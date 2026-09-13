@@ -28539,6 +28539,108 @@
         "TimedOut": false
       }
     },
+    "axis/printf-grouping-flag": {
+      "ash": {
+        "Stdout": "[st=1~ast=1~[[7'x]",
+        "Stderr": "\u003cshell\u003e: %'d]\\n: invalid format~\u003cshell\u003e: %'db%sc\\n: invalid format~\u003cshell\u003e: %'s][%'f]\\n: invalid format",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[1234567]~st=0~a1234567bXc~st=0~[abc][2.500000]~[7'x]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[1234567]~st=0~a1234567bXc~st=0~[abc][2.500000]~[7'x]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[1234567]~st=0~a1234567bXc~st=0~[abc][2.500000]~[7'x]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[st=2~ast=2~[[7'x]",
+        "Stderr": "\u003cshell\u003e: 1: printf: %': invalid directive~\u003cshell\u003e: 1: printf: %': invalid directive~\u003cshell\u003e: 1: printf: %': invalid directive",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[1234567]~st=0~a1234567bXc~st=0~[abc][2.500000]~[7'x]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[1234567]~st=0~a1234567bXc~st=0~[abc][2.500000]~[7'x]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/printf-grouping-flag-after-the-width": {
+      "ash": {
+        "Stdout": "[st=1~[st=1~[st=1",
+        "Stderr": "\u003cshell\u003e: %15'd]\\n: invalid format~\u003cshell\u003e: %.5'd]\\n: invalid format~\u003cshell\u003e: %'15d]\\n: invalid format",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[st=1~[st=1~[        1234567]~st=0",
+        "Stderr": "\u003cshell\u003e: line 1: printf: `'': invalid format character~\u003cshell\u003e: line 1: printf: `'': invalid format character",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[st=1~[st=1~[        1234567]~st=0",
+        "Stderr": "\u003cshell\u003e: line 1: printf: `'': invalid format character~\u003cshell\u003e: line 1: printf: `'': invalid format character",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[st=1~[st=1~[        1234567]~st=0",
+        "Stderr": "\u003cshell\u003e: line 0: printf: `'': invalid format character~\u003cshell\u003e: line 0: printf: `'': invalid format character",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[st=2~[st=2~[st=2",
+        "Stderr": "\u003cshell\u003e: 1: printf: %15': invalid directive~\u003cshell\u003e: 1: printf: %.5': invalid directive~\u003cshell\u003e: 1: printf: %': invalid directive",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[        1234567]~st=0~[1234567]~st=0~[        1234567]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[st=1~[st=1~[        1234567]~st=0",
+        "Stderr": "\u003cshell\u003e:printf:1: %15': invalid directive~\u003cshell\u003e:printf:1: %.5': invalid directive",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "axis/printf-star-complaint-costs-the-status": {
       "ash": {
         "Stdout": "[hi]~st=0~[]~st=0",

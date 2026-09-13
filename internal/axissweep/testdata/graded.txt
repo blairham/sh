@@ -37,6 +37,8 @@ ash    LastPipelineElementInCurrentShell                    No
 ash    LocalOutsideAFunctionIsAnError                       Yes
 ash    LocalOutsideAFunctionIsFatal                         Yes
 ash    PrefixToAFunctionIsExported                          Yes
+ash    PrintfGroupingFlag                                   No
+ash    PrintfGroupingFlagAfterTheWidth                      -
 ash    QuitIgnoredWhenNotInteractive                        Yes
 ash    QuitResetRestoresTheDefault                          No
 ash    ReadonlyReassignmentFatal                            Yes
@@ -64,6 +66,8 @@ bash   LastPipelineElementInCurrentShell                    No
 bash   LocalOutsideAFunctionIsAnError                       Yes
 bash   LocalOutsideAFunctionIsFatal                         No
 bash   PrefixToAFunctionIsExported                          Yes
+bash   PrintfGroupingFlag                                   Yes
+bash   PrintfGroupingFlagAfterTheWidth                      No
 bash   QuitIgnoredWhenNotInteractive                        Yes
 bash   QuitResetRestoresTheDefault                          No
 bash   ReadonlyReassignmentFatal                            No
@@ -91,6 +95,8 @@ dash   LastPipelineElementInCurrentShell                    No
 dash   LocalOutsideAFunctionIsAnError                       Yes
 dash   LocalOutsideAFunctionIsFatal                         Yes
 dash   PrefixToAFunctionIsExported                          Yes
+dash   PrintfGroupingFlag                                   No
+dash   PrintfGroupingFlagAfterTheWidth                      -
 dash   QuitIgnoredWhenNotInteractive                        No
 dash   QuitResetRestoresTheDefault                          -
 dash   ReadonlyReassignmentFatal                            Yes
@@ -118,6 +124,8 @@ ksh    LastPipelineElementInCurrentShell                    Yes
 ksh    LocalOutsideAFunctionIsAnError                       -
 ksh    LocalOutsideAFunctionIsFatal                         -
 ksh    PrefixToAFunctionIsExported                          No
+ksh    PrintfGroupingFlag                                   Yes
+ksh    PrintfGroupingFlagAfterTheWidth                      Yes
 ksh    QuitIgnoredWhenNotInteractive                        No
 ksh    QuitResetRestoresTheDefault                          -
 ksh    ReadonlyReassignmentFatal                            Yes
@@ -145,6 +153,8 @@ zsh    LastPipelineElementInCurrentShell                    Yes
 zsh    LocalOutsideAFunctionIsAnError                       No
 zsh    LocalOutsideAFunctionIsFatal                         No
 zsh    PrefixToAFunctionIsExported                          Yes
+zsh    PrintfGroupingFlag                                   Yes
+zsh    PrintfGroupingFlagAfterTheWidth                      No
 zsh    QuitIgnoredWhenNotInteractive                        Yes
 zsh    QuitResetRestoresTheDefault                          Yes
 zsh    ReadonlyReassignmentFatal                            Yes

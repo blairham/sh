@@ -539,14 +539,21 @@ func Probes() []Probe {
 				if strings.TrimSpace(cells["axis/printf-grouping-flag"].Stderr) != "" {
 					return "", "this shell has no `'` flag at any position — it refuses the plain `%'d` too, so its refusal here is about the flag and not about where the flag may be written"
 				}
+				// The row's **first** line and not the row, because its
+				// third line is the control: `%'15d` is the same flag ahead
+				// of the width, so every shell that has the flag at all
+				// writes the padded number there. A reading that searched
+				// the whole cell answered Yes for the entire panel, which is
+				// what TestEveryProbeDiscriminates caught.
 				r := cells["axis/printf-grouping-flag-after-the-width"]
+				first, _, _ := strings.Cut(r.Stdout, "~")
 				switch {
-				case strings.Contains(r.Stdout, "[        1234567]"):
+				case first == "[        1234567]":
 					return "Yes", ""
 				case strings.TrimSpace(r.Stderr) != "":
 					return "No", ""
 				}
-				return "", "the row neither padded the number nor refused anything, so it did not reach the late flag"
+				return "", "the row neither padded the number on its first line nor refused anything, so it did not reach the late flag"
 			},
 		},
 		{

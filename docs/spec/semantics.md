@@ -6266,6 +6266,43 @@ What was built, all through the extension seam — registered builtins in each
   `${#a}` counts and whether an unbraced name's brackets are a subscript,
   all together — see `dialect/zsh/ksharrays.go` for the measurement and
   #1726 for what moving only the first of them cost.
+- **bash `help`** (dialect/bash/help.go): the shell's only self-documenting
+  builtin, and the one place in this tree where a builtin is deliberately
+  **half** built. A topic in the real shell is a **synopsis** followed by a
+  paragraph of **description**. The synopsis is behavior — the option letters
+  a builtin takes, the shape of a keyword — and this shell already carried it,
+  measured, as the same string a bad option's usage line is built from. The
+  description is another project's documentation prose, which `CLEANROOM.md`'s
+  red list covers as squarely as its source: reproducing it would relicense
+  the repository a paragraph at a time.
+
+  So `help -s` is byte-for-byte the real shell's, and `help NAME` writes that
+  same line where the real shell follows it with the description. `help -d`
+  and `help -m` are **refused by name** at 2, because both are asked *for* the
+  description — `-d` is the one-line summary and `-m` the man-page layout
+  built around it — and a letter taken and answered with a synopsis would hand
+  a script a success it did not earn. That refusal is the honest half of the
+  partial and the reason it is a partial rather than a wrong answer.
+
+  Three matching rules, each with the case that separates it from its
+  neighbor, measured on bash 5.3.15 on 2026-09-13: an exact topic name wins
+  (`help -s time` is `time` alone in a shell that also has `times`); an
+  operand with no metacharacter is a prefix match and writes no header
+  (`help -s sh` is `shift` and `shopt`); an operand with one is a pattern
+  anchored at both ends and writes the header before it knows whether
+  anything matched (`help -s '*pt'` is `compopt` and `shopt` and **not**
+  `getopts`, and `help -s 'z*'` writes the header and then complains).
+
+  Two topics the real shell lists are absent and neither is an oversight.
+  `logout` is a builtin this shell does not have, and documenting it would be
+  documenting a shell this is not. `variables` is the one topic whose
+  "synopsis" is a sentence about what the topic contains rather than a shape a
+  script can act on, so it is description under a name and falls the same side
+  of the line as the paragraphs. A bare `help` writes one topic per line
+  rather than the real shell's version banner and two truncated columns: the
+  banner is a claim this shell must not make, and what is left is the same
+  information its own `help -s ''` writes.
+
 - **ksh93 `whence`** (dialect/ksh/whence.go): bare, `-v`, `-p`, `-q`, `-a` —
   the bare mode delegating to the same lookup `command -v` uses, `-v` to the
   core `type`, whose ksh wording was already `whence`'s, and aliases spoken

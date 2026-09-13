@@ -2336,6 +2336,10 @@ func Apply(r *interp.Runner) {
 	// The builtin this shell alone answers to; the other three say "command
 	// not found", so it is registered here rather than taken away there.
 	r.Register("shopt", biShopt)
+	// This shell's only self-documenting builtin, and there is no other name
+	// for it — a script reaching for it used to get 127. See help.go, which
+	// carries what is answered and what is deliberately refused.
+	r.Register("help", biHelp)
 	// `**` with nothing behind it crosses levels here too, so `d/**` reaches
 	// every one of them. Set unconditionally rather than through `globstar`,
 	// because the walk asks it only where `globstar` has already said `**`

@@ -1,0 +1,63 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Command substitution — the other half of #2307. ext/procsub.tests has asked
+# `<(…)` since the ext tier landed; `$(…)` and the backtick form, which every
+# shell on the panel has and POSIX XCU 2.6.3 requires, were asked nowhere.
+#
+# Nothing here prints a pid or a path that a temporary file would make up. A
+# substitution's whole observable behaviour is the text it yields, the status
+# it leaves, and where the result may stand.
+
+# The text, with the trailing newlines removed — however many there were.
+printf '[%s]\n' "$(printf 'plain')"
+printf '[%s]\n' "$(printf 'trailing\n\n\n')"
+printf '[%s]\n' "$(printf 'a\nb\n')"
+printf '[%s]\n' "$(printf 'a b   c')"
+
+# The backtick form is the same substitution, and the two nest into each
+# other and stand side by side.
+printf '[%s]\n' `printf 'backtick'`
+printf '[%s]\n' "`printf 'x'`"
+printf '[%s]\n' "$(printf '%s' "$(printf 'inner')")"
+printf '[%s]\n' `printf 'a'``printf 'b'`
+printf '[%s]\n' "$(printf 'a')$(printf 'b')"
+printf '[%s]\n' "x$(printf 'y')z"
+
+# The status is the last command's in it, and an assignment from one carries
+# that status out — which is how a substitution's failure is seen at all.
+printf '[%s]\n' "$(exit 5)"; printf 'status -> %s\n' "$?"
+printf '[%s]\n' "$(false)"; printf 'false status -> %s\n' "$?"
+u=$(true); printf 'assign true -> %s\n' "$?"
+u=$(false); printf 'assign false -> %s\n' "$?"
+v=$(printf 'assigned'); printf '[%s]\n' "$v"
+
+# Unquoted, the result is split on IFS and globbed like any other expansion;
+# quoted, it is one word whatever is in it.
+set -- $(printf 'a b c'); printf '[%s][%s][%s]\n' "$1" "$2" "$3"
+printf '[%s]\n' $(printf 'a b c')
+printf '[%s]\n' "$(printf '*')"
+
+# Any command goes inside it: a list, a compound, a here-document, a loop.
+printf '[%s]\n' "$(printf 'semi'; printf 'colon')"
+printf '[%s]\n' "$(if true; then printf 'compound'; fi)"
+printf '[%s]\n' "$(for w in a b; do printf '%s' "$w"; done)"
+printf '[%s]\n' "$(cat <<'HERE'
+heredoc
+HERE
+)"
+printf '[%s]\n' "$( printf 'spaced' )"
+
+# Quoting inside it is read as its own, so a double quote may appear inside a
+# double-quoted substitution without ending the outer word.
+printf '[%s]\n' "$(printf 'quote"inside')"
+printf '[%s]\n' "$(printf "nested\"quote")"
+printf '[%s]\n' "$(printf 'back\\slash')"
+
+# It runs in its own environment: a `cd` inside one does not move the shell.
+printf '[%s]\n' "$(cd /; printf 'moved')"
+cd /
+printf '[%s]\n' "$(pwd)"
+
+# `$(( ))` is arithmetic, not a substitution of a subshell named `(`.
+printf '[%s]\n' "$(( 2 + 3 ))"

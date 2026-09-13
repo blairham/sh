@@ -1,0 +1,70 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# trap and signals — the other half of #2314. core/status.tests has asked the
+# EXIT trap since the core tier landed and nothing anywhere asked a signal.
+#
+# A signal is the one thing in a shell that arrives rather than being called,
+# and that is what makes most of it unaskable here: the suite ships no
+# expected output, so a case has to reproduce, and delivery to anything but
+# this process is scheduling. What *is* deterministic is a shell signalling
+# itself — `kill -s NAME $$` is delivered before the next command runs, in
+# every shell on the panel — and that is the whole of what this file uses.
+#
+# Nothing here prints a pid, a job number or a signal number. `$$` is used and
+# never written out, and `kill -l NAME` is held out because dash has no
+# name-to-number form of it at all.
+#
+# A subshell cannot be signalled by name either: `$$` inside `( … )` is still
+# the parent's pid in every shell here, so `( trap … USR1; kill -s USR1 $$ )`
+# reaches the *outer* trap. That is worth knowing and is not worth a case,
+# because what it measures is which process the number named.
+
+# A trap fires when the signal arrives, the command after it runs, and the
+# status the trap leaves behind is not the signalled command's.
+trap 'printf "USR1 caught\n"' USR1
+kill -s USR1 $$
+printf 'after usr1 -> %s\n' "$?"
+
+# It stays installed. A trap is a disposition, not a one-shot.
+kill -s USR1 $$
+printf 'again\n'
+
+# The same for the signals a script is most likely to want.
+trap 'printf "TERM caught\n"' TERM
+kill -s TERM $$
+printf 'after term\n'
+trap 'printf "INT caught\n"' INT
+kill -s INT $$
+printf 'after int\n'
+trap 'printf "HUP caught\n"' HUP
+kill -s HUP $$
+printf 'after hup\n'
+
+# An empty action ignores the signal: nothing runs and the next command does.
+trap '' USR2
+kill -s USR2 $$
+printf 'ignored usr2 -> %s\n' "$?"
+
+# A trap is the shell's, not a command's. It fires inside a function body and
+# the body resumes afterwards.
+f() { kill -s USR1 $$; printf 'func body after\n'; }
+f
+
+# A function may replace the disposition, and the replacement outlives the
+# call — a trap is not scoped to the function that set it.
+g() { trap 'printf "reset in func\n"' USR1; kill -s USR1 $$; }
+g
+kill -s USR1 $$
+printf 'still reset\n'
+
+# `--` ends the options of `trap` as it does anywhere else.
+trap -- 'printf "dashdash\n"' USR1
+kill -s USR1 $$
+
+# The EXIT trap runs when the shell ends, sees the status about to be
+# reported, and runs for an `exit` from inside a function as it does for one
+# at the top level.
+( trap 'printf "exit trap\n"' EXIT; printf 'body\n' )
+( trap 'printf "exit trap saw %s\n" "$?"' EXIT; exit 3 ); printf 'status %s\n' "$?"
+( trap 'printf "exit via trap in func\n"' EXIT; h() { exit 4; }; h ); printf 'func exit %s\n' "$?"

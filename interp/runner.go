@@ -1303,6 +1303,7 @@ type Runner struct {
 	posixSavedUnsetReadonly Answer
 	posixSavedForName       ForNameRunForm
 	posixSavedFuncName      FuncNameRunForm
+	posixSavedBadOption     Answer
 	// The three listing axes the mode moves, saved for the same reason and
 	// separately for the same reason: no shell in the panel answers all
 	// three alike, so one remembered form could not put three back. The
@@ -4983,6 +4984,29 @@ func (r *Runner) fatalQuiet() {
 	// the reason the status and the unwinding are: every fatal error comes
 	// through this one door, so nothing else has to remember to say so.
 	r.ctl, r.abandon, r.errexitStopped = controlExit, abandonError, false
+}
+
+// fatalQuietAt ends the script at a status the caller has already chosen,
+// rather than at the dialect's generic fatal status.
+//
+// A special builtin's usage error is the fatality that needs it. Measured
+// 2026-09-13: `shift -x`, `export -q`, `return abc` and `exit status` end a
+// shell in POSIX mode at **2** — bash 5.3.15 under `set -o posix` and under
+// the name `sh`, dash, ksh93 and BusyBox ash alike — where the same shells'
+// generic fatal status is 1 in bash and 2 in the rest, which is what
+// FatalErrorStatusIsOne records. Unanimous across every column that has a
+// dialect here, so it is the implementation rather than an axis; bash 3.2.57
+// is the one column that parts from it, ending `shift -x` at 1 while its own
+// `export -q` ends at 2, and no dialect claims that build.
+//
+// It was invisible while only dash, ksh93 and BusyBox ash could reach the
+// path: all three answer 2 to both questions, so the assignments the callers
+// already made before fatalQuiet — which setFatalStatus then overwrote — were
+// dead and read as live. bash reaching the same path through POSIX mode is
+// what told the two apart (#2583).
+func (r *Runner) fatalQuietAt(status int) {
+	r.fatalQuiet()
+	r.status = status
 }
 
 func (r *Runner) fatal(format string, args ...any) {

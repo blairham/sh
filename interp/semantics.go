@@ -8879,6 +8879,43 @@ type Semantics struct {
 	// `export`, `readonly` and `unset`.
 	BadOptionToSpecialBuiltinFatal Answer
 
+	// BadOptionToSpecialBuiltinFatalInPosixMode is the same question asked of
+	// a shell that is in POSIX mode, which is a state rather than a preset —
+	// [Runner.SetPosixMode] swaps this value in on the way in and puts the
+	// answer above back on the way out.
+	//
+	// It is a field of its own rather than a constant inside that swap
+	// because the shells disagree about what their own POSIX mode makes of
+	// this, and they disagree *per axis* rather than per shell. Measured
+	// 2026-09-13, `<shell> -c 'shift -x; echo alive'` and the same line with
+	// `export -q`, against every route each shell has into the mode:
+	//
+	//	                        default              POSIX mode
+	//	dash                    fatal                fatal (it is the mode)
+	//	bash 5.3.15             complains, alive, 0  fatal at 2
+	//	bash 5.3.15 as `sh`     fatal at 2           fatal at 2
+	//	ksh93u+                 fatal at 2           fatal at 2
+	//	zsh 5.9.2               complains, alive, 0  complains, alive, 0
+	//	zsh 5.9.2 as `sh`       complains, alive, 0  complains, alive, 0
+	//	BusyBox ash             fatal                fatal (it is the mode)
+	//
+	// So bash's mode moves the answer and zsh's does not, while the *same*
+	// two shells' POSIX mode both move RedirectErrorOnSpecialBuiltinFatal —
+	// `export x > /nonexistent/dir/f` carries on in zsh and ends the script
+	// in zsh invoked as `sh`. One mode, two axes, opposite answers in one
+	// shell: that is what makes "what does POSIX mode move" a question a
+	// dialect answers rather than one the mode can answer for everybody.
+	//
+	// bash 3.2.57 is the reminder that the answer is not even uniform across
+	// the builtins: it is fatal for `shift -x` in both modes, moves for
+	// `export -q`, and does not move for `return abc`. No dialect here claims
+	// that build, and a single axis could not hold it if one did.
+	//
+	// Unspecified is a real answer and means the mode leaves a script that
+	// reaches the question refused by name, exactly as the axis above does —
+	// a dialect whose POSIX mode nobody has measured must not be handed one.
+	BadOptionToSpecialBuiltinFatalInPosixMode Answer
+
 	// AliasBadOptionFatal ends the script when `alias` or `unalias` is given
 	// an option it does not have. True in ksh93 alone.
 	//
@@ -10529,6 +10566,13 @@ func PosixSemantics() Semantics {
 		// POSIX makes a special builtin's failure fatal, and a bad option is
 		// one.
 		BadOptionToSpecialBuiltinFatal: Yes,
+		// And the standard's own mode cannot make it anything else, so the
+		// preset answers the POSIX-mode twin the same way. Four of the five
+		// dialects inherit this and are right to: dash, ksh93 and BusyBox ash
+		// are fatal in both modes, and bash is measured to move to fatal when
+		// its mode is entered by either door. zsh is the departure and
+		// overrides it.
+		BadOptionToSpecialBuiltinFatalInPosixMode: Yes,
 		// `alias` is not one of the fifteen the standard marks special, so
 		// the refusal is an ordinary one and the script goes on.
 		AliasBadOptionFatal: No,

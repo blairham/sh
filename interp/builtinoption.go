@@ -315,8 +315,7 @@ func (r *Runner) badBuiltinOption(name string, opts ...string) int {
 	// caller of this was special until `wait` was not, so the check had
 	// never been reached and was wrong the moment it was.
 	if r.badOptionEndsTheScript(name) {
-		r.status = status
-		r.fatalQuiet()
+		r.fatalQuietAt(status)
 	}
 	return status
 }

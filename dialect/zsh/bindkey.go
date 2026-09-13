@@ -102,10 +102,17 @@ var bindkeyWidgets = map[string]repl.Widget{
 	"kill-word":             repl.WidgetKillWordAfter,
 	"yank":                  repl.WidgetYank,
 	"transpose-chars":       repl.WidgetTransposeChars,
-	"up-line-or-history":    repl.WidgetPreviousHistory,
-	"up-history":            repl.WidgetPreviousHistory,
-	"down-line-or-history":  repl.WidgetNextHistory,
-	"down-history":          repl.WidgetNextHistory,
+	// Typing. Not a key anybody binds — it is what a printable key does when
+	// nothing else claims it — but a name a shell can *redefine*, which is what
+	// a syntax highlighter needs: it wraps every name in `$widgets`, and the one
+	// that matters most is the one that runs when a person types (#2485).
+	// Without it, `${+widgets[self-insert]}` read 0 here and 1 in the shell
+	// being imitated, and a highlighter loaded and never saw a keystroke.
+	"self-insert":          repl.WidgetSelfInsert,
+	"up-line-or-history":   repl.WidgetPreviousHistory,
+	"up-history":           repl.WidgetPreviousHistory,
+	"down-line-or-history": repl.WidgetNextHistory,
+	"down-history":         repl.WidgetNextHistory,
 	// The searching pair, which walks only to entries beginning with the
 	// line's first word. **macOS's `/etc/zshrc` binds the arrows to these**,
 	// by `$terminfo[kcuu1]` and its fellows, so on that machine they are not
@@ -177,6 +184,7 @@ var widgetNames = map[repl.Widget]string{
 	repl.WidgetKillWordAfter:           "kill-word",
 	repl.WidgetYank:                    "yank",
 	repl.WidgetTransposeChars:          "transpose-chars",
+	repl.WidgetSelfInsert:              "self-insert",
 	repl.WidgetPreviousHistory:         "up-line-or-history",
 	repl.WidgetNextHistory:             "down-line-or-history",
 	repl.WidgetPreviousHistoryMatching: "up-line-or-search",

@@ -36,7 +36,7 @@ import (
 // a four-shell panel and the fifth column is what found it, which is what
 // that column is for.
 //
-// Four things they do not agree on, and each is an axis or a wording rather
+// Five things they do not agree on, and each is an axis or a wording rather
 // than a branch here:
 //
 //   - A `%d` given something that is not a number. bash and dash complain and
@@ -46,6 +46,10 @@ import (
 //     not have it at all.
 //   - `\c` in the format, which stops output there in ksh93 and zsh and is
 //     two ordinary characters in bash and dash.
+//   - The `'` flag, which asks for a number's digits to be grouped the way
+//     the locale groups them. bash, zsh and ksh93 have it; dash and ash do
+//     not, and for them the character is the conversion it is refused as.
+//     ksh93 also reads it later in the prefix than the other two do (#2665).
 //   - What an unknown verb is called, and what `printf` with no format says.
 
 func init() {

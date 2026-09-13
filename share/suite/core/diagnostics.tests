@@ -1,0 +1,60 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Diagnostic destination — #2324, and the half of that area that can be asked
+# of the whole panel.
+#
+# The wording cannot be. Every shell writes its own sentence for a command it
+# cannot find, and the prefix in front of it differs too: bash and ash use
+# `<script>: line N:`, ksh93 `<script>[N]:`, dash `<script>: N:`, zsh
+# `<script>:N:` — and BusyBox puts the *builtin's* name in the prefix where
+# none of the others do. Those belong in the dialect tiers, one file each,
+# where being alone in an answer is the claim being made.
+#
+# What every shell on the panel agrees on is the part a script can actually
+# depend on: which stream a diagnostic goes to. It is stderr, always, and
+# nothing about a failure leaks into stdout — which is what makes
+# `cmd 2>/dev/null` and `cmd 2>&1` mean what a script author expects.
+#
+# So each case is run twice and neither run can print the wording: once with
+# stderr dropped, to see what reached stdout, and once with stdout dropped and
+# stderr counted only for whether it was empty.
+#
+# The status is printed only where the panel agrees on a number. 127 for a
+# command that is not there and 126 for one that cannot be run are reserved by
+# POSIX XCU 2.8.2 and every shell here uses them. Everything else is a shell's
+# own convention — dash answers 2 where the other three answer 1 — so those
+# cases print `nonzero` and the numbers are a dialect question.
+
+saw() {
+  out=$( ( eval "$1" ) 2> /dev/null )
+  st=$?
+  err=$( ( eval "$1" ) 2>&1 > /dev/null )
+  if [ -n "$err" ]; then e=yes; else e=no; fi
+  if [ -n "$out" ]; then o=yes; else o=no; fi
+  case $3 in
+    exact) s=$st ;;
+    *) if [ "$st" -eq 0 ]; then s=zero; else s=nonzero; fi ;;
+  esac
+  printf '%s: status %s · stderr %s · stdout %s\n' "$2" "$s" "$e" "$o"
+}
+
+# The two reserved statuses, which are the same number everywhere.
+saw 'nosuchcommand_zz' 'command not found' exact
+saw ': > ne; chmod 644 ne; ./ne' 'not executable' exact
+
+# The failures whose number is a shell's own convention. What is asked is
+# that each one is diagnosed, on stderr, with nothing on stdout.
+saw 'cd /nosuchdir_zz' 'cd to nowhere'
+saw 'set -u; printf "%s" "$UNSET_ZZ"' 'unset name under -u'
+saw 'unset -q -x -z' 'an option no builtin has'
+saw 'read < /nosuchfile_zz' 'redirect from nowhere'
+saw 'printf "x" > /nosuchdir_zz/f' 'redirect into nowhere'
+saw 'kill -s NOSUCHSIG_ZZ 1' 'a signal name nobody has'
+
+# And the other side of the claim: a command that works says nothing on
+# either stream, output goes to stdout, and a deliberate write to stderr is
+# the only thing besides a diagnostic that lands there.
+saw 'true' 'a command that works' exact
+saw 'printf "to stdout\n"' 'plain output' exact
+saw 'printf "to stderr\n" >&2' 'explicit stderr' exact

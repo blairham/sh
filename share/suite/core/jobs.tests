@@ -1,0 +1,76 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Background commands and `wait` — #2318, which was written down as the area
+# that might not be askable at all.
+#
+# The doubt was right about the reason and wrong about the conclusion. The
+# suite ships no expected output, so a case has to reproduce, and `repeats()`
+# refuses one that does not — and most of job control is scheduling order,
+# which is exactly what will not reproduce. Two background jobs racing to
+# write, a `jobs` listing with its pids and its `Running`/`Done` states, and
+# anything that depends on which of two processes finished first are all
+# unaskable here and stay unaskable.
+#
+# What survives that cut is not nothing. A background job's *status*, once
+# waited for, is a number the shell computed and not a race; `wait` with
+# nothing to wait for is an answer; and `$!` can be used without being
+# printed. That subset is deterministic in all five columns, and it is the
+# part a script actually depends on — `cmd & … ; wait "$pid" || handle_it` is
+# how a shell script parallelizes anything.
+#
+# Nothing here prints a pid or a job number. `$!` is used as an operand and
+# as the left side of a comparison, never written out.
+#
+# Held out, and both are dialect answers:
+#   `wait` on a pid already waited for — bash and dash remember the status
+#     and give it again; zsh and ksh93 answer 127, having forgotten the child
+#   `set -m` — bash and ksh93 take it silently, dash warns that there is no
+#     tty and carries on, and zsh refuses and ends the script. Three answers
+#     to one line, in a suite run with no terminal anywhere.
+#
+# Two more are held out because *we* are the odd one out, and both were found
+# by this file's first run:
+#   `$(( $! > 0 ))`   #2650 — `$!` is 0 for a background job with no
+#     operating-system process, which is every background subshell of
+#     builtins, in all five dialects
+#   `%1` after a reap  #2651 — a finished job still occupies `%1` here, so
+#     `wait %1` gives the first job's status again rather than the first job
+#     still known
+
+# Nothing to wait for is a success, not an error.
+wait; printf 'wait with nothing -> %s\n' "$?"
+
+# The status of a background command is the status it exited with, and it
+# arrives through `wait` rather than through `$?` at the point it was started.
+( exit 7 ) & wait $!; printf 'background status -> %s\n' "$?"
+( exit 0 ) & wait $!; printf 'background zero -> %s\n' "$?"
+
+# `wait` with no operand waits for all of them and is a success however they
+# ended — the statuses are not folded into it.
+true & wait; printf 'wait all -> %s\n' "$?"
+( exit 9 ) & : ; wait; printf 'wait after another command -> %s\n' "$?"
+
+# A background job writes to the same output as the shell, and waiting for it
+# is what makes the order of that writing a fact rather than a race.
+( printf 'from background\n' ) & wait
+
+# Including through a substitution: the subshell that captures it waits for
+# what it started before it yields its text.
+p=$( { printf 'captured\n'; } & wait ); printf '[%s]\n' "$p"
+
+# `$!` is the most recent background command, and it can be saved and waited
+# for later. It is never printed: a pid does not reproduce, and a suite that
+# ships no expected output cannot ask for one.
+( exit 3 ) &
+b=$!
+wait "$b"; printf 'by pid -> %s\n' "$?"
+
+# `jobs` runs and says something about nothing; what it prints is a listing
+# with pids in it and is a dialect question.
+jobs > /dev/null 2>&1; printf 'jobs -> %s\n' "$?"
+
+# All of it works inside a function, which is where a script that
+# parallelizes actually puts it.
+f() { ( exit 2 ) & wait $!; }
+f; printf 'in function -> %s\n' "$?"

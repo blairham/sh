@@ -17066,6 +17066,18 @@ grades it and nothing drift-checks it either, for the same reason.
 | `declare/print-arrays-back` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `declare -a arr=([0]="x" [1]="y")~declare -A m=([k]="a b" )` | `declare -a arr=([0]="x" [1]="y")~declare -A m=([k]="a b" )` | `declare -a arr='([0]="x" [1]="y")'~declare -a m='([0]="a b")'` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `typeset -a arr=(x y)~typeset -A m=([k]='a b')` | `typeset -a arr=( x y )~typeset -A m=( [k]='a b' )` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
 | `declare/print-a-missing-name` | `st=127` **2>** `<shell>: 1: typeset: not found` | `st=1` **2>** `<shell>: line 1: typeset: nosuch: not found` | `st=1` **2>** `<shell>: line 1: typeset: nosuch: not found` | `st=1` **2>** `<shell>: line 0: typeset: nosuch: not found` | `st=0` | `st=1` **2>** `<shell>:typeset:1: no such variable: nosuch` | `st=127` **2>** `<shell>: typeset: not found` |
 | `declare/f-says-a-named-function-back` | `st=127` **2>** `<shell>: 1: typeset: not found` | `f () ~{ ~    if true; then~        echo one;~    fi~}~st=0` | `f () ~{ ~    if true; then~        echo one;~    fi~}~st=0` | `f () ~{ ~    if true; then~        echo one;~    fi~}~st=0` | `f() { if true; then echo one; fi; };st=0` | `f () {~	if true~	then~		echo one~	fi~}~st=0` | `st=127` **2>** `<shell>: typeset: not found` |
+| `declare/f-says-a-braced-parameter-back` | **2>** `<shell>: 1: typeset: not found` *(status 127)* | `f () ~{ ~    echo "${x}"~}` | `f () ~{ ~    echo "${x}"~}` | `f () ~{ ~    echo "${x}"~}` | `f() { echo "${x}"; };` | `f () {~	echo "${x}"~}` | **2>** `<shell>: typeset: not found` *(status 127)* |
+| `declare/f-says-a-bare-parameter-back` | **2>** `<shell>: 1: typeset: not found` *(status 127)* | `f () ~{ ~    echo "$x"~}` | `f () ~{ ~    echo "$x"~}` | `f () ~{ ~    echo "$x"~}` | `f() { echo "$x"; };` | `f () {~	echo "$x"~}` | **2>** `<shell>: typeset: not found` *(status 127)* |
+| `declare/f-says-a-stderr-pipe-back` | **2>** `<shell>: 1: Syntax error: "&" unexpected` *(status 2)* | `f () ~{ ~    echo a 2>&1 \| cat~}` | `f () ~{ ~    echo a 2>&1 \| cat~}` | **2>** `<shell>: -c: line 0: syntax error near unexpected token `&'~<shell>: -c: line 0: `f() { echo a \|& cat; }; typeset -f f'` *(status 2)* | `f() { echo a \|& cat; };` | `f () {~	echo a 2>&1 \| cat~}` | **2>** `<shell>: syntax error: unexpected "&"` *(status 2)* |
+| `declare/f-says-a-plain-pipe-back` | **2>** `<shell>: 1: typeset: not found` *(status 127)* | `f () ~{ ~    echo a \| cat~}` | `f () ~{ ~    echo a \| cat~}` | `f () ~{ ~    echo a \| cat~}` | `f() { echo a \| cat; };` | `f () {~	echo a \| cat~}` | **2>** `<shell>: typeset: not found` *(status 127)* |
+| `declare/f-says-a-subshell-body-back` | **2>** `<shell>: 1: typeset: not found` *(status 127)* | `f () ~{ ~    ( echo sub )~}` | `f () ~{ ~    ( echo sub )~}` | `f () ~{ ~    ( echo sub )~}` | `f() ( echo sub );` | `f () {~	(~		echo sub~	)~}` | **2>** `<shell>: typeset: not found` *(status 127)* |
+| `declare/f-says-a-conditional-body-back` | **2>** `<shell>: 1: typeset: not found` *(status 127)* | `f () ~{ ~    if true; then~        echo a;~    fi~}` | `f () ~{ ~    if true; then~        echo a;~    fi~}` | `f () ~{ ~    if true; then~        echo a;~    fi~}` | `f() if true; then echo a; fi;` | `f () {~	if true~	then~		echo a~	fi~}` | **2>** `<shell>: typeset: not found` *(status 127)* |
+| `declare/f-says-a-nested-declaration-back` | **2>** `<shell>: 1: typeset: not found` *(status 127)* | `f () ~{ ~    function inner () ~    { ~        echo i~    }~}` | `f () ~{ ~    inner () ~    { ~        echo i~    }~}` | `f () ~{ ~    function inner () ~    { ~        echo i~    }~}` | `f() { inner() { echo i; };` | `f () {~	inner () {~		echo i~	}~}` | **2>** `<shell>: typeset: not found` *(status 127)* |
+| `declare/f-says-a-nested-keyword-declaration-back` | **2>** `<shell>: 1: Syntax error: "}" unexpected` *(status 2)* | `f () ~{ ~    function inner () ~    { ~        echo i~    }~}` | `f () ~{ ~    inner () ~    { ~        echo i~    }~}` | `f () ~{ ~    function inner () ~    { ~        echo i~    }~}` | `f() { function inner { echo i; };` | `f () {~	inner () {~		echo i~	}~}` | **2>** `<shell>: typeset: not found` *(status 127)* |
+| `declare/f-says-a-background-statement-back` | **2>** `<shell>: 1: typeset: not found` *(status 127)* | `f () ~{ ~    echo a & echo b~}` | `f () ~{ ~    echo a & echo b~}` | `f () ~{ ~    echo a & echo b~}` | `f() { echo a & echo b; };` | `f () {~	echo a &~	echo b~}` | **2>** `<shell>: typeset: not found` *(status 127)* |
+| `declare/f-says-an-elif-back` | **2>** `<shell>: 1: typeset: not found` *(status 127)* | `f () ~{ ~    if a; then~        b;~    else~        if c; then~            d;~        else~            e;~        fi;~    fi~}` | `f () ~{ ~    if a; then~        b;~    else~        if c; then~            d;~        else~            e;~        fi;~    fi~}` | `f () ~{ ~    if a; then~        b;~    else~        if c; then~            d;~        else~            e;~        fi;~    fi~}` | `f() { if a; then b; elif c; then d; else e; fi; };` | `f () {~	if a~	then~		b~	elif c~	then~		d~	else~		e~	fi~}` | **2>** `<shell>: typeset: not found` *(status 127)* |
+| `declare/f-says-an-if-with-no-elif-back` | **2>** `<shell>: 1: typeset: not found` *(status 127)* | `f () ~{ ~    if a; then~        b;~    else~        e;~    fi~}` | `f () ~{ ~    if a; then~        b;~    else~        e;~    fi~}` | `f () ~{ ~    if a; then~        b;~    else~        e;~    fi~}` | `f() { if a; then b; else e; fi; };` | `f () {~	if a~	then~		b~	else~		e~	fi~}` | **2>** `<shell>: typeset: not found` *(status 127)* |
+| `declare/f-says-a-subshell-inside-a-body-back` | **2>** `<shell>: 1: typeset: not found` *(status 127)* | `f () ~{ ~    ( exit 1 )~}` | `f () ~{ ~    ( exit 1 )~}` | `f () ~{ ~    ( exit 1 )~}` | `f() { ( exit 1 ); };` | `f () {~	(~		exit 1~	)~}` | **2>** `<shell>: typeset: not found` *(status 127)* |
 | `declare/capital-f-names-a-function` | `st=127~st2=127` **2>** `<shell>: 1: declare: not found~<shell>: 1: declare: not found` | `f~st=0~st2=1` | `f~st=0~st2=1` | `f~st=0~st2=1` | `st=127~st2=127` **2>** `<shell>: declare: not found~<shell>: declare: not found` | `st=0~st2=0` | `st=127~st2=127` **2>** `<shell>: declare: not found~<shell>: declare: not found` |
 | `declare/local-reads-the-integer-letter` | **2>** `<shell>: 1: local: -i: bad variable name` *(status 2)* | `v=5~st=0` | `v=5~st=0` | `v=5~st=0` | `v=2+3~st=0` **2>** `<shell>: local: not found` | `v=5~st=0` | **2>** `<shell>: local: line 0: -i: bad variable name` *(status 2)* |
 | `declare/local-readonly-letter` | **2>** `<shell>: 1: local: -r: bad variable name` *(status 2)* | **2>** `<shell>: line 1: ro: readonly variable` *(status 1)* | **2>** `<shell>: line 1: ro: readonly variable` *(status 127)* | **2>** `<shell>: ro: readonly variable` *(status 1)* | `unreached~after` **2>** `<shell>: local: not found` | **2>** `f: read-only variable: ro` *(status 1)* | **2>** `<shell>: local: line 0: -r: bad variable name` *(status 2)* |
@@ -18087,6 +18099,54 @@ grades it and nothing drift-checks it either, for the same reason.
 - `declare/f-says-a-named-function-back` — three engines, three renderings of identical state: one gives the brace a line of its own and terminates with `;`, one keeps the brace on the header and terminates with nothing, and one prints the source text verbatim — which this engine does not keep, so the third is refused as unimplemented rather than approximated
   ```sh
   f() { if true; then echo one; fi; }; typeset -f f; echo "st=$?"
+  ```
+- `declare/f-says-a-braced-parameter-back` — the braces of a `${x}` survive the round trip through the tree in both engines that print from one, and they have to: reprinted as `$x` the body is a different program the moment the next character continues a name. The two spellings are one node to everything that expands them, so only a flag on the span can say which was read
+  ```sh
+  f() { echo "${x}"; }; typeset -f f
+  ```
+- `declare/f-says-a-bare-parameter-back` — the control for the row above: written without braces it comes back without them, which is what says the listing reads the spelling rather than bracing every name it sees
+  ```sh
+  f() { echo "$x"; }; typeset -f f
+  ```
+- `declare/f-says-a-stderr-pipe-back` — the operator is not what comes back: both engines write the `2>&1` it stands for and an ordinary pipe after it. bash 3.2 is the column that says why it matters rather than a second vote — `|&` arrived in bash 4 and 3.2 refuses the definition outright, so a listing that kept the operator would hand it a body it cannot read. ksh93 spells a coprocess with the same two characters and echoes the line back unchanged
+  ```sh
+  f() { echo a |& cat; }; typeset -f f
+  ```
+- `declare/f-says-a-plain-pipe-back` — the control: an ordinary pipe is written as one under every column, so the row above is about the operator rather than about pipelines
+  ```sh
+  f() { echo a | cat; }; typeset -f f
+  ```
+- `declare/f-says-a-subshell-body-back` — a declaration whose body is a subshell rather than a brace group. Both printing engines wrap it — the listing has one shape and the author's is not it — where ksh93, which keeps the text, writes the bare parentheses back. It reads as a function either way, so this is parity rather than a correctness trap
+  ```sh
+  f() ( echo sub ); typeset -f f
+  ```
+- `declare/f-says-a-conditional-body-back` — the same question reached through the other bodyless-brace declaration, which is what says the wrapping is about the body not being a group rather than about subshells
+  ```sh
+  f() if true; then echo a; fi; typeset -f f
+  ```
+- `declare/f-says-a-nested-declaration-back` — the header of a declaration *inside* a listed body, which is not the header of the listing itself: bash respells it `function inner () ` with both the keyword and the parentheses and gives the brace a line of its own, and zsh respells it `inner () ` with the blank and no keyword. Neither writes what the author wrote, and the two do not write the same thing
+  ```sh
+  f() { inner() { echo i; }; }; typeset -f f
+  ```
+- `declare/f-says-a-nested-keyword-declaration-back` — the same nested declaration written the other way. Both engines answer exactly as they answer the row above, which is what says they respell rather than preserve — and it is the reason a listing may not simply drop the keyword everywhere: ksh93 scopes a `typeset` by the word, and its column keeps it
+  ```sh
+  f() { function inner { echo i; }; }; typeset -f f
+  ```
+- `declare/f-says-a-background-statement-back` — the `&` is a terminator, so this is two statements under every reading and the only question is where the line breaks: bash keeps the second on the first's line and zsh gives it one of its own. An axis in the arrangement and nothing about the program
+  ```sh
+  f() { echo a & echo b; }; typeset -f f
+  ```
+- `declare/f-says-an-elif-back` — bash writes the word out as an `else` holding an `if` of its own, nested a level deeper and with its own `fi`, where zsh keeps `elif`. The same program twice and not the same tree, which is what makes bash's answer a choice a listing consents to rather than a normalization a printer may make on its own
+  ```sh
+  f() { if a; then b; elif c; then d; else e; fi; }; typeset -f f
+  ```
+- `declare/f-says-an-if-with-no-elif-back` — the control for the row above: with nothing to expand the two engines differ only in their usual arrangement, so the expansion is about `elif` and not about `if`
+  ```sh
+  f() { if a; then b; else e; fi; }; typeset -f f
+  ```
+- `declare/f-says-a-subshell-inside-a-body-back` — a subshell that is *not* the body: bash leaves it inline as `( exit 1 )` and zsh gives it the shape it gives a brace group, three lines and an indent. The neighbor of the body row and a different question — that one is about a node being added, this one about how an existing node is laid out
+  ```sh
+  f() { ( exit 1 ); }; typeset -f f
   ```
 - `declare/capital-f-names-a-function` — only one shell has `-F` as a function listing — a named operand answers with the bare name, a missing one with silence and 1 — while another spells a *float's precision* with the same letter and answers 0 to both, and two have no `declare` at all
   ```sh

@@ -6038,6 +6038,61 @@ echo "st=$?"`,
 		Why:     "`+=` keeps what is there and the subscripted element still places rather than landing after the end, so the two elements are at 2 and 5 with nothing between. Unanimous in the three, and it is the combination a fix is likeliest to miss because each half works alone",
 	},
 	{
+		ID: "array/a-literal-element-appends-to-the-element", Category: "expansion",
+		Snippet: `a=(p q r); a+=( [1]+=Z ); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "an element of a literal may be written `[sub]+=value`, which joins what that element already holds rather than replacing it. We read only the plain spelling, so this one fell through to being an ordinary word and the array grew a fourth element holding the seven characters `[1]+=Z` — silent, at status 0, with an array that is the wrong length and looks populated (#2405). bash and zsh differ here only by their array base, which is the same rule twice; ksh93 does not read a subscripted element inside an *appending* literal at all and keeps the text, which is the same thing it does to the plain `[1]=Z` and so is about the literal's shape rather than about the operator",
+	},
+	{
+		ID: "array/an-element-append-inside-and-outside-a-literal", Category: "expansion",
+		Snippet: `a=(p q r); a[1]+=Z; printf "[%s]" "${a[@]}"; echo; b=(p q r); b+=( [1]+=Z ); printf "[%s]" "${b[@]}"; echo`,
+		Why:     "the control beside the subject, in one case, because the control is what says where the gap was: the standalone `a[1]+=Z` was already right when the literal spelling stored its own text, and a case showing only the literal would not have said that the operator was fine and the literal was not. The two halves agree in the two shells that read the element, so a rule about what `+=` does to an element must not come to differ between the line that writes it and the literal that does",
+	},
+	{
+		ID: "array/a-replacing-literal-element-appends-to-what-it-has-built", Category: "expansion",
+		Snippet: `a=(p q r); a=( [1]+=Z ); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "what an appending element joins is the array the literal is building, and `a=(…)` starts from nothing however much the name was holding — so the same element that appends under `+=` assigns under `=`, and one element comes back rather than three. Unanimous in all three, ksh93 included, which is the row that says the disagreement above is about the literal's shape and not about `[sub]+=` being unreadable there",
+	},
+	{
+		ID: "array/a-literal-element-appends-to-an-earlier-element", Category: "expansion",
+		Snippet: `a=([1]=A [1]+=B); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "two elements naming one subscript, the second appending: unanimous at `AB`, so an append inside a literal reads what the literal itself has just written and not only what the name held before it. The count is printed because the failure mode is two elements rather than a wrong one",
+	},
+	{
+		ID: "array/a-literal-element-appends-to-an-absent-element", Category: "expansion",
+		Snippet: `a=(p q r); a+=( [5]+=Z ); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "an element the array has not got has nothing to join, so the append is the value alone and the gap below it stays a gap. The control for the row above: an append that found nothing must still place, and must not pad. zsh counts the gap as well as the elements, which is the sparse-array axis reached through this form rather than a disagreement about appending",
+	},
+	{
+		ID: "array/a-bare-element-after-an-appending-one", Category: "expansion",
+		Snippet: `a=(x [2]+=y z); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "a bare element after an *appending* one continues from that subscript, exactly as it does after a plain one: the subscript is what moves the position and not which of the two operators wrote it. The control that keeps the append from growing a placement rule of its own",
+	},
+	{
+		ID: "array/an-integer-literal-element-appends-by-adding", Category: "expansion",
+		Snippet: `typeset -i n=(1 2 3); n[1]+=5; printf "[%s]" "${n[@]}"; echo; typeset -i m=(1 2 3); m+=( [1]+=5 ); printf "[%s]" "${m[@]}"; echo`,
+		Why:     "the join is the name's and not the operator's: an integer-attributed name adds where a plain one concatenates, so the element is 7 and not the two digits joined. Both spellings again, because an append inside a literal that did its own `+` would be right for every ordinary name and wrong for this one — which is the kind of second join that only an attributed name can tell apart. zsh refuses an array assignment to a name it has already made an integer, which is the attribute axis rather than an answer about appending",
+	},
+	{
+		ID: "assoc/a-literal-element-appends-to-the-value", Category: "expansion",
+		Snippet: `typeset -A m; m[k]=v; m+=([k]+=x); echo "[${m[k]}]"`,
+		Why:     "the keyed spelling of the same element, and unanimous in the three that have the attribute: an appending literal keeps the table, so the value before the literal and the value built so far are one value and all three join it. The row that says the append is a property of the element rather than of indexed arrays",
+	},
+	{
+		ID: "assoc/a-replacing-literal-append-joins-the-replaced-value", Category: "semantics axes",
+		Snippet: `typeset -A m; m[k]=v; m=([k]+=x); echo "[${m[k]}]"`,
+		Why:     "`m=(…)` empties the table before it fills it, and the panel parts over which table the append then reads — the `KeyedLiteralAppendJoinsTheReplacedValue` axis. bash builds the replacement beside the old table and asks the *name* for what to join, so it joins a value it is in the middle of throwing away and answers `vx`; ksh93 and zsh join what the literal has built and answer `x`. Keyed only: `array/a-replacing-literal-element-appends-to-what-it-has-built` is unanimous, so bash splits its own two array kinds here and no other column does",
+	},
+	{
+		ID: "assoc/a-replacing-literal-append-repeating-a-key", Category: "semantics axes",
+		Snippet: `typeset -A m; m[k]=v; m=([k]+=x [k]+=y); echo "[${m[k]}]"`,
+		Why:     "the same axis said twice over, and the spelling that shows what bash is doing rather than only that it differs: each element joins that one discarded `v`, so the second overwrites the first and the answer is `vy` rather than `vxy`. In the other two the second element joins the first and the answer is `xy`. A case answering `vx` above and `xy` here would be an implementation that had learned one row",
+	},
+	{
+		ID: "array/a-literal-element-ends-at-the-first-bracket", Category: "syntax",
+		Snippet: `a=([1]=b]+=c); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "the subscript ends at the first `]` an `=` or a `+=` follows, so a `]+=` standing inside the value a plain element already delimited is text. Unanimous, and the control for reading the two spellings at once: looking for `]+=` and for `]=` separately and taking whichever matched would read this as an append of `c` to an element keyed `a]=b`",
+	},
+	{
 		ID: "array/a-literal-value-is-an-assignment-value", Category: "expansion",
 		Snippet: `x="p q"; a=([2]=$x); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
 		Why:     "the value of a subscripted element is not field-split, exactly as the right side of `a[2]=$x` is not — unanimous, and the opposite of a bare element in the same literal, which is a word and does split. So one set of parentheses holds two expansion rules and the subscript is what chooses between them",

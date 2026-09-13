@@ -6,6 +6,7 @@ package interp_test
 import (
 	"strings"
 	"testing"
+	"time"
 
 	. "github.com/blairham/sh/interp"
 )
@@ -28,6 +29,9 @@ func printfSem() Semantics {
 	s.PrintfBCapitalEscEscape = No
 	s.PrintfBOctalWithoutZero = No
 	s.PrintfBStopIsPadded = Yes
+	s.PrintfAbsentNumberIsAnEmptyOne = No
+	s.PrintfStarWithoutOperandIsRefused = No
+	s.PrintfStarComplaintCostsTheStatus = Yes
 	return s
 }
 
@@ -658,9 +662,9 @@ func TestPrintfQuoteIsThreeAnswersAndAnAbsence(t *testing.T) {
 	}
 }
 
-// An operand that is *missing* is never an error; one that is present and
-// empty is, in one dialect. The two are easy to conflate and the corpus has a
-// case for each.
+// An operand that is present and empty is an error in two dialects; one that
+// is *missing* is an error in only one of those two. The pair is easy to
+// conflate and the corpus has a case for each.
 func TestPrintfEmptyOperandIsNotAMissingOne(t *testing.T) {
 	sem := printfSem()
 	sem.PrintfReportsBadNumber = Yes
@@ -673,6 +677,67 @@ func TestPrintfEmptyOperandIsNotAMissingOne(t *testing.T) {
 	out, _ = run(t, `printf "[%d]"`, func(r *Runner) { r.Semantics = &sem })
 	if out != "[0]" {
 		t.Errorf("missing: got %q, want the zero and no complaint", out)
+	}
+}
+
+// The absent operand is ash's own answer, and it is a second axis rather than
+// a reading of the first: the two cross. bash complains about an operand that
+// is present and empty and not about one that is absent; ash complains about
+// both; the other three complain about neither (#2648).
+func TestPrintfAbsentNumberIsAnEmptyOneIsAnAxis(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		answer Answer
+		want   string
+	}{
+		{"absent is its own case", No, "[0]"},
+		{"absent is the empty one", Yes, "sh: printf: : invalid number\n[0]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := printfSem()
+			sem.PrintfReportsBadNumber = Yes
+			sem.PrintfEmptyIsNotANumber = Yes
+			sem.PrintfAbsentNumberIsAnEmptyOne = tc.answer
+
+			out, st := run(t, `printf "[%d]"`, func(r *Runner) { r.Semantics = &sem })
+			if out != tc.want {
+				t.Errorf("got %q, want %q", out, tc.want)
+			}
+			if want := map[Answer]int{No: 0, Yes: 1}[tc.answer]; st != want {
+				t.Errorf("status %d, want %d", st, want)
+			}
+		})
+	}
+}
+
+// One complaint per absent operand, and the zero still printed for each. A
+// reading that stopped at the first would have been indistinguishable on
+// `printf '[%d]'` and wrong on the line that found it.
+func TestPrintfAbsentNumberComplainsOncePerConversion(t *testing.T) {
+	sem := printfSem()
+	sem.PrintfReportsBadNumber = Yes
+	sem.PrintfEmptyIsNotANumber = Yes
+	sem.PrintfAbsentNumberIsAnEmptyOne = Yes
+
+	out, st := run(t, `printf "[%x][%o][%u]"`, func(r *Runner) { r.Semantics = &sem })
+	want := strings.Repeat("sh: printf: : invalid number\n", 3) + "[0][0][0]"
+	if out != want || st != 1 {
+		t.Errorf("got %q status %d, want %q and 1", out, st, want)
+	}
+}
+
+// A dialect that lets a present-and-empty operand through is never asked
+// about an absent one, because every column that allows the first allows the
+// second. Without the guard, a core with neither axis answered would refuse
+// `printf '%d'` — which no shell in the panel does.
+func TestPrintfAbsentNumberIsNotAskedWhereEmptyIsAllowed(t *testing.T) {
+	sem := printfSem()
+	sem.PrintfEmptyIsNotANumber = No
+	sem.PrintfAbsentNumberIsAnEmptyOne = Unspecified
+
+	out, st := run(t, `printf "[%d]"`, func(r *Runner) { r.Semantics = &sem })
+	if out != "[0]" || st != 0 {
+		t.Errorf("got %q status %d, want the zero at 0 with the axis left unanswered", out, st)
 	}
 }
 
@@ -957,5 +1022,208 @@ func TestPrintfBStopPaddingUnansweredIsRefused(t *testing.T) {
 		"the shells disagree here and no dialect was chosen\n[a"
 	if out != want || st != 2 {
 		t.Errorf("got %q status %d, want %q and 2", out, st, want)
+	}
+}
+
+// The `*` a width or a precision may be written as takes its value from the
+// operand list, ahead of the operand being converted. Unanimous across the
+// whole panel — bash 5.3, bash as sh, bash 3.2, zsh, ksh93, dash and BusyBox
+// ash — and so a correction rather than an axis (#2646).
+func TestPrintfStarTakesTheWidthFromTheOperands(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		src  string
+		want string
+	}{
+		{"a width", `printf '[%*d]' 6 42`, "[    42]"},
+		{"a precision", `printf '[%.*s]' 3 hello`, "[hel]"},
+		// The discriminating one: two stars in a single conversion, taken
+		// as two operands in written order. A fix that resolved one star
+		// passes both rows above and fails this.
+		{"both, in order", `printf '[%*.*f]' 10 2 3.14159`, "[      3.14]"},
+		// Ordering again, from the other side: were the two read the other
+		// way round, this would be `[     3.141590]`.
+		{"the order is not a coincidence", `printf '[%*.*f]' 2 10 3.14159`, "[3.1415900000]"},
+		{"a negative width is the `-` flag", `printf '[%*d]' -5 42`, "[42   ]"},
+		{"a negative precision is no precision", `printf '[%.*s]' -3 hello`, "[hello]"},
+		{"a zero width is no width", `printf '[%*d]' 0 42`, "[42]"},
+		{"a zero precision is not no precision", `printf '[%.*s]' 0 hello`, "[]"},
+		{"the flags still stand", `printf '[%-*d]' 6 42`, "[42    ]"},
+		{"including the one a digit would have been", `printf '[%0*d]' 6 42`, "[000042]"},
+		{"a `-` flag and a negative width agree", `printf '[%-*d]' -6 42`, "[42    ]"},
+		{"a star for a string's width", `printf '[%*s]' 6 hi`, "[    hi]"},
+		// The conversions that do not read their operand as a number take
+		// the same widths: the star belongs to the field, not to the verb.
+		{"a star before a `%c`", `printf '[%*c]' 4 abc`, "[   a]"},
+		{"a star before a `%b`", `printf '[%*b]' 5 'a\tb'`, "[  a\tb]"},
+		{"a precision truncates a `%b` after its escapes", `printf '[%.*b]' 2 'a\tb'`, "[a\t]"},
+		{"a width with no star is untouched", `printf '[%6d]' 42`, "[    42]"},
+		{"a precision with no star is untouched", `printf '[%.3s]' hello`, "[hel]"},
+		{"a star with nothing left is a zero", `printf '[%*d]' 6`, "[     0]"},
+		{"and so is a precision's", `printf '[%.*s]' `, "[]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := printfSem()
+			out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q status %d, want %q and 0", out, st, tc.want)
+			}
+		})
+	}
+}
+
+// The format is reused until the operands run out, and a star consumes one of
+// them. Both halves of that have to hold at once: a star that consumed
+// nothing would spin on a format with no other conversion in it, and one
+// whose count the loop did not see would be off by a pass.
+//
+// Written so that a wrong answer hangs or over-runs rather than mismatching,
+// and run under a deadline so the hang is a failure and not a stuck suite.
+func TestPrintfStarIsCountedByTheReuseLoop(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		src  string
+		want string
+	}{
+		{"a star and its value, twice", `printf '[%*d]' 6 42 3 7`, "[    42][  7]"},
+		{"an odd operand starts a pass the star pays for", `printf '[%*d]' 6 42 8`, "[    42][       0]"},
+		{"two stars a pass", `printf '[%*.*f]' 10 2 3.14159 6 1 2.5`, "[      3.14][   2.5]"},
+		// The format whose only conversion is a width. Were the star not
+		// counted as an operand consumed, `used` would be zero every pass
+		// and the loop would never reach its operands.
+		{"a format that is nothing but a width", `printf '[%*s]' 3 1 4 1 5`, "[  1][   1][     ]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			done := make(chan struct{})
+			var out string
+			var st int
+			go func() {
+				defer close(done)
+				sem := printfSem()
+				out, st = run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+			}()
+			select {
+			case <-done:
+			case <-time.After(10 * time.Second):
+				t.Fatal("printf did not finish: the reuse loop is not counting the star's operand")
+			}
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q status %d, want %q and 0", out, st, tc.want)
+			}
+		})
+	}
+}
+
+// A star's operand is read by the same number reader the conversion's own
+// operand is, so the complaint and the axis that governs it are the same
+// ones — except for the status, which ash alone withholds.
+func TestPrintfStarOperandIsReadAsANumber(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		costs  Answer
+		src    string
+		want   string
+		status int
+	}{
+		{"a character constant is a width", Yes, `printf '[%*d]' "'A" 42`, "[" + strings.Repeat(" ", 63) + "42]", 0},
+		{"something that is not a number complains", Yes, `printf '[%*s]' abc hi`, "sh: printf: abc: invalid number\n[hi]", 1},
+		{"and the width it could not read is none", No, `printf '[%*s]' abc hi`, "sh: printf: abc: invalid number\n[hi]", 0},
+		{"a precision's operand is read the same way", Yes, `printf '[%.*s]' abc hello`, "sh: printf: abc: invalid number\n[]", 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := printfSem()
+			sem.PrintfReportsBadNumber = Yes
+			sem.PrintfStarComplaintCostsTheStatus = tc.costs
+			out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+			if out != tc.want || st != tc.status {
+				t.Errorf("got %q status %d, want %q and %d", out, st, tc.want, tc.status)
+			}
+		})
+	}
+}
+
+// An absent operand at a star and an absent operand at the conversion are not
+// one question, and ash is the column that proves it: the same shell that
+// reads a missing `%d` operand as an empty string reads a missing width as a
+// silent zero. `printf 'a%*db'` writes one complaint there and not two.
+func TestPrintfStarWithNoOperandIsNotTheAbsentNumberCase(t *testing.T) {
+	sem := printfSem()
+	sem.PrintfReportsBadNumber = Yes
+	sem.PrintfEmptyIsNotANumber = Yes
+	sem.PrintfAbsentNumberIsAnEmptyOne = Yes
+
+	out, st := run(t, `printf 'a%*db'`, func(r *Runner) { r.Semantics = &sem })
+	if want := "sh: printf: : invalid number\na0b"; out != want || st != 1 {
+		t.Errorf("got %q status %d, want %q and 1", out, st, want)
+	}
+	out, st = run(t, `printf '[%.*s]'`, func(r *Runner) { r.Semantics = &sem })
+	if out != "[]" || st != 0 {
+		t.Errorf("got %q status %d, want the empty field in silence at 0", out, st)
+	}
+}
+
+// ksh93 alone refuses the directive outright when a star finds the operand
+// list already empty. The trigger is the star's operand and not the operand
+// count — a star that has its width is fine however little is left after it.
+func TestPrintfStarWithoutOperandIsRefusedIsAnAxis(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		refused Answer
+		src     string
+		want    string
+		status  int
+	}{
+		{"a silent zero", No, `printf '%s[%*d]' x`, "x[0]", 0},
+		{"refused", Yes, `printf '%s[%*d]' x`, "sh: printf: .: invalid directive\nx[", 1},
+		// The star has its operand here; what ran out is the `%d`, which is
+		// the other question and not this one.
+		{"a star that has its width is not refused", Yes, `printf '[%*d]' 6`, "[     0]", 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := printfSem()
+			sem.PrintfStarWithoutOperandIsRefused = tc.refused
+			out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+			if out != tc.want || st != tc.status {
+				t.Errorf("got %q status %d, want %q and %d", out, st, tc.want, tc.status)
+			}
+		})
+	}
+}
+
+// The three axes this file added are asked at the disagreement and nowhere
+// else, and the strongest way to say so is to run the core vector — where
+// every one of them is unanswered, and an axis that *is* consulted refuses
+// the command and says which one on stderr.
+//
+// So an ordinary `printf` has to work under a shell that has answered none of
+// them, and a star that is given its operands is ordinary: the panel is
+// unanimous about it, which is what made #2646 a correction.
+func TestPrintfDoesNotConsultTheStarAxesOnThePlainPath(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		src  string
+		want string
+	}{
+		{"a number", `printf '%d' 5`, "5"},
+		{"a string and a number", `printf '[%s=%d]' n 5`, "[n=5]"},
+		{"a width written out", `printf '[%6d]' 42`, "[    42]"},
+		{"a width from the operands", `printf '[%*d]' 6 42`, "[    42]"},
+		{"a precision from the operands", `printf '[%.*s]' 3 hello`, "[hel]"},
+		{"both of them", `printf '[%*.*f]' 10 2 3.14159`, "[      3.14]"},
+		{"a negative width", `printf '[%*d]' -5 42`, "[42   ]"},
+		{"the format reused", `printf '[%*d]' 6 42 3 7`, "[    42][  7]"},
+		// The absent *conversion* operand is the panel's silent zero too,
+		// and the guard in printfEmptyNumberIsAnError is what keeps the core
+		// from being asked about it.
+		{"an absent operand", `printf '[%d]'`, "[0]"},
+		{"an absent operand part way through", `printf '[%d][%d]' 1`, "[1][0]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := CoreSemantics()
+			out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q status %d, want %q and 0 — an axis was consulted on the plain path", out, st, tc.want)
+			}
+		})
 	}
 }

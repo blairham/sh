@@ -942,6 +942,9 @@ func Semantics() interp.Semantics {
 	s.KillStatus = interp.KillStatusAnySuccess
 	s.SubshellJobTable = interp.SubshellJobsKeptOutsideACompound
 	s.PrintfEmptyIsNotANumber = interp.Yes
+	s.PrintfAbsentNumberIsAnEmptyOne = interp.No
+	s.PrintfStarWithoutOperandIsRefused = interp.No
+	s.PrintfStarComplaintCostsTheStatus = interp.Yes
 	s.PrintfReportsBadNumber = interp.Yes
 	s.PrintfBackslashC = interp.PrintfBackslashCLiteral
 	// A format that ends inside a conversion is an error here, with a

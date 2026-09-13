@@ -23,11 +23,18 @@ import (
 // *this* shell quotes, and the diagnostics have to be the shell's own.
 //
 // Most of it is unanimous, which is worth saying because the divergences are
-// what the rest of this file is about. All four agree that the format is
-// *reused* until the arguments run out, that a missing argument is the empty
-// string or zero rather than an error, that `%b` expands escapes in its
+// what the rest of this file is about. All of them agree that the format is
+// *reused* until the arguments run out, that `%b` expands escapes in its
 // argument and `%s` does not, that escapes in the format itself are always
-// expanded, and on `%c`, widths, precisions, `%%` and octal escapes.
+// expanded, and on `%c`, widths — including the `*` that takes one from the
+// operand list (#2646) — precisions, `%%` and octal escapes.
+//
+// A missing argument is the empty string or zero rather than an error in four
+// of the five, and that sentence used to say "all". ash is the fifth: it
+// reads a numeric conversion with nothing left as a conversion of the empty
+// string, complaint and all (#2648). The paragraph above was written against
+// a four-shell panel and the fifth column is what found it, which is what
+// that column is for.
 //
 // Four things they do not agree on, and each is an axis or a wording rather
 // than a branch here:
@@ -263,8 +270,148 @@ func (r *Runner) printfOnce(format string, operands []string) (int, int, printfP
 	return used, status, printfPassRan
 }
 
-// printfVerb formats one conversion.
+// printfVerb formats one conversion, resolving the width and the precision a
+// `*` stands for before the operand being converted is read.
+//
+// The order is the whole of it: `printf '%*.*f' 10 2 3.14159` takes the width,
+// then the precision, then the value, and a fix that resolved one star would
+// pass `%*d` and `%.*s` and still get that one wrong.
 func (r *Runner) printfVerb(spec string, verb byte, timeFmt string, next func() (string, bool)) (string, int, bool) {
+	starCode := 0
+	if strings.IndexByte(spec, '*') >= 0 {
+		// Guarded, so an ordinary `printf '%d' 5` never reaches the star
+		// code and never consults the axis inside it.
+		var stop bool
+		if spec, starCode, stop = r.printfStars(spec, next); stop {
+			return "", starCode, true
+		}
+	}
+	text, code, stop := r.printfConvert(spec, verb, timeFmt, next)
+	if code == 0 {
+		// The star's complaint still stands where the conversion itself had
+		// nothing to say: `printf '%*s' abc hi` writes `hi` and reports.
+		code = starCode
+	}
+	return text, code, stop
+}
+
+// printfStars replaces each `*` in a conversion's prefix with the operand it
+// takes, returning the prefix as if those widths had been written out.
+//
+// Unanimous across the whole panel — bash 5.3, bash as sh, bash 3.2, zsh,
+// ksh93, dash and BusyBox ash — in three respects, measured 2026-09-13:
+// one operand per star and in written order, a negative width meaning the `-`
+// flag and the width without its sign, and a negative precision meaning no
+// precision at all rather than a zero one. `printf '%.*s' -3 hello` is
+// `hello` in all seven, where a precision of zero would be the empty string.
+func (r *Runner) printfStars(spec string, next func() (string, bool)) (string, int, bool) {
+	i := 1 // past the %
+	for i < len(spec) && strings.IndexByte("-+ #0", spec[i]) >= 0 {
+		i++
+	}
+	flags, status := spec[1:i], 0
+	width := ""
+	if i < len(spec) && spec[i] == '*' {
+		i++
+		n, code, stop := r.printfStarOperand(next)
+		if stop {
+			return "", code, true
+		}
+		if code != 0 {
+			status = code
+		}
+		if n < 0 {
+			// C's rule, and the panel's: a negative width is the `-` flag
+			// and the magnitude. Added only where the flag is not already
+			// there, because `%--6d` is not a spelling Go's fmt reads.
+			if !strings.ContainsRune(flags, '-') {
+				flags += "-"
+			}
+			if n = -n; n < 0 {
+				// The one value whose sign cannot be dropped: negating it
+				// wraps back to itself, which would put a `-` where the
+				// width goes. Clamped, so it stays a width nobody meant
+				// rather than a spec nothing can read.
+				n = 1<<63 - 1
+			}
+		}
+		if n != 0 {
+			// A zero width is written as no width rather than as `0`: with
+			// no flags before it that digit *is* the zero-padding flag, and
+			// the two mean the same thing here only by accident.
+			width = strconv.FormatInt(n, 10)
+		}
+	} else {
+		start := i
+		for i < len(spec) && spec[i] >= '0' && spec[i] <= '9' {
+			i++
+		}
+		width = spec[start:i]
+	}
+	prec := ""
+	if i < len(spec) && spec[i] == '.' {
+		i++
+		if i < len(spec) && spec[i] == '*' {
+			i++
+			n, code, stop := r.printfStarOperand(next)
+			if stop {
+				return "", code, true
+			}
+			if code != 0 {
+				status = code
+			}
+			if n >= 0 {
+				prec = "." + strconv.FormatInt(n, 10)
+			}
+		} else {
+			start := i
+			for i < len(spec) && spec[i] >= '0' && spec[i] <= '9' {
+				i++
+			}
+			prec = "." + spec[start:i]
+		}
+	}
+	return "%" + flags + width + prec + spec[i:], status, false
+}
+
+// printfStarOperand reads the operand a `*` takes, which is the same number
+// the conversion itself would read and so carries the same complaints.
+//
+// The operand list running out is where this parts from the conversion. A
+// star with nothing left is a silent zero in six of the seven, ash included —
+// and ash is the column that *does* complain about an absent operand at the
+// conversion, so the two cases are not one question. ksh93 is the seventh and
+// refuses the directive outright.
+func (r *Runner) printfStarOperand(next func() (string, bool)) (int64, int, bool) {
+	arg, present := next()
+	if !present {
+		if r.ask(r.sem().PrintfStarWithoutOperandIsRefused, "`printf '%*d'` refusing a `*` the operands ran out before") {
+			// ksh93 names `.` whatever the conversion was — `%*s` and
+			// `%*.*f` both report `.` — so the name is the constant it
+			// measured as rather than anything read out of the format.
+			return 0, r.printfBadVerb(".", "."), true
+		}
+		if r.unspecified {
+			return 0, r.status, true
+		}
+		return 0, 0, false
+	}
+	n, code := r.printfNumber(arg, true)
+	if code != 0 && !r.ask(r.sem().PrintfStarComplaintCostsTheStatus, "a `printf` complaint about a `*` operand reporting failure") {
+		// ash alone writes the complaint and reports success anyway:
+		// `printf '%*s' abc hi` is `hi` on stderr's evidence and 0 on the
+		// status's. Asked only where there is a complaint to cost anything,
+		// so the two dialects that never complain are never questioned.
+		if r.unspecified {
+			return n, r.status, true
+		}
+		code = 0
+	}
+	return n, code, false
+}
+
+// printfConvert formats one conversion whose width and precision are settled.
+func (r *Runner) printfConvert(spec string, verb byte, timeFmt string, next func() (string, bool)) (string, int, bool) {
 	arg, present := next()
 	switch verb {
 	case 'T':
@@ -316,11 +463,11 @@ func (r *Runner) printfVerb(spec string, verb byte, timeFmt string, next func() 
 
 // printfNumber reads an integer operand, complaining where the dialect does.
 //
-// The zero is printed either way: the two shells that report this still write
-// the zero the conversion would have produced, so the complaint is beside the
+// The zero is printed either way: the shells that report this still write the
+// zero the conversion would have produced, so the complaint is beside the
 // output rather than instead of it.
 func (r *Runner) printfNumber(arg string, present bool) (int64, int) {
-	if arg == "" && (!present || !r.ask(r.sem().PrintfEmptyIsNotANumber, "`printf` complaining about an empty operand where a number belongs")) {
+	if arg == "" && !r.printfEmptyNumberIsAnError(present) {
 		return 0, 0
 	}
 	if n, ok := r.charConstant(arg); ok {
@@ -335,8 +482,33 @@ func (r *Runner) printfNumber(arg string, present bool) (int64, int) {
 	return 0, r.printfReport(printfBadNumber, arg)
 }
 
+// printfEmptyNumberIsAnError is whether a numeric conversion left with no
+// text to read should complain, which is two questions and not one.
+//
+// The operand being *absent* and the operand being present and *empty* are
+// separate facts, and the dialects cross on them: bash complains about the
+// empty one and not the absent one, ash complains about both, and the other
+// three complain about neither. So the absent case is asked first, and the
+// dialect that folds it into the empty one goes on to ask the empty one's
+// question — which is what BusyBox does (#2648).
+func (r *Runner) printfEmptyNumberIsAnError(present bool) bool {
+	if !present {
+		// Read rather than asked, and that is the point: every dialect that
+		// lets a present-and-empty operand through lets an absent one
+		// through too. The implication holds in all seven columns, so a
+		// dialect that says no here has nothing left to decide and must not
+		// be questioned about it — which is also what keeps a core with
+		// neither axis answered writing the silent zero the panel agrees on.
+		if r.sem().PrintfEmptyIsNotANumber != Yes {
+			return false
+		}
+		return r.ask(r.sem().PrintfAbsentNumberIsAnEmptyOne, "`printf` reading a numeric conversion with no operand left as an empty one")
+	}
+	return r.ask(r.sem().PrintfEmptyIsNotANumber, "`printf` complaining about an empty operand where a number belongs")
+}
+
 func (r *Runner) printfFloat(arg string, present bool) (float64, int) {
-	if arg == "" && (!present || !r.ask(r.sem().PrintfEmptyIsNotANumber, "`printf` complaining about an empty operand where a number belongs")) {
+	if arg == "" && !r.printfEmptyNumberIsAnError(present) {
 		return 0, 0
 	}
 	if n, ok := r.charConstant(arg); ok {
@@ -502,16 +674,31 @@ func printfSpecPrefix(s string) int {
 	for i < len(s) && strings.IndexByte("-+ #0'", s[i]) >= 0 {
 		i++
 	}
-	for i < len(s) && s[i] >= '0' && s[i] <= '9' {
-		i++
-	}
+	i += printfFieldRun(s, i)
 	if i < len(s) && s[i] == '.' {
 		i++
-		for i < len(s) && s[i] >= '0' && s[i] <= '9' {
-			i++
-		}
+		i += printfFieldRun(s, i)
 	}
 	return i
+}
+
+// printfFieldRun is how much of s at i is a width or a precision: a run of
+// digits, or the single `*` that takes one from the operand list instead.
+//
+// The star belongs here and not at the verb. Accepting only digits is what
+// made `printf '%*d' 6 42` refuse: the `*` fell out of the prefix and
+// arrived at the scan as the conversion character, so every dialect reported
+// a conversion it did not have — each in its own correct wording, which is
+// why the diagnostics looked right and the answer was wrong (#2646).
+func printfFieldRun(s string, i int) int {
+	if i < len(s) && s[i] == '*' {
+		return 1
+	}
+	n := 0
+	for i+n < len(s) && s[i+n] >= '0' && s[i+n] <= '9' {
+		n++
+	}
+	return n
 }
 
 // printfTime is `%(fmt)T`: an epoch through a date format.

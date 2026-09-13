@@ -855,3 +855,21 @@ func TestTheKindLetterIsNotAmongTypesLetters(t *testing.T) {
 		t.Errorf("TypeOptions = %q, want no kind letter: this shell refuses it", got)
 	}
 }
+
+// TestPrintfStarWithoutOperandIsRefused is ksh93's alone: a `*` standing for
+// a width or a precision that finds the operand list already empty refuses
+// the directive, where the other six take a silent zero. `printf
+// '%s[%*d]\n' x` is `x[0]` at 0 elsewhere and `printf: .: unknown format
+// specifier` at 1 here.
+func TestPrintfStarWithoutOperandIsRefused(t *testing.T) {
+	s := ksh.Semantics()
+	if got, want := s.PrintfStarWithoutOperandIsRefused, interp.Yes; got != want {
+		t.Errorf("PrintfStarWithoutOperandIsRefused = %v, want %v", got, want)
+	}
+	// The trigger is the star's operand and not the operand count: `printf
+	// '[%*d]' 6`, where the star has its 6 and the `%d` is what ran out, is
+	// `[     0]` at 0 in ksh93 too, and that is the axis below saying so.
+	if got, want := s.PrintfAbsentNumberIsAnEmptyOne, interp.No; got != want {
+		t.Errorf("PrintfAbsentNumberIsAnEmptyOne = %v, want %v", got, want)
+	}
+}

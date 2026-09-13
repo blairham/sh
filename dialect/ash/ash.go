@@ -398,6 +398,9 @@ func Semantics() interp.Semantics {
 	// An empty operand to a numeric conversion is reported, where dash reads
 	// it as a zero and says nothing.
 	s.PrintfEmptyIsNotANumber = interp.Yes
+	s.PrintfAbsentNumberIsAnEmptyOne = interp.Yes
+	s.PrintfStarWithoutOperandIsRefused = interp.No
+	s.PrintfStarComplaintCostsTheStatus = interp.No
 	s.PrintfReportsBadNumber = interp.Yes
 	s.PrintfUnfinishedConversionIsAPercent = interp.No
 	// `printf -v x '%s' hi` assigns nothing: `-v` is read as the format.

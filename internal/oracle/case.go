@@ -1047,6 +1047,26 @@ var Corpus = []Case{
 		Why:     "a numeric conversion whose operand begins with a quote takes the value of the *character after it* rather than reading digits — POSIX XCU says so in so many words and all seven columns do it, so it is the core's. It is also the only way a shell has of asking what a character's code is, which is what made the gap sting here: `printf '0x%x' \"'a\"` answered `invalid number` and printed `0x0`. Five readings in one row: both quote characters, a hex and a float conversion taking the same operand, a trailing character ignored rather than refused — ksh93 warns beside the same 65 — and a lone quote worth zero",
 	},
 	{
+		ID: "printf/star-takes-the-width-from-the-operands", Category: "builtins",
+		Snippet: `printf '%*d\n' 6 42 3 7; printf '%.*s|%*.*f\n' 3 hello 10 2 3.14159; printf '[%*d][%.*s]\n' -5 42 -3 hello; printf '[%*s][%0*d]\n' 6 hi 6 42`,
+		Why:     "POSIX XCU gives printf C's `*` for a field width and for a precision, taken from the operand list in order ahead of the operand being converted, and all seven columns do it — so it is the core's and not an axis (#2646). Six readings in one row, and the third is the one that separates a real fix from a partial one: `%*.*f` takes the width, then the precision, then the value, as two operands in written order, where a fix that resolved a single star passes `%*d` and `%.*s` and still gets it wrong. Then the two signs, which are C's rule and not an approximation of it — a negative width is the `-` flag and the magnitude, a negative precision is no precision at all rather than a zero one, so `%.*s` of -3 is `hello` and not the empty string — and the reuse loop counting the star's operand, which the first conversion exercises twice over",
+	},
+	{
+		ID: "axis/printf-star-without-operand", Category: "builtins",
+		Snippet: `printf '%*d\n'; echo "st=$?"`,
+		Why:     "a `*` that finds the operand list already empty: six columns take a silent zero and ksh93 alone refuses the directive, naming the constant `.` whatever the conversion was. Written with the conversion first deliberately — ksh93's refusal also rewinds the pass's stdout to the start of the last conversion that consumed an operand, which this shell records in docs/spec/semantics.md and does not reproduce, so a format with a literal ahead of the star would grade that unreproduced fact instead of this axis",
+	},
+	{
+		ID: "axis/printf-absent-number-is-an-empty-one", Category: "builtins",
+		Snippet: `printf '[%d]\n'; echo "st=$?"; printf '[%x][%o][%u]\n'; echo "st=$?"; printf '[%d][%d]\n' 1; echo "st=$?"`,
+		Why:     "a numeric conversion with no operand left: bash, zsh, ksh93 and dash write the zero in silence at 0, and BusyBox ash reads it as a conversion of the empty string — `invalid number ''` at 1, the same complaint it makes for an operand that is present and empty (#2648). The second line is why the axis is not satisfied by complaining once: ash writes one complaint per absent operand and three come out. The third shows the operands running out part way through a format rather than at its start, which is the shape a script actually meets",
+	},
+	{
+		ID: "axis/printf-star-complaint-costs-the-status", Category: "builtins",
+		Snippet: `printf '[%*s]\n' abc hi; echo "st=$?"; printf '[%.*s]\n' abc hello; echo "st=$?"`,
+		Why:     "the complaint about an operand a `*` took, and whether it reports failure. bash and dash say yes, ksh93 and zsh never complain about a number at all, and ash writes the complaint and reports success anyway — the diagnostic, the output and the status are three observations here and they do not move together. The width it could not read is none, which is why the field comes out unpadded in every column",
+	},
+	{
 		ID: "printf/quoted-operand-needs-the-quote-first", Category: "builtins",
 		Snippet: `printf '%d\n' " 'A"; echo "st=$?"`,
 		Why:     "the control for the row above, and the reason the operand is not trimmed before that reading where a plain numeral is: one blank in front of the quote makes the word an ordinary operand again and a bad number in five of the seven columns, each in its own wording. ksh93 and ash read through the blank and answer 65",

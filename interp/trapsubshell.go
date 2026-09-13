@@ -210,11 +210,24 @@ func (r *Runner) clearPseudoInherited(name string) {
 // while the kept snapshot is showing it — once a modification drops the
 // snapshot, `(trap ” USR2; trap)` lists USR2 alone. RETURN fires in no
 // subshell, so it is never listed as inherited.
+//
+// errtrace and functrace are asked ahead of the axis for exactly that
+// reason: with either on the trap does fire in the subshell, so it is
+// listed there whatever the dialect would otherwise say, and it survives a
+// modification that drops the snapshot. Measured in bash 5.3.15:
+// `set -T; trap 'echo D' DEBUG; (trap "" USR2; trap)` writes SIGUSR2 *and*
+// the DEBUG trap, where the same line without `-T` lists SIGUSR2 alone.
 func (r *Runner) inheritedPseudoListed(name string) (listed, refused bool) {
 	switch name {
 	case "ERR":
+		if r.errtrace {
+			return true, false
+		}
 		listed = r.ask(r.sem().ErrTrapRunsInSubshells, "the ERR trap inside a subshell")
 	case "DEBUG":
+		if r.functrace {
+			return true, false
+		}
 		listed = r.ask(r.sem().DebugTrapRunsInSubshells, "the DEBUG trap inside a subshell")
 	default:
 		return false, false

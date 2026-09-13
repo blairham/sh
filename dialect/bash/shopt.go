@@ -147,10 +147,12 @@ var shoptModes = map[string]interp.MatchOption{
 //     (interp.Runner.CompletesEmptyCommandWord) and the inversion happens
 //     here, in the one place the name's sense is decided.
 //
-// `lastpipe` is the ninth entry and belongs to neither group above. It is not
-// interactive-only — it is the one name here a *script* sets and immediately
-// depends on — and what it moves is a semantics axis rather than a capability.
-// Its own comment on the entry carries the measurement; #2361 is the issue.
+// `lastpipe` and `extdebug` are the last two entries and belong to neither
+// group above. Neither is interactive-only — they are the names here a
+// *script* sets and immediately depends on — and what they move is a
+// semantics axis and a pair of trap-carriage options rather than a
+// capability. Their own comments on the entries carry the measurements;
+// #2361 and #2426 are the issues.
 var shoptSwitches = map[string]struct {
 	get func(*interp.Runner) bool
 	set func(*interp.Runner, bool)
@@ -191,6 +193,44 @@ var shoptSwitches = map[string]struct {
 	"no_empty_cmd_completion": {
 		get: func(r *interp.Runner) bool { return !r.CompletesEmptyCommandWord() },
 		set: func(r *interp.Runner, on bool) { r.SetCompletesEmptyCommandWord(!on) },
+	},
+	// extdebug, and it is two states under one name. bash's extended
+	// debugging turns **both** trap-carriage options on with it — measured
+	// in bash 5.3.15, `shopt -s extdebug` leaves `set -o` reporting
+	// `errtrace on` and `functrace on` and `$-` carrying `E` and `T`, and
+	// `shopt -u extdebug` puts both back off — which is what makes it the
+	// other half of #2426: a DEBUG trap set beside it is exactly the trap
+	// that has to enter the calls it is watching.
+	//
+	// The indicator bit is stored here rather than derived from the two
+	// options because the three come apart, measured on the same binary:
+	// `shopt -s extdebug; set +T` leaves `functrace off` with
+	// `shopt -p extdebug` still writing `shopt -s extdebug`, and `set -T`
+	// alone never turns the indicator on. So the options are the behavior
+	// and the bit is bash's own answer about itself, which is the one thing
+	// here the core has no state for.
+	//
+	// bash 3.2.57 moves the indicator alone and leaves both options off — a
+	// change within bash rather than a difference between shells, so the
+	// corpus's `bash32` column disagrees with the other two on purpose and
+	// this is 5.3's answer.
+	//
+	// What bash's extended debugging *also* does is not here: `declare -F`
+	// reporting a definition's file and line, a DEBUG action's status
+	// skipping the next command or simulating a `return`, and the
+	// BASH_ARGC/BASH_ARGV record — measured and itemized in #2476, so the
+	// remainder is a count rather than a paragraph. The entry keeps the same
+	// partial honesty `set -o posix` does — it moves what was measured to
+	// move with it and promises nothing else — rather than refusing the name
+	// outright, which is what left a debugging script with the option off,
+	// `$?` at 1 and a trap that saw only the call (#2426).
+	"extdebug": {
+		get: func(r *interp.Runner) bool { return shoptStoredState(r, "extdebug", false) },
+		set: func(r *interp.Runner, on bool) {
+			shoptSetStored(r, "extdebug", on, false)
+			r.SetErrorTracing(on)
+			r.SetFunctionTracing(on)
+		},
 	},
 	// The one name in this table that moves a *semantics axis* rather than a
 	// capability, and the reason it is a switch at all: where the last element
@@ -295,18 +335,26 @@ var shoptRecorded = map[string]bool{
 	"progcomp":      true,
 }
 
-// shoptRecordedStore is where a moved recorded name is kept: an array under a
-// name no script can reach, which is the shape the zsh dialect's own recorded
-// store uses and for the same reasons — a subshell deep-copies the variable
-// table, so `(shopt -u progcomp)` stays in the subshell.
+// shoptStateStore is where a moved name this dialect keeps for itself is
+// kept: an array under a name no script can reach, which is the shape the zsh
+// dialect's own recorded store uses and for the same reasons — a subshell
+// deep-copies the variable table, so `(shopt -u progcomp)` stays in the
+// subshell.
 //
 // Deviations rather than states, so a shell that has never run `shopt` on one
 // of these holds an empty array and every name reads back at bash's default.
-const shoptRecordedStore = ".bash.shopt"
+//
+// Two kinds of name live here and they are not the same kind. The recorded
+// ones above are remembered and acted on by nothing. `extdebug` is remembered
+// *and* acted on: the behavior it carries is the core's two trap-carriage
+// options, and what is stored here is only the indicator bit bash writes back
+// through `shopt -p`, which no core state holds because the option and the
+// indicator come apart — see the entry in shoptSwitches.
+const shoptStateStore = ".bash.shopt"
 
-// shoptRecordedState reads one recorded name.
-func shoptRecordedState(r *interp.Runner, name string, def bool) bool {
-	names, _ := r.GetArray(shoptRecordedStore)
+// shoptStoredState reads one stored name.
+func shoptStoredState(r *interp.Runner, name string, def bool) bool {
+	names, _ := r.GetArray(shoptStateStore)
 	for _, n := range names {
 		if n == name {
 			return !def
@@ -315,11 +363,11 @@ func shoptRecordedState(r *interp.Runner, name string, def bool) bool {
 	return def
 }
 
-// shoptSetRecorded records or clears one name's deviation, keeping the store
-// sorted so it is a function of the set rather than of the order an rc file
-// happened to write.
-func shoptSetRecorded(r *interp.Runner, name string, on, def bool) {
-	names, _ := r.GetArray(shoptRecordedStore)
+// shoptSetStored records or clears one name's deviation from its default,
+// keeping the store sorted so it is a function of the set rather than of the
+// order an rc file happened to write.
+func shoptSetStored(r *interp.Runner, name string, on, def bool) {
+	names, _ := r.GetArray(shoptStateStore)
 	out := make([]string, 0, len(names)+1)
 	for _, n := range names {
 		if n != name {
@@ -330,7 +378,7 @@ func shoptSetRecorded(r *interp.Runner, name string, on, def bool) {
 		out = append(out, name)
 		sort.Strings(out)
 	}
-	r.SetArray(shoptRecordedStore, out)
+	r.SetArray(shoptStateStore, out)
 }
 
 // shoptStates are the rest of the names bash 5.3 lists, with the state this
@@ -390,7 +438,6 @@ var shoptStates = map[string]bool{
 	"compat44":             false,
 	"complete_fullquote":   true,
 	"execfail":             false,
-	"extdebug":             false,
 	"extquote":             true,
 	"failglob":             false,
 	"globasciiranges":      true,
@@ -445,7 +492,7 @@ func shoptState(r *interp.Runner, name string) (on, known bool) {
 		return ro(r), true
 	}
 	if def, ok := shoptRecorded[name]; ok {
-		return shoptRecordedState(r, name, def), true
+		return shoptStoredState(r, name, def), true
 	}
 	on, known = shoptStates[name]
 	return on, known
@@ -596,7 +643,7 @@ func shoptApply(r *interp.Runner, names []string, on bool) int {
 			continue
 		}
 		if def, ok := shoptRecorded[name]; ok {
-			shoptSetRecorded(r, name, on, def)
+			shoptSetStored(r, name, on, def)
 			continue
 		}
 		if held, ok := shoptStates[name]; ok {

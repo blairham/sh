@@ -29,3 +29,22 @@ func TestASubscriptHoldingABlankIsRefused(t *testing.T) {
 		}
 	}
 }
+
+// The holdout holds in the other position too: an array literal's element is
+// cut at the blank and the bracket is then read as a glob (#2299).
+//
+// Measured on zsh 5.9.2, 2026-09-13: `typeset -A m; m=( [two words]=2 )` is
+// `bad pattern: [two` at status 1, where bash 5.3.15 and ksh93u+ store the
+// key `two words`. Here so that the flag giving those two the longer element
+// cannot be turned on for this one in silence.
+func TestAnArrayLiteralElementHoldingABlankIsRefused(t *testing.T) {
+	for _, src := range []string{
+		`typeset -A m; m=( [two words]=2 )`,
+		`m=( [1 2]=x )`,
+	} {
+		out, st := runZsh(t, t.TempDir(), src)
+		if st == 0 || !strings.Contains(out, "bad pattern: [") {
+			t.Errorf("%s = %q (status %d), want a refused pattern at nonzero", src, out, st)
+		}
+	}
+}

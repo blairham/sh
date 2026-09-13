@@ -9492,6 +9492,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `trap/listing-in-a-pipeline-element` | `done` | `trap -- 'echo x' SIGUSR1~done` | `trap -- 'echo x' USR1~done` | `done` | `done` | `trap -- 'echo x' USR1~done` | `trap -- 'echo x' USR1~done` |
 | `trap/set-in-a-function-diverges` | `enter~between~TRAP` | `enter~between~TRAP` | `enter~between~TRAP` | `enter~between~TRAP` | `enter~between~TRAP` | `enter~TRAP~between` | `enter~between~TRAP` |
 | `exit/status-and-wrapping` | `[44]~[1]` | `[44]~[1]` | `[44]~[1]` | `[44]~[1]` | `[44]~[1]` | `[44]~[1]` | `[44]~[1]` |
+| `exit/a-refused-operand-and-the-next-command` | **2>** `<shell>: 1: exit: Illegal number: status` *(status 2)* | `after=2~alive` **2>** `<shell>: line 1: exit: status: numeric argument required` | **2>** `<shell>: line 1: exit: status: numeric argument required` *(status 2)* | **2>** `<shell>: line 0: exit: status: numeric argument required` *(status 255)* | *(no output, status 0)* | *(no output, status 0)* | **2>** `<shell>: exit: line 0: Illegal number: status` *(status 2)* |
+| `exit/a-good-operand-still-ends-the-script` | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* |
 | `exit/bad-argument-diverges` | `[2]~[2]` **2>** `<shell>: 1: exit: Illegal number: -1~<shell>: 1: exit: Illegal number: abc` | `[255]~[2]` **2>** `<shell>: line 1: exit: abc: numeric argument required` | `[255]~[2]` **2>** `<shell>: line 1: exit: abc: numeric argument required` | `[255]~[255]` **2>** `<shell>: line 0: exit: abc: numeric argument required` | `[255]~[0]` | `[255]~[0]` | `[2]~[2]` **2>** `<shell>: exit: line 0: Illegal number: -1~<shell>: exit: line 0: Illegal number: abc` |
 | `exec/the-exit-trap-fires-after-a-syntax-error` | `bye` **2>** `<script>: 2: Syntax error: "fi" unexpected` *(status 2)* | `bye` **2>** `<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `{ fi; }'` *(status 2)* | `bye` **2>** `<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `{ fi; }'` *(status 2)* | `bye` **2>** `<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `{ fi; }'` *(status 2)* | `bye` **2>** `<script>: syntax error at line 2: `fi' unexpected` *(status 3)* | `bye` **2>** `<script>:2: parse error near `fi'` *(status 1)* | `bye` **2>** `<script>: line 2: syntax error: unexpected "fi"` *(status 2)* |
 | `exit/from-inside-a-while-loop` | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* |
@@ -9915,6 +9917,14 @@ grades it and nothing drift-checks it either, for the same reason.
 - `exit/status-and-wrapping` — a status is taken modulo 256, and a bare `exit` reports what the last command did
   ```sh
   (exit 300); echo "[$?]"; (false; exit); echo "[$?]"
+  ```
+- `exit/a-refused-operand-and-the-next-command` — not what the refusal is worth but whether it *ends the script*, which is the half `exit/bad-argument-diverges` cannot see: it asks in a subshell, where every answer ends the same way. bash reports the complaint, leaves 2 behind and runs both commands after it; dash and that same bash called `sh` end the script at 2, which is the POSIX rule that a special builtin's usage error is fatal; bash 3.2 ends it too and at 255; ksh93 and zsh refuse nothing, read the name as an expression and leave at 0 with nothing printed. So the axis is the one `return`, `shift` and `unalias` already ask, and `exit` was the caller that never asked it (#2299)
+  ```sh
+  exit status; echo "after=$?"; echo alive
+  ```
+- `exit/a-good-operand-still-ends-the-script` — the control for the row above, and the reason it cannot be read as `exit no longer exits`: an operand every column takes still ends the script with it, unanimously at 3 and with nothing printed after
+  ```sh
+  exit 3; echo alive
   ```
 - `exit/bad-argument-diverges` — an ordering rather than a side: dash refuses both, bash refuses only the one that is not a number, ksh93 and zsh take either
   ```sh
@@ -14805,6 +14815,12 @@ grades it and nothing drift-checks it either, for the same reason.
 | `assoc/a-key-holding-a-blank-is-appended-to` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[foo: not found~<shell>: 1: m[foo: not found~<shell>: 1: Bad substitution` *(status 2)* | `[qux blat]` | `[qux blat]` | **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~<shell>: foo bar: syntax error in expression (error token is "bar")` *(status 1)* | `[qux blat]` | **2>** `<shell>:1: bad pattern: m[foo` *(status 1)* | **2>** `<shell>: typeset: not found~<shell>: m[foo: not found~<shell>: m[foo: not found~<shell>: syntax error: bad substitution` *(status 2)* |
 | `assoc/a-key-holding-an-operator` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[a: not found~<shell>: 1: b]=v: not found~<shell>: 1: Bad substitution` *(status 2)* | `[v]` | `[v]` | **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~<shell>: a; b: syntax error: invalid arithmetic operator (error token is "; b")` *(status 1)* | `[v]` | **2>** `<shell>:1: bad pattern: m[a` *(status 1)* | **2>** `<shell>: typeset: not found~<shell>: m[a: not found~<shell>: b]=v: not found~<shell>: syntax error: bad substitution` *(status 2)* |
 | `assoc/a-key-holding-a-nested-bracket` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[a: not found~<shell>: 1: Bad substitution` *(status 2)* | `[v]` | `[v]` | **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~<shell>: a [b] c: syntax error: invalid arithmetic operator (error token is "[b] c")` *(status 1)* | `[v]` | **2>** `<shell>:1: bad pattern: m[a` *(status 1)* | **2>** `<shell>: typeset: not found~<shell>: m[a: not found~<shell>: syntax error: bad substitution` *(status 2)* |
+| `assoc/a-literal-element-keyed-with-a-blank` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[2][1]` | `[2][1]` | **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~<shell>: two words: syntax error in expression (error token is "words")` *(status 1)* | `[2][1]` | **2>** `<shell>:1: bad pattern: [two` *(status 1)* | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
+| `assoc/a-literal-element-keyed-with-a-run-of-blanks` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[2]` | `[2]` | **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~<shell>: two  words: syntax error in expression (error token is "words")` *(status 1)* | `[2]` | **2>** `<shell>:1: bad pattern: [two` *(status 1)* | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
+| `assoc/a-literal-element-keyed-with-a-nested-bracket` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[v]` | `[v]` | **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~<shell>: a [b] c: syntax error: invalid arithmetic operator (error token is "[b] c")` *(status 1)* | `[v]` | **2>** `<shell>:1: bad pattern: [a` *(status 1)* | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
+| `array/a-name-before-a-literal-elements-bracket` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `<pre[1><2]=x>` | `<pre[1><2]=x>` | `<pre[1><2]=x>` | **2>** `<shell>: 1 2: arithmetic syntax error` *(status 1)* | **2>** `<shell>:1: bad pattern: pre[1` *(status 1)* | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
+| `array/a-literal-value-holding-a-bracket` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `<x[1><2]>` | `<x[1><2]>` | `<x[1><2]>` | `<x[1 2]>` | **2>** `<shell>:1: bad pattern: x[1` *(status 1)* | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
+| `array/a-quoted-bracket-at-a-literal-elements-front` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `<[1 2]=x>` | `<[1 2]=x>` | `<[1 2]=x>` | `<[1 2]=x>` | `<[1 2]=x>` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
 | `subscript/a-blank-in-an-argument-subscript` | `<m[foo><bar]=v>` | `<m[foo><bar]=v>` | `<m[foo><bar]=v>` | `<m[foo><bar]=v>` | `<m[foo><bar]=v>` | **2>** `<shell>:1: bad pattern: m[foo` *(status 1)* | `<m[foo><bar]=v>` |
 
 - `array/a-semicolon-ends-the-literal-elements` — a `;` between the parentheses of an array literal, in the one position two shells agree on. Every bash column names the `;`, ksh93 and zsh both take it, and the two are reading it differently — a terminator there and a separator here — which the rows below separate. The `n=` is what makes the difference visible rather than the exit status: a shell that took the `;` as an element would answer 2
@@ -14850,6 +14866,30 @@ grades it and nothing drift-checks it either, for the same reason.
 - `assoc/a-key-holding-a-nested-bracket` — which `]` ends it. Brackets nest in the two columns that take the form, so the key is the whole of `a [b] c` and not `a [b`, and bash 3.2 reaches the same text as an arithmetic expression — which is the tell that its word ran to the matching bracket too
   ```sh
   typeset -A m; m[a [b] c]=v; echo "[${m[a [b] c]}]"
+  ```
+- `assoc/a-literal-element-keyed-with-a-blank` — the same word boundary in the other position: between a compound literal's parentheses an element that *opens* with `[` runs to the matching `]`, so bash 5.3 under both its names and ksh93 store the key `two words` and answer `[2][1]`. zsh ends the element at the blank and then globs the bracket, and bash 3.2 — which spans at command position — does not span here and reaches `two words` as an arithmetic subscript, so this row is what says the two positions are measured separately. A shell that cut the element stored `[two` holding `words]=2`: nothing failed and the array held something nobody wrote (#2299)
+  ```sh
+  typeset -A m; m=( [one]=1 [two words]=2 ); echo "[${m[two words]}][${m[one]}]"
+  ```
+- `assoc/a-literal-element-keyed-with-a-run-of-blanks` — the run is not collapsed, which is what says the element is the *text* between the brackets and not a join of two fields with one blank put back between them. The two columns that span answer 2; bash 3.2, which spans at command position and not here, reaches `two  words` as arithmetic and refuses it. An operator between the brackets is the same fact and is recorded at command position instead — `assoc/a-key-holding-an-operator` — because the literal spelling of it cannot be read at all by a grammar without the flag, and the corpus is read by one
+  ```sh
+  typeset -A m; m=( [two  words]=2 ); echo "[${m[two  words]}]"
+  ```
+- `assoc/a-literal-element-keyed-with-a-nested-bracket` — which `]` ends the element. Brackets nest in the two columns that span, so the key is the whole of `a [b] c`; a reading that stopped at the first `]` would store `a [b` and answer empty without complaining
+  ```sh
+  typeset -A m; m=( [a [b] c]=v ); echo "[${m[a [b] c]}]"
+  ```
+- `array/a-name-before-a-literal-elements-bracket` — the first control, and the row that says the rule is the *front of the element*: bash spans only where the bracket opens the element, so all three bash columns print two fields here while ksh93 reaches `1 2` as a subscript and refuses it. Recorded and deliberately not matched — the flag says where a subscript may stand, and the front of the element is the shape every column that spans agrees on
+  ```sh
+  a=( pre[1 2]=x ); printf "<%s>" "${a[@]}"; echo
+  ```
+- `array/a-literal-value-holding-a-bracket` — the second control, and the narrower one: a bracket in the *value* of an element is not a subscript at all, so every bash column prints two fields. Without it the rule above would read as `a bracket inside a literal spans`, which is a larger claim than any column makes
+  ```sh
+  a=( x[1 2] ); printf "<%s>" "${a[@]}"; echo
+  ```
+- `array/a-quoted-bracket-at-a-literal-elements-front` — the third control, and the one that pins *which* brackets are counted: a quoted `[` opens nothing, so the element is one field holding the text and no key is written — unanimous in all five columns with arrays, zsh included, which is what makes it the row a depth counter that forgot about quotes would fail
+  ```sh
+  a=( "[1 2]"=x ); printf "<%s>" "${a[@]}"; echo
   ```
 - `subscript/a-blank-in-an-argument-subscript` — the control for the four rows above, and the reason the rule is about command position rather than about subscripts. Every column that reads a command word through to the matching `]` still ends an *argument* at the blank, so all five print two fields; only zsh differs, and it differs by refusing the pattern rather than by joining the word
   ```sh

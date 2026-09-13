@@ -3967,6 +3967,16 @@ echo "reached-after st=$?"`,
 		Why:     "a status is taken modulo 256, and a bare `exit` reports what the last command did",
 	},
 	{
+		ID: "exit/a-refused-operand-and-the-next-command", Category: "traps and exit",
+		Snippet: `exit status; echo "after=$?"; echo alive`,
+		Why:     "not what the refusal is worth but whether it *ends the script*, which is the half `exit/bad-argument-diverges` cannot see: it asks in a subshell, where every answer ends the same way. bash reports the complaint, leaves 2 behind and runs both commands after it; dash and that same bash called `sh` end the script at 2, which is the POSIX rule that a special builtin's usage error is fatal; bash 3.2 ends it too and at 255; ksh93 and zsh refuse nothing, read the name as an expression and leave at 0 with nothing printed. So the axis is the one `return`, `shift` and `unalias` already ask, and `exit` was the caller that never asked it (#2299)",
+	},
+	{
+		ID: "exit/a-good-operand-still-ends-the-script", Category: "traps and exit",
+		Snippet: `exit 3; echo alive`,
+		Why:     "the control for the row above, and the reason it cannot be read as `exit no longer exits`: an operand every column takes still ends the script with it, unanimously at 3 and with nothing printed after",
+	},
+	{
 		ID: "exit/bad-argument-diverges", Category: "traps and exit",
 		Snippet: `(exit -1); echo "[$?]"; (exit abc); echo "[$?]"`,
 		Why:     "an ordering rather than a side: dash refuses both, bash refuses only the one that is not a number, ksh93 and zsh take either",
@@ -7988,6 +7998,36 @@ echo "st=$?"`,
 		ID: "assoc/a-key-holding-a-nested-bracket", Category: "syntax",
 		Snippet: `typeset -A m; m[a [b] c]=v; echo "[${m[a [b] c]}]"`,
 		Why:     "which `]` ends it. Brackets nest in the two columns that take the form, so the key is the whole of `a [b] c` and not `a [b`, and bash 3.2 reaches the same text as an arithmetic expression — which is the tell that its word ran to the matching bracket too",
+	},
+	{
+		ID: "assoc/a-literal-element-keyed-with-a-blank", Category: "syntax",
+		Snippet: `typeset -A m; m=( [one]=1 [two words]=2 ); echo "[${m[two words]}][${m[one]}]"`,
+		Why:     "the same word boundary in the other position: between a compound literal's parentheses an element that *opens* with `[` runs to the matching `]`, so bash 5.3 under both its names and ksh93 store the key `two words` and answer `[2][1]`. zsh ends the element at the blank and then globs the bracket, and bash 3.2 — which spans at command position — does not span here and reaches `two words` as an arithmetic subscript, so this row is what says the two positions are measured separately. A shell that cut the element stored `[two` holding `words]=2`: nothing failed and the array held something nobody wrote (#2299)",
+	},
+	{
+		ID: "assoc/a-literal-element-keyed-with-a-run-of-blanks", Category: "syntax",
+		Snippet: `typeset -A m; m=( [two  words]=2 ); echo "[${m[two  words]}]"`,
+		Why:     "the run is not collapsed, which is what says the element is the *text* between the brackets and not a join of two fields with one blank put back between them. The two columns that span answer 2; bash 3.2, which spans at command position and not here, reaches `two  words` as arithmetic and refuses it. An operator between the brackets is the same fact and is recorded at command position instead — `assoc/a-key-holding-an-operator` — because the literal spelling of it cannot be read at all by a grammar without the flag, and the corpus is read by one",
+	},
+	{
+		ID: "assoc/a-literal-element-keyed-with-a-nested-bracket", Category: "syntax",
+		Snippet: `typeset -A m; m=( [a [b] c]=v ); echo "[${m[a [b] c]}]"`,
+		Why:     "which `]` ends the element. Brackets nest in the two columns that span, so the key is the whole of `a [b] c`; a reading that stopped at the first `]` would store `a [b` and answer empty without complaining",
+	},
+	{
+		ID: "array/a-name-before-a-literal-elements-bracket", Category: "syntax",
+		Snippet: `a=( pre[1 2]=x ); printf "<%s>" "${a[@]}"; echo`,
+		Why:     "the first control, and the row that says the rule is the *front of the element*: bash spans only where the bracket opens the element, so all three bash columns print two fields here while ksh93 reaches `1 2` as a subscript and refuses it. Recorded and deliberately not matched — the flag says where a subscript may stand, and the front of the element is the shape every column that spans agrees on",
+	},
+	{
+		ID: "array/a-literal-value-holding-a-bracket", Category: "syntax",
+		Snippet: `a=( x[1 2] ); printf "<%s>" "${a[@]}"; echo`,
+		Why:     "the second control, and the narrower one: a bracket in the *value* of an element is not a subscript at all, so every bash column prints two fields. Without it the rule above would read as `a bracket inside a literal spans`, which is a larger claim than any column makes",
+	},
+	{
+		ID: "array/a-quoted-bracket-at-a-literal-elements-front", Category: "syntax",
+		Snippet: `a=( "[1 2]"=x ); printf "<%s>" "${a[@]}"; echo`,
+		Why:     "the third control, and the one that pins *which* brackets are counted: a quoted `[` opens nothing, so the element is one field holding the text and no key is written — unanimous in all five columns with arrays, zsh included, which is what makes it the row a depth counter that forgot about quotes would fail",
 	},
 	{
 		ID: "subscript/a-blank-in-an-argument-subscript", Category: "syntax",

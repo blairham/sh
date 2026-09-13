@@ -4880,7 +4880,16 @@ shell's name silently did nothing here. The axis is
 option on where `emulate csh` and `emulate zsh` leave it off — measured all
 four ways, which is what makes it the fifth axis an emulation carries.
 
-So 143 of 185 are recorded, the count above is the one produced by counting
+`casematch` left it in #2622, and left it for a reason worth the sentence:
+the name is *bash's* name too, and there it means something else. bash's
+`nocasematch` folds `[[ == ]]`, `case` and the substitution operators of
+parameter expansion **and** the `=~` operator; zsh's folds `=~` and nothing
+else — measured 2026-09-13 on zsh 5.9.2 and bash 5.3.15, with each shell's
+own option on. So the core keeps two switches, `interp.MatchFoldsCase` and
+`interp.RegexFoldsCase`, and each dialect wires the name it spells: this one
+reaches the second alone.
+
+So 142 of 185 are recorded, the count above is the one produced by counting
 the constructors in `dialect/zsh/setopt.go`, and **the fixed set is now
 exactly the set real zsh refuses**: `interactive`, `shinstdin`,
 `singlecommand` and `zle`. `monitor` left it in #1720 because zsh grants it

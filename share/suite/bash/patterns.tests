@@ -40,14 +40,18 @@ re='^a.c$'
 [[ abc =~ "$re" ]] || printf 'quoted variable is a literal\n'
 
 # nocasematch takes the case out of a pattern match, and only while it is
-# set. (bash applies it to `=~` as well; this shell applies it to `==` only,
-# and the issue filed with this file carries the two-line measurement. The
-# `=~` line is left out rather than left failing, so that this file says what
-# was measured and the issue says what is wrong.)
+# set. It reaches the regexp operator as well as the pattern one, and reaches
+# the whole regexp rather than its literal letters: a bracket expression and
+# a character class fold with them, and the fold happens before a negated
+# class is complemented, so `[^a]` stops matching `A` too.
 shopt -s nocasematch
 [[ ABC == abc ]] && printf 'nocasematch: == ignores case\n'
+[[ ABC =~ ^abc$ ]] && printf 'nocasematch: =~ ignores case\n'
+[[ ABC =~ ^[[:lower:]]+$ ]] && printf 'nocasematch: =~ folds a character class\n'
+[[ A =~ ^[^a]$ ]] || printf 'nocasematch: =~ folds before it negates\n'
 shopt -u nocasematch
 [[ ABC == abc ]] || printf 'and it is off again\n'
+[[ ABC =~ ^abc$ ]] || printf 'and so is the regexp half\n'
 
 # extglob is what turns the five sub-patterns on. They stay on for the rest
 # of the file: turning the option off while a later line still spells one

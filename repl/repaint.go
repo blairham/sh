@@ -49,9 +49,19 @@ type drawnLine struct {
 
 	// styled is the line exactly as it was written, escape sequences and all.
 	// The comparison is against these bytes rather than against the line and
-	// its runs, because two draws that emit the same bytes leave the terminal
-	// in the same state whatever produced them — which is what lets a redraw
-	// resume in the middle of a highlighted run.
+	// its runs, because two draws that emit the same bytes put the same
+	// characters in the same cells whatever produced them.
+	//
+	// **They do not leave the terminal in the same *style*, and that is not
+	// what the shared prefix says.** The colour in force is whatever the last
+	// byte of the *previous whole draw* set, not whatever the shared prefix
+	// would have set had it been written on its own — the cursor came back
+	// over the line afterwards and a cursor move carries no attributes. A
+	// prefix ending inside a highlighted run therefore names a screen
+	// position where the terminal is already back at its default, and the
+	// bytes after it were written expecting the run to be in force. See
+	// outsideARun, which is where the resume point is walked back to somewhere
+	// the two agree (#2627).
 	styled string
 
 	// prompt and cells are the prompt this was drawn under. A prompt whose
@@ -89,6 +99,7 @@ func (e *editor) repaint(prompt drawnPrompt, cols int) bool {
 
 	styled := e.styled()
 	at, resume := sharedPrefix(d.styled, styled)
+	at, resume = outsideARun(styled, at, resume)
 	if resume > len(e.line) {
 		// The highlighter emitted more characters than the line has, which
 		// styled does not do. Rather than reason about a screen this cannot
@@ -228,6 +239,55 @@ func sharedPrefix(old, cur string) (bytes, chars int) {
 		i += size
 	}
 	return i, n
+}
+
+// outsideARun walks a resume point back to where the terminal's style is
+// known, and recounts the characters before it.
+//
+// [sharedPrefix] answers where two draws stop agreeing, which is a cell the
+// cursor can be moved to. It is not necessarily a cell the terminal's *colour*
+// can be reasoned about: the previous draw wrote the whole line and then moved
+// the cursor back over it, so the attributes in force are the ones its last
+// byte left — the default, because [editor.styled] closes every run it opens —
+// and not the ones the shared prefix implies.
+//
+// Resuming one byte inside `\e[31m"` therefore writes the rest of the red word
+// with red already off. Measured 2026-09-13 through a pseudo-terminal at 80
+// columns, typing `cho "one two` under UnclosedQuote: the keystroke that typed
+// the quotation wrote `\e[31m"\e[0m` and the keystroke after it wrote `o\e[0m`
+// — an `o` belonging to the red run, drawn plain. On screen the quotation mark
+// was red and the word after it was not, where the whole unclosed word should
+// be red, in every real session: driver/interactive.go installs a highlighter
+// for every interactive shell and a real terminal always has a width, so this
+// path is the one a person is on (#2627).
+//
+// So the resume point moves back to the last place no run was open — the byte
+// after a reset, or a byte of plain text, or the start of the line — and the
+// tail from there re-states the style it needs. The cost is redrawing from the
+// start of the run being typed in, which is a word rather than a line, and
+// nothing at all for a line with no highlighting in it.
+func outsideARun(cur string, at, chars int) (int, int) {
+	safe, safeChars, open := 0, 0, false
+	i, n := 0, 0
+	for i < at {
+		escape, size := nextToken(cur, i)
+		if escape {
+			// A run is open from its style sequence until this package's own
+			// reset closes it. Nothing else in a drawn line opens one: styled
+			// writes the caller's escape, the run, and highlightReset.
+			open = cur[i:i+size] != highlightReset
+		} else {
+			n++
+		}
+		i += size
+		if !open {
+			safe, safeChars = i, n
+		}
+	}
+	if !open {
+		return at, chars
+	}
+	return safe, safeChars
 }
 
 // nextToken is the length of the thing at s[i] — one escape sequence, or one

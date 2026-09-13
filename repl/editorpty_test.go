@@ -8,8 +8,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/blairham/sh/internal/pty"
 )
 
 // The editing keys, through a real terminal, in a real session.
@@ -55,14 +53,7 @@ func newSession(t *testing.T) *session { return newSessionWith(t, nil) }
 // copy of them is a second thing to keep right.
 func newSessionWith(t *testing.T, configure func(*Shell)) *session {
 	t.Helper()
-	control, tty, err := pty.Open()
-	if err != nil {
-		t.Skipf("no pseudo-terminal: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = tty.Close()
-		_ = control.Close()
-	})
+	control, tty := openTerminal(t)
 
 	screen, ran, errs := &syncBuffer{}, &syncBuffer{}, &syncBuffer{}
 	// The prompt counts the commands, so every one of them is a mark that has
@@ -104,6 +95,17 @@ func (s *session) typeLine(keys string) {
 	s.t.Helper()
 	s.prompt++
 	waitFor(s.t, s.screen, "["+itoa(s.prompt)+"]", "the prompt")
+	s.typeKeys(keys)
+}
+
+// typeKeys types at whatever the session is already showing, for a test that
+// has typed once and is going on typing into the same line.
+//
+// The wait for a prompt belongs to the first keystroke of a line and not to
+// the rest of them: a second wait would be answered only by a prompt that has
+// not been drawn, and a half-typed line has not produced one.
+func (s *session) typeKeys(keys string) {
+	s.t.Helper()
 	for i := 0; i < len(keys); i++ {
 		drawn := s.screen.Len()
 		if _, err := s.control.WriteString(keys[i : i+1]); err != nil {
@@ -113,6 +115,28 @@ func (s *session) typeLine(keys string) {
 			time.Sleep(time.Millisecond)
 		}
 	}
+}
+
+// shown is what a terminal of the fixture's size would be showing, colours and
+// all, after everything the session has drawn.
+//
+// **The screen and not the bytes.** An incremental redraw writes whichever of
+// several equivalent sequences is shortest for the change in hand, so a test
+// naming one of them is asserting a coincidence — and for as long as every
+// fixture here ran at width 0 the coincidence being asserted was the one the
+// whole-line draw produced, which is a path no session with a terminal takes
+// (#2627). See screenmodel_test.go.
+func (s *session) shown() *screen { return shownBy(fixtureCols, s.screen.String()) }
+
+// row is one line of what the screen is showing, with the colours written back
+// into it.
+func (s *session) row(n int) string {
+	s.t.Helper()
+	rows := strings.Split(s.shown().styledText(), "\n")
+	if n >= len(rows) {
+		s.t.Fatalf("the screen has %d row(s), so there is no row %d:\n%q", len(rows), n, s.screen.String())
+	}
+	return rows[n]
 }
 
 // end sends ^D at a fresh prompt, which is how a session is told to stop.

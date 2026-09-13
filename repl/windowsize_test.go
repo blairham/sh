@@ -23,17 +23,7 @@ import (
 // a corpus row and why #1429 refused the name from a `-c` probe that showed
 // bash and this shell both reporting the variables unset.
 func TestWindowSizeTrackingSetsLinesAndColumns(t *testing.T) {
-	control, terminal, err := pty.Open()
-	if err != nil {
-		t.Skipf("no pseudo-terminal: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = terminal.Close()
-		_ = control.Close()
-	})
-	if err := pty.SetSize(terminal, 24, 80); err != nil {
-		t.Skipf("no resize: %v", err)
-	}
+	_, terminal := openTerminalAt(t, 24, 80)
 	r := &interp.Runner{}
 	s := Shell{Runner: r, In: terminal}
 

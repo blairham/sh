@@ -194,24 +194,26 @@ func TestAColoredLineReachesTheTerminalAndTheCursorStillLandsRight(t *testing.T)
 		sh.Highlighter = UnclosedQuote{Style: "\x1b[31m"}
 	})
 
-	// A quotation left open, then closed, then `^A` to the start of the line
-	// and the missing letter typed there. The command only runs if the cursor
-	// was where the editor said it was: `cho "one two"` is not a command, and
-	// the `e` has to land in front of it and nowhere else.
-	s.typeLine("cho \"one two\"\x01e\n")
+	// Stopped with the quotation still open, which is the state the colour is
+	// for and the one a keystroke-by-keystroke redraw has to get right in the
+	// middle of a line rather than at the end of it.
+	s.typeLine("cho \"one two")
+	if got, want := s.row(0), "[1]cho \x1b[31m\"one two\x1b[0m"; got != want {
+		t.Errorf("the open quotation is not red on the screen.\n got %q\nwant %q\n(written: %q)",
+			got, want, s.screen.String())
+	}
+
+	// Then closed, then `^A` to the start of the line and the missing letter
+	// typed there. The command only runs if the cursor was where the editor
+	// said it was: `cho "one two"` is not a command, and the `e` has to land
+	// in front of it and nowhere else.
+	s.typeKeys("\"\x01e\n")
 	waitFor(t, s.ran, "one two", "the command's output")
 
-	// The redraw for the moment the quotation was open, exactly: the erase,
-	// the prompt, and the line with the unclosed word in red. `cho "one` is
-	// what had been typed when the `t` of `two` had not yet arrived.
-	const want = "\r\x1b[K[1]cho \x1b[31m\"one\x1b[0m"
-	if got := s.screen.String(); !strings.Contains(got, want) {
-		t.Errorf("the open quotation was never drawn in red.\nwant a draw of %q\ngot %q", want, got)
-	}
-	// And once it was closed, the same line is drawn plainly.
-	const closed = "\r\x1b[K[1]cho \"one two\""
-	if got := s.screen.String(); !strings.Contains(got, closed) {
-		t.Errorf("the closed line was never drawn plainly.\nwant a draw of %q\ngot %q", closed, got)
+	// And once it was closed, the same line stands on the screen plainly —
+	// every cell of it back at the terminal's default.
+	if got, want := s.row(0), `[1]echo "one two"`; got != want {
+		t.Errorf("the closed line is not plain on the screen.\n got %q\nwant %q", got, want)
 	}
 	s.end()
 }

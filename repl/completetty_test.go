@@ -8,8 +8,6 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
-
-	"github.com/blairham/sh/internal/pty"
 )
 
 // Tab pressed at a real terminal, and the line it produced handed to the
@@ -27,14 +25,7 @@ import (
 // what is queued but unread across that change, so a keystroke sent before
 // the next prompt is drawn is simply gone (#635).
 func TestTabAtATerminalProducesALineThatMeansTheFile(t *testing.T) {
-	control, tty, err := pty.Open()
-	if err != nil {
-		t.Skipf("no pseudo-terminal: %v", err)
-	}
-	defer func() {
-		_ = tty.Close()
-		_ = control.Close()
-	}()
+	control, tty := openTerminal(t)
 
 	dir := completionFixture(t)
 	out, errs := &syncBuffer{}, &syncBuffer{}
@@ -90,14 +81,7 @@ func TestTabAtATerminalProducesALineThatMeansTheFile(t *testing.T) {
 // A second Tab lists what a first one could not decide, and the listing shows
 // the names rather than the whole word.
 func TestASecondTabListsTheMatches(t *testing.T) {
-	control, tty, err := pty.Open()
-	if err != nil {
-		t.Skipf("no pseudo-terminal: %v", err)
-	}
-	defer func() {
-		_ = tty.Close()
-		_ = control.Close()
-	}()
+	control, tty := openTerminal(t)
 
 	dir := t.TempDir()
 	for _, name := range []string{"apple.txt", "apricot.txt"} {

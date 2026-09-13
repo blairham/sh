@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/blairham/sh/internal/pty"
 	"github.com/blairham/sh/interp"
 )
 
@@ -97,6 +96,18 @@ func (s *promptSession) waitFor(want, what string) {
 	waitFor(s.t, s.out, want, what)
 }
 
+// waitForLine waits for the line the editor is showing to be exactly want,
+// with this session's prompt on the front of it.
+//
+// The screen rather than the bytes. These waits are all "the up arrow put this
+// line back", and the redraw that a terminal with a width takes writes the
+// difference — a cursor move and the letters that changed — so the line as a
+// literal is never written. See editedLine in ptyfixture_test.go.
+func (s *promptSession) waitForLine(want, what string) {
+	s.t.Helper()
+	waitForLine(s.t, s.out, "$ "+want, what)
+}
+
 // waitForPrompt waits for the next prompt, which is drawn after raw mode is
 // restored and immediately before the read — an order the two cannot swap.
 func (s *promptSession) waitForPrompt(what string) {
@@ -147,10 +158,7 @@ func atThePromptWith(
 	seeded ...string,
 ) *promptSession {
 	t.Helper()
-	control, tty, err := pty.Open()
-	if err != nil {
-		t.Skipf("no pseudo-terminal: %v", err)
-	}
+	control, tty := openTerminal(t)
 
 	path := filepath.Join(t.TempDir(), "hist")
 	if len(seeded) > 0 {
@@ -258,7 +266,7 @@ func TestTheTerminalLoopHonorsTheKnobs(t *testing.T) {
 	}
 	// The up arrow skips straight past the hidden line to the kept one.
 	sess.send("\x1b[A\x1b[A")
-	sess.waitFor("$ echo seeded", "the entry before the kept one, the hidden line having been dropped")
+	sess.waitForLine("echo seeded", "the entry before the kept one, the hidden line having been dropped")
 	sess.send("\x03")
 	sess.finish()
 
@@ -390,7 +398,7 @@ func TestTheTerminalLoopHonorsAnOptionSpelledKnob(t *testing.T) {
 	// Two steps back reaches the seeded line, the space-led one having been
 	// dropped from the list as well as from the file.
 	sess.send("\x1b[A\x1b[A")
-	sess.waitFor("$ echo seeded", "the entry before the kept one, the space-led line having been dropped")
+	sess.waitForLine("echo seeded", "the entry before the kept one, the space-led line having been dropped")
 	sess.send("\x03")
 	sess.finish()
 
@@ -432,7 +440,7 @@ func TestTheTerminalLoopKeepsAPatternIgnoredLineOnTheArrow(t *testing.T) {
 	// One step back is the ignored line itself, which is the half bash does
 	// not agree with.
 	sess.send("\x1b[A")
-	sess.waitFor("$ echo hidden", "the ignored line, still on the arrow")
+	sess.waitForLine("echo hidden", "the ignored line, still on the arrow")
 	sess.send("\x03")
 	sess.finish()
 

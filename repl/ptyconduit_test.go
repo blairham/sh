@@ -202,13 +202,7 @@ type capturingSession struct {
 // built and the capture path is never entered.
 func atACapturingPrompt(t *testing.T) *capturingSession {
 	t.Helper()
-	control, tty, err := pty.Open()
-	if err != nil {
-		t.Skipf("no pseudo-terminal: %v", err)
-	}
-	if err := pty.SetSize(tty, 40, 200); err != nil {
-		t.Fatal(err)
-	}
+	control, tty := openTerminalAt(t, 40, 200)
 
 	dir := t.TempDir()
 	vars := map[string]string{
@@ -386,12 +380,7 @@ func (s *capturingSession) bodies(t *testing.T) []string {
 // alternative there is the wrapper, and the wrapper is what costs a child its
 // terminal. A session that wants that anyway still asks for it by name.
 func TestWhichCaptureASessionGets(t *testing.T) {
-	control, tty, err := pty.Open()
-	if err != nil {
-		t.Skipf("no pseudo-terminal: %v", err)
-	}
-	defer func() { _ = control.Close() }()
-	defer func() { _ = tty.Close() }()
+	_, tty := openTerminal(t)
 
 	for _, tc := range []struct {
 		name         string
@@ -482,12 +471,7 @@ func TestWhichCaptureASessionGets(t *testing.T) {
 				defer func() { _ = other.Close() }()
 				r.Stdout, r.Stderr = tty, other
 			case "two-terminals":
-				otherControl, otherTty, err := pty.Open()
-				if err != nil {
-					t.Skipf("no second pseudo-terminal: %v", err)
-				}
-				defer func() { _ = otherControl.Close() }()
-				defer func() { _ = otherTty.Close() }()
+				_, otherTty := openTerminal(t)
 				r.Stdout, r.Stderr = tty, otherTty
 			}
 			before := r.Stdout
@@ -530,12 +514,7 @@ func TestWhichCaptureASessionGets(t *testing.T) {
 // turned the store off with an empty HISTFILE would still be paying for a
 // pseudo-terminal and a copy of every byte, to fill a buffer nobody empties.
 func TestNoStoreMeansNoCapture(t *testing.T) {
-	control, tty, err := pty.Open()
-	if err != nil {
-		t.Skipf("no pseudo-terminal: %v", err)
-	}
-	defer func() { _ = control.Close() }()
-	defer func() { _ = tty.Close() }()
+	_, tty := openTerminal(t)
 
 	for _, tc := range []struct{ name, histfile, output string }{
 		{name: "history off turns the store off", histfile: "", output: "1"},
@@ -705,11 +684,7 @@ func (w *writeSizes) Write(p []byte) (int, error) {
 // an editor between the assertion and the thing it is asserting on.
 func newTestConduit(t *testing.T, sink io.Writer) *ptyConduit {
 	t.Helper()
-	control, tty, err := pty.Open()
-	if err != nil {
-		t.Skipf("no pseudo-terminal: %v", err)
-	}
-	t.Cleanup(func() { _ = control.Close(); _ = tty.Close() })
+	_, tty := openTerminal(t)
 	// The capture is the identity here: these are about the conduit's own
 	// delivery, and a bounded copy in the way would make the assertion about
 	// the bound instead.
@@ -759,12 +734,7 @@ func (s *slowSink) len() int {
 func TestTakeOutputDrainsBeforeItTakes(t *testing.T) {
 	sink := &slowSink{}
 	capture := blocks.NewCapture(1 << 20)
-	control, tty, err := pty.Open()
-	if err != nil {
-		t.Skipf("no pseudo-terminal: %v", err)
-	}
-	defer func() { _ = control.Close() }()
-	defer func() { _ = tty.Close() }()
+	_, tty := openTerminal(t)
 	conduit, err := newPtyConduit(tty, sink, capture.Stream)
 	if err != nil {
 		t.Skipf("no conduit: %v", err)
@@ -822,15 +792,7 @@ func TestTheInnerTerminalHasTheOuterOnesSize(t *testing.T) {
 // is not in this pseudo-terminal's session, so nothing would arrive on its own.
 func TestTheInnerTerminalFollowsAResize(t *testing.T) {
 	sink := &syncBuffer{}
-	control, tty, err := pty.Open()
-	if err != nil {
-		t.Skipf("no pseudo-terminal: %v", err)
-	}
-	defer func() { _ = control.Close() }()
-	defer func() { _ = tty.Close() }()
-	if err := pty.SetSize(tty, 40, 200); err != nil {
-		t.Fatal(err)
-	}
+	_, tty := openTerminalAt(t, 40, 200)
 	conduit, err := newPtyConduit(tty, sink, func(w io.Writer) io.Writer { return w })
 	if err != nil {
 		t.Skipf("no conduit: %v", err)
@@ -869,12 +831,7 @@ func TestTheInnerTerminalFollowsAResize(t *testing.T) {
 // everything.
 func TestClosingWaitsForWhatIsStillInTheConduit(t *testing.T) {
 	sink := &slowSink{}
-	control, tty, err := pty.Open()
-	if err != nil {
-		t.Skipf("no pseudo-terminal: %v", err)
-	}
-	defer func() { _ = control.Close() }()
-	defer func() { _ = tty.Close() }()
+	_, tty := openTerminal(t)
 	conduit, err := newPtyConduit(tty, sink, func(w io.Writer) io.Writer { return w })
 	if err != nil {
 		t.Skipf("no conduit: %v", err)
@@ -968,14 +925,7 @@ func TestTheMarkHasAShapeTheScanCanTrust(t *testing.T) {
 // conduit is still alive, and a SIGWINCH can arrive after it has.
 func TestATerminalThatWillNotSaySizeLeavesTheInnerOneAlone(t *testing.T) {
 	sink := &syncBuffer{}
-	control, tty, err := pty.Open()
-	if err != nil {
-		t.Skipf("no pseudo-terminal: %v", err)
-	}
-	defer func() { _ = control.Close() }()
-	if err := pty.SetSize(tty, 40, 200); err != nil {
-		t.Fatal(err)
-	}
+	_, tty := openTerminalAt(t, 40, 200)
 	conduit, err := newPtyConduit(tty, sink, func(w io.Writer) io.Writer { return w })
 	if err != nil {
 		t.Skipf("no conduit: %v", err)
@@ -1070,16 +1020,10 @@ func TestTheConduitsNewlinesArriveWholeInEitherMode(t *testing.T) {
 		{"the terminal is translating, so the conduit does not", false, "one\r\ntwo\r\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			control, terminal, err := pty.Open()
-			if err != nil {
-				t.Skipf("no pseudo-terminal: %v", err)
-			}
-			t.Cleanup(func() {
-				_ = terminal.Close()
-				_ = control.Close()
-			})
+			control, terminal := openTerminal(t)
 			var state *terminalState
 			if tc.raw {
+				var err error
 				if state, err = makeRaw(terminal); err != nil {
 					t.Fatalf("raw mode: %v", err)
 				}
@@ -1105,14 +1049,7 @@ func TestTheConduitsNewlinesArriveWholeInEitherMode(t *testing.T) {
 // and the next beginning with `\n` written while it is not. Rare, and the kind
 // of rare that shows up as one stray blank column nobody can reproduce.
 func TestACarriageReturnAcrossAWriteIsNotDoubled(t *testing.T) {
-	control, terminal, err := pty.Open()
-	if err != nil {
-		t.Skipf("no pseudo-terminal: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = terminal.Close()
-		_ = control.Close()
-	})
+	control, terminal := openTerminal(t)
 	seen := collectTerminal(control)
 	out := &conduitOut{w: terminal, real: terminal}
 	// Cooked for the first write, so the terminal is translating and the

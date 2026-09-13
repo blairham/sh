@@ -41,3 +41,24 @@ func TestAReadFindingEndOfFileForgetsTheCoprocess(t *testing.T) {
 		t.Errorf("out %q status %d, want %q at 0", out, st, want)
 	}
 }
+
+// A coprocess started with `|&` has no name to publish its ends under, so the
+// notice a *redirection* delivers in the shell with an array must not reach it
+// (#2582). Measured 2026-09-13 on ksh93u+ 2012-08-01: an `echo x >&2` between
+// the coprocess ending and a `print -p` changes nothing, and the write still
+// succeeds at 0.
+//
+// The write end here goes with the coprocess at the reaping — see
+// Semantics.ReapedCoprocessEnds — so a notice delivered early would turn this
+// into the no-coprocess refusal, which is the answer ksh93 keeps for a
+// coprocess that was never started.
+func TestAnOutputDuplicationDoesNotRetireAnUnnamedCoprocess(t *testing.T) {
+	out, st := runKsh(t, t.TempDir(), `true |&
+echo x >&2
+print -p hi
+print "st=$?"
+print done`)
+	if want := "x\nst=0\ndone\n"; st != 0 || out != want {
+		t.Errorf("out %q status %d, want %q at 0", out, st, want)
+	}
+}

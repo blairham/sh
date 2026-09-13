@@ -357,6 +357,18 @@ func Semantics() interp.Semantics {
 	s.ShiftNamesAreArrays = interp.No
 	s.ShiftNegativeIsOutOfRange = interp.No
 	s.ShiftCountIsArithmetic = interp.No
+	// `shift` past the end is **not** fatal here, which is BusyBox siding
+	// with bash rather than with the dash this preset starts from: `shift 5`
+	// with nothing to shift says nothing at all, leaves 1 behind and leaves
+	// `$#` alone, and the next command runs. Measured 2026-09-12 in the
+	// pinned alpine image, and `axis/shift-past-end` has recorded `survived`
+	// in the ash column since that column existed.
+	//
+	// Inherited from PosixSemantics as Yes and never overridden, so nothing
+	// objected: no corpus case reaches this dialect's answer, which is the
+	// blind spot #2441 is about. It was found by grading the preset against
+	// the golden record rather than by running anything.
+	s.ShiftPastEndFatal = interp.No
 	// `command -Z true` is `illegal option -Z` at 2.
 	s.CommandRejectsUnknownOption = interp.Yes
 	s.GetoptsRejectsUnknownOption = interp.No
@@ -905,7 +917,10 @@ func Diagnostics() interp.Diagnostics {
 		OptionListingWidth: 16,
 
 		ParamNullOrNotSet: "parameter not set or null",
-		ShiftTooMany:      "can't shift that many",
+		// Silent for a count above `$#`, as bash is — there is no
+		// ShiftTooMany here. BusyBox writes nothing and returns 1; the
+		// sentence that used to sit on this line is dash's, and it was
+		// unreachable while ShiftPastEndFatal was dash's too.
 		TimesDecimals:     3,
 		JobRunning:        "Running",
 		JobDone:           "Done",

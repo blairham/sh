@@ -58,8 +58,33 @@ func main() {
 	quiet := flag.Bool("quiet", false, "only print the report")
 	presets := flag.Bool("presets", false, "only ask the presets what they hold — no shell is run, which takes a second rather than an hour")
 	coverage := flag.Bool("coverage", false, "only report the axes each dialect does not answer — no shell is run")
-	write := flag.Bool("write", false, "with -coverage, rewrite the committed ledger of what is unanswered")
+	grade := flag.Bool("grade", false, "only grade each preset against the golden record — no shell is run")
+	write := flag.Bool("write", false, "with -coverage or -grade, rewrite that check's committed ledger")
 	flag.Parse()
+
+	if *grade {
+		g, err := axissweep.GradeCommitted()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "axissweep:", err)
+			os.Exit(2)
+		}
+		if *write {
+			path, err := g.WriteLedger()
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "axissweep:", err)
+				os.Exit(2)
+			}
+			fmt.Fprintf(os.Stderr, "wrote %d probed pairs to %s\n", len(g.Judgements), path)
+		}
+		fmt.Print(g.Report())
+		// Nonzero on a preset that contradicts a measured cell, and on a
+		// broken probe — which is the worse of the two, since a probe that
+		// reads nothing reports exactly like one that agrees.
+		if len(g.Disagreements()) > 0 || len(g.Faults) > 0 {
+			os.Exit(1)
+		}
+		return
+	}
 
 	if *coverage {
 		cov, err := axissweep.Coverage()

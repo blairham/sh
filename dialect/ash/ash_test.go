@@ -149,6 +149,24 @@ func TestTheAnswersThatSideWithBashRatherThanDash(t *testing.T) {
 	if !strings.Contains(out, "in") {
 		t.Errorf("[a[:nope:]b] against b = %q, want the unknown name inert", out)
 	}
+	// A seventh, and the one that was wrong here until #2441 built something
+	// that reads the record: `shift` past the end is survivable, as it is in
+	// bash, where dash — the preset this one starts from — ends the script
+	// over it. Measured 2026-09-12 in the pinned image: nothing is printed at
+	// all, 1 is left behind, `$#` is untouched and the next command runs.
+	if s.ShiftPastEndFatal != interp.No {
+		t.Errorf("ShiftPastEndFatal = %v, want No", s.ShiftPastEndFatal)
+	}
+	// Both halves, because the axis alone would leave dash's sentence being
+	// printed where BusyBox says nothing — a survivable overshoot that
+	// complains is not this shell either.
+	out, st := run(t, `set -- a b; shift 5; echo "st=$? n=$#"`)
+	if !strings.Contains(out, "st=1 n=2") || st != 0 {
+		t.Errorf("shift past the end = %q at %d, want `st=1 n=2` at 0", out, st)
+	}
+	if strings.Contains(out, "shift") {
+		t.Errorf("shift past the end = %q, want it to say nothing at all", out)
+	}
 }
 
 // TestDiagnosticsAreWordedThisShellsWay pins the two shapes that run through

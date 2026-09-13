@@ -215,6 +215,23 @@ func (f declareFlags) lastSign(c rune) (plus, written bool) {
 	return plus, written
 }
 
+// letterMissingOnAFunctionLine reports the first letter of `refused` this
+// line wrote under a **minus**, which is the sign that asks for the facility
+// rather than taking it away. Zero when none was.
+//
+// The mirror of markingLetterUnderPlus, and beside it rather than folded into
+// it: the two ask about opposite signs and the answer to one is not the
+// negation of the other, a letter that was never written at all being neither.
+// See Diagnostics.UnimplementedOptionLettersOnAFunctionLine.
+func (f declareFlags) letterMissingOnAFunctionLine(refused string) (rune, bool) {
+	for _, c := range refused {
+		if plus, written := f.lastSign(c); written && !plus {
+			return c, true
+		}
+	}
+	return 0, false
+}
+
 // markingLetterUnderPlus reports the first letter of `refused` whose own last
 // sign was a plus. Empty when none was, which is every ordinary line.
 func (f declareFlags) markingLetterUnderPlus(refused string) (rune, bool) {
@@ -527,7 +544,47 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 		}
 	}
 	r.blockALaterPlus(&f)
-	return args[i:], f, 0
+	rest = args[i:]
+	if code := r.refuseAFunctionLineLetter(name, f, rest); code != 0 {
+		return nil, f, code
+	}
+	return rest, f, 0
+}
+
+// refuseAFunctionLineLetter refuses a letter this shell has on a variable
+// line and has not got on a function one, and answers 0 for every other line.
+//
+// It is here rather than in the letter loop's refuseOption because the letter
+// is *known*: the parser took it and gave it its other meaning, so nothing
+// downstream would ever ask whether it was missing. And it is here rather
+// than in declareNames — where it was first written — because the *fatality*
+// hangs off this function's status: Semantics.TypesetBadOptionFatal is asked
+// only of a non-zero code from the option parse, so a refusal raised further
+// in would report the same sentence and let the script carry on, where the
+// sibling letter beside it in Diagnostics.UnimplementedOptionLetters stops it.
+// One refusal, two exits, is exactly the drift this repository keeps finding.
+//
+// **Operands are required**, and that is measured rather than a caution.
+// ksh93's `typeset -fu` with no names is the *listing* of the functions the
+// letter marks, and with none marked it is silent at 0 — which this shell
+// already answers correctly through the marked-function listing. Refusing the
+// bare word would have replaced a right answer with a complaint. The form
+// that is missing is the one with names, which is the declaration.
+func (r *Runner) refuseAFunctionLineLetter(name string, f declareFlags, rest []string) int {
+	if !f.function || f.functionOff || len(rest) == 0 {
+		return 0
+	}
+	c, missing := f.letterMissingOnAFunctionLine(
+		r.diag().UnimplementedOptionLettersOnAFunctionLine[name])
+	if !missing {
+		return 0
+	}
+	// The sentence is UnimplementedOptionLetters' own, said in the one place
+	// that says it, so the two lists cannot come to word the same fact
+	// differently.
+	r.complainAboutOption(name, "%s: -%c is not implemented yet\n",
+		r.builtinComplaintName(name), c)
+	return orDefault(r.diag().BuiltinBadOptionStatus, 2)
 }
 
 // blockALaterPlus is one dialect's reading of a declaration that writes both

@@ -1961,17 +1961,22 @@ func Diagnostics() interp.Diagnostics {
 			// `-u` is not here and cannot be: it is the upper-case
 			// attribute, which this shell has, and only its meaning *on a
 			// `-f` line* is missing — there it marks a name to be read from
-			// `$FPATH`. So `typeset -fu nm` reads as a listing of a
-			// function that is not there, silent at 1, where ksh93 marks
-			// the name and is 0. That half is #2192; the seam it needs is
-			// Semantics.FunctionLettersThatMarkUndefined, and what is
-			// missing is an FPATH search for this dialect to put behind it.
+			// `$FPATH`. It is refused in that position alone, through
+			// UnimplementedOptionLettersOnAFunctionLine below.
 			"typeset": "-bFhnstCEHLRSTXZ",
 			// `functions` is `typeset -f` under a second name, so the
 			// letters it is missing are read off its own set: `-t` traces a
 			// function and `-u` marks one to be read from `$FPATH`, both of
 			// which ksh93 takes there and this shell does not do, and `-M`
-			// is a character mapping rather than zsh's math facility. `-F`
+			// is a character mapping rather than zsh's math facility.
+			//
+			// The alias is what a script actually meets, so this entry is
+			// reached only by the registered builtin behind it — `functions`
+			// written after `unalias functions`, from a route where the
+			// alias never expanded. The line a script writes is
+			// `typeset -f -u`, and that is refused by the two tables under
+			// `typeset`. Both are kept: a name that can be reached has to
+			// answer, and the two must not disagree. `-F`
 			// and `-m` are deliberately absent: measured, `functions -F`
 			// and `functions -m` are the usage line on ksh93u+, so that
 			// shell has not got them either and "unknown" is the truth.
@@ -1988,6 +1993,33 @@ func Diagnostics() interp.Diagnostics {
 			// letter of typeset's grammar that ksh93u+ refuses under the
 			// second name, and it refuses it with the usage line alone.
 			"integer": "-bFhnstCEHLRSTXZ",
+		},
+		// `-u` on a `-f` line, which is the one letter that cannot go in
+		// the list above: it is also the upper-case attribute, and this
+		// shell has that — `typeset -u v=abc` is `ABC`. Only its meaning
+		// under `-f` is missing, where it marks a name whose body is read
+		// from `$FPATH` the first time it is called.
+		//
+		// Refused rather than left to fall through, because falling through
+		// is not silence: the line reached the *listing* instead, so
+		// `typeset -fu nm` was a silent status 1 — a listing of a function
+		// that is not there — where ksh93 marks the name and is 0. A wrong
+		// status in silence is the worst of the three answers available,
+		// and an honest refusal is the best one until the search exists.
+		// `autoload` is the same line under an alias (`alias
+		// autoload='typeset -fu'`), so it is refused too and by the same
+		// sentence.
+		//
+		// `-t` is not here: it is in the list above, under `typeset`, and
+		// belongs there because this shell has no tracing on a variable
+		// line either.
+		//
+		// The remaining half of #2192 is the `$FPATH` search itself, plus
+		// the ksh93 rendering of a marked name — `typeset -f nm` writes
+		// `typeset -fu nm`, a declaration with no body, where the
+		// Runner.SetUndefinedFunctions seam hands back a *block*.
+		UnimplementedOptionLettersOnAFunctionLine: map[string]string{
+			"typeset": "u",
 		},
 		// ksh93's one sentence for a dead -u descriptor, the number not
 		// named; the non-number wordings per letter are not modeled yet, so

@@ -21873,6 +21873,26 @@ echo "st=$?"`,
 		Why:     "the shape the two rows above could not tell apart: a numeric letter that takes a *detached number* written in the same option word as a case letter. `declare/a-numeric-letter-over-a-case-attribute` writes the two letters as two commands and records the case attribute being replaced -- which is real, and which this engine then applied here too, dropping the `l` from both spellings where zsh writes `typeset -i16 -l w=255` and `typeset -Fl y=1.500`. A row that only ever wrote the letters apart cannot say whether the axis is about the shell or about how the letters arrive, and it is about how they arrive: zsh replaces a case attribute the name *already had* and keeps one the same declaration is giving it. ksh93 reads the number and keeps the letter too -- `typeset -l -i 16 w=16#ff`, the value re-rendered in the base -- while bash has no detached number, refuses the `16` as an identifier and declares the name from the rest; bash 3.2 has no `-l` at all and declares nothing. Both spellings in one row because the width family and the integer family reach the case attribute through the same call and a fix to one that missed the other would pass on either alone (#2560)",
 	},
 	{
+		ID: "declare/a-function-line-marking-letter-with-names", Category: "declarations",
+		Snippet: `typeset -fu nm 2>&1; echo "st=$?"; typeset -f nm 2>&1; echo "then=$?"`,
+		Why:     "ksh93's `-u` on a `-f` line: the operands are names whose bodies are read from `$FPATH` the first time they are called, so the line is silent at 0 and `typeset -f nm` afterwards writes `typeset -fu nm` — a declaration with no body, which is that shell's whole rendering of a function still waiting to be defined. zsh has the same spelling and renders it as a body with `# undefined` in it; the two bashes have no `-u` on `declare` and refuse the letter; dash has no `typeset`. This shell has no `$FPATH` search, so the letter is refused by name in that position — the row is here to say what the refusal is standing in for (#2192)",
+	},
+	{
+		ID: "declare/the-same-function-line-letter-with-no-names", Category: "declarations",
+		Snippet: `typeset -fu 2>&1; echo "st=$?"`,
+		Why:     "the discriminator, and the reason the refusal above asks for operands: with no names the same letters are a *listing* narrowed to the functions they mark, and with none marked ksh93 and zsh are both silent at 0. A refusal written on the letter rather than on the letter-with-names would have replaced a right answer with a complaint",
+	},
+	{
+		ID: "declare/the-same-letter-on-a-variable-line", Category: "declarations",
+		Snippet: `typeset -u v=abc 2>&1; echo "[$v] st=$?"`,
+		Why:     "the second discriminator, and the reason ksh93's `-u` cannot go in the ordinary table of letters a shell has and this one has not: on a variable line it is the upper-case attribute, which ksh93 and zsh both apply and this shell has. `bash` has no `-u` on `declare` at all. So one letter names two facilities and only the `-f` one is missing, which is what a second, position-narrowed table is for",
+	},
+	{
+		ID: "declare/a-function-line-tracing-letter", Category: "declarations",
+		Snippet: `f(){ :; }; typeset -ft f 2>&1; echo "st=$?"; typeset -f f 2>&1`,
+		Why:     "the sibling letter, and the control that says the two are refused in the same words for different reasons: ksh93's `-t` marks a function for tracing, is silent at 0, and writes **no** listing — which is what makes accepting-and-dropping it worse than refusing it, since a dropped letter would leave `typeset -ft f` printing the body where that shell prints nothing. It is refused by name today from the wider table, `-t` being absent on a variable line too",
+	},
+	{
 		ID: "declare/a-local-over-a-produced-readonly-parameter", Category: "declarations",
 		Snippet: `g() { local ARGC; printf "g=[%s]" "$ARGC"; }; g; f() { local ARGC=5; printf "f=[%s]" "$ARGC"; }; f; echo " tail"`,
 		Why:     "whether a local declaration thaws a parameter the *shell* produces and has frozen. zsh has `ARGC`, freezes it, and refuses the second function fatally -- `f: read-only variable: ARGC` -- while taking the first: the valueless form shadows the name and reads the producer's `0`, so the declaration is allowed and only a value is refused. That pair is the whole discrimination, and a row with the valued form alone would be passed by a guard aimed at the declaration instead of at the assignment. An ordinary readonly goes the other way in the same shell -- `readonly z=1; f(){ local z=5 }` is `5` there -- so this is not `local` refusing to shadow anything frozen. The other columns have no such parameter and none of them freezes `ARGC`, so all three bash spellings and dash answer `g=[]f=[5] tail`; ksh93 has no `local` at all and says so twice while still running the bodies, which is that shell's standing answer and not this question (#2551)",

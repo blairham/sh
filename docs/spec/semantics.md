@@ -8478,6 +8478,44 @@ undefined function as a declaration rather than a body: `typeset -fu nm`
 lists back as `typeset -fu nm`. The two bashes have no `-u` on `declare`
 and refuse the letter; dash has no `typeset`.
 
+### ksh93's `-u`: refused by name, in that position alone
+
+This shell has no `$FPATH` search, so the ksh93 marking is a facility it
+has not got. It is **refused by name** rather than dropped, and rather
+than left to fall through — falling through is not silence, because the
+line reached the *listing* instead and answered a silent status 1 for a
+function that is not there, where ksh93 marks the name and is 0. A wrong
+status in silence is the worst of the three answers available.
+
+The refusal cannot go in `Diagnostics.UnimplementedOptionLetters`, and
+that is the whole reason there is a second table. `u` is also the
+upper-case attribute, which this shell **has**: `typeset -u v=abc` is
+`ABC`. Only its meaning on a `-f` line is missing, so
+`UnimplementedOptionLettersOnAFunctionLine` names it in that position and
+nowhere else.
+
+Three lines settle where the line is drawn, and the middle one is the
+reason the check asks for operands:
+
+    typeset -fu nm      typeset: -u is not implemented yet, 2, fatal
+    typeset -fu         silent, 0     — the listing of what is marked, and
+                                        nothing is; ksh93 agrees
+    typeset -u v=abc    ABC           — the attribute, untouched
+
+`autoload` is the same line under an alias — ksh93 ships
+`alias autoload='typeset -fu'`, and so does this shell — so it is refused
+too, by the same sentence. The status is fatal because `typeset` is a
+special builtin there and `Semantics.TypesetBadOptionFatal` is asked of
+the option parse: the refusal is raised **in** that parse rather than
+after it, so the sibling letter `-t` beside it in the wider table and this
+one stop the script the same way. Two exits for one refusal is the drift
+this table exists not to have.
+
+What is left of #2192 is the facility itself: an `$FPATH` search for this
+dialect, and a rendering for a marked name — `typeset -f nm` writes
+`typeset -fu nm`, a declaration with no body, where the
+`Runner.SetUndefinedFunctions` seam hands a listing a *block*.
+
 
 ## A function said back, and the word it was declared with
 

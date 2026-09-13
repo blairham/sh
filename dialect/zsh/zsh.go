@@ -780,6 +780,12 @@ func Semantics() interp.Semantics {
 	// which is what makes it worth an answer rather than a bug (#1893).
 	s.PromptAsksAgainAfterARefusedToken = true
 	s.UnsetEndsTheProducedPipelineStatus = interp.Yes
+	// `unset RANDOM; RANDOM=9; a=$RANDOM; b=$RANDOM` is two fresh numbers
+	// here — measured 2026-09-12, 20191 and 4730 — where bash, ksh93, dash
+	// and BusyBox ash all answer 9 twice: the assignment is a message to the
+	// producer whether or not `unset` has been past (#2450). The 9 is the
+	// discriminator, being one digit against the generator's five.
+	s.AssignmentRestoresAnUnsetProducedParameter = interp.Yes
 	s.SelectLayout = interp.SelectMenuColumns
 	s.SelectPromptNeedsTerminal = interp.No
 	s.AliasParsesOptions = interp.Yes
@@ -3111,6 +3117,16 @@ func Apply(r *interp.Runner) {
 	r.SetPromptStyle(PromptStyle())
 	r.SetSpecial("EUID", strconv.Itoa(os.Geteuid()))
 	r.SetDynamic("RANDOM", func(*interp.Runner) string { return interp.Randoms() })
+	// `typeset -p RANDOM` is `typeset -i10 RANDOM=13859` here — the base
+	// rides on the letter in this shell's listing form, and both are facts
+	// the parameter has to be told, having no attribute record of its own
+	// (#2451).
+	r.SetDynamicDeclaration("RANDOM", interp.ProducedDeclaration{Integer: true, Base: 10})
+	// And the third answer, which is neither a row nor a refusal: measured
+	// 2026-09-12, `typeset -p LINENO` writes nothing at all and reports 0,
+	// where the same probe is a row in bash and ksh93 and was
+	// `LINENO: not found` here.
+	r.SetDynamicDeclaration("LINENO", interp.ProducedDeclaration{Silent: true})
 	// `$ARGC`, this shell's name for `$#` — see argc.go for what was
 	// measured and for the startup that could not run without it.
 	registerARGC(r)
@@ -3130,6 +3146,11 @@ func Apply(r *interp.Runner) {
 		}
 		return strconv.Itoa(int(rr.SecondsFrom()))
 	})
+	// `typeset -i10 SECONDS=0`, the same shape RANDOM lists in. The float
+	// attribute a script puts on the name with `typeset -F 3 SECONDS=0` is
+	// the script's own record and lists from the attribute tables as it
+	// always did; this is the shape of the name nobody has declared.
+	r.SetDynamicDeclaration("SECONDS", interp.ProducedDeclaration{Integer: true, Base: 10})
 	// A NUL as well as the three whitespace characters, which is zsh's alone.
 	r.SetSpecial("IFS", " \t\n\x00")
 	// The two names the null-command options point at, which no script can

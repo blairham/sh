@@ -2081,9 +2081,22 @@ func Apply(r *interp.Runner) {
 	// anything the printer should know.
 	r.SetFunctionLayout(FunctionLayout(), ExportedFunctionLayout())
 	r.SetDynamic("RANDOM", func(*interp.Runner) string { return interp.Randoms() })
+	// How the two of them list back, which a produced parameter has to be
+	// told rather than carry: `declare -p RANDOM` is
+	// `declare -i RANDOM="16735"` in bash 5.3 and was `RANDOM: not found`
+	// here, from the name this shell had just expanded a number for (#2451).
+	r.SetDynamicDeclaration("RANDOM", interp.ProducedDeclaration{Integer: true})
 	r.SetDynamic("SECONDS", func(rr *interp.Runner) string {
 		return strconv.Itoa(int(rr.SecondsFrom()))
 	})
+	r.SetDynamicDeclaration("SECONDS", interp.ProducedDeclaration{Integer: true})
+	// And the line, which this shell lists with *no* attribute where bash
+	// 3.2 writes `-i` — `declare -- LINENO="1"`, measured on 5.3.15. It is
+	// registered by the core rather than here, so this is a declaration for
+	// a producer the dialect did not install, which the seam allows for
+	// exactly this: the letters are the dialect's fact and the producer is
+	// not (#2451).
+	r.SetDynamicDeclaration("LINENO", interp.ProducedDeclaration{})
 	// The clock, as this shell reads it since 5.0. In a file of its own
 	// because it is not the `zsh/datetime` registration under another name —
 	// see epoch.go for the row-by-row measurement (#1158).

@@ -142,6 +142,10 @@ func TestSemantics(t *testing.T) {
 		{"AssignmentUpdatesPipelineStatus", s.AssignmentUpdatesPipelineStatus, interp.No},
 		{"TestAndArithmeticUpdatePipelineStatus", s.TestAndArithmeticUpdatePipelineStatus, interp.No},
 		{"UnsetEndsTheProducedPipelineStatus", s.UnsetEndsTheProducedPipelineStatus, interp.Yes},
+		// The one shell where an assignment brings an `unset` produced
+		// parameter back: `unset RANDOM; RANDOM=9` reads two fresh numbers
+		// (#2450).
+		{"AssignmentRestoresAnUnsetProducedParameter", s.AssignmentRestoresAnUnsetProducedParameter, interp.Yes},
 		{"ArrayScalarIsTheWholeArray", s.ArrayScalarIsTheWholeArray, interp.Yes},
 		{"ArrayNameWithoutSubscriptIsTheList", s.ArrayNameWithoutSubscriptIsTheList, interp.Yes},
 		{"SelectPromptNeedsTerminal", s.SelectPromptNeedsTerminal, interp.No},

@@ -635,6 +635,24 @@ type Runner struct {
 	// is a message to whatever produces it rather than a value of its own.
 	assigned map[string]string
 
+	// dynamicDeclarations is how each produced parameter lists back, as the
+	// dialect that registered it states it — see SetDynamicDeclaration.
+	dynamicDeclarations map[string]ProducedDeclaration
+
+	// endedProducers are the produced parameters an `unset` and an assignment
+	// have between them turned into ordinary names — see
+	// Semantics.AssignmentRestoresAnUnsetProducedParameter and
+	// producerEndedByUnset.
+	//
+	// A record rather than only a deletion from Dynamic, because the shell's
+	// own parameters are registered lazily and *repeatedly*: ensureSpecials
+	// runs at the head of every chunk a front end hands to RunPart, and this
+	// parser reads a script incrementally, so a `LINENO` deleted by one line
+	// was back before the next one ran. Deleting the producer alone was
+	// measured doing exactly that — the RANDOM row moved and the LINENO row
+	// did not, which is what a second probe is for (#2450).
+	endedProducers map[string]bool
+
 	// absentParams are the parameters a dialect's module *names* and this
 	// shell has not got, to the sentence a read of one is refused with.
 	//
@@ -5338,6 +5356,21 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 	if !ok {
 		return
 	}
+	if _, dynamic := r.Dynamic[name]; dynamic && r.producerEndedByUnset(name) {
+		// The `unset` ended the parameter in this dialect, so what the
+		// assignment makes is an ordinary variable: the producer goes with
+		// the name it was producing for, and the store further down is the
+		// whole of what is left. Deleted from this runner's own tables, of
+		// which a subshell holds a copy — a name unset inside one is still
+		// the parent's produced parameter afterwards.
+		delete(r.Dynamic, name)
+		delete(r.dynamicWriters, name)
+		delete(r.assigned, name)
+		if r.endedProducers == nil {
+			r.endedProducers = map[string]bool{}
+		}
+		r.endedProducers[name] = true
+	}
 	if _, dynamic := r.Dynamic[name]; dynamic {
 		// Assigning a produced parameter is a message to its producer rather
 		// than a replacement for it.
@@ -5369,6 +5402,31 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 	// And the other half of a tie, if this name is one. After the store, so
 	// that the mirror's own read of this name sees the new value.
 	r.mirrorScalarToArray(name, value)
+}
+
+// producerEndedByUnset reports whether `unset` has ended a produced parameter,
+// so that an assignment to the name now makes an ordinary variable rather than
+// sending its producer a message.
+//
+// An assignment is a message every time while the parameter is still there:
+// `RANDOM=9` seeds the generator, `SECONDS=9` counts on from nine, and no
+// shell in the panel lets the stored text shadow what the producer says. The
+// split is only over what `unset` left behind — see
+// Semantics.AssignmentRestoresAnUnsetProducedParameter, where one shell reads
+// the assignment as the same message and the producer answers again, and four
+// read the `unset` as having ended the parameter.
+//
+// Asked only where the two readings differ, which is the rule for every axis:
+// a name nothing has unset has one answer and is never asked about. That is
+// also what keeps `OPTIND` and `OPTARG` where they were — they reach
+// r.removed directly (see getoptsbuiltin.go) and are no dialect's produced
+// parameters, so nothing here sees them.
+func (r *Runner) producerEndedByUnset(name string) bool {
+	if !r.removed[name] {
+		return false
+	}
+	return !r.ask(r.sem().AssignmentRestoresAnUnsetProducedParameter,
+		"an assignment restoring a produced parameter `unset` took away")
 }
 
 // nameIsBack forgets that `unset` had taken a name away, which is what

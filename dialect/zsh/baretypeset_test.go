@@ -80,7 +80,13 @@ func TestABareListingWritesAProducedParametersAttributesAndNotItsValue(t *testin
 		"association readonly widgets\n",
 		"association readonly sysparams\n",
 		"association readonly builtins\n",
-		"readonly EPOCHSECONDS\n",
+		// The kind word beside the readonly one, which the parameter had no
+		// way to carry until a produced one could say how it lists —
+		// measured 2026-09-12 after `zmodload zsh/datetime`, real zsh writes
+		// `integer readonly EPOCHSECONDS` and `float readonly EPOCHREALTIME`
+		// here, and this wrote `readonly` alone for both (#2451).
+		"integer readonly EPOCHSECONDS\n",
+		"float readonly EPOCHREALTIME\n",
 	} {
 		if !containsLine(out, want) {
 			t.Errorf("out = %q, want the whole line %q", out, want)

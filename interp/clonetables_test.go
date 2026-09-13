@@ -235,6 +235,8 @@ func seedTables(r *Runner) {
 		"seed": func(*Runner, string, string, bool) {},
 	}
 	r.dynamicWriters = map[string]func(*Runner, string){"seed": func(*Runner, string) {}}
+	r.dynamicDeclarations = map[string]ProducedDeclaration{"seed": {Integer: true}}
+	r.endedProducers = map[string]bool{"seed": true}
 	r.absentElements = map[string]string{"seed": "v"}
 	r.absentParams = map[string]string{"seed": "v"}
 	r.aliases = map[string]aliasDef{"seed": {value: "v"}}

@@ -6223,6 +6223,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `special/random-is-absent-from-dash` | `none` | `have` | `have` | `have` | `have` | `have` | `have` |
 | `special/uid-is-bash-and-zsh` | `none` | `have` | `have` | `have` | `none` | `have` | `none` |
 | `special/assigning-random-seeds-it` | `none` | `produced` | `produced` | `produced` | `produced` | `produced` | `produced` |
+| `special/listing-a-produced-parameter` | `<shell>: 1: typeset: not found~<shell>: 1: typeset: not found` | `declare -i RANDOM=<n>~declare -i SECONDS=<n>` | `declare -i RANDOM=<n>~declare -i SECONDS=<n>` | `declare -i RANDOM=<n>~declare -i SECONDS=<n>` | `typeset -i RANDOM=<n>~typeset -F 3 SECONDS=<n>` | `typeset -i10 RANDOM=<n>~typeset -i10 SECONDS=<n>` | `<shell>: typeset: not found~<shell>: typeset: not found` |
+| `special/listing-the-line-number` | `<shell>: 1: typeset: not found~st=127` | `declare -- LINENO="1"~st=0` | `declare -- LINENO="1"~st=0` | `declare -i LINENO="0"~st=0` | `typeset -i LINENO=1~st=0` | `st=0` | `<shell>: typeset: not found~st=127` |
+| `special/unset-then-assign-a-produced-parameter` | `none` | `same~stored` | `same~stored` | `same~stored` | `same~stored` | `differ~produced` | `same~stored` |
+| `special/unset-then-assign-lineno` | `[9]` | `[9]` | `[9]` | `[9]` | `[9]` | **2>** `<shell>:1: read-only variable: LINENO` *(status 1)* | `[9]` |
 | `special/the-window-size-with-no-window` | `[UNSET][UNSET]` | `[UNSET][UNSET]` | `[UNSET][UNSET]` | `[UNSET][UNSET]` | `[UNSET][UNSET]` | `[0][0]` | `[UNSET][UNSET]` |
 | `special/the-window-size-is-an-integer-parameter` | `[3+4][abc]` | `[3+4][abc]` | `[3+4][abc]` | `[3+4][abc]` | `[3+4][abc]` | `[7][0]` | `[3+4][abc]` |
 | `zsh/the-window-size-type-word` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: ${(t)COLUMNS}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(t)COLUMNS}: bad substitution` *(status 127)* | **2>** `<shell>: ${(t)COLUMNS}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `COLUMNS}' unexpected` *(status 3)* | `[integer-special][integer-special]` | **2>** `<shell>: syntax error: bad substitution` *(status 2)* |
@@ -6317,6 +6321,22 @@ grades it and nothing drift-checks it either, for the same reason.
 - `special/assigning-random-seeds-it` — assigning a produced parameter is a message to whatever produces it rather than a replacement for it: the next read is a new number and not the 5
   ```sh
   [ -n "${RANDOM-}" ] || { echo none; exit; }; RANDOM=5; a=$RANDOM; b=$RANDOM; [ "$a" = 5 ] && echo stored || echo produced
+  ```
+- `special/listing-a-produced-parameter` — a produced parameter is in none of the tables a listing walks, and every shell in the panel that has one lists it anyway, with its value: `declare -i RANDOM=…` in both bash columns, `typeset -i RANDOM=…` in ksh93, `typeset -i10 RANDOM=…` in zsh — three spellings of the letters and a base that rides on the letter in one of them. ksh93's SECONDS is the fourth shape, `typeset -F 3`, whose places no listing form here writes yet (#1461). The value is cut down to `<n>` because it is a different number on every run, and the *letters* are the whole of what the row is for; the cut keeps the `-i10`, which is on the flag rather than in the value. dash and BusyBox ash have no such builtin and record the complaint they make of the word. Ours answered `RANDOM: not found` at 1 from a name it had just expanded a number for (#2451)
+  ```sh
+  typeset -p RANDOM 2>&1 | sed "s/=.*/=<n>/"; typeset -p SECONDS 2>&1 | sed "s/=.*/=<n>/"
+  ```
+- `special/listing-the-line-number` — the same question asked of the parameter with three answers rather than two. bash 5.3 lists it with *no* attribute — `declare -- LINENO="1"` — where bash 3.2 and ksh93 write `-i`, so the letters are per shell rather than per parameter; and zsh writes nothing at all at status 0, which is neither a row nor a refusal and is the third answer a filter could not have produced. It is why ProducedDeclaration has a Silent field: without one the choice for that column is between a row no shell writes and the `not found` this row was filed against (#2451)
+  ```sh
+  typeset -p LINENO 2>&1; echo "st=$?"
+  ```
+- `special/unset-then-assign-a-produced-parameter` — the row above asks what an assignment means while the parameter is standing, and this asks what it means once `unset` has been past — and unlike that one, this splits. bash, ksh93 and BusyBox ash read the `unset` as having ended the parameter, so the assignment makes an ordinary name and both reads are the stored 9; zsh reads the assignment as the same message to the producer, so the name produces again and the two reads are different numbers. `9` is what makes the row readable: one digit against a five-digit range, so `stored` and `produced` cannot agree by accident, and the numbers themselves are never recorded. dash has no such parameter and says `none`. It is Semantics.AssignmentRestoresAnUnsetProducedParameter, filed as #2450 from a shell that answered zsh's way in all four dialects
+  ```sh
+  [ -n "${RANDOM-}" ] || { echo none; exit; }; unset RANDOM; RANDOM=9; a=$RANDOM; b=$RANDOM; [ "$a" = "$b" ] && echo same || echo differ; [ "$a" = 9 ] && echo stored || echo produced
+  ```
+- `special/unset-then-assign-lineno` — the same question asked of the parameter every shell in the panel has, which is what reaches the two columns the RANDOM row cannot: dash and BusyBox ash have no RANDOM and both answer `[9]` here, with bash and ksh93. zsh is the odd column for a different reason again — its LINENO is read-only, so the `unset` is refused and the shell stops, and the row records that rather than an answer to the axis. So the two rows cover the panel between them and neither covers it alone (#2450)
+  ```sh
+  unset LINENO; LINENO=9; echo "[$LINENO]"
   ```
 - `special/the-window-size-with-no-window` — whether the shell *has* the terminal's size as a parameter at all, asked where there is no terminal — which is the only place the corpus can ask it, and is exactly why the answer here is worth pinning. One column says `[0][0]` and the other five say `[UNSET][UNSET]`: in zsh the pair is the shell's own, so it is nought rather than absent, and everywhere else `COLUMNS` is a variable something assigns and nothing has. bash is the near miss that makes the row necessary — it assigns both, but only when it is interactive and only with `checkwinsize`, so `-c` shows nothing of it and a reading that gave them to the core would be answering for five columns that do not (#2107)
   ```sh

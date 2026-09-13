@@ -34,16 +34,17 @@ import (
 // There is no `$epochtime` and no `strftime` builtin, because this shell has
 // neither: its formatting is `printf '%(fmt)T'`, which the core already has.
 //
-// **Known divergence, and it is not this parameter's.** Real bash's `unset
-// EPOCHSECONDS` removes the parameter for good — a later `EPOCHSECONDS=7`
-// makes an ordinary variable holding `7`, and the clock never comes back.
-// Here the producer returns on the next assignment. That is not a fact about
-// the clock: measured the same day, `unset RANDOM; RANDOM=9; echo $RANDOM
-// $RANDOM` answers `9 9` in bash 5.3, bash 3.2 and ksh93, and two different
-// numbers in zsh 5.9.2 — and this shell answers zsh's way in every dialect,
-// so `RANDOM` and `SECONDS` have carried the same divergence since long
-// before this file. It is one axis over every produced parameter rather than
-// a special case here, so it is filed rather than patched in (#2450).
+// **The divergence this file recorded is closed, and it was never this
+// parameter's.** Real bash's `unset EPOCHSECONDS` removes the parameter for
+// good — a later `EPOCHSECONDS=7` makes an ordinary variable holding `7`, and
+// the clock never comes back — where the producer used to return on the next
+// assignment. Measured the same day, `unset RANDOM; RANDOM=9; echo $RANDOM
+// $RANDOM` answers `9 9` in bash 5.3, bash 3.2, ksh93 and BusyBox ash and two
+// different numbers in zsh 5.9.2, so `RANDOM` and `SECONDS` had carried the
+// same divergence since long before this file. It is one axis over every
+// produced parameter rather than a special case here, which is why it was
+// filed rather than patched in behind one parameter's back:
+// Semantics.AssignmentRestoresAnUnsetProducedParameter (#2450).
 //
 // bash 3.2.57 has neither parameter, which is a version fact and not an axis:
 // the panel holds both builds and this dialect models 5.3.
@@ -73,6 +74,12 @@ func registerEpochClock(r *interp.Runner) {
 	// variable: EPOCHSECONDS`.
 	for _, name := range []string{"EPOCHSECONDS", "EPOCHREALTIME"} {
 		r.SetDynamicWriter(name, func(*interp.Runner, string) {})
+		// And listed as an ordinary scalar carrying its value —
+		// `declare -- EPOCHSECONDS="1789252077"`, measured — where zsh's
+		// pair of the same name list as `typeset -ir` with no value at all.
+		// The row in the table above was unreachable until a produced
+		// parameter could say how it lists (#2451).
+		r.SetDynamicDeclaration(name, interp.ProducedDeclaration{})
 	}
 }
 

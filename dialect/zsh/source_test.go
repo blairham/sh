@@ -727,7 +727,7 @@ func TestSourceIsNotASynonymForDot(t *testing.T) {
 	}
 }
 
-// TestSourceLooksInTheCurrentDirectoryForItsOwnCallOnly is the neighbour of the
+// TestSourceLooksInTheCurrentDirectoryForItsOwnCallOnly is the neighbor of the
 // row above, and the reason the lookup is taken by the call rather than left
 // standing while the file runs. Measured on the same shell: a file `source`
 // found in the current directory can `source` another one there, and a `.`

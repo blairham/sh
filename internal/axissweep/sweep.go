@@ -50,7 +50,29 @@ type Flip struct {
 	// run before it did.
 	By      string `json:"by,omitempty"`
 	Scanned int    `json:"scanned"`
-	Elapsed string `json:"elapsed"`
+	// ByUnanimous reports that every panel column the record holds for By
+	// answered that row identically.
+	//
+	// A pin is this instrument's only positive claim, and it is made by the
+	// *first* row that stops agreeing rather than by a row shown to have
+	// anything to do with the axis. So a flip that breaks the shell in some
+	// general way — a string spelling mutated to nonsense, a value that
+	// reaches an unhandled branch — reads as pinned, because the first
+	// casualty is counted as the objection (#2061).
+	//
+	// An axis records a *measured disagreement between real shells*, so the
+	// row recording it has to be a row the panel itself splits on. A row
+	// every column answers identically cannot be recording a disagreement,
+	// whatever else it proves, so a pin resting only on such a row is
+	// suspect and says so here.
+	//
+	// It is reported and never a verdict. The reading is a heuristic — a row
+	// the panel agrees about can still exercise an axis whose two values our
+	// implementation alone distinguishes — so demoting such a pin to the
+	// backlog would file work against axes nobody has looked at. What it
+	// changes is that the pin no longer reads as an ordinary one.
+	ByUnanimous bool   `json:"byUnanimous,omitempty"`
+	Elapsed     string `json:"elapsed"`
 }
 
 // Options configure a run.
@@ -297,6 +319,7 @@ func (o *Options) sweepTarget(ctx context.Context, t Target, ref oracle.Found, f
 				// would object to everything. Confirm before believing it.
 				if o.stable(ctx, plain, by, pass) {
 					out.Outcome, out.By = Pinned, by
+					out.ByUnanimous = panelUnanimous(o.Golden, by)
 					state.objections[by]++
 					state.pinnedBy[f.Path] = by
 				} else {
@@ -306,6 +329,7 @@ func (o *Options) sweepTarget(ctx context.Context, t Target, ref oracle.Found, f
 					out.Scanned = scanned
 					if by != "" {
 						out.Outcome, out.By = Pinned, by
+						out.ByUnanimous = panelUnanimous(o.Golden, by)
 						state.objections[by]++
 						state.pinnedBy[f.Path] = by
 					}
@@ -422,6 +446,52 @@ func (o *Options) stable(ctx context.Context, plain oracle.Found, id string, cas
 func sameResult(a, b oracle.Result) bool {
 	return a.Stdout == b.Stdout && a.Stderr == b.Stderr && a.Status == b.Status &&
 		a.Signal == b.Signal && a.TimedOut == b.TimedOut
+}
+
+// panelUnanimous reports that every column the record holds for a row
+// answered it the same way.
+//
+// It is the reading behind Flip.ByUnanimous, and it costs nothing: the golden
+// record already holds every panel column per row, so asking whether the panel
+// splits on the row that objected is a map lookup rather than another shell.
+//
+// Cross-column comparison is meaningful because a recorded cell is already
+// normalized — a shell's own name in a diagnostic is rewritten to `<shell>:`
+// before it is stored, so two columns that word one complaint their own way
+// compare equal rather than reading as a disagreement the panel does not
+// have. See oracle.normalize.
+//
+// A row with fewer than two columns answers nothing: one column cannot be
+// unanimous or split, and calling it unanimous would mark every pin suspect
+// on a machine missing the panel.
+func panelUnanimous(g *oracle.Run, id string) bool {
+	if g == nil {
+		return false
+	}
+	row := g.Results[id]
+	if len(row) < 2 {
+		return false
+	}
+	first := true
+	var want string
+	for _, r := range row {
+		got := cellKey(r)
+		if first {
+			want, first = got, false
+			continue
+		}
+		if got != want {
+			return false
+		}
+	}
+	return true
+}
+
+// cellKey is everything a recorded cell says, as one comparable string. The
+// same five parts oracle grades on, so "the panel agrees" here means what
+// "we agree with the panel" means everywhere else.
+func cellKey(r oracle.Result) string {
+	return fmt.Sprintf("%q\x00%q\x00%d\x00%d\x00%t", r.Stdout, r.Stderr, r.Status, r.Signal, r.TimedOut)
 }
 
 func (o *Options) runAll(ctx context.Context, sh oracle.Found, cases []oracle.Case) []oracle.Result {
@@ -556,6 +626,36 @@ func (r *Result) Unpinned() []Flip {
 	return out
 }
 
+// SuspectPins are the axis/dialect pairs whose every discriminating pin rests
+// on a row the panel answers identically.
+//
+// A pair with one such pin and one ordinary one is not here: the ordinary pin
+// is a row the panel splits on, which is the objection the axis was looking
+// for, and the other one adds nothing to doubt. Only a pair with nothing
+// better behind it is worth re-checking — which is the shape #2061 names, a
+// flip that broke the shell in some general way and was counted as the axis
+// being caught.
+func (r *Result) SuspectPins() []Flip {
+	type key struct{ field, dialect string }
+	sound := map[key]bool{}
+	for _, f := range r.Flips {
+		if f.Discriminating && f.Outcome == Pinned && !f.ByUnanimous {
+			sound[key{f.Field, f.Dialect}] = true
+		}
+	}
+	seen := map[key]bool{}
+	var out []Flip
+	for _, f := range r.Flips {
+		k := key{f.Field, f.Dialect}
+		if !f.Discriminating || f.Outcome != Pinned || !f.ByUnanimous || sound[k] || seen[k] {
+			continue
+		}
+		seen[k] = true
+		out = append(out, f)
+	}
+	return out
+}
+
 // Report renders the sweep the way the issue asks for it: the fields nothing
 // objected to, which is the backlog.
 func (r *Result) Report() string {
@@ -599,6 +699,26 @@ func (r *Result) Report() string {
 	}
 	fmt.Fprintf(&b, "\n%d axis/dialect pairs nothing objected to, %d of them with no\nrecorded reason. The second number is the one to drive down: a pair\nthat stays needs a standing verdict on the axis — `unpinned %s: why` in\nthe field's doc comment — and a pair a row now catches leaves on its own.\n",
 		len(unpinned), untriaged, "<dialect>")
+	// Printed on every run, including one whose backlog is empty. A pin
+	// nothing vouches for must never read like a pin — which is the whole of
+	// #2061 — and a list only shown when it is non-empty is a list a reader
+	// learns to assume is empty.
+	suspect := r.SuspectPins()
+	fmt.Fprintf(&b, "\npinned only by a row the panel answers identically (%d):\n", len(suspect))
+	b.WriteString("  An axis records a disagreement between real shells, so the row that\n" +
+		"  objects should be one the panel itself splits on. These pairs have no\n" +
+		"  such row behind them: the flip broke something, and what it broke may\n" +
+		"  have nothing to do with the axis. Re-check before reading them as\n" +
+		"  covered. Not a verdict and not counted against the exit status — a\n" +
+		"  row the panel agrees about can still exercise an axis, so demoting\n" +
+		"  these to the backlog would file work against axes nobody has looked\n" +
+		"  at.\n")
+	for _, f := range suspect {
+		fmt.Fprintf(&b, "  %-8s %-52s pinned by %s\n", f.Dialect, f.Field, f.By)
+	}
+	if len(suspect) == 0 {
+		b.WriteString("  (none — every pin rests on a row the panel disagrees about)\n")
+	}
 	if len(r.Flaky) > 0 {
 		fmt.Fprintf(&b, "\nrows whose own answer moved between two unmutated runs (%d):\n", len(r.Flaky))
 		for _, id := range r.Flaky {

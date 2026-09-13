@@ -35,10 +35,13 @@ func EditorStyle() repl.EditorStyle {
 		// line from having the prompt drawn against it (#2477).
 		MarkUnfinishedOutputOption:  "PROMPT_SP",
 		ReturnBeforeThePromptOption: "PROMPT_CR",
-		// And the erase, which is neither option's doing: measured, this shell
-		// writes it with both of them turned off, and bash writes it in no
-		// case at all.
-		ClearsBelowThePrompt: true,
+		// And the ground under the prompt, which is neither option's doing:
+		// measured, this shell writes all four sequences with both options
+		// turned off, and bash writes nothing in any case. The three resets
+		// are the attributes a run of output is most likely to have left on;
+		// the erase is what stops a shorter prompt leaving the tail of a
+		// longer one behind it.
+		ClearBeforeThePrompt: "\x1b[0m\x1b[27m\x1b[24m\x1b[J",
 		UnfinishedOutputMark: "\x1b[1m\x1b[7m%\x1b[27m\x1b[1m\x1b[0m",
 		// Measured under a pty against zsh 5.9 started with no startup files,
 		// one keystroke at a time. These are the four places where the same

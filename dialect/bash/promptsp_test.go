@@ -29,7 +29,8 @@ func TestThisShellDoesNotMarkUnfinishedOutput(t *testing.T) {
 	if style.ReturnBeforeThePromptOption != "" {
 		t.Errorf("return option = %q, want none", style.ReturnBeforeThePromptOption)
 	}
-	if style.ClearsBelowThePrompt {
-		t.Error("the rows below the prompt are cleared; measured, this shell leaves them")
+	if style.ClearBeforeThePrompt != "" {
+		t.Errorf("before the prompt = %q, want nothing — measured, this shell writes none of it",
+			style.ClearBeforeThePrompt)
 	}
 }

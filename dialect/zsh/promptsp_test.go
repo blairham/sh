@@ -27,8 +27,10 @@ func TestThisShellMarksUnfinishedOutput(t *testing.T) {
 	if style.ReturnBeforeThePromptOption != "PROMPT_CR" {
 		t.Errorf("return option = %q, want PROMPT_CR", style.ReturnBeforeThePromptOption)
 	}
-	if !style.ClearsBelowThePrompt {
-		t.Error("the rows below the prompt are not cleared; measured, this shell clears them")
+	// The exact text, because it is what makes the four measured rows
+	// byte-identical to the real shell rather than merely close.
+	if got, want := style.ClearBeforeThePrompt, "\x1b[0m\x1b[27m\x1b[24m\x1b[J"; got != want {
+		t.Errorf("before the prompt = %q, want %q", got, want)
 	}
 	// The mark is an inverse `%`, and it has to carry its own reset or the
 	// prompt after it is drawn inverse too.
@@ -46,6 +48,47 @@ func TestThisShellMarksUnfinishedOutput(t *testing.T) {
 		out, st := runZsh(t, t.TempDir(), "[[ -o "+opt+" ]] && print -r -- on || print -r -- off\n")
 		if st != 0 || strings.TrimSpace(out) != "on" {
 			t.Errorf("%s = %q status %d, want on", opt, out, st)
+		}
+	}
+}
+
+// The join between the option table and the session that reads it.
+//
+// EditorStyle names two options; repl reads them through
+// interp.Runner.DialectOption, which is this dialect's own namespace. A test
+// that only asserted the two strings would pass for a name nothing could look
+// up — and a name that does not resolve reads as *off*, which is a feature
+// that is silently never on. The same shape as
+// TestTheHistoryOptionsAreReadableThroughTheNamespace, and for the same
+// reason.
+//
+// Every spelling this shell folds together, because the style spells them
+// `PROMPT_SP` and `PROMPT_CR` and the option table records `promptsp` and
+// `promptcr`.
+func TestTheMarkingOptionsAreReadableThroughTheNamespace(t *testing.T) {
+	style := zsh.EditorStyle()
+	for _, tc := range []struct {
+		named string
+		on    string
+		off   string
+	}{
+		{named: style.MarkUnfinishedOutputOption, on: "setopt promptsp", off: "unsetopt promptsp"},
+		{named: style.ReturnBeforeThePromptOption, on: "setopt promptcr", off: "unsetopt promptcr"},
+	} {
+		if tc.named == "" {
+			t.Fatal("EditorStyle names no option here; the marking would be off in every session")
+		}
+		for _, spelling := range []string{
+			tc.named,
+			strings.ToLower(tc.named),
+			strings.ReplaceAll(strings.ToLower(tc.named), "_", ""),
+		} {
+			src := tc.on + `; [[ -o ` + spelling + ` ]] && echo on; ` +
+				tc.off + `; [[ -o ` + spelling + ` ]] || echo off`
+			out, st := runZsh(t, t.TempDir(), src)
+			if want := "on\noff\n"; out != want || st != 0 {
+				t.Errorf("%s: out %q status %d, want %q at 0", spelling, out, st, want)
+			}
 		}
 	}
 }

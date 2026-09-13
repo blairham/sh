@@ -482,12 +482,12 @@ func (s Shell) openState() string {
 	return strings.Join(words, " ")
 }
 
-// freshRow puts the prompt on a row of its own when output stopped part-way
-// along the one the cursor is on.
+// markUnfinished marks the row output stopped part-way along, so that the
+// prompt does not have to be drawn on it.
 //
-// Measured 2026-09-12 through a pseudo-terminal, with an rc file whose last
-// act is `printf 'LEFTOVER'`. The two shells with a line editor disagree
-// completely:
+// Measured 2026-09-12 through a pseudo-terminal. The two shells with a line
+// editor disagree completely, with an rc file whose last act is
+// `printf 'LEFTOVER'`:
 //
 //	bash   LEFTOVERP>      the prompt runs straight on
 //	zsh    LEFTOVER%       a marker, and the prompt below
@@ -499,16 +499,16 @@ func (s Shell) openState() string {
 // is, so a version that only marked a row it *knew* was unfinished would need
 // to track every write anything ever made to the screen.
 //
-//	the mark      in inverse, wherever the cursor happens to be
-//	cols-1 spaces so the row is exactly filled from column 0
-//	\r            the start of the row the cursor is now on
-//	a space       over the column the mark would occupy there
-//	\r            back to its start, which is where the prompt goes
+//	the mark        in inverse, wherever the cursor happens to be
+//	cols-mark wide  spaces, so the row is exactly filled from column 0
+//	\r              the start of the row the cursor is now on
+//	mark-wide       spaces, over the columns the mark would occupy there
+//	\r              back to its start
 //
-// Follow it from column 0: the mark takes column 0, the padding fills to the
-// right-hand edge and the terminal has not wrapped — it wraps lazily, when
+// Follow it from column 0: the mark takes its columns, the padding fills to
+// the right-hand edge and the terminal has not wrapped — it wraps lazily, when
 // there is another character to put — so `\r` returns to the *same* row and
-// the space paints over the mark. Nothing is left behind.
+// the spaces paint over the mark. Nothing is left behind.
 //
 // Follow it from column c: the padding overflows by c, so the terminal does
 // wrap, and `\r` returns to the start of the *next* row. The mark at column c
@@ -518,27 +518,84 @@ func (s Shell) openState() string {
 // to wrap. Without the padding there is no wrap and the prompt would be drawn
 // over the output it had just marked.
 //
-// The two answers behind it are separate and are **not** independent, which is
-// measured rather than assumed: with the return turned off the mark is not
-// written either, though the marking option is still on. So the return is the
-// outer of the two, and a dialect naming only the mark gets neither.
-func (e *editor) freshRow() {
+// # This runs before the prompt hooks, and that is measured
+//
+// It is not part of drawing the prompt; it is the last thing done about the
+// *previous* command's output. Measured with a `precmd` that prints without a
+// newline and a command that does the same:
+//
+//	CMD  mark <79 spaces> \r <space> \r  HOOK  \r  <erase>  P>
+//
+// The mark lands between the command's output and the hook's, and only the
+// return and the erase come after the hook. With no hook the two groups are
+// adjacent and read as one sequence, which is how this looked when it was
+// measured through an rc file alone — and a shell that marked after the hooks
+// would mark the hook's own half-written line instead of the command's. That
+// is the case this exists for: the progress line a plugin manager prints while
+// it loads is exactly such a hook (#2477).
+//
+// The other half is groundForPrompt, and both are the return option's: with it
+// off, neither is written.
+func (e *editor) markUnfinished() {
+	if !e.returnsFirst || e.unfinishedMark == "" {
+		// An empty mark is a session that was not asked to mark, and it pads
+		// nothing either — measured, the marking option off leaves the return
+		// alone and writes nothing else.
+		return
+	}
+	// The mark is drawn wherever the cursor is, so what has to be filled is
+	// the rest of the row *after* it, and what has to be painted out on the
+	// row below is exactly the columns it took. Both are the mark's width on
+	// the screen and not its length in bytes: the default one is six escape
+	// sequences around a single `%`.
+	//
+	// Measured a width at a time, by giving the shell that marks a longer one,
+	// in an eighty-column terminal:
+	//
+	//	mark    padding   painted out
+	//	`%`     79        1
+	//	`abc`   77        3
+	//	empty   80        0
+	//
+	// So it is `cols` less the mark, in both places, and the one-column
+	// default is the case where that happens to read as `cols-1`.
+	width := displayWidth(e.unfinishedMark)
+	if e.cols() <= width {
+		// Without a width there is no way to fill the row, so no way to make
+		// the terminal wrap, and the mark would be painted over by the prompt
+		// rather than marking anything. e.cols() is 0 there, which fails this
+		// test for every mark.
+		return
+	}
+	var b strings.Builder
+	b.WriteString(e.unfinishedMark)
+	b.WriteString(strings.Repeat(" ", e.cols()-width))
+	b.WriteString("\r")
+	b.WriteString(strings.Repeat(" ", width))
+	b.WriteString("\r")
+	e.write(b.String())
+}
+
+// groundForPrompt is what is written on the row the prompt is about to be
+// drawn on, immediately before it.
+//
+// The return is the other half of markUnfinished's option and is written
+// whether or not anything was marked — measured, the marking turned off leaves
+// it and turning *it* off takes the marking with it, so it is the outer of the
+// two and a dialect naming only the mark would get neither.
+//
+// The erase is neither option's doing: measured, it is written with both of
+// them turned off, and the shell that marks nothing writes nothing here at
+// all. See EditorStyle.ClearBeforeThePrompt.
+//
+// Between this and markUnfinished fall the prompt hooks, which is where a
+// hook's own half-written line gets erased rather than marked — see the note
+// there.
+func (e *editor) groundForPrompt() {
 	var b strings.Builder
 	if e.returnsFirst {
-		if cols := e.cols(); e.unfinishedMark != "" && cols > 1 {
-			// Without a width there is no way to fill the row, so no way to
-			// make the terminal wrap, and the mark would be painted over by
-			// the prompt rather than marking anything.
-			b.WriteString(e.unfinishedMark)
-			b.WriteString(strings.Repeat(" ", cols-1))
-			b.WriteString("\r \r")
-		}
 		b.WriteString("\r")
 	}
-	if e.clearsBelow {
-		// Not part of either option: measured, this is written with both of
-		// them turned off. See EditorStyle.ClearsBelowThePrompt.
-		b.WriteString("\x1b[J")
-	}
+	b.WriteString(e.clearBefore)
 	e.write(b.String())
 }

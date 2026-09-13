@@ -154,7 +154,7 @@ does.
 | code | draws | measured |
 | --- | --- | --- |
 | `%n` | user name, from the password database — **nothing** where the uid has no entry | `bhamilton`; empty at uid 99999 in a container, where bash's `\u` draws `I have no name!` |
-| `%m` `%M` | host to the first dot, and all of it | as bash's `\h` `\H` |
+| `%m` `%M` | host to the first dot, and all of it — and `%m` **counts**, see below | as bash's `\h` `\H` |
 | `%~` | directory, `$HOME` written `~` | `~`, `~/sub`, `/` |
 | `%d` `%/` | directory, untouched | `/private/tmp/p808/home` |
 | `%c` `%.` | `%~` with the count defaulting to **one** | `~` at `$HOME`, `sub` below it, `/tmp` in `/tmp` |
@@ -210,11 +210,32 @@ component** rather than no limit, and a nought means one as well. So `%2c` is
 `%c` a different question from bash's `\W`, which has no count at all and
 answers the plain basename: in `/tmp`, `\W` is `tmp` and `%c` is `/tmp`.
 
-Every code reads the count, and the ones that count nothing ignore it exactly
-as they ignore a positive one — `%-2n` is the login name and `%-2j` the job
-count. The colors are the exception and the only one: a negative index there
-draws **nothing whatever** and clears the layer, where the braced `%F{-1}` is a
-number out of range and draws the terminal's default.
+The **host** is the third family and it points the other way. Measured on zsh
+5.9.2, 2026-09-13 with `HOST=a.b.c.d` — four dot-components, which is the
+fewest that can tell "the leading N" apart from "the whole name once N is large
+enough", since a two-component name answers both readings alike:
+
+| written | drawn | |
+| --- | --- | --- |
+| `%m` `%0m` `%-0m` `%1m` | `a` | absent and nought are **one**, and from the left |
+| `%2m` `%3m` | `a.b`, `a.b.c` | positive: the **first** N — the opposite of a path |
+| `%-m` `%-1m` | `d` | negative: the **last** N, and a bare minus is minus one |
+| `%-2m` `%-3m` | `c.d`, `b.c.d` | |
+| `%4m` `%5m` `%-4m` | `a.b.c.d` | at or past the count is the whole name |
+| `%M` `%0M` `%2M` `%-2M` | `a.b.c.d` | **`%M` takes no count at all** |
+
+A host name reads most-specific first where a path reads it last, which is what
+the reversal is: `%2m` and `%2~` both keep the two components nearest the thing
+being named. The dot is a separator and not a marker, so there is no analog
+of the leading `/` or `~`: `HOST=a.b.` is three components with the last empty,
+`%3m` draws `a.b.` and `%-1m` draws nothing, and a name with no dot in it is
+one component that every count draws whole.
+
+Every other code reads the count, and the ones that count nothing ignore it
+exactly as they ignore a positive one — `%-2n` is the login name and `%-2j` the
+job count. The colors are the exception and the only one: a negative index
+there draws **nothing whatever** and clears the layer, where the braced
+`%F{-1}` is a number out of range and draws the terminal's default.
 
 The clock is where the two languages disagree about the same fact rather
 than about the spelling: measured at the same moment, bash's `\t` drew

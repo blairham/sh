@@ -441,6 +441,13 @@ const (
 	FieldUser
 	// FieldHost is the host name up to its first dot; FieldHostFull is all of
 	// it. bash and zsh both distinguish the two.
+	//
+	// FieldHost counts, and the two directions are the opposite way round
+	// from a path's: a positive count keeps that many dot-components from the
+	// *left* and a negative one that many from the right. A host name reads
+	// most-specific first where a path reads it last, so the count follows the
+	// name rather than the punctuation. FieldHostFull takes no count at all.
+	// See countedHostComponents.
 	FieldHost
 	FieldHostFull
 	// FieldCwd is the working directory with the home directory written `~`
@@ -1469,9 +1476,10 @@ func (r *Runner) promptField(f PromptField, arg string, braced bool) (string, bo
 		return name, true
 	case FieldHost:
 		full := r.askPromptHost()
-		host, _, _ := strings.Cut(full, ".")
-		return host, full != ""
+		return countedHostComponents(full, arg), full != ""
 	case FieldHostFull:
+		// No count: `%1M`, `%2M` and `%-1M` are all the whole name, measured
+		// in the same run as the FieldHost table. arg is dropped on purpose.
 		full := r.askPromptHost()
 		return full, full != ""
 	case FieldCwd:
@@ -1789,6 +1797,51 @@ func abbreviateHome(dir, home string) string {
 		return "~" + dir[len(home):]
 	}
 	return dir
+}
+
+// countedHostComponents is what a count in front of a host-name code means.
+//
+// It is the mirror of countedComponents and shares nothing with it, because
+// the two point opposite ways. Measured on zsh 5.9.2, 2026-09-13, with `HOST`
+// set to `a.b.c.d` so that four components can tell "the leading n" apart from
+// "the whole of it once n is large enough" — a two-component name, which is
+// what this machine has, answers both readings alike and cannot:
+//
+//	%m %0m %-0m %1m  a          %-m %-1m  d
+//	%2m              a.b        %-2m      c.d
+//	%3m              a.b.c      %-3m      b.c.d
+//	%4m %5m          a.b.c.d    %-4m      a.b.c.d
+//
+// So a positive count keeps that many components from the **left** where a
+// path's keeps them from the right, a negative one keeps them from the right,
+// and nought — with or without a minus in front of it — is one from the left.
+// A count at or past the number of components is the whole name.
+//
+// The dot is a separator and not a marker, so there is no pathLeader analog
+// here and no unit that is not a component: `a.b.` is three components, the
+// last of them empty, and measured `%3m` draws `a.b.` while `%-1m` draws
+// nothing. A name with no dot in it is one component and every count draws all
+// of it, which is why the bare `%m` this shell already answered was right for
+// every host name that is not fully qualified.
+func countedHostComponents(host, arg string) string {
+	if host == "" {
+		return host
+	}
+	n := promptCount(arg)
+	if n == 0 {
+		n = 1
+	}
+	parts := strings.Split(host, ".")
+	if n < 0 {
+		if -n >= len(parts) {
+			return host
+		}
+		return strings.Join(parts[len(parts)+n:], ".")
+	}
+	if n >= len(parts) {
+		return host
+	}
+	return strings.Join(parts[:n], ".")
 }
 
 // countedComponents is the whole of what a count in front of a path code

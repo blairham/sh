@@ -3292,6 +3292,43 @@ type Semantics struct {
 	// argument and never stops for this one.
 	ReadonlyReassignmentByDeclarationFatal Answer
 
+	// ArrayLiteralOperandRetypesAFrozenScalar lets a declaration utility's own
+	// `name=(…)` operand replace a **frozen scalar** with an array, without a
+	// refusal and with the freeze still on.
+	//
+	// The narrowest reading of a measurement, and every word of it is one of
+	// the discriminators. Measured 2026-09-12 from a script file under
+	// `env -i`, zsh 5.9.2 against bash 5.3 and bash 3.2:
+	//
+	//	readonly q=1;  typeset -g q=(b)    zsh takes it, `typeset -ar q=( b )`
+	//	readonly q;    typeset -g q=(b)    the same, over a name holding nothing
+	//	typeset -ir q=1; typeset -g q=(b)  the same; the other letters do not
+	//	                                   decide it, only the container does
+	//	readonly q=(a); typeset -g q=(b)   **refused** — already an array
+	//	typeset -ga e=(); readonly e; typeset -g e=(b)
+	//	                                   **refused** — a declared array is one
+	//	                                   even while it holds nothing
+	//	typeset -A q; readonly q; typeset -gA q=(k v)
+	//	                                   **refused** — a table is one too
+	//	readonly q=1;  q=(b)               **refused** — no declaration word
+	//
+	// So the exemption is a *retype* and not a write: the name has to be
+	// leaving the scalar kind, and the operand has to be a declaration's
+	// rather than a bare assignment's. Every declaration word does it —
+	// `typeset`, `local`, `declare`, `export` and `readonly` alike, the last
+	// two leaving `typeset -arx` and `typeset -ar` behind — which is why this
+	// is asked at the assignment the operand lands and not in one builtin.
+	//
+	// bash refuses all of it, in both builds. So it is a conflict rather than
+	// something the core can hold: `readonly q; typeset -g q=(b); echo tail`
+	// prints `tail` at 0 in zsh and stops at the refusal in bash.
+	//
+	// The reason it is worth a field is the shape a script writes: `readonly
+	// name` with no value is the ordinary way to reserve a name before filling
+	// it in, and a shell that refuses the array that fills it refuses the very
+	// assignment the reservation was for (#2250).
+	ArrayLiteralOperandRetypesAFrozenScalar Answer
+
 	// SetArrayBadNameLeavesZeroFromCommandString makes `set -A` refuse a
 	// name that is not one and leave the shell exiting **0**, where the same
 	// refusal from a script file leaves 1.

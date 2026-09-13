@@ -1888,6 +1888,9 @@ type Runner struct {
 	// type letter over exactly that shape. See
 	// Semantics.TypeLetterAndAnArrayLiteralIsAnInconsistentType.
 	literalOperands map[string]bool
+	// retypingFrozen is the one name a frozen-scalar retype is under way for.
+	// See the method of the same name for why it is a field.
+	retypingFrozen string
 	// indexedLetterHere is the subset of those names whose declaration also
 	// carried the *indexed* container letter — `typeset -a a=([5]=q)` and not
 	// `typeset -a a` followed by the assignment on the next line.
@@ -5297,6 +5300,12 @@ func (r *Runner) refuseReadonly(name string, form assignForm) bool {
 	if !r.readonly[name] {
 		return false
 	}
+	if name == r.retypingFrozen {
+		// A frozen scalar being replaced by a declaration's array literal,
+		// which the dialect has already allowed at the top of assign. See
+		// Runner.retypingFrozen.
+		return false
+	}
 	// Fatal everywhere but bash, measured with a plain assignment in a
 	// script — which is the contaminated-probe case oracle.md records.
 	//
@@ -5788,7 +5797,18 @@ func (r *Runner) assign(a *syntax.Assign) {
 		r.assignPositional(a, n)
 		return
 	}
-	if r.refuseReadonly(a.Name, assignedAlone) {
+	if r.frozenScalarRetyped(a) {
+		// Exempt for the whole store and not just for this check. The
+		// literal reaches storeArray, which keeps the scalar view in step
+		// through setVarAs — so a name let past here met the same refusal one
+		// frame down and printed the sentence anyway.
+		outer := r.retypingFrozen
+		r.retypingFrozen = a.Name
+		defer func() { r.retypingFrozen = outer }()
+	} else if r.refuseReadonly(a.Name, assignedAlone) {
+		return
+	}
+	if r.unspecified {
 		return
 	}
 	switch {
@@ -6019,4 +6039,48 @@ func (r *Runner) signalDeathStatus(sig syscall.Signal) int {
 		base = 256
 	}
 	return base + int(sig)
+}
+
+// retypingFrozen is the name whose freeze one array-literal store is exempt
+// from, set only where Semantics.ArrayLiteralOperandRetypesAFrozenScalar said
+// so and put back the moment the store is done.
+//
+// A field rather than an argument threaded through, because the store is four
+// frames deep and every one of them is shared with the paths that must still
+// refuse: assign, assignArrayLiteral, storeArray and setVarAs. A parameter
+// would have to be added to all four and defaulted on the callers that are not
+// this, which is the shape that goes wrong silently the next time one of them
+// grows a caller.
+//
+// Empty is the ordinary state and no name is ever "" here, so the comparison
+// needs no second flag beside it.
+
+// frozenScalarRetyped reports whether this assignment is the one shape a
+// frozen name still takes: a declaration utility's own `name=(…)` operand
+// over a name that is not a compound yet.
+//
+// Asked ahead of refuseReadonly and only where a refusal was actually coming,
+// so the axis stays off every path that had no question. Three guards before
+// the dialect is reached, and each is a measured discriminator rather than an
+// economy — see Semantics.ArrayLiteralOperandRetypesAFrozenScalar for the
+// rows:
+//
+//   - the name is frozen, or there was nothing to be exempt from;
+//   - the operand is a declaration's array literal, so a bare `q=(b)` and a
+//     scalar `typeset -g q=b` both keep the refusal they had;
+//   - the name is not already an array or a table, which is the *retype* half
+//     — a frozen array's elements may not be replaced in either shell.
+//
+// An append is not one of these and needs no guard of its own: the spelling
+// does not exist on a declaration operand, and `typeset -g q+=(b)` is `not
+// valid in this context: q+` in the shell this is for.
+func (r *Runner) frozenScalarRetyped(a *syntax.Assign) bool {
+	if !r.readonly[a.Name] || !a.Operand || !a.IsArray || a.Index != nil || a.Append {
+		return false
+	}
+	if r.nameIsAnArray(a.Name) {
+		return false
+	}
+	return r.ask(r.sem().ArrayLiteralOperandRetypesAFrozenScalar,
+		"a declaration's array literal replacing a frozen scalar")
 }

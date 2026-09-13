@@ -4113,8 +4113,10 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 			// always makes one. Adding a guard would change what the axes
 			// this builtin has always reached do, which is not this change's
 			// business, and nothing could exercise it either way.
-			r.declareEmpty(name, fresh, f.export || f.readonly,
-				withoutMatching(f) != (declareFlags{}))
+			if !r.declarationCarriesAnArrayLiteral(name) {
+				r.declareEmpty(name, fresh, f.export || f.readonly,
+					withoutMatching(f) != (declareFlags{}))
+			}
 		}
 		if f.readonly && !f.readonlyOff {
 			r.markReadonly(name)

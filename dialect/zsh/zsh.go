@@ -905,6 +905,13 @@ func Semantics() interp.Semantics {
 	// `can't change type of a special parameter` — which this engine has no
 	// specials to reach.
 	s.ReadonlyAttributeCanBeRemoved = interp.Yes
+	// And a declaration's own array literal replaces a frozen *scalar*
+	// outright, freeze and all: `readonly q=1; typeset -g q=(b)` leaves
+	// `typeset -ar q=( b )` at status 0 here, where bash refuses it. The
+	// exemption stops at the container — a name already holding an array or
+	// a table refuses the same operand — so it is the retype and not the
+	// write. See the axis for the rows (#2250).
+	s.ArrayLiteralOperandRetypesAFrozenScalar = interp.Yes
 	s.DeclaredNameWithoutValueIsEmpty = interp.Yes
 	// The export letter carries `-g` with it, so `typeset -x v=1` inside a
 	// function declares no local — `local -x` is the spelling that still

@@ -936,8 +936,10 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 			// reaches the operands after it, and
 			// TestAnUnansweredInheritedTypeAxisRefusesTheNamesAfterItToo
 			// pins that rather than the guard that appeared to do it.
-			r.declareEmpty(name, fresh, df.export || df.readonly,
-				withoutMatching(df) != (declareFlags{}))
+			if !r.declarationCarriesAnArrayLiteral(name) {
+				r.declareEmpty(name, fresh, df.export || df.readonly,
+					withoutMatching(df) != (declareFlags{}))
+			}
 		}
 		if df.readonly && !df.readonlyOff {
 			r.markReadonly(name)
@@ -3215,4 +3217,24 @@ func (r *Runner) expandAssignArg(w *syntax.Word) string {
 // no mutation could kill.
 func (r *Runner) expandAssignName(w *syntax.Word) string {
 	return r.expandAssignValue(w)
+}
+
+// declarationCarriesAnArrayLiteral reports whether this operand's value is an
+// array literal the command machinery is holding aside — `typeset a=(x y)`,
+// where the parser hands the builtin the bare name and lands the parentheses
+// through Runner.assignOperands.
+//
+// The declaration is *not* valueless, which is the whole of what this is for.
+// The loop reads `hasValue` off a `name=value` word, so an array literal reads
+// as nothing there and the name went to declareEmpty — a store of the empty
+// string, to a name the very next step assigns an array to. Harmless while
+// nothing refused it, and two sentences the moment something did:
+// `readonly q; typeset -g q=(b)` wrote `read-only variable: q` once for the
+// empty this branch stored and once for the array the operand landed (#2250).
+//
+// Every other reader of the same fact already spells it this way beside
+// hasValue — see compoundKindChanged and typeLetterOverAnArrayLiteralRefused
+// — so this is that condition given a name rather than a new rule.
+func (r *Runner) declarationCarriesAnArrayLiteral(name string) bool {
+	return r.literalOperands[name]
 }

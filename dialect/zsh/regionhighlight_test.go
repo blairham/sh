@@ -198,16 +198,13 @@ func TestItIsNotAParameterOutsideAWidget(t *testing.T) {
 // TestAWidgetSeesItAsASpecialArray is the type, which is what a plugin tests
 // before it trusts the parameter at all.
 //
-// **The want here is this shell's spelling and not zsh's, deliberately.** zsh
-// says `array-local-special` and every one of the line parameters is missing
-// the same word here — `${(t)BUFFER}` is `scalar-special` where zsh says
-// `scalar-local-special` — so this is not `region_highlight`'s gap and is not
-// fixed under it. #2493 is the one word, across all of them. Pinning zsh's
-// answer here would have made this file fail for a reason that has nothing to
-// do with what it tests.
-//
-// What this *does* pin is the half that is right and that the parameter is
-// useless without: it is set, and it is an array.
+// This asserted `array-special` until #2493 — the shell's own spelling rather
+// than zsh's, because the missing `local` was every line parameter's gap and
+// not this one's, and pinning zsh's answer here would have failed this file
+// for a reason it is not about. #2493 closed that gap across all of them, so
+// the want is now zsh's own word for word. The comment is kept because the
+// choice it records is the reason this test could sit here saying the wrong
+// thing without hiding a regression.
 func TestAWidgetSeesItAsASpecialArray(t *testing.T) {
 	r, out := zleRunner(t, `
 		kind() { print -r -- "[${(t)region_highlight}] [${+region_highlight}]"; }
@@ -217,7 +214,7 @@ func TestAWidgetSeesItAsASpecialArray(t *testing.T) {
 	if !ok {
 		t.Fatal("the widget did not run")
 	}
-	if !strings.Contains(said, "[array-special] [1]") {
+	if !strings.Contains(said, "[array-local-special] [1]") {
 		t.Errorf("got %q, want a special array that is set", said)
 	}
 }

@@ -54,6 +54,9 @@ func (s *screen) feed(out string) {
 			i++
 		case out[i] == '\a':
 			i++
+		case out[i] == '\b':
+			s.col, s.pending = max(0, s.col-1), false
+			i++
 		case out[i] == esc:
 			i += s.control(out[i:])
 		default:

@@ -97,35 +97,44 @@ func (e *editor) repaint(prompt drawnPrompt, cols int) bool {
 	resRow, resCol = pastEdge(resRow, resCol, cols)
 	curRow, curCol = pastEdge(curRow, curCol, cols)
 
+	// row and col follow the cursor through the write, so that every move
+	// below is from where it actually is. Nothing has been written yet, so
+	// that is where the last draw left it.
 	var b strings.Builder
-	moveCursor(&b, d.row, d.col, resRow, resCol)
-	tail := styled[at:]
-	b.WriteString(tail)
-	if endCol == cols {
-		// The content ends exactly at the right-hand edge, where a terminal
-		// stays on the row it filled until there is something else to put
-		// somewhere. A space makes the wrap happen and the carriage return
-		// undoes the space — but only if something was written: with an empty
-		// tail the cursor was *moved* to the row below already, and the wrap
-		// is not pending at all.
-		if tail != "" {
+	row, col := d.row, d.col
+	if tail := styled[at:]; tail != "" {
+		moveCursor(&b, row, col, resRow, resCol)
+		b.WriteString(tail)
+		row, col = endRow, endCol
+		if endCol == cols {
+			// The content ends exactly at the right-hand edge, where a
+			// terminal stays on the row it filled until there is something
+			// else to put somewhere. A space makes the wrap happen and the
+			// carriage return undoes the space.
 			b.WriteString(" \r")
+			row, col = endRow+1, 0
 		}
-		endRow, endCol = endRow+1, 0
 	}
+	// An empty tail is a redraw that changed no bytes — a cursor motion, or a
+	// widget that touched nothing. The cursor is not moved to the end for one:
+	// it is already where it was left, and walking it out to the end of the
+	// line and back is two movements to accomplish one.
+	endRow, endCol = pastEdge(endRow, endCol, cols)
 	if d.endRow > endRow || (d.endRow == endRow && d.endCol > endCol) {
 		// The line got shorter, so there is a tail of the old one still on the
-		// screen. Erase from here to the end of the screen rather than to the
-		// end of the row: what is left over may be several rows of it.
+		// screen. Erase from the new end to the end of the screen rather than
+		// to the end of the row: what is left over may be several rows of it.
 		//
 		// The reset first because the erase paints with the current
 		// attributes on a terminal with background-colour erase, and the
 		// cursor may be sitting inside a highlighted run whose style the
 		// shared prefix left in force.
+		moveCursor(&b, row, col, endRow, endCol)
+		row, col = endRow, endCol
 		b.WriteString(highlightReset)
 		b.WriteString("\x1b[J")
 	}
-	moveCursor(&b, endRow, endCol, curRow, curCol)
+	moveCursor(&b, row, col, curRow, curCol)
 
 	e.row = curRow
 	if b.Len() > 0 {
@@ -276,21 +285,30 @@ func writeColumn(b *strings.Builder, fromCol, toCol int) {
 		b.WriteString(itoa(toCol - fromCol))
 		b.WriteString("C")
 	default:
-		back := 1 + len("[") + len(itoa(fromCol-toCol)) + 1
+		// Three ways to go left, and the shortest of them wins. A backspace
+		// is one byte and moves one column, so a short walk back — which is
+		// what a cursor key and a delete are — beats the four bytes of the
+		// sequence that says the same thing. It is what zsh emits for the
+		// same move.
+		steps := fromCol - toCol
+		back := len("\x1b[") + len(itoa(steps)) + 1
 		ret := 1
 		if toCol > 0 {
-			ret = 1 + 1 + len("[") + len(itoa(toCol)) + 1
+			ret = 1 + len("\x1b[") + len(itoa(toCol)) + 1
 		}
-		if ret < back {
+		switch {
+		case steps < back && steps <= ret:
+			b.WriteString(strings.Repeat("\b", steps))
+		case ret <= back:
 			b.WriteString("\r")
 			if toCol > 0 {
 				b.WriteString("\x1b[")
 				b.WriteString(itoa(toCol))
 				b.WriteString("C")
 			}
-		} else {
+		default:
 			b.WriteString("\x1b[")
-			b.WriteString(itoa(fromCol - toCol))
+			b.WriteString(itoa(steps))
 			b.WriteString("D")
 		}
 	}

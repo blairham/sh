@@ -301,3 +301,48 @@ func TestARedrawThatChangesNothingWritesNothing(t *testing.T) {
 		t.Errorf("redrawing an unchanged line wrote %q", out.String())
 	}
 }
+
+// Getting from one cell to another, in the fewest bytes that say it.
+//
+// Exact sequences here, where everything else in this file asserts the screen:
+// this function's whole job is the encoding, so the encoding is the behavior.
+// Each one is checked against the terminal model as well, because the shortest
+// way of saying something is worth nothing if it says the wrong thing.
+func TestTheCursorIsMovedInTheFewestBytes(t *testing.T) {
+	const cols = 40
+	for _, tc := range []struct {
+		name                           string
+		fromRow, fromCol, toRow, toCol int
+		want                           string
+	}{
+		{"nowhere", 0, 7, 0, 7, ""},
+		{"one left is a backspace", 0, 7, 0, 6, "\b"},
+		{"three left is three of them", 0, 7, 0, 4, "\b\b\b"},
+		{"four left is the sequence", 0, 7, 0, 3, "\x1b[4D"},
+		{"back to the start of the line", 0, 30, 0, 0, "\r"},
+		{"back to a column near the start", 0, 30, 0, 2, "\r\x1b[2C"},
+		{"right", 0, 4, 0, 9, "\x1b[5C"},
+		{"up a row, same column", 2, 6, 1, 6, "\x1b[1A"},
+		{"down a row, same column", 1, 6, 2, 6, "\x1b[1B"},
+		{"up two rows and a little left", 3, 9, 1, 7, "\x1b[2A\b\b"},
+		{"up two rows and a long way left", 3, 30, 1, 14, "\x1b[2A\x1b[16D"},
+		{"down a row to the start", 1, 9, 2, 0, "\x1b[1B\r"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var b strings.Builder
+			moveCursor(&b, tc.fromRow, tc.fromCol, tc.toRow, tc.toCol)
+			if got := b.String(); got != tc.want {
+				t.Errorf("moved with %q, want %q", got, tc.want)
+			}
+			// And it lands where it was asked to. The filler puts the cursor
+			// at the starting cell without any of the sequences under test.
+			s := newScreen(cols)
+			s.grow(tc.fromRow + 1)
+			s.row, s.col = tc.fromRow, tc.fromCol
+			s.feed(b.String())
+			if row, col := s.at(); row != tc.toRow || col != tc.toCol {
+				t.Errorf("landed at row %d column %d, want row %d column %d", row, col, tc.toRow, tc.toCol)
+			}
+		})
+	}
+}

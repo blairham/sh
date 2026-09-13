@@ -37,17 +37,23 @@ typeset -f f`)
 // gets nothing either way and must not also get a complaint in the output it
 // shows a person.
 func TestTypesetCapitalFIsTakenInSilence(t *testing.T) {
-	for _, c := range []struct{ name, src string }{
-		{"a bare listing, which is what a state capture writes", "declare -F"},
-		{"the same under the other name", "typeset -F"},
-		{"with a function's name, which is what it means elsewhere", "f() { :; }\ndeclare -F f"},
-		{"with a name that is nothing at all", "declare -F nosuch"},
-		{"a listing with functions already defined", "f() { :; }\ng() { :; }\ndeclare -F"},
+	for _, c := range []struct{ name, src, out string }{
+		// `EPOCHREALTIME` is the shell's own float and is in the filtered
+		// listing, which is measured rather than incidental: real zsh with
+		// `zsh/datetime` loaded writes exactly that one name for
+		// `typeset -F`, and nothing else. The rows here used to expect not
+		// one byte, from a build where the parameter carried no float
+		// attribute to be selected by (#2451).
+		{"a bare listing, which is what a state capture writes", "declare -F", "EPOCHREALTIME\n"},
+		{"the same under the other name", "typeset -F", "EPOCHREALTIME\n"},
+		{"with a function's name, which is what it means elsewhere", "f() { :; }\ndeclare -F f", ""},
+		{"with a name that is nothing at all", "declare -F nosuch", ""},
+		{"a listing with functions already defined", "f() { :; }\ng() { :; }\ndeclare -F", "EPOCHREALTIME\n"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			out, st, errs := runZshSplit(t, t.TempDir(), c.src)
-			if out != "" {
-				t.Errorf("stdout = %q, want not one byte written", out)
+			if out != c.out {
+				t.Errorf("stdout = %q, want %q", out, c.out)
 			}
 			if errs != "" {
 				t.Errorf("stderr = %q, want not one byte written", errs)
@@ -65,8 +71,11 @@ func TestTypesetCapitalFIsTakenInSilence(t *testing.T) {
 // worse than the refusal this replaced.
 func TestTypesetCapitalFIsNotTheBareWord(t *testing.T) {
 	out, st, errs := runZshSplit(t, t.TempDir(), "marked=here\ndeclare -F")
-	if out != "" || errs != "" || st != 0 {
-		t.Errorf("got stdout %q stderr %q status %d, want a silent 0", out, errs, st)
+	// The shell's own float and nothing the script wrote — measured, real
+	// zsh writes the same one name here — where the bare word below writes
+	// the whole table.
+	if out != "EPOCHREALTIME\n" || errs != "" || st != 0 {
+		t.Errorf("got stdout %q stderr %q status %d, want the shell's own float alone at 0", out, errs, st)
 	}
 	// The control: the bare word really does list, so the row above is a
 	// statement about the letter rather than about an engine that lists
@@ -460,7 +469,10 @@ func TestBareExportAndReadonlyAreAssignmentsAlone(t *testing.T) {
 		"errnos\nkeymaps\nlanginfo\nparameters\nsysparams\ntermcap\nterminfo\n" +
 		"widgets\nzsh_scheduled_events\n" +
 		"export OLDPWD=" + dir + "\nexport V='a b'\n" +
-		"typeset -r ARGC=0\ntypeset -r EPOCHREALTIME\ntypeset -r EPOCHSECONDS\n" +
+		// The kind letters beside the readonly one, measured: real zsh's
+		// `readonly -p` writes `typeset -Fr EPOCHREALTIME` and
+		// `typeset -ir EPOCHSECONDS` (#2451).
+		"typeset -r ARGC=0\ntypeset -Fr EPOCHREALTIME\ntypeset -ir EPOCHSECONDS\n" +
 		"typeset -r R=2\n" +
 		"typeset -Ar builtins\ntypeset -Ar dis_functions_source\n" +
 		"typeset -ar dis_patchars\ntypeset -ar dis_reswords\ntypeset -ar epochtime\n" +

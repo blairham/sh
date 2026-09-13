@@ -82,6 +82,15 @@ func registerDatetimeModule(r *interp.Runner) {
 		r.MarkReadonly(name)
 		r.MarkHidden(name)
 	}
+	// The letters the two scalars list with, which the readonly mark could
+	// not supply: measured 2026-09-12 after `zmodload zsh/datetime`, real zsh
+	// writes `typeset -ir EPOCHSECONDS` and `typeset -Fr EPOCHREALTIME` and
+	// this wrote `typeset -r` for both. The mark put the names into a
+	// listing — which is how the array row above came to be right — and a
+	// mark that means "cannot be assigned to" was never going to say which
+	// type the name has (#2451).
+	r.SetDynamicDeclaration("EPOCHSECONDS", interp.ProducedDeclaration{Integer: true})
+	r.SetDynamicDeclaration("EPOCHREALTIME", interp.ProducedDeclaration{Float: true})
 	r.Register("strftime", strftimeBuiltin)
 }
 

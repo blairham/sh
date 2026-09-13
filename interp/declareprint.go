@@ -158,6 +158,10 @@ type declaration struct {
 	// word of its own, `typeset -F 3 x=3.142`, and does not have the
 	// attribute here — see #1461.
 	float bool
+	// silent is the produced parameter one shell keeps out of a listing while
+	// still knowing the name: nothing is written and the status is 0, which
+	// is neither a row nor a refusal. See ProducedDeclaration.Silent.
+	silent bool
 	// inAFunction and localHere are not attributes of the name at all: they
 	// are where the listing is being written *from*, and a form that claims
 	// to be re-executable needs them. Inside a function, a declaration lands
@@ -195,6 +199,16 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 	d.tied, d.hasTie = r.tieOf(name)
 	attributed := d.integer || d.float || d.readonly || d.exported || d.lower ||
 		d.upper || d.hidden || d.unique
+	if pd, ok := r.producedDeclaration(name); ok {
+		// A produced parameter the dialect has said how to list. Its letters
+		// are stated rather than read off an attribute table, because there
+		// is no entry in one to read — see SetDynamicDeclaration — and they
+		// are taken *over* whatever the tables happened to hold, so that one
+		// answer to "how does this name list" cannot come from two places.
+		d.integer, d.base, d.float = pd.Integer, pd.Base, pd.Float
+		d.silent = pd.Silent
+		attributed = true
+	}
 	if r.removed[name] {
 		// The name holds nothing — `unset` took the value away, or a
 		// declaration hid it — but the compound attribute a declaration
@@ -404,6 +418,13 @@ func (r *Runner) declarePrintForm(names []string, form DeclarationListingForm, k
 			if r.unspecified {
 				return r.status
 			}
+			continue
+		}
+		if d.silent {
+			// Known to the listing and written by it as nothing, at 0 — see
+			// ProducedDeclaration.Silent. Ahead of the row rather than
+			// inside the renderer, because there is no row: a form that
+			// wrote an empty line would be a shape no shell produces.
 			continue
 		}
 		r.printf("%s\n", r.listedDeclaration(form, d))

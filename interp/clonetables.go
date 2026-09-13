@@ -184,6 +184,15 @@ func (c *Runner) ownTables(r *Runner) {
 	// The call-scoped parameters its doc comment describes are a line
 	// editor's, so a widget running in a subshell is the live path.
 	c.dynamicWriters = maps.Clone(r.dynamicWriters)
+	// How each produced parameter lists back travels with the producer it
+	// describes, for the same reason: a subshell that registers one of its
+	// own must not put a row into the parent's listings.
+	c.dynamicDeclarations = maps.Clone(r.dynamicDeclarations)
+	// endedProducers travels with them for the third time and the same
+	// reason: it is the record that keeps a producer from being registered
+	// again, so a subshell that ends one while sharing this table would end
+	// the parent's parameter too.
+	c.endedProducers = maps.Clone(r.endedProducers)
 	c.custom = maps.Clone(r.custom)
 
 	// The stacks, for the same two reasons as the tables above and a third

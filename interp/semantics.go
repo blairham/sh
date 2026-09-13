@@ -5730,6 +5730,58 @@ type Semantics struct {
 	// it in both — `unset RANDOM` leaves an ordinary empty name everywhere.
 	UnsetEndsTheProducedPipelineStatus Answer
 
+	// AssignmentRestoresAnUnsetProducedParameter decides what a name is after
+	// `unset` has taken a produced parameter away and a script assigns to it:
+	// the producer again, or an ordinary variable holding what was assigned.
+	//
+	// An assignment to a produced parameter that is still there is a message
+	// to its producer rather than a replacement for it — `RANDOM=9` seeds the
+	// generator and the next read is a fresh number — and that is unanimous.
+	// This is the other case, and it splits: one shell reads the assignment as
+	// the same message and the producer answers again, the rest read `unset`
+	// as having ended the parameter, so the name the assignment makes is an
+	// ordinary one.
+	//
+	// Measured 2026-09-12, `env -i PATH=/usr/bin:/bin` with a scratch HOME,
+	// over a script file:
+	//
+	//	unset RANDOM; RANDOM=9; a=$RANDOM; b=$RANDOM
+	//
+	//	                a       b       same    a is 9
+	//	bash 5.3        9       9       yes     yes
+	//	bash 3.2        9       9       yes     yes
+	//	ksh93u+         9       9       yes     yes
+	//	BusyBox ash     9       9       yes     yes
+	//	zsh 5.9.2       20191   4730    no      no
+	//
+	// `RANDOM=9` is the discriminator and the number is the whole of it: 9 is
+	// one digit where the generator's range is five, so "the assignment took"
+	// and "the producer answered" cannot agree by accident, and the second
+	// read tells a *stored* 9 from a 9 the producer happened to give.
+	// `SECONDS` cannot discriminate at all — `SECONDS=9` counts from 9 in
+	// every shell that has it, so a stored 9 and a produced 9 are the same
+	// byte — which is worth writing down so nobody re-runs that row expecting
+	// an answer.
+	//
+	// dash and BusyBox ash register no `RANDOM` producer of their own, and
+	// the axis is reachable in them anyway through `LINENO`, which every
+	// dialect here produces. Measured the same day, the same way:
+	//
+	//	unset LINENO; LINENO=9; echo $LINENO
+	//
+	//	bash 5.3, bash 3.2, ksh93u+, dash 0.5.12, BusyBox ash   9
+	//	zsh 5.9.2   refuses the `unset` — `read-only variable: LINENO`
+	//
+	// So the two probes cover the panel between them and neither covers it
+	// alone: zsh answers only the first and dash and ash only the second.
+	// This was filed believing dash and ash could not answer at all (#2450),
+	// and they answer the same way the rest do.
+	//
+	// Yes is one shell's: the assignment restores the producer, so a script
+	// that unsets and assigns gets a fresh value on every read. No leaves an
+	// ordinary variable, which is the reading four of the five hold.
+	AssignmentRestoresAnUnsetProducedParameter Answer
+
 	// ArrayScalarIsTheWholeArray decides what a plain `$a` gives when `a` is
 	// an array: zsh says every element joined by a space, and bash and ksh93
 	// say the first element alone. dash has no arrays, which is why the axis
@@ -10153,7 +10205,13 @@ func PosixSemantics() Semantics {
 		// do with it.
 		SubstringRangeReadsModifiers: No,
 		LinenoCountsFromTheFunction:  No,
-		ArithBaseAbove36:             Yes,
+		// The standard has no produced parameters at all — no RANDOM, no
+		// SECONDS, and LINENO is required to be "set by the shell" without
+		// saying what an `unset` leaves. So this follows the panel, where
+		// four of the five read the `unset` as having ended the parameter
+		// and only zsh lets an assignment bring the producer back (#2450).
+		AssignmentRestoresAnUnsetProducedParameter: No,
+		ArithBaseAbove36: Yes,
 		// The standard's numeral is C's, where a leading zero opens an octal
 		// constant — so a base cannot be written with one, and a radix prefix
 		// needs at least one digit after it. Neither is a base spelling the

@@ -3132,6 +3132,137 @@ neither lists the name nor takes the attribute off it. That corner is
 deliberately not followed: an operand here keeps the refusal every other
 column gives it.
 
+## What an assignment means once `unset` has taken a produced parameter away
+
+An assignment to a produced parameter that is still there is a **message to
+its producer** rather than a replacement for it: `RANDOM=9` seeds the
+generator and the next read is a fresh number, `SECONDS=9` counts on from
+nine. That is unanimous. What splits is the case after an `unset`.
+
+Measured 2026-09-12, `env -i PATH=/usr/bin:/bin` with a scratch `HOME`,
+over a script file:
+
+```sh
+unset RANDOM; RANDOM=9; a=$RANDOM; b=$RANDOM
+```
+
+| | `a` | `b` | same | `a` is 9 |
+| --- | --- | --- | --- | --- |
+| bash 5.3 | `9` | `9` | yes | yes |
+| bash 3.2 | `9` | `9` | yes | yes |
+| ksh93u+ | `9` | `9` | yes | yes |
+| BusyBox ash | `9` | `9` | yes | yes |
+| zsh 5.9.2 | `20191` | `4730` | no | no |
+
+`9` is the discriminator and the number is the whole of it: one digit
+against a five-digit range, so "the assignment took" and "the producer
+answered" cannot agree by accident, and the second read tells a *stored* 9
+from a 9 the producer happened to give. `SECONDS` cannot discriminate —
+`SECONDS=9` counts from 9 in every shell that has it, so a stored 9 and a
+produced 9 are the same byte, and the row is unreadable rather than
+absent.
+
+dash has no `RANDOM`, so the axis is reached there through `LINENO`, which
+every dialect here produces:
+
+```sh
+unset LINENO; LINENO=9; echo $LINENO
+```
+
+bash 5.3, bash 3.2, ksh93u+, dash 0.5.12 and BusyBox ash all answer `9`;
+zsh refuses the `unset` outright — `read-only variable: LINENO` — so the
+two probes cover the panel between them and neither covers it alone. This
+was filed (#2450) believing dash and ash "register no produced scalars at
+all" and so could not answer; they answer, and they answer the way bash
+does. Re-measuring the premise is what found it, and `ash` siding with
+bash rather than with dash is the usual shape of that column.
+
+So it is `Semantics.AssignmentRestoresAnUnsetProducedParameter`: **yes**
+for zsh, **no** for bash, ksh93, dash and BusyBox ash. This shell answered
+zsh's way in every dialect.
+
+Under **no**, the producer goes with the name it was producing for: it is
+deleted from this runner's own tables and recorded in `endedProducers`, so
+what the assignment makes is an ordinary variable and stays one. The record
+is needed as well as the deletion, and finding that out needed the second
+probe: the shell's own parameters are registered lazily and *repeatedly* —
+`ensureSpecials` runs at the head of every chunk `RunPart` is handed, and
+this parser reads a script incrementally — so a deleted `LINENO` was back
+before the next line ran, while `RANDOM`, which a dialect registers once,
+looked fixed.
+
+A subshell holds a copy of those tables, so a produced parameter it ends is
+still the parent's afterwards, which is the behavior the tables' cloning
+already promised.
+
+Corpus: `special/unset-then-assign-a-produced-parameter` and
+`special/unset-then-assign-lineno`.
+
+## Listing a parameter that is produced rather than stored
+
+A produced parameter — `RANDOM`, `SECONDS`, `LINENO`, a clock — is in none
+of the tables a listing walks: not `Vars`, not `Arrays`, not the keyed
+one. It is only in `Dynamic`. So `typeset -p RANDOM` answered
+`RANDOM: not found` at 1 from a name the same shell had expanded a number
+for one line earlier, which is a listing and an expansion giving two
+answers to whether a name exists (#2451).
+
+Measured 2026-09-12, `env -i PATH=/usr/bin:/bin` with a scratch `HOME`,
+over a script file:
+
+| `typeset -p` | `RANDOM` | `SECONDS` | `LINENO` |
+| --- | --- | --- | --- |
+| bash 5.3 | `declare -i RANDOM="16735"` | `declare -i SECONDS="0"` | `declare -- LINENO="1"` |
+| bash 3.2 | `declare -i RANDOM="17244"` | `declare -i SECONDS="0"` | `declare -i LINENO="1"` |
+| ksh93u+ | `typeset -i RANDOM=7000` | `typeset -F 3 SECONDS=0.001` | `typeset -i LINENO=1` |
+| zsh 5.9.2 | `typeset -i10 RANDOM=13859` | `typeset -i10 SECONDS=0` | *(nothing, status 0)* |
+| dash, ash | *(no such builtin)* | | |
+
+Every member that has the parameter lists it, **with its value**, and the
+three rows say three separate things:
+
+- **The letters are the dialect's fact and not the parameter's.** `LINENO`
+  is `--` in bash 5.3, `-i` in bash 3.2 and `-i` in ksh93; the base rides
+  on the letter in zsh alone. A produced parameter carries no attribute
+  record here to read any of that off.
+- **Which names a listing names at all is the second fact.** zsh writes
+  nothing for `typeset -p LINENO`, at status 0 — neither a row nor a
+  refusal, and a third answer rather than a variant of either.
+- **The value is the producer's, read at the moment of the listing.** zsh
+  draws a fresh number for `typeset -p RANDOM`, so a listing is a read.
+
+Both facts are stated by the dialect that registers the producer, through
+`interp.ProducedDeclaration` beside `SetDynamic`
+(`interp/producedlisting.go`). A producer with no declaration is not
+listed, which is what every one of them did before and is the right answer
+for a name the shell being modeled does not list either.
+
+**Not the attribute tables**, which is the other way it could have been
+done and is a worse one. Marking `RANDOM` integer would put the letter in
+a listing by the route an ordinary name takes — and would also change what
+`RANDOM=abc` does, what `typeset +i RANDOM` can take off, and what an
+`unset` clears: three behaviors nobody measured, riding on a decision about
+a listing. Until this, the only thing that *could* put a produced parameter
+into a listing was `MarkReadonly`, which is why `zsh/datetime`'s three
+appeared and nothing else did — a mark meaning "cannot be assigned to",
+standing in for "and here is how it lists".
+
+Two rows are knowingly still short, and each is somebody else's issue
+rather than a shortcut here:
+
+- **ksh93's `SECONDS`** lists as `typeset -F 3 SECONDS=0.001`, and no
+  listing form here writes the places after `-F` (#1461). Registering the
+  bare letter would give `typeset -F SECONDS=0.001` — closer than the
+  `not found` it says today, still not what the shell writes, and a corpus
+  row cannot tell "closer" from "right". So that parameter is deliberately
+  left unregistered.
+- **The bare listing** — `typeset -p` with no operands — is a separate
+  question and is unchanged. Measured the same day: bash 5.3 writes
+  `declare -i RANDOM` and `declare -- LINENO` there *without values*, ksh93
+  and zsh write the same rows they write for a named listing, and bash 3.2
+  writes none of them. Three answers again, and one of them differs from
+  what the same shell writes when the name is asked for by hand.
+
 ## A declaration letter with no names is a filtered listing
 
 Measured 2026-09-10, macOS arm64: bash 5.3.15 (`--norc --noprofile -c`,
@@ -6055,10 +6186,13 @@ What was built, all through the extension seam — registered builtins in each
   and it is load-bearing rather than decoration: a produced parameter a
   script can assign to is shadowed by the assignment from then on, so it
   would stop tracking the clock and never say so. They appear in `readonly`
-  and `readonly -p` as bare names, exactly as zsh's do; zsh writes a kind
-  letter with the readonly one — `-ir`, `-Fr`, `-ar` — and this shell writes
-  `-r` alone, because a produced parameter has no integer or float attribute
-  here to show.
+  and `readonly -p` as bare names, exactly as zsh's do, and `typeset -p`
+  writes the kind letter beside the readonly one — `-ir`, `-Fr`, `-ar` —
+  because the dialect now states the letters a produced parameter lists with
+  (#2451, `interp.ProducedDeclaration`). It wrote `-r` alone until then: the
+  readonly mark was what put the name into a listing at all, and a mark
+  meaning "cannot be assigned to" was never going to say which type the name
+  has.
 
   They are **not** also marked hidden, though zsh's are. `MarkHidden` keeps a
   produced *table* out of a listing, which is why the `builtins` association
@@ -6334,17 +6468,18 @@ What was built, all through the extension seam — registered builtins in each
   that noise and are kept there because zsh prints it, where six here are
   exact.
 
-  Two divergences remain, and **neither is this parameter's**. Real bash's
-  `unset EPOCHSECONDS` removes it for good, so a later `EPOCHSECONDS=7` makes
-  an ordinary variable holding `7`; here the producer comes back on the next
-  assignment. And `declare -p EPOCHSECONDS` says `not found` here where bash
-  lists it. Both are one rule over every produced parameter rather than a
-  special case: measured the same day, `unset RANDOM; RANDOM=9; echo $RANDOM
-  $RANDOM` is `9 9` in bash 5.3, bash 3.2 and ksh93 and two different numbers
-  in zsh 5.9.2 — this shell answers zsh's way in every dialect — and
-  `declare -p RANDOM` and `declare -p SECONDS` are `not found` here and
-  `declare -i RANDOM="3899"` there. Filed as #2450 and #2451 rather than
-  patched in behind one parameter's back.
+  Two divergences were open here and **neither was this parameter's**; both
+  are closed, and each was one rule over every produced parameter rather than
+  a special case, which is why each was filed rather than patched in behind
+  one parameter's back. Real bash's `unset EPOCHSECONDS` removes it for good,
+  so a later `EPOCHSECONDS=7` makes an ordinary variable holding `7`, where
+  the producer used to come back on the next assignment — that is
+  `Semantics.AssignmentRestoresAnUnsetProducedParameter` (#2450), below. And
+  `declare -p EPOCHSECONDS` said `not found` where bash lists it — that is
+  `interp.ProducedDeclaration` (#2451), also below, and this dialect states
+  both clock parameters as ordinary scalars carrying their value:
+  `declare -- EPOCHSECONDS="1789252077"`, where zsh's pair of the same name
+  list as `typeset -ir` and `typeset -Fr` with no value at all.
 
   Corpus: `datetime/the-seconds-are-a-clock-read` and
   `datetime/the-real-time-and-how-many-places-it-carries`, both of which

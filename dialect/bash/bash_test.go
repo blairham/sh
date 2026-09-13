@@ -85,6 +85,9 @@ func TestSemantics(t *testing.T) {
 		{"AssignmentUpdatesPipelineStatus", s.AssignmentUpdatesPipelineStatus, interp.Yes},
 		{"TestAndArithmeticUpdatePipelineStatus", s.TestAndArithmeticUpdatePipelineStatus, interp.Yes},
 		{"UnsetEndsTheProducedPipelineStatus", s.UnsetEndsTheProducedPipelineStatus, interp.No},
+		// `unset RANDOM; RANDOM=9` leaves an ordinary 9 here, where zsh's
+		// producer answers again (#2450).
+		{"AssignmentRestoresAnUnsetProducedParameter", s.AssignmentRestoresAnUnsetProducedParameter, interp.No},
 		{"ArrayScalarIsTheWholeArray", s.ArrayScalarIsTheWholeArray, interp.No},
 		{"ArrayNameWithoutSubscriptIsTheList", s.ArrayNameWithoutSubscriptIsTheList, interp.No},
 		{"SelectPromptNeedsTerminal", s.SelectPromptNeedsTerminal, interp.No},

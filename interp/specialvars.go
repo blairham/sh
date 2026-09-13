@@ -34,6 +34,12 @@ import (
 // splitting already used a default when it was unset, so everything *worked*
 // while `echo "$IFS"` printed nothing and a script could neither read it nor
 // tell it had been changed.
+// Each producer here is registered only while nothing has ended it. The guard
+// is not defensive: this runs at the head of every chunk RunPart is handed and
+// a script is read incrementally, so without it a `LINENO` an `unset` and an
+// assignment had turned into an ordinary name (see
+// Semantics.AssignmentRestoresAnUnsetProducedParameter) was produced again by
+// the next line of the same script.
 func (r *Runner) ensureSpecials() {
 	if r.Dynamic == nil {
 		r.Dynamic = map[string]func(*Runner) string{}
@@ -41,7 +47,7 @@ func (r *Runner) ensureSpecials() {
 	if _, ok := r.Vars["IFS"]; !ok && !r.removed["IFS"] {
 		r.setVarQuietly("IFS", " \t\n")
 	}
-	if _, ok := r.Dynamic["_"]; !ok {
+	if _, ok := r.Dynamic["_"]; !ok && !r.endedProducers["_"] {
 		// Registered once, not every time: RunPart comes back through here
 		// while a process substitution's goroutine may be reading the shared
 		// table, and rewriting the same producer was a write all the same.
@@ -74,7 +80,7 @@ func (r *Runner) ensureSpecials() {
 	// OLDPWD is the one parameter here the panel disagrees about *inheriting*
 	// rather than providing, so it is a policy rather than a starting value.
 	r.settleInheritedOldpwd()
-	if _, ok := r.Dynamic["LINENO"]; !ok {
+	if _, ok := r.Dynamic["LINENO"]; !ok && !r.endedProducers["LINENO"] {
 		r.Dynamic["LINENO"] = func(r *Runner) string {
 			// One dialect numbers lines inside a function from the line the
 			// function was written on; the rest count from the file, which
@@ -92,7 +98,7 @@ func (r *Runner) ensureSpecials() {
 			return strconv.Itoa(r.line)
 		}
 	}
-	if _, ok := r.Dynamic["-"]; !ok {
+	if _, ok := r.Dynamic["-"]; !ok && !r.endedProducers["-"] {
 		r.Dynamic["-"] = (*Runner).optionLetters
 	}
 }

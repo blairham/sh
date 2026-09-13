@@ -96,15 +96,26 @@ func TestABracedSubstitutionIsPlacedInTheScript(t *testing.T) {
 	}
 }
 
-func braceRun(t *testing.T, src string) string {
+// braceRun runs a source in a runner that has both spellings of the construct.
+//
+// The trailing env is what the shell was *born with*, which only the reply
+// form's test needs — it is the difference between a name deleted and a name
+// hidden, and a deleted one still reads through to the environment. Variadic
+// rather than a second helper beside this one: two would be two places for a
+// fix to land, and only one of them would get it.
+func braceRun(t *testing.T, src string, env ...string) string {
 	t.Helper()
 	var buf strings.Builder
 	sem := PosixSemantics()
 	d := syntax.Core()
 	d.CurrentShellSubstitution = true
+	// And the pipe spelling, so replysubst_test.go has the same door rather
+	// than a second one of its own. Turning it on here is also a control:
+	// every row above is written in the blank form, and none of them moves.
+	d.ReplySubstitution = true
 	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh", Dialect: &d,
-		Stdout: &buf, Stderr: &buf,
+		Stdout: &buf, Stderr: &buf, Env: env,
 	})
 	f, err := syntax.Parse(src, d)
 	if err != nil {

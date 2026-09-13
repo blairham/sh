@@ -3255,6 +3255,28 @@ func Apply(r *interp.Runner) {
 	// where the same probe is a row in bash and ksh93 and was
 	// `LINENO: not found` here.
 	r.SetDynamicDeclaration("LINENO", interp.ProducedDeclaration{Silent: true})
+	// And it is read-only here, which no other column in the panel says.
+	// Measured 2026-09-12, zsh 5.9.2, `env -i PATH=/usr/bin:/bin` with a
+	// scratch HOME, over a script file:
+	//
+	//	unset LINENO       ./b.sh:2: read-only variable: LINENO, and the
+	//	                   shell stops
+	//	LINENO=9           ./c.sh:1: read-only variable: LINENO
+	//	${(t)LINENO}       integer-readonly-special
+	//
+	// where bash 5.3, bash 3.2, ksh93, dash and BusyBox ash all take both
+	// and leave `$LINENO` empty after the `unset` (#2519). It was an
+	// ordinary produced parameter here, so a script could remove the name
+	// this shell keeps counting into.
+	//
+	// The mark is deliberately no wider than the two writes above, and that
+	// was measured before it was written rather than assumed: a *local*
+	// declaration with no value is still allowed — `f() { typeset LINENO;
+	// echo $LINENO; }` prints 0 in zsh 5.9.2 and the outer count is intact
+	// afterwards — so a script that shadows the name in a function must go
+	// on working. `local LINENO=5` is refused, which is the assignment and
+	// not the declaration.
+	r.MarkReadonly("LINENO")
 	// `$ARGC`, this shell's name for `$#` — see argc.go for what was
 	// measured and for the startup that could not run without it.
 	registerARGC(r)

@@ -72452,6 +72452,57 @@
         "TimedOut": false
       }
     },
+    "dot/the-name-goes-when-the-source-returns": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: NOPE: parameter not set",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "./fn.sh: line 1: NOPE: unbound variable",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "./fn.sh: line 1: NOPE: unbound variable",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "./fn.sh: line 1: NOPE: unbound variable",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: NOPE: parameter not set",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: NOPE: parameter not set",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "f: NOPE: parameter not set",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "dot/unterminated-file-names-the-source": {
       "ash": {
         "Stdout": "",
@@ -76069,6 +76120,57 @@
         "Stdout": "st=1",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "eval/the-borrowed-text-in-the-prefix": {
+      "ash": {
+        "Stdout": "e",
+        "Stderr": "\u003cscript\u003e: eval: line 3: NOPE: parameter not set",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "e",
+        "Stderr": "\u003cscript\u003e: line 3: NOPE: unbound variable",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "e",
+        "Stderr": "\u003cscript\u003e: line 3: NOPE: unbound variable",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "e",
+        "Stderr": "\u003cscript\u003e: line 4: NOPE: unbound variable",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "e",
+        "Stderr": "\u003cscript\u003e: 2: eval: NOPE: parameter not set",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "e",
+        "Stderr": "\u003cscript\u003e[2]: eval: line 2: NOPE: parameter not set",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "e",
+        "Stderr": "(eval):2: NOPE: parameter not set",
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       }

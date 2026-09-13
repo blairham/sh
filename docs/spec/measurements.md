@@ -16774,6 +16774,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `eval/joins-arguments-with-a-space` | `a b c` | `a b c` | `a b c` | `a b c` | `a b c` | `a b c` | `a b c` |
 | `eval/where-the-texts-lines-are` | `diff=-1` | `diff=1` | `diff=1` | `diff=1` | `diff=-1` | `diff=-1` | `diff=1` |
 | `dot/the-borrowed-text-in-the-prefix` | `one` **2>** `<shell>: 2: ./p.sh: NOPE: parameter not set` *(status 2)* | `one` **2>** `./p.sh: line 2: NOPE: unbound variable` *(status 127)* | `one` **2>** `./p.sh: line 2: NOPE: unbound variable` *(status 127)* | `one` **2>** `./p.sh: line 2: NOPE: unbound variable` *(status 127)* | `one` **2>** `<shell>: .: line 2: NOPE: parameter not set` *(status 1)* | `one` **2>** `./p.sh:2: NOPE: parameter not set` *(status 126)* | `one` **2>** `<shell>: ./p.sh: line 2: NOPE: parameter not set` *(status 2)* |
+| `eval/the-borrowed-text-in-the-prefix` | `e` **2>** `<script>: 2: eval: NOPE: parameter not set` *(status 2)* | `e` **2>** `<script>: line 3: NOPE: unbound variable` *(status 1)* | `e` **2>** `<script>: line 3: NOPE: unbound variable` *(status 1)* | `e` **2>** `<script>: line 4: NOPE: unbound variable` *(status 1)* | `e` **2>** `<script>[2]: eval: line 2: NOPE: parameter not set` *(status 1)* | `e` **2>** `(eval):2: NOPE: parameter not set` *(status 1)* | `e` **2>** `<script>: eval: line 3: NOPE: parameter not set` *(status 2)* |
+| `dot/the-name-goes-when-the-source-returns` | **2>** `<script>: 1: NOPE: parameter not set` *(status 2)* | **2>** `./fn.sh: line 1: NOPE: unbound variable` *(status 1)* | **2>** `./fn.sh: line 1: NOPE: unbound variable` *(status 1)* | **2>** `./fn.sh: line 1: NOPE: unbound variable` *(status 1)* | **2>** `<script>: line 1: NOPE: parameter not set` *(status 1)* | **2>** `f: NOPE: parameter not set` *(status 1)* | **2>** `<script>: line 1: NOPE: parameter not set` *(status 2)* |
 | `dot/the-borrowed-chain-two-levels-down` | `s1~one` **2>** `<shell>: 2: ./p.sh: NOPE: parameter not set` *(status 2)* | `s1~one` **2>** `./p.sh: line 2: NOPE: unbound variable` *(status 127)* | `s1~one` **2>** `./p.sh: line 2: NOPE: unbound variable` *(status 127)* | `s1~one` **2>** `./p.sh: line 2: NOPE: unbound variable` *(status 127)* | `s1~one` **2>** `<shell>: .[2]: .: line 2: NOPE: parameter not set` *(status 1)* | `s1~one` **2>** `./p.sh:2: NOPE: parameter not set` *(status 126)* | `s1~one` **2>** `<shell>: ./p.sh: line 2: NOPE: parameter not set` *(status 2)* |
 | `eval/nothing-to-run-reports-success` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
 | `eval/text-sees-the-callers-status` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` |
@@ -16845,6 +16847,19 @@ grades it and nothing drift-checks it either, for the same reason.
 - `dot/the-borrowed-text-in-the-prefix` — what a run-time failure inside a sourced file is located and named as, which splits four ways: bash and zsh put the file's own path where the shell's name goes, dash names it after the location, and ksh93 names the *builtin* — `<shell>: .: line 2:` — in front of a location the shell's own name would otherwise carry. It is the one-level case of Diagnostics.BorrowedTextRendersTheCallStack (#2461)
   ```sh
   printf "echo one\necho \$NOPE\n" > p.sh; set -u; . ./p.sh
+  ```
+- `eval/the-borrowed-text-in-the-prefix` — the `eval` half of `dot/the-borrowed-text-in-the-prefix`, and a second row rather than a duplicate: what a diagnostic calls borrowed text is EvalNaming for one kind and SourceFileNaming for the other, so a dialect can name a sourced file and say nothing about `eval` — which is what BusyBox ash did until #2520 turned the run-time naming on for both. From a **script** and not `-c`, which is the confound this row exists to dodge: ash numbers a `-c` program from 0, so the line beside the name would be one less than every other column's for a reason that has nothing to do with naming (see `eval/where-the-texts-lines-are`), and a row recording the raw number would read as a naming difference
+  ```sh
+  set -u
+  eval 'echo e
+  echo $NOPE'
+  ```
+- `dot/the-name-goes-when-the-source-returns` — the row that keeps the naming above from being too wide. The rule for *which* borrowed text a run-time diagnostic names is the innermost one still being read, with no test that the failing line came from it — so a function whose body was read from a sourced file, called after the source returned, must name nothing. Every column writes its plain prefix here, and an implementation that named the defining file instead would satisfy both rows above and fail only this one
+  ```sh
+  printf 'f() { echo $NOPE; }\n' > fn.sh
+  set -u
+  . ./fn.sh
+  f
   ```
 - `dot/the-borrowed-chain-two-levels-down` — the row above with one more level, which is what separates a *name* from a chain: ksh93 writes `<shell>: .[2]: .: line 2:` — a component for each borrowed text, each carrying the line in it that entered the next — where every other column writes exactly what it wrote one level up, the innermost text and nothing about the way in. Turning ksh93's naming on without the brackets would give `<shell>: .: line 2:` here, which is closer and still wrong, and only this row can tell the two apart (#2461)
   ```sh

@@ -221,6 +221,7 @@ func TestSemantics(t *testing.T) {
 		{"CdHasSymlinkFreeOption", s.CdHasSymlinkFreeOption, interp.Yes},
 		{"CdLastPathOptionWins", s.CdLastPathOptionWins, interp.No},
 		{"BadSetOptionNameFatal", s.BadSetOptionNameFatal, interp.Yes},
+		{"BadSetOptionLetterFatal", s.BadSetOptionLetterFatal, interp.Yes},
 		// The one shell that says anything about a `[[ -o ]]` name it does
 		// not have — and answers 3, which is neither of a condition's two.
 		{"UnknownConditionOptionIsAStatus", s.UnknownConditionOptionIsAStatus, interp.Yes},
@@ -877,10 +878,10 @@ func TestZshReadsTheProfileWithAScriptToRun(t *testing.T) {
 // invocation and inside a script alike, which is why one value answers both
 // spellings (#483).
 func TestZshRefusesASetOptionAtOne(t *testing.T) {
-	if got := zsh.Diagnostics().SetInvalidOptionStatus; got != 1 {
-		t.Errorf("SetInvalidOptionStatus = %d, want 1", got)
+	if got := zsh.Diagnostics().SetInvalidOptionNameStatus; got != 1 {
+		t.Errorf("SetInvalidOptionNameStatus = %d, want 1", got)
 	}
-	if got := (interp.Diagnostics{}).SetInvalidOptionStatus; got != 0 {
+	if got := (interp.Diagnostics{}).SetInvalidOptionNameStatus; got != 0 {
 		t.Errorf("the substrate answers %d, want nothing — zero means the 2 the other three report", got)
 	}
 }

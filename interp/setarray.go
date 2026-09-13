@@ -128,7 +128,13 @@ func (r *Runner) setArrayWithoutAName(on bool) int {
 	}
 	if msg := r.diag().SetArrayNeedsAName; msg != "" {
 		r.saySetRefusal(Wording(msg, "", sign+"A"), true, false)
-		r.setRefusalStatus("a `set -A` with no name ending the script")
+		// The letter's pair and not the name's: `-A` is a letter, and what
+		// was refused is the letter's own usage. ksh93 and zsh are the only
+		// dialects with `set -A` at all and both answer the two spellings
+		// alike, so nothing measurable rides on it — which is the reason to
+		// write down which one this is rather than take whichever was
+		// nearest. See Semantics.BadSetOptionLetterFatal.
+		r.setRefusalStatus(refusedOptionLetter, "a `set -A` with no name ending the script")
 		return r.setOptionFailure()
 	}
 	r.diagf("set: %sA: a listing is not implemented yet\n", sign)

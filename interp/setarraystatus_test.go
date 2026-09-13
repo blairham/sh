@@ -116,6 +116,7 @@ func setArrayStatusRunFatality(t *testing.T, src string, answer Answer, route Ro
 	sem.ArrayBaseIsZero = Yes
 	sem.BadNameToDeclarationFatal = fatal
 	sem.BadSetOptionNameFatal = Yes
+	sem.BadSetOptionLetterFatal = Yes
 	sem.FatalErrorStatusIsOne = Yes
 	sem.SetArrayBadNameLeavesZeroFromCommandString = answer
 	var out, errs bytes.Buffer
@@ -123,10 +124,11 @@ func setArrayStatusRunFatality(t *testing.T, src string, answer Answer, route Ro
 	r := newTestRunner(t, &Runner{
 		Stdout: &out, Stderr: &errs, Semantics: &sem, Route: route,
 		Diagnostics: &Diagnostics{
-			Location:               LocationColonLine,
-			BuiltinBadName:         map[string]string{"set": "not an identifier: %[2]s"},
-			BuiltinBadNameStatus:   1,
-			SetInvalidOptionStatus: 1,
+			Location:                     LocationColonLine,
+			BuiltinBadName:               map[string]string{"set": "not an identifier: %[2]s"},
+			BuiltinBadNameStatus:         1,
+			SetInvalidOptionNameStatus:   1,
+			SetInvalidOptionLetterStatus: 1,
 		},
 		Dir: dir, Name: "testsh", Vars: map[string]string{"PATH": dir},
 	})

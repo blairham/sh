@@ -12151,11 +12151,11 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   trk() { set -o 2>/dev/null | grep -E "^(hashall|trackall)" | tr -s "[:blank:]" "="; }; trk; case $- in *h*) echo "letter=in";; *) echo "letter=out";; esac; case $- in *h*) set +h;; esac; trk; case $- in *h*) echo "after=in";; *) echo "after=out";; esac
   ```
-- `opt/an-unknown-long-name-is-refused` — a name outside the shell's table is refused in both directions, with four different wordings and two different statuses — the boundary the accept-off policy stops at, since a name that does not exist is not a state anything is already in
+- `opt/an-unknown-long-name-is-refused` — a name outside the shell's table is refused in both directions, with four different wordings and two different statuses — the boundary the accept-off policy stops at, since a name that does not exist is not a state anything is already in. The row the `BadSetOptionNameFatal` probe reads, and `zzznosuch` rather than a name some shell owns is what makes it readable: a column that *has* the name answers 0 in silence and says nothing about what a refusal would do, which is the shape `opt/set-o-takes-a-name-only-this-shell-has` has for zsh
   ```sh
   set -o zzznosuch; echo "on=$?"; set +o zzznosuch; echo "off=$?"
   ```
-- `opt/an-unknown-letter-is-refused` — the letter half of the question the long name asks, and the panel answers the two identically — `-q`, `-j`, `-z` and `-A` are the letters all seven refuse, and each shell reports for `set -q` exactly what it reports for `set -o zzznosuch` and ends the script or does not in the same way. bash alone carries on, at 2; dash, ksh93 and ash stop at 2 and zsh at 1. The letter had no dialect answer at all until #483: it reported 2 everywhere and never stopped a script, so the same shell answered its own two spellings differently
+- `opt/an-unknown-letter-is-refused` — the letter half of the question the long name asks, and **not** the same answer — which is what this row said for a year and what #2629 measured out of it. `-q`, `-j`, `-z` and `-A` are letters all seven refuse, and comparing them against each other is what the #483 measurement did; comparing one of them against a refused *name* in the same shell is what it never did. bash 5.3 and bash 3.2 carry on at 2 where their names are 2 and **1**; bash-as-`sh`, dash, ksh93 and BusyBox ash stop at 2 and zsh at 1, and ash's name is 1 and survivable. So the letter is the harsher spelling in two columns and the same in five. The letter had no dialect answer at all until #483 — it reported 2 everywhere and never stopped a script — and it had the *name's* answer until #2629
   ```sh
   set -q; echo "st=$?"; echo alive
   ```

@@ -1443,6 +1443,12 @@ func Semantics() interp.Semantics {
 	s.CdHasSymlinkFreeOption = interp.No
 	s.CdLastPathOptionWins = interp.Yes
 	s.BadSetOptionNameFatal = interp.No
+	// Neither spelling ends the script here: `set -o zzznosuch; echo one;
+	// set -Z; echo two` prints both words and leaves at 0. Written rather
+	// than inherited so that the agreement between the two is a measured
+	// answer — the substrate assumed it until #2629 and was wrong about
+	// BusyBox ash.
+	s.BadSetOptionLetterFatal = interp.No
 	s.UnknownConditionOptionIsAStatus = interp.No
 	s.ReturnOutsideAFunctionIsRefused = interp.Yes
 	// `break` with no loop around it is reported and then ignored here: the
@@ -1632,6 +1638,13 @@ func Diagnostics() interp.Diagnostics {
 		// sentence a bad `-o` name earns, which is why
 		// SetInvalidOptionNameUsage is not set.
 		SetInvalidOptionLetter: "set: %[1]s: invalid option",
+		// The two spellings answer alike here, and they are written rather
+		// than left to the zero so that the sameness is a measurement.
+		// bash 3.2 is why that matters: the *same shell* three versions back
+		// reports 1 for the name and 2 for the letter. Measured 2026-09-13
+		// on 5.3.15 with `set -o zzznosuch` and `set -Z` (#2629).
+		SetInvalidOptionNameStatus:   2,
+		SetInvalidOptionLetterStatus: 2,
 		// bash refuses a `set` option letter from its own command-line
 		// parser: its name, the sentence, and the whole shell usage block
 		// under it, with no location and no second name. The long spelling

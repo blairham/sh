@@ -159,6 +159,13 @@ func TestNoAnsweredAxisRefusesAtRunTime(t *testing.T) {
 			"ValuelessDeclarationOfAHeldNameListsIt",
 		},
 		{
+			"a refused `set -o` name against a refused option letter",
+			"set -o nosuchname\necho one\nset -Z\necho two\n",
+			"BadSetOptionNameFatal and BadSetOptionLetterFatal — two axes " +
+				"since #2629, because this shell is the one that answers " +
+				"them differently",
+		},
+		{
 			"a pid listing and a job that has finished",
 			`sleep 0.05 & sleep 0.4; jobs -p >/dev/null; jobs; jobs`,
 			"PidListingFinishesWithAJob — a bare `jobs -p` never reaches it, " +
@@ -231,5 +238,33 @@ func TestABadDuplicationTargetEndsThisShell(t *testing.T) {
 	out, st := runIn(t, `echo A; /bin/echo B <&qq; echo reached`)
 	if out != "A\nash: redir error\n" || st != 2 {
 		t.Errorf("out = %q status %d, want the shell over at 2 after `A`", out, st)
+	}
+}
+
+// The split #2629 measured, end to end through the preset: this shell reports
+// a refused `set -o` **name** at 1 and carries on, and ends the script at 2
+// for a refused option **letter**. It is the only panel column where the two
+// part company, and the reason `BadSetOptionNameFatal` could not stay one
+// field for both.
+//
+// Both halves in one script, in both orders, because either alone is
+// satisfiable by a shell that treats the two alike: name-then-letter passes
+// under "both survivable" if only the first line is read, and letter-then-name
+// passes under "both fatal" if only the first line is read. What no single
+// answer produces is `one` from the first and nothing from the second.
+func TestARefusedNameIsSurvivableAndARefusedLetterIsNot(t *testing.T) {
+	out, st := runIn(t, "set -o nosuchname\necho one\nset -Z\necho two\n")
+	if !strings.Contains(out, "one") || strings.Contains(out, "two") || st != 2 {
+		t.Errorf("name then letter: got %q at %d, want `one` said, `two` not, and 2", out, st)
+	}
+	out, st = runIn(t, "set -Z\necho one\nset -o nosuchname\necho two\n")
+	if strings.Contains(out, "one") || st != 2 {
+		t.Errorf("letter then name: got %q at %d, want nothing said and 2", out, st)
+	}
+	// And the status the surviving half reports, which is the other pair of
+	// fields: 1 for the name where the letter's is 2.
+	out, st = runIn(t, "set -o nosuchname\necho \"st=$?\"\n")
+	if !strings.Contains(out, "st=1") || st != 0 {
+		t.Errorf("the name's status: got %q at %d, want `st=1` and 0", out, st)
 	}
 }

@@ -12103,16 +12103,66 @@ rather than instead of it.
 
 ### `$_`, `$-` and the option letters
 
-**`BadSetOptionNameFatal`** — bash no · dash yes · ksh93 yes · zsh yes
+**`BadSetOptionNameFatal`** — bash no · dash yes · ksh93 yes · zsh yes · ash **no**
 
-Ends the script when `set -o` is given a name this shell does not have.
-True in dash, ksh93 and zsh.
+**`BadSetOptionLetterFatal`** — bash no · dash yes · ksh93 yes · zsh yes · ash **yes**
+
+Ends the script when `set` is given an option this shell does not have —
+a long `-o` name for the first, an option letter for the second.
 
 Not the same question as BadOptionToSpecialBuiltinFatal, and measured
 rather than assumed to be: a bad option *letter* to the same builtin is
 fatal in only two of them, and zsh does not so much as complain about
 `set -Q`. So one shell treats an unknown name as worse than an unknown
 letter, which is why this is a field of its own.
+
+And the two spellings are not one question either, which took a seventh
+column to see. Measured 2026-09-13 with `set -o zzznosuch; echo one;
+set -Z; echo two`, and again with the two halves swapped so that a column
+which stops at the first refusal is still asked about the second:
+
+| | name | letter |
+| --- | --- | --- |
+| bash 5.3 | carries on | carries on |
+| bash-as-`sh` | **stops** | **stops** |
+| bash 3.2 | carries on | carries on |
+| dash | **stops** | **stops** |
+| ksh93 | **stops** | **stops** |
+| zsh | **stops** | **stops** |
+| BusyBox ash | carries on | **stops** |
+
+One field answered both until #2629, because #483 measured it across the
+six columns above BusyBox ash and they all agree. That is not a wrong
+measurement; it is a measurement taken when the panel was smaller, and the
+seventh column split a question that genuinely looked like one. ash was
+added later (#2272) and took `Yes` for both with no comment of its own,
+which made `set -o nosuchname` — and `set -o posix`, a name BusyBox does
+not have — end scripts that really carry on.
+
+**The seam is the spelling that was refused, not the route it arrived by**,
+and the attached form is the probe that separates the two readings. In ash,
+`set -o zzznosuch` and `set +o zzznosuch` both report 1 and carry on, while
+`set -ozzznosuch` stops the script at 2 — BusyBox reads that word as a bare
+`-o`, which prints the option listing, followed by the letters of
+`zzznosuch`, and refuses the `z`. An `-o` is present in all three spellings,
+so "the `-o` route is the gentle one" predicts 1 for the third and is
+falsified. (Where our own parse lands for that word is a separate
+divergence, #2640.)
+
+**The status splits in a different column from the fatality**, which is why
+`Diagnostics.SetInvalidOptionNameStatus` and `SetInvalidOptionLetterStatus`
+are a second pair rather than a consequence of this one. bash 3.2 reports
+**1** for the name and **2** for the letter while ending the script for
+neither — a bash three versions back, not a BusyBox quirk. A single "the
+letter is harsher" axis would have been right about ash and wrong about
+bash 3.2.
+
+**Neither axis is moved by POSIX mode**, and bash moves both when its mode
+is entered: `set -o posix; set -o zzznosuch; echo after` stops in bash 5.3
+and prints `after` here, and `set +o posix` puts it back. That is #2641,
+left out of the split deliberately — bash is the only panel column with a
+POSIX mode to measure, so the `…InPosixMode` pair it wants would have four
+presets holding a value no shell was ever asked for.
 
 **It is `set`'s fatality and not the option's**, which a dialect with a
 second option builtin makes visible. Measured on a pipe in zsh 5.9.2,

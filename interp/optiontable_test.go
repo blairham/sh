@@ -95,6 +95,7 @@ func optionTableRunner(t *testing.T, src string, dg Diagnostics, sem *Semantics)
 func notFatal() *Semantics {
 	s := PosixSemantics()
 	s.BadSetOptionNameFatal = No
+	s.BadSetOptionLetterFatal = No
 	return &s
 }
 
@@ -152,7 +153,7 @@ func TestSetOMovesTheDialectsOwnName(t *testing.T) {
 // TestANameTheDialectDoesNotHaveIsAnInvalidName: known false is the "typo"
 // answer, worded and scored by the dialect exactly as it is without a table.
 func TestANameTheDialectDoesNotHaveIsAnInvalidName(t *testing.T) {
-	dg := Diagnostics{SetInvalidOptionName: "set: no such option: %[1]s", SetInvalidOptionStatus: 1}
+	dg := Diagnostics{SetInvalidOptionName: "set: no such option: %[1]s", SetInvalidOptionNameStatus: 1}
 	out, st := optionTableRunner(t, "set -o zzznosuch\necho \"st=$?\"\n", dg, notFatal())
 	if want := "sh: set: no such option: zzznosuch\nst=1\n"; out != want {
 		t.Errorf("output = %q, want exactly %q", out, want)
@@ -168,9 +169,9 @@ func TestANameTheDialectDoesNotHaveIsAnInvalidName(t *testing.T) {
 // difference.
 func TestANameTheDialectWillNotMoveIsADifferentAnswer(t *testing.T) {
 	dg := Diagnostics{
-		SetInvalidOptionName:   "set: no such option: %[1]s",
-		SetImmovableOptionName: "set: can't change option: %[1]s",
-		SetInvalidOptionStatus: 1,
+		SetInvalidOptionName:       "set: no such option: %[1]s",
+		SetImmovableOptionName:     "set: can't change option: %[1]s",
+		SetInvalidOptionNameStatus: 1,
 	}
 	out, _ := optionTableRunner(t, "set -o epsilon\necho \"st=$?\"\n", dg, notFatal())
 	if want := "sh: set: can't change option: epsilon\nst=1\n"; out != want {
@@ -188,9 +189,13 @@ func TestANameTheDialectWillNotMoveIsADifferentAnswer(t *testing.T) {
 // TestAnImmovableNameEndsTheScriptWhereTheDialectSaysSo: the refusal is the
 // dialect's on every axis a refused `set -o` already has, fatality included.
 func TestAnImmovableNameEndsTheScriptWhereTheDialectSaysSo(t *testing.T) {
-	dg := Diagnostics{SetImmovableOptionName: "set: can't change option: %[1]s", SetInvalidOptionStatus: 1}
+	dg := Diagnostics{SetImmovableOptionName: "set: can't change option: %[1]s", SetInvalidOptionNameStatus: 1}
 	fatal := PosixSemantics()
+	// The *name*'s axis, because an immovable name is a name. The letter's
+	// is left the other way round so that a reading through the wrong field
+	// would print `after` and fail here.
 	fatal.BadSetOptionNameFatal = Yes
+	fatal.BadSetOptionLetterFatal = No
 	out, st := optionTableRunner(t, "set -o epsilon\necho after\n", dg, &fatal)
 	if want := "sh: set: can't change option: epsilon\n"; out != want {
 		t.Errorf("output = %q, want exactly %q — nothing after it", out, want)

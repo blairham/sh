@@ -17,36 +17,53 @@ import (
 // answering 1 exited 2 — while the same dialect's `-o nosuchoption` already
 // exited 1, because only the long spelling could carry an answer back.
 //
-// Both spellings in one table, since the point is that they agree.
+// Both spellings in one table, and since #2629 each carries **its own**
+// answer: the two statuses are set to different numbers here, so a front end
+// that read one field for both spellings fails on whichever half it did not
+// take. That is not a hypothetical shape — BusyBox ash reports 1 for the name
+// and 2 for the letter.
 func TestARefusedInvocationOptionExitsTheDialectsStatus(t *testing.T) {
-	shellWith := func(status int) driver.Shell {
+	shellWith := func(letter, name int) driver.Shell {
 		sem := interp.PosixSemantics()
 		// Not fatal, so that what is being measured is the status the front
 		// end returns rather than the one a dying script leaves behind.
 		sem.BadSetOptionNameFatal = interp.No
+		sem.BadSetOptionLetterFatal = interp.No
 		return driver.Shell{
-			Name:        "testsh",
-			Dialect:     syntax.Core(),
-			Semantics:   sem,
-			Diagnostics: interp.Diagnostics{SetInvalidOptionStatus: status},
+			Name:      "testsh",
+			Dialect:   syntax.Core(),
+			Semantics: sem,
+			Diagnostics: interp.Diagnostics{
+				SetInvalidOptionNameStatus:   name,
+				SetInvalidOptionLetterStatus: letter,
+			},
 		}
 	}
 	for _, c := range []struct {
-		name string
-		argv []string
+		name   string
+		argv   []string
+		letter bool
 	}{
-		{"a letter", []string{"testsh", "-q", "-c", "echo hi"}},
-		{"a letter in a bundle", []string{"testsh", "-eq", "-c", "echo hi"}},
-		{"a name", []string{"testsh", "-o", "nosuchoption", "-c", "echo hi"}},
-		{"a letter with a script route behind it", []string{"testsh", "-q"}},
+		{"a letter", []string{"testsh", "-q", "-c", "echo hi"}, true},
+		{"a letter in a bundle", []string{"testsh", "-eq", "-c", "echo hi"}, true},
+		{"a name", []string{"testsh", "-o", "nosuchoption", "-c", "echo hi"}, false},
+		{"a letter with a script route behind it", []string{"testsh", "-q"}, true},
 	} {
 		t.Run(c.name, func(t *testing.T) {
+			// Two spellings, two fields, and never the same number in both:
+			// whichever this invocation is, the other field holds the answer
+			// that must *not* come back.
 			for _, want := range []int{1, 2, 3} {
+				other := want%3 + 1
+				letter, name := want, other
+				if !c.letter {
+					letter, name = other, want
+				}
 				var out, errs strings.Builder
-				sh := shellWith(want)
+				sh := shellWith(letter, name)
 				sh.Stdout, sh.Stderr = &out, &errs
 				if got := driver.MainArgs(sh, c.argv); got != want {
-					t.Errorf("status %d, want the dialect's %d (stderr %q)", got, want, errs.String())
+					t.Errorf("status %d, want this spelling's own %d and not the other's %d (stderr %q)", got, want, other, errs.String())
 				}
 				if out.String() != "" {
 					t.Errorf("ran %q, want a refused option to stop the shell before anything runs", out.String())

@@ -3161,14 +3161,72 @@ type Semantics struct {
 	UnknownConditionOptionIsAStatus Answer
 
 	// BadSetOptionNameFatal ends the script when `set -o` is given a name
-	// this shell does not have. True in dash, ksh93 and zsh.
+	// this shell does not have. True in dash, ksh93 and zsh; false in bash
+	// and in BusyBox ash.
 	//
 	// Not the same question as BadOptionToSpecialBuiltinFatal, and measured
 	// rather than assumed to be: a bad option *letter* to the same builtin
 	// is fatal in only two of them, and zsh does not so much as complain
 	// about `set -Q`. So one shell treats an unknown name as worse than an
 	// unknown letter, which is why this is a field of its own.
+	//
+	// And BadSetOptionLetterFatal is a second field for the mirror of that,
+	// found when the panel grew a seventh column: BusyBox ash treats an
+	// unknown *letter* as worse than an unknown name. Measured 2026-09-13
+	// with `set -o zzznosuch; echo one; set -Z; echo two`, and with the two
+	// halves swapped so that every column is asked both:
+	//
+	//	bash 5.3      name no    letter no
+	//	bash-as-sh    name yes   letter yes
+	//	bash 3.2      name no    letter no
+	//	dash          name yes   letter yes
+	//	ksh93         name yes   letter yes
+	//	zsh           name yes   letter yes
+	//	BusyBox ash   name NO    letter YES
+	//
+	// This field answered both spellings until #2629, because it was
+	// measured in #483 across six columns that all answered them alike. That
+	// is not a wrong measurement, it is a measurement taken when the panel
+	// was smaller — and ash, added later (#2272), took `Yes` here with no
+	// comment of its own, which made `set -o nosuchname` end a BusyBox
+	// script that really carries on at 1.
+	//
+	// The seam is the **spelling that was refused**, not the route it
+	// arrived by, and the discriminating probe is the attached form: in ash
+	// `set -o zzznosuch` and `set +o zzznosuch` both report 1 and carry on,
+	// while `set -ozzznosuch` — which ash reads as a bare `-o` followed by
+	// the letters of `zzznosuch` — stops the script at 2 on the letter `z`.
+	// An `-o` is present in all three, so "the `-o` route is the gentle one"
+	// predicts 1 for the third and is falsified. What ash is doing is
+	// refusing a letter harder than a name.
 	BadSetOptionNameFatal Answer
+
+	// BadSetOptionLetterFatal ends the script when `set` is given an option
+	// letter this shell does not have. True in dash, ksh93, zsh and BusyBox
+	// ash; false in bash. See BadSetOptionNameFatal for the measurement and
+	// for the one column where the two answers differ.
+	//
+	// The status is Diagnostics.SetInvalidOptionLetterStatus, and it splits
+	// in a *different* column from this one: bash 3.2 reports 1 for the name
+	// and 2 for the letter while ending the script for neither. So the
+	// status and the fatality are two questions, and a single "the letter is
+	// harsher" axis would have been right about ash and wrong about bash 3.2.
+	//
+	// Both spellings ask their own axis at every door `set` has, including
+	// the ones that are neither plainly: a letter this shell *has* and will
+	// not move (Diagnostics.ImmovableOptionLetters) asks this one, and
+	// `set -A` with no name asks it too, because `-A` is a letter. The two
+	// dialects that reach either answer both spellings alike, so nothing
+	// measurable rides on those two choices today — which is precisely why
+	// they are written down rather than left to whichever field was nearest.
+	//
+	// Neither this nor the name's axis is moved by POSIX mode, and bash
+	// moves both when its mode is entered — `set -o posix; set -o zzznosuch`
+	// stops there and carries on here. That is a real divergence and it is
+	// #2641 rather than a value in this field: bash is the only panel column
+	// with a POSIX mode to measure, so the `…InPosixMode` pair it wants has
+	// four presets with nothing to put in it.
+	BadSetOptionLetterFatal Answer
 
 	// CdLastPathOptionWins lets the last of `cd -L` and `cd -P` decide.
 	// True in bash, dash and ksh93 — `cd -P -L` is logical there. zsh gives

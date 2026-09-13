@@ -5,6 +5,7 @@ package interp
 
 import (
 	"sort"
+	"strings"
 	"syscall"
 )
 
@@ -664,7 +665,15 @@ func (r *Runner) setMonitor(on bool, spelling string) bool {
 			return true
 		}
 		r.setOptionStatus = d.MonitorDeniedStatus
-		r.endOnSetRefusal(d.MonitorDeniedStatus, "a refused `set -m` ending the script")
+		// The one refusal that arrives under either spelling, so the axis it
+		// asks is the one for the spelling that asked: `set -m` is the
+		// letter's and `set -o monitor` is the name's. zsh is the only
+		// dialect that refuses this and it answers the two alike — it stops
+		// at 1 for both — so the two readings are indistinguishable here
+		// today, and the point of choosing by the spelling rather than by
+		// habit is that the spelling is already in hand.
+		r.endOnSetRefusal(d.MonitorDeniedStatus, spellingRefused(spelling),
+			"a refused `set -m` ending the script")
 		return false
 	}
 	if r.unspecified {
@@ -672,6 +681,15 @@ func (r *Runner) setMonitor(on bool, spelling string) bool {
 	}
 	r.monitor = true
 	return true
+}
+
+// spellingRefused reads a spelling `set` echoed back and says which of its
+// two refusals it is. `-m` and `+m` are letters; `monitor` is a name.
+func spellingRefused(spelling string) setRefusalSpelling {
+	if strings.HasPrefix(spelling, "-") || strings.HasPrefix(spelling, "+") {
+		return refusedOptionLetter
+	}
+	return refusedOptionName
 }
 
 // SetOptionLetters applies a run of single-letter options — `e` and `ux`
@@ -789,7 +807,8 @@ func (r *Runner) setNamedOption(name string, on bool) bool {
 	d := r.diag()
 	r.saySetRefusal(Wording(d.SetImmovableOptionName, "set: %[1]s: not implemented", name),
 		d.SetInvalidOptionNameUsage, true)
-	return r.setRefusalStatus("a `set -o` name this shell will not move ending the script")
+	return r.setRefusalStatus(refusedOptionName,
+		"a `set -o` name this shell will not move ending the script")
 }
 
 // AddSetOptions declares the `set -o` names this shell has beyond the ones

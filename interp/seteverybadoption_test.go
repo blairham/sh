@@ -25,18 +25,23 @@ func setEveryRun(t *testing.T, src string, every, fatal Answer) (string, int) {
 	t.Helper()
 	sem := PosixSemantics()
 	sem.SetReportsEveryBadOption = every
+	// Both spellings, and the same answer to each: these rows mix names and
+	// letters in one `set`, and what they measure is how many words get
+	// reported rather than which spelling was harsher.
 	sem.BadSetOptionNameFatal = fatal
+	sem.BadSetOptionLetterFatal = fatal
 	sem.FatalErrorStatusIsOne = No
 	dg := Diagnostics{
 		// The shell's name still stands in front of each sentence, which is
 		// why every expectation below carries it: the assertion is the whole
 		// rendered block and not a substring of it.
-		Location:               LocationNone,
-		SetInvalidOptionLetter: "set: %[2]s: unknown option",
-		SetInvalidOptionName:   "set: %[1]s: bad option(s)",
-		SetInvalidOptionStatus: 2,
-		BuiltinUsage:           map[string]string{"set": "Usage: set [-abc]"},
-		BuiltinUsageUnprefixed: true,
+		Location:                     LocationNone,
+		SetInvalidOptionLetter:       "set: %[2]s: unknown option",
+		SetInvalidOptionName:         "set: %[1]s: bad option(s)",
+		SetInvalidOptionNameStatus:   2,
+		SetInvalidOptionLetterStatus: 2,
+		BuiltinUsage:                 map[string]string{"set": "Usage: set [-abc]"},
+		BuiltinUsageUnprefixed:       true,
 	}
 	var buf strings.Builder
 	r := newTestRunner(t, &Runner{
@@ -169,14 +174,16 @@ func TestOnlyARefusalThatWantsAUsageBlockGetsOne(t *testing.T) {
 	sem := PosixSemantics()
 	sem.SetReportsEveryBadOption = Yes
 	sem.BadSetOptionNameFatal = No
+	sem.BadSetOptionLetterFatal = No
 	sem.FatalErrorStatusIsOne = No
 	base := Diagnostics{
-		Location:               LocationNone,
-		SetInvalidOptionLetter: "set: %[2]s: unknown option",
-		SetInvalidOptionName:   "set: %[1]s: bad option(s)",
-		SetInvalidOptionStatus: 2,
-		BuiltinUsage:           map[string]string{"set": "Usage: set [-abc]"},
-		BuiltinUsageUnprefixed: true,
+		Location:                     LocationNone,
+		SetInvalidOptionLetter:       "set: %[2]s: unknown option",
+		SetInvalidOptionName:         "set: %[1]s: bad option(s)",
+		SetInvalidOptionNameStatus:   2,
+		SetInvalidOptionLetterStatus: 2,
+		BuiltinUsage:                 map[string]string{"set": "Usage: set [-abc]"},
+		BuiltinUsageUnprefixed:       true,
 	}
 	withName := base
 	withName.SetInvalidOptionNameUsage = true
@@ -226,13 +233,15 @@ func TestReportingEveryBadOptionDoesNotReachTheInvocationRoute(t *testing.T) {
 	sem := PosixSemantics()
 	sem.SetReportsEveryBadOption = Yes
 	sem.BadSetOptionNameFatal = No
+	sem.BadSetOptionLetterFatal = No
 	sem.FatalErrorStatusIsOne = No
 	dg := Diagnostics{
-		Location:               LocationNone,
-		SetInvalidOptionLetter: "set: %[2]s: unknown option",
-		SetInvalidOptionStatus: 2,
-		BuiltinUsage:           map[string]string{"set": "Usage: set [-abc]"},
-		BuiltinUsageUnprefixed: true,
+		Location:                     LocationNone,
+		SetInvalidOptionLetter:       "set: %[2]s: unknown option",
+		SetInvalidOptionNameStatus:   2,
+		SetInvalidOptionLetterStatus: 2,
+		BuiltinUsage:                 map[string]string{"set": "Usage: set [-abc]"},
+		BuiltinUsageUnprefixed:       true,
 	}
 	var buf strings.Builder
 	r := newTestRunner(t, &Runner{

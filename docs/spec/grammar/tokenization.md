@@ -144,12 +144,21 @@ vector rather than a decision taken here:
   recorded decision following bash until `\cX` made it answerable: zsh
   reaches the rule *through* `\c`, so pinning `$'\cA'` for zsh pins this
   too, and one of them had to become an axis for the other to be right.
-- **A NUL ends the text** — `DollarSingleNulTruncates`. bash and ksh93
-  hold a word as a C string, so `$'a\0b'` is `a` and `${#x}` is 1; zsh
-  counts its strings and keeps all three bytes. What ends is the *span*
-  and not the word — `$'a\0b'ccc` is `accc` — and every road to a zero
-  byte takes it: `\0`, `\x00`, `\u0000`, an octal value past a byte, and
-  `\c@`.
+- **What a NUL does to the text around it** — `DollarSingleNul`, and the
+  panel gives it **three** answers rather than two. bash and ksh93 hold a
+  word as a C string, so `$'a\0b'` is `a` and `${#x}` is 1; zsh counts its
+  strings and keeps all three bytes; BusyBox ash drops the byte and keeps
+  the rest, `ab` at length 2. What ends, in the two that end anything, is
+  the *span* and not the word — `$'a\0b'ccc` is `accc` in bash and ksh93
+  and `abccc` in ash — and every road to a zero byte takes the same
+  answer: `\0`, `\x00`, `\u0000`, an octal value past a byte, and `\c@`.
+
+  It was an `Answer` until #2276, which is the shape to remember rather
+  than the fix: two columns were measured, "does the NUL truncate" looked
+  like the question, and the third column could then only be recorded by
+  being wrong by a byte and silent about it. **"Does X happen" and "what
+  happens" are different questions**, and a two-valued axis has quietly
+  committed to the first.
 
 Two more places the panel splits, both about the hexadecimal escape's
 digits, and each an axis:
@@ -183,8 +192,8 @@ digits, and each an axis:
   `DollarSingleDigitlessEscapeIsAZeroByte`. bash keeps `\xzz` as written;
   ksh93 and zsh read a zero byte and carry on with the rest. The two that
   agree look different in a terminal and are the same answer: the zero
-  truncates the span in ksh93, which is `DollarSingleNulTruncates` and
-  not this, so what is left there is nothing at all. One answer for
+  ends the span in ksh93, which is `DollarSingleNul` and not this, so
+  what is left there is nothing at all. One answer for
   `\x`, `\u` and `\U` alike — no column splits them.
 
 **What `\c` applies to also differs, when the argument is itself an

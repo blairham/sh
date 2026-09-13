@@ -4741,7 +4741,7 @@ func (r *Runner) expandDollarSingle(s string) string {
 			}
 			if used <= 2 {
 				// One or two digits are a byte in every reading, which is
-				// the road to a NUL that DollarSingleNulTruncates answers.
+				// the road to a NUL that DollarSingleNul answers.
 				if !r.writeDecodedByte(&b, byte(n)) {
 					return b.String()
 				}
@@ -5020,13 +5020,28 @@ func caretMetaArgument(s string, i int) (byte, int, bool) {
 // writeDecodedByte writes one byte an escape decoded to, reporting whether
 // decoding carries on.
 //
-// A zero byte is the interesting one. Where a shell holds a word as a C
-// string there is nothing after it to hold, so `$'a\0b'` is `a` — and only
-// the *span* ends: `$'a\0b'ccc` is `accc`, because the rest of the word was
-// never inside the quotes. zsh counts its strings and keeps all three bytes.
+// A zero byte is the interesting one, and it splits the panel three ways
+// rather than two — see Semantics.DollarSingleNul. Where a shell holds a word
+// as a C string there is nothing after it to hold, so `$'a\0b'` is `a` and
+// only the *span* ends: `$'a\0b'ccc` is `accc`, because the rest of the word
+// was never inside the quotes. zsh counts its strings and keeps all three
+// bytes. BusyBox ash does neither and simply drops it, which is `ab` at
+// length 2 with the rest of the span still following.
 func (r *Runner) writeDecodedByte(b *strings.Builder, c byte) bool {
-	if c == 0 && r.ask(r.sem().DollarSingleNulTruncates, `a NUL inside $'…'`) {
-		return false
+	if c == 0 {
+		switch r.dollarSingleNul() {
+		case DollarSingleNulEndsTheSpan:
+			return false
+		case DollarSingleNulIsDropped:
+			// Neither written nor an end: decoding carries on with the byte
+			// left out.
+			return true
+		case DollarSingleNulUnspecified:
+			// Refused, and dollarSingleNul has already said so. Stopping
+			// here rather than writing the byte keeps a refused axis from
+			// also producing a value.
+			return false
+		}
 	}
 	b.WriteByte(c)
 	return true

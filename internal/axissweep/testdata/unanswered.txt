@@ -67,7 +67,6 @@ ash   DeclarePrintReportsAMissingName
 ash   DisownRemovesTheJob
 ash   DollarSingleDigitlessEscapeIsAZeroByte
 ash   DollarSingleHexReadsEveryDigit
-ash   DollarSingleNulTruncates
 ash   EarlierDeclarationLetterBlocksALaterPlus
 ash   EmptyArithSubscript
 ash   EmptyAssociativeKeyIsAnError
@@ -212,7 +211,7 @@ dash  DollarSingleBackslashC
 dash  DollarSingleCaretMeta
 dash  DollarSingleDigitlessEscapeIsAZeroByte
 dash  DollarSingleHexReadsEveryDigit
-dash  DollarSingleNulTruncates
+dash  DollarSingleNul
 dash  DollarSingleUnknownEscape
 dash  EarlierDeclarationLetterBlocksALaterPlus
 dash  EchoLastEscapeFlagWins

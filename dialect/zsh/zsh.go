@@ -1555,7 +1555,7 @@ func Semantics() interp.Semantics {
 	// terminated, so a decoded NUL is a byte like any other.
 	s.DollarSingleBackslashC = interp.DollarSingleControlAbsent
 	s.DollarSingleUnknownEscape = interp.DollarSingleUnknownDropsBackslash
-	s.DollarSingleNulTruncates = interp.No
+	s.DollarSingleNul = interp.DollarSingleNulIsAByte
 	// Two digits after `\x` and no more, as in bash — but a run with no
 	// digit at all is a zero byte here, where bash keeps the two characters
 	// it was written as. This shell keeps the zero, so `$'\xzz'` is three

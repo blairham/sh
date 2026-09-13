@@ -1017,7 +1017,7 @@ func Semantics() interp.Semantics {
 	// toggled rather than bash's five-bit mask: `$'\c1'` is `q`, not 0x11.
 	s.DollarSingleBackslashC = interp.DollarSingleControlToggled
 	s.DollarSingleUnknownEscape = interp.DollarSingleUnknownDropsBackslash
-	s.DollarSingleNulTruncates = interp.Yes
+	s.DollarSingleNul = interp.DollarSingleNulEndsTheSpan
 	// `\x` here takes every hexadecimal digit that follows and a run past
 	// two is a code point, so `$'\x00b'` is the one byte 0x0b where the
 	// other shells read `\x00` and truncate. A run with no digit at all is

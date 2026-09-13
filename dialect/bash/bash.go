@@ -944,7 +944,7 @@ func Semantics() interp.Semantics {
 	// masked to five bits, with `\c?` reading as DEL since 5.x.
 	s.DollarSingleBackslashC = interp.DollarSingleControlMasked
 	s.DollarSingleUnknownEscape = interp.DollarSingleUnknownKeepsBackslash
-	s.DollarSingleNulTruncates = interp.Yes
+	s.DollarSingleNul = interp.DollarSingleNulEndsTheSpan
 	// Two digits after `\x`, and an escape with no digit at all stays the
 	// two characters it was written as: `$'\xzz'` is `\xzz` here.
 	s.DollarSingleHexReadsEveryDigit = interp.No

@@ -709,6 +709,20 @@ func Semantics() interp.Semantics {
 	// list.
 	s.PidListingFinishesWithAJob = interp.No
 
+	// The NUL an escape produced is dropped: `x=$'a\0b'` leaves `ab` at
+	// length 2, so the byte is neither the end of the span (bash and ksh93,
+	// length 1) nor a character of it (zsh, length 3). The octal and hex
+	// spellings agree — `$'a\000b'` and `$'a\x00b'` are 2 as well — and the
+	// rest of the span still follows, `printf '[%s]' $'a\0b'ccc` being
+	// `[abccc]`. Measured 2026-09-12 in the pinned alpine image.
+	//
+	// This is the value that had nowhere to go while the axis was an
+	// `Answer`, which is what #2276 widened. It is worth reading as a
+	// warning about axis *types* rather than about this shell: two columns
+	// were measured, "does the NUL truncate" looked like the question, and
+	// the third column could then only be recorded by being wrong.
+	s.DollarSingleNul = interp.DollarSingleNulIsDropped
+
 	// And two more this file leaves unanswered for want of a binary rather
 	// than for want of room in the vector: `DollarSingleHexReadsEveryDigit`
 	// and `DollarSingleDigitlessEscapeIsAZeroByte` (#554). The panel splits
@@ -718,12 +732,12 @@ func Semantics() interp.Semantics {
 	// measured, so nothing is written down for it. `$'\x41'` and every other
 	// two-digit spelling reaches neither, which is the shape a script writes.
 	//
-	// Three the sweep reached and this file deliberately leaves unanswered,
+	// The ones the sweep reached and this file deliberately leaves unanswered,
 	// each with what BusyBox answered and what stands in the way of writing
 	// it down. None is a guess deferred; each is a measurement the vector
 	// cannot yet hold.
 	//
-	// The first two are written as `unanswered <axis>:` lines, which is the
+	// Each is written as an `unanswered <axis>:` line, which is the
 	// spelling internal/axissweep reads back (#2340). The coverage check
 	// prints them under the entry they answer, so what this dialect has not
 	// measured is stated by the instrument rather than only here — and a
@@ -734,12 +748,6 @@ func Semantics() interp.Semantics {
 	// expansion either, so nothing ever resumes a scan — `@{x}{a,b}@` is
 	// one word, and the four `BraceRange…` axes are unanswered beside it
 	// for the same reason.
-	//
-	// unanswered DollarSingleNulTruncates: a *third* reading (#2276).
-	// `x=$'a\0b'` leaves `ab` at length 2: the NUL is neither kept (zsh,
-	// length 3) nor the end of the span (bash and ksh93, length 1) but
-	// dropped, and the octal and hex spellings agree. `Answer` has no room
-	// for it, so a value here would have to be one of the two wrong ones.
 	//
 	// unanswered ArrayLiteralOperandRetypesAFrozenScalar: no declaration
 	// utility and no array literal here either. Measured 2026-09-12 on
@@ -753,19 +761,20 @@ func Semantics() interp.Semantics {
 	// unanswered TwoCaseLettersOnOneDeclarationCancel: no declaration
 	// command here either. Measured 2026-09-12 on BusyBox in a container,
 	// `typeset -lu z=Ab` is `typeset: not found` (#2541).
+	//
 	// unanswered EarlierDeclarationLetterBlocksALaterPlus: there is no
 	// declaration command to write the letter on. `typeset` is not a
 	// builtin here and `integer` is not a word, so neither sign of `-i`
 	// can be put to this shell at all (#2345).
 	// unanswered ReadonlyRecordsTheCompoundAttribute: this shell has no
-	// letter to ask it with (#2277). `readonly -a a` is `readonly: illegal
-	// option -a` and there is no `typeset` at all. The refusal our binary
-	// reaches is `readonly`'s option set being fixed in the interpreter
-	// rather than the dialect's, which is a gap ksh93 has today for the same
-	// reason — it refuses the same corpus row, on `main`, for want of the
-	// same letter.
+	// letter to ask it with, which is a different thing from having no
+	// answer and is the whole of #2277. `readonly -a a` is `readonly:
+	// illegal option -a` and there is no `typeset` at all, so the question
+	// cannot be put here rather than being left open. Semantics.
+	// ReadonlyOptions is `p` in this dialect now, so the refusal a script
+	// meets is the option's and not an axis's.
 	//
-	// The third is not an axis of the semantics vector at all, so it carries
+	// The last is not an axis of the semantics vector at all, so it carries
 	// no marker: Diagnostics.UlimitListing — measured in full (#2278:
 	// fifteen rows, `core file size (blocks)         (-c) unlimited` and its
 	// fellows), and five of them — `-e`, `-i`, `-q`, `-r`, `-x` — name

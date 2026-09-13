@@ -752,7 +752,7 @@ func TestDollarSingleAnswers(t *testing.T) {
 		{"DollarSingleUnknownEscape", s.DollarSingleUnknownEscape, interp.DollarSingleUnknownKeepsBackslash},
 		// C-string semantics: `$'a\0b'` is `a`, and the length of what was
 		// assigned is 1.
-		{"DollarSingleNulTruncates", s.DollarSingleNulTruncates, interp.Yes},
+		{"DollarSingleNul", s.DollarSingleNul, interp.DollarSingleNulEndsTheSpan},
 	} {
 		if tc.got != tc.want {
 			t.Errorf("%s = %v, want %v", tc.axis, tc.got, tc.want)

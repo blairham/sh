@@ -21,8 +21,11 @@ diff is the lists a new binary has to appear in — `Makefile`'s `SHELLS`,
 `cmd/sh`'s `-dialect`, `cmd/shfmt`'s `-dialect`, `.goreleaser.yaml`, and
 two counts in prose.
 
-That is not a claim that every measured behavior fits. Three do not, and
-they are listed under *What could not be said* below. It is a claim about
+That is not a claim that every measured behavior fits. Four do not, and
+they are listed under *What could not be said* below. Two more used to be
+there and have gone, one each way: #2276 widened an axis so a reading
+that had no value could have one, and #2277 moved a refusal from an axis
+to the option that raises it. It is a claim about
 the shape of the work: every answer this shell needed was a **value on an
 existing axis**, and no axis anywhere acquired a branch on a shell's name.
 
@@ -208,11 +211,12 @@ refusing at run time with the test suite green.
 An axis this dialect genuinely cannot answer is recorded where the
 omission is, as a line in `ash.go`:
 
-    // unanswered DollarSingleNulTruncates: a *third* reading (#2276). …
+    // unanswered ReadonlyRecordsTheCompoundAttribute: this shell has no
+    // letter to ask it with … (#2277)
 
 which the coverage report prints under the entry it answers. So the check
 states what is unmeasured rather than being switched off — and, the other
-way round, a value quietly appearing for one of the three items under
+way round, a value quietly appearing for one of the items under
 *What could not be said* now **fails** the check while its note still
 stands, which is exactly the "copied from a neighboring dialect to make
 the message go away" move this file forbids.
@@ -295,7 +299,7 @@ placement.
 
 ## What could not be said
 
-Six measured behaviors have no value on any existing axis. They are
+Four measured behaviors have no value on any existing axis. They are
 recorded here rather than approximated in code, because an invented
 answer is indistinguishable from a measured one in a file that holds both.
 
@@ -317,7 +321,7 @@ rides on the shell's name", and it is a `bool` whose one true value joins
 them *tight* — zsh's `zsh:shift:1:`. ash wants the same thing spaced.
 Closing it means widening that bool into a three-valued enum
 (absent / tight / spaced), which is 31 references across 14 files. It is
-the one of the three that costs real corpus rows, and it is now
+the one of them that costs real corpus rows, and it is now
 measurable: the ash column is what the widening would be graded against.
 It is deliberately not part of #2263 — a 14-file substrate edit folded
 into the change that builds the instrument would be graded by the same
@@ -342,22 +346,7 @@ substrate's own string (`division by zero`); this shell writes `divide by
 zero`. There is no `Diagnostics` field for it, and adding one for a
 single word was not worth a substrate edit.
 
-**4. A NUL inside `$'…'`.** `x=$'a\0b'` leaves `ab` at length 2 — the
-byte is neither the end of the span (bash and ksh93, length 1) nor a
-character of it (zsh, length 3) but **dropped**, and the octal and hex
-spellings agree. `Semantics.DollarSingleNulTruncates` is an `Answer` and
-has no room for a third reading, so the axis is left unanswered here
-rather than set to one of the two wrong values. #2276.
-
-**5. `readonly -a`.** `readonly: illegal option -a`, and there is no
-`typeset` at all. Our binary accepts the letter because `readonly`'s
-option set is fixed in the interpreter rather than taken from the vector
-the way `ReadOptions` and `EchoOptions` are, and then walks into
-`ReadonlyRecordsTheCompoundAttribute`, which this shell cannot answer
-because it cannot be asked. ksh93 has the same hole today and for the
-same reason. #2277.
-
-**6. `ulimit -a`.** Measured in full — fifteen rows, `core file size
+**4. `ulimit -a`.** Measured in full — fifteen rows, `core file size
 (blocks)         (-c) unlimited` and its fellows, the letter in its own
 parenthesis at the end. Five of them (`-e`, `-i`, `-q`, `-r`, `-x`) name
 resources no `interp.Resource` constant does, and they were measured on

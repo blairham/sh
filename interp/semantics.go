@@ -650,24 +650,40 @@ type Semantics struct {
 	//	$'\uZ'        \uZ                  00 then Z     00 then Z
 	//
 	// ksh93 and zsh look different in a terminal and are the same answer:
-	// the zero byte truncates the span in ksh93, which is
-	// DollarSingleNulTruncates and not this, so what is left there is
-	// nothing at all.
+	// the zero byte ends the span in ksh93, which is DollarSingleNul and not
+	// this, so what is left there is nothing at all.
 	//
 	// One answer for the three escapes, which is measured rather than
 	// assumed — no column splits them. Asked only where such an escape has
 	// no digits, so an ordinary `$'\x41'` never meets it.
 	DollarSingleDigitlessEscapeIsAZeroByte Answer
-	// DollarSingleNulTruncates ends the decoded text at the first NUL an
-	// escape produces, which is C-string semantics: `$'a\0b'` is `a` in
-	// bash and ksh93 and the three bytes `a`, NUL, `b` in zsh.
+	// DollarSingleNul is what a NUL an escape produced does to the text
+	// around it, and the panel gives it three answers rather than two.
 	//
-	// The truncation is the *span's*, not the word's: `$'a\0b'ccc` is `accc`
-	// in the shells that truncate, so what is lost is the remainder of the
-	// quoted text and nothing else. Reached only where a decoded escape
-	// actually yields a zero byte — `\0`, an octal or hex escape that comes
-	// to zero, and `\c@`, which is the same zero by another road.
-	DollarSingleNulTruncates Answer
+	// Measured 2026-09-12 under `LC_ALL=C`, from `x=$'a\0b'`:
+	//
+	//	                    ${#x}  bytes
+	//	bash 5.3, ksh93     1      a          the NUL ends the span
+	//	zsh 5.9.2           3      a NUL b    the NUL is a byte of it
+	//	BusyBox ash 1.37.0  2      a b        the NUL is dropped
+	//
+	// The octal and hex spellings agree in every column — `$'a\000b'` and
+	// `$'a\x00b'` answer as `$'a\0b'` does — and so does `\c@`, which is the
+	// same zero by another road.
+	//
+	// It was an Answer until #2276, which is the shape worth remembering:
+	// two readings were measured, the field was made a yes-or-no, and the
+	// third column then had no value it could hold without being wrong by a
+	// byte and silent about it. An `Answer` is only safe where the question
+	// really is one, and "does X happen" is not the same question as "what
+	// happens".
+	//
+	// The truncation, where it happens, is the *span's* and not the word's:
+	// `$'a\0b'ccc` is `accc` in bash and ksh93, so what is lost is the
+	// remainder of the quoted text and nothing else. The shell that drops
+	// the byte keeps the rest of the span with it — `[abccc]` — which is the
+	// second thing no Answer could have said.
+	DollarSingleNul DollarSingleNulPolicy
 	// DollarSingleCaretMeta reads `\C-X` inside `$'…'` as a control
 	// character and `\M-X` as the same byte with the high bit set. The
 	// separating `-` is optional in both, so `\CA` and `\C-A` are one byte
@@ -11254,6 +11270,54 @@ func (r *Runner) dollarSingleControl() DollarSingleControlPolicy {
 	if p == DollarSingleControlUnspecified {
 		r.errf("%s\n", r.diag().Report(r.name(), r.line,
 			r.unanswered(`$'\c'`)))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
+}
+
+// DollarSingleNulPolicy is what a NUL an escape produced does to the text
+// around it — see Semantics.DollarSingleNul for the three measured columns.
+type DollarSingleNulPolicy int
+
+const (
+	// DollarSingleNulUnspecified is no answer, and is refused like any
+	// other.
+	DollarSingleNulUnspecified DollarSingleNulPolicy = iota
+	// DollarSingleNulEndsTheSpan stops the decoded text at the zero byte,
+	// which is C-string semantics: `$'a\0b'` is `a`, and `$'a\0b'ccc` is
+	// `accc` because the rest of the word was never inside the quotes. bash
+	// and ksh93.
+	DollarSingleNulEndsTheSpan
+	// DollarSingleNulIsAByte keeps it as a character of the text, so
+	// `$'a\0b'` is three bytes and `${#x}` is 3. zsh.
+	DollarSingleNulIsAByte
+	// DollarSingleNulIsDropped writes neither the byte nor an end: `$'a\0b'`
+	// is `ab` at length 2, and the rest of the span follows it. BusyBox ash,
+	// and the reading that had nowhere to go while this was an Answer
+	// (#2276).
+	DollarSingleNulIsDropped
+)
+
+func (p DollarSingleNulPolicy) String() string {
+	switch p {
+	case DollarSingleNulEndsTheSpan:
+		return "ends the span"
+	case DollarSingleNulIsAByte:
+		return "is a byte"
+	case DollarSingleNulIsDropped:
+		return "is dropped"
+	}
+	return "unspecified"
+}
+
+// dollarSingleNul resolves the axis, and only for an escape that really
+// produced a zero byte.
+func (r *Runner) dollarSingleNul() DollarSingleNulPolicy {
+	p := r.sem().DollarSingleNul
+	if p == DollarSingleNulUnspecified {
+		r.errf("%s\n", r.diag().Report(r.name(), r.line,
+			r.unanswered(`a NUL inside $'…'`)))
 		r.status = 2
 		r.unspecified = true
 	}

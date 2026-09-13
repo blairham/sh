@@ -559,8 +559,8 @@ func TestDollarSingleIsAbsent(t *testing.T) {
 	if got := s.DollarSingleUnknownEscape; got != interp.DollarSingleUnknownUnspecified {
 		t.Errorf("DollarSingleUnknownEscape = %v, want unspecified", got)
 	}
-	if got := s.DollarSingleNulTruncates; got != interp.Unspecified {
-		t.Errorf("DollarSingleNulTruncates = %v, want unspecified", got)
+	if got := s.DollarSingleNul; got != interp.DollarSingleNulUnspecified {
+		t.Errorf("DollarSingleNul = %v, want unspecified", got)
 	}
 }
 

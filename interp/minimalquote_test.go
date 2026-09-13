@@ -25,7 +25,7 @@ func minimalQuoting(d *syntax.Dialect) {
 func extendedQuotingSem() Semantics {
 	s := CoreSemantics()
 	s.DollarSingleCaretMeta = Yes
-	s.DollarSingleNulTruncates = No
+	s.DollarSingleNul = DollarSingleNulIsAByte
 	// The round trip below reads its answers back through `eval`, on a line
 	// that is not the first — which is where EvalTextContinuesTheCallersLines
 	// is asked. Either answer does the same thing here, since nothing in the

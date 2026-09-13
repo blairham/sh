@@ -128,11 +128,17 @@ func (r *Runner) patternOf(w *syntax.Word) string {
 	// which `case` and `[[ ]]` share.
 	defer r.inWord(w)()
 	var b strings.Builder
+	// Where a value's text landed in the pattern, which is the only thing
+	// that separates a live `|` from a written one. See markWrittenBars.
+	var fromValue [][2]int
 	spans := r.patternTilde(w, &b)
 	for i, s := range spans {
 		r.expandingSpan = i
 		text, live := r.patternSpan(s)
 		if live {
+			if s.Kind != syntax.Literal {
+				fromValue = append(fromValue, [2]int{b.Len(), b.Len() + len(text)})
+			}
 			b.WriteString(text)
 			continue
 		}
@@ -140,6 +146,79 @@ func (r *Runner) patternOf(w *syntax.Word) string {
 		// re-read as a pattern, are literal: every metacharacter is escaped.
 		b.WriteString(escapePatternMeta(text))
 	}
+	return r.markWrittenBars(b.String(), fromValue)
+}
+
+// markWrittenBars escapes every top-level `|` that the script *wrote*, leaving
+// the ones that arrived in a value live. valueAt names the byte ranges of
+// pattern the values contributed.
+//
+// A top-level bar is an alternation of the whole pattern only where it arrived
+// live, and the source is the whole of what decides it. Measured on zsh 5.9.2,
+// 2026-09-12, with `v=abc`:
+//
+//	L='a|ab'; ${v#a|ab}                  abc — written, so an ordinary character
+//	L='a|ab'; ${v#${~L}}                 bc  — live, so an alternation
+//	L='a|ab'; ${v#$L}                    abc — not live without the flag
+//	setopt globsubst; ${v#$L}            bc  — the option is the same answer
+//	setopt globsubst; ${v#a|ab}          abc — and does not reach a written bar
+//	${v#(a|ab)}                          bc  — a written *group* still splits
+//	w='a|b'; ${w#a|b}                    ''  — the written bar matches itself
+//
+// The last two rows are why this cannot be done by escaping every written bar:
+// inside a group the bar is the group's own separator, and it is written there
+// in the one spelling zsh does read. So the walk is topAlternatives' walk —
+// past a group, past a bracket expression, past an escape — and only a bar
+// standing at depth zero is asked where it came from.
+//
+// A live bar splits the *whole* pattern and not only the value it came in,
+// which is measured rather than assumed: with `N='x|abc'`, `${v#a${~N}}` is
+// empty, so the arms are `ax` and `abc` rather than `a` followed by a group;
+// and with `I='ab|x'`, `${v#${~I}z}` is `c`, so the written `z` joined the
+// second arm. Concatenation would have answered `abc` to both.
+//
+// It runs only where the dialect reads a top-level bar at all. Elsewhere the
+// character is ordinary already, and an escape would be a difference nothing
+// could observe.
+func (r *Runner) markWrittenBars(pattern string, valueAt [][2]int) string {
+	if !strings.Contains(pattern, "|") || !r.dialect().PatternTopLevelAlternation {
+		return pattern
+	}
+	written := func(i int) bool {
+		for _, v := range valueAt {
+			if i >= v[0] && i < v[1] {
+				return false
+			}
+		}
+		return true
+	}
+	var b strings.Builder
+	depth, last := 0, 0
+	for i := 0; i < len(pattern); i++ {
+		switch pattern[i] {
+		case '\\':
+			i++
+		case '(':
+			depth++
+		case ')':
+			depth--
+		case '[':
+			if end, ok := bracketEnd(pattern, i); ok {
+				i = end
+			}
+		case '|':
+			if depth != 0 || !written(i) {
+				continue
+			}
+			b.WriteString(pattern[last:i])
+			b.WriteString(`\|`)
+			last = i + 1
+		}
+	}
+	if last == 0 {
+		return pattern
+	}
+	b.WriteString(pattern[last:])
 	return b.String()
 }
 
@@ -475,9 +554,16 @@ type patternOpts struct {
 	// alternation of the whole pattern, which one dialect does and only for
 	// a bar that arrived live — see matchTopLevel. Separate from group for
 	// the reason group and quantified are separate: the dialect that has
-	// bare groups is not the only one that could have this, and the written
-	// spelling is a parse error in every shell measured, so nothing but a
-	// value can put one here.
+	// bare groups is not the only one that could have this.
+	//
+	// A bar the script *wrote* never reaches here unescaped, and that is
+	// arranged rather than assumed. This comment used to say a written bar
+	// was a parse error in every shell measured, "so nothing but a value can
+	// put one here" — which is false inside a `${…}`, where the braces keep
+	// the bar out of the command grammar and it arrives as pattern text.
+	// zsh reads it as an ordinary character and this read it as an
+	// alternation (#2168). markWrittenBars escapes it at the one place a
+	// pattern is built, so the invariant the matcher relies on holds again.
 	topGroup bool
 	// bad is set when the pattern is one the dialect rejects outright. It is
 	// a field rather than a return value because matchHere recurses, and

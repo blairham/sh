@@ -634,6 +634,46 @@ beside `hasUnescapedMeta` rather than counted by it — the same composition
 where the split is made: at the one entry point every surface's match goes
 through, so a condition, a `case`, a trim and a glob all take it.
 
+#### A written bar is not a live one
+
+The flag was documented here and in the source as reachable *only* from a
+value, on the grounds that the written spelling is a parse error. That is
+true of a condition — `[[ a = a|b ]]` is `parse error near '|'` in zsh and
+here alike — and of a `case` arm, where the bar is the grammar's own
+separator and never reaches the matcher. It is false inside a `${…}`: the
+braces keep the bar out of the command grammar and it arrives as pattern
+text, which is the one place a written bar can be asked about. Measured on
+zsh 5.9.2, 2026-09-12, `v=abc`:
+
+    ${v#a|ab}                            abc   ← written, so an ordinary character
+    L='a|ab'; ${v#${~L}}                 bc    ← live, so an alternation
+    L='a|ab'; ${v#$L}                    abc   ← not live without the flag
+    setopt globsubst; ${v#$L}            bc    ← the option is the same answer
+    setopt globsubst; ${v#a|ab}          abc   ← and does not reach a written bar
+    ${v#(a|ab)}                          bc    ← a written *group* still splits
+    w='a|b'; ${w#a|b}                    ''    ← the written bar matches itself
+
+The last two rows are why this cannot be done by escaping every written bar:
+inside a group the bar is the group's separator, written in the one spelling
+zsh does read. So `markWrittenBars` walks the assembled pattern the way
+`topAlternatives` does — past a group, past a bracket expression, past an
+escape — and escapes only a depth-zero bar that no value contributed.
+
+**A live bar splits the whole pattern rather than the value it arrived in**,
+which is measured rather than assumed and is the reason the escaping is done
+to the *pattern* instead of to each span:
+
+    N='x|abc'; ${v#a${~N}}      empty   ← arms `ax` and `abc`, not `a(x|abc)`
+    I='ab|x';  ${v#${~I}z}      c       ← arms `ab` and `xz`, not `(ab|x)z`
+    E=a; F=ab; ${v#${~E}|${~F}} abc     ← the bar between two live values is written
+
+Read as concatenation the first two would both answer `abc`. The third is
+the control from the other side: two live expansions with a written bar
+between them do not make that bar live.
+
+This implementation gave a written bar the live reading, so `${v#a|ab}`
+trimmed and answered `bc` (#2168).
+
 ### Which arm a longest match takes
 
 `${x##pat}` is spelled "the longest match", and the panel does not agree on

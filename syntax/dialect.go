@@ -2613,13 +2613,19 @@ type Dialect struct {
 	// bracket as an alternation of the whole pattern — `a|b` matching `a` or
 	// `b` rather than the three characters.
 	//
-	// Only reachable from a value, which is why it is a separate flag rather
-	// than a consequence of the one above: the written spelling is a *parse
-	// error* in the one shell that has it, so this can only be read in a
-	// pattern a live expansion supplied — `L='a|b'; [[ a = ${~L} ]]`, the
+	// Read only from a bar a value supplied — `L='a|b'; [[ a = ${~L} ]]`, the
 	// same value under `setopt globsubst`, or a `case` arm expanded from one.
 	// Measured on zsh 5.9.2: all three match, and `[[ a = a|b ]]` is
 	// `parse error near '|'` there and here alike.
+	//
+	// That last row used to be the whole argument — "the written spelling is
+	// a parse error, so only a value can put one here" — and it is false
+	// inside a `${…}`, where the braces keep the bar out of the command
+	// grammar and it reaches the matcher as pattern text. zsh reads a written
+	// bar there as an ordinary character: `v=abc; ${v#a|ab}` is `abc` while
+	// `${v#${~L}}` with the same three characters in a value is `bc`. So the
+	// provenance is arranged rather than implied, by interp's markWrittenBars
+	// (#2168), and this flag still means what it says.
 	//
 	// Separate from PatternAlternation because the two are answered
 	// independently: a dialect with bare groups need not read a bar outside

@@ -14512,6 +14512,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `pattern/a-tilde-at-the-front-of-a-pattern-expands` | `[bare=Y][trim=/sub]` | `[bare=Y][trim=/sub]` | `[bare=Y][trim=/sub]` | `[bare=Y][trim=/sub]` | `[bare=Y][trim=/sub]` | `[bare=Y][trim=/sub]` | `[bare=Y][trim=/sub]` |
 | `pattern/the-text-after-an-expanded-tilde-is-still-a-pattern` | `[tail=Y][star=N][inner=N]` | `[tail=Y][star=N][inner=N]` | `[tail=Y][star=N][inner=N]` | `[tail=Y][star=N][inner=N]` | `[tail=Y][star=N][inner=N]` | `[tail=Y][star=N][inner=N]` | `[tail=Y][star=N][inner=N]` |
 | `pattern/an-escape-before-an-ordinary-character` | `strips~no` | `strips~no` | `strips~no` | `strips~no` | `strips~no` | `keeps~literal` | `strips~no` |
+| `pattern/a-written-bar-is-an-ordinary-character` | `[written=abc][value=abc]` | `[written=abc][value=abc]` | `[written=abc][value=abc]` | `[written=abc][value=abc]` | `[written=bc][value=bc]` | `[written=abc][value=bc]` | `[written=abc][value=abc]` |
+| `pattern/a-live-bar-splits-the-whole-pattern` | `[tail=abc][head=abc]` | `[tail=abc][head=abc]` | `[tail=abc][head=abc]` | `[tail=abc][head=abc]` | `[tail=c][head=]` | `[tail=c][head=]` | `[tail=abc][head=abc]` |
 
 - `pattern/a-tilde-at-the-front-of-a-pattern-expands` — a tilde is expanded before the word becomes a pattern, and every shell in the panel does it — in a `case` arm and in a trim alike. Neither half prints a path, so the row says the same thing on every machine. This implementation expanded the tilde in every *word* position and in none of the pattern ones, so a `case $HOME in ~)` arm was never taken; powerlevel10k tells a global tool version from a local override with exactly `[[ ${files[1]:h} == ~ ]]` and drew five segments the real shell does not (#2181)
   ```sh
@@ -14524,6 +14526,14 @@ grades it and nothing drift-checks it either, for the same reason.
 - `pattern/an-escape-before-an-ordinary-character` — the pattern language's own answer, asked the only way it can be: quote removal spends an escape written in the source before the matcher sees it, so a `case` pattern spelled `bet\a` is `beta` in all six and says nothing. A *substituted* pattern asks it — five shells match the result of an expansion as a pattern, and the sixth does under the option this line sets. A backslash before a character that needed no escaping is spent in five and kept in zsh, where the pattern is five characters
   ```sh
   setopt globsubst 2>/dev/null; p='bet\a'; case beta in $p) echo strips;; *) echo keeps;; esac; case 'bet\a' in $p) echo literal;; *) echo no;; esac
+  ```
+- `pattern/a-written-bar-is-an-ordinary-character` — where a bar came from is what decides it in zsh, and the braces are what let the question be asked at all: a `|` is a parse error in a condition and a grammar separator in a `case`, so a parameter expansion's operand is the one place a *written* bar reaches the matcher. The two columns hold the same three characters and part on provenance — zsh trims the value's bar under the option this line sets and leaves the written one alone. Four shells read neither as an alternation. ksh93 is the column that says provenance is zsh's rule rather than the rule: it answers `bc` to **both**, so its pattern language has a top-level bar outright, which this implementation gives no dialect and which is not what the zsh reading is. This gave the written bar zsh's live reading and answered `bc` to the first column there (#2168)
+  ```sh
+  setopt globsubst 2>/dev/null; v=abc; L='a|ab'; printf "[written=%s]" "${v#a|ab}"; printf "[value=%s]" "${v#$L}"; echo
+  ```
+- `pattern/a-live-bar-splits-the-whole-pattern` — the arms of a live bar are not confined to the value it arrived in — the written text on either side joins the arm beside it. `ab|x` followed by a written `z` is `ab` or `xz` rather than `(ab|x)z`, so the first column trims `ab`; a written `a` in front of `x|abc` is `ax` or `abc` rather than `a(x|abc)`, so the second matches the whole subject and comes back empty. Read as concatenation both would answer `abc`, which is what the five shells without the reading answer
+  ```sh
+  setopt globsubst 2>/dev/null; v=abc; I='ab|x'; N='x|abc'; printf "[tail=%s]" "${v#${I}z}"; printf "[head=%s]" "${v#a$N}"; echo
   ```
 
 ## substitutions

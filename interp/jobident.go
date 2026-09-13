@@ -57,12 +57,19 @@ const inventedJobIdentBase = 1 << 30
 // inventJobIdent is the next such number for this shell.
 //
 // **Per shell rather than per process, and shared down the clone chain.** A
-// counter of one shell's own is what makes the value reproducible: the same
-// script run twice hands out the same numbers, where a process-wide counter
-// would hand out different ones on the second run and put a value in the
-// output that is not the same twice. This repository forbids exactly that —
-// see interp/printbehaviour_test.go, which runs a case and then runs its
-// printed form and compares, and which a drifting counter failed.
+// counter of one shell's own is what makes the value reproducible: a script
+// that starts its jobs one after another hands out the same numbers every
+// run, where a process-wide counter hands out different ones on the second
+// run and puts a value in the output that is not the same twice. This
+// repository forbids exactly that — see interp/printbehaviour_test.go, which
+// runs a case and then runs its printed form and compares, and which a
+// drifting counter failed.
+//
+// Two jobs started *concurrently* — a background job that itself backgrounds
+// something — draw in whichever order the scheduler gives, so they are
+// distinct rather than fixed. That is as much as a real shell offers for the
+// same shape, and it is why nothing prints the value: the corpus compares
+// `$!` readings against each other and never writes one down.
 //
 // Shared down the chain because that is where a collision could come from: a
 // subshell inherits its parent's job table, so a number it invented for a job

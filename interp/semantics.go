@@ -2168,7 +2168,7 @@ type Semantics struct {
 	// the whole pass held, and ksh93 is the one dialect that writes through:
 	// holding it would put every other complaint in the pass *after* the
 	// output it currently precedes, which is a live behavior traded for a
-	// dead one. Filed separately.
+	// dead one. Filed as #2664.
 	PrintfStarWithoutOperandIsRefused Answer
 
 	// PrintfStarComplaintCostsTheStatus lets a complaint about the operand a

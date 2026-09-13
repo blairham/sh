@@ -12204,7 +12204,8 @@ mark, which is why `printf 'XY%s%*.*dZ' q 3` rewinds past the `%s` to
 `XY`. Recorded rather than implemented: rewinding needs the whole pass
 held, and ksh93 is the one dialect that writes through, so holding it
 would put every other complaint in the pass *after* the output it
-currently precedes — a live behavior traded for a dead one.
+currently precedes — a live behavior traded for a dead one. Filed as
+#2664.
 
 **`PrintfStarComplaintCostsTheStatus`** — bash yes · dash yes · ksh93 yes · zsh yes · ash **no**
 

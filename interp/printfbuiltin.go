@@ -23,11 +23,18 @@ import (
 // *this* shell quotes, and the diagnostics have to be the shell's own.
 //
 // Most of it is unanimous, which is worth saying because the divergences are
-// what the rest of this file is about. All four agree that the format is
-// *reused* until the arguments run out, that a missing argument is the empty
-// string or zero rather than an error, that `%b` expands escapes in its
+// what the rest of this file is about. All of them agree that the format is
+// *reused* until the arguments run out, that `%b` expands escapes in its
 // argument and `%s` does not, that escapes in the format itself are always
-// expanded, and on `%c`, widths, precisions, `%%` and octal escapes.
+// expanded, and on `%c`, widths — including the `*` that takes one from the
+// operand list (#2646) — precisions, `%%` and octal escapes.
+//
+// A missing argument is the empty string or zero rather than an error in four
+// of the five, and that sentence used to say "all". ash is the fifth: it
+// reads a numeric conversion with nothing left as a conversion of the empty
+// string, complaint and all (#2648). The paragraph above was written against
+// a four-shell panel and the fifth column is what found it, which is what
+// that column is for.
 //
 // Four things they do not agree on, and each is an axis or a wording rather
 // than a branch here:

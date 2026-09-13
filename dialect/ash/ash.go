@@ -727,6 +727,19 @@ func Semantics() interp.Semantics {
 	// bash's side of the split (#2272).
 	s.ArithNegativeExponentIsError = interp.Yes
 
+	// The right operand of `&&` and `||` is evaluated even when the left has
+	// already decided the answer, so an assignment written there takes
+	// effect: `x=0; $((0 && (x=9)))` leaves x at 9 and `y=0; $((1 || (y=8)))`
+	// leaves y at 8. The value is still the operator's — 0 and 1 — because it
+	// cannot be anything else.
+	//
+	// The sole holdout in the panel, and the first thing the ash column of
+	// `make suite` found on the day it could run at all (#2605). Its
+	// conditional does *not* do this — `w=5; $((0 ? (w=1) : 2))` leaves w at
+	// 5 — so this is a fact about the two logical operators rather than about
+	// this shell evaluating everything.
+	s.ArithShortCircuitEvaluatesTheRightOperand = interp.Yes
+
 	// A declaration does not shadow a readonly: `readonly x=1; f() { local
 	// x=2; }; f` is `local: line 1: x: is read only` and the script ends,
 	// which is dash's and bash's answer rather than ksh93's and zsh's

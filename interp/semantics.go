@@ -1071,6 +1071,68 @@ type Semantics struct {
 	// whose variable held a stale name got a plausible number where the real
 	// shell had stopped.
 	ArithRecursedNameMustBeSet Answer
+	// ArithShortCircuitEvaluatesTheRightOperand runs the right operand of
+	// `&&` or `||` even when the left one has already decided the answer, so
+	// an assignment or an increment written there takes effect anyway.
+	//
+	// Yes in BusyBox ash alone. Measured 2026-09-13 over the whole panel,
+	// BusyBox v1.37.0 through the container route `make oracle` uses and the
+	// rest the binaries on this machine:
+	//
+	//	                        x=0; $((0 && (x=9)))   $((0 && (1/0)))
+	//	BusyBox ash 1.37.0      x is 9                 divide by zero
+	//	bash 5.3.15             x is 0                 0
+	//	bash-as-`sh`            x is 0                 0
+	//	bash 3.2.57             x is 0                 division by 0
+	//	ksh93u+                 x is 0                 0
+	//	zsh 5.9.2               x is 0                 0
+	//	dash                    x is 0                 0
+	//
+	// The second column is what makes this one question rather than two. The
+	// *value* of the expression cannot tell the two readings apart — `0 &&
+	// anything` is 0 and `1 || anything` is 1 whatever the right operand
+	// holds, so both readings agree on it and every column prints the same
+	// number, 0 and 1 as the operator requires. What parts them is whether
+	// the operand is evaluated at all, and the division by zero says it is:
+	// the shell that assigns also errors.
+	//
+	// bash 3.2 is a **third** reading and the axis cannot hold it: it raises
+	// the error and performs no assignment, so its decided operand is
+	// evaluated for what can fail and not for what can last. Nothing in this
+	// tree claims that shell — the bash preset is 5.3's, and bash 3.2 is a
+	// panel column and not a dialect — so the axis stays two-valued and this
+	// paragraph is the note a dialect for it would start from, rather than a
+	// value no preset holds.
+	//
+	// Neighbours measured with it, because a one-column divergence about
+	// evaluation order could easily have been a rule about arithmetic:
+	//
+	//	`||` moves with `&&`             `y=0; $((1 || (y=8)))` is 8 there
+	//	nesting is not a limit           `$((0 && (1 && (x=1)) && (y=2))))`
+	//	                                 leaves both set
+	//	`++`/`--` move with `=`          `$((0 && (x++)))` leaves x at 1
+	//	the conditional does **not**     `w=5; $((0 ? (w=1) : 2))` leaves w
+	//	                                 at 5 in every column, and an `&&`
+	//	                                 inside the skipped arm is skipped
+	//	                                 with it
+	//	`,` is not short-circuiting      every shell with it evaluates both
+	//
+	// So the axis is about the two logical operators and not about "this
+	// shell evaluates everything": its conditional short-circuits like
+	// everyone else's, and a `&&` inside a branch the conditional dropped
+	// never runs.
+	//
+	// Asked only where the two readings can be told apart — an operand that
+	// carries an assignment or an increment. `$((0 && 1))` and `$((a || b))`
+	// reach no question, so an unanswered vector runs them as every shell
+	// does rather than refusing the commonest arithmetic there is. That is
+	// the rule in docs/spec/semantics.md: ask at the disagreement, not on the
+	// path to it.
+	//
+	// Found by the ash column's first run of `make suite` (#2605), which is
+	// worth recording: no row of the 3884-case corpus asked it, because every
+	// one of them was written by somebody who already knew the answer.
+	ArithShortCircuitEvaluatesTheRightOperand Answer
 	// ArithSubscriptSkippedWhenNameUnset looks the name up before it reads
 	// the brackets, and answers zero for a name that is not there without
 	// evaluating the subscript at all. Yes in zsh alone: measured 2026-09-10,
@@ -10704,6 +10766,12 @@ func PosixSemantics() Semantics {
 		// requires only "greater than zero", which decides nothing.
 		FatalErrorStatusIsOne:  No,
 		ArithNameValueRecurses: No,
+		// 2.6.4 hands arithmetic to the ISO C integer expressions, where
+		// `&&` and `||` are the two operators that guarantee the right
+		// operand is not evaluated when the left has decided the result. So
+		// the standard's answer is No, and it is five of the panel's seven
+		// columns.
+		ArithShortCircuitEvaluatesTheRightOperand: No,
 		// ArithRecursedNameMustBeSet is deliberately left unanswered: with
 		// no recursion there is no name below the top for it to be asked
 		// about, so an answer here would be a value nothing can measure.

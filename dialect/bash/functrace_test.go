@@ -67,9 +67,20 @@ func TestFunctraceCarriesTheDebugTrapIntoACall(t *testing.T) {
 	}{
 		// The bound this shell keeps with the option off: one D, for `f`.
 		{"off", `f() { echo in-f; }; trap 'echo D' DEBUG; f`, "D\nin-f\n"},
-		{"by name", `f() { echo in-f; }; set -o functrace; trap 'echo D' DEBUG; f`, "D\nD\nin-f\n"},
-		{"by letter", `f() { echo in-f; }; set -T; trap 'echo D' DEBUG; f`, "D\nD\nin-f\n"},
-		{"by extdebug", `f() { echo in-f; }; shopt -s extdebug; trap 'echo D' DEBUG; f`, "D\nD\nin-f\n"},
+		// **Three** D lines with the option on, not two, and the three rows
+		// below said two until #2437: one for the call, one more once the
+		// frame is entered, and one for the body's own command. Measured on
+		// bash 5.3.15, 2026-09-12 — these pinned our own answer as bash's,
+		// which is what makes a passing test worth re-measuring. See
+		// Semantics.DebugTrapRefiresOnEnteringAFunction, and the row below
+		// that parts the extra firing from a miscounted body.
+		{"by name", `f() { echo in-f; }; set -o functrace; trap 'echo D' DEBUG; f`, "D\nD\nD\nin-f\n"},
+		{"by letter", `f() { echo in-f; }; set -T; trap 'echo D' DEBUG; f`, "D\nD\nD\nin-f\n"},
+		{"by extdebug", `f() { echo in-f; }; shopt -s extdebug; trap 'echo D' DEBUG; f`, "D\nD\nD\nin-f\n"},
+		// Once per frame entered, which is the row that parts the extra
+		// firing from a body counted twice: five D lines for three commands,
+		// exactly as bash 5.3.15 writes them.
+		{"once for each frame entered", `set -T; g() { echo g; }; f() { g; }; trap 'echo D' DEBUG; f`, "D\nD\nD\nD\nD\ng\n"},
 		// A subshell is the other boundary the option crosses, and the half
 		// a function-only implementation would pass the rows above without.
 		// The group itself fires nothing in either state.

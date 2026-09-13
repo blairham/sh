@@ -1599,6 +1599,7 @@ func Semantics() interp.Semantics {
 	s.ErrTrapRunsInsideFunctions = interp.Yes
 	s.ErrTrapRunsInSubshells = interp.Yes
 	s.DebugTrapRunsInsideCalls = interp.Yes
+	s.DebugTrapRefiresOnEnteringAFunction = interp.No
 	s.DebugTrapRunsInSubshells = interp.Yes
 	// The listing least is kept of: `(trap)` and `$(trap)` show nothing the
 	// parent had — not even an ignored signal, though it stays ignored in

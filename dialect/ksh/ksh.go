@@ -1055,6 +1055,7 @@ func Semantics() interp.Semantics {
 	s.ErrTrapRunsInsideFunctions = interp.Yes
 	s.ErrTrapRunsInSubshells = interp.No
 	s.DebugTrapRunsInsideCalls = interp.Yes
+	s.DebugTrapRefiresOnEnteringAFunction = interp.No
 	s.DebugTrapRunsInSubshells = interp.Yes
 	// `(trap)` and `$(trap)` still list the parent's traps, EXIT included —
 	// measured, and the working state is still reset: `trap 'echo x' USR1;

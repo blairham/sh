@@ -198,6 +198,11 @@ func TestSemantics(t *testing.T) {
 		{"ErrTrapRunsInSubshells", s.ErrTrapRunsInSubshells, interp.No},
 		{"DebugTrapRunsInsideCalls", s.DebugTrapRunsInsideCalls, interp.Yes},
 		{"DebugTrapRunsInSubshells", s.DebugTrapRunsInSubshells, interp.Yes},
+		// And once per command, not twice for a call: the nested snippet
+		// `trap "echo D" DEBUG; g(){ echo g; }; f(){ g; }; f` writes three
+		// D lines here where bash writes five (#2437). Measured on ksh93,
+		// 2026-09-12.
+		{"DebugTrapRefiresOnEnteringAFunction", s.DebugTrapRefiresOnEnteringAFunction, interp.No},
 		// `(trap)` and `$(trap)` keep the parent's listing, EXIT included;
 		// a pipeline element and a background job list nothing the parent
 		// had.

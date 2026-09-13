@@ -874,6 +874,22 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	// function set one of its own.
 	outerTrap, outerDepth := r.exitTrap, r.trapDepth
 
+	// One dialect fires the DEBUG trap again here: once for the call where
+	// it was written, and once more with the frame entered — see
+	// Semantics.DebugTrapRefiresOnEnteringAFunction. It goes through the
+	// same gating as every other firing, so with the trap kept out of calls
+	// there is nothing here to double.
+	//
+	// The location is the *body's* first line for the duration, which is
+	// measured and not an artifact of where this sits: with the definition
+	// spread over two lines bash reports the `{` and not the `f()` above it.
+	// Put back afterwards, because a body whose commands never run would
+	// otherwise leave the line moved.
+	enteredAt := r.line
+	r.line = int(fn.Body.Pos().Line)
+	r.runDebugTrapOnFunctionEntry(ctx)
+	r.line = enteredAt
+
 	err := r.command(ctx, fn.Body)
 	// Whatever arrived while the body's *last* command ran, handled before
 	// the call unwinds. stmt drains between commands, which leaves the last

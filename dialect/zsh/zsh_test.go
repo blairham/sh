@@ -258,6 +258,11 @@ func TestSemantics(t *testing.T) {
 		{"ErrTrapRunsInSubshells", s.ErrTrapRunsInSubshells, interp.Yes},
 		{"DebugTrapRunsInsideCalls", s.DebugTrapRunsInsideCalls, interp.Yes},
 		{"DebugTrapRunsInSubshells", s.DebugTrapRunsInSubshells, interp.Yes},
+		// And once per command, not twice for a call: the nested snippet
+		// `trap "echo D" DEBUG; g(){ echo g; }; f(){ g; }; f` writes three
+		// D lines here where bash writes five (#2437). Measured on zsh 5.9.2,
+		// 2026-09-12.
+		{"DebugTrapRefiresOnEnteringAFunction", s.DebugTrapRefiresOnEnteringAFunction, interp.No},
 		// The subshell listing shows nothing inherited — not even an ignore
 		// that is still working — while a pipeline element keeps the signal
 		// listing and still drops the EXIT trap from it.

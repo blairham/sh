@@ -178,6 +178,21 @@ func (r *Runner) runErrTrap(ctx context.Context) {
 // runs no DEBUG for the commands of a dotted file and still judges ERR for
 // a failure inside one.
 func (r *Runner) runDebugTrap(ctx context.Context) {
+	r.fireDebugTrap(ctx, false)
+}
+
+// runDebugTrapOnFunctionEntry is the *second* firing one dialect makes for a
+// function call — see Semantics.DebugTrapRefiresOnEnteringAFunction.
+//
+// The axis is asked here rather than at the call site so that it is asked
+// only where a firing would otherwise happen: a shell that keeps the trap out
+// of calls altogether never reaches this question, and the two shells with no
+// DEBUG condition at all are never made to answer it.
+func (r *Runner) runDebugTrapOnFunctionEntry(ctx context.Context) {
+	r.fireDebugTrap(ctx, true)
+}
+
+func (r *Runner) fireDebugTrap(ctx context.Context, entering bool) {
 	body := r.debugTrap
 	if body == nil || *body == "" || r.inDebugTrap {
 		return
@@ -193,6 +208,10 @@ func (r *Runner) runDebugTrap(ctx context.Context) {
 	// puts a second D ahead of the `echo s` inside.
 	if r.debugTrapInherited && !r.functrace &&
 		!r.ask(r.sem().DebugTrapRunsInSubshells, "the DEBUG trap inside a subshell") {
+		return
+	}
+	if entering && !r.ask(r.sem().DebugTrapRefiresOnEnteringAFunction,
+		"the DEBUG trap firing again on entering a function") {
 		return
 	}
 	r.inDebugTrap = true

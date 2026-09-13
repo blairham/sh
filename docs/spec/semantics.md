@@ -10686,6 +10686,32 @@ anywhere else.
 
 ### the ERR, DEBUG, RETURN and EXIT conditions
 
+**`DebugTrapRefiresOnEnteringAFunction`** — bash yes · dash unspecified · ksh93 no · zsh no
+
+Fires the DEBUG trap a *second* time for a function call: once where the
+call was written, and again once the frame has been entered, with the
+call word still the current command. bash alone, and only where the trap
+runs inside the call at all — so in practice only under `functrace`,
+which is what lets it in there. ksh93 and zsh run the trap inside calls
+with nothing asked and still fire it once.
+
+Measured on bash 5.3.15, 2026-09-12, with the action printing
+`$BASH_COMMAND`: `set -T; g(){ echo g; }; f(){ g; }; trap "echo
+D:$BASH_COMMAND" DEBUG; f` writes five lines for three commands —
+`D:f`, `D:f`, `D:g`, `D:g`, `D:echo g`. A **sourced** file does not
+double: `. ./lib.sh` writes one D for the `.` and one per line inside it,
+so this is the function boundary and not every borrowed text.
+
+The second firing's `$LINENO` is the line the function's **body** begins
+on rather than the caller's or the one the name was written on, which
+takes a definition spread over two lines to see: with `f()` on line 1,
+`{` on line 2 and the call on line 7, bash writes `D=7`, `D=2`, `D=3`.
+
+Three rows of `dialect/bash`'s own functrace test pinned two D lines for
+a traced call — our answer, written down as bash's — until this axis was
+measured. A test that passes is not evidence that what it pins was ever
+read off the shell it names.
+
 **`DebugTrapRunsInSubshells`** — bash no · dash unspecified · ksh93 yes · zsh yes
 
 Fires the DEBUG trap inside a subshell or a command substitution. ksh93

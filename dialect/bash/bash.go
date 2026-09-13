@@ -987,6 +987,7 @@ func Semantics() interp.Semantics {
 	s.ErrTrapRunsInsideFunctions = interp.No
 	s.ErrTrapRunsInSubshells = interp.No
 	s.DebugTrapRunsInsideCalls = interp.No
+	s.DebugTrapRefiresOnEnteringAFunction = interp.Yes
 	s.DebugTrapRunsInSubshells = interp.No
 	// The shell that keeps the parent's trap listing across every boundary
 	// but a process substitution — `(trap)`, `$(trap)`, `trap | cat` and

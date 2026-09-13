@@ -3,20 +3,26 @@
 
 package interp
 
+import "github.com/blairham/sh/internal/tty"
+
 // `$COLUMNS` and `$LINES` as parameters of the shell rather than as variables
 // something assigns.
 //
 // The distinction is the whole of this file, and it is what the panel is split
 // on. Measured 2026-09-11, all six columns, each through a pseudo-terminal
-// opened 100x37 and again on a pipe:
+// opened 100x37 and again on a pipe; the middle column added 2026-09-13, on a
+// pseudo-terminal opened with *no* window size, which answers the ioctl 0x0:
 //
-//	                  under a pty        no terminal
-//	zsh 5.9.2         100 / 37           0 / 0            `-c`, no `-i` needed
-//	bash 5.3.15       100 / 37 with -i   unset            interactive only
-//	bash-as-sh        100 / 37 with -i   unset            the same build
-//	bash 3.2.57       unset even with -i unset            `checkwinsize` is off
-//	ksh93             unset              unset
-//	dash              unset              unset
+//	                  under a pty        a pty of no size   no terminal
+//	zsh 5.9.2         100 / 37           80 / 24            0 / 0
+//	bash 5.3.15       100 / 37 with -i   unset              unset
+//	bash-as-sh        100 / 37 with -i   unset              the same build
+//	bash 3.2.57       unset even with -i unset              `checkwinsize` off
+//	ksh93             unset              unset              unset
+//	dash              unset              unset              unset
+//
+// zsh needs no `-i` for any of it, which is the half that separates its
+// reading from bash's.
 //
 // So the *variable* half of this is already answered elsewhere and is bash's:
 // Runner.TracksWindowSize is the permission, repl.trackWindowSize does the
@@ -36,7 +42,7 @@ package interp
 // string cannot be `integer-special`, cannot be 0 where there is no window,
 // and cannot follow a window that changes while a script runs.
 //
-// # The four answers, in the order they are asked
+// # The five answers, in the order they are asked
 //
 // Each of the two names answers from the first of these that has something to
 // say, and the order is measured rather than chosen:
@@ -49,10 +55,19 @@ package interp
 //     `integer-export-special`, so the inherited value is kept and stays
 //     exported. With a terminal the terminal wins — the same line under a
 //     100-column pty is 100.
-//  4. **Nought**, which is zsh's answer for a shell that has no window and
-//     was told nothing. It is a value and not an absence, and the difference
-//     is visible: `${COLUMNS-UNSET}` is `0` there and `UNSET` in the five
-//     columns without the parameter.
+//  4. **The classic 80 by 24**, where there is a terminal and it will not say
+//     how big it is. A pseudo-terminal created without a window size answers
+//     the ioctl with 0x0 — `pty.fork()` does exactly that — and zsh reports
+//     `COLUMNS=80 LINES=24` there, with `typeset -p COLUMNS` writing
+//     `typeset -i10 COLUMNS=80`. Measured 2026-09-13.
+//  5. **Nought**, which is zsh's answer for a shell that has no window at all
+//     and was told nothing. It is a value and not an absence, and the
+//     difference is visible: `${COLUMNS-UNSET}` is `0` there and `UNSET` in
+//     the five columns without the parameter.
+//
+// Four and five are the two readings of a zero and they are not the same
+// answer: on a pipe the same shell reports 0. Taking the ioctl's 0 literally
+// is what silently disabled every piece of wrapping arithmetic (#2489).
 //
 // # What `unset` does
 //
@@ -132,7 +147,7 @@ func (r *Runner) ProvideWindowSize() {
 // already made. `COLUMNS=13; print $COLUMNS` is 13 in zsh, and settling late
 // is what makes it 13 here.
 func (r *Runner) windowSizeValue(name string) string {
-	rows, cols := r.terminalSize()
+	rows, cols, held := r.terminalSizeHeld()
 	switch {
 	case !r.windowSettled:
 		r.windowSettled = true
@@ -154,9 +169,30 @@ func (r *Runner) windowSizeValue(name string) string {
 	}
 	// A shell with no window keeps what it was handed, which is how a script
 	// run from one that had a terminal still knows how wide that terminal
-	// was. Measured: `COLUMNS=55 zsh -f -c 'print $COLUMNS'` is 55.
+	// was. Measured: `COLUMNS=55 zsh -f -c 'print $COLUMNS'` is 55, and it is
+	// still 55 under a terminal that will not say its size, so the
+	// environment stands *in front of* the fallback below and not behind it.
 	if v, ok := r.inheritedValue(name); ok {
 		return v
+	}
+	// A terminal that is there and will not say how big it is, which is the
+	// fifth answer and is not the fourth. Measured 2026-09-13 on a
+	// pseudo-terminal created without a window size — what `pty.fork()`
+	// produces, and the window between `forkpty` and the parent's
+	// `TIOCSWINSZ` — zsh 5.9.2 reports `COLUMNS=80 LINES=24` where the ioctl
+	// says 0x0, and `typeset -p COLUMNS` writes `typeset -i10 COLUMNS=80`. On
+	// a pipe the same shell reports 0, so the fallback is about an unhelpful
+	// terminal rather than about the absence of one.
+	//
+	// Nothing else in the panel has an opinion here, because nothing else has
+	// the parameter: bash under `-i` on the same 0x0 pseudo-terminal leaves
+	// both names *unset*, which is what its `checkwinsize` does at every size
+	// it cannot read.
+	if held {
+		if name == "LINES" {
+			return itoa(tty.FallbackRows)
+		}
+		return itoa(tty.FallbackCols)
 	}
 	return "0"
 }

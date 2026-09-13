@@ -214,3 +214,43 @@ func TestWithoutTheCapabilityNeitherNameExists(t *testing.T) {
 		t.Errorf("got %q, want %q — only the dialect that asks for these has them", out, want)
 	}
 }
+
+// A terminal that is there and will not say how big it is is the classic
+// 80x24, and that is not the same answer as no terminal at all.
+//
+// A pseudo-terminal created without a window size answers `TIOCGWINSZ` with
+// 0x0 — what `pty.fork()` produces, what some CI runners hand a job, and what
+// sits in the window between `forkpty` and the parent's `TIOCSWINSZ`.
+// Measured 2026-09-13 on zsh 5.9.2 through exactly that: `COLUMNS=80
+// LINES=24`, and `typeset -p COLUMNS` writes `typeset -i10 COLUMNS=80`. The
+// same shell on a pipe reports 0, which is the row above.
+//
+// Taking the 0 literally is silent in the worst direction: every wrapping
+// calculation still produces a number, and the redraw simply behaves as though
+// nothing were known about the terminal (#2489).
+func TestATerminalThatWillNotSayItsSizeIsEightyByTwentyFour(t *testing.T) {
+	r, resize := windowShell(t, 0, 0)
+	if got, want := say(t, r, `echo "[$COLUMNS][$LINES]"`), "[80][24]\n"; got != want {
+		t.Errorf("got %q, want %q — a terminal answering 0x0 is not a shell without one", got, want)
+	}
+	// And it is a fallback rather than a reading, so a size arriving later
+	// still wins: this is the `forkpty` window closing.
+	resize(37, 100)
+	if got, want := say(t, r, `echo "[$COLUMNS][$LINES]"`), "[100][37]\n"; got != want {
+		t.Errorf("after the size arrives: got %q, want %q", got, want)
+	}
+}
+
+// And what was inherited stands in front of the fallback, not behind it.
+//
+// Measured on the same 0x0 pseudo-terminal: `COLUMNS=55 LINES=9 zsh -f -c
+// 'print $COLUMNS $LINES'` answers `55 9` rather than `80 24`. The order is
+// what makes the fallback a last resort — a shell launched from one that knew
+// its width still knows it.
+func TestAnInheritedSizeBeatsTheFallbackForATerminalThatWillNotSay(t *testing.T) {
+	r, _ := windowShell(t, 0, 0)
+	r.Env = append(r.Env, "COLUMNS=55")
+	if got, want := say(t, r, `echo "[$COLUMNS][$LINES]"`), "[55][24]\n"; got != want {
+		t.Errorf("got %q, want %q — the environment answers first and the fallback fills the rest", got, want)
+	}
+}

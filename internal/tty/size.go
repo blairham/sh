@@ -46,3 +46,30 @@ func Size(f *os.File) (rows, cols int) {
 	}
 	return rows, cols
 }
+
+// The size a terminal that will not say its own is worth.
+//
+// The classic 80x24, which is what the panel's most divergent member falls
+// back to and what every line editor has drawn against since VT100s: measured
+// 2026-09-13 on a pseudo-terminal created without a window size — the shape
+// `pty.fork()` produces, and the window between `forkpty` and the parent's
+// `TIOCSWINSZ` — zsh 5.9.2 reports `COLUMNS=80 LINES=24` where the ioctl
+// answers 0x0.
+//
+// It is **not** what a shell with no terminal at all is worth. The same zsh on
+// a pipe reports 0, and bash leaves both names unset either way, so the
+// fallback is a statement about an unhelpful terminal rather than about the
+// absence of one — which is why SizeOrFallback asks IsTerminal rather than
+// reading a zero as its own answer.
+const (
+	FallbackRows = 24
+	FallbackCols = 80
+)
+
+// There is no SizeOrFallback here, and that is deliberate. Every caller has
+// something of its own to try before the fallback and they do not agree about
+// what: the shell reads an inherited `$COLUMNS` first, and the line editor has
+// nothing else at all. A helper applying the fallback for them would stand in
+// front of the answer one of them already has, so each asks Size and
+// IsTerminal and decides the order itself — see
+// interp.Runner.windowSizeValue, where the environment comes between the two.

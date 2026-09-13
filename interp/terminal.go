@@ -190,11 +190,27 @@ func (r *Runner) terminalTest(operand string) (answer, isNumber bool) {
 // not make. See TestTheTerminalIsRememberedOnceItHasBeenSeen, which asserts
 // the claim and records the limit.
 func (r *Runner) terminalSize() (rows, cols int) {
+	rows, cols, _ = r.terminalSizeHeld()
+	return rows, cols
+}
+
+// terminalSizeHeld is the same answer with the third fact a caller sometimes
+// needs: whether there was a terminal to ask.
+//
+// Zeroes mean two different things and the difference is measured. A shell on
+// a pipe has no terminal and zsh reports `0`; a shell holding a terminal that
+// will not say its size — a pseudo-terminal created without one — has a
+// terminal and zsh reports the classic 80x24. Folding the two into one pair of
+// zeroes is what made this shell take the 0 literally (#2489), so the fact is
+// returned rather than reconstructed by a second IsTerminal call that could
+// answer differently a moment later.
+func (r *Runner) terminalSizeHeld() (rows, cols int, held bool) {
 	f, held := r.terminal()
 	if !held {
-		return 0, 0
+		return 0, 0, false
 	}
-	return tty.Size(f)
+	rows, cols = tty.Size(f)
+	return rows, cols, true
 }
 
 // terminal is the terminal this shell holds, and false where it holds none.

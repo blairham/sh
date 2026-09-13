@@ -14,7 +14,10 @@ import (
 // `./zsh` are the same shell reached by two roads — see the same file under
 // dialect/bash for what went wrong when they were not.
 func Prelude() string {
-	return identity + nullCommands + "WORDCHARS='" + wordCharacters + "'\n" + functions
+	return identity + nullCommands +
+		"WORDCHARS='" + wordCharacters + "'\n" +
+		historyCharactersParameter + "='" + historyCharacters + "'\n" +
+		functions
 }
 
 // The directory stack, as shell. The same machinery the bash dialect's

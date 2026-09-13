@@ -294,3 +294,67 @@ meaning of its own: measured,
 `ignoredups` does. That is not implemented — a pattern of `&` is matched
 literally here — because it is a second spelling of a rule the same
 variable's neighbor already has.
+
+## `$histchars`: three characters, and what an empty one costs
+
+zsh keeps the characters history expansion is spelled with in a parameter
+a script can read, under two names for one value. Measured on zsh 5.9.2
+with no startup files:
+
+| | |
+| --- | --- |
+| `$histchars` | `!^#`, and `${(t)histchars}` is `scalar-special` |
+| `${histchars[1]}` | `!` — history expansion |
+| `${histchars[2]}` | `^` — quick substitution |
+| `${histchars[3]}` | `#` — the comment character |
+| `$HISTCHARS` | the same parameter under a second name |
+
+A write through either name is read back through both, it takes `local`
+inside a function and the outer value returns with the frame, `typeset -x`
+exports it, and `typeset -p` reports an ordinary scalar.
+
+**zsh is the only shell in the panel that ships it set.** bash recognizes the
+name — the manual documents `histchars` as the characters history expansion is
+spelled with, and an assignment to it is honored — but a fresh bash leaves it
+**empty**, interactive or not, measured on 5.3.15 and on 3.2.57. ksh93 and
+dash read it as an ordinary unset name. So the value is zsh's answer rather
+than the panel's, and it is kept in this dialect rather than in the core.
+
+The value and the two spellings are what this shell keeps. It performs no
+history expansion, so nothing here *acts* on the characters — the parameter
+is what a script reads, and reading it is the whole of what the readers on
+this machine do with it.
+
+**Two properties are measured and not modeled**, written down here so that
+neither later reads as untested. An assignment is truncated to three
+characters in zsh — `histchars=abcdef` leaves `abc` — where the whole string
+stays here. And a non-ASCII assignment is refused there, with `HISTCHARS can
+only contain ASCII characters` and the old value standing, where it is taken
+here. Both are only visible to a script that assigns something this parameter
+means nothing with.
+
+### Why an empty value is not a small divergence
+
+This shell had the parameter absent, which reads as the empty string, and
+that is worse than it sounds because **every reader reads it a character at
+a time and uses the character as the left end of a pattern**. An empty
+`${histchars[1]}` does not make `[[ $word = ${histchars[1]}* ]]` ask about
+nothing; it makes it `[[ $word = * ]]`, which is true of every word. The test
+does not error, the parameter is not unset, and nothing anywhere is in a
+state a guard could notice — the pattern simply stops discriminating.
+
+Measured 2026-09-12 against the syntax highlighter installed on this machine,
+on `echo hello | grep x`: it asks that exact question to find a history
+expansion, so with the parameter empty every argument of two or more
+characters was styled as one. Real zsh produced two colored runs for that
+line and this shell produced three. The single-character `x` was spared only
+by the second half of the test — `&& -n ${word[2]}` — which is what a
+degenerate pattern looks like from the outside: not an error, but an
+exception that makes no sense.
+
+The same reader asks about `${histchars[3]}` one line further on to find a
+comment, so the same emptiness classified a whole line as one whenever the
+comment-aware tokenizer was chosen. That was the symptom #2536 was filed for,
+and fixing the *option* that chooses that tokenizer (#2516, #2530) uncovered
+this rather than completing it — the two faults had one appearance and no
+connection.

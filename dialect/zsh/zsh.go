@@ -3207,6 +3207,10 @@ func Apply(r *interp.Runner) {
 	// And the four scalar pairs that are one parameter under two names —
 	// see promptnames.go, and the theme that could not draw without them.
 	registerPromptNames(r)
+	// A fifth pair, and the one whose *value* was the fault rather than the
+	// tie: `histchars` and `HISTCHARS` — see histchars.go, and the pattern
+	// that matched every word once the parameter behind it was empty.
+	registerHistoryCharacters(r)
 	if dot, ok := r.Builtin("."); ok {
 		// The same function under a second name — and *not* a synonym, which
 		// is the one row this shell does not share with bash. `source` looks

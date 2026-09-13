@@ -16621,6 +16621,21 @@ echo after`,
 		Why:     "the same prefix once the person has written their own `pushd`, which is the control the row above is read against: bash offers it at 0, because there the function shadows the builtin and really is a function. So the answer turns on whose declaration is standing rather than on the name, which is the rule #603 and #1035 already set — and a fix that suppressed the name outright would pass the row above and fail this one",
 	},
 	{
+		ID: "compgen/filenames-and-directories", Category: "builtins",
+		Snippet: `mkdir -p cgf && cd cgf && mkdir -p adir && : > afile && ln -s afile alink && ln -s nowhere blink && compgen -f a | sort; echo "f=$?"; compgen -d a; echo "d=$?"; compgen -f b; echo "b=$?"; compgen -d b; echo "db=$?"`,
+		Why:     "the filesystem half of the builtin, which only bash has at all. The word is a prefix and not a pattern, the answers are the directory entries carrying it, and `-d` keeps the ones that *resolve* to a directory — so a broken link is a file and not a directory, which is the pair the last two fields ask. Piped through `sort` on the multi-name field on purpose: bash answers in readdir order, which on the machine this was recorded on is a hash order that differs between two directories holding the same names, so the unsorted list is not a fact about bash. The single-name fields are left alone, and `f=` is read from the pipeline's own status rather than the builtin's, which is what the sort costs (#2555)",
+	},
+	{
+		ID: "compgen/the-o-names-that-generate", Category: "builtins",
+		Snippet: `mkdir -p cgo && cd cgo && mkdir -p adir && : > afile && compgen -o dirnames a; echo "dn=$?"; compgen -o plusdirs a; echo "pd=$?"; compgen -o filenames a; echo "fn=$?"; compgen -o dirnames -A builtin cd; echo "fb=$?"; compgen -o default -o dirnames a; echo "both=$?"`,
+		Why:     "`-o` names one of the nine completion options and three of them **generate**, which is what #2412 had wrong — its row read the letter as an option *reader*, `compgen -o default | head -1` printing `cmd`, and it is nothing of the kind. `dirnames` and `default` generate only as a fallback, which the fourth field shows by matching a builtin and getting no directory with it; `plusdirs` appends instead and is not a fallback; the other six generate nothing at all and answer 1, which the third field pins. The fifth is the tie: with both fallbacks named, the directories win. Recorded with a prefix matching one name each, so no field grades an order neither shell promises (#2555)",
+	},
+	{
+		ID: "compgen/an-option-name-that-is-not-one", Category: "builtins",
+		Snippet: `compgen -o nope a; echo "n=$?"; compgen -o; echo "bare=$?"; compgen -o -f; echo "next=$?"`,
+		Why:     "the two refusals `-o` has, and they are shaped differently: a name that is not one of the nine is a single line naming it, while a bare `-o` is `option requires an argument` **and the usage line** — which the shell writes without the location prefix its own complaint carries. The third field is why the second cannot be read as `-o` with nothing after it: the next operand is taken as the *name* whatever it looks like, so `-f` is an option name here and not a letter (#2555)",
+	},
+	{
 		ID: "compgen/an-action-this-shell-does-not-generate", Category: "builtins",
 		Snippet: `compgen -A alias zzzznosuch; echo "st=$?"`,
 		Why:     "bash generates it and answers 1 for no match; this shell refuses it as not implemented at 2, and the divergence is recorded here deliberately — an action generated from a guess would be a promise the shell cannot keep, and the honest refusal is the answer docs/spec/semantics.md scopes",

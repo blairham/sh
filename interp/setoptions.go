@@ -44,9 +44,12 @@ type setOption struct {
 	// on is the state this shell is already in for a name it does not
 	// implement, so that asking for that state can succeed honestly.
 	//
-	// Not a claim about what any *other* shell defaults to. bash has
-	// `hashall` on and we do not hash at all, so ours is off and a script
-	// turning it off gets what it asked for.
+	// Not a claim about what any *other* shell defaults to: a name recorded
+	// here is one this shell does not act on, so the state it reports is the
+	// state it is already in and asking for that state succeeds honestly.
+	// `hashall` used to be the example and is not one any more — the command
+	// hash is real since #2554, the option gates it in the dialect that says
+	// it should, and its entry below reads live state through a method.
 	on bool // get reads the live state, for the listing; nil means the static
 	// `on` field is the whole answer.
 	get func(*Runner) bool

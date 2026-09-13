@@ -145,9 +145,12 @@ type zshOption struct {
 	// corrected in #2516, `emacs` in #1858 and `banghist` in #2542, and none
 	// of those says anything about the one that remains: `hashcmds` has a
 	// real state behind it where the corrected three did not: it is backed by
-	// `hashall`, which is genuinely off here because nothing is hashed, so
-	// correcting its default alone would print `nohashcmds` as a deviation
-	// where zsh prints nothing — moving a row rather than removing one.
+	// `hashall`, and no startup letter of this dialect turns that on, so it
+	// reads off and correcting its default alone would print `nohashcmds` as
+	// a deviation where zsh prints nothing — moving a row rather than
+	// removing one. The reason used to be that nothing was hashed at all;
+	// since #2554 something is, and what is left is the backing state's
+	// default in this dialect, which is a change of its own.
 	def bool
 	// recorded marks a name that is remembered and not acted on. It is what
 	// tells the listings and `emulate` that the state lives in the store

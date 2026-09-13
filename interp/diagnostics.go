@@ -424,6 +424,13 @@ type Diagnostics struct {
 	// HashNotFound is a hashed name that resolves to nothing. One verb: the
 	// name. Empty means the substrate's own wording.
 	HashNotFound string
+	// HashListing is the shape a bare `hash` prints the table in. See
+	// HashListingForm.
+	HashListing HashListingForm
+	// HashDisabled is what every spelling of `hash` says while command
+	// tracking is off, in the one dialect where the option stops the table
+	// being filled. No verbs. Empty means the dialect does not refuse.
+	HashDisabled string
 
 	// CompleteNoSpec is `complete -p` or `-r` on a name nothing was
 	// registered for — and `compopt` on one, which is why the builtin's own
@@ -4215,6 +4222,39 @@ func (b BadOptionName) String() string {
 		return "BadOptionFirstUnknownLetter"
 	}
 	return "BadOptionFirstCharacter"
+}
+
+// HashListingForm is the shape a bare `hash` writes the command hash in. See
+// Diagnostics.HashListing.
+//
+// Three shapes over four shells, measured 2026-09-13 after running `ls` and
+// `cat`. The table is the same table in all of them; what differs is how much
+// of it the listing admits to.
+type HashListingForm int
+
+const (
+	// HashListingPathOnly prints the resolved path and nothing else, one per
+	// line: `/bin/ls`. dash, and the substrate's own — it is the least the
+	// listing can say and still be a listing, and POSIX describes no more.
+	HashListingPathOnly HashListingForm = iota
+	// HashListingNameEqualsPath prints `ls=/bin/ls`, which is the shape an
+	// assignment would have. zsh and ksh93, the two whose hash is a view of
+	// a wider naming table.
+	HashListingNameEqualsPath
+	// HashListingHitsAndPath prints a `hits<TAB>command` header and then a
+	// right-aligned count beside each path. bash alone, and the only column
+	// that keeps a count to print.
+	HashListingHitsAndPath
+)
+
+func (h HashListingForm) String() string {
+	switch h {
+	case HashListingNameEqualsPath:
+		return "HashListingNameEqualsPath"
+	case HashListingHitsAndPath:
+		return "HashListingHitsAndPath"
+	}
+	return "HashListingPathOnly"
 }
 
 // TestUnknownOperatorReport is what a long `test` expression says about a

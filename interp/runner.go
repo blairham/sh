@@ -789,6 +789,29 @@ type Runner struct {
 	// leaves the other, and a name may be in both at once.
 	suffixAliases map[string]string
 
+	// cmdHash is the command hash: a bare name PATH resolved, and where it
+	// resolved to. cmdHashOrder is the same names in the order they were
+	// first put there, which is the order a listing walks unless the dialect
+	// sorts — see hashedCommandNames for why insertion order is the one we
+	// can defend.
+	//
+	// A table of the shell's rather than a cache of the process's, for the
+	// reason lookPath reads this Runner's PATH rather than the process's: two
+	// Runners in one program must not share one. A subshell gets a copy, which
+	// is measured — `(ls >/dev/null); hash` leaves the parent's table empty in
+	// bash, zsh and dash. ksh93 alone carries it back out, which its virtual
+	// subshells explain and which no field here claims yet.
+	cmdHash      map[string]hashedCommand
+	cmdHashOrder []string
+
+	// checksHashedCommand is `shopt -s checkhash`: look at the remembered
+	// path before running it, and fall back to a fresh PATH search when it
+	// has gone. It is the one dialect switch over
+	// Semantics.CommandHashIsTrusted, and it only ever *lowers* trust — in
+	// the three shells that never trusted the entry it changes nothing,
+	// which is why there is one field and not an option per dialect.
+	checksHashedCommand bool
+
 	// aliasExpansion is whether a word being parsed *right now* is replaced
 	// by what the table holds for it, and aliasExpansionBase is the answer
 	// this shell started with.
@@ -1124,10 +1147,10 @@ type Runner struct {
 	monitor bool
 	// tracksCommands is command tracking — the option bash lists as hashall
 	// and ksh93 as trackall, `set -h` in both. It is permission to remember
-	// where commands were found, and a shell that searches afresh every
-	// time keeps the promise in either state, so the state is real here
-	// even though no cache hangs off it — the same honesty `hash` answers
-	// with an empty table.
+	// where commands were found, and since #2554 there is a table behind it:
+	// where the dialect reads the option as a stop rather than a preference,
+	// turning it off empties nothing and fills nothing, and every spelling of
+	// `hash` says so. See Semantics.HashObeysCommandTracking.
 	//
 	// Read through Runner.commandTracking and written through
 	// Runner.setCommandTracking, never directly. Two of the panel start it
@@ -4159,6 +4182,14 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 		}
 		path = argv[0]
 	}
+	if lookErr == nil {
+		// The command hash: a bare name that PATH resolved, remembered at
+		// the moment it is about to run. Before the gate rather than after,
+		// because every shell in the panel hashes what it resolved whether
+		// or not the run then succeeds — and a policy that refuses the exec
+		// is this shell's own answer, not a fact about where the command is.
+		r.hashCommandRun(argv[0], path)
+	}
 	action := r.act(Action{Kind: ActionExec, Path: path, Args: argv})
 	if !r.allowed(ctx, action) {
 		return nil
@@ -5730,6 +5761,15 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 	if name == "OPTIND" {
 		// Noted rather than compared: see optindAssigned.
 		r.optindAssigned = true
+	}
+	if name == "PATH" {
+		// A new PATH makes every remembered answer a guess about a search
+		// nobody has run. Unanimous — bash 5.3.15, zsh 5.9.2, ksh93 and dash
+		// all answer an empty table after `ls >/dev/null; PATH=$PATH; hash`,
+		// and all four keep it after a bare `export PATH`, which is the
+		// control: it is the assignment that empties the table and not the
+		// mention.
+		r.forgetEveryHashedCommand()
 	}
 	// An assignment gives the name a value of its own, whatever a
 	// declaration had left there. declareEmpty records the flag *after*

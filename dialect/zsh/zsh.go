@@ -1193,6 +1193,10 @@ func Semantics() interp.Semantics {
 	// hash counts only what PATH holds: a builtin or a function is "no
 	// such command" to it.
 	s.HashSearchesPathAlone = interp.Yes
+	// And lists it in name order, alone in the panel — the other three print
+	// their own tables' bucket order, which is a fact about their hashing
+	// rather than about the language.
+	s.HashListingIsSorted = interp.Yes
 	s.TildePlusMinusExpands = interp.Yes
 	s.UnderscoreTracksTheLastArgument = interp.Yes
 	// And starts it empty regardless, alone in the panel: an exported `_`
@@ -2574,6 +2578,15 @@ func Diagnostics() interp.Diagnostics {
 			// all, which is a different sentence from a letter we have not
 			// built — see ImmovableOptionLetters below.
 			"set": "dgiklrswyBDEFGHIJKLMNOPQRSTUVWXYZ",
+			// zsh's hash past `-r`: `-d` is the *named directory* table
+			// rather than a forgetting, `-f` hashes every command on PATH
+			// at once, `-m` reads the operands as patterns, `-v` reports
+			// each entry as it is made and `-L` lists the table as `hash`
+			// commands. Measured 2026-09-13 by asking zsh 5.9.2 for every
+			// letter of the alphabet: it takes these six and refuses the
+			// rest, so a script asking for one is told it is missing here
+			// rather than told zsh has not got it.
+			"hash": "dfmvL",
 			// read's letters about a terminal or the line editor — -q's one
 			// keystroke, -e/-E echoing, -z and the zle pair -c/-l. The -p
 			// coprocess is implemented as its measured refusal — see
@@ -3029,6 +3042,9 @@ func Diagnostics() interp.Diagnostics {
 		LowercaseReason:           true,
 		DirectoryReason:           "Permission denied",
 		HashNotFound:              "no such command: %[1]s",
+		// `ls=/bin/ls`, the shape an assignment would have — zsh and ksh93
+		// both write the table that way.
+		HashListing: interp.HashListingNameEqualsPath,
 	}
 }
 

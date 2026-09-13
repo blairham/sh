@@ -387,6 +387,26 @@ func Semantics() interp.Semantics {
 	s.AliasRestrictsToRegularKind = interp.No
 	s.AliasOperandsCanBePatterns = interp.No
 	s.AliasPlusPrintsNamesOnly = interp.No
+	// The command hash, which bash keeps more of than the rest of the panel
+	// and reads more strictly. It trusts what it remembered: a hashed path
+	// that has gone is reported as that *path* at 127, where the other three
+	// walk PATH again and run the next copy. The four letters past `-r`
+	// follow from keeping a table worth addressing — `-l` writes it back as
+	// commands, `-p` puts an entry in by hand, `-d` takes one out and `-t`
+	// reports one. Measured 2026-09-13 against 5.3.15.
+	s.CommandHashIsTrusted = interp.Yes
+	s.HashListsAsCommands = interp.Yes
+	s.HashTakesAPathToRemember = interp.Yes
+	s.HashForgetsOneName = interp.Yes
+	s.HashReportsThePath = interp.Yes
+	// Not sorted: bash walks its own table's buckets, which is not an order
+	// this shell can or should reproduce. See interp.Runner.hashedCommandNames.
+	s.HashListingIsSorted = interp.No
+	// And `set +h` really stops it: bash answers every spelling of the
+	// builtin with one sentence at 1 and remembers nothing until the option
+	// comes back. ksh93 keeps hashing with `trackall` off, and zsh's `-h` is
+	// a history option that never touched the table.
+	s.HashObeysCommandTracking = interp.Yes
 	s.TypeNamesAnAliasOnlyWhenExpanded = interp.Yes
 	s.AliasReportsNotFound = interp.Yes
 	s.UnaliasReportsNotFound = interp.Yes
@@ -2091,6 +2111,10 @@ func Diagnostics() interp.Diagnostics {
 		NamesResolvedPath: true,
 		// A bare `hash` announces the table, on standard output.
 		HashEmptyTable: "hash: hash table empty",
+		// The `hits<TAB>command` table, which is bash's alone: it is the only
+		// column that keeps a count to print. See interp.HashListingForm.
+		HashListing:  interp.HashListingHitsAndPath,
+		HashDisabled: "hash: hashing disabled",
 		// Two lines, which is bash rather than a mistake: it prints the
 		// complaint and then a usage line, and only the first carries the
 		// shell's own prefix.
@@ -2246,6 +2270,7 @@ func Apply(r *interp.Runner) {
 	registerEpochClock(r)
 	// The alias table written as an association, readable and writable.
 	registerBashAliases(r)
+	registerBashCmds(r)
 	if dot, ok := r.Builtin("."); ok {
 		r.Register("source", dot)
 	}

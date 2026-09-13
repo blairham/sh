@@ -67,10 +67,12 @@ func (r *Runner) SetShellOptions(name string) {
 // `case ":$SHELLOPTS:" in *:xtrace:*)` is the question this variable answers.
 //
 // The names are this shell's own state and not a claim about anyone else's.
-// One default differs from the shell that has the variable, and it is already
-// recorded in setoptions.go: `hashall` is off here because nothing is hashed.
-// Reporting it the other way round to match a listing would be the lie this
-// file exists to avoid.
+// Reporting one the other way round to match a listing would be the lie this
+// file exists to avoid. `hashall` was the standing example of a default that
+// differs, on the grounds that nothing was hashed; since #2554 something is,
+// and in bash the name reads `on` here exactly as it does there — the state
+// comes from the startup letter `h` rather than from a constant, and `set +h`
+// really stops the table being filled.
 //
 // `emacs` was the second until #1858, and it was the wrong kind of honesty:
 // the editor does read those keys, but a *script* has no line to edit, and no

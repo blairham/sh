@@ -1515,6 +1515,12 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 // entered the builtin by different doors and would otherwise have been two
 // copies of this, which is how one of them ends up forgetting a table.
 func (r *Runner) unsetName(name string) {
+	if name == "PATH" {
+		// The same rule as an assignment to it, and for the same reason: a
+		// search nobody can repeat is not an answer worth keeping. Measured,
+		// `ls >/dev/null; unset PATH; hash` reports an empty table in bash.
+		r.forgetEveryHashedCommand()
+	}
 	if t, tied := r.tieOf(name); tied {
 		// Half a tie is not a state this shell has: `unset SCA` leaves `sca`
 		// with no elements *and* unset, and `unset sca` leaves `$SCA` unset.

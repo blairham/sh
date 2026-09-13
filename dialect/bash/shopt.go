@@ -169,6 +169,17 @@ var shoptSwitches = map[string]struct {
 		get: (*interp.Runner).AutoCd,
 		set: (*interp.Runner).SetAutoCd,
 	},
+	// The one switch here that turns a *dialect answer* down rather than a
+	// capability up. bash believes what its command hash holds, which is
+	// Semantics.CommandHashIsTrusted; `checkhash` makes it look first, and
+	// then a hashed path that has gone sends it back to PATH exactly as it
+	// sends the other three. Measured 2026-09-13 with two copies of one name
+	// on PATH: with the option off bash reports the remembered path at 127,
+	// and with it on it runs the second copy.
+	"checkhash": {
+		get: (*interp.Runner).ChecksHashedCommand,
+		set: (*interp.Runner).SetChecksHashedCommand,
+	},
 	"cdspell": {
 		get: (*interp.Runner).CorrectsCdSpelling,
 		set: (*interp.Runner).SetCorrectsCdSpelling,
@@ -427,7 +438,6 @@ var shoptStates = map[string]bool{
 	"assoc_expand_once":    false,
 	"bash_source_fullpath": false,
 	"cdable_vars":          false,
-	"checkhash":            false,
 	"cmdhist":              true,
 	"compat31":             false,
 	"compat32":             false,

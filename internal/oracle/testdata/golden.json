@@ -164108,6 +164108,57 @@
         "TimedOut": false
       }
     },
+    "setopt/the-interactive-listing-drops-nohashdirs": {
+      "ash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: can't access tty; job control turned off~\u003cshell\u003e: setopt: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: cannot set terminal process group (N): Inappropriate ioctl for device~\u003cshell\u003e: no job control in this shell~\u003cshell\u003e: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: cannot set terminal process group (N): Inappropriate ioctl for device~\u003cshell\u003e: no job control in this shell~\u003cshell\u003e: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: no job control in this shell~\u003cshell\u003e: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 0: can't access tty; job control turned off~\u003cshell\u003e: 1: setopt: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: setopt: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "interactive~norcs~zle~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "setopt/the-no-prefix-reaches-a-compat-spelling": {
       "ash": {
         "Stdout": "",

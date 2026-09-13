@@ -275,6 +275,15 @@ func escapedMarks(s string) []bool {
 // the half of #1370 the pattern side cannot also carry. The escape behind it
 // is then read as any other mark is.
 func globUnescape(s string) string {
+	// Nothing to resolve is the ordinary case — a field with no backslash in
+	// it and no mark standing in for one comes back as it went in. Asked
+	// before building anything because the answer is almost always this one:
+	// every field of every command reaches here, and a `strings.Builder` per
+	// field was 19% of the allocations in the gate's workload (#1403), which
+	// has no backslash anywhere in it.
+	if strings.IndexByte(s, valueBackslashMark) < 0 && strings.IndexByte(s, '\\') < 0 {
+		return s
+	}
 	var b strings.Builder
 	for i := 0; i < len(s); i++ {
 		if s[i] == valueBackslashMark {

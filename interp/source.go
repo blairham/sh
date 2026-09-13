@@ -149,7 +149,7 @@ func (s sourced) route() syntax.ProgramRoutes {
 // really happened in the columns that answer Yes, so a `.` of a file that sets
 // six names and has a typo on the last line leaves six names set there and
 // none where the text is read through first.
-func (s sourced) runsWhatItParsed(sem Semantics) Answer {
+func (s sourced) runsWhatItParsed(sem *Semantics) Answer {
 	if s.eval {
 		return sem.EvalRunsWhatItParsed
 	}

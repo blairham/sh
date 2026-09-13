@@ -57,14 +57,24 @@ func (r *Runner) expandWordEscaped(w *syntax.Word) []string {
 	// Reading it first is also what keeps a turned-off expansion silent —
 	// an unanswered range axis inside a brace nobody is going to expand is
 	// not a disagreement worth refusing a script over.
-	if words := r.braceExpand(w); !r.noBraceExpand &&
-		(len(words) > 1 || len(words) == 1 && words[0] != w) &&
-		r.ask(r.sem().BraceExpansion, "brace expansion") {
-		var out []string
-		for _, bw := range words {
-			out = append(out, r.expandOneWordFields(bw)...)
+	// A word with no `{` in it anywhere is asked nothing and expanded by
+	// nobody: the scan finds no brace, so braceExpand returns the word it was
+	// given, in a slice built to hold exactly that one word, and every test
+	// below is false. Skipping it is behavior-preserving rather than a
+	// shortcut past the axis — a scan that finds no brace also asks no
+	// question, so there is no answer being stepped over — and it is worth
+	// doing because the slice was a fifth of the allocations in the gate's
+	// workload (#1403), which has no brace in it.
+	if _, hasBrace := findBraceFrom(w.Spans, cursor{0, 0}, '{'); hasBrace {
+		if words := r.braceExpand(w); !r.noBraceExpand &&
+			(len(words) > 1 || len(words) == 1 && words[0] != w) &&
+			r.ask(r.sem().BraceExpansion, "brace expansion") {
+			var out []string
+			for _, bw := range words {
+				out = append(out, r.expandOneWordFields(bw)...)
+			}
+			return out
 		}
-		return out
 	}
 	return r.expandOneWordFields(w)
 }
@@ -310,17 +320,43 @@ func (r *Runner) globFields(fields []string) []string {
 	if fields == nil {
 		return nil
 	}
-	out := make([]string, 0, len(fields))
-	for _, f := range fields {
+	// out stays nil while every field so far has come back as itself, which
+	// is what happens to a command line with no pattern in it — and that is
+	// most command lines. The slice is built from the first field that
+	// actually changes, carrying the untouched ones over, so the ordinary
+	// case returns the slice it was given and allocates nothing. It was a
+	// fifth of the allocations in the gate's workload (#1403), which has no
+	// pattern in it at all.
+	var out []string
+	begin := func(upTo, extra int) {
+		out = make([]string, 0, len(fields)+extra)
+		out = append(out, fields[:upTo]...)
+	}
+	for i, f := range fields {
 		matches, dropped := r.glob(f)
-		if len(matches) > 0 {
+		switch {
+		case len(matches) > 0:
+			if out == nil {
+				begin(i, len(matches))
+			}
 			out = append(out, matches...)
-			continue
+		case dropped:
+			if out == nil {
+				begin(i, 0)
+			}
+		default:
+			unescaped := globUnescape(f)
+			if out == nil {
+				if unescaped == f {
+					continue
+				}
+				begin(i, 0)
+			}
+			out = append(out, unescaped)
 		}
-		if dropped {
-			continue
-		}
-		out = append(out, globUnescape(f))
+	}
+	if out == nil {
+		return fields
 	}
 	return out
 }

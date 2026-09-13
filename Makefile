@@ -237,6 +237,16 @@ axis-sweep: ## Move every axis in interp.Semantics and report the ones nothing o
 axis-coverage: ## Report every interp.Semantics axis a dialect does not answer, ash included (#2340)
 	@go run ./internal/cmd/axissweep -coverage $(ARGS)
 
+# The third question, and cheap for the same reason: not whether an axis is
+# answered, but whether the answer agrees with what the panel was measured
+# doing. It reads the golden record off disk and starts no shell, so it is
+# gated as a test in `make check` like the coverage half; this target is that
+# check with its whole ledger printed, and `ARGS=-write` regenerates the
+# committed reading after a probe is added. See internal/axissweep/grade.go
+# for why most pairs have no probe and why that number is printed (#2441).
+axis-grade: ## Grade every dialect preset against the golden record and report the pairs nothing compares (#2441)
+	@go run ./internal/cmd/axissweep -grade $(ARGS)
+
 sandbox: ## Try every way a script has of reaching the filesystem, against the shipped binaries, and report what the boundary stopped
 	@mkdir -p $(BINDIR)
 	@go build -o $(BINDIR)/sandbox-sh ./cmd/sh

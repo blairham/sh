@@ -14991,6 +14991,62 @@ the builtin under test; the first was `read ?`, where a leading `?` is a
 prompt in zsh and an unquoted one is a glob (#2060). **Quote the operand
 whenever the probe is about what a builtin does with a word.**
 
+### Grading a preset against the record
+
+Everything above asks the corpus about a *flip*. That leaves one question
+unasked, and it is the one a wrong preset hides in: **does what a dialect
+holds agree with what the panel was measured doing?**
+
+Three instruments, three questions, and they are not substitutes:
+
+| instrument | question |
+|---|---|
+| `make axis-coverage` | does every dialect **answer** every axis? |
+| the oracle panel | does the **record** match the real shells? |
+| `make axis-grade` | does a **preset** match the record? |
+
+Completeness cannot see a wrong answer, and the panel never looks at a
+vector. So a preset that contradicts a measured cell *it has no corpus case
+for* was invisible: no test failed, no drift was reported, and the value
+shipped. `dialect/ash` answered `QuitIgnoredWhenNotInteractive` with dash's
+value for the whole life of the ash column while
+`signal-death/quit-is-not-fatal-in-every-shell` had BusyBox's answer right
+the entire time, and nothing read it (#2441).
+
+The flip sweep cannot close that gap from the other side, for a reason worth
+stating: it grades from the **passing** set. A preset that is already wrong
+fails its rows at the baseline, where a conformance failure is
+indistinguishable from a feature nobody has written yet.
+
+**A probe is the reading, and it costs nothing.** The record is on disk, so
+`internal/axissweep/probes.go` names the corpus rows whose recorded cells
+show one axis and says in code what those cells mean — `[x]` against `[]`
+for `LastPipelineElementInCurrentShell`, `survived` against a nonzero status
+for `ShiftPastEndFatal` — and the check compares that with what each vector
+holds. No shell is started, so it is a test in `make check`.
+
+Three properties keep it from being a list somebody has to remember:
+
+- **A reading never names a shell.** It is handed one panel column's cells,
+  so every dialect is graded by the same sentence and a dialect added
+  tomorrow is graded by all of them on the commit that adds it. `Presets` is
+  the roster and is asserted against the packages on disk (#2336).
+- **Silence is a value.** Where the cells cannot show the axis — dash and
+  BusyBox have no array literal, so `axis/array-base` is a syntax error in
+  both — the reading says so in words, and the pair is a committed ledger
+  line reading `-`. "Not graded" must never be readable as "graded and
+  agreeing".
+- **The blind spot is printed.** Sixteen of 519 axes have a probe, so 2515 of
+  the 2595 dialect/axis pairs are compared with nothing at all, and that
+  number is in the report on a passing run.
+
+The first run found a second wrong ash answer, and its shape is the general
+lesson: `ShiftPastEndFatal` was inherited from `PosixSemantics` — dash's
+answer — and never overridden, while BusyBox prints nothing, leaves 1 behind
+and runs the next command. **An inherited value looks exactly like a measured
+one in the source**, which is why the check reads the record rather than the
+comments.
+
 ### What the flip backlog is, once it is triaged
 
 The list `make axis-sweep` produces is not one kind of thing either, and

@@ -17,4 +17,7 @@ package interp
 // It is a build tag rather than an environment check so that the shipped
 // binary has no such seam at all: this body is empty, it inlines to nothing,
 // and no value a person can set reaches the vector.
-func axisMutate(s Semantics) Semantics { return s }
+//
+// It takes a pointer so that the shipped build copies nothing: Semantics is
+// 1784 bytes and the interpreter reads it hundreds of times per command.
+func axisMutate(s *Semantics) *Semantics { return s }

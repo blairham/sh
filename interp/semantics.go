@@ -3,7 +3,10 @@
 
 package interp
 
-import "strings"
+import (
+	"strings"
+	"sync"
+)
 
 // Answer is one axis's value, and it has three states rather than two.
 //
@@ -10173,12 +10176,31 @@ func CoreSemantics() Semantics {
 // one place the interpreter reads the vector: a hook here covers a dialect
 // binary and a test that builds its own Semantics alike. axisMutate is the
 // identity in every build but the sweep's — see interp/axissweep_off.go.
-func (r *Runner) sem() Semantics {
+func (r *Runner) sem() *Semantics {
 	if r.Semantics != nil {
-		return axisMutate(*r.Semantics)
+		return axisMutate(r.Semantics)
 	}
-	return axisMutate(CoreSemantics())
+	return axisMutate(coreSemantics())
 }
+
+// coreSemantics is the vector a runner with no dialect reads, built once.
+//
+// It is shared, and sem() hands out a pointer to it, so nothing may write
+// through it — the one caller that changes an axis, swapSemantics, takes its
+// own copy first. Building it per call was 1784 bytes of copying on a path the
+// interpreter takes hundreds of times per command (#1403).
+func coreSemantics() *Semantics {
+	coreSemanticsOnce.Do(func() {
+		s := CoreSemantics()
+		coreSemanticsCached = &s
+	})
+	return coreSemanticsCached
+}
+
+var (
+	coreSemanticsOnce   sync.Once
+	coreSemanticsCached *Semantics
+)
 
 // swapSemantics moves an axis at run time, copy-on-write.
 //
@@ -10188,7 +10210,7 @@ func (r *Runner) sem() Semantics {
 // outside the package, kept here because the core has a mode of its own to
 // switch: `set -o posix`.
 func (r *Runner) swapSemantics(change func(*Semantics)) {
-	s := r.sem()
+	s := *r.sem()
 	change(&s)
 	r.Semantics = &s
 }

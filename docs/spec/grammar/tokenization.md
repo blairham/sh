@@ -989,3 +989,102 @@ and two of those three have no `|&` whatever: an intersection cannot
 contain it. It is a version fact as much as a dialect one — `|&` arrived
 in bash 4, so the `bash` preset states what bash 5.3 does and the bash
 3.2 column of every measurement above is the other half of the same row.
+
+## Two operators with no blank between them
+
+    (:);(:)         accepted and run by all seven columns
+    echo a&;b       accepted by one, refused by the rest
+    if |; then      refused by all seven
+
+Adjacency has meaning in three places already — `<(`, an IO number before
+a redirection, `|&` — and this is the one place where it means nothing to
+the grammar and something to a reader. One shell says so on the way past:
+
+    $ ksh -n s.sh                       # (:);(:)
+    s.sh: warning: line 1: use space or tab to separate operators ; and (
+
+Measured 2026-09-12 on ksh93u+ 2012-08-01, from a script file with a
+scratch `HOME` under `env -i`. dash, bash 5.3, bash-as-`sh`, bash 3.2,
+zsh 5.9.2 and BusyBox ash read the same bytes without a word, so the
+wording is one column's: `Diagnostics.OperatorsNotSeparated`, empty in
+the rest.
+
+**It is advice about layout and nothing else.** Writing the two apart
+removes the line and changes nothing else about the parse — `a |; b` and
+`a | ; b` are refused identically, with the same complaint and the same
+status, and only the first draws the warning. That is why it is a
+`syntax.Remark` and not a fact hung off an error: half the shapes it
+fires on parse and run at status 0, and there is no error for them to
+hang off.
+
+### The same route restriction the backquote remark has
+
+| route | ksh93 on `(:);(:)` |
+| --- | --- |
+| `ksh -n s.sh` | the warning, status 0 |
+| `ksh s.sh` | nothing, status 0 |
+| `ksh -c '(:);(:)'` | nothing |
+| `ksh < s.sh` | nothing |
+
+So `-n` in that shell is a **lint mode with rules** rather than a parse
+check that happens to warn, and this is its second rule; the backquote
+remark in `substitutions.md` is the first. Both are held back by
+`interp.RemarkOnlyWhenNotRunning`, which is a property of the remark
+kind — the here-document remark is said either way, which is what makes
+this a question and not a rule about remarks.
+
+That restriction is what collapsed the design. #2409 was filed as a line
+that precedes a refusal and re-measured into a channel that had to
+survive a *successful* parse, because two of its rows exit 0 with no
+error to carry it. Both rounds were measured entirely under `-n`. The
+status-0 rows do survive a successful parse — within the one route that
+ever prints anything, which lives in `driver` and had the machinery
+already.
+
+### The trigger, probed a byte at a time
+
+The operator just lexed is **exactly one character** and is one of `;`,
+`|` or `&`, and the byte immediately after it is one of `;`, `|`, `&`,
+`(`, `<` or `>`.
+
+    :;|:      ; and |     :|;:      | and ;     :&;:      & and ;
+    :;(:)     ; and (     :|(:)     | and (     :&(:)     & and (
+    :;<f      ; and <     :;>f      ; and >     :;((1))   ; and (
+    :;>>f     ; and >     :;<<E     ; and <     :;||:     ; and |
+
+    :&&(:)    silent      :||(:)    silent      :;;:      silent
+    :;&:      silent      :|&:      silent      :&|:      silent
+    :;$(:)    silent      :;x       silent      :;!:      silent
+    :;)       silent      :;{ :; }  silent      :;[[ x ]] silent
+    a | ; b   silent      #:;(:)    silent      ":;(:)"   silent
+
+Three things the silent rows pin down, and each rules out a simpler rule:
+
+- **Length is the whole of the first half.** `&&(` is silent where `|(`
+  remarks, and `;;`, `;&`, `|&`, `&&`, `||` and `&|` never start one,
+  because the two bytes are one operator and one operator has no blank
+  to be missing. So the condition is asked of the **operator table** and
+  not of a list of excluded pairs — which is what keeps it right per
+  dialect: `;&` is one token only where the grammar has it, and turning
+  `CaseFallthrough` off makes the same two bytes remark, correctly.
+- **It is the byte and not the next token.** `:;$(:)` is silent where
+  `:;(:)` remarks, so the trigger is a literal `(` opening a token
+  rather than "a parenthesis comes next".
+- **The second operator is named by its first byte.** `:;>>f` writes
+  `; and >`, not `; and >>`.
+
+One line per occurrence, in source order, before the syntax error where
+there is one. The status is never the remark's: 0 where the parse
+succeeds and the refusal's where it does not.
+
+Redirection operators can begin one too — `:<;` writes `< and ;` and
+`:><` writes `> and <` — and that half is deliberately not modeled. It
+is erratic in the shell it comes from: `:>;` is silent where `:<;` warns,
+and `:<>X` names `<` for every `X` and names a *newline* as the second
+operator when the line ends. Every such text is refused anyway, so what
+would be reproduced is one shell's inconsistency in a line nobody reads.
+
+Corpus: `core/two-operators-run-together-under-a-syntax-check`,
+`core/two-operators-run-together-when-it-runs`,
+`core/two-operators-run-together-before-a-refusal`,
+`core/two-operators-run-together-are-refused-without-the-remark`.

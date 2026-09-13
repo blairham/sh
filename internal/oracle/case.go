@@ -2369,6 +2369,34 @@ echo "$x$y"`,
 		Why: "the same file run instead of checked, which is the half of the answer an implementation gets wrong by reading only the row above: ksh93 says **nothing** here. The remark belongs to a shell that is not going to execute — `ksh -n` writes two lines and `ksh` writes none, on the same bytes — so a front end that said it whenever the parse produced it would put two warnings in front of every script this dialect runs (#1466)",
 	},
 	{
+		ID: "core/two-operators-run-together-under-a-syntax-check", Category: "command language",
+		Args: []string{"-n", ArgScript},
+		Snippet: `(:);(:)
+:|(:)
+echo done`,
+		Why: "the **second** rule of one shell's syntax-check mode, which is what makes `-n` a lint mode there rather than a parse check that happens to warn. ksh93 writes `warning: line N: use space or tab to separate operators X and Y` once per occurrence, naming both spellings, and dash, bash 5.3, bash as `sh`, bash 3.2 and zsh read the same bytes without a word. Two different pairs on two lines, so the row says the wording carries the operators it found rather than a fixed sentence. Nothing is wrong with the file — every column accepts it at 0 and it runs — so this is a remark about *layout* and not a diagnostic (#2409)",
+	},
+	{
+		ID: "core/two-operators-run-together-when-it-runs", Category: "command language",
+		Script: true,
+		Snippet: `(:);(:)
+:|(:)
+echo done`,
+		Why: "the same file run instead of checked, and the row the issue's first two measurement rounds did not have: ksh93 says **nothing** here. Both of that shell's `-n` remarks are held back once it is going to execute, so a design that carried this one alongside a *successful* parse — the shape a status-0 warning seems to demand — would print two lines in front of every script that spells a pipeline without blanks (#2409)",
+	},
+	{
+		ID: "core/two-operators-run-together-before-a-refusal", Category: "command language", SyntaxError: true,
+		Args:    []string{"-n", ArgScript},
+		Snippet: `if |; then :; fi`,
+		Why:     "the shape #2409 was filed from: the remark, then the refusal, in that order and on separate lines. Writing the same two operators apart removes the first line and leaves the second untouched, which is what says the remark is about the blank rather than about the construct. Four wordings for the refusal across the six columns and three statuses; only one column has anything in front of it",
+	},
+	{
+		ID: "core/two-operators-run-together-are-refused-without-the-remark", Category: "command language", SyntaxError: true,
+		Script:  true,
+		Snippet: `if |; then :; fi`,
+		Why:     "the discriminator between the two readings of the row above, and it is the one that decided the design. If the remark rode the refusal it would be here too, since the refusal is; it is not. Every column writes exactly what it wrote under `-n` except the one with the remark, which drops the warning and keeps the error at the same status — so the remark belongs to the *route* and not to the error (#2409)",
+	},
+	{
 		ID: "core/a-refused-loop-name-costs-the-loop-or-the-script", Category: "command language", SyntaxError: true,
 		Script: true,
 		Snippet: `n=x

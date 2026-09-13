@@ -11549,13 +11549,28 @@ options where they were — a change within bash rather than a difference
 between shells, so the corpus's `bash32` column disagrees with the other
 two on purpose (`shopt/extdebug-turns-on-function-tracing`).
 
-What bash's extended debugging *also* names is not provided here:
-`declare -F` reporting a definition's file and line, a DEBUG action's
-status skipping the next command or simulating a `return`, and the
-BASH_ARGC/BASH_ARGV record. The name is taken for what it moves rather
-than refused for what it does not, which is the same partial honesty
-`set -o posix` keeps — and the remainder is itemized and measured in
-#2476 rather than left as this paragraph, so it is countable.
+**The third state it carries is not a `set` option under another name.**
+With extended debugging on, a *names-only* function listing writes the
+line the definition begins on and the file it was read from after the
+name: `shopt -s extdebug; declare -F g` is `g 1 ./lib.sh` where the same
+listing without it is `g`. All three bash columns agree here, which
+parts it from the tracing above — this half of the option is older than
+the indicator split. The listing reads the option rather than the
+definition, so the same function answers differently before and after
+`shopt -u extdebug`, and `-p` alongside asks for the reissuable shape
+and gets no location at all. A function with no file behind it — one
+defined in a `-c` string or on standard input — is named against the
+shell itself. `interp.Runner.LocatesFunctions` is the capability, a
+switch over the core's listing rather than anything in the dialect, for
+the reason the two tracing bits are.
+
+What bash's extended debugging *also* names is still not provided here:
+a DEBUG action's status skipping the next command or simulating a
+`return`, and the BASH_ARGC/BASH_ARGV record. The name is taken for what
+it moves rather than refused for what it does not, which is the same
+partial honesty `set -o posix` keeps — and the remainder is itemized and
+measured in #2476 rather than left as this paragraph, so it is
+countable.
 
 **`ExitTrapFiresPastTheEnd`** — bash unspecified · dash unspecified · ksh93 no · zsh yes
 

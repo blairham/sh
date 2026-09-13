@@ -1025,6 +1025,9 @@ type Runner struct {
 
 	// inFunc is the name of the function being run, for `$0`.
 	inFunc string
+	// locatesFunctions is whether a names-only function listing says where
+	// each function was defined — see Runner.LocatesFunctions.
+	locatesFunctions bool
 	// funcLine is the line the function being run was written on, which one
 	// dialect counts a message's line from instead of from the top of the
 	// file.

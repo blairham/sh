@@ -173,7 +173,11 @@ func biUnfunction(r *Runner, _ context.Context, args []string) int {
 // gives.
 func (r *Runner) functionsMatching(patterns []string, namesOnly bool) int {
 	if len(patterns) == 0 {
-		return r.declareFunctions(nil, false, namesOnly, false)
+		// Never located: this is the other shell's spelling and that shell
+		// has no extended debugging, so LocatesFunctions is off here in
+		// every dialect that reaches this builtin. Written out rather than
+		// asked, so a dialect adding the capability has to come and look.
+		return r.declareFunctions(nil, false, namesOnly, false, false)
 	}
 	for _, pattern := range patterns {
 		o := r.patternOpts(pattern)

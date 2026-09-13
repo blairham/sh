@@ -5,6 +5,8 @@ package bash_test
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -202,5 +204,42 @@ func TestExtdebugStaysInTheListing(t *testing.T) {
 	out, _, _ := runTraced(t, `shopt -p`)
 	if !strings.Contains(out, "shopt -u extdebug\n") {
 		t.Errorf("`shopt -p` wrote %q, want an extdebug row", out)
+	}
+}
+
+// The third state extended debugging carries, and the only one of the three
+// that is not a `set` option under another name: a names-only function
+// listing writes where the function was defined.
+//
+// Measured on bash 5.3.15 and bash 3.2.57 alike, 2026-09-13 — the two agree
+// here where they part over the tracing indicator above, which says this half
+// of the option is the older one. The listing reads the option rather than
+// the definition, so the same function answers differently before and after
+// `shopt -u extdebug` (#2476).
+func TestExtdebugLocatesAFunctionDefinition(t *testing.T) {
+	dir := t.TempDir()
+	lib := filepath.Join(dir, "lib.sh")
+	if err := os.WriteFile(lib, []byte("\ng() { :; }\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	src := ". " + lib + "; declare -F g; shopt -s extdebug; declare -F g; " +
+		"declare -Fp g; shopt -u extdebug; declare -F g"
+	out, errs, code := runTraced(t, src)
+	// Line 2, because the definition is on the second line of the file and
+	// not on the line the file was sourced from.
+	want := "g\ng 2 " + lib + "\ng\ng\n"
+	if out != want || errs != "" || code != 0 {
+		t.Errorf("ran %q: out %q errs %q status %d, want %q", src, out, errs, code, want)
+	}
+}
+
+// A function with no file behind it is reported against the shell itself,
+// which is measured: `bash -c 'shopt -s extdebug; f(){ :; }; declare -F f'`
+// names the bash binary, and so does the same definition arriving on standard
+// input.
+func TestExtdebugNamesTheShellForAFunctionWithNoFile(t *testing.T) {
+	out, _, _ := runTraced(t, `shopt -s extdebug; f(){ :; }; declare -F f`)
+	if want := "f 1 bash\n"; out != want {
+		t.Errorf("out = %q, want %q", out, want)
 	}
 }

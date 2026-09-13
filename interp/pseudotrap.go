@@ -324,3 +324,22 @@ func (r *Runner) FunctionTracing() bool { return r.functrace }
 
 // SetFunctionTracing moves it.
 func (r *Runner) SetFunctionTracing(on bool) { r.functrace = on }
+
+// LocatesFunctions reports whether a names-only function listing also says
+// where each function was defined — the line and the file, after the name.
+//
+// The third state bash's extended debugging carries, beside the two above,
+// and the only one of the three that is not a `set` option under another
+// name: `shopt -s extdebug; declare -F g` writes `g 1 ./lib2.sh` where the
+// same listing without it writes `g`. It is what a shell-level debugger needs
+// to put a breakpoint anywhere, measured on bash 5.3.15 (#2476).
+//
+// A capability rather than an axis, for the reason the two above are: no
+// shell in the panel *disagrees* about a listing that names a location, four
+// of them have no such option at all, and the one that has it can move the
+// state twice in a script. What it changes lives in Runner.declareFunctions,
+// which is the core's listing and not a dialect's.
+func (r *Runner) LocatesFunctions() bool { return r.locatesFunctions }
+
+// SetLocatesFunctions moves it.
+func (r *Runner) SetLocatesFunctions(on bool) { r.locatesFunctions = on }

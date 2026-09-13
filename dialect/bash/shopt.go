@@ -227,8 +227,10 @@ var shoptSwitches = map[string]struct {
 	// corpus's `bash32` column disagrees with the other two on purpose and
 	// this is 5.3's answer.
 	//
-	// What bash's extended debugging *also* does is not here: `declare -F`
-	// reporting a definition's file and line, a DEBUG action's status
+	// `declare -F` reporting a definition's line and file joined the two in
+	// #2476, and it is the one of the three that is not a `set` option under
+	// another name — see interp.Runner.LocatesFunctions. What bash's extended
+	// debugging *also* does is still not here: a DEBUG action's status
 	// skipping the next command or simulating a `return`, and the
 	// BASH_ARGC/BASH_ARGV record — measured and itemized in #2476, so the
 	// remainder is a count rather than a paragraph. The entry keeps the same
@@ -242,6 +244,7 @@ var shoptSwitches = map[string]struct {
 			shoptSetStored(r, "extdebug", on, false)
 			r.SetErrorTracing(on)
 			r.SetFunctionTracing(on)
+			r.SetLocatesFunctions(on)
 		},
 	},
 	// The one name in this table that moves a *semantics axis* rather than a

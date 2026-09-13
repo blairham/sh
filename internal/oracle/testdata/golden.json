@@ -171760,6 +171760,57 @@
         "TimedOut": false
       }
     },
+    "shopt/extdebug-locates-a-function-definition": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: declare: not found~\u003cshell\u003e: shopt: not found~\u003cshell\u003e: declare: not found~\u003cshell\u003e: shopt: not found~\u003cshell\u003e: declare: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "g~g 1 ./lib.sh~g",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "g~g 1 ./lib.sh~g",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "g~g 1 ./lib.sh~g",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 2: declare: not found~\u003cshell\u003e: 2: shopt: not found~\u003cshell\u003e: 2: declare: not found~\u003cshell\u003e: 2: shopt: not found~\u003cshell\u003e: 2: declare: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 2: declare: not found~\u003cshell\u003e: line 2: shopt: not found~\u003cshell\u003e: line 2: declare: not found~\u003cshell\u003e: line 2: shopt: not found~\u003cshell\u003e: line 2: declare: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:2: command not found: shopt~\u003cshell\u003e:2: command not found: shopt",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "shopt/extdebug-turns-on-function-tracing": {
       "ash": {
         "Stdout": "S1~after",

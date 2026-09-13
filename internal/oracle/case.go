@@ -4808,6 +4808,11 @@ echo "st=$?"`,
 		Why:     "the name is not only an indicator: in bash 5.3 — under either argv[0] — it turns both trap-carriage options on with it, so this traces the dotted file exactly as `set -o functrace` does above. bash 3.2 moves the indicator alone and traces nothing inside the file, which is a change within bash rather than a difference between shells and the reason the `bash32` column is one D short here on purpose. The other three have no `shopt` at all, and two of them run the DEBUG trap inside a sourced file with nothing asked",
 	},
 	{
+		ID: "shopt/extdebug-locates-a-function-definition", Category: "shell options",
+		Snippet: "printf 'g() { :; }\n' > lib.sh; . ./lib.sh; declare -F g; shopt -s extdebug; declare -F g; shopt -u extdebug; declare -F g",
+		Why:     "the third thing extended debugging carries, and the only one of the three that is not a `set` option under another name: with it on, a names-only listing writes the line the definition begins on and the file it was read from after the name. all three bash columns answer `g`, then `g 1 ./lib.sh`, then `g` again, so the option is read at the listing rather than at the definition — and unlike the tracing row above, bash 3.2 agrees, which is what says this half of the option is older than the indicator split. It is what a shell-level debugger needs to put a breakpoint anywhere, and it was missing here (#2476)",
+	},
+	{
 		ID: "readonly/reassignment-by-a-declaration", Category: "builtins",
 		Snippet: "readonly x=1; export x=2; echo after",
 		Why:     "the same refusal reached through a declaration utility rather than by an assignment standing alone, and a different set of shells stops for it — three here, where a plain assignment stops all four. So which of the two ways the name was set decides, and one shell answers the two oppositely: it stops for the plain form given as an argument and never stops for this one",

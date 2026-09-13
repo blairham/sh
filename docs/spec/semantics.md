@@ -17013,16 +17013,16 @@ Measured 2026-09-07, zsh 5.9.2, bash 5.3.15, bash 3.2.57, ksh93u+, dash:
     zsh       p q y      the element is replaced by the two words
     bash 5.3  a[$i]: cannot assign list to array member   (status 1, line abandoned)
     bash 3.2  the same sentence, the same status
-    ksh93     x p        a nested value, which this interpreter cannot hold
+    ksh93     x p        the element becomes an array of its own
     dash      a syntax error before any of it
 
-There is nothing to fall back on. The two readings that can be built here
-leave arrays of *different lengths*, so a core that guessed would be wrong
-in a way no script could see: status 0, an array on the other side, and
-plausible contents. That is what it was doing — the subscript was dropped
-and the literal became the whole array — and `SubscriptedArrayLiteral` is
-the axis that replaces the guess, with an unanswered dialect refused by
-name.
+There is nothing to fall back on. The three readings leave arrays of
+*different lengths* and two different kinds of element, so a core that
+guessed would be wrong in a way no script could see: status 0, an array on
+the other side, and plausible contents. That is what it was doing — the
+subscript was dropped and the literal became the whole array — and
+`SubscriptedArrayLiteral` is the axis that replaces the guess, with an
+unanswered dialect refused by name.
 
 ### The rows that fix the reading
 
@@ -17135,6 +17135,64 @@ A range on a plain *string* is a span of characters there (`s=hello;
 s[2,3]=x` is `hxlo`), and that is not modeled: the single subscript
 `s[2]=x` has no character write behind it yet either, so a range would be
 the same absent construct wearing a pair.
+
+### The third answer: the element becomes an array
+
+ksh93's reading is neither of the other two. The array's **length does not
+change** and the element named stops being a string — it holds an array of
+its own, which is why this answer waited on the store's element type rather
+than on a branch here (#2620).
+
+Measured on ksh93u+ 2012-08-01, 2026-09-13, `env -i` with a scratch `HOME`:
+
+    a=(x y);   a[1]=(p q)              "${a[@]}" -> x p, at two elements
+    a=(x y);   a[1]=(p q)              typeset -a a=(x (p q) )
+    a=(x y);   a[1]=(p q)              ${a[1]} -> p, ${a[1][1]} -> q
+    a=(x y z); a[1]=()                 three elements still, the middle empty
+    a=(x y);   a[1]+=(p)               typeset -a a=(x (p) )
+    a=(x y);   a[1]=(p q); a[1]+=(r)   typeset -a a=(x (p q r) )
+    a=(x y);   a[1]=(p q); a[1]=z      typeset -a a=(x (z q) )
+    a=(x y);   a[1]=(); a[1]=z         typeset -a a=(x z)
+    s=abc;     s[1]=(p q)              typeset -a s=(abc (p q) )
+    unset a;   a[3]=(x y)              one element, at subscript 3
+
+Four of those are rows a symmetry argument gets wrong. `+=` **appends** to
+an element already holding an array and **replaces** one holding a string,
+so the `y` in the fifth row is gone rather than nested. A plain assignment
+through the subscript goes *into* the nested array and writes its first
+element, which is why the seventh row keeps `q` — and the eighth is the
+exception that states the rule, since an empty nested array has no first
+element for the write to reach and the element goes back to being a string.
+And a name holding a string is **promoted** here where the splicing shell
+refuses it outright.
+
+The element's scalar reading — what `${a[1]}` and a field of `"${a[@]}"`
+answer — is the nested array's own first element, and for an entirely empty
+one it is a newline between two parens rather than the empty string. That
+is measured too: `printf "[%s]" "${a[@]}"` over `a=(x y z); a[1]=()` prints
+`[x][(`, a newline, `)][z]`.
+
+**No range reading is asked for on this route**, and that is a fact about
+the dialect rather than an omission: this shell reads a subscript's comma
+as the arithmetic operator whose value is its right operand, so
+`a[2,3]=(x y)` is `a[3]=(x y)` — the same reading `a[2,3]=x` already takes
+here. Seven of the panel's range rows are that one sentence.
+
+The listing carries one oddity, measured through `od -c` and reproduced
+rather than tidied: a list whose **last** element holds a non-empty array
+is written with a space before its closing paren, and one whose last
+element is anything else is not. `(x (p q) )` and `((m n) (p q) )`, but
+`((p q) y)`, `(1 (p q) 3)` and `(x ())`. A rule that gave every nested
+element a trailing space writes two spaces in the second of those; a rule
+that gave the list one unconditionally writes it in the last three.
+
+Two surfaces are **not modeled** and are recorded here rather than left to
+be rediscovered. A second subscript — `${a[1][1]}` — is still a parse error
+here, so the nested words are reachable only through the listing. And a
+nested array with nothing at subscript 0 splits the shell's own two
+readings: `a=(x y); a[1]=([2]=z)` answers `${a[1]}` with the empty string
+there and `"${a[@]}"` with `x z`, where one store can give only one of them.
+The first is what is implemented, so the second field reads empty.
 
 ### The letter that had to start meaning something
 

@@ -1,0 +1,68 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Command lookup order — #2320. Which of the four things a word could name
+# the shell picks, and what changes the answer.
+#
+# The order POSIX XCU 2.9.1.1 gives is: a special builtin, then a function,
+# then a regular builtin, then PATH. The pieces are made here — two
+# directories with a program of the same name in each — so the answer is the
+# rule rather than what is installed on the machine.
+#
+# `command -v` on a name that is nothing is held out: dash answers 127 where
+# the other three answer 1, so it is a dash answer and it is asked in dash/.
+
+mkdir -p bin1 bin2
+printf '#!/bin/sh\nprintf "bin1 tool\\n"\n' > bin1/tool; chmod 755 bin1/tool
+printf '#!/bin/sh\nprintf "bin2 tool\\n"\n' > bin2/tool; chmod 755 bin2/tool
+
+# PATH is searched left to right, and the first directory with the name wins.
+PATH="$PWD/bin1:$PWD/bin2:/usr/bin:/bin"
+tool
+PATH="$PWD/bin2:$PWD/bin1:/usr/bin:/bin"
+tool
+PATH="$PWD/bin1:$PWD/bin2:/usr/bin:/bin"
+
+# A function of the same name is found before anything on PATH, and `command`
+# is what reaches past it. Removing the function uncovers the program again.
+tool() { printf 'function tool\n'; }
+tool
+command tool
+unset -f tool
+tool
+
+# A function is found before a regular builtin too, and `command` reaches past
+# that one the same way.
+true() { printf 'function true\n'; }
+true; printf 'status %s\n' "$?"
+command true; printf 'command true -> %s\n' "$?"
+unset -f true
+true; printf 'plain true -> %s\n' "$?"
+
+# A builtin that changes the shell is no different: a function named `cd` is
+# what `cd` runs.
+cd() { printf 'function cd\n'; }
+cd /tmp
+unset -f cd
+
+# `command -v` reports what the name would run, and its status says whether
+# the name is anything at all.
+printf '#!/bin/sh\nprintf "external mytool\\n"\n' > bin1/mytool; chmod 755 bin1/mytool
+mytool
+command -v mytool > /dev/null; printf 'command -v external -> %s\n' "$?"
+myfn() { :; }
+command -v myfn > /dev/null; printf 'command -v function -> %s\n' "$?"
+command -v true > /dev/null; printf 'command -v builtin -> %s\n' "$?"
+
+# A word with a slash in it is a path and is not looked up at all.
+./bin1/tool
+
+# The three ways a command does not run, and the statuses POSIX reserves for
+# them: nothing of that name is 127, whether the name was never anywhere or
+# PATH no longer has it, and a file that is found and cannot be executed is
+# 126.
+nosuchthing_zz 2>/dev/null; printf 'not found -> %s\n' "$?"
+PATH=/nonexistent_zz; tool 2>/dev/null; printf 'empty path -> %s\n' "$?"
+PATH="$PWD/bin1:$PWD/bin2:/usr/bin:/bin"
+printf 'x\n' > notexec; chmod 644 notexec
+./notexec 2>/dev/null; printf 'not executable -> %s\n' "$?"

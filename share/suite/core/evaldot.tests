@@ -1,0 +1,78 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# eval, `.` and source — #2322. The two ways a shell runs text that was not
+# in the script when it started, and both are special builtins.
+#
+# What the panel splits on is held out and named:
+#   `. ./nosuchfile`   bash answers 1, zsh 127, and ksh93 and dash end the
+#                      script — a special builtin's failure is fatal in a
+#                      non-interactive shell, and the three answers to "what
+#                      failed" are not the same answer.
+#   `$0` in a dot file zsh alone renames it to the sourced file. It is asked
+#                      in zsh/ instead, where being alone is the claim.
+
+eval 'printf "simple\n"'
+eval printf '"%s\\n"' unquoted
+eval 'printf "%s\n" "one" "two"'
+
+# The words are joined with a space and then read as shell input, so a
+# multi-word eval is one command line rather than several.
+eval 'printf' "'%s\n'" 'joined args'
+
+# The text goes through the whole expansion the shell does for anything else,
+# and it is expanded twice — once to build the string, once when the string is
+# run. That second pass is what eval is for.
+v=world
+eval 'printf "hello %s\n" "$v"'
+eval 'printf "%s\n" $(printf "sub")'
+w='printf "from variable\n"'
+eval "$w"
+x='$v'
+eval "printf '%s\n' \"$x\""
+
+# It runs in the current shell, so its assignments and its arithmetic stay.
+eval 'a=1'; printf 'assigned %s\n' "$a"
+n=1; eval "n=$((n+1))"; printf 'n=%s\n' "$n"
+
+# Any shell input at all, not only a simple command.
+eval 'printf "a\n"; printf "b\n"'
+eval 'for w in x y; do printf "%s " "$w"; done'; printf '\n'
+eval 'if true; then printf "compound\n"; fi'
+
+# The status is the status of what it ran, and nothing to run is a success.
+eval ''; printf 'empty eval -> %s\n' "$?"
+eval 'false'; printf 'false eval -> %s\n' "$?"
+
+printf -- '--- dot ---\n'
+
+# A dot script runs in the current shell: its assignments and its function
+# definitions are still there afterwards.
+printf 'printf "sourced\\n"\n' > s1.sh
+. ./s1.sh
+printf 'sv=set-by-source\n' > s3.sh
+. ./s3.sh; printf 'sv=%s\n' "$sv"
+printf 'f_from_source() { printf "defined in source\\n"; }\n' > s6.sh
+. ./s6.sh; f_from_source
+
+# It sees the caller's positional parameters rather than a set of its own.
+printf 'printf "args [%%s][%%s]\\n" "$1" "$2"\n' > s2.sh
+. ./s2.sh
+set -- outer1 outer2
+. ./s2.sh
+
+# `return` in a dot script ends the script and gives it that status; the rest
+# of the file does not run.
+printf 'return 7\nprintf "not reached\\n"\n' > s4.sh
+. ./s4.sh; printf 'return from dot -> %s\n' "$?"
+
+# A dot script may source another.
+printf 'printf "nested outer\\n"\n. ./s1.sh\n' > s5.sh
+. ./s5.sh
+
+# A name with no slash in it is looked up on PATH, which is what makes `.`
+# the way a script loads a library rather than a file.
+mkdir -p sub
+printf 'printf "found on path\\n"\n' > sub/s7.sh
+PATH="$PWD/sub:$PATH"
+. s7.sh

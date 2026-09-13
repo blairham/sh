@@ -244,20 +244,6 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 		// takes its csh reading when the word is not a number.
 		name := strings.Join(names, " ")
 
-		// `N>&M` and `N<&M` duplicate a descriptor, and `N>&-` closes one.
-		// No file is opened, so the gate has nothing to see: this rearranges
-		// streams the shell already holds.
-		//
-		// Copying the stream *as it is now* is the whole of it, and is why
-		// order matters — `>f 2>&1` sends both to the file and `2>&1 >f`
-		// sends only stdout there, because the second one copied stdout
-		// before it was redirected. All four shells agree, and getting it
-		// right needs no special case: the loop already runs left to right.
-		// `>&word` is the csh spelling of `&>word` in the dialects that kept
-		// it, and it is that spelling exactly: the same flags, the same both
-		// streams, the same `set -C`, the same words for an open that failed.
-		// Rebinding the operator rather than copying the open is the whole of
-		// it — a second copy is a second place to forget noclobber.
 		// `N<&M-` and `N>&M-` are the move operators: duplicate M onto N and
 		// close M, as one operator rather than as a duplication followed by a
 		// separate close. The suffix is read here, before anything else looks
@@ -280,6 +266,20 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			}
 		}
 
+		// `N>&M` and `N<&M` duplicate a descriptor, and `N>&-` closes one.
+		// No file is opened, so the gate has nothing to see: this rearranges
+		// streams the shell already holds.
+		//
+		// Copying the stream *as it is now* is the whole of it, and is why
+		// order matters — `>f 2>&1` sends both to the file and `2>&1 >f`
+		// sends only stdout there, because the second one copied stdout
+		// before it was redirected. All four shells agree, and getting it
+		// right needs no special case: the loop already runs left to right.
+		// `>&word` is the csh spelling of `&>word` in the dialects that kept
+		// it, and it is that spelling exactly: the same flags, the same both
+		// streams, the same `set -C`, the same words for an open that failed.
+		// Rebinding the operator rather than copying the open is the whole of
+		// it — a second copy is a second place to forget noclobber.
 		op := rd.Op
 		if r.greatAmpNamesAFile(rd, name) {
 			op = syntax.TokAmpGreat
@@ -383,6 +383,13 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			// relocates a descriptor onto itself, which is a descriptor that
 			// is still open, and closing it would be a close the script did
 			// not write.
+			//
+			// A destination that outlives its command takes the close with
+			// it whatever the form says, and that is not a nicety: giving
+			// the source back needs a save of the table, and a save is
+			// exactly what a persisting `{name}` redirection must not have,
+			// since restoring it would take the install back too. One
+			// operation, one lifetime.
 			if moveFrom >= 0 && moveFrom != fd {
 				closeMovedSource(moveFrom, persists || r.sem().FdMove == FdMoveDuplicatesThenCloses)
 			}

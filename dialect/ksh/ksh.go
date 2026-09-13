@@ -1061,6 +1061,12 @@ func Semantics() interp.Semantics {
 	// the path it was given, and `cd -` then names it — this shell judges the
 	// value when something tries to use it and not before.
 	s.InheritedOldpwd = interp.InheritedOldpwdTaken
+	// And the name this shell gives the directory it starts in: a `PWD` it
+	// was handed is kept whatever it says, and with none handed over the
+	// directory is named under `$HOME` where it sits there — where three of
+	// the panel simply ask the kernel. Measured 2026-09-13 under the macOS
+	// `TMPDIR`, which is reached through a symbolic link.
+	s.StartupPwdName = interp.StartupPwdNameFromTheEnvironmentOrHome
 	s.CdWithoutHomeIsAnError = interp.Yes
 	s.CdDashPrintsTheDirectory = interp.Yes
 	s.PrintfAssignsWithV = interp.No

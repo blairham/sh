@@ -1598,6 +1598,9 @@ func Semantics() interp.Semantics {
 	// is why `OLDPWD=/nonexistent zsh -c 'cd -'` says nothing and reports 0:
 	// there is no unusable value to refuse.
 	s.InheritedOldpwd = interp.InheritedOldpwdIgnored
+	// And the starting directory is named by what the kernel reports, however
+	// the parent spelled it.
+	s.StartupPwdName = interp.StartupPwdNameFromTheKernel
 	s.CdWithoutHomeIsAnError = interp.No
 	s.CdDashPrintsTheDirectory = interp.No
 	s.PrintfAssignsWithV = interp.Yes

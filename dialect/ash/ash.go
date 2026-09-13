@@ -385,6 +385,12 @@ func Semantics() interp.Semantics {
 	// $OLDPWD'` answers the path it was given, and `cd -` then answers `can't cd
 	// to /nonexistent: No such file or directory` at 2.
 	s.InheritedOldpwd = interp.InheritedOldpwdTaken
+	// A handed-in `PWD` names the starting directory here too, but only where
+	// it really is that directory: measured 2026-09-13 in the pinned image,
+	// `PWD=/link/d` under a symbolic link survives and `PWD=/usr` in a
+	// directory that is not `/usr` is dropped for the real path. ksh93 keeps
+	// that second one, and also looks at `$HOME` where this shell does not.
+	s.StartupPwdName = interp.StartupPwdNameFromTheEnvironmentWhenItFits
 	s.CdWithoutHomeIsAnError = interp.No
 	s.CdEmptyOperandIsAnError = interp.No
 	s.CdEmptyHomeIsAnError = interp.No

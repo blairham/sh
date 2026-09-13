@@ -416,6 +416,10 @@ func Semantics() interp.Semantics {
 	// Measured 2026-09-12: `OLDPWD=/nonexistent dash -c 'echo $OLDPWD'` answers
 	// the path it was given, and `cd -` then answers `can't cd to` it at 2.
 	s.InheritedOldpwd = interp.InheritedOldpwdTaken
+	// dash names its starting directory by asking the kernel, whatever it was
+	// handed, which is where it parts company with the other ash-derived
+	// shell in the panel.
+	s.StartupPwdName = interp.StartupPwdNameFromTheKernel
 	s.CdWithoutHomeIsAnError = interp.No
 	s.CdDashPrintsTheDirectory = interp.Yes
 	s.PrintfAssignsWithV = interp.No

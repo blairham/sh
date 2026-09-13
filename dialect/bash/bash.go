@@ -971,6 +971,9 @@ func Semantics() interp.Semantics {
 	// stat rather than the one `cd` makes. bash 3.2 drops an inherited OLDPWD
 	// whatever it names, which is a fourth answer and not this dialect's.
 	s.InheritedOldpwd = interp.InheritedOldpwdTakenIfADirectory
+	// `PWD` is a different answer from OLDPWD's here: the starting directory
+	// is named by what the kernel reports, in 5.3 and 3.2 alike.
+	s.StartupPwdName = interp.StartupPwdNameFromTheKernel
 	s.CdWithoutHomeIsAnError = interp.Yes
 	s.CdDashPrintsTheDirectory = interp.Yes
 	s.PrintfAssignsWithV = interp.Yes

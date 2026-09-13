@@ -1399,10 +1399,28 @@ func (r *Runner) splitEachElement(elems []string, sp splitPolicy, glob Answer) [
 	split := sp.answer(r.sem().SplitParamExpansion)
 	var out []string
 	for _, el := range elems {
-		if el == "" && r.expandingNestedInner {
+		if el == "" && (r.expandingNestedInner || sp == splitNever) {
 			// Unless the fields are an inner's, where the element is a value
 			// the operator around it is about to read rather than a word the
 			// command line is about to lose. See Runner.expandingNestedInner.
+			//
+			// Or unless nothing is going to keep the fields at all. In a
+			// context that keeps one word the caller joins what comes back,
+			// so an element dropped here is a *separator* dropped rather
+			// than a field — and the empty element is exactly the shape
+			// whose whole contribution is the separator beside it. Measured
+			// 2026-09-12, `set -- a "" b; x=$@`, which is portable enough
+			// to ask every column: dash, bash 5.3, ksh93 and zsh all answer
+			// `a  b`, and `set -- "" ""; x=$@` is one space in all four.
+			// The `*` spelling answers the same in every column including
+			// bash 3.2. This dropped the element and answered `a b`.
+			//
+			// bash 3.2 is the one deviation, and only on `@`: it answers
+			// `a b` and an empty string. Recorded rather than modeled, for
+			// the reason unsplitJoinSeparator gives about the very same
+			// pair of spellings — it is a version this repository grades
+			// nothing against, and the same build answers `a  b` to `$*`,
+			// so the shell disagrees with itself (#2326).
 			out = append(out, r.escapeResult(el, glob))
 			continue
 		}
@@ -2714,12 +2732,28 @@ func (r *Runner) bareArrayAsList(e *syntax.ParamExpr, s syntax.Span, sp splitPol
 			return nil, false
 		}
 	case s.Quoting == syntax.Unquoted:
-		// In a context that splits, and under an operator the array branch
-		// answers with the elements. Both measured; see the note above.
-		if sp == splitNever {
+		// With no operator, and in a context that keeps no fields, the two
+		// readings coincide and the scalar path already answers: measured,
+		// `IFS=-; v=$a` is `x-y-z` in the shell with the reading too. With
+		// one, they do not, and the operator runs over the *elements* with
+		// the join happening after it — which is the whole of #2326:
+		//
+		//	y=(ab ab); x=${y#ab}      zsh ` `, and this shell ` ab`
+		//	z=(x y);   x=${z:/x/Q}    zsh `Q y`, and this shell `x y`
+		//
+		// The quoted spelling is the control and the two are each other's:
+		// `x="${y#ab}"` is ` ab` in zsh as well, because there the join at
+		// rule 5 runs first and the trim takes one `ab` off the pair it
+		// made. This shell gave the quoted answer to both.
+		//
+		// The flag-group path has answered it this way since #2290 —
+		// `x=${(j:+:)y#ab}` is `+` on both sides — and this is the same
+		// rule reached by a word with no flag group in it, so the two must
+		// not be able to disagree.
+		if sp == splitNever && e.Op == syntax.ParamNone {
 			return nil, false
 		}
-		if e.Op != syntax.ParamNone && !r.listShapedOp(e) {
+		if e.Op != syntax.ParamNone && !r.listShapedOp(e) && sp != splitNever {
 			return nil, false
 		}
 	case opReadsTheList(e.Op):
@@ -2775,7 +2809,14 @@ func (r *Runner) bareArrayAsList(e *syntax.ParamExpr, s syntax.Span, sp splitPol
 			return nil, false
 		}
 	case n == 0:
-		if !isArray || !rcExpandOn(s) {
+		// A distributive expansion is one caller that can say "no fields";
+		// an inner expansion and a count are the others, and they were
+		// missing. Measured on zsh 5.9.2, `u=()`: `${#${u}[@]}` is `0` and
+		// `${#${u}}` is `0`, where a scalar path with one empty string to
+		// answer with counts 1 (#2326). Runner.expandingNestedInner is the
+		// flag both of those set — see countingElements — and it is the
+		// same reason it exempts an empty element from being dropped.
+		if !isArray || (!rcExpandOn(s) && !r.expandingNestedInner) {
 			return nil, false
 		}
 	case n == 1 && !opReadsTheList(e.Op):

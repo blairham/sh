@@ -7805,6 +7805,27 @@ echo "st=$?"`,
 		Why:     "the third route into the same store, recorded because one of the three not abandoning would say the check sits at the wrong level rather than being missing once. ksh93 and zsh report the parameter and keep `[keep]`; the three bashes end the shell over it and never reach the `echo`, which is the ordinary `set -u` split and not a disagreement about the assignment",
 	},
 	{
+		ID: "array/an-operator-over-a-bare-name-runs-before-the-join", Category: "expansion",
+		Snippet: `y=(ab ab); x=${y#ab}; printf "[unq=%s]" "$x"; x="${y#ab}"; printf "[q=%s]" "$x"; echo`,
+		Why:     "the two spellings are each other's control and they are the whole of the report: the same characters in the same assignment, parting on where the join sits. Unquoted, zsh applies the trim to each element and joins what is left, so both elements empty and the separator between them is all there is — one space. Quoted, the join at rule 5 runs first and the trim takes one `ab` off the front of the pair it made, leaving ` ab`. The other three that have arrays read a bare name as its first element — the axis ArrayScalarIsTheWholeArray — so `${y#ab}` is `${y[0]#ab}` and both columns are empty there, and dash and ash have no array literal to write. This shell gave the quoted answer to both (#2326)",
+	},
+	{
+		ID: "array/an-empty-element-survives-a-join-that-keeps-one-word", Category: "expansion",
+		Snippet: `set -- a "" b; x=$@; printf "[at=%s]" "$x"; x=$*; printf "[star=%s]" "$x"; set -- "" ""; x=$@; printf "[two=%s]" "$x"; echo`,
+		Why:     "an unquoted list reaching a context that keeps one word is joined rather than split, so an element the split reading would drop is a *separator* here and not a field. The positional parameters are the portable spelling, which is what lets every column answer: six of the seven say `a  b` to both, and to two spaces' worth of nothing for the pair of empty ones. bash 3.2 is the single deviation and only on `@` — it answers `a b` and an empty string while the same build answers `a  b` to `$*`, so the shell disagrees with itself, which is why this is recorded rather than modeled, exactly as its unquoted `${a[*]}` join already is. This shell dropped the element in every dialect and answered `a b`, which is also what stopped `y=(ab ab); x=${y#ab}` in the row above from being able to come out right (#2326)",
+	},
+	{
+		ID: "array/counting-an-empty-array-through-an-inner-expansion", Category: "expansion",
+		Snippet: `u=(); printf "[sub=%s]" ${#${u}[@]}; printf "[bare=%s]" ${#${u}}; v=(a b); printf "[two=%s]" ${#${v}[@]}; echo`,
+		Why:     "an inner expansion is one of the callers that can say *no fields*, and an empty array is the one value where that differs from a single empty one. zsh counts `0` and `0`; this counted `1` and `1`, because the list reading was declined for a name holding nothing and the scalar path has only the empty string to answer with. The third column is the control that says the counting itself works. Only the one grammar with nested expansions can write the line; the rest refuse it (#2326)",
+	},
+	{
+		ID: "array/a-length-over-a-quoted-inner-is-refused", Category: "expansion",
+		GradedOnRefusal: true,
+		Snippet:         `v=abc; printf "[%s]" ${#"$(echo abc)"}; echo`,
+		Why:             "every column refuses this and they refuse it in their own words, which is what the flag above is for: zsh and both bashes call it a bad substitution at run time, dash blames an unterminated quoted string and ksh93 the `\"` itself, each at its own status. The quotes are the whole of it — `${#$(echo abc)}` is `1` in zsh, a *count* of the fields the substitution came to, and `${#${v}}` is `3` — so the refusal is about the name position and not about the operator. This answered `3` at status 0, which is the plausible-value failure this surface's refusals exist to prevent, and it is deferred to the run rather than raised at parse time: measured, the same characters inside an `if false` branch are no error at all in zsh (#2326)",
+	},
+	{
 		ID: "assoc/unsetting-at-is-a-key-and-not-every-element", Category: "expansion",
 		Snippet: `typeset -A m; m[k]=v; m[j]=w; unset "m[@]"; echo "n=${#m[@]}"`,
 		Why:     "the whole-array reading belongs to the indexed array alone. With the attribute on, `@` is a key like any other and nothing was stored under it, so all three that have the attribute leave both elements where they are — including the two that clear an indexed array through the same spelling. It is the boundary a fix is likeliest to cross by accident, because the two kinds share a builtin and an operand shape",

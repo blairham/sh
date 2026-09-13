@@ -731,6 +731,11 @@ scan:
 	// substitution. A prefix test here as well was a second copy of the same
 	// rule, and mutants that widened *this* one were unobservable because
 	// the other still refused — which is how the duplication was found.
+	// Whether a quote was *written* in front of the inner, which the span's
+	// own Quoting cannot say: an inner inherits the quoting of whatever
+	// encloses the whole expansion, so `"${#${v}}"` and `${#"${v}"}` both
+	// carry DoubleQuoted and only the source text tells them apart.
+	innerQuoteWritten := s != "" && (s[0] == '"' || s[0] == '\'')
 	if p.dialect.NestedParamExpansion {
 		if inner, rest, ok := p.scanNestedExpansion(s, start, q); ok {
 			// Src as well as the node: a diagnostic about a nested expansion
@@ -754,6 +759,32 @@ scan:
 	// branch never taken is no error at all in the shell that refuses it.
 	// See [Dialect.ParamLengthRefusesTheBangName].
 	if p.dialect.ParamLengthRefusesTheBangName && e.Length && e.Name == "!" {
+		e.Bad, e.Src = true, src
+		return e
+	}
+	// A length over a *quoted* inner is refused, where the same inner without
+	// the quotes is measured. Only the one grammar with nested expansions can
+	// write it, so this is a rule of the construct rather than a flag: it is
+	// not a disagreement anybody else has an answer to.
+	//
+	// Measured on zsh 5.9.2, 2026-09-12, with `v=abc`:
+	//
+	//	${#${v}}            3   the inner unquoted
+	//	${#$(echo a b)}     2   a substitution, and a *count* of its fields
+	//	${#"${v}"}          bad substitution
+	//	${#"$(echo ab)"}    bad substitution
+	//	${#"${v[@]}"}       bad substitution
+	//	${(@f)"$(echo ab)"} ab  and the idiom the quotes exist for is fine
+	//
+	// Deferred to the run like every other unreadable expansion in this
+	// grammar, which is measured too: the same characters inside an `if
+	// false` branch are no error at all there. This shell answered `3` and
+	// `1` to the refused rows, which is a plausible value at status 0 and is
+	// the shape this surface's refusals exist to prevent (#2326).
+	// The quote has to have been *written* here: an inner inherits the
+	// quoting of whatever encloses the expansion, so a span's Quoting would
+	// refuse `"${#${v}}"` as well — which zsh answers with `3`.
+	if e.Length && e.Inner != nil && innerQuoteWritten {
 		e.Bad, e.Src = true, src
 		return e
 	}

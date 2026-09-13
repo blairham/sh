@@ -12032,10 +12032,41 @@ arrays, which is why the axis is absent rather than false there.
 
 The field-count half of what `ArrayScalarIsTheWholeArray` answers for the
 value, and separate from it because the same shell answers the two
-differently by quoting: `"$a"` is one joined field in zsh as well. So the
-divergence is exactly the *unquoted* spelling in a context that splits —
-an assignment's value, a `case` subject and a here-document body join it
-in every shell, measured.
+differently by quoting: `"$a"` is one joined field in zsh as well.
+
+**A context that keeps one word joins, and where it joins is the whole of
+the question.** With no operator the two readings coincide there and the
+join is all that is visible — `IFS=-; v=$a` is `x-y-z` in zsh as much as
+anywhere. With an operator they do not: the operator runs over the
+*elements* and the join happens after it. Measured on zsh 5.9.2,
+2026-09-12, and the two spellings are each other's control:
+
+    y=(ab ab); x=${y#ab}     ` `     each element trimmed to nothing, and
+                                     the separator between them is all
+                                     that is left
+    y=(ab ab); x="${y#ab}"   ` ab`   the join at rule 5 runs first, and the
+                                     trim takes one `ab` off the pair
+    z=(x y);   x=${z:/x/Q}   `Q y`   the element-selecting operators from
+                                     the other side
+    IFS=-; z=(one two); x=${z#o}     `ne-two`, so the join after the
+                                     operator is IFS's
+
+An implementation that declines the list reading in every context that
+keeps one word answers the quoted column to both, which this one did
+(#2326). The flag-group path has answered it the other way since #2290 —
+`x=${(j:+:)y#ab}` is `+` on both sides — and a word with no flag group in
+it must not be able to disagree.
+
+**An empty element survives that join**, which is not this axis and is
+what the row above needs in order to come out right at all. In a context
+that keeps fields an unquoted empty element is no field; in one that keeps
+one word it is a *separator*, and dropping it drops the separator beside
+it. Measured with the portable spelling, so every column answers: `set --
+a "" b; x=$@` is `a  b` in dash, bash 5.3.15, ksh93u+ and zsh 5.9.2, and
+`set -- "" ""; x=$@` is one space in all four. bash 3.2 is the single
+deviation and only on `@`, where the same build keeps the element for
+`$*` — recorded rather than modeled, exactly as its unquoted `${a[*]}`
+join already is.
 
 Asked only where the two readings differ: more than one element, or
 exactly one under an operator that still reads the list there — a slice,

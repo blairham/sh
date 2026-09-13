@@ -20,10 +20,13 @@ import (
 //
 // It was briefly not empty. #2045 needed Unicode decomposition data to close
 // a sandbox escape, took `golang.org/x/text/unicode/norm` to get it, and the
-// table came back into the repository a day later as internal/unorm — the
-// same answer internal/eastasian had already reached for East Asian Width.
-// The list is kept rather than deleted because a guard that exists only
-// while it has something to hold is a guard that will be missing next time.
+// table came back into the repository as internal/unorm — the same answer
+// internal/eastasian had already reached for East Asian Width. It was a
+// direct requirement of this module for 54 minutes, between two merges on
+// 2026-09-11; this comment said "a day later" until somebody checked the
+// dates. The list is kept rather than deleted because a guard that exists
+// only while it has something to hold is a guard that will be missing next
+// time.
 //
 // An entry here costs a deliberate edit and a sentence saying why, which is
 // the price a dependency should cost a substrate.

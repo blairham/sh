@@ -117,19 +117,47 @@ snapshot:
   version_template: "{{ incpatch .Version }}-next"
 
 changelog:
+  # **A first tag has no predecessor, so there is nothing to compare against
+  # and the whole history becomes the changelog.** Measured on this tree at
+  # v0.0.0: 1224 entries and 188,381 characters, against GitHub's limit of
+  # 125,000 for a release body — so the release would have failed at the very
+  # last step, with every artifact built and the tag already public. It is also
+  # not a changelog anybody wants: "everything, since the beginning" is what a
+  # first release means. The header in `release:` below is the note instead.
+  disable: '{{ eq .PreviousTag "" }}'
   sort: asc
   use: github
+  # `use: github` falls back to `git` whenever the compare is unavailable — a
+  # first tag, a shallow clone — and git's default line carries the full 40
+  # character SHA and the author's name and address. That is about ninety bytes
+  # a line of what no reader asked for, and one copy of an email address per
+  # commit on a public page; the subject already ends in its pull request
+  # number, which is the link worth having.
+  format: '{{ .Message }}'
   groups:
-  - title: Features
-    regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+  # **Grouped by the subsystem each subject already names.** This tree does not
+  # write conventional commits, and the `feat:`/`fix:` groups that used to be
+  # here matched **zero of 1224** subjects — so every entry fell through to
+  # "Other" and the two groups were decoration that read as curation. These
+  # prefixes are the ones actually in use; run
+  # `git log --format='%s' | sed -E 's/[:,].*//' | sort | uniq -c | sort -rn`
+  # before changing them.
+  - title: Dialects
+    regexp: '^(bash|zsh|ksh|dash|ash|dialect)[,:]'
     order: 0
-  - title: Bug Fixes
-    regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+  - title: The interactive shell
+    regexp: '^(repl|zle|blocks)[,:]'
     order: 1
+  - title: The language and the interpreter
+    regexp: '^(interp|syntax|expansion|pattern|arrays|declarations|traps|printer|diagnostics|driver)[,:]'
+    order: 2
   - title: Other
     order: 999
   filters:
     exclude:
+    # These are live, unlike the groups that used to sit above: 19 `docs:`,
+    # 3 `test:` and 2 `chore:` on this tree. Checked rather than assumed —
+    # the groups were not.
     - '^docs:'
     - '^test:'
     - '^chore:'
@@ -209,5 +237,50 @@ release:
   target_commitish: "{{ .Commit }}"
   prerelease: auto
   mode: replace
+  # The changelog is suppressed for a first tag — see `changelog:` above — so
+  # this header is the whole of what a reader gets on the v0.0.0 page. It says
+  # what the thing is, what it scored, and what is missing, in that order.
+  header: |
+    A shell parser, interpreter and formatter in Go. One core — the common
+    denominator of real shells — with `bash`, `zsh`, `ksh`, `dash` and `ash`
+    as presets over a semantics vector rather than forks of one another.
+
+    **The first tag is `v0.0.0`, and it means it.** This is early, and
+    breakage is expected.
+
+    ### What is in the archive
+
+    Six binaries: the substrate driver `sh`, and the five dialect binaries.
+    They install into `libexec` and **never** into a `bin` directory — they
+    are named after the shells they model, so a directory ahead of `/bin` on
+    `PATH` would answer for every program on the machine that resolves a
+    shell by name.
+
+        brew install blairham/tap/sh
+
+    ### Where it stands
+
+    Each dialect graded against the real shell it models, over 3670 cases —
+    `make conformance-dialects`:
+
+    | binary | against | exact | behavioral |
+    | --- | --- | --- | --- |
+    | `bash` | bash 5.3.15 | 96% | **100%** |
+    | `zsh` | zsh 5.9.2 | 98% | 99% |
+    | `dash` | dash | 98% | **100%** |
+    | `ksh` | ksh93 AJM 93u+ | 91% | 97% |
+    | `ash` | BusyBox 1.37 ash | 79% | 97% |
+
+    *Exact* is byte-identical stdout, stderr and status; *behavioral* allows a
+    diagnostic to be worded differently when the status and output agree. The
+    distance between the two columns is almost entirely message wording.
+
+    ### What is not there yet
+
+    The README's "What is not there yet" is the current list, and it is real.
+    The sandbox contains the shell rather than the process tree; there is no
+    Windows target; and diagnostic wording is the largest remaining gap.
+  # `.PreviousTag` is empty for a first tag, which would render this as a
+  # `compare/...v0.0.0` link that goes nowhere.
   footer: |
-    **Full Changelog**: https://github.com/blairham/sh/compare/{{ .PreviousTag }}...{{ .Tag }}
+    {{ with .PreviousTag }}**Full Changelog**: https://github.com/blairham/sh/compare/{{ . }}...{{ $.Tag }}{{ end }}

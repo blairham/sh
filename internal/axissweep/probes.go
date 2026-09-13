@@ -303,6 +303,21 @@ func Probes() []Probe {
 			},
 		},
 		{
+			Field:   "AliasListingQuotesTheName",
+			Cases:   []string{"alias/a-listing-spells-a-name-that-needs-quoting"},
+			Reading: "the row lists an alias whose name holds a `#`, which every shell in the panel takes in a name and none of them would read back bare; a listing that quotes names writes `'a#b'=` and one that does not writes `a#b=`",
+			Read: func(cells map[string]oracle.Result) (string, string) {
+				r := cells["alias/a-listing-spells-a-name-that-needs-quoting"]
+				switch {
+				case strings.Contains(r.Stdout, "'a#b'="):
+					return "Yes", ""
+				case strings.Contains(r.Stdout, "a#b="):
+					return "No", ""
+				}
+				return "", "the listing did not write the entry back, so there is no name in it to have been spelled either way"
+			},
+		},
+		{
 			Field:   "PrefixToAFunctionIsExported",
 			Cases:   []string{"axis/whether-a-prefix-to-a-function-is-exported"},
 			Reading: "the function asks `export -p` about the name its own prefix set, and answers YES where the prefix carried the export attribute in",

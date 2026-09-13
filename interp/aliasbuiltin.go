@@ -192,6 +192,10 @@ func (r *Runner) commandVAliasLine(display, value string, kind AliasKind) string
 	if kind == AliasSuffixKind {
 		return value
 	}
+	// Spelled before the letter goes in front of it, or the letter and the
+	// name would be quoted together as one word and the line would no longer
+	// define anything back.
+	display = r.listedAliasName(display)
 	if kind == AliasGlobalKind {
 		// The kind's own letter, so the line really would define it back.
 		// Only one dialect has a kind to put here.
@@ -728,7 +732,33 @@ func (r *Runner) aliasLine(name string, form aliasForm) string {
 	} else {
 		value = r.aliases[name].value
 	}
-	return prefix + name + "=" + r.quoteListedValue(r.sem().AliasQuoting, "`alias`", value)
+	return prefix + r.listedAliasName(name) + "=" +
+		r.quoteListedValue(r.sem().AliasQuoting, "`alias`", value)
+}
+
+// listedAliasName spells an alias's name for a listing that would define the
+// entry back, which is a different question from spelling its value.
+//
+// Only three shells can be asked at all — bash and ksh93 refuse `$` in a name
+// outright, so a listing there never holds one — and of the five, zsh alone
+// quotes. See Semantics.AliasListingQuotesTheName for the measurement and for
+// which routes it reaches; the wording is AliasQuoting's, because zsh's name
+// rule is its value rule character for character.
+//
+// Asked only for a name that would be spelled differently either way, so a
+// dialect that has not answered is not stopped from listing `alias ls=ls`.
+// The bare test is the shared one the values use, which has per-dialect edges
+// of its own — `a^b` is bare in ksh93 and quoted in zsh — and moving it moves
+// the names with it, which is the point of asking through it rather than
+// beside it.
+func (r *Runner) listedAliasName(name string) string {
+	if listedValueIsBare(name) {
+		return name
+	}
+	if !r.ask(r.sem().AliasListingQuotesTheName, "an alias listing spelling a name that needs quoting") {
+		return name
+	}
+	return r.quoteListedValue(r.sem().AliasQuoting, "`alias`", name)
 }
 
 // ExpandingAlias is the parser's hook: what a name stands for when this shell

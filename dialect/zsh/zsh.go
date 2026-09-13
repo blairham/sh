@@ -847,6 +847,7 @@ func Semantics() interp.Semantics {
 	s.AliasNotFoundStatusCounts = interp.No
 	s.UnaliasAllRefusesOperands = interp.Yes
 	s.AliasQuoting = interp.ListingQuoteWhenNeededRuns
+	s.AliasListingQuotesTheName = interp.Yes
 	s.TrapQuoting = interp.ListingQuoteWhenNeededPlain
 	// `typeset -p` writes `typeset v=1`, an exported scalar as `export e=E`
 	// — values in the alias style, keys in the trap one.

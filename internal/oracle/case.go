@@ -18184,6 +18184,16 @@ echo end`,
 		Why:     "whether `alias` checks the *name* it is given at all, and what a refusal costs. Two of the panel check and three take any name: bash 5.3 complains, defines nothing, answers 1 and carries on, ksh93u+ complains and ends the script — so `st=` never prints there and that is the only observable difference, since the builtin's own status is 1 in both — and zsh 5.9.2, dash and BusyBox ash accept the name in silence, which the trailing `look=0` is the evidence for. Semantics.AliasNameRefusedCharacters and Semantics.AliasInvalidNameFatal (#2413). The lookup's own output is discarded because how a listing quotes a name that needs quoting is a different question and would put an unrelated cell in this row",
 	},
 	{
+		ID: "alias/a-listing-spells-a-name-that-needs-quoting", Category: "alias",
+		Snippet: `alias 'a#b'=echo; alias 'a#b'`,
+		Why:     "whether a listing quotes the **name** as well as the value, asked with a character every shell in the panel accepts in a name so that all of them answer — `#` is in neither refused set, where the `$` of `alias/a-name-holding-a-character-it-may-not-carry` is in both. zsh 5.9.2 writes `'a#b'=echo` and the other four leave the name bare, which is what makes Semantics.AliasListingQuotesTheName an axis rather than one column's habit; the *value* half splits differently again in the same cells, since two of them quote a value always and two only when it needs it (#2579)",
+	},
+	{
+		ID: "alias/a-sentence-about-an-alias-leaves-the-name-bare", Category: "alias",
+		Snippet: `alias 'a#b'=echo; type 'a#b'; command -v 'a#b'`,
+		Why:     "how far the name quoting reaches, which is the half a single listing cannot show. The shell that quotes a name writes it bare in the sentence `type` gives and quoted again in `command -v` — prose about a name against a line that would define the entry back, and only the second is the line the quoting is for. Measured 2026-09-13: the same split holds for `command -V` and `whence -v`, and for the names-only listing `alias +` (#2579)",
+	},
+	{
 		ID: "alias/a-pattern-character-in-an-alias-name", Category: "alias",
 		Snippet: `alias 'a*b'=echo; echo "st=$?"; echo two`,
 		Why:     "the two shells that check do **not** refuse the same set, which is why the set is a value on the vector rather than one axis they share. Swept over every printable ASCII character on 2026-09-12: both refuse whitespace and `\" $ & ' ( ) / ; < > \\ ` |`, and ksh93u+ refuses `* ? [ { }` beside them where bash 5.3 takes all five. `]` is in neither set, which is what says the extra five are the pattern characters and not a bracket rule (#2413)",

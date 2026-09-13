@@ -476,6 +476,7 @@ func Semantics() interp.Semantics {
 	s.AliasNotFoundStatusCounts = interp.No
 	s.UnaliasAllRefusesOperands = interp.No
 	s.AliasQuoting = interp.ListingQuoteAlwaysDoubled
+	s.AliasListingQuotesTheName = interp.No
 	s.TrapQuoting = interp.ListingQuoteAlwaysDoubled
 	s.TrapActionIsParsedWhenSet = interp.No
 	s.TrapParseFailureNamesWhereItFired = interp.No

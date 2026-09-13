@@ -1837,7 +1837,7 @@ func (r *Runner) declareFunctions(names []string, narrowed, namesOnly, asDeclara
 	}
 	status := 0
 	for _, name := range names {
-		fn, ok := r.funcs[name]
+		fn, ok := r.reportedFunc(name)
 		if !ok {
 			// Silent, and 1 stands however many other names printed —
 			// measured in both shells that can be asked.

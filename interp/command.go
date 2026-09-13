@@ -167,7 +167,7 @@ func (r *Runner) reportWhatRuns(name string) int {
 	if r.unspecified {
 		return r.status
 	}
-	if _, ok := r.funcs[name]; ok {
+	if _, ok := r.reportedFunc(name); ok {
 		r.printf("%s\n", name)
 		return 0
 	}

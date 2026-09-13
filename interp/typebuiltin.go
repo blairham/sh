@@ -125,7 +125,7 @@ func (r *Runner) typeOneMode(name string, m typeMode) int {
 		return r.typePath(name, m)
 	}
 	if m.noFuncs {
-		if fn, ok := r.funcs[name]; ok {
+		if fn, ok := r.reportedFunc(name); ok {
 			// `-f` splits: two shells use it to leave functions out of the
 			// search, and one turns it around and *prints* the function —
 			// the definition alone, no sentence in front of it.
@@ -170,7 +170,7 @@ func (r *Runner) typePath(name string, m typeMode) int {
 	if !past {
 		// This engine's `-p` speaks only where the plain answer would have
 		// been a file: a function, builtin or keyword is silence and 0.
-		if _, ok := r.funcs[name]; ok && !m.noFuncs {
+		if _, ok := r.reportedFunc(name); ok && !m.noFuncs {
 			return 0
 		}
 		if _, ok := r.lookupBuiltin(name); ok {
@@ -276,7 +276,7 @@ func (r *Runner) functionOrigin(name string) (string, bool) {
 func (r *Runner) typeAll(name string, m typeMode) int {
 	dg := r.diag()
 	found := false
-	if fn, ok := r.funcs[name]; ok && !m.noFuncs {
+	if fn, ok := r.reportedFunc(name); ok && !m.noFuncs {
 		found = true
 		if m.kind {
 			r.printf("function\n")
@@ -382,7 +382,7 @@ func (r *Runner) describeName(name string, kind, skipFuncs bool, notFound string
 	if r.unspecified {
 		return 2
 	}
-	if fn, ok := r.funcs[name]; ok && !skipFuncs {
+	if fn, ok := r.reportedFunc(name); ok && !skipFuncs {
 		if kind {
 			r.printf("function\n")
 			return 0

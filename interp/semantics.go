@@ -2687,8 +2687,11 @@ type Semantics struct {
 	//
 	// Measured 2026-09-13 on ksh93u+ 2012-08-01 and zsh 5.9.2 against bash
 	// 5.3.15, bash 3.2.57 and bash as `sh`. dash and BusyBox ash have no
-	// C-style `for` at all and answer `Bad for loop variable` at 2, so this
-	// is three columns against two rather than a split of the whole panel:
+	// C-style `for` at all — each answers with its own spelling of a syntax
+	// error about the *loop variable*, at 2, raised before any expression is
+	// evaluated — so their silence is a refusal of the grammar rather than a
+	// reading, and this is three columns against two rather than a split of
+	// the whole panel:
 	//
 	//	for ((i=0; i<1/0; i++)); do :; done; echo "A st=$?"
 	//	  bash x3   the complaint, then `A st=1`, ending 0
@@ -2718,8 +2721,26 @@ type Semantics struct {
 	// construct's: measured, a sourced file catches it and `echo after` still
 	// runs, exactly as it does for `(( ))`.
 	//
+	// Two neighbors this is not, both measured the same day and both already
+	// right. `x=$((1/0))` — the *expansion* rather than the header — ends
+	// every column including all three bash ones, so a fix making arithmetic
+	// failure fatal in general would pass this axis and break that. And
+	// `set -u` against a name the header reads ends all five columns too,
+	// arriving before this question is asked.
+	//
+	// Interactively the answer is no for every column, and the axis is not
+	// what decides that. Driven over a pseudo-terminal 2026-09-13, ksh93 and
+	// zsh survive a failing header, `(( 1/0 ))` and `x=$((1/0))` alike, where
+	// the last of those ends them in a script. The corpus cannot reach it —
+	// every case runs under `-c` with no controlling terminal — and nothing
+	// here is conditioned on it: the give-up goes through the same
+	// abandonment path `(( ))` uses, which an interactive read already scopes
+	// to the line it was typed on.
+	//
 	// Asked only on the error path. A header that reads cleanly never reaches
-	// it, which is what keeps `for ((;;))` endless rather than fatal.
+	// it, which is what keeps `for ((;;))` endless rather than fatal, and
+	// TestACleanForHeaderAsksNothing is what fails if the ask is ever hoisted
+	// to the top of the clause.
 	ForHeaderArithmeticErrorIsFatal Answer
 
 	// LetKeepsTheValueBeforeAnIllegalByte leaves `let` with the value its

@@ -44,6 +44,27 @@ const (
 	WidgetKillWordAfter
 	WidgetYank
 	WidgetTransposeChars
+	// Putting the character that was typed into the line.
+	//
+	// **This one is different from every other name here, and the difference
+	// is the reason it took a while to arrive.** The rest are actions a key is
+	// *bound* to; this is what the key loop does when nothing else claims the
+	// key, so for a long time it was not a Widget at all — there was nothing
+	// to bind it to and nothing to name.
+	//
+	// What makes it one is that a shell can redefine it. A syntax highlighter
+	// works by wrapping every widget in `$widgets` and re-colouring the line
+	// after each one, and the widget it most needs is the one that runs when a
+	// person types — so a shell whose table has no `self-insert` is a shell
+	// where a highlighter loads, binds nothing that matters, and never sees a
+	// keystroke (#2485). Measured: `${#widgets}` is 386 in zsh against 43
+	// here, and `${+widgets[self-insert]}` is 1 against 0.
+	//
+	// The editor still performs it. What the name buys is that the key loop
+	// asks, on a printable key, whether the shell has put something in front
+	// of it — see EditorStyle.SelfInsertWidget.
+	WidgetSelfInsert
+
 	WidgetPreviousHistory
 	WidgetNextHistory
 
@@ -217,6 +238,15 @@ func (e *editor) runWidget(w Widget, prompt drawnPrompt) {
 		e.redraw(prompt)
 	case WidgetTransposeChars:
 		e.transpose()
+		e.redraw(prompt)
+	case WidgetSelfInsert:
+		// The key this keystroke is about — see editor.typedKey, which is
+		// what makes `zle .self-insert` from inside a wrapper insert the
+		// character the person actually pressed.
+		if e.typedKey != 0 {
+			e.change(e.typedBefore, func() { e.insert(e.typedKey) })
+			e.typing = true
+		}
 		e.redraw(prompt)
 	case WidgetPreviousHistory:
 		e.browse(-1, prompt)

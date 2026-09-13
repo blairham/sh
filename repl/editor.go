@@ -85,6 +85,19 @@ type editor struct {
 	// keystroke. See browseMatching, which is the whole of it.
 	search matchingWalk
 
+	// typedKey is the character this keystroke is about, and selfInsert is
+	// what the shell calls putting it in the line — empty for a dialect that
+	// does not name it, and then a printable key never leaves this package.
+	//
+	// The key is held rather than passed because the thing that may need it is
+	// several frames away and on the other side of the shell: a widget
+	// wrapping `self-insert` reaches the real insertion by calling `zle
+	// .self-insert`, which comes back through repl.Actions as
+	// WidgetSelfInsert, with nothing in the call that says which key. See
+	// widgets.go.
+	typedKey   rune
+	selfInsert string
+
 	// changes is the line as it was before each change, oldest first, and
 	// `^_` walks back through it. typing and typedBefore say whether this
 	// keystroke and the one before it were characters typed into the line,
@@ -285,7 +298,7 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 			// committed gets the same ending a typed Return gets — which is
 			// the whole of how a plugin's wrapper around `accept-line` works,
 			// since the wrapper is what the key is bound to (#2082).
-			if e.runShellWidget(b.Function, prompt) {
+			if _, accept := e.runShellWidget(b.Function, prompt); accept {
 				e.endLine(prompt, "")
 				return string(e.line), nil
 			}
@@ -416,6 +429,35 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 			r, err := e.readRune(c)
 			if err != nil {
 				return "", err
+			}
+			// The shell first, where it has put something in front of typing.
+			// A syntax highlighter is the case this exists for: it wraps
+			// `self-insert` and recolours the line after the insertion, so a
+			// key that went straight into the line would never reach it
+			// (#2485).
+			//
+			// Asked per keystroke, and it costs a lookup by name in the
+			// shell's widget table — not the table itself; see the dialect's
+			// widgetDefinitionOf, which was a map built per call until this
+			// made it a scan. A session with nothing wrapping `self-insert`
+			// gets false and the ordinary path below, including the drawing
+			// that makes a paste cost the line rather than the line squared.
+			//
+			// A session that *has* one pays a redraw per character, which is
+			// what the shell being imitated pays for the same reason: the
+			// widget is opaque, so there is no telling what it did to the
+			// line.
+			e.typedKey = r
+			if e.selfInsert != "" {
+				if ran, accept := e.runShellWidget(e.selfInsert, prompt); ran {
+					if accept {
+						// A wrapper that committed the line while handling a
+						// printable key. Unlikely and not ours to refuse.
+						e.endLine(prompt, "")
+						return string(e.line), nil
+					}
+					continue
+				}
 			}
 			e.change(e.typedBefore, func() { e.insert(r) })
 			e.typing = true

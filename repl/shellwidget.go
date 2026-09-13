@@ -75,24 +75,30 @@ type Line struct {
 // from one that rewrote the line from one that did neither — and an action
 // that *printed* has moved the screen out from under the prompt whatever it
 // did to the line. Drawing again is right for all three.
-func (e *editor) runShellWidget(name string, prompt drawnPrompt) bool {
+// ran is whether the shell had an action of that name at all, and accept is
+// whether it asked for the line to be committed. The two are separate because
+// a caller may have something of its own to do when the shell has nothing: a
+// printable key asks whether `self-insert` was redefined and, told no, inserts
+// the character itself. A single bool could not say "no such widget" and "it
+// ran and did not accept" apart, and the key would be swallowed.
+func (e *editor) runShellWidget(name string, prompt drawnPrompt) (ran, accept bool) {
 	if e.runFunc == nil {
 		// A session whose front end offered no way to run one. The key is
 		// still claimed — see matchBinding — so it does nothing, which is
 		// what a binding to an action this shell cannot perform means.
-		return false
+		return false, false
 	}
 	out, ok := e.runFunc(name, e.give(), editorActions{e: e, prompt: prompt})
 	if !ok {
 		// The shell declined to run it: no such action, or one whose
 		// definition has gone. It has said so itself if it had anything to
 		// say, and the line is left exactly as it was.
-		return false
+		return false, false
 	}
 	e.line = []rune(out.Buffer)
 	e.pos = min(max(out.Cursor, 0), len(e.line))
 	e.redraw(prompt)
-	return out.Accept
+	return true, out.Accept
 }
 
 // shellWidgets is how a session runs an action the shell owns, with the ctx

@@ -51,6 +51,21 @@ type EditorStyle struct {
 	// to the screen. zsh does; bash does not.
 	ListQueryEchoesTheKey bool
 
+	// SelfInsertWidget is what this shell calls putting the typed character
+	// into the line, and empty for a dialect that does not name it.
+	//
+	// Named, because the name is the whole mechanism: on a printable key the
+	// editor asks the shell whether anything has been put in front of typing,
+	// and it can only ask by name. A syntax highlighter is what does that — it
+	// wraps every widget in the shell's table and recolours the line after
+	// each, so the widget it most needs is the one that runs when a person
+	// types (#2485).
+	//
+	// Empty costs nothing: a printable key never leaves this package, which is
+	// every dialect that has not named it and every session in a shell that
+	// has.
+	SelfInsertWidget string
+
 	// What to do about a line of output that never ended.
 	//
 	// A command — or a plugin loading — can leave the cursor part-way along a

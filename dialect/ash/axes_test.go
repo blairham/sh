@@ -141,6 +141,13 @@ func TestNoAnsweredAxisRefusesAtRunTime(t *testing.T) {
 			"ArithNegativeExponentIsError",
 		},
 		{
+			"an assignment in the operand a short circuit decided",
+			`x=0; : $((0 && (x = 9))); echo "x=$x"`,
+			"ArithShortCircuitEvaluatesTheRightOperand — the axis is asked " +
+				"only where the operand leaves something behind, so a plain " +
+				"`$((0 && 1))` reaches no question and cannot stand in for this",
+		},
+		{
 			"a declaration over a readonly",
 			"readonly x=1\nf() { local x=2; }\nf\necho end\n",
 			"DeclarationMayShadowAReadonly",

@@ -104,3 +104,36 @@ set -o interactive 2>&1 | sed 's/^[^ ]*: //'
 
 # A letter this shell has not got at all is the other sentence.
 set -q 2>&1 | sed 's/^[^ ]*: //'
+
+# An emulation puts every option it resets at that emulation's own default,
+# which is a second table the same size as the set of names it resets. The
+# three controls are a name whose sh default differs from zsh's, a name where
+# sh and ksh part company, and a name all four agree about.
+#
+# This is last in the file on purpose: an emulation changes how words split
+# and how an unmatched pattern is read, so anything after it would be
+# measuring the emulation rather than what it says it measures.
+report() {
+  for n in multios posixbuiltins kshglob cshnullcmd extendedglob; do
+    if [[ -o $n ]]; then printf '%s=on ' "$n"; else printf '%s=off ' "$n"; fi
+  done
+  printf '\n'
+}
+
+for m in zsh sh ksh csh; do
+  emulate $m
+  printf '%-4s ' "$m"
+  report
+done
+emulate zsh
+
+# And from the other side: a name the script moved away from the emulation's
+# default comes back to the emulation's, not to zsh's. Both directions,
+# because a reset that only ever turned things off would pass one of them on
+# its own.
+setopt multios
+unsetopt posixbuiltins
+emulate sh
+printf 'after a move: '
+report
+emulate zsh

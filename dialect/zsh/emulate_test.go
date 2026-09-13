@@ -342,3 +342,55 @@ func TestEmulateTurnsPosixBuiltinsOnForTheShFamily(t *testing.T) {
 		t.Errorf("out %q, want the option to have decided it", out)
 	}
 }
+
+// An emulation puts each name it resets at **that emulation's** default
+// rather than at zsh's, which is #2549: it picked the right set of names in
+// #2515 and then put 49 of the 81 a bare `emulate sh` resets on the wrong
+// value.
+//
+// The three controls #2515 established, run through the shell rather than
+// read off the table: a name whose `sh` default differs from zsh's, one where
+// `ksh` and `sh` part company, and one all four agree about. Measured on
+// zsh 5.9.2, 2026-09-13, by reading `${options[name]}` after
+// `emulate -R <mode>` in a fresh shell.
+func TestAnEmulationLeavesTheEmulationsOwnDefaults(t *testing.T) {
+	// `[[ -o … ]]` answers 0 for on, so the strings below read on/off.
+	probe := func(names ...string) string {
+		src := ""
+		for _, n := range names {
+			src += `[[ -o ` + n + ` ]] && echo "` + n + ` on" || echo "` + n + ` off"; `
+		}
+		return src
+	}
+	names := []string{"multios", "posixbuiltins", "kshglob", "cshnullcmd", "extendedglob"}
+	for _, tc := range []struct{ mode, want string }{
+		{"zsh", "multios on\nposixbuiltins off\nkshglob off\ncshnullcmd off\nextendedglob off\n"},
+		{"sh", "multios off\nposixbuiltins on\nkshglob off\ncshnullcmd off\nextendedglob off\n"},
+		{"ksh", "multios off\nposixbuiltins on\nkshglob on\ncshnullcmd off\nextendedglob off\n"},
+		{"csh", "multios off\nposixbuiltins off\nkshglob off\ncshnullcmd on\nextendedglob off\n"},
+	} {
+		out, st := runZsh(t, t.TempDir(), `emulate `+tc.mode+`; `+probe(names...))
+		if st != 0 || out != tc.want {
+			t.Errorf("emulate %s: out %q status %d, want %q", tc.mode, out, st, tc.want)
+		}
+	}
+	// And from the other side: a name the script moved *away* from the
+	// emulation's default comes back to the emulation's, not to zsh's. Two
+	// directions, because a reset that only ever turns things off would pass
+	// the first half of this on its own.
+	out, st := runZsh(t, t.TempDir(),
+		`setopt multios; unsetopt posixbuiltins; emulate sh; `+probe("multios", "posixbuiltins"))
+	if want := "multios off\nposixbuiltins on\n"; st != 0 || out != want {
+		t.Errorf("out %q status %d, want %q", out, st, want)
+	}
+	// `emulate csh` used to skip the axis swap outright, so the four names
+	// that rode it kept whatever the script had left. Measured: csh's value
+	// for them is zsh's, so the skip stood for nothing and its cost was that
+	// csh alone did not reset them.
+	out, st = runZsh(t, t.TempDir(),
+		`setopt shwordsplit ksharrays posixbuiltins; unsetopt nomatch; emulate csh; `+
+			probe("shwordsplit", "ksharrays", "posixbuiltins", "nomatch"))
+	if want := "shwordsplit off\nksharrays off\nposixbuiltins off\nnomatch on\n"; st != 0 || out != want {
+		t.Errorf("emulate csh: out %q status %d, want %q", out, st, want)
+	}
+}

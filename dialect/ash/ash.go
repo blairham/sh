@@ -458,6 +458,11 @@ func Semantics() interp.Semantics {
 	// pseudo-conditions is dash, and this shell is not with it.
 	s.TrapHasErrCondition = interp.Yes
 	s.TrapHasDebugCondition = interp.No
+	// No DEBUG condition, so no head to fire one at. Not an unanswered
+	// axis — DebugTrapHeads has no unspecified value, because a head
+	// either fires or does not and there is no third thing for a
+	// dialect to be silent about.
+	s.DebugTrapCompoundHeads = interp.DebugTrapHeadsNone
 	s.TrapHasReturnCondition = interp.No
 	// `trap` reads options and has none of them: `-p` and `-l` are both
 	// `illegal option`.

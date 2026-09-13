@@ -2386,6 +2386,13 @@ grades it and nothing drift-checks it either, for the same reason.
 | `axis/shift-past-end` | **2>** `<shell>: 1: shift: can't shift that many` *(status 2)* | `survived` | `survived` **2>** `<shell>: line 1: shift: 5: shift count out of range` | `survived` | **2>** `<shell>: shift: 5: bad number` *(status 1)* | `survived` **2>** `<shell>:shift:1: shift count must be <= $#` | `survived` |
 | `axis/local-outside-a-function` | **2>** `<script>: 1: local: not in a function` *(status 2)* | `x=~end` **2>** `<script>: line 1: local: can only be used in a function` | `x=~end` **2>** `<script>: line 1: local: can only be used in a function` | `x=~end` **2>** `<script>: line 1: local: can only be used in a function` | `x=~end` **2>** `<script>: line 1: local: not found` | `x=2~end` | **2>** `<script>: local: line 1: not in a function` *(status 2)* |
 | `axis/local-inside-a-function` | `in=2~out=` | `in=2~out=` | `in=2~out=` | `in=2~out=` | `in=~out=` **2>** `<script>: line 1: local: not found` | `in=2~out=` | `in=2~out=` |
+| `axis/debug-head-of-a-for-loop` | `a~b` **2>** `trap: DEBUG: bad trap~trap: DEBUG: bad trap` *(status 1)* | `D=2~D=4~a~D=2~D=4~b~D=6` | `D=2~D=4~a~D=2~D=4~b~D=6` | `D=2~D=4~a~D=2~D=4~b~D=6` | `D=2~D=4~a~D=4~D=4~b~D=6` | `D=2~D=4~a~D=4~b~D=6` | `a~b` **2>** `<script>: trap: line 1: DEBUG: invalid signal specification~<script>: trap: line 6: DEBUG: invalid signal specification` *(status 1)* |
+| `axis/debug-head-of-a-for-loop-over-nothing` | `after` **2>** `trap: DEBUG: bad trap~trap: DEBUG: bad trap` *(status 1)* | `D=6~after~D=7` | `D=6~after~D=7` | `D=6~after~D=7` | `D=6~after~D=7` | `D=2~D=6~after~D=7` | `after` **2>** `<script>: trap: line 1: DEBUG: invalid signal specification~<script>: trap: line 7: DEBUG: invalid signal specification` *(status 1)* |
+| `axis/debug-head-of-a-select` | **2>** `trap: DEBUG: bad trap~<script>: 2: select: not found~<script>: 3: Syntax error: "do" unexpected` *(status 2)* | `D=2~D=4~got=a~D=4~got=b~~D=6` **2>** `1) a~2) b~#? #? #? ` | `D=2~D=4~got=a~D=4~got=b~~D=6` **2>** `1) a~2) b~#? #? #? ` | `D=2~D=4~got=a~D=4~got=b~~D=6` **2>** `1) a~2) b~#? #? #? ` | `D=2~D=4~got=a~D=4~D=4~got=b~D=6` **2>** `1) a~2) b` | `D=2~D=4~got=a~D=4~got=b~D=6` **2>** `1) a  2) b  ~?# ?# ?# ` | **2>** `<script>: trap: line 1: DEBUG: invalid signal specification~<script>: line 2: select: not found~<script>: line 3: syntax error: unexpected "do"` *(status 2)* |
+| `axis/debug-head-of-an-arithmetic-for` | **2>** `trap: DEBUG: bad trap~<script>: 2: Syntax error: Bad for loop variable` *(status 2)* | `D=2~D=2~D=4~0~D=2~D=2~D=4~1~D=2~D=2~D=6` | `D=2~D=2~D=4~0~D=2~D=2~D=4~1~D=2~D=2~D=6` | `D=2~D=2~D=4~0~D=2~D=2~D=4~1~D=2~D=2~D=6` | `D=2~D=2~D=4~0~D=2~D=2~D=4~1~D=2~D=2~D=6` | `D=2~D=4~0~D=4~1~D=6` | **2>** `<script>: trap: line 1: DEBUG: invalid signal specification~<script>: line 2: syntax error: bad for loop variable` *(status 2)* |
+| `axis/debug-head-of-an-arithmetic-for-with-parts-left-out` | **2>** `trap: DEBUG: bad trap~<script>: 3: Syntax error: Bad for loop variable` *(status 2)* | `D=3~D=3~D=5~D=3~D=3~D=5~D=3~D=3~D=7` | `D=3~D=3~D=5~D=3~D=3~D=5~D=3~D=3~D=7` | `D=3~D=3~D=5~D=3~D=3~D=5~D=3~D=3~D=7` | `D=3~D=5~D=3~D=5~D=3~D=7` | `D=3~D=5~D=5~D=7` | **2>** `<script>: trap: line 2: DEBUG: invalid signal specification~<script>: line 3: syntax error: bad for loop variable` *(status 2)* |
+| `axis/debug-head-of-an-if` | `yes` **2>** `trap: DEBUG: bad trap~trap: DEBUG: bad trap` *(status 1)* | `D=2~D=4~yes~D=6` | `D=2~D=4~yes~D=6` | `D=2~D=4~yes~D=6` | `D=2~D=4~yes~D=6` | `D=2~D=2~D=4~yes~D=6` | `yes` **2>** `<script>: trap: line 1: DEBUG: invalid signal specification~<script>: trap: line 6: DEBUG: invalid signal specification` *(status 1)* |
+| `axis/debug-head-of-a-case-and-a-condition` | `c` **2>** `trap: DEBUG: bad trap~<script>: 3: [[: not found~trap: DEBUG: bad trap` *(status 1)* | `D=2~D=2~c~D=3~D=4` | `D=2~D=2~c~D=3~D=4` | `D=2~D=2~c~D=3~D=4` | `D=2~D=2~c~D=3~D=4` | `D=2~D=2~c~D=3~D=4` | `c` **2>** `<script>: trap: line 1: DEBUG: invalid signal specification~<script>: trap: line 4: DEBUG: invalid signal specification` *(status 1)* |
 | `axis/trap-body-will-not-parse` | `after` **2>** `<script>: 1: Syntax error: end of file unexpected (expecting "then")` *(status 2)* | `after` **2>** `<script>: exit trap: line 2: syntax error: unexpected end of file from `if' command on line 1` | `after` **2>** `<script>: exit trap: line 2: syntax error: unexpected end of file from `if' command on line 1` | `after` **2>** `<script>: exit trap: line 4: syntax error: unexpected end of file` | `after` **2>** `<script>: syntax error at line 1: `if' unmatched` | `after` **2>** `<script>:1: parse error near `if'~<script>:trap:1: couldn't parse trap command` | `after` **2>** `<script>: line 2: syntax error: unexpected end of file (expecting "then")` *(status 2)* |
 | `axis/trap-body-runs-what-parsed` | `one~end~a` **2>** `<script>: 2: Syntax error: end of file unexpected (expecting "then")` *(status 2)* | `one~end~a` **2>** `<script>: exit trap: line 3: syntax error: unexpected end of file from `if' command on line 2` | `one~end~a` **2>** `<script>: exit trap: line 3: syntax error: unexpected end of file from `if' command on line 2` | `one~end~a` **2>** `<script>: exit trap: line 7: syntax error: unexpected end of file` | `one~end` **2>** `<script>: syntax error at line 2: `if' unmatched` | `one~end` **2>** `<script>:2: parse error near `if'~<script>:trap:2: couldn't parse trap command` | `one~end~a` **2>** `<script>: line 4: syntax error: unexpected end of file (expecting "then")` *(status 2)* |
 | `axis/trap-action-read-when-set` | `after` | `after` | `after` | `after` | `after` | `after` **2>** `<script>:1: parse error near `if'~<script>:trap:1: couldn't parse trap command` | `after` |
@@ -2568,6 +2575,69 @@ grades it and nothing drift-checks it either, for the same reason.
   f() { local x=2; echo in=$x; }
   f
   echo out=$x
+  ```
+- `axis/debug-head-of-a-for-loop` — which commands other than the simple ones fire a DEBUG trap, asked where the panel divides most sharply: the bash columns and ksh93 write the loop's head **once per pass** — two heads and two bodies — and zsh writes it once for the construct. dash and BusyBox ash have no DEBUG condition and refuse the trap. Written over two items on purpose: one pass cannot tell a head per pass from a head per loop. A third question rides along and is recorded rather than modeled: which *line* a repeated head names. The bash columns name the head's own line on every pass; ksh93 names wherever the line record has got to, which is the body's last line on every pass but the first. The DebugTrapCompoundHeads axis
+  ```sh
+  trap 'echo D=$LINENO' DEBUG
+  for i in a b
+  do
+    echo $i
+  done
+  trap - DEBUG
+  ```
+- `axis/debug-head-of-a-for-loop-over-nothing` — the control for the row above, and the one that says the first two readings are counting *passes* rather than adding a head to the loop: a list with nothing in it runs no passes, and the bash columns and ksh93 write no head at all where zsh still writes one. An implementation that fired once at the top would be indistinguishable from either on the row above and wrong here
+  ```sh
+  trap 'echo D=$LINENO' DEBUG
+  for i in
+  do
+    echo never
+  done
+  echo after
+  trap - DEBUG
+  ```
+- `axis/debug-head-of-a-select` — the menu loop, which is where the bash columns and ksh93 part company and the reason the axis has a third reading rather than two: answered twice, the bash columns write **one** head for the construct and ksh93 writes one per reply, exactly as both of them do for a word loop's head. zsh writes one. No column writes a third head for the reply that ends the loop, so the head belongs to a pass and not to a read. ksh93's repeated head names the body's last line, the same way its `for` head does. Where the head sits relative to the *menu* is not in this row, because the menu is on the other stream: measured with the two interleaved, the bash columns and zsh write the head before the menu is drawn and ksh93 after it
+  ```sh
+  trap 'echo D=$LINENO' DEBUG
+  select w in a b
+  do
+    echo got=$w
+  done
+  trap - DEBUG
+  ```
+- `axis/debug-head-of-an-arithmetic-for` — the arithmetic `for`, whose head is three expressions rather than a word list, and which every column that counts heads at all counts one evaluation at a time: the bash columns and ksh93 write the initializer, then a condition, then a body, then a step and a condition per pass, and a last condition that ends it — six heads and two bodies — where zsh writes one head for the construct. The `for` rows above cannot stand for this one: a reading that fired once per pass would write two heads here and every bash column writes six
+  ```sh
+  trap 'echo D=$LINENO' DEBUG
+  for ((i=0;i<2;i++))
+  do
+    echo $i
+  done
+  trap - DEBUG
+  ```
+- `axis/debug-head-of-an-arithmetic-for-with-parts-left-out` — the second place the bash columns and ksh93 part: the same loop with the initializer and the step left unwritten. The bash columns write the **same** six heads they write when all three are spelled out — an unwritten expression fires one anyway — and ksh93 writes three, one condition per round and nothing for the two it was not given. Measured over every combination of the three parts a script can leave out, and the two counts do not move: the bash columns write two heads per round whatever is written and ksh93 writes one plus one for each part it was given. So it is the reading and not an emptiness rule
+  ```sh
+  i=0
+  trap 'echo D=$LINENO' DEBUG
+  for ((;i<2;))
+  do
+    i=$((i+1))
+  done
+  trap - DEBUG
+  ```
+- `axis/debug-head-of-an-if` — the other half of the same split, and the half that keeps the first two readings from being read as "every compound head": the bash columns and ksh93 write nothing for the `if` itself — two heads, for `true` and for the `echo` — where zsh writes three. A `while`, a group and a function *definition* standing on its own answer the same way, so this row stands for all of them
+  ```sh
+  trap 'echo D=$LINENO' DEBUG
+  if true
+  then
+    echo yes
+  fi
+  trap - DEBUG
+  ```
+- `axis/debug-head-of-a-case-and-a-condition` — the control on the other side: `case` and `[[ ]]` are heads whose own work is a word rather than a command, and **all three** readings write a head for each of them. So the axis is three readings of which heads fire and not one column firing where another does not — a row where the panel agrees is what says the rows where it does not are about the reading. dash and ash refuse the trap and ash reads the condition as a command
+  ```sh
+  trap 'echo D=$LINENO' DEBUG
+  case x in x) echo c;; esac
+  [[ x == x ]]
+  trap - DEBUG
   ```
 - `axis/trap-body-will-not-parse` — each dialect words it its own way, dash ends the script over it, and zsh refused the trap when it was set
   ```sh
@@ -6776,6 +6846,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `axis/trap-body-line-debug` | `two~three` **2>** `trap: DEBUG: bad trap` | `at=3~two~at=4~three` **2>** `<script>: line 4: nosuchcmd-xyz: command not found~<script>: line 5: nosuchcmd-xyz: command not found` | `at=3~two~at=4~three` **2>** `<script>: line 4: nosuchcmd-xyz: command not found~<script>: line 5: nosuchcmd-xyz: command not found` | `at=3~two~at=4~three` **2>** `<script>: line 4: nosuchcmd-xyz: command not found~<script>: line 5: nosuchcmd-xyz: command not found` | `at=3~two~at=4~three` **2>** `<script>: line 4: nosuchcmd-xyz: not found~<script>: line 5: nosuchcmd-xyz: not found` | `at=3~two~at=4~three` **2>** `<script>:3: command not found: nosuchcmd-xyz~<script>:4: command not found: nosuchcmd-xyz` | `two~three` **2>** `<script>: trap: line 1: DEBUG: invalid signal specification` |
 | `axis/trap-body-line-err` | `two~four` **2>** `trap: ERR: bad trap` | `two~at=4~four` **2>** `<script>: line 5: nosuchcmd-xyz: command not found` | `two~at=4~four` **2>** `<script>: line 5: nosuchcmd-xyz: command not found` | `two~at=4~four` **2>** `<script>: line 5: nosuchcmd-xyz: command not found` | `two~at=4~four` **2>** `<script>: line 5: nosuchcmd-xyz: not found` | `two~at=4~four` **2>** `<script>:4: command not found: nosuchcmd-xyz` | `two~at=4~four` **2>** `<script>: line 4: nosuchcmd-xyz: not found` |
 | `axis/trap-body-line-return` | `one~in-f~two` **2>** `trap: RETURN: bad trap` | `one~in-f~at=1~two` **2>** `<script>: line 2: nosuchcmd-xyz: command not found` | `one~in-f~at=1~two` **2>** `<script>: line 2: nosuchcmd-xyz: command not found` | `one~in-f~at=1~two` **2>** `<script>: line 2: nosuchcmd-xyz: command not found` | `one~in-f~two` **2>** `<script>[2]: trap: RETURN: bad trap` | `one~in-f~two` **2>** `f:trap:1: undefined signal: RETURN` | `one~in-f~two` **2>** `<script>: trap: line 2: RETURN: invalid signal specification` |
+| `axis/trap-body-line-return-below-the-top` | `one~two~in-f~last~done` **2>** `trap: RETURN: bad trap` | `one~two~in-f~last~at=3~done` **2>** `<script>: line 4: nosuchcmd-xyz: command not found` | `one~two~in-f~last~at=3~done` **2>** `<script>: line 4: nosuchcmd-xyz: command not found` | `one~two~in-f~last~at=3~done` **2>** `<script>: line 4: nosuchcmd-xyz: command not found` | `one~two~in-f~last~done` **2>** `<script>[4]: trap: RETURN: bad trap` | `one~two~in-f~last~done` **2>** `f:trap:1: undefined signal: RETURN` | `one~two~in-f~last~done` **2>** `<script>: trap: line 4: RETURN: invalid signal specification` |
+| `axis/trap-body-line-return-from-an-explicit-return` | `one~two~done` **2>** `trap: RETURN: bad trap` | `one~two~at=6~done` **2>** `<script>: line 7: nosuchcmd-xyz: command not found` | `one~two~at=6~done` **2>** `<script>: line 7: nosuchcmd-xyz: command not found` | `one~two~at=6~done` **2>** `<script>: line 7: nosuchcmd-xyz: command not found` | `one~two~done` **2>** `<script>[4]: trap: RETURN: bad trap` | `one~two~done` **2>** `f:trap:1: undefined signal: RETURN` | `one~two~done` **2>** `<script>: trap: line 4: RETURN: invalid signal specification` |
 | `axis/trap-prints-a-bare-action` | `trap -- ':' INT~end` | `trap -- ':' SIGINT~end` | `trap -- ':' INT~end` | `trap -- ':' SIGINT~end` | `trap -- : INT~end` | `trap -- : INT~end` | `trap -- ':' INT~end` |
 | `axis/trap-prints-a-quoted-action` | `trap -- 'echo hi' INT~end` | `trap -- 'echo hi' SIGINT~end` | `trap -- 'echo hi' INT~end` | `trap -- 'echo hi' SIGINT~end` | `trap -- 'echo hi' INT~end` | `trap -- 'echo hi' INT~end` | `trap -- 'echo hi' INT~end` |
 | `axis/redirect-opened-for-a-builtin` | `end` **2>** `<script>: 2: cannot create /nonexistent-dir-xyz/x: Directory nonexistent` | `end` **2>** `<script>: line 2: /nonexistent-dir-xyz/x: No such file or directory` | `end` **2>** `<script>: line 2: /nonexistent-dir-xyz/x: No such file or directory` | `end` **2>** `<script>: line 2: /nonexistent-dir-xyz/x: No such file or directory` | `end` **2>** `<script>[2]: /nonexistent-dir-xyz/x: cannot create [No such file or directory]` | `end` **2>** `<script>:2: no such file or directory: /nonexistent-dir-xyz/x` | `end` **2>** `<script>: line 2: can't create /nonexistent-dir-xyz/x: nonexistent directory` |
@@ -6862,7 +6934,7 @@ grades it and nothing drift-checks it either, for the same reason.
   false
   echo four
   ```
-- `axis/trap-body-line-return` — and the control that keeps the axis from being read as "the pseudo-conditions": RETURN is one of them and the bash columns count its body from the body's own first line, exactly as they count a signal's. So the split is measured rather than reasoned — a rule written for the three would have taken this row with it. ksh93, dash and zsh have no RETURN condition and refuse the trap
+- `axis/trap-body-line-return` — RETURN asked the same way, and this snippet **cannot** tell the two readings apart: the function's body opens on line 1, where "the body's own first line" and "where it fired" are both 1. It was read as an answer — RETURN going with the signals — and the two rows below are the ones that discriminate. Kept as the control: whatever the reading, these numbers do not move. ksh93, dash and zsh have no RETURN condition and refuse the trap
   ```sh
   f() {
     trap 'echo at=$LINENO
@@ -6872,6 +6944,32 @@ grades it and nothing drift-checks it either, for the same reason.
   echo one
   f
   echo two
+  ```
+- `axis/trap-body-line-return-below-the-top` — the same question with the function moved down the file, which is what makes it answerable: the body opens on line 3 and the last command of it is on line 7, so this shape can produce three different numbers — the body's own lines read 1 and 2, the line the body opened on reads 3 and 4, and the body's last command reads 7 and 8. Every bash column answers 3 and 4. So RETURN is numbered from where it fired, like DEBUG and ERR and unlike a signal — the opposite of what the row above was read as saying — and a call that falls off the end of its body fires at the line the body **opened** on rather than at the command it ended with
+  ```sh
+  echo one
+  echo two
+  f() {
+    trap 'echo at=$LINENO
+  nosuchcmd-xyz' RETURN
+    echo in-f
+    echo last
+  }
+  f
+  echo done
+  ```
+- `axis/trap-body-line-return-from-an-explicit-return` — and the row that says "where it fired" is not one place: the same body with a `return` written in it, on line 6, and a command after it that never runs. Every bash column answers 6 and 7 here where the row above answers 3 and 4, so an explicit `return` fires at the `return`'s own line and only a call that runs off the end falls back to the line the body opened on. Written with the `return` in the middle of the body on purpose — put it last and the body's opening, the return point and the last command are not three numbers any more
+  ```sh
+  echo one
+  echo two
+  f() {
+    trap 'echo at=$LINENO
+  nosuchcmd-xyz' RETURN
+    return
+    echo never
+  }
+  f
+  echo done
   ```
 - `axis/trap-prints-a-bare-action` — a one-word action: bash and dash quote it anyway, ksh93 and zsh leave it bare
   ```sh
@@ -7091,6 +7189,604 @@ grades it and nothing drift-checks it either, for the same reason.
 - `expansion/an-operator-where-the-name-belongs` — an operator where the parameter name belongs: ksh93 refuses while reading and must name the `%` — the token used to come through blank there, ``' unexpected — while the other three defer and call it a bad substitution when the expansion is reached
   ```sh
   echo "${%x}"; echo "st=$?"
+  ```
+
+## traps and exit
+
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh | ash |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `trap/the-return-trap-is-not-carried-into-a-debug-body` | **2>** `<script>: 1: set: Illegal option -T` *(status 2)* | `ran~ran~done` | `ran~ran~done` | `ran~ran~done` | **2>** `<script>[1]: set: -T: unknown option~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | `ran~ran~done` **2>** `<script>:trap:3: undefined signal: RETURN~<script>:trap:7: undefined signal: RETURN` | **2>** `<script>: set: line 1: illegal option -T` *(status 2)* |
+| `trap/the-return-trap-is-carried-into-an-err-body` | **2>** `<script>: 1: set: Illegal option -T` *(status 2)* | `ran~RET~done` | `ran~RET~done` | `ran~RET~done` | **2>** `<script>[1]: set: -T: unknown option~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | `ran~done` **2>** `<script>:trap:3: undefined signal: RETURN~<script>:trap:7: undefined signal: RETURN` | **2>** `<script>: set: line 1: illegal option -T` *(status 2)* |
+| `trap/a-function-holding-its-own-return-trap-fires-it-inside-a-debug-body` | **2>** `<script>: 1: set: Illegal option -T` *(status 2)* | `ran~RET~ran~RET~done` | `ran~RET~ran~RET~done` | `ran~RET~ran~RET~done` | **2>** `<script>[1]: set: -T: unknown option~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | `ran~ran~done` **2>** `act:trap: undefined signal: RETURN~act:trap: undefined signal: RETURN` | **2>** `<script>: set: line 1: illegal option -T` *(status 2)* |
+| `kill/exit-trap-after-a-fatal-signal` | *(no output, killed by signal 2 (interrupt))* | `bye` *(killed by signal 2 (interrupt))* | `bye` *(killed by signal 2 (interrupt))* | `bye` *(killed by signal 2 (interrupt))* | `bye` *(killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* |
+| `trap/bad-signal-name` | `st=1` **2>** `trap: NOPE: bad trap` | `st=1` **2>** `<shell>: line 1: trap: NOPE: invalid signal specification` | `st=1` **2>** `<shell>: line 1: trap: NOPE: invalid signal specification` | `st=1` **2>** `<shell>: line 0: trap: NOPE: invalid signal specification` | `st=1` **2>** `<shell>: trap: NOPE: bad trap` | `st=1` **2>** `<shell>:trap:1: undefined signal: NOPE` | `st=1` **2>** `<shell>: trap: line 0: NOPE: invalid signal specification` |
+| `trap/sig-prefix-diverges` | `st=1` **2>** `trap: SIGUSR1: bad trap` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
+| `trap/signal-handler-runs-and-continues` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` |
+| `trap/an-exit-from-a-handler-ends-a-while-loop` | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* |
+| `trap/an-exit-from-a-handler-ends-an-until-loop` | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* |
+| `trap/an-exit-from-a-handler-ends-a-for-loop` | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* |
+| `trap/an-exit-from-a-handler-ends-nested-loops` | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* |
+| `trap/an-exit-from-a-handler-ends-a-loop-inside-a-function` | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* |
+| `trap/lineno-inside-an-action` | `one~in trap LINENO=1~two` | `one~in trap LINENO=1~two` | `one~in trap LINENO=1~two` | `one~in trap LINENO=3~two` | `one~in trap LINENO=3~two` | `one~in trap LINENO=3~two` | `one~in trap LINENO=3~two` |
+| `trap/listing-is-ordered-by-signal-number` | `trap -- 'echo x' EXIT~trap -- 'echo x' HUP~trap -- 'echo x' INT~trap -- 'echo x' QUIT~trap -- 'echo x' ABRT~trap -- 'echo x' TERM~x` | `trap -- 'echo x' EXIT~trap -- 'echo x' SIGHUP~trap -- 'echo x' SIGINT~trap -- 'echo x' SIGQUIT~trap -- 'echo x' SIGABRT~trap -- 'echo x' SIGTERM~x` | `trap -- 'echo x' EXIT~trap -- 'echo x' HUP~trap -- 'echo x' INT~trap -- 'echo x' QUIT~trap -- 'echo x' ABRT~trap -- 'echo x' TERM~x` | `trap -- 'echo x' EXIT~trap -- 'echo x' SIGHUP~trap -- 'echo x' SIGINT~trap -- 'echo x' SIGQUIT~trap -- 'echo x' SIGABRT~trap -- 'echo x' SIGTERM~x` | `trap -- 'echo x' TERM~trap -- 'echo x' IOT~trap -- 'echo x' QUIT~trap -- 'echo x' INT~trap -- 'echo x' HUP~trap -- 'echo x' EXIT~x` | `trap -- 'echo x' EXIT~trap -- 'echo x' HUP~trap -- 'echo x' INT~trap -- 'echo x' QUIT~trap -- 'echo x' ABRT~trap -- 'echo x' TERM~x` | `trap -- 'echo x' EXIT~trap -- 'echo x' HUP~trap -- 'echo x' INT~trap -- 'echo x' QUIT~trap -- 'echo x' ABRT~trap -- 'echo x' TERM~x` |
+| `trap/empty-handler-ignores` | `after` | `after` | `after` | `after` | `after` | `after` | `after` |
+| `trap/default-signal-terminates` | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* |
+| `trap/reset-restores-the-default` | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* |
+| `trap/a-reset-takes-back-an-ignore-a-child-would-inherit` | `st=143` | `st=143` | `st=143` | `st=143` | `st=271` | `st=143` | `st=143` |
+| `trap/an-ignore-with-no-reset-is-a-childs-to-inherit` | `survived~st=0` | `survived~st=0` | `survived~st=0` | `survived~st=0` | `survived~st=0` | `survived~st=0` | `survived~st=0` |
+| `trap/a-reset-with-no-ignore-leaves-a-child-the-default` | `st=143` | `st=143` | `st=143` | `st=143` | `st=271` | `st=143` | `st=143` |
+| `trap/a-handler-and-a-reset-leave-a-child-the-default` | `st=143` | `st=143` | `st=143` | `st=143` | `st=271` | `st=143` | `st=143` |
+| `trap/a-reset-takes-back-an-ignored-interrupt` | `st=130~after` | `st=130~after` | `st=130~after` | `st=130~after` | *(no output, killed by signal 2 (interrupt))* | `st=130~after` | `st=130~after` |
+| `trap/a-pipeline-element-runs-the-pipe-handler-it-set-for-itself` | `after` **2>** `child~reached` | `after` **2>** `child~reached` | `after` **2>** `child~reached` | `after` **2>** `~child~reached` | `after` **2>** `child~reached` | `after` **2>** `child~reached` | `after` **2>** `child~reached` |
+| `trap/an-elements-broken-pipe-is-not-the-outer-shells-to-handle` | `after` **2>** `child~reached` | `after` **2>** `child~reached` | `after` **2>** `child~reached` | `after` **2>** `~child~reached` | `after` **2>** `child~reached` | `after` **2>** `child~reached` | `after` **2>** `child~reached` |
+| `trap/an-elements-pipe-handler-runs-inside-the-elements-redirections` | `e=[<shell>: 1: echo: echo: I/O error~child]` | `e=[<shell>: line 1: echo: write error: Broken pipe~child]` | `e=[sh: line 1: echo: write error: Broken pipe~child]` | `e=[<shell>: line 0: echo: write error: Broken pipe~~child]` | `e=[child]` | `e=[child~child~<shell>:echo:1: write error: broken pipe~<shell>:1: write error: broken pipe~child]` | `e=[ash: write error: Broken pipe~child]` |
+| `signal-death/status-encodes-the-signal` | `st=141~after` | `st=141~after` | `st=141~after` | `st=141~after` | `st=269~after` | `st=141~after` | `st=141~after` |
+| `signal-death/the-shell-dies-by-the-signal-rather-than-exiting` | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* |
+| `signal-death/an-uncatchable-signal-ends-it-outright` | *(no output, killed by signal 9 (killed))* | *(no output, killed by signal 9 (killed))* | *(no output, killed by signal 9 (killed))* | *(no output, killed by signal 9 (killed))* | *(no output, killed by signal 9 (killed))* | *(no output, killed by signal 9 (killed))* | *(no output, killed by signal 9 (killed))* |
+| `signal-death/a-signal-with-no-meaning-of-its-own-is-fatal-too` | *(no output, killed by signal 30 (user defined signal 1))* | *(no output, killed by signal 30 (user defined signal 1))* | *(no output, killed by signal 30 (user defined signal 1))* | *(no output, killed by signal 30 (user defined signal 1))* | *(no output, killed by signal 30 (user defined signal 1))* | *(no output, killed by signal 30 (user defined signal 1))* | *(no output, killed by signal 10 (user defined signal 1))* |
+| `signal-death/dying-by-a-signal-says-nothing` | *(no output, killed by signal 6 (abort trap))* | *(no output, killed by signal 6 (abort trap))* | *(no output, killed by signal 6 (abort trap))* | *(no output, killed by signal 6 (abort trap))* | *(no output, killed by signal 6 (abort trap))* | *(no output, killed by signal 6 (abort trap))* | *(no output, killed by signal 6 (aborted))* |
+| `signal-death/quit-is-not-fatal-in-every-shell` | *(no output, killed by signal 3 (quit))* | `after` | `after` | *(no output, killed by signal 3 (quit))* | *(no output, killed by signal 3 (quit))* | `after` | `after` |
+| `signal-death/a-reset-takes-the-ignore-away-in-one-shell` | *(no output, killed by signal 3 (quit))* | `after` | `after` | *(no output, killed by signal 3 (quit))* | *(no output, killed by signal 3 (quit))* | *(no output, killed by signal 3 (quit))* | `after` |
+| `signal-death/an-ignore-written-after-a-reset-stands` | `after` | `after` | `after` | `after` | `after` | `after` | `after` |
+| `signal-death/hangup-is-an-exit-in-one-shell` | *(no output, killed by signal 1 (hangup))* | *(no output, killed by signal 1 (hangup))* | *(no output, killed by signal 1 (hangup))* | *(no output, killed by signal 1 (hangup))* | *(no output, killed by signal 1 (hangup))* | *(no output, status 1)* | *(no output, killed by signal 1 (hangup))* |
+| `signal-death/a-hangup-that-exits-runs-the-exit-trap` | *(no output, killed by signal 1 (hangup))* | `bye` *(killed by signal 1 (hangup))* | `bye` *(killed by signal 1 (hangup))* | `bye` *(killed by signal 1 (hangup))* | `bye` *(killed by signal 1 (hangup))* | `bye` *(status 1)* | *(no output, killed by signal 1 (hangup))* |
+| `signal-death/a-subshell-that-signaled-the-shell` | `inner` *(killed by signal 15 (terminated))* | `inner` *(killed by signal 15 (terminated))* | `inner` *(killed by signal 15 (terminated))* | `inner` *(killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | `inner` *(killed by signal 15 (terminated))* | `inner` *(killed by signal 15 (terminated))* |
+| `signal-death/a-brace-group-does-not-outlive-the-signal` | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* |
+| `signal-death/a-function-body-does-not-outlive-the-signal` | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* |
+| `signal-death/a-loop-body-does-not-outlive-the-signal` | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* |
+| `signal-death/a-command-substitution-that-signaled-the-shell` | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* |
+| `signal-death/a-handled-signal-is-not-a-death` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` |
+| `signal-death/an-ordinary-failure-is-untouched` | `st=3` | `st=3` | `st=3` | `st=3` | `st=3` | `st=3` | `st=3` |
+| `umask/reads-the-mask` | `0022` | `0022` | `0022` | `0022` | `0022` | `022` | `0022` |
+| `umask/symbolic-is-unanimous` | `u=rwx,g=rx,o=rx` | `u=rwx,g=rx,o=rx` | `u=rwx,g=rx,o=rx` | `u=rwx,g=rx,o=rx` | `u=rwx,g=rx,o=rx` | `u=rwx,g=rx,o=rx` | `u=rwx,g=rx,o=rx` |
+| `umask/setting-then-reading` | `0077~u=rwx,g=,o=` | `0077~u=rwx,g=,o=` | `0077~u=rwx,g=,o=` | `0077~u=rwx,g=,o=` | `0077~u=rwx,g=,o=` | `077~u=rwx,g=,o=` | `0077~u=rwx,g=,o=` |
+| `umask/a-created-file-takes-the-mask` | `-rw-------~-rw-r--r--` | `-rw-------~-rw-r--r--` | `-rw-------~-rw-r--r--` | `-rw-------~-rw-r--r--` | `-rw-------~-rw-r--r--` | `-rw-------~-rw-r--r--` | `-rw-------~-rw-r--r--` |
+| `umask/setting-is-silent` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
+| `umask/dash-s-with-a-mask-echoes-in-bash` | *(no output, status 0)* | `u=rwx,g=,o=` | `u=rwx,g=,o=` | `u=rwx,g=,o=` | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* |
+| `umask/a-mask-it-cannot-read` | `st=2` **2>** `<shell>: 1: umask: Illegal number: 9999` | `st=1` **2>** `<shell>: line 1: umask: 9999: octal number out of range` | `st=1` **2>** `<shell>: line 1: umask: 9999: octal number out of range` | `st=1` **2>** `<shell>: line 0: umask: 9999: octal number out of range` | `st=1` **2>** `<shell>: umask: 9999: bad number` | `st=1` **2>** `<shell>:umask:1: bad umask` | `st=2` **2>** `<shell>: umask: line 0: illegal mode: 9999` |
+| `ulimit/reads-the-file-size-limit` | `unlimited~unlimited` | `unlimited~unlimited` | `unlimited~unlimited` | `unlimited~unlimited` | `unlimited~unlimited` | `unlimited~unlimited` | `unlimited~unlimited` |
+| `ulimit/hard-and-soft` | `unlimited~unlimited~unlimited` | `unlimited~unlimited~unlimited` | `unlimited~unlimited~unlimited` | `unlimited~unlimited~unlimited` | `unlimited~unlimited~unlimited` | `unlimited~unlimited~unlimited` | `unlimited~unlimited~unlimited` |
+| `ulimit/setting-with-neither-letter-moves-both` | `s=100 hard_moved=yes` | `s=100 hard_moved=yes` | `s=100 hard_moved=yes` | `s=100 hard_moved=yes` | `s=100 hard_moved=yes` | `s=100 hard_moved=no` | `s=100 hard_moved=yes` |
+| `ulimit/the-file-size-block` | `size=512` **2>** `Filesize limit exceeded: 25` | `size=600` | `size=512` | `size=600` | `size=512` | `size=512` | `size=512` **2>** `File size limit exceeded (core dumped)` |
+| `ulimit/unlimited-is-a-word` | `unlimited` | `unlimited` | `unlimited` | `unlimited` | `unlimited` | `unlimited` | `unlimited` |
+| `ulimit/setting-then-reading` | `3600~3600` | `3600~3600` | `3600~3600` | `3600~3600` | `3600~3600` | `3600~unlimited` | `3600~3600` |
+| `ulimit/a-limit-it-cannot-read` | `st=2` **2>** `<shell>: 1: ulimit: bad number` | `st=1` **2>** `<shell>: line 1: ulimit: abc: invalid number` | `st=1` **2>** `<shell>: line 1: ulimit: abc: invalid number` | `st=1` **2>** `<shell>: line 0: ulimit: abc: invalid number` | `st=1` **2>** `<shell>: ulimit: abc: parameter not set` | `st=1` **2>** `<shell>:ulimit:1: invalid number: abc` | `st=1` **2>** `<shell>: invalid number 'abc'` |
+| `ulimit/a-letter-zsh-does-not-have` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=1` **2>** `<shell>:ulimit:1: bad option: -m` | `st=0` |
+| `ulimit/a-letter-dash-does-not-have` | `st=2` **2>** `<shell>: 1: ulimit: Illegal option -u` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
+| `builtin/an-option-it-does-not-have` | **2>** `<shell>: 1: export: Illegal option -Q` *(status 2)* | `st=2~after` **2>** `<shell>: line 1: export: -Q: invalid option~export: usage: export [-fn] [name[=value] ...] or export -p [-f]` | **2>** `<shell>: line 1: export: -Q: invalid option~export: usage: export [-fn] [name[=value] ...] or export -p [-f]` *(status 2)* | `st=2~after` **2>** `<shell>: line 0: export: -Q: invalid option~export: usage: export [-nf] [name[=value] ...] or export -p` | **2>** `<shell>: export: -Q: unknown option~Usage: export [-p] [name[=value]...]` *(status 2)* | `st=1~after` **2>** `<shell>:export:1: bad option: -Q` | **2>** `<shell>: export: line 0: illegal option -Q` *(status 2)* |
+| `builtin/the-same-refusal-for-another-builtin` | **2>** `<shell>: 1: unset: Illegal option -Q` *(status 2)* | `st=2~after` **2>** `<shell>: line 1: unset: -Q: invalid option~unset: usage: unset [-f] [-v] [-n] [name ...]` | **2>** `<shell>: line 1: unset: -Q: invalid option~unset: usage: unset [-f] [-v] [-n] [name ...]` *(status 2)* | `st=2~after` **2>** `<shell>: line 0: unset: -Q: invalid option~unset: usage: unset [-f] [-v] [name ...]` | **2>** `<shell>: unset: -Q: unknown option~Usage: unset [-nfv] name...` *(status 2)* | `st=1~after` **2>** `<shell>:unset:1: bad option: -Q` | **2>** `<shell>: unset: line 0: illegal option -Q` *(status 2)* |
+| `builtin/an-option-it-does-have` | `[unset]` | `[unset]` | `[unset]` | `[unset]` | `[unset]` | `[unset]` | `[unset]` |
+| `trap/numeric-signal-name` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` |
+| `trap/numeric-signal-beyond-the-common-few` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` |
+| `trap/number-and-name-are-one-trap` | `two~after` | `two~after` | `two~after` | `two~after` | `two~after` | `two~after` | `two~after` |
+| `trap/signal-handler-status-diverges` | `st=0~after` | `st=0~after` | `st=0~after` | `st=0~after` | `st=0~after` | `st=1~after` | `st=0~after` |
+| `trap/wait-cut-short-by-a-signal` | `T~st=158` | `T~st=158` | `T~st=158` | `T~st=158` | `T~st=286` | `T~st=158` | `T~st=138` |
+| `trap/wait-for-a-job-cut-short-by-a-signal` | `T~st=158` | `T~st=158` | `T~st=158` | `T~st=158` | `T~st=1` | `T~st=158` | `T~st=138` |
+| `trap/wait-is-not-cut-short-by-an-ignored-signal` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
+| `trap/exit-runs-at-the-end` | `hi~bye` | `hi~bye` | `hi~bye` | `hi~bye` | `hi~bye` | `hi~bye` | `hi~bye` |
+| `trap/exit-sees-the-last-status` | `st=1` *(status 1)* | `st=1` *(status 1)* | `st=1` *(status 1)* | `st=1` *(status 1)* | `st=1` *(status 1)* | `st=1` *(status 1)* | `st=1` *(status 1)* |
+| `trap/exit-trap-can-override-the-status` | `bye` *(status 7)* | `bye` *(status 7)* | `bye` *(status 7)* | `bye` *(status 7)* | `bye` *(status 7)* | `bye` *(status 7)* | `bye` *(status 7)* |
+| `exit-hook/the-named-function-and-its-list` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | *(no output, status 4)* | *(no output, status 4)* | *(no output, status 4)* | *(no output, status 4)* | `named st=4~z2 st=4~z3 st=4` *(status 4)* | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
+| `exit-hook/runs-after-the-exit-trap` | `trap` *(status 3)* | `trap` *(status 3)* | `trap` *(status 3)* | `trap` *(status 3)* | `trap` *(status 3)* | `trap~hook` *(status 3)* | `trap` *(status 3)* |
+| `exit-hook/an-exit-inside-it-wins-and-stops-nothing` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | *(no output, status 4)* | *(no output, status 4)* | *(no output, status 4)* | *(no output, status 4)* | `a~b` *(status 9)* | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
+| `exit-hook/a-return-cannot-change-the-status` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | *(no output, status 4)* | *(no output, status 4)* | *(no output, status 4)* | *(no output, status 4)* | `a st=4~b st=4` *(status 4)* | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
+| `exit-hook/a-subshell-that-exits-fires-it` | `out=2` | `out=2` | `out=2` | `out=2` | `out=2` | `hook=2~out=2~hook=0` | `out=2` |
+| `exit-hook/a-subshell-that-falls-through-does-not` | `out=3` | `out=3` | `out=3` | `out=3` | `out=3` | `out=3~hook` | `out=3` |
+| `exit-hook/a-pipeline-element-that-exits-fires-it` | `out=0` | `out=0` | `out=0` | `out=0` | `out=0` | `hook~out=0~hook` | `out=0` |
+| `exit-hook/a-subshell-trap-that-exits-fires-it` | `a=5~T~b=0` | `a=5~T~b=0` | `a=5~T~b=0` | `a=5~T~b=0` | `a=5~T~b=0` | `hook~a=5~T~b=0~hook` | `a=5~T~b=0` |
+| `trap/second-trap-replaces` | `body~two` | `body~two` | `body~two` | `body~two` | `body~two` | `body~two` | `body~two` |
+| `trap/err-fires-on-failure` | `after=1` **2>** `trap: ERR: bad trap` | `E=1~after=1` | `E=1~after=1` | `E=1~after=1` | `E=1~after=1` | `E=1~after=1` | `E=1~after=1` |
+| `trap/err-under-errexit` | **2>** `trap: ERR: bad trap` *(status 1)* | `ERR` *(status 1)* | `ERR` *(status 1)* | `ERR` *(status 1)* | `ERR` *(status 1)* | `ERR` *(status 1)* | `ERR` *(status 1)* |
+| `trap/debug-fires-before-each-command` | `a~b` **2>** `trap: DEBUG: bad trap` | `D~a~D~b` | `D~a~D~b` | `D~a~D~b` | `D~a~D~b` | `D~a~D~b` | `a~b` **2>** `<shell>: trap: line 0: DEBUG: invalid signal specification` |
+| `trap/return-fires-when-a-sourced-file-ends` | `insource~after` **2>** `trap: RETURN: bad trap` | `insource~R~after` | `insource~R~after` | `insource~R~after` | `insource~after` **2>** `<shell>: trap: RETURN: bad trap` | `insource~after` **2>** `<shell>:trap:1: undefined signal: RETURN` | `insource~after` **2>** `<shell>: trap: line 0: RETURN: invalid signal specification` |
+| `trap/subshell-does-not-refire` | `sub~after~T` | `sub~after~T` | `sub~after~T` | `sub~after~T` | `sub~after~T` | `sub~after~T` | `sub~after~T` |
+| `trap/exit-set-inside-a-subshell` | `TRAP~[5]` | `TRAP~[5]` | `TRAP~[5]` | `TRAP~[5]` | `TRAP~[5]` | `TRAP~[5]` | `TRAP~[5]` |
+| `trap/exit-inside-a-subshell-on-the-fallthrough` | `TRAP~[0]` | `TRAP~[0]` | `TRAP~[0]` | `TRAP~[0]` | `TRAP~[0]` | `TRAP~[0]` | `TRAP~[0]` |
+| `trap/exit-inside-a-subshell-sees-the-status` | `T=5~[5]` | `T=5~[5]` | `T=5~[5]` | `T=5~[5]` | `T=5~[5]` | `T=5~[5]` | `T=5~[5]` |
+| `trap/exit-inside-a-command-substitution` | `[T=5] [5]` | `[T=5] [5]` | `[T=5] [5]` | `[T=5] [5]` | `[T=5] [5]` | `[T=5] [5]` | `[T=5] [5]` |
+| `trap/exit-inside-a-subshell-can-override-the-status` | `[9]` | `[9]` | `[9]` | `[9]` | `[9]` | `[9]` | `[9]` |
+| `trap/exit-inside-a-subshell-and-the-parents` | `CHILD~[7]~PARENT` | `CHILD~[7]~PARENT` | `CHILD~[7]~PARENT` | `CHILD~[7]~PARENT` | `CHILD~[7]~PARENT` | `CHILD~[7]~PARENT` | `CHILD~[7]~PARENT` |
+| `trap/exit-inside-a-pipeline-element` | `body~TRAP~[0]~P` | `body~TRAP~[0]~P` | `body~TRAP~[0]~P` | `body~[0]~P` | `body~TRAP~[0]~P` | `body~TRAP~[0]~P` | `body~TRAP~[0]~P` |
+| `trap/exit-inside-a-background-job` | `TRAP~[4]` | `TRAP~[4]` | `TRAP~[4]` | `TRAP~[4]` | `TRAP~[4]` | `TRAP~[4]` | `TRAP~[4]` |
+| `trap/exit-inside-a-subshell-runs-inside-its-redirections` | `[TRAP]` | `[TRAP]` | `[TRAP]` | `[TRAP]` | `[TRAP]` | `[TRAP]` | `[TRAP]` |
+| `trap/subshell-resets-a-handled-trap` | `done` | `trap -- 'echo x' SIGUSR1~done` | `trap -- 'echo x' USR1~done` | `done` | `trap -- 'echo x' USR1~done` | `done` | `done` |
+| `trap/subshell-keeps-an-ignored-one` | `trap -- '' USR2~done` | `trap -- '' SIGUSR2~done` | `trap -- '' USR2~done` | `trap -- '' SIGUSR2~done` | `trap -- '' USR2~done` | `done` | `trap -- '' USR2~done` |
+| `trap/listing-in-a-pipeline-element` | `done` | `trap -- 'echo x' SIGUSR1~done` | `trap -- 'echo x' USR1~done` | `done` | `done` | `trap -- 'echo x' USR1~done` | `trap -- 'echo x' USR1~done` |
+| `trap/set-in-a-function-diverges` | `enter~between~TRAP` | `enter~between~TRAP` | `enter~between~TRAP` | `enter~between~TRAP` | `enter~between~TRAP` | `enter~TRAP~between` | `enter~between~TRAP` |
+| `exit/status-and-wrapping` | `[44]~[1]` | `[44]~[1]` | `[44]~[1]` | `[44]~[1]` | `[44]~[1]` | `[44]~[1]` | `[44]~[1]` |
+| `exit/a-refused-operand-and-the-next-command` | **2>** `<shell>: 1: exit: Illegal number: status` *(status 2)* | `after=2~alive` **2>** `<shell>: line 1: exit: status: numeric argument required` | **2>** `<shell>: line 1: exit: status: numeric argument required` *(status 2)* | **2>** `<shell>: line 0: exit: status: numeric argument required` *(status 255)* | *(no output, status 0)* | *(no output, status 0)* | **2>** `<shell>: exit: line 0: Illegal number: status` *(status 2)* |
+| `exit/a-good-operand-still-ends-the-script` | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* |
+| `exit/bad-argument-diverges` | `[2]~[2]` **2>** `<shell>: 1: exit: Illegal number: -1~<shell>: 1: exit: Illegal number: abc` | `[255]~[2]` **2>** `<shell>: line 1: exit: abc: numeric argument required` | `[255]~[2]` **2>** `<shell>: line 1: exit: abc: numeric argument required` | `[255]~[255]` **2>** `<shell>: line 0: exit: abc: numeric argument required` | `[255]~[0]` | `[255]~[0]` | `[2]~[2]` **2>** `<shell>: exit: line 0: Illegal number: -1~<shell>: exit: line 0: Illegal number: abc` |
+| `exec/the-exit-trap-fires-after-a-syntax-error` | `bye` **2>** `<script>: 2: Syntax error: "fi" unexpected` *(status 2)* | `bye` **2>** `<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `{ fi; }'` *(status 2)* | `bye` **2>** `<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `{ fi; }'` *(status 2)* | `bye` **2>** `<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `{ fi; }'` *(status 2)* | `bye` **2>** `<script>: syntax error at line 2: `fi' unexpected` *(status 3)* | `bye` **2>** `<script>:2: parse error near `fi'` *(status 1)* | `bye` **2>** `<script>: line 2: syntax error: unexpected "fi"` *(status 2)* |
+| `exit/from-inside-a-while-loop` | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* |
+| `exit/from-inside-an-until-loop` | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* |
+| `exit/from-inside-a-for-loop` | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* |
+| `exit/from-inside-a-nested-loop` | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* |
+| `exit/break-still-counts-its-loops` | `after` | `after` | `after` | `after` | `after` | `after` | `after` |
+
+- `trap/the-return-trap-is-not-carried-into-a-debug-body` — `set -T` carries the RETURN trap into a function that did not set it, and not into one called from the **DEBUG** body: every bash column runs `act` and writes no RET for it. It is worth pinning because the cost is per command rather than per script — a DEBUG body runs before everything, so a shell that fired here wrote two extra lines for every command of a traced run. ksh93, dash and ash refuse `set -T` and end the script; zsh takes the letter and refuses the RETURN condition, so bash's three columns are the only ones that can answer
+  ```sh
+  set -T
+  act() { echo ran; }
+  trap 'echo RET' RETURN
+  trap 'act' DEBUG
+  false
+  trap - DEBUG
+  trap - RETURN
+  echo done
+  ```
+- `trap/the-return-trap-is-carried-into-an-err-body` — the control that says the exemption above belongs to DEBUG and not to trap bodies in general: the same function called from an ERR body fires the trap, so every bash column writes RET here. A guard written as "not from inside a trap" passes the row above and fails this one
+  ```sh
+  set -T
+  act() { echo ran; }
+  trap 'echo RET' RETURN
+  trap 'act' ERR
+  false
+  trap - ERR
+  trap - RETURN
+  echo done
+  ```
+- `trap/a-function-holding-its-own-return-trap-fires-it-inside-a-debug-body` — and the control on the other side of the same exemption: a function that sets the trap in its *own* body fires it from inside a DEBUG body like anywhere else. So what DEBUG withholds is the carriage `set -T` turns on rather than the condition — the two rows together are what makes that a measurement instead of a guess
+  ```sh
+  set -T
+  act() { trap 'echo RET' RETURN; echo ran; }
+  trap 'act' DEBUG
+  false
+  trap - DEBUG
+  echo done
+  ```
+- `kill/exit-trap-after-a-fatal-signal` — whether being killed counts as exiting: bash and ksh93 run the EXIT trap and dash and zsh do not, and all four report 130 without reaching the next command
+  ```sh
+  trap 'echo bye' EXIT
+  kill -INT $$
+  echo after
+  ```
+- `trap/bad-signal-name` — status 1 in all four and four different sentences, one of which arrives with no shell name in front of it where the same shell prefixes every `kill` diagnostic it has
+  ```sh
+  trap 'echo x' NOPE; echo "st=$?"
+  ```
+- `trap/sig-prefix-diverges` — dash reads no SIG-prefixed name: the prefix is simply not part of a signal's name there, so a script that traps SIGUSR1 traps nothing and says so, where the other three take it
+  ```sh
+  trap 'echo caught' SIGUSR1; echo "st=$?"
+  ```
+- `trap/signal-handler-runs-and-continues` — a caught signal runs its handler and the script carries on, which is the whole reason to catch one
+  ```sh
+  trap 'echo caught' INT
+  kill -INT $$
+  echo after
+  ```
+- `trap/an-exit-from-a-handler-ends-a-while-loop` — an `exit` raised inside a signal handler ends the shell from wherever it was raised, and a loop that was running when the signal arrived is not an exception: all seven print `caught` once, never reach `after`, and exit 7. It is the status a caller acts on, and the one shape most likely to be got wrong, because a `while` asks its condition a question immediately after the handler has answered a different one
+  ```sh
+  trap 'echo caught; exit 7' USR1; i=0; while [ $i -lt 3 ]; do i=$((i+1)); kill -USR1 $$; done; echo after
+  ```
+- `trap/an-exit-from-a-handler-ends-an-until-loop` — the same for the loop that reads its condition the other way round, unanimously 7. It is worth having beside the `while` row rather than assumed from it: an `until` inverts the sense of the status it reads, so a shell that mistakes a refusal for a condition gets the *opposite* wrong answer here — it runs the body again rather than deciding the loop is over
+  ```sh
+  trap 'echo caught; exit 7' USR1; i=0; until [ $i -ge 3 ]; do i=$((i+1)); kill -USR1 $$; done; echo after
+  ```
+- `trap/an-exit-from-a-handler-ends-a-for-loop` — the control row. A `for` reads no condition, so it has nothing to mistake a refusal for, and it was right while the `while` was wrong — which is what says the fault was in how a loop reads its control state rather than in how a trap sets one. All seven exit 7 here too
+  ```sh
+  trap 'echo caught; exit 7' USR1; for i in 1 2 3; do kill -USR1 $$; done; echo after
+  ```
+- `trap/an-exit-from-a-handler-ends-nested-loops` — an exit raised two loops deep leaves both of them, rather than the inner one only: the outer loop's own condition is the next command after the inner loop returns, so a shell that recovers at one level goes round the outer loop and reports its bookkeeping instead. Still `caught` once and 7 in all seven
+  ```sh
+  trap 'echo caught; exit 7' USR1; i=0; while [ $i -lt 2 ]; do j=0; while [ $j -lt 2 ]; do j=$((j+1)); kill -USR1 $$; done; i=$((i+1)); done; echo after
+  ```
+- `trap/an-exit-from-a-handler-ends-a-loop-inside-a-function` — and the same through a function boundary, which is the shape a real script has: an `exit` is not a `return`, so the function call it was raised inside does not absorb it. `caught` and 7 in all seven, with `after` unreached
+  ```sh
+  trap 'echo caught; exit 7' USR1; f() { i=0; while [ $i -lt 3 ]; do i=$((i+1)); kill -USR1 $$; done; }; f; echo after
+  ```
+- `trap/lineno-inside-an-action` — which line a trap action thinks it is on, and the panel gives two answers: bash 5.3 numbers the action's own text from 1, while bash 3.2, ksh93, dash and zsh report the line the signal was delivered on. So a trap body is a little program of its own in one shell and part of the script in four, and the split runs *through* bash rather than between bash and the rest — which is why the case is worth having over an assertion that names `bash`
+  ```sh
+  trap 'echo "in trap LINENO=$LINENO"' USR1
+  echo one
+  kill -USR1 $$
+  echo two
+  ```
+- `trap/listing-is-ordered-by-signal-number` — a bare listing is ordered by *signal number*, EXIT counting as 0: bash 5.3, bash-as-`sh`, bash 3.2, zsh, dash and BusyBox ash all print EXIT, HUP, INT, QUIT, ABRT, TERM whatever order the traps were set in, and ksh93 alone runs the sequence the other way with EXIT last. Set in a deliberately scrambled order so an implementation that printed them as they arrived is visible. Only signals numbered alike on every system the panel runs on — 1, 2, 3, 6 and 15 — because the order is the *host's* numbering and USR1 sits either side of TERM depending on the kernel, which would make the row a fact about the machine. This listed alphabetically, which is an order no column produces, and printed EXIT outside the ordering altogether — a listing is what a script parses to save and restore its traps, so its order is output rather than presentation
+  ```sh
+  trap 'echo x' TERM
+  trap 'echo x' HUP
+  trap 'echo x' ABRT
+  trap 'echo x' INT
+  trap 'echo x' EXIT
+  trap 'echo x' QUIT
+  trap
+  ```
+- `trap/empty-handler-ignores` — an empty handler ignores the signal, which is different from having no trap at all
+  ```sh
+  trap '' INT
+  kill -INT $$
+  echo after
+  ```
+- `trap/default-signal-terminates` — untrapped, INT kills the shell and the status is 128 plus the number
+  ```sh
+  kill -INT $$
+  echo after
+  ```
+- `trap/reset-restores-the-default` — `trap -` puts the default back rather than leaving an empty handler
+  ```sh
+  trap 'echo caught' INT
+  trap - INT
+  kill -INT $$
+  echo after
+  ```
+- `trap/a-reset-takes-back-an-ignore-a-child-would-inherit` — the same reset asked of a **child** rather than of the shell, which is the only place the answer was ever wrong: the row above shows what the shell's own trap table did with `trap -`, and this one shows what the *process disposition* did, since an ignore survives exec and a handled signal does not. Unanimous across all seven columns — bash 5.3, bash-as-`sh`, bash 3.2, zsh, dash and BusyBox ash all kill the child and report 143, and ksh93 kills it too and reports its own 256-plus-the-number as 271. SIGTERM rather than a user signal because the status carries the *host's* signal number: USR1 is 30 on this machine and 10 on the Linux the ash column runs in, which would make half the row a fact about a kernel, and TERM is 15 on both. So a reset reaches the children started after it, and it took a case starting one to see it: this shell answered `survived` here while answering the row above correctly, because signal.Reset does not undo signal.Ignore and nothing in the corpus had ever asked a child (#2507). The child's own death notice is caught by the group's redirection, which keeps the row about the disposition rather than about four wordings for the same death
+  ```sh
+  trap '' TERM; trap - TERM; { /bin/sh -c 'kill -TERM $$; echo survived'; } 2>/dev/null; echo st=$?
+  ```
+- `trap/an-ignore-with-no-reset-is-a-childs-to-inherit` — the control for the row above, and the half that says `trap -` is a reset rather than a shell that has stopped ignoring anything at all: with the reset taken away the child survives at status 0 in all seven. It is `nohup` written in one line — an ignore is the one disposition that crosses exec, so a script can hand one to everything it starts, and a fix that cleared the ignore eagerly would pass the row above and fail this one
+  ```sh
+  trap '' TERM; { /bin/sh -c 'kill -TERM $$; echo survived'; } 2>/dev/null; echo st=$?
+  ```
+- `trap/a-reset-with-no-ignore-leaves-a-child-the-default` — a reset of a signal nothing has touched, which is the other control: 143 in six columns and 271 in ksh93, the same as the reset that follows an ignore. It is worth a row because `trap -` on a signal with no trap is not a null statement in every shell — it is the spelling `trap - QUIT` uses to argue with a shell born ignoring one (Semantics.QuitResetRestoresTheDefault) — and here, where nothing was ignored to begin with, all seven leave the child exactly as it would have been
+  ```sh
+  trap - TERM; { /bin/sh -c 'kill -TERM $$; echo survived'; } 2>/dev/null; echo st=$?
+  ```
+- `trap/a-handler-and-a-reset-leave-a-child-the-default` — the third control, and the one that separates the two ways a trap reaches the process: a *handler* is not inherited across exec at all, so the child sees the default whether the handler was reset or not, and every column kills it. Its value is as the discriminator — an implementation that reads `trap -` as one operation whatever preceded it passes this row and the two above and still fails the ignore row, because only the ignore leaves anything behind to take back
+  ```sh
+  trap 'echo handler' TERM; trap - TERM; { /bin/sh -c 'kill -TERM $$; echo survived'; } 2>/dev/null; echo st=$?
+  ```
+- `trap/a-reset-takes-back-an-ignored-interrupt` — the same reset for the signal the idiom is actually written about — a script that shields a critical section from ^C and then stops shielding it. Six columns kill the child at 130 and carry on to `after`; ksh93 prints nothing at all, because an interrupt that ended a child also ends the script there, which `signal/an-interrupt-that-ended-a-child` records on its own. Kept beside the TERM row rather than instead of it: TERM is the signal with no second story attached and the same number on every host, and INT is the one anybody writes this code for — a row that agreed with the panel only on the signal nobody uses for this would be a thin claim
+  ```sh
+  trap '' INT; trap - INT; { /bin/sh -c 'kill -INT $$; echo survived'; } 2>/dev/null; echo st=$?; echo after
+  ```
+- `trap/a-pipeline-element-runs-the-pipe-handler-it-set-for-itself` — a handler is not only the shell's to set: an element that traps PIPE for itself runs that handler when its own write meets the broken pipe, and every shell in the panel does it — `child` then `reached` on standard error, in that order, in dash, both bash builds, ksh93 and zsh. The trap has to be set *inside* the element, because a handled signal is back at its default across the boundary and only an ignore crosses intact, so this cannot be spelled from the outside. ksh93 prints `after` before either of them, which is why the two streams are recorded apart
+  ```sh
+  v=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done; { trap 'echo child >&2' PIPE; echo "$v" 2>/dev/null; echo reached >&2; } | true; echo after
+  ```
+- `trap/an-elements-broken-pipe-is-not-the-outer-shells-to-handle` — the same shape with a handler on both sides, which is the half that says where the signal went: the element's handler runs and the shell's never does, in all five, because the broken pipe was the element's and the process never had it. It is the case a naive fix breaks — recording the arrival where the shell can see it makes the shell run `outer` for a signal it was never sent
+  ```sh
+  v=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done; trap 'echo outer >&2' PIPE; { trap 'echo child >&2' PIPE; echo "$v" 2>/dev/null; echo reached >&2; } | true; echo after
+  ```
+- `trap/an-elements-pipe-handler-runs-inside-the-elements-redirections` — two facts one shape can hold, and both are about *when* the handler runs. The failed write is the element's last command, so there is no command after it to run a handler between — and every shell in the panel runs it anyway, which makes the end of the element's body a boundary of its own. And `child` lands in the file rather than on the shell's standard error, so it runs while the element's own redirection is still in force: the boundary is at the end of the element's *list*, inside the redirection, and not after the body has been taken down. The wording of the failed write lands in the file too, ahead of the handler, which is the ordering all five agree on — ksh93 has no wording, and zsh says its own twice and runs the handler three times
+  ```sh
+  v=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done; { trap 'echo child >&2' PIPE; echo "$v"; } 2>e | true; echo "e=[$(cat e)]"
+  ```
+- `signal-death/status-encodes-the-signal` — a command killed by a signal has no exit status of its own, so the signal goes in the number: 128 + 13 in bash, dash and zsh, and 256 + 13 in ksh93. PIPE is the signal to ask with — it is one of only two the panel does not announce (INT is the other), so the case is about the number and not about three wordings, and unlike INT it does not end the script in ksh93
+  ```sh
+  sh -c 'kill -PIPE $$'; echo "st=$?"; echo after
+  ```
+- `signal-death/the-shell-dies-by-the-signal-rather-than-exiting` — the discipline the record could not see until it kept the signal: a shell with no trap for a fatal signal does not exit with 128 plus the number, it *re-raises the signal at itself*, so its own caller is told the shell was killed and by which one. `sh -c 'kill -TERM $$'; echo $?` says 143 either way, which is why every earlier case had to nest a child and read the parent shell's arithmetic instead of the death
+  ```sh
+  kill -TERM $$; echo after
+  ```
+- `signal-death/an-uncatchable-signal-ends-it-outright` — the same death by a signal no shell can trap, handle or re-raise deliberately — the kernel ends it — which is what says the row above is the shell's own discipline and not simply what happens to a process that is signaled
+  ```sh
+  kill -KILL $$; echo after
+  ```
+- `signal-death/a-signal-with-no-meaning-of-its-own-is-fatal-too` — the same discipline for a signal the shell is not expected to have an opinion about: USR1 has no default meaning beyond ending the process, and every shell in the panel is killed by it. It is here because ours was not — Go's runtime forwards a signal it classifies as killing and silently discards the rest, so USR1, USR2, ALRM, PIPE, XCPU, XFSZ, VTALRM and PROF raised at ourselves did nothing and the shell hung waiting for a death that was never coming, at ten seconds of harness timeout each
+  ```sh
+  kill -USR1 $$; echo after
+  ```
+- `signal-death/dying-by-a-signal-says-nothing` — a shell killed by a signal writes no diagnostic of its own — both streams are empty in all four — and ABRT is the sharp way to ask, because it is one of the signals Go's runtime treats as a crash: it printed a full goroutine dump to standard error and exited 2 where a shell must print nothing at all and be killed by the signal. The same leak internal/panicguard exists to stop, arriving by another road
+  ```sh
+  kill -ABRT $$; echo after
+  ```
+- `signal-death/quit-is-not-fatal-in-every-shell` — the one fatal signal the panel disagrees about: bash 5.3, zsh and BusyBox ash take QUIT's default action away and print after with status 0, where dash, ksh93 — and bash 3.2, so the two bash columns differ — are killed by it. ash siding with bash rather than with dash is the half this row recorded correctly while dialect/ash answered the other way for the whole of that column's life (#645). Measured with a signal from another process too, so it is a disposition rather than a deferral, and it disappears with `-i`, where all five ignore it
+  ```sh
+  kill -QUIT $$; echo after
+  ```
+- `signal-death/a-reset-takes-the-ignore-away-in-one-shell` — what `trap -` means for a signal the shell was born ignoring, which the row above does not answer and the panel splits differently on: bash 5.3 and ash keep the ignore and print after, zsh hands SIGQUIT back its default action and is killed by it. The three columns that die on the row above die here too, so this asks nothing of them. No handler is installed first on purpose — the issue that filed this framed it as `trap 'x' QUIT; trap - QUIT` and the handler turns out to be no part of it, so a snippet carrying one could not tell a disposition from a memory of what the script did
+  ```sh
+  trap - QUIT; kill -QUIT $$; echo after
+  ```
+- `signal-death/an-ignore-written-after-a-reset-stands` — the control for the row above, and what makes it a disposition rather than a latch: zsh prints after here, so the reset is undone by writing the ignore back rather than being a fact about the shell from then on. All seven print it, which is the other half of the point: `trap '' QUIT` is an ignore any shell will honor, so the row above is about the disposition a shell was *born* with and not about whether SIGQUIT can be ignored at all
+  ```sh
+  trap - QUIT; trap '' QUIT; kill -QUIT $$; echo after
+  ```
+- `signal-death/hangup-is-an-exit-in-one-shell` — the second fatal signal the panel disagrees about, and the only other one: zsh reports 1 where bash, dash and ksh93 are killed by SIGHUP and report 129. Nothing prints after it anywhere, so the disagreement is about how the shell ended rather than about whether it did — and 1 is not 128 plus anything, which is the first sign that zsh is exiting rather than dying. Measured across all nineteen signals whose default action ends a process: this and QUIT are the whole of the split
+  ```sh
+  kill -HUP $$; echo after
+  ```
+- `signal-death/a-hangup-that-exits-runs-the-exit-trap` — what says the row above is an exit and not merely a different number. zsh does not run the EXIT trap when a signal kills it — `trap 'echo bye' EXIT; kill -TERM $$` prints nothing there — and it prints bye here, so SIGHUP produced no death for that question to be asked about. bash and ksh93 print bye because dying counts as exiting for them, and dash prints nothing for either signal, which is why the trap alone cannot tell the two apart and the status beside it can
+  ```sh
+  trap 'echo bye' EXIT; kill -HUP $$; echo after
+  ```
+- `signal-death/a-subshell-that-signaled-the-shell` — the whole of what a subshell changes about a fatal self-signal, and the one place in the grammar that changes anything. The shell ends by the signal in all seven and `outer` prints in none of them, so what splits is `inner`: bash 5.3.15, bash 3.2.57, bash 3.2 as `sh`, dash, zsh and ash print it and ksh93 does not. Not a delivery race — the same answer on twenty-five runs of each under load, and unchanged by a `sleep 0.3` between the kill and the echo. The reason is the opposite of the obvious one: measured with a child started inside the subshell and its parent process id read back, the six that keep going are the six that gave the subshell a **process of its own**, so the signal aimed at `$$` never reached it; ksh93 runs the subshell in the shell's own process and the signal lands on the thing that was about to run the echo. Semantics.SubshellRunsOnAfterSignalingTheShell
+  ```sh
+  (kill -TERM $$; echo inner); echo outer
+  ```
+- `signal-death/a-brace-group-does-not-outlive-the-signal` — the control for the row above, and the reason that one names a subshell rather than a compound command: a brace group is the same shell, so all seven stop at once and print nothing. Grouping is not what defers the death — being a separate process is
+  ```sh
+  { kill -TERM $$; echo inner; }; echo outer
+  ```
+- `signal-death/a-function-body-does-not-outlive-the-signal` — the same control one level further in, because a function body is the place a reader would next expect the boundary to be. Unanimous: nothing prints, in all seven. Together with the brace group and the loop below this is what makes the subshell row an axis about processes and not an axis about scopes
+  ```sh
+  f() { kill -TERM $$; echo inner; }; f; echo outer
+  ```
+- `signal-death/a-loop-body-does-not-outlive-the-signal` — the third control, and the one that asks whether a shell checks for its own death only between *top-level* commands. It does not: all seven stop inside the loop body, printing neither the echo after the kill nor anything after the loop
+  ```sh
+  i=0; while [ $i -lt 1 ]; do kill -TERM $$; echo inner; i=1; done; echo outer
+  ```
+- `signal-death/a-command-substitution-that-signaled-the-shell` — the other subshell environment, and it does not divide the panel the way `( )` does: all seven print nothing and die, because whatever the child wrote went into the assignment rather than to the output and the shell never reached the echo that would have shown it. Here so that the `( )` row is not read as a claim about every subshell environment
+  ```sh
+  x=$(kill -TERM $$; echo inner); echo "outer x=$x"
+  ```
+- `signal-death/a-handled-signal-is-not-a-death` — the control: the same signal with a trap for it runs the handler and the shell carries on to exit normally, so the two rows above are about the *absence* of a handler rather than about the signal arriving
+  ```sh
+  trap "echo caught" TERM; kill -TERM $$; echo after
+  ```
+- `signal-death/an-ordinary-failure-is-untouched` — a command that exits by itself reports what it exited with, unanimously — which is what says the encoding above is about being killed rather than about failing
+  ```sh
+  sh -c 'exit 3'; echo "st=$?"
+  ```
+- `umask/reads-the-mask` — three of the four write four octal digits and zsh writes three — `0022` against `022`. The value itself is the machine's, so this pins the shape rather than the number, and the harness runs every case with the same mask
+  ```sh
+  umask
+  ```
+- `umask/symbolic-is-unanimous` — `-S` writes the permissions the mask *allows* rather than the bits it takes away, and all four spell it identically — the one part of this builtin needing no dialect
+  ```sh
+  umask -S
+  ```
+- `umask/setting-then-reading` — the mask a script sets is the mask it reads back, which is the whole point of the builtin and exactly what a `/usr/bin/umask` in a child process cannot do
+  ```sh
+  umask 077; umask; umask -S
+  ```
+- `umask/a-created-file-takes-the-mask` — every other umask case interrogates the builtin, and a mask nothing is created under is a number the shell is keeping rather than a mask. This is the one that opens a file on each side of a change and reads the mode back off the file system, unanimously — and it is the case the no-process-state rule makes worth having, since a core that may not call umask(2) has to carry the mask itself and apply it at every open. Two masks rather than one, because a shell that ignored the mask entirely would still pass with whatever the process started with
+  ```sh
+  umask 077; : > f; ls -l f | cut -c1-10; umask 022; : > g; ls -l g | cut -c1-10
+  ```
+- `umask/setting-is-silent` — setting writes nothing in any of the four — so a script can set a mask without its output changing, and the `-S` form below is the exception rather than the rule
+  ```sh
+  umask 077; echo "st=$?"
+  ```
+- `umask/dash-s-with-a-mask-echoes-in-bash` — bash alone echoes the new mask symbolically when asked to set *and* shown `-S`; dash, ksh93 and zsh set it and say nothing. The trailing `umask 022` puts the machine back so the case leaves nothing behind
+  ```sh
+  umask -S 077; umask 022
+  ```
+- `umask/a-mask-it-cannot-read` — four wordings and two statuses — 1 in bash, ksh93 and zsh, 2 in dash — and zsh names no operand at all, saying only `bad umask`
+  ```sh
+  umask 9999; echo "st=$?"
+  ```
+- `ulimit/reads-the-file-size-limit` — bare `ulimit` is `-f`, which is why it reports the file-size limit rather than a summary — unanimous, and the reason a script that means something else has to say which
+  ```sh
+  ulimit; ulimit -f
+  ```
+- `ulimit/hard-and-soft` — `-H` and `-S` choose which of the two limits is read, and neither means the soft one — so the third line repeats the second. CPU time rather than open files: the file-descriptor limit is the one resource whose value differs between our process and bash's, for reasons outside either shell
+  ```sh
+  ulimit -Ht; ulimit -St; ulimit -t
+  ```
+- `ulimit/setting-with-neither-letter-moves-both` — `ulimit -n 100` with neither -H nor -S sets *both* limits in six of the seven and only the soft one in zsh — which matters because lowering both is a door that cannot be reopened, while lowering the soft limit alone can be undone. The hard limit is compared rather than printed: its starting value is a property of the machine, and a row that recorded it would record where it was generated
+  ```sh
+  ulimit -n 100; h=$(ulimit -H -n); s=$(ulimit -S -n); echo "s=$s hard_moved=$([ "$h" = 100 ] && echo yes || echo no)"
+  ```
+- `ulimit/the-file-size-block` — how many bytes a block is, asked of the file system rather than of the builtin: one block, six hundred bytes written, and the file is 600 where a block is 1024 and 512 where it is 512. The prior reading of this, taken from bash alone, was that a block is 1024 bytes — true for bash 5.3 and bash 3.2 as `bash`, and false for dash, ksh93, zsh, ash *and the same bash 5.3 called `sh`*, all of which use POSIX's 512. So the unit is argv[0]'s to decide, which is not a shape a one-shell measurement could have found. Written in a subshell whose group carries the redirection, because the shell that reaps a child killed by SIGXFSZ announces it with a process id in the text
+  ```sh
+  { ( ulimit -f 1; printf "%0600d" 0 > f ); } 2>/dev/null; ls -l f | awk "{print \"size=\" \$5}"
+  ```
+- `ulimit/unlimited-is-a-word` — no limit is printed as `unlimited` rather than as a very large number, in all four — and is read back from that word too, which is what lets a script save and restore one
+  ```sh
+  ulimit -Hf
+  ```
+- `ulimit/setting-then-reading` — setting without -H or -S lowers both, which is what makes it irreversible — the hard limit follows the soft one down and cannot be raised again
+  ```sh
+  ulimit -t 3600; ulimit -t; ulimit -Ht
+  ```
+- `ulimit/a-limit-it-cannot-read` — four wordings, and ksh93's is the odd one — `parameter not set` where the others call it a bad or invalid number
+  ```sh
+  ulimit -t abc; echo "st=$?"
+  ```
+- `ulimit/a-letter-zsh-does-not-have` — the resident-set letter, read by bash, dash and ksh93 and a bad option in zsh — the UlimitHasResidentSet axis. The value goes to /dev/null because it is the machine's, not the shell's; the letter's existence is the question
+  ```sh
+  ulimit -m >/dev/null; echo "st=$?"
+  ```
+- `ulimit/a-letter-dash-does-not-have` — the process-count letter, read by bash, ksh93 and zsh where dash refuses it at 2 and carries on — the UlimitHasProcessCount axis, and the other half of the pair above: neither absence is a subset of the other, which is what makes them two axes
+  ```sh
+  ulimit -u >/dev/null; echo "st=$?"
+  ```
+- `builtin/an-option-it-does-not-have` — four wordings, two statuses and a divergence about whether the script survives: bash and zsh report it and carry on — with 2 and 1 — while dash and ksh93 stop there, which is the POSIX rule that a special builtin's failure is fatal. bash and ksh93 print a usage line after it and word that per builtin
+  ```sh
+  export -Q x; echo "st=$?"; echo after
+  ```
+- `builtin/the-same-refusal-for-another-builtin` — the same shape from a different builtin, which is what says the wording is one rule rather than one per name — only the usage line changes, and only in the two that print one
+  ```sh
+  unset -Q x; echo "st=$?"; echo after
+  ```
+- `builtin/an-option-it-does-have` — the options each of them really has still work, which is the half a refusal could break — and `--` and a bare name have to keep meaning what they did
+  ```sh
+  x=1; export x; unset -v x; echo "[${x-unset}]"
+  ```
+- `trap/numeric-signal-name` — a signal can be named by number, and 2 is INT everywhere the panel runs
+  ```sh
+  trap 'echo caught' 2
+  kill -INT $$
+  echo after
+  ```
+- `trap/numeric-signal-beyond-the-common-few` — every signal has a number, not just the handful a script usually names. 5 is TRAP on every platform the panel runs on, and /usr/bin/bzless on macOS traps 0 2 3 5 10 13 15 — a script written against a shell that takes them all
+  ```sh
+  trap 'echo caught' 5
+  kill -TRAP $$
+  echo after
+  ```
+- `trap/number-and-name-are-one-trap` — the two spellings are the same signal rather than two entries, so the second setting replaces the first and only `two` runs
+  ```sh
+  trap 'echo one' 5
+  trap 'echo two' TRAP
+  kill -TRAP $$
+  echo after
+  ```
+- `trap/signal-handler-status-diverges` — zsh shows the handler the status from before the command that triggered it; the other three show that command's own
+  ```sh
+  trap 'echo st=$?' INT
+  false
+  kill -INT $$
+  echo after
+  ```
+- `trap/wait-cut-short-by-a-signal` — the async delivery path, which every other trap case misses: the signal comes from a background job rather than from the shell's own line, and it has to reach a `wait` that is already blocked. The handler runs and then `wait` reports the signal — 128 + USR1 in bash, dash and zsh, 256 + USR1 in ksh93 — where a wait nobody interrupted reports 0. `wait; check $?` is the supervisor loop every job-runner script is built on, so a 0 here is silence in place of the whole point. The job outlives the signal it sends, so `wait` is still blocked when the signal lands rather than racing the job's own death
+  ```sh
+  trap 'echo T' USR1; (sleep 0.3; kill -USR1 $$; sleep 0.2) & wait; echo "st=$?"
+  ```
+- `trap/wait-for-a-job-cut-short-by-a-signal` — naming the job splits the panel where the bare form did not: bash, dash and zsh answer exactly as above and ksh93 drops its own 256 encoding for a plain 1 (WaitForAJobFailsWhenInterrupted). `wait %1` is the same answer in all four, so the axis is about having an operand and not about how it is spelled
+  ```sh
+  trap 'echo T' USR1; (sleep 0.3; kill -USR1 $$; sleep 0.2) & wait $!; echo "st=$?"
+  ```
+- `trap/wait-is-not-cut-short-by-an-ignored-signal` — the control, and the line between the two: an ignored signal has no handler to run, so it does not interrupt anything and `wait` still reports 0 in all four. Without it the case above would be evidence about a signal arriving rather than about a *trapped* one arriving. Same shape to the character, so the trap is the only variable
+  ```sh
+  trap '' USR1; (sleep 0.3; kill -USR1 $$; sleep 0.2) & wait; echo "st=$?"
+  ```
+- `trap/exit-runs-at-the-end` — the EXIT trap runs after the script, not where it was set
+  ```sh
+  trap 'echo bye' EXIT; echo hi
+  ```
+- `trap/exit-sees-the-last-status` — the body reads `$?` at the moment it fires, which is what makes an EXIT trap useful for reporting
+  ```sh
+  trap 'echo st=$?' EXIT
+  false
+  ```
+- `trap/exit-trap-can-override-the-status` — the trap's own exit wins over the one that triggered it
+  ```sh
+  trap 'echo bye; exit 7' EXIT; exit 2
+  ```
+- `exit-hook/the-named-function-and-its-list` — the hook a plugin tears itself down in — gitstatus registers its daemon's cleanup here and powerlevel10k its async worker's. One shell in the panel has it: the named function runs, then every name in the list, in the order the list holds them, and each is told the status the shell is leaving with. The other five define a function called `zshexit`, exit 4, and call nothing, which is the whole of what the column difference is. Each hook prints `$?` rather than a bare marker because the status is the half a chain that ran the items in the right order could still get wrong
+  ```sh
+  zshexit() { echo "named st=$?"; }; zshexit_functions=(z2 z3); z2() { echo "z2 st=$?"; }; z3() { echo "z3 st=$?"; }; exit 4
+  ```
+- `exit-hook/runs-after-the-exit-trap` — which of the two goes last, asked of the one shell that has both. The trap is the script's own last word and the hook is the shell's, in that order — so a plugin's teardown cannot be cut short by a script's cleanup, and a shell that fired the hook first would pass every other row here
+  ```sh
+  trap 'echo trap' EXIT; zshexit() { echo hook; }; exit 3
+  ```
+- `exit-hook/an-exit-inside-it-wins-and-stops-nothing` — the one rule this chain does not share with every other hook chain in this shell. Everywhere else an item that exited ends the chain, because what it ended is the session; here the session is already over, so `exit` has nothing left to end and only records a status — `b` still prints and the shell leaves with 9 rather than 4. A `return` cannot do the same, which the row below pins
+  ```sh
+  zshexit() { echo a; exit 9; }; zshexit_functions=(z2); z2() { echo b; }; exit 4
+  ```
+- `exit-hook/a-return-cannot-change-the-status` — the counter-case to the row above, and what makes it mean something: a hook that merely *fails* changes neither the status the shell leaves with nor the status the next item is told. Both items read 4, a `false` at the end of one is not carried, and the shell still exits 4 — where a chain that let the last command's status through would exit 1
+  ```sh
+  zshexit() { echo "a st=$?"; return 5; }; zshexit_functions=(z2); z2() { echo "b st=$?"; false; }; exit 4
+  ```
+- `exit-hook/a-subshell-that-exits-fires-it` — the hook fires at a subshell boundary as well as at the shell's own end, and the one shell that has it fires it twice here — once inside the parentheses and once at the end. `$?` is what makes the row say which is which: the first reads 2, the status the subshell is leaving with, and the second reads 0. The row below is its counter-case, and the pair is the whole rule: the hook wants an `exit`, where the EXIT trap wants only a boundary
+  ```sh
+  zshexit() { echo "hook=$?"; }; ( exit 2 ); echo out=$?
+  ```
+- `exit-hook/a-subshell-that-falls-through-does-not` — the counter-case: a subshell that merely runs off its end fires nothing, and neither does a command substitution that calls `exit` — so the hook's rule is narrower than the EXIT trap's on both counts, and an implementation that hung it on the boundary would print `hook` three times here instead of once
+  ```sh
+  zshexit() { echo hook; }; ( true ); v=$(exit 3); echo out=$?
+  ```
+- `exit-hook/a-pipeline-element-that-exits-fires-it` — a pipeline element is a subshell too, so the same rule reaches it — the element's `exit` fires the hook inside the element, while the pipeline still reports `cat`'s 0. Worth a row of its own because parentheses and a pipe are different code paths, and because the hook runs while the element's end of the pipe is still open: `hook` arrives here by way of `cat` rather than straight from the shell, and a tail of `:` would swallow it and leave the row passing for the wrong reason
+  ```sh
+  zshexit() { echo hook; }; { exit 2; } | cat; echo out=$?
+  ```
+- `exit-hook/a-subshell-trap-that-exits-fires-it` — an EXIT trap that exits counts as the subshell exiting and one that merely prints does not, which is the pair that says the rule is about how the subshell *left* rather than about what ran in it. Both subshells fall off their own ends, so a reading that asked only what the body did would answer alike for the two
+  ```sh
+  zshexit() { echo hook; }; ( trap "exit 5" EXIT; true ); echo a=$?; ( trap "echo T" EXIT; true ); echo b=$?
+  ```
+- `trap/second-trap-replaces` — traps are set rather than accumulated, and `trap -` removes
+  ```sh
+  trap 'echo one' EXIT; trap 'echo two' EXIT; echo body
+  ```
+- `trap/err-fires-on-failure` — ERR fires on a failing command with `set -e` nowhere in sight, sees the failing status, and leaves it for the script — dash alone refuses the name, with its ordinary bad-trap words
+  ```sh
+  trap 'echo "E=$?"' ERR; false; echo "after=$?"
+  ```
+- `trap/err-under-errexit` — the reason the condition exists: the trap runs first and errexit then stops the script with the failure's own status, so a script can say where it died
+  ```sh
+  set -e; trap 'echo ERR' ERR; false
+  ```
+- `trap/debug-fires-before-each-command` — DEBUG runs before each simple command rather than after — the D precedes what it announces — and dash refuses the name like any other word that is no signal
+  ```sh
+  trap 'echo D' DEBUG; echo a; echo b
+  ```
+- `trap/return-fires-when-a-sourced-file-ends` — RETURN is one shell's alone — three of the four refuse it as a bad signal — and where it exists a sourced file fires it on the way out, wherever the trap was set
+  ```sh
+  trap 'echo R' RETURN; echo 'echo insource' > lib.sh; . ./lib.sh; echo after
+  ```
+- `trap/subshell-does-not-refire` — the trap fires once for the script: neither a subshell nor a command substitution repeats the *parent's*. Half of a pair — the trap a subshell installs for itself is a separate rule and fires at the subshell's own end, which `trap/exit-set-inside-a-subshell` holds and this row deliberately does not reach
+  ```sh
+  trap 'echo T' EXIT; (echo sub); x=$(echo cs); echo after
+  ```
+- `trap/exit-set-inside-a-subshell` — the other half of the row above, and the one nothing asked for a long time: the trap the *subshell itself* installs fires when the subshell ends, and the status the parentheses report is still the one `exit` named. The pair is what makes each half mean something — a shell that fired the parent's trap here would pass this row and fail that one, and a shell that fired neither passed both until this arrived (#2349). Unanimous across the panel
+  ```sh
+  ( trap 'echo TRAP' EXIT; exit 5 ); echo "[$?]"
+  ```
+- `trap/exit-inside-a-subshell-on-the-fallthrough` — the same trap where the body simply runs out rather than calling `exit`, which is the shape the cleanup idiom actually has — `( trap 'rm -rf "$tmp"' EXIT; … )`. A shell that fired the handler only on an explicit exit would leave the directory behind with no diagnostic anywhere, and would pass the row above
+  ```sh
+  ( trap 'echo TRAP' EXIT; true ); echo "[$?]"
+  ```
+- `trap/exit-inside-a-subshell-sees-the-status` — `$?` in the handler is the status the *subshell* is about to report, not the parent's and not zero — 5 inside and 5 outside. Single-quoted so the expansion happens when the handler runs rather than when the trap is set, which is the difference between measuring this and measuring nothing
+  ```sh
+  ( trap 'echo "T=$?"' EXIT; exit 5 ); echo "[$?]"
+  ```
+- `trap/exit-inside-a-command-substitution` — the same defect reached from ordinary script text rather than from a deliberate subshell: the handler's output is part of what the substitution captured, and the status is still the body's. `make conformance` was silent on this for as long as it was, because the snippet exits 5 whether or not the handler ever ran
+  ```sh
+  x=$( trap 'echo "T=$?"' EXIT; exit 5 ); echo "[$x] [$?]"
+  ```
+- `trap/exit-inside-a-subshell-can-override-the-status` — an `exit` in the handler wins over the one that triggered it, and what it changes is the *subshell's* status — the parentheses report 9. The same rule the top-level row pins, asked at the boundary where the status has somewhere else to go
+  ```sh
+  ( trap 'exit 9' EXIT; exit 5 ); echo "[$?]"
+  ```
+- `trap/exit-inside-a-subshell-and-the-parents` — both traps run, each at its own end and in that order: the child's when the parentheses close, the parent's when the script does. Two rules that look like one — the parent's must not fire at the boundary and the child's must — and only a case holding both handlers at once can tell a shell that has them from a shell that has neither
+  ```sh
+  trap 'echo PARENT' EXIT; ( trap 'echo CHILD' EXIT; exit 7 ); echo "[$?]"
+  ```
+- `trap/exit-inside-a-pipeline-element` — a pipeline element is a subshell, so it ends like one — and the handler writes into the element's end of the pipe rather than past it, which is what puts TRAP after body and before the status. bash 3.2 is the column that does not run it, which is a version difference rather than a dialect one
+  ```sh
+  trap 'echo P' EXIT; { trap 'echo TRAP' EXIT; echo body; } | cat; echo "[$?]"
+  ```
+- `trap/exit-inside-a-background-job` — the fourth boundary, and the one with a status nobody else reports: `wait` is what tells the script the job left with 4, and the handler has run by then. Waited on by pid rather than bare so the row terminates and its output is in one order
+  ```sh
+  ( trap 'echo TRAP' EXIT; exit 4 ) & wait $!; echo "[$?]"
+  ```
+- `trap/exit-inside-a-subshell-runs-inside-its-redirections` — *where* the handler runs, which is a separate question from whether it does: the subshell's own redirections are still up, so a handler writing to standard error writes to the file the parentheses were redirected into. A shell that fired the trap after taking them down would print TRAP on the terminal and leave the file empty, and would pass every row above
+  ```sh
+  ( trap 'echo TRAP >&2' EXIT; true ) 2>err.txt; echo "[$(cat err.txt)]"
+  ```
+- `trap/subshell-resets-a-handled-trap` — a subshell starts with a handled trap back at its default, unanimously — what differs is the listing: bash and ksh93 still show the trap they will not fire, dash and zsh show nothing
+  ```sh
+  trap 'echo x' USR1; (trap); echo done
+  ```
+- `trap/subshell-keeps-an-ignored-one` — an ignored signal crosses the fork still ignored, and three of the four list it in the subshell; zsh keeps the ignore working and hides it from the listing
+  ```sh
+  trap '' USR2; (trap); echo done
+  ```
+- `trap/listing-in-a-pipeline-element` — a pipeline element is a subshell environment with an inheritance rule of its own: bash and zsh keep the parent's listing there, dash and ksh93 print nothing — the shape issue #339 measured, orthogonal to which end of the pipeline forks
+  ```sh
+  trap 'echo x' USR1; trap | cat; echo done
+  ```
+- `trap/set-in-a-function-diverges` — zsh runs a trap set inside a function when the function returns; dash, bash and ksh93 keep it for the end of the script
+  ```sh
+  f() { trap 'echo TRAP' EXIT; echo enter; }
+  f
+  echo between
+  ```
+- `exit/status-and-wrapping` — a status is taken modulo 256, and a bare `exit` reports what the last command did
+  ```sh
+  (exit 300); echo "[$?]"; (false; exit); echo "[$?]"
+  ```
+- `exit/a-refused-operand-and-the-next-command` — not what the refusal is worth but whether it *ends the script*, which is the half `exit/bad-argument-diverges` cannot see: it asks in a subshell, where every answer ends the same way. bash reports the complaint, leaves 2 behind and runs both commands after it; dash and that same bash called `sh` end the script at 2, which is the POSIX rule that a special builtin's usage error is fatal; bash 3.2 ends it too and at 255; ksh93 and zsh refuse nothing, read the name as an expression and leave at 0 with nothing printed. So the axis is the one `return`, `shift` and `unalias` already ask, and `exit` was the caller that never asked it (#2299)
+  ```sh
+  exit status; echo "after=$?"; echo alive
+  ```
+- `exit/a-good-operand-still-ends-the-script` — the control for the row above, and the reason it cannot be read as `exit no longer exits`: an operand every column takes still ends the script with it, unanimously at 3 and with nothing printed after
+  ```sh
+  exit 3; echo alive
+  ```
+- `exit/bad-argument-diverges` — an ordering rather than a side: dash refuses both, bash refuses only the one that is not a number, ksh93 and zsh take either
+  ```sh
+  (exit -1); echo "[$?]"; (exit abc); echo "[$?]"
+  ```
+- `exec/the-exit-trap-fires-after-a-syntax-error` — the trap set by a line that ran still fires when a later line will not parse, which is what makes the failure an ending rather than an abort
+  ```sh
+  trap 'echo bye' EXIT
+  { fi; }
+  ```
+- `exit/from-inside-a-while-loop` — `exit` ends the shell from inside a loop as surely as from anywhere else — the loop must stop and must not touch the status on the way out, which is what turned `exit 3` into an exit of 0
+  ```sh
+  g() { exit 3; }; while :; do g; done; echo after
+  ```
+- `exit/from-inside-an-until-loop` — the same for `until`, which read the shell's refusal to run anything as its condition still holding and span forever rather than stopping
+  ```sh
+  g() { exit 3; }; until false; do g; done; echo after
+  ```
+- `exit/from-inside-a-for-loop` — and for `for`, which came out right by accident: a finite list ends on its own, so the loop stopped even without being told to — the shape most scripts use, and the reason this went unnoticed
+  ```sh
+  g() { exit 3; }; for i in 1 2 3; do g; done; echo after
+  ```
+- `exit/from-inside-a-nested-loop` — an exit passes out through every loop it is inside, unlike `break`, which counts them
+  ```sh
+  g() { exit 3; }; while :; do while :; do g; done; done; echo after
+  ```
+- `exit/break-still-counts-its-loops` — the counter-case: `break` still stops only as many loops as it was asked to, which is what an exit must not be confused with
+  ```sh
+  while :; do while :; do break 2; done; echo inner; done; echo after
   ```
 
 ## tokenization
@@ -9435,570 +10131,6 @@ grades it and nothing drift-checks it either, for the same reason.
 - `kill/sig-prefix-after-s` — and once more with the POSIX spelling, where dash calls the same word an invalid signal rather than an illegal option: one refusal, three wordings from the shell that refuses
   ```sh
   kill -s SIGCONT $$; echo "st=$?"
-  ```
-
-## traps and exit
-
-| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh | ash |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| `kill/exit-trap-after-a-fatal-signal` | *(no output, killed by signal 2 (interrupt))* | `bye` *(killed by signal 2 (interrupt))* | `bye` *(killed by signal 2 (interrupt))* | `bye` *(killed by signal 2 (interrupt))* | `bye` *(killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* |
-| `trap/bad-signal-name` | `st=1` **2>** `trap: NOPE: bad trap` | `st=1` **2>** `<shell>: line 1: trap: NOPE: invalid signal specification` | `st=1` **2>** `<shell>: line 1: trap: NOPE: invalid signal specification` | `st=1` **2>** `<shell>: line 0: trap: NOPE: invalid signal specification` | `st=1` **2>** `<shell>: trap: NOPE: bad trap` | `st=1` **2>** `<shell>:trap:1: undefined signal: NOPE` | `st=1` **2>** `<shell>: trap: line 0: NOPE: invalid signal specification` |
-| `trap/sig-prefix-diverges` | `st=1` **2>** `trap: SIGUSR1: bad trap` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
-| `trap/signal-handler-runs-and-continues` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` |
-| `trap/an-exit-from-a-handler-ends-a-while-loop` | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* |
-| `trap/an-exit-from-a-handler-ends-an-until-loop` | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* |
-| `trap/an-exit-from-a-handler-ends-a-for-loop` | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* |
-| `trap/an-exit-from-a-handler-ends-nested-loops` | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* |
-| `trap/an-exit-from-a-handler-ends-a-loop-inside-a-function` | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* |
-| `trap/lineno-inside-an-action` | `one~in trap LINENO=1~two` | `one~in trap LINENO=1~two` | `one~in trap LINENO=1~two` | `one~in trap LINENO=3~two` | `one~in trap LINENO=3~two` | `one~in trap LINENO=3~two` | `one~in trap LINENO=3~two` |
-| `trap/listing-is-ordered-by-signal-number` | `trap -- 'echo x' EXIT~trap -- 'echo x' HUP~trap -- 'echo x' INT~trap -- 'echo x' QUIT~trap -- 'echo x' ABRT~trap -- 'echo x' TERM~x` | `trap -- 'echo x' EXIT~trap -- 'echo x' SIGHUP~trap -- 'echo x' SIGINT~trap -- 'echo x' SIGQUIT~trap -- 'echo x' SIGABRT~trap -- 'echo x' SIGTERM~x` | `trap -- 'echo x' EXIT~trap -- 'echo x' HUP~trap -- 'echo x' INT~trap -- 'echo x' QUIT~trap -- 'echo x' ABRT~trap -- 'echo x' TERM~x` | `trap -- 'echo x' EXIT~trap -- 'echo x' SIGHUP~trap -- 'echo x' SIGINT~trap -- 'echo x' SIGQUIT~trap -- 'echo x' SIGABRT~trap -- 'echo x' SIGTERM~x` | `trap -- 'echo x' TERM~trap -- 'echo x' IOT~trap -- 'echo x' QUIT~trap -- 'echo x' INT~trap -- 'echo x' HUP~trap -- 'echo x' EXIT~x` | `trap -- 'echo x' EXIT~trap -- 'echo x' HUP~trap -- 'echo x' INT~trap -- 'echo x' QUIT~trap -- 'echo x' ABRT~trap -- 'echo x' TERM~x` | `trap -- 'echo x' EXIT~trap -- 'echo x' HUP~trap -- 'echo x' INT~trap -- 'echo x' QUIT~trap -- 'echo x' ABRT~trap -- 'echo x' TERM~x` |
-| `trap/empty-handler-ignores` | `after` | `after` | `after` | `after` | `after` | `after` | `after` |
-| `trap/default-signal-terminates` | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* |
-| `trap/reset-restores-the-default` | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* |
-| `trap/a-reset-takes-back-an-ignore-a-child-would-inherit` | `st=143` | `st=143` | `st=143` | `st=143` | `st=271` | `st=143` | `st=143` |
-| `trap/an-ignore-with-no-reset-is-a-childs-to-inherit` | `survived~st=0` | `survived~st=0` | `survived~st=0` | `survived~st=0` | `survived~st=0` | `survived~st=0` | `survived~st=0` |
-| `trap/a-reset-with-no-ignore-leaves-a-child-the-default` | `st=143` | `st=143` | `st=143` | `st=143` | `st=271` | `st=143` | `st=143` |
-| `trap/a-handler-and-a-reset-leave-a-child-the-default` | `st=143` | `st=143` | `st=143` | `st=143` | `st=271` | `st=143` | `st=143` |
-| `trap/a-reset-takes-back-an-ignored-interrupt` | `st=130~after` | `st=130~after` | `st=130~after` | `st=130~after` | *(no output, killed by signal 2 (interrupt))* | `st=130~after` | `st=130~after` |
-| `trap/a-pipeline-element-runs-the-pipe-handler-it-set-for-itself` | `after` **2>** `child~reached` | `after` **2>** `child~reached` | `after` **2>** `child~reached` | `after` **2>** `~child~reached` | `after` **2>** `child~reached` | `after` **2>** `child~reached` | `after` **2>** `child~reached` |
-| `trap/an-elements-broken-pipe-is-not-the-outer-shells-to-handle` | `after` **2>** `child~reached` | `after` **2>** `child~reached` | `after` **2>** `child~reached` | `after` **2>** `~child~reached` | `after` **2>** `child~reached` | `after` **2>** `child~reached` | `after` **2>** `child~reached` |
-| `trap/an-elements-pipe-handler-runs-inside-the-elements-redirections` | `e=[<shell>: 1: echo: echo: I/O error~child]` | `e=[<shell>: line 1: echo: write error: Broken pipe~child]` | `e=[sh: line 1: echo: write error: Broken pipe~child]` | `e=[<shell>: line 0: echo: write error: Broken pipe~~child]` | `e=[child]` | `e=[child~child~<shell>:echo:1: write error: broken pipe~<shell>:1: write error: broken pipe~child]` | `e=[ash: write error: Broken pipe~child]` |
-| `signal-death/status-encodes-the-signal` | `st=141~after` | `st=141~after` | `st=141~after` | `st=141~after` | `st=269~after` | `st=141~after` | `st=141~after` |
-| `signal-death/the-shell-dies-by-the-signal-rather-than-exiting` | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* |
-| `signal-death/an-uncatchable-signal-ends-it-outright` | *(no output, killed by signal 9 (killed))* | *(no output, killed by signal 9 (killed))* | *(no output, killed by signal 9 (killed))* | *(no output, killed by signal 9 (killed))* | *(no output, killed by signal 9 (killed))* | *(no output, killed by signal 9 (killed))* | *(no output, killed by signal 9 (killed))* |
-| `signal-death/a-signal-with-no-meaning-of-its-own-is-fatal-too` | *(no output, killed by signal 30 (user defined signal 1))* | *(no output, killed by signal 30 (user defined signal 1))* | *(no output, killed by signal 30 (user defined signal 1))* | *(no output, killed by signal 30 (user defined signal 1))* | *(no output, killed by signal 30 (user defined signal 1))* | *(no output, killed by signal 30 (user defined signal 1))* | *(no output, killed by signal 10 (user defined signal 1))* |
-| `signal-death/dying-by-a-signal-says-nothing` | *(no output, killed by signal 6 (abort trap))* | *(no output, killed by signal 6 (abort trap))* | *(no output, killed by signal 6 (abort trap))* | *(no output, killed by signal 6 (abort trap))* | *(no output, killed by signal 6 (abort trap))* | *(no output, killed by signal 6 (abort trap))* | *(no output, killed by signal 6 (aborted))* |
-| `signal-death/quit-is-not-fatal-in-every-shell` | *(no output, killed by signal 3 (quit))* | `after` | `after` | *(no output, killed by signal 3 (quit))* | *(no output, killed by signal 3 (quit))* | `after` | `after` |
-| `signal-death/a-reset-takes-the-ignore-away-in-one-shell` | *(no output, killed by signal 3 (quit))* | `after` | `after` | *(no output, killed by signal 3 (quit))* | *(no output, killed by signal 3 (quit))* | *(no output, killed by signal 3 (quit))* | `after` |
-| `signal-death/an-ignore-written-after-a-reset-stands` | `after` | `after` | `after` | `after` | `after` | `after` | `after` |
-| `signal-death/hangup-is-an-exit-in-one-shell` | *(no output, killed by signal 1 (hangup))* | *(no output, killed by signal 1 (hangup))* | *(no output, killed by signal 1 (hangup))* | *(no output, killed by signal 1 (hangup))* | *(no output, killed by signal 1 (hangup))* | *(no output, status 1)* | *(no output, killed by signal 1 (hangup))* |
-| `signal-death/a-hangup-that-exits-runs-the-exit-trap` | *(no output, killed by signal 1 (hangup))* | `bye` *(killed by signal 1 (hangup))* | `bye` *(killed by signal 1 (hangup))* | `bye` *(killed by signal 1 (hangup))* | `bye` *(killed by signal 1 (hangup))* | `bye` *(status 1)* | *(no output, killed by signal 1 (hangup))* |
-| `signal-death/a-subshell-that-signaled-the-shell` | `inner` *(killed by signal 15 (terminated))* | `inner` *(killed by signal 15 (terminated))* | `inner` *(killed by signal 15 (terminated))* | `inner` *(killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | `inner` *(killed by signal 15 (terminated))* | `inner` *(killed by signal 15 (terminated))* |
-| `signal-death/a-brace-group-does-not-outlive-the-signal` | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* |
-| `signal-death/a-function-body-does-not-outlive-the-signal` | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* |
-| `signal-death/a-loop-body-does-not-outlive-the-signal` | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* |
-| `signal-death/a-command-substitution-that-signaled-the-shell` | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* |
-| `signal-death/a-handled-signal-is-not-a-death` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` |
-| `signal-death/an-ordinary-failure-is-untouched` | `st=3` | `st=3` | `st=3` | `st=3` | `st=3` | `st=3` | `st=3` |
-| `umask/reads-the-mask` | `0022` | `0022` | `0022` | `0022` | `0022` | `022` | `0022` |
-| `umask/symbolic-is-unanimous` | `u=rwx,g=rx,o=rx` | `u=rwx,g=rx,o=rx` | `u=rwx,g=rx,o=rx` | `u=rwx,g=rx,o=rx` | `u=rwx,g=rx,o=rx` | `u=rwx,g=rx,o=rx` | `u=rwx,g=rx,o=rx` |
-| `umask/setting-then-reading` | `0077~u=rwx,g=,o=` | `0077~u=rwx,g=,o=` | `0077~u=rwx,g=,o=` | `0077~u=rwx,g=,o=` | `0077~u=rwx,g=,o=` | `077~u=rwx,g=,o=` | `0077~u=rwx,g=,o=` |
-| `umask/a-created-file-takes-the-mask` | `-rw-------~-rw-r--r--` | `-rw-------~-rw-r--r--` | `-rw-------~-rw-r--r--` | `-rw-------~-rw-r--r--` | `-rw-------~-rw-r--r--` | `-rw-------~-rw-r--r--` | `-rw-------~-rw-r--r--` |
-| `umask/setting-is-silent` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
-| `umask/dash-s-with-a-mask-echoes-in-bash` | *(no output, status 0)* | `u=rwx,g=,o=` | `u=rwx,g=,o=` | `u=rwx,g=,o=` | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* |
-| `umask/a-mask-it-cannot-read` | `st=2` **2>** `<shell>: 1: umask: Illegal number: 9999` | `st=1` **2>** `<shell>: line 1: umask: 9999: octal number out of range` | `st=1` **2>** `<shell>: line 1: umask: 9999: octal number out of range` | `st=1` **2>** `<shell>: line 0: umask: 9999: octal number out of range` | `st=1` **2>** `<shell>: umask: 9999: bad number` | `st=1` **2>** `<shell>:umask:1: bad umask` | `st=2` **2>** `<shell>: umask: line 0: illegal mode: 9999` |
-| `ulimit/reads-the-file-size-limit` | `unlimited~unlimited` | `unlimited~unlimited` | `unlimited~unlimited` | `unlimited~unlimited` | `unlimited~unlimited` | `unlimited~unlimited` | `unlimited~unlimited` |
-| `ulimit/hard-and-soft` | `unlimited~unlimited~unlimited` | `unlimited~unlimited~unlimited` | `unlimited~unlimited~unlimited` | `unlimited~unlimited~unlimited` | `unlimited~unlimited~unlimited` | `unlimited~unlimited~unlimited` | `unlimited~unlimited~unlimited` |
-| `ulimit/setting-with-neither-letter-moves-both` | `s=100 hard_moved=yes` | `s=100 hard_moved=yes` | `s=100 hard_moved=yes` | `s=100 hard_moved=yes` | `s=100 hard_moved=yes` | `s=100 hard_moved=no` | `s=100 hard_moved=yes` |
-| `ulimit/the-file-size-block` | `size=512` **2>** `Filesize limit exceeded: 25` | `size=600` | `size=512` | `size=600` | `size=512` | `size=512` | `size=512` **2>** `File size limit exceeded (core dumped)` |
-| `ulimit/unlimited-is-a-word` | `unlimited` | `unlimited` | `unlimited` | `unlimited` | `unlimited` | `unlimited` | `unlimited` |
-| `ulimit/setting-then-reading` | `3600~3600` | `3600~3600` | `3600~3600` | `3600~3600` | `3600~3600` | `3600~unlimited` | `3600~3600` |
-| `ulimit/a-limit-it-cannot-read` | `st=2` **2>** `<shell>: 1: ulimit: bad number` | `st=1` **2>** `<shell>: line 1: ulimit: abc: invalid number` | `st=1` **2>** `<shell>: line 1: ulimit: abc: invalid number` | `st=1` **2>** `<shell>: line 0: ulimit: abc: invalid number` | `st=1` **2>** `<shell>: ulimit: abc: parameter not set` | `st=1` **2>** `<shell>:ulimit:1: invalid number: abc` | `st=1` **2>** `<shell>: invalid number 'abc'` |
-| `ulimit/a-letter-zsh-does-not-have` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=1` **2>** `<shell>:ulimit:1: bad option: -m` | `st=0` |
-| `ulimit/a-letter-dash-does-not-have` | `st=2` **2>** `<shell>: 1: ulimit: Illegal option -u` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
-| `builtin/an-option-it-does-not-have` | **2>** `<shell>: 1: export: Illegal option -Q` *(status 2)* | `st=2~after` **2>** `<shell>: line 1: export: -Q: invalid option~export: usage: export [-fn] [name[=value] ...] or export -p [-f]` | **2>** `<shell>: line 1: export: -Q: invalid option~export: usage: export [-fn] [name[=value] ...] or export -p [-f]` *(status 2)* | `st=2~after` **2>** `<shell>: line 0: export: -Q: invalid option~export: usage: export [-nf] [name[=value] ...] or export -p` | **2>** `<shell>: export: -Q: unknown option~Usage: export [-p] [name[=value]...]` *(status 2)* | `st=1~after` **2>** `<shell>:export:1: bad option: -Q` | **2>** `<shell>: export: line 0: illegal option -Q` *(status 2)* |
-| `builtin/the-same-refusal-for-another-builtin` | **2>** `<shell>: 1: unset: Illegal option -Q` *(status 2)* | `st=2~after` **2>** `<shell>: line 1: unset: -Q: invalid option~unset: usage: unset [-f] [-v] [-n] [name ...]` | **2>** `<shell>: line 1: unset: -Q: invalid option~unset: usage: unset [-f] [-v] [-n] [name ...]` *(status 2)* | `st=2~after` **2>** `<shell>: line 0: unset: -Q: invalid option~unset: usage: unset [-f] [-v] [name ...]` | **2>** `<shell>: unset: -Q: unknown option~Usage: unset [-nfv] name...` *(status 2)* | `st=1~after` **2>** `<shell>:unset:1: bad option: -Q` | **2>** `<shell>: unset: line 0: illegal option -Q` *(status 2)* |
-| `builtin/an-option-it-does-have` | `[unset]` | `[unset]` | `[unset]` | `[unset]` | `[unset]` | `[unset]` | `[unset]` |
-| `trap/numeric-signal-name` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` |
-| `trap/numeric-signal-beyond-the-common-few` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` |
-| `trap/number-and-name-are-one-trap` | `two~after` | `two~after` | `two~after` | `two~after` | `two~after` | `two~after` | `two~after` |
-| `trap/signal-handler-status-diverges` | `st=0~after` | `st=0~after` | `st=0~after` | `st=0~after` | `st=0~after` | `st=1~after` | `st=0~after` |
-| `trap/wait-cut-short-by-a-signal` | `T~st=158` | `T~st=158` | `T~st=158` | `T~st=158` | `T~st=286` | `T~st=158` | `T~st=138` |
-| `trap/wait-for-a-job-cut-short-by-a-signal` | `T~st=158` | `T~st=158` | `T~st=158` | `T~st=158` | `T~st=1` | `T~st=158` | `T~st=138` |
-| `trap/wait-is-not-cut-short-by-an-ignored-signal` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
-| `trap/exit-runs-at-the-end` | `hi~bye` | `hi~bye` | `hi~bye` | `hi~bye` | `hi~bye` | `hi~bye` | `hi~bye` |
-| `trap/exit-sees-the-last-status` | `st=1` *(status 1)* | `st=1` *(status 1)* | `st=1` *(status 1)* | `st=1` *(status 1)* | `st=1` *(status 1)* | `st=1` *(status 1)* | `st=1` *(status 1)* |
-| `trap/exit-trap-can-override-the-status` | `bye` *(status 7)* | `bye` *(status 7)* | `bye` *(status 7)* | `bye` *(status 7)* | `bye` *(status 7)* | `bye` *(status 7)* | `bye` *(status 7)* |
-| `exit-hook/the-named-function-and-its-list` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | *(no output, status 4)* | *(no output, status 4)* | *(no output, status 4)* | *(no output, status 4)* | `named st=4~z2 st=4~z3 st=4` *(status 4)* | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
-| `exit-hook/runs-after-the-exit-trap` | `trap` *(status 3)* | `trap` *(status 3)* | `trap` *(status 3)* | `trap` *(status 3)* | `trap` *(status 3)* | `trap~hook` *(status 3)* | `trap` *(status 3)* |
-| `exit-hook/an-exit-inside-it-wins-and-stops-nothing` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | *(no output, status 4)* | *(no output, status 4)* | *(no output, status 4)* | *(no output, status 4)* | `a~b` *(status 9)* | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
-| `exit-hook/a-return-cannot-change-the-status` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | *(no output, status 4)* | *(no output, status 4)* | *(no output, status 4)* | *(no output, status 4)* | `a st=4~b st=4` *(status 4)* | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
-| `exit-hook/a-subshell-that-exits-fires-it` | `out=2` | `out=2` | `out=2` | `out=2` | `out=2` | `hook=2~out=2~hook=0` | `out=2` |
-| `exit-hook/a-subshell-that-falls-through-does-not` | `out=3` | `out=3` | `out=3` | `out=3` | `out=3` | `out=3~hook` | `out=3` |
-| `exit-hook/a-pipeline-element-that-exits-fires-it` | `out=0` | `out=0` | `out=0` | `out=0` | `out=0` | `hook~out=0~hook` | `out=0` |
-| `exit-hook/a-subshell-trap-that-exits-fires-it` | `a=5~T~b=0` | `a=5~T~b=0` | `a=5~T~b=0` | `a=5~T~b=0` | `a=5~T~b=0` | `hook~a=5~T~b=0~hook` | `a=5~T~b=0` |
-| `trap/second-trap-replaces` | `body~two` | `body~two` | `body~two` | `body~two` | `body~two` | `body~two` | `body~two` |
-| `trap/err-fires-on-failure` | `after=1` **2>** `trap: ERR: bad trap` | `E=1~after=1` | `E=1~after=1` | `E=1~after=1` | `E=1~after=1` | `E=1~after=1` | `E=1~after=1` |
-| `trap/err-under-errexit` | **2>** `trap: ERR: bad trap` *(status 1)* | `ERR` *(status 1)* | `ERR` *(status 1)* | `ERR` *(status 1)* | `ERR` *(status 1)* | `ERR` *(status 1)* | `ERR` *(status 1)* |
-| `trap/debug-fires-before-each-command` | `a~b` **2>** `trap: DEBUG: bad trap` | `D~a~D~b` | `D~a~D~b` | `D~a~D~b` | `D~a~D~b` | `D~a~D~b` | `a~b` **2>** `<shell>: trap: line 0: DEBUG: invalid signal specification` |
-| `trap/return-fires-when-a-sourced-file-ends` | `insource~after` **2>** `trap: RETURN: bad trap` | `insource~R~after` | `insource~R~after` | `insource~R~after` | `insource~after` **2>** `<shell>: trap: RETURN: bad trap` | `insource~after` **2>** `<shell>:trap:1: undefined signal: RETURN` | `insource~after` **2>** `<shell>: trap: line 0: RETURN: invalid signal specification` |
-| `trap/subshell-does-not-refire` | `sub~after~T` | `sub~after~T` | `sub~after~T` | `sub~after~T` | `sub~after~T` | `sub~after~T` | `sub~after~T` |
-| `trap/exit-set-inside-a-subshell` | `TRAP~[5]` | `TRAP~[5]` | `TRAP~[5]` | `TRAP~[5]` | `TRAP~[5]` | `TRAP~[5]` | `TRAP~[5]` |
-| `trap/exit-inside-a-subshell-on-the-fallthrough` | `TRAP~[0]` | `TRAP~[0]` | `TRAP~[0]` | `TRAP~[0]` | `TRAP~[0]` | `TRAP~[0]` | `TRAP~[0]` |
-| `trap/exit-inside-a-subshell-sees-the-status` | `T=5~[5]` | `T=5~[5]` | `T=5~[5]` | `T=5~[5]` | `T=5~[5]` | `T=5~[5]` | `T=5~[5]` |
-| `trap/exit-inside-a-command-substitution` | `[T=5] [5]` | `[T=5] [5]` | `[T=5] [5]` | `[T=5] [5]` | `[T=5] [5]` | `[T=5] [5]` | `[T=5] [5]` |
-| `trap/exit-inside-a-subshell-can-override-the-status` | `[9]` | `[9]` | `[9]` | `[9]` | `[9]` | `[9]` | `[9]` |
-| `trap/exit-inside-a-subshell-and-the-parents` | `CHILD~[7]~PARENT` | `CHILD~[7]~PARENT` | `CHILD~[7]~PARENT` | `CHILD~[7]~PARENT` | `CHILD~[7]~PARENT` | `CHILD~[7]~PARENT` | `CHILD~[7]~PARENT` |
-| `trap/exit-inside-a-pipeline-element` | `body~TRAP~[0]~P` | `body~TRAP~[0]~P` | `body~TRAP~[0]~P` | `body~[0]~P` | `body~TRAP~[0]~P` | `body~TRAP~[0]~P` | `body~TRAP~[0]~P` |
-| `trap/exit-inside-a-background-job` | `TRAP~[4]` | `TRAP~[4]` | `TRAP~[4]` | `TRAP~[4]` | `TRAP~[4]` | `TRAP~[4]` | `TRAP~[4]` |
-| `trap/exit-inside-a-subshell-runs-inside-its-redirections` | `[TRAP]` | `[TRAP]` | `[TRAP]` | `[TRAP]` | `[TRAP]` | `[TRAP]` | `[TRAP]` |
-| `trap/subshell-resets-a-handled-trap` | `done` | `trap -- 'echo x' SIGUSR1~done` | `trap -- 'echo x' USR1~done` | `done` | `trap -- 'echo x' USR1~done` | `done` | `done` |
-| `trap/subshell-keeps-an-ignored-one` | `trap -- '' USR2~done` | `trap -- '' SIGUSR2~done` | `trap -- '' USR2~done` | `trap -- '' SIGUSR2~done` | `trap -- '' USR2~done` | `done` | `trap -- '' USR2~done` |
-| `trap/listing-in-a-pipeline-element` | `done` | `trap -- 'echo x' SIGUSR1~done` | `trap -- 'echo x' USR1~done` | `done` | `done` | `trap -- 'echo x' USR1~done` | `trap -- 'echo x' USR1~done` |
-| `trap/set-in-a-function-diverges` | `enter~between~TRAP` | `enter~between~TRAP` | `enter~between~TRAP` | `enter~between~TRAP` | `enter~between~TRAP` | `enter~TRAP~between` | `enter~between~TRAP` |
-| `exit/status-and-wrapping` | `[44]~[1]` | `[44]~[1]` | `[44]~[1]` | `[44]~[1]` | `[44]~[1]` | `[44]~[1]` | `[44]~[1]` |
-| `exit/a-refused-operand-and-the-next-command` | **2>** `<shell>: 1: exit: Illegal number: status` *(status 2)* | `after=2~alive` **2>** `<shell>: line 1: exit: status: numeric argument required` | **2>** `<shell>: line 1: exit: status: numeric argument required` *(status 2)* | **2>** `<shell>: line 0: exit: status: numeric argument required` *(status 255)* | *(no output, status 0)* | *(no output, status 0)* | **2>** `<shell>: exit: line 0: Illegal number: status` *(status 2)* |
-| `exit/a-good-operand-still-ends-the-script` | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* |
-| `exit/bad-argument-diverges` | `[2]~[2]` **2>** `<shell>: 1: exit: Illegal number: -1~<shell>: 1: exit: Illegal number: abc` | `[255]~[2]` **2>** `<shell>: line 1: exit: abc: numeric argument required` | `[255]~[2]` **2>** `<shell>: line 1: exit: abc: numeric argument required` | `[255]~[255]` **2>** `<shell>: line 0: exit: abc: numeric argument required` | `[255]~[0]` | `[255]~[0]` | `[2]~[2]` **2>** `<shell>: exit: line 0: Illegal number: -1~<shell>: exit: line 0: Illegal number: abc` |
-| `exec/the-exit-trap-fires-after-a-syntax-error` | `bye` **2>** `<script>: 2: Syntax error: "fi" unexpected` *(status 2)* | `bye` **2>** `<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `{ fi; }'` *(status 2)* | `bye` **2>** `<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `{ fi; }'` *(status 2)* | `bye` **2>** `<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `{ fi; }'` *(status 2)* | `bye` **2>** `<script>: syntax error at line 2: `fi' unexpected` *(status 3)* | `bye` **2>** `<script>:2: parse error near `fi'` *(status 1)* | `bye` **2>** `<script>: line 2: syntax error: unexpected "fi"` *(status 2)* |
-| `exit/from-inside-a-while-loop` | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* |
-| `exit/from-inside-an-until-loop` | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* |
-| `exit/from-inside-a-for-loop` | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* |
-| `exit/from-inside-a-nested-loop` | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* |
-| `exit/break-still-counts-its-loops` | `after` | `after` | `after` | `after` | `after` | `after` | `after` |
-
-- `kill/exit-trap-after-a-fatal-signal` — whether being killed counts as exiting: bash and ksh93 run the EXIT trap and dash and zsh do not, and all four report 130 without reaching the next command
-  ```sh
-  trap 'echo bye' EXIT
-  kill -INT $$
-  echo after
-  ```
-- `trap/bad-signal-name` — status 1 in all four and four different sentences, one of which arrives with no shell name in front of it where the same shell prefixes every `kill` diagnostic it has
-  ```sh
-  trap 'echo x' NOPE; echo "st=$?"
-  ```
-- `trap/sig-prefix-diverges` — dash reads no SIG-prefixed name: the prefix is simply not part of a signal's name there, so a script that traps SIGUSR1 traps nothing and says so, where the other three take it
-  ```sh
-  trap 'echo caught' SIGUSR1; echo "st=$?"
-  ```
-- `trap/signal-handler-runs-and-continues` — a caught signal runs its handler and the script carries on, which is the whole reason to catch one
-  ```sh
-  trap 'echo caught' INT
-  kill -INT $$
-  echo after
-  ```
-- `trap/an-exit-from-a-handler-ends-a-while-loop` — an `exit` raised inside a signal handler ends the shell from wherever it was raised, and a loop that was running when the signal arrived is not an exception: all seven print `caught` once, never reach `after`, and exit 7. It is the status a caller acts on, and the one shape most likely to be got wrong, because a `while` asks its condition a question immediately after the handler has answered a different one
-  ```sh
-  trap 'echo caught; exit 7' USR1; i=0; while [ $i -lt 3 ]; do i=$((i+1)); kill -USR1 $$; done; echo after
-  ```
-- `trap/an-exit-from-a-handler-ends-an-until-loop` — the same for the loop that reads its condition the other way round, unanimously 7. It is worth having beside the `while` row rather than assumed from it: an `until` inverts the sense of the status it reads, so a shell that mistakes a refusal for a condition gets the *opposite* wrong answer here — it runs the body again rather than deciding the loop is over
-  ```sh
-  trap 'echo caught; exit 7' USR1; i=0; until [ $i -ge 3 ]; do i=$((i+1)); kill -USR1 $$; done; echo after
-  ```
-- `trap/an-exit-from-a-handler-ends-a-for-loop` — the control row. A `for` reads no condition, so it has nothing to mistake a refusal for, and it was right while the `while` was wrong — which is what says the fault was in how a loop reads its control state rather than in how a trap sets one. All seven exit 7 here too
-  ```sh
-  trap 'echo caught; exit 7' USR1; for i in 1 2 3; do kill -USR1 $$; done; echo after
-  ```
-- `trap/an-exit-from-a-handler-ends-nested-loops` — an exit raised two loops deep leaves both of them, rather than the inner one only: the outer loop's own condition is the next command after the inner loop returns, so a shell that recovers at one level goes round the outer loop and reports its bookkeeping instead. Still `caught` once and 7 in all seven
-  ```sh
-  trap 'echo caught; exit 7' USR1; i=0; while [ $i -lt 2 ]; do j=0; while [ $j -lt 2 ]; do j=$((j+1)); kill -USR1 $$; done; i=$((i+1)); done; echo after
-  ```
-- `trap/an-exit-from-a-handler-ends-a-loop-inside-a-function` — and the same through a function boundary, which is the shape a real script has: an `exit` is not a `return`, so the function call it was raised inside does not absorb it. `caught` and 7 in all seven, with `after` unreached
-  ```sh
-  trap 'echo caught; exit 7' USR1; f() { i=0; while [ $i -lt 3 ]; do i=$((i+1)); kill -USR1 $$; done; }; f; echo after
-  ```
-- `trap/lineno-inside-an-action` — which line a trap action thinks it is on, and the panel gives two answers: bash 5.3 numbers the action's own text from 1, while bash 3.2, ksh93, dash and zsh report the line the signal was delivered on. So a trap body is a little program of its own in one shell and part of the script in four, and the split runs *through* bash rather than between bash and the rest — which is why the case is worth having over an assertion that names `bash`
-  ```sh
-  trap 'echo "in trap LINENO=$LINENO"' USR1
-  echo one
-  kill -USR1 $$
-  echo two
-  ```
-- `trap/listing-is-ordered-by-signal-number` — a bare listing is ordered by *signal number*, EXIT counting as 0: bash 5.3, bash-as-`sh`, bash 3.2, zsh, dash and BusyBox ash all print EXIT, HUP, INT, QUIT, ABRT, TERM whatever order the traps were set in, and ksh93 alone runs the sequence the other way with EXIT last. Set in a deliberately scrambled order so an implementation that printed them as they arrived is visible. Only signals numbered alike on every system the panel runs on — 1, 2, 3, 6 and 15 — because the order is the *host's* numbering and USR1 sits either side of TERM depending on the kernel, which would make the row a fact about the machine. This listed alphabetically, which is an order no column produces, and printed EXIT outside the ordering altogether — a listing is what a script parses to save and restore its traps, so its order is output rather than presentation
-  ```sh
-  trap 'echo x' TERM
-  trap 'echo x' HUP
-  trap 'echo x' ABRT
-  trap 'echo x' INT
-  trap 'echo x' EXIT
-  trap 'echo x' QUIT
-  trap
-  ```
-- `trap/empty-handler-ignores` — an empty handler ignores the signal, which is different from having no trap at all
-  ```sh
-  trap '' INT
-  kill -INT $$
-  echo after
-  ```
-- `trap/default-signal-terminates` — untrapped, INT kills the shell and the status is 128 plus the number
-  ```sh
-  kill -INT $$
-  echo after
-  ```
-- `trap/reset-restores-the-default` — `trap -` puts the default back rather than leaving an empty handler
-  ```sh
-  trap 'echo caught' INT
-  trap - INT
-  kill -INT $$
-  echo after
-  ```
-- `trap/a-reset-takes-back-an-ignore-a-child-would-inherit` — the same reset asked of a **child** rather than of the shell, which is the only place the answer was ever wrong: the row above shows what the shell's own trap table did with `trap -`, and this one shows what the *process disposition* did, since an ignore survives exec and a handled signal does not. Unanimous across all seven columns — bash 5.3, bash-as-`sh`, bash 3.2, zsh, dash and BusyBox ash all kill the child and report 143, and ksh93 kills it too and reports its own 256-plus-the-number as 271. SIGTERM rather than a user signal because the status carries the *host's* signal number: USR1 is 30 on this machine and 10 on the Linux the ash column runs in, which would make half the row a fact about a kernel, and TERM is 15 on both. So a reset reaches the children started after it, and it took a case starting one to see it: this shell answered `survived` here while answering the row above correctly, because signal.Reset does not undo signal.Ignore and nothing in the corpus had ever asked a child (#2507). The child's own death notice is caught by the group's redirection, which keeps the row about the disposition rather than about four wordings for the same death
-  ```sh
-  trap '' TERM; trap - TERM; { /bin/sh -c 'kill -TERM $$; echo survived'; } 2>/dev/null; echo st=$?
-  ```
-- `trap/an-ignore-with-no-reset-is-a-childs-to-inherit` — the control for the row above, and the half that says `trap -` is a reset rather than a shell that has stopped ignoring anything at all: with the reset taken away the child survives at status 0 in all seven. It is `nohup` written in one line — an ignore is the one disposition that crosses exec, so a script can hand one to everything it starts, and a fix that cleared the ignore eagerly would pass the row above and fail this one
-  ```sh
-  trap '' TERM; { /bin/sh -c 'kill -TERM $$; echo survived'; } 2>/dev/null; echo st=$?
-  ```
-- `trap/a-reset-with-no-ignore-leaves-a-child-the-default` — a reset of a signal nothing has touched, which is the other control: 143 in six columns and 271 in ksh93, the same as the reset that follows an ignore. It is worth a row because `trap -` on a signal with no trap is not a null statement in every shell — it is the spelling `trap - QUIT` uses to argue with a shell born ignoring one (Semantics.QuitResetRestoresTheDefault) — and here, where nothing was ignored to begin with, all seven leave the child exactly as it would have been
-  ```sh
-  trap - TERM; { /bin/sh -c 'kill -TERM $$; echo survived'; } 2>/dev/null; echo st=$?
-  ```
-- `trap/a-handler-and-a-reset-leave-a-child-the-default` — the third control, and the one that separates the two ways a trap reaches the process: a *handler* is not inherited across exec at all, so the child sees the default whether the handler was reset or not, and every column kills it. Its value is as the discriminator — an implementation that reads `trap -` as one operation whatever preceded it passes this row and the two above and still fails the ignore row, because only the ignore leaves anything behind to take back
-  ```sh
-  trap 'echo handler' TERM; trap - TERM; { /bin/sh -c 'kill -TERM $$; echo survived'; } 2>/dev/null; echo st=$?
-  ```
-- `trap/a-reset-takes-back-an-ignored-interrupt` — the same reset for the signal the idiom is actually written about — a script that shields a critical section from ^C and then stops shielding it. Six columns kill the child at 130 and carry on to `after`; ksh93 prints nothing at all, because an interrupt that ended a child also ends the script there, which `signal/an-interrupt-that-ended-a-child` records on its own. Kept beside the TERM row rather than instead of it: TERM is the signal with no second story attached and the same number on every host, and INT is the one anybody writes this code for — a row that agreed with the panel only on the signal nobody uses for this would be a thin claim
-  ```sh
-  trap '' INT; trap - INT; { /bin/sh -c 'kill -INT $$; echo survived'; } 2>/dev/null; echo st=$?; echo after
-  ```
-- `trap/a-pipeline-element-runs-the-pipe-handler-it-set-for-itself` — a handler is not only the shell's to set: an element that traps PIPE for itself runs that handler when its own write meets the broken pipe, and every shell in the panel does it — `child` then `reached` on standard error, in that order, in dash, both bash builds, ksh93 and zsh. The trap has to be set *inside* the element, because a handled signal is back at its default across the boundary and only an ignore crosses intact, so this cannot be spelled from the outside. ksh93 prints `after` before either of them, which is why the two streams are recorded apart
-  ```sh
-  v=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done; { trap 'echo child >&2' PIPE; echo "$v" 2>/dev/null; echo reached >&2; } | true; echo after
-  ```
-- `trap/an-elements-broken-pipe-is-not-the-outer-shells-to-handle` — the same shape with a handler on both sides, which is the half that says where the signal went: the element's handler runs and the shell's never does, in all five, because the broken pipe was the element's and the process never had it. It is the case a naive fix breaks — recording the arrival where the shell can see it makes the shell run `outer` for a signal it was never sent
-  ```sh
-  v=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done; trap 'echo outer >&2' PIPE; { trap 'echo child >&2' PIPE; echo "$v" 2>/dev/null; echo reached >&2; } | true; echo after
-  ```
-- `trap/an-elements-pipe-handler-runs-inside-the-elements-redirections` — two facts one shape can hold, and both are about *when* the handler runs. The failed write is the element's last command, so there is no command after it to run a handler between — and every shell in the panel runs it anyway, which makes the end of the element's body a boundary of its own. And `child` lands in the file rather than on the shell's standard error, so it runs while the element's own redirection is still in force: the boundary is at the end of the element's *list*, inside the redirection, and not after the body has been taken down. The wording of the failed write lands in the file too, ahead of the handler, which is the ordering all five agree on — ksh93 has no wording, and zsh says its own twice and runs the handler three times
-  ```sh
-  v=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done; { trap 'echo child >&2' PIPE; echo "$v"; } 2>e | true; echo "e=[$(cat e)]"
-  ```
-- `signal-death/status-encodes-the-signal` — a command killed by a signal has no exit status of its own, so the signal goes in the number: 128 + 13 in bash, dash and zsh, and 256 + 13 in ksh93. PIPE is the signal to ask with — it is one of only two the panel does not announce (INT is the other), so the case is about the number and not about three wordings, and unlike INT it does not end the script in ksh93
-  ```sh
-  sh -c 'kill -PIPE $$'; echo "st=$?"; echo after
-  ```
-- `signal-death/the-shell-dies-by-the-signal-rather-than-exiting` — the discipline the record could not see until it kept the signal: a shell with no trap for a fatal signal does not exit with 128 plus the number, it *re-raises the signal at itself*, so its own caller is told the shell was killed and by which one. `sh -c 'kill -TERM $$'; echo $?` says 143 either way, which is why every earlier case had to nest a child and read the parent shell's arithmetic instead of the death
-  ```sh
-  kill -TERM $$; echo after
-  ```
-- `signal-death/an-uncatchable-signal-ends-it-outright` — the same death by a signal no shell can trap, handle or re-raise deliberately — the kernel ends it — which is what says the row above is the shell's own discipline and not simply what happens to a process that is signaled
-  ```sh
-  kill -KILL $$; echo after
-  ```
-- `signal-death/a-signal-with-no-meaning-of-its-own-is-fatal-too` — the same discipline for a signal the shell is not expected to have an opinion about: USR1 has no default meaning beyond ending the process, and every shell in the panel is killed by it. It is here because ours was not — Go's runtime forwards a signal it classifies as killing and silently discards the rest, so USR1, USR2, ALRM, PIPE, XCPU, XFSZ, VTALRM and PROF raised at ourselves did nothing and the shell hung waiting for a death that was never coming, at ten seconds of harness timeout each
-  ```sh
-  kill -USR1 $$; echo after
-  ```
-- `signal-death/dying-by-a-signal-says-nothing` — a shell killed by a signal writes no diagnostic of its own — both streams are empty in all four — and ABRT is the sharp way to ask, because it is one of the signals Go's runtime treats as a crash: it printed a full goroutine dump to standard error and exited 2 where a shell must print nothing at all and be killed by the signal. The same leak internal/panicguard exists to stop, arriving by another road
-  ```sh
-  kill -ABRT $$; echo after
-  ```
-- `signal-death/quit-is-not-fatal-in-every-shell` — the one fatal signal the panel disagrees about: bash 5.3, zsh and BusyBox ash take QUIT's default action away and print after with status 0, where dash, ksh93 — and bash 3.2, so the two bash columns differ — are killed by it. ash siding with bash rather than with dash is the half this row recorded correctly while dialect/ash answered the other way for the whole of that column's life (#645). Measured with a signal from another process too, so it is a disposition rather than a deferral, and it disappears with `-i`, where all five ignore it
-  ```sh
-  kill -QUIT $$; echo after
-  ```
-- `signal-death/a-reset-takes-the-ignore-away-in-one-shell` — what `trap -` means for a signal the shell was born ignoring, which the row above does not answer and the panel splits differently on: bash 5.3 and ash keep the ignore and print after, zsh hands SIGQUIT back its default action and is killed by it. The three columns that die on the row above die here too, so this asks nothing of them. No handler is installed first on purpose — the issue that filed this framed it as `trap 'x' QUIT; trap - QUIT` and the handler turns out to be no part of it, so a snippet carrying one could not tell a disposition from a memory of what the script did
-  ```sh
-  trap - QUIT; kill -QUIT $$; echo after
-  ```
-- `signal-death/an-ignore-written-after-a-reset-stands` — the control for the row above, and what makes it a disposition rather than a latch: zsh prints after here, so the reset is undone by writing the ignore back rather than being a fact about the shell from then on. All seven print it, which is the other half of the point: `trap '' QUIT` is an ignore any shell will honor, so the row above is about the disposition a shell was *born* with and not about whether SIGQUIT can be ignored at all
-  ```sh
-  trap - QUIT; trap '' QUIT; kill -QUIT $$; echo after
-  ```
-- `signal-death/hangup-is-an-exit-in-one-shell` — the second fatal signal the panel disagrees about, and the only other one: zsh reports 1 where bash, dash and ksh93 are killed by SIGHUP and report 129. Nothing prints after it anywhere, so the disagreement is about how the shell ended rather than about whether it did — and 1 is not 128 plus anything, which is the first sign that zsh is exiting rather than dying. Measured across all nineteen signals whose default action ends a process: this and QUIT are the whole of the split
-  ```sh
-  kill -HUP $$; echo after
-  ```
-- `signal-death/a-hangup-that-exits-runs-the-exit-trap` — what says the row above is an exit and not merely a different number. zsh does not run the EXIT trap when a signal kills it — `trap 'echo bye' EXIT; kill -TERM $$` prints nothing there — and it prints bye here, so SIGHUP produced no death for that question to be asked about. bash and ksh93 print bye because dying counts as exiting for them, and dash prints nothing for either signal, which is why the trap alone cannot tell the two apart and the status beside it can
-  ```sh
-  trap 'echo bye' EXIT; kill -HUP $$; echo after
-  ```
-- `signal-death/a-subshell-that-signaled-the-shell` — the whole of what a subshell changes about a fatal self-signal, and the one place in the grammar that changes anything. The shell ends by the signal in all seven and `outer` prints in none of them, so what splits is `inner`: bash 5.3.15, bash 3.2.57, bash 3.2 as `sh`, dash, zsh and ash print it and ksh93 does not. Not a delivery race — the same answer on twenty-five runs of each under load, and unchanged by a `sleep 0.3` between the kill and the echo. The reason is the opposite of the obvious one: measured with a child started inside the subshell and its parent process id read back, the six that keep going are the six that gave the subshell a **process of its own**, so the signal aimed at `$$` never reached it; ksh93 runs the subshell in the shell's own process and the signal lands on the thing that was about to run the echo. Semantics.SubshellRunsOnAfterSignalingTheShell
-  ```sh
-  (kill -TERM $$; echo inner); echo outer
-  ```
-- `signal-death/a-brace-group-does-not-outlive-the-signal` — the control for the row above, and the reason that one names a subshell rather than a compound command: a brace group is the same shell, so all seven stop at once and print nothing. Grouping is not what defers the death — being a separate process is
-  ```sh
-  { kill -TERM $$; echo inner; }; echo outer
-  ```
-- `signal-death/a-function-body-does-not-outlive-the-signal` — the same control one level further in, because a function body is the place a reader would next expect the boundary to be. Unanimous: nothing prints, in all seven. Together with the brace group and the loop below this is what makes the subshell row an axis about processes and not an axis about scopes
-  ```sh
-  f() { kill -TERM $$; echo inner; }; f; echo outer
-  ```
-- `signal-death/a-loop-body-does-not-outlive-the-signal` — the third control, and the one that asks whether a shell checks for its own death only between *top-level* commands. It does not: all seven stop inside the loop body, printing neither the echo after the kill nor anything after the loop
-  ```sh
-  i=0; while [ $i -lt 1 ]; do kill -TERM $$; echo inner; i=1; done; echo outer
-  ```
-- `signal-death/a-command-substitution-that-signaled-the-shell` — the other subshell environment, and it does not divide the panel the way `( )` does: all seven print nothing and die, because whatever the child wrote went into the assignment rather than to the output and the shell never reached the echo that would have shown it. Here so that the `( )` row is not read as a claim about every subshell environment
-  ```sh
-  x=$(kill -TERM $$; echo inner); echo "outer x=$x"
-  ```
-- `signal-death/a-handled-signal-is-not-a-death` — the control: the same signal with a trap for it runs the handler and the shell carries on to exit normally, so the two rows above are about the *absence* of a handler rather than about the signal arriving
-  ```sh
-  trap "echo caught" TERM; kill -TERM $$; echo after
-  ```
-- `signal-death/an-ordinary-failure-is-untouched` — a command that exits by itself reports what it exited with, unanimously — which is what says the encoding above is about being killed rather than about failing
-  ```sh
-  sh -c 'exit 3'; echo "st=$?"
-  ```
-- `umask/reads-the-mask` — three of the four write four octal digits and zsh writes three — `0022` against `022`. The value itself is the machine's, so this pins the shape rather than the number, and the harness runs every case with the same mask
-  ```sh
-  umask
-  ```
-- `umask/symbolic-is-unanimous` — `-S` writes the permissions the mask *allows* rather than the bits it takes away, and all four spell it identically — the one part of this builtin needing no dialect
-  ```sh
-  umask -S
-  ```
-- `umask/setting-then-reading` — the mask a script sets is the mask it reads back, which is the whole point of the builtin and exactly what a `/usr/bin/umask` in a child process cannot do
-  ```sh
-  umask 077; umask; umask -S
-  ```
-- `umask/a-created-file-takes-the-mask` — every other umask case interrogates the builtin, and a mask nothing is created under is a number the shell is keeping rather than a mask. This is the one that opens a file on each side of a change and reads the mode back off the file system, unanimously — and it is the case the no-process-state rule makes worth having, since a core that may not call umask(2) has to carry the mask itself and apply it at every open. Two masks rather than one, because a shell that ignored the mask entirely would still pass with whatever the process started with
-  ```sh
-  umask 077; : > f; ls -l f | cut -c1-10; umask 022; : > g; ls -l g | cut -c1-10
-  ```
-- `umask/setting-is-silent` — setting writes nothing in any of the four — so a script can set a mask without its output changing, and the `-S` form below is the exception rather than the rule
-  ```sh
-  umask 077; echo "st=$?"
-  ```
-- `umask/dash-s-with-a-mask-echoes-in-bash` — bash alone echoes the new mask symbolically when asked to set *and* shown `-S`; dash, ksh93 and zsh set it and say nothing. The trailing `umask 022` puts the machine back so the case leaves nothing behind
-  ```sh
-  umask -S 077; umask 022
-  ```
-- `umask/a-mask-it-cannot-read` — four wordings and two statuses — 1 in bash, ksh93 and zsh, 2 in dash — and zsh names no operand at all, saying only `bad umask`
-  ```sh
-  umask 9999; echo "st=$?"
-  ```
-- `ulimit/reads-the-file-size-limit` — bare `ulimit` is `-f`, which is why it reports the file-size limit rather than a summary — unanimous, and the reason a script that means something else has to say which
-  ```sh
-  ulimit; ulimit -f
-  ```
-- `ulimit/hard-and-soft` — `-H` and `-S` choose which of the two limits is read, and neither means the soft one — so the third line repeats the second. CPU time rather than open files: the file-descriptor limit is the one resource whose value differs between our process and bash's, for reasons outside either shell
-  ```sh
-  ulimit -Ht; ulimit -St; ulimit -t
-  ```
-- `ulimit/setting-with-neither-letter-moves-both` — `ulimit -n 100` with neither -H nor -S sets *both* limits in six of the seven and only the soft one in zsh — which matters because lowering both is a door that cannot be reopened, while lowering the soft limit alone can be undone. The hard limit is compared rather than printed: its starting value is a property of the machine, and a row that recorded it would record where it was generated
-  ```sh
-  ulimit -n 100; h=$(ulimit -H -n); s=$(ulimit -S -n); echo "s=$s hard_moved=$([ "$h" = 100 ] && echo yes || echo no)"
-  ```
-- `ulimit/the-file-size-block` — how many bytes a block is, asked of the file system rather than of the builtin: one block, six hundred bytes written, and the file is 600 where a block is 1024 and 512 where it is 512. The prior reading of this, taken from bash alone, was that a block is 1024 bytes — true for bash 5.3 and bash 3.2 as `bash`, and false for dash, ksh93, zsh, ash *and the same bash 5.3 called `sh`*, all of which use POSIX's 512. So the unit is argv[0]'s to decide, which is not a shape a one-shell measurement could have found. Written in a subshell whose group carries the redirection, because the shell that reaps a child killed by SIGXFSZ announces it with a process id in the text
-  ```sh
-  { ( ulimit -f 1; printf "%0600d" 0 > f ); } 2>/dev/null; ls -l f | awk "{print \"size=\" \$5}"
-  ```
-- `ulimit/unlimited-is-a-word` — no limit is printed as `unlimited` rather than as a very large number, in all four — and is read back from that word too, which is what lets a script save and restore one
-  ```sh
-  ulimit -Hf
-  ```
-- `ulimit/setting-then-reading` — setting without -H or -S lowers both, which is what makes it irreversible — the hard limit follows the soft one down and cannot be raised again
-  ```sh
-  ulimit -t 3600; ulimit -t; ulimit -Ht
-  ```
-- `ulimit/a-limit-it-cannot-read` — four wordings, and ksh93's is the odd one — `parameter not set` where the others call it a bad or invalid number
-  ```sh
-  ulimit -t abc; echo "st=$?"
-  ```
-- `ulimit/a-letter-zsh-does-not-have` — the resident-set letter, read by bash, dash and ksh93 and a bad option in zsh — the UlimitHasResidentSet axis. The value goes to /dev/null because it is the machine's, not the shell's; the letter's existence is the question
-  ```sh
-  ulimit -m >/dev/null; echo "st=$?"
-  ```
-- `ulimit/a-letter-dash-does-not-have` — the process-count letter, read by bash, ksh93 and zsh where dash refuses it at 2 and carries on — the UlimitHasProcessCount axis, and the other half of the pair above: neither absence is a subset of the other, which is what makes them two axes
-  ```sh
-  ulimit -u >/dev/null; echo "st=$?"
-  ```
-- `builtin/an-option-it-does-not-have` — four wordings, two statuses and a divergence about whether the script survives: bash and zsh report it and carry on — with 2 and 1 — while dash and ksh93 stop there, which is the POSIX rule that a special builtin's failure is fatal. bash and ksh93 print a usage line after it and word that per builtin
-  ```sh
-  export -Q x; echo "st=$?"; echo after
-  ```
-- `builtin/the-same-refusal-for-another-builtin` — the same shape from a different builtin, which is what says the wording is one rule rather than one per name — only the usage line changes, and only in the two that print one
-  ```sh
-  unset -Q x; echo "st=$?"; echo after
-  ```
-- `builtin/an-option-it-does-have` — the options each of them really has still work, which is the half a refusal could break — and `--` and a bare name have to keep meaning what they did
-  ```sh
-  x=1; export x; unset -v x; echo "[${x-unset}]"
-  ```
-- `trap/numeric-signal-name` — a signal can be named by number, and 2 is INT everywhere the panel runs
-  ```sh
-  trap 'echo caught' 2
-  kill -INT $$
-  echo after
-  ```
-- `trap/numeric-signal-beyond-the-common-few` — every signal has a number, not just the handful a script usually names. 5 is TRAP on every platform the panel runs on, and /usr/bin/bzless on macOS traps 0 2 3 5 10 13 15 — a script written against a shell that takes them all
-  ```sh
-  trap 'echo caught' 5
-  kill -TRAP $$
-  echo after
-  ```
-- `trap/number-and-name-are-one-trap` — the two spellings are the same signal rather than two entries, so the second setting replaces the first and only `two` runs
-  ```sh
-  trap 'echo one' 5
-  trap 'echo two' TRAP
-  kill -TRAP $$
-  echo after
-  ```
-- `trap/signal-handler-status-diverges` — zsh shows the handler the status from before the command that triggered it; the other three show that command's own
-  ```sh
-  trap 'echo st=$?' INT
-  false
-  kill -INT $$
-  echo after
-  ```
-- `trap/wait-cut-short-by-a-signal` — the async delivery path, which every other trap case misses: the signal comes from a background job rather than from the shell's own line, and it has to reach a `wait` that is already blocked. The handler runs and then `wait` reports the signal — 128 + USR1 in bash, dash and zsh, 256 + USR1 in ksh93 — where a wait nobody interrupted reports 0. `wait; check $?` is the supervisor loop every job-runner script is built on, so a 0 here is silence in place of the whole point. The job outlives the signal it sends, so `wait` is still blocked when the signal lands rather than racing the job's own death
-  ```sh
-  trap 'echo T' USR1; (sleep 0.3; kill -USR1 $$; sleep 0.2) & wait; echo "st=$?"
-  ```
-- `trap/wait-for-a-job-cut-short-by-a-signal` — naming the job splits the panel where the bare form did not: bash, dash and zsh answer exactly as above and ksh93 drops its own 256 encoding for a plain 1 (WaitForAJobFailsWhenInterrupted). `wait %1` is the same answer in all four, so the axis is about having an operand and not about how it is spelled
-  ```sh
-  trap 'echo T' USR1; (sleep 0.3; kill -USR1 $$; sleep 0.2) & wait $!; echo "st=$?"
-  ```
-- `trap/wait-is-not-cut-short-by-an-ignored-signal` — the control, and the line between the two: an ignored signal has no handler to run, so it does not interrupt anything and `wait` still reports 0 in all four. Without it the case above would be evidence about a signal arriving rather than about a *trapped* one arriving. Same shape to the character, so the trap is the only variable
-  ```sh
-  trap '' USR1; (sleep 0.3; kill -USR1 $$; sleep 0.2) & wait; echo "st=$?"
-  ```
-- `trap/exit-runs-at-the-end` — the EXIT trap runs after the script, not where it was set
-  ```sh
-  trap 'echo bye' EXIT; echo hi
-  ```
-- `trap/exit-sees-the-last-status` — the body reads `$?` at the moment it fires, which is what makes an EXIT trap useful for reporting
-  ```sh
-  trap 'echo st=$?' EXIT
-  false
-  ```
-- `trap/exit-trap-can-override-the-status` — the trap's own exit wins over the one that triggered it
-  ```sh
-  trap 'echo bye; exit 7' EXIT; exit 2
-  ```
-- `exit-hook/the-named-function-and-its-list` — the hook a plugin tears itself down in — gitstatus registers its daemon's cleanup here and powerlevel10k its async worker's. One shell in the panel has it: the named function runs, then every name in the list, in the order the list holds them, and each is told the status the shell is leaving with. The other five define a function called `zshexit`, exit 4, and call nothing, which is the whole of what the column difference is. Each hook prints `$?` rather than a bare marker because the status is the half a chain that ran the items in the right order could still get wrong
-  ```sh
-  zshexit() { echo "named st=$?"; }; zshexit_functions=(z2 z3); z2() { echo "z2 st=$?"; }; z3() { echo "z3 st=$?"; }; exit 4
-  ```
-- `exit-hook/runs-after-the-exit-trap` — which of the two goes last, asked of the one shell that has both. The trap is the script's own last word and the hook is the shell's, in that order — so a plugin's teardown cannot be cut short by a script's cleanup, and a shell that fired the hook first would pass every other row here
-  ```sh
-  trap 'echo trap' EXIT; zshexit() { echo hook; }; exit 3
-  ```
-- `exit-hook/an-exit-inside-it-wins-and-stops-nothing` — the one rule this chain does not share with every other hook chain in this shell. Everywhere else an item that exited ends the chain, because what it ended is the session; here the session is already over, so `exit` has nothing left to end and only records a status — `b` still prints and the shell leaves with 9 rather than 4. A `return` cannot do the same, which the row below pins
-  ```sh
-  zshexit() { echo a; exit 9; }; zshexit_functions=(z2); z2() { echo b; }; exit 4
-  ```
-- `exit-hook/a-return-cannot-change-the-status` — the counter-case to the row above, and what makes it mean something: a hook that merely *fails* changes neither the status the shell leaves with nor the status the next item is told. Both items read 4, a `false` at the end of one is not carried, and the shell still exits 4 — where a chain that let the last command's status through would exit 1
-  ```sh
-  zshexit() { echo "a st=$?"; return 5; }; zshexit_functions=(z2); z2() { echo "b st=$?"; false; }; exit 4
-  ```
-- `exit-hook/a-subshell-that-exits-fires-it` — the hook fires at a subshell boundary as well as at the shell's own end, and the one shell that has it fires it twice here — once inside the parentheses and once at the end. `$?` is what makes the row say which is which: the first reads 2, the status the subshell is leaving with, and the second reads 0. The row below is its counter-case, and the pair is the whole rule: the hook wants an `exit`, where the EXIT trap wants only a boundary
-  ```sh
-  zshexit() { echo "hook=$?"; }; ( exit 2 ); echo out=$?
-  ```
-- `exit-hook/a-subshell-that-falls-through-does-not` — the counter-case: a subshell that merely runs off its end fires nothing, and neither does a command substitution that calls `exit` — so the hook's rule is narrower than the EXIT trap's on both counts, and an implementation that hung it on the boundary would print `hook` three times here instead of once
-  ```sh
-  zshexit() { echo hook; }; ( true ); v=$(exit 3); echo out=$?
-  ```
-- `exit-hook/a-pipeline-element-that-exits-fires-it` — a pipeline element is a subshell too, so the same rule reaches it — the element's `exit` fires the hook inside the element, while the pipeline still reports `cat`'s 0. Worth a row of its own because parentheses and a pipe are different code paths, and because the hook runs while the element's end of the pipe is still open: `hook` arrives here by way of `cat` rather than straight from the shell, and a tail of `:` would swallow it and leave the row passing for the wrong reason
-  ```sh
-  zshexit() { echo hook; }; { exit 2; } | cat; echo out=$?
-  ```
-- `exit-hook/a-subshell-trap-that-exits-fires-it` — an EXIT trap that exits counts as the subshell exiting and one that merely prints does not, which is the pair that says the rule is about how the subshell *left* rather than about what ran in it. Both subshells fall off their own ends, so a reading that asked only what the body did would answer alike for the two
-  ```sh
-  zshexit() { echo hook; }; ( trap "exit 5" EXIT; true ); echo a=$?; ( trap "echo T" EXIT; true ); echo b=$?
-  ```
-- `trap/second-trap-replaces` — traps are set rather than accumulated, and `trap -` removes
-  ```sh
-  trap 'echo one' EXIT; trap 'echo two' EXIT; echo body
-  ```
-- `trap/err-fires-on-failure` — ERR fires on a failing command with `set -e` nowhere in sight, sees the failing status, and leaves it for the script — dash alone refuses the name, with its ordinary bad-trap words
-  ```sh
-  trap 'echo "E=$?"' ERR; false; echo "after=$?"
-  ```
-- `trap/err-under-errexit` — the reason the condition exists: the trap runs first and errexit then stops the script with the failure's own status, so a script can say where it died
-  ```sh
-  set -e; trap 'echo ERR' ERR; false
-  ```
-- `trap/debug-fires-before-each-command` — DEBUG runs before each simple command rather than after — the D precedes what it announces — and dash refuses the name like any other word that is no signal
-  ```sh
-  trap 'echo D' DEBUG; echo a; echo b
-  ```
-- `trap/return-fires-when-a-sourced-file-ends` — RETURN is one shell's alone — three of the four refuse it as a bad signal — and where it exists a sourced file fires it on the way out, wherever the trap was set
-  ```sh
-  trap 'echo R' RETURN; echo 'echo insource' > lib.sh; . ./lib.sh; echo after
-  ```
-- `trap/subshell-does-not-refire` — the trap fires once for the script: neither a subshell nor a command substitution repeats the *parent's*. Half of a pair — the trap a subshell installs for itself is a separate rule and fires at the subshell's own end, which `trap/exit-set-inside-a-subshell` holds and this row deliberately does not reach
-  ```sh
-  trap 'echo T' EXIT; (echo sub); x=$(echo cs); echo after
-  ```
-- `trap/exit-set-inside-a-subshell` — the other half of the row above, and the one nothing asked for a long time: the trap the *subshell itself* installs fires when the subshell ends, and the status the parentheses report is still the one `exit` named. The pair is what makes each half mean something — a shell that fired the parent's trap here would pass this row and fail that one, and a shell that fired neither passed both until this arrived (#2349). Unanimous across the panel
-  ```sh
-  ( trap 'echo TRAP' EXIT; exit 5 ); echo "[$?]"
-  ```
-- `trap/exit-inside-a-subshell-on-the-fallthrough` — the same trap where the body simply runs out rather than calling `exit`, which is the shape the cleanup idiom actually has — `( trap 'rm -rf "$tmp"' EXIT; … )`. A shell that fired the handler only on an explicit exit would leave the directory behind with no diagnostic anywhere, and would pass the row above
-  ```sh
-  ( trap 'echo TRAP' EXIT; true ); echo "[$?]"
-  ```
-- `trap/exit-inside-a-subshell-sees-the-status` — `$?` in the handler is the status the *subshell* is about to report, not the parent's and not zero — 5 inside and 5 outside. Single-quoted so the expansion happens when the handler runs rather than when the trap is set, which is the difference between measuring this and measuring nothing
-  ```sh
-  ( trap 'echo "T=$?"' EXIT; exit 5 ); echo "[$?]"
-  ```
-- `trap/exit-inside-a-command-substitution` — the same defect reached from ordinary script text rather than from a deliberate subshell: the handler's output is part of what the substitution captured, and the status is still the body's. `make conformance` was silent on this for as long as it was, because the snippet exits 5 whether or not the handler ever ran
-  ```sh
-  x=$( trap 'echo "T=$?"' EXIT; exit 5 ); echo "[$x] [$?]"
-  ```
-- `trap/exit-inside-a-subshell-can-override-the-status` — an `exit` in the handler wins over the one that triggered it, and what it changes is the *subshell's* status — the parentheses report 9. The same rule the top-level row pins, asked at the boundary where the status has somewhere else to go
-  ```sh
-  ( trap 'exit 9' EXIT; exit 5 ); echo "[$?]"
-  ```
-- `trap/exit-inside-a-subshell-and-the-parents` — both traps run, each at its own end and in that order: the child's when the parentheses close, the parent's when the script does. Two rules that look like one — the parent's must not fire at the boundary and the child's must — and only a case holding both handlers at once can tell a shell that has them from a shell that has neither
-  ```sh
-  trap 'echo PARENT' EXIT; ( trap 'echo CHILD' EXIT; exit 7 ); echo "[$?]"
-  ```
-- `trap/exit-inside-a-pipeline-element` — a pipeline element is a subshell, so it ends like one — and the handler writes into the element's end of the pipe rather than past it, which is what puts TRAP after body and before the status. bash 3.2 is the column that does not run it, which is a version difference rather than a dialect one
-  ```sh
-  trap 'echo P' EXIT; { trap 'echo TRAP' EXIT; echo body; } | cat; echo "[$?]"
-  ```
-- `trap/exit-inside-a-background-job` — the fourth boundary, and the one with a status nobody else reports: `wait` is what tells the script the job left with 4, and the handler has run by then. Waited on by pid rather than bare so the row terminates and its output is in one order
-  ```sh
-  ( trap 'echo TRAP' EXIT; exit 4 ) & wait $!; echo "[$?]"
-  ```
-- `trap/exit-inside-a-subshell-runs-inside-its-redirections` — *where* the handler runs, which is a separate question from whether it does: the subshell's own redirections are still up, so a handler writing to standard error writes to the file the parentheses were redirected into. A shell that fired the trap after taking them down would print TRAP on the terminal and leave the file empty, and would pass every row above
-  ```sh
-  ( trap 'echo TRAP >&2' EXIT; true ) 2>err.txt; echo "[$(cat err.txt)]"
-  ```
-- `trap/subshell-resets-a-handled-trap` — a subshell starts with a handled trap back at its default, unanimously — what differs is the listing: bash and ksh93 still show the trap they will not fire, dash and zsh show nothing
-  ```sh
-  trap 'echo x' USR1; (trap); echo done
-  ```
-- `trap/subshell-keeps-an-ignored-one` — an ignored signal crosses the fork still ignored, and three of the four list it in the subshell; zsh keeps the ignore working and hides it from the listing
-  ```sh
-  trap '' USR2; (trap); echo done
-  ```
-- `trap/listing-in-a-pipeline-element` — a pipeline element is a subshell environment with an inheritance rule of its own: bash and zsh keep the parent's listing there, dash and ksh93 print nothing — the shape issue #339 measured, orthogonal to which end of the pipeline forks
-  ```sh
-  trap 'echo x' USR1; trap | cat; echo done
-  ```
-- `trap/set-in-a-function-diverges` — zsh runs a trap set inside a function when the function returns; dash, bash and ksh93 keep it for the end of the script
-  ```sh
-  f() { trap 'echo TRAP' EXIT; echo enter; }
-  f
-  echo between
-  ```
-- `exit/status-and-wrapping` — a status is taken modulo 256, and a bare `exit` reports what the last command did
-  ```sh
-  (exit 300); echo "[$?]"; (false; exit); echo "[$?]"
-  ```
-- `exit/a-refused-operand-and-the-next-command` — not what the refusal is worth but whether it *ends the script*, which is the half `exit/bad-argument-diverges` cannot see: it asks in a subshell, where every answer ends the same way. bash reports the complaint, leaves 2 behind and runs both commands after it; dash and that same bash called `sh` end the script at 2, which is the POSIX rule that a special builtin's usage error is fatal; bash 3.2 ends it too and at 255; ksh93 and zsh refuse nothing, read the name as an expression and leave at 0 with nothing printed. So the axis is the one `return`, `shift` and `unalias` already ask, and `exit` was the caller that never asked it (#2299)
-  ```sh
-  exit status; echo "after=$?"; echo alive
-  ```
-- `exit/a-good-operand-still-ends-the-script` — the control for the row above, and the reason it cannot be read as `exit no longer exits`: an operand every column takes still ends the script with it, unanimously at 3 and with nothing printed after
-  ```sh
-  exit 3; echo alive
-  ```
-- `exit/bad-argument-diverges` — an ordering rather than a side: dash refuses both, bash refuses only the one that is not a number, ksh93 and zsh take either
-  ```sh
-  (exit -1); echo "[$?]"; (exit abc); echo "[$?]"
-  ```
-- `exec/the-exit-trap-fires-after-a-syntax-error` — the trap set by a line that ran still fires when a later line will not parse, which is what makes the failure an ending rather than an abort
-  ```sh
-  trap 'echo bye' EXIT
-  { fi; }
-  ```
-- `exit/from-inside-a-while-loop` — `exit` ends the shell from inside a loop as surely as from anywhere else — the loop must stop and must not touch the status on the way out, which is what turned `exit 3` into an exit of 0
-  ```sh
-  g() { exit 3; }; while :; do g; done; echo after
-  ```
-- `exit/from-inside-an-until-loop` — the same for `until`, which read the shell's refusal to run anything as its condition still holding and span forever rather than stopping
-  ```sh
-  g() { exit 3; }; until false; do g; done; echo after
-  ```
-- `exit/from-inside-a-for-loop` — and for `for`, which came out right by accident: a finite list ends on its own, so the loop stopped even without being told to — the shape most scripts use, and the reason this went unnoticed
-  ```sh
-  g() { exit 3; }; for i in 1 2 3; do g; done; echo after
-  ```
-- `exit/from-inside-a-nested-loop` — an exit passes out through every loop it is inside, unlike `break`, which counts them
-  ```sh
-  g() { exit 3; }; while :; do while :; do g; done; done; echo after
-  ```
-- `exit/break-still-counts-its-loops` — the counter-case: `break` still stops only as many loops as it was asked to, which is what an exit must not be confused with
-  ```sh
-  while :; do while :; do break 2; done; echo inner; done; echo after
   ```
 
 ## arithmetic

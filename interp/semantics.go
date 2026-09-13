@@ -5923,13 +5923,13 @@ type Semantics struct {
 	// names. See TrapBodyLineStyle.
 	TrapBodyLine TrapBodyLineStyle
 
-	// CommandTrapBodyLine is the same question asked of the two conditions
-	// that fire *at a command* — DEBUG and ERR — where one dialect answers
-	// it differently than it answers TrapBodyLine.
+	// CommandTrapBodyLine is the same question asked of the three conditions
+	// that fire *at a command* — DEBUG, ERR and RETURN — where one dialect
+	// answers it differently than it answers TrapBodyLine.
 	//
-	// bash counts a signal body, an EXIT body and a RETURN body from the
-	// body's own first line, and counts a DEBUG or ERR body from the line
-	// the condition fired on: with the body
+	// bash counts a signal body and an EXIT body from the body's own first
+	// line, and counts a DEBUG, ERR or RETURN body from the line the
+	// condition fired on: with the body
 	//
 	//	echo $LINENO
 	//	nosuchcmd
@@ -5948,10 +5948,24 @@ type Semantics struct {
 	// cannot tell "the body's first line" from "wherever it fired", and a
 	// one-line probe is exactly why this looked like one question.
 	//
-	// RETURN is *not* one of these: bash prints 1 for the same body on a
-	// RETURN trap, so it goes with the signals. Measured rather than
-	// reasoned — a rule of "the pseudo-conditions" would have taken it.
+	// RETURN *is* one of these, and it was written down as going with the
+	// signals from a probe that could not tell the readings apart: the
+	// function in it opened its body on line 1, where "the body's own first
+	// line" and "wherever it fired" are both 1. Re-measured 2026-09-13 with
+	// the body opening on line 5 and the `return` on line 7, bash 5.3.15 and
+	// bash 3.2 run a two-line RETURN body reporting 7 and 8.
+	//
+	// Where a RETURN counts as having fired is its own measurement, and the
+	// answer is not the body's last command: an explicit `return` fires at
+	// the `return`'s own line, wherever in the body it stands, and a call
+	// that falls off the end fires at the line the **body opened** on. Both
+	// re-measured the same day, on the same two builds, and callFuncAs holds
+	// the second half.
 	CommandTrapBodyLine TrapBodyLineStyle
+
+	// DebugTrapCompoundHeads is which commands other than the simple ones
+	// fire the DEBUG trap. See DebugTrapHeads, which carries the panel.
+	DebugTrapCompoundHeads DebugTrapHeads
 
 	// ExitTrapFiresPastTheEnd counts the EXIT trap as having fired on the
 	// line after the script's last, rather than on its first.

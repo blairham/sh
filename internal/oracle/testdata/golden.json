@@ -25887,6 +25887,363 @@
         "TimedOut": false
       }
     },
+    "axis/debug-head-of-a-case-and-a-condition": {
+      "ash": {
+        "Stdout": "c",
+        "Stderr": "\u003cscript\u003e: trap: line 1: DEBUG: invalid signal specification~\u003cscript\u003e: trap: line 4: DEBUG: invalid signal specification",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "D=2~D=2~c~D=3~D=4",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "D=2~D=2~c~D=3~D=4",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "D=2~D=2~c~D=3~D=4",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "c",
+        "Stderr": "trap: DEBUG: bad trap~\u003cscript\u003e: 3: [[: not found~trap: DEBUG: bad trap",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "D=2~D=2~c~D=3~D=4",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "D=2~D=2~c~D=3~D=4",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/debug-head-of-a-for-loop": {
+      "ash": {
+        "Stdout": "a~b",
+        "Stderr": "\u003cscript\u003e: trap: line 1: DEBUG: invalid signal specification~\u003cscript\u003e: trap: line 6: DEBUG: invalid signal specification",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "D=2~D=4~a~D=2~D=4~b~D=6",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "D=2~D=4~a~D=2~D=4~b~D=6",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "D=2~D=4~a~D=2~D=4~b~D=6",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "a~b",
+        "Stderr": "trap: DEBUG: bad trap~trap: DEBUG: bad trap",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "D=2~D=4~a~D=4~D=4~b~D=6",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "D=2~D=4~a~D=4~b~D=6",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/debug-head-of-a-for-loop-over-nothing": {
+      "ash": {
+        "Stdout": "after",
+        "Stderr": "\u003cscript\u003e: trap: line 1: DEBUG: invalid signal specification~\u003cscript\u003e: trap: line 7: DEBUG: invalid signal specification",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "D=6~after~D=7",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "D=6~after~D=7",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "D=6~after~D=7",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "after",
+        "Stderr": "trap: DEBUG: bad trap~trap: DEBUG: bad trap",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "D=6~after~D=7",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "D=2~D=6~after~D=7",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/debug-head-of-a-select": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: trap: line 1: DEBUG: invalid signal specification~\u003cscript\u003e: line 2: select: not found~\u003cscript\u003e: line 3: syntax error: unexpected \"do\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "D=2~D=4~got=a~D=4~got=b~~D=6",
+        "Stderr": "1) a~2) b~#? #? #? ",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "D=2~D=4~got=a~D=4~got=b~~D=6",
+        "Stderr": "1) a~2) b~#? #? #? ",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "D=2~D=4~got=a~D=4~got=b~~D=6",
+        "Stderr": "1) a~2) b~#? #? #? ",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "trap: DEBUG: bad trap~\u003cscript\u003e: 2: select: not found~\u003cscript\u003e: 3: Syntax error: \"do\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "D=2~D=4~got=a~D=4~D=4~got=b~D=6",
+        "Stderr": "1) a~2) b",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "D=2~D=4~got=a~D=4~got=b~D=6",
+        "Stderr": "1) a  2) b  ~?# ?# ?# ",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/debug-head-of-an-arithmetic-for": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: trap: line 1: DEBUG: invalid signal specification~\u003cscript\u003e: line 2: syntax error: bad for loop variable",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "D=2~D=2~D=4~0~D=2~D=2~D=4~1~D=2~D=2~D=6",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "D=2~D=2~D=4~0~D=2~D=2~D=4~1~D=2~D=2~D=6",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "D=2~D=2~D=4~0~D=2~D=2~D=4~1~D=2~D=2~D=6",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "trap: DEBUG: bad trap~\u003cscript\u003e: 2: Syntax error: Bad for loop variable",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "D=2~D=2~D=4~0~D=2~D=2~D=4~1~D=2~D=2~D=6",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "D=2~D=4~0~D=4~1~D=6",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/debug-head-of-an-arithmetic-for-with-parts-left-out": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: trap: line 2: DEBUG: invalid signal specification~\u003cscript\u003e: line 3: syntax error: bad for loop variable",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "D=3~D=3~D=5~D=3~D=3~D=5~D=3~D=3~D=7",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "D=3~D=3~D=5~D=3~D=3~D=5~D=3~D=3~D=7",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "D=3~D=3~D=5~D=3~D=3~D=5~D=3~D=3~D=7",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "trap: DEBUG: bad trap~\u003cscript\u003e: 3: Syntax error: Bad for loop variable",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "D=3~D=5~D=3~D=5~D=3~D=7",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "D=3~D=5~D=5~D=7",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/debug-head-of-an-if": {
+      "ash": {
+        "Stdout": "yes",
+        "Stderr": "\u003cscript\u003e: trap: line 1: DEBUG: invalid signal specification~\u003cscript\u003e: trap: line 6: DEBUG: invalid signal specification",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "D=2~D=4~yes~D=6",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "D=2~D=4~yes~D=6",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "D=2~D=4~yes~D=6",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "yes",
+        "Stderr": "trap: DEBUG: bad trap~trap: DEBUG: bad trap",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "D=2~D=4~yes~D=6",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "D=2~D=2~D=4~yes~D=6",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "axis/declaration-shadows-a-readonly-keyword-function": {
       "ash": {
         "Stdout": "in=[]~st=0 out=[]~end",
@@ -28125,6 +28482,108 @@
       },
       "zsh": {
         "Stdout": "one~in-f~two",
+        "Stderr": "f:trap:1: undefined signal: RETURN",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/trap-body-line-return-below-the-top": {
+      "ash": {
+        "Stdout": "one~two~in-f~last~done",
+        "Stderr": "\u003cscript\u003e: trap: line 4: RETURN: invalid signal specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "one~two~in-f~last~at=3~done",
+        "Stderr": "\u003cscript\u003e: line 4: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one~two~in-f~last~at=3~done",
+        "Stderr": "\u003cscript\u003e: line 4: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one~two~in-f~last~at=3~done",
+        "Stderr": "\u003cscript\u003e: line 4: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one~two~in-f~last~done",
+        "Stderr": "trap: RETURN: bad trap",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one~two~in-f~last~done",
+        "Stderr": "\u003cscript\u003e[4]: trap: RETURN: bad trap",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one~two~in-f~last~done",
+        "Stderr": "f:trap:1: undefined signal: RETURN",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/trap-body-line-return-from-an-explicit-return": {
+      "ash": {
+        "Stdout": "one~two~done",
+        "Stderr": "\u003cscript\u003e: trap: line 4: RETURN: invalid signal specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "one~two~at=6~done",
+        "Stderr": "\u003cscript\u003e: line 7: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one~two~at=6~done",
+        "Stderr": "\u003cscript\u003e: line 7: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one~two~at=6~done",
+        "Stderr": "\u003cscript\u003e: line 7: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one~two~done",
+        "Stderr": "trap: RETURN: bad trap",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one~two~done",
+        "Stderr": "\u003cscript\u003e[4]: trap: RETURN: bad trap",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one~two~done",
         "Stderr": "f:trap:1: undefined signal: RETURN",
         "Status": 0,
         "Signal": 0,
@@ -181482,6 +181941,57 @@
         "TimedOut": false
       }
     },
+    "trap/a-function-holding-its-own-return-trap-fires-it-inside-a-debug-body": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: set: line 1: illegal option -T",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "ran~RET~ran~RET~done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "ran~RET~ran~RET~done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "ran~RET~ran~RET~done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: set: Illegal option -T",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e[1]: set: -T: unknown option~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "ran~ran~done",
+        "Stderr": "act:trap: undefined signal: RETURN~act:trap: undefined signal: RETURN",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "trap/a-handler-and-a-reset-leave-a-child-the-default": {
       "ash": {
         "Stdout": "st=143",
@@ -184042,6 +184552,108 @@
       "zsh": {
         "Stdout": "done",
         "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "trap/the-return-trap-is-carried-into-an-err-body": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: set: line 1: illegal option -T",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "ran~RET~done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "ran~RET~done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "ran~RET~done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: set: Illegal option -T",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e[1]: set: -T: unknown option~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "ran~done",
+        "Stderr": "\u003cscript\u003e:trap:3: undefined signal: RETURN~\u003cscript\u003e:trap:7: undefined signal: RETURN",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "trap/the-return-trap-is-not-carried-into-a-debug-body": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: set: line 1: illegal option -T",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "ran~ran~done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "ran~ran~done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "ran~ran~done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: set: Illegal option -T",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e[1]: set: -T: unknown option~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "ran~ran~done",
+        "Stderr": "\u003cscript\u003e:trap:3: undefined signal: RETURN~\u003cscript\u003e:trap:7: undefined signal: RETURN",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

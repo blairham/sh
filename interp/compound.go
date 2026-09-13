@@ -309,6 +309,14 @@ func (r *Runner) forClause(ctx context.Context, c *syntax.ForClause) error {
 			return nil
 		}
 		for i := 0; i < len(items); i += stride {
+			// The head again, for the readings that write one per pass. A
+			// loop over no items writes none, which is what an empty list
+			// measures to in both of them: the head is the pass and not the
+			// construct.
+			r.debugPass(ctx, c.Pos())
+			if r.ctl != controlNone {
+				return nil
+			}
 			// A final pass with fewer words than names leaves the names it
 			// did not reach **empty rather than unset** — measured 2026-09-06
 			// in zsh 5.9.2, `for a b ( 1 2 3 ) { … }` reads `[3][]` on its
@@ -374,11 +382,24 @@ func (r *Runner) forArithClause(ctx context.Context, c *syntax.ForArithClause) e
 		// complaint quotes back is the text of the part, and the fields are
 		// trimmed for the printer's sake. See ForArithClause.PartsAsWritten.
 		initText, condText, postText := c.PartsAsWritten()
+		// Each part is a head of its own, counted one evaluation at a time:
+		// a two-pass loop writes the initializer, three conditions, two
+		// steps and two bodies. The initializer and the step are the two a
+		// reading may skip when the script did not write one; the condition
+		// is written or not and fires either way — see debugArithPart.
+		r.debugArithPart(ctx, c.Pos(), arithPartWritten(c.Init, initText))
+		if r.ctl != controlNone {
+			return nil
+		}
 		if _, ok := r.forArithPart(c.Init, initText); !ok {
 			return nil
 		}
 		defer r.enteringLoop()()
 		for {
+			r.debugPass(ctx, c.Pos())
+			if r.ctl != controlNone {
+				return nil
+			}
 			if c.Cond != nil || c.CondText != "" {
 				v, ok := r.forArithPart(c.Cond, condText)
 				if !ok {
@@ -405,6 +426,10 @@ func (r *Runner) forArithClause(ctx context.Context, c *syntax.ForArithClause) e
 			// it, so a step that fails does not decide whether the job
 			// settled.
 			r.settleBackgroundJobAtALoopsBackEdge()
+			r.debugArithPart(ctx, c.Pos(), arithPartWritten(c.Post, postText))
+			if r.ctl != controlNone {
+				return nil
+			}
 			if _, ok := r.forArithPart(c.Post, postText); !ok {
 				return nil
 			}
@@ -417,6 +442,13 @@ func (r *Runner) forArithClause(ctx context.Context, c *syntax.ForArithClause) e
 // An absent part needs no special case. Its value is only ever read for the
 // condition, and the caller asks about that only when there is one — which is
 // what makes `for ((;;))` endless rather than a loop that never runs.
+// arithPartWritten reports whether the script wrote one of the three parts at
+// all, which one reading of the DEBUG heads needs and nothing else does: the
+// evaluation itself has no special case for an absent part.
+func arithPartWritten(tree syntax.ArithExpr, text string) bool {
+	return tree != nil || strings.TrimSpace(text) != ""
+}
+
 func (r *Runner) forArithPart(tree syntax.ArithExpr, text string) (int, bool) {
 	resolved, expanded, perr := r.arithTreeOver(tree, text)
 	if r.failedHeading() {
@@ -890,6 +922,10 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	r.runDebugTrapOnFunctionEntry(ctx)
 	r.line = enteredAt
 
+	// And the body itself is never a head, in any column, however it is
+	// written — measured, though the column that writes a head for a `{ }`
+	// standing on its own writes none here. See Runner.suppressedHead.
+	r.suppressedHead = true
 	err := r.command(ctx, fn.Body)
 	// Whatever arrived while the body's *last* command ran, handled before
 	// the call unwinds. stmt drains between commands, which leaves the last
@@ -1062,7 +1098,21 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	// The RETURN trap, if this call's own body set one. After the locals
 	// and parameters are back — the action runs in the caller — and before
 	// controlReturn is cleared, so an explicit `return` still fires it.
+	//
+	// And it is numbered from where it fired, like DEBUG and ERR — see
+	// Semantics.CommandTrapBodyLine — which makes *where a return fires* a
+	// measurement of its own. It is not the body's last command: measured
+	// 2026-09-13 on bash 5.3.15 and bash 3.2, an explicit `return` fires at
+	// the `return`'s own line wherever in the body it stands, and a call
+	// that falls off the end fires at the line the **body opened** on. The
+	// first needs nothing here, because the line record is still sitting on
+	// the `return`; the second is this.
+	returnedAt := r.line
+	if r.ctl != controlReturn && fn.Body != nil {
+		r.line = r.lineOf(fn.Body.Pos())
+	}
 	r.runReturnTrap(ctx, frameSerial)
+	r.line = returnedAt
 	if r.ctl == controlReturn {
 		r.ctl = controlNone
 	}

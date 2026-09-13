@@ -655,6 +655,13 @@ func biDot(r *Runner, ctx context.Context, args []string) int {
 	r.pushFrame(Frame{File: display, Name: sourceFrameName, Operand: args[0]})
 	defer r.popFrame()
 
+	// Where the `.` itself stands, because that is where a RETURN trap
+	// fired from here counts as having fired and the file's own lines are
+	// about to walk over the record. Measured 2026-09-13 on bash 5.3.15 and
+	// bash 3.2: a two-line RETURN body at the end of a one-line sourced file
+	// reports the line of the `.` and one past it, where this engine
+	// reported the sourced file's own 1 and 2.
+	dotLine := r.line
 	st := r.runSourced(ctx, string(b), sourced{
 		label:        display,
 		syntaxStatus: r.diag().sourcedSyntaxStatus(),
@@ -665,6 +672,7 @@ func biDot(r *Runner, ctx context.Context, args []string) int {
 	// was set, which is the half of the rule functions do not share. The
 	// action sees the file's status, and an `exit` of its own wins.
 	r.status = st
+	r.line = dotLine
 	r.runReturnTrap(ctx, sourcedFrame)
 	return r.status
 }

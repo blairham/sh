@@ -123,7 +123,15 @@ func (r *Runner) runPseudoTrapBody(ctx context.Context, name, body string, sees 
 	r.status = sees
 	r.ctl = controlNone
 	outer := r.inCommandTrap
-	r.inCommandTrap = name == "DEBUG" || name == "ERR"
+	// DEBUG, ERR and RETURN all fire *at a command*, and the one dialect
+	// that tells the two questions apart numbers all three from where they
+	// fired. RETURN was written down as going with the signals, from a probe
+	// that could not tell the readings apart: the function in it opened its
+	// body on line 1, where "the body's own first line" and "where it fired"
+	// are the same number. Re-measured 2026-09-13 with the body opening on
+	// line 5 and the `return` on line 7, bash 5.3.15 numbers a two-line
+	// RETURN body 7 and 8.
+	r.inCommandTrap = name == "DEBUG" || name == "ERR" || name == "RETURN"
 	r.runTrapBody(ctx, body)
 	r.inCommandTrap = outer
 	if r.ctl == controlNone {
@@ -236,7 +244,24 @@ func (r *Runner) runReturnTrap(ctx context.Context, serial int) {
 	if body == nil || *body == "" || r.inReturnTrap || r.returnTrapInherited {
 		return
 	}
-	if serial != sourcedFrame && r.returnTrapFrame != serial && !r.functrace {
+	// functrace is what carries this trap into a function that did not set
+	// it — and it does not carry it into one called from the **DEBUG** body.
+	// Measured on bash 5.3.15, that build invoked as `sh`, and bash 3.2: with
+	// the trap set at the top level and the shell tracing calls, a function
+	// called from an ERR body, an EXIT body or a signal body fires it, and
+	// one called from a DEBUG body fires nothing. A function that sets the
+	// trap in its *own* body fires it from inside a DEBUG body like anywhere
+	// else, which is what says the exemption is about the carriage rather
+	// than about the body.
+	//
+	// Not an axis: no other column has the condition to ask. zsh, ksh93, dash
+	// and ash all refuse `trap … RETURN` outright, so the panel has one
+	// answer and this is a correction.
+	//
+	// It matters out of proportion to how narrow it reads, because a DEBUG
+	// body runs before *every* command: a traced script with both traps set
+	// carried two extra lines of output per command for its whole run.
+	if serial != sourcedFrame && r.returnTrapFrame != serial && (!r.functrace || r.inDebugTrap) {
 		return
 	}
 	if r.ctl != controlNone && r.ctl != controlReturn {

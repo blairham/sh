@@ -1074,6 +1074,11 @@ func Semantics() interp.Semantics {
 	s.ErrTrapRunsInSubshells = interp.No
 	s.DebugTrapRunsInsideCalls = interp.Yes
 	s.DebugTrapRefiresOnEnteringAFunction = interp.No
+	// The same heads as the bash columns, and two measured departures: the
+	// menu loop's head repeats with its replies the way the list loop's
+	// repeats with its words, and an arithmetic `for`'s initializer or step
+	// that the script did not write fires nothing.
+	s.DebugTrapCompoundHeads = interp.DebugTrapHeadsEveryPassAndWrittenParts
 	s.DebugTrapRunsInSubshells = interp.Yes
 	// `(trap)` and `$(trap)` still list the parent's traps, EXIT included —
 	// measured, and the working state is still reset: `trap 'echo x' USR1;

@@ -988,6 +988,13 @@ func Semantics() interp.Semantics {
 	s.ErrTrapRunsInSubshells = interp.No
 	s.DebugTrapRunsInsideCalls = interp.No
 	s.DebugTrapRefiresOnEnteringAFunction = interp.Yes
+	// The heads whose own work is a word or an expression: `case`, `[[`,
+	// `((` and `select` once each, the list `for` on every pass and each of
+	// the arithmetic `for`'s three expressions every time one is evaluated —
+	// written or not. `if`, `while`, a group, a subshell and a function
+	// definition write nothing. The zero value, and the same in all three
+	// bash columns.
+	s.DebugTrapCompoundHeads = interp.DebugTrapHeadsWordAndArithmetic
 	s.DebugTrapRunsInSubshells = interp.No
 	// The shell that keeps the parent's trap listing across every boundary
 	// but a process substitution — `(trap)`, `$(trap)`, `trap | cat` and

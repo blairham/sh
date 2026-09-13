@@ -11157,6 +11157,53 @@ a traced call — our answer, written down as bash's — until this axis was
 measured. A test that passes is not evidence that what it pins was ever
 read off the shell it names.
 
+**`DebugTrapCompoundHeads`** — bash word-and-arithmetic · dash none · ksh93 every-pass-and-written-parts · zsh every-compound
+
+Which commands other than the simple ones fire the DEBUG trap. Every
+column that has the condition fires it before a simple command; the panel
+gives **three** readings of what else counts as a head, and none of them
+is derivable from anything else a dialect answers.
+
+Measured 2026-09-13 with `trap 'echo D $LINENO' DEBUG` over scripts of one
+construct per line:
+
+| construct | bash 5.3 / as `sh` / 3.2 | ksh93 | zsh |
+| --- | --- | --- | --- |
+| `for w in a b` | the head on every pass | the head per pass | once |
+| `for w in` | nothing, it never runs | nothing | once |
+| `select` | the head once | the head per pass | once |
+| `case`, `[[ ]]`, `(( ))` | the head once | once | once |
+| `for ((i;c;n))` | three parts per round | the written ones | once |
+| `if`, `while`, `until` | nothing | nothing | once |
+| `{ … }`, `( … )` | nothing | nothing | once |
+| `f() { … }` defining | nothing | nothing | once |
+| `repeat` | no such construct | no such construct | once |
+
+dash and BusyBox ash have no DEBUG condition and never reach the question.
+
+**ksh93 is its own reading and was nearly not.** An earlier pass put it
+with the bash columns from a `select` answered **once**, which cannot tell
+a head per pass from a head per construct — the same shape of
+non-discriminating probe that had `CommandTrapBodyLine` saying RETURN
+goes with the signals. Answered twice, ksh93 writes two heads where bash
+writes one. It parts again on the arithmetic `for`: bash fires a head for
+an expression the script never wrote, so `for ((;;))` writes two heads per
+round there and one in ksh93, and that holds for every combination of the
+three parts a script can leave out — so it is the reading and not a rule
+about emptiness.
+
+A **third** ksh93 departure is recorded rather than modeled: a `for` or
+`select` head that fires again on a later pass names wherever the line
+record has got to, which is the body's last line, where the bash columns
+name the head's own line every time. Modeling it would need a line rule
+that is right for the two list loops and wrong for the arithmetic one,
+whose parts name the head's line on every pass in ksh93 too.
+
+A function's **body** is never a head, in any column — even the one that
+writes a head for a `{ }` standing on its own. That is why bash's extra
+firing on entering a call is `DebugTrapRefiresOnEnteringAFunction` above
+and not a fourth reading here.
+
 **`DebugTrapRunsInSubshells`** — bash no · dash unspecified · ksh93 yes · zsh yes
 
 Fires the DEBUG trap inside a subshell or a command substitution. ksh93

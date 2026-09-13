@@ -1135,12 +1135,22 @@ func (r *Runner) dupFd(fd int, target, written string, opened map[int]io.Writer)
 	if target == "-" {
 		// Whatever this command had aimed at the number, it no longer has.
 		delete(opened, fd)
+		// What the number was aimed at, read before it stops being aimed at
+		// it: a pipe this shell made is closed for real once nothing else
+		// names it, which is what delivers the end-of-file a `>(cmd)` body
+		// is reading until. See Runner.closeOwnPipe, and note the order —
+		// the slot is emptied first, or the aliasing check would find the
+		// entry being dropped and call the file shared with itself.
+		dropped := r.fds[fd]
 		switch fd {
 		case 0:
+			dropped = r.Stdin
 			r.Stdin = closedFd{}
 		case 2:
+			dropped = r.Stderr
 			r.Stderr = closedFd{}
 		case 1:
+			dropped = r.Stdout
 			r.Stdout = closedFd{}
 			// Recorded, because one dialect stays quiet about a failed write
 			// exactly when the command that wrote closed the stream itself.
@@ -1151,6 +1161,7 @@ func (r *Runner) dupFd(fd int, target, written string, opened map[int]io.Writer)
 			// any shell measured, so neither is deleting a missing entry.
 			delete(r.fds, fd)
 		}
+		r.closeOwnPipe(dropped)
 		return nil
 	}
 	m, ok := atoi(target)

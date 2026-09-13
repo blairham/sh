@@ -197,7 +197,10 @@ var exempt = map[string]string{
 		"which holds the argument for both spellings.",
 	"interp.procSubDir":     "the directory this shell makes for its own pipes, under r.tempHome().",
 	"interp.removeProcSubs": "the same pipes, removed with the command that named them.",
-	"interp.CleanUp":        "the same directory, removed when this shell stops being one (#1284).",
+	"interp.endHeldProcSubs": "the same pipes again — the ones removeProcSubs could not " +
+		"remove because this shell still held a descriptor onto them, removed when the " +
+		"shell itself ends (#2198).",
+	"interp.CleanUp": "the same directory, removed when this shell stops being one (#1284).",
 
 	// dialect/zsh. filesgate.go is the module's gate — every call in it is
 	// behind the consultation above it — and the rest are the mutating system

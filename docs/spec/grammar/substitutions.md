@@ -291,7 +291,7 @@ shell library otherwise does with a global by convention.
 | dash | `Bad substitution` |
 | zsh 5.9.2 | `bad substitution` |
 | BusyBox ash | `syntax error: bad substitution` |
-| ksh93u+ | ``syntax error at line 1: `|' unexpected`` |
+| ksh93u+ | ``syntax error at line 1: `\|' unexpected`` |
 
 So it is a dialect's own construct and there is nothing to ask the
 semantics vector — the four dialects that refuse it agree with what this

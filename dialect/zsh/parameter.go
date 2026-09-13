@@ -122,7 +122,7 @@ func registerParameterModule(r *interp.Runner) {
 	// would then write out every builtin this shell has as an assignment
 	// somebody could source back. Measured — zsh's own `typeset -r` writes
 	// `builtins` as a bare name.
-	r.MarkHidden("builtins")
+	hideModuleParameter(r, "builtins")
 	r.SetDynamicAssoc("aliases", zshAliasesView)
 	r.SetDynamicAssocWriter("aliases", writeZshAlias)
 	// The other two kinds, each with its own parameter, which is how this
@@ -151,7 +151,7 @@ func registerParameterModule(r *interp.Runner) {
 	// `read-only variable: reswords`, and a plain `typeset` writes
 	// `array readonly reswords` with no value.
 	r.MarkReadonly("reswords")
-	r.MarkHidden("reswords")
+	hideModuleParameter(r, "reswords")
 	r.SetDynamicAssoc("parameters", zshParametersView)
 	r.SetDynamicAssocElement("parameters", zshParameterValue)
 	// Readonly and hidden together, the pair `builtins` needs and for the same
@@ -160,7 +160,7 @@ func registerParameterModule(r *interp.Runner) {
 	// into a stored table that then shadows the producer. See MarkHidden's
 	// note above — an attribute puts the name in the tables a listing walks.
 	r.MarkReadonly("parameters")
-	r.MarkHidden("parameters")
+	hideModuleParameter(r, "parameters")
 	registerArgv(r)
 	// `${(t)name}` is the one-name spelling of the table above, and it is
 	// the same words: a script asking what it was handed and a script
@@ -240,7 +240,7 @@ func registerEmptyParameters(r *interp.Runner) {
 			// assignment into a stored table and shadow itself, and readonly
 			// alone would put the name in the tables a listing walks.
 			r.MarkReadonly(p.name)
-			r.MarkHidden(p.name)
+			hideModuleParameter(r, p.name)
 			continue
 		}
 		r.SetDynamicAssocWriter(p.name, refuseEmptyParameterWrite(p.name, p.waitsFor))

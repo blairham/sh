@@ -86,10 +86,10 @@ func registerZleParameterModule(r *interp.Runner) {
 	// table is what a later read finds first — so one `widgets[x]=y` would
 	// turn the view into a snapshot that never says it stopped tracking.
 	r.MarkReadonly("widgets")
-	r.MarkHidden("widgets")
+	hideModuleParameter(r, "widgets")
 	r.SetDynamicArray("keymaps", zshKeymapsView)
 	r.MarkReadonly("keymaps")
-	r.MarkHidden("keymaps")
+	hideModuleParameter(r, "keymaps")
 }
 
 // The values `$widgets` gives, which are the kinds of widget there are.

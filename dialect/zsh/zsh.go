@@ -176,6 +176,11 @@ func Dialect() syntax.Dialect {
 	// the rest read every letter into the number and then refuse it — see
 	// syntax.Dialect.ArithNumeralEndsAtABadDigit.
 	d.ArithNumeralEndsAtABadDigit = true
+	// And an underscore inside a numeral is a digit separator, skipped
+	// rather than read: `$(( 1_0 ))` is 10 here where every other column
+	// calls it a digit too great for base ten — see
+	// syntax.Dialect.ArithDigitSeparator.
+	d.ArithDigitSeparator = true
 	// And the binary radix prefix, which this shell alone has: `0b101` is 5
 	// here and an octal constant carrying a `b` everywhere else.
 	d.ArithBinaryLiteral = true

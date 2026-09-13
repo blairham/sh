@@ -11497,7 +11497,32 @@ echo unreachable`,
 	{
 		ID: "arith/a-numeral-whose-letters-are-base-digits", Category: "arithmetic",
 		Snippet: `echo "v=$(( 1@2 ))"; echo "w=$(( 1_ ))"; echo "st=$?"`,
-		Why:     "the control for the row above on the other side: `@` and `_` are digits 62 and 63 of the base-64 alphabet, and bash reads them into the numeral exactly as it reads letters — `value too great for base` for both, not the `invalid arithmetic operator` it keeps for a byte no operator could be. So the swallowing reading is about the alphabet and not about letters. zsh refuses the `@` outright and is a cell short on `1_`, which it answers 1",
+		Why:     "the control for the row above on the other side: `@` and `_` are digits 62 and 63 of the base-64 alphabet, and bash reads them into the numeral exactly as it reads letters — `value too great for base` for both, not the `invalid arithmetic operator` it keeps for a byte no operator could be. So the swallowing reading is about the alphabet and not about letters. zsh refuses the `@` outright and answers 1 to `1_` — for a third reason again, the underscore being a digit *separator* there rather than a digit or a leftover, which the rows below pin (#2223)",
+	},
+	{
+		ID: "arith/an-underscore-inside-a-numeral-is-a-digit-separator", Category: "arithmetic",
+		Snippet: `echo "a=$(( 1_0 ))"; echo "b=$(( 1_0_0 ))"; echo "st=$?"`,
+		Why:     "the row that decides what the underscore in `arith/a-numeral-whose-letters-are-base-digits` is. `1_` cannot: 1 is what a separator gives and 1 is also what a discarded byte gives. `1_0` parts them — ten is a separator and nothing else, since the byte being a digit is `value too great for base` (which is what the other columns answer) and the byte ending the numeral would leave `_0` standing where an operator belongs. One shell answers 10 and 100; the rest refuse both",
+	},
+	{
+		ID: "arith/a-digit-separator-inside-a-based-numeral", Category: "arithmetic",
+		Snippet: `echo "a=$(( 0x1_f ))"; echo "b=$(( 2#1_0 ))"; echo "c=$(( 16#f_f ))"; echo "st=$?"`,
+		Why:     "the separator is removed before the base is applied rather than after, so it works in every spelling of a numeral: 31, 2 and 255 on the shell that has it. The middle cell is the one that could not be got any other way — binary has no room for a digit 63 under any reading, so a shell answering 2 there is one that never saw the byte",
+	},
+	{
+		ID: "arith/a-digit-separator-may-stand-where-a-digit-would", Category: "arithmetic",
+		Snippet: `echo "a=$(( 0x_1 ))"; echo "b=$(( 1__0 ))"; echo "c=$(( 1_ ))"; echo "st=$?"`,
+		Why:     "the three edges of \"removed, and then the ordinary rules apply\": one may stand before the first digit, a run of them is one, and a trailing one belongs to the numeral it follows rather than being left where an operator would go. 1, 10 and 1 on the shell that has it. `arith/a-numeral-ends-at-a-byte-a-separator-does-not-hide` is the pair for the last of these",
+	},
+	{
+		ID: "arith/a-numeral-ends-at-a-byte-a-separator-does-not-hide", Category: "arithmetic",
+		Snippet: `echo "a=$(( 1_abc ))"; echo "st=$?"`,
+		Why:     "the boundary: the separator is skipped and the byte after it is not, so the numeral still ends where its base runs out. The shell with the separator blames `abc` — the underscore having gone into the numeral and the letters not — where the ones that read the whole run into the number call it a digit too great for base ten. It is `arith/a-numeral-followed-by-letters` with an underscore in front of the letters, and that shell answers the two alike",
+	},
+	{
+		ID: "arith/a-variable-holding-a-separated-numeral", Category: "arithmetic",
+		Snippet: `x=1_0; echo "a=$(( x ))"; echo "st=$?"`,
+		Why:     "the separator is a rule about reading a numeral and not about reading a *script*, so it reaches a value no parser ever saw: 10 on the shell that has it. Worth its own row because an implementation can get every row above right by changing only its lexer and still refuse this one",
 	},
 	{
 		ID: "arith/a-radix-prefix-with-a-digit-its-base-lacks", Category: "arithmetic",

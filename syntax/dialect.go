@@ -2326,6 +2326,54 @@ type Dialect struct {
 	// with the rest left standing.
 	ArithNumeralEndsAtABadDigit bool
 
+	// ArithDigitSeparator makes an underscore inside a numeral a **digit
+	// separator**: it is skipped, and the numeral reads as though it were
+	// not there. zsh alone.
+	//
+	// Measured 2026-09-13 against zsh 5.9.2 and bash 5.3.15. `$(( 1_ ))` was
+	// the row that started this and it cannot decide it — 1 is what both a
+	// separator and a discarded byte would give — so the question is `1_0`:
+	//
+	//	            1_    1_0   1_0_0  0x1_f  2#1_0  16#f_f  1_0.5  1_abc
+	//	zsh 5.9.2   1     10    100    31     2      255     10.5   operator
+	//	                                                             expected
+	//	                                                             at `abc'
+	//	bash 5.3    value too great for base, every one of them
+	//
+	// Ten is what a separator gives and nothing else does: the byte is
+	// neither a digit — bash reads it as digit 63 of the base-64 alphabet and
+	// then refuses a digit base ten has no room for, which is what
+	// ArithNumeralEndsAtABadDigit's sibling rows pin — nor a leftover token,
+	// `1` followed by an unset name being an `operator expected` rather than
+	// a 1.
+	//
+	// **Removed, and then the ordinary rules apply to what is left.** That is
+	// the whole rule and it is worth stating that way round, because every
+	// other row follows from it: `setopt octalzeroes; $(( 0_10 ))` is 8, so
+	// the leading zero the separator uncovers is an octal prefix; `$(( 1_#5
+	// ))` is `invalid base … : 1`, so the base is read from the cleaned text;
+	// `$(( 0x_1 ))` and `$(( 2#_10 ))` are 1 and 2, so a separator may stand
+	// where the first digit would; `$(( 1__0 ))` is 10, so a run of them is
+	// one; and `$(( 1_ ))` is 1, so a trailing one belongs to the numeral it
+	// follows rather than being left standing.
+	//
+	// **It is only a separator inside a numeral.** A numeral begins with a
+	// digit, so a leading underscore is a name as it always was: `$(( _ ))`
+	// and `$(( _1 ))` are both 0, an unset name being zero.
+	//
+	// A grammar flag rather than a semantics axis, and asked in the two
+	// places that need it: the parser, where it decides how far the numeral
+	// reaches, and the conversion, where a value a *variable* was holding is
+	// read by the same rule — `x=1_0; $(( x ))` is 10 there, and no parser
+	// saw that text.
+	//
+	// One shape is knowingly short of the shell, and it is a wording rather
+	// than a value. zsh cleans the token and then reports what is left of the
+	// *cleaned* text, so `$(( 1e_foo ))` blames `efoo`; this reader leaves the
+	// separator standing in the leftover and blames `e_foo`. Both stop in the
+	// same place and both are an `operator expected`. #2223.
+	ArithDigitSeparator bool
+
 	// ArithBinaryLiteral enables `0b101`, the binary radix prefix. zsh alone
 	// among the panel: measured 2026-09-12, `$(( 0b101 ))` is 5 there and
 	// `0b101: value too great for base` in bash 5.3, bash 3.2 and

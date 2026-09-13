@@ -82,11 +82,14 @@ const IDLength = 26
 // commands run an hour apart are two of whatever is being identified, and when
 // and where they ran is as much of the thing as what was in it.
 //
-// This is not what numbers an action. An action id is a small counter on the
-// Runner — see interp.Action.ID — because a PATH search stats a candidate per
+// It numbers an action too, but only on the cold side. interp.Action.ID is a
+// small counter on the Runner, because a PATH search stats a candidate per
 // directory and paying for randomness there would tax every shell that merely
-// asked to watch itself. The pair of a session id from here and an action's
-// counter is what is unique everywhere.
+// asked to watch itself; internal/boundary calls this instead, because a run
+// makes a handful of front-end accesses and an id needing no coordination is
+// what lets each place that builds a Boundary build one independently. So a
+// stream carries both kinds, and IDLength being fixed is what keeps them
+// apart. This comment said the counter was the only one until #1787.
 //
 // The randomness is math/rand/v2 and deliberately not crypto/rand, which is a
 // choice a shell has a specific reason to make. What is wanted here is

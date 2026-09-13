@@ -1304,14 +1304,69 @@ promise — a permission request and the records of what was permitted are
 provably the same action — and it is why the field could not live only
 on the wire the way `seq` does.
 
-**It is a counter, and `session` is what makes it unique.** A `PATH`
-search stats a candidate in every directory `PATH` names and a glob
-stats every entry it descends past, so this is one of the hottest things
-the interpreter does; sixteen bytes of randomness per stat would be paid
-by every shell that had merely asked to watch itself. The counter is
-shared across a subshell rather than copied, because a cloned Runner
-that numbered from its own copy would hand two different actions the
-same id. The pair `(session, actionId)` is what is unique everywhere.
+**It is an opaque string, and `session` is what makes it unique.** That
+sentence is the whole of what a consumer may rely on, and it is stated
+before the mechanism because this document used to state only the
+mechanism — "it is a counter" — and there are two issuers (#1787).
+
+What is guaranteed:
+
+- `(session, actionId)` is unique across everything.
+- Every record about one action carries the *same* `actionId`. A
+  `command-start` and its `command-end` are the worked case.
+
+What is **not** guaranteed, and each of these is a way a consumer
+written from the old text would break on its first real stream:
+
+- **That it parses as an integer.** It is typed `string` in the table
+  above for a reason.
+- **That it is short.** One issuer's ids are 26 characters.
+- **That it is dense, contiguous, or ordered.** Nothing sorts by it and
+  no gap in it means anything.
+
+The two issuers, and why the split is deliberate rather than an
+oversight:
+
+**`interp` counts.** A `PATH` search stats a candidate in every
+directory `PATH` names and a glob stats every entry it descends past, so
+this is one of the hottest things the interpreter does; sixteen bytes of
+randomness per stat would be paid by every shell that had merely asked
+to watch itself. The counter is shared across a subshell rather than
+copied, because a cloned Runner that numbered from its own copy would
+hand two different actions the same id.
+
+**`internal/boundary` mints**, with `event.NewID`, and so its ids are
+`event.IDLength` — 26 characters of base32. A front-end access is not on
+any hot path: a run makes a handful of them, a script and a startup file
+or two, a history file, a block store. What that buys is that the
+several places which build a `Boundary` go on building one
+independently. A shared counter would have to be threaded through every
+one of them, and the first that forgot would issue a duplicate.
+
+The two spaces cannot collide, because `event.IDLength` is fixed rather
+than a range: a 26-character id is never a short decimal.
+
+**The minted kind is the one a consumer meets first.** The front end
+opens the script before the interpreter has run anything, so `seq 1` of
+an ordinary `-audit` run carries a minted id and the counter starts at
+the record after it. Measured 2026-09-13:
+
+    {"v":1,"seq":1,"session":"33ACRLG6E9CG0MG3L1U3O2S6HG",
+     "actionId":"33ACRLG6EBU81LMGVHGBG40O00","event":"access",
+     "action":"open","path":"…/s.sh","line":0}
+    {"v":1,"seq":2,"session":"33ACRLG6E9CG0MG3L1U3O2S6HG",
+     "actionId":"1","event":"access","action":"stat","path":"/bin/echo"}
+    {"v":1,"seq":3,"session":"33ACRLG6E9CG0MG3L1U3O2S6HG",
+     "actionId":"2","event":"command-start","action":"exec","path":"/bin/echo"}
+    {"v":1,"seq":4,"session":"33ACRLG6E9CG0MG3L1U3O2S6HG",
+     "actionId":"2","event":"command-end","action":"exec",
+     "path":"/bin/echo","status":0}
+
+(wrapped for width, and `time` dropped; a record is one line)
+
+Both regimes are in those four lines, and so is the invariant that
+matters: `seq` differs on every record and `actionId` is the same on the
+two records of the one `exec`.
 
 **`actionId` is not `seq` and the two must never be conflated.** `seq`
 orders *emission* within one stream and differs on every record;

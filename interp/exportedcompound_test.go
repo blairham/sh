@@ -127,7 +127,13 @@ func TestASubscriptedOperandsAttributesAreAnAxis(t *testing.T) {
 // array that way had none (#1380).
 func TestAValuelessSubscriptedOperandDeclaresTheArray(t *testing.T) {
 	for _, tc := range []struct{ name, src, want string }{
-		{"an unset name becomes an array", `typeset a[3]; printf "[%s]" "${#a[@]}" "$(typeset -p a)"`, `[0][declare -a a=()]`},
+		// No `=()` on the listing: the operand carries no value, so the name
+		// is declared an array and nothing has written to it. Measured
+		// 2026-09-12 on bash 5.3.15, `typeset a[3]; declare -p a` is
+		// `declare -a a` while `typeset a[3]=` is `declare -a a=([3]="")` —
+		// see compounddeclaredonly.go. This row asserted `=()` until #2558,
+		// which was this engine's own answer rather than a measured one.
+		{"an unset name becomes an array", `typeset a[3]; printf "[%s]" "${#a[@]}" "$(typeset -p a)"`, `[0][declare -a a]`},
 		{"and no element is written", `typeset a[3]; printf "[%s]" "${a[3]-none}"`, `[none]`},
 		{"an array already standing is left alone", `a=(x y); typeset a[3]; printf "[%s]" "${a[@]}"`, `[x][y]`},
 		// The control: with a value it is the element declaration it always

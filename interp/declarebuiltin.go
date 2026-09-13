@@ -3310,6 +3310,17 @@ func (r *Runner) shadow(name string) (fresh bool) {
 		sc.savedAssoc[name] = old
 		sc.assocExisted[name] = existed
 	}
+	// And how the shadowed table came to be, which travels with the two
+	// above: a local declaration marks the name declared-only, and the
+	// caller's own table must not inherit that when the call unwinds. Keyed
+	// off assocExisted, which the block above has just filled in for this
+	// name, so the record is taken exactly once per name per scope.
+	if _, seen := sc.declaredOnlyBefore[name]; !seen {
+		if sc.declaredOnlyBefore == nil {
+			sc.declaredOnlyBefore = map[string]bool{}
+		}
+		sc.declaredOnlyBefore[name] = r.declaredOnlyCompound[name]
+	}
 	// And the other half of a tie the shell made for itself, which is one
 	// value under two names and so cannot have one of them saved alone. See
 	// tielocal.go.

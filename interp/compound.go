@@ -921,6 +921,16 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 			delete(r.AssocArrays, name)
 		}
 	}
+	// And how the caller's compound value had come to be, which is restored
+	// with the tables rather than left as the local declaration set it. See
+	// compounddeclaredonly.go.
+	for name, was := range sc.declaredOnlyBefore {
+		if was {
+			r.compoundDeclaredOnly(name)
+		} else {
+			r.compoundWasAssigned(name)
+		}
+	}
 	// And the frozen attribute, which goes both ways: a name the declaration
 	// shadowed is frozen again, so a function cannot thaw one for good, and
 	// a name the declaration *froze* is writable again, because the

@@ -77,10 +77,14 @@ func (c *Runner) ownTables(r *Runner) {
 	//	assigned       the assignment a `${x=…}` and friends recorded
 	//	absentParams   a name a nounset check has already spoken about
 	//	declaredEmpty  declared with no value, which is not the same as unset
+	//	declaredOnlyCompound
+	//	               an array or table a declaration made and nothing has
+	//	               written to, which is not the same as an emptied one
 	c.removed = maps.Clone(r.removed)
 	c.assigned = maps.Clone(r.assigned)
 	c.absentParams = maps.Clone(r.absentParams)
 	c.declaredEmpty = maps.Clone(r.declaredEmpty)
+	c.declaredOnlyCompound = maps.Clone(r.declaredOnlyCompound)
 
 	// The attribute tables `declare` and `typeset` write. A subshell's
 	// attribute must not outlive it: measured, `x=1; (readonly x); x=2`
@@ -292,6 +296,7 @@ func cloneScopes(scopes []*scope) []*scope {
 		c.existed = maps.Clone(sc.existed)
 		c.arrayExisted = maps.Clone(sc.arrayExisted)
 		c.removedBefore = maps.Clone(sc.removedBefore)
+		c.declaredOnlyBefore = maps.Clone(sc.declaredOnlyBefore)
 		c.assocExisted = maps.Clone(sc.assocExisted)
 		c.savedReadonly = maps.Clone(sc.savedReadonly)
 		c.savedHideInScope = maps.Clone(sc.savedHideInScope)

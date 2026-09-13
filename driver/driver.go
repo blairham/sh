@@ -115,6 +115,24 @@ type Shell struct {
 	// so no dialect package can hold one.
 	Highlighter repl.Highlighter
 
+	// HighlightLine is the same seam reached from the *dialect* side, where
+	// the runs are not this binary's choice but something the session's own
+	// shell code asked for — zsh's `region_highlight`, which is how every
+	// syntax highlighter in the wild colors a line.
+	//
+	// Separate from Highlighter rather than folded into it for the reason
+	// RunWidget is separate from a plain function: it needs the Runner, and
+	// only the moment a session is built knows which one. A binary that sets
+	// both gets Highlighter, since that one is the binary's own answer and
+	// this one is the dialect's default.
+	HighlightLine func(*interp.Runner, string) []repl.Highlight
+
+	// StartLine is what this dialect clears when a new line begins — the
+	// other half of HighlightLine, since `region_highlight` is kept for the
+	// length of a line and must not colour the next one. Nil is a dialect
+	// with nothing to clear.
+	StartLine func(*interp.Runner)
+
 	// PromptProviders contribute text to every prompt an interactive session
 	// draws, before the prompt parameter's own text. Nil is the common case
 	// and is what every dialect binary is: a prompt is a prompt parameter.

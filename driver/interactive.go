@@ -173,6 +173,33 @@ func (sh Shell) runWidget(r *interp.Runner) func(context.Context, string, repl.L
 	}
 }
 
+// highlighter is what colors the line, preferring the binary's own answer to
+// the dialect's.
+//
+// Nil when there is neither, which repl reads as "draw the line plainly" — so
+// a dialect that has no coloring costs the redraw nothing, not even a call
+// that returns no runs.
+func (sh Shell) highlighter(r *interp.Runner) repl.Highlighter {
+	if sh.Highlighter != nil {
+		return sh.Highlighter
+	}
+	if sh.HighlightLine == nil {
+		return nil
+	}
+	return repl.HighlighterFunc(func(line string) []repl.Highlight {
+		return sh.HighlightLine(r, line)
+	})
+}
+
+// startLine binds the dialect's per-line reset to this runner, and is nil for
+// a dialect with none — repl skips the call rather than making an empty one.
+func (sh Shell) startLine(r *interp.Runner) func() {
+	if sh.StartLine == nil {
+		return nil
+	}
+	return func() { sh.StartLine(r) }
+}
+
 func (sh Shell) runScheduled(r *interp.Runner) func(context.Context) {
 	if sh.RunScheduled == nil {
 		return nil
@@ -352,7 +379,7 @@ func (sh Shell) frontEnd(r *interp.Runner, name string, dg interp.Diagnostics) r
 		PromptProviders: sh.PromptProviders,
 		// And what colors the line while it is typed, which is nothing
 		// unless the binary asked for it.
-		Highlighter: sh.Highlighter,
+		Highlighter: sh.highlighter(r),
 		// Bound to *this* runner and read per keystroke, so a `bindkey` typed
 		// at the prompt takes effect on the next line rather than the next
 		// shell.
@@ -361,6 +388,7 @@ func (sh Shell) frontEnd(r *interp.Runner, name string, dg interp.Diagnostics) r
 		// And how a key bound to one of the dialect's own actions runs, and
 		// what it had set aside for a time that has passed. Both bound to
 		// this runner, for the reason the bindings are.
+		StartLine:    sh.startLine(r),
 		RunWidget:    sh.runWidget(r),
 		RunScheduled: sh.runScheduled(r),
 		// And what it wants waited on beside the terminal while it waits for

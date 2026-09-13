@@ -5530,6 +5530,89 @@ type Semantics struct {
 	// ksh93 as tolerant off ksh93's own feature.
 	CommandRejectsUnknownOption Answer
 
+	// UmaskHasTheReusableLetter gives `umask` a `-p`, which prints the mask
+	// as a command that would set it again: `umask 0022` rather than `0022`,
+	// and `umask -S u=rwx,g=rx,o=rx` with `-S` beside it.
+	//
+	// It is what `saved=$(umask -p)` is for — save the mask, change it, and
+	// `eval "$saved"` to put it back — and bash alone has the letter. The
+	// other four refuse it as an option `umask` does not have.
+	//
+	// Only the *report* takes the prefix. `umask -p 077` sets the mask and
+	// says nothing, and `umask -p -S 077` prints the bare symbolic form the
+	// `-S` echo already prints, measured both ways.
+	UmaskHasTheReusableLetter Answer
+
+	// SetHasThePrivilegedLetter makes `set -p` the short spelling of
+	// `set -o privileged`.
+	//
+	// bash, ksh93 and zsh have the letter and all three mean privileged mode
+	// by it; dash and ash refuse it. The long name is what carries the state
+	// wherever it is answered, so the letter and the name cannot come to
+	// disagree — the rule `set -t` and `onecmd` already follow.
+	SetHasThePrivilegedLetter Answer
+
+	// TestHasTheFileExistsLetter gives `test` a *unary* `-a`, which asks the
+	// question `-e` asks: `test -a f` is true when f exists.
+	//
+	// The letter is the three-word connective at three arguments and the file
+	// test at two, and the argument count is the whole of what decides —
+	// which is why this is asked only where the count has already said the
+	// word is an operator. bash and ksh93 have it; dash, zsh and ash do not
+	// and refuse it as an operator they do not know.
+	TestHasTheFileExistsLetter Answer
+
+	// TestHasTheShellOptionOperator gives `test` a unary `-o`, which is true
+	// when the named shell option is on: `test -o errexit` is `set -e`
+	// asked as an expression.
+	//
+	// The same two shells have it, and it is a separate question from the
+	// letter above rather than a second reading of one: a shell could have
+	// either without the other, and the pair sits behind the same
+	// argument-count rule for the same reason. An option name this shell
+	// does not know is false rather than an error, measured in both.
+	TestHasTheShellOptionOperator Answer
+
+	// TestHasTheModifiedSinceReadOperator gives `test` a unary `-N`: the
+	// file has been written since it was last read.
+	//
+	// The operator's *presence* is what this pins, deliberately. Its answer
+	// does not survive being measured twice — reading a file to ask the
+	// question is itself a read — and the panel does not even agree on a
+	// file nothing has touched: bash 5.3 and ksh93 answer false where bash
+	// 3.2 and zsh answer true, on the same file in the same run. What every
+	// column that has the operator does agree on is the comparison itself,
+	// which is what this shell implements: the modification time against the
+	// access time.
+	TestHasTheModifiedSinceReadOperator Answer
+
+	// TestStringOrder is which of `<` and `>` `test` compares strings with —
+	// see TestStringOrderPolicy.
+	//
+	// An enum over the pair rather than one axis, because ksh93 has `>` and
+	// refuses `<` with `test: <: unknown operator`, so "does this shell order
+	// strings" would be wrong about one of the two there.
+	TestStringOrder TestStringOrderPolicy
+
+	// CommandReachesABuiltin lets `command name` run the builtin of that
+	// name. Where it does not, the word is a request for an *external*
+	// program alone, and a builtin nothing on PATH shares a name with is
+	// `command not found`.
+	//
+	// POSIX is unambiguous — `command` exists so that a special builtin's
+	// failure is survivable and so a function can wrap the builtin it is
+	// named after — and four of the five dialects answer Yes. zsh alone
+	// answers No, and it is not an oversight there: the shell has an option
+	// for the POSIX behavior (`posixbuiltins`), and its two sh-family
+	// emulations turn that option on.
+	//
+	// The divergence is not the status. `command set -o …` in front of a
+	// *special* builtin is the survivable spelling everywhere else, and in
+	// zsh it is 127 and the option is never set — so a line written to work
+	// under either shell's name silently does nothing there. Recorded as
+	// `cmd/command-in-front-of-a-builtin`.
+	CommandReachesABuiltin Answer
+
 	// GetoptsRejectsUnknownOption is the same question for `getopts`, which
 	// has no options at all here — so any leading `-` word is the one being
 	// asked about, and it would otherwise be the optstring.
@@ -10091,6 +10174,20 @@ func PosixSemantics() Semantics {
 		// the second.
 		CommandRejectsUnknownOption: Yes,
 		GetoptsRejectsUnknownOption: No,
+		// And POSIX gives `command` a builtin to run: bypassing the function
+		// table is what the utility is for, not bypassing the builtins too.
+		CommandReachesABuiltin: Yes,
+		// POSIX gives `umask` `-S` and no more, and `set` no `-p`.
+		UmaskHasTheReusableLetter: No,
+		SetHasThePrivilegedLetter: No,
+		// POSIX gives `test` neither a unary `-a`, a `-o`, a `-N`, nor `<`
+		// and `>`: its `-a` and `-o` are the connectives alone, and the
+		// string comparisons it has are `=` and `!=`. So the core has none
+		// of the four, and every one of them is a dialect's addition.
+		TestHasTheFileExistsLetter:          No,
+		TestHasTheShellOptionOperator:       No,
+		TestHasTheModifiedSinceReadOperator: No,
+		TestStringOrder:                     TestStringOrderNeither,
 		// POSIX gives `umask` chmod's symbolic mode: a who list, then one
 		// or more actions, each an operator and its permissions. So several
 		// operators in a clause are allowed, an omitted who means all three,
@@ -12172,6 +12269,60 @@ func (r *Runner) compoundPipelineStatus() CompoundPipelineStatusPolicy {
 	p := r.sem().CompoundPipelineStatusRecord
 	if p == CompoundPipelineStatusUnspecified {
 		r.diagf("%s\n", r.unanswered("what a compound does to the pipeline status"))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
+}
+
+// TestStringOrderPolicy is which of `<` and `>` `test` orders strings with.
+//
+// One axis over the pair because the panel does not split them evenly. Three
+// of the answers are real: bash and dash have both, zsh has neither, and
+// ksh93 has `>` alone — `test b '<' a` there is `test: <: unknown operator` at
+// 2 while `test b '>' a` is 0. A single "does this shell order strings" flag
+// would have to be wrong about one of ksh93's two operators.
+//
+// The comparison itself is unanimous wherever it exists: byte order, so `A` is
+// less than `a`, and it is a string comparison rather than a numeric one.
+//
+// Neither operator is `[[ ]]`'s. There the same characters are redirections
+// in some shells and comparisons in others, and the construct is grammar
+// rather than a command; this is about the builtin's operand table alone.
+type TestStringOrderPolicy int
+
+const (
+	// TestStringOrderUnspecified is no answer, and is refused like any
+	// other.
+	TestStringOrderUnspecified TestStringOrderPolicy = iota
+	// TestStringOrderNeither has no ordering operator at all, so `<` and `>`
+	// are words the operand table does not know: zsh.
+	TestStringOrderNeither
+	// TestStringOrderBoth has the pair: bash, dash, and POSIX's XSI option.
+	TestStringOrderBoth
+	// TestStringOrderGreaterOnly has `>` and refuses `<`: ksh93, which is
+	// the reason this is an enum.
+	TestStringOrderGreaterOnly
+)
+
+func (p TestStringOrderPolicy) String() string {
+	switch p {
+	case TestStringOrderNeither:
+		return "neither `<` nor `>`"
+	case TestStringOrderBoth:
+		return "both `<` and `>`"
+	case TestStringOrderGreaterOnly:
+		return "`>` alone"
+	}
+	return "unspecified"
+}
+
+// testStringOrder resolves the axis, and only for a `<` or a `>` standing
+// where a binary operator belongs — so no expression without one pays for it.
+func (r *Runner) testStringOrder() TestStringOrderPolicy {
+	p := r.sem().TestStringOrder
+	if p == TestStringOrderUnspecified {
+		r.diagf("%s\n", r.unanswered("`test a '<' b` ordering two strings"))
 		r.status = 2
 		r.unspecified = true
 	}

@@ -469,6 +469,25 @@ func (r *Runner) lookupForListing(name string, kind AliasKind) (found, listed bo
 	return true, kind == AliasAnyKind || a.global
 }
 
+// AliasNames is every alias of one kind, sorted — what a listing walks, and
+// what a dialect that presents the table as a *parameter* enumerates.
+//
+// Exported for the second of those: bash's `BASH_ALIASES` is the alias table
+// written as an association, so `${!BASH_ALIASES[@]}` has to ask this
+// question from outside the package. It is the same function the `alias`
+// listing uses rather than a second walk, which is what keeps the two from
+// disagreeing about which aliases exist.
+func (r *Runner) AliasNames(kind AliasKind) []string { return r.aliasNames(kind) }
+
+// DefineAlias writes one alias, which is what `alias name=value` does.
+//
+// Exported for the same reason AliasNames is, and it is the write half of the
+// same parameter: `BASH_ALIASES[w]=date` defines an alias in bash, measured,
+// so a produced association that could only be read would be half the name.
+func (r *Runner) DefineAlias(name, value string, kind AliasKind) {
+	r.defineAlias(name, value, kind)
+}
+
 // aliasNames is what a listing walks, in order.
 func (r *Runner) aliasNames(kind AliasKind) []string {
 	var names []string

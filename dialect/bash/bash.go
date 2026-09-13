@@ -798,6 +798,20 @@ func Semantics() interp.Semantics {
 	s.ExecFailureRunsExitTrap = interp.Yes
 	s.ExecTakesOptions = interp.Yes
 	s.TestAcceptsDoubleEqual = interp.Yes
+	// The operators past the three-word rules. `test -a f` is `-e`'s question
+	// where two words say the letter is an operator rather than the
+	// connective, `test -o errexit` asks whether a `set -o` name is on, and
+	// `test -N f` asks whether the file was written since it was read.
+	// `umask -p` prints the mask as a command that would set it again, and
+	// `set -p` is the short spelling of `set -o privileged`.
+	s.UmaskHasTheReusableLetter = interp.Yes
+	s.SetHasThePrivilegedLetter = interp.Yes
+	s.TestHasTheFileExistsLetter = interp.Yes
+	s.TestHasTheShellOptionOperator = interp.Yes
+	s.TestHasTheModifiedSinceReadOperator = interp.Yes
+	// And both ordering operators, which is the answer POSIX's XSI option
+	// gives — where ksh93 has only the greater one.
+	s.TestStringOrder = interp.TestStringOrderBoth
 	// `f -nt missing` holds when f exists, in `test` and `[[ ]]` alike.
 	s.MissingFileIsOlder = interp.Yes
 	s.UmaskPrintsFourDigits = interp.Yes
@@ -1846,7 +1860,7 @@ func Diagnostics() interp.Diagnostics {
 			// the same request, so a letter listed here while the name is
 			// wired would refuse what the name grants — see
 			// Semantics.SetHasTheTLetter.
-			"set": "bkprHP",
+			"set": "bkrHP",
 			// Options these builtins have here and this shell does not.
 			"wait": "fp",
 			// disown's sweepers: -a for every job, -h for HUP shielding
@@ -1876,11 +1890,6 @@ func Diagnostics() interp.Diagnostics {
 			"declare": "Int",
 			"typeset": "Int",
 			"local":   "fFInt",
-			// The callbacks: -C runs a command every -c elements, which is
-			// about progress display and is deferred rather than parsed and
-			// ignored — under either of the command's two names.
-			"mapfile":   "Cc",
-			"readarray": "Cc",
 		},
 		// bash's own words for the two -u failures it can meet here; the
 		// non-number wordings per letter are not modeled yet, so those fall
@@ -2131,6 +2140,8 @@ func Apply(r *interp.Runner) {
 	// because it is not the `zsh/datetime` registration under another name —
 	// see epoch.go for the row-by-row measurement (#1158).
 	registerEpochClock(r)
+	// The alias table written as an association, readable and writable.
+	registerBashAliases(r)
 	if dot, ok := r.Builtin("."); ok {
 		r.Register("source", dot)
 	}

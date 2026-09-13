@@ -12300,6 +12300,36 @@ printf 'TWO=still-running\n'`,
 		Snippet: `[ -t 9223372036854775808 ]; echo "big=$?"; [ -t 99999999999999999999 ]; echo "wide=$?"`,
 		Why:     "an operand too wide for the shell's own integer, which is where the narrowing above becomes visible in a run with no terminal in it. bash and dash convert first and refuse what will not fit, at 2 with their integer wordings; ksh93 saturates and narrows to -1, which is true; bash 3.2 and zsh answer a quiet false. Ours owes zsh a warning here — that shell truncates *any* number past nineteen digits and says so, in arithmetic and `printf` as much as in `test`, which is a reader of its own and not this operand's question. Kept as a row because it is the only place a run without a terminal can tell a narrowed descriptor from a refused one (#2000)",
 	},
+	{
+		ID: "test/unary-dash-a-is-a-file-test", Category: "test",
+		Snippet: `: > f; test -a f; echo "have=$?"; test -a nosuch; echo "miss=$?"; test -f f -a -f f; echo "conn=$?"`,
+		Why:     "the TestHasTheFileExistsLetter axis: with two arguments `-a` is `-e`'s question in bash and ksh93 and an operator dash, zsh and ash refuse — and with three it is the connective in all six, which is the third field. The argument count is the whole of what decides, so the two readings are one letter and not a conflict",
+	},
+	{
+		ID: "test/unary-dash-a-refused-names-the-word-or-the-count", Category: "test",
+		Snippet: `test -a f; echo "st=$?"; test -Q f; echo "q=$?"`,
+		Why:     "which complaint the shells without the file test give, and the pair is the discriminator: zsh answers `too many arguments` for `-a` and `unknown condition: -Q` for a letter nothing has, so `-a` is a word it knows — as the connective — and `-Q` is not. dash and ash make no such distinction. See Diagnostics.TestConnectiveIsALeftoverWord",
+	},
+	{
+		ID: "test/dash-o-asks-whether-an-option-is-set", Category: "test",
+		Snippet: `test -o errexit; echo "off=$?"; set -e; test -o errexit; echo "on=$?"; set +e; test -o nosuchopt; echo "nosuch=$?"`,
+		Why:     "the TestHasTheShellOptionOperator axis: bash and ksh93 read a `set -o` name as an expression, and an option name the shell has never heard of is false rather than an error in both — which is what says the operator answers a question rather than validating one. The other four refuse the letter",
+	},
+	{
+		ID: "test/string-order-operators", Category: "test",
+		Snippet: `test a "<" b; echo "lt=$?"; test b "<" a; echo "gt=$?"; test b ">" a; echo "ge=$?"; test A "<" a; echo "case=$?"`,
+		Why:     "the TestStringOrder axis, and the reason it is an enum over the pair rather than one flag: ksh93 has `>` and refuses `<` with `test: <: unknown operator`, so a single ordering question would be wrong about one of its two operators. bash, dash and ash have both, zsh has neither. Where it exists the comparison is byte order, which the fourth field pins",
+	},
+	{
+		ID: "test/a-missing-order-operator-is-named", Category: "test",
+		Snippet: `test -n x -a a "<" b; echo "st=$?"`,
+		Why:     "the same operator past the three-word rules, where a shell that lacks it has to name the one token that was wrong rather than count the words. ksh93 says `<: unknown operator` and zsh `condition expected: <`; neither reports an argument count, which is what a bare-string reading of the left operand would have produced",
+	},
+	{
+		ID: "test/dash-N-is-present-or-absent", Category: "test",
+		Snippet: `: > f; test -N f >/dev/null 2>&1; case $? in (0|1) echo HAS;; (*) echo LACKS;; esac`,
+		Why:     "the operator's *presence*, deliberately, and not its answer. `-N` asks whether a file was written since it was read, so measuring it is itself a read, and the panel does not even agree on a file nothing has touched: bash 5.3 and ksh93 answer false where bash 3.2 and zsh answer true. Folding 0 and 1 together is what makes this a row that does not move on its own",
+	},
 
 	// --- times: the last special builtin, and the most divergent for its size
 	//
@@ -12568,6 +12598,26 @@ printf 'TWO=still-running\n'`,
 		ID: "mapfile/a-NUL-delimiter-is-stripped-without-t", Category: "builtins",
 		Snippet: `printf 'a\0' | { mapfile -d "" x; echo "len=${#x[0]}"; }; printf 'a:' | { mapfile -d : y; echo "len=${#y[0]}"; }`,
 		Why:     "a delimiter is normally kept on the element unless -t asks for it to go — and NUL is the exception, dropped either way, because the value could not carry it",
+	},
+	{
+		ID: "mapfile/a-callback-runs-as-the-array-fills", Category: "builtins",
+		Snippet: `printf '1\n2\n3\n4\n' | { mapfile -t -C "echo cb" -c 2 arr; echo "n=${#arr[@]}"; }`,
+		Why:     "-C names a command run every -c elements with the subscript and the element appended, so the row pins both the firing schedule and the arguments; the default quantum is 5000, which is why a -C with no -c calls nothing on a short list",
+	},
+	{
+		ID: "mapfile/a-callback-sees-a-partly-filled-array", Category: "builtins",
+		Snippet: `arr=(x y z); printf '1\n2\n' | { mapfile -t -C 'echo "at:${#arr[@]}"' -c 1 arr; echo "n=${#arr[@]}"; }`,
+		Why:     "the callback runs before the element is assigned and after the replacing form has already emptied what the array held, so the first call sees nothing at all rather than the three elements that were there",
+	},
+	{
+		ID: "mapfile/a-callback-element-is-one-word", Category: "builtins",
+		Snippet: `cb() { echo "n=$# at=$1 [$2]"; }; printf 'a b; echo NO\nx  y\n*\n' | { mapfile -t -C cb -c 1 arr; echo "n=${#arr[@]}"; }`,
+		Why:     "the callback is source text the two arguments are appended to, so the element has to arrive quoted: a line holding a semicolon or two spaces is data and must not become program",
+	},
+	{
+		ID: "mapfile/an-invalid-callback-quantum", Category: "builtins",
+		Snippet: `printf 'a\n' | { mapfile -t -c 0 arr; echo "st=$? n=${#arr[@]}"; }`,
+		Why:     "zero is refused for -c where it means no cap for -n, and the refusal stands without a -C to call — the whole read is lost with it",
 	},
 	{
 		ID: "mapfile/reads-a-descriptor", Category: "builtins",
@@ -16078,6 +16128,21 @@ echo "st=$? alive"`,
 		Why:     "the whole reason `command` exists: a function may wrap the thing it is named after without calling itself",
 	},
 	{
+		ID: "cmd/command-in-front-of-a-builtin", Category: "command lookup",
+		Snippet: `command set -f; echo "st=$?"; case $- in (*f*) echo SET;; (*) echo UNSET;; esac`,
+		Why:     "the CommandReachesABuiltin axis: four dialects run the builtin, and zsh asks for an external program alone and answers `command not found: set` at 127. `set` is the probe because no PATH anywhere has a program of that name, and `$-` afterwards says whether the builtin ran rather than merely what it reported. The divergence is not the status: `command` in front of a *special* builtin is the survivable spelling everywhere else, so a line written to work under either shell's name does nothing at all there",
+	},
+	{
+		ID: "cmd/posixbuiltins-lets-command-reach-a-builtin", Category: "command lookup",
+		Snippet: `setopt posixbuiltins 2>/dev/null; command set -f; echo "st=$?"; case $- in (*f*) echo SET;; (*) echo UNSET;; esac`,
+		Why:     "zsh's own name for the POSIX behavior, and the reason the axis is not a constant there: with the option on, `command` reaches the builtin and the row reads as the other four already do. The other six have no `setopt`, whose failure is silenced so the rest of the line still runs",
+	},
+	{
+		ID: "cmd/an-sh-emulation-lets-command-reach-a-builtin", Category: "command lookup",
+		Snippet: `emulate sh 2>/dev/null; command set -f; echo "st=$?"; case $- in (*f*) echo SET;; (*) echo UNSET;; esac`,
+		Why:     "the option is what an sh-family emulation turns on, which is the fifth axis `emulate` carries — so a zsh script that opened with `emulate sh` was already getting the POSIX answer, and the divergence only ever showed in a plain zsh",
+	},
+	{
 		ID: "cmd/command-with-an-option-nobody-has", Category: "command lookup",
 		Snippet: `command -q true; echo "st=$?"`,
 		Why:     "the CommandRejectsUnknownOption axis: bash, dash and ksh93 refuse an option command does not have, at 2; zsh stops reading options and looks up -q as the command, at 127. Probed with a letter no panel shell owns — -x is a real ksh93 option, and a probe written with -x read ksh93 as tolerant off ksh93's own feature",
@@ -16450,6 +16515,61 @@ echo after`,
 		ID: "compgen/an-action-this-shell-does-not-generate", Category: "builtins",
 		Snippet: `compgen -A alias zzzznosuch; echo "st=$?"`,
 		Why:     "bash generates it and answers 1 for no match; this shell refuses it as not implemented at 2, and the divergence is recorded here deliberately — an action generated from a guess would be a promise the shell cannot keep, and the honest refusal is the answer docs/spec/semantics.md scopes",
+	},
+	{
+		ID: "complete/an-option-and-its-argument", Category: "builtins",
+		Snippet: `complete -o nospace -F _f foo; complete -p foo; echo "st=$?"; complete -p nospace; echo "n=$?"`,
+		Why:     "`-o` takes the next word, which this shell did not read until #2412 — so `complete -o nospace -F _f foo` registered a spec for a command called `nospace` as well as for `foo`, and printed `foo`'s back with the option missing. The second half of the row is the part that catches it: `complete -p nospace` must be a miss",
+	},
+	{
+		ID: "complete/the-options-print-back-first-and-sorted", Category: "builtins",
+		Snippet: `complete -F _f -o nospace -o dirnames foo; complete -p foo`,
+		Why:     "bash renders the `-o` options ahead of the rest of the spec, sorted and deduplicated, whatever order they were written in — so a spec is printed back canonically rather than verbatim, and the two spellings of one spec list identically",
+	},
+	{
+		ID: "complete/an-option-name-that-is-not-one", Category: "builtins",
+		Snippet: `complete -o nosuchopt foo; echo "st=$?"; complete -p foo; echo "p=$?"`,
+		Why:     "the nine option names are validated before the table is touched: nothing is registered, which is what the second lookup shows",
+	},
+	{
+		ID: "compopt/moves-the-options-of-a-registered-spec", Category: "builtins",
+		Snippet: `complete -F _f foo; compopt -o nospace foo; echo "st=$?"; complete -p foo; compopt +o nospace foo; complete -p foo`,
+		Why:     "the whole of what `compopt` can be observed doing without a terminal: a change to a registered spec, in both directions, showing where `complete -p` prints it. The other four dialects have neither builtin",
+	},
+	{
+		ID: "compopt/lists-every-options-state", Category: "builtins",
+		Snippet: `complete -F _f foo; compopt foo`,
+		Why:     "with no -o or +o it writes all nine options in bash's own order with the sign saying whether the spec holds each — which is also where the nine names came from",
+	},
+	{
+		ID: "compopt/a-name-with-no-specification", Category: "builtins",
+		Snippet: `compopt -o default true; echo "st=$?"; compopt -D; echo "d=$?"`,
+		Why:     "the refusal a script reaches, and the second field is the one worth keeping: `-D` names the *default* compspec, which bash keeps in the same table under a name no command can have and says out loud — `_DefaultCmD_`",
+	},
+	{
+		ID: "compopt/with-no-name-at-all", Category: "builtins",
+		Snippet: `complete -F _f foo; compopt -o nospace; echo "st=$?"`,
+		Why:     "bash means `compopt` for use from *inside* a completion function, where a call with no name changes the completion in progress; outside one it is `not currently executing completion function` at 1, which is the only answer a shell with no line editor can give",
+	},
+	{
+		ID: "umask/prints-a-reusable-line", Category: "builtins",
+		Snippet: `umask 022; umask -p; echo "st=$?"; umask -p -S; umask -p 077; echo "set=$?"; umask`,
+		Why:     "bash alone has `-p`, which writes the mask as the command that would set it again — the half of `saved=$(umask -p); …; eval \"$saved\"` that makes the idiom work. Only the *report* takes the prefix: setting with -p is silent, measured. The other four refuse the letter, each in its own words",
+	},
+	{
+		ID: "opt/set-plus-p-is-privileged-under-a-letter", Category: "builtins",
+		Snippet: `set +p; echo "st=$?"`,
+		Why:     "`-p` is the short spelling of `privileged` in bash, ksh93 and zsh and an illegal option in dash and ash. Asking to turn *off* a mode the shell is not in is granted in all three that have it, which is the direction a script writes — and the direction this shell can honestly answer, having no privileged mode to turn on",
+	},
+	{
+		ID: "var/bash-aliases-is-the-alias-table", Category: "parameters",
+		Snippet: `alias q=echo; echo "[${BASH_ALIASES[q]}] n=${#BASH_ALIASES[@]} k=${!BASH_ALIASES[@]}"`,
+		Why:     "bash presents the alias table as an association, and it is a view rather than a copy — the read follows the table as it is now. zsh and ksh93 have the subscript syntax and no such name, so both answer empty; dash has neither",
+	},
+	{
+		ID: "var/bash-aliases-lists-and-is-written", Category: "parameters",
+		Snippet: `alias q=echo; declare -p BASH_ALIASES; BASH_ALIASES[w]=date; alias w`,
+		Why:     "the two halves a produced association needs: it lists back as one, and an assignment to an element *defines an alias*, which is what makes the writer required rather than optional — without one the write would land in a stored table and the view would silently become a snapshot",
 	},
 	{
 		ID: "glob/matches-are-in-order", Category: "expansion",

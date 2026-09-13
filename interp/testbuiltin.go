@@ -408,6 +408,25 @@ func (p *testParser) primary() (bool, error) {
 // Which complaint it is belongs to the dialect, because the panel gives three
 // answers — see Diagnostics.TestUnknownLongOperator.
 func (p *testParser) unknownOperator() error {
+	// An ordering operator this dialect does not have, standing where a
+	// *binary* one belongs. It is the same fault the paragraph above
+	// describes arriving by the other door: `<` is not spelled like a unary
+	// operator, so without this the left operand becomes a bare string and
+	// the count is reported instead of the one token that was wrong.
+	// Measured — `test a '<' b -a b '>' a` is `test: <: unknown operator` in
+	// ksh93 and `condition expected: <` in zsh, and neither says how many
+	// arguments there were.
+	if next := p.pos + 1; next < len(p.args) {
+		if op := p.args[next]; (op == "<" || op == ">") && !p.r.stringOrderOperator(op) {
+			// Which of the two words is blamed is the three-word complaint's
+			// question, already answered.
+			blamed := op
+			if p.r.diag().TestNamesFirstOperand {
+				blamed = p.args[p.pos]
+			}
+			return &testError{kind: errBinaryExpected, operand: blamed}
+		}
+	}
 	word := p.args[p.pos]
 	if len(word) < 2 || word[0] != '-' || p.r.isTestUnary(word) {
 		return nil
@@ -417,6 +436,12 @@ func (p *testParser) unknownOperator() error {
 		return nil
 	case p.args[next] == "-a", p.args[next] == "-o", p.args[next] == ")":
 		return nil
+	}
+	if (word == "-a" || word == "-o") && p.r.diag().TestConnectiveIsALeftoverWord {
+		// The same reading unaryTest gives the two-word form: a connective
+		// this dialect has, standing where a primary begins and without the
+		// file test behind it, is a string with a word left over.
+		return &testError{kind: errTooManyArguments}
 	}
 	switch p.r.diag().TestUnknownLongOperator {
 	case TestUnknownOperatorNamed:
@@ -443,8 +468,21 @@ func (p *testParser) unknownOperator() error {
 // grammar: dash has neither the operator nor `[[ ]]`, and bash 3.2 answers
 // `[: -v: unary operator expected` too.
 func (r *Runner) isTestUnary(s string) bool {
-	if s == "-v" {
+	switch s {
+	case "-v":
 		return r.dialect().ParameterIsSetTest
+	case "-a":
+		// The connective under the same spelling, and the argument count is
+		// what tells them apart — so this is asked only where a *primary*
+		// begins, which is where the count has already said the word is an
+		// operator. `[ x -a y ]` never reaches here: three words go straight
+		// to the connective, and in the grammar past four the connective is
+		// read between primaries rather than at the front of one.
+		return r.sem().TestHasTheFileExistsLetter == Yes
+	case "-o":
+		return r.sem().TestHasTheShellOptionOperator == Yes
+	case "-N":
+		return r.sem().TestHasTheModifiedSinceReadOperator == Yes
 	}
 	return isTestUnary(s)
 }
@@ -493,6 +531,33 @@ func (r *Runner) unaryTest(op, operand string) (bool, error) {
 			break
 		}
 		return r.parameterIsSet(operand)
+	case "-a":
+		// The file test, not the connective: two words have already settled
+		// which this is. Asked of the dialect at both gates for the reason
+		// `-v` is — the two-word route never consults the operator table.
+		if !r.ask(r.sem().TestHasTheFileExistsLetter, "`test -a f` asking whether f exists") {
+			break
+		}
+		return r.fileTest("-e", operand), nil
+	case "-o":
+		// A shell option by the name `set -o` gives it. A name this shell
+		// has never heard of is false rather than an error, measured in both
+		// shells that have the operator — so `known` is deliberately
+		// discarded.
+		if !r.ask(r.sem().TestHasTheShellOptionOperator, "`test -o errexit` asking whether an option is set") {
+			break
+		}
+		on, _ := r.NamedOption(operand)
+		return on, nil
+	case "-N":
+		// Written since last read: the modification time against the access
+		// time. The operator's presence is the axis and its answer is this
+		// comparison — see Semantics.TestHasTheModifiedSinceReadOperator for
+		// why the boolean is not what gets pinned.
+		if !r.ask(r.sem().TestHasTheModifiedSinceReadOperator, "`test -N f` asking whether f was written since it was read") {
+			break
+		}
+		return r.modifiedSinceRead(operand), nil
 	case "-t":
 		// Whether this shell's descriptor is a terminal, asked of the shell's
 		// own table — see descriptorIsTerminal. An operand that is not a
@@ -505,6 +570,13 @@ func (r *Runner) unaryTest(op, operand string) (bool, error) {
 		return on, nil
 	}
 	if !isTestUnary(op) {
+		if (op == "-a" || op == "-o") && r.diag().TestConnectiveIsALeftoverWord {
+			// A connective this dialect has, standing where a unary operator
+			// belongs and without the file test behind it: read as a string
+			// with a word left over rather than as an operator nobody has.
+			// See Diagnostics.TestConnectiveIsALeftoverWord.
+			return false, &testError{kind: errTooManyArguments}
+		}
 		return false, &testError{kind: errUnaryExpected, operand: op}
 	}
 	return r.fileTest(op, operand), nil
@@ -598,6 +670,27 @@ func (r *Runner) fileTest(op, operand string) bool {
 	return false
 }
 
+// modifiedSinceRead is `test -N f`: the file has been written since it was
+// last read.
+//
+// The modification time against the access time, to the nanosecond — a file
+// written and read inside one second is the ordinary case, and the one column
+// that compares whole seconds is the one column that gets it wrong. A file
+// that is not there, an empty operand and a stat this platform cannot
+// decompose are all false, which is measured for the first two and is the
+// bargain `-O` and `-G` already strike for the third.
+func (r *Runner) modifiedSinceRead(operand string) bool {
+	if operand == "" {
+		return false
+	}
+	info, err := r.stat(r.atDir(operand))
+	if err != nil {
+		return false
+	}
+	read, ok := fileAccessTime(info)
+	return ok && info.ModTime().After(read)
+}
+
 // compareStat stats one side of a binary file comparison.
 //
 // An empty operand is a file that is not there, for the reason fileTest
@@ -657,6 +750,23 @@ func (r *Runner) compareFiles(op, left, right string) (bool, error) {
 	return lerr == nil && rerr == nil && os.SameFile(li, ri), nil
 }
 
+// stringOrderOperator reports whether this dialect orders strings with this
+// operator, resolving the axis once for everything that has to know.
+//
+// One function rather than the enum read at each site, because the sites
+// disagree about what to *do* and must not come to disagree about what the
+// answer is: the primary reader below names an operator the dialect lacks,
+// and binaryTest hands the words back unread.
+func (r *Runner) stringOrderOperator(op string) bool {
+	switch r.testStringOrder() {
+	case TestStringOrderBoth:
+		return true
+	case TestStringOrderGreaterOnly:
+		return op == ">"
+	}
+	return false
+}
+
 // binaryTest is `a OP b`. The third return says whether the middle word was an
 // operator at all, which is what lets the caller fall back to another reading
 // rather than guessing.
@@ -680,6 +790,24 @@ func (r *Runner) binaryTest(left, op, right string) (bool, error, bool) {
 		return left == right, nil, true
 	case "!=":
 		return left != right, nil, true
+	case "<", ">":
+		// Byte order, and a *string* comparison — `test 10 '<' 9` is true.
+		// Which of the two the shell has is one enum rather than two flags,
+		// because ksh93 has `>` and refuses `<`: see TestStringOrderPolicy.
+		//
+		// Not handled where the shell lacks the operator, so the words fall
+		// to whatever reading the caller has left — which is how a dialect
+		// keeps the refusal it already gives for a word that is not an
+		// operator, worded its own way. An unanswered axis has already
+		// complained, and counts as handled so that one fault gets one
+		// sentence.
+		if !r.stringOrderOperator(op) {
+			return false, nil, r.unspecified
+		}
+		if op == "<" {
+			return left < right, nil, true
+		}
+		return left > right, nil, true
 	case "-nt", "-ot", "-ef":
 		// In `test` as in `[[ ]]`, and in every shell in the panel — dash
 		// included, whose lack of `[[ ]]` does not extend to these.

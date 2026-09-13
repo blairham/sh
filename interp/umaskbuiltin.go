@@ -28,34 +28,49 @@ func init() {
 }
 
 func biUmask(r *Runner, _ context.Context, args []string) int {
-	symbolic := false
+	// The letters this shell's `umask` has. `-S` is unanimous; `-p` is one
+	// dialect's, so the set the reader accepts and the set a bad option is
+	// named against are both built from the answer — a letter refused here
+	// has to be refused as an option and not silently taken.
+	letters := "S"
+	reusable := r.sem().UmaskHasTheReusableLetter == Yes
+	if reusable {
+		letters = "Sp"
+	}
+	symbolic, prefixed := false, false
 	for len(args) > 0 && strings.HasPrefix(args[0], "-") && args[0] != "-" {
-		switch args[0] {
-		case "--":
+		if args[0] == "--" {
 			args = args[1:]
-		case "-S":
-			symbolic, args = true, args[1:]
-			continue
-		default:
-			d := r.diag()
-			// Named the way every other builtin's bad option is named, which
-			// is the dialect's rule and not this builtin's: `umask --version`
-			// is `--` in bash and `-v` in zsh, exactly as `export --version`
-			// is. Spelling the whole word here made this the one builtin
-			// that answered `umask: --version: invalid option`.
-			_, name := r.badOption(args[0], "S")
-			r.diagf("%s\n", Wording(d.UmaskBadOption,
-				"umask: %[1]s: invalid option", name))
-			if d.UmaskUsage != "" {
-				if d.UmaskUsageUnprefixed {
-					r.errf("%s\n", d.UmaskUsage)
-				} else {
-					r.diagf("%s\n", d.UmaskUsage)
-				}
-			}
-			return orDefault(d.UmaskBadOptionStatus, 2)
+			break
 		}
-		break
+		// A bundle, because bash reads one: `umask -pS` and `umask -Sp` both
+		// print the prefixed symbolic form. Every letter of the word has to
+		// be one this shell has, or the word is refused whole — the same
+		// bundle rule the shared option reader follows.
+		bundle := args[0][1:]
+		if strings.Trim(bundle, letters) == "" && bundle != "" {
+			symbolic = symbolic || strings.ContainsRune(bundle, 'S')
+			prefixed = prefixed || (reusable && strings.ContainsRune(bundle, 'p'))
+			args = args[1:]
+			continue
+		}
+		d := r.diag()
+		// Named the way every other builtin's bad option is named, which is
+		// the dialect's rule and not this builtin's: `umask --version` is
+		// `--` in bash and `-v` in zsh, exactly as `export --version` is.
+		// Spelling the whole word here made this the one builtin that
+		// answered `umask: --version: invalid option`.
+		_, name := r.badOption(args[0], letters)
+		r.diagf("%s\n", Wording(d.UmaskBadOption,
+			"umask: %[1]s: invalid option", name))
+		if d.UmaskUsage != "" {
+			if d.UmaskUsageUnprefixed {
+				r.errf("%s\n", d.UmaskUsage)
+			} else {
+				r.diagf("%s\n", d.UmaskUsage)
+			}
+		}
+		return orDefault(d.UmaskBadOptionStatus, 2)
 	}
 	if r.SetUmask == nil {
 		// Refused rather than answered from somewhere else. The whole point
@@ -65,7 +80,7 @@ func biUmask(r *Runner, _ context.Context, args []string) int {
 		return 2
 	}
 	if len(args) == 0 {
-		return r.reportUmask(symbolic)
+		return r.reportUmask(symbolic, prefixed)
 	}
 	mask, code := r.readMask(args[0])
 	if code != 0 {
@@ -85,14 +100,19 @@ func biUmask(r *Runner, _ context.Context, args []string) int {
 
 // reportUmask prints the mask without changing it — which takes a set and a
 // set-back, the system call offering no way to ask.
-func (r *Runner) reportUmask(symbolic bool) int {
+//
+// `prefixed` is `-p`: the same figure written as the command that would set
+// it again, which is what makes `eval "$(umask -p)"` a way to put a saved
+// mask back. Only the report takes it — `umask -p 077` is silent, and
+// `umask -p -S 077` prints the bare symbolic form the `-S` echo prints.
+func (r *Runner) reportUmask(symbolic, prefixed bool) int {
 	old, err := r.currentUmask()
 	if err != nil {
 		r.diagf("umask: %v\n", err)
 		return 1
 	}
 	if symbolic {
-		r.printf("%s\n", symbolicUmask(old))
+		r.printf("%s%s\n", umaskPrefix(prefixed, "umask -S "), symbolicUmask(old))
 		return 0
 	}
 	// Four digits in three of the four. zsh writes a C octal literal with a
@@ -101,11 +121,19 @@ func (r *Runner) reportUmask(symbolic bool) int {
 	// leading zero comes back the moment the owner group denies anything,
 	// and printing a flat three gave `333` there.
 	if r.ask(r.sem().UmaskPrintsFourDigits, "`umask` printing a leading zero") {
-		r.printf("%04o\n", old)
+		r.printf("%s%04o\n", umaskPrefix(prefixed, "umask "), old)
 	} else {
-		r.printf("%#03o\n", old)
+		r.printf("%s%#03o\n", umaskPrefix(prefixed, "umask "), old)
 	}
 	return 0
+}
+
+// umaskPrefix is the word `-p` puts in front of the figure, or nothing.
+func umaskPrefix(prefixed bool, prefix string) string {
+	if prefixed {
+		return prefix
+	}
+	return ""
 }
 
 // readMask reads either spelling of a mask, and reports the dialect's

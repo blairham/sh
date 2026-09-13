@@ -891,6 +891,16 @@ func Semantics() interp.Semantics {
 	s.ExecFailureRunsExitTrap = interp.No
 	s.ExecTakesOptions = interp.Yes
 	s.TestAcceptsDoubleEqual = interp.Yes
+	// The same three unary operators bash has past the three-word rules.
+	// `set -p` is the short spelling of `set -o privileged`, which this
+	// shell lists; `umask -p` it has not got.
+	s.SetHasThePrivilegedLetter = interp.Yes
+	s.TestHasTheFileExistsLetter = interp.Yes
+	s.TestHasTheShellOptionOperator = interp.Yes
+	s.TestHasTheModifiedSinceReadOperator = interp.Yes
+	// And `>` alone: `test b '<' a` here is `test: <: unknown operator` at 2
+	// while `test b '>' a` is 0, which is the split the enum exists for.
+	s.TestStringOrder = interp.TestStringOrderGreaterOnly
 	s.SignalDeathStatusIsTwoFiftySix = interp.Yes
 	s.PipefailOption = interp.Yes
 	// And the one place ksh93's 256-plus-the-signal convention stops: an
@@ -1821,7 +1831,7 @@ func Diagnostics() interp.Diagnostics {
 			// `-t` is not here: this shell really does stop after one
 			// command, and the letter is the only spelling it has for the
 			// option — see Semantics.SetHasTheTLetter.
-			"set": "bkprsGH",
+			"set": "bkrsGH",
 			// ksh93 answers --version on most builtins, and has its own
 			// letters for these two.
 			"wait": "-",
@@ -2294,6 +2304,7 @@ func Apply(r *interp.Runner) {
 	})
 	// No `compgen` here; it is bash's alone.
 	r.Unregister("compgen")
+	r.Unregister("compopt")
 	r.Unregister("complete")
 	// And neither `mapfile` nor its other name; both are bash's alone.
 	r.Unregister("mapfile")

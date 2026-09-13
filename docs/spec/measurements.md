@@ -3291,6 +3291,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `readarray/is-mapfile-under-another-name` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `0 2 3 3` | `0 2 3 3` | `0   1` **2>** `<shell>: readarray: command not found` | `0   1` **2>** `<shell>: readarray: not found` | ` 0  1` **2>** `<shell>:1: command not found: readarray` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
 | `mapfile/an-empty-delimiter-means-NUL` | **2>** `<shell>: 1: mapfile: not found~<shell>: 1: Bad substitution` *(status 2)* | `[a][b] n=2` | `[a][b] n=2` | `[] n=0` **2>** `<shell>: mapfile: command not found` | `[] n=0` **2>** `<shell>: mapfile: not found` | `[] n=0` **2>** `<shell>:1: command not found: mapfile` | **2>** `<shell>: mapfile: not found~<shell>: syntax error: bad substitution` *(status 2)* |
 | `mapfile/a-NUL-delimiter-is-stripped-without-t` | **2>** `<shell>: 1: mapfile: not found~<shell>: 1: Bad substitution~<shell>: 1: mapfile: not found~<shell>: 1: Bad substitution` *(status 2)* | `len=1~len=2` | `len=1~len=2` | `len=0~len=0` **2>** `<shell>: mapfile: command not found~<shell>: mapfile: command not found` | `len=0~len=0` **2>** `<shell>: mapfile: not found~<shell>: mapfile: not found` | `len=0~len=0` **2>** `<shell>:1: command not found: mapfile~<shell>:1: command not found: mapfile` | **2>** `<shell>: mapfile: not found~<shell>: syntax error: bad substitution~<shell>: mapfile: not found~<shell>: syntax error: bad substitution` *(status 2)* |
+| `mapfile/a-callback-runs-as-the-array-fills` | **2>** `<shell>: 1: mapfile: not found~<shell>: 1: Bad substitution` *(status 2)* | `cb 1 2~cb 3 4~n=4` | `cb 1 2~cb 3 4~n=4` | `n=0` **2>** `<shell>: mapfile: command not found` | `n=0` **2>** `<shell>: mapfile: not found` | `n=0` **2>** `<shell>:1: command not found: mapfile` | **2>** `<shell>: mapfile: not found~<shell>: syntax error: bad substitution` *(status 2)* |
+| `mapfile/a-callback-sees-a-partly-filled-array` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `at:0 0 1~at:1 1 2~n=2` | `at:0 0 1~at:1 1 2~n=2` | `n=3` **2>** `<shell>: mapfile: command not found` | `n=3` **2>** `<shell>: mapfile: not found` | `n=3` **2>** `<shell>:1: command not found: mapfile` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
+| `mapfile/a-callback-element-is-one-word` | **2>** `<shell>: 1: mapfile: not found~<shell>: 1: Bad substitution` *(status 2)* | `n=2 at=0 [a b; echo NO]~n=2 at=1 [x  y]~n=2 at=2 [*]~n=3` | `n=2 at=0 [a b; echo NO]~n=2 at=1 [x  y]~n=2 at=2 [*]~n=3` | `n=0` **2>** `<shell>: mapfile: command not found` | `n=0` **2>** `<shell>: mapfile: not found` | `n=0` **2>** `<shell>:1: command not found: mapfile` | **2>** `<shell>: mapfile: not found~<shell>: syntax error: bad substitution` *(status 2)* |
+| `mapfile/an-invalid-callback-quantum` | **2>** `<shell>: 1: mapfile: not found~<shell>: 1: Bad substitution` *(status 2)* | `st=1 n=0` **2>** `<shell>: line 1: mapfile: 0: invalid callback quantum` | `st=1 n=0` **2>** `<shell>: line 1: mapfile: 0: invalid callback quantum` | `st=127 n=0` **2>** `<shell>: mapfile: command not found` | `st=127 n=0` **2>** `<shell>: mapfile: not found` | `st=127 n=0` **2>** `<shell>:1: command not found: mapfile` | **2>** `<shell>: mapfile: not found~<shell>: syntax error: bad substitution` *(status 2)* |
 | `mapfile/reads-a-descriptor` | **2>** `<shell>: 1: mapfile: not found~<shell>: 1: Bad substitution` *(status 2)* | `[x][y] n=2` | `[x][y] n=2` | `[] n=0` **2>** `<shell>: mapfile: command not found` | `[] n=0` **2>** `<shell>: mapfile: not found` | `[] n=0` **2>** `<shell>:1: command not found: mapfile` | **2>** `<shell>: mapfile: not found~<shell>: syntax error: bad substitution` *(status 2)* |
 | `declare/a-readonly-element-declaration-by-the-letter` | `st=127~<shell>: 1: typeset: not found~after` **2>** `<shell>: 1: typeset: not found` | `st=0~declare -ar a=()~after` **2>** `<shell>: line 1: a: readonly variable` | `st=0~declare -ar a=()~after` **2>** `<shell>: line 1: a: readonly variable` | `st=0~declare -ar a='()'~after` **2>** `<shell>: a: readonly variable` | `st=0~typeset -r -a a=([1]=v)~after` | **2>** `<shell>:typeset:1: a[1]: can't create readonly array elements` *(status 1)* | `st=127~<shell>: typeset: not found~after` **2>** `<shell>: typeset: not found` |
 | `declare/a-readonly-element-declaration-over-an-array` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=0~declare -ar a=([0]="x" [1]="y" [2]="z")` **2>** `<shell>: line 1: a: readonly variable` | `st=0~declare -ar a=([0]="x" [1]="y" [2]="z")` **2>** `<shell>: line 1: a: readonly variable` | `st=0~declare -ar a='([0]="x" [1]="y" [2]="z")'` **2>** `<shell>: a: readonly variable` | `st=0~typeset -r -a a=(x v z)` | **2>** `<shell>:typeset:1: a[1]: can't create readonly array elements` *(status 1)* | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
@@ -3372,6 +3376,15 @@ grades it and nothing drift-checks it either, for the same reason.
 | `compgen/a-prefix-only-the-shells-own-names-have` | `st=127` **2>** `<shell>: 1: compgen: not found` | `st=1` | `st=1` | `st=1` | `st=127` **2>** `<shell>: compgen: not found` | `st=127` **2>** `<shell>:1: command not found: compgen` | `st=127` **2>** `<shell>: compgen: not found` |
 | `compgen/a-prefix-the-person-defined-over-the-shells-name` | `st=127` **2>** `<shell>: 1: compgen: not found` | `pushd~st=0` | `pushd~st=0` | `pushd~st=0` | `st=127` **2>** `<shell>: compgen: not found` | `st=127` **2>** `<shell>:1: command not found: compgen` | `st=127` **2>** `<shell>: compgen: not found` |
 | `compgen/an-action-this-shell-does-not-generate` | `st=127` **2>** `<shell>: 1: compgen: not found` | `st=1` | `st=1` | `st=1` | `st=127` **2>** `<shell>: compgen: not found` | `st=127` **2>** `<shell>:1: command not found: compgen` | `st=127` **2>** `<shell>: compgen: not found` |
+| `complete/an-option-and-its-argument` | `st=127~n=127` **2>** `<shell>: 1: complete: not found~<shell>: 1: complete: not found~<shell>: 1: complete: not found` | `complete -o nospace -F _f foo~st=0~n=1` **2>** `<shell>: line 1: complete: nospace: no completion specification` | `complete -o nospace -F _f foo~st=0~n=1` **2>** `<shell>: line 1: complete: nospace: no completion specification` | `complete -o nospace -F _f foo~st=0~n=1` **2>** `<shell>: line 0: complete: nospace: no completion specification` | `st=127~n=127` **2>** `<shell>: complete: not found~<shell>: complete: not found~<shell>: complete: not found` | `st=127~n=127` **2>** `<shell>:1: command not found: complete~<shell>:1: command not found: complete~<shell>:1: command not found: complete` | `st=127~n=127` **2>** `<shell>: complete: not found~<shell>: complete: not found~<shell>: complete: not found` |
+| `complete/the-options-print-back-first-and-sorted` | **2>** `<shell>: 1: complete: not found~<shell>: 1: complete: not found` *(status 127)* | `complete -o dirnames -o nospace -F _f foo` | `complete -o dirnames -o nospace -F _f foo` | `complete -o dirnames -o nospace -F _f foo` | **2>** `<shell>: complete: not found~<shell>: complete: not found` *(status 127)* | **2>** `<shell>:1: command not found: complete~<shell>:1: command not found: complete` *(status 127)* | **2>** `<shell>: complete: not found~<shell>: complete: not found` *(status 127)* |
+| `complete/an-option-name-that-is-not-one` | `st=127~p=127` **2>** `<shell>: 1: complete: not found~<shell>: 1: complete: not found` | `st=2~p=1` **2>** `<shell>: line 1: complete: nosuchopt: invalid option name~<shell>: line 1: complete: foo: no completion specification` | `st=2~p=1` **2>** `<shell>: line 1: complete: nosuchopt: invalid option name~<shell>: line 1: complete: foo: no completion specification` | `st=2~p=1` **2>** `<shell>: line 0: complete: nosuchopt: invalid option name~<shell>: line 0: complete: foo: no completion specification` | `st=127~p=127` **2>** `<shell>: complete: not found~<shell>: complete: not found` | `st=127~p=127` **2>** `<shell>:1: command not found: complete~<shell>:1: command not found: complete` | `st=127~p=127` **2>** `<shell>: complete: not found~<shell>: complete: not found` |
+| `compopt/moves-the-options-of-a-registered-spec` | `st=127` **2>** `<shell>: 1: complete: not found~<shell>: 1: compopt: not found~<shell>: 1: complete: not found~<shell>: 1: compopt: not found~<shell>: 1: complete: not found` *(status 127)* | `st=0~complete -o nospace -F _f foo~complete -F _f foo` | `st=0~complete -o nospace -F _f foo~complete -F _f foo` | `st=127~complete -F _f foo~complete -F _f foo` **2>** `<shell>: compopt: command not found~<shell>: compopt: command not found` | `st=127` **2>** `<shell>: complete: not found~<shell>: compopt: not found~<shell>: complete: not found~<shell>: compopt: not found~<shell>: complete: not found` *(status 127)* | `st=127` **2>** `<shell>:1: command not found: complete~<shell>:1: command not found: compopt~<shell>:1: command not found: complete~<shell>:1: command not found: compopt~<shell>:1: command not found: complete` *(status 127)* | `st=127` **2>** `<shell>: complete: not found~<shell>: compopt: not found~<shell>: complete: not found~<shell>: compopt: not found~<shell>: complete: not found` *(status 127)* |
+| `compopt/lists-every-options-state` | **2>** `<shell>: 1: complete: not found~<shell>: 1: compopt: not found` *(status 127)* | `compopt +o bashdefault +o default +o dirnames +o filenames +o fullquote +o noquote +o nosort +o nospace +o plusdirs foo` | `compopt +o bashdefault +o default +o dirnames +o filenames +o fullquote +o noquote +o nosort +o nospace +o plusdirs foo` | **2>** `<shell>: compopt: command not found` *(status 127)* | **2>** `<shell>: complete: not found~<shell>: compopt: not found` *(status 127)* | **2>** `<shell>:1: command not found: complete~<shell>:1: command not found: compopt` *(status 127)* | **2>** `<shell>: complete: not found~<shell>: compopt: not found` *(status 127)* |
+| `compopt/a-name-with-no-specification` | `st=127~d=127` **2>** `<shell>: 1: compopt: not found~<shell>: 1: compopt: not found` | `st=1~d=1` **2>** `<shell>: line 1: compopt: true: no completion specification~<shell>: line 1: compopt: _DefaultCmD_: no completion specification` | `st=1~d=1` **2>** `<shell>: line 1: compopt: true: no completion specification~<shell>: line 1: compopt: _DefaultCmD_: no completion specification` | `st=127~d=127` **2>** `<shell>: compopt: command not found~<shell>: compopt: command not found` | `st=127~d=127` **2>** `<shell>: compopt: not found~<shell>: compopt: not found` | `st=127~d=127` **2>** `<shell>:1: command not found: compopt~<shell>:1: command not found: compopt` | `st=127~d=127` **2>** `<shell>: compopt: not found~<shell>: compopt: not found` |
+| `compopt/with-no-name-at-all` | `st=127` **2>** `<shell>: 1: complete: not found~<shell>: 1: compopt: not found` | `st=1` **2>** `<shell>: line 1: compopt: not currently executing completion function` | `st=1` **2>** `<shell>: line 1: compopt: not currently executing completion function` | `st=127` **2>** `<shell>: compopt: command not found` | `st=127` **2>** `<shell>: complete: not found~<shell>: compopt: not found` | `st=127` **2>** `<shell>:1: command not found: complete~<shell>:1: command not found: compopt` | `st=127` **2>** `<shell>: complete: not found~<shell>: compopt: not found` |
+| `umask/prints-a-reusable-line` | `st=2~set=2~0022` **2>** `<shell>: 1: umask: Illegal option -p~<shell>: 1: umask: Illegal option -p~<shell>: 1: umask: Illegal option -p` | `umask 0022~st=0~umask -S u=rwx,g=rx,o=rx~set=0~0077` | `umask 0022~st=0~umask -S u=rwx,g=rx,o=rx~set=0~0077` | `umask 0022~st=0~umask -S u=rwx,g=rx,o=rx~set=0~0077` | `st=2~set=2~0022` **2>** `<shell>: umask: -p: unknown option~Usage: umask [-S] [mask]~<shell>: umask: -p: unknown option~Usage: umask [-S] [mask]~<shell>: umask: -p: unknown option~Usage: umask [-S] [mask]` | `st=1~set=1~022` **2>** `<shell>:umask:1: bad option: -p~<shell>:umask:1: bad option: -p~<shell>:umask:1: bad option: -p` | `st=2~set=2~0022` **2>** `<shell>: umask: line 0: illegal option -p~<shell>: umask: line 0: illegal option -p~<shell>: umask: line 0: illegal option -p` |
+| `opt/set-plus-p-is-privileged-under-a-letter` | **2>** `<shell>: 1: set: Illegal option -p` *(status 2)* | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | **2>** `<shell>: set: line 0: illegal option +p` *(status 2)* |
 | `shift/an-operand-that-was-never-given` | **2>** `<shell>: 1: shift: can't shift that many` *(status 2)* | `st=1` | `st=1` **2>** `<shell>: line 1: shift: shift count out of range` | `st=1` | **2>** `<shell>: shift: (null): bad number` *(status 1)* | `st=1` **2>** `<shell>:shift:1: shift count must be <= $#` | `st=1` |
 | `setopt/normalizes-zsh-spellings` | `st=127~x*` **2>** `<shell>: 1: setopt: not found` | `st=127~x*` **2>** `<shell>: line 1: setopt: command not found` | `st=127~x*` **2>** `<shell>: line 1: setopt: command not found` | `st=127~x*` **2>** `<shell>: setopt: command not found` | `st=127~x*` **2>** `<shell>: setopt: not found` | `st=0~x*` | `st=127~x*` **2>** `<shell>: setopt: not found` |
 | `setopt/acts-past-a-bad-name` | `st=127~x*` **2>** `<shell>: 1: setopt: not found` | `st=127~x*` **2>** `<shell>: line 1: setopt: command not found` | `st=127~x*` **2>** `<shell>: line 1: setopt: command not found` | `st=127~x*` **2>** `<shell>: setopt: command not found` | `st=127~x*` **2>** `<shell>: setopt: not found` | `st=1~x*` **2>** `<shell>:setopt:1: no such option: zzqq` | `st=127~x*` **2>** `<shell>: setopt: not found` |
@@ -4555,6 +4568,22 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   printf 'a\0' | { mapfile -d "" x; echo "len=${#x[0]}"; }; printf 'a:' | { mapfile -d : y; echo "len=${#y[0]}"; }
   ```
+- `mapfile/a-callback-runs-as-the-array-fills` — -C names a command run every -c elements with the subscript and the element appended, so the row pins both the firing schedule and the arguments; the default quantum is 5000, which is why a -C with no -c calls nothing on a short list
+  ```sh
+  printf '1\n2\n3\n4\n' | { mapfile -t -C "echo cb" -c 2 arr; echo "n=${#arr[@]}"; }
+  ```
+- `mapfile/a-callback-sees-a-partly-filled-array` — the callback runs before the element is assigned and after the replacing form has already emptied what the array held, so the first call sees nothing at all rather than the three elements that were there
+  ```sh
+  arr=(x y z); printf '1\n2\n' | { mapfile -t -C 'echo "at:${#arr[@]}"' -c 1 arr; echo "n=${#arr[@]}"; }
+  ```
+- `mapfile/a-callback-element-is-one-word` — the callback is source text the two arguments are appended to, so the element has to arrive quoted: a line holding a semicolon or two spaces is data and must not become program
+  ```sh
+  cb() { echo "n=$# at=$1 [$2]"; }; printf 'a b; echo NO\nx  y\n*\n' | { mapfile -t -C cb -c 1 arr; echo "n=${#arr[@]}"; }
+  ```
+- `mapfile/an-invalid-callback-quantum` — zero is refused for -c where it means no cap for -n, and the refusal stands without a -C to call — the whole read is lost with it
+  ```sh
+  printf 'a\n' | { mapfile -t -c 0 arr; echo "st=$? n=${#arr[@]}"; }
+  ```
 - `mapfile/reads-a-descriptor` — -u reads the shell's own descriptor table rather than standard input, which is how the command is used without a pipe putting it in a subshell — the whole reason to prefer it to a while-read loop
   ```sh
   printf 'x\ny\n' > f; exec 3<f; mapfile -u 3 -t arr; printf "[%s]" "${arr[@]}"; echo " n=${#arr[@]}"
@@ -4878,6 +4907,42 @@ grades it and nothing drift-checks it either, for the same reason.
 - `compgen/an-action-this-shell-does-not-generate` — bash generates it and answers 1 for no match; this shell refuses it as not implemented at 2, and the divergence is recorded here deliberately — an action generated from a guess would be a promise the shell cannot keep, and the honest refusal is the answer docs/spec/semantics.md scopes
   ```sh
   compgen -A alias zzzznosuch; echo "st=$?"
+  ```
+- `complete/an-option-and-its-argument` — `-o` takes the next word, which this shell did not read until #2412 — so `complete -o nospace -F _f foo` registered a spec for a command called `nospace` as well as for `foo`, and printed `foo`'s back with the option missing. The second half of the row is the part that catches it: `complete -p nospace` must be a miss
+  ```sh
+  complete -o nospace -F _f foo; complete -p foo; echo "st=$?"; complete -p nospace; echo "n=$?"
+  ```
+- `complete/the-options-print-back-first-and-sorted` — bash renders the `-o` options ahead of the rest of the spec, sorted and deduplicated, whatever order they were written in — so a spec is printed back canonically rather than verbatim, and the two spellings of one spec list identically
+  ```sh
+  complete -F _f -o nospace -o dirnames foo; complete -p foo
+  ```
+- `complete/an-option-name-that-is-not-one` — the nine option names are validated before the table is touched: nothing is registered, which is what the second lookup shows
+  ```sh
+  complete -o nosuchopt foo; echo "st=$?"; complete -p foo; echo "p=$?"
+  ```
+- `compopt/moves-the-options-of-a-registered-spec` — the whole of what `compopt` can be observed doing without a terminal: a change to a registered spec, in both directions, showing where `complete -p` prints it. The other four dialects have neither builtin
+  ```sh
+  complete -F _f foo; compopt -o nospace foo; echo "st=$?"; complete -p foo; compopt +o nospace foo; complete -p foo
+  ```
+- `compopt/lists-every-options-state` — with no -o or +o it writes all nine options in bash's own order with the sign saying whether the spec holds each — which is also where the nine names came from
+  ```sh
+  complete -F _f foo; compopt foo
+  ```
+- `compopt/a-name-with-no-specification` — the refusal a script reaches, and the second field is the one worth keeping: `-D` names the *default* compspec, which bash keeps in the same table under a name no command can have and says out loud — `_DefaultCmD_`
+  ```sh
+  compopt -o default true; echo "st=$?"; compopt -D; echo "d=$?"
+  ```
+- `compopt/with-no-name-at-all` — bash means `compopt` for use from *inside* a completion function, where a call with no name changes the completion in progress; outside one it is `not currently executing completion function` at 1, which is the only answer a shell with no line editor can give
+  ```sh
+  complete -F _f foo; compopt -o nospace; echo "st=$?"
+  ```
+- `umask/prints-a-reusable-line` — bash alone has `-p`, which writes the mask as the command that would set it again — the half of `saved=$(umask -p); …; eval "$saved"` that makes the idiom work. Only the *report* takes the prefix: setting with -p is silent, measured. The other four refuse the letter, each in its own words
+  ```sh
+  umask 022; umask -p; echo "st=$?"; umask -p -S; umask -p 077; echo "set=$?"; umask
+  ```
+- `opt/set-plus-p-is-privileged-under-a-letter` — `-p` is the short spelling of `privileged` in bash, ksh93 and zsh and an illegal option in dash and ash. Asking to turn *off* a mode the shell is not in is granted in all three that have it, which is the direction a script writes — and the direction this shell can honestly answer, having no privileged mode to turn on
+  ```sh
+  set +p; echo "st=$?"
   ```
 - `shift/an-operand-that-was-never-given` — past the end with no count written down, ksh93 reports `(null)` — the operand it did not get — where its complaint about `shift 99` names the 99; dash keeps one sentence for both and bash and zsh keep their usual answers
   ```sh
@@ -6392,6 +6457,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `unset/the-n-letter-still-refuses-a-readonly` | **2>** `<shell>: 1: unset: Illegal option -n` *(status 2)* | `st=1 [1]` **2>** `<shell>: line 1: unset: r: cannot unset: readonly variable` | **2>** `<shell>: line 1: unset: r: cannot unset: readonly variable` *(status 1)* | `st=2 [1]` **2>** `<shell>: line 0: unset: -n: invalid option~unset: usage: unset [-f] [-v] [name ...]` | `st=1 [1]` **2>** `<shell>: unset: warning: r: is read only` | `st=1 [1]` **2>** `<shell>:unset:1: bad option: -n` | **2>** `<shell>: unset: line 0: illegal option -n` *(status 2)* |
 | `special/lineno-in-a-function-diverges` | `2` | `2` | `2` | `2` | `2` | `1` | `2` |
 | `special/lineno-in-a-file-a-function-sourced` | `a=0~b=1` | `a=1~b=2` | `a=1~b=2` | `a=1~b=2` | `a=1~b=2` | `a=1~b=2` | `a=1~b=2` |
+| `var/bash-aliases-is-the-alias-table` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[echo] n=1 k=q` | `[echo] n=1 k=q` | `[] n=0 k=` | `[] n=0 k=` | **2>** `<shell>:1: bad substitution` *(status 1)* | **2>** `<shell>: syntax error: bad substitution` *(status 2)* |
+| `var/bash-aliases-lists-and-is-written` | **2>** `<shell>: 1: declare: not found~<shell>: 1: BASH_ALIASES[w]=date: not found~alias: w not found` *(status 1)* | `declare -A BASH_ALIASES=([q]="echo" )~alias w='date'` | `declare -A BASH_ALIASES=([q]="echo" )~w='date'` | **2>** `<shell>: line 0: declare: BASH_ALIASES: not found~<shell>: line 0: alias: w: not found` *(status 1)* | **2>** `<shell>: declare: not found~w: alias not found` *(status 1)* | **2>** `<shell>:declare:1: no such variable: BASH_ALIASES~<shell>:1: BASH_ALIASES: assignment to invalid subscript range` *(status 1)* | **2>** `<shell>: declare: not found~<shell>: BASH_ALIASES[w]=date: not found~alias: w not found` *(status 1)* |
 | `param/an-unbraced-flag-sigil-before-a-name` | `[$+v]~[$=v]~[$~v]~[0v]` | `[$+v]~[$=v]~[$~v]~[0v]` | `[$+v]~[$=v]~[$~v]~[0v]` | `[$+v]~[$=v]~[$~v]~[0v]` | `[$+v]~[$=v]~[$~v]~[0v]` | `[1]~[hello]~[hello]~[5]` | `[$+v]~[$=v]~[$~v]~[0v]` |
 | `param/the-existence-sigil-needs-a-name-or-a-digit` | `[$+1]~[$+@]~[$++v]~[$+]` | `[$+1]~[$+@]~[$++v]~[$+]` | `[$+1]~[$+@]~[$++v]~[$+]` | `[$+1]~[$+@]~[$++v]~[$+]` | `[$+1]~[$+@]~[$++v]~[$+]` | `[1]~[$+@]~[$++v]~[$+]` | `[$+1]~[$+@]~[$++v]~[$+]` |
 | `core/a-bare-brace-inside-a-quoted-expansion` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[{y][xr}]` | `[{y][xr}]` | `[{y][xr}]` | `[{y}; printf [%s] x; echo]` | `[{y][xr}]` | `[{y][xr}]` |
@@ -6599,6 +6666,14 @@ grades it and nothing drift-checks it either, for the same reason.
   . ./inc.sh
   }
   f
+  ```
+- `var/bash-aliases-is-the-alias-table` — bash presents the alias table as an association, and it is a view rather than a copy — the read follows the table as it is now. zsh and ksh93 have the subscript syntax and no such name, so both answer empty; dash has neither
+  ```sh
+  alias q=echo; echo "[${BASH_ALIASES[q]}] n=${#BASH_ALIASES[@]} k=${!BASH_ALIASES[@]}"
+  ```
+- `var/bash-aliases-lists-and-is-written` — the two halves a produced association needs: it lists back as one, and an assignment to an element *defines an alias*, which is what makes the writer required rather than optional — without one the write would land in a stored table and the view would silently become a snapshot
+  ```sh
+  alias q=echo; declare -p BASH_ALIASES; BASH_ALIASES[w]=date; alias w
   ```
 - `param/an-unbraced-flag-sigil-before-a-name` — one column reads a flag character between the `$` and the name and the other five read text. `$+v` is `1` there and the literal `$+v` everywhere else, and `$=v` and `$~v` are `hello` against themselves — while `$#v` is `5` in the one and `0v` in the rest — the length sigil, which is a *different* flag (BareSubscript) and is here as the control that says this column had one such form already. A grammar question rather than a semantic one: the word boundary moves, and once the spans are cut nothing downstream can tell the two readings apart
   ```sh
@@ -16939,6 +17014,12 @@ grades it and nothing drift-checks it either, for the same reason.
 | `test/a-comparison-operands-leading-zeros` | `dec=0~hex=2~name=2~inner=2` **2>** `<shell>: 1: [: Illegal number: 0x10~<shell>: 1: [: Illegal number: 0x10~<shell>: 1: [: Illegal number: 1+0x10` | `dec=0~hex=2~name=2~inner=2` **2>** `<shell>: line 1: [: 0x10: integer expected~<shell>: line 1: [: 0x10: integer expected~<shell>: line 1: [: 1+0x10: integer expected` | `dec=0~hex=2~name=2~inner=2` **2>** `<shell>: line 1: [: 0x10: integer expected~<shell>: line 1: [: 0x10: integer expected~<shell>: line 1: [: 1+0x10: integer expected` | `dec=0~hex=2~name=2~inner=2` **2>** `<shell>: line 0: [: 0x10: integer expression expected~<shell>: line 0: [: 0x10: integer expression expected~<shell>: line 0: [: 1+0x10: integer expression expected` | `dec=0~hex=1~name=0~inner=0` | `dec=0~hex=2~name=2~inner=2` **2>** `<shell>:[:1: integer expression expected: 0x10~<shell>:[:1: integer expression expected: 0x10~<shell>:[:1: integer expression expected: 1+0x10` | `dec=0~hex=2~name=2~inner=2` **2>** `<shell>: 0x10: bad number~<shell>: 0x10: bad number~<shell>: 1+0x10: bad number` |
 | `test/a-terminal-test-descriptor-too-wide` | `m1=1~m2=1~wrap=1~zero=1~max=1` | `m1=1~m2=1~wrap=1~zero=1~max=1` | `m1=1~m2=1~wrap=1~zero=1~max=1` | `m1=1~m2=1~wrap=1~zero=1~max=1` | `m1=0~m2=1~wrap=0~zero=1~max=0` | `m1=1~m2=1~wrap=1~zero=1~max=1` | `m1=1~m2=1~wrap=1~zero=1~max=1` |
 | `test/a-terminal-test-descriptor-past-the-integer` | `big=2~wide=2` **2>** `<shell>: 1: [: Illegal number: 9223372036854775808~<shell>: 1: [: Illegal number: 99999999999999999999` | `big=2~wide=2` **2>** `<shell>: line 1: [: 9223372036854775808: integer expected~<shell>: line 1: [: 99999999999999999999: integer expected` | `big=2~wide=2` **2>** `<shell>: line 1: [: 9223372036854775808: integer expected~<shell>: line 1: [: 99999999999999999999: integer expected` | `big=1~wide=1` | `big=0~wide=0` | `big=1~wide=1` **2>** `<shell>:1: number truncated after 18 digits: 9223372036854775808~<shell>:1: number truncated after 19 digits: 99999999999999999999` | `big=2~wide=2` **2>** `<shell>: 9223372036854775808: out of range~<shell>: 99999999999999999999: out of range` |
+| `test/unary-dash-a-is-a-file-test` | `have=2~miss=2~conn=0` **2>** `<shell>: 1: test: -a: unexpected operator~<shell>: 1: test: -a: unexpected operator` | `have=0~miss=1~conn=0` | `have=0~miss=1~conn=0` | `have=0~miss=1~conn=0` | `have=0~miss=1~conn=0` | `have=2~miss=2~conn=0` **2>** `<shell>:test:1: too many arguments~<shell>:test:1: too many arguments` | `have=2~miss=2~conn=0` **2>** `<shell>: f: unknown operand~<shell>: nosuch: unknown operand` |
+| `test/unary-dash-a-refused-names-the-word-or-the-count` | `st=2~q=2` **2>** `<shell>: 1: test: -a: unexpected operator~<shell>: 1: test: -Q: unexpected operator` | `st=1~q=2` **2>** `<shell>: line 1: test: -Q: unary operator expected` | `st=1~q=2` **2>** `<shell>: line 1: test: -Q: unary operator expected` | `st=1~q=2` **2>** `<shell>: line 0: test: -Q: unary operator expected` | `st=1~q=2` **2>** `<shell>: test: -Q: unknown operator` | `st=2~q=2` **2>** `<shell>:test:1: too many arguments~<shell>:test:1: unknown condition: -Q` | `st=2~q=2` **2>** `<shell>: f: unknown operand~<shell>: f: unknown operand` |
+| `test/dash-o-asks-whether-an-option-is-set` | `off=2` **2>** `<shell>: 1: test: -o: unexpected operator~<shell>: 1: test: -o: unexpected operator` *(status 2)* | `off=1~on=0~nosuch=1` | `off=1~on=0~nosuch=1` | `off=1~on=0~nosuch=1` | `off=1~on=0~nosuch=1` | `off=2` **2>** `<shell>:test:1: too many arguments~<shell>:test:1: too many arguments` *(status 2)* | `off=2` **2>** `<shell>: errexit: unknown operand~<shell>: errexit: unknown operand` *(status 2)* |
+| `test/string-order-operators` | `lt=0~gt=1~ge=0~case=0` | `lt=0~gt=1~ge=0~case=0` | `lt=0~gt=1~ge=0~case=0` | `lt=0~gt=1~ge=0~case=0` | `lt=2~gt=2~ge=0~case=2` **2>** `<shell>: test: <: unknown operator~<shell>: test: <: unknown operator~<shell>: test: <: unknown operator` | `lt=2~gt=2~ge=2~case=2` **2>** `<shell>:1: condition expected: <~<shell>:1: condition expected: <~<shell>:1: condition expected: >~<shell>:1: condition expected: <` | `lt=0~gt=1~ge=0~case=0` |
+| `test/a-missing-order-operator-is-named` | `st=0` | `st=0` | `st=0` | `st=0` | `st=2` **2>** `<shell>: test: <: unknown operator` | `st=2` **2>** `<shell>:1: condition expected: <` | `st=0` |
+| `test/dash-N-is-present-or-absent` | `LACKS` | `HAS` | `HAS` | `HAS` | `HAS` | `HAS` | `LACKS` |
 
 - `test/argument-count-decides` — POSIX defines `test` by argument count before grammar, which is why `test -f` alone is *true*: one argument is a string, and `-f` is a non-empty one. Two arguments make the same word an operator
   ```sh
@@ -17052,6 +17133,30 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   [ -t 9223372036854775808 ]; echo "big=$?"; [ -t 99999999999999999999 ]; echo "wide=$?"
   ```
+- `test/unary-dash-a-is-a-file-test` — the TestHasTheFileExistsLetter axis: with two arguments `-a` is `-e`'s question in bash and ksh93 and an operator dash, zsh and ash refuse — and with three it is the connective in all six, which is the third field. The argument count is the whole of what decides, so the two readings are one letter and not a conflict
+  ```sh
+  : > f; test -a f; echo "have=$?"; test -a nosuch; echo "miss=$?"; test -f f -a -f f; echo "conn=$?"
+  ```
+- `test/unary-dash-a-refused-names-the-word-or-the-count` — which complaint the shells without the file test give, and the pair is the discriminator: zsh answers `too many arguments` for `-a` and `unknown condition: -Q` for a letter nothing has, so `-a` is a word it knows — as the connective — and `-Q` is not. dash and ash make no such distinction. See Diagnostics.TestConnectiveIsALeftoverWord
+  ```sh
+  test -a f; echo "st=$?"; test -Q f; echo "q=$?"
+  ```
+- `test/dash-o-asks-whether-an-option-is-set` — the TestHasTheShellOptionOperator axis: bash and ksh93 read a `set -o` name as an expression, and an option name the shell has never heard of is false rather than an error in both — which is what says the operator answers a question rather than validating one. The other four refuse the letter
+  ```sh
+  test -o errexit; echo "off=$?"; set -e; test -o errexit; echo "on=$?"; set +e; test -o nosuchopt; echo "nosuch=$?"
+  ```
+- `test/string-order-operators` — the TestStringOrder axis, and the reason it is an enum over the pair rather than one flag: ksh93 has `>` and refuses `<` with `test: <: unknown operator`, so a single ordering question would be wrong about one of its two operators. bash, dash and ash have both, zsh has neither. Where it exists the comparison is byte order, which the fourth field pins
+  ```sh
+  test a "<" b; echo "lt=$?"; test b "<" a; echo "gt=$?"; test b ">" a; echo "ge=$?"; test A "<" a; echo "case=$?"
+  ```
+- `test/a-missing-order-operator-is-named` — the same operator past the three-word rules, where a shell that lacks it has to name the one token that was wrong rather than count the words. ksh93 says `<: unknown operator` and zsh `condition expected: <`; neither reports an argument count, which is what a bare-string reading of the left operand would have produced
+  ```sh
+  test -n x -a a "<" b; echo "st=$?"
+  ```
+- `test/dash-N-is-present-or-absent` — the operator's *presence*, deliberately, and not its answer. `-N` asks whether a file was written since it was read, so measuring it is itself a read, and the panel does not even agree on a file nothing has touched: bash 5.3 and ksh93 answer false where bash 3.2 and zsh answer true. Folding 0 and 1 together is what makes this a row that does not move on its own
+  ```sh
+  : > f; test -N f >/dev/null 2>&1; case $? in (0|1) echo HAS;; (*) echo LACKS;; esac
+  ```
 
 ## times
 
@@ -17135,6 +17240,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `cmd/command-v-on-nothing` | `st=127` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` | `st=127` |
 | `cmd/command-v-names-a-function` | `f` | `f` | `f` | `f` | `f` | `f` | `f` |
 | `cmd/command-bypasses-a-function` | `hi` | `hi` | `hi` | `hi` | `hi` | `hi` | `hi` |
+| `cmd/command-in-front-of-a-builtin` | `st=0~SET` | `st=0~SET` | `st=0~SET` | `st=0~SET` | `st=0~SET` | `st=127~UNSET` **2>** `<shell>:1: command not found: set` | `st=0~SET` |
+| `cmd/posixbuiltins-lets-command-reach-a-builtin` | `st=0~SET` | `st=0~SET` | `st=0~SET` | `st=0~SET` | `st=0~SET` | `st=0~SET` | `st=0~SET` |
+| `cmd/an-sh-emulation-lets-command-reach-a-builtin` | `st=0~SET` | `st=0~SET` | `st=0~SET` | `st=0~SET` | `st=0~SET` | `st=0~SET` | `st=0~SET` |
 | `cmd/command-with-an-option-nobody-has` | `st=2` **2>** `<shell>: 1: command: Illegal option -q` | `st=2` **2>** `<shell>: line 1: command: -q: invalid option~command: usage: command [-pVv] command [arg ...]` | `st=2` **2>** `<shell>: line 1: command: -q: invalid option~command: usage: command [-pVv] command [arg ...]` | `st=2` **2>** `<shell>: line 0: command: -q: invalid option~command: usage: command [-pVv] command [arg ...]` | `st=2` **2>** `<shell>: command: -q: unknown option~Usage: command [-pvxV] [command [arg ...]]` | `st=127` **2>** `<shell>:1: command not found: -q` | `st=2` **2>** `<shell>: command: line 0: illegal option -q` |
 | `cmd/command-v-names-a-reserved-word` | `if` | `if` | `if` | `if` | `if` | `if` | `if` |
 
@@ -17201,6 +17309,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `cmd/command-bypasses-a-function` — the whole reason `command` exists: a function may wrap the thing it is named after without calling itself
   ```sh
   echo() { echo overridden; }; command echo hi
+  ```
+- `cmd/command-in-front-of-a-builtin` — the CommandReachesABuiltin axis: four dialects run the builtin, and zsh asks for an external program alone and answers `command not found: set` at 127. `set` is the probe because no PATH anywhere has a program of that name, and `$-` afterwards says whether the builtin ran rather than merely what it reported. The divergence is not the status: `command` in front of a *special* builtin is the survivable spelling everywhere else, so a line written to work under either shell's name does nothing at all there
+  ```sh
+  command set -f; echo "st=$?"; case $- in (*f*) echo SET;; (*) echo UNSET;; esac
+  ```
+- `cmd/posixbuiltins-lets-command-reach-a-builtin` — zsh's own name for the POSIX behavior, and the reason the axis is not a constant there: with the option on, `command` reaches the builtin and the row reads as the other four already do. The other six have no `setopt`, whose failure is silenced so the rest of the line still runs
+  ```sh
+  setopt posixbuiltins 2>/dev/null; command set -f; echo "st=$?"; case $- in (*f*) echo SET;; (*) echo UNSET;; esac
+  ```
+- `cmd/an-sh-emulation-lets-command-reach-a-builtin` — the option is what an sh-family emulation turns on, which is the fifth axis `emulate` carries — so a zsh script that opened with `emulate sh` was already getting the POSIX answer, and the divergence only ever showed in a plain zsh
+  ```sh
+  emulate sh 2>/dev/null; command set -f; echo "st=$?"; case $- in (*f*) echo SET;; (*) echo UNSET;; esac
   ```
 - `cmd/command-with-an-option-nobody-has` — the CommandRejectsUnknownOption axis: bash, dash and ksh93 refuse an option command does not have, at 2; zsh stops reading options and looks up -q as the command, at 127. Probed with a letter no panel shell owns — -x is a real ksh93 option, and a probe written with -x read ksh93 as tolerant off ksh93's own feature
   ```sh

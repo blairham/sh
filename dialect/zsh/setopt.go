@@ -518,7 +518,26 @@ var zshOptions = []zshOption{
 	setOptBacked("pipefail", false, "pipefail", false),
 	recorded("posixaliases", false),
 	recorded("posixargzero", false),
-	recorded("posixbuiltins", false),
+	{
+		// zsh's POSIX_BUILTINS, and the one thing it does that this shell
+		// can speak about: with it on, `command name` reaches the builtin of
+		// that name, which is what `command` means in POSIX and in the other
+		// four dialects. With it off — a plain zsh — the word asks for an
+		// external program alone, so `command set -o globstar` is `command
+		// not found: set` at 127 and the option is never set.
+		//
+		// Read off the axis rather than off a stored bit, which is what
+		// makes `(setopt posixbuiltins)` stay in the subshell — the same
+		// arrangement `shwordsplit` and `globsubst` use.
+		base: "posixbuiltins", def: false,
+		get: func(r *interp.Runner) bool {
+			return r.Semantics.CommandReachesABuiltin == interp.Yes
+		},
+		set: func(r *interp.Runner, on bool) int {
+			swapAxes(r, func(s *interp.Semantics) { s.CommandReachesABuiltin = answer(on) })
+			return 0
+		},
+	},
 	recorded("posixcd", false),
 	recorded("posixidentifiers", false),
 	recorded("posixjobs", false),

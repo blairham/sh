@@ -41,12 +41,16 @@ func TestNoglobSwitchesTheMatchOffForTheWordsBehindIt(t *testing.T) {
 		// Repeats and combinations. `command` stops the scan and the other
 		// two do not — measured, and the reason the three are not one rule.
 		{`noglob noglob echo a[b]c`, "a[b]c"},
-		{`noglob command echo a[b]c`, "a[b]c"},
 		{`builtin noglob echo a[b]c`, "a[b]c"},
-		// The scratch PATH holds no `echo` program, so this one is graded
+		// The scratch PATH holds no `echo` program, so these two are graded
 		// on *which* diagnostic: `command not found: echo` says the scan
-		// read past `exec` and took the modifier, where a match that had
-		// fired would have said `no matches found: a[b]c` instead.
+		// read past the word ahead and took the modifier, where a match that
+		// had fired would have said `no matches found: a[b]c` instead.
+		//
+		// `command` reaches only an external here — see
+		// Semantics.CommandReachesABuiltin — which is why it is `echo` that
+		// is missing rather than `echo` that ran.
+		{`noglob command echo a[b]c`, "zsh:1: command not found: echo"},
 		{`exec noglob echo a[b]c`, "zsh:1: command not found: echo"},
 		{`command noglob echo a[b]c`, "zsh:1: no matches found: a[b]c"},
 		// A builtin rather than grammar: quoting does not take it away and

@@ -528,3 +528,39 @@ func TestNoAliasesReachesTheExpansionSwitch(t *testing.T) {
 		}
 	}
 }
+
+// `posixbuiltins` is what makes `command` mean what POSIX says it means:
+// with it off — a plain zsh — the word asks for an external program alone,
+// so `command set -f` is `command not found: set` at 127 and the option is
+// never set. It is a real option and not a recorded one, so it reads back
+// through `[[ -o … ]]`, it shows in a bare `setopt`, and a subshell keeps
+// its own.
+func TestPosixBuiltinsDecidesWhetherCommandReachesABuiltin(t *testing.T) {
+	const probe = `command set -f; echo "st=$?"; case $- in (*f*) echo SET;; (*) echo UNSET;; esac`
+
+	out, _ := runZsh(t, t.TempDir(), probe)
+	if !strings.Contains(out, "st=127") || !strings.Contains(out, "UNSET") {
+		t.Errorf("off: out %q, want the builtin out of reach", out)
+	}
+
+	out, st := runZsh(t, t.TempDir(), `setopt posixbuiltins; `+probe)
+	if st != 0 || out != "st=0\nSET\n" {
+		t.Errorf("on: out %q status %d, want the builtin reached", out, st)
+	}
+
+	// Read off the axis rather than a stored bit, which is what keeps a
+	// subshell's change inside the subshell.
+	out, _ = runZsh(t, t.TempDir(),
+		`( setopt posixbuiltins; [[ -o posixbuiltins ]] && echo IN-ON ); `+
+			`[[ -o posixbuiltins ]] && echo OUT-ON || echo OUT-OFF`)
+	if out != "IN-ON\nOUT-OFF\n" {
+		t.Errorf("out %q, want the subshell to have kept its own", out)
+	}
+
+	// And a bare `setopt` lists it, which is the listing's whole job: the
+	// deviations from zsh's defaults.
+	out, _ = runZsh(t, t.TempDir(), `setopt posixbuiltins; setopt`)
+	if !strings.Contains(out, "posixbuiltins\n") {
+		t.Errorf("out %q, want the name in the deviation listing", out)
+	}
+}

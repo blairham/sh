@@ -80,10 +80,20 @@ func currentEmulation(r *interp.Runner) string {
 // `emulate zsh` leaves it a complaint the script runs past. That is the same
 // switch bash's `set -o posix` throws, measured in a second binary, which is
 // what says the axis belongs to the mode rather than to either shell.
-var emulations = map[string]struct{ split, nomatchOk, zeroBase, redirFatal bool }{
-	"zsh": {split: false, nomatchOk: false, zeroBase: false, redirFatal: false},
-	"sh":  {split: true, nomatchOk: true, zeroBase: true, redirFatal: true},
-	"ksh": {split: true, nomatchOk: true, zeroBase: true, redirFatal: true},
+//
+// posixBuiltins is the fifth, and it is the one an emulation carries that a
+// script can also ask for by name: `emulate sh` and `emulate ksh` turn
+// `posixbuiltins` on, which is what makes `command` reach a builtin under an
+// emulation and not under a plain `emulate zsh`. Measured on 5.9.2 four ways
+// — `emulate sh` and `emulate ksh` read the option on, `emulate csh` and
+// `emulate zsh` read it off — so it moves with the mode rather than with the
+// sh-ness of it by coincidence.
+var emulations = map[string]struct {
+	split, nomatchOk, zeroBase, redirFatal, posixBuiltins bool
+}{
+	"zsh": {split: false, nomatchOk: false, zeroBase: false, redirFatal: false, posixBuiltins: false},
+	"sh":  {split: true, nomatchOk: true, zeroBase: true, redirFatal: true, posixBuiltins: true},
+	"ksh": {split: true, nomatchOk: true, zeroBase: true, redirFatal: true, posixBuiltins: true},
 	"csh": {},
 }
 
@@ -106,6 +116,7 @@ func applyEmulation(r *interp.Runner, mode string, strict bool) {
 			// which is neither shell's answer (#1726).
 			setKshArrays(s, e.zeroBase)
 			s.RedirectErrorOnSpecialBuiltinFatal = answer(e.redirFatal)
+			s.CommandReachesABuiltin = answer(e.posixBuiltins)
 		})
 	}
 	// The recorded names in one write rather than one write each — the store
@@ -127,7 +138,7 @@ func applyEmulation(r *interp.Runner, mode string, strict bool) {
 			continue
 		}
 		switch o.base {
-		case "shwordsplit", "nomatch", "ksharrays":
+		case "shwordsplit", "nomatch", "ksharrays", "posixbuiltins":
 			// Already placed by the axis swap, and their default is the
 			// emulation's rather than the table's.
 			continue

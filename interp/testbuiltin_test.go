@@ -8,6 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	. "github.com/blairham/sh/interp"
 )
 
 // `test` is defined by argument count before grammar, so these are organized
@@ -215,5 +218,237 @@ func TestTheDialectWordsAMalformedExpression(t *testing.T) {
 	out, _ = lookRun(t, dir, dir, `test a b c`)
 	if !strings.Contains(out, "b") {
 		t.Errorf("output %q should name the word where an operator belonged", out)
+	}
+}
+
+// The operators past the three-word rules, each behind its own axis because
+// each is a split rather than a correction — see the four fields on Semantics
+// whose names begin `TestHas`, and TestStringOrderPolicy for the pair that
+// needed an enum.
+
+// TestTheUnaryFileExistsLetter is `-a` with two arguments, which is `-e`'s
+// question where the argument count has already said the letter is an
+// operator rather than the connective.
+func TestTheUnaryFileExistsLetter(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "f"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	yes := func(r *Runner) {
+		s := *r.Semantics
+		s.TestHasTheFileExistsLetter = Yes
+		r.Semantics = &s
+		r.Dir = dir
+	}
+	no := func(r *Runner) {
+		s := *r.Semantics
+		s.TestHasTheFileExistsLetter = No
+		r.Semantics = &s
+		r.Dir = dir
+	}
+	for _, tc := range []struct {
+		name string
+		set  func(*Runner)
+		src  string
+		want int
+	}{
+		{"the file is there", yes, `test -a f`, 0},
+		{"the file is not", yes, `test -a nosuch`, 1},
+		// The same letter inside the grammar, where it begins a primary as
+		// well as joining two of them.
+		{"a primary and a connective in one expression", yes, `test -a f -a -a f`, 0},
+		{"and the connective still binds them", yes, `test -a f -a -a nosuch`, 1},
+		// Without it the word is an operator this shell does not have, which
+		// is 2 and not a false answer.
+		{"refused where the shell has no such operator", no, `test -a f`, 2},
+		// The connective is not the axis, and is unanimous: three words are
+		// two strings joined however the letter is answered.
+		{"three words are the connective either way", no, `test x -a y`, 0},
+		{"and with an empty side", no, `test x -a ""`, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, st := run(t, tc.src, tc.set)
+			if st != tc.want {
+				t.Errorf("%s = %d, want %d", tc.src, st, tc.want)
+			}
+		})
+	}
+}
+
+// TestTheShellOptionOperator is `-o name`: a `set -o` switch asked as an
+// expression. A name the shell has never heard of is false rather than an
+// error, which is measured in both shells that have the operator.
+func TestTheShellOptionOperator(t *testing.T) {
+	set := func(a Answer) func(*Runner) {
+		return func(r *Runner) {
+			s := *r.Semantics
+			s.TestHasTheShellOptionOperator = a
+			r.Semantics = &s
+		}
+	}
+	for _, tc := range []struct {
+		src  string
+		a    Answer
+		want int
+	}{
+		{`test -o errexit`, Yes, 1},
+		{`set -e; test -o errexit`, Yes, 0},
+		{`test -o nosuchopt`, Yes, 1},
+		{`test -o errexit`, No, 2},
+	} {
+		_, st := run(t, tc.src, set(tc.a))
+		if st != tc.want {
+			t.Errorf("%s at %v = %d, want %d", tc.src, tc.a, st, tc.want)
+		}
+	}
+}
+
+// TestTheModifiedSinceReadOperator is `-N`: the modification time against the
+// access time. The axis pins the operator and this pins the comparison, which
+// is the half the panel agrees on — see the field's comment for why the
+// boolean is not what a corpus row may grade.
+func TestTheModifiedSinceReadOperator(t *testing.T) {
+	dir := t.TempDir()
+	written := filepath.Join(dir, "written")
+	read := filepath.Join(dir, "read")
+	for _, p := range []string{written, read} {
+		if err := os.WriteFile(p, []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Written after it was read, and read after it was written: the two
+	// orders, spelled with explicit times so nothing depends on how fast the
+	// test runs.
+	early, late := time.Now().Add(-2*time.Hour), time.Now().Add(-time.Hour)
+	if err := os.Chtimes(written, early, late); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(read, late, early); err != nil {
+		t.Fatal(err)
+	}
+	set := func(a Answer) func(*Runner) {
+		return func(r *Runner) {
+			s := *r.Semantics
+			s.TestHasTheModifiedSinceReadOperator = a
+			r.Semantics = &s
+			r.Dir = dir
+		}
+	}
+	for _, tc := range []struct {
+		src  string
+		a    Answer
+		want int
+	}{
+		{`test -N written`, Yes, 0},
+		{`test -N read`, Yes, 1},
+		// A file that is not there, and an operand that is not a path: false
+		// rather than an error, measured.
+		{`test -N nosuch`, Yes, 1},
+		{`test -N ""`, Yes, 1},
+		{`test -N written`, No, 2},
+	} {
+		_, st := run(t, tc.src, set(tc.a))
+		if st != tc.want {
+			t.Errorf("%s at %v = %d, want %d", tc.src, tc.a, st, tc.want)
+		}
+	}
+}
+
+// TestTheStringOrderOperators is the enum, and the third answer is why it is
+// one: a shell can have `>` and refuse `<`.
+func TestTheStringOrderOperators(t *testing.T) {
+	set := func(p TestStringOrderPolicy) func(*Runner) {
+		return func(r *Runner) {
+			s := *r.Semantics
+			s.TestStringOrder = p
+			r.Semantics = &s
+		}
+	}
+	for _, tc := range []struct {
+		src  string
+		p    TestStringOrderPolicy
+		want int
+	}{
+		// Byte order, and a string comparison rather than a numeric one.
+		{`test a "<" b`, TestStringOrderBoth, 0},
+		{`test b "<" a`, TestStringOrderBoth, 1},
+		{`test b ">" a`, TestStringOrderBoth, 0},
+		{`test A "<" a`, TestStringOrderBoth, 0},
+		{`test 10 "<" 9`, TestStringOrderBoth, 0},
+		// The greater one alone: the same two words are an answer under one
+		// operator and not an expression under the other.
+		{`test b ">" a`, TestStringOrderGreaterOnly, 0},
+		{`test a "<" b`, TestStringOrderGreaterOnly, 2},
+		{`test a "<" b`, TestStringOrderNeither, 2},
+		{`test b ">" a`, TestStringOrderNeither, 2},
+	} {
+		_, st := run(t, tc.src, set(tc.p))
+		if st != tc.want {
+			t.Errorf("%s at %v = %d, want %d", tc.src, tc.p, st, tc.want)
+		}
+	}
+}
+
+// TestAMissingOrderOperatorIsNamedPastThreeWords is the same fault arriving
+// by the other door. `<` is not spelled like a unary operator, so without a
+// reader for it the left operand becomes a bare string, the expression
+// parses, and the count is reported instead of the one token that was wrong —
+// which is the #1290 shape, and which says nothing a reader can act on.
+func TestAMissingOrderOperatorIsNamedPastThreeWords(t *testing.T) {
+	out, st := run(t, `test -n x -a a "<" b`, func(r *Runner) {
+		s := *r.Semantics
+		s.TestStringOrder = TestStringOrderNeither
+		r.Semantics = &s
+		dg := Diagnostics{TestBinaryExpected: "%[2]s: %[1]s: unknown operator"}
+		r.Diagnostics = &dg
+	})
+	if !strings.Contains(out, "<: unknown operator") {
+		t.Errorf("out %q, want the operator named", out)
+	}
+	if strings.Contains(out, "too many arguments") {
+		t.Errorf("out %q, want the count not reported over the token", out)
+	}
+	if st != 2 {
+		t.Errorf("status %d, want 2", st)
+	}
+	// And where the shell has the operator, the same words are an answer.
+	_, st = run(t, `test -n x -a a "<" b`, func(r *Runner) {
+		s := *r.Semantics
+		s.TestStringOrder = TestStringOrderBoth
+		r.Semantics = &s
+	})
+	if st != 0 {
+		t.Errorf("status %d, want 0", st)
+	}
+}
+
+// TestAConnectiveWhereAUnaryBelongs is the wording split the two letters
+// leave behind in a shell that has the connectives and not the file test:
+// `-a` is a word zsh knows, so it is a string with a word left over, where a
+// letter nothing has is an operator it has never heard of.
+func TestAConnectiveWhereAUnaryBelongs(t *testing.T) {
+	leftover := func(r *Runner) {
+		s := *r.Semantics
+		s.TestHasTheFileExistsLetter = No
+		s.TestHasTheShellOptionOperator = No
+		r.Semantics = &s
+		dg := Diagnostics{
+			TestConnectiveIsALeftoverWord: true,
+			TestTooManyArguments:          "too many arguments",
+			TestUnaryExpected:             "unknown condition: %[1]s",
+		}
+		r.Diagnostics = &dg
+	}
+	for _, src := range []string{`test -a f`, `test -o errexit`, `test -a f -a -a f`} {
+		out, st := run(t, src, leftover)
+		if !strings.Contains(out, "too many arguments") || st != 2 {
+			t.Errorf("%s said %q at %d, want the leftover-word complaint", src, out, st)
+		}
+	}
+	// And a letter the shell really has never heard of keeps the other one,
+	// which is the pair that makes this a distinction rather than a rename.
+	out, _ := run(t, `test -Q f`, leftover)
+	if !strings.Contains(out, "unknown condition: -Q") {
+		t.Errorf("said %q, want the unknown operator named", out)
 	}
 }

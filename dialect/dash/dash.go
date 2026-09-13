@@ -446,6 +446,10 @@ func Semantics() interp.Semantics {
 	// form that names a job answers the same as the bare one.
 	s.WaitForAJobFailsWhenInterrupted = interp.No
 	s.CommandRejectsUnknownOption = interp.Yes
+	// Both string-ordering operators, which this shell has and the three
+	// unary additions past the three-word rules it does not: `test -a f`,
+	// `test -o errexit` and `test -N f` are all `unexpected operator` here.
+	s.TestStringOrder = interp.TestStringOrderBoth
 	s.GetoptsRejectsUnknownOption = interp.No
 	s.ShiftCountIsArithmetic = interp.No
 	s.TrapBodyRunsWhatParsed = interp.Yes
@@ -992,6 +996,7 @@ func Apply(r *interp.Runner) {
 	r.Unregister("builtin")
 	// No `compgen` here; it is bash's alone.
 	r.Unregister("compgen")
+	r.Unregister("compopt")
 	// fc really is an external here: `command -v fc` answers /usr/bin/fc.
 	r.Unregister("fc")
 	r.Unregister("complete")

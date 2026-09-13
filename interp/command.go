@@ -218,7 +218,14 @@ func reservedWord(name string) bool {
 // is the whole of what `command name` means: a function may then wrap the
 // thing it is named after without calling itself.
 func (r *Runner) runWithoutFunctions(ctx context.Context, args []string) int {
-	if fn, ok := r.lookupBuiltin(args[0]); ok {
+	// Or with the builtin table ignored as well, in the dialect where the
+	// word asks for an external program and nothing else. There the lookup
+	// is skipped entirely rather than tried and discarded: `command set` has
+	// to reach the PATH search and come back `command not found: set`, which
+	// is the answer measured, and a builtin found here would never get
+	// there. See Semantics.CommandReachesABuiltin.
+	if fn, ok := r.lookupBuiltin(args[0]); ok &&
+		r.ask(r.sem().CommandReachesABuiltin, "`command` in front of a builtin running that builtin") {
 		outer := r.inBuiltin
 		r.inBuiltin = args[0]
 		// callBuiltin folds a failed write here as well as at the outer

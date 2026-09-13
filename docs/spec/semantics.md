@@ -4644,11 +4644,11 @@ first is unanimous across the table.** Every name is one of five kinds:
 | kind | how many | what `setopt NAME` does |
 | --- | --- | --- |
 | substrate-backed | 15 | moves a real `set -o` switch: `setopt err_exit` **is** `set -e`, and `setopt vi` **is** `set -o vi`. `ignorebraces` is the inverted one: it is `set +o braceexpand`, zsh naming the state that *stops* the expansion where the substrate names the expansion |
-| axis- or matcher-backed | 12 | moves a semantics axis (`shwordsplit`, `nomatch`, `ksharrays`, `localtraps`, `multios`, `globsubst`, `typesetsilent`) or a pattern-matcher option (`nullglob`, `globdots`, `caseglob`, `extendedglob`, `bareglobqual`). `ksharrays` is one name over **five** axes — see below |
+| axis- or matcher-backed | 13 | moves a semantics axis (`shwordsplit`, `nomatch`, `ksharrays`, `localtraps`, `multios`, `globsubst`, `typesetsilent`, `posixbuiltins`) or a pattern-matcher option (`nullglob`, `globdots`, `caseglob`, `extendedglob`, `bareglobqual`). `ksharrays` is one name over **five** axes — see below |
 | fixed | 4 | refuses to move, in zsh's own words: `can't change option: NAME`, status 1. Asking for the state it already holds is granted, and one of the four is taken at the *invocation* — see `singlecommand` below |
 | store-backed, read by the front end | 7 | `histignorespace`, read by the line editor before it records a line; `interactivecomments`, read by the same editor before it *parses* one; `promptsp` and `promptcr`, read by it before it draws a prompt; `checkrunningjobs`, read by `checkjobs` when it recomputes what the exit is held for; and `cshnullcmd` and `shnullcmd`, read together when either moves so that the first can win while it is on. All seven are kept where a recorded name is kept, because the substrate has no `set -o` name for any of them |
 | switch-backed | 3 | `aliases`, `autocd` and `checkjobs`: each moves a capability the substrate holds under no option name of its own — alias expansion really does stop, a bare directory name really is read as a `cd`, and a job still running really does hold the exit |
-| **recorded** | 144 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
+| **recorded** | 143 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
 
 **Two names moved out of "recorded" when the history knobs were built**
 (#571). `histignorespace` is the fifth row above: its state has nowhere
@@ -4765,7 +4765,17 @@ editor now asks for it before each line it parses (#2537), which is the
 `histignorespace` bargain exactly — the state has nowhere better to live, and
 something reads it every time a line is accepted.
 
-So 144 of 185 are recorded, the count above is the one produced by counting
+`posixbuiltins` left "recorded" the same way (#2390): with it off — a plain
+zsh — `command name` asks for an *external* program of that name and nothing
+else, so `command set -o globstar` is `command not found: set` at 127 and the
+option is never set. `command` in front of a special builtin is the survivable
+spelling in the other four dialects, so a line written to work under either
+shell's name silently did nothing here. The axis is
+`Semantics.CommandReachesABuiltin`, and `emulate sh` and `emulate ksh` turn the
+option on where `emulate csh` and `emulate zsh` leave it off — measured all
+four ways, which is what makes it the fifth axis an emulation carries.
+
+So 143 of 185 are recorded, the count above is the one produced by counting
 the constructors in `dialect/zsh/setopt.go`, and **the fixed set is now
 exactly the set real zsh refuses**: `interactive`, `shinstdin`,
 `singlecommand` and `zle`. `monitor` left it in #1720 because zsh grants it
@@ -7059,6 +7069,61 @@ action we cannot generate is a promise we cannot keep:
   the reason `compgen` is the interesting third of it: `compgen` answers
   a question, where the other two register and adjust completion
   specifications for an interactive line editor this core does not own.
+  Both are implemented as far as a script without a terminal can see —
+  see below.
+
+### `complete` and `compopt`: the options, and the three specs that are not commands
+
+Neither builtin completes anything here, and neither is meant to. What
+they have to do is survive: every `bash_completion.d` file registers
+specs in a non-interactive shell and exits 0, and dying at 127 on the
+first `complete` is what broke carapace's setup. So the spec is kept and
+printed back, and everything a script can observe about it is measured.
+
+Two gaps closed in #2412, both found by measurement rather than by
+reading the code.
+
+**`-o` takes the next word.** It did not, so `complete -o nospace -F _foo
+foo` registered a specification for a command called `nospace` as well as
+for `foo`, and printed `foo`'s back with the option's name missing. Both
+halves are silent: a plausible listing, and a spec for a command nobody
+named. The nine option names are `bashdefault`, `default`, `dirnames`,
+`filenames`, `fullquote`, `noquote`, `nosort`, `nospace` and `plusdirs`
+— read off `compopt name`, which lists every one — and a word that is not
+one of them is `invalid option name` at 2 before the table is touched.
+
+**The options print back first, sorted and deduplicated**, whatever order
+they were written in: `complete -F f -o nospace x` and `complete -o
+nospace -F f x` both list as `complete -o nospace -F f x`. So a spec is
+printed back canonically rather than verbatim, which is the one place
+this shell does not keep what it was given.
+
+**`compopt`** changes those options on a spec that is already registered,
+which is the whole of what it can be observed doing here. Measured
+against bash 5.3.15:
+
+- `compopt -o nospace name` and `compopt +o name` move one option, and
+  `complete -p name` is where the change shows;
+- `compopt name` with neither writes all nine in bash's own order, each
+  with the sign saying whether the spec holds it;
+- a name nothing registered is `compopt: name: no completion
+  specification` at 1, and the other names in the same call are still
+  changed;
+- `compopt` with **no name at all** is `not currently executing
+  completion function` at 1. bash means that literally — the no-name form
+  operates on the completion in progress — and there is never one here,
+  so it is the only answer this shell can give and it is bash's answer
+  for every route a script can reach.
+
+`-D`, `-E` and `-I` name the default, empty-line and initial-word
+specifications, which bash keeps in the same table under names no command
+can have and says out loud: `compopt -D` with none registered is
+`compopt: _DefaultCmD_: no completion specification`. Printed back as the
+letter, in the slot a command's name would take — `complete -D -F f`
+lists as `complete -F f -D`.
+
+bash 3.2 has no `compopt` at all, which is a version fact rather than an
+axis: this dialect models 5.3.
 
 ## `mapfile`, and a delimiter that is not a character
 
@@ -10338,6 +10403,20 @@ contaminated probe, macOS ships /usr/bin/cd. Recorded as
 
 ### `umask`, and the symbolic form
 
+**`UmaskHasTheReusableLetter`** — bash yes · dash no · ksh93 no · zsh no ·
+ash no
+
+Gives `umask` a `-p`, which writes the mask as the command that would set
+it again: `umask 0022` rather than `0022`, and `umask -S u=rwx,g=rx,o=rx`
+with `-S` beside it. It is the half of `saved=$(umask -p); …; eval
+"$saved"` that makes the idiom work, and bash alone has it — the other
+four refuse it as an option `umask` has not got, each in its own words.
+
+Only the *report* takes the prefix. `umask -p 077` sets the mask and says
+nothing, and `umask -p -S 077` prints the bare symbolic form the `-S`
+echo already prints; both measured. The letter bundles either way round,
+`-pS` and `-Sp` alike.
+
 **An omitted who before `=` is not an axis.** `umask -- =w` means all
 three groups in every column of the panel, and `SymbolicMaskSetsWithoutAWho`
 recorded a disagreement that is not there. See *A probe that measured the
@@ -11357,6 +11436,27 @@ them out of. bash alone: dash and ksh93 refuse the letters, and zsh
 spells different options with them, so only a refusal is honest
 elsewhere. Recorded as `opt/set-e-carries-the-err-trap`.
 
+**`SetHasThePrivilegedLetter`** — bash yes · ksh93 yes · zsh yes · dash no ·
+ash no
+
+Makes `set -p` the short spelling of `set -o privileged`. Three of the
+panel have the letter and all three mean privileged mode by it; dash and
+ash refuse it as an illegal option.
+
+Routed through the long name rather than into a field of its own, so the
+letter and the name are one question with one answer — the rule `set -t`
+and `onecmd` already follow, and all three shells that have the letter
+also list the name. This shell has no privileged mode, so `privileged` is
+one of the `set -o` entries whose whole answer is "already off": `set +p`
+is **granted**, because turning off something the shell was never doing
+leaves it exactly where it was asked to be, and `set -p` is refused out
+loud, because turning it on would be a promise the shell cannot keep.
+That is setoptions.go's bargain and not a rule about this letter, and the
+divergence it leaves — real bash answers `set -p` with 0 — is the same
+one `set -o privileged` already had. Recorded as
+`opt/set-plus-p-is-privileged-under-a-letter`, which is the direction a
+script writes.
+
 **`UnderscoreTracksTheLastArgument`** — bash yes · dash no · ksh93 no · zsh yes
 
 Moves `$_` to the previous simple command's last expanded argument — the
@@ -11487,6 +11587,73 @@ terminal: still true in ksh93 and false everywhere else. `-2`, `-3` and
 value rather than a rule about negative descriptors — and a second
 question beside the narrowing above, since every saturating conversion
 lands here.
+
+#### The operators past the three-word rules
+
+Four more, each a split rather than a correction, and each measured one
+operator at a time — the panel answers them in three different groupings,
+which is what says they are four questions and not one.
+
+**`TestHasTheFileExistsLetter`** — bash yes · ksh93 yes · dash no · zsh no ·
+ash no
+
+Gives `test` a *unary* `-a`, asking what `-e` asks. The letter is the
+connective at three arguments and the file test at two, and the argument
+count is the whole of what decides: `[ "$a" -a "$b" ]` is the both-set
+guard in every column, `test -a f` is a file test in two of them and an
+operator the other three refuse.
+
+**`TestHasTheShellOptionOperator`** — the same five answers, for a unary
+`-o`: `test -o errexit` is true when the switch is on. An option name the
+shell has never heard of is **false rather than an error**, measured in
+both shells that have it, which is what says the operator answers a
+question rather than validating one. Written as a second axis and not as a
+reading of the first because a shell could have either without the other.
+
+**`TestHasTheModifiedSinceReadOperator`** — bash yes · ksh93 yes · zsh yes ·
+dash no · ash no
+
+Gives `test` a unary `-N`: the file has been written since it was last
+read. This pins the operator's *presence* and deliberately not its answer.
+Reading a file to ask the question is itself a read, and the panel does not
+even agree on a file nothing has touched — bash 5.3 and ksh93 answer false
+where bash 3.2 and zsh answer true, in the same run. What every column that
+has the operator does agree on is the comparison, which is what this shell
+implements: the modification time against the access time, to the
+nanosecond. The corpus row folds 0 and 1 together for the same reason, so
+it grades presence and cannot move on its own.
+
+**`TestStringOrder`** — bash both · dash both · ash both · ksh93 `>` alone ·
+zsh neither
+
+An enum over `<` and `>` rather than one flag, and ksh93 is why: `test b
+'<' a` there is `test: <: unknown operator` at 2 while `test b '>' a` is 0,
+so a single "does this shell order strings" question would be wrong about
+one of its two operators. Where the operators exist the comparison is byte
+order and a string one — `test 10 '<' 9` is true.
+
+A shell that lacks one has to **name it**, past three words as well as at
+three. `<` is not spelled like a unary operator, so without a reader for it
+the left operand becomes a bare string, the expression parses, and the
+count is reported instead of the token that was wrong: measured, `test -n x
+-a a '<' b` is `<: unknown operator` in ksh93 and `condition expected: <` in
+zsh, and neither says how many arguments there were. That is the #1290
+shape arriving by a second door.
+
+The refusal the first two letters leave behind splits once more, and it is
+a wording rather than an axis —
+**`Diagnostics.TestConnectiveIsALeftoverWord`**. In zsh `test -a f` is `too
+many arguments` while `test -Q f` is `unknown condition: -Q`, so `-a` is a
+word that shell knows — as the connective — and `-Q` is not. dash and ash
+have the same connectives and draw no such distinction.
+
+**What is not modeled**: at exactly three words the panel disagrees about
+whether `!` binds tighter than the connective. `test ! -a f` is 0 in bash
+and zsh, which read `-a` as the connective between two non-empty strings; 1
+in ksh93, which reads it as `!` negating a file test; and `-a: unexpected
+operator` in dash, which reads the `!` first and then has no unary `-a` to
+apply. This shell gives bash's answer, which is what it gave before these
+four axes and is unchanged by them.
 
 
 ### the names a builtin will and will not take

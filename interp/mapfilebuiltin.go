@@ -22,9 +22,8 @@ import (
 // delimiter from each element, -d renames the delimiter and an empty -d means
 // NUL, -n caps how many elements arrive (0 is no cap), -s throws away the
 // first N, -O writes from a given subscript into whatever the array already
-// holds, and -u reads a descriptor from the shell's own table. The -C/-c
-// callbacks are deferred: the dialect's letter table refuses them by name
-// rather than parsing and ignoring them.
+// holds, and -u reads a descriptor from the shell's own table, -C names a command
+// run every -c elements as the array fills, and -c is how many that is.
 func init() {
 	builtins["mapfile"] = func(r *Runner, ctx context.Context, args []string) int {
 		return biMapfile(r, ctx, "mapfile", args)
@@ -36,12 +35,12 @@ func init() {
 
 // biMapfile is both names; the complaints and the usage line carry whichever
 // one the script used, measured — `readarray -q` says readarray.
-func biMapfile(r *Runner, _ context.Context, name string, args []string) int {
+func biMapfile(r *Runner, ctx context.Context, name string, args []string) int {
 	// The letters are fixed rather than a semantics axis, because exactly
 	// one dialect has the command at all. Through the shared reader, so a
 	// bundle splits — `-tn 1` is `-t -n 1` — and an unknown letter is
 	// refused with the dialect's wording and usage line.
-	args, opts, optArg, code := r.builtinOptionsArg(name, args, "d:n:O:s:tu:")
+	args, opts, optArg, code := r.builtinOptionsArg(name, args, "C:c:d:n:O:s:tu:")
 	if code != 0 {
 		return code
 	}
@@ -80,6 +79,22 @@ func biMapfile(r *Runner, _ context.Context, name string, args []string) int {
 			return 1
 		}
 		skip = n
+	}
+
+	// The callback and how often it runs. The quantum is validated whenever
+	// -c is written, with or without a -C to call — measured, `mapfile -c 0`
+	// alone is the same refusal — and zero is refused rather than meaning no
+	// cap, which is the opposite of what zero means to -n above. The default
+	// is 5000, so a -C with no -c on a short list calls nothing at all.
+	callback, hasCallback := optArg['C']
+	quantum := 5000
+	if word, ok := optArg['c']; ok {
+		n, numeric := atoi(word)
+		if !numeric || n <= 0 {
+			r.diagf("%s: %s: invalid callback quantum\n", name, word)
+			return 1
+		}
+		quantum = n
 	}
 
 	// The origin. Giving it at all is what changes the write: with -O the
@@ -141,18 +156,39 @@ func biMapfile(r *Runner, _ context.Context, name string, args []string) int {
 	// The third stream a builtin waits on, and so the third place a
 	// background job's pid has to settle before it does — see
 	// settleBackgroundJobBeforeABlockingRead.
+	//
+	// The elements land one at a time rather than in one write at the end,
+	// because a -C callback can see the array and it sees a partly filled
+	// one: measured, the first call with `-c 1` prints an *empty* array and
+	// the second prints the first element. That is also when the replacing
+	// form empties what was there — before the first line is read, not after
+	// the last — so `arr=(x y z)` is already gone by the first callback.
+	if !originSet {
+		r.setArray(target, nil)
+	}
 	r.settleBackgroundJobBeforeABlockingRead(in)
 	next := directByteSource(in)
-	var elems []string
 	var b strings.Builder
-	seen := 0
+	seen, kept := 0, 0
+	keep := func(elem string) {
+		at := origin + kept
+		kept++
+		// Before the assignment, and only on a multiple of the quantum: the
+		// callback is handed the subscript this element is *about* to get and
+		// the element itself. -O moves the subscript with it, and -s does not
+		// — a skipped line is never an element and never counts here.
+		if hasCallback && kept%quantum == 0 {
+			r.runMapfileCallback(ctx, callback, at, elem)
+		}
+		r.setArrayElem(target, at, itoa(at), elem)
+	}
 	for count == 0 || seen < skip+count {
 		c, ev := next()
 		if ev != evByte {
 			if b.Len() > 0 {
 				seen++
 				if seen > skip {
-					elems = append(elems, b.String())
+					keep(b.String())
 				}
 			}
 			break
@@ -163,23 +199,50 @@ func biMapfile(r *Runner, _ context.Context, name string, args []string) int {
 		if c == delim {
 			seen++
 			if seen > skip {
-				elems = append(elems, b.String())
+				keep(b.String())
 			}
 			b.Reset()
 		}
 	}
 
-	if !originSet {
-		r.setArray(target, elems)
-		return 0
-	}
-	for i, e := range elems {
-		r.setArrayElem(target, origin+i, itoa(origin+i), e)
-	}
 	if _, ok := r.Arrays[target]; !ok {
 		// Nothing arrived and nothing was there: the name still becomes an
 		// empty array, exactly as the replacing form leaves it.
 		r.setArray(target, nil)
 	}
 	return 0
+}
+
+// runMapfileCallback runs one -C call.
+//
+// It is text joined and evaluated, not a command with two arguments appended,
+// and the difference is measurable in three directions: `-C 'echo A |'` runs
+// the subscript as a command on the right of a pipe, `-C 'echo x; exit'` hands
+// the arguments to the *last* command in the string, and `-C 'echo "'` fails
+// to parse. So the callback is a fragment of shell source and the two
+// arguments are appended to it as source.
+//
+// Which is why the element is quoted on the way in. It is one argument
+// whatever it holds — measured with embedded spaces, a `*`, a `$V` and a `;`,
+// all of which arrive literally — so joining it raw would let a line of data
+// become a line of program.
+//
+// The status is not the builtin's: a callback that fails leaves `mapfile` at
+// 0, measured with `-C false`.
+//
+// The label is `stdin` rather than `eval`, which is measured and is not the
+// same answer `eval` itself gives on the same route: a malformed `eval` is
+// `bash: eval: line 1: …` and a malformed callback is `bash: stdin: line 1: …`,
+// from a script file as well as from standard input. Fixed here rather than
+// asked of the dialect for the reason the letters are: one dialect has the
+// command at all.
+func (r *Runner) runMapfileCallback(ctx context.Context, callback string, at int, elem string) {
+	status := r.status
+	text := callback + " " + itoa(at) + " " + singleQuoted(elem, `'\''`, false)
+	r.runSourced(ctx, text, sourced{
+		eval:         true,
+		label:        "stdin",
+		syntaxStatus: r.diag().SyntaxStatus(),
+	})
+	r.status = status
 }

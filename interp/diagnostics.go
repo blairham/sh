@@ -340,6 +340,22 @@ type Diagnostics struct {
 	// condition's operand in a dialect that does not allow one there. One
 	// verb: the substitution as it was written, `<(cmd)` and not its inside.
 	ProcessSubstitutionNotInCondition string
+	// TestConnectiveIsALeftoverWord reads `-a` and `-o` standing where a
+	// unary operator belongs as a *string* with a word left over, rather
+	// than as an operator the shell does not have.
+	//
+	// The distinction is only visible in a shell that has the connectives
+	// and not the file test, which is zsh: `test -a f` there is `too many
+	// arguments` where `test -Q f` is `unknown condition: -Q`, so the two
+	// letters are words it knows and `-Q` is not. dash and ash have the same
+	// connectives and make no such distinction — both are the ordinary
+	// unknown-operator complaint there.
+	//
+	// A wording choice rather than an axis: what the words mean is settled
+	// by Semantics.TestHasTheFileExistsLetter and its neighbor, and this is
+	// which complaint the refusal they leave behind carries.
+	TestConnectiveIsALeftoverWord bool
+
 	// TestTooManyArguments is a well-formed expression with words left over.
 	// No verbs.
 	TestTooManyArguments string
@@ -395,8 +411,14 @@ type Diagnostics struct {
 	HashNotFound string
 
 	// CompleteNoSpec is `complete -p` or `-r` on a name nothing was
-	// registered for. One verb: the name.
+	// registered for — and `compopt` on one, which is why the builtin's own
+	// name is `%[2]s` rather than written into the sentence: the two say the
+	// same thing about the same table and each blames itself.
 	CompleteNoSpec string
+
+	// CompoptNoCompletion is `compopt` with no name outside a completion
+	// function. No verbs.
+	CompoptNoCompletion string
 
 	// FunctionNameInvalid refuses to define a function whose name carries
 	// punctuation, in the dialect that refuses one. One verb: the name.

@@ -892,6 +892,13 @@ func Semantics() interp.Semantics {
 	s.WaitForAJobFailsWhenInterrupted = interp.No
 	s.DisownRemovesTheJob = interp.Yes
 	s.CommandRejectsUnknownOption = interp.No
+	// `command` here means an *external* program of that name and nothing
+	// else: `command set -o …` is `command not found: set` at 127, not the
+	// survivable spelling of a special builtin it is in the other four. The
+	// state is not fixed — `posixbuiltins` moves it, and `emulate sh` and
+	// `emulate ksh` turn that option on — so setopt.go reads and writes this
+	// axis and the preset only says where a plain zsh starts.
+	s.CommandReachesABuiltin = interp.No
 	s.GetoptsRejectsUnknownOption = interp.No
 	s.ShiftCountIsArithmetic = interp.Yes
 	// No by construction rather than by measurement: zsh has already parsed
@@ -1384,6 +1391,12 @@ func Semantics() interp.Semantics {
 	s.ExecFailureRunsExitTrap = interp.No
 	s.ExecTakesOptions = interp.Yes
 	s.TestAcceptsDoubleEqual = interp.Yes
+	// Of the operators past the three-word rules this shell has only `-N`:
+	// `test -a f` and `test -o errexit` are `too many arguments` here, and
+	// `<` and `>` are `condition expected`.
+	s.TestHasTheModifiedSinceReadOperator = interp.Yes
+	// `set -p` is the short spelling of `privileged` here too.
+	s.SetHasThePrivilegedLetter = interp.Yes
 	// `-nt` and `-ot` want both files to exist, and `-t x` is a plain
 	// false rather than an integer complaint.
 	s.MissingFileIsOlder = interp.No
@@ -2460,7 +2473,7 @@ func Diagnostics() interp.Diagnostics {
 			// point of the pair: this shell will not move that option at
 			// all, which is a different sentence from a letter we have not
 			// built — see ImmovableOptionLetters below.
-			"set": "dgiklprswyBDEFGHIJKLMNOPQRSTUVWXYZ",
+			"set": "dgiklrswyBDEFGHIJKLMNOPQRSTUVWXYZ",
 			// read's letters about a terminal or the line editor — -q's one
 			// keystroke, -e/-E echoing, -z and the zle pair -c/-l. The -p
 			// coprocess is implemented as its measured refusal — see
@@ -2885,10 +2898,16 @@ func Diagnostics() interp.Diagnostics {
 		// The whole substitution as it was written, not its inside.
 		ProcessSubstitutionNotInCondition: "process substitution %[1]s cannot be used here",
 		TestTooManyArguments:              "too many arguments",
-		TestOperandExpected:               "argument expected",
-		TestMissingBracket:                "']' expected",
-		TimesDecimals:                     2,
-		TimesArguments:                    "times: too many arguments",
+		// `-a` and `-o` are words this shell knows — as the connectives —
+		// so one standing where a unary operator belongs is a string with a
+		// word left over rather than an operator it has never heard of.
+		// Measured: `test -a f` is `too many arguments` and `test -Q f` is
+		// `unknown condition: -Q`.
+		TestConnectiveIsALeftoverWord: true,
+		TestOperandExpected:           "argument expected",
+		TestMissingBracket:            "']' expected",
+		TimesDecimals:                 2,
+		TimesArguments:                "times: too many arguments",
 		// The `time` keyword reports one line per pipeline element that
 		// forked, labeled with the element as written, and nothing for one
 		// that did not — `time true` prints nothing at all here. A bare
@@ -3127,6 +3146,7 @@ func Apply(r *interp.Runner) {
 	r.SetExpansionEscapes(expandExpansionFlagEscapes)
 	// No `compgen` here; it is bash's alone.
 	r.Unregister("compgen")
+	r.Unregister("compopt")
 	r.Unregister("complete")
 	// And neither `mapfile` nor its other name; both are bash's alone.
 	r.Unregister("mapfile")

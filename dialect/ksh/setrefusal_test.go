@@ -85,10 +85,14 @@ func TestKshRefusesAnInvocationOptionWithItsOwnUsageLine(t *testing.T) {
 // builtins whose letters are an optstring; `set`'s are a switch, so this is
 // the row that has to be kept honest by hand.
 func TestKshKeepsTheSetLettersItHasAndThisShellDoesNot(t *testing.T) {
-	if got, want := ksh.Diagnostics().UnimplementedOptionLetters["set"], "bkprsGH"; got != want {
+	// `-p` left in #2412: it is the short spelling of `privileged`, which
+	// this shell answers through the `set -o` table, so `set +p` is granted
+	// and `set -p` is refused by the name. A letter routed to a name must
+	// not also be listed here.
+	if got, want := ksh.Diagnostics().UnimplementedOptionLetters["set"], "bkrsGH"; got != want {
 		t.Errorf("UnimplementedOptionLetters[set] = %q, want %q", got, want)
 	}
-	for _, l := range "bkprsGH" {
+	for _, l := range "bkrsGH" {
 		src := "set -" + string(l) + "\n"
 		if got := refuseInScript(t, src); !strings.Contains(got, "is not implemented yet") {
 			t.Errorf("%q said %q, want it called missing rather than unknown", src, got)

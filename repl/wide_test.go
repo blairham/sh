@@ -86,18 +86,24 @@ func TestTheCursorIsPlacedInCellsAndNotCharacters(t *testing.T) {
 }
 
 // A line of wide characters wraps at half as many of them, and the redraw has
-// to come back up over every row it drew.
+// to reach every row it drew.
 func TestAWrappedLineOfWideCharacters(t *testing.T) {
 	// Ten columns, two of prompt: four wide characters fill the first row and
 	// the fifth is on the second.
-	out := typedAtWith(t, 10, "$ ", "日本語日本\r")
-	if !strings.Contains(out, "\x1b[1A") {
-		t.Errorf("no move back up to the prompt row in %q", out)
+	s := drawnScreen(t, 10, "$ ", []edit{{"日本語日", 4}, {"日本語日本", 5}})
+	if got, want := s.text(), "$ 日本語日\n本"; got != want {
+		t.Errorf("screen is\n%q\nwant\n%q", got, want)
 	}
-	// Four of them is eight columns and fits; nothing should move rows.
-	short := typedAtWith(t, 10, "$ ", "日本語日\r")
-	if strings.Contains(short, "\x1b[1A") {
-		t.Errorf("moved rows for a line that fits: %q", short)
+	if row, col := s.at(); row != 1 || col != 2 {
+		t.Errorf("cursor at row %d column %d, want row 1 column 2", row, col)
+	}
+	// Four of them is eight columns and fits on the one row.
+	short := drawnScreen(t, 10, "$ ", []edit{{"日本語", 3}, {"日本語日", 4}})
+	if got, want := short.text(), "$ 日本語日"; got != want {
+		t.Errorf("screen is\n%q\nwant\n%q", got, want)
+	}
+	if row, col := short.at(); row != 1 || col != 0 {
+		t.Errorf("cursor at row %d column %d, want row 1 column 0", row, col)
 	}
 }
 

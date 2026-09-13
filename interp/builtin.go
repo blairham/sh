@@ -607,6 +607,18 @@ func (r *Runner) setOptionsAndOperands(_ context.Context, args []string) int {
 // See Semantics.SetValidatesOptionLettersFirst for the measurement and for
 // why the invocation and the environment are not this question.
 func (r *Runner) refuseBeforeApplyingSetOptions(args []string) (int, bool) {
+	if r.reportsEveryBadSetOption() {
+		// ksh93 reads every option word and reports every bad one, names and
+		// letters alike and in the order they were written — `set -o nosuch
+		// -z` draws both sentences and one usage line. It applies none of
+		// them either, measured, so it agrees with bash about what is left
+		// behind and disagrees about how far the reading goes: a pass over
+		// the *letters* would lose the name reports that make this dialect
+		// what it is, and one over both would leave errexit off where bash
+		// leaves it on. Two mechanisms, and this axis is only one of them —
+		// so this dialect is not asked and does not answer it.
+		return 0, false
+	}
 	if r.atInvocation || r.fromEnvironment {
 		// The front end's own parse is position-sensitive where this one is
 		// not, measured; one pass cannot be both, and guessing that they are
@@ -673,9 +685,9 @@ func (r *Runner) unknownSetLetter(args []string, report bool) (bad rune, on, pre
 			return
 		}
 		sign := a[0] == '-'
-		letters, stop := a[1:], false
+		letters, read, stop := a[1:], false, false
 		if before, after, ok := strings.Cut(letters, "o"); ok {
-			letters, seen = before, true
+			letters, read = before, true
 			if after == "" && i+1 < len(args) {
 				i++
 			}
@@ -689,6 +701,13 @@ func (r *Runner) unknownSetLetter(args []string, report bool) (bad rune, on, pre
 				}
 				continue
 			}
+			seen = true
+		}
+		// The `-o` counts as read only once the letters in front of it are
+		// past: `set -Zo pipefail` refuses `Z` with nothing yet applied,
+		// which is the same answer under both readings and must not be
+		// mistaken for the disagreement.
+		if read {
 			seen = true
 		}
 		if stop {

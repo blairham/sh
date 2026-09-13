@@ -4,6 +4,7 @@
 package interp_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -32,6 +33,11 @@ func ashLike() (Semantics, Diagnostics) {
 	// ash gives `-o` the next word and reads the rest of its own as letters,
 	// which is what makes the attached form below a *letter* refusal at all.
 	sem.SetOLetterAttachesItsName = No
+	// And it applies as it goes, so the letters welded behind the `-o` are
+	// refused by the one pass it has, at the letter's own status and
+	// fatality. This is the column bash parts from; see
+	// TestAWeldedLetterIsRefusedByTheApplyingPass.
+	sem.SetValidatesOptionLettersFirst = No
 	return sem, Diagnostics{
 		Location:                     LocationNone,
 		SetInvalidOptionName:         "set: illegal option -o %[1]s",
@@ -95,12 +101,19 @@ func TestAGrantedSetOptionAsksNothing(t *testing.T) {
 		// question about a word with characters *behind* the `o`, and none
 		// of these has one. `set -euo pipefail` is the line this protects.
 		{"a bundle ending in the o letter", `set -uo nounset; echo "ok=$?"`},
+		// And the validating pass with them. It is a question about what a
+		// *refusal* leaves applied, so a `set` with no bad letter in it has
+		// nothing for either reading to disagree over — and neither has one
+		// whose bad letter is the first thing in the word list, where
+		// applying as you go has applied nothing either.
+		{"a bundle of letters with a name behind it", `set -ue -o nounset; echo "ok=$?"`},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			sem := PosixSemantics()
 			sem.BadSetOptionNameFatal = Unspecified
 			sem.BadSetOptionLetterFatal = Unspecified
 			sem.SetOLetterAttachesItsName = Unspecified
+			sem.SetValidatesOptionLettersFirst = Unspecified
 			out, st := run(t, c.src, func(r *Runner) { r.Semantics = &sem })
 			if out != "ok=0\n" || st != 0 {
 				t.Errorf("got %q at %d, want %q at 0 and nothing asked", out, st, "ok=0\n")
@@ -112,6 +125,97 @@ func TestAGrantedSetOptionAsksNothing(t *testing.T) {
 // And the other half of the same rule: each spelling's *own* refusal reaches
 // its own axis, so an unanswered one is refused by name rather than quietly
 // picking a side — and the axis that was not asked stays silent.
+// TestARefusalWithNothingInFrontOfItAsksNothing is the other half of the rule
+// above, and the one that keeps the new axis off the common path: a bad
+// option letter with nothing already read in front of it is refused the same
+// way under both readings — nothing had been applied either way — so the
+// question is never put.
+//
+// `set -Z` is the whole of what `opt/an-unknown-letter-is-refused` grades,
+// and an axis asked there would have made every column's refusal an
+// unanswered-axis complaint in the core.
+func TestARefusalWithNothingInFrontOfItAsksNothing(t *testing.T) {
+	for _, c := range []struct{ name, src string }{
+		{"a letter on its own", "set -Z\n"},
+		{"the first letter of a bundle", "set -Ze\n"},
+		{"a sign that is not a word", "set +Z\n"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			sem := PosixSemantics()
+			sem.BadSetOptionLetterFatal = No
+			sem.SetValidatesOptionLettersFirst = Unspecified
+			out, _ := run(t, c.src, func(r *Runner) { r.Semantics = &sem })
+			if strings.Contains(out, "the shells disagree here and no dialect was chosen") {
+				t.Errorf("got %q, want the refusal to stand on its own with no axis asked", out)
+			}
+		})
+	}
+}
+
+// And where something *has* been read in front of it, the question is put —
+// which is the disagreement itself, and the mutation that kills a pass that
+// quietly picked a side.
+func TestARefusalBehindAnAppliedLetterAsksTheAxis(t *testing.T) {
+	sem := PosixSemantics()
+	sem.BadSetOptionLetterFatal = No
+	sem.SetValidatesOptionLettersFirst = Unspecified
+	out, _ := run(t, "set -uZ\n", func(r *Runner) { r.Semantics = &sem })
+	if !strings.Contains(out, "reading every option word's letters before it applies any of them") {
+		t.Errorf("got %q, want the validating pass named as the unanswered axis", out)
+	}
+}
+
+// With the axis answered, the two readings part on what the shell is left
+// holding: the letter in front of the bad one is applied in one and not in
+// the other, from the same two words.
+func TestTheValidatingPassAppliesNothing(t *testing.T) {
+	for _, c := range []struct {
+		name   string
+		answer Answer
+		want   string
+	}{
+		{"validated first", Yes, "u=off"},
+		{"applied as it goes", No, "u=on"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			sem := PosixSemantics()
+			sem.BadSetOptionLetterFatal = No
+			sem.SetValidatesOptionLettersFirst = c.answer
+			out, _ := run(t, `set -u -Z; case $- in *u*) echo "u=on";; *) echo "u=off";; esac`+"\n",
+				func(r *Runner) { r.Semantics = &sem })
+			if !strings.Contains(out, c.want) {
+				t.Errorf("got %q, want %q", out, c.want)
+			}
+		})
+	}
+}
+
+// And the letters welded behind an `-o` are the ones that pass cannot see, so
+// the shell that has one refuses them at 1 and carries on where its own bad
+// letter is 2 and ends the script.
+func TestAWeldedLetterIsRefusedByTheApplyingPass(t *testing.T) {
+	for _, c := range []struct {
+		name   string
+		answer Answer
+		want   int
+	}{
+		{"the applying pass answers for it", Yes, 1},
+		{"one pass, one answer", No, 2},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			sem := PosixSemantics()
+			sem.BadSetOptionLetterFatal = No
+			sem.SetOLetterAttachesItsName = No
+			sem.SetValidatesOptionLettersFirst = c.answer
+			out, _ := run(t, `set -oZ >/dev/null; echo "st=$?"`+"\n",
+				func(r *Runner) { r.Semantics = &sem })
+			if !strings.Contains(out, fmt.Sprintf("st=%d", c.want)) {
+				t.Errorf("got %q, want st=%d", out, c.want)
+			}
+		})
+	}
+}
+
 func TestEachRefusalReachesItsOwnAxis(t *testing.T) {
 	for _, c := range []struct{ name, src, why string }{
 		{"a letter", "set -Z\n", "a refused `set` option letter ending the script"},
@@ -125,6 +229,10 @@ func TestEachRefusalReachesItsOwnAxis(t *testing.T) {
 			// nothing at all.
 			sem := PosixSemantics()
 			sem.BadSetOptionNameFatal, sem.BadSetOptionLetterFatal = Yes, Yes
+			// And the validating pass answered, because `set -xZ` has a
+			// letter applied in front of the bad one and would otherwise
+			// reach that axis first — which is its own test above.
+			sem.SetValidatesOptionLettersFirst = No
 			if strings.Contains(c.why, "letter") {
 				sem.BadSetOptionLetterFatal = Unspecified
 			} else {

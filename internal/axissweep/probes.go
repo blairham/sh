@@ -437,6 +437,38 @@ func Probes() []Probe {
 			},
 		},
 		{
+			Field: "SetValidatesOptionLettersFirst",
+			Cases: []string{"opt/a-bad-letter-behind-a-good-one"},
+			// Only the two columns that survive a refused letter can answer
+			// this from a recorded cell at all, and that is the honest state
+			// of it rather than a gap to paper over: in the other five the
+			// refusal ends the script before it can say what was applied, so
+			// the record holds a fatality and not an answer. They were asked
+			// with `command set` in front, which is a probe and not a row.
+			//
+			// Two controls, and both are the #2645 one pointing at this row's
+			// two ways of holding nothing. A cell with empty standard error
+			// refused nothing, so it says nothing about what a refusal
+			// leaves behind; and a cell whose standard output never reaches
+			// the `u=` word was ended by the refusal, which is the other
+			// axis's answer and not this one's. Scoring either `No` would
+			// make silence agree with whatever the preset already held.
+			Reading: "`set -u -q; …; case $- in *u*)` leaves nounset **off** in a shell that reads every option word's letters before applying one, and **on** in a shell that applies them as it goes",
+			Read: func(cells map[string]oracle.Result) (string, string) {
+				r := cells["opt/a-bad-letter-behind-a-good-one"]
+				if strings.TrimSpace(r.Stderr) == "" {
+					return "", "this shell refused nothing — the recorded cell holds no refusal, so the row says nothing about what one leaves applied"
+				}
+				switch {
+				case strings.Contains(r.Stdout, "u=off"):
+					return "Yes", ""
+				case strings.Contains(r.Stdout, "u=on"):
+					return "No", ""
+				}
+				return "", "the refusal ended the script before it could say what had been applied — the cell holds a fatality rather than an answer"
+			},
+		},
+		{
 			Field: "BadSetOptionLetterFatal",
 			Cases: []string{"opt/an-unknown-letter-is-refused"},
 			// The mirror, and the reason the two are separate axes at all:

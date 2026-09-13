@@ -5696,10 +5696,10 @@ type Semantics struct {
 	// letters of every word it was given before it applies any of them, so
 	// that one bad letter anywhere leaves the shell exactly as it was.
 	//
-	// Yes in the three bash columns and in ksh93; No in dash, BusyBox ash and
-	// zsh. Measured 2026-09-13 across all seven, with `command set` in front
-	// of the builtin so that the four columns where a refusal is fatal live
-	// long enough to be asked what they applied, and with a control row —
+	// Yes in the three bash columns; No in dash, BusyBox ash and zsh.
+	// Measured 2026-09-13 across all seven, with `command set` in front of
+	// the builtin so that the four columns where a refusal is fatal live long
+	// enough to be asked what they applied, and with a control row —
 	// `command set -e` alone — proving the probe can see errexit at all:
 	//
 	//	command set -e -Z || true; case $- in *e*) …    bash, ksh93  errexit off
@@ -5717,12 +5717,23 @@ type Semantics struct {
 	// letter leaves that letter applied in every bash column — `command set
 	// -e -o zzznosuch` is errexit on — so the pass that runs first knows the
 	// letter table and not the name table, and the name is refused later by
-	// the applying pass. ksh93 is the exception and stops for the name too;
-	// that is measured and not modeled, because one axis with a wider reach
-	// in one dialect would be two axes wearing one name. Word boundaries are
-	// unanimous and need no axis: `set -e -- -Z` and `set -e x -Z` turn
-	// errexit on and make `-Z` a positional parameter in all seven, so the
-	// pass stops where option parsing stops.
+	// the applying pass. Word boundaries are unanimous and need no axis:
+	// `set -e -- -Z` and `set -e x -Z` turn errexit on and make `-Z` a
+	// positional parameter in all seven, so the pass stops where option
+	// parsing stops.
+	//
+	// **ksh93 is not asked this and does not answer it**, which is a decision
+	// and not an omission. It leaves nothing applied, like bash — but it gets
+	// there by reading every option word, reporting every bad one in the
+	// order they were written, names and letters alike, and applying none of
+	// them: `set -o nosuch -z` draws both sentences and one usage line, and
+	// `command set -u -o zzznosuch` is nounset **off** where bash's is on.
+	// That is SetReportsEveryBadOption carried one step further and it is a
+	// second mechanism, not a value of this one — a letters-only pass there
+	// would lose the name reports, and a pass over both would put bash's
+	// errexit off where the measurement says it is on. refuseBeforeApplying
+	// SetOptions declines to ask any dialect that reports every bad option,
+	// so the unanswered field is never reached rather than quietly defaulting.
 	//
 	// The consequence this was found by. Characters welded behind an `o` are
 	// what the `-o` takes under either reading, so the validating pass never

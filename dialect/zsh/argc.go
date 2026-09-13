@@ -76,7 +76,7 @@ func registerARGC(r *interp.Runner) {
 	// the route an ordinary attributed name takes, and this shell wrote
 	// `typeset -r ARGC=0` where zsh writes nothing.
 	//
-	// The integer half is silent's *neighbour* rather than its opposite, and
+	// The integer half is silent's *neighbor* rather than its opposite, and
 	// leaving it out cost two answers rather than none (#2552). Silence is
 	// the `-p` word's, so the two forms that do write the name still need
 	// the letters: measured in the same run, a bare `typeset` writes

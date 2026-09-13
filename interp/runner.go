@@ -1330,6 +1330,12 @@ type Runner struct {
 	posixSavedForName       ForNameRunForm
 	posixSavedFuncName      FuncNameRunForm
 	posixSavedBadOption     Answer
+	// Whether an assignment written in front of a special builtin is still
+	// set on the next line. Saved like the rest, and for a reason the others
+	// only half share: the two dialects that answer `No` are the two with a
+	// POSIX mode, so this is the field that would be *most* wrong to assert
+	// the standard's answer to on the way out.
+	posixSavedAssignPrefix Answer
 	// The three listing axes the mode moves, saved for the same reason and
 	// separately for the same reason: no shell in the panel answers all
 	// three alike, so one remembered form could not put three back. The

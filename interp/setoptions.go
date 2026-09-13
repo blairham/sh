@@ -253,14 +253,14 @@ var extraSetOptions = map[string]setOption{
 	// It moves the axes measured to move with it and no others, which is the
 	// same partial honesty `emulate` keeps in the zsh dialect: real posix
 	// modes fold in dozens of behaviors, and claiming those would be a
-	// promise nothing here keeps. Today that is eight axes, and the evidence
+	// promise nothing here keeps. Today that is nine axes, and the evidence
 	// is direct in every case — `set -o posix` makes a failed redirection on
 	// a special builtin end bash 5.3 and bash 3.2, `set +o posix` makes bash
 	// invoked as `sh` carry on, and the two states are exactly the panel's
 	// `bash` and `bash-as-sh` columns. See SetPosixMode for the list and for
 	// the measurement behind each.
 	//
-	// Seven of the eight take the standard's own answer, and the eighth takes
+	// Eight of the nine take the standard's own answer, and the ninth takes
 	// the *dialect's* answer to what its mode makes of that axis. See
 	// SetPosixMode: the mode is the core's, and what a given shell's mode
 	// moves is not (#2583).
@@ -330,9 +330,9 @@ var extraSetOptions = map[string]setOption{
 // two questions; this is the mode, and it is the core's for the same reason
 // PosixSemantics is.
 //
-// **Eight of the nine axes it moves take the standard's own answer**, because
+// **Nine of the ten axes it moves take the standard's own answer**, because
 // that is what the name asks for and every shell with a POSIX mode was measured
-// to take them. The ninth — BadOptionToSpecialBuiltinFatal — it takes from the
+// to take them. The tenth — BadOptionToSpecialBuiltinFatal — it takes from the
 // dialect, through BadOptionToSpecialBuiltinFatalInPosixMode, because the shells
 // disagree about what their own mode makes of it: bash's moves it to fatal
 // through either door and zsh's leaves it alone, while both shells' mode moves
@@ -365,6 +365,7 @@ func (r *Runner) SetPosixMode(on bool) {
 	readonlyListing := r.posixSavedReadonlyListing
 	bareListing := r.posixSavedBareListing
 	badOption := r.posixSavedBadOption
+	assignPrefix := r.posixSavedAssignPrefix
 	aliasReserved := r.posixSavedAliasReserved
 	if on {
 		r.posixSaved = r.sem().RedirectErrorOnSpecialBuiltinFatal
@@ -383,6 +384,8 @@ func (r *Runner) SetPosixMode(on bool) {
 		bareListing = posixListing(r.posixSavedBareListing)
 		r.posixSavedBadOption = r.sem().BadOptionToSpecialBuiltinFatal
 		badOption = r.sem().BadOptionToSpecialBuiltinFatalInPosixMode
+		r.posixSavedAssignPrefix = r.sem().AssignmentPrefixPersistsOnSpecialBuiltin
+		assignPrefix = Yes
 		r.posixSavedAliasReserved = r.dialect().AliasesExpandReservedWords
 		aliasReserved = false
 		redir, unsetRO = Yes, Yes
@@ -471,8 +474,39 @@ func (r *Runner) SetPosixMode(on bool) {
 		// given zsh-as-`sh` a fatality zsh does not have, which is the whole
 		// of why this axis was not simply added to the others (#2583).
 		s.BadOptionToSpecialBuiltinFatal = badOption
+		// The ninth, and the second one that is about what a special builtin
+		// leaves behind rather than about what ends a script. It takes the
+		// standard's own answer, like the seven above and unlike the one
+		// before it, because the panel was measured to be unanimous about it
+		// in both halves — which is the whole of why it is here and not a
+		// tenth `…InPosixMode` twin. Measured 2026-09-13 over
+		// `FOO=1 : ; echo "[$FOO]"`:
+		//
+		//	          default   mode on           called sh
+		//	bash 5.3    []      [1] -o posix        [1]
+		//	bash 3.2    []      [1] -o posix        [1]
+		//	zsh 5.9     []      [1] -o posixbuiltins [1]
+		//	dash        [1]     no such mode        [1]
+		//	ksh93       [1]     no such mode        [1]
+		//	BusyBox ash [1]     no such mode        [1]
+		//
+		// Every shell with a POSIX mode moves to the standard's answer, and
+		// every shell without one already holds it. That second half is the
+		// measurement that matters here, because this knob is entered by
+		// *every* dialect invoked as `sh`: writing `Yes` cannot impose
+		// anything on dash, ksh93 or ash, since `Yes` is what all three
+		// already say under every name. Contrast
+		// BadOptionToSpecialBuiltinFatal directly above, where zsh's mode
+		// does not move the axis and a written-in `Yes` would have given
+		// zsh-as-`sh` a fatality zsh has not got (#2583, #2659).
+		//
+		// `FOO=1 true` is the control and it stays transient in both modes
+		// in all six: the mode moves the special-builtin rule and not the
+		// prefix rule as a whole, which is why this is the one field written
+		// and not the site in Runner.execBuiltin.
+		s.AssignmentPrefixPersistsOnSpecialBuiltin = assignPrefix
 	})
-	// The ninth, and the only one that is not on the vector at all: whether
+	// The tenth, and the only one that is not on the vector at all: whether
 	// an alias may stand in for a word the grammar reserves is decided while
 	// a line is *read*, so it is a dialect field and the mode reaches it the
 	// way a grammar-reaching option does — a replaced Dialect, never a write

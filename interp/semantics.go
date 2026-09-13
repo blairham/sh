@@ -349,8 +349,44 @@ type Semantics struct {
 	GlobNoMatchIsError Answer
 
 	// AssignmentPrefixPersistsOnSpecialBuiltin keeps `x=1 shift` set
-	// afterwards. POSIX requires it; dash and ksh93 comply and bash and zsh
-	// do not.
+	// afterwards. POSIX requires it.
+	//
+	// **This is the dialect's default and not the shell's whole answer**, and
+	// the distinction is load-bearing here in a way it is not for most of
+	// this vector: the two dialects that answer `No` are exactly the two with
+	// a POSIX mode, and both of them move to `Yes` the moment it is on.
+	// Measured 2026-09-13 over `FOO=1 : ; echo "[$FOO]"`, with the same
+	// answer from `FOO=1 export -p`, `FOO=1 . /dev/null` and `FOO=1 source
+	// /dev/null`:
+	//
+	//	              default   its own mode          called `sh`
+	//	bash 5.3        []      [1]  -o posix           [1]
+	//	bash 3.2        []      [1]  -o posix           [1]
+	//	zsh 5.9         []      [1]  -o posixbuiltins   [1]
+	//	dash            [1]     no such mode            [1]
+	//	ksh93u+         [1]     no such mode            [1]
+	//	BusyBox ash     [1]     no such mode            [1]
+	//
+	// So the panel does not split two-and-two on the *behavior*; what splits
+	// two-and-two is the default, and reading the old comment as the former
+	// is the mistake this one exists to stop (#2659).
+	//
+	// Written here once and moved from two places, which are the two doors
+	// the measurement found and not two homes for one decision:
+	// [Runner.SetPosixMode] swaps in the standard's `Yes` for the core's mode
+	// — the door bash's `set -o posix` and every dialect's `sh` name take —
+	// and the zsh dialect's `posixbuiltins` swaps it for zsh's own option,
+	// which is the only door zsh has. Each is killed by a different row: take
+	// the first away and `bash -o posix` and both shells called `sh` go
+	// wrong, take the second away and `zsh -o posixbuiltins` does.
+	//
+	// The mode taking the standard's own answer rather than a
+	// `…InPosixMode` twin is what the second half of the table above buys:
+	// the core's mode is entered by *every* dialect invoked as `sh`, so a
+	// written-in `Yes` is only safe where the dialects with no mode of their
+	// own already say `Yes` — and all three do, under every name. Compare
+	// BadOptionToSpecialBuiltinFatal, where zsh's mode leaves the axis alone
+	// and the twin had to be added (#2583).
 	AssignmentPrefixPersistsOnSpecialBuiltin Answer
 
 	// AssignmentPrefixPersistsAfterAFunction keeps `v=9 f` set once `f` has

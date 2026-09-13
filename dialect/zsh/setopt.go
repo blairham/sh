@@ -511,9 +511,20 @@ var zshOptions = []zshOption{
 	recorded("printexitvalue", false),
 	recorded("privileged", false),
 	recorded("promptbang", false),
-	recorded("promptcr", true),
+	// PROMPT_CR and PROMPT_SP are read by the line editor every time it
+	// draws a prompt — `repl.EditorStyle` names them and `Shell.dialectOption`
+	// asks this namespace for their state — so neither is `recorded`, which
+	// means remembered and acted on by nothing.
+	//
+	// They were left as `recorded` during #2502 as a workaround rather than
+	// an answer: `emulate` reset every non-recorded name, so calling them
+	// what they are would have made `setopt nopromptsp; emulate sh` turn the
+	// mark back on. #2515 took the reset off that distinction — both names
+	// are measured as ones a bare `emulate` leaves alone — so the workaround
+	// is no longer buying anything and the entries can say what is true.
+	storeBacked("promptcr", true),
 	recorded("promptpercent", true),
-	recorded("promptsp", true),
+	storeBacked("promptsp", true),
 	recorded("promptsubst", false),
 	recorded("pushdignoredups", false),
 	recorded("pushdminus", false),

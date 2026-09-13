@@ -8611,13 +8611,15 @@ next command.** With a coprocess that has certainly ended:
     :  :  :                   the array is still 2, for any number of builtins
     jobs                      still 2 — asking after the jobs is not waiting
     v=$( : )                  still 2
-    ( : )                     0
+    ( : )                     0 — on an idle machine; see below
+    ( a loop of builtins )    0 — at any load
     : | :                     0
     /usr/bin/true             0
     wait                      0
 
 **bash's own rule is asynchronous and racy, and the shapes above are the
-deterministic ends of it.** It has no rule about forking: a `for
+ends of it a loaded machine does not move** — with one exception, below.
+It has no rule about forking: a `for
 ((i=0;i<500;i++)); do :; done` answers 0 five times out of five with no
 fork in it at all, five iterations of the same loop answers 2 five times
 out of five, and between 10 and 200 the same line answers both ways on
@@ -8627,6 +8629,28 @@ arriving whenever the child gets round to exiting and the notice landing
 at the next command boundary after it — so a construct wins the race by
 taking long enough *and* running commands, which a fork does and a line
 of builtins does not.
+
+**The exception is `( : )`, and it is the reason the corpus row spells
+the subshell with a loop in it** (#2506). A subshell that returns as
+fast as the coprocess exits does not *end* the race, it only wins it
+most of the time: measured against bash 5.3.15 on 2026-09-12, `coproc CP
+{ echo hi; }; ( : ); echo "n=${#CP[@]}"` answered 2 rather than 0 in 9
+runs of 300 with the machine at load 12, in 463 of 1600 at load 24, and
+in 837 of 3000 at load 55. The recorded cell was therefore a fact about
+how busy the recording machine was, and `oracle-check` read a saturated
+laptop as a shell that had changed — a failure no diff can explain,
+because no change caused it.
+
+What removes the race is a subshell that **outlives** the coprocess,
+since the shell is then already blocked in its wait when the coprocess
+exits rather than arriving after it: `( for ((i=0;i<50000;i++)); do :;
+done )` answered 0 in 4920 runs at loads 55 to 90, with none the other
+way. That does not soften what the row asks, and the command
+substitution beside it is the control that says so: the *same* loop
+inside `$( … )` still answers 2, 1915 runs in 1920 at load 90. So the
+pair remains subshell against command substitution, not short against
+long, and the rule above — SIGCHLD whenever the child gets round to
+exiting — is what predicts both.
 
 So this shell places the notice where it reaps a job, deterministically:
 at the subshell, the pipeline element, the external command and `wait`.

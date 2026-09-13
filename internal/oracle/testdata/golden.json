@@ -38152,7 +38152,7 @@
       },
       "bash32": {
         "Stdout": "",
-        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `}'~\u003cshell\u003e: -c: line 0: `coproc CP { echo hi; }; ( : ); echo \"n=${#CP[@]}\"'",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `}'~\u003cshell\u003e: -c: line 0: `coproc CP { echo hi; }; ( for ((i=0;i\u003c50000;i++)); do :; done ); echo \"n=${#CP[@]}\"'",
         "Status": 2,
         "Signal": 0,
         "TimedOut": false

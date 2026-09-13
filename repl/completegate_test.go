@@ -15,7 +15,6 @@ import (
 
 	"github.com/blairham/sh/internal/boundary"
 	"github.com/blairham/sh/internal/policy"
-	"github.com/blairham/sh/internal/pty"
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
 )
@@ -317,14 +316,7 @@ func runScript(t *testing.T, r *interp.Runner, src string) error {
 // wrong reason: a session where Tab does nothing at all would satisfy the
 // first line and fail the second.
 func TestTabAtATerminalOffersNothingFromADirectoryThePolicyHides(t *testing.T) {
-	control, tty, err := pty.Open()
-	if err != nil {
-		t.Skipf("no pseudo-terminal: %v", err)
-	}
-	defer func() {
-		_ = tty.Close()
-		_ = control.Close()
-	}()
+	control, tty := openTerminal(t)
 
 	dir := gatedFixture(t)
 	p := hidesReads(t, filepath.Join(dir, "hidden"))

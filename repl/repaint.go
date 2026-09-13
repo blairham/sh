@@ -37,6 +37,16 @@ import (
 // most of what it wrote was the prompt. zsh does not rewrite the prompt for a
 // keystroke and neither does this.
 //
+// Those figures predate [styleInForce], which is a correction and not free: a
+// keystroke landing *inside* a colored run now carries the run's escape as
+// well as the character, because the terminal has to be put back into a state
+// the shared prefix does not leave it in. Measured 2026-09-13 on the built
+// shell under `-highlight`, typing the eight characters of `"one two` into an
+// unclosed quotation: 80 bytes, against 45 for the draws that were losing the
+// color and 130 for redrawing the run from its opening sequence. A keystroke
+// outside a run — which is every keystroke on a line with no highlighting on
+// it, and the rows above — is untouched.
+//
 // **What makes it safe is that the editor knows exactly what it last drew.**
 // The state below is written only by a redraw, and [editor.write] clears it —
 // so anything else that puts bytes on the terminal, a completion listing, a
@@ -49,9 +59,19 @@ type drawnLine struct {
 
 	// styled is the line exactly as it was written, escape sequences and all.
 	// The comparison is against these bytes rather than against the line and
-	// its runs, because two draws that emit the same bytes leave the terminal
-	// in the same state whatever produced them — which is what lets a redraw
-	// resume in the middle of a highlighted run.
+	// its runs, because two draws that emit the same bytes put the same
+	// characters in the same cells whatever produced them.
+	//
+	// **They do not leave the terminal in the same *style*, and that is not
+	// what the shared prefix says.** The color in force is whatever the last
+	// byte of the *previous whole draw* set, not whatever the shared prefix
+	// would have set had it been written on its own — the cursor came back
+	// over the line afterwards and a cursor move carries no attributes. A
+	// prefix ending inside a highlighted run therefore names a screen
+	// position where the terminal is already back at its default, and the
+	// bytes after it were written expecting the run to be in force. See
+	// styleInForce, which is where the run is said again before the resume
+	// (#2627).
 	styled string
 
 	// prompt and cells are the prompt this was drawn under. A prompt whose
@@ -108,6 +128,11 @@ func (e *editor) repaint(prompt drawnPrompt, cols int) bool {
 	row, col := d.row, d.col
 	if tail := styled[at:]; tail != "" {
 		moveCursor(&b, row, col, resRow, resCol)
+		// The color the tail was written expecting, said again. See
+		// styleInForce: the shared prefix names a cell, not a state, and the
+		// state the terminal is actually in is the one the last whole draw
+		// left.
+		b.WriteString(styleInForce(styled, at))
 		b.WriteString(tail)
 		row, col = endRow, endCol
 		if endCol == cols {
@@ -130,7 +155,7 @@ func (e *editor) repaint(prompt drawnPrompt, cols int) bool {
 		// to the end of the row: what is left over may be several rows of it.
 		//
 		// The reset first because the erase paints with the current
-		// attributes on a terminal with background-colour erase, and the
+		// attributes on a terminal with background-color erase, and the
 		// cursor may be sitting inside a highlighted run whose style the
 		// shared prefix left in force.
 		moveCursor(&b, row, col, endRow, endCol)
@@ -206,7 +231,7 @@ func pastEdge(row, col, cols int) (int, int) {
 // bytes, and how many of the line's own characters those bytes drew.
 //
 // Bytes rather than runs, because byte-identical output leaves the terminal in
-// an identical state — the same colour in force, the same cell under the
+// an identical state — the same color in force, the same cell under the
 // cursor — so a redraw may resume in the middle of a highlighted run without
 // re-stating the run. The count of characters is what turns the byte offset
 // back into a place on the screen, and escape sequences do not contribute to
@@ -228,6 +253,65 @@ func sharedPrefix(old, cur string) (bytes, chars int) {
 		i += size
 	}
 	return i, n
+}
+
+// styleInForce is the attributes a redraw has to re-state before it may resume
+// writing at at: everything [editor.styled] switched on before that byte and
+// has not switched off again, or nothing where no run is open there.
+//
+// [sharedPrefix] answers where two draws stop agreeing, which is a *cell* the
+// cursor can be moved to. It is not a *state* the terminal is in. The previous
+// draw wrote the whole line and then walked the cursor back over it, and a
+// cursor move carries no attributes — so what is in force is whatever its last
+// byte left, which is the terminal's default, because styled closes every run
+// it opens. A shared prefix ending inside a colored run therefore names a
+// position where the run is over as far as the terminal is concerned, and the
+// bytes after it were written expecting it to be in force.
+//
+// Measured 2026-09-13 through a pseudo-terminal at 80 columns, typing
+// `echo "one two` into the built shell under `-highlight`, which is the
+// UnclosedQuote every interactive session gets:
+//
+//	before   echo \e[31m"\e[0m o\e[0m n\e[0m e\e[0m …
+//	after    echo \e[31m"\e[0m \e[31mo\e[0m \e[31mn\e[0m \e[31me\e[0m …
+//
+// Read as writes: the keystroke that typed the quotation wrote `\e[31m"\e[0m`,
+// and the keystroke after it wrote `o\e[0m` — an `o` belonging to the red run,
+// drawn with the terminal already back at its default. On screen the quotation
+// mark was red and the whole unclosed word after it was plain. Not a corner:
+// driver/interactive.go installs a highlighter for every interactive shell and
+// a real terminal always has a width, so this is the path a person is on, and
+// with a highlighter that colors words it was every word — only the first
+// character of each kept its color (#2627).
+//
+// **Re-stating the style rather than redrawing the run.** The other repair is
+// to walk the resume point back to where no run is open and write the run
+// again from its opening sequence. That is correct too, and it costs the run:
+// measured the same way, typing the eight characters of `"one two` wrote 130
+// bytes that way against 80 for this, and the eighth keystroke on its own was
+// 21 bytes against 10 — a gap that grows with the word, where this one does
+// not. Re-stating is also the smaller change: the resume point does not move,
+// so nothing counted against it has to be recounted.
+//
+// The scan is token by token for the reason sharedPrefix's is: a cut inside an
+// escape sequence would name a state that does not exist. Everything since the
+// last reset is kept rather than only the last sequence, because a terminal
+// composes them — a highlighter emitting a color and then a weight has both
+// in force, and re-stating only the weight would resume in the wrong color.
+func styleInForce(cur string, at int) string {
+	var open []string
+	for i := 0; i < at; {
+		escape, size := nextToken(cur, i)
+		if escape {
+			if tok := cur[i : i+size]; tok == highlightReset {
+				open = open[:0]
+			} else {
+				open = append(open, tok)
+			}
+		}
+		i += size
+	}
+	return strings.Join(open, "")
 }
 
 // nextToken is the length of the thing at s[i] — one escape sequence, or one

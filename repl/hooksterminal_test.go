@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/blairham/sh/internal/blocks"
-	"github.com/blairham/sh/internal/pty"
 )
 
 // A hook prints with the terminal in its own line discipline.
@@ -33,14 +32,7 @@ import (
 // it once something has printed two lines: this is the state the *next* thing
 // to print will find, whatever that turns out to be.
 func TestWorkHandedTheTerminalBackFindsItsOwnLineDiscipline(t *testing.T) {
-	control, terminal, err := pty.Open()
-	if err != nil {
-		t.Skipf("no pseudo-terminal: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = terminal.Close()
-		_ = control.Close()
-	})
+	_, terminal := openTerminal(t)
 	state, err := makeRaw(terminal)
 	if err != nil {
 		t.Fatalf("raw mode: %v", err)
@@ -94,14 +86,7 @@ func echoes(t *testing.T, f *os.File) bool {
 // enough that the work cannot block, and what is measured is the mode and not
 // the bytes.
 func TestNothingIsStillOnItsWayWhenRawModeComesBack(t *testing.T) {
-	control, terminal, err := pty.Open()
-	if err != nil {
-		t.Skipf("no pseudo-terminal: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = terminal.Close()
-		_ = control.Close()
-	})
+	control, terminal := openTerminal(t)
 	// Somebody reading the far end, so the terminal's own buffer cannot fill
 	// and block the writes being measured.
 	go func() {

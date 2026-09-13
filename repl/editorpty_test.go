@@ -8,8 +8,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/blairham/sh/internal/pty"
 )
 
 // The editing keys, through a real terminal, in a real session.
@@ -55,14 +53,7 @@ func newSession(t *testing.T) *session { return newSessionWith(t, nil) }
 // copy of them is a second thing to keep right.
 func newSessionWith(t *testing.T, configure func(*Shell)) *session {
 	t.Helper()
-	control, tty, err := pty.Open()
-	if err != nil {
-		t.Skipf("no pseudo-terminal: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = tty.Close()
-		_ = control.Close()
-	})
+	control, tty := openTerminal(t)
 
 	screen, ran, errs := &syncBuffer{}, &syncBuffer{}, &syncBuffer{}
 	// The prompt counts the commands, so every one of them is a mark that has
@@ -104,6 +95,17 @@ func (s *session) typeLine(keys string) {
 	s.t.Helper()
 	s.prompt++
 	waitFor(s.t, s.screen, "["+itoa(s.prompt)+"]", "the prompt")
+	s.typeKeys(keys)
+}
+
+// typeKeys types at whatever the session is already showing, for a test that
+// has typed once and is going on typing into the same line.
+//
+// The wait for a prompt belongs to the first keystroke of a line and not to
+// the rest of them: a second wait would be answered only by a prompt that has
+// not been drawn, and a half-typed line has not produced one.
+func (s *session) typeKeys(keys string) {
+	s.t.Helper()
 	for i := 0; i < len(keys); i++ {
 		drawn := s.screen.Len()
 		if _, err := s.control.WriteString(keys[i : i+1]); err != nil {
@@ -113,6 +115,28 @@ func (s *session) typeLine(keys string) {
 			time.Sleep(time.Millisecond)
 		}
 	}
+}
+
+// shown is what a terminal of the fixture's size would be showing, colors and
+// all, after everything the session has drawn.
+//
+// **The screen and not the bytes.** An incremental redraw writes whichever of
+// several equivalent sequences is shortest for the change in hand, so a test
+// naming one of them is asserting a coincidence — and for as long as every
+// fixture here ran at width 0 the coincidence being asserted was the one the
+// whole-line draw produced, which is a path no session with a terminal takes
+// (#2627). See screenmodel_test.go.
+func (s *session) shown() *screen { return shownBy(fixtureCols, s.screen.String()) }
+
+// row is one line of what the screen is showing, with the colors written back
+// into it.
+func (s *session) row(n int) string {
+	s.t.Helper()
+	rows := strings.Split(s.shown().styledText(), "\n")
+	if n >= len(rows) {
+		s.t.Fatalf("the screen has %d row(s), so there is no row %d:\n%q", len(rows), n, s.screen.String())
+	}
+	return rows[n]
 }
 
 // end sends ^D at a fresh prompt, which is how a session is told to stop.
@@ -258,5 +282,44 @@ func TestTheLastArgumentAndUndoThroughATerminal(t *testing.T) {
 	// A whole line killed by mistake and taken back.
 	s.typeLine("echo restored-line\x15\x1f\n")
 	waitFor(t, s.ran, "restored-line", "the line ^U took away")
+	s.end()
+}
+
+// A session on a real terminal takes the minimal redraw, and the fixture's
+// terminal is really the size the fixture says it is.
+//
+// This is the instrument's own check and it is here because the instrument was
+// the defect. Every fixture in this package ran at width 0 (#2627), which is
+// the redraw's "nothing known about the terminal" branch: the whole line, the
+// prompt with it, once per keystroke. Everything these tests reported green
+// was about that branch, and the branch a person is on — the O(change) repaint
+// — was exercised by no session at all. Nothing said so, because a terminal
+// that will not give its size is a case the editor handles rather than an
+// error it reports.
+//
+// The prompt is what tells the two apart, and it is the right marker rather
+// than a convenient one: not rewriting the prompt for a keystroke is most of
+// why the minimal redraw is cheaper, and it is what zsh does. A prompt drawn
+// once for the line is the repaint path; a prompt per character is the other
+// one.
+func TestASessionThroughATerminalRedrawsOnlyWhatChanged(t *testing.T) {
+	s := newSession(t)
+	if rows, cols := terminalSize(s.tty); rows != fixtureRows || cols != fixtureCols {
+		t.Fatalf("the fixture's terminal is %dx%d, want %dx%d — a session drawing for a terminal "+
+			"nobody has is not the session anybody runs", rows, cols, fixtureRows, fixtureCols)
+	}
+
+	const keys = "echo one two three"
+	s.typeLine(keys)
+	if got, want := s.row(0), "[1]"+keys; got != want {
+		t.Errorf("the screen shows %q, want %q", got, want)
+	}
+	if n := strings.Count(s.screen.String(), "[1]"); n != 1 {
+		t.Errorf("the prompt was written %d times for %d keystrokes, want once: a keystroke that "+
+			"rewrites the prompt is the whole-line draw, which is the width-0 path", n, len(keys))
+	}
+
+	s.typeKeys("\n")
+	waitFor(t, s.ran, "one two three", "the command's output")
 	s.end()
 }

@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/blairham/sh/internal/pty"
 	"github.com/blairham/sh/syntax"
 )
 
@@ -165,14 +164,7 @@ func TestNoHistoryMeansNoRecorder(t *testing.T) {
 // notice arrive where a person would see it — between the line they typed and
 // the output of the next command.
 func TestTheTerminalLoopScrubsWhatIsTyped(t *testing.T) {
-	control, tty, err := pty.Open()
-	if err != nil {
-		t.Skipf("no pseudo-terminal: %v", err)
-	}
-	defer func() {
-		_ = tty.Close()
-		_ = control.Close()
-	}()
+	control, tty := openTerminal(t)
 
 	path := filepath.Join(t.TempDir(), "hist")
 	out, errs := &syncBuffer{}, &syncBuffer{}
@@ -280,14 +272,7 @@ func waitUntilReading(t *testing.T, out *syncBuffer, control *os.File) {
 func TestTheReadingMarkOutlastsTheLineThatIsStillRunning(t *testing.T) {
 	const runs = 250 * time.Millisecond
 
-	control, tty, err := pty.Open()
-	if err != nil {
-		t.Skipf("no pseudo-terminal: %v", err)
-	}
-	defer func() {
-		_ = tty.Close()
-		_ = control.Close()
-	}()
+	control, tty := openTerminal(t)
 
 	out, errs := &syncBuffer{}, &syncBuffer{}
 	r := newTestRunner(map[string]string{"HISTFILE": "", "PS1": "$ "})

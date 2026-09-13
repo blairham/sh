@@ -276,7 +276,7 @@ func (l *Lexer) queueHeredoc(r *Redirect, quoted bool) {
 
 // NewLexer returns a Lexer over src.
 func NewLexer(src string, d Dialect) *Lexer {
-	return &Lexer{src: src, dialect: d, line: 1, col: 1}
+	return &Lexer{src: src, dialect: d, comments: d.Comments, line: 1, col: 1}
 }
 
 // Err reports why lexing stopped early, or nil.
@@ -753,12 +753,16 @@ func (l *Lexer) skipComment() {
 // CommentMode says what an unquoted `#` standing where a word could begin
 // means to this lexer.
 //
-// The zero value is the shell's own rule and is what every parse in this
-// package uses. The other two exist for [ShellWords], which re-reads a
-// *value* as a command line rather than reading a program, and there the
-// question has three answers rather than one — see the note on that function.
-// A token stream produced under either of them is not a program: the parser
-// is never handed one, and neither mode is reachable except by asking.
+// The zero value is the shell's own rule and is what a parse that says
+// nothing gets. Two callers say something. [ShellWords] re-reads a *value* as
+// a command line rather than reading a program, and there the question has
+// three answers rather than one — see the note on that function. A front end
+// reading a line a person typed has two of the three, through
+// [Dialect.Comments], because one shell in the panel reads a `#` at its
+// prompt as an ordinary character.
+//
+// [CommentsKept] is the one that stays [ShellWords]': a token stream carrying
+// a comment as a word is not a program, and the parser is never handed one.
 type CommentMode uint8
 
 const (
@@ -772,6 +776,40 @@ const (
 	// end of the line and not taking the newline with it.
 	CommentsKept
 )
+
+// bodyComments is the comment rule to record on a span this lexer is about to
+// cut: the rule this lexer read it under for a command substitution, and
+// [CommentsSkipped] — the ordinary rule — for everything else.
+//
+// **A command substitution and a process substitution answer differently**,
+// which is measured and is not a distinction anyone would guess. zsh 5.9.2,
+// 2026-09-12, `-f -i` on a pipe with `interactivecomments` off, so the typed
+// line reads a `#` as a character:
+//
+//	echo M-$(echo a #b; echo AFTER)      M-a #b AFTER
+//	cat <(echo MARK-a #b; echo AFTER)    MARK-a
+//	cat =(echo MARK-a #b)                MARK-a
+//	echo M-`echo a #b`                   M-a #b
+//
+// So the rule reaches `$( )` and its backquoted spelling and stops at `<( )`
+// and `=( )`, whose bodies are read the way a script is however the line was
+// typed. Turning the option on makes all four a comment, and there the *end*
+// of the body moves with it too: `cat <(echo a #b) ; echo TAIL` and the `$( )`
+// line beside it both become `parse error` because the comment swallows the
+// `)`, exactly as they do in a script.
+//
+// Where the body ends is therefore a separate question from how it is read,
+// and it is the one [Lexer.commentsExist] answers for every kind alike.
+//
+// Arithmetic is out for a third reason: `$(( 16#ff ))` is 255 in every shell
+// in the panel and `$(( 1 # c ))` is a syntax error in all of them, so a `#`
+// there is neither a comment nor a thing this rule is about.
+func (l *Lexer) bodyComments(kind SpanKind) CommentMode {
+	if kind != CommandSubst {
+		return CommentsSkipped
+	}
+	return l.comments
+}
 
 // commentsExist reports whether a `#` opens a comment for the *raw* scans —
 // the bodies of `$( )`, `<( )` and `${ ;}`, which have no word structure to
@@ -2679,7 +2717,7 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 			}
 			value := l.src[start:l.off]
 			l.advance() // the )
-			return Span{Kind: kind, Value: value, Quoting: q, Pos: open}
+			return Span{Kind: kind, Value: value, Quoting: q, Pos: open, Comments: l.bodyComments(kind)}
 		}
 		// Not something the parser could read — half a line at a prompt,
 		// most often. Counting is the older answer and is kept for it: it
@@ -2813,7 +2851,7 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 	for n := 1; n <= closers(kind) && end > start && l.src[end-1] == ')'; n++ {
 		end--
 	}
-	return Span{Kind: kind, Value: l.src[start:end], Quoting: q, Pos: open}
+	return Span{Kind: kind, Value: l.src[start:end], Quoting: q, Pos: open, Comments: l.bodyComments(kind)}
 }
 
 // failedToClose records a parenthesised construct the input ran out inside.
@@ -3192,7 +3230,7 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 		//
 		// The body is taken exactly as the parameter form takes it: a `}`
 		// inside quotes does not close either, and both nest.
-		return Span{Kind: CommandSubst, CurrentShell: true, Value: l.src[start:end], Quoting: q, Pos: open}
+		return Span{Kind: CommandSubst, CurrentShell: true, Value: l.src[start:end], Quoting: q, Pos: open, Comments: l.bodyComments(CommandSubst)}
 	}
 	return Span{Kind: ParamExp, Value: l.src[start:end], Quoting: q, Pos: open}
 }
@@ -3223,7 +3261,7 @@ func (l *Lexer) scanBackticks(q Quoting) Span {
 			if !l.closesQuotesAtEOF() {
 				l.failUnmatched(open, "`", "`", "unterminated backquote substitution")
 			}
-			return Span{Kind: CommandSubst, Backquoted: true, Value: unescapeBackquoted(l.src[start:l.off]), Quoting: q, Pos: open}
+			return Span{Kind: CommandSubst, Backquoted: true, Value: unescapeBackquoted(l.src[start:l.off]), Quoting: q, Pos: open, Comments: l.bodyComments(CommandSubst)}
 		}
 		switch l.peek() {
 		case '\\':
@@ -3234,7 +3272,7 @@ func (l *Lexer) scanBackticks(q Quoting) Span {
 		case '`':
 			end := l.off
 			l.advance()
-			return Span{Kind: CommandSubst, Backquoted: true, Value: unescapeBackquoted(l.src[start:end]), Quoting: q, Pos: open}
+			return Span{Kind: CommandSubst, Backquoted: true, Value: unescapeBackquoted(l.src[start:end]), Quoting: q, Pos: open, Comments: l.bodyComments(CommandSubst)}
 		default:
 			l.advance()
 		}

@@ -276,6 +276,23 @@ type Span struct {
 	// has to write the spelling that was read.
 	Backquoted bool
 
+	// Comments is the rule a `#` in this span's body was read under, for the
+	// spans that hold a program and are read again by whatever runs them.
+	// The zero value is [CommentsSkipped], the ordinary rule.
+	//
+	// It travels for the reason Backquoted does: a substitution's body is
+	// kept as the text it was written as and parsed a second time when it
+	// runs, and a second parse under a different rule is a second shell. The
+	// front end is the one that can set the rule — see [Dialect.Comments] —
+	// so without this the *typed* line reads a `#` as a character and the
+	// body inside it reads the same `#` as a comment.
+	//
+	// Measured on zsh 5.9.2, 2026-09-12, `-f -i` on a pipe with the option
+	// off: `echo M-$(echo a #b)` answers `M-a #b`, and so does the same line
+	// with the substitution nested twice or written with backquotes. The
+	// rule reaches the whole of the text that was typed, at every depth.
+	Comments CommentMode
+
 	// Bracketed says an arithmetic substitution was written `$[ … ]` rather
 	// than `$(( … ))`.
 	//

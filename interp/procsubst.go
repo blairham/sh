@@ -69,8 +69,9 @@ import (
 // procSub runs the inner command and returns the path the word becomes: a
 // pipe for `<(cmd)` and `>(cmd)`, a file already holding the output for
 // `=(cmd)`.
-func (r *Runner) procSub(ctx context.Context, kind syntax.SpanKind, src string) (string, bool) {
-	f, ok := r.substBody(src)
+func (r *Runner) procSub(ctx context.Context, span syntax.Span) (string, bool) {
+	kind := span.Kind
+	f, ok := r.substBody(span)
 	if !ok {
 		return "", false
 	}
@@ -211,8 +212,8 @@ func (r *Runner) procSub(ctx context.Context, kind syntax.SpanKind, src string) 
 // One reader for all three spellings, because the body is a program in each
 // of them and a parse failure is reported the same way: the word produces
 // nothing and the expansion is in error.
-func (r *Runner) substBody(src string) (*syntax.File, bool) {
-	f, perr := syntax.Parse(src, r.dialect())
+func (r *Runner) substBody(span syntax.Span) (*syntax.File, bool) {
+	f, perr := syntax.Parse(span.Value, r.bodyDialect(span))
 	if perr != nil {
 		r.diagf("%s\n", r.diag().ParseFailure(perr))
 		r.expandErr = true

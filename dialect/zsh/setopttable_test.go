@@ -16,9 +16,10 @@ import "testing"
 // two prompt names are read by the line editor before it draws a prompt. Those
 // two joined the list in #2515, where the reason they had been left behind —
 // that `emulate` reset every name outside the recorded set — stopped being
-// true.
+// true. `interactivecomments` is the fifth and is read earlier still: the
+// editor asks for it before it *parses* the line (#2537).
 func TestTheOptionsSomethingReadsAreNotRecordedOnly(t *testing.T) {
-	for _, base := range []string{"histignorespace", "histignoredups", "promptsp", "promptcr"} {
+	for _, base := range []string{"histignorespace", "histignoredups", "promptsp", "promptcr", "interactivecomments"} {
 		o, _, ok := resolveOptionName(base)
 		if !ok {
 			t.Fatalf("%s is not in the table at all", base)
@@ -39,7 +40,7 @@ func TestTheOptionsSomethingReadsAreNotRecordedOnly(t *testing.T) {
 			recordedCount++
 		}
 	}
-	if want := 145; recordedCount != want {
+	if want := 144; recordedCount != want {
 		t.Errorf("%d recorded names, want %d — docs/spec/semantics.md publishes the count", recordedCount, want)
 	}
 }

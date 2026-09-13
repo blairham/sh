@@ -3582,6 +3582,43 @@ type Dialect struct {
 	// parse that never said gets the strict answer.
 	ProgramRoute ProgramRoutes
 
+	// Comments is what a `#` where a word could begin means in the program
+	// *now being parsed*. The zero value is [CommentsSkipped], the rule
+	// every shell reads a script by.
+	//
+	// The second field here that is not a grammar rule, and it is here for
+	// the reason ProgramRoute is: the lexer answers the question and the
+	// dialect is the only thing the lexer is handed. Where ProgramRoute is
+	// one program's provenance, this is one program's *reader* — the front
+	// end setting it says that the text about to be parsed was typed at a
+	// prompt by a shell whose option for that is off.
+	//
+	// No preset writes it, and it would be wrong for one to: the shell this
+	// exists for reads a `#` in a script exactly as the others do, and
+	// differs only on the line a person typed. Measured on zsh 5.9.2,
+	// 2026-09-12, `-f -i` on a pipe with a scratch HOME, beside the same
+	// shell's script routes:
+	//
+	//	route                          `echo a #b`
+	//	typed at the prompt            a #b
+	//	`-c`, with `-i` or without     a
+	//	`eval` typed at the prompt     a
+	//	`.` on a file, at the prompt   a
+	//	standard input, not `-i`       a
+	//
+	// So it is neither the route nor the shell's interactivity on its own:
+	// zsh reading the same descriptor answers both ways depending on which,
+	// and a `-c` string is a comment in a shell that is interactive. What
+	// decides it is the front end, which is where both facts meet, and
+	// which is why this is set per parse rather than chosen by a preset.
+	// See repl.Shell.CommentsNeedTheOption.
+	//
+	// [CommentsKept] is not a mode a program can be parsed under — a
+	// comment arrives as a word and the grammar has nowhere to put it — so
+	// a front end has the other two. See [ShellWords], which is where the
+	// third belongs.
+	Comments CommentMode
+
 	// UnmatchedBlamesTheOutermost names the *enclosing* construct when the
 	// input runs out inside nested ones, where the default names the
 	// innermost.

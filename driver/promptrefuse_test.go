@@ -33,6 +33,24 @@ func TestTheFrontEndCarriesWhetherAPromptAsksAgain(t *testing.T) {
 	}
 }
 
+// And which option a `#` typed at the prompt waits on, carried the same way
+// and for the same reason: three of the four shells name none, so a wiring
+// that always passed the empty string would pass every test written against
+// the majority and leave the fourth reading its own prompt the wrong way
+// (#2537).
+func TestTheFrontEndCarriesWhichOptionAHashWaitsOn(t *testing.T) {
+	for _, answer := range []string{"", "interactivecomments"} {
+		sh := Shell{
+			Name:      "testsh",
+			Semantics: interp.Semantics{PromptCommentsNeedTheOption: answer},
+		}.withDefaults([]string{"testsh"})
+		r := sh.newRunner("testsh", nil, sh.Diagnostics, interp.RouteCommandString)
+		if got := sh.frontEnd(r, "testsh", sh.Diagnostics).CommentsNeedTheOption; got != answer {
+			t.Errorf("the prompt was told %q, want %q", got, answer)
+		}
+	}
+}
+
 // The front end words a parse failure the way the dialect words one at a
 // **prompt**, which is its own route: three of the four name no line there.
 //

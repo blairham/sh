@@ -785,6 +785,17 @@ func Semantics() interp.Semantics {
 	// into `-i`: this shell draws PS2 twice and swallows the `echo three`,
 	// which is what makes it worth an answer rather than a bug (#1893).
 	s.PromptAsksAgainAfterARefusedToken = true
+	// And a `#` typed at this shell's prompt is an ordinary character until
+	// `interactivecomments` is set, where the other three open a comment with
+	// it — bash through a `shopt` of the same name that is on by default, and
+	// dash and ksh93 with no option in the matter at all. Measured 2026-09-12,
+	// `printf 'echo a #b\n'` into `-f -i` on a pipe: `a #b` here and `a`
+	// everywhere else.
+	//
+	// The prompt alone: this shell's `-c`, its `eval` and its `.` all read
+	// the `#` as a comment with the option off, which is why this is the
+	// front end's question and not a preset for [syntax.Dialect.Comments].
+	s.PromptCommentsNeedTheOption = "interactivecomments"
 	s.UnsetEndsTheProducedPipelineStatus = interp.Yes
 	// `unset RANDOM; RANDOM=9; a=$RANDOM; b=$RANDOM` is two fresh numbers
 	// here — measured 2026-09-12, 20191 and 4730 — where bash, ksh93, dash

@@ -1541,7 +1541,7 @@ func (r *Runner) expandSpan(s syntax.Span, sp splitPolicy, head bool) (text stri
 		// A path, and a path is never split or globbed however it was
 		// written: what came back is a name this shell just made, not text
 		// from somewhere that might contain a separator.
-		path, ok := r.procSub(r.ctx, s.Kind, s.Value)
+		path, ok := r.procSub(r.ctx, s)
 		if !ok {
 			return "", false
 		}

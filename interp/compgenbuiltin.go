@@ -303,9 +303,15 @@ func compgenOptArg(args []string, i *int, cluster string, j *int) (string, bool)
 // diagnostic above carries the shell's own location prefix and this line
 // carries none. Measured 2026-09-12 — `bash -c 'compgen -o'` writes
 // `<shell>: line 1: compgen: -o: option requires an argument` and then this
-// text at the start of its own line. Only the two letters that take an
-// argument reach it; an invalid option name is one line with no usage after
-// it, which is measured too.
+// text at the start of its own line. A missing argument and an invalid option
+// *letter* both reach it; an `-o` name or an action name that is not one is a
+// single line with no usage after it, which is measured too.
+//
+// The text is bash 5.3's. bash 3.2 writes a shorter one in a different order —
+// no `-V varname`, and the filter and function letters the other way round —
+// and it is in the record beside this; there is no bash 3.2 dialect to spell
+// it for, so the one string stands rather than becoming a Diagnostics field
+// with a single answer.
 func (r *Runner) compgenUsage() {
 	r.errf("compgen: usage: compgen [-V varname] [-abcdefgjksuv] [-o option] " +
 		"[-A action] [-G globpat] [-W wordlist] [-F function] [-C command] " +

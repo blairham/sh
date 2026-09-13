@@ -439,6 +439,38 @@ func (k NameKind) String() string {
 	return "not found"
 }
 
+// NamedKindWord is the word a `name: kind` listing uses for a resolution.
+//
+// A second vocabulary beside [NameKind.String], and the two differ on exactly
+// two of the five — which is the whole reason both exist. A file on PATH is
+// `command` here and `file` there; a name that is nothing is `none` here and
+// `not found` there. The three in between are spelled alike and are still
+// taken from here, so that a sixth kind added later cannot be given a word in
+// one place and forgotten in the other.
+//
+// Measured 2026-09-12 against the two shells that have these letters:
+// `type -w ls` is `ls: command` in one and `type -t ls` is `file` in the
+// other. Both letters read the same resolution — see ResolveName — and only
+// the naming differs, which is the split this tree is built on.
+//
+// An alias is not a NameKind and is not here: the tables are consulted before
+// the resolution is, by every caller, because an alias beats a function of the
+// same name.
+func NamedKindWord(k NameKind) string {
+	switch k {
+	case NameFunction:
+		return "function"
+	case NameBuiltin:
+		return "builtin"
+	case NameReserved:
+		return "reserved"
+	case NameFile:
+		return "command"
+	case NameNotFound:
+	}
+	return "none"
+}
+
 // ResolveName reports what this shell would run for name, and for a file the
 // path it would run. Everything else has no path, and the empty string says so.
 //

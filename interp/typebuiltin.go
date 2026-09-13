@@ -36,9 +36,61 @@ func biType(r *Runner, _ context.Context, args []string) int {
 }
 
 // typeMode is what the option letters asked for.
+// typeKind is how a letter that answers with a *word* wants it written.
+//
+// Two letters do, and they disagree about every word and about the shape of
+// the line, which is why this is a vocabulary rather than a bool. Measured
+// 2026-09-12 against the shells that have them:
+//
+//	                -t (one dialect)   -w (another)
+//	an alias        alias              NAME: alias
+//	a function      function           NAME: function
+//	a builtin       builtin            NAME: builtin
+//	a reserved word keyword            NAME: reserved
+//	a file on PATH  file               NAME: command
+//	nothing         (silence)          NAME: none
+//
+// Four of the six words differ and the sixth is the sharpest: `-t` says
+// nothing at all for a name that is nothing — the status is the whole answer —
+// where `-w` names it `none`. A syntax highlighter reads that line for every
+// word on the line, so silence there would make every unknown command
+// indistinguishable from a failure to ask (#2512).
+type typeKind int
+
+const (
+	// typeKindNone is the plain sentence — `ls is /bin/ls`.
+	typeKindNone typeKind = iota
+	// typeKindBare is the kind alone, on a line of its own.
+	typeKindBare
+	// typeKindNamed is the name, a colon, and the kind.
+	typeKindNamed
+)
+
+// sayKind writes the kind where a letter asked for one, and reports whether it
+// wrote anything — false is the plain sentence, which the caller goes on to
+// produce.
+//
+// One resolution serves all three shapes. The alternative is a second walk of
+// the tables per letter, which is how two spellings of the same question come
+// to disagree about which of an alias and a function wins.
+func (r *Runner) sayKind(k typeKind, name, bare, named string) bool {
+	switch k {
+	case typeKindBare:
+		r.printf("%s\n", bare)
+	case typeKindNamed:
+		r.printf("%s: %s\n", name, named)
+	default:
+		return false
+	}
+	return true
+}
+
 type typeMode struct {
 	// kind is `-t`: the bare kind word instead of the sentence.
 	kind bool
+	// word is `-w`: the name, a colon and the kind. See typeKind, where the
+	// two are measured against each other.
+	word bool
 	// all is `-a`: every resolution the name has, PATH hits included.
 	all bool
 	// path is `-p`: the path alone — with two axes inside it, see
@@ -91,6 +143,7 @@ func (r *Runner) typeOperands(args []string) (names []string, m typeMode, code i
 	}
 	m = typeMode{
 		kind:       strings.ContainsRune(opts, 't'),
+		word:       strings.ContainsRune(opts, 'w'),
 		all:        strings.ContainsRune(opts, 'a'),
 		path:       strings.ContainsRune(opts, 'p'),
 		pathSearch: strings.ContainsRune(opts, 'P'),
@@ -111,6 +164,17 @@ func typeOptionWordsCarryT(args []string) bool {
 		}
 	}
 	return false
+}
+
+// asked is the shape this mode's letters want a kind written in.
+func (m typeMode) asked() typeKind {
+	switch {
+	case m.word:
+		return typeKindNamed
+	case m.kind:
+		return typeKindBare
+	}
+	return typeKindNone
 }
 
 // typeOneMode dispatches one name to the shape its letters asked for.
@@ -138,9 +202,9 @@ func (r *Runner) typeOneMode(name string, m typeMode) int {
 				return 0
 			}
 		}
-		return r.describeName(name, m.kind, true, r.typeNotFoundWording(name))
+		return r.describeName(name, m.asked(), true, r.typeNotFoundWording(name))
 	}
-	return r.typeOne(name, m.kind)
+	return r.typeOne(name, m.asked())
 }
 
 // typeOne accounts for one name — as a sentence, or as `-t`'s bare kind —
@@ -152,7 +216,7 @@ func (r *Runner) typeOneMode(name string, m typeMode) int {
 // reach here for the same reason plain `type` never names one: whether
 // aliases expand is the parser's fact — see syntax.Dialect.ExpandAliases —
 // and the runner holds only the table.
-func (r *Runner) typeOne(name string, kind bool) int {
+func (r *Runner) typeOne(name string, kind typeKind) int {
 	return r.describeName(name, kind, false, r.typeNotFoundWording(name))
 }
 
@@ -278,9 +342,7 @@ func (r *Runner) typeAll(name string, m typeMode) int {
 	found := false
 	if fn, ok := r.reportedFunc(name); ok && !m.noFuncs {
 		found = true
-		if m.kind {
-			r.printf("function\n")
-		} else {
+		if !r.sayKind(m.asked(), name, "function", NamedKindWord(NameFunction)) {
 			shows := r.ask(r.sem().TypePrintsFunctionBody, "`type` printing a function's body")
 			if r.unspecified {
 				return 2
@@ -294,16 +356,12 @@ func (r *Runner) typeAll(name string, m typeMode) int {
 	switch _, ok := r.lookupBuiltin(name); {
 	case ok:
 		found = true
-		if m.kind {
-			r.printf("builtin\n")
-		} else {
+		if !r.sayKind(m.asked(), name, "builtin", NamedKindWord(NameBuiltin)) {
 			r.printf("%s\n", Wording(dg.TypeBuiltin, "%[1]s is a shell builtin", name))
 		}
 	case reservedWord(name):
 		found = true
-		if m.kind {
-			r.printf("keyword\n")
-		} else {
+		if !r.sayKind(m.asked(), name, "keyword", NamedKindWord(NameReserved)) {
 			r.printf("%s\n", Wording(dg.TypeKeyword, "%[1]s is a shell keyword", name))
 		}
 	}
@@ -315,9 +373,7 @@ func (r *Runner) typeAll(name string, m typeMode) int {
 	if !r.reservedBuiltin(name) {
 		for _, path := range r.lookPathAll(name) {
 			found = true
-			if m.kind {
-				r.printf("file\n")
-			} else {
+			if !r.sayKind(m.asked(), name, "file", NamedKindWord(NameFile)) {
 				r.printf("%s is %s\n", name, path)
 			}
 		}
@@ -364,7 +420,7 @@ func (r *Runner) reportNameNotFound(msg string) {
 // describeName is the sentence itself, shared with `command -V`, which asks
 // `type`'s question with a complaint of its own for a name that is nothing —
 // the one line the two spell differently, so it arrives already worded.
-func (r *Runner) describeName(name string, kind, skipFuncs bool, notFound string) int {
+func (r *Runner) describeName(name string, kind typeKind, skipFuncs bool, notFound string) int {
 	dg := r.diag()
 	// The tables come first, as they do in every shell in the panel and as
 	// the parser does when it reads a line: an alias beats a function of the
@@ -372,8 +428,7 @@ func (r *Runner) describeName(name string, kind, skipFuncs bool, notFound string
 	// the kind, the suffix keying and one dialect's expansion gate are all
 	// in AliasForName.
 	if display, value, akind, ok := r.AliasForName(name); ok {
-		if kind {
-			r.printf("alias\n")
+		if r.sayKind(kind, name, "alias", "alias") {
 			return 0
 		}
 		r.printf("%s\n", r.AliasSentence(display, value, akind))
@@ -383,8 +438,7 @@ func (r *Runner) describeName(name string, kind, skipFuncs bool, notFound string
 		return 2
 	}
 	if fn, ok := r.reportedFunc(name); ok && !skipFuncs {
-		if kind {
-			r.printf("function\n")
+		if r.sayKind(kind, name, "function", NamedKindWord(NameFunction)) {
 			return 0
 		}
 		shows := r.ask(r.sem().TypePrintsFunctionBody, "`type` printing a function's body")
@@ -402,16 +456,14 @@ func (r *Runner) describeName(name string, kind, skipFuncs bool, notFound string
 		return 0
 	}
 	if _, ok := r.lookupBuiltin(name); ok {
-		if kind {
-			r.printf("builtin\n")
+		if r.sayKind(kind, name, "builtin", NamedKindWord(NameBuiltin)) {
 			return 0
 		}
 		r.printf("%s\n", Wording(dg.TypeBuiltin, "%[1]s is a shell builtin", name))
 		return 0
 	}
 	if reservedWord(name) {
-		if kind {
-			r.printf("keyword\n")
+		if r.sayKind(kind, name, "keyword", NamedKindWord(NameReserved)) {
 			return 0
 		}
 		r.printf("%s\n", Wording(dg.TypeKeyword, "%[1]s is a shell keyword", name))
@@ -422,20 +474,25 @@ func (r *Runner) describeName(name string, kind, skipFuncs bool, notFound string
 	// saying where it is would be answering about the wrong thing.
 	if !r.reservedBuiltin(name) {
 		if path, err := r.lookPath(name); err == nil {
-			if kind {
+			if r.sayKind(kind, name, "file", NamedKindWord(NameFile)) {
 				// The kind and never the path, which is what keeps the word
 				// comparable on any machine.
-				r.printf("file\n")
 				return 0
 			}
 			r.printf("%s\n", Wording(dg.TypeExternal, "%[1]s is %[2]s", name, path))
 			return 0
 		}
 	}
-	if kind {
-		// Nothing at all for a name that is nothing — no line and no
-		// diagnostic, measured. The status is the whole of the answer,
-		// which is what makes `-t` scriptable in the first place.
+	if kind != typeKindNone {
+		// Nothing at all for a name that is nothing under `-t` — no line and
+		// no diagnostic, measured. The status is the whole of the answer,
+		// which is what makes it scriptable in the first place. `-w` names it
+		// `none` instead, which is the one place the two shapes differ by
+		// more than a word: a highlighter reads this line for every word on
+		// the line, and silence would be indistinguishable from not asking.
+		if kind == typeKindNamed {
+			r.printf("%s: %s\n", name, NamedKindWord(NameNotFound))
+		}
 		return orDefault(dg.TypeNotFoundStatus, 1)
 	}
 	// Two of the four write this one with nothing in front of it, where every

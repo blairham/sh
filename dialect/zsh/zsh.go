@@ -1891,7 +1891,11 @@ func Semantics() interp.Semantics {
 	// -p searches PATH past the shell's own answer and words the hit the
 	// way plain type does, and -f *prints* a function rather than skipping
 	// it. The completion-system letters ride as unimplemented.
-	s.TypeOptions = "afp"
+	// `w` names the kind — `ls: command` — which is how a syntax
+	// highlighter classifies every word on the line. See interp's typeKind,
+	// where its six words are measured against the other dialect's `-t`
+	// (#2512).
+	s.TypeOptions = "afpw"
 	s.TypePSearchesPathPastTheShell = interp.Yes
 	s.TypePathAnswerIsASentence = interp.Yes
 	s.TypeFSaysTheFunctionBack = interp.Yes
@@ -2441,7 +2445,12 @@ func Diagnostics() interp.Diagnostics {
 			// `-H`, `-U`, `-T`, `-h` and `-m` have left this list — they are
 			// implemented, in DeclareOptions above.
 			"typeset": "bcEkLnRtZ",
-			"type":    "mvwsS",
+			// `w` has left this list and joined TypeOptions above, in the same
+			// change: a letter in both is refused as missing while it works,
+			// and a letter in neither is `bad option` for something this
+			// shell has. TestNoLetterIsBothAcceptedAndCalledMissing is the
+			// invariant.
+			"type": "mvsS",
 			// jobs' letters that are zsh's own: -d names the directory the
 			// job was started in, and -z and -Z are about the process
 			// title rather than about the job table.

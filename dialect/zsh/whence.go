@@ -330,22 +330,14 @@ func resolvedAnswer(r *interp.Runner, name string, kind interp.NameKind, path st
 	return name
 }
 
-// whenceKindWord is `-w`'s vocabulary, which is its own: a file is `command`
-// here and `file` in the shell whose `type -t` names kinds.
-func whenceKindWord(kind interp.NameKind) string {
-	switch kind {
-	case interp.NameFunction:
-		return "function"
-	case interp.NameBuiltin:
-		return "builtin"
-	case interp.NameReserved:
-		return "reserved"
-	case interp.NameFile:
-		return "command"
-	case interp.NameNotFound:
-	}
-	return "none"
-}
+// whenceKindWord is `-w`'s vocabulary, which this shell shares with its own
+// `type -w` — the same letter on the two names for one builtin.
+//
+// One table, in interp beside the resolution it names, so that a kind added
+// later cannot be worded here and forgotten there. See interp.NamedKindWord,
+// which carries what was measured and how it differs from the other dialect's
+// `-t`.
+func whenceKindWord(kind interp.NameKind) string { return interp.NamedKindWord(kind) }
 
 // verboseSentence is the `type` wording for a resolution, taken from the
 // dialect's own Diagnostics so the two builtins cannot drift apart.

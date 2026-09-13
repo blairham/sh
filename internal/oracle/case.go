@@ -12084,6 +12084,16 @@ echo unreachable`,
 		Why:     "the neighboring refusal, and the reason the row above is about zero rather than about small bases: `1#0` *is* read as a base in bash and refused with a third sentence, `invalid arithmetic base`, where `0#5` gets the numeral reader's. zsh names the range it takes and ksh93 says what it says about everything",
 	},
 	{
+		ID: "arith/a-base-of-one-with-a-digit-it-has-no-room-for", Category: "arithmetic",
+		Snippet: `echo $((1#5)); echo "st=$?"`,
+		Why:     "the row above with a digit base one could not hold under any reading, and the pair is what makes either of them evidence. `1#0` is matched by an implementation that never checks the base at all — zero is the one byte whose value is below one, so the digit run is not empty and the numeral ends where it should by accident — and this one is not. zsh refuses the base where it reads it and never consults the digits, so it names `1` here exactly as it names `37`; ours ended the numeral at the `#` and complained about the `5` (#2575)",
+	},
+	{
+		ID: "arith/a-base-of-one-with-a-byte-the-reader-refuses-alone", Category: "arithmetic",
+		Snippet: `echo $((1#@)); echo "st=$?"`,
+		Why:     "the same base with the byte one shell will not take as any part of a token: `$((@))` there is `illegal character: @`, and after a base of one it is `invalid base` instead. So a base nothing can use is refused before the bytes after it are judged, which is the half `arith/a-base-of-one-with-a-digit-it-has-no-room-for` cannot show — a reader that merely widened its alphabet for the bad base would still stop at this byte and blame it (#2575)",
+	},
+	{
 		ID: "arith/a-base-above-thirty-six-written-padded", Category: "arithmetic",
 		Snippet: `echo $((064#10)); echo "st=$?"`,
 		Why:     "the base that is both padded and out of one shell's range, which is what pins the *number* in zsh's refusal: it writes `64` where the script wrote `064`, so the sentence names the base it read rather than the text. bash reads no base here and ksh93's cap has already taken `06`",
@@ -18192,6 +18202,16 @@ echo end`,
 		ID: "alias/a-name-holding-a-character-it-may-not-carry", Category: "alias",
 		Snippet: `echo one; alias 'a$b'=echo; echo "st=$?"; alias 'a$b' >/dev/null 2>&1; echo "look=$?"`,
 		Why:     "whether `alias` checks the *name* it is given at all, and what a refusal costs. Two of the panel check and three take any name: bash 5.3 complains, defines nothing, answers 1 and carries on, ksh93u+ complains and ends the script — so `st=` never prints there and that is the only observable difference, since the builtin's own status is 1 in both — and zsh 5.9.2, dash and BusyBox ash accept the name in silence, which the trailing `look=0` is the evidence for. Semantics.AliasNameRefusedCharacters and Semantics.AliasInvalidNameFatal (#2413). The lookup's own output is discarded because how a listing quotes a name that needs quoting is a different question and would put an unrelated cell in this row",
+	},
+	{
+		ID: "alias/a-listing-spells-a-name-that-needs-quoting", Category: "alias",
+		Snippet: `alias 'a#b'=echo; alias 'a#b'`,
+		Why:     "whether a listing quotes the **name** as well as the value, asked with a character every shell in the panel accepts in a name so that all of them answer — `#` is in neither refused set, where the `$` of `alias/a-name-holding-a-character-it-may-not-carry` is in both. zsh 5.9.2 writes `'a#b'=echo` and the other four leave the name bare, which is what makes Semantics.AliasListingQuotesTheName an axis rather than one column's habit; the *value* half splits differently again in the same cells, since two of them quote a value always and two only when it needs it (#2579)",
+	},
+	{
+		ID: "alias/a-sentence-about-an-alias-leaves-the-name-bare", Category: "alias",
+		Snippet: `alias 'a#b'=echo; type 'a#b'; command -v 'a#b'`,
+		Why:     "how far the name quoting reaches, which is the half a single listing cannot show. The shell that quotes a name writes it bare in the sentence `type` gives and quoted again in `command -v` — prose about a name against a line that would define the entry back, and only the second is the line the quoting is for. Measured 2026-09-13: the same split holds for `command -V` and `whence -v`, and for the names-only listing `alias +` (#2579)",
 	},
 	{
 		ID: "alias/a-pattern-character-in-an-alias-name", Category: "alias",

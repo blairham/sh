@@ -451,6 +451,7 @@ func Semantics() interp.Semantics {
 	s.AliasNotFoundStatusCounts = interp.Yes
 	s.UnaliasAllRefusesOperands = interp.No
 	s.AliasQuoting = interp.ListingQuoteWhenNeededDollar
+	s.AliasListingQuotesTheName = interp.No
 	s.TrapQuoting = interp.ListingQuoteWhenNeededDollar
 	// `typeset -p` writes `typeset -x -r n=5` — separate flags — and a name
 	// with no attributes as a bare `v=1`; a missing name is passed over in

@@ -280,6 +280,7 @@ func Semantics() interp.Semantics {
 	s.SetListing = interp.SetListingAssignments
 	s.SetListingQuoting = interp.ListingQuoteAlwaysDoubled
 	s.AliasQuoting = interp.ListingQuoteAlwaysDoubled
+	s.AliasListingQuotesTheName = interp.No
 	s.TrapQuoting = interp.ListingQuoteAlwaysDoubled
 	// A bare `local` in a function writes nothing.
 	s.BareLocalListing = interp.BareLocalListsNothing

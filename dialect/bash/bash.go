@@ -426,6 +426,7 @@ func Semantics() interp.Semantics {
 	s.AliasNotFoundStatusCounts = interp.No
 	s.UnaliasAllRefusesOperands = interp.No
 	s.AliasQuoting = interp.ListingQuoteAlwaysEscaped
+	s.AliasListingQuotesTheName = interp.No
 	s.TrapQuoting = interp.ListingQuoteAlwaysEscaped
 	// `declare -p` writes `declare -- v="1"` — double quotes, unlike the
 	// single-quoting listings above.

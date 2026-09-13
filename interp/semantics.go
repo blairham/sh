@@ -6234,6 +6234,36 @@ type Semantics struct {
 	// (#2060).
 	AliasQuoting ListingQuotingStyle
 
+	// AliasListingQuotesTheName spells an alias's **name** the way
+	// AliasQuoting spells its value, where the name needs it.
+	//
+	// Only three shells in the panel can be asked: bash 5.3 and ksh93u+
+	// refuse a name holding `$` outright, so a listing there never has one
+	// to spell — see AliasNameRefusedCharacters. Of the three that take any
+	// name, zsh 5.9.2 quotes and dash 0.5.12 does not, which is what makes
+	// this an axis rather than one column's habit:
+	//
+	//	alias 'a$b'=echo; alias
+	//	zsh    'a$b'=echo
+	//	dash   a$b='echo'
+	//
+	// Measured 2026-09-12 and re-measured 2026-09-13, `env -i
+	// PATH=/usr/bin:/bin` over a script file. The rule is AliasQuoting's own
+	// and not a second one: swept over 37 spellings on 2026-09-13, every
+	// character zsh quotes in a value it quotes in a name and every one it
+	// leaves bare in a value it leaves bare in a name — `a!b` and `a%b` bare
+	// on both sides, `a#b` and `a^b` quoted on both. So this says *whether*
+	// the name is spelled, and AliasQuoting says how.
+	//
+	// It reaches the listing forms and no further. Measured on the same run:
+	// `alias`, `alias -L`, `alias -g -L`, `alias -s`, `alias -s -L` and
+	// `command -v` all quote the name in zsh, and the sentence forms —
+	// `type`, `command -V`, `whence -v` — write it bare, as does the
+	// names-only listing `alias +`. A sentence is prose about a name rather
+	// than a line that would define it back, which is the line the quoting
+	// is for.
+	AliasListingQuotesTheName Answer
+
 	// TrapQuoting is that same question asked of `trap`, and it is a
 	// separate field because one dialect answers the two differently: zsh
 	// writes an alias holding a tab as `$'a\tb'` and a trap holding one as

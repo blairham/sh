@@ -329,6 +329,11 @@ func aliasNameSem(set string) func(*Semantics) {
 		s.AliasNameRefusedCharacters = set
 		s.AliasNameCheckReachesALookup = No
 		s.AliasInvalidNameFatal = No
+		// A name this set lets through is then listed back, and a name that
+		// needs quoting is where AliasListingQuotesTheName is asked — so
+		// leaving it unanswered would fail these cases on a question none of
+		// them is about.
+		s.AliasListingQuotesTheName = No
 	}
 }
 

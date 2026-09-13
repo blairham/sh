@@ -85,3 +85,40 @@ func TestANumeralStopsAtACharacterItsBaseCannotUse(t *testing.T) {
 		}
 	}
 }
+
+// A base of one names an *empty* alphabet, so "stop at the first character
+// this base cannot use" would stop before the first one and leave the digits
+// standing where an operator belongs — which is a complaint about the digits
+// for a text whose fault is its base.
+//
+// The reader has no range to check against: how far a base may go is the
+// dialect's own — one shell counts to 36 and another to 64 — and lives with
+// the conversion. So the numeral takes the whole run the alphabet knows and
+// the base travels with it, which is the same shape a base *past* the
+// alphabet already had: nothing in `65#5` stops the scan either, because no
+// character's value reaches 65 (#2575).
+func TestABaseWithNoAlphabetTakesTheWholeRunAnyway(t *testing.T) {
+	for _, c := range []struct{ expr, want string }{
+		{`1#5`, "1#5"},
+		{`1#z`, "1#z"},
+		{`1#Z`, "1#Z"},
+		{`1#@`, "1#@"},
+		{`1#9z`, "1#9z"},
+		{`1#0`, "1#0"},
+		{`01#5`, "01#5"},
+		// Nothing after the `#` is still the whole numeral, and so is a
+		// base past the alphabet, which never needed the branch.
+		{`1#`, "1#"},
+		{`65#5`, "65#5"},
+	} {
+		if got, rest := numeralText(t, c.expr, true); got != c.want || rest {
+			t.Errorf("%q: numeral %q (leftover %v), want %q whole", c.expr, got, rest, c.want)
+		}
+	}
+	// The control, and it is what says the branch is about a base with no
+	// digits rather than about `base#` at large: two has an alphabet, and a
+	// digit outside it still ends the numeral.
+	if got, rest := numeralText(t, `2#5`, true); !rest || got != "5" {
+		t.Errorf("`2#5`: blamed %q (leftover %v), want `5` left over", got, rest)
+	}
+}

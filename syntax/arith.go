@@ -1168,6 +1168,30 @@ func (a *arithParser) numberInItsOwnBase() {
 		a.numberInItsOwnBase()
 		return
 	}
+	if named == 1 {
+		// One is the other end of the same off-by-one, and it is the one
+		// case where stopping at a bad digit cannot be done at all: base one
+		// has no digits, so the run after the `#` is empty however the
+		// numeral is spelled and the digits are left standing where an
+		// operator belongs. This shell then complained about the *digit* —
+		// ``operator expected at `5'`` for `$(( 1#5 ))` — which sends a
+		// reader to look at their digits rather than at their base (#2575).
+		//
+		// Measured on zsh 5.9.2, 2026-09-13, `env -i PATH=/usr/bin:/bin`:
+		// `1#5`, `1#z`, `1#@`, `1#0`, `1#` and `1#5*2` are all `invalid base
+		// (must be 2 to 36 inclusive): 1`, the same sentence `37#5` gets.
+		// The base is refused where it is read and the digits are never
+		// consulted — so `1#0` matching here was luck rather than agreement,
+		// zero being the one byte whose value is below one.
+		//
+		// The range itself stays with the evaluator, which is where it
+		// already is and where the dialect's own bound lives: ksh93 counts
+		// to 64 and zsh stops at 36. All the reader has to do is hand the
+		// evaluator a numeral to complain about, so it takes the whole run
+		// the widest alphabet allows and lets parseNum name the base.
+		a.digitsIn(baseAlphabetWidth)
+		return
+	}
 	a.digitsIn(named)
 }
 
@@ -1305,6 +1329,13 @@ func isBasedLiteral(text string) bool {
 	return strings.HasPrefix(text, "0x") || strings.HasPrefix(text, "0X") ||
 		strings.Contains(text, "#")
 }
+
+// baseAlphabetWidth is how many digits the alphabet a `base#digits` literal
+// draws on has, which is also the widest base any shell in the panel counts
+// in. A base past it names no alphabet at all, and one below two names an
+// empty one; both are the evaluator's to refuse, and reading a numeral in
+// this base is how the reader hands one over — see numberInItsOwnBase.
+const baseAlphabetWidth = 64
 
 // isBaseDigit is the base-64 alphabet a `base#digits` literal may draw on:
 // 0-9, both letter cases, `@` and `_`.

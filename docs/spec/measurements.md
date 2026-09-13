@@ -9134,6 +9134,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | `trap/empty-handler-ignores` | `after` | `after` | `after` | `after` | `after` | `after` | `after` |
 | `trap/default-signal-terminates` | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* |
 | `trap/reset-restores-the-default` | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* |
+| `trap/a-reset-takes-back-an-ignore-a-child-would-inherit` | `st=143` | `st=143` | `st=143` | `st=143` | `st=271` | `st=143` | `st=143` |
+| `trap/an-ignore-with-no-reset-is-a-childs-to-inherit` | `survived~st=0` | `survived~st=0` | `survived~st=0` | `survived~st=0` | `survived~st=0` | `survived~st=0` | `survived~st=0` |
+| `trap/a-reset-with-no-ignore-leaves-a-child-the-default` | `st=143` | `st=143` | `st=143` | `st=143` | `st=271` | `st=143` | `st=143` |
+| `trap/a-handler-and-a-reset-leave-a-child-the-default` | `st=143` | `st=143` | `st=143` | `st=143` | `st=271` | `st=143` | `st=143` |
+| `trap/a-reset-takes-back-an-ignored-interrupt` | `st=130~after` | `st=130~after` | `st=130~after` | `st=130~after` | *(no output, killed by signal 2 (interrupt))* | `st=130~after` | `st=130~after` |
 | `trap/a-pipeline-element-runs-the-pipe-handler-it-set-for-itself` | `after` **2>** `child~reached` | `after` **2>** `child~reached` | `after` **2>** `child~reached` | `after` **2>** `~child~reached` | `after` **2>** `child~reached` | `after` **2>** `child~reached` | `after` **2>** `child~reached` |
 | `trap/an-elements-broken-pipe-is-not-the-outer-shells-to-handle` | `after` **2>** `child~reached` | `after` **2>** `child~reached` | `after` **2>** `child~reached` | `after` **2>** `~child~reached` | `after` **2>** `child~reached` | `after` **2>** `child~reached` | `after` **2>** `child~reached` |
 | `trap/an-elements-pipe-handler-runs-inside-the-elements-redirections` | `e=[<shell>: 1: echo: echo: I/O error~child]` | `e=[<shell>: line 1: echo: write error: Broken pipe~child]` | `e=[sh: line 1: echo: write error: Broken pipe~child]` | `e=[<shell>: line 0: echo: write error: Broken pipe~~child]` | `e=[child]` | `e=[child~child~<shell>:echo:1: write error: broken pipe~<shell>:1: write error: broken pipe~child]` | `e=[ash: write error: Broken pipe~child]` |
@@ -9293,6 +9298,26 @@ grades it and nothing drift-checks it either, for the same reason.
   trap - INT
   kill -INT $$
   echo after
+  ```
+- `trap/a-reset-takes-back-an-ignore-a-child-would-inherit` — the same reset asked of a **child** rather than of the shell, which is the only place the answer was ever wrong: the row above shows what the shell's own trap table did with `trap -`, and this one shows what the *process disposition* did, since an ignore survives exec and a handled signal does not. Unanimous across all seven columns — bash 5.3, bash-as-`sh`, bash 3.2, zsh, dash and BusyBox ash all kill the child and report 143, and ksh93 kills it too and reports its own 256-plus-the-number as 271. SIGTERM rather than a user signal because the status carries the *host's* signal number: USR1 is 30 on this machine and 10 on the Linux the ash column runs in, which would make half the row a fact about a kernel, and TERM is 15 on both. So a reset reaches the children started after it, and it took a case starting one to see it: this shell answered `survived` here while answering the row above correctly, because signal.Reset does not undo signal.Ignore and nothing in the corpus had ever asked a child (#2507). The child's own death notice is caught by the group's redirection, which keeps the row about the disposition rather than about four wordings for the same death
+  ```sh
+  trap '' TERM; trap - TERM; { /bin/sh -c 'kill -TERM $$; echo survived'; } 2>/dev/null; echo st=$?
+  ```
+- `trap/an-ignore-with-no-reset-is-a-childs-to-inherit` — the control for the row above, and the half that says `trap -` is a reset rather than a shell that has stopped ignoring anything at all: with the reset taken away the child survives at status 0 in all seven. It is `nohup` written in one line — an ignore is the one disposition that crosses exec, so a script can hand one to everything it starts, and a fix that cleared the ignore eagerly would pass the row above and fail this one
+  ```sh
+  trap '' TERM; { /bin/sh -c 'kill -TERM $$; echo survived'; } 2>/dev/null; echo st=$?
+  ```
+- `trap/a-reset-with-no-ignore-leaves-a-child-the-default` — a reset of a signal nothing has touched, which is the other control: 143 in six columns and 271 in ksh93, the same as the reset that follows an ignore. It is worth a row because `trap -` on a signal with no trap is not a null statement in every shell — it is the spelling `trap - QUIT` uses to argue with a shell born ignoring one (Semantics.QuitResetRestoresTheDefault) — and here, where nothing was ignored to begin with, all seven leave the child exactly as it would have been
+  ```sh
+  trap - TERM; { /bin/sh -c 'kill -TERM $$; echo survived'; } 2>/dev/null; echo st=$?
+  ```
+- `trap/a-handler-and-a-reset-leave-a-child-the-default` — the third control, and the one that separates the two ways a trap reaches the process: a *handler* is not inherited across exec at all, so the child sees the default whether the handler was reset or not, and every column kills it. Its value is as the discriminator — an implementation that reads `trap -` as one operation whatever preceded it passes this row and the two above and still fails the ignore row, because only the ignore leaves anything behind to take back
+  ```sh
+  trap 'echo handler' TERM; trap - TERM; { /bin/sh -c 'kill -TERM $$; echo survived'; } 2>/dev/null; echo st=$?
+  ```
+- `trap/a-reset-takes-back-an-ignored-interrupt` — the same reset for the signal the idiom is actually written about — a script that shields a critical section from ^C and then stops shielding it. Six columns kill the child at 130 and carry on to `after`; ksh93 prints nothing at all, because an interrupt that ended a child also ends the script there, which `signal/an-interrupt-that-ended-a-child` records on its own. Kept beside the TERM row rather than instead of it: TERM is the signal with no second story attached and the same number on every host, and INT is the one anybody writes this code for — a row that agreed with the panel only on the signal nobody uses for this would be a thin claim
+  ```sh
+  trap '' INT; trap - INT; { /bin/sh -c 'kill -INT $$; echo survived'; } 2>/dev/null; echo st=$?; echo after
   ```
 - `trap/a-pipeline-element-runs-the-pipe-handler-it-set-for-itself` — a handler is not only the shell's to set: an element that traps PIPE for itself runs that handler when its own write meets the broken pipe, and every shell in the panel does it — `child` then `reached` on standard error, in that order, in dash, both bash builds, ksh93 and zsh. The trap has to be set *inside* the element, because a handled signal is back at its default across the boundary and only an ignore crosses intact, so this cannot be spelled from the outside. ksh93 prints `after` before either of them, which is why the two streams are recorded apart
   ```sh

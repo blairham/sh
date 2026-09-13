@@ -115,7 +115,7 @@ func (r *Runner) setListedArray(d declaration) string {
 	case DeclareListingClustered:
 		elems := make([]string, 0, len(d.arr))
 		for _, i := range d.arr.subscripts() {
-			elems = append(elems, fmt.Sprintf("[%d]=%s", i, r.declareQuoted(d.arr[i].scalar())))
+			elems = append(elems, fmt.Sprintf("[%d]=%s", i, r.listedElement(d.arr[i])))
 		}
 		return "(" + strings.Join(elems, " ") + ")"
 	case DeclareListingExportSpelled:
@@ -131,7 +131,7 @@ func (r *Runner) setListedTable(d declaration, quote func(string) string) string
 		var b strings.Builder
 		b.WriteString("(")
 		for _, k := range d.assoc.keys() {
-			b.WriteString("[" + r.clusteredKey(k) + "]=" + r.declareQuoted(d.assoc[k].scalar()) + " ")
+			b.WriteString("[" + r.clusteredKey(k) + "]=" + r.listedElement(d.assoc[k]) + " ")
 		}
 		b.WriteString(")")
 		return b.String()
@@ -157,7 +157,7 @@ func (r *Runner) quotedArrayElems(d declaration) []string {
 func (r *Runner) quotedTablePairs(d declaration, key func(string) string) []string {
 	pairs := make([]string, 0, len(d.assoc))
 	for _, k := range d.assoc.keys() {
-		pairs = append(pairs, "["+key(k)+"]="+r.declareQuoted(d.assoc[k].scalar()))
+		pairs = append(pairs, "["+key(k)+"]="+r.listedElement(d.assoc[k]))
 	}
 	return pairs
 }

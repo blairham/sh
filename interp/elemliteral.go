@@ -17,8 +17,8 @@ import "github.com/blairham/sh/syntax"
 //
 // Which of the three readings applies is a semantics axis rather than a branch
 // here, because the panel does not merely differ in degree: one shell splices,
-// one refuses the line outright, and the third builds a nested value. See
-// SubscriptedArrayLiteralPolicy.
+// one refuses the line outright, and the third makes the element a value of
+// its own. See SubscriptedArrayLiteralPolicy.
 func (r *Runner) assignElemLiteral(a *syntax.Assign) {
 	switch r.subscriptedArrayLiteral() {
 	case SubscriptedArrayLiteralRefused:
@@ -31,6 +31,8 @@ func (r *Runner) assignElemLiteral(a *syntax.Assign) {
 			a.Name, subscriptSubject(a.IndexText, r.subscriptAsWritten(a.Index))))
 	case SubscriptedArrayLiteralSplices:
 		r.spliceElemLiteral(a)
+	case SubscriptedArrayLiteralNests:
+		r.nestElemLiteral(a)
 	}
 	// Unspecified has already been reported by name, and r.unspecified is set
 	// so nothing after it writes.

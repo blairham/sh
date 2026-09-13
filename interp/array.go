@@ -90,10 +90,10 @@ func (e Element) scalar() string {
 	if e.Nested == nil {
 		return e.Str
 	}
-	if lo, _, any := e.Nested.bounds(); any {
-		return e.Nested[lo].scalar()
+	if len(e.Nested) == 0 {
+		return "(\n)"
 	}
-	return "(\n)"
+	return e.Nested[0].scalar()
 }
 
 // equal reports whether two elements hold the same value.
@@ -390,7 +390,7 @@ func (r *Runner) setArrayElem(name string, idx int, sub, value string) {
 	if !ok {
 		if idx < 0 && r.ask(r.sem().NegativeSubscriptPastTheStartInserts,
 			"a negative subscript past the first element placing one in front of it") {
-			r.storeArray(name, insertAtTheFront(a, value))
+			r.storeArray(name, insertAtTheFront(a, str(value)))
 			return
 		}
 		if r.unspecified {
@@ -400,8 +400,34 @@ func (r *Runner) setArrayElem(name string, idx int, sub, value string) {
 			"%[1]s[%[2]s]: bad array subscript", name, sub))
 		return
 	}
-	a[pos] = str(value)
+	a[pos] = stringWritten(a[pos], value)
 	r.storeArray(name, a)
+}
+
+// stringWritten is what a *string* write leaves in an element, which is not
+// always a string: where the element holds a nested array the write reaches
+// that array's own first element and the nesting stays.
+//
+// Measured on ksh93u+ 2012-08-01, 2026-09-13, which is the one column whose
+// elements can nest — and each row here would have been a guess:
+//
+//	a=(x y); a[1]=(p q); a[1]=z    typeset -a a=(x (z q) )
+//	a=(x y); a[1]=(p q); a[1]+=z   typeset -a a=(x (pz q) )
+//	a=(x y); a[1]=();    a[1]=z    typeset -a a=(x z)
+//
+// So the write does not flatten a nested array and does not sit beside it; it
+// goes *in*. The third row is the exception that states the rule: an empty
+// nested array has no first element for the write to reach, and the element
+// goes back to being a string rather than growing one.
+//
+// The append spelling arrives here already joined — appendArrayElem reads the
+// element's scalar and hands the result over — so one rule covers both.
+func stringWritten(e Element, value string) Element {
+	if e.Nested == nil || len(e.Nested) == 0 {
+		return str(value)
+	}
+	e.Nested[0] = stringWritten(e.Nested[0], value)
+	return e
 }
 
 // elementsOfName is the array an element write starts from: the one the name
@@ -458,12 +484,12 @@ func (r *Runner) elementsOfName(name string, idx int) Array {
 // however far past, it lands in front and the array grows by exactly one, so
 // `a=(p q)` takes `a[-3]`, `a[-4]` and `a[-5]` to the same place. The others
 // refuse it, which is the axis rather than this arithmetic.
-func insertAtTheFront(a Array, value string) Array {
+func insertAtTheFront(a Array, e Element) Array {
 	out := make(Array, len(a)+1)
 	for _, pos := range a.subscripts() {
 		out[pos+1] = a[pos]
 	}
-	out[0] = str(value)
+	out[0] = e
 	return out
 }
 

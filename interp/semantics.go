@@ -13957,10 +13957,9 @@ type SubscriptedArrayLiteralPolicy int
 
 const (
 	// SubscriptedArrayLiteralUnspecified is no answer, and it is refused by
-	// name rather than guessed at. There is nothing to fall back on: the two
-	// answers that exist leave arrays of different lengths, and the third
-	// shell in the panel builds a nested value this interpreter has no
-	// representation for at all.
+	// name rather than guessed at. There is nothing to fall back on: the
+	// three answers leave arrays of three different lengths and two different
+	// kinds of element.
 	SubscriptedArrayLiteralUnspecified SubscriptedArrayLiteralPolicy = iota
 	// SubscriptedArrayLiteralRefused reports the line and ends the script:
 	// bash, in both builds measured, where `a[1]=(p q)` is `a[1]: cannot
@@ -13977,6 +13976,22 @@ const (
 	// scalar name is refused as a non-array and a declared table is refused
 	// as a slice.
 	SubscriptedArrayLiteralSplices
+	// SubscriptedArrayLiteralNests makes the element a value of its own:
+	// ksh93, where the array's **length does not change** and the element
+	// named becomes an array. Measured on 93u+ 2012-08-01, 2026-09-13:
+	//
+	//	a=(x y);   a[1]=(p q)   ${a[@]} -> x p    two elements, the second nested
+	//	a=(x y);   a[1]=(p q)   ${a[1][1]} -> q  the words are all still there
+	//	a=(x y z); a[1]=()      ${#a[@]} -> 3    an empty one is still an element
+	//	a=(x y);   a[1]+=(p)    ${a[@]} -> x p   and += appends to the nested one
+	//	s=abc;     s[1]=(p q)   typeset -a s=(abc (p q) )
+	//
+	// The scalar row is the one that separates this from both others: the
+	// shell that splices refuses a string outright and the shell that refuses
+	// refuses everything, where this one promotes the string to element zero
+	// and nests beside it. A *subscript* past the last element leaves a gap
+	// rather than padding, because this dialect's arrays are sparse.
+	SubscriptedArrayLiteralNests
 )
 
 func (p SubscriptedArrayLiteralPolicy) String() string {
@@ -13985,12 +14000,14 @@ func (p SubscriptedArrayLiteralPolicy) String() string {
 		return "refused"
 	case SubscriptedArrayLiteralSplices:
 		return "splices the element"
+	case SubscriptedArrayLiteralNests:
+		return "nests a value in the element"
 	}
 	return "unspecified"
 }
 
 // subscriptedArrayLiteral resolves the axis, refusing an unanswered dialect by
-// name rather than picking one of the two answers: they disagree about the
+// name rather than picking one of the three answers: they disagree about the
 // array's length, its contents and the exit status, so there is no reading
 // that is nearly right.
 func (r *Runner) subscriptedArrayLiteral() SubscriptedArrayLiteralPolicy {

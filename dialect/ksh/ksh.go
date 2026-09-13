@@ -1368,6 +1368,10 @@ func Semantics() interp.Semantics {
 	// A negative subscript past the first element is refused here too, and
 	// the refusal ends the script.
 	s.NegativeSubscriptPastTheStartInserts = interp.No
+	// `a[1]=(p q)` makes the element an array of its own — the array keeps
+	// its length and the element stops being a string. The one dialect that
+	// does; bash refuses the line and zsh splices the words in.
+	s.SubscriptedArrayLiteral = interp.SubscriptedArrayLiteralNests
 	// `typeset: a+: invalid variable name` — the append operator is not a
 	// declaration operand here.
 	s.DeclarationTakesAnAppendOperand = interp.No

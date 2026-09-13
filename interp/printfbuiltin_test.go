@@ -32,6 +32,8 @@ func printfSem() Semantics {
 	s.PrintfAbsentNumberIsAnEmptyOne = No
 	s.PrintfStarWithoutOperandIsRefused = No
 	s.PrintfStarComplaintCostsTheStatus = Yes
+	s.PrintfGroupingFlag = Yes
+	s.PrintfGroupingFlagAfterTheWidth = No
 	return s
 }
 
@@ -1190,6 +1192,106 @@ func TestPrintfStarWithoutOperandIsRefusedIsAnAxis(t *testing.T) {
 	}
 }
 
+// The `'` flag is a flag in three of the panel and not a flag at all in the
+// other two, where the character reaches the scan as the conversion it does
+// not have — the same shape #2646 had, and the reason the two answers want
+// different things from the prefix scan rather than from the formatter.
+//
+// The grouping itself is not in this table because there is none to see: the
+// separator is the locale's, this shell has numeric data for the C locale
+// alone, and `THOUSEP` there is empty. See Semantics.PrintfGroupingFlag and
+// #2675.
+func TestPrintfGroupingFlagIsAnAxis(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		flag   Answer
+		src    string
+		want   string
+		status int
+	}{
+		{"the flag is taken", Yes, `printf "[%'d]" 1234567`, "[1234567]", 0},
+		{"and the rest of the format runs", Yes, `printf "a%'db%sc" 1234567 X`, "a1234567bXc", 0},
+		// Not a flag: the `'` is the conversion character, which is refused
+		// as any unknown one is and stops the format where it stands. The
+		// `b` and everything after it never reach the output.
+		{"not a flag, so it is the conversion", No, `printf "a%'db%sc" 1234567 X`, "sh: printf: %': invalid directive\na", 1},
+		{"a flag run it is written into", Yes, `printf "[%-'10d]" 42`, "[42        ]", 0},
+		{"and the same one refused", No, `printf "[%-'10d]" 42`, "sh: printf: %-': invalid directive\n[", 1},
+		// The conversions that do not group take the flag all the same: it
+		// is a property of the prefix and not of the verb, and no column
+		// refuses it on one verb and not another.
+		{"a string conversion takes it", Yes, `printf "[%'s]" abc`, "[abc]", 0},
+		{"a float conversion takes it", Yes, `printf "[%'f]" 2.5`, "[2.500000]", 0},
+		// The control: outside a conversion's prefix the character is
+		// ordinary in all seven columns, so neither answer may touch it.
+		{"past the verb it is a literal", Yes, `printf "[%d'x]" 7`, "[7'x]", 0},
+		{"past the verb it is a literal here too", No, `printf "[%d'x]" 7`, "[7'x]", 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := printfSem()
+			sem.PrintfGroupingFlag = tc.flag
+			out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+			if out != tc.want || st != tc.status {
+				t.Errorf("got %q status %d, want %q and %d", out, st, tc.want, tc.status)
+			}
+		})
+	}
+}
+
+// Where the flag may be written, which is ksh93's question alone: it reads a
+// `'` anywhere in the conversion prefix and the other two that have the flag
+// read it among the flags and nowhere else.
+//
+// The third row is what makes this about the *position*. `%'15d` is the same
+// flag ahead of the width and both answers take it, so a table without that
+// row would pass for an implementation that had simply stopped accepting the
+// flag at all.
+func TestPrintfGroupingFlagAfterTheWidthIsAnAxis(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		after  Answer
+		src    string
+		want   string
+		status int
+	}{
+		{"past the width", Yes, `printf "[%10'd]" 1234567`, "[   1234567]", 0},
+		{"past the width, refused", No, `printf "[%10'd]" 1234567`, "sh: printf: %10': invalid directive\n[", 1},
+		{"past the precision", Yes, `printf "[%.5'd]" 1234567`, "[1234567]", 0},
+		{"past the precision, refused", No, `printf "[%.5'd]" 1234567`, "sh: printf: %.5': invalid directive\n[", 1},
+		{"ahead of the width is neither answer's business", Yes, `printf "[%'10d]" 1234567`, "[   1234567]", 0},
+		{"ahead of the width, still not", No, `printf "[%'10d]" 1234567`, "[   1234567]", 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := printfSem()
+			sem.PrintfGroupingFlagAfterTheWidth = tc.after
+			out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+			if out != tc.want || st != tc.status {
+				t.Errorf("got %q status %d, want %q and %d", out, st, tc.want, tc.status)
+			}
+		})
+	}
+}
+
+// The second axis is asked only where the first has already said yes, so a
+// dialect without the flag is never questioned about where it may be written.
+// Run with the flag refused and the position axis unanswered: an
+// implementation that asked the second question first would refuse the
+// command and name it, and this shell has to answer `%'d` as dash does.
+func TestPrintfGroupingPositionIsAskedOnlyWhereTheFlagExists(t *testing.T) {
+	sem := printfSem()
+	sem.PrintfGroupingFlag = No
+	sem.PrintfGroupingFlagAfterTheWidth = Unspecified
+	for _, src := range []string{`printf "[%'d]" 1234567`, `printf "[%10'd]" 1234567`} {
+		out, st := run(t, src, func(r *Runner) { r.Semantics = &sem })
+		if !strings.Contains(out, "invalid directive") || st != 1 {
+			t.Errorf("%s: got %q status %d, want the bad-directive refusal at 1", src, out, st)
+		}
+		if strings.Contains(out, "disagree") {
+			t.Errorf("%s: got %q — the position axis was consulted where the flag does not exist", src, out)
+		}
+	}
+}
+
 // The three axes this file added are asked at the disagreement and nowhere
 // else, and the strongest way to say so is to run the core vector — where
 // every one of them is unanswered, and an axis that *is* consulted refuses
@@ -1217,6 +1319,11 @@ func TestPrintfDoesNotConsultTheStarAxesOnThePlainPath(t *testing.T) {
 		// from being asked about it.
 		{"an absent operand", `printf '[%d]'`, "[0]"},
 		{"an absent operand part way through", `printf '[%d][%d]' 1`, "[1][0]"},
+		// And the two the `'` flag added (#2665). A conversion with no `'`
+		// in its prefix must not raise either question, and a `'` that is
+		// past the verb is not in a prefix at all.
+		{"a quote outside a conversion", `printf "[%d'x]" 7`, "[7'x]"},
+		{"a quote in the format's text", `printf "it's [%s]" here`, "it's [here]"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			sem := CoreSemantics()

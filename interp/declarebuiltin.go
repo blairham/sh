@@ -1610,8 +1610,8 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 	// caseLetterReplacesTheNumeric is still asked only where no numeric
 	// letter shares the line.
 	numeric := f.integer || f.float
-	cancelled := r.caseLettersCancel(name, f)
-	if f.lower && !cancelled {
+	canceled := r.caseLettersCancel(name, f)
+	if f.lower && !canceled {
 		if r.lowered == nil {
 			r.lowered = map[string]bool{}
 		}
@@ -1627,7 +1627,7 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 			}
 		}
 	}
-	if f.upper && !cancelled && !(numeric && r.upperLetterRecordsNothing()) {
+	if f.upper && !canceled && !(numeric && r.upperLetterRecordsNothing()) {
 		if r.uppered == nil {
 			r.uppered = map[string]bool{}
 		}

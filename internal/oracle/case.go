@@ -5421,6 +5421,16 @@ echo "st=$?"`,
 		Why:     "the control for the line ksh93 leaves out: on the first line of a command string it writes no bracket at all — `<shell>: eval: line 1:` — where the same `eval` one line lower is `<shell>[2]: eval: line 1:`. So the suppression belongs to the shell's own name rather than to every frame, which is the distinction `location/an-eval-inside-an-eval` is the other half of. bash 3.2 leaves its line out here too and bash 5.3 does not, which is a second reason to have the row",
 	},
 	{
+		ID: "location/a-sourced-file-below-the-first-line-of-a-command-string", Category: "diagnostics",
+		// -c with the `.` on the *second* line, which is the half the row
+		// above cannot see: every other case of a borrow under -c in this
+		// corpus has it on line 1, where the two readings of the suppression
+		// agree.
+		LayoutSensitive: true,
+		Snippet:         "printf 'echo one\\nnosuchcmd-xyz\\n' > inc.sh\n. ./inc.sh\necho st=$?",
+		Why:             "the discriminating half of what ksh93 leaves out on line 1. Here the `.` is on line 2 and ksh93 writes `<shell>[2]: .: line 2:` — the bracket is back — where the same `.` on line 1 is `<shell>: .: line 2:` with none. So the suppression is about the first line of what the shell was *given* and not about the `-c` route, which is a distinction every other borrow row in this corpus is blind to because its `.` is on line 1 (#2417). bash and zsh name the sourced file and dash names it after the location, none of them caring which line the `.` was on",
+	},
+	{
 		ID: "location/an-eval-inside-an-eval", Category: "diagnostics",
 		// The pair to the row above: same route, same line 1, and a second
 		// frame in between.

@@ -619,9 +619,12 @@ Rows one and three are the pair that decides it. A rule suppressing in every
 component writes `/bin/ksh: eval: ` for the first and `/bin/ksh: eval: eval: `
 for the third; a rule suppressing nowhere writes `/bin/ksh[1]: eval: line 1: `
 for the first. Neither row alone can tell the three readings apart, and the
-corpus carries both as
-`location/an-eval-on-the-first-line-of-a-command-string` and
-`location/an-eval-inside-an-eval`.
+corpus carries all three as
+`location/an-eval-on-the-first-line-of-a-command-string`,
+`location/an-eval-inside-an-eval` and
+`location/a-sourced-file-below-the-first-line-of-a-command-string` — the last
+being the only row in the corpus where a borrow sits below line 1 of a `-c`
+program, which is the one arrangement that can see the bracket come back.
 
 #### A builtin's complaint is located the builtin's way at the end of a chain
 

@@ -20735,6 +20735,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `startup/the-profile-falls-back-to-the-next-name` | `.profile~main` | `.bash_login~main` | `.profile~main` | `.bash_login~main` | `.profile~main` | `.zprofile~main` | `.profile~main` |
 | `startup/the-profile-falls-back-to-the-last-name` | `.profile~main` | `.profile~main` | `.profile~main` | `.profile~main` | `.profile~main` | `main` | `.profile~main` |
 | `startup/an-option-skips-the-profile` | **2>** `<shell>: 0: Illegal option --` *(status 2)* | `main` | `main` | `main` | **2>** `<shell>: noprofile: bad option(s)~Usage: <shell> [ options ] [arg ...]` *(status 2)* | **2>** `<shell>: no such option: noprofile` *(status 1)* | **2>** `<shell>: bad option '--noprofile'` *(status 2)* |
+| `startup/an-option-skips-every-startup-file` | `.profile~main` | `.bash_profile~main` | `.profile~main` | `.bash_profile~main` | `.profile~main` | `main` | `.profile~main` |
 | `startup/an-option-skips-the-interactive-file` | **2>** `<shell>: 0: Illegal option --` *(status 2)* | `main` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `main` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `main` **2>** `<shell>: no job control in this shell` | `main` | **2>** `<shell>: no such option: norc` *(status 1)* | **2>** `<shell>: bad option '--norc'` *(status 2)* |
 | `startup/the-interactive-file-is-read-at-a-prompt-by-name` | `main` **2>** `<shell>: 0: can't access tty; job control turned off` | `.bashrc~main` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `main` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `.bashrc~main` **2>** `<shell>: no job control in this shell` | `main` | `.zshrc~main` | `main` **2>** `<shell>: can't access tty; job control turned off` |
 | `startup/an-option-names-the-interactive-file` | **2>** `<shell>: 0: Illegal option --` *(status 2)* | `named-rc-file~main` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `main` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `named-rc-file~main` **2>** `<shell>: no job control in this shell` | **2>** `<shell>: rcfile: bad option(s)~Usage: <shell> [ options ] [arg ...]` *(status 2)* | **2>** `<shell>: no such option: rcfile` *(status 1)* | **2>** `<shell>: bad option '--rcfile'` *(status 2)* |
@@ -21154,6 +21155,10 @@ grades it and nothing drift-checks it either, for the same reason.
   echo main
   ```
 - `startup/an-option-skips-the-profile` — a broken startup file has to be escapable, which is the reason the skip options are modeled at all. The shell that has this option reads no profile and still runs the command string; the ones that do not have it refuse the word, each in its own way, which is the fact worth recording beside it. Semantics.StartupFileOptions.SuppressLogin
+  ```sh
+  echo main
+  ```
+- `startup/an-option-skips-every-startup-file` — the widest escape hatch, and the letter is the point: one shell reads `-f` as "skip every startup file" and every other column reads it as "turn globbing off" and reads its profile anyway. So the row is a disagreement about a letter rather than about a file, which is why the skip options are a table of spellings per dialect and not one axis. Semantics.StartupFileOptions.SuppressAll
   ```sh
   echo main
   ```

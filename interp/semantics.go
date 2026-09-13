@@ -6159,13 +6159,14 @@ type Semantics struct {
 	// disappearing: the next line typed is read as part of the construct
 	// already refused, so `echo three` above never runs (#1893).
 	//
-	// unpinned zsh: reached, and the corpus cannot discriminate: it is about
-	// what the *prompt* does after a parse failure, and no row draws a second
-	// prompt to be asked again at. Measured 2026-09-13; the bash pair is pinned.
-	// driver/promptrefuse_test.go carries it to the front end
-	// (TestTheFrontEndCarriesWhetherAPromptAsksAgain), repl/repl.go's own tests
-	// drive the retry, and dialect/zsh/promptrefuse_test.go pins this shell's
-	// answer (TestAPromptKeepsAskingAfterARefusedToken) (#2058).
+	// unpinned: reached, and the corpus cannot discriminate. It is about what
+	// the *prompt* does after a parse failure, and no row draws a second
+	// prompt to be asked again at — measured 2026-09-13 in bash and zsh
+	// alike. driver/promptrefuse_test.go carries it to the front end
+	// (TestTheFrontEndCarriesWhetherAPromptAsksAgain),
+	// repl/promptcomments_test.go's neighbours drive the retry through a
+	// session, and dialect/zsh/promptrefuse_test.go pins one shell's answer
+	// (TestAPromptKeepsAskingAfterARefusedToken) (#2058).
 	PromptAsksAgainAfterARefusedToken bool
 
 	// PromptCommentsNeedTheOption names the option a `#` typed at this
@@ -6206,9 +6207,15 @@ type Semantics struct {
 	// the shell's own splitter, and the two then disagree about where the
 	// words are (#2537).
 	//
-	// unpinned zsh: reached, and the corpus cannot discriminate. A `#` is a
-	// comment in every row already, because the question is what an *interactive
-	// line* does with one and no row is typed at a prompt. Measured 2026-09-13.
+	// unpinned: reached, and the corpus cannot discriminate, for two reasons
+	// that land on the two dialects separately. In the shell that names an
+	// option, a `#` is a comment in every row already, because the question
+	// is what an *interactive line* does with one and no row is typed at a
+	// prompt. In the shell that names none the axis holds the empty string,
+	// and the only other value the sweep has for a string axis is a word it
+	// invented — a row could object only by passing that exact word, which
+	// would be a case written against the instrument rather than against a
+	// shell. Measured 2026-09-13 in bash and zsh.
 	// repl/promptcomments_test.go drives a session and pins both answers
 	// (TestAHashAtThePromptFollowsTheNamedOption,
 	// TestTheCommentOptionIsReReadForEveryLine), and
@@ -7882,6 +7889,15 @@ type Semantics struct {
 	// and where a shell does hold a name, it is a row: see the
 	// `startup/…` family, which pins every non-empty name in this group
 	// (#2059).
+	//
+	// unpinned zsh: reached, and the shell that *has* one is the harder half — a
+	// row would have to put this variable in the environment, and its value is a
+	// *directory*. Case.Files can write into one, but Case.Env interpolates only
+	// the script's path, so a row cannot name the scratch directory it wrote
+	// into. Worth one measurement before anybody writes a harness change for it:
+	// a case runs with its scratch directory as the working directory, so a
+	// **relative** value may resolve there and make this a row rather than a
+	// standing verdict (#2059).
 	StartupDirectoryVariable string
 
 	// UnconditionalStartupFile names a file read on *every* invocation —
@@ -8650,10 +8666,11 @@ type Semantics struct {
 	// has not been asked for a job report does not write one where nobody is
 	// waiting at a prompt to read it.
 	//
-	// unpinned zsh: never reached from the corpus, which draws no prompt in any
-	// row — so there is no moment for the notice to be waiting for. Measured
-	// 2026-09-13. driver/interactivejobs_test.go pins it on both routes through
-	// a pseudo-terminal (TestAFinishedJobNoticeMayWaitForAPromptThatNeverComes,
+	// unpinned: never reached from the corpus, which draws no prompt in any
+	// row — so there is no moment for the notice to be waiting for, in bash
+	// or in zsh. Measured 2026-09-13. driver/interactivejobs_test.go pins it
+	// on both routes through a pseudo-terminal
+	// (TestAFinishedJobNoticeMayWaitForAPromptThatNeverComes,
 	// TestAScriptRouteObeysTheSameFinishedNoticeAxis), and
 	// repl/jobnotice_test.go pins the prompt it waits for
 	// (TestANoticeWaitsForAPromptThatIsNotAContinuation) (#2058).
@@ -10393,6 +10410,13 @@ type StartupFileOptions struct {
 	// pinned by rows: `startup/an-option-skips-the-profile`,
 	// `startup/an-option-skips-the-interactive-file` and
 	// `startup/an-option-names-the-interactive-file` (#2059).
+	//
+	// unpinned zsh: reached, and no row can observe it, for the reason the files
+	// it suppresses cannot be observed either — they live in a directory the
+	// machine's administrator owns, and a case writes only in the scratch
+	// directory it was given. With nothing of ours in `/etc`, `-d -l -c` and `-l
+	// -c` read exactly the same files, so the option is invisible whichever way
+	// the axis is set. See SystemStartupFiles (#2059).
 	SuppressSystem string
 
 	// SuppressLogin names the options that suppress the login profile and
@@ -10405,6 +10429,15 @@ type StartupFileOptions struct {
 	//
 	// It beats Login above, which is measured: `bash --noprofile --login -i`
 	// reads no profile.
+	//
+	// unpinned zsh: reached, and the flip is unobservable by construction. This
+	// shell has no option for the profile alone — the one it has drops every
+	// startup file at once, SuppressAll above — so the axis holds the empty
+	// string, and the only other value the sweep has for a string axis is a word
+	// it invented. A row could object only by passing that exact word, which
+	// would be a case written against the instrument rather than against a
+	// shell. The shell that does have it is pinned by
+	// `startup/an-option-skips-the-profile` (#2059).
 	SuppressLogin string
 
 	// SuppressInteractive names the options that suppress the interactive

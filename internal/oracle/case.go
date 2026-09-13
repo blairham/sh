@@ -20800,6 +20800,13 @@ echo "st=$?"`,
 		Why:     "a broken startup file has to be escapable, which is the reason the skip options are modeled at all. The shell that has this option reads no profile and still runs the command string; the ones that do not have it refuse the word, each in its own way, which is the fact worth recording beside it. Semantics.StartupFileOptions.SuppressLogin",
 	},
 	{
+		ID: "startup/an-option-skips-every-startup-file", Category: "invocation",
+		Files:   startupMarkers(".bash_profile", ".profile", ".zshenv", ".zprofile", ".zlogin", ".bashrc", ".zshrc"),
+		Args:    []string{"-f", "-l", "-c", ArgSnippet},
+		Snippet: `echo main`,
+		Why:     "the widest escape hatch, and the letter is the point: one shell reads `-f` as \"skip every startup file\" and every other column reads it as \"turn globbing off\" and reads its profile anyway. So the row is a disagreement about a letter rather than about a file, which is why the skip options are a table of spellings per dialect and not one axis. Semantics.StartupFileOptions.SuppressAll",
+	},
+	{
 		ID: "startup/an-option-skips-the-interactive-file", Category: "invocation",
 		Files:   startupMarkers(".bashrc", ".zshrc", ".profile"),
 		Args:    []string{"--norc", "-i", "-c", ArgSnippet},

@@ -357,14 +357,6 @@ func (r *Runner) readOptionNumber(builtin string, f *declareFlags, letter byte, 
 	if letter == 'i' {
 		return r.readIntegerBase(builtin, f, written)
 	}
-	if letter == 'L' || letter == 'R' || letter == 'Z' {
-		n, err := strconv.Atoi(written)
-		if err != nil {
-			return true
-		}
-		f.width, f.widthNamed = n, true
-		return true
-	}
 	n, err := strconv.Atoi(written)
 	if err != nil {
 		// Not a number at all, so not this letter's argument — the callers
@@ -375,6 +367,12 @@ func (r *Runner) readOptionNumber(builtin string, f *declareFlags, letter byte, 
 	// The letter itself is not set here. Both spellings that reach this have
 	// already written it — the detached one in the word before, the attached
 	// one in what is left of this word after the number comes off.
+	if letter == 'L' || letter == 'R' || letter == 'Z' {
+		// A width rather than a precision, and one field pair each so the
+		// listing knows which letter to write the number back onto.
+		f.width, f.widthNamed = n, true
+		return true
+	}
 	f.precision, f.precisionNamed = n, true
 	return true
 }

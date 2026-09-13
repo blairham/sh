@@ -5715,9 +5715,11 @@ func (r *Runner) assignOperands(c *syntax.SimpleCmd) {
 // rather than replacing its elements, having asked the dialect.
 //
 // Asked only where the answer could be seen: the name has to be carrying one
-// of the attributes there is something to lose, and the literal has to be the
-// plain assignment spelling rather than a declaration's own operand. Each of
-// those was measured — see the fields.
+// of the attributes there is something to lose — nameCarriesATypeAttribute,
+// which is the same list clearTypeAttributes takes off, so the question and
+// the answer cannot come apart — and the literal has to be the plain
+// assignment spelling rather than a declaration's own operand. Each of those
+// was measured — see the fields.
 //
 // **Three questions, not one**, and the panel answers them differently:
 //
@@ -5736,7 +5738,7 @@ func (r *Runner) arrayLiteralStartsTheNameOver(a *syntax.Assign) bool {
 	if a.Operand {
 		return false
 	}
-	if !r.integer[a.Name] && !r.lowered[a.Name] && !r.uppered[a.Name] {
+	if !r.nameCarriesATypeAttribute(a.Name) {
 		return false
 	}
 	if !r.nameIsAnArray(a.Name) {
@@ -5794,16 +5796,43 @@ func (r *Runner) nameIsAnArray(name string) bool {
 }
 
 // clearTypeAttributes takes off the letters that say what a name's values
-// *are* — the integer letter and the two case letters.
+// *are* — the integer letter, the two case letters, the float precision and
+// the width attribute.
 //
 // Narrower than clearAttributes, which `unset` uses: this is not the name
 // going away, so what is measured to go is measured to go, and nothing else
 // is guessed at. The listing after a re-creating assignment keeps the array
-// letter and loses these three, which is what the field records.
+// letter and loses these, which is what the field records.
+//
+// Measured 2026-09-12, zsh 5.9.2: `typeset -L 3 c; c=(a bb); typeset -p c`
+// writes `typeset -a c=( a bb )` — no `L`, no width — and `typeset -F 3 b;
+// b=(1 2)` writes `typeset -a b=( 1 2 )` the same way, beside the `-i`, `-l`
+// and `-u` rows that were already here. The width has to go from the store
+// and not only from the listing: the name can be assigned a scalar again
+// afterwards, and `d=zz` then reads back `zz` rather than `zz ` (#1461).
+// nameCarriesATypeAttribute reports whether clearTypeAttributes would take
+// anything off the name. It is the guard on asking the re-creation question
+// at all, and it is here rather than beside that question so the two lists
+// are one list: an attribute added to the clearing and not to the guard is an
+// attribute the question is never asked about, which is how the float
+// precision and the width both survived a `c=(a bb)` that zsh drops them on.
+func (r *Runner) nameCarriesATypeAttribute(name string) bool {
+	if r.integer[name] || r.lowered[name] || r.uppered[name] {
+		return true
+	}
+	if _, ok := r.floatPrecision[name]; ok {
+		return true
+	}
+	_, ok := r.fieldWidth[name]
+	return ok
+}
+
 func (r *Runner) clearTypeAttributes(name string) {
 	delete(r.integer, name)
 	delete(r.lowered, name)
 	delete(r.uppered, name)
+	delete(r.floatPrecision, name)
+	delete(r.fieldWidth, name)
 }
 
 // assignAll performs a bare assignment list, tracing it as it goes.

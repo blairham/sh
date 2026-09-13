@@ -246,12 +246,17 @@ var extraSetOptions = map[string]setOption{
 	// It moves the axes measured to move with it and no others, which is the
 	// same partial honesty `emulate` keeps in the zsh dialect: real posix
 	// modes fold in dozens of behaviors, and claiming those would be a
-	// promise nothing here keeps. Today that is seven axes, and the evidence
+	// promise nothing here keeps. Today that is eight axes, and the evidence
 	// is direct in every case — `set -o posix` makes a failed redirection on
 	// a special builtin end bash 5.3 and bash 3.2, `set +o posix` makes bash
 	// invoked as `sh` carry on, and the two states are exactly the panel's
 	// `bash` and `bash-as-sh` columns. See SetPosixMode for the list and for
 	// the measurement behind each.
+	//
+	// Seven of the eight take the standard's own answer, and the eighth takes
+	// the *dialect's* answer to what its mode makes of that axis. See
+	// SetPosixMode: the mode is the core's, and what a given shell's mode
+	// moves is not (#2583).
 	//
 	// Turning it *off* puts back the answer the dialect started with rather
 	// than writing the opposite of the standard's, which is not the same
@@ -318,6 +323,16 @@ var extraSetOptions = map[string]setOption{
 // two questions; this is the mode, and it is the core's for the same reason
 // PosixSemantics is.
 //
+// **Seven of the eight axes it moves take the standard's own answer**, because
+// that is what the name asks for and every shell with a POSIX mode was measured
+// to take them. The eighth — BadOptionToSpecialBuiltinFatal — it takes from the
+// dialect, through BadOptionToSpecialBuiltinFatalInPosixMode, because the shells
+// disagree about what their own mode makes of it: bash's moves it to fatal
+// through either door and zsh's leaves it alone, while both shells' mode moves
+// the redirection axis beside it. A knob that wrote one shell's answer here
+// would be imposing bash's semantics on every dialect invoked as `sh`, which is
+// the thing the core is not allowed to do (#2583).
+//
 // The saved fields are the whole of the care it needs, and the reason it is
 // one function rather than a line at each call site. Entering records the
 // answer the dialect held, and leaving puts *that* back rather than asserting
@@ -342,6 +357,7 @@ func (r *Runner) SetPosixMode(on bool) {
 	exportListing := r.posixSavedExportListing
 	readonlyListing := r.posixSavedReadonlyListing
 	bareListing := r.posixSavedBareListing
+	badOption := r.posixSavedBadOption
 	if on {
 		r.posixSaved = r.sem().RedirectErrorOnSpecialBuiltinFatal
 		r.posixSavedUnsetReadonly = r.sem().UnsetReadonlyFatal
@@ -357,6 +373,8 @@ func (r *Runner) SetPosixMode(on bool) {
 		exportListing = posixListing(r.posixSavedExportListing)
 		readonlyListing = posixListing(r.posixSavedReadonlyListing)
 		bareListing = posixListing(r.posixSavedBareListing)
+		r.posixSavedBadOption = r.sem().BadOptionToSpecialBuiltinFatal
+		badOption = r.sem().BadOptionToSpecialBuiltinFatalInPosixMode
 		redir, unsetRO = Yes, Yes
 		forName = ForNameEndsTheScriptAsASyntaxError
 		funcName = FuncNameEndsTheScriptAsASyntaxError
@@ -429,6 +447,20 @@ func (r *Runner) SetPosixMode(on bool) {
 		s.ExportListing = exportListing
 		s.ReadonlyListing = readonlyListing
 		s.BareDeclarationListing = bareListing
+		// The eighth, and the only one whose value comes from the dialect
+		// rather than from the standard. The seven above are the standard's
+		// own answers and every shell that has a POSIX mode was measured to
+		// take them; this one the shells disagree about, and they disagree
+		// about it *within* one mode rather than about the mode as a whole —
+		// zsh invoked as `sh` stops on a failed redirection and still carries
+		// on past `shift -x`, where bash under either door stops on both.
+		//
+		// So the mode asks the dialect what it makes of this axis and swaps
+		// in the answer, rather than writing bash's into a knob that every
+		// dialect invoked as `sh` goes through. Writing `Yes` here would have
+		// given zsh-as-`sh` a fatality zsh does not have, which is the whole
+		// of why this axis was not simply added to the others (#2583).
+		s.BadOptionToSpecialBuiltinFatal = badOption
 	})
 	r.posixMode = on
 	// The standard has aliases expand in a script, so the mode turns the

@@ -1303,6 +1303,7 @@ type Runner struct {
 	posixSavedUnsetReadonly Answer
 	posixSavedForName       ForNameRunForm
 	posixSavedFuncName      FuncNameRunForm
+	posixSavedBadOption     Answer
 	// The three listing axes the mode moves, saved for the same reason and
 	// separately for the same reason: no shell in the panel answers all
 	// three alike, so one remembered form could not put three back. The
@@ -5087,6 +5088,24 @@ func (r *Runner) failedExpansion() {
 
 // setFatalStatus is the status half of fatalQuiet, for the caller that wants
 // the number without the unwinding.
+// setFatalStatus writes the dialect's generic status for a fatal error.
+//
+// **A builtin's own return value wins over it**, because the dispatcher writes
+// what the builtin returned after the control flow is set — so a builtin that
+// reports a usage error, ends the script and returns 2 ends it at 2 however
+// this answers. That is the reading the panel wants: measured 2026-09-13,
+// `shift -x`, `export -q`, `return abc` and `exit status` end a shell in POSIX
+// mode at 2 in bash 5.3.15 under `set -o posix`, in that build under the name
+// `sh`, and in dash, ksh93 and BusyBox ash, while bash's generic fatal status
+// is 1 — a failed redirection on a special builtin ends it at 1 in the same
+// shell. bash 3.2.57 is the one column that parts from it, ending `shift -x`
+// at 1 while its own `export -q` ends at 2; no dialect here claims that build.
+//
+// So a caller on that path returns the builtin's status and never `r.status`,
+// and an assignment to r.status in front of fatalQuiet is dead either way.
+// Both facts were invisible while only dash, ksh93 and BusyBox ash could reach
+// it — all three answer 2 to both questions — and bash reaching the same path
+// through POSIX mode is what told them apart (#2583).
 func (r *Runner) setFatalStatus() {
 	if r.ask(r.sem().FatalErrorStatusIsOne, "the exit status of a fatal error") {
 		r.status = 1

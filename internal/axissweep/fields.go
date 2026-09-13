@@ -478,10 +478,25 @@ func readDocs() {
 }
 
 // markerLine matches the triage lines a field comment may carry. The value
-// name is required to look like a Go constant, and the dialect to be one of
-// the four, so that a sentence beginning with the word cannot be mistaken for
-// a marker.
-var markerLine = regexp.MustCompile(`^(?:(unanimous)|unexhibited ([A-Za-z_][A-Za-z0-9_]*)|unpinned(?: (bash|zsh|ksh|dash))?):[ \t]*(.*)$`)
+// name is required to look like a Go constant, and the dialect to be one this
+// module actually ships, so that a sentence beginning with the word cannot be
+// mistaken for a marker.
+//
+// The dialect alternation is built from Presets rather than written out, for
+// the same reason the sweep's own enumeration is derived from the struct: the
+// hand-written list said `bash|zsh|ksh|dash` and went on saying it after `ash`
+// became the fifth dialect, so an `unpinned ash:` verdict was read as ordinary
+// prose and the pair stayed in the untriaged count however carefully the
+// verdict was written. A silently ignored triage line is worse than a missing
+// one, because the report says exactly the same thing either way (#2583).
+var markerLine = sync.OnceValue(func() *regexp.Regexp {
+	names := make([]string, 0, len(Presets()))
+	for _, p := range Presets() {
+		names = append(names, regexp.QuoteMeta(p.Name))
+	}
+	return regexp.MustCompile(`^(?:(unanimous)|unexhibited ([A-Za-z_][A-Za-z0-9_]*)|unpinned(?: (` +
+		strings.Join(names, "|") + `))?):[ \t]*(.*)$`)
+})
 
 // scanMarkers walks one comment's lines and hands each marker the pattern
 // matches to fn, together with the paragraph that follows it.
@@ -518,7 +533,7 @@ func scanMarkers(text string, marker *regexp.Regexp, fn func(m []string, body st
 // parseNotes reads the triage lines out of one field's comment.
 func parseNotes(text string) Notes {
 	var out Notes
-	scanMarkers(text, markerLine, func(m []string, body string) {
+	scanMarkers(text, markerLine(), func(m []string, body string) {
 		switch {
 		case m[1] != "":
 			out.Unanimous = body

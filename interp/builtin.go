@@ -227,22 +227,21 @@ func biReturn(r *Runner, _ context.Context, args []string) int {
 // here would end the script in the shell that carries on.
 //
 // Where a special builtin's failure is fatal the script does end, and that is
-// the same axis `unalias` with nothing to remove already asks rather than a
-// second one about operands: dash ends the script at status 2, and so does
-// bash called as `sh`, which is bash's own posix mode reaching the POSIX rule.
-// Plain bash reports it and runs the next command. ksh93 and zsh never arrive
-// here at all, because neither refuses any word — so the fatality is left to
-// the axis the two shells that *can* answer it agree with.
+// BadOptionToSpecialBuiltinFatal rather than a second axis about operands:
+// dash ends the script at status 2, and so does bash called as `sh`, which is
+// bash's own posix mode reaching the POSIX rule. Plain bash reports it and
+// runs the next command, and `set -o posix` moves it — measured 2026-09-13,
+// and see Semantics.BadOptionToSpecialBuiltinFatalInPosixMode. ksh93 and zsh
+// never arrive here at all, because neither refuses any word — so the fatality
+// is left to the axis the two shells that *can* answer it agree with.
 func (r *Runner) refusedReturnOperand(arg string) int {
 	r.diagf("%s\n", Wording(r.diag().NumericArgument, "%[1]s: invalid number: %[2]s", "return", arg))
-	// No `r.status = 2` to go with the 2 below, unlike badStatusArg: a
-	// builtin's *return value* is what becomes the status here, and on the
-	// fatal path setFatalStatus chooses it. The assignment was dead both
-	// ways, which a mutation run showed by changing it to 1 with nothing
-	// noticing.
 	if r.ask(r.sem().BadOptionToSpecialBuiltinFatal, "a special builtin's usage error ending the script") {
 		// fatalQuiet sets controlExit over the controlReturn above, which is
 		// the order that matters: the script ends rather than the function.
+		// No `r.status = 2` to go with the 2 below: the return value is what
+		// the dispatcher writes, and it is the status the panel ends at. See
+		// setFatalStatus.
 		r.fatalQuiet()
 	}
 	return 2
@@ -2164,9 +2163,11 @@ func (r *Runner) shiftBadNumber(operand string) (int, bool) {
 	r.diagf("%s\n", Wording(d.ShiftBadNumber, "shift: %[1]s: numeric argument required", operand))
 	status := orDefault(d.BuiltinBadOptionStatus, 2)
 	if r.ask(r.sem().BadOptionToSpecialBuiltinFatal, "a special builtin's bad operand ending the script") {
-		r.status = status
 		r.fatalQuiet()
-		return r.status, true
+		// The builtin's own status and not `r.status`, which fatalQuiet has
+		// just written the dialect's generic fatal answer into — 1 in bash,
+		// and the panel ends this at 2. See setFatalStatus (#2583).
+		return status, true
 	}
 	return status, true
 }
@@ -4567,9 +4568,10 @@ func sortedKeys(m map[string]string) []string {
 func (r *Runner) badStatusArg(builtin, arg string) int {
 	r.diagf("%s\n", Wording(r.diag().NumericArgument, "%[1]s: invalid number: %[2]s", builtin, arg))
 	if r.ask(r.sem().BadOptionToSpecialBuiltinFatal, "a special builtin's bad operand ending the script") {
-		r.status = 2
 		r.fatalQuiet()
-		return r.status
+		// The 2 and not `r.status`, for the reason shiftBadNumber returns the
+		// builtin's status: see setFatalStatus (#2583).
+		return 2
 	}
 	// Reported and not obeyed: no control flow is set, so the next statement
 	// runs and the 2 below is what it finds in `$?`.

@@ -230,6 +230,24 @@ func TestDiagnostics(t *testing.T) {
 	}
 }
 
+// TestPosixModeMakesASpecialBuiltinsUsageErrorFatal is the half of #2583 this
+// preset answers, and it answers it by *not* overriding the standard's.
+//
+// Measured 2026-09-13: `shift -x`, `export -q`, `return abc` and `exit status`
+// each print a complaint and run the next command at 0 in bash 5.3.15, and
+// each ends the script at 2 under `set -o posix` and under the name `sh`. So
+// the two fields part company here, and the pair is the assertion — a preset
+// holding the same value in both would be saying the mode moves nothing.
+func TestPosixModeMakesASpecialBuiltinsUsageErrorFatal(t *testing.T) {
+	s := bash.Semantics()
+	if got, want := s.BadOptionToSpecialBuiltinFatal, interp.No; got != want {
+		t.Errorf("BadOptionToSpecialBuiltinFatal = %v, want %v", got, want)
+	}
+	if got, want := s.BadOptionToSpecialBuiltinFatalInPosixMode, interp.Yes; got != want {
+		t.Errorf("BadOptionToSpecialBuiltinFatalInPosixMode = %v, want %v", got, want)
+	}
+}
+
 // TestDerivesFromTheStandardNotFromASibling is the property the package
 // comment promises. A preset that inherits from another shell inherits its
 // future mistakes; this one starts from POSIX and overrides only what was

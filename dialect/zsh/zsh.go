@@ -1641,6 +1641,20 @@ func Semantics() interp.Semantics {
 	s.UlimitHasProcessCount = interp.Yes
 	s.UlimitSetsBothLimits = interp.No
 	s.BadOptionToSpecialBuiltinFatal = interp.No
+	// And this shell's POSIX mode does not move it, which is the departure
+	// from the standard's preset and from every other dialect here. The mode
+	// has one door in this shell — there is no `set -o posix`, `set -o posix`
+	// is `no such option` at 1 — so it is the name that reaches it, and a
+	// symlinked `sh` answers `bad option: -x` and then `alive` at 0, exactly
+	// as this shell does under its own name. Measured 2026-09-13 for both
+	// `shift -x` and `export -q`.
+	//
+	// Not a claim that the mode does nothing here: the same shell under the
+	// same name *does* move RedirectErrorOnSpecialBuiltinFatal, stopping on
+	// `export x > /nonexistent/dir/f` where it carries on as `zsh`. Two axes,
+	// one mode, opposite answers — which is why this is a field a dialect
+	// fills in rather than a constant in SetPosixMode (#2583).
+	s.BadOptionToSpecialBuiltinFatalInPosixMode = interp.No
 	// `alias` is no more special here than POSIX makes it: the complaint is
 	// said and the next command runs. Measured with `alias -g x`.
 	s.AliasBadOptionFatal = interp.No

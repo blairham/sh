@@ -50728,6 +50728,108 @@
         "TimedOut": false
       }
     },
+    "core/a-quoted-brace-in-a-word-operand-decided-when-the-word-expands": {
+      "ash": {
+        "Stdout": "[Vx}yb'}]~[Vx}yb'}]",
+        "Stderr": "\u003cshell\u003e: set: line 0: illegal option -o posix",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[Vx}y]~[Vx}yb'}]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[Vx}yb'}]~[Vx}yb'}]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[Vx}y]~[Vx}y]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[Vx}yb'}]",
+        "Stderr": "\u003cshell\u003e: 1: set: Illegal option -o posix",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[Vx}yb'}]",
+        "Stderr": "\u003cshell\u003e: set: posix: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[Vx}yb'}]",
+        "Stderr": "\u003cshell\u003e:set:1: no such option: posix",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "core/a-quoted-brace-in-a-word-operand-in-posix-mode": {
+      "ash": {
+        "Stdout": "[Vx}yb'}]",
+        "Stderr": "\u003cshell\u003e: set: line 0: illegal option -o posix",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[Vx}yb'}]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[Vx}yb'}]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[Vx}y]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: set: Illegal option -o posix",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: set: posix: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:set:1: no such option: posix",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "core/a-quoted-brace-in-an-unquoted-operand": {
       "ash": {
         "Stdout": "[Vx}y][a}b][Vx}y]",
@@ -97393,6 +97495,57 @@
         "TimedOut": false
       }
     },
+    "invoke/a-name-that-is-not-sh-leaves-a-special-builtins-usage-error-alone": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: applet not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "after",
+        "Stderr": "\u003cshell\u003e: line 1: shift: -x: numeric argument required",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "after",
+        "Stderr": "\u003cshell\u003e: line 1: shift: -x: numeric argument required",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 0: shift: -x: numeric argument required",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: shift: Illegal number: -x",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: shift: -x: unknown option~Usage: shift [ options ] [n]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "after",
+        "Stderr": "\u003cshell\u003e:shift:1: bad option: -x",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "invoke/a-program-on-a-standard-input-that-is-closed": {
       "ash": {
         "Stdout": "",
@@ -98409,6 +98562,159 @@
         "Stdout": "",
         "Stderr": "\u003cshell\u003e:1: no such file or directory: /nope/x",
         "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "invoke/called-sh-leaves-unalias-with-nothing-to-remove-alone": {
+      "ash": {
+        "Stdout": "after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "after",
+        "Stderr": "unalias: usage: unalias [-a] name [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "after",
+        "Stderr": "unalias: usage: unalias [-a] name [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "after",
+        "Stderr": "unalias: usage: unalias [-a] name [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "Usage: unalias [-a] name...",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "after",
+        "Stderr": "\u003cshell\u003e:unalias:1: not enough arguments",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "invoke/called-sh-makes-a-special-builtins-usage-error-fatal": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: shift: line 0: Illegal number: -x",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: shift: -x: numeric argument required",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: shift: -x: numeric argument required",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 0: shift: -x: numeric argument required",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: shift: Illegal number: -x",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: shift: -x: unknown option~Usage: shift [ options ] [n]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "after",
+        "Stderr": "\u003cshell\u003e:shift:1: bad option: -x",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "invoke/called-sh-moves-a-quoted-brace-in-a-word-operand": {
+      "ash": {
+        "Stdout": "[Vx}yb'}][Vx}y]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[Vx}yb'}][Vx}y]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[Vx}yb'}][Vx}y]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[Vx}y][Vx}y]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[Vx}yb'}][Vx}y]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[Vx}yb'}][Vx}y]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[Vx}yb'}][Vx}y'}]",
+        "Stderr": "",
+        "Status": 0,
         "Signal": 0,
         "TimedOut": false
       }
@@ -163548,6 +163854,57 @@
         "TimedOut": false
       }
     },
+    "set/leaving-posix-mode-restores-a-special-builtins-usage-error": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: set: line 0: illegal option -o posix~\u003cshell\u003e: set: line 0: illegal option +o posix~\u003cshell\u003e: shift: line 0: Illegal number: -x",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "after",
+        "Stderr": "\u003cshell\u003e: line 1: shift: -x: numeric argument required",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "after",
+        "Stderr": "\u003cshell\u003e: line 1: shift: -x: numeric argument required",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 0: shift: -x: numeric argument required",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: set: Illegal option -o posix",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: set: posix: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:set:1: no such option: posix",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "set/leaving-posix-mode-restores-the-clustered-listing": {
       "ash": {
         "Stdout": "export zqv='a b'",
@@ -163930,6 +164287,210 @@
       "bash32": {
         "Stdout": "",
         "Stderr": "\u003cshell\u003e: /nope/x: No such file or directory",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: set: Illegal option -o posix",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: set: posix: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:set:1: no such option: posix",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "set/posix-mode-makes-a-refused-exit-operand-fatal": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: set: line 0: illegal option -o posix~\u003cshell\u003e: exit: line 0: Illegal number: status",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: exit: status: numeric argument required",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: exit: status: numeric argument required",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 0: exit: status: numeric argument required",
+        "Status": 255,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: set: Illegal option -o posix",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: set: posix: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:set:1: no such option: posix",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "set/posix-mode-makes-a-refused-return-operand-fatal": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: set: line 0: illegal option -o posix~\u003cshell\u003e: return: line 0: Illegal number: abc",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: return: abc: numeric argument required",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: return: abc: numeric argument required",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "after",
+        "Stderr": "\u003cshell\u003e: line 0: return: abc: numeric argument required",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: set: Illegal option -o posix",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: set: posix: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:set:1: no such option: posix",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "set/posix-mode-makes-a-special-builtins-bad-option-fatal": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: set: line 0: illegal option -o posix~\u003cshell\u003e: export: line 0: illegal option -q",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: export: -q: invalid option~export: usage: export [-fn] [name[=value] ...] or export -p [-f]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: export: -q: invalid option~export: usage: export [-fn] [name[=value] ...] or export -p [-f]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 0: export: -q: invalid option~export: usage: export [-nf] [name[=value] ...] or export -p",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: set: Illegal option -o posix",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: set: posix: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:set:1: no such option: posix",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "set/posix-mode-makes-a-special-builtins-usage-error-fatal": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: set: line 0: illegal option -o posix~\u003cshell\u003e: shift: line 0: Illegal number: -x",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: shift: -x: numeric argument required",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: shift: -x: numeric argument required",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 0: shift: -x: numeric argument required",
         "Status": 1,
         "Signal": 0,
         "TimedOut": false

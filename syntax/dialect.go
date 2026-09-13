@@ -2284,6 +2284,28 @@ type Dialect struct {
 	// The `sh` row is recorded and not modeled, as it is for every grammar
 	// flag: POSIX mode is a Semantics question here, and `set -o posix` cannot
 	// reach a grammar flag through it (#2399).
+	//
+	// **And it is decided when the word expands rather than when it is read**,
+	// which says a front end handing the parser a different reading at startup
+	// would agree with bash only on the inputs it was built for. Measured
+	// 2026-09-13 on one function body, parsed once, before the mode was on:
+	//
+	//	$ bash -c "v=Vx}y; f(){ printf '[%s]' \"\${v-'a}b'}\"; echo; }; f;
+	//	          set -o posix; f"
+	//	[Vx}y]
+	//	[Vx}yb'}]
+	//
+	// The same already-parsed word answers both ways as the mode moves under
+	// it. Under the name `sh` the move is from BraceQuoteProtectsEveryOperand
+	// to BraceQuoteProtectsAPatternOnly — the core's own reading — and only
+	// for the *word* operand: `"${v#'a}'}"` is `[Vx}y]` under either name. zsh
+	// under the same name does not move at all, which is the shape
+	// Semantics.BadOptionToSpecialBuiltinFatalInPosixMode has, so whatever
+	// mechanism reaches this the answer has to come from the dialect. #2604
+	// holds the options; the corpus rows are
+	// core/a-quoted-brace-in-a-word-operand-in-posix-mode, its
+	// -decided-when-the-word-expands twin and
+	// invoke/called-sh-moves-a-quoted-brace-in-a-word-operand.
 	QuoteProtectsTheClosingBrace BraceQuotePolicy
 
 	// CompoundAssignmentErrorGivesUpTheLine makes a syntax error inside

@@ -677,8 +677,22 @@ func (r *Runner) unaliasWithNothingToRemove() int {
 		r.diagf("%s\n", d.UnaliasUsage)
 	}
 	status := orDefault(d.UnaliasNoOperandStatus, 2)
-	if r.ask(r.sem().BadOptionToSpecialBuiltinFatal, "a special builtin's usage error ending the script") {
-		r.status = status
+	// AliasBadOptionFatal and not BadOptionToSpecialBuiltinFatal, because
+	// `unalias` is not one of the fifteen the standard marks special and the
+	// panel says so. Measured 2026-09-13, `unalias; echo alive` and
+	// `unalias -q; echo alive`, in both modes where the mode exists: ksh93
+	// alone ends the script, at 2, and bash 5.3.15, that build as `sh`, bash
+	// 3.2.57, dash and zsh all carry on — `set -o posix` moves neither line.
+	// The two questions line up column for column, which is what says one
+	// axis covers both.
+	//
+	// It asked the special-builtin axis until #2583, on a sentence claiming
+	// that dash and bash-as-`sh` end the script here. They do not: dash says
+	// nothing at all and answers 0, and bash-as-`sh` prints its usage and runs
+	// the next command. The wrong axis was quiet while nothing moved it —
+	// bash answers `No` to both — and became a divergence the moment POSIX
+	// mode started moving the special-builtin one.
+	if r.ask(r.sem().AliasBadOptionFatal, "a bad `unalias` usage ending the script") {
 		r.fatalQuiet()
 	}
 	return status

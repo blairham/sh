@@ -12303,6 +12303,14 @@ posix knob moves it — `set -o posix` and `set +o posix` in bash, and
 answer per axis rather than one for the mode. zsh does **not** move:
 `emulate sh`, `emulate ksh` and `emulate zsh` all stop.
 
+The mode moves **five** axes. Four of them — this one, the redirection
+one, and the two about a name that is not a name — it writes the
+standard's own answer into, because that is what the name asks for and
+every shell with a POSIX mode was measured to take it. The fifth,
+`BadOptionToSpecialBuiltinFatalInPosixMode`, it reads off the vector,
+because the shells part company there; see that axis for the measurement
+and for why the split is per axis rather than per shell.
+
 bash 3.2 is fatal in neither mode, so what is recorded is bash 5's rule
 rather than bash's.
 
@@ -15544,6 +15552,55 @@ A different question from BuiltinSyntaxErrorFatal, which is about text
 that would not *parse* and is true for dash alone. Measured across
 `export`, `readonly` and `unset`.
 
+**`BadOptionToSpecialBuiltinFatalInPosixMode`** — bash yes · dash yes ·
+ksh93 yes · zsh **no**
+
+What the axis above becomes in POSIX mode, which `Runner.SetPosixMode`
+swaps in and puts back. It is a field a dialect fills in rather than a
+constant inside that knob, and the measurement is why — 2026-09-13,
+`<shell> -c 'shift -x; echo alive'` and the same line with `export -q`:
+
+| | default | POSIX mode |
+| --- | --- | --- |
+| dash | fatal | fatal — it *is* the mode |
+| bash 5.3 | complains, `alive`, 0 | **fatal at 2** |
+| bash 5.3 as `sh` | fatal at 2 | fatal at 2 |
+| bash 3.2 | *per builtin* | *per builtin* |
+| ksh93 | fatal at 2 | fatal at 2 |
+| zsh | complains, `alive`, 0 | **complains, `alive`, 0** |
+| zsh as `sh` | complains, `alive`, 0 | complains, `alive`, 0 |
+| BusyBox ash | fatal | fatal — it *is* the mode |
+
+bash's mode moves it and zsh's does not, **while the same two shells'
+POSIX mode both move `RedirectErrorOnSpecialBuiltinFatal`** — `export x >
+/nonexistent/dir/f` carries on in zsh and ends the script in zsh invoked
+as `sh`. One mode, two axes, opposite answers inside one shell. So "what
+does POSIX mode move" is not a property of the mode and not a property of
+the shell: it is a question per axis per dialect, and the knob can only
+ask.
+
+That is the whole reason this axis could not simply be added to the four
+`SetPosixMode` already swapped (#2583). The knob is the core's and is
+entered by *any* dialect invoked as `sh`, so writing bash's answer into it
+would have handed zsh-as-`sh` a fatality zsh does not have.
+
+The four already there take the standard's own answer, which every shell
+with a POSIX mode was measured to take, and only this one needed a
+dialect to speak. If another turns out to split the same way, it takes a
+field of the same shape rather than a second knob.
+
+bash 3.2 is the reminder that the answer is not even uniform across the
+builtins in one build: it is fatal for `shift -x` in **both** modes and at
+1, moves for `export -q`, and does not move for `return abc`. A single
+axis cannot hold that, and no dialect here claims that column.
+
+The status a fatal one ends at is the **builtin's** and not the shell's,
+which is the paragraph above about usage errors read from the other side:
+bash's generic fatal status is 1 and every column ends these at 2. The
+implementation reaches it by returning the builtin's status rather than
+`r.status`, since the dispatcher writes the return value after the control
+flow is set.
+
 **`MultiDigitDuplicationTargetIsAnError`** — bash no · dash **yes** · ksh93 no · zsh no
 
 Refuses `>&10`: a duplication whose *target* is written with more than one
@@ -16353,6 +16410,10 @@ say:
   does not move either — `export V="a b"` keeps the double quotes the
   clustered form uses — so `DeclareValueQuoting` stays where the dialect
   put it.
+  Those three take the standard's answer; whether an axis the mode moves
+  does is a question per axis, and
+  `BadOptionToSpecialBuiltinFatalInPosixMode` is the one that had to be
+  asked of the dialect instead (#2583).
 - **`read ?` was a contaminated probe, and this document's field comment
   cited it.** A leading `?` argument is a *prompt* in zsh, so the value
   lands in `REPLY` and the word never stood where a name belongs. Worse,

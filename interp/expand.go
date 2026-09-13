@@ -2816,7 +2816,7 @@ func (r *Runner) bareArrayAsList(e *syntax.ParamExpr, s syntax.Span, sp splitPol
 		// answer with counts 1 (#2326). Runner.expandingNestedInner is the
 		// flag both of those set — see countingElements — and it is the
 		// same reason it exempts an empty element from being dropped.
-		if !isArray || !(rcExpandOn(s) || r.expandingNestedInner) {
+		if !isArray || (!rcExpandOn(s) && !r.expandingNestedInner) {
 			return nil, false
 		}
 	case n == 1 && !opReadsTheList(e.Op):

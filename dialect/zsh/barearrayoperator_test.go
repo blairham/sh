@@ -140,7 +140,7 @@ func TestAnEmptyElementSurvivesAJoinThatKeepsOneWord(t *testing.T) {
 }
 
 // TestCountingAnEmptyArrayThroughAnInnerExpansion and the refusal beside it
-// are the two neighbours #2326 found: both are a name position that a count
+// are the two neighbors #2326 found: both are a name position that a count
 // reaches, and both were a plausible value at status 0.
 func TestCountingAnEmptyArrayThroughAnInnerExpansion(t *testing.T) {
 	dir := t.TempDir()

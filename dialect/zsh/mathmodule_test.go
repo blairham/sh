@@ -229,15 +229,70 @@ func TestRand48IsDeterministicFromItsSeedVariable(t *testing.T) {
 // reseed. The discriminating half is the *second* line: a shell that left the
 // variable alone, or that refused, would not write twelve hexadecimal digits
 // over `zzz`.
+//
+// The range half is an arithmetic comparison and not a glob on the spelling,
+// because the spelling is not always `0.…`. This case reseeds, so its draw is
+// a fresh uniform double in [0,1), and one below 1e-4 is written in
+// scientific notation: the first state that prints with a leading `0.` is
+// 28147497672 of 2^48, so `[[ $v == 0.* ]]` missed one run in 10,000 and
+// failed with this test's `reseeded` line and no `in-range` (#2341). Our
+// spelling agrees with zsh 5.9 on every such draw, so the shell was right and
+// the assertion was wrong — [TestRand48ASmallDrawIsSpelledInScientificNotation]
+// pins both halves of that with seeds that straddle the threshold.
+//
+// `> 0` rather than the obvious `>= 0`, which does not discriminate. Measured
+// in zsh 5.9 and here on 2026-09-13, `(( v >= 0 && v < 1 ))` is *true* for an
+// empty `v`, for an unset one and for one holding `hello`, since a name
+// arithmetic cannot read is zero — so a shell that returned nothing at all
+// would have passed it. `> 0` rejects all three. It also rejects a genuine
+// draw of zero, which one state in 2^48 gives: 1 run in 2.8e14 against the 1
+// in 10,000 it replaces.
 func TestRand48ReseedsRatherThanRefusingAVariableItCannotRead(t *testing.T) {
 	out, _, errs := runZshSplit(t, t.TempDir(),
 		"seed=zzz\n"+
 			"v=$(( rand48(seed) ))\n"+
-			`[[ $v == 0.* ]] && print -r -- in-range`+"\n"+
+			`(( v > 0 && v < 1 )) && print -r -- in-range`+"\n"+
 			"setopt extendedglob\n"+
 			`[[ $seed == [0-9a-f](#c12) ]] && print -r -- reseeded`+"\n")
 	if got, want := out+errs, "in-range\nreseeded\n"; got != want {
 		t.Errorf("output = %q, want %q", got, want)
+	}
+}
+
+// TestRand48ASmallDrawIsSpelledInScientificNotation is the mechanism behind
+// #2341, held still: a uniform double in [0,1) is not always spelled `0.…`,
+// and a test that globbed for that leading `0.` was reading the *format* of a
+// number rather than its value.
+//
+// The seeds are computed backwards through the generator rather than searched
+// for — the multiplier is odd, so a state is invertible modulo 2^48 — which is
+// what lets the pair sit either side of the boundary instead of merely below
+// it. `b391e29c9357` steps to 28147497672, the smallest state whose quotient
+// prints with a leading `0.`; `8cc72b06d397` steps to the state one below it
+// and prints in scientific notation. So this says *where* the threshold is,
+// and the last line is the glob that #2341 removed, asserted by its absence.
+//
+// Each spelling was compared with zsh 5.9 on 2026-09-13 and is identical,
+// which is what makes the flake a fault in the assertion and not in the shell.
+func TestRand48ASmallDrawIsSpelledInScientificNotation(t *testing.T) {
+	for _, c := range []struct {
+		seed, want string
+	}{
+		{"67acc459532e", "9.9999999996214228e-06\nin-range\n"},
+		{"8cc72b06d397", "9.9999999996214228e-05\nin-range\n"},
+		{"b391e29c9357", "0.00010000000000331966\nin-range\nleading-0dot\n"},
+	} {
+		t.Run(c.seed, func(t *testing.T) {
+			out, _, errs := runZshSplit(t, t.TempDir(),
+				"seed="+c.seed+"\n"+
+					"v=$(( rand48(seed) ))\n"+
+					"print -r -- $v\n"+
+					`(( v > 0 && v < 1 )) && print -r -- in-range`+"\n"+
+					`[[ $v == 0.* ]] && print -r -- leading-0dot`+"\n")
+			if got := out + errs; got != c.want {
+				t.Errorf("output = %q, want %q", got, c.want)
+			}
+		})
 	}
 }
 

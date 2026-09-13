@@ -3589,6 +3589,24 @@ type Diagnostics struct {
 	// writes, and whether the expression survives it, is
 	// Semantics.EmptyArithSubscript; this is only the wording.
 	ArithEmptySubscript string
+	// ArithEmptySubscriptTarget is the same emptiness where the brackets name
+	// a place to *write*: `(( m[] = 4 ))` and `(( m[]++ ))`. One verb, the
+	// name, and the sentences carry their own brackets because the two shells
+	// that write one put them in different places.
+	//
+	// A field of its own rather than a second use of ArithEmptySubscript,
+	// because the same shell words the two apart. Measured 2026-09-12:
+	//
+	//	                 read `$(( m[] ))`         write `(( m[] = 4 ))`
+	//	bash 5.3.15      m[]: bad array subscript  `m[]': not a valid identifier
+	//	zsh 5.9.2        invalid subscript         not an identifier: m[]
+	//	ksh93u+          nothing                   nothing
+	//
+	// Which of them a dialect writes, and whether the expression survives it,
+	// is Semantics.EmptyArithSubscript — one axis for both sides, because
+	// every shell that has the construct gives the write the disposition it
+	// gives the read. This is only the wording (#1764).
+	ArithEmptySubscriptTarget string
 
 	// ArithWholeArraySubscript is the complaint about a `*` or `@` subscript
 	// on an indexed name where an expression reads it — `$(( a[*] ))`. Two

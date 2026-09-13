@@ -12728,6 +12728,43 @@ expression parser's: `invalid subscript`, with no `bad math expression`
 in front of it and no name after it, where an expression that will not
 parse in the same position carries that prefix.
 
+**The same axis answers the write**, and that is measured rather than an
+economy. `(( a[] = 4 ))` is the same emptiness where the brackets name a
+place to put a value, and each of the three shells gives it the
+disposition it gives the read. Measured 2026-09-12, `-c`, with
+`a=(5 6 7)`:
+
+    zsh 5.9.2      not an identifier: a[]   array untouched   (( )) at 2
+    bash 5.3.15    `a[]': not a valid identifier   untouched   (( )) at 0
+    ksh93u+        (nothing)                4 6 7             (( )) at 0
+
+bash's **0** is the part worth reading twice: the expression keeps its
+value and only the store is dropped, which `(( a[] = 0 ))` at 1 and
+`x=$(( a[] = 4 ))` giving `x` the 4 are what show. zsh's expansion
+spelling ends the script outright.
+
+What does *not* carry over is the wording, which is why there is a
+second `Diagnostics` field — `ArithEmptySubscriptTarget` — and not a
+second axis: the same shell says `a[]: bad array subscript` of a read
+and `` `a[]': not a valid identifier `` of a write, and zsh says
+`invalid subscript` and `not an identifier: a[]`.
+
+bash 3.2 is the one column that splits the two sides: it reports the
+read and is silent on the write, at 0 with nothing written. No dialect
+here targets that build, so it is a corpus row
+(`arithmetic/an-empty-subscript-as-an-assignment-target`) rather than a
+fourth value — and it is the evidence that a second axis would be
+measurable if a preset ever needed one.
+
+The grammar refused an empty subscript in this one position until #1764,
+which made all four dialects answer with a sentence — `operand
+expected` — that is nobody's. One thing measured is still not
+reproduced: bash puts `((: ` in front of its sentence on the *command*
+route and not on the expansion one, which is
+`ArithErrorNamesTheConstruct`'s rule reaching a sentence that is not an
+error, and would mean holding the report until the construct flushes it
+at every one of the five sites that word a math failure.
+
 **`EmptyParamSubscriptIsAnError`** — bash yes · dash unspecified · ksh93 no · zsh yes
 
 Refuses `${a[]}` — the same brackets one construct over, where a

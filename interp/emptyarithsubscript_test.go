@@ -206,26 +206,114 @@ func TestAnEmptySubscriptOnAnUnsetNameIsTheUnsetOperand(t *testing.T) {
 	}
 }
 
-// The grammar carries the empty pair rather than refusing it, and it carries
-// it only where a value is *read*. An assignment target keeps the refusal it
-// has always had: the shells part there too and part differently — `not an
-// identifier`, `not a valid identifier`, and a silent write to element zero —
-// so the grammar holds until that second disagreement has an axis of its own.
+// The grammar carries the empty pair where a value is *written* too, and the
+// axis answers it there in a sentence of its own.
 //
-// The refusal has to be checked by running rather than by parsing: an
-// expression inside `$(( ))` is read after its parameters have gone in, which
-// is the whole reason `a[$w]` can arrive here as `a[]` at all.
-func TestAnEmptyArithmeticSubscriptIsRefusedAsAnAssignmentTarget(t *testing.T) {
-	for _, src := range []string{
-		`a=(5 6 7); (( a[] = 4 )); printf "[%s]" "${a[*]}"; echo " st=$?"`,
-		`a=(5 6 7); (( a[] += 4 )); printf "[%s]" "${a[*]}"; echo " st=$?"`,
+// It used to be a parse error in this one position, on the grounds that the
+// shells part over the write as well as over the read. They do — and each of
+// the three writes is that shell's own answer to the read wearing a different
+// sentence, which is what makes it one axis and two wordings rather than a
+// refusal. Measured 2026-09-12, `-c`, with `a=(5 6 7)`:
+//
+//	(( a[] = 4 ))
+//
+//	zsh 5.9.2      `not an identifier: a[]`, the array untouched, (( )) at 2
+//	bash 5.3.15    `` `a[]': not a valid identifier ``, untouched, and the
+//	               (( )) at **0** — the expression keeps its value and only
+//	               the store is dropped, which `(( a[] = 0 ))` at 1 and
+//	               `x=$(( a[] = 4 ))` giving 4 are what show
+//	ksh93u+        silent at 0, and the array is `4 6 7` — element zero,
+//	               which is the element the empty expression names
+//
+// Checked by running rather than by parsing, because an expression inside
+// `(( ))` is read after its parameters have gone in — which is the whole
+// reason `a[$w]` can arrive here as `a[]` at all (#1764).
+func TestAnEmptyArithmeticSubscriptAsAnAssignmentTarget(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		p     EmptyArithSubscriptPolicy
+		src   string
+		left  string
+		says  string
+		quiet bool
+	}{
+		{
+			name: "the empty expression writes element zero",
+			p:    EmptyArithSubscriptIsTheEmptyExpression,
+			src:  `a=(5 6 7); (( a[] = 4 )); s=$?; printf "[%s]" "${a[*]}"; echo " st=$s"`,
+			left: "[4 6 7] st=0", quiet: true,
+		},
+		{
+			name: "and the compound operator through the same element",
+			p:    EmptyArithSubscriptIsTheEmptyExpression,
+			src:  `a=(5 6 7); (( a[] += 4 )); s=$?; printf "[%s]" "${a[*]}"; echo " st=$s"`,
+			left: "[9 6 7] st=0", quiet: true,
+		},
+		{
+			// The row the bare-name branch used to fail: writing through the
+			// name would leave a one-element array holding the number.
+			name: "and never through the bare name",
+			p:    EmptyArithSubscriptIsTheEmptyExpression,
+			src:  `a=(5 6 7); (( a[] = 4 )); printf "%d" "${#a[@]}"; echo`,
+			left: "3", quiet: true,
+		},
+		{
+			name: "reported, with the store dropped and the value kept",
+			p:    EmptyArithSubscriptIsReported,
+			src:  `a=(5 6 7); (( a[] = 4 )); s=$?; printf "[%s]" "${a[*]}"; echo " st=$s"`,
+			left: "[5 6 7] st=0", says: "not a valid identifier",
+		},
+		{
+			name: "reported, and a zero value still fails the command",
+			p:    EmptyArithSubscriptIsReported,
+			src:  `a=(5 6 7); (( a[] = 0 )); s=$?; printf "[%s]" "${a[*]}"; echo " st=$s"`,
+			left: "[5 6 7] st=1", says: "not a valid identifier",
+		},
+		{
+			name: "invalid, where the expression fails outright",
+			p:    EmptyArithSubscriptIsInvalid,
+			src:  `a=(5 6 7); (( a[] = 4 )); printf "[%s]" "${a[*]}"; echo " st=$?"`,
+			says: "not an identifier: a[]",
+		},
 	} {
-		out, _ := run(t, src, emptySub(EmptyArithSubscriptIsTheEmptyExpression))
-		if !strings.Contains(out, "[5 6 7]") {
-			t.Errorf("%s = %q, want the array untouched", src, out)
-		}
-		if !strings.Contains(out, "operand expected") {
-			t.Errorf("%s = %q, want the target refused", src, out)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			out, _ := run(t, tc.src, emptySub(tc.p))
+			if tc.left != "" && !strings.Contains(out, tc.left) {
+				t.Errorf("%s = %q, want %q in it", tc.src, out, tc.left)
+			}
+			if tc.says != "" && !strings.Contains(out, tc.says) {
+				t.Errorf("%s = %q, want %q in it", tc.src, out, tc.says)
+			}
+			if tc.quiet && strings.Contains(out, "identifier") {
+				t.Errorf("%s = %q, want nothing said", tc.src, out)
+			}
+		})
+	}
+}
+
+// The wording is what does not carry over from the read, which is why there
+// is a second Diagnostics field: the same shell says one thing of a read and
+// another of a write.
+func TestTheEmptyTargetAndTheEmptyReadAreWordedApart(t *testing.T) {
+	const src = `a=(5 6 7); echo "r=$(( a[] ))"; (( a[] = 4 )); echo after`
+	out, _ := run(t, src, func(r *Runner) {
+		sem := testSemantics()
+		sem.EmptyArithSubscript = EmptyArithSubscriptIsReported
+		r.Semantics = &sem
+		d := CoreDiagnostics()
+		d.ArithEmptySubscript = "%[1]s[]: bad array subscript"
+		d.ArithEmptySubscriptTarget = "`%[1]s[]': not a valid identifier"
+		r.Diagnostics = &d
+	})
+	if !strings.Contains(out, "a[]: bad array subscript") {
+		t.Errorf("%s = %q, want the read's own sentence", src, out)
+	}
+	if !strings.Contains(out, "`a[]': not a valid identifier") {
+		t.Errorf("%s = %q, want the write's own sentence", src, out)
+	}
+	// Both sides reported and the script ran on, which is what the reporting
+	// answer means on either of them.
+	if !strings.Contains(out, "after") {
+		t.Errorf("%s = %q, want the script running on", src, out)
 	}
 }

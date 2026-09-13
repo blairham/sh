@@ -1689,6 +1689,7 @@ func Diagnostics() interp.Diagnostics {
 		EmptyAssociativeKeyRead:                  "%[1]s: bad array subscript",
 		EmptyAssociativeKeyLength:                "[%[1]s]: bad array subscript",
 		ArithEmptySubscript:                      "%[1]s[]: bad array subscript",
+		ArithEmptySubscriptTarget:                "`%[1]s[]': not a valid identifier",
 		ArithWholeArraySubscript:                 "%[1]s[%[2]s]: bad array subscript",
 		ArrayLiteralThroughASubscript:            "%[1]s[%[2]s]: cannot assign list to array member",
 		// Through a literal the element is named as it stands between the

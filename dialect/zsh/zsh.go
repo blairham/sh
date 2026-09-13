@@ -2346,8 +2346,9 @@ func Diagnostics() interp.Diagnostics {
 		UnsetFunctionNotFound: "no such hash table element: %[1]s",
 		// The array alone, and a sentence about the assignment rather than
 		// about the subscript.
-		BadArraySubscript:   "%[1]s: assignment to invalid subscript range",
-		ArithEmptySubscript: "invalid subscript",
+		BadArraySubscript:         "%[1]s: assignment to invalid subscript range",
+		ArithEmptySubscript:       "invalid subscript",
+		ArithEmptySubscriptTarget: "not an identifier: %[1]s[]",
 		// The same sentence at the parameter site, and its own field because
 		// the two coincide here and do not in bash — see the field.
 		EmptyParamSubscript: "invalid subscript",

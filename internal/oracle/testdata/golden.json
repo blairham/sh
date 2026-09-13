@@ -11352,6 +11352,57 @@
         "TimedOut": false
       }
     },
+    "arithmetic/a-flag-group-searching-a-table-on-the-left": {
+      "ash": {
+        "Stdout": "no-attribute",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "4[1][7]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "4[1][7]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "no-attribute",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "no-attribute",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "4[1][7]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "1[9][7]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "arithmetic/a-float-whose-exponent-is-not-a-number": {
       "ash": {
         "Stdout": "",
@@ -11913,6 +11964,57 @@
         "TimedOut": false
       }
     },
+    "arithmetic/an-empty-subscript-as-an-assignment-target": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected \"(\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[5 6 7] st=0~after",
+        "Stderr": "\u003cshell\u003e: line 1: ((: `a[]': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[5 6 7] st=0~after",
+        "Stderr": "\u003cshell\u003e: line 1: ((: `a[]': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[5 6 7] st=0~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[4 6 7] st=0~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[5 6 7] st=2~after",
+        "Stderr": "\u003cshell\u003e:1: not an identifier: a[]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "arithmetic/an-empty-subscript-on-a-name-that-is-not-set": {
       "ash": {
         "Stdout": "",
@@ -12010,6 +12112,57 @@
       "zsh": {
         "Stdout": "",
         "Stderr": "\u003cshell\u003e:1: invalid subscript",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "arithmetic/an-empty-subscript-target-that-evaluates-to-zero": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected \"(\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "st=1~x=4 st2=0",
+        "Stderr": "\u003cshell\u003e: line 1: ((: `a[]': not a valid identifier~\u003cshell\u003e: line 1: `a[]': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1~x=4 st2=0",
+        "Stderr": "\u003cshell\u003e: line 1: ((: `a[]': not a valid identifier~\u003cshell\u003e: line 1: `a[]': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1~x=4 st2=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1~x=4 st2=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e:1: not an identifier: a[]~\u003cshell\u003e:1: not an identifier: a[]",
         "Status": 1,
         "Signal": 0,
         "TimedOut": false
@@ -23541,6 +23694,108 @@
         "TimedOut": false
       }
     },
+    "assoc/the-length-of-an-empty-key": {
+      "ash": {
+        "Stdout": "no-attribute",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 2: [$w]: bad array subscript",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 2: [$w]: bad array subscript",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "no-attribute",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "no-attribute",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[0]~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[0]~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "assoc/the-length-of-an-empty-key-on-a-table-nothing-has-written-to": {
+      "ash": {
+        "Stdout": "no-attribute",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[0]~declared-only",
+        "Stderr": "\u003cshell\u003e: line 2: [$w]: bad array subscript",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[0]~declared-only",
+        "Stderr": "\u003cshell\u003e: line 2: [$w]: bad array subscript",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "no-attribute",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "no-attribute",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[0]~declared-only~[3]~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[0]~declared-only~[0]~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "assoc/the-subscript-is-not-arithmetic": {
       "ash": {
         "Stdout": "",
@@ -25628,6 +25883,414 @@
         "Stdout": "",
         "Stderr": "\u003cshell\u003e:shift:1: shift count must be \u003c= $#",
         "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/debug-head-entering-a-function": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: set: line 5: illegal option -T",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "D=7~D=2~D=3~in-f~D=8",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "D=7~D=2~D=3~in-f~D=8",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "D=7~D=2~D=3~in-f~D=8",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 5: set: Illegal option -T",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e[5]: set: -T: unknown option~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "D=7~D=2~in-f~D=8",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/debug-head-of-a-case-and-a-condition": {
+      "ash": {
+        "Stdout": "c",
+        "Stderr": "\u003cscript\u003e: trap: line 1: DEBUG: invalid signal specification~\u003cscript\u003e: trap: line 4: DEBUG: invalid signal specification",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "D=2~D=2~c~D=3~D=4",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "D=2~D=2~c~D=3~D=4",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "D=2~D=2~c~D=3~D=4",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "c",
+        "Stderr": "trap: DEBUG: bad trap~\u003cscript\u003e: 3: [[: not found~trap: DEBUG: bad trap",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "D=2~D=2~c~D=3~D=4",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "D=2~D=2~c~D=3~D=4",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/debug-head-of-a-for-loop": {
+      "ash": {
+        "Stdout": "a~b",
+        "Stderr": "\u003cscript\u003e: trap: line 1: DEBUG: invalid signal specification~\u003cscript\u003e: trap: line 6: DEBUG: invalid signal specification",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "D=2~D=4~a~D=2~D=4~b~D=6",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "D=2~D=4~a~D=2~D=4~b~D=6",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "D=2~D=4~a~D=2~D=4~b~D=6",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "a~b",
+        "Stderr": "trap: DEBUG: bad trap~trap: DEBUG: bad trap",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "D=2~D=4~a~D=4~D=4~b~D=6",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "D=2~D=4~a~D=4~b~D=6",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/debug-head-of-a-for-loop-over-nothing": {
+      "ash": {
+        "Stdout": "after",
+        "Stderr": "\u003cscript\u003e: trap: line 1: DEBUG: invalid signal specification~\u003cscript\u003e: trap: line 7: DEBUG: invalid signal specification",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "D=6~after~D=7",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "D=6~after~D=7",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "D=6~after~D=7",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "after",
+        "Stderr": "trap: DEBUG: bad trap~trap: DEBUG: bad trap",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "D=6~after~D=7",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "D=2~D=6~after~D=7",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/debug-head-of-a-select": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: trap: line 1: DEBUG: invalid signal specification~\u003cscript\u003e: line 2: select: not found~\u003cscript\u003e: line 3: syntax error: unexpected \"do\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "D=2~D=4~got=a~D=4~got=b~~D=6",
+        "Stderr": "1) a~2) b~#? #? #? ",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "D=2~D=4~got=a~D=4~got=b~~D=6",
+        "Stderr": "1) a~2) b~#? #? #? ",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "D=2~D=4~got=a~D=4~got=b~~D=6",
+        "Stderr": "1) a~2) b~#? #? #? ",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "trap: DEBUG: bad trap~\u003cscript\u003e: 2: select: not found~\u003cscript\u003e: 3: Syntax error: \"do\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "D=2~D=4~got=a~D=4~D=4~got=b~D=6",
+        "Stderr": "1) a~2) b",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "D=2~D=4~got=a~D=4~got=b~D=6",
+        "Stderr": "1) a  2) b  ~?# ?# ?# ",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/debug-head-of-an-arithmetic-for": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: trap: line 1: DEBUG: invalid signal specification~\u003cscript\u003e: line 2: syntax error: bad for loop variable",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "D=2~D=2~D=4~0~D=2~D=2~D=4~1~D=2~D=2~D=6",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "D=2~D=2~D=4~0~D=2~D=2~D=4~1~D=2~D=2~D=6",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "D=2~D=2~D=4~0~D=2~D=2~D=4~1~D=2~D=2~D=6",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "trap: DEBUG: bad trap~\u003cscript\u003e: 2: Syntax error: Bad for loop variable",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "D=2~D=2~D=4~0~D=2~D=2~D=4~1~D=2~D=2~D=6",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "D=2~D=4~0~D=4~1~D=6",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/debug-head-of-an-arithmetic-for-with-parts-left-out": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: trap: line 2: DEBUG: invalid signal specification~\u003cscript\u003e: line 3: syntax error: bad for loop variable",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "D=3~D=3~D=5~D=3~D=3~D=5~D=3~D=3~D=7",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "D=3~D=3~D=5~D=3~D=3~D=5~D=3~D=3~D=7",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "D=3~D=3~D=5~D=3~D=3~D=5~D=3~D=3~D=7",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "trap: DEBUG: bad trap~\u003cscript\u003e: 3: Syntax error: Bad for loop variable",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "D=3~D=5~D=3~D=5~D=3~D=7",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "D=3~D=5~D=5~D=7",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/debug-head-of-an-if": {
+      "ash": {
+        "Stdout": "yes",
+        "Stderr": "\u003cscript\u003e: trap: line 1: DEBUG: invalid signal specification~\u003cscript\u003e: trap: line 6: DEBUG: invalid signal specification",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "D=2~D=4~yes~D=6",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "D=2~D=4~yes~D=6",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "D=2~D=4~yes~D=6",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "yes",
+        "Stderr": "trap: DEBUG: bad trap~trap: DEBUG: bad trap",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "D=2~D=4~yes~D=6",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "D=2~D=2~D=4~yes~D=6",
+        "Stderr": "",
+        "Status": 0,
         "Signal": 0,
         "TimedOut": false
       }
@@ -27870,6 +28533,108 @@
       },
       "zsh": {
         "Stdout": "one~in-f~two",
+        "Stderr": "f:trap:1: undefined signal: RETURN",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/trap-body-line-return-below-the-top": {
+      "ash": {
+        "Stdout": "one~two~in-f~last~done",
+        "Stderr": "\u003cscript\u003e: trap: line 4: RETURN: invalid signal specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "one~two~in-f~last~at=3~done",
+        "Stderr": "\u003cscript\u003e: line 4: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one~two~in-f~last~at=3~done",
+        "Stderr": "\u003cscript\u003e: line 4: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one~two~in-f~last~at=3~done",
+        "Stderr": "\u003cscript\u003e: line 4: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one~two~in-f~last~done",
+        "Stderr": "trap: RETURN: bad trap",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one~two~in-f~last~done",
+        "Stderr": "\u003cscript\u003e[4]: trap: RETURN: bad trap",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one~two~in-f~last~done",
+        "Stderr": "f:trap:1: undefined signal: RETURN",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/trap-body-line-return-from-an-explicit-return": {
+      "ash": {
+        "Stdout": "one~two~done",
+        "Stderr": "\u003cscript\u003e: trap: line 4: RETURN: invalid signal specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "one~two~at=6~done",
+        "Stderr": "\u003cscript\u003e: line 7: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one~two~at=6~done",
+        "Stderr": "\u003cscript\u003e: line 7: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one~two~at=6~done",
+        "Stderr": "\u003cscript\u003e: line 7: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one~two~done",
+        "Stderr": "trap: RETURN: bad trap",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one~two~done",
+        "Stderr": "\u003cscript\u003e[4]: trap: RETURN: bad trap",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one~two~done",
         "Stderr": "f:trap:1: undefined signal: RETURN",
         "Status": 0,
         "Signal": 0,
@@ -38842,6 +39607,59 @@
         "TimedOut": false
       }
     },
+    "commands/a-duplicate-of-a-coprocess-s-write-end-outlives-the-reaping": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected \"}\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "n=0",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 13,
+        "SignalName": "broken pipe",
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "n=0",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 13,
+        "SignalName": "broken pipe",
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `}'~\u003cshell\u003e: -c: line 0: `coproc CP { echo hi; }; exec 3\u003e\u0026${CP[1]}; wait; echo \"n=${#CP[@]}\"; echo x \u003e\u00263; echo \"w=$?\"; echo done'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"}\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `}' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: parse error near `}'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "commands/a-list-beginning-with-a-separator": {
       "ash": {
         "Stdout": "",
@@ -39296,6 +40114,57 @@
       "zsh": {
         "Stdout": "",
         "Stderr": "\u003cshell\u003e:1: parse error near `}'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "commands/a-write-to-a-coprocess-that-has-ended-notices-it": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected \"}\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "after=1~done",
+        "Stderr": "\u003cshell\u003e: line 5: ${CP[1]}: ambiguous redirect",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "after=1~done",
+        "Stderr": "\u003cshell\u003e: line 5: ${CP[1]}: ambiguous redirect",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 2: syntax error near unexpected token `}'~\u003cshell\u003e: -c: line 2: `coproc CP { exit 0; }'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 3: Syntax error: \"}\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 2: syntax error at line 3: `}' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:3: parse error near `}'",
         "Status": 1,
         "Signal": 0,
         "TimedOut": false
@@ -39806,6 +40675,57 @@
       "zsh": {
         "Stdout": "",
         "Stderr": "\u003cshell\u003e:2: parse error near `}'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "commands/an-output-duplication-elsewhere-does-not-notice-a-coprocess-has-ended": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected \"}\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "n=2",
+        "Stderr": "x",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "n=2",
+        "Stderr": "x",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `}'~\u003cshell\u003e: -c: line 0: `coproc CP { echo hi; }; echo x \u003e\u00262; echo \"n=${#CP[@]}\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"}\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `}' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: parse error near `}'",
         "Status": 1,
         "Signal": 0,
         "TimedOut": false
@@ -51436,6 +52356,57 @@
         "Stdout": "",
         "Stderr": "\u003cscript\u003e:1: parse error near `done'",
         "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "core/a-substitution-inside-a-quoted-operand-starts-over": {
+      "ash": {
+        "Stdout": "[A\\}B][A\\}B]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[A\\}B][A\\}B]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[A\\}B][A\\}B]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[A\\}B][A\\}B]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[A\\}B][A\\}B]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[A\\}B][A\\}B]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[A\\}B][A\\}B]",
+        "Stderr": "",
+        "Status": 0,
         "Signal": 0,
         "TimedOut": false
       }
@@ -147532,6 +148503,57 @@
         "TimedOut": false
       }
     },
+    "procsub/a-case-arms-pattern": {
+      "ash": {
+        "Stdout": "star~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "star~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "star~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "star~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected (expecting \")\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `\u003c(' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "star~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "procsub/a-command-started-after-the-body-returned": {
       "ash": {
         "Stdout": "LATE",
@@ -147732,6 +148754,108 @@
         "Stdout": "",
         "Stderr": "\u003cscript\u003e:4: parse error near `\u003c(echo hi # cmt )'",
         "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "procsub/a-condition-in-a-branch-never-taken": {
+      "ash": {
+        "Stdout": "reached",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "reached",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "reached",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "reached",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `\u003c(' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "reached",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "procsub/a-condition-operand": {
+      "ash": {
+        "Stdout": "miss~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "miss~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "miss~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "miss~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `\u003c(' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: process substitution \u003c(:) cannot be used here",
+        "Status": 2,
         "Signal": 0,
         "TimedOut": false
       }
@@ -148144,6 +149268,108 @@
         "TimedOut": false
       }
     },
+    "procsub/a-here-strings-operand": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected redirection",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "st=0~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: redirection unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `\u003c(' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "procsub/a-loop-headers-word-list": {
+      "ash": {
+        "Stdout": "[]~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[]~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[]~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[]~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: redirection unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `\u003c(' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[]~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "procsub/a-nested-body-in-a-pipeline": {
       "ash": {
         "Stdout": "PIPE",
@@ -148246,6 +149472,57 @@
         "TimedOut": false
       }
     },
+    "procsub/a-redirection-target-is-taken": {
+      "ash": {
+        "Stdout": "hi~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "hi~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "hi~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "hi~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: redirection unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "hi~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "hi~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "procsub/a-redirection-where-a-target-belongs": {
       "ash": {
         "Stdout": "",
@@ -148342,6 +149619,57 @@
       },
       "zsh": {
         "Stdout": "PIPE",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "procsub/an-array-literals-element": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected \"(\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[1]~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[1]~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[1]~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `\u003c(' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[1]~after",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -162577,6 +163905,57 @@
         "TimedOut": false
       }
     },
+    "set/leaving-posix-mode-restores-the-clustered-listing": {
+      "ash": {
+        "Stdout": "export zqv='a b'",
+        "Stderr": "\u003cshell\u003e: set: line 0: illegal option -o posix~\u003cshell\u003e: set: line 0: illegal option +o posix",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "declare -x zqv=\"a b\"",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "declare -x zqv=\"a b\"",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "declare -x zqv=\"a b\"",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: set: Illegal option -o posix",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: set: posix: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:set:1: no such option: posix",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "set/leaving-posix-mode-restores-the-shells-own-answer": {
       "ash": {
         "Stdout": "",
@@ -162832,6 +164211,57 @@
         "TimedOut": false
       }
     },
+    "set/posix-mode-leaves-the-declare-listing-alone": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: set: line 0: illegal option -o posix~\u003cshell\u003e: declare: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "declare -x zqv=\"a b\"",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "declare -x zqv=\"a b\"",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "declare -x zqv=\"a b\"",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: set: Illegal option -o posix",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: set: posix: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:set:1: no such option: posix",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "set/posix-mode-makes-a-failed-redirection-fatal": {
       "ash": {
         "Stdout": "",
@@ -163062,6 +164492,159 @@
         "Stdout": "",
         "Stderr": "\u003cshell\u003e: line 0: shift: -x: numeric argument required",
         "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: set: Illegal option -o posix",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: set: posix: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:set:1: no such option: posix",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "set/posix-mode-moves-the-bare-declaration-listing-too": {
+      "ash": {
+        "Stdout": "export zqv='a b'",
+        "Stderr": "\u003cshell\u003e: set: line 0: illegal option -o posix",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "export zqv=\"a b\"",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "export zqv=\"a b\"",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "export zqv=\"a b\"",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: set: Illegal option -o posix",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: set: posix: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:set:1: no such option: posix",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "set/posix-mode-writes-the-export-listing-with-the-command-word": {
+      "ash": {
+        "Stdout": "export zqv='a b'",
+        "Stderr": "\u003cshell\u003e: set: line 0: illegal option -o posix",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "export zqv=\"a b\"",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "export zqv=\"a b\"",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "export zqv=\"a b\"",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: set: Illegal option -o posix",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: set: posix: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:set:1: no such option: posix",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "set/posix-mode-writes-the-readonly-listing-with-the-command-word": {
+      "ash": {
+        "Stdout": "readonly zqr='2'",
+        "Stderr": "\u003cshell\u003e: set: line 0: illegal option -o posix",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "readonly zqr=\"2\"",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "readonly zqr=\"2\"",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "readonly zqr=\"2\"",
+        "Stderr": "",
+        "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
@@ -173269,6 +174852,108 @@
         "TimedOut": false
       }
     },
+    "subscript/a-flag-group-searching-a-table-on-the-left": {
+      "ash": {
+        "Stdout": "no-attribute",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "no-attribute",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "no-attribute",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:2: m: attempt to set slice of associative array",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "subscript/a-flag-group-selecting-nothing-is-a-tables-key": {
+      "ash": {
+        "Stdout": "no-attribute",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[1][]3",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[1][]3",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "no-attribute",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "no-attribute",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[1][]3",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[Z][Y]2",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "subscript/a-flag-group-that-matched-nothing-appends": {
       "ash": {
         "Stdout": "",
@@ -181225,6 +182910,57 @@
         "TimedOut": false
       }
     },
+    "trap/a-function-holding-its-own-return-trap-fires-it-inside-a-debug-body": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: set: line 1: illegal option -T",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "ran~RET~ran~RET~done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "ran~RET~ran~RET~done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "ran~RET~ran~RET~done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: set: Illegal option -T",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e[1]: set: -T: unknown option~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "ran~ran~done",
+        "Stderr": "act:trap: undefined signal: RETURN~act:trap: undefined signal: RETURN",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "trap/a-handler-and-a-reset-leave-a-child-the-default": {
       "ash": {
         "Stdout": "st=143",
@@ -183785,6 +185521,108 @@
       "zsh": {
         "Stdout": "done",
         "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "trap/the-return-trap-is-carried-into-an-err-body": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: set: line 1: illegal option -T",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "ran~RET~done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "ran~RET~done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "ran~RET~done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: set: Illegal option -T",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e[1]: set: -T: unknown option~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "ran~done",
+        "Stderr": "\u003cscript\u003e:trap:3: undefined signal: RETURN~\u003cscript\u003e:trap:7: undefined signal: RETURN",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "trap/the-return-trap-is-not-carried-into-a-debug-body": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: set: line 1: illegal option -T",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "ran~ran~done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "ran~ran~done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "ran~ran~done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: set: Illegal option -T",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e[1]: set: -T: unknown option~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "ran~ran~done",
+        "Stderr": "\u003cscript\u003e:trap:3: undefined signal: RETURN~\u003cscript\u003e:trap:7: undefined signal: RETURN",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
@@ -187462,6 +189300,57 @@
         "TimedOut": false
       }
     },
+    "unterminated/a-case-arms-pattern-that-ran-out": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected end of file (expecting \")\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `newline'~\u003cshell\u003e: -c: line 1: `case x in x) : ;; zzz'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `newline'~\u003cshell\u003e: -c: line 1: `case x in x) : ;; zzz'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `newline'~\u003cshell\u003e: -c: line 0: `case x in x) : ;; zzz'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: end of file unexpected (expecting \")\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `case' unmatched",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: parse error near `zzz'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "unterminated/a-case-arms-terminator-after-a-separator": {
       "ash": {
         "Stdout": "",
@@ -188533,6 +190422,57 @@
         "TimedOut": false
       }
     },
+    "unterminated/an-arms-open-paren-with-nothing-behind-it": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected end of file (expecting \")\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `newline'~\u003cshell\u003e: -c: line 1: `case x in ('",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `newline'~\u003cshell\u003e: -c: line 1: `case x in ('",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `newline'~\u003cshell\u003e: -c: line 0: `case x in ('",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: end of file unexpected (expecting \")\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `case' unmatched",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: parse error near `('",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "unterminated/an-output-process-substitution-that-never-closes": {
       "ash": {
         "Stdout": "",
@@ -188579,6 +190519,57 @@
       "zsh": {
         "Stdout": "",
         "Stderr": "\u003cscript\u003e:4: parse error near `\u003e(echo hi'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "unterminated/the-same-pattern-with-its-newline-written": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected newline (expecting \")\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `newline'~\u003cshell\u003e: -c: line 1: `case x in x) : ;; zzz'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `newline'~\u003cshell\u003e: -c: line 1: `case x in x) : ;; zzz'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `newline'~\u003cshell\u003e: -c: line 0: `case x in x) : ;; zzz'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 2: Syntax error: newline unexpected (expecting \")\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 2: `newline' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:2: parse error near `\\n'",
         "Status": 1,
         "Signal": 0,
         "TimedOut": false

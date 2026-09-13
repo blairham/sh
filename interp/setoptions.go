@@ -448,7 +448,7 @@ func (r *Runner) SetPosixMode(on bool) {
 		s.ReadonlyListing = readonlyListing
 		s.BareDeclarationListing = bareListing
 		// The eighth, and the only one whose value comes from the dialect
-		// rather than from the standard. The four above are the standard's
+		// rather than from the standard. The seven above are the standard's
 		// own answers and every shell that has a POSIX mode was measured to
 		// take them; this one the shells disagree about, and they disagree
 		// about it *within* one mode rather than about the mode as a whole —

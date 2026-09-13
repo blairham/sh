@@ -82,16 +82,19 @@ func TestOnlyABrokenBoundaryFailsTheSweep(t *testing.T) {
 // feature rather than a broken test.
 func TestNoRouteCarriesAPlaceholderNothingFillsIn(t *testing.T) {
 	t.Parallel()
-	f := Fixture{
-		Root: "/root", Ws: "/root/ws", Secret: "/root/secret",
-		Target: "/root/target", Victim: "/root/victim",
-		VictimDir: "/root/victimdir", Sock: "/root/s",
-	}
 	left := regexp.MustCompile(`\{\{[a-z]+\}\}`)
-	for _, rt := range Routes() {
-		if m := left.FindString(rt.script(f)); m != "" {
-			t.Errorf("route %s: %s is never substituted, so the script names a path that is not there",
-				rt.Name, m)
+	// Both shapes, since a placeholder only one of them fills in is the same
+	// silent failure one step further along.
+	for _, shape := range Shapes {
+		f, err := newFixture(t.TempDir(), 1, shape)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, rt := range Routes() {
+			if m := left.FindString(rt.script(f)); m != "" {
+				t.Errorf("route %s under %s: %s is never substituted, so the script names a path that is not there",
+					rt.Name, shape, m)
+			}
 		}
 	}
 }
@@ -134,9 +137,128 @@ func TestEveryRouteCanSayWhetherItWorked(t *testing.T) {
 // permitted by one nobody noticed.
 func TestTheDeniedPolicyGrantsTheWorkspaceAndNothingElse(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
-	f := Fixture{Root: dir, Ws: filepath.Join(dir, "ws")}
-	at, err := policy(f, Denied)
+	// Under both shapes. What the carved-out one adds is denies, and a grant
+	// arriving with them would be the same hole in every row at once.
+	for _, shape := range Shapes {
+		f, err := newFixture(t.TempDir(), 1, shape)
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := readPolicy(t, f, Denied)
+		if !strings.Contains(text, "default deny") {
+			t.Errorf("%s: policy = %q, want it to start from a refusal", shape, text)
+		}
+		if !strings.Contains(text, "allow path "+f.Ws+"/**") {
+			t.Errorf("%s: policy = %q, want the workspace granted", shape, text)
+		}
+		if n := strings.Count(text, "allow"); n != 1 {
+			t.Errorf("%s: policy = %q has %d allow rules, want 1", shape, text, n)
+		}
+	}
+}
+
+// The carve-out is the whole of #2055, and it is two lines rather than one.
+// `<region>/**` covers what is under the region and not the region itself, so
+// a glob that reads the directory would fall through to the allow beside it
+// and enumerate what the policy meant to hide — an escape written into the
+// instrument rather than found by it.
+func TestTheCarvedPolicyDeniesTheRegionAndEverythingUnderIt(t *testing.T) {
+	t.Parallel()
+	f, err := newFixture(t.TempDir(), 1, Carved)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := readPolicy(t, f, Denied)
+	for _, want := range []string{"deny path " + f.Denied + "\n", "deny path " + f.Denied + "/**\n"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("policy = %q, want it to carry %q", text, want)
+		}
+	}
+	// And the outside shape must not carry them: its whole claim is that the
+	// refusal comes from there being no rule, so a deny would grade the other
+	// half of Policy.Allow under both names.
+	outside, err := newFixture(t.TempDir(), 2, Outside)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := readPolicy(t, outside, Denied); strings.Contains(got, "deny path "+outside.Denied+"\n") {
+		t.Errorf("the outside shape denies its own region by rule: %q", got)
+	}
+}
+
+// The two shapes have to aim at different places, or the second one is three
+// more runs of the first and the table says "graded twice" about one question.
+func TestTheCarvedShapeAimsInsideTheWorkspaceAndTheOtherDoesNot(t *testing.T) {
+	t.Parallel()
+	inside, err := newFixture(t.TempDir(), 1, Carved)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outside, err := newFixture(t.TempDir(), 2, Outside)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(inside.Denied, inside.Ws+string(filepath.Separator)) {
+		t.Errorf("the carved region %s is not inside the workspace %s", inside.Denied, inside.Ws)
+	}
+	if strings.HasPrefix(outside.Denied, outside.Ws+string(filepath.Separator)) {
+		t.Errorf("the outside region %s is inside the workspace %s", outside.Denied, outside.Ws)
+	}
+	// Every path a route aims at moves with the region, or the shape changes
+	// the policy and not the question.
+	for _, f := range []Fixture{inside, outside} {
+		for _, path := range []string{f.Secret, f.Target, f.Victim, f.VictimDir, f.Sock} {
+			if !strings.HasPrefix(path, f.Denied+string(filepath.Separator)) {
+				t.Errorf("%s: %s is not in the denied region %s", f.Shape, path, f.Denied)
+			}
+		}
+		// And the fixture really built it, in both shapes — a route aiming at
+		// a directory that is not there grades inert, which is not a pass and
+		// is also not the measurement.
+		if _, err := os.Lstat(f.Secret); err != nil {
+			t.Errorf("%s: %v", f.Shape, err)
+		}
+		// The link is the one entry that lives in the workspace and points
+		// into the region, which is what makes it a test of resolution rather
+		// than of the pattern.
+		to, err := os.Readlink(f.Link)
+		if err != nil || to != f.Denied {
+			t.Errorf("%s: link points at %q (%v), want %s", f.Shape, to, err, f.Denied)
+		}
+	}
+}
+
+// A relative name is its own route: the shell resolves it and the gate sees
+// whatever comes out. Hardcoding `..` would have left the carved-out shape
+// with no relative row at all — a row silently graded twice against the same
+// place.
+func TestTheRelativeNameFollowsTheShape(t *testing.T) {
+	t.Parallel()
+	for _, shape := range Shapes {
+		f, err := newFixture(t.TempDir(), 1, shape)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Resolved from the workspace a script runs in, it has to name the
+		// denied region under either shape.
+		got, err := filepath.EvalSymlinks(filepath.Join(f.Ws, f.relative()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		want, err := filepath.EvalSymlinks(f.Denied)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != want {
+			t.Errorf("%s: %q from the workspace is %s, want the denied region %s",
+				shape, f.relative(), got, want)
+		}
+	}
+}
+
+func readPolicy(t *testing.T, f Fixture, mode Mode) string {
+	t.Helper()
+	at, err := policy(f, mode)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,17 +266,7 @@ func TestTheDeniedPolicyGrantsTheWorkspaceAndNothingElse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	text := string(b)
-	if !strings.Contains(text, "default deny") {
-		t.Errorf("policy = %q, want it to start from a refusal", text)
-	}
-	if !strings.Contains(text, "allow path "+f.Ws+"/**") {
-		t.Errorf("policy = %q, want the workspace granted", text)
-	}
-	// Exactly one grant. A second would be a hole in every row at once.
-	if n := strings.Count(text, "allow"); n != 1 {
-		t.Errorf("policy = %q has %d allow rules, want 1", text, n)
-	}
+	return string(b)
 }
 
 // The policy file must not be written where a route can see it: one of them
@@ -198,11 +310,11 @@ func TestTheUngatedRunHasNoPolicyAtAll(t *testing.T) {
 func TestEachRunGetsAFixtureOfItsOwn(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
-	one, err := newFixture(root, 1)
+	one, err := newFixture(root, 1, Outside)
 	if err != nil {
 		t.Fatal(err)
 	}
-	two, err := newFixture(root, 2)
+	two, err := newFixture(root, 2, Outside)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -232,16 +344,21 @@ func TestEachRunGetsAFixtureOfItsOwn(t *testing.T) {
 // from silently turning that row inert. See Fixture.Sock.
 func TestTheSocketPathLeavesRoomForARealScratchRoot(t *testing.T) {
 	t.Parallel()
-	f, err := newFixture(t.TempDir(), 9999)
-	if err != nil {
-		t.Fatal(err)
-	}
-	const budget = 104
-	// What the fixture adds beyond the root the caller chose.
-	added := len(f.Sock) - len(t.TempDir())
-	if added > 16 {
-		t.Errorf("the fixture adds %d bytes to the socket path (%s), which leaves %d "+
-			"for the scratch root out of %d", added, f.Sock, budget-added, budget)
+	// Both shapes, because the carved-out one puts the socket two components
+	// deeper and the budget is spent on the scratch root either way.
+	for _, shape := range Shapes {
+		root := t.TempDir()
+		f, err := newFixture(root, 9999, shape)
+		if err != nil {
+			t.Fatal(err)
+		}
+		const budget = 104
+		// What the fixture adds beyond the root the caller chose.
+		added := len(f.Sock) - len(root)
+		if added > 16 {
+			t.Errorf("%s: the fixture adds %d bytes to the socket path (%s), which leaves %d "+
+				"for the scratch root out of %d", shape, added, f.Sock, budget-added, budget)
+		}
 	}
 }
 

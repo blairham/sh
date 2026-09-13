@@ -562,6 +562,16 @@ been refused, which is why the sweep did not see it for so long: every
 route it had aimed *outside* an allowed workspace, and this only bites
 where a deny is carved out of an allow.
 
+**So `make sandbox` now grades every route under both shapes** (#2055).
+The outside one asks whether the boundary of an allowed region holds; the
+carved-out one asks whether a deny holds *inside* a region the policy
+otherwise allows. They are different questions of the same gate, because a
+deny is an early return in `Policy.Allow` while the absence of an allow is a
+fallthrough past `defaultFor` and past the stat exemption `allow exec` earns
+— so a table built from the first shape alone leaves the deny path untried
+for all but a handful of selectors. Measured by breaking deny-overrides on
+purpose: the outside shape catches 24 escapes and the carved-out shape 125.
+
 **A deny therefore matches with case folded, and an allow does not.**
 Evaluation is deny-overrides, and that asymmetry is the whole argument.
 Widening a deny can only refuse more, which is the fail-closed direction.

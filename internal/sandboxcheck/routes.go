@@ -69,7 +69,17 @@ func (rt Route) script(f Fixture) string {
 		"{{victimdir}}", f.VictimDir,
 		"{{link}}", f.Link,
 		"{{sock}}", f.Sock,
-		"{{outside}}", f.Root,
+		// The region the routes aim at, and the one placeholder the shape
+		// moves: the run's root above the workspace, or a denied region
+		// inside it. It was named for being outside while there was only
+		// one shape, which is a name the carved-out one would make false.
+		"{{denied}}", f.Denied,
+		// The same region named *relatively*, from the workspace a script
+		// runs in: `..` above it, or the region's own name inside it. A
+		// relative name is its own route — the shell resolves it rather than
+		// handing the gate what was written — and it has to stay one under
+		// both shapes.
+		"{{rel}}", f.relative(),
 		"{{ws}}", f.Ws,
 		"{{carved}}", f.Carved,
 		"{{carvedupper}}", f.CarvedUpper,
@@ -138,10 +148,10 @@ func coreRoutes() []Route {
 		Did:    made,
 		Why:    "a here-document's output still has to land somewhere",
 	}, {
-		Name:   "write/relative-parent",
-		Script: `echo x > ../target`,
+		Name:   "write/relative",
+		Script: `echo x > {{rel}}/target`,
 		Did:    made,
-		Why:    "the workspace's own parent, reached by name rather than by path",
+		Why:    "the denied region reached by a relative name rather than by path",
 	}, {
 		Name:   "write/truncate-victim",
 		Script: `: > {{victim}}`,
@@ -247,7 +257,7 @@ read -r L <&${COPROC[0]}; echo $L`,
 		Why:    "a probe is an oracle: existence is information",
 	}, {
 		Name:   "list/glob",
-		Script: `echo {{outside}}/*`,
+		Script: `echo {{denied}}/*`,
 		Did:    func(_ Fixture, o Outcome) bool { return o.Says("secret") },
 		Why:    "a glob enumerates a directory it was never allowed to read",
 	}, {
@@ -382,7 +392,7 @@ func moduleRoutes() []Route {
 	}, {
 		Name:   "module/autoload",
 		Only:   zsh,
-		Script: `print 'echo ` + SecretMark + `' > {{outside}}/fn; fpath=({{outside}}); autoload -Uz fn; fn`,
+		Script: `print 'echo ` + SecretMark + `' > {{denied}}/fn; fpath=({{denied}}); autoload -Uz fn; fn`,
 		Did:    leaked,
 		Why:    "#1812: autoload read a file with os.ReadFile and then ran it",
 	}, {
@@ -506,7 +516,7 @@ zf_chmod 777 ./sneaky`,
 		// AllowList where the two above answer to the read and write gates.
 		Name:   "module/mapfile-roster",
 		Only:   zsh,
-		Script: `zmodload zsh/mapfile; cd {{outside}} && echo ${(k)mapfile}`,
+		Script: `zmodload zsh/mapfile; cd {{denied}} && echo ${(k)mapfile}`,
 		// The same predicate `list/glob` uses, and for the same reason: what
 		// the route produces is a *name*, so what says it worked is the name
 		// of the denied file coming back rather than its contents.

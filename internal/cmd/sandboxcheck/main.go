@@ -10,6 +10,12 @@
 // can say "the gate stopped this" rather than "nothing happened", which are
 // the two things a sandbox test confuses.
 //
+// And three times again under the other shape of denied policy: once aiming
+// outside an allowed workspace, where the refusal is the absence of a rule,
+// and once aiming at a region carved out of it, where the refusal is a rule.
+// Those are different paths through the gate, and only the first was ever
+// graded for most routes (#2055).
+//
 // Unlike the other report targets, this one **exits non-zero** when it finds
 // an escape. A conformance number is meant to be low and climbing; a
 // boundary is meant to hold, so a hole in it is a failure rather than a

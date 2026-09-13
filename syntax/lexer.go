@@ -3188,7 +3188,15 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 	// 5.3 and ksh93, the two panel members that have the construct, while
 	// `${x#a}` strips a prefix in all six. Same hole as #1397's, one scanner
 	// over, and the same fix.
-	brace := l.dialect.CurrentShellSubstitution && start < len(l.src) && isBraceCommandStart(l.src[start])
+	//
+	// `${|cmd;}` reaches the same answer by its own character, and the two
+	// rules are deliberately asked separately: a blank opens the body of one
+	// form and the `|` *is* the marker of the other, so `${ | cmd;}` is a
+	// syntax error in the shell that has both. See Dialect.ReplySubstitution
+	// for the five rows.
+	reply := l.dialect.ReplySubstitution && start < len(l.src) && l.src[start] == '|'
+	brace := reply ||
+		(l.dialect.CurrentShellSubstitution && start < len(l.src) && isBraceCommandStart(l.src[start]))
 	depth := 1
 	// Where the body of each open nesting level began. Only the innermost
 	// level's operand decides what a quote written there does — measured, and
@@ -3369,7 +3377,15 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 		//
 		// The body is taken exactly as the parameter form takes it: a `}`
 		// inside quotes does not close either, and both nest.
-		return Span{Kind: CommandSubst, CurrentShell: true, Value: l.src[start:end], Quoting: q, Pos: open, Comments: l.bodyComments(CommandSubst)}
+		body := start
+		if reply {
+			// The `|` is the marker and not the first word of the body,
+			// which is the one place the two forms differ once the end has
+			// been found: the blank form's opening blank *is* body text and
+			// this one's pipe is not.
+			body++
+		}
+		return Span{Kind: CommandSubst, CurrentShell: true, ReplyValue: reply, Value: l.src[body:end], Quoting: q, Pos: open, Comments: l.bodyComments(CommandSubst)}
 	}
 	return Span{Kind: ParamExp, Value: l.src[start:end], Quoting: q, Pos: open}
 }

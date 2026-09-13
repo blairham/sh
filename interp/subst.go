@@ -146,16 +146,30 @@ func (r *Runner) commandSubst(ctx context.Context, span syntax.Span) string {
 	return strings.TrimRight(out.String(), "\n")
 }
 
-// currentShellSubst runs a `${ … ;}` body on this runner.
+// currentShellSubst runs a `${ … ;}` or `${| … ;}` body on this runner.
 //
 // Everything it does outlives it, so there is nothing to clone and nothing to
 // merge back — only the output to catch and the writer to put back
 // afterwards. The status is the body's last command's for the same reason: it
 // is this runner's status, set where every other command sets it.
+//
+// **The two spellings are one function because they differ in one thing**:
+// where the value comes from. The blank form's is what the body printed, so
+// its output is caught; the pipe form's is what the body left in `$REPLY`, so
+// its output is not caught at all and goes wherever the shell's was going —
+// measured 2026-09-13, `echo "[${| echo printed; REPLY=val; }]"` on bash
+// 5.3.15 writes `printed` on its own line and then `[val]`. Splitting them
+// into two functions would put the line offset, the control-flow break and
+// the diagnostic in two places, where a fix to one is a fix to neither.
 func (r *Runner) currentShellSubst(ctx context.Context, f *syntax.File, span syntax.Span) string {
 	var out bytes.Buffer
 	savedOut, savedBase := r.Stdout, r.lineBase
-	r.Stdout = &out
+	putBackReply := func() {}
+	if span.ReplyValue {
+		putBackReply = r.localizeReply()
+	} else {
+		r.Stdout = &out
+	}
 	// The body was parsed on its own, so its lines count from one; the
 	// script it was written in did not. Same offset the subshell form
 	// carries, and put back afterwards because this runner goes on being
@@ -164,6 +178,7 @@ func (r *Runner) currentShellSubst(ctx context.Context, f *syntax.File, span syn
 	for _, st := range f.Stmts {
 		if err := r.stmt(ctx, st); err != nil {
 			r.Stdout, r.lineBase = savedOut, savedBase
+			putBackReply()
 			r.diagf("%v\n", err)
 			return ""
 		}
@@ -175,7 +190,68 @@ func (r *Runner) currentShellSubst(ctx context.Context, f *syntax.File, span syn
 		}
 	}
 	r.Stdout, r.lineBase = savedOut, savedBase
+	if span.ReplyValue {
+		// Read before the name is put back, and taken whole: this is a
+		// parameter's value rather than captured output, so the trailing
+		// newlines the other form strips are text here. Measured,
+		// `v=$'a\n\n'; echo "[${| REPLY=$v; }]"` keeps both.
+		v, _ := r.getVar("REPLY")
+		putBackReply()
+		return v
+	}
 	return strings.TrimRight(out.String(), "\n")
+}
+
+// localizeReply hides `$REPLY` for the duration of a `${| … ;}` body and hands
+// back what puts it there again.
+//
+// Measured 2026-09-13 on bash 5.3.15, and it is three facts rather than one:
+//
+//	REPLY=outer; echo "[${| echo "in=[${REPLY+SET}]" >&2; REPLY=x; }]"
+//	                                          in=[]      the body starts with none
+//	REPLY=outer; v=${| REPLY=inner; }; echo "$REPLY"
+//	                                          outer      the outer one comes back
+//	unset REPLY; v=${| REPLY=inner; }; echo "${REPLY+SET}"
+//	                                          (empty)    and comes back *unset*
+//
+// So absent and empty are two states here, which is why the set-ness is saved
+// beside the value — the same tri-state localizeGetoptsCursor keeps, and for
+// the same reason. The name is hidden rather than merely deleted because a
+// deleted name still reads through to the environment: `REPLY=outer sh -c
+// 'echo "[${| true; }]"'` would answer `[outer]` off the inherited value.
+//
+// **What this is not is a scope.** bash gives the body a variable frame —
+// `local` is legal inside one there and an error at the top level — and this
+// engine gives neither form of the construct a frame at all, so `${ local z=1;
+// echo $z; }` says `local: can only be used in a function` here. That is one
+// gap and not two: the visible corner of it is that `${| unset REPLY; }` reads
+// bash's *outer* REPLY, because unsetting a local there reveals what it shadows
+// and there is nothing here for it to reveal. Recorded rather than worked
+// around, so a frame — when the blank form gets one — fixes both spellings at
+// once instead of finding a second answer already written here (#2656).
+func (r *Runner) localizeReply() func() {
+	held, inVars := r.Vars["REPLY"]
+	wasRemoved := r.removed["REPLY"]
+	delete(r.Vars, "REPLY")
+	if r.removed == nil {
+		r.removed = map[string]bool{}
+	}
+	r.removed["REPLY"] = true
+	return func() {
+		if inVars {
+			if r.Vars == nil {
+				r.Vars = map[string]string{}
+			}
+			r.Vars["REPLY"] = held
+		} else {
+			delete(r.Vars, "REPLY")
+		}
+		if wasRemoved {
+			r.removed["REPLY"] = true
+		} else {
+			delete(r.removed, "REPLY")
+		}
+	}
 }
 
 // bodyDialect is the dialect a substitution's body is read again with: this

@@ -264,6 +264,18 @@ type Span struct {
 	// only the reading, the writing back and the choice of shell differ.
 	CurrentShell bool
 
+	// ReplyValue says a current-shell command substitution was written
+	// `${| cmd;}`, whose value is whatever the body left in `$REPLY` rather
+	// than what it printed — so its body's output goes where the shell's
+	// output was going, and nothing is captured.
+	//
+	// A second flag on the same kind rather than a kind of its own, for the
+	// reason CurrentShell is one: everything that *runs* a substitution
+	// treats them alike, and only where the value comes from differs. It is
+	// never set without CurrentShell, because the form is that form with a
+	// different source for its value. See Dialect.ReplySubstitution.
+	ReplyValue bool
+
 	// Backquoted says a command substitution was written `` `like this` ``
 	// rather than as `$( … )`.
 	//

@@ -1,0 +1,76 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# set and its options — #2313. The half of that area every shell on the panel
+# has; `shopt` is bash's own and belongs in bash/.
+#
+# What is printed here is *whether* a run survived, not the status it left.
+# The shells agree on the behaviour of every option below and part on the
+# number an aborted one reports — dash says 2 where the other three say 1 —
+# so a file that printed the number would be measuring dash's exit convention
+# in twenty places instead of measuring the options once.
+#
+# The subshell is run as a plain command and its status read afterwards,
+# never as the condition of an `if`. That is not style: POSIX suspends
+# errexit inside a condition, and an earlier draft of this file that wrapped
+# the run in `if ( … )` reported `set -e; false; printf 'not reached'` as
+# having *run*, with the unreachable line printed. The instrument was
+# measuring its own harness.
+#
+# Held out, and each a zsh answer asked in zsh/:
+#   `set -f`             is noglob in three shells and "read no rc files" in
+#                        zsh, which has -F for the globbing one
+#   `set -o` with a name no shell has — zsh answers 1, the others 2
+
+sub() {
+  ( eval "$1" ) 2> /dev/null
+  st=$?
+  if [ "$st" -eq 0 ]; then printf '%s -> ran\n' "$2"; else printf '%s -> failed\n' "$2"; fi
+}
+
+# -u, nounset: reading a name that is not set ends the shell, and the
+# expansions that supply a default are not a read.
+sub 'set -u; printf "[%s]\n" "$UNSETVAR"; printf "not reached\n"' 'nounset'
+sub 'set -u; printf "[%s]\n" "${UNSETVAR-ok}"' 'nounset with default'
+sub 'set +u; printf "[%s]\n" "$UNSETVAR"' 'plus u'
+
+# -e, errexit: a simple command that fails ends the shell — except where its
+# failure is being tested, which is the whole of what makes errexit subtle.
+sub 'set -e; false; printf "not reached\n"' 'errexit'
+sub 'set -e; false || true; printf "e or ok\n"' 'errexit or'
+sub 'set -e; if false; then :; fi; printf "e if ok\n"' 'errexit if'
+sub 'set -e; ! false; printf "e bang ok\n"' 'errexit bang'
+sub 'set -e; set +e; false; printf "turned off\n"' 'errexit toggled off'
+sub 'set -eu; false' 'combined'
+
+# noglob by its long name, which is the spelling all four share.
+mkdir -p gd; : > gd/one; : > gd/two
+sub 'set -o noglob; printf "[%s]\n" gd/*' 'noglob'
+sub 'set +o noglob; printf "[%s]\n" gd/*' 'noglob off'
+
+# -o takes the long name of the same options the letters name.
+sub 'set -o nounset; printf "[%s]\n" "$UNSETVAR"' 'o nounset'
+sub 'set -o errexit; false; printf "no\n"' 'o errexit'
+sub 'set -o | grep -c . > /dev/null' 'set -o lists something'
+sub 'set -o nosuchoption_zz' 'bad option name'
+
+# -C, noclobber: `>` refuses to truncate a file that exists, `>|` overrides
+# it, and `>>` was never a truncation to begin with.
+printf 'noclobber\n' > cf
+sub 'set -C; printf "again\n" > cf' 'noclobber'
+printf 'file still [%s]\n' "$(cat cf)"
+sub 'set -C; printf "forced\n" >| cf' 'noclobber forced'
+printf 'file now [%s]\n' "$(cat cf)"
+sub 'set -C; printf "appended\n" >> cf' 'noclobber append'
+
+# -a, allexport: every assignment after it is in the environment.
+sub 'set -a; AV=auto; env | grep "^AV=" | head -1' 'allexport'
+sub 'AV2=notauto; env | grep "^AV2=" | head -1' 'no allexport'
+
+# -n, noexec: the shell reads and does not run.
+sub 'set -n; printf "never printed\n"' 'noexec'
+
+# `set` with options only does not touch the positional parameters — which is
+# why clearing them needs the `--` that core/argv.tests asks.
+set -- keep1 keep2
+sub 'set -o noglob; printf "args survive %s\n" "$#"' 'options do not clear argv'

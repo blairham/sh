@@ -67,6 +67,13 @@ func common() syntax.Layout {
 		BackgroundKeepsTheLine:   true,
 		ElifWrittenAsANestedIf:   true,
 
+		// A subshell stays on one line, and the line a here-document body
+		// ended is not written on again — so a body followed by anything at
+		// all, the closing `}` included, has a blank line between them. The
+		// other engine answers both the other way.
+		SubshellBodyOnItsOwnLines:       false,
+		BlankLineAfterAHereDocumentBody: true,
+
 		// A nested declaration is respelled with both the keyword and the
 		// parentheses, whichever it was written with: `inner() { … }` inside
 		// a listed body comes back `function inner () ` with the brace on

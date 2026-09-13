@@ -49,6 +49,10 @@ func FunctionLayout() syntax.Layout {
 		PipeBothWrittenOut:       true,
 		BodyIsAlwaysBraced:       true,
 
+		// And a subshell gets the shape a brace group gets, which the other
+		// engine does not give it: `( exit 1 )` there, three lines here.
+		SubshellBodyOnItsOwnLines: true,
+
 		// Not agreed, and left at their zero values so that saying so is
 		// this comment's job: a statement after a `&` starts a line of its
 		// own here where the other engine keeps it on the `&`'s line, and an
@@ -56,6 +60,11 @@ func FunctionLayout() syntax.Layout {
 		// `if`.
 		BackgroundKeepsTheLine: false,
 		ElifWrittenAsANestedIf: false,
+
+		// And the line a here-document body ended is written on again
+		// rather than left as a blank one, so a body sits directly above
+		// the `}` that closes the function.
+		BlankLineAfterAHereDocumentBody: false,
 
 		// A nested declaration is respelled with the parentheses and never
 		// the keyword: `function inner { … }` inside a listed body comes

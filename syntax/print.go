@@ -153,6 +153,25 @@ type Layout struct {
 	// parenthesis that the grammar allows and most shells leave out.
 	CasePatternsParenthesised bool
 
+	// SubshellBodyOnItsOwnLines gives a `( … )` the shape a brace group
+	// gets: the parenthesis ends its line, the statements are indented one
+	// level further, and the closing parenthesis starts a line of its own.
+	//
+	// One engine writes `( exit 1 )` and the other writes the three lines,
+	// in the same listing and from the same tree, which is what makes this
+	// a field.
+	SubshellBodyOnItsOwnLines bool
+
+	// BlankLineAfterAHereDocumentBody writes the newline that opens the next
+	// line even where a here-document body has already ended the line,
+	// leaving a blank line the source never had.
+	//
+	// Measured, and not a defect in either engine: one leaves the blank line
+	// between the body and whatever follows it — a statement, a `fi`, the
+	// `}` that closes the function — and the other writes the next line
+	// straight onto the one the delimiter ended.
+	BlankLineAfterAHereDocumentBody bool
+
 	// BackgroundKeepsTheLine lets the statement after a `&` follow it on the
 	// same line rather than starting one of its own.
 	//
@@ -325,6 +344,22 @@ func (p *printer) str(s string) { p.b.WriteString(s) }
 // without asking joins the body's last line and becomes part of the body.
 func (p *printer) atLineStart() bool { return strings.HasSuffix(p.b.String(), "\n") }
 
+// newLine starts the next line of a chosen arrangement, indent and all.
+//
+// A newline and the pad, except where the line has already been ended — which
+// only a here-document body does, since the printer owns every other newline
+// it writes. Whether a second one goes in there, leaving a blank line the
+// source never had, is Layout.BlankLineAfterAHereDocumentBody: the two
+// engines that list a body answer it differently, at the closing brace as
+// much as between two statements.
+func (p *printer) newLine() {
+	if p.atLineStart() && !p.layout.BlankLineAfterAHereDocumentBody {
+		p.str(p.pad())
+		return
+	}
+	p.str("\n" + p.pad())
+}
+
 // stmts writes a list, separated the way a shell separates them on one line.
 //
 // `;` between and none after, which is what a group needs — `{ a; b; }` has
@@ -372,7 +407,7 @@ func (p *printer) separate(prev, next *Stmt) {
 		if !prev.Background && !p.atLineStart() {
 			p.str(p.layout.Separator)
 		}
-		p.str("\n" + p.pad())
+		p.newLine()
 		return
 	}
 	// A here-document body has already ended the line.
@@ -480,7 +515,8 @@ func (p *printer) braceGroup(list []*Stmt) {
 		// The outermost brace — a function's own — is the one that differs; a
 		// brace inside one opens a line in every arrangement measured.
 		p.bodyAt(list, false, p.layout.OutermostBraceOpensALine || p.depth > 0)
-		p.str("\n" + p.pad() + "}")
+		p.newLine()
+		p.str("}")
 		return
 	}
 	if len(list) == 0 {
@@ -503,6 +539,17 @@ func (p *printer) command(c Command) {
 	case *SimpleCmd:
 		p.simple(x)
 	case *Subshell:
+		if p.layout.Lines && p.layout.SubshellBodyOnItsOwnLines {
+			// The shape a brace group gets, which one engine's listing gives
+			// a subshell too. No separation to arrange for here: the
+			// parenthesis ends its line, so nothing can run into it.
+			p.str("(")
+			p.bodyAt(x.List, false, true)
+			p.newLine()
+			p.str(")")
+			p.redirs(x.Redirs)
+			return
+		}
 		// Spaced, which is not decoration: a subshell whose first command is
 		// itself a subshell needs the separation, `((` being arithmetic.
 		p.str("( ")
@@ -963,7 +1010,8 @@ func (p *printer) pad() string {
 // keyword writes the word that closes or continues a construct.
 func (p *printer) keyword(word string) {
 	if p.layout.Lines {
-		p.str("\n" + p.pad() + word)
+		p.newLine()
+		p.str(word)
 		return
 	}
 	p.terminate()
@@ -1249,9 +1297,16 @@ func (p *printer) printedWord(w *Word) string {
 // to be held off its delimiter by a space.
 //
 // Only where writing them tight would spell a *longer operator*, which is two
-// delimiters and no more: after `<<`, a leading `<` makes `<<<`, the
-// herestring, and a leading `-` makes `<<-`, the tab-stripping document. Both
-// are a different construct reading a different body, printed at status 0.
+// leading characters and no more: after `<<`, a `-` makes `<<-`, the
+// tab-stripping document, and a `<` makes `<<<`, the herestring. Both are a
+// different construct reading a different body, printed at status 0.
+//
+// The dash is the reachable one and has a row of its own; the `<` is the same
+// rule rather than a second, and no word this printer writes can begin with
+// one — an unquoted `<` is escaped, and a quoted delimiter's first character
+// is the quote. It is written out because the rule is about the operator the
+// two would spell together, which is a fact about the lexer and not about how
+// a word happens to be escaped today.
 //
 // `<<-` extends into nothing, so a document written with it is always tight.
 func heredocDelimiterNeedsABlank(op Kind, delim string) bool {

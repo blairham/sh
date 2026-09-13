@@ -134,16 +134,22 @@ func TestALayoutWritesNoSeparatorAfterAHereDocumentBody(t *testing.T) {
 	// after the last of a body a keyword closes. Written out rather than
 	// taken from a dialect: what is under test is the arrangement, and which
 	// shell arranges things this way is not this package's business.
+	//
+	// BlankLineAfterAHereDocumentBody is what leaves the blank line in the
+	// want strings below. It is a separate question from this one — whether
+	// a *separator* goes there, which is what the cases are about — and an
+	// arrangement that answers it the other way is the last case here.
 	layout := syntax.Layout{
-		Indent:                     "    ",
-		Nested:                     true,
-		Lines:                      true,
-		Separator:                  ";",
-		KeywordTerminator:          ";",
-		DoAfterWordsOnItsOwnLine:   true,
-		BraceOpenSuffix:            " ",
-		OutermostBraceOpensALine:   true,
-		DoAfterCommandOnItsOwnLine: false,
+		Indent:                          "    ",
+		Nested:                          true,
+		Lines:                           true,
+		Separator:                       ";",
+		KeywordTerminator:               ";",
+		DoAfterWordsOnItsOwnLine:        true,
+		BraceOpenSuffix:                 " ",
+		OutermostBraceOpensALine:        true,
+		DoAfterCommandOnItsOwnLine:      false,
+		BlankLineAfterAHereDocumentBody: true,
 	}
 	for _, c := range []struct {
 		name string

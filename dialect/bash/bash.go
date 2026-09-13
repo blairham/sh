@@ -402,11 +402,18 @@ func Semantics() interp.Semantics {
 	// Not sorted: bash walks its own table's buckets, which is not an order
 	// this shell can or should reproduce. See interp.Runner.hashedCommandNames.
 	s.HashListingIsSorted = interp.No
-	// And `set +h` really stops it: bash answers every spelling of the
-	// builtin with one sentence at 1 and remembers nothing until the option
-	// comes back. ksh93 keeps hashing with `trackall` off, and zsh's `-h` is
-	// a history option that never touched the table.
+	// And `set +h` really stops it: nothing is remembered until the option
+	// comes back. zsh reads its own `hashcmds` the same way; ksh93 keeps
+	// hashing with `trackall` off, and zsh's *letter* `-h` is a history
+	// option that never reaches the table.
 	s.HashObeysCommandTracking = interp.Yes
+	// And the builtin itself closes with it, which zsh's reading of the same
+	// option does not: every spelling answers one sentence at 1 here.
+	s.HashRefusesWhileTrackingIsOff = interp.Yes
+	// And a lookup that only *reports* where a command is leaves the table
+	// alone, alone in the panel: `type ls >/dev/null; hash` is an empty
+	// table here and holds `ls` in zsh, ksh93 and dash.
+	s.ALookupRemembersThePath = interp.No
 	s.TypeNamesAnAliasOnlyWhenExpanded = interp.Yes
 	s.AliasReportsNotFound = interp.Yes
 	s.UnaliasReportsNotFound = interp.Yes

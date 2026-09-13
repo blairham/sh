@@ -22,14 +22,18 @@ import (
 // unanimous in all four directions:
 //
 //	ls >/dev/null; hash            the name is in the table
-//	type ls; command -v ls; hash   neither puts it there
-//	command ls >/dev/null; hash    `command` does
+//	command ls >/dev/null; hash    `command` does too
 //	(ls >/dev/null); hash          a subshell's entry is the subshell's
 //	cd /; hash                     moving does not empty it
 //	PATH=$PATH; hash               *assigning* PATH does
+//	unset PATH; hash               so does unsetting it
 //
-// The one thing they part on is what a **stale** entry means, and that is
-// Semantics.CommandHashIsTrusted.
+// Two things they part on. What a **stale** entry means is
+// Semantics.CommandHashIsTrusted, and whether a lookup that only *reports* a
+// path also remembers it is Semantics.ALookupRemembersThePath — which this
+// comment claimed was unanimous on the strength of a bash-only probe, and is
+// not: `type ls >/dev/null; hash` leaves bash's table empty and fills the
+// other three.
 //
 // One measurement here has no field and is prose in docs/spec/semantics.md
 // instead: bash and dash empty the table *again* when a `PATH=… cmd` prefix
@@ -170,18 +174,71 @@ func (r *Runner) HashedCommandNames() []string { return r.hashedCommandNames() }
 // path is taken as given and the hit count starts at zero.
 func (r *Runner) HashCommand(name, path string) { r.putHashedCommand(name, path, 0) }
 
-// hashingIsOff reports whether the option behind `set +h` has been turned off
-// *and* this dialect reads that as a stop rather than as a preference.
+// trackingIsOff reports whether a script has turned command tracking off.
 //
-// The first half is what keeps this off the hot path of a shell nobody has
-// told anything: a script that has not moved the option asks no axis, which
-// matters here more than anywhere else — this runs in front of every external
-// command, and an unanswered axis there would refuse every command a
-// library embedder's Runner tried to start. See
-// Semantics.HashObeysCommandTracking, and TestHashingIsAskedAboutOnlyWhenTheOptionMoved.
+// **Moved**, and not merely off: a shell nobody has told anything asks no axis
+// at all, which matters here more than anywhere else — the two callers below
+// run in front of every external command and in front of every `hash`, and an
+// unanswered axis there would refuse every command a library embedder's
+// Runner tried to start. See TestHashingIsAskedAboutOnlyWhenTheOptionMoved.
+func (r *Runner) trackingIsOff() bool {
+	return r.tracksCommandsMoved && !r.tracksCommands
+}
+
+// hashingIsOff reports whether tracking is off *and* this dialect reads that
+// as a stop rather than as a preference.
+//
+// This is the automatic half — what a command that runs puts in the table.
+// bash and zsh stop; ksh93 goes on hashing with `trackall` off. See
+// Semantics.HashObeysCommandTracking.
 func (r *Runner) hashingIsOff() bool {
-	if !r.tracksCommandsMoved || r.tracksCommands {
+	if !r.trackingIsOff() {
 		return false
 	}
-	return r.ask(r.sem().HashObeysCommandTracking, "`set +h` stopping the command hash")
+	return r.ask(r.sem().HashObeysCommandTracking, "command tracking turned off stopping the command hash")
+}
+
+// hashBuiltinIsRefused reports whether the builtin itself declines while
+// tracking is off, which is a second and narrower question.
+//
+// bash alone. Measured 2026-09-13: with the option off, bash answers every
+// spelling — a bare listing, `hash -r`, `hash name` — with one sentence at 1,
+// where zsh goes on answering all three at 0 and an explicit `hash ls` still
+// puts `ls` in the table there. So the option stops the *automatic* hashing
+// in both and only bash reads it as closing the builtin.
+func (r *Runner) hashBuiltinIsRefused() bool {
+	if !r.trackingIsOff() {
+		return false
+	}
+	return r.ask(r.sem().HashRefusesWhileTrackingIsOff, "`hash` refusing while command tracking is off")
+}
+
+// lookPathReporting is lookPath for a builtin that was asked *where* a command
+// is rather than to run it — `type`, `command -v`, `command -V`, `type -p`.
+//
+// Three of the four hash what they were only asked about; bash does not. See
+// Semantics.ALookupRemembersThePath, which carries the measurement and the
+// probe that got it wrong first.
+//
+// **The answer is read and not asked**, which is the rare shape and wants its
+// reason. r.ask refuses the command outright where no dialect has answered,
+// and that is right where the disagreement is something the command itself
+// shows — but here it is not: `type ls` prints the same sentence either way,
+// and the only difference is whether a later `hash` finds the name. Refusing
+// a command whose own answer is unanimous, to settle a side effect nobody in
+// that command can see, would be an over-refusal. Runner.commandTracking
+// reads its axis directly for the same kind of reason.
+//
+// It is in a helper rather than inside lookPath because lookPath is the
+// *execution* path too, where the answer is not this one: running a command
+// hashes it in all four, so hashCommandRun stays there unconditionally.
+func (r *Runner) lookPathReporting(name string) (string, error) {
+	path, err := r.lookPath(name)
+	if err != nil {
+		return path, err
+	}
+	if r.sem().ALookupRemembersThePath == Yes {
+		r.hashCommandRun(name, path)
+	}
+	return path, err
 }

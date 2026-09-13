@@ -217,8 +217,11 @@ var extraSetOptions = map[string]setOption{
 
 	// Command tracking under its two names: bash calls it hashall — and zsh
 	// takes that name too — where ksh93 says trackall. One state behind
-	// both, kept honestly because it is permission to cache rather than a
-	// promise to; see the field.
+	// both, and since #2554 it is load-bearing rather than merely honest:
+	// where the dialect reads the option as a stop, turning it off empties
+	// nothing and fills nothing. See the field, and
+	// Semantics.HashObeysCommandTracking for the two shells that read it
+	// that way and the one that does not.
 	//
 	// Through the pair of methods rather than the field, because the state
 	// this reports before a script has moved it is the startup letters' and

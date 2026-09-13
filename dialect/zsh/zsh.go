@@ -1197,6 +1197,13 @@ func Semantics() interp.Semantics {
 	// their own tables' bucket order, which is a fact about their hashing
 	// rather than about the language.
 	s.HashListingIsSorted = interp.Yes
+	// And `unsetopt hashcmds` really stops the table being filled, which is
+	// the same reading bash gives `set +h` and not the one ksh93 gives
+	// `trackall`. Measured 2026-09-13: `unsetopt hashcmds; ls >/dev/null;
+	// hash` lists nothing here and `setopt hashcmds` starts it again, where
+	// ksh93 with `set +o trackall` goes on hashing. The letter `-h` is a
+	// different option in this shell and does not reach it.
+	s.HashObeysCommandTracking = interp.Yes
 	s.TildePlusMinusExpands = interp.Yes
 	s.UnderscoreTracksTheLastArgument = interp.Yes
 	// And starts it empty regardless, alone in the panel: an exported `_`

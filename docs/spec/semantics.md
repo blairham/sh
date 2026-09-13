@@ -4601,9 +4601,11 @@ history this shell does not keep), `braceexpand` (below), `onecmd`
 EXIT conditions. The rest are recorded with the state we are already in, so that
 turning them off succeeds honestly: `interactive-comments` is **on**,
 because we do honor comments wherever they are written; everything else is
-**off**. That is not a claim about what any other shell defaults to —
-bash has `hashall` on and we do not hash at all, so ours is off and a
-script turning it off gets what it asked for.
+**off**. That is not a claim about what any other shell defaults to. The
+standing example here was `hashall`, on the grounds that nothing was
+hashed; since #2554 something is, the option gates it in the dialects
+that read it as a stop, and its state comes from the startup letters
+rather than from this table — see *The command hash*.
 
 ### `braceexpand`, and the letter `set -B`
 
@@ -5094,11 +5096,13 @@ the table says and deviates from nothing. Correcting such a default adds no
 row to the bare `setopt` listing — measured, that listing is byte-identical
 to zsh's before and after — so for that kind the trade above does not apply
 and the correction is free. `hashcmds` is the one it does apply to: it is
-backed by the substrate's `hashall`, which is off because nothing is hashed
-here (interp/shellopts.go records that as a deliberate refusal to report a
-state the shell is not in), so its default and its state are two facts and
-not one, and correcting the first alone would print `nohashcmds` as a
-deviation where real zsh prints nothing — a row moved rather than removed.
+backed by the substrate's `hashall`, and no startup letter of this dialect
+turns that on, so its default and its state are two facts and not one, and
+correcting the first alone would print `nohashcmds` as a deviation where real
+zsh prints nothing — a row moved rather than removed. The reason used to be
+that nothing was hashed at all; since #2554 something is, and `unsetopt
+hashcmds` really stops it — what is left is the backing state's default in
+this dialect, which is a change of its own.
 `banghist` is the same `recorded` kind as the name corrected here and so is
 correctable the same way, but it has not been measured for its own
 consequences and is left flagged rather than swept in alongside.
@@ -5389,18 +5393,29 @@ ksh93 and dash.
 Unanimous in all four, and in both directions:
 
     ls >/dev/null; hash             the name is in the table
-    type ls; command -v ls; hash    neither puts it there
-    command ls >/dev/null; hash     `command` does
+    command ls >/dev/null; hash     `command` does too
     cd /; hash                      moving does not empty it
     PATH=$PATH; hash                *assigning* PATH does
     export PATH; hash               mentioning it does not
     unset PATH; hash                unsetting it does
 
 So the table holds **bare names PATH resolved for a command that ran**. A word
-with a slash in it never went through PATH and is never in it, and a lookup
-that does not run anything does not put one there. An assignment to PATH
-empties the table outright: a remembered answer is an answer to a search
-nobody would run again.
+with a slash in it never went through PATH and is never in it. An assignment
+to PATH empties the table outright: a remembered answer is an answer to a
+search nobody would run again.
+
+**A lookup that only *reports* where a command is splits the panel**, and this
+section said it did not until the probe was widened past bash:
+
+    type ls >/dev/null; hash
+
+leaves the table empty in bash 5.3.15 and puts `ls` in it in zsh 5.9.2, ksh93
+and dash. `command -v`, `command -V` and `type -p` go the same way as `type`
+in each. That is `Semantics.ALookupRemembersThePath`, and it is **read rather
+than asked**: `type ls` prints the same sentence in all four, so refusing the
+command in a shell that has chosen no dialect would be refusing over a
+difference the command itself cannot show. bash's own `type -P` is not this
+question — it hashes in none of the four.
 
 A subshell's entries are the subshell's in bash, zsh and dash —
 `(ls >/dev/null); hash` leaves the parent's table as it was — and ksh93 alone
@@ -5450,22 +5465,32 @@ leaps, and then it runs the second copy exactly as the other three do — so the
 option is this axis turned down rather than a behavior of its own, and it is
 wired that way (`Runner.SetChecksHashedCommand`).
 
-### `set +h` is a stop in one shell and a preference in the others
+### Command tracking off: two questions, not one
 
-`hashall` in bash, `trackall` in ksh93, `-h` in both:
+`hashall` in bash and zsh, `trackall` in ksh93, `-h` in the first and third.
+The first cut of this modeled it as one axis and it is two.
 
-    set +h; ls >/dev/null; hash
+**Does the automatic hashing stop?** bash and zsh yes, ksh93 no:
 
-bash answers `hash: hashing disabled` at status 1 — to **every** spelling of
-the builtin, a bare listing and `hash -r` included — and remembers nothing
-until the option comes back. ksh93 goes on hashing with `trackall` off. zsh's
-`-h` is `histignoredups` and never touched the table, and dash has no such
-letter. That is `Semantics.HashObeysCommandTracking`.
+    bash    set +h; ls >/dev/null; hash                nothing remembered
+    zsh     unsetopt hashcmds; ls >/dev/null; hash     nothing remembered
+    ksh93   set +o trackall; ls >/dev/null; hash       still lists ls
 
-The question is asked **only where a script has moved the option**, which
-matters more here than anywhere else: the check runs in front of every
-external command, and an axis read there unconditionally would refuse every
-command a shell that had chosen no dialect tried to start.
+dash has no such option at all, and zsh's *letter* `-h` is `histignoredups` —
+only the long name reaches the table there. That is
+`Semantics.HashObeysCommandTracking`.
+
+**Does the builtin close with it?** bash alone. With the option off, bash
+answers a bare listing, `hash -r` and `hash name` alike with
+`hash: hashing disabled` at 1; zsh answers all three at 0, and an explicit
+`hash ls` there still puts `ls` in the table — so the listing afterwards shows
+the name the automatic hashing would not have put there. That is
+`Semantics.HashRefusesWhileTrackingIsOff`.
+
+Both are asked **only where a script has moved the option**, which matters
+more here than anywhere else: the check runs in front of every external
+command, and an axis read there unconditionally would refuse every command a
+shell that had chosen no dialect tried to start.
 
 ### The listing, and an order that cannot be reproduced
 
@@ -5524,7 +5549,10 @@ sentence with no usage line at **1** — the first takes a word of its own and
 the other two take the operands.
 
 `-t` wins over `-d`: `hash -d -t ls` reports the path and leaves the entry
-where it was.
+where it was. **`-l` beside `-t` is not a second action but the shape of that
+one** — `hash -l -t ls` and `hash -t -l ls` both write the reusable command in
+either order, while `hash -l ls` with no `-t` prints nothing at all, because
+an operand without `-t` is a name to hash.
 
 ### `BASH_CMDS`
 
@@ -5536,8 +5564,9 @@ omissions here. `dialect/bash/bashcmds.go` carries the measurements.
 
 ### What is measured and not built
 
-Two things, recorded here rather than modeled, because each would be a branch
-no run could take or a bug to imitate:
+Three things, recorded here rather than modeled: two because each would be a
+branch no run could take or a bug to imitate, and one because it is a feature
+of its own now that there is a table for it to be a view of.
 
 - **A `PATH=… cmd` prefix taken back.** All four empty the table when the
   prefix goes on; bash and dash empty it *again* when the old value is put
@@ -5549,6 +5578,11 @@ no run could take or a bug to imitate:
 - **`hash -p ./name`.** bash stores an entry whose path begins with `./` and
   then reports `not found` for `hash -t` on it, while `hash -p ../name` and
   `hash -p name` both read back. This shell reads every `-p` path back.
+- **zsh's `$commands`.** It is that shell's `BASH_CMDS`, and it removes an
+  entry where bash's does not: `unset "commands[ls]"` really takes `ls` out.
+  The read side here is still a PATH search rather than a view of the table,
+  so the writes stay refused by name until the read is moved with them —
+  #2631.
 
 ## A bundle of option letters is one word and several options
 

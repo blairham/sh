@@ -428,8 +428,9 @@ type Diagnostics struct {
 	// HashListingForm.
 	HashListing HashListingForm
 	// HashDisabled is what every spelling of `hash` says while command
-	// tracking is off, in the one dialect where the option stops the table
-	// being filled. No verbs. Empty means the dialect does not refuse.
+	// tracking is off, in the one dialect that closes the builtin with the
+	// option — see Semantics.HashRefusesWhileTrackingIsOff, which is what
+	// decides whether this is reached at all. No verbs.
 	HashDisabled string
 
 	// CompleteNoSpec is `complete -p` or `-r` on a name nothing was

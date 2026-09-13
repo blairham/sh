@@ -15,9 +15,8 @@ import (
 // The command hash — what PATH resolved a name to, kept so the next run does
 // not walk PATH again. See interp/commandhash.go for the measurements.
 
-// hashable writes an executable script into a directory of the runner's and
-// returns the script the test should run in front of its own, which puts that
-// directory on PATH.
+// hashable writes an executable script into a directory of the runner's own,
+// making the directory if it is not there — withDirs puts it on PATH.
 //
 // A command of the test's own making rather than one on the machine, because
 // what these tests are about is a *second* copy appearing and the first one
@@ -33,8 +32,10 @@ func hashable(t *testing.T, dir, name, body string) {
 	}
 }
 
-// withDirs runs src with d1 and d2 made under the runner's own directory and
-// both on PATH, in that order.
+// withDirs runs src with `d1` and `d2` under the runner's own directory on
+// PATH in that order, and hands their paths to seed to fill in. Two of them,
+// because the questions with an axis behind them need a second copy of one
+// name for the answers to differ at all.
 func withDirs(t *testing.T, src string, seed func(d1, d2 string), setup func(*Runner)) (string, int) {
 	t.Helper()
 	return run(t, `PATH=$PWD/d1:$PWD/d2:$PATH; `+src, func(r *Runner) {
@@ -58,17 +59,47 @@ func TestARunCommandIsRemembered(t *testing.T) {
 	}
 }
 
-func TestALookupIsNotEnoughToHash(t *testing.T) {
-	// `type` and `command -v` find the command and do not put it in the
-	// table — measured unanimous. A listing afterwards is empty, so the
-	// dialect's empty-table wording is what comes back.
-	out, st := withDirs(t, `type zzc >/dev/null; command -v zzc >/dev/null; hash`,
+// TestALookupRemembersThePathOrDoesNot is the half of "what goes in" that is
+// **not** unanimous, and was written down here as though it were: a bash-only
+// probe said `type` and `command -v` leave the table alone, and so they do —
+// in bash. zsh, ksh93 and dash all hash what they were only asked about.
+func TestALookupRemembersThePathOrDoesNot(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		remembers Answer
+		want      string
+	}{
+		{"a lookup hashes", Yes, "zzc\n"},
+		{"only a run hashes", No, "hash: hash table empty\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := withDirs(t, `type zzc >/dev/null; command -v zzc >/dev/null; hash | sed "s|.*/||"`,
+				func(d1, _ string) { hashable(t, d1, "zzc", ":") },
+				func(r *Runner) {
+					s := testSemantics()
+					s.ALookupRemembersThePath = tc.remembers
+					r.Semantics = &s
+					r.Diagnostics = &Diagnostics{HashEmptyTable: "hash: hash table empty"}
+				})
+			if st != 0 || out != tc.want {
+				t.Errorf("out=%q st=%d, want %q", out, st, tc.want)
+			}
+		})
+	}
+}
+
+// And the unanimous half beside it, which is what keeps the two apart: a
+// command that *runs* is hashed whatever the axis above says.
+func TestARunHashesWhateverALookupDoes(t *testing.T) {
+	out, st := withDirs(t, `zzc; hash | sed "s|.*/||"`,
 		func(d1, _ string) { hashable(t, d1, "zzc", ":") },
 		func(r *Runner) {
-			r.Diagnostics = &Diagnostics{HashEmptyTable: "hash: hash table empty"}
+			s := testSemantics()
+			s.ALookupRemembersThePath = No
+			r.Semantics = &s
 		})
-	if st != 0 || !strings.Contains(out, "hash table empty") {
-		t.Errorf("out=%q st=%d, want a lookup to leave the table empty", out, st)
+	if st != 0 || out != "zzc\n" {
+		t.Errorf("out=%q st=%d, want a run to hash in every column", out, st)
 	}
 }
 
@@ -270,19 +301,24 @@ func TestHashAsksWhereTheLetterIsSpelled(t *testing.T) {
 	}
 }
 
-// TestCommandTrackingCanStopTheTable is `set +h` in the dialect that reads it
-// as a stop rather than as a preference.
+// TestCommandTrackingCanStopTheTable is command tracking turned off, and the
+// two questions that used to be modeled as one: whether the *automatic*
+// hashing stops, and whether the builtin itself closes with it.
 func TestCommandTrackingCanStopTheTable(t *testing.T) {
 	for _, tc := range []struct {
-		name  string
-		obeys Answer
-		want  string
+		name           string
+		obeys, refuses Answer
+		want           string
 	}{
-		// The second half of each is what the option was *for*: with
-		// tracking back on, a stop has left nothing behind and a preference
-		// has kept what ran while it was off.
-		{"a stop", Yes, "st=1\nhash: hash table empty\n"},
-		{"a preference", No, "st=0\nzzc\n"},
+		// bash: the builtin says one sentence at 1 to everything, and with
+		// tracking back on there is nothing behind it.
+		{"a stop, and a closed builtin", Yes, Yes, "st=1\nhash: hash table empty\n"},
+		// zsh: nothing is remembered automatically, and the builtin goes on
+		// answering — so an explicit `hash` names the command it was given
+		// and the run that happened while tracking was off is not there.
+		{"a stop, with the builtin open", Yes, No, "st=0\nhash: hash table empty\n"},
+		// ksh93: the option is a preference and the table fills anyway.
+		{"a preference", No, No, "st=0\nzzc\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, st := withDirs(t, `set +h; zzc; hash >/dev/null 2>&1; echo "st=$?"; set -h; hash 2>/dev/null | sed "s|.*/||"`,
@@ -290,6 +326,7 @@ func TestCommandTrackingCanStopTheTable(t *testing.T) {
 				func(r *Runner) {
 					s := testSemantics()
 					s.HashObeysCommandTracking = tc.obeys
+					s.HashRefusesWhileTrackingIsOff = tc.refuses
 					s.SetHLetterTracksCommands = Yes
 					r.Semantics = &s
 					r.Diagnostics = &Diagnostics{
@@ -301,6 +338,24 @@ func TestCommandTrackingCanStopTheTable(t *testing.T) {
 				t.Errorf("out=%q st=%d, want %q", out, st, tc.want)
 			}
 		})
+	}
+}
+
+// TestAnExplicitHashStillWorksWhileTrackingIsOff is zsh's reading of the
+// option from the other side: it stops what a *run* puts in the table and
+// leaves `hash name` doing exactly what it says.
+func TestAnExplicitHashStillWorksWhileTrackingIsOff(t *testing.T) {
+	out, st := withDirs(t, `set +h; zzc; hash zzc; echo "n=$?"; hash | sed "s|.*/||"`,
+		func(d1, _ string) { hashable(t, d1, "zzc", ":") },
+		func(r *Runner) {
+			s := testSemantics()
+			s.HashObeysCommandTracking = Yes
+			s.HashRefusesWhileTrackingIsOff = No
+			s.SetHLetterTracksCommands = Yes
+			r.Semantics = &s
+		})
+	if st != 0 || out != "n=0\nzzc\n" {
+		t.Errorf("out=%q st=%d, want the named command hashed anyway", out, st)
 	}
 }
 

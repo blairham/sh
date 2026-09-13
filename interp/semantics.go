@@ -7315,22 +7315,64 @@ type Semantics struct {
 	// letter — measured, and it is the same rule `type` does not follow.
 	HashReportsThePath Answer
 
-	// HashObeysCommandTracking stops filling the command hash when the
-	// option behind `set +h` is turned off — bash's `hashall`, ksh93's
-	// `trackall`.
+	// ALookupRemembersThePath puts a name in the command hash when a builtin
+	// was only asked *where* it is — `type`, `command -v`, `command -V`,
+	// `type -p`.
 	//
-	// bash alone, and it is the whole of what that option *does* there:
-	// `set +h; ls >/dev/null; hash` answers `hash: hashing disabled` at 1,
-	// nothing is remembered, and every spelling of the builtin says the same
-	// thing until the option comes back. ksh93 goes on hashing with
-	// `trackall` off — measured, `set +h; ls >/dev/null; hash` still lists
-	// `ls=/bin/ls` — zsh's `-h` is a history option and does not touch the
-	// table, and dash has no such letter at all.
+	// zsh, ksh93 and dash do; bash does not. Measured 2026-09-13 with an
+	// empty table, `type ls >/dev/null; hash`:
+	//
+	//	bash 5.3.15   the table is still empty
+	//	zsh 5.9.2     ls is in it
+	//	ksh93         ls is in it
+	//	dash          ls is in it
+	//
+	// This was written down here as unanimous on the strength of a bash-only
+	// probe, and it is not — which is the failure this burndown keeps making
+	// and is worth the sentence. What *is* unanimous is the other half:
+	// running a command hashes it in all four, so hashCommandRun stays on
+	// the execution path and is asked about by nobody.
+	//
+	// bash's `type -P` is not this question and no dialect here answers it
+	// differently: measured, it hashes in none of the four — in bash because
+	// no lookup does, and in the other three because they have no such
+	// letter for the question to be put through.
+	//
+	// **Read rather than asked** — see Runner.lookPathReporting. The
+	// disagreement is invisible to the builtin that would have to refuse:
+	// `type ls` prints the same sentence in all four, and only a later
+	// `hash` can tell them apart.
+	ALookupRemembersThePath Answer
+
+	// HashObeysCommandTracking stops filling the command hash when command
+	// tracking is turned off — bash's `hashall` and `set +h`, zsh's
+	// `hashcmds`, ksh93's `trackall`.
+	//
+	// bash and zsh; ksh93 does not. Measured 2026-09-13:
+	//
+	//	bash    set +h; ls >/dev/null; hash            nothing remembered
+	//	zsh     unsetopt hashcmds; ls >/dev/null; hash nothing remembered
+	//	ksh93   set +o trackall; ls >/dev/null; hash   still lists ls
+	//
+	// dash has no such option at all. zsh's *letter* `-h` is a history
+	// option and never reaches this — the long name is the only spelling
+	// there that does.
 	//
 	// Asked only where a script has *moved* the option, which is the one
 	// place the answers differ and the only place this is on the path of
 	// every external command. See Runner.hashCommandRun.
 	HashObeysCommandTracking Answer
+
+	// HashRefusesWhileTrackingIsOff closes the builtin itself while the
+	// option above is off, rather than only stopping what is put in.
+	//
+	// bash alone, and it is the second half of a question the first cut of
+	// this modeled as one. Measured with the option off: bash answers a bare
+	// listing, `hash -r` and `hash name` alike with one sentence at 1, where
+	// zsh answers all three at 0 and an explicit `hash ls` still puts `ls`
+	// in the table — so its listing afterwards shows the name the automatic
+	// hashing would not have put there.
+	HashRefusesWhileTrackingIsOff Answer
 
 	// UnderscoreTracksTheLastArgument moves `$_` to the previous simple
 	// command's last expanded argument — the command word itself when it
@@ -11273,13 +11315,18 @@ func PosixSemantics() Semantics {
 		// about re-checking it; the majority of the panel looks again, and
 		// the one that does not overrides. The letters past `-r` are bash's
 		// own and are off here for the same reason every extension is.
-		CommandHashIsTrusted:     No,
-		HashListingIsSorted:      No,
-		HashListsAsCommands:      No,
-		HashTakesAPathToRemember: No,
-		HashForgetsOneName:       No,
-		HashReportsThePath:       No,
-		HashObeysCommandTracking: No,
+		CommandHashIsTrusted:          No,
+		HashListingIsSorted:           No,
+		HashListsAsCommands:           No,
+		HashTakesAPathToRemember:      No,
+		HashForgetsOneName:            No,
+		HashReportsThePath:            No,
+		HashObeysCommandTracking:      No,
+		HashRefusesWhileTrackingIsOff: No,
+		// dash is the closest reading of the standard here and it hashes
+		// what it was only asked about; so do zsh and ksh93, and bash
+		// overrides.
+		ALookupRemembersThePath: Yes,
 		// POSIX has no such names; refusal is one shell's own answer.
 		PunctuatedFunctionNameIsRefused: No,
 		SetHasTraceLetters:              No,

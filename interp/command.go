@@ -188,7 +188,7 @@ func (r *Runner) reportWhatRuns(name string) int {
 	// The guard exists to avoid exactly the failure that follows. It has to
 	// answer for what will actually run, not for what is on the disk.
 	if !r.reservedBuiltin(name) {
-		if path, err := r.lookPath(name); err == nil {
+		if path, err := r.lookPathReporting(name); err == nil {
 			r.printf("%s\n", path)
 			return 0
 		}

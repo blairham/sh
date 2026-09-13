@@ -28,11 +28,12 @@ func init() { builtins["hash"] = biHash }
 // Diagnostics.UnimplementedOptionLetters and one that is in neither reads as
 // "no shell has this" (#2081).
 func biHash(r *Runner, _ context.Context, args []string) int {
-	if r.hashingIsOff() {
+	if r.hashBuiltinIsRefused() {
 		// Every spelling, including `hash -r` and a bare listing: measured,
 		// bash answers all of them with one sentence at 1 while the option
 		// is off. Before the options are read, so the refusal does not
-		// depend on which letters the dialect has.
+		// depend on which letters the dialect has. zsh stops filling the
+		// table and leaves the builtin open, which is the other axis.
 		r.diagf("%s\n", Wording(r.diag().HashDisabled, "hash: hashing disabled"))
 		return 1
 	}

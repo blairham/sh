@@ -2124,9 +2124,12 @@ arrived in the environment, or because a script exported it, and not otherwise.
 ### Two defaults differ from the shell that has this, on purpose
 
 The names in the list are this shell's own state and not a claim about anyone
-else's. `hashall` is off here because nothing is hashed, and `emacs` is on
-because the line editor really does read those keys — both already recorded in
-`interp/setoptions.go`. Reporting either one the other way round to match a
+else's. `hashall` is off in the substrate because no startup letter of the
+common denominator turns command tracking on — the dialect that starts it on
+says so with `h` in `$-`, and in bash it reads `on` here exactly as it does
+there — and `emacs` is on because the line editor really does read those keys;
+both are recorded in `interp/setoptions.go`. The reason used to be that
+nothing was hashed at all, and since #2554 something is. Reporting either one the other way round to match a
 listing would be the lie this whole design avoids, which is also why every
 corpus case here asks about membership of a name it set itself.
 

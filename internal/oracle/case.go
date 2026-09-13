@@ -13237,6 +13237,11 @@ printf 'TWO=still-running\n'`,
 		Why:     "running a bare name puts it in the command hash in every shell, and the listing is three shapes over four columns: bash's hits/command table, zsh's and ksh93's name=path, dash's bare path",
 	},
 	{
+		ID: "hash/a-lookup-that-only-reports-a-path", Category: "builtins",
+		Snippet: `mkdir -p d1; printf '#!/bin/sh\n:\n' > d1/zzc; chmod +x d1/zzc; PATH=$PWD/d1:$PATH; type zzc >/dev/null 2>&1; command -v zzc >/dev/null 2>&1; hash 2>&1 | sed "s|$PWD/d1/||"`,
+		Why:     "bash leaves the command hash alone when it was only asked where a command is; zsh, ksh93 and dash all remember it — the half of 'what goes in the table' that a bash-only probe reported as unanimous",
+	},
+	{
 		ID: "hash/the-listing-counts-lookups-not-runs", Category: "builtins",
 		Snippet: `mkdir -p d1; printf '#!/bin/sh\n:\n' > d1/zzc; chmod +x d1/zzc; PATH=$PWD/d1:$PATH; zzc; zzc; type zzc >/dev/null; hash 2>&1 | sed "s|$PWD/d1/||"`,
 		Why:     "bash's hits column counts every lookup the table answered — two runs and a type are three — where a listing itself walks nothing; the other three keep no count to show",
@@ -13284,7 +13289,12 @@ printf 'TWO=still-running\n'`,
 	{
 		ID: "hash/command-tracking-off-stops-the-table", Category: "builtins",
 		Snippet: `set +h 2>/dev/null; mkdir -p d1; printf '#!/bin/sh\n:\n' > d1/zzc; chmod +x d1/zzc; PATH=$PWD/d1:$PATH; zzc; hash >/dev/null 2>&1; echo "st=$?"; hash 2>/dev/null | wc -l | tr -d " "`,
-		Why:     "bash reads set +h as a stop: every spelling of hash answers 'hashing disabled' at 1 and nothing is remembered, where ksh93 goes on hashing with trackall off and zsh's -h is a history option that never touched the table",
+		Why:     "bash reads set +h as a stop: every spelling of hash answers 'hashing disabled' at 1 and nothing is remembered, where ksh93 goes on hashing with trackall off and zsh's -h is a history option that never reaches the table",
+	},
+	{
+		ID: "hash/the-long-name-stops-it-in-two-shells", Category: "builtins",
+		Snippet: `set +o hashall 2>/dev/null; mkdir -p d1; printf '#!/bin/sh\n:\n' > d1/zzc; chmod +x d1/zzc; PATH=$PWD/d1:$PATH; zzc; hash >/dev/null 2>&1; echo "st=$?"; hash 2>/dev/null | wc -l | tr -d " "`,
+		Why:     "the letter is not the option: zsh spells command tracking hashall too and stops filling the table when it is off, while leaving the builtin answering at 0 — where bash closes the builtin as well. ksh93 and dash have no such name and the special builtin's failure ends the script, which is the other half of what this records",
 	},
 	{
 		ID: "hash/an-assignment-to-bash-cmds-hashes", Category: "builtins",

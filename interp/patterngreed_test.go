@@ -115,7 +115,7 @@ func TestGreedDoesNotDecideWhetherAPatternMatches(t *testing.T) {
 // subject a whole character.
 //
 // It needs saying why a helper of its own exists: the rows above all run in
-// **bytes**, because the preset this harness starts from does not honour the
+// **bytes**, because the preset this harness starts from does not honor the
 // encoding and a subject above ASCII is a run of bytes there. The star walks
 // its split points differently in the two modes — arithmetically over bytes,
 // and over collected boundaries when a unit may be several bytes wide — so a

@@ -29,14 +29,18 @@
 #     tty and carries on, and zsh refuses and ends the script. Three answers
 #     to one line, in a suite run with no terminal anywhere.
 #
-# Two more are held out because *we* are the odd one out, and both were found
-# by this file's first run:
+# Three more are held out because *we* are the odd one out. Two were found by
+# this file's first run and the third by the `fg` cases added after it:
 #   `$(( $! > 0 ))`   #2650 — `$!` is 0 for a background job with no
 #     operating-system process, which is every background subshell of
 #     builtins, in all five dialects
 #   `%1` after a reap  #2651 — a finished job still occupies `%1` here, so
 #     `wait %1` gives the first job's status again rather than the first job
 #     still known
+#   `fg` with a live background job  #2657 — cmd/ksh and cmd/dash take it as
+#     a live request, print the job's command line on stdout the way an
+#     interactive shell does, and only then fail. ksh93 says nothing at all
+#     and dash refuses; cmd/bash and cmd/zsh are already right
 
 # Nothing to wait for is a success, not an error.
 wait; printf 'wait with nothing -> %s\n' "$?"
@@ -69,6 +73,25 @@ wait "$b"; printf 'by pid -> %s\n' "$?"
 # `jobs` runs and says something about nothing; what it prints is a listing
 # with pids in it and is a dialect question.
 jobs > /dev/null 2>&1; printf 'jobs -> %s\n' "$?"
+
+# `fg` is the other half of that: a suite runs with no terminal, so no column
+# here has job control, and every one of them refuses. What they refuse with
+# is four sentences and two statuses — ksh93 writes nothing at all — so the
+# case is whether the shell ran the job, not what it said about not running
+# it. `fg` was one of the eleven builtins no case anywhere in this tree
+# mentioned (#2293).
+( fg ) 2> /dev/null
+if [ "$?" -eq 0 ]; then printf 'fg -> ran\n'; else printf 'fg -> refused\n'; fi
+( fg %1 ) 2> /dev/null
+if [ "$?" -eq 0 ]; then printf 'fg %%1 -> ran\n'; else printf 'fg %%1 -> refused\n'; fi
+
+# The refusal is a diagnostic, so stdout stays empty — which is what a script
+# writing `fg 2>/dev/null` is relying on.
+printf 'fg stdout [%s]\n' "$( ( fg ) 2> /dev/null )"
+
+# And it is not fatal: the shell carries on past it.
+( fg ) 2> /dev/null
+printf 'still running after fg\n'
 
 # All of it works inside a function, which is where a script that
 # parallelizes actually puts it.

@@ -20,18 +20,22 @@ import (
 // people actually run it is several hundred bytes of escapes on its own —
 // which a keystroke has no reason to touch at all.
 //
-// Measured 2026-09-13 through a pseudo-terminal at 80 columns, typing
-// `echo hi` one key at a time with a highlighter wrapping `self-insert`, and
-// counting the bytes the shell wrote:
+// Measured 2026-09-13 through a pseudo-terminal, against zsh 5.9.2 driven the
+// same way, at the same width, under the same rc file: a themed prompt and a
+// highlighter wrapping `self-insert`. Seven keystrokes of each shape, counting
+// the bytes the shell wrote:
 //
-//	                      plain prompt    themed prompt
-//	zsh 5.9.2                  142             142
-//	ours, whole-line           450            1764
-//	ours, this file            108             108
+//	                      zsh 5.9.2   whole-line   this file
+//	typing at the end           142         1764          63
+//	inserting mid-line        1,090        2,184         588
+//	deleting                    140          938          72
+//	a wrapped line              162        3,258          63
+//	cursor motion                 7        1,064           7
 //
-// zsh does not depend on the prompt because it never rewrites it, and neither
-// does this. The remaining difference against zsh is the escape sequences the
-// runs themselves carry.
+// The whole-line column depends on the prompt and the other two do not: with a
+// plain `%# ` prompt in place of the theme it is 450 rather than 1764, because
+// most of what it wrote was the prompt. zsh does not rewrite the prompt for a
+// keystroke and neither does this.
 //
 // **What makes it safe is that the editor knows exactly what it last drew.**
 // The state below is written only by a redraw, and [editor.write] clears it —

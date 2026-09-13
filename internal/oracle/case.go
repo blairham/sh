@@ -16932,8 +16932,8 @@ case $PWD in */sub) echo moved;; *) echo stayed;; esac`,
 	{
 		ID:       "commands/a-subshell-is-what-notices-a-coprocess-has-ended",
 		Category: "commands",
-		Snippet:  `coproc CP { echo hi; }; ( : ); echo "n=${#CP[@]}"`,
-		Why:      "no `wait` anywhere and the array is gone all the same, which is what makes the notice asynchronous rather than something `wait` delivers. A subshell is a fork and a wait for it, and that is the whole of what the shell needed: measured the same way for a pipeline element and for an external command, and the opposite way for any number of builtins",
+		Snippet:  `coproc CP { echo hi; }; ( for ((i=0;i<50000;i++)); do :; done ); echo "n=${#CP[@]}"`,
+		Why:      "no `wait` anywhere and the array is gone all the same, which is what makes the notice asynchronous rather than something `wait` delivers. A subshell is a fork and a wait for it, and that is the whole of what the shell needed: measured the same way for a pipeline element and for an external command, and the opposite way for any number of builtins. The loop is *inside* the subshell and it is what makes this row a measurement rather than a coin flip (#2506). bash delivers the notice only for a coprocess that has **already** ended, so with a subshell as short as `( : )` the two children race: that snippet answered 2 rather than 0 in 9 runs of 300 with this machine at load 12, 463 in 1600 at load 24, and 837 in 3000 at load 55 — a cell whose value depends on how busy the recording machine was. A subshell that outlives its sibling ends the race rather than winning it more often, because the shell is already blocked in its wait when the coprocess exits: 4920 runs at loads 55 to 90, all 0. It does not change what the row measures, and the neighboring row is the control that says so: the same loop inside a *command substitution* still answers 2, 1915 runs in 1920 at load 90, so the pair is still subshell against command substitution rather than short against long",
 	},
 	{
 		ID:       "commands/a-command-substitution-does-not-notice-a-coprocess-has-ended",

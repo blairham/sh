@@ -2075,6 +2075,10 @@ func Semantics() interp.Semantics {
 	// this is a disagreement about identical syntax rather than a letter
 	// one dialect has — see interp.DeclareMatchingLetterPolicy.
 	s.DeclareMatchingLetter = interp.DeclareMatchingLetterSelects
+	// And the `M` of `functions`: it registers a shell function as a math
+	// function here, where ksh93's `M` names a character mapping. The same
+	// shape as the `m` letter above and for the same reason.
+	s.DeclareMappingLetter = interp.DeclareMappingLetterRegistersAMathFunction
 	// `export` is this word's declaration under another name, and it takes
 	// the same letters bar six. Measured 2026-09-12, a letter at a time
 	// against `export -X q=4`: `-A`, `-g`, `-m`, `-x` and `-z` are

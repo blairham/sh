@@ -1449,13 +1449,18 @@ func Semantics() interp.Semantics {
 	// local in a keyword body here and the global in the other, so a
 	// listing that dropped the word would hand back a program whose
 	// variables leak.
-	s.DeclareOptions = "aAfilmprux"
+	s.DeclareOptions = "aAfilmMprux"
 	// `-m` is here now, and it is not the letter zsh spells the same way:
 	// it *moves* a parameter — `typeset -m new=old` — where the other
 	// shell selects several by pattern. Measured 2026-09-13 on ksh93u+;
 	// interp/declaremove.go holds the whole measurement and
 	// interp.DeclareMatchingLetterPolicy is the axis.
 	s.DeclareMatchingLetter = interp.DeclareMatchingLetterMoves
+	// `-M` is here too, and it is the same shape: the letter names a
+	// *character mapping* — `typeset -M tolower v`, which lists back as
+	// `typeset -l v` — where zsh's `functions -M` registers a math function.
+	// Measured 2026-09-13; interp/declaremapping.go holds it.
+	s.DeclareMappingLetter = interp.DeclareMappingLetterNamesACharacterMapping
 	// A lone `-` or `+` is an option word to *this* builtin: measured
 	// 2026-09-10, `typeset +` names every parameter and `typeset -` writes
 	// the same table with values, where bash calls the sign an identifier
@@ -1486,7 +1491,7 @@ func Semantics() interp.Semantics {
 	// does — and answers the usage line for `-F`, `-m` and `-M`, which is
 	// what an unimplemented letter gets here too. See #2192 for the two
 	// that are missing.
-	s.FunctionsOptions = "fp"
+	s.FunctionsOptions = "fMp"
 	// `integer` is the same declaration under a second name, and this shell
 	// hands it typeset's whole letter grammar — measured 2026-09-06, every
 	// letter typeset takes is either accepted by `integer` or refused by it
@@ -1500,7 +1505,7 @@ func Semantics() interp.Semantics {
 	// fatally, since these are special builtins there — where `typeset -f
 	// nm` on the same line lists. The word carries a type and a function
 	// has none.
-	s.IntegerOptions = "aAilmprux"
+	s.IntegerOptions = "aAilmMprux"
 	// `-i16` and `-i 16` are an output base here — `integer -i 16 b=255` is
 	// `16#ff` — and this engine has no base to keep, so it refuses by name.
 	s.IntegerAttributeTakesABase = interp.Yes
@@ -1955,7 +1960,7 @@ func Diagnostics() interp.Diagnostics {
 			// the name and is 0. That half is #2192; the seam it needs is
 			// Semantics.FunctionLettersThatMarkUndefined, and what is
 			// missing is an FPATH search for this dialect to put behind it.
-			"typeset": "-bFhnstCEHLMRSTXZ",
+			"typeset": "-bFhnstCEHLRSTXZ",
 			// `functions` is `typeset -f` under a second name, so the
 			// letters it is missing are read off its own set: `-t` traces a
 			// function and `-u` marks one to be read from `$FPATH`, both of
@@ -1965,7 +1970,7 @@ func Diagnostics() interp.Diagnostics {
 			// and `functions -m` are the usage line on ksh93u+, so that
 			// shell has not got them either and "unknown" is the truth.
 			// See #2192.
-			"functions": "-tuM",
+			"functions": "-tu",
 			// `integer` reads typeset's letters, so it is missing exactly
 			// the ones typeset is missing — including the `--version` this
 			// shell answers on both names.
@@ -1976,7 +1981,7 @@ func Diagnostics() interp.Diagnostics {
 			// takes. Measured 2026-09-12, `integer -f w=1` is the only
 			// letter of typeset's grammar that ksh93u+ refuses under the
 			// second name, and it refuses it with the usage line alone.
-			"integer": "-bFhnstCEHLMRSTXZ",
+			"integer": "-bFhnstCEHLRSTXZ",
 		},
 		// ksh93's one sentence for a dead -u descriptor, the number not
 		// named; the non-number wordings per letter are not modeled yet, so
@@ -2047,6 +2052,11 @@ func Diagnostics() interp.Diagnostics {
 			// `read "?p"` is the empty word the split left.
 			"read": "%[1]s: %[2]s: invalid variable name",
 		},
+		// The `M` letter's two refusals — see
+		// interp/declaremapping.go, where the letter names a character
+		// mapping rather than zsh's math facility.
+		DeclareUnknownMapping:    "%[1]s: %[2]s: unknown mapping name",
+		DeclareMappingNeedsAName: "%[1]s: -M requires argument when operands are specified",
 		BuiltinBadNameKeepsValue: true,
 		BuiltinUsageUnprefixed:   true,
 		// Three of this shell's builtins write their complaint bare, where

@@ -234,6 +234,11 @@ func Semantics() interp.Semantics {
 	// then `syntax error: bad substitution` at 2 — no subscript reaches a
 	// parameter expansion here at all, the same wall dash meets one construct
 	// earlier than this axis (#2286).
+	// unanswered DeclareMatchingLetter: BusyBox ash has no declaration
+	// utility either, so the letter has nowhere to be written. Measured
+	// 2026-09-13 in the pinned image, `typeset -m x` is `typeset: not found`
+	// at 127 (#2345).
+	// unanswered DeclareMappingLetter: the same, for `typeset -M x`.
 	// unanswered ExpansionResultSuppliesGroupSyntax: BusyBox ash has no
 	// pattern groups either, for the same reason dash has none.
 	// unanswered TableLetterReachesItsOwnOperandsSubscript: BusyBox ash has

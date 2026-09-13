@@ -1448,6 +1448,11 @@ func Semantics() interp.Semantics {
 	// trace letters this shell also has ride in
 	// Diagnostics.UnimplementedOptionLetters.
 	s.DeclareOptions = "aAfFgilprux"
+	// unanswered DeclareMatchingLetter: bash has no `m` letter under either
+	// reading. Measured 2026-09-13 on 5.3 and 3.2 alike, `declare -m q=1` is
+	// `declare: -m: invalid option` followed by the usage line, so the
+	// question of what the letter *means* never arises (#2345).
+	// unanswered DeclareMappingLetter: the same, for `typeset -M tolower v`.
 	s.LocalOptions = "aAgilprux"
 	// A bad `declare` option is reported and the script goes on.
 	s.TypesetBadOptionFatal = interp.No

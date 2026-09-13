@@ -84,7 +84,13 @@ func biFunctions(r *Runner, _ context.Context, args []string) int {
 	// where it is not, `-M` falls through to the option parser and is
 	// refused as a letter this engine does not spell, which is what a shell
 	// with the word and without the facility should say.
-	if strings.ContainsRune(r.sem().FunctionsOptions, 'M') {
+	if strings.ContainsRune(r.sem().FunctionsOptions, 'M') &&
+		r.sem().DeclareMappingLetter == DeclareMappingLetterRegistersAMathFunction {
+		// The letter is read here only where it *is* the math facility. The
+		// other dialect with the word spells the same letter and means a
+		// character mapping by it, and that reading takes the ordinary
+		// declaration path so the letters around it can refuse the line —
+		// see interp/declaremapping.go and Semantics.DeclareMappingLetter.
 		switch remove, operands, verdict := mathFunctionLetter(args); verdict {
 		case mathLetterAlone:
 			return r.mathFunctionsBuiltin(name, remove, operands)

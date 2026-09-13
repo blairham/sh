@@ -94,6 +94,20 @@ type declareFlags struct {
 	// command and its undo. See declarematching.go.
 	matching   bool
 	matchNames bool
+	// mapping is the `M` letter in the dialect that reads it as a *character
+	// mapping* — see interp/declaremapping.go and
+	// Semantics.DeclareMappingLetter. mappingName is the name, and
+	// mappingNamed says it was written attached to the letter rather than
+	// left to the first operand: the two are indistinguishable afterwards
+	// and the operand list has to be shortened for one and not the other.
+	mapping      bool
+	mappingName  string
+	mappingNamed bool
+	// endedOptions records a `--` word. The mapping letter is the one reading
+	// that has to know: `typeset -M -- mf` takes no name from the operands
+	// there, so the name is missing and the line is refused, where the same
+	// line without the dashes reads `mf` as the mapping.
+	endedOptions bool
 	// added records that some letter was written in a *minus* word, which is
 	// what tells a declaration apart from a listing under `-m`. zsh's rule is
 	// per letter and not per word — `typeset +mx 'p*'` lists the exported
@@ -266,6 +280,7 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 		a := args[i]
 		if a == "--" {
 			i++
+			f.endedOptions = true
 			break
 		}
 		if a == "-" || a == "+" {
@@ -331,6 +346,7 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 		// `+i` removes the attribute where `-i` adds it, which is the one
 		// place a shell spells an option with a plus.
 		f.remove = a[0] == '+'
+	letters:
 		for at, c := range a[1:] {
 			if !strings.ContainsRune(known, c) {
 				return nil, f, r.refuseOption(name, a, known)
@@ -417,6 +433,28 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 				// on the line — see declarematching.go.
 				f.matching = true
 				f.matchNames = f.remove
+			case 'M':
+				// A character mapping, whose name may ride on the letter —
+				// `-Mtolower` — or arrive as the first operand. Where it
+				// rides, the rest of the word is that name and not more
+				// letters, which is why this is the one case that stops the
+				// walk. See interp/declaremapping.go.
+				//
+				// Asked of the dialect rather than taken from the letter,
+				// because the other shell that spells `M` reads the rest of
+				// the word as more letters: `functions -Mt` is a refusal of
+				// `-t` there, and swallowing the `t` as a mapping name would
+				// have taken a refused line and run it. That reading also
+				// takes the letter off this parser's hands entirely, before
+				// the declaration is reached at all — see biFunctions.
+				if r.sem().DeclareMappingLetter == DeclareMappingLetterRegistersAMathFunction {
+					break
+				}
+				f.mapping = true
+				if rest := a[at+2:]; rest != "" {
+					f.mappingName, f.mappingNamed = rest, true
+					break letters
+				}
 			case 'F':
 				if r.declareOptionTakesANumber('F') {
 					// The letter is a float's precision in this dialect
@@ -598,6 +636,17 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 				r.diagf("%s: %s\n", r.builtinComplaintName(name), refusal)
 				return 1
 			}
+		}
+	}
+	if f.mapping {
+		switch r.sem().DeclareMappingLetter {
+		case DeclareMappingLetterNamesACharacterMapping:
+			return r.declareMapping(name, args, f)
+		case DeclareMappingLetterUnspecified:
+			r.errf("%s\n", r.diag().Report(r.name(), r.line,
+				r.unanswered("the `M` letter of a declaration")))
+			r.status, r.unspecified = 2, true
+			return r.status
 		}
 	}
 	if f.matching {

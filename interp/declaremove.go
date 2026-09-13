@@ -51,7 +51,7 @@ import "strings"
 // reading. The letters are settled first because they can refuse the line
 // before an operand is looked at.
 func (r *Runner) declareMove(name string, operands []string, f declareFlags) int {
-	if r.moveLetterConflicts(f) {
+	if moveLetterConflicts(f) {
 		return r.refuseWithUsage(name)
 	}
 	if f.print {
@@ -86,16 +86,29 @@ func (r *Runner) declareMove(name string, operands []string, f declareFlags) int
 	return 0
 }
 
-// moveLetterConflicts reports whether another letter on the line refuses the
+// moveLetterConflicts reports whether anything else on the line refuses the
 // move outright. `p` is the exception and `m` is the letter itself; every
-// other letter, and the `f` that is recorded apart from them, conflicts.
-func (r *Runner) moveLetterConflicts(f declareFlags) bool {
-	if f.function || f.funcNames {
+// other letter conflicts.
+//
+// Asked of the whole flag set and not only of the letters written, because a
+// letter is not the only way one arrives: `integer` *is* `typeset -i` under
+// another word, and `integer -m qb=qa` is the usage block in the shell that
+// reads the letter this way — a check that walked the option words alone saw
+// an `m` on its own there and made the move.
+func moveLetterConflicts(f declareFlags) bool {
+	if strings.ContainsFunc(f.letters, func(c rune) bool { return c != 'm' && c != 'p' }) {
 		return true
 	}
-	return strings.ContainsFunc(f.letters, func(c rune) bool {
-		return c != 'm' && c != 'p'
-	})
+	// Everything the letters recorded, with the move's own two taken back
+	// out. What is left has to be the zero value, which is what makes a
+	// field added to this struct tomorrow conflict by default rather than be
+	// silently tolerated.
+	bare := f
+	bare.matching, bare.matchNames = false, false
+	bare.print, bare.added, bare.remove = false, false, false
+	bare.letters, bare.letterSigns = "", ""
+	bare.endedOptions = false
+	return bare != declareFlags{}
 }
 
 // refuseWithUsage writes the builtin's usage block with no complaint above it

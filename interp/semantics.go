@@ -4885,6 +4885,11 @@ type Semantics struct {
 	// DeclareMatchingLetterPolicy.
 	DeclareMatchingLetter DeclareMatchingLetterPolicy
 
+	// DeclareMappingLetter is the same question about the `M` letter, which
+	// two shells also spell alike and also read as two unrelated commands.
+	// See DeclareMappingLetterPolicy.
+	DeclareMappingLetter DeclareMappingLetterPolicy
+
 	// DeclareOptionsWithoutEffect names letters out of DeclareOptions that
 	// this engine models as doing nothing: accepted, silent, and 0.
 	//

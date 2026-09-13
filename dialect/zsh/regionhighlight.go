@@ -133,7 +133,7 @@ func parseRegionElement(elem string, starts []int) (repl.Highlight, bool) {
 	// number, so it is not.
 	//
 	// **Deliberately not a branch of its own.** One was written first and
-	// mutation testing found it inert: deleting it changed no behaviour and
+	// mutation testing found it inert: deleting it changed no behavior and
 	// failed no test, because every element it claimed to catch was already
 	// being dropped here. A guard that cannot be removed by a test is a
 	// comment promising something the code does not do.
@@ -169,10 +169,6 @@ func regionStyle(spec string) string {
 	for _, part := range strings.Split(spec, ",") {
 		part = strings.TrimSpace(part)
 		switch {
-		case part == "" || part == "none":
-			// `none` overrides a default rather than adding anything, and an
-			// element that says only `none` paints nothing at all.
-			continue
 		case part == "bold":
 			attrs += "\x1b[1m"
 		case part == "standout":
@@ -183,12 +179,15 @@ func regionStyle(spec string) string {
 			fg = colorEscape(strings.TrimPrefix(part, "fg="), true)
 		case strings.HasPrefix(part, "bg="):
 			bg = colorEscape(strings.TrimPrefix(part, "bg="), false)
-		case strings.HasPrefix(part, "memo="):
-			// Carried verbatim by zsh and parsed no further. It names the
-			// plugin that wrote the element so the plugin can find it again;
-			// it selects nothing to draw.
-			continue
 		}
+		// Anything else contributes nothing, and that is the whole of what
+		// the rest have in common: `none`, which overrides a default rather
+		// than adding to one; `memo=token`, which names the plugin that wrote
+		// the element so it can find it again and selects nothing to draw; an
+		// empty part, from a trailing comma; and a word this shell does not
+		// know. Each had a case of its own and every one of them was inert —
+		// staticcheck caught the third, and the `P` guard above is the same
+		// story. A branch that only falls through is not documentation.
 	}
 	return attrs + fg + bg
 }

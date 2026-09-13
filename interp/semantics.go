@@ -2257,7 +2257,14 @@ type Semantics struct {
 	// words rather than answering `,` for the two locales anybody tests in.
 	// So a conversion carrying this flag is written ungrouped, which is
 	// exactly right under every locale this shell can speak for and wrong
-	// under one it cannot. Filed as #2675.
+	// under one it cannot — and right on every musl system there is, where
+	// bash asks a C library with no locale data and writes the same
+	// ungrouped number. #2675 weighed generating the other locales the way
+	// widthgen generates the Unicode tables and declined: the host's C
+	// library disagrees with itself across platforms, the panel disagrees
+	// with itself outside C, and the radix character is the larger half.
+	// interp/localenumeric.go carries the measurements and the two values,
+	// which `$langinfo[THOUSEP]` reads from there too.
 	//
 	// Which conversions take it is not a second question. Measured: `%d`,
 	// `%i`, `%u` and `%f` group, `%s`, `%x`, `%e`, `%g`, `%c` and `%b` accept

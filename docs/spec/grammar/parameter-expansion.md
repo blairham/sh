@@ -386,6 +386,27 @@ inputs. This is not modeled: the flag is the parser's and the mode is
 `invoke/called-sh-moves-a-quoted-brace-in-a-word-operand`; the options are
 in #2604.
 
+Five more rows say how little of the answer the parse holds, and they
+matter because the cheap fix on offer is to hand the parser a reading at
+startup. **The mode is read where the word expands and nowhere else.**
+A body parsed with the mode *on* and expanded with it *off* answers the
+non-posix reading — `set -o posix; f(){ … }; set +o posix; f` is `[Vx}y]`
+— which is the mirror of the row above, so neither arriving nor leaving
+is decided at the parse. Three words on one line, read in one pass,
+answer `[Vx}y][Vx}yb'}][Vx}y]` as the mode goes on and off between them,
+so the move is not a latch either. And the mode has **three** doors, not
+one: the name `sh`, the `--posix` option, and `POSIXLY_CORRECT` in the
+environment — bash 3.2 has all three and moves on none of them, which is
+what separates having the option from the option moving this axis. The
+last of those doors is the one a startup mechanism gets wrong: entered
+with `--posix` and left with `set +o posix` before the word expands,
+bash answers the non-posix reading. Recorded by
+`core/a-quoted-brace-in-a-word-operand-parsed-in-posix-mode-and-expanded-outside-it`,
+`core/a-quoted-brace-in-a-word-operand-moves-back-when-posix-mode-ends`,
+`invoke/the-posix-option-moves-a-quoted-brace-in-a-word-operand`,
+`invoke/posixly-correct-in-the-environment-moves-a-quoted-brace-in-a-word-operand`
+and `invoke/leaving-the-posix-mode-a-startup-option-turned-on` (#2604).
+
 One consequence has to be carried through to the operand: where the
 scan leaves a quote unread, the half-quote after the closing brace is
 part of the **pattern**, not a quote that ran out of input.

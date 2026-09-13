@@ -51136,6 +51136,108 @@
         "TimedOut": false
       }
     },
+    "core/a-quoted-brace-in-a-word-operand-moves-back-when-posix-mode-ends": {
+      "ash": {
+        "Stdout": "[Vx}yb'}][Vx}yb'}][Vx}yb'}]",
+        "Stderr": "\u003cshell\u003e: set: line 0: illegal option -o posix~\u003cshell\u003e: set: line 0: illegal option +o posix",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[Vx}y][Vx}yb'}][Vx}y]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[Vx}yb'}][Vx}yb'}][Vx}y]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[Vx}y][Vx}y][Vx}y]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[Vx}yb'}]",
+        "Stderr": "\u003cshell\u003e: 1: set: Illegal option -o posix",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[Vx}yb'}]",
+        "Stderr": "\u003cshell\u003e: set: posix: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[Vx}yb'}]",
+        "Stderr": "\u003cshell\u003e:set:1: no such option: posix",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "core/a-quoted-brace-in-a-word-operand-parsed-in-posix-mode-and-expanded-outside-it": {
+      "ash": {
+        "Stdout": "[Vx}yb'}]",
+        "Stderr": "\u003cshell\u003e: set: line 0: illegal option -o posix~\u003cshell\u003e: set: line 0: illegal option +o posix",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[Vx}y]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[Vx}y]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[Vx}y]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: set: Illegal option -o posix",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: set: posix: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:set:1: no such option: posix",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "core/a-quoted-brace-in-an-unquoted-operand": {
       "ash": {
         "Stdout": "[Vx}y][a}b][Vx}y]",
@@ -99892,6 +99994,57 @@
         "TimedOut": false
       }
     },
+    "invoke/leaving-the-posix-mode-a-startup-option-turned-on": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: bad option '--posix'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[Vx}y][Vx}y]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[Vx}y][Vx}y]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[Vx}y][Vx}y]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 0: Illegal option --",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "cilrsDER:abefhkmno:prtuvxBCGH",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: no such option: posix",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "invoke/options-between-c-and-its-string": {
       "ash": {
         "Stdout": "name|1|a",
@@ -100141,6 +100294,57 @@
       },
       "zsh": {
         "Stdout": "\u003cshell\u003e|0|",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "invoke/posixly-correct-in-the-environment-moves-a-quoted-brace-in-a-word-operand": {
+      "ash": {
+        "Stdout": "[Vx}yb'}][Vx}y]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[Vx}yb'}][Vx}y]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[Vx}yb'}][Vx}y]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[Vx}y][Vx}y]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[Vx}yb'}][Vx}y]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[Vx}yb'}][Vx}y]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[Vx}yb'}][Vx}y'}]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -100499,6 +100703,57 @@
       "zsh": {
         "Stdout": "one",
         "Stderr": "",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "invoke/the-posix-option-moves-a-quoted-brace-in-a-word-operand": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: bad option '--posix'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[Vx}yb'}][Vx}y]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[Vx}yb'}][Vx}y]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[Vx}y][Vx}y]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 0: Illegal option --",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "cilrsDER:abefhkmno:prtuvxBCGH",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: no such option: posix",
         "Status": 1,
         "Signal": 0,
         "TimedOut": false
@@ -108565,6 +108820,57 @@
       "zsh": {
         "Stdout": "",
         "Stderr": "\u003cshell\u003e:set:1: bad option: -q",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "opt/a-refused-set-o-name-is-not-a-refused-option-letter": {
+      "ash": {
+        "Stdout": "one",
+        "Stderr": "\u003cshell\u003e: set: line 0: illegal option -o nosuchname~\u003cshell\u003e: set: line 0: illegal option -Z",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "one~two",
+        "Stderr": "\u003cshell\u003e: line 1: set: nosuchname: invalid option name~\u003cshell\u003e: line 1: set: -Z: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: set: nosuchname: invalid option name",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one~two",
+        "Stderr": "\u003cshell\u003e: line 0: set: nosuchname: invalid option name~\u003cshell\u003e: line 0: set: -Z: invalid option~set: usage: set [--abefhkmnptuvxBCHP] [-o option] [arg ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: set: Illegal option -o nosuchname",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: set: nosuchname: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:set:1: no such option: nosuchname",
         "Status": 1,
         "Signal": 0,
         "TimedOut": false

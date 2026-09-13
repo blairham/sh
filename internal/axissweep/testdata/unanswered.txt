@@ -136,6 +136,7 @@ ash   SubscriptIsAQuotingContext
 ash   SubscriptedArrayLiteral
 ash   SubscriptedOperandCarriesTheAttributes
 ash   SubscriptedOperandTakesALocalDeclaration
+ash   SubscriptedOperandTakesTheContainerAttribute
 ash   SubscriptedOperandTakesTheIntegerAttribute
 ash   TableLetterReachesItsOwnOperandsSubscript
 ash   TableUnderAnArrayDeclaration
@@ -287,6 +288,7 @@ dash  SubscriptIsAQuotingContext
 dash  SubscriptedArrayLiteral
 dash  SubscriptedOperandCarriesTheAttributes
 dash  SubscriptedOperandTakesALocalDeclaration
+dash  SubscriptedOperandTakesTheContainerAttribute
 dash  SubscriptedOperandTakesTheIntegerAttribute
 dash  TableLetterReachesItsOwnOperandsSubscript
 dash  TableUnderAnArrayDeclaration

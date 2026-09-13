@@ -8634,6 +8634,27 @@ type Semantics struct {
 	// in ksh93 as in bash, and that path never reaches this.
 	ExpansionResultSuppliesGroupSyntax Answer
 
+	// SubscriptedOperandTakesTheContainerAttribute lets a declaration write
+	// `-a` or `-A` beside a subscripted operand — `typeset -A m[k]=v`.
+	//
+	// Measured 2026-09-12 from a script file. bash 5.3 and ksh93u+ take it;
+	// zsh 5.9.2 refuses the operand and ends the script, `m[k]: inconsistent
+	// type for assignment`, and refuses `-a` in the same words — even over a
+	// name that is already a table of the kind the letter names, which is
+	// what says the refusal is about the letter being written rather than
+	// about any kind change it would cause.
+	//
+	// Asked only where the container letter is still in effect once
+	// NumericAttributeReplacesTheArrayAttribute has had its say, and that
+	// narrowing is measured rather than tidy. `typeset -iA m[k]=v` in zsh is
+	// `m[k]: inconsistent array element or slice assignment` — the *integer*
+	// refusal — because `-i` absorbs the `-A` there and leaves no container
+	// letter to refuse, and `typeset -iA m` really does list back as
+	// `typeset -i m=0`. Asked without that guard the three refusals order
+	// into a cycle: readonly beats integer (`-ri`), integer appears to beat
+	// the container (`-iA`), and the container beats readonly (`-rA`).
+	SubscriptedOperandTakesTheContainerAttribute Answer
+
 	// TableLetterReachesItsOwnOperandsSubscript reads a subscripted operand's
 	// subscript as a *key* when the table letter that would make it one is
 	// written on the same command — `typeset -A m[k]=v`.

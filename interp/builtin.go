@@ -1803,14 +1803,58 @@ func firstOptionLetter(operand string) string {
 // Whether the text evaluates is the caller's question, asked where the
 // element is reached and not here, which is also what keeps a builtin out of
 // the arithmetic evaluator's reach until it means to use it.
+// The brackets have to *balance*, though, and that is here rather than at a
+// caller because it decides whether there is a subscript at all. Measured
+// 2026-09-12 from a script file, `typeset 'm[a]b]'=v` is refused by the name
+// check in all three shells that reach it — `not a valid identifier` in bash
+// 5.3, `invalid variable name` in ksh93u+, `not an identifier` in zsh 5.9.2 —
+// and so is `typeset 'n[x[y]'=v`. Without the check the text between the
+// first `[` and the last `]` became the subscript, so `m[a]b]=v` quietly
+// placed a key literally spelled `a]b`.
+//
+// `a[1][2]=v` is the same shape and the same refusal in bash 5.3 and zsh, and
+// **ksh93 is a fourth answer this does not implement**: it builds a compound
+// inside the element, `typeset -a a=([1]=([2]=v) )`, which needs compound
+// variables this engine does not have (#2491). bash 3.2 is a fifth — an empty
+// array under the base name at status 0. So the refusal here is right in two
+// of the four columns that reach it and is a loud complaint rather than a
+// silent wrong answer in the third; what it replaced was `1][2: arithmetic
+// syntax error`, which is nobody's (#1380).
 func (r *Runner) subscriptOperand(operand string) (string, string, bool) {
 	open := strings.IndexByte(operand, '[')
-	if open <= 0 || !strings.HasSuffix(operand, "]") {
+	if open <= 0 || !subscriptBracketsBalance(operand[open:]) {
 		return "", "", false
 	}
 	base := operand[:open]
 	sub := strings.TrimSpace(operand[open+1 : len(operand)-1])
 	return base, sub, true
+}
+
+// subscriptBracketsBalance reports whether text is one `[…]` and nothing
+// after it, counting nested brackets on the way.
+//
+// The count is what tells `a[i[0]]` — a subscript reading another element,
+// which is a legal expression — from `a[1][2]`, where the first bracket has
+// closed and a second one follows. Both hold a `[` inside and both end in
+// `]`, so neither a search for the last `]` nor one for a second `[` can
+// separate them.
+func subscriptBracketsBalance(text string) bool {
+	depth := 0
+	for i := range len(text) {
+		switch text[i] {
+		case '[':
+			depth++
+		case ']':
+			depth--
+			if depth == 0 {
+				return i == len(text)-1
+			}
+			if depth < 0 {
+				return false
+			}
+		}
+	}
+	return false
 }
 
 // hasOption reports whether the letter appears in the option words before the

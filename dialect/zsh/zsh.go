@@ -1635,6 +1635,12 @@ func Semantics() interp.Semantics {
 	// fatal `unset ":" ok1 ok2` removes ok1 and ok2 before it stops.
 	s.BadNameDeclaresTheOperandsAfterIt = interp.Yes
 	s.SubscriptedOperandTakesTheIntegerAttribute = interp.No
+	// And the container letter, refused in the same breath — `typeset -A
+	// m[k]=v` and `typeset -a n[2]=v` alike are `inconsistent type for
+	// assignment`, and so is the letter over a name already a table of that
+	// very kind, so it is the letter beside the subscript that is refused
+	// rather than anything the letter would change.
+	s.SubscriptedOperandTakesTheContainerAttribute = interp.No
 	s.SubscriptedOperandTakesALocalDeclaration = interp.No
 	s.ReadonlyElement = interp.ReadonlyElementRefused
 	// `unset a[@]` replaces the elements with a single empty one, which is
@@ -2376,6 +2382,11 @@ func Diagnostics() interp.Diagnostics {
 		ReadonlyElementRefusal: "%[1]s[%[2]s]: can't create readonly array elements",
 		IntegerElementRefusal:  "%[1]s[%[2]s]: inconsistent array element or slice assignment",
 		LocalElementRefusal:    "%[1]s[%[2]s]: can't create local array elements",
+		// The container letter's is the sentence a whole-name kind change
+		// gets rather than one of its own, which is what makes it worth
+		// having beside the three above: only the wording tells a script
+		// which refusal it ran into.
+		ContainerElementRefusal: "%[1]s[%[2]s]: inconsistent type for assignment",
 		// `set -A 1v q` does not name the builtin in its location where
 		// `unset 1x` and `typeset 1w` from this same shell do.
 		// `read` joins `set` in it: `zsh:1: not an identifier: 1bad` has no
@@ -2784,6 +2795,18 @@ func Diagnostics() interp.Diagnostics {
 			"typeset":  "not an identifier: %[2]s",
 			"declare":  "not an identifier: %[2]s",
 			"integer":  "not an identifier: %[2]s",
+		},
+		// A word holding a bracket that never closes is judged by the
+		// identifier rule rather than the context one, and the location
+		// leaves the builtin out — see Diagnostics.BuiltinBadNameBracketed.
+		// Measured 2026-09-12: `typeset 'm[a]b]'=v` is `<shell>:1: not an
+		// identifier: m[a]b]` where `typeset 'a]'=v`, with no bracket to
+		// open one, is `<shell>:typeset:1: not valid in this context: a]`.
+		BuiltinBadNameBracketed: map[string]string{
+			"typeset": "not an identifier: %[2]s",
+			"declare": "not an identifier: %[2]s",
+			"local":   "not an identifier: %[2]s",
+			"integer": "not an identifier: %[2]s",
 		},
 		BuiltinBadOptionStatus:    1,
 		PrintfUsage:               "not enough arguments",

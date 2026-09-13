@@ -897,19 +897,22 @@ type Diagnostics struct {
 	// measured apart.
 	ArithErrorNamesTheBuiltin bool
 
-	// ReadonlyElementRefusal, IntegerElementRefusal and LocalElementRefusal
-	// are what a declaration says about a subscripted operand whose element
-	// cannot carry what the declaration is asking the *variable* to be. Two
-	// verbs each: %[1]s the base name, %[2]s the subscript as written.
+	// ReadonlyElementRefusal, IntegerElementRefusal, LocalElementRefusal and
+	// ContainerElementRefusal are what a declaration says about a
+	// subscripted operand whose element cannot carry what the declaration is
+	// asking the *variable* to be. Two verbs each: %[1]s the base name,
+	// %[2]s the subscript as written.
 	//
-	// One dialect has all three and the others have none, because the others
-	// take the operand — see Semantics.ReadonlyElement and its two
-	// neighbors. Three strings rather than one because the shell that has
-	// them words the three differently, and it is the wording that tells a
-	// script which of the three it ran into.
-	ReadonlyElementRefusal string
-	IntegerElementRefusal  string
-	LocalElementRefusal    string
+	// One dialect has all four and the others have none, because the others
+	// take the operand — see Semantics.ReadonlyElement and its three
+	// neighbors. Four strings rather than one because the shell that has
+	// them words them differently, and it is the wording that tells a script
+	// which of them it ran into: the container one is the sentence a
+	// whole-name kind change gets, and the integer one is not.
+	ReadonlyElementRefusal  string
+	IntegerElementRefusal   string
+	LocalElementRefusal     string
+	ContainerElementRefusal string
 
 	// UmaskBadOption is an option `umask` does not have. One verb.
 	UmaskBadOption string
@@ -1026,6 +1029,24 @@ type Diagnostics struct {
 	// identifier: 1x` for `1x` and `not valid in this context: a-b` for
 	// `a-b`. An empty entry means the dialect says the same to both.
 	BuiltinBadNameNumeric map[string]string
+
+	// BuiltinBadNameBracketed is that wording where the operand holds a `[`
+	// but is not a subscripted name — `typeset 'm[a]b]'=v`, where the
+	// bracket never closes at the end of the word.
+	//
+	// A third entry beside the numeric one, and the one dialect that has it
+	// has it for a reason worth keeping: zsh answers `not an identifier:
+	// m[a]b]` there where the same builtin answers `not valid in this
+	// context: a]` for a word with no bracket at all — so a failed
+	// *subscript* is judged by the identifier rule rather than by the
+	// context one. bash and ksh93 say what they say about any bad name.
+	//
+	// The builtin is left out of the location wherever this fires, which is
+	// measured and not a convenience: `typeset 'm[a]b]'=v` is
+	// `<shell>:1: not an identifier: …` where `typeset 1x=v` from the same
+	// shell is `<shell>:typeset:1: …`. It travels with the wording because
+	// only the shell that has one has the other.
+	BuiltinBadNameBracketed map[string]string
 
 	// BuiltinBadNameStatus is what that reports where it is not fatal. Zero
 	// means 1 — dash says 2.

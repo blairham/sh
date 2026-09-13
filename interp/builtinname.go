@@ -354,6 +354,19 @@ func (r *Runner) badBuiltinName(builtin, operand, name string, fatal Answer) int
 			wording = numeric
 		}
 	}
+	// And a word whose bracket never closes is a third complaint in that
+	// same dialect — see Diagnostics.BuiltinBadNameBracketed, where the
+	// location is part of the answer too. Only a name that got this far,
+	// which means subscriptOperand already refused to read a subscript out
+	// of it.
+	if strings.ContainsRune(name, '[') {
+		if bracketed := d.BuiltinBadNameBracketed[builtin]; bracketed != "" {
+			wording = bracketed
+			outer := r.inBuiltin
+			r.inBuiltin = ""
+			defer func() { r.inBuiltin = outer }()
+		}
+	}
 	r.diagf("%s\n", Wording(wording, "%[1]s: `%[2]s': not a valid identifier", builtin, shown))
 	status := orDefault(d.BuiltinBadNameStatus, 1)
 	if r.ask(fatal, "a bad name to a special builtin ending the script") {

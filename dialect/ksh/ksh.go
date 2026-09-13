@@ -1099,6 +1099,10 @@ func Semantics() interp.Semantics {
 	s.ReadTrailingWhitespaceEndsAField = interp.No
 	s.BadNameDeclaresTheOperandsAfterIt = interp.Yes
 	s.SubscriptedOperandTakesTheIntegerAttribute = interp.Yes
+	// And the container letter, taken here too — what this shell then does
+	// with the subscript is TableLetterReachesItsOwnOperandsSubscript and
+	// not this question.
+	s.SubscriptedOperandTakesTheContainerAttribute = interp.Yes
 	s.SubscriptedOperandTakesALocalDeclaration = interp.Yes
 	s.ReadonlyElement = interp.ReadonlyElementWritten
 	// `@` is not a spelling for the whole array here. The brackets hold an

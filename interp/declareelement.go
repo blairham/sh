@@ -136,6 +136,22 @@ func (r *Runner) declareElement(base, sub, value string, f declareFlags, shadows
 // one splits three ways and only two of the three are answered here.
 func (r *Runner) elementDeclarationRefused(base, sub string, f declareFlags, shadows bool) bool {
 	d := r.diag()
+	// Ahead of the other three, which is measured rather than arbitrary: in
+	// the one shell that refuses, `typeset -rA m[k]=v` answers with this
+	// sentence and not the readonly one. The guard is what keeps the three
+	// from ordering into a cycle — see
+	// Semantics.SubscriptedOperandTakesTheContainerAttribute.
+	if (f.array || f.assoc) && !f.remove && !r.typeLetterTakesTheCompoundLetter(f) &&
+		!r.ask(r.sem().SubscriptedOperandTakesTheContainerAttribute,
+			"a container attribute on a declaration of one array element") {
+		if !r.unspecified {
+			r.refuseElementDeclaration(base, sub, d.ContainerElementRefusal)
+		}
+		return true
+	}
+	if r.unspecified {
+		return true
+	}
 	if f.readonly && !f.readonlyOff {
 		switch r.readonlyElementPolicy() {
 		case ReadonlyElementRefused:

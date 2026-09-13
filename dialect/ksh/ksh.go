@@ -1179,6 +1179,16 @@ func Semantics() interp.Semantics {
 	// with `${a[0]}` reading `x` afterwards (#1375).
 	s.TableUnderAnArrayDeclaration = interp.CompoundKindChangeEndsTheScript
 	s.ArrayUnderATableDeclaration = interp.CompoundKindChangeKeepsTheElements
+	// And the literal form converts in both directions without a word, which
+	// is what makes it a second pair of fields rather than a widening of the
+	// first: this shell ends the script over the valueless array letter and
+	// takes the identical letter carrying a literal. Measured 2026-09-12,
+	// `typeset -A h; h[k]=v; typeset -a h=(x)` lists `typeset -a h=(x)` at 0
+	// and `typeset -a a=(x y); typeset -A a=([k]=v)` lists `typeset -A
+	// a=([k]=v)` at 0 -- the old elements gone in both, where the valueless
+	// table letter carries them across (#2287).
+	s.TableUnderAnArrayLiteralDeclaration = interp.CompoundKindChangeEmptiesTheName
+	s.ArrayUnderATableLiteralDeclaration = interp.CompoundKindChangeEmptiesTheName
 	// And reading one says nothing either: measured 2026-09-12, `typeset -A
 	// m; m[k]=v; w=; ${m[$w]}` is the empty string at status 0 with no
 	// diagnostic, where bash names the table (#1972).

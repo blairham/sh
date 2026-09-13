@@ -1589,6 +1589,24 @@ type Diagnostics struct {
 	// and convert the other, which ksh93 does.
 	CannotConvertArrayToTable string
 
+	// CannotConvertTableToArrayAtTheAssignment is the same refusal for a
+	// declaration carrying an **array literal** of its own, and it is a field
+	// of its own for one measured reason: it names no builtin. `typeset -A h;
+	// h[k]=v; typeset -a h` is `typeset: h: cannot convert associative to
+	// indexed array` in bash 5.3.15 and `typeset -a h=(x)` over the same
+	// table is `h: cannot convert associative to indexed array` — one verb
+	// rather than two, because the complaint comes from the assignment rather
+	// than from the builtin. A shared field would have had to print an empty
+	// builtin name into the two-verb form.
+	//
+	// Only a dialect answering Semantics.TableUnderAnArrayLiteralDeclaration
+	// with a refusal has anything to put here.
+	CannotConvertTableToArrayAtTheAssignment string
+
+	// CannotConvertArrayToTableAtTheAssignment is the other direction of the
+	// same one-verb sentence, for Semantics.ArrayUnderATableLiteralDeclaration.
+	CannotConvertArrayToTableAtTheAssignment string
+
 	// ArrayValueToNonArray is what the splicing shell says when the name a
 	// subscripted literal writes through holds a plain string. One verb: the
 	// name, without the subscript. An *unset* name is not this — it becomes

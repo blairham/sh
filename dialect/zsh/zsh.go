@@ -1751,6 +1751,12 @@ func Semantics() interp.Semantics {
 	// and the only one that loses the values doing it (#1375).
 	s.TableUnderAnArrayDeclaration = interp.CompoundKindChangeEmptiesTheName
 	s.ArrayUnderATableDeclaration = interp.CompoundKindChangeEmptiesTheName
+	// The literal form converts and empties in both directions too, the same
+	// as the valueless one. Measured 2026-09-12, `typeset -A h; h[k]=v;
+	// typeset -a h=(x)` lists `typeset -a h=( x )` at 0 and `typeset -a a=(x
+	// y); typeset -A a=([k]=v)` lists `typeset -A a=( [k]=v )` at 0 (#2287).
+	s.TableUnderAnArrayLiteralDeclaration = interp.CompoundKindChangeEmptiesTheName
+	s.ArrayUnderATableLiteralDeclaration = interp.CompoundKindChangeEmptiesTheName
 	// Nor is reading one reported: measured 2026-09-12, `typeset -A m;
 	// m[k]=v; w=; ${m[$w]}` is the empty string at status 0 and silent
 	// (#1972).

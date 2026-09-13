@@ -1141,6 +1141,15 @@ func Semantics() interp.Semantics {
 	// under argv[0] `sh`; 3.2.57 has no `-A` to reach it (#1375).
 	s.TableUnderAnArrayDeclaration = interp.CompoundKindChangeRefused
 	s.ArrayUnderATableDeclaration = interp.CompoundKindChangeRefused
+	// The literal form is refused too, and it costs more: the complaint
+	// names no builtin and the rest of the command list does not run.
+	// Measured 2026-09-12 with `typeset -A h; h[k]=v` in front of it and the
+	// commands newline-separated, `typeset -a h=(x)` is `h: cannot convert
+	// associative to indexed array` at 1 with the table intact and the next
+	// *line* running; the same four commands under `;` print nothing after
+	// the complaint, by either invocation route (#2287).
+	s.TableUnderAnArrayLiteralDeclaration = interp.CompoundKindChangeAbandonsTheLine
+	s.ArrayUnderATableLiteralDeclaration = interp.CompoundKindChangeAbandonsTheLine
 	// And a *read* whose key comes out empty is reported too, with a
 	// different subject and a different outcome: measured 2026-09-12,
 	// `typeset -A m; m[k]=v; w=; ${m[$w]}` writes `m: bad array subscript` —
@@ -1634,13 +1643,18 @@ func Diagnostics() interp.Diagnostics {
 		NumericArgument:               "%[1]s: %[2]s: numeric argument required",
 		// A subscript before the first element, named as it was written:
 		// `a[x-2]`, not the -1 it evaluated to. Identical in bash 3.2.
-		BadArraySubscript:             "%[1]s[%[2]s]: bad array subscript",
-		CannotConvertTableToArray:     "%[2]s: %[1]s: cannot convert associative to indexed array",
-		CannotConvertArrayToTable:     "%[2]s: %[1]s: cannot convert indexed to associative array",
-		EmptyAssociativeKeyRead:       "%[1]s: bad array subscript",
-		ArithEmptySubscript:           "%[1]s[]: bad array subscript",
-		ArithWholeArraySubscript:      "%[1]s[%[2]s]: bad array subscript",
-		ArrayLiteralThroughASubscript: "%[1]s[%[2]s]: cannot assign list to array member",
+		BadArraySubscript:         "%[1]s[%[2]s]: bad array subscript",
+		CannotConvertTableToArray: "%[2]s: %[1]s: cannot convert associative to indexed array",
+		CannotConvertArrayToTable: "%[2]s: %[1]s: cannot convert indexed to associative array",
+		// One verb rather than two: the literal form's complaint comes from
+		// the assignment and names no builtin. See
+		// Semantics.TableUnderAnArrayLiteralDeclaration.
+		CannotConvertTableToArrayAtTheAssignment: "%[1]s: cannot convert associative to indexed array",
+		CannotConvertArrayToTableAtTheAssignment: "%[1]s: cannot convert indexed to associative array",
+		EmptyAssociativeKeyRead:                  "%[1]s: bad array subscript",
+		ArithEmptySubscript:                      "%[1]s[]: bad array subscript",
+		ArithWholeArraySubscript:                 "%[1]s[%[2]s]: bad array subscript",
+		ArrayLiteralThroughASubscript:            "%[1]s[%[2]s]: cannot assign list to array member",
 		// Through a literal the element is named as it stands between the
 		// parentheses, with no array name in front of it. bash 3.2 says the
 		// same and does not end the script, which is the one place the two

@@ -4425,6 +4425,68 @@ type Semantics struct {
 	// holds it, for ksh93, and no column ends the script over this direction
 	// (#1375).
 	ArrayUnderATableDeclaration CompoundKindChangePolicy
+	// TableUnderAnArrayLiteralDeclaration is the same question as
+	// TableUnderAnArrayDeclaration asked of a declaration that carries an
+	// **array literal** of its own — `typeset -a h=(x)` rather than the bare
+	// `typeset -a h` — and the panel splits differently, which is the whole
+	// reason it is a second field.
+	//
+	// Measured 2026-09-12 with `typeset -A h; h[k]=v` in front of it, the
+	// four commands separated by **newlines** so that the cost of the refusal
+	// is the refusal's and not a command list's:
+	//
+	//	shell        `typeset -a h=(x)`
+	//	bash 5.3.15  `h: cannot convert associative to indexed array`, status 1,
+	//	             the table intact, and the rest of the *line* abandoned
+	//	ksh93u+      converted, the literal's element kept: `typeset -a h=(x)`
+	//	zsh 5.9.2    the same: `typeset -a h=( x )`
+	//
+	// ksh93 is what makes the second field unavoidable: it answers the
+	// valueless form `CompoundKindChangeEndsTheScript` and this one by
+	// converting without a word, so no single field can hold both of its
+	// answers.
+	//
+	// Two further things the sentence itself says, and both were measured
+	// rather than inferred. It carries **no builtin name** where the
+	// valueless form's does — `typeset: h: cannot convert…` against `h:
+	// cannot convert…` — so the complaint comes from the assignment rather
+	// than from the builtin, which is what says it is a different site. And
+	// the cost is the *line* rather than the input: the same four commands
+	// separated by `;` print nothing after the complaint, by either
+	// invocation route, and separated by newlines print all of it, by either
+	// route (#1182's square, and #2287 was filed on the `;` reading).
+	//
+	// The **array literal** and not any value: a scalar value is a third
+	// shape again and the columns move under it — `typeset -a h=x` over the
+	// same table is `h: inconsistent type for assignment` in zsh, a fatal
+	// `cannot change associative array h to index array` in ksh93 and bash's
+	// refusal under the builtin's name. That form is left where it was
+	// rather than given this field's answer (#2287).
+	TableUnderAnArrayLiteralDeclaration CompoundKindChangePolicy
+	// ArrayUnderATableLiteralDeclaration is the other direction of the same
+	// question: `typeset -A a=([k]=v)` over a name already holding an
+	// indexed array.
+	//
+	// Measured 2026-09-12 with `typeset -a a=(x y)` in front of it, newline
+	// separated:
+	//
+	//	shell        `typeset -A a=([k]=v)`
+	//	bash 5.3.15  `a: cannot convert indexed to associative array`, status 1,
+	//	             the array intact, the rest of the line abandoned
+	//	ksh93u+      `typeset -A a=([k]=v)` — converted, and the old elements gone
+	//	zsh 5.9.2    the same
+	//
+	// The converting columns **empty** the name here where ksh93's valueless
+	// form carries the elements across as the keys `0`, `1`, … — the literal
+	// is an assignment and it replaces what it lands on. That is the second
+	// place this direction needs its own field rather than the valueless
+	// one's answer.
+	//
+	// unexhibited CompoundKindChangeEndsTheScript and
+	// CompoundKindChangeKeepsTheElements: no column measured ends the input
+	// over either literal direction, and none carries the old elements
+	// through one (#2287).
+	ArrayUnderATableLiteralDeclaration CompoundKindChangePolicy
 
 	// ValuelessDeclarationHidesTheOuterValue makes `local u` in a function
 	// hide any outer `u` — the local exists unset, so `${u-UNSET}` fires the
@@ -11755,6 +11817,21 @@ const (
 	// leaving the name an empty compound of the new kind. zsh, in both
 	// directions.
 	CompoundKindChangeEmptiesTheName
+	// CompoundKindChangeAbandonsTheLine is a third cost between the two
+	// refusals above: the name keeps what it had and the status is 1, as
+	// under CompoundKindChangeRefused, but the rest of the *command list*
+	// does not run — and the next line does. bash, for the array-literal
+	// form of either direction.
+	//
+	// A value of its own rather than the script-ending one, because the two
+	// are a measured square apart and this repository has read that square
+	// the wrong way before (#1182). Measured 2026-09-12 with `typeset -A h;
+	// h[k]=v` in front of it and `typeset -a h=(x); echo "st=$?"; typeset -p
+	// h; echo done` after it, bash 5.3.15 prints only the complaint when the
+	// four are separated by `;` -- by *both* invocation routes -- and prints
+	// `st=1`, the untouched table and `done` when they are separated by
+	// newlines, again by both. So what ends is the list and not the input.
+	CompoundKindChangeAbandonsTheLine
 )
 
 func (p CompoundKindChangePolicy) String() string {
@@ -11767,6 +11844,8 @@ func (p CompoundKindChangePolicy) String() string {
 		return "keeps the elements"
 	case CompoundKindChangeEmptiesTheName:
 		return "empties the name"
+	case CompoundKindChangeAbandonsTheLine:
+		return "refused, and the command list is abandoned"
 	}
 	return "unspecified"
 }

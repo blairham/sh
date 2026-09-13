@@ -569,6 +569,9 @@ func Semantics() interp.Semantics {
 	// `wait -n` is 127 rather than a wait, so the letter is not an option
 	// here.
 	s.WaitNWaitsForTheNextJob = interp.No
+	// Nor `-p`: `wait: illegal option -p`, BusyBox v1.37.0 in the pinned
+	// image. Measured 2026-09-13.
+	s.WaitPNamesTheFinishedJob = interp.No
 	s.WaitForAJobFailsWhenInterrupted = interp.No
 
 	// ---- control flow and redirection ----

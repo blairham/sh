@@ -48,6 +48,12 @@ func Dialect() syntax.Dialect {
 	// And a body's newlines do not count: bash alone leaves the whole of an
 	// expanded body on the line the alias word was written on.
 	d.AliasBodyCountsLines = false
+	// A reserved word may be aliased and the alias wins: `alias for=echo` on
+	// one line makes `for x in 1` on the next a command, in 5.3 and in the
+	// 3.2 macOS ships alike. POSIX mode takes it back — that half is
+	// interp.Runner.SetPosixMode, in both directions — which is what makes
+	// it a mode this shell enters and leaves rather than a build.
+	d.AliasesExpandReservedWords = true
 	// The utilities that take an array assignment as an operand. bash has
 	// all five.
 	d.DeclarationUtilities = map[string]bool{
@@ -465,6 +471,10 @@ func Semantics() interp.Semantics {
 	s.AmbiguousJobNameIsRefused = interp.Yes
 	s.WaitReportsAMissingJob = interp.Yes
 	s.WaitNWaitsForTheNextJob = interp.Yes
+	// And `-p var` beside it, which names the job the status came from.
+	// bash 5's letter alone: the 3.2 build answers `wait: -p: invalid
+	// option`. Measured 2026-09-13.
+	s.WaitPNamesTheFinishedJob = interp.Yes
 	// A trapped signal cuts a `wait` short with 128 plus the signal, and the
 	// form that names a job answers the same as the bare one.
 	s.WaitForAJobFailsWhenInterrupted = interp.No
@@ -1992,7 +2002,7 @@ func Diagnostics() interp.Diagnostics {
 			// Semantics.SetHasTheTLetter.
 			"set": "bkrHP",
 			// Options these builtins have here and this shell does not.
-			"wait": "fp",
+			"wait": "f",
 			// disown's sweepers: -a for every job, -h for HUP shielding
 			// alone, -r for the running ones.
 			"disown": "ahr",

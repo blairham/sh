@@ -329,9 +329,9 @@ var extraSetOptions = map[string]setOption{
 // two questions; this is the mode, and it is the core's for the same reason
 // PosixSemantics is.
 //
-// **Seven of the eight axes it moves take the standard's own answer**, because
+// **Eight of the nine axes it moves take the standard's own answer**, because
 // that is what the name asks for and every shell with a POSIX mode was measured
-// to take them. The eighth — BadOptionToSpecialBuiltinFatal — it takes from the
+// to take them. The ninth — BadOptionToSpecialBuiltinFatal — it takes from the
 // dialect, through BadOptionToSpecialBuiltinFatalInPosixMode, because the shells
 // disagree about what their own mode makes of it: bash's moves it to fatal
 // through either door and zsh's leaves it alone, while both shells' mode moves
@@ -364,6 +364,7 @@ func (r *Runner) SetPosixMode(on bool) {
 	readonlyListing := r.posixSavedReadonlyListing
 	bareListing := r.posixSavedBareListing
 	badOption := r.posixSavedBadOption
+	aliasReserved := r.posixSavedAliasReserved
 	if on {
 		r.posixSaved = r.sem().RedirectErrorOnSpecialBuiltinFatal
 		r.posixSavedUnsetReadonly = r.sem().UnsetReadonlyFatal
@@ -381,6 +382,8 @@ func (r *Runner) SetPosixMode(on bool) {
 		bareListing = posixListing(r.posixSavedBareListing)
 		r.posixSavedBadOption = r.sem().BadOptionToSpecialBuiltinFatal
 		badOption = r.sem().BadOptionToSpecialBuiltinFatalInPosixMode
+		r.posixSavedAliasReserved = r.dialect().AliasesExpandReservedWords
+		aliasReserved = false
 		redir, unsetRO = Yes, Yes
 		forName = ForNameEndsTheScriptAsASyntaxError
 		funcName = FuncNameEndsTheScriptAsASyntaxError
@@ -468,6 +471,25 @@ func (r *Runner) SetPosixMode(on bool) {
 		// of why this axis was not simply added to the others (#2583).
 		s.BadOptionToSpecialBuiltinFatal = badOption
 	})
+	// The ninth, and the only one that is not on the vector at all: whether
+	// an alias may stand in for a word the grammar reserves is decided while
+	// a line is *read*, so it is a dialect field and the mode reaches it the
+	// way a grammar-reaching option does — a replaced Dialect, never a write
+	// through the shared pointer, since a subshell holds the same one and a
+	// script must not change the grammar of the shell that spawned it. The
+	// front end watches for the replacement and re-reads the rest of the
+	// program with it; see driver's run loop and syntax.Parser.SetDialect.
+	//
+	// The standard's answer on the way in, like the seven above, because
+	// both shells with a POSIX mode were measured to take it: `set -o posix`
+	// protects the words in bash 5.3 and in bash 3.2, and so does invoking
+	// either bash or zsh as `sh`. The saved answer on the way out, because
+	// the two shells that have the mode both expand reserved-word aliases
+	// without it and the three that do not have it never did.
+	if d := r.dialect(); d.AliasesExpandReservedWords != aliasReserved {
+		d.AliasesExpandReservedWords = aliasReserved
+		r.Dialect = &d
+	}
 	r.posixMode = on
 	// The standard has aliases expand in a script, so the mode turns the
 	// switch on and leaving it puts back the answer the *route* gave rather

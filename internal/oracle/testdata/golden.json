@@ -591,6 +591,57 @@
         "TimedOut": false
       }
     },
+    "alias/a-name-the-body-has-finished-with-expands-again": {
+      "ash": {
+        "Stdout": "X~Y",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "X~Y",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "X~Y",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "X~Y",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "X~Y",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "X~Y",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "X~Y",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "alias/a-name-the-table-does-not-hold": {
       "ash": {
         "Stdout": "st=1",
@@ -795,6 +846,159 @@
         "TimedOut": false
       }
     },
+    "alias/a-reserved-word-after-an-alias-ending-in-a-blank": {
+      "ash": {
+        "Stdout": "st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "took~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "took~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "took~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "alias/a-reserved-word-alias-in-posix-mode": {
+      "ash": {
+        "Stdout": "[a]",
+        "Stderr": "\u003cscript\u003e: set: line 3: illegal option -o posix",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[a]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[a]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[a]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 3: set: Illegal option -o posix",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e[3]: set: posix: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:set:3: no such option: posix",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "alias/a-reserved-word-is-read-the-way-the-grammar-reads-it": {
+      "ash": {
+        "Stdout": "[a]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "took~[a]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[a]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "took~[a]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[a]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[a]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "took~[a]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "alias/a-script-file-is-a-different-route": {
       "ash": {
         "Stdout": "hit",
@@ -897,6 +1101,57 @@
         "TimedOut": false
       }
     },
+    "alias/a-self-reference-past-a-separator-does-not-loop": {
+      "ash": {
+        "Stdout": "took~st=127",
+        "Stderr": "\u003cscript\u003e: line 3: a: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "took~st=127",
+        "Stderr": "\u003cscript\u003e: line 3: a: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "took~st=127",
+        "Stderr": "\u003cscript\u003e: line 3: a: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "took~st=127",
+        "Stderr": "\u003cscript\u003e: line 3: a: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "took~st=127",
+        "Stderr": "\u003cscript\u003e: 3: a: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "took~st=127",
+        "Stderr": "\u003cscript\u003e: line 3: a: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "took~st=127",
+        "Stderr": "\u003cscript\u003e:3: command not found: a",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "alias/a-self-reference-through-a-prefix-does-not-loop": {
       "ash": {
         "Stdout": "st=127",
@@ -943,6 +1198,57 @@
       "zsh": {
         "Stdout": "st=127",
         "Stderr": "\u003cscript\u003e:2: command not found: a",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "alias/a-self-reference-two-names-away-past-a-separator": {
+      "ash": {
+        "Stdout": "A~B~st=127",
+        "Stderr": "\u003cscript\u003e: line 4: a: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "A~B~st=127",
+        "Stderr": "\u003cscript\u003e: line 4: a: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "A~B~st=127",
+        "Stderr": "\u003cscript\u003e: line 4: a: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "A~B~st=127",
+        "Stderr": "\u003cscript\u003e: line 4: a: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "A~B~st=127",
+        "Stderr": "\u003cscript\u003e: 4: a: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "A~B~st=127",
+        "Stderr": "\u003cscript\u003e: line 4: a: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "A~B~st=127",
+        "Stderr": "\u003cscript\u003e:4: command not found: a",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
@@ -1407,6 +1713,57 @@
         "TimedOut": false
       }
     },
+    "alias/a-word-the-grammar-does-not-reserve-expands-in-posix-mode": {
+      "ash": {
+        "Stdout": "took there",
+        "Stderr": "\u003cscript\u003e: set: line 2: illegal option -o posix",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "took there",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "took there",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "took there",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 2: set: Illegal option -o posix",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e[2]: set: posix: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:set:2: no such option: posix",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "alias/an-alias-may-hold-a-keyword": {
       "ash": {
         "Stdout": "yes",
@@ -1760,6 +2117,57 @@
         "Stdout": "",
         "Stderr": "\u003cshell\u003e:2: command not found: a",
         "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "alias/leaving-posix-mode-hands-the-reserved-word-back": {
+      "ash": {
+        "Stdout": "[a]",
+        "Stderr": "\u003cscript\u003e: set: line 3: illegal option -o posix~\u003cscript\u003e: set: line 4: illegal option +o posix",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "took~[a]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "took~[a]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "took~[a]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 3: set: Illegal option -o posix",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e[3]: set: posix: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:set:3: no such option: posix",
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       }
@@ -100453,6 +100861,57 @@
         "TimedOut": false
       }
     },
+    "invoke/called-sh-protects-a-reserved-word-alias": {
+      "ash": {
+        "Stdout": "[a]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[a]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[a]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[a]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[a]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[a]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[a]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "invoke/called-sh-starts-in-posix-mode": {
       "ash": {
         "Stdout": "",
@@ -101367,6 +101826,57 @@
         "Stdout": "\u003cshell\u003e|0|",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "invoke/posix-mode-from-the-invocation-reaches-the-first-line": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: illegal option -o posix",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[a]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[a]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[a]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 0: Illegal option -o posix",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: posix: bad option(s)~Usage: \u003cshell\u003e [-cilrsDEabefhkmnprtuvxBCGH] [-R file] [-o[option]] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: no such option: posix",
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       }
@@ -104121,6 +104631,261 @@
         "Stdout": "",
         "Stderr": "",
         "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "jobs/wait-n-waits-for-the-job-it-was-given": {
+      "ash": {
+        "Stdout": "st=5",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "st=5",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=5",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cscript\u003e: line 3: wait: -n: invalid option~wait: usage: wait [n]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cscript\u003e: 3: wait: Illegal option -n",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cscript\u003e[3]: wait: -n: unknown option~Usage: wait [ options ] [job ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cscript\u003e:wait:3: job not found: -n",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "jobs/wait-n-with-nothing-after-it-takes-the-first": {
+      "ash": {
+        "Stdout": "st=129",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "st=4",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=4",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cscript\u003e: line 3: wait: -n: invalid option~wait: usage: wait [n]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cscript\u003e: 3: wait: Illegal option -n",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cscript\u003e[3]: wait: -n: unknown option~Usage: wait [ options ] [job ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cscript\u003e:wait:3: job not found: -n",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "jobs/wait-p-names-the-job-the-status-came-from": {
+      "ash": {
+        "Stdout": "st=2 named=no",
+        "Stderr": "\u003cscript\u003e: wait: line 2: illegal option -p",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "st=4 named=yes",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=4 named=yes",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=2 named=no",
+        "Stderr": "\u003cscript\u003e: line 2: wait: -p: invalid option~wait: usage: wait [n]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2 named=no",
+        "Stderr": "\u003cscript\u003e: 2: wait: Illegal option -p",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=2 named=no",
+        "Stderr": "\u003cscript\u003e[2]: wait: -p: unknown option~Usage: wait [ options ] [job ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=127 named=no",
+        "Stderr": "\u003cscript\u003e:wait:2: job not found: -p",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "jobs/wait-p-with-no-job-to-name-empties-the-variable": {
+      "ash": {
+        "Stdout": "st=2 V=[preset]",
+        "Stderr": "\u003cscript\u003e: wait: line 3: illegal option -p",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "st=0 V=[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0 V=[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=2 V=[preset]",
+        "Stderr": "\u003cscript\u003e: line 3: wait: -p: invalid option~wait: usage: wait [n]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2 V=[preset]",
+        "Stderr": "\u003cscript\u003e: 3: wait: Illegal option -p",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=2 V=[preset]",
+        "Stderr": "\u003cscript\u003e[3]: wait: -p: unknown option~Usage: wait [ options ] [job ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=127 V=[preset]",
+        "Stderr": "\u003cscript\u003e:wait:3: job not found: -p",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "jobs/wait-p-writes-through-an-array-element": {
+      "ash": {
+        "Stdout": "st=2 named=",
+        "Stderr": "\u003cscript\u003e: wait: line 3: illegal option -p~\u003cscript\u003e: line 5: syntax error: bad substitution",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "st=4 named=yes",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=4 named=yes",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=2 named=no",
+        "Stderr": "\u003cscript\u003e: line 3: wait: -p: invalid option~wait: usage: wait [n]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2 named=",
+        "Stderr": "\u003cscript\u003e: 3: wait: Illegal option -p~\u003cscript\u003e: 4: Bad substitution",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=2 named=no",
+        "Stderr": "\u003cscript\u003e[3]: wait: -p: unknown option~Usage: wait [ options ] [job ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=127 named=no",
+        "Stderr": "\u003cscript\u003e:wait:3: job not found: -p",
+        "Status": 0,
         "Signal": 0,
         "TimedOut": false
       }

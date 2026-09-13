@@ -5515,7 +5515,27 @@ type Semantics struct {
 	// WaitNWaitsForTheNextJob gives `wait` a `-n`: block until whichever
 	// job finishes first and report its status, 127 with no jobs at all.
 	// bash's letter alone; the other three refuse or misread it.
+	//
+	// **The operands narrow it.** `wait -n` with job specs or process ids
+	// after it waits for the first of *those* to finish and not for the
+	// first of all of them: measured 2026-09-13 on bash 5.3.15, with a job
+	// sleeping one second and a second sleeping two, `wait -n %2` reports
+	// the two-second job's status and `wait -n` reports the one-second
+	// job's. An operand naming nothing is the same complaint and the same
+	// 127 a plain `wait` gives it.
 	WaitNWaitsForTheNextJob Answer
+	// WaitPNamesTheFinishedJob gives `wait` a `-p var`: the process id of
+	// the job whose status is being reported is stored in var, through the
+	// same store an assignment uses — so `wait -p A[$key] -n %2` writes into
+	// an associative element.
+	//
+	// bash 5's letter alone, and not the 3.2 build macOS ships, which
+	// answers `wait: -p: invalid option` beside its one-line usage.
+	// Measured 2026-09-13: with an operand the variable takes that job's
+	// pid, with several it takes the last one waited for, and a `wait` that
+	// names no job at all — a bare one, or a `-n` with nothing left to wait
+	// for — **empties** it rather than leaving what was there.
+	WaitPNamesTheFinishedJob Answer
 	// WaitForAJobFailsWhenInterrupted has a `wait` that names a job report a
 	// plain 1 when a trapped signal cuts it short, rather than the status
 	// that signal encodes. True in ksh93 alone, and only with an operand:
@@ -11333,6 +11353,9 @@ func PosixSemantics() Semantics {
 		AmbiguousJobNameIsRefused: Yes,
 		WaitReportsAMissingJob:    Yes,
 		WaitNWaitsForTheNextJob:   No,
+		// And no `wait -p` either, for the same reason: the standard's
+		// `wait` takes no options at all.
+		WaitPNamesTheFinishedJob: No,
 		// POSIX has an interrupted `wait` report a status above 128 and does
 		// not carve out the form that names a job; four of the five measured
 		// builds agree.

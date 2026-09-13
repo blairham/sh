@@ -46,6 +46,12 @@ func Dialect() syntax.Dialect {
 	// And a body's newlines are lines of the program, as they are in the two
 	// that expand by every route.
 	d.AliasBodyCountsLines = true
+	// A reserved word may be aliased and the alias wins, as in bash: `alias
+	// for=echo` on one line makes `for x in 1` on the next a command.
+	// Measured 2026-09-13, zsh 5.9.2 from a script file. Invoking this shell
+	// as `sh` takes it back, which is interp.Runner.SetPosixMode's half and
+	// is why the value here is the shell's own and not the mode's.
+	d.AliasesExpandReservedWords = true
 	// zsh has all five, like bash.
 	d.DeclarationUtilities = map[string]bool{
 		"declare": true, "typeset": true, "local": true,
@@ -904,6 +910,9 @@ func Semantics() interp.Semantics {
 	s.AmbiguousJobNameIsRefused = interp.No
 	s.WaitReportsAMissingJob = interp.Yes
 	s.WaitNWaitsForTheNextJob = interp.No
+	// Nor `-p`: the word is a job spec there too, and `wait -p` is `job
+	// not found: -p` at 127. Measured 2026-09-13.
+	s.WaitPNamesTheFinishedJob = interp.No
 	// A trapped signal cuts a `wait` short with 128 plus the signal, and the
 	// form that names a job answers the same as the bare one.
 	s.WaitForAJobFailsWhenInterrupted = interp.No

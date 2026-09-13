@@ -1339,6 +1339,15 @@ type Runner struct {
 	posixSavedExportListing   DeclarationListingForm
 	posixSavedReadonlyListing DeclarationListingForm
 	posixSavedBareListing     DeclarationListingForm
+	// And the one axis the mode moves that is not on the semantics vector at
+	// all: whether an alias may stand in for a word the grammar reserves is
+	// a question about how a line is *read*, so it lives on the dialect and
+	// the mode reaches it the way SetMatchOption reaches the grammar — by
+	// replacing the Dialect rather than writing through it. Saved here for
+	// the reason the others are: bash takes the alias and zsh takes it too,
+	// so leaving the mode has to put the shell's own answer back rather than
+	// assert the standard's opposite.
+	posixSavedAliasReserved bool
 
 	// fds are the descriptors beyond the three named streams — what
 	// `exec 6>&1` saves and `>&6` finds again. Values are the io.Reader or

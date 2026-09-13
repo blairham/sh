@@ -52,9 +52,26 @@ type Parser struct {
 	// — `alias f='a=(x y)'; f` is an unexpected `(` here and an array in
 	// bash, ksh93 and zsh (#2299).
 	pendingTouches []bool
+	// pendingChains runs beside pending too: the names of the expansions
+	// each token came *out of*, innermost last. A token the lexer read
+	// belongs to none and carries nil.
+	//
+	// It is what stops a body that names itself past a separator. aliasDone
+	// is the set for one *command*, and a body holding `;` is more than one
+	// command, so `alias a='echo took;a'` re-expanded `a` in the second of
+	// them and did it forever — a hang, where every shell in the panel
+	// prints `took` and then `a: not found`. The set cannot simply be kept
+	// for the whole body either: `alias e=echo` with `alias a='e X; e Y'`
+	// expands `e` twice, also unanimous. What is spent is the chain of
+	// expansions still *open* around the token, and that is per token rather
+	// than per command or per body, so it travels with the token.
+	pendingChains []map[string]bool
 	// tokTouches is the same fact about the current token, and is false for
 	// a token read from the input, where the offsets answer directly.
 	tokTouches bool
+	// aliasChain is pendingChains' entry for the current token: the names
+	// whose bodies this token is inside. Nil for a token of the input.
+	aliasChain map[string]bool
 	// aliasSpliced counts the tokens of the current expansion still in hand,
 	// so the trailing-space rule can tell a word that *came from* the value
 	// from the word that follows it.
@@ -370,6 +387,7 @@ func (p *Parser) next() {
 		// the input has moved, so the lexer is not touched.
 		p.tok, p.pending = p.pending[0], p.pending[1:]
 		p.tokTouches, p.pendingTouches = p.pendingTouches[0], p.pendingTouches[1:]
+		p.aliasChain, p.pendingChains = p.pendingChains[0], p.pendingChains[1:]
 		// A global alias inside an alias body is expanded in turn — measured
 		// `alias -g B=x; alias -g H='a B'` gives `a x` — so the tokens being
 		// handed out are asked as well as the ones being read. Not a fresh
@@ -380,8 +398,10 @@ func (p *Parser) next() {
 	}
 	p.tok = p.lex.Next()
 	// A token of the input answers the adjacency question from its own
-	// offset, so nothing here has to be remembered for it.
+	// offset, so nothing here has to be remembered for it, and it is inside
+	// no expansion: whatever a body spent is spent only for the body.
 	p.tokTouches = false
+	p.aliasChain = nil
 	if p.err == nil && p.lex.Err() != nil {
 		p.err = p.lex.Err()
 	}
@@ -450,6 +470,26 @@ var reservedWords = map[string]bool{
 	// the shell that draws the class distinction quotes it there:
 	// `` "!" unexpected `` in dash, against `word unexpected` for a name.
 	"!": true,
+}
+
+// reservedInDialect reports whether name is a word *this* dialect reserves.
+//
+// [reservedWords] is the union, because the class distinction a diagnostic
+// draws is the same in every dialect. Three of its members are constructs a
+// preset adds, and an alias expansion is the one caller that has to tell them
+// apart: a shell with no `select` loop has nothing to protect the word for,
+// and dash, which has none of the three, takes an alias for all three where
+// ksh93 takes none. See [Dialect.AliasesExpandReservedWords] for the panel.
+func (p *Parser) reservedInDialect(name string) bool {
+	switch name {
+	case "select":
+		return p.dialect.Select
+	case "function":
+		return p.dialect.FunctionKeyword
+	case "time":
+		return p.dialect.TimeKeyword
+	}
+	return reservedWords[name]
 }
 
 // atReservedWord reports whether the current token is one of the words the

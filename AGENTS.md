@@ -89,6 +89,8 @@ refuses what every real shell accepts is a core nobody can write against.
       oraclerunner    the oracle, inside a container: the far half of the
                       ash column, and oracle.Exec rather than a lookalike
       corpusguard     fails when the corpus has lost a case
+      suiteguard      fails when share/suite has lost a file or shortened
+                      one — the same hazard, a different tree
       fmtwild         lays out every script on the machine and checks
                       that nothing but the layout changed
       acpcheck        speaks the Agent Client Protocol to the shipped
@@ -1249,6 +1251,49 @@ rather than as placeholders, and `Suite.Missing` makes a column unable to
 claim a directory that is not there. The baseline over the ten core files —
 bash, zsh, ksh93 and dash each 10/10 parsed, 9/10 strict — is #2291's burndown
 number, and the single disagreement is the same file in all four columns.
+
+`make suite-guard` fails when **our own suite** has lost a file, or shortened
+one. It runs in `make check` and as a step of the same required
+`Build and test (ubuntu-latest)` job, against the same merge base.
+
+It exists because the thing it guards against already happened. #2356 landed
+`share/suite` — 862 lines, ten files, four native dialect columns — and #2363,
+a pull request about alias options and `-sc`, deleted every line of it: zero
+lines added under `share/suite`, 862 removed, the `suite` target and this
+file's section on it gone too, and nothing in the deleted text about aliases
+or `-sc`. Nothing failed. `make check` was green and every test passed. It was
+found days later by somebody asking why `make suite` was not a target (#2600).
+The corpus survived the same day intact, and the reason is that the corpus had
+a guard.
+
+**A file is the case.** The corpus is a set of named cases, so its guard
+differences IDs; a suite file has no names in it and the unit the instrument
+scores is the file — the report says 10/10 strict over ten files. So rule one
+is a set difference over paths.
+
+**Rule two is a count, and it is a count because there is nothing to
+difference.** The mechanism both guards are built for is a merge resolving a
+file by taking one side, and taking one side *of a suite file* leaves the path
+in place while reverting the contents. So a file may not hold fewer runnable
+lines — neither blank nor comment — than it held at the base. `corpus-guard`'s
+own documentation argues against counts and the argument holds, but the move
+that defeats a total is not available here: the floor is per file and against
+that file's own base, so five lines added to `quoting.tests` cannot conceal
+four reverted out of `redirect.tests`. Within a single file it is genuinely
+weaker than a set would be, and there is no set; that is a limit of the data.
+
+**The cross-check is what keeps it from passing on the day it matters.** The
+broken form of a file scanner is silence, and silence reads as "nothing was
+lost". So the walk of `share/suite` is checked against the files the compiled
+instrument would actually run — `suite.Tiers` and each column's `Dirs`,
+through `suite.Files` — and a disagreement, or an instrument running no files
+at all, is an error rather than a pass.
+
+Mutation-proven, three ways, against the commit the suite landed on: deleting
+one file reports that file; deleting the directory — the actual regression —
+reports the tier the columns claim and the tree does not have; truncating
+`quoting.tests` to half its length with its path intact reports 33 runnable
+lines becoming 16. The unmutated tree passes.
 
 `make corpus-guard` fails when the corpus has *lost* a case. It runs in
 `make check` and as a step of the required `Build and test (ubuntu-latest)`

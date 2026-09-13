@@ -56,7 +56,7 @@ SHELLS := sh bash zsh ksh dash ash
 FUNCSRC := share/sh/functions
 FUNCS := $(sort $(notdir $(wildcard $(FUNCSRC)/*)))
 
-.PHONY: all build test test-cover fmt vet tidy clean check corpus-guard oracle oracle-check conformance conformance-gated conformance-dialects axis-sweep axis-coverage coverage wild wild-run wild-run-contained fmt-wild smoke acp acp-wire acp-bench startup perfgate suite suite-panel bash-suite zsh-suite ksh-suite dash-suite install uninstall
+.PHONY: all build test test-cover fmt vet tidy clean check corpus-guard oracle oracle-check conformance conformance-gated conformance-dialects axis-sweep axis-coverage coverage wild wild-run wild-run-contained fmt-wild smoke acp acp-wire acp-bench startup perfgate suite suite-guard suite-panel bash-suite zsh-suite ksh-suite dash-suite install uninstall
 
 all: build
 
@@ -116,7 +116,7 @@ clean:
 	rm -rf $(BINDIR)
 	go clean
 
-check: fmt vet test corpus-guard oracle-check
+check: fmt vet test corpus-guard suite-guard oracle-check
 
 install: ## Build the five shells and install them into $(SHELLDIR) — see docs/install.md
 	@case ":$$PATH:" in \
@@ -153,6 +153,9 @@ uninstall: ## Remove the shells and functions `make install` put in $(SHELLDIR) 
 
 corpus-guard: ## Fail if the corpus has lost a case since the merge base with main
 	@go run ./internal/cmd/corpusguard
+
+suite-guard: ## Fail if our own suite has lost a file, or shortened one, since the merge base with main
+	@go run ./internal/cmd/suiteguard
 
 oracle: ## Regenerate docs/spec/measurements.md and the golden record from a live panel run
 	go run ./internal/cmd/oracle

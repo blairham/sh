@@ -157,8 +157,15 @@ func Compare(base, head []string) *Result {
 	return r
 }
 
-// git runs one git command in dir and returns its standard output.
-func git(dir string, args ...string) (string, error) {
+// Git runs one git command in dir and returns its standard output.
+//
+// Exported because the baseline machinery — this and [ResolveBase] — is the
+// half of a guard that has nothing to do with what is being guarded, and the
+// suite has a guard of its own (internal/suiteguard) for the same hazard over
+// different files. Written down once rather than twice: an exec wrapper that
+// drops git's stderr, or a base resolution that skips instead of failing, is
+// a bug whose second copy would be found much later than its first.
+func Git(dir string, args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
 	out, err := cmd.Output()
@@ -183,12 +190,12 @@ func git(dir string, args ...string) (string, error) {
 // as no guard.
 func ResolveBase(dir, prefer string) (string, error) {
 	if prefer != "" {
-		if sha, err := git(dir, "rev-parse", "--verify", "--quiet", prefer+"^{commit}"); err == nil && sha != "" {
+		if sha, err := Git(dir, "rev-parse", "--verify", "--quiet", prefer+"^{commit}"); err == nil && sha != "" {
 			return sha, nil
 		}
 	}
 	for _, ref := range []string{"origin/main", "main"} {
-		if sha, err := git(dir, "merge-base", "HEAD", ref); err == nil && sha != "" {
+		if sha, err := Git(dir, "merge-base", "HEAD", ref); err == nil && sha != "" {
 			return sha, nil
 		}
 	}
@@ -218,7 +225,7 @@ func Check(dir, prefer string, live []string) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	src, err := git(dir, "show", base+":"+CasePath)
+	src, err := Git(dir, "show", base+":"+CasePath)
 	if err != nil {
 		return nil, err
 	}

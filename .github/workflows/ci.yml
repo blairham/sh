@@ -240,6 +240,16 @@ jobs:
         # merge base rather than skipping.
         BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
       run: go run ./internal/cmd/corpusguard -base "$BASE"
+    # The same question about share/suite, and for the same reason it is a
+    # step rather than a job. It is separate from the corpus guard because
+    # the two compare different things — a set of case IDs inside one Go file
+    # against a set of paths plus a per-file line floor — and folding them
+    # would mean one instrument reporting about two unrelated trees.
+    - name: Has our own suite lost a file?
+      if: needs.changes.outputs.code == 'true' && matrix.os == 'ubuntu-latest'
+      env:
+        BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+      run: go run ./internal/cmd/suiteguard -base "$BASE"
     # The boundary, tried from outside the process against the binary this
     # job just built. A step of the same already-required job for the reason
     # given above, and unlike the corpus guard it runs on **both** platforms:

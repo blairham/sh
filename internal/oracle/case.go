@@ -5020,6 +5020,16 @@ echo "st=$?"`,
 		Why:     "the status reaches the listing, and the two shells that say so disagree about how: `Exit 1` against `Done(1)`. The current-job marker is normalized to one space rather than recorded, because it answers a different question and does not answer it the same way twice: bash spelled it `[1]+` in every one of 2,900 measured runs of this snippet and `[1] ` once in three runs of the record check, which is rare enough that a regeneration bakes in whichever it saw and every later check then fails for a reason unrelated to what changed. What the marker does mean is pinned by the row below, where the blank is reachable on purpose. Through a file rather than a pipe, because a subshell has no job table in dash or zsh and `jobs | sed` would empty two of the columns instead of normalizing them",
 	},
 	{
+		ID: "jobs/a-reaped-job-gives-its-number-back", Category: "builtins",
+		Snippet: `/bin/sh -c 'exit 7' & p=$!; wait "$p"; /bin/sh -c 'exit 4' & wait %1; echo "st=$?"`,
+		Why:     "what `%1` *is*: a slot in the table the shell holds now, not the first job it ever started. All seven columns answer 4 — the second job took the number the first gave back when it was waited for — and this shell answered 7, still holding the first job's status under a number it should have let go of (#2651). The second job is started after the first is reaped rather than beside it, which is what makes the row discriminating: a shell that renumbers and a shell that leaves the number where it was answer alike on a script that never reaps anything. A process id rather than a `%` spec does the reaping on purpose, because the spec route already freed the number here and the ordinary route did not",
+	},
+	{
+		ID: "jobs/the-last-background-pid-of-a-job-with-no-process", Category: "builtins",
+		Snippet: `( exit 5 ) & a=$!; true & b=$!; /bin/sleep 0 & c=$!; echo "set=$(( a > 0 && b > 0 && c > 0 )) distinct=$(( a != b && b != c && a != c ))"; wait`,
+		Why:     "`$!` is a process id in every column whatever the job was made of, because a real shell forks before the body runs a thing. A background subshell of builtins and a background builtin have no process here, and both reported 0 — which is not a spare number: POSIX gives `kill` pid 0 as every process in the sender's group, so `p=$!; kill \"$p\"` was a line aimed at the shell. They were not distinguishable from each other either, so `wait` on the older one answered the newer one's status (#2650). The external command is the control: it had a real id all along, so a row that only asked about the two compound shapes could not say whether `$!` worked at all. Compared rather than printed, because a process id is not the same twice",
+	},
+	{
 		ID: "jobs/a-job-that-is-neither-current-nor-previous", Category: "builtins",
 		Snippet: `false & sleep 0.05 & wait %2; jobs >j.txt; sed -e "s/^\(\[[0-9][0-9]*\]\) *\([-+]\) */\1[\2] /;s/^\(\[[0-9][0-9]*\]\)  */\1[ ] /" j.txt`,
 		Why:     "the marker belongs to the job table and not to the job. With a second job started and waited for, bash has nothing left to call current and writes a *blank* where the `+` would be — the other spelling the failed-job row above was seeing at random, here on purpose. Re-measured for #1249, which reported the other answer three runs in a row: 140 runs of this row across the panel gave the recorded answer every time, 80 of them with the machine held at a load average of 15, so what is written down is what this panel does and the earlier report is not reproducible here. A count is a measurement and not a guarantee — this one says what was run and under what, which is the only form of the claim a reader can check. dash marks both of its rows `+` rather than keeping a previous job at all, and the three shells that print nothing have forgotten both. The marker is bracketed because a blank one is invisible beside a `+`, and a reader cannot check what they cannot see",
@@ -17640,6 +17650,11 @@ echo after`,
 		ID: "axis/unset-a-subscripted-operand", Category: "semantics axes",
 		Snippet: "unset 'a[0]'; echo \"st=$?\"; echo after",
 		Why:     "three of the four take a subscript as naming an element; dash has no arrays and refuses it in the words it gives any bad name, which is fatal there",
+	},
+	{
+		ID: "axis/wait-remembers-a-reaped-job", Category: "semantics axes",
+		Snippet: `/bin/sh -c 'exit 7' & p=$!; wait %1; echo "first=$?"; wait "$p"; echo "again=$?"`,
+		Why:     "where a reaped job's status lives once its number has gone back. The job is waited for by name, which takes it out of the table in every column, and then waited for again by process id: six of the seven still report its status and ksh93 reports the one a process that was never a child of this shell gets. The first status is the control and is what keeps a shell that could not resolve `%1` at all from being read as one that forgot the job — a cell whose first line is not 7 is evidence about nothing. See Semantics.WaitRemembersAReapedJob, and the narrower reading two columns hold that the vector does not model",
 	},
 	{
 		ID: "umask/symbolic-two-operators-in-one-clause", Category: "umask",

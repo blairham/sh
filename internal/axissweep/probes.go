@@ -520,6 +520,58 @@ func Probes() []Probe {
 			},
 		},
 		{
+			Field: "PrintfGroupingFlag",
+			Cases: []string{"axis/printf-grouping-flag"},
+			// Standard error is the whole reading, and a cell with none of
+			// it is the shell that *has* the flag rather than one that said
+			// nothing. Stdout cannot carry this on its own: under the
+			// harness's `LC_ALL=C` the separator is empty, so a shell that
+			// honors the flag writes the same `1234567` a shell that threw
+			// it away would — which is exactly how the issue behind #2665
+			// came to record the C locale as grouping.
+			Reading: "`printf \"[%'d]\" 1234567` is refused in a shell for which `'` is not a flag, the character arriving at the scan as a conversion it does not have, and is the plain number in one that takes it",
+			Read: func(cells map[string]oracle.Result) (string, string) {
+				r := cells["axis/printf-grouping-flag"]
+				switch {
+				case strings.TrimSpace(r.Stderr) != "":
+					return "No", ""
+				case strings.Contains(r.Stdout, "[1234567]"):
+					return "Yes", ""
+				}
+				return "", "the row neither refused the directive nor wrote the number, so it did not reach the flag at all"
+			},
+		},
+		{
+			Field: "PrintfGroupingFlagAfterTheWidth",
+			Cases: []string{"axis/printf-grouping-flag-after-the-width", "axis/printf-grouping-flag"},
+			// The first row is the control and is why this cannot be read
+			// from the second alone. A shell with no `'` flag at any
+			// position refuses `%15'd` too, and scoring that refusal as `No`
+			// would count a shell that was never asked where the flag may go
+			// as one that answered "among the flags".
+			Reading: "the row writes `%15'd` and `%.5'd`, which a shell that reads the flag only among its flags refuses — read beside axis/printf-grouping-flag, since a shell with no such flag at all refuses them for the other reason",
+			Read: func(cells map[string]oracle.Result) (string, string) {
+				if strings.TrimSpace(cells["axis/printf-grouping-flag"].Stderr) != "" {
+					return "", "this shell has no `'` flag at any position — it refuses the plain `%'d` too, so its refusal here is about the flag and not about where the flag may be written"
+				}
+				// The row's **first** line and not the row, because its
+				// third line is the control: `%'15d` is the same flag ahead
+				// of the width, so every shell that has the flag at all
+				// writes the padded number there. A reading that searched
+				// the whole cell answered Yes for the entire panel, which is
+				// what TestEveryProbeDiscriminates caught.
+				r := cells["axis/printf-grouping-flag-after-the-width"]
+				first, _, _ := strings.Cut(r.Stdout, "~")
+				switch {
+				case first == "[        1234567]":
+					return "Yes", ""
+				case strings.TrimSpace(r.Stderr) != "":
+					return "No", ""
+				}
+				return "", "the row neither padded the number on its first line nor refused anything, so it did not reach the late flag"
+			},
+		},
+		{
 			Field: "WaitRemembersAReapedJob",
 			Cases: []string{"axis/wait-remembers-a-reaped-job"},
 			// The first status is the control and is why this row cannot be

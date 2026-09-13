@@ -388,6 +388,10 @@ func Semantics() interp.Semantics {
 	s.PrintfAbsentNumberIsAnEmptyOne = interp.No
 	s.PrintfStarWithoutOperandIsRefused = interp.No
 	s.PrintfStarComplaintCostsTheStatus = interp.Yes
+	// No `'` flag: the character is the conversion this shell does not
+	// have, and `%'d` is `printf: %': invalid directive` at 2.
+	s.PrintfGroupingFlag = interp.No
+	s.PrintfGroupingFlagAfterTheWidth = interp.No
 	s.PrintfReportsBadNumber = interp.Yes
 	s.PrintfBackslashC = interp.PrintfBackslashCLiteral
 	s.PrintfUnfinishedConversionIsAPercent = interp.No

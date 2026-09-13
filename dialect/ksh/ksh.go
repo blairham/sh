@@ -1039,6 +1039,11 @@ func Semantics() interp.Semantics {
 	s.PrintfAbsentNumberIsAnEmptyOne = interp.No
 	s.PrintfStarWithoutOperandIsRefused = interp.Yes
 	s.PrintfStarComplaintCostsTheStatus = interp.Yes
+	// The `'` flag, and this shell alone reads it wherever it is written in
+	// the prefix: `%15'd` and `%.5'd` are accepted here and refused by the
+	// other two that have the flag at all.
+	s.PrintfGroupingFlag = interp.Yes
+	s.PrintfGroupingFlagAfterTheWidth = interp.Yes
 	s.PrintfReportsBadNumber = interp.No
 	s.PrintfBackslashC = interp.PrintfBackslashCControl
 	// `printf 'a%5'` is `a%` here and reports success: the unfinished

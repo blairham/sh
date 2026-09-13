@@ -873,3 +873,26 @@ func TestPrintfStarWithoutOperandIsRefused(t *testing.T) {
 		t.Errorf("PrintfAbsentNumberIsAnEmptyOne = %v, want %v", got, want)
 	}
 }
+
+// TestPrintfGroupingFlagAfterTheWidth is ksh93's alone: it reads the `'` flag
+// wherever it is written in a conversion's prefix, where bash and zsh — the
+// other two that have the flag at all — take it among the flags and nowhere
+// else.
+//
+// Measured 2026-09-13: `printf "[%15'd]" 1234567` is `[        1234567]` at 0
+// here, “ `”: invalid format character “ at 1 in bash and `%15': invalid
+// directive` at 1 in zsh, while `%'15d` — the same flag ahead of the width —
+// is accepted by all three. It is the flag and not a character being ignored,
+// which only a locale shows: under `en_US.UTF-8` this shell's `[%15'd]` is
+// `[      1,234,567]`, so the late `'` still asks for the grouping (#2665).
+func TestPrintfGroupingFlagAfterTheWidth(t *testing.T) {
+	s := ksh.Semantics()
+	if got, want := s.PrintfGroupingFlagAfterTheWidth, interp.Yes; got != want {
+		t.Errorf("PrintfGroupingFlagAfterTheWidth = %v, want %v", got, want)
+	}
+	// And it has the flag to read, which is the question that one is asked
+	// underneath.
+	if got, want := s.PrintfGroupingFlag, interp.Yes; got != want {
+		t.Errorf("PrintfGroupingFlag = %v, want %v", got, want)
+	}
+}

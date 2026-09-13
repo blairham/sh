@@ -2225,6 +2225,71 @@ type Semantics struct {
 	// indistinguishable from one nobody thought about.
 	PrintfStarComplaintCostsTheStatus Answer
 
+	// PrintfGroupingFlag gives `printf` the `'` flag, which asks for the
+	// digits of a numeric conversion to be grouped the way the locale groups
+	// them.
+	//
+	// bash, zsh and ksh93 have it; dash and BusyBox ash do not, and for them
+	// `'` is not a flag at all — it arrives at the scan as the conversion
+	// character and is refused as any other unknown one is, which stops the
+	// format where it stands. Measured 2026-09-13 across all seven columns:
+	// `printf "[%'d]" 1234567` is `[1234567]` at 0 in bash 5.3.15, bash as
+	// sh, bash 3.2, ksh93u+ and zsh 5.9.2 under `LC_ALL=C`; dash writes `[`,
+	// `printf: %': invalid directive` and reports 2; ash writes `[`,
+	// `%'d]: invalid format` and reports 1.
+	//
+	// **The grouping is the locale's, and the locale has to be pinned to see
+	// it.** The issue this axis closes recorded the five accepting columns as
+	// writing `1,234,567` under the C locale, and they do not: under
+	// `LC_ALL=C` — and `POSIX`, and `C.UTF-8` — the separator is empty and
+	// all five write `1234567`, which is the same string this shell wrote
+	// before the flag was modeled at all. The comma appears only under a
+	// locale that has one: `en_US.UTF-8` gives `1,234,567` and `de_DE.UTF-8`
+	// gives `1.234.567`, in all five, so the separator is read from the
+	// locale rather than built in. A probe run only under `C` cannot separate
+	// "the flag is honored" from "the flag is thrown away".
+	//
+	// **What this shell does with the flag it now keeps is nothing, and that
+	// is a stated limit rather than an oversight.** The separator is
+	// `LC_NUMERIC`'s `THOUSEP`, and this tree has no locale database: the C
+	// locale's numeric data is the only numeric data it has, `THOUSEP` there
+	// is empty, and `$langinfo` already refuses every other locale in so many
+	// words rather than answering `,` for the two locales anybody tests in.
+	// So a conversion carrying this flag is written ungrouped, which is
+	// exactly right under every locale this shell can speak for and wrong
+	// under one it cannot. Filed as #2675.
+	//
+	// Which conversions take it is not a second question. Measured: `%d`,
+	// `%i`, `%u` and `%f` group, `%s`, `%x`, `%e`, `%g`, `%c` and `%b` accept
+	// the flag and are unaffected by it, and none of them refuses it. So the
+	// flag is a property of the conversion prefix and not of the verb, which
+	// is where this is asked.
+	PrintfGroupingFlag Answer
+
+	// PrintfGroupingFlagAfterTheWidth reads the `'` flag wherever it is
+	// written in a conversion's prefix rather than only among the flags.
+	//
+	// ksh93 alone, and it is the reason `'` is not simply added to the flag
+	// run for the three shells that have it. Measured 2026-09-13:
+	// `printf "[%15'd]" 1234567` is `[        1234567]` at 0 in ksh93 and a
+	// refusal in bash and zsh — `` `'': invalid format character `` at 1 and
+	// `%15': invalid directive` at 1 — where `printf "[%'15d]" 1234567`, the
+	// same flag written ahead of the width, is accepted by all three.
+	// `%.5'd` is the precision's half of the same reading and parts the same
+	// way.
+	//
+	// It is the *flag* that is read late and not a character that is ignored,
+	// which took a locale to tell apart: under `en_US.UTF-8` ksh93's
+	// `[%15'd]` is `[      1,234,567]`, so the late `'` still asks for the
+	// grouping. A probe under `LC_ALL=C` alone shows only that ksh93 did not
+	// refuse, which "the flag is read here too" and "the character is
+	// dropped" both predict.
+	//
+	// Asked only where PrintfGroupingFlag has already said yes and a `'` is
+	// actually written past the flag run, so neither `%d` nor `%'d` reaches
+	// it.
+	PrintfGroupingFlagAfterTheWidth Answer
+
 	// PidListingFinishesWithAJob makes `jobs -p` forget a finished job the
 	// way a listing of states does.
 	//

@@ -407,6 +407,10 @@ func TestPrintfAnswers(t *testing.T) {
 		// bash's complaint about one it cannot read reports failure (#2646).
 		{"PrintfStarWithoutOperandIsRefused", s.PrintfStarWithoutOperandIsRefused, interp.No},
 		{"PrintfStarComplaintCostsTheStatus", s.PrintfStarComplaintCostsTheStatus, interp.Yes},
+		// The `'` flag, among the flags and nowhere else: `%'d` groups here
+		// and `%15'd` is `` `'': invalid format character `` (#2665).
+		{"PrintfGroupingFlag", s.PrintfGroupingFlag, interp.Yes},
+		{"PrintfGroupingFlagAfterTheWidth", s.PrintfGroupingFlagAfterTheWidth, interp.No},
 		{"PrintfBackslashC", s.PrintfBackslashC, interp.PrintfBackslashCLiteral},
 		{"PrintfQuote", s.PrintfQuote, interp.PrintfQuoteAnsiCWord},
 	} {

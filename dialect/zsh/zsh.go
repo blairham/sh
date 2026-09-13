@@ -1602,6 +1602,10 @@ func Semantics() interp.Semantics {
 	s.PrintfAbsentNumberIsAnEmptyOne = interp.No
 	s.PrintfStarWithoutOperandIsRefused = interp.No
 	s.PrintfStarComplaintCostsTheStatus = interp.Yes
+	// The `'` flag, among the flags and nowhere else: `%15'd` is
+	// `%15': invalid directive`.
+	s.PrintfGroupingFlag = interp.Yes
+	s.PrintfGroupingFlagAfterTheWidth = interp.No
 	s.PrintfReportsBadNumber = interp.No
 	s.PrintfBackslashC = interp.PrintfBackslashCStops
 	s.PrintfUnfinishedConversionIsAPercent = interp.No

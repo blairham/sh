@@ -36,7 +36,7 @@ import (
 // a four-shell panel and the fifth column is what found it, which is what
 // that column is for.
 //
-// Four things they do not agree on, and each is an axis or a wording rather
+// Five things they do not agree on, and each is an axis or a wording rather
 // than a branch here:
 //
 //   - A `%d` given something that is not a number. bash and dash complain and
@@ -46,6 +46,10 @@ import (
 //     not have it at all.
 //   - `\c` in the format, which stops output there in ksh93 and zsh and is
 //     two ordinary characters in bash and dash.
+//   - The `'` flag, which asks for a number's digits to be grouped the way
+//     the locale groups them. bash, zsh and ksh93 have it; dash and ash do
+//     not, and for them the character is the conversion it is refused as.
+//     ksh93 also reads it later in the prefix than the other two do (#2665).
 //   - What an unknown verb is called, and what `printf` with no format says.
 
 func init() {
@@ -559,10 +563,20 @@ func (r *Runner) printfQuote(spec, arg string) (string, int, bool) {
 // is an axis nothing answered, which stops the format rather than printing
 // half of it.
 func (r *Runner) scanPrintfSpec(s string) (string, byte, string, int, int) {
-	i := printfSpecPrefix(s)
+	i, code := r.printfSpecPrefix(s)
+	if code != 0 {
+		return "", 0, "", i, code
+	}
 	if i >= len(s) {
 		return "", 0, "", len(s), 0
 	}
+	// The `'` that survived the prefix scan is this dialect's grouping flag,
+	// and it is dropped here because Go's formatter has no such flag and the
+	// grouping it asks for is the locale's — which is empty in the C locale,
+	// the only one this shell has numeric data for. See
+	// Semantics.PrintfGroupingFlag and #2675: a dialect that does *not* have
+	// the flag never gets this far, because the `'` is the conversion
+	// character it was refused as.
 	spec := "%" + strings.ReplaceAll(s[1:i], "'", "")
 	if s[i] == '(' {
 		// `%(fmt)T`, the one conversion whose format is inside the
@@ -668,18 +682,95 @@ func (r *Runner) timeZone() *time.Location {
 }
 
 // printfSpecPrefix is where a conversion's verb starts: past the `%`, the
-// flags, the width and the precision.
-func printfSpecPrefix(s string) int {
-	i := 1 // past the %
-	for i < len(s) && strings.IndexByte("-+ #0'", s[i]) >= 0 {
-		i++
+// flags, the width and the precision — and a non-zero code is an axis
+// nothing answered.
+//
+// The `'` in a prefix is the only part of this that is a question, and it is
+// asked here rather than at the top of the builtin so that `printf '%d' 5`
+// never reaches it. Two questions, because the panel parts three ways and not
+// two: bash and zsh take `'` among the flags, ksh93 takes it anywhere in the
+// prefix, dash and BusyBox ash do not take it at all. See
+// Semantics.PrintfGroupingFlag and PrintfGroupingFlagAfterTheWidth.
+//
+// A dialect without the flag needs the `'` **not consumed here**, so that it
+// arrives at the scan as the conversion character and is refused the way any
+// other unknown one is. That is the same shape #2646 had, and the reason
+// both halves live in this function.
+func (r *Runner) printfSpecPrefix(s string) (int, int) {
+	group, after := false, false
+	if inFlags, pastFlags := printfGroupingFlagPositions(s); inFlags || pastFlags {
+		group = r.ask(r.sem().PrintfGroupingFlag, "`printf` taking `'` as the flag that groups a number's digits")
+		if r.unspecified {
+			return printfSpecPrefixAt(s, true, true), r.status
+		}
+		if group && pastFlags {
+			after = r.ask(r.sem().PrintfGroupingFlagAfterTheWidth, "`printf` taking the `'` flag written past the flags")
+			if r.unspecified {
+				return printfSpecPrefixAt(s, true, true), r.status
+			}
+		}
 	}
+	return printfSpecPrefixAt(s, group, after), 0
+}
+
+// printfSpecPrefixAt is printfSpecPrefix once the two questions are settled:
+// group says `'` is one of this dialect's flags, and after says it may also
+// be written past the flag run, where the width and the precision go.
+//
+// One grammar and not two. printfGroupingFlagPositions calls this with both
+// readings open to find out what a conversion is even asking, so the widest
+// reading and the dialect's reading can never drift apart.
+func printfSpecPrefixAt(s string, group, after bool) int {
+	flags := "-+ #0"
+	if group {
+		flags += "'"
+	}
+	i := 1 // past the %
+	i += runOfBytes(s, i, flags)
 	i += printfFieldRun(s, i)
+	if after {
+		i += runOfBytes(s, i, "'")
+	}
 	if i < len(s) && s[i] == '.' {
 		i++
 		i += printfFieldRun(s, i)
+		if after {
+			i += runOfBytes(s, i, "'")
+		}
 	}
 	return i
+}
+
+// printfGroupingFlagPositions says where a `'` is written in a conversion's
+// prefix: among the flags, past them, or — the common answer, and the one
+// that asks nothing — neither.
+//
+// The prefix is walked under the *widest* reading, ksh93's, because the
+// question is what the conversion is asking for and not yet what this shell
+// answers. Narrowing it to the dialect first would ask the flag axis only
+// where the dialect already had the flag, which is the wrong way round.
+func printfGroupingFlagPositions(s string) (inFlags, pastFlags bool) {
+	end := printfSpecPrefixAt(s, true, true)
+	flagEnd := 1 + runOfBytes(s, 1, "-+ #0'")
+	for i := 1; i < end && i < len(s); i++ {
+		switch {
+		case s[i] != '\'':
+		case i < flagEnd:
+			inFlags = true
+		default:
+			pastFlags = true
+		}
+	}
+	return inFlags, pastFlags
+}
+
+// runOfBytes is how many bytes at i are drawn from set.
+func runOfBytes(s string, i int, set string) int {
+	n := 0
+	for i+n < len(s) && strings.IndexByte(set, s[i+n]) >= 0 {
+		n++
+	}
+	return n
 }
 
 // printfFieldRun is how much of s at i is a width or a precision: a run of

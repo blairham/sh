@@ -1067,6 +1067,16 @@ var Corpus = []Case{
 		Why:     "the complaint about an operand a `*` took, and whether it reports failure. bash and dash say yes, ksh93 and zsh never complain about a number at all, and ash writes the complaint and reports success anyway — the diagnostic, the output and the status are three observations here and they do not move together. The width it could not read is none, which is why the field comes out unpadded in every column",
 	},
 	{
+		ID: "axis/printf-grouping-flag", Category: "builtins",
+		Snippet: `printf "[%'d]\n" 1234567; echo "st=$?"; printf "a%'db%sc\n" 1234567 X; echo "st=$?"; printf "[%'s][%'f]\n" abc 2.5; printf "[%d'x]\n" 7`,
+		Why:     "the `'` flag, which asks for a number's digits to be grouped the way the locale groups them: bash, zsh and ksh93 have it and write the number, dash and BusyBox ash have no such flag at all — the `'` reaches the scan as the conversion character and is refused as any unknown one is, `printf: %': invalid directive` at 2 and `invalid format` at 1. The grouping itself is invisible here on purpose: the harness pins `LC_ALL=C`, where the separator is empty and all five accepting columns write `1234567`, and a locale that has one — `en_US.UTF-8` gives `1,234,567`, `de_DE.UTF-8` gives `1.234.567` — is what a case would have to set to see it (#2675). The second line is the refusal stopping the format rather than skipping one conversion, the third is the flag on conversions that do not group and do not refuse it either, and the fourth is the control: a `'` that is not in a conversion's prefix is an ordinary character in all seven",
+	},
+	{
+		ID: "axis/printf-grouping-flag-after-the-width", Category: "builtins",
+		Snippet: `printf "[%15'd]\n" 1234567; echo "st=$?"; printf "[%.5'd]\n" 1234567; echo "st=$?"; printf "[%'15d]\n" 1234567; echo "st=$?"`,
+		Why:     "where the `'` flag may be written. ksh93 alone reads it anywhere in the conversion prefix, so `%15'd` and `%.5'd` are accepted there and refused by bash and zsh, which take it among the flags and nowhere else. The third line is the control that makes the first two about the *position* and not about the flag: `%'15d` is the same flag ahead of the width and all three accept it. dash and ash refuse every line, having no such flag at any position, which is why this row says nothing about them on its own and is read beside axis/printf-grouping-flag",
+	},
+	{
 		ID: "printf/quoted-operand-needs-the-quote-first", Category: "builtins",
 		Snippet: `printf '%d\n' " 'A"; echo "st=$?"`,
 		Why:     "the control for the row above, and the reason the operand is not trimmed before that reading where a plain numeral is: one blank in front of the quote makes the word an ordinary operand again and a bad number in five of the seven columns, each in its own wording. ksh93 and ash read through the blank and answer 65",

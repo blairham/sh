@@ -585,6 +585,14 @@ func TestPrintfAnswers(t *testing.T) {
 	if got, want := s.PrintfReportsBadNumber, interp.No; got != want {
 		t.Errorf("PrintfReportsBadNumber = %v, want %v", got, want)
 	}
+	// The `'` flag, and bash's reading of where it may be written rather than
+	// ksh93's: `%'d` groups and `%15'd` is `%15': invalid directive` (#2665).
+	if got, want := s.PrintfGroupingFlag, interp.Yes; got != want {
+		t.Errorf("PrintfGroupingFlag = %v, want %v", got, want)
+	}
+	if got, want := s.PrintfGroupingFlagAfterTheWidth, interp.No; got != want {
+		t.Errorf("PrintfGroupingFlagAfterTheWidth = %v, want %v", got, want)
+	}
 }
 
 // TestCdAnswers: zsh moves silently and names the reason before the operand,

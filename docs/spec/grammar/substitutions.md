@@ -268,6 +268,80 @@ quotes does not close either, and both nest. Grammar flag:
 `CurrentShellSubstitution`, on for bash and ksh, off elsewhere including
 the core.
 
+## `${| cmd;}` — the same body, valued from `$REPLY`
+
+bash 5.3 added a fourth spelling. The body runs in the current shell
+exactly as the one above does, and the substitution expands to whatever
+the body left in `$REPLY` rather than to what it printed:
+
+    f() { REPLY=zz; }
+    echo "[${| f;}]"       →  [zz]
+
+It is the one expansion that lets a function return a value without a
+subshell and without the caller naming a variable, which is what every
+shell library otherwise does with a global by convention.
+
+**One shell in the panel has it**, measured 2026-09-13 over
+`echo ${| REPLY=hi; }`:
+
+| shell | answer |
+| --- | --- |
+| bash 5.3.15, and that binary as `sh` | `hi` |
+| bash 3.2.57 | `bad substitution` |
+| dash | `Bad substitution` |
+| zsh 5.9.2 | `bad substitution` |
+| BusyBox ash | `syntax error: bad substitution` |
+| ksh93u+ | ``syntax error at line 1: `\|' unexpected`` |
+
+So it is a dialect's own construct and there is nothing to ask the
+semantics vector — the four dialects that refuse it agree with what this
+shell already did. Grammar flag: `ReplySubstitution`, on for bash alone.
+The ksh column is the interesting refusal: that shell *has* the blank
+form and still rejects this one, which is what says the pipe belongs to
+one shell rather than to the construct.
+
+**Three things the value's source changes**, all measured on bash 5.3.15:
+
+    y=${| echo printed; REPLY=val;}      printed goes to the shell's own
+                                         output, and y is val
+    REPLY=outer; y=${| true;}            y is empty, and REPLY is outer
+                                         again afterwards
+    v=$'a\n\n'; echo "[${| REPLY=$v;}]"  [a\n\n] — nothing is trimmed
+
+The body's output is not captured at all; `$REPLY` is localized around
+the body, with absent and empty kept apart on the way back; and the value
+is a parameter's rather than captured output, so the trailing newlines
+the other three spellings strip are text here.
+
+**The lexical rule is its own, and is not the blank form's.** A `|`
+*adjacent* to the brace is the marker, and a blank first is a syntax
+error rather than the same construct spelled loosely:
+
+    ${|REPLY=hi; }     hi             no blank needed after the pipe
+    ${| REPLY=hi; }    hi             a blank after it is body text
+    ${ | REPLY=hi; }   syntax error   `|' unexpected, looking for `}'
+    ${|}               empty          at status 0
+
+The third row is what makes these two rules rather than one reading of
+"a blank **or** a pipe after the brace": with the blank first the body
+has already begun, and a `|` opening it is a pipeline with nothing on its
+left. A combined rule would accept the line bash refuses.
+
+**What this shell does not give either spelling is a variable frame.**
+bash gives both bodies one — `local` is legal inside `${ cmd;}` and
+`${| cmd;}` there and an error at the top level — and here it is
+`local: can only be used in a function` in both. The visible corner is
+that `${| unset REPLY;}` reads bash's *outer* `REPLY`, because unsetting
+a local there reveals what it shadows and there is nothing here to
+reveal. One gap and not two, recorded rather than worked around, so a
+frame fixes both spellings at once.
+
+Measured: `subst/a-body-valued-from-what-it-left-in-reply`,
+`subst/a-reply-body-does-not-capture-its-output`,
+`subst/a-reply-body-starts-with-no-reply`,
+`subst/a-pipe-needs-no-blank-after-it` and
+`subst/a-blank-before-the-pipe-is-not-the-reply-form`.
+
 ## Process substitution: `<(cmd)` and `>(cmd)`
 
 A command run with one end of a pipe, expanding to a **path** the other

@@ -102,6 +102,13 @@ func Dialect() syntax.Dialect {
 	// so that what it assigns survives. The space after the brace is the
 	// whole of the grammar: `${x}` is a parameter and `${ x}` is not.
 	d.CurrentShellSubstitution = true
+	// `${| cmd;}`, the same substitution taking its value from what the body
+	// left in `$REPLY` rather than from what it printed — the one expansion
+	// that lets a function return a value without a subshell and without the
+	// caller naming a variable. bash 5.3 alone: bash 3.2 and zsh call it a bad
+	// substitution, dash calls it a bad substitution, and ksh93 — which has
+	// the blank form — answers `` `|' unexpected `` (#2656).
+	d.ReplySubstitution = true
 	// A here-document inside parentheses that hold a program ends at the
 	// closing one: `v=$(cat <<EOF` / `a` / `EOF)` is accepted and `v` is `a`.
 	// dash and zsh read the body from the whole input instead, so the `)`

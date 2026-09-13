@@ -822,6 +822,32 @@ type Dialect struct {
 	// grammar: `${x}` is a parameter and `${ x}` is a command.
 	CurrentShellSubstitution bool
 
+	// ReplySubstitution reads `${| cmd;}` as a command substitution that runs
+	// in the current shell and expands to whatever the body left in `$REPLY`
+	// rather than to what it printed. bash 5.3 has it and nothing else in the
+	// panel does.
+	//
+	// **Not the same lexical rule as the form above, and measured rather than
+	// assumed.** That one turns on a *blank* after the brace and this one
+	// turns on a `|` adjacent to it, and the two do not mix — measured
+	// 2026-09-13 on bash 5.3.15:
+	//
+	//	${|REPLY=hi; }    hi             no blank needed after the `|`
+	//	${| REPLY=hi; }   hi             a blank after it is ordinary body
+	//	${ | REPLY=hi; }  syntax error   `|' unexpected, looking for `}'
+	//	${echo hi; }      bad substitution
+	//	${|}              empty, status 0
+	//
+	// So the third row is the discriminating one: with a blank first the body
+	// has already begun and a `|` opening it is a pipeline with nothing on its
+	// left. A single flag reading "brace, then a blank *or* a pipe" would
+	// accept it.
+	//
+	// Separate from CurrentShellSubstitution because the panel separates them:
+	// ksh93 has the blank form and answers `` `|' unexpected `` to this one
+	// (#2656).
+	ReplySubstitution bool
+
 	// CasePatternAcceptsOperator lets an operator stand where a case pattern
 	// belongs, which produces an arm with no patterns at all.
 	//

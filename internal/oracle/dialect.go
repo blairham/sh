@@ -179,6 +179,12 @@ func Dialect() syntax.Dialect {
 	// without the flag a case with a comment in one is lexed as an ordinary
 	// expansion and the apostrophe in `# it's fine` runs off the end (#1397).
 	d.CurrentShellSubstitution = true
+	// `${| echo hi;}` — the same body, valued from `$REPLY`. One of the seven
+	// columns has it, bash 5.3 in both of its columns being one binary, and
+	// the corpus records what the other five say instead; same argument as
+	// the flag above, and load-bearing for the same reason — the body's `#`
+	// is a comment here too (#2656).
+	d.ReplySubstitution = true
 	// `a |& b` — the pipe-of-both-streams cases. Four of the seven columns
 	// take the operator — three as a pipe and ksh93 as a coprocess — and the
 	// corpus records what the other three say about it, so the grammar that

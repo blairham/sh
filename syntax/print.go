@@ -1521,6 +1521,13 @@ func (p *printer) span(s Span) {
 			// after the brace is what makes it a command rather than a
 			// parameter, and it is already the first byte of the body.
 			p.str("${")
+			if s.ReplyValue {
+				// The fourth, whose marker is *not* body text — the lexer
+				// took the `|` off, so this is the one byte that has to be
+				// put back rather than reprinted from the value. See
+				// Span.ReplyValue.
+				p.str("|")
+			}
 			p.str(s.Value)
 			p.str("}")
 			return

@@ -6226,6 +6226,31 @@ echo "st=$?"`,
 		Why:     "the counter-case, and the one that says the comment rule in the brace scanner is positional rather than blanket — `#` is also the strip operator in `${x#a}` and the length operator in `${#x}`, both unanimous across all seven, so a scanner that skipped to the newline on every `#` inside braces would break the two commonest expansions in the language. Here it is neither: mid-word in a command body it is an ordinary character and the two shells with the construct print `x#y`",
 	},
 	{
+		ID: "subst/a-body-valued-from-what-it-left-in-reply", Category: "commands",
+		Snippet: `x=0; y=${| x=1; REPLY=hi;}; echo "[$x][$y]"`,
+		Why:     "the fourth spelling, and bash 5.3's alone: the same current-shell body valued from what it left in `$REPLY` rather than from what it printed. The `x=0` before it and the `[$x]` after are the same pair `subst/a-body-that-runs-in-the-current-shell` carries, and they say the same thing — `[1][hi]` is a body that ran here. Only two of the seven have it, and they are one binary under two names; bash 3.2, dash, zsh and BusyBox ash call it a bad substitution, and ksh93 — which *has* the blank form — answers `` `|' unexpected ``, which is what says the pipe belongs to one shell rather than to the construct (#2656)",
+	},
+	{
+		ID: "subst/a-reply-body-does-not-capture-its-output", Category: "commands",
+		Snippet: `y=${| echo printed; REPLY=val;}; echo "[$y]"`,
+		Why:     "the row that parts this from the blank form rather than reading it as that form with a marker: the body's output is not captured at all and goes where the shell's was going, so bash prints `printed` on its own line and then `[val]`. An implementation that caught the output and merely read the value from REPLY passes the row above and swallows this line",
+	},
+	{
+		ID: "subst/a-reply-body-starts-with-no-reply", Category: "commands",
+		Snippet: `REPLY=outer; y=${| true;}; echo "[$y][$REPLY]"`,
+		Why:     "`$REPLY` is localized around the body, and both halves are here: the body starts with none of the script's value, so a body that never assigns is empty rather than `outer`, and the script's own value is back afterwards. Neither half alone says it — a shell that only hid the name would answer `[][]`, and one that only restored it would answer `[outer][outer]`",
+	},
+	{
+		ID: "subst/a-pipe-needs-no-blank-after-it", Category: "commands",
+		Snippet: `echo "[${|REPLY=hi;}]"`,
+		Why:     "the `|` is the marker and not the first character of the body, so nothing has to follow it — where `${x}` is a parameter and only `${ x}` is a command. bash reads `[hi]` with the two characters adjacent",
+	},
+	{
+		ID: "subst/a-blank-before-the-pipe-is-not-the-reply-form", Category: "commands",
+		Snippet: `echo "[${ | REPLY=hi;}]"`,
+		Why:     "the control for the row above, and the reason the two spellings are two rules rather than one reading of \"a blank **or** a pipe after the brace\": with the blank first the body has already begun and a `|` opening it is a pipeline with nothing on its left, which is what bash blames — `` syntax error near unexpected token `|' while looking for matching `}' ``. A single combined rule takes this line and bash refuses it. ksh93 refuses it too, for the reason it refuses every row here; bash 3.2, dash, zsh and BusyBox ash never get that far and call the whole thing a bad substitution",
+	},
+	{
 		ID: "subst/the-subshell-form-loses-what-it-assigns", Category: "commands",
 		Snippet: `x=0; y=$(x=1; echo hi); echo "[$x][$y]"`,
 		Why:     "the same script with the older spelling, and unanimous: the assignment is lost. Recorded beside the case above because the pair is the difference — either alone says nothing about which shell the body ran in",

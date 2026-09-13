@@ -70,12 +70,6 @@ type fieldWidth struct {
 	width int
 }
 
-// widthOf is the width attribute a name carries, and whether it carries one.
-func (r *Runner) widthOf(name string) (fieldWidth, bool) {
-	w, ok := r.fieldWidth[name]
-	return w, ok
-}
-
 // widthLearned records the width a name's first value teaches it, for the
 // letter written with no number of its own.
 //

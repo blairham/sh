@@ -1303,11 +1303,15 @@ parenthesized `function` body, and a `select` loop with no `break`. An
 omission nobody wrote down is indistinguishable from one nobody thought of.
 
 Measured 2026-09-13: bash, zsh and ksh93 each 21/21 parsed and 21/21 strict
-over `core/` and `ext/`; dash 10/10 and 10/10 over `core/`; ash 10/10 parsed
-and **9/10** strict. The cross-checks are `core/` 10/10 across four references
-and `ext/` 11/11 across three. **The ash column found a real divergence on its
-first run** — BusyBox performs the assignment inside a short-circuited `&&` or
-`||` in arithmetic and the other five shells do not (#2605).
+over `core/` and `ext/`; dash 10/10 and 10/10 over `core/`; ash 10/10 and
+10/10. The cross-checks are `core/` 10/10 across four references and `ext/`
+11/11 across three. **The ash column found a real divergence on its first
+run** — BusyBox evaluates the right operand of a short-circuited `&&` or `||`
+in arithmetic and the other five shells do not — and the column is 10/10
+because that divergence was measured into a semantics axis rather than papered
+over (#2605). What the corpus had all along was the row; what it did not have
+was anything that said it out loud, since the dialect conformance number is
+report-only by design.
 
 `make suite-guard` fails when **our own suite** has lost a file, or shortened
 one. It runs in `make check` and as a step of the same required

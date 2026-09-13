@@ -10273,6 +10273,12 @@ grades it and nothing drift-checks it either, for the same reason.
 | `arith/comparison-yields-one-or-zero` | `[1][0][1]` | `[1][0][1]` | `[1][0][1]` | `[1][0][1]` | `[1][0][1]` | `[1][0][1]` | `[1][0][1]` |
 | `arith/logical-yields-one-not-an-operand` | `[1][1]` | `[1][1]` | `[1][1]` | `[1][1]` | `[1][1]` | `[1][1]` | `[1][1]` |
 | `arith/short-circuit-is-observable` | `[0][0]` | `[0][0]` | `[0][0]` | `[0][0]` | `[0][0]` | `[0][0]` | `[0][9]` |
+| `arith/short-circuit-or-is-observable` | `[1][0]` | `[1][0]` | `[1][0]` | `[1][0]` | `[1][0]` | `[1][0]` | `[1][8]` |
+| `arith/an-increment-in-a-decided-operand` | **2>** `<shell>: 1: arithmetic expression: expecting primary: "0 && (x++)"` *(status 2)* | `[0]` | `[0]` | `[0]` | `[0]` | `[0]` | `[1]` |
+| `arith/a-decided-operand-nested-two-deep` | `[0][0]` | `[0][0]` | `[0][0]` | `[0][0]` | `[0][0]` | `[0][0]` | `[1][2]` |
+| `arith/a-failure-in-a-decided-operand` | `[0][st=0]` | `[0][st=0]` | `[0][st=0]` | **2>** `<shell>: 0 && (1/0): division by 0 (error token is ")")` *(status 1)* | `[0][st=0]` | `[0][st=0]` | **2>** `<shell>: divide by zero` *(status 2)* |
+| `arith/an-operand-the-short-circuit-did-not-decide` | `[9]` | `[9]` | `[9]` | `[9]` | `[9]` | `[9]` | `[9]` |
+| `arith/a-decided-operand-inside-an-arm-that-was-dropped` | `[4][0]` | `[4][0]` | `[4][0]` | `[4][0]` | `[4][0]` | `[4][0]` | `[4][0]` |
 | `arith/assignment-escapes` | `[5][5]` | `[5][5]` | `[5][5]` | `[5][5]` | `[5][5]` | `[5][5]` | `[5][5]` |
 | `arith/a-chained-assignment` | `5 a=5 b=5` | `5 a=5 b=5` | `5 a=5 b=5` | `5 a=5 b=5` | `5 a=5 b=5` | `5 a=5 b=5` | `5 a=5 b=5` |
 | `arith/a-negative-modulo` | `[-1][1]` | `[-1][1]` | `[-1][1]` | `[-1][1]` | `[-1][1]` | `[-1][1]` | `[-1][1]` |
@@ -10736,9 +10742,33 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   printf "[%s]" "$((2 && 3))" "$((0 || 5))"
   ```
-- `arith/short-circuit-is-observable` — assignment is an operator here, so evaluation order is part of the specification rather than an implementation detail
+- `arith/short-circuit-is-observable` — assignment is an operator here, so evaluation order is part of the specification rather than an implementation detail. The row the ash column moved: BusyBox prints `[0][9]` where the other six print `[0][0]`, so it is the assignment and never the value that parts them — `0 && anything` is 0 under either reading, which is why the first field is unanimous and cannot be the discriminator. The row was here and recorded the divergence from the day the ash column existed; what was missing was a gate, and `make suite` was the instrument that read it out loud (#2605)
   ```sh
   x=0; printf "[%s]" "$((0 && (x=9)))" "$x"
+  ```
+- `arith/short-circuit-or-is-observable` — the `||` mirror of the row above, and the reason the axis is named for both operators rather than for `&&`: BusyBox assigns here too, so the divergence is about a decided operand and not about the word `&&`. A fix measured on one operator alone leaves the other wrong in a shape no row would have shown
+  ```sh
+  y=0; printf "[%s]" "$((1 || (y=8)))" "$y"
+  ```
+- `arith/an-increment-in-a-decided-operand` — the same axis reached by the other side effect arithmetic has, which says it is the operand being evaluated rather than assignment being special: BusyBox leaves x at 1. dash has no `++` at all and refuses the expression, which is the row saying that absence rather than an answer
+  ```sh
+  x=0; : $((0 && (x++))); printf "[%s]" "$x"
+  ```
+- `arith/a-decided-operand-nested-two-deep` — nesting is not a bound on it: the shell that runs a decided operand runs every assignment written inside one, so BusyBox prints `[1][2]` where the rest print `[0][0]`. An implementation that skipped only the operand it was looking at would print `[0][2]` and no single-level row could tell
+  ```sh
+  x=0; y=0; : $((0 && (1 && (x=1)) && (y=2))); printf "[%s][%s]" "$x" "$y"
+  ```
+- `arith/a-failure-in-a-decided-operand` — the row that says the decided operand is *evaluated* and not merely assigned into: the shell that leaves the assignment behind also raises the division. It is also the row with three answers rather than two — bash 3.2 refuses while assigning nothing, which is a reading no dialect in this tree claims and the reason the axis is two-valued on purpose
+  ```sh
+  printf "[%s]" "$((0 && (1/0)))"; printf "[st=%s]" "$?"
+  ```
+- `arith/an-operand-the-short-circuit-did-not-decide` — the control for the four rows above: an operand the left side did *not* decide is evaluated in every column, BusyBox included, so what parts them is the skip and not assignment inside a logical operator. Without this row a shell that had simply lost short-circuiting would look the same
+  ```sh
+  x=0; : $((1 && (x=9))); printf "[%s]" "$x"
+  ```
+- `arith/a-decided-operand-inside-an-arm-that-was-dropped` — the second control, and the one that bounds the axis: the conditional's skipped arm is skipped in every column, so an `&&` written inside it never runs even in the shell that would have run its decided operand. `[4][0]` everywhere. That is what makes this a property of the two logical operators rather than of a shell that evaluates everything it parses
+  ```sh
+  x=0; printf "[%s]" "$((0 ? (0 && (x=9)) : 4))" "$x"
   ```
 - `arith/assignment-escapes` — an assignment inside an expression is a side effect that outlives it, like ${x:=5}
   ```sh

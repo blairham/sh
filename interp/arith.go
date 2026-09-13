@@ -137,8 +137,10 @@ func arithToken(e syntax.ArithExpr) string {
 //
 // Evaluation order is part of the specification rather than an implementation
 // detail, because assignment is an operator whose effect outlives the
-// expression: `x=0; $((0 && (x=9)))` must leave x alone. So the logical
-// operators short-circuit here, and nothing evaluates both sides eagerly.
+// expression: `x=0; $((0 && (x=9)))` leaves x alone in five of the panel's
+// seven columns and sets it to 9 in BusyBox ash. So the logical operators
+// short-circuit here, nothing evaluates both sides eagerly, and the one shell
+// that does says so on an axis — see evalDecidedOperand.
 // arithNum is a value in an arithmetic expression.
 //
 // Two shells in the panel do floating point and two do not, and an expression
@@ -1108,14 +1110,82 @@ func (r *Runner) evalAssign(x *syntax.ArithAssign) (arithNum, error) {
 	return v, nil
 }
 
+// evalDecidedOperand runs the operand of `&&` or `||` whose value can no
+// longer change the answer, in the shell that runs it.
+//
+// The axis is asked here and not at the top of evalBinary, because the two
+// readings are indistinguishable unless the operand does something that
+// outlives it: `$((0 && 1))` and `$((a || b))` produce the same number and
+// leave the same state under either answer. Asking on the common path would
+// make an unanswered vector refuse the commonest arithmetic in the language,
+// which is the mistake docs/spec/semantics.md names — ask at the
+// disagreement, not on the path to it.
+//
+// The error is returned rather than swallowed: a shell that evaluates the
+// decided operand also raises what it fails on, which is how the panel shows
+// that the operand is evaluated at all and not merely assigned into.
+func (r *Runner) evalDecidedOperand(y syntax.ArithExpr) error {
+	a := r.sem().ArithShortCircuitEvaluatesTheRightOperand
+	if a == Unspecified && !arithOutlivesTheExpression(y) {
+		return nil
+	}
+	if !r.ask(a, "the right operand of `&&` or `||` being evaluated after the answer is decided") {
+		return nil
+	}
+	_, err := r.evalNum(y)
+	return err
+}
+
+// arithOutlivesTheExpression reports whether evaluating this operand could
+// leave anything behind: an assignment, or an increment or decrement, however
+// deep it is written.
+//
+// It is deliberately a question about *effects* and not about errors. A
+// division by zero inside a decided operand is a third thing the panel splits
+// on — bash 3.2 raises it while assigning nothing — and no static walk can
+// find it, so what this decides is only when the axis is worth asking. A
+// dialect that has answered gets its answer whatever the operand holds.
+func arithOutlivesTheExpression(x syntax.ArithExpr) bool {
+	switch x := x.(type) {
+	case *syntax.ArithAssign:
+		return true
+	case *syntax.ArithUnary:
+		return x.Op == "++" || x.Op == "--" || arithOutlivesTheExpression(x.X)
+	case *syntax.ArithBinary:
+		return arithOutlivesTheExpression(x.X) || arithOutlivesTheExpression(x.Y)
+	case *syntax.ArithCond:
+		return arithOutlivesTheExpression(x.Cond) ||
+			arithOutlivesTheExpression(x.Then) ||
+			arithOutlivesTheExpression(x.Else)
+	case *syntax.ArithIndex:
+		return arithOutlivesTheExpression(x.Index)
+	case *syntax.ArithCall:
+		for _, a := range x.Args {
+			if arithOutlivesTheExpression(a) {
+				return true
+			}
+		}
+	case *syntax.ArithOutput:
+		return arithOutlivesTheExpression(x.X)
+	}
+	return false
+}
+
 func (r *Runner) evalBinary(x *syntax.ArithBinary) (arithNum, error) {
-	// The short-circuiting operators must not evaluate their right side when
-	// the answer is already known, because that side can assign.
+	// The short-circuiting operators usually must not evaluate their right
+	// side when the answer is already known, because that side can assign —
+	// and one shell in the panel evaluates it anyway. See
+	// Semantics.ArithShortCircuitEvaluatesTheRightOperand: the *value* is the
+	// operator's either way, so what the axis decides is only whether the
+	// operand's effects happen.
 	switch x.Op {
 	case "&&":
 		l, err := r.evalNum(x.X)
-		if err != nil || l.isZero() {
+		if err != nil {
 			return intNum(0), err
+		}
+		if l.isZero() {
+			return intNum(0), r.evalDecidedOperand(x.Y)
 		}
 		v, err := r.evalNum(x.Y)
 		return intNum(boolInt(!v.isZero())), err
@@ -1125,7 +1195,7 @@ func (r *Runner) evalBinary(x *syntax.ArithBinary) (arithNum, error) {
 			return intNum(0), err
 		}
 		if !l.isZero() {
-			return intNum(1), nil
+			return intNum(1), r.evalDecidedOperand(x.Y)
 		}
 		v, err := r.evalNum(x.Y)
 		return intNum(boolInt(!v.isZero())), err

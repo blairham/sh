@@ -16265,6 +16265,98 @@ compound value the name can be started over from — measured in bash 5.3.15,
 where `typeset -ia b=(); b=(5+5 6+6)` gives the same `10 12` as the
 valueless declaration.
 
+## The operand a short circuit already decided
+
+`&&` and `||` inside `$(( ))` stop as soon as the left operand settles the
+answer — in five of the panel's seven columns. BusyBox ash evaluates the
+right operand anyway, so anything written there that outlives the
+expression happens.
+
+Measured 2026-09-13, BusyBox v1.37.0 through the container route the
+oracle reaches it by and the rest the binaries on this machine:
+
+| probe | dash | bash 5.3 | bash-as-`sh` | bash 3.2 | ksh93 | zsh | BusyBox ash |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `x=0; $((0 && (x=9)))` then `$x` | 0 | 0 | 0 | 0 | 0 | 0 | **9** |
+| `y=0; $((1 \|\| (y=8)))` then `$y` | 0 | 0 | 0 | 0 | 0 | 0 | **8** |
+| `x=0; $((0 && (x++)))` then `$x` | *no `++`* | 0 | 0 | 0 | 0 | 0 | **1** |
+| `$((0 && (x=9)))` — the value | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| `$((7 \|\| (x=9)))` — the value | 1 | 1 | 1 | 1 | 1 | 1 | 1 |
+| `$((0 && (1/0)))` | 0 | 0 | 0 | **refused** | 0 | 0 | **refused** |
+| `w=5; $((0 ? (w=1) : 2))` then `$w` | 5 | 5 | 5 | 5 | 5 | 5 | 5 |
+| `x=0; $((1 && (x=9)))` then `$x` | 9 | 9 | 9 | 9 | 9 | 9 | 9 |
+
+### It is one question and not two
+
+The obvious second question — whether the *value* moves with the side
+effect — has no answer to give. `0 && anything` is 0 and `1 || anything`
+is 1 under either reading, because a logical operator's result is already
+determined once the left operand is, so every column prints the same
+number and no value anywhere can discriminate. Rows four and five above
+are in the table to say exactly that: they are the shape a case would take
+if it meant to catch this and could not.
+
+What discriminates is the side effect, and — row six — the *failure*. A
+division by zero cannot be reached by storing a value, so the shell that
+raises it has evaluated the operand rather than walked it for assignments.
+That is why the axis is spelled as whether the operand is evaluated, and
+not as whether an assignment inside it takes effect: the second wording
+describes the same rows and implies an implementation that would answer
+row six wrongly.
+
+### The neighbors, and where the axis stops
+
+The conditional is the other short-circuiting operator and is **not** on
+this axis: the arm it did not take is not evaluated anywhere, BusyBox
+included, and an `&&` written inside a dropped arm never runs there
+either. So this is a property of the two logical operators rather than of
+a shell that evaluates everything it parses — which is a reading the
+`&&` rows alone would support and which a fix written to it would get
+wrong in both directions.
+
+`,` is not short-circuiting in any column and raises nothing. Nesting is
+not a bound: `$((0 && (1 && (x=1)) && (y=2)))` sets both names in the
+column that sets either, so an implementation that skipped only the
+operand in front of it would be visible on no single-level probe.
+
+### bash 3.2 is a third reading, and the axis does not hold it
+
+Row six has bash 3.2 refusing while rows one to three have it assigning
+nothing: it evaluates the decided operand for what can fail and not for
+what can last. `Answer` has no room for that, and it does not need any —
+the bash preset is bash 5.3's, and bash 3.2 is a panel column rather than
+a dialect (`core.md`). The reading is written down here and in the field
+comment so that a dialect for that shell starts from a measurement instead
+of from a two-valued axis that cannot express it.
+
+### Where it is asked
+
+At the disagreement and not on the path to it. The two readings are
+indistinguishable unless the decided operand carries an assignment or an
+increment, so that is the only shape that consults the vector; `$((0 &&
+1))` and `$((a || b))` run under a vector that has answered nothing. An
+axis read at the top of the operator would refuse the commonest
+arithmetic in the language in the bare core, which is the mistake "Rules
+for adding an axis" names and which `TestOrdinaryShortCircuitingAsksNothing`
+pins.
+
+### How it was found, and what that says about the corpus
+
+By the ash column's first run of `make suite` (#2605, #2608) — the column
+that until #2263 printed the reason it could not run. The corpus was *not*
+blind to it: `arith/short-circuit-is-observable` has recorded BusyBox's
+`[0][9]` against six columns of `[0][0]` since the ash column existed.
+What was missing was a gate. `make conformance-dialects` is report-only on
+purpose, so a recorded divergence sits in a number that is meant to be low
+and climbing, and nothing says which rows it is made of. A suite file is
+run whole and scored against the shell it claims to be, so the same fact
+came out as `ash 9/10` with a file name beside it.
+
+The corpus row's `Why` is the other half of the lesson. It described the
+rule — "evaluation order is part of the specification" — rather than a
+disagreement, so it read as a case pinning something unanimous. A row
+recording a divergence has to say which column moves.
+
 ## An axis nothing objects to is not a measurement
 
 Every field above claims a fact about real shells: they were run, they

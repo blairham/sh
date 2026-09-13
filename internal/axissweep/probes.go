@@ -316,6 +316,24 @@ func Probes() []Probe {
 				return "", "the function printed neither word, so it never ran"
 			},
 		},
+		{
+			Field:   "ArithShortCircuitEvaluatesTheRightOperand",
+			Cases:   []string{"arith/short-circuit-is-observable"},
+			Reading: "`x=0; $((0 && (x=9)))` prints the value and then x, so the second field is 9 in a shell that ran the operand its short circuit had already decided and 0 in one that did not",
+			Read: func(cells map[string]oracle.Result) (string, string) {
+				r := cells["arith/short-circuit-is-observable"]
+				// The first field is the operator's value and is 0 under
+				// either reading, so only the second can answer. Reading the
+				// whole cell would make the two readings look alike.
+				switch strings.TrimSpace(r.Stdout) {
+				case "[0][9]":
+					return "Yes", ""
+				case "[0][0]":
+					return "No", ""
+				}
+				return "", "the row printed neither pair, so the expression never reached an assignment"
+			},
+		},
 	}
 }
 

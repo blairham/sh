@@ -11877,7 +11877,37 @@ echo unreachable`,
 	{
 		ID: "arith/short-circuit-is-observable", Category: "arithmetic",
 		Snippet: `x=0; printf "[%s]" "$((0 && (x=9)))" "$x"`,
-		Why:     "assignment is an operator here, so evaluation order is part of the specification rather than an implementation detail",
+		Why:     "assignment is an operator here, so evaluation order is part of the specification rather than an implementation detail. The row the ash column moved: BusyBox prints `[0][9]` where the other six print `[0][0]`, so it is the assignment and never the value that parts them — `0 && anything` is 0 under either reading, which is why the first field is unanimous and cannot be the discriminator. The row was here and recorded the divergence from the day the ash column existed; what was missing was a gate, and `make suite` was the instrument that read it out loud (#2605)",
+	},
+	{
+		ID: "arith/short-circuit-or-is-observable", Category: "arithmetic",
+		Snippet: `y=0; printf "[%s]" "$((1 || (y=8)))" "$y"`,
+		Why:     "the `||` mirror of the row above, and the reason the axis is named for both operators rather than for `&&`: BusyBox assigns here too, so the divergence is about a decided operand and not about the word `&&`. A fix measured on one operator alone leaves the other wrong in a shape no row would have shown",
+	},
+	{
+		ID: "arith/an-increment-in-a-decided-operand", Category: "arithmetic",
+		Snippet: `x=0; : $((0 && (x++))); printf "[%s]" "$x"`,
+		Why:     "the same axis reached by the other side effect arithmetic has, which says it is the operand being evaluated rather than assignment being special: BusyBox leaves x at 1. dash has no `++` at all and refuses the expression, which is the row saying that absence rather than an answer",
+	},
+	{
+		ID: "arith/a-decided-operand-nested-two-deep", Category: "arithmetic",
+		Snippet: `x=0; y=0; : $((0 && (1 && (x=1)) && (y=2))); printf "[%s][%s]" "$x" "$y"`,
+		Why:     "nesting is not a bound on it: the shell that runs a decided operand runs every assignment written inside one, so BusyBox prints `[1][2]` where the rest print `[0][0]`. An implementation that skipped only the operand it was looking at would print `[0][2]` and no single-level row could tell",
+	},
+	{
+		ID: "arith/a-failure-in-a-decided-operand", Category: "arithmetic",
+		Snippet: `printf "[%s]" "$((0 && (1/0)))"; printf "[st=%s]" "$?"`,
+		Why:     "the row that says the decided operand is *evaluated* and not merely assigned into: the shell that leaves the assignment behind also raises the division. It is also the row with three answers rather than two — bash 3.2 refuses while assigning nothing, which is a reading no dialect in this tree claims and the reason the axis is two-valued on purpose",
+	},
+	{
+		ID: "arith/an-operand-the-short-circuit-did-not-decide", Category: "arithmetic",
+		Snippet: `x=0; : $((1 && (x=9))); printf "[%s]" "$x"`,
+		Why:     "the control for the four rows above: an operand the left side did *not* decide is evaluated in every column, BusyBox included, so what parts them is the skip and not assignment inside a logical operator. Without this row a shell that had simply lost short-circuiting would look the same",
+	},
+	{
+		ID: "arith/a-decided-operand-inside-an-arm-that-was-dropped", Category: "arithmetic",
+		Snippet: `x=0; printf "[%s]" "$((0 ? (0 && (x=9)) : 4))" "$x"`,
+		Why:     "the second control, and the one that bounds the axis: the conditional's skipped arm is skipped in every column, so an `&&` written inside it never runs even in the shell that would have run its decided operand. `[4][0]` everywhere. That is what makes this a property of the two logical operators rather than of a shell that evaluates everything it parses",
 	},
 	{
 		ID: "arith/assignment-escapes", Category: "arithmetic",

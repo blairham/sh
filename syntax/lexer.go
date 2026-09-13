@@ -3412,7 +3412,7 @@ func (l *Lexer) scanBackticks(q Quoting) Span {
 			if !l.closesQuotesAtEOF() {
 				l.failUnmatched(open, "`", "`", "unterminated backquote substitution")
 			}
-			return Span{Kind: CommandSubst, Backquoted: true, Value: unescapeBackquoted(l.src[start:l.off]), Quoting: q, Pos: open, Comments: l.bodyComments(CommandSubst)}
+			return Span{Kind: CommandSubst, Backquoted: true, Value: unescapeBackquoted(l.src[start:l.off], q), Quoting: q, Pos: open, Comments: l.bodyComments(CommandSubst)}
 		}
 		switch l.peek() {
 		case '\\':
@@ -3423,7 +3423,7 @@ func (l *Lexer) scanBackticks(q Quoting) Span {
 		case '`':
 			end := l.off
 			l.advance()
-			return Span{Kind: CommandSubst, Backquoted: true, Value: unescapeBackquoted(l.src[start:end]), Quoting: q, Pos: open, Comments: l.bodyComments(CommandSubst)}
+			return Span{Kind: CommandSubst, Backquoted: true, Value: unescapeBackquoted(l.src[start:end], q), Quoting: q, Pos: open, Comments: l.bodyComments(CommandSubst)}
 		default:
 			l.advance()
 		}
@@ -3439,7 +3439,17 @@ func (l *Lexer) scanBackticks(q Quoting) Span {
 // backquote, or another backslash. Doing it here is also what makes nesting
 // work at all — the inner `\“ becomes a plain backquote, and re-lexing the
 // result finds the nested substitution that `$( )` would have made obvious.
-func unescapeBackquoted(s string) string {
+//
+// q is the quoting the substitution was written in, and it adds a fourth
+// character to that set. Inside double quotes a `\"` is unescaped as well, so
+// `"`echo \"a b\"`"` runs `echo "a b"` and yields one field — measured
+// 2026-09-13 across bash 5.3, bash 3.2, bash as sh, dash, ksh93, zsh and zsh
+// as sh, every one of which prints `a b`. It is the backquoted form alone:
+// the same escape inside `"$(echo \"x\")"` stays a backslash in all seven,
+// and so does a backquote written outside double quotes. The rule is not the
+// backslash meeting a quote, it is the two quotings meeting — which is why
+// this takes the position as a parameter rather than growing a case.
+func unescapeBackquoted(s string, q Quoting) string {
 	if !strings.ContainsRune(s, '\\') {
 		return s
 	}
@@ -3450,6 +3460,10 @@ func unescapeBackquoted(s string) string {
 			switch s[i+1] {
 			case '$', '`', '\\':
 				i++
+			case '"':
+				if q == DoubleQuoted {
+					i++
+				}
 			}
 		}
 		b.WriteByte(s[i])

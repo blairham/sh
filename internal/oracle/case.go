@@ -1689,6 +1689,16 @@ var Corpus = []Case{
 		Why:     "the backquoted spelling of the same rule, and it is here as a measurement rather than as a symmetry: ksh93 refuses a single quote inside backquotes inside a double quote when the word stands on its own — `a=\"`echo 'e\"f'`\"` is a syntax error there — and accepts it inside a `${ }` body, so all seven agree on this row and only on this row. A fix written for `$( )` alone leaves the older spelling refused in all four dialects while the un-nested one is accepted, which is one construct answered two ways",
 	},
 	{
+		ID: "core/a-backslash-quote-inside-backquotes-inside-double-quotes", Category: "quoting",
+		Snippet: "printf '[%s]' \"`echo \\\"a b\\\"`\" `echo \\\"c d\\\"` \"$(echo \\\"e f\\\")\"; echo",
+		Why:     "the fourth character the older substitution unescapes, and it is the *position* that adds it rather than the character: inside double quotes a `\\\\\\\"` in a backquoted body becomes the quote the inner command is then lexed with, so the first field is the one word `a b` in all seven columns. The two neighbors are the controls and both keep the backslash everywhere — the same backquote written outside double quotes, and the `$( )` spelling written inside them. Without them a fix that unescaped it unconditionally would score identically on the row it was written for",
+	},
+	{
+		ID: "core/the-three-the-older-spelling-always-unescaped", Category: "quoting",
+		Snippet: "v=V; printf '[%s]' \"`echo \\$v`\" \"`echo 'a\\qb'`\"; echo",
+		Why:     "the guard on the rule the row above extends. `$`, a backquote and a backslash are unescaped in a backquoted body wherever it stands, and a backslash before anything else stays literal — so `\\\\$v` reaches the inner shell as `$v` and expands, and `a\\\\qb` keeps its backslash. Unanimous. A change that widened the set by position had to leave these three where they were, and a change that widened it by character would have moved neither",
+	},
+	{
 		ID: "core/single-quotes-in-a-quoted-expansion-body", Category: "quoting",
 		Snippet: `v=VAL; printf '[%s]' "${u:-'$v'}" "${w:-''}"; echo`,
 		Why:     "a `${ }` body written inside double quotes is double-quoted *content*, so a single quote in it is an ordinary character rather than a quote: all seven shells keep the two quote characters and substitute the `$v` between them. The empty pair is the guard on the same fact — `''` is two characters here where a quoting reading makes it nothing",

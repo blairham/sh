@@ -49555,6 +49555,57 @@
         "TimedOut": false
       }
     },
+    "core/a-backslash-quote-inside-backquotes-inside-double-quotes": {
+      "ash": {
+        "Stdout": "[a b][\"c][d\"][\"e f\"]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[a b][\"c][d\"][\"e f\"]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[a b][\"c][d\"][\"e f\"]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[a b][\"c][d\"][\"e f\"]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[a b][\"c][d\"][\"e f\"]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[a b][\"c][d\"][\"e f\"]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[a b][\"c][d\"][\"e f\"]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "core/a-bare-brace-in-a-nested-quoted-operand": {
       "ash": {
         "Stdout": "[a{bcz\"}]~after",
@@ -58831,6 +58882,57 @@
       },
       "zsh": {
         "Stdout": "it=1~it=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "core/the-three-the-older-spelling-always-unescaped": {
+      "ash": {
+        "Stdout": "[V][a\\qb]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[V][a\\qb]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[V][a\\qb]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[V][a\\qb]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[V][a\\qb]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[V][a\\qb]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[V][a\\qb]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

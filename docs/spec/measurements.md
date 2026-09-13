@@ -6460,6 +6460,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `core/a-swallowed-quote-changes-the-program-rather-than-refusing-it` | `[a"b][c'd]` | `[a"b][c'd]` | `[a"b][c'd]` | `[a"b][c'd]` | `[a"b][c'd]` | `[a"b][c'd]` | `[a"b][c'd]` |
 | `core/what-a-nested-substitution-holds-is-not-a-delimiter` | `[2][a")b]` | `[2][a")b]` | `[2][a")b]` | `[2][a")b]` | `[2][a")b]` | `[2][a")b]` | `[2][a")b]` |
 | `core/the-older-substitution-spelling-brings-its-own-quoting-too` | `[e"f]` | `[e"f]` | `[e"f]` | `[e"f]` | `[e"f]` | `[e"f]` | `[e"f]` |
+| `core/a-backslash-quote-inside-backquotes-inside-double-quotes` | `[a b]["c][d"]["e f"]` | `[a b]["c][d"]["e f"]` | `[a b]["c][d"]["e f"]` | `[a b]["c][d"]["e f"]` | `[a b]["c][d"]["e f"]` | `[a b]["c][d"]["e f"]` | `[a b]["c][d"]["e f"]` |
+| `core/the-three-the-older-spelling-always-unescaped` | `[V][a\qb]` | `[V][a\qb]` | `[V][a\qb]` | `[V][a\qb]` | `[V][a\qb]` | `[V][a\qb]` | `[V][a\qb]` |
 | `core/single-quotes-in-a-quoted-expansion-body` | `['VAL']['']` | `['VAL']['']` | `['VAL']['']` | `['VAL']['']` | `['VAL']['']` | `['VAL']['']` | `['VAL']['']` |
 | `core/a-substitution-inside-those-quotes-is-performed` | `['hi']['bq']` | `['hi']['bq']` | `['hi']['bq']` | `['hi']['bq']` | `['hi']['bq']` | `['hi']['bq']` | `['hi']['bq']` |
 | `core/an-unbalanced-substitution-inside-those-quotes` | **2>** `<shell>: 1: Syntax error: Unterminated quoted string` *(status 2)* | **2>** `<shell>: command substitution: line 2: unexpected EOF while looking for matching `''` *(status 1)* | **2>** `<shell>: -c: line 1: unexpected EOF while looking for matching `''` *(status 2)* | **2>** `<shell>: bad substitution: no closing `)' in 'a$(b'` *(status 1)* | **2>** `<shell>: syntax error at line 1: `(' unmatched` *(status 3)* | **2>** `<shell>:1: unmatched '~<shell>:1: unmatched "` *(status 1)* | **2>** `<shell>: syntax error: unterminated quoted string` *(status 2)* |
@@ -6578,6 +6580,14 @@ grades it and nothing drift-checks it either, for the same reason.
 - `core/the-older-substitution-spelling-brings-its-own-quoting-too` — the backquoted spelling of the same rule, and it is here as a measurement rather than as a symmetry: ksh93 refuses a single quote inside backquotes inside a double quote when the word stands on its own — `a="`echo 'e"f'`"` is a syntax error there — and accepts it inside a `${ }` body, so all seven agree on this row and only on this row. A fix written for `$( )` alone leaves the older spelling refused in all four dialects while the un-nested one is accepted, which is one construct answered two ways
   ```sh
   printf '[%s]\n' "${x:-"`echo 'e"f'`"}"
+  ```
+- `core/a-backslash-quote-inside-backquotes-inside-double-quotes` — the fourth character the older substitution unescapes, and it is the *position* that adds it rather than the character: inside double quotes a `\\\"` in a backquoted body becomes the quote the inner command is then lexed with, so the first field is the one word `a b` in all seven columns. The two neighbors are the controls and both keep the backslash everywhere — the same backquote written outside double quotes, and the `$( )` spelling written inside them. Without them a fix that unescaped it unconditionally would score identically on the row it was written for
+  ```sh
+  printf '[%s]' "`echo \"a b\"`" `echo \"c d\"` "$(echo \"e f\")"; echo
+  ```
+- `core/the-three-the-older-spelling-always-unescaped` — the guard on the rule the row above extends. `$`, a backquote and a backslash are unescaped in a backquoted body wherever it stands, and a backslash before anything else stays literal — so `\\$v` reaches the inner shell as `$v` and expands, and `a\\qb` keeps its backslash. Unanimous. A change that widened the set by position had to leave these three where they were, and a change that widened it by character would have moved neither
+  ```sh
+  v=V; printf '[%s]' "`echo \$v`" "`echo 'a\qb'`"; echo
   ```
 - `core/single-quotes-in-a-quoted-expansion-body` — a `${ }` body written inside double quotes is double-quoted *content*, so a single quote in it is an ordinary character rather than a quote: all seven shells keep the two quote characters and substitute the `$v` between them. The empty pair is the guard on the same fact — `''` is two characters here where a quoting reading makes it nothing
   ```sh

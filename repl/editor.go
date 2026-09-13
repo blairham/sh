@@ -142,6 +142,14 @@ type editor struct {
 	// out or not.
 	pendingDraw bool
 
+	// What to do about output that never ended its line, before the prompt is
+	// drawn over it. unfinishedMark is written where the output stopped, and
+	// returnsFirst says the cursor goes to the start of the row first — which
+	// is also what the marking is built on. See EditorStyle, and freshRow.
+	unfinishedMark string
+	returnsFirst   bool
+	clearsBelow    bool
+
 	// What to ask before printing a large listing, and how to read the
 	// answer. See EditorStyle.
 	listQuery       string
@@ -211,6 +219,9 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 	// prompt that takes typing.
 	e.viCommand = false
 	e.find = viFind{}
+	// A row that output stopped part-way along is marked and stepped off
+	// before anything is drawn on it. See freshRow.
+	e.freshRow()
 	// The leading rows first and once — every redraw after this rewrites only
 	// the last row. See drawnPrompt.
 	e.write(prompt.lead + prompt.text)

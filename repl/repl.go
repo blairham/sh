@@ -1621,6 +1621,30 @@ func (s Shell) recalled(ctx context.Context, hist historyFile) []string {
 // next line on, and a setting that only takes hold in the next session is one
 // they will believe is broken. Two variable lookups and a split is nothing
 // beside running the command that was typed.
+// dialectOption answers whether a named option is on in this session, and
+// false for a dialect that named none. See optionOn, which is the same
+// question asked for the history rules.
+func (s Shell) dialectOption(name string) bool {
+	if s.Runner == nil {
+		return false
+	}
+	return optionOn(s.Runner.DialectOption, name)
+}
+
+// markIfAsked is what to write where unfinished output stopped, and empty
+// where this session is not to mark it.
+//
+// Two options have to be on: the marking's own, and the return it is built on
+// — measured, `setopt nopromptcr` stops the mark being written though the
+// marking option is still set. The return is checked beside this rather than
+// here, because it also stands alone.
+func (s Shell) markIfAsked() string {
+	if !s.dialectOption(s.Editor.MarkUnfinishedOutputOption) {
+		return ""
+	}
+	return s.Editor.UnfinishedOutputMark
+}
+
 func (s Shell) historyRules() historyRules {
 	if s.Runner == nil {
 		return historyRules{}
@@ -1658,6 +1682,13 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		interrupt:       s.Editor.Interrupt,
 		listQuery:       s.Editor.ListQuery,
 		listQueryEchoes: s.Editor.ListQueryEchoesTheKey,
+		// What to do about output that never ended its line. Read through the
+		// options rather than taken as values, because both are options a
+		// person turns off — and the return is the outer of the two, so a
+		// dialect whose person cleared it gets neither. See freshRow.
+		unfinishedMark:  s.markIfAsked(),
+		returnsFirst:    s.dialectOption(s.Editor.ReturnBeforeThePromptOption),
+		clearsBelow:     s.Editor.ClearsBelowThePrompt,
 		listQueryStrict: s.Editor.ListQueryAcceptsOnlyYesOrNo,
 		// What this dialect calls a word, and what its kills do with one.
 		wordChars:                  s.Editor.WordCharacters,

@@ -20,6 +20,26 @@ func EditorStyle() repl.EditorStyle {
 		// no second asking.
 		ListQuery:             "zsh: do you wish to see all %[1]d possibilities (%[2]d lines)? ",
 		ListQueryEchoesTheKey: true,
+		// Output that never ended its line. Measured 2026-09-12 through a
+		// pseudo-terminal with an rc file ending `printf 'LEFTOVER'`: this
+		// shell writes a bold, inverse `%` where the output stopped, pads to
+		// the end of the row so the terminal wraps, and puts the prompt on the
+		// row below — where bash draws its prompt straight onto the output.
+		//
+		// The two options one at a time, which is what says they are not
+		// independent: `nopromptsp` leaves the return and drops the mark, and
+		// `nopromptcr` drops **both**, though `promptsp` is still set. So the
+		// return is the outer of the two and both names are given here.
+		//
+		// This is what keeps powerlevel10k's `fetching gitstatusd ..` progress
+		// line from having the prompt drawn against it (#2477).
+		MarkUnfinishedOutputOption:  "PROMPT_SP",
+		ReturnBeforeThePromptOption: "PROMPT_CR",
+		// And the erase, which is neither option's doing: measured, this shell
+		// writes it with both of them turned off, and bash writes it in no
+		// case at all.
+		ClearsBelowThePrompt: true,
+		UnfinishedOutputMark: "\x1b[1m\x1b[7m%\x1b[27m\x1b[1m\x1b[0m",
 		// Measured under a pty against zsh 5.9 started with no startup files,
 		// one keystroke at a time. These are the four places where the same
 		// key does something different from bash, and every one of them is on

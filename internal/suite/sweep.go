@@ -366,8 +366,8 @@ func Sweep(ctx context.Context, s Suite, dir, ours, reference string, opts Optio
 				rep.Refused.Longest += int64(res.Longest)
 			}
 			rep.Prose += int64(res.Prose)
-			for i, n := range res.Excuses {
-				excused[i] += n
+			for phrase, n := range res.Excuses {
+				excused[phrase] += n
 			}
 			rep.Missing += int64(res.RefLines - res.Common)
 			rep.Excess += int64(res.OurLines - res.Common)

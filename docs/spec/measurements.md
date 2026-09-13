@@ -17443,6 +17443,14 @@ grades it and nothing drift-checks it either, for the same reason.
 | `path/non-executable-is-skipped` | `from-b` | `from-b` | `from-b` | `from-b` | `from-b` | `from-b` | `from-b` |
 | `path/unrunnable-is-126-not-127` | `st=126` **2>** `<shell>: 1: ./ne: Permission denied` | `st=126` **2>** `<shell>: line 1: ./ne: Permission denied` | `st=126` **2>** `<shell>: line 1: ./ne: Permission denied` | `st=126` **2>** `<shell>: ./ne: Permission denied` | `st=126` **2>** `<shell>: ./ne: cannot execute [Permission denied]` | `st=126` **2>** `<shell>:1: permission denied: ./ne` | `st=126` **2>** `<shell>: ./ne: Permission denied` |
 | `path/directory-as-a-command` | `st=126` **2>** `<shell>: 1: ./adir: Permission denied` | `st=126` **2>** `<shell>: line 1: ./adir: Is a directory` | `st=126` **2>** `<shell>: line 1: ./adir: Is a directory` | `st=126` **2>** `<shell>: ./adir: is a directory` | `st=126` **2>** `<shell>: ./adir: cannot execute [Is a directory]` | `st=126` **2>** `<shell>:1: permission denied: ./adir` | `st=126` **2>** `<shell>: ./adir: Permission denied` |
+| `path/no-shebang-is-run-as-a-shell-script` | `ran-as-script n=2 1=a~st=0` | `ran-as-script n=2 1=a~st=0` | `ran-as-script n=2 1=a~st=0` | `ran-as-script n=2 1=a~st=0` | `ran-as-script n=2 1=a~st=0` | `ran-as-script n=2 1=a~st=0` | `ran-as-script n=2 1=a~st=0` |
+| `path/no-shebang-script-gets-a-fresh-shell` | `[][e]~st=0` | `[][e]~st=0` | `[][e]~st=0` | `[][e]~st=0` | `[][e]~st=0` | `[][e]~st=0` | `[][e]~st=0` |
+| `path/no-shebang-script-zero-is-the-resolved-path` | `resolved~st=0` | `resolved~st=0` | `resolved~st=0` | `resolved~st=0` | `word~st=0` | `resolved~st=0` | `resolved~st=0` |
+| `path/binary-content-is-not-run-as-a-script` | `st=126` **2>** `./b.img: ./b.img: cannot execute binary file` | `st=126` **2>** `<shell>: line 1: ./b.img: cannot execute binary file: Exec format error` | `st=126` **2>** `<shell>: line 1: ./b.img: cannot execute binary file: Exec format error` | `st=126` **2>** `<shell>: ./b.img: cannot execute binary file` | `st=126` **2>** `<shell>: ./b.img: cannot execute [Exec format error]` | `st=126` **2>** `<shell>:1: exec format error: ./b.img` | `ranmore~st=0` |
+| `path/no-shebang-empty-file-is-an-empty-script` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
+| `path/no-shebang-comment-only-file-is-an-empty-script` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
+| `path/missing-interpreter-is-not-the-script-fallback` | `st=127` **2>** `<shell>: 1: ./bad.scr: not found` | `st=126` **2>** `<shell>: ./bad.scr: /nonexistent/interp: bad interpreter: No such file or directory` | `st=126` **2>** `<shell>: ./bad.scr: /nonexistent/interp: bad interpreter: No such file or directory` | `st=126` **2>** `<shell>: ./bad.scr: /nonexistent/interp: bad interpreter: No such file or directory` | `st=127` **2>** `<shell>: ./bad.scr: not found` | `st=127` **2>** `<shell>:1: ./bad.scr: bad interpreter: /nonexistent/interp: no such file or directory` | `st=127` **2>** `<shell>: ./bad.scr: not found` |
+| `path/exec-on-a-file-with-no-shebang-runs-it` | `ran-under-exec 2` | `ran-under-exec 2` | `ran-under-exec 2` | `ran-under-exec 2` | `ran-under-exec 2` | `ran-under-exec 2` | `ran-under-exec 2` |
 | `path/directory-on-path-is-walked-past` | `ran~st=0` | `ran~st=0` | `ran~st=0` | `ran~st=0` | `ran~st=0` | `ran~st=0` | `ran~st=0` |
 | `path/directory-on-path-alone-diverges` | `st=127` **2>** `<shell>: 1: target: Permission denied` | `st=127` **2>** `<shell>: line 1: target: command not found` | `st=127` **2>** `<shell>: line 1: target: command not found` | `st=127` **2>** `<shell>: target: command not found` | `st=126` **2>** `<shell>: target: cannot execute [Is a directory]` | `st=126` **2>** `<shell>:1: permission denied: target` | `st=127` **2>** `<shell>: target: Permission denied` |
 | `path/missing-path-is-not-a-missing-name` | `st=127` **2>** `<shell>: 1: ./nope: not found` | `st=127` **2>** `<shell>: line 1: ./nope: No such file or directory` | `st=127` **2>** `<shell>: line 1: ./nope: No such file or directory` | `st=127` **2>** `<shell>: ./nope: No such file or directory` | `st=127` **2>** `<shell>: ./nope: not found` | `st=127` **2>** `<shell>:1: no such file or directory: ./nope` | `st=127` **2>** `<shell>: ./nope: not found` |
@@ -17488,6 +17496,38 @@ grades it and nothing drift-checks it either, for the same reason.
 - `path/directory-as-a-command` — 126 as well, and the reason diverges: bash and ksh93 check for a directory and say so, dash and zsh report the permission error execve returns
   ```sh
   mkdir -p adir; ./adir; echo "st=$?"
+  ```
+- `path/no-shebang-is-run-as-a-shell-script` — a file with the execute bit and no `#!` line is not an executable image, so execve answers ENOEXEC — and POSIX says the shell then runs it as a shell script. Unanimous across all seven columns, arguments and all, so it is a correction rather than an axis. We answered `fork/exec <path>: exec format error` at 126, which broke every shebang-less executable script there is: Makefile recipes, hand-written git hooks, anything a generator wrote and chmod'd. It also put a Go string in a shell diagnostic (#2580)
+  ```sh
+  printf 'echo ran-as-script n=$# 1=$1\n' > ne.scr; chmod +x ne.scr; ./ne.scr a b; echo "st=$?"
+  ```
+- `path/no-shebang-script-gets-a-fresh-shell` — *which* shell runs it, asked in the one way that does not depend on which: the script sees the exported variable and not the unexported one, in all seven. So this is not a `.` — a sourced file would print both — and the implementation it demands is a shell of its own seeded from the environment. The two readings the panel actually holds are a re-exec of itself and an execve of `/bin/sh`, and they are indistinguishable here, which is why the case asks the question this way rather than by printing a version string
+  ```sh
+  U=u; export E=e; printf 'echo "[$U][$E]"\n' > f.scr; chmod +x f.scr; ./f.scr; echo "st=$?"
+  ```
+- `path/no-shebang-script-zero-is-the-resolved-path` — the one place the panel parts on the row above: six columns hand the script the path the search resolved and ksh93 hands it the word that was typed. Matched with `case` rather than printed, because the path is a scratch directory this run invented and a row holding it would move every run. Off PATH rather than through `./z.scr`, which is where the two readings are the same string and nothing could be learned
+  ```sh
+  mkdir -p d; printf 'case $0 in */z.scr) echo resolved;; z.scr) echo word;; *) echo "other=$0";; esac\n' > d/z.scr; chmod +x d/z.scr; PATH=$PWD/d; z.scr; echo "st=$?"
+  ```
+- `path/binary-content-is-not-run-as-a-script` — the control that keeps the fallback above from swallowing a real failure: a file the kernel refused whose first line holds a NUL is not shell text, and six columns say 126 rather than reading it. A binary for another architecture answers the same ENOEXEC, so without this a fix would turn one clear error into a spray of `command not found`. BusyBox ash is the seventh and does not look at all — it runs this — which is the axis, Semantics.BinaryContentIsNotRunAsAScript. The NUL is written with `printf`'s octal escape, which all seven produce identically
+  ```sh
+  printf 'echo ran\0more\n' > b.img; chmod +x b.img; ./b.img; echo "st=$?"
+  ```
+- `path/no-shebang-empty-file-is-an-empty-script` — the degenerate end of the fallback: nothing to run is status 0 and no diagnostic, unanimous. An implementation that reported an empty program, or that fell through to the exec error because there was nothing to parse, is visible here and nowhere else
+  ```sh
+  : > empty.scr; chmod +x empty.scr; ./empty.scr; echo "st=$?"
+  ```
+- `path/no-shebang-comment-only-file-is-an-empty-script` — and the same answer for a file with text in it that is not a command. The pair with the empty file is what says the 0 is the script running to its end rather than the shell declining to start it — a `#` is shell syntax, so this file is parsed and the other is not
+  ```sh
+  printf '# nothing but a comment\n' > c.scr; chmod +x c.scr; ./c.scr; echo "st=$?"
+  ```
+- `path/missing-interpreter-is-not-the-script-fallback` — the other control, and the one that fails the other way round: a `#!` naming an interpreter that is not there is ENOENT rather than ENOEXEC, and no column runs the file itself — the three bash columns say `bad interpreter` at 126 and dash, ksh93, zsh and ash say some form of `not found` at 127. A fallback keyed on "the start failed" instead of on the one errno would print SHOULD-NOT-RUN here. We report Go's wrapper at 126 and so are wrong in both the wording and, for four columns, the status; the row records the target rather than the fix, which is a separate failure from #2580
+  ```sh
+  printf '#!/nonexistent/interp\necho SHOULD-NOT-RUN\n' > bad.scr; chmod +x bad.scr; ./bad.scr; echo "st=$?"
+  ```
+- `path/exec-on-a-file-with-no-shebang-runs-it` — the second door onto the same question. `exec` reaches the file by a different road — a process replacement rather than a child — and every column runs the script and does not come back, arguments and all. A fix applied at one call site and not the other passes the row above and fails this one, which is the shape this tree keeps repeating
+  ```sh
+  printf 'echo ran-under-exec $#\n' > x.scr; chmod +x x.scr; exec ./x.scr a b; echo NOT-REACHED
   ```
 - `path/directory-on-path-is-walked-past` — a directory whose name matches the command does not stop the PATH search — the shim-directory-early-on-PATH arrangement every version manager relies on
   ```sh

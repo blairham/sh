@@ -12746,6 +12746,46 @@ printf 'TWO=still-running\n'`,
 		Why:     "126 as well, and the reason diverges: bash and ksh93 check for a directory and say so, dash and zsh report the permission error execve returns",
 	},
 	{
+		ID: "path/no-shebang-is-run-as-a-shell-script", Category: "command lookup",
+		Snippet: `printf 'echo ran-as-script n=$# 1=$1\n' > ne.scr; chmod +x ne.scr; ./ne.scr a b; echo "st=$?"`,
+		Why:     "a file with the execute bit and no `#!` line is not an executable image, so execve answers ENOEXEC — and POSIX says the shell then runs it as a shell script. Unanimous across all seven columns, arguments and all, so it is a correction rather than an axis. We answered `fork/exec <path>: exec format error` at 126, which broke every shebang-less executable script there is: Makefile recipes, hand-written git hooks, anything a generator wrote and chmod'd. It also put a Go string in a shell diagnostic (#2580)",
+	},
+	{
+		ID: "path/no-shebang-script-gets-a-fresh-shell", Category: "command lookup",
+		Snippet: `U=u; export E=e; printf 'echo "[$U][$E]"\n' > f.scr; chmod +x f.scr; ./f.scr; echo "st=$?"`,
+		Why:     "*which* shell runs it, asked in the one way that does not depend on which: the script sees the exported variable and not the unexported one, in all seven. So this is not a `.` — a sourced file would print both — and the implementation it demands is a shell of its own seeded from the environment. The two readings the panel actually holds are a re-exec of itself and an execve of `/bin/sh`, and they are indistinguishable here, which is why the case asks the question this way rather than by printing a version string",
+	},
+	{
+		ID: "path/no-shebang-script-zero-is-the-resolved-path", Category: "command lookup",
+		Snippet: `mkdir -p d; printf 'case $0 in */z.scr) echo resolved;; z.scr) echo word;; *) echo "other=$0";; esac\n' > d/z.scr; chmod +x d/z.scr; PATH=$PWD/d; z.scr; echo "st=$?"`,
+		Why:     "the one place the panel parts on the row above: six columns hand the script the path the search resolved and ksh93 hands it the word that was typed. Matched with `case` rather than printed, because the path is a scratch directory this run invented and a row holding it would move every run. Off PATH rather than through `./z.scr`, which is where the two readings are the same string and nothing could be learned",
+	},
+	{
+		ID: "path/binary-content-is-not-run-as-a-script", Category: "command lookup",
+		Snippet: `printf 'echo ran\0more\n' > b.img; chmod +x b.img; ./b.img; echo "st=$?"`,
+		Why:     "the control that keeps the fallback above from swallowing a real failure: a file the kernel refused whose first line holds a NUL is not shell text, and six columns say 126 rather than reading it. A binary for another architecture answers the same ENOEXEC, so without this a fix would turn one clear error into a spray of `command not found`. BusyBox ash is the seventh and does not look at all — it runs this — which is the axis, Semantics.BinaryContentIsNotRunAsAScript. The NUL is written with `printf`'s octal escape, which all seven produce identically",
+	},
+	{
+		ID: "path/no-shebang-empty-file-is-an-empty-script", Category: "command lookup",
+		Snippet: `: > empty.scr; chmod +x empty.scr; ./empty.scr; echo "st=$?"`,
+		Why:     "the degenerate end of the fallback: nothing to run is status 0 and no diagnostic, unanimous. An implementation that reported an empty program, or that fell through to the exec error because there was nothing to parse, is visible here and nowhere else",
+	},
+	{
+		ID: "path/no-shebang-comment-only-file-is-an-empty-script", Category: "command lookup",
+		Snippet: `printf '# nothing but a comment\n' > c.scr; chmod +x c.scr; ./c.scr; echo "st=$?"`,
+		Why:     "and the same answer for a file with text in it that is not a command. The pair with the empty file is what says the 0 is the script running to its end rather than the shell declining to start it — a `#` is shell syntax, so this file is parsed and the other is not",
+	},
+	{
+		ID: "path/missing-interpreter-is-not-the-script-fallback", Category: "command lookup",
+		Snippet: `printf '#!/nonexistent/interp\necho SHOULD-NOT-RUN\n' > bad.scr; chmod +x bad.scr; ./bad.scr; echo "st=$?"`,
+		Why:     "the other control, and the one that fails the other way round: a `#!` naming an interpreter that is not there is ENOENT rather than ENOEXEC, and no column runs the file itself — the three bash columns say `bad interpreter` at 126 and dash, ksh93, zsh and ash say some form of `not found` at 127. A fallback keyed on \"the start failed\" instead of on the one errno would print SHOULD-NOT-RUN here. We report Go's wrapper at 126 and so are wrong in both the wording and, for four columns, the status; the row records the target rather than the fix, which is a separate failure from #2580",
+	},
+	{
+		ID: "path/exec-on-a-file-with-no-shebang-runs-it", Category: "command lookup",
+		Snippet: `printf 'echo ran-under-exec $#\n' > x.scr; chmod +x x.scr; exec ./x.scr a b; echo NOT-REACHED`,
+		Why:     "the second door onto the same question. `exec` reaches the file by a different road — a process replacement rather than a child — and every column runs the script and does not come back, arguments and all. A fix applied at one call site and not the other passes the row above and fails this one, which is the shape this tree keeps repeating",
+	},
+	{
 		ID: "export/p-names-what-is-exported", Category: "builtins",
 		Snippet: `export V=1; export -p | grep -c -E "^(declare -x|export) V="`,
 		Why:     "the listing must name the exported variable in one of the two spellings the shells use — the grep finds either, and found neither before",

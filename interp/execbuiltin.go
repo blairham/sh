@@ -142,6 +142,13 @@ func (r *Runner) replaceSelf(ctx context.Context, argv []string) int {
 		err := r.ReplaceProcess(path, withArgv0(argv, argv0), r.environ(), r.replacementFiles())
 		// Only reached if the replacement failed, which is the one case where
 		// there is still a shell to report it.
+		//
+		// A file the kernel will not start may still be a shell script — see
+		// noexecscript.go, and execImageAsScript for why the same helper
+		// answers both this door and a command word's.
+		if st, ran := r.execImageAsScript(ctx, action, path, argv, r.environ(), err); ran {
+			return st
+		}
 		r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
 		// A start that failed rather than a lookup that did: wrapped so the
 		// shared reporter has a name and a resolved path to work from.
@@ -169,6 +176,9 @@ func (r *Runner) replaceSelf(ctx context.Context, argv []string) int {
 	cmd.ExtraFiles = r.childFiles()
 
 	if err := cmd.Start(); err != nil {
+		if st, ran := r.execImageAsScript(ctx, action, path, argv, cmd.Env, err); ran {
+			return st
+		}
 		r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
 		// A start that failed rather than a lookup that did: wrapped so the
 		// shared reporter has a name and a resolved path to work from.

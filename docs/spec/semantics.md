@@ -9567,8 +9567,204 @@ name goes. bash has taken the operand for its name by the time the read
 fails, which is an artifact of the order it does things in rather than a
 wording a dialect vector could hold. The status, 126, is reproduced.
 
-Neither is about a file whose *contents* are not a script; that is a
-separate question and has an issue of its own.
+Neither is about a file whose *contents* are not a script; that is the
+next section.
+
+## A file the kernel will not exec is run as a shell script
+
+Oracle runs, 2026-09-13, on macOS: bash 5.3.15, that bash as `sh`, bash
+3.2.57, ksh93u+, zsh 5.9.2, dash, and BusyBox ash in the pinned alpine
+image. Corpus rows `path/no-shebang-is-run-as-a-shell-script`,
+`path/no-shebang-script-gets-a-fresh-shell`,
+`path/no-shebang-script-zero-is-the-resolved-path`,
+`path/binary-content-is-not-run-as-a-script`,
+`path/no-shebang-empty-file-is-an-empty-script`,
+`path/no-shebang-comment-only-file-is-an-empty-script`,
+`path/missing-interpreter-is-not-the-script-fallback` and
+`path/exec-on-a-file-with-no-shebang-runs-it`. Issue #2580.
+
+A file with the execute bit set and no `#!` line is not an executable
+image, so `execve` answers `ENOEXEC`. POSIX XCU says the shell then runs
+it **as a shell script**, and every member of the panel does:
+
+    printf 'echo ran-as-script "$@" "$0"\n' > ne.scr && chmod +x ne.scr
+    <shell> -c 'PATH=.:$PATH; ne.scr a b; echo st=$?'
+
+| column | |
+| --- | --- |
+| dash | `ran-as-script a b <tmp>/ne.scr`, `st=0` |
+| bash 5.3.15 | the same |
+| bash as `sh` | the same |
+| bash 3.2.57 | the same |
+| zsh 5.9.2 | the same |
+| ash | the same |
+| ksh93u+ | the same, except `$0` is the word as typed |
+| **ours, before** | `fork/exec <tmp>/ne.scr: exec format error`, `st=126` |
+
+Unanimous, so it is a correction rather than an axis — and the diagnostic
+was a Go error string, which is a second defect in one line. What it cost
+is not a conformance point: a shebang-less executable script is ordinary
+in `Makefile` recipes, in hand-written `git` hooks and in anything a
+generator wrote and `chmod +x`'d, and every one of them failed here.
+
+### Which shell runs it
+
+A fresh one. Measured with a script that prints the variables around it,
+the caller's functions and its own parameters:
+
+| what the script sees | every column |
+| --- | --- |
+| an **exported** variable of the caller | yes |
+| an **unexported** one | no |
+| a function the caller defined | no |
+| the caller's positional parameters | no — its own, from the words after it |
+
+So this is not a `.`: a sourced file would see all four. Under
+`CLEANROOM`'s rule that the core may not touch the process it cannot be
+an `execve` either, so what it is here is a **child `Runner` seeded from
+the environment the command would have been given**, with `$0` set and
+the rest of the words as the positional parameters. The descriptors past
+the three named streams cross too — see the last subsection.
+
+It is a shell of this front end's kind and not a bare interpreter, which
+took a second pass to get right. Built from the exported fields alone it
+was fresh in a sense no real shell is: an `execve` of the same binary runs
+the dialect's registrations and its prelude on the way up, and this ran
+neither, so a shebang-less script found `$RANDOM`, `$SECONDS` and the
+version parameter empty and had none of the builtins its dialect adds.
+`Runner.SetUp` is the seam that closes it — the front end hands over the
+part of composing a shell that is not a field — and it is carried on, so a
+script reached this way that reaches another one gets the same shell again.
+
+What deliberately does **not** cross is the hooks that change *this*
+process, because the process a real shell gives the script is its own and
+nothing it does there comes back. An `exec` in the script must not replace
+the shell that is waiting for it, a signal that kills the script must not
+take the shell with it, and a limit the script lowered must not stay
+lowered — a lowered hard limit cannot be raised again by anybody. `umask`
+is the one exception and it is a bounded one: it has to reach the process,
+because the files the script creates really are created by it, so it is
+applied and then taken back when the script ends. Without that a
+`umask 077` in such a script does nothing at all and the file it writes is
+world-readable; left standing, every later command in the caller inherits
+a mask the caller never set.
+
+*Whose* shell is where the implementations part, and it parts in a place
+that is not ours to reproduce. bash and ksh93 run the file with
+themselves; zsh and dash hand it to `/bin/sh`, which on the machine the
+panel runs on is bash 3.2 — a script printing `$BASH_VERSION` reports
+`3.2.57` under both. That is a fact about `/bin/sh` on this machine
+rather than about zsh or dash, and reproducing it would mean starting a
+shell nobody named. So the file is run by **this** shell's dialect, which
+is what bash and ksh93 do and what zsh and dash do wherever `/bin/sh` is
+the shell in question. Every construct the panel was measured on is in
+the common denominator, so the columns agree whichever reading is taken.
+
+### `$0`, which is the one place the panel parts
+
+Six columns hand the script the path the `PATH` search resolved; ksh93
+hands it the word that was typed. It is the same split
+`Diagnostics.NamesResolvedPath` records for a failed command's
+diagnostic, asked about a parameter instead, and it is
+`Semantics.ScriptImageSeesTheResolvedPath`.
+
+The axis is asked at the disagreement and nowhere else. A word already
+written with a slash is the same string under either reading, so
+`./ne.scr` is `./ne.scr` in every column and nothing is asked. `exec` is
+the exception in the other direction: `exec ./ne.scr` hands the script
+`<tmp>/ne.scr` in all three bash columns and `./ne.scr` in the rest —
+the same habit `NamesResolvedPath` already names, so it is read from
+there rather than given a second field to drift from it.
+
+### What must still fail, and how the shells decide
+
+Not every `ENOEXEC` is a script. A binary for another architecture
+answers the same errno, and reading one as shell text turns a single
+clear failure into a spray of `command not found`. The panel looks
+before it leaps, and what it looks for is measured rather than guessed
+— a NUL byte in the file's **first line**, bounded by a sample of about
+eighty bytes:
+
+| the file | bash 5.3 | bash 3.2 | zsh | ksh93 | dash | ash |
+| --- | --- | --- | --- | --- | --- | --- |
+| `echo a\0b` — NUL in line 1 | 126 | 126 | 126 | 126 | 126 | ran |
+| `\0echo zero` — NUL at byte 0 | 126 | 126 | 126 | 126 | 126 | ran |
+| `echo one` / `echo t\0wo` — NUL on line 2 | 0 | 0 | 0 | 3 | 0 | ran |
+| `echo nulearly` then `\0\0rest` | 0 | 0 | 0 | 3 | 0 | ran |
+| a NUL at byte 78 of one long line | 126 | 126 | 126 | 126 | 126 | ran |
+| a NUL at byte 205 of one long line | 0 | 0 | 0 | 126 | 0 | ran |
+| `\x7fELF echo …` — ELF magic, no NUL | 126 | 0 | 0 | 0 | 0 | ran |
+
+Three things fall out of the grid. The rule five columns share is *the
+first line and a NUL in it*: a NUL after the first newline does not stop
+anything, which is what lets a script with binary data in its body run
+at all. The **sample bound** is ksh93's alone to disagree about — it is
+still looking at byte 205 where the rest have stopped. The **ELF magic**
+is bash 5.3's alone; a real ELF or Mach-O header carries NULs within a
+few bytes of its magic, so the narrow rule catches the case the check
+exists for without it.
+
+BusyBox ash is the column that does not look at all. A Mach-O header, a
+file beginning with a NUL and a file with a NUL mid-line are all read as
+scripts there. That is `Semantics.BinaryContentIsNotRunAsAScript`, and
+the preset answers yes.
+
+The wording of the refusal is the dialects' own, and one of them has a
+phrase rather than the `strerror` text:
+
+| column | |
+| --- | --- |
+| bash 5.3.15 | `<file>: cannot execute binary file: Exec format error` |
+| bash 3.2.57 | `<file>: cannot execute binary file` |
+| ksh93u+ | `<file>: cannot execute [Exec format error]` |
+| zsh 5.9.2 | `exec format error: <file>` |
+
+— which is `Diagnostics.BinaryFileReason` for the first and the existing
+`CannotExecute` shape arranging the errno for the other two. All of them
+are 126.
+
+### The two neighbors this must not swallow
+
+**A file without the execute bit** is `EACCES`, not `ENOEXEC`, and is
+`Permission denied` at 126 in every column. That one was already right
+and has to stay apart from this.
+
+**A `#!` naming an interpreter that is not there** is `ENOENT` on the
+interpreter, and no column runs the file itself: the three bash columns
+say `bad interpreter: No such file or directory` at 126, and dash,
+ksh93, zsh and ash say some form of `not found` at 127. The fallback is
+therefore keyed on `ENOEXEC` **specifically** — a fallback keyed on "the
+start failed" would run the file, which is exactly the error a person
+needs to see. We still report Go's wrapper for this one, at 126, so the
+corpus row records the target rather than our answer; it is a separate
+failure from #2580 and the row is where the next fix starts.
+
+### The degenerate ends, and the second door
+
+An **empty** executable file and one holding **nothing but a comment**
+are both status 0 with nothing said, in all seven. The pair is what says
+the 0 is the script running to its end rather than the shell declining to
+start it: a `#` line is shell syntax, so the second file is parsed and
+the first is not.
+
+`exec` is the second door onto the same question, and it must not answer
+differently: `exec ./ne.scr a b; echo NOT-REACHED` runs the script and
+prints no `NOT-REACHED` anywhere. So a replacement that failed with
+`ENOEXEC` runs the script and then ends the shell with its status, which
+is what the stand-in child beside it does — and a binary reached that way
+still fails, still at 126, and still stops the shell.
+
+### The descriptors, and the one place a table differs
+
+A descriptor the script parked reaches the file run this way in every
+column: `exec 3>out3` then a `t.scr` of `echo via3 >&3` writes, ksh93
+included. That is worth stating because ksh93 is the shell that keeps
+`exec`'s own descriptors *from an external command*
+(`Semantics.ExecOpenedFdReachesACommand`), and it does not keep them
+from this. The reading behind that is the one the shells implement — the
+script is the shell running on, not a command it launched — which is why
+`imageFiles` is a second caller of the one table rather than a second
+table.
 
 ## A subscript that will not read
 

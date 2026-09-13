@@ -927,6 +927,12 @@ func Semantics() interp.Semantics {
 	s.DotDirectoryOperandIsAnError = interp.Yes
 	s.ExecFailureRunsExitTrap = interp.No
 	s.ExecTakesOptions = interp.Yes
+	// A file the kernel would not start is run as a script here as it is
+	// everywhere, and `$0` inside it is the word that was typed rather than
+	// the path the PATH search resolved. Measured 2026-09-13: with the file
+	// on PATH, `ne.scr` reports `ne.scr` here and the resolved path in the
+	// other six columns.
+	s.ScriptImageSeesTheResolvedPath = interp.No
 	s.TestAcceptsDoubleEqual = interp.Yes
 	// The same three unary operators bash has past the three-word rules.
 	// `set -p` is the short spelling of `set -o privileged`, which this

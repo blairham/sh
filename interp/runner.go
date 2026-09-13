@@ -5526,6 +5526,20 @@ func (r *Runner) refuseReadonly(name string, form assignForm) bool {
 		// Runner.retypingFrozen.
 		return false
 	}
+	if form == assignedAsTheCompoundView && r.freezeSurvivesAShadow(name) {
+		// The empty a valueless declaration writes, over a produced
+		// parameter whose freeze the shadow did *not* displace. Measured:
+		// `f(){ local ARGC; print $ARGC }` is `0` in zsh and the outer value
+		// is intact, where `f(){ local ARGC=5; … }` is refused — so the
+		// declaration is taken and only a *value* is refused, and a letter
+		// is not a value either (`local -i ARGC` is `0` there too).
+		//
+		// This form and no other, which is what keeps the refusal on the
+		// line after: `f(){ local ARGC; ARGC=5 }` writes through
+		// assignedAlone and is `read-only variable: ARGC` in both shells.
+		// See freezeSurvivesAShadow, where the six rows are.
+		return false
+	}
 	// Fatal everywhere but bash, measured with a plain assignment in a
 	// script — which is the contaminated-probe case oracle.md records.
 	//

@@ -3229,7 +3229,9 @@ func (r *Runner) shadow(name string) (fresh bool) {
 			sc.savedReadonly = map[string]bool{}
 		}
 		sc.savedReadonly[name] = r.readonly[name]
-		delete(r.readonly, name)
+		if !r.freezeSurvivesAShadow(name) {
+			delete(r.readonly, name)
+		}
 		// And the hide-in-scope attribute, for the same reason and with the
 		// same two jobs: the outer name gets back what it carried, and an
 		// attribute this call added or removed goes away with the call.

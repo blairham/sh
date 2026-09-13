@@ -470,7 +470,10 @@ func TestBareExportAndReadonlyAreAssignmentsAlone(t *testing.T) {
 	dir := t.TempDir()
 	out, st := runZsh(t, dir,
 		`export V='a b'; readonly R=2; export; readonly; export -p; readonly -p`)
-	want := "OLDPWD=" + dir + "\nV='a b'\nARGC=0\nEPOCHREALTIME\nEPOCHSECONDS\nR=2\n" +
+	// `LINENO=1` sits between them because this shell's LINENO is read-only,
+	// which is measured: zsh 5.9.2's own bare `readonly` writes `ARGC=0` and
+	// `LINENO=1` in the same run, and refuses `unset LINENO` (#2519).
+	want := "OLDPWD=" + dir + "\nV='a b'\nARGC=0\nEPOCHREALTIME\nEPOCHSECONDS\nLINENO=1\nR=2\n" +
 		"builtins\ndis_functions_source\ndis_patchars\ndis_reswords\nepochtime\n" +
 		"errnos\nkeymaps\nlanginfo\nparameters\nreswords\nsysparams\ntermcap\nterminfo\n" +
 		"widgets\nzsh_scheduled_events\n" +
@@ -478,7 +481,12 @@ func TestBareExportAndReadonlyAreAssignmentsAlone(t *testing.T) {
 		// The kind letters beside the readonly one, measured: real zsh's
 		// `readonly -p` writes `typeset -Fr EPOCHREALTIME` and
 		// `typeset -ir EPOCHSECONDS` (#2451).
-		"typeset -r ARGC=0\ntypeset -Fr EPOCHREALTIME\ntypeset -ir EPOCHSECONDS\n" +
+		// No `ARGC` row on this side, and it is on the other: measured
+		// 2026-09-12 in one run of zsh 5.9.2, a bare `readonly` writes
+		// `ARGC=0` and `readonly -p` writes no row for the name at all,
+		// which is ProducedDeclaration.Silent and is asked of the `-p`
+		// *word* rather than of the shape that came back (#2518).
+		"typeset -Fr EPOCHREALTIME\ntypeset -ir EPOCHSECONDS\n" +
 		"typeset -r R=2\n" +
 		"typeset -Ar builtins\ntypeset -Ar dis_functions_source\n" +
 		"typeset -ar dis_patchars\ntypeset -ar dis_reswords\ntypeset -ar epochtime\n" +

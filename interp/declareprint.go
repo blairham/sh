@@ -395,13 +395,13 @@ func (r *Runner) declarableNames() []string {
 // declarePrint is the `-p` of `declare` and `typeset`: the named
 // declarations, or every one the runner knows when no name is given.
 func (r *Runner) declarePrint(names []string) int {
-	return r.declarePrintForm(names, r.sem().DeclareListing, nil)
+	return r.declarePrintForm(names, r.sem().DeclareListing, true, nil)
 }
 
 // declarePrintForm lists declarations in the given form, walking only the
 // names the filter admits when no operands narrow it — which is how
 // `export -p` lists the exported names alone.
-func (r *Runner) declarePrintForm(names []string, form DeclarationListingForm, keep func(declaration) bool) int {
+func (r *Runner) declarePrintForm(names []string, form DeclarationListingForm, dashP bool, keep func(declaration) bool) int {
 	if form == DeclarationListingUnspecified {
 		r.diagf("%s\n", r.unanswered("how a declaration is listed back"))
 		r.status = 2
@@ -433,11 +433,27 @@ func (r *Runner) declarePrintForm(names []string, form DeclarationListingForm, k
 			}
 			continue
 		}
-		if d.silent {
+		if d.silent && dashP {
 			// Known to the listing and written by it as nothing, at 0 — see
 			// ProducedDeclaration.Silent. Ahead of the row rather than
 			// inside the renderer, because there is no row: a form that
 			// wrote an empty line would be a shape no shell produces.
+			//
+			// The silence belongs to the **`-p` word** and not to the name,
+			// and it is asked of the word rather than of the shape that came
+			// back because two dialects give the two forms one shape. zsh
+			// 5.9.2, 2026-09-12, one run, `ARGC`:
+			//
+			//	typeset -p ARGC   nothing, status 0
+			//	typeset -p        no row
+			//	readonly -p       no row
+			//	typeset -r        ARGC=0
+			//	readonly          ARGC=0
+			//	typeset           integer 10 readonly ARGC=0
+			//
+			// `LINENO` answers the same six ways. So a name silent to `-p`
+			// is still in the listing the bare word writes, and the
+			// bare-assignment form is the one this engine renders those with.
 			continue
 		}
 		r.printf("%s\n", r.listedDeclaration(form, d))

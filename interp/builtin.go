@@ -1725,7 +1725,8 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 		// the leading `export` word for the bare form alone. That split is
 		// recorded in the corpus and left for a dialect to answer; the
 		// listing every shell has is worth more than the silence it replaces.
-		return r.declarePrintForm(args, r.bareOrDashP(opts, r.sem().ExportListing),
+		form, dashP := r.bareOrDashP(opts, r.sem().ExportListing)
+		return r.declarePrintForm(args, form, dashP,
 			func(d declaration) bool { return d.exported })
 	}
 	args, status, ended := r.builtinNames("export", args, false)
@@ -4209,11 +4210,15 @@ func (r *Runner) namesUnderAPlus(args []string, keep func(declaration) bool) (in
 	return r.declarationFilteredNameListing(r.declarableNames(), keep), true
 }
 
-func (r *Runner) bareOrDashP(opts string, dashP DeclarationListingForm) DeclarationListingForm {
+// The second result is whether `-p` was the word written, which is a
+// different question from which *shape* came back: two dialects give the two
+// forms one shape and a produced parameter can still be in one listing and
+// not the other. See ProducedDeclaration.Silent.
+func (r *Runner) bareOrDashP(opts string, dashP DeclarationListingForm) (DeclarationListingForm, bool) {
 	if strings.ContainsRune(opts, 'p') {
-		return dashP
+		return dashP, true
 	}
-	return r.sem().BareDeclarationListing
+	return r.sem().BareDeclarationListing, false
 }
 
 // readonlyRecordsTheCompound reports whether `readonly -a` and `readonly -A`
@@ -4259,7 +4264,8 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 		// The listing: readonly names alone, in the dialect's shape. `-p` and
 		// nothing at all list alike, which is the same rule `export` follows
 		// and is measured the same way.
-		return r.declarePrintForm(nil, r.bareOrDashP(opts, r.sem().ReadonlyListing),
+		form, dashP := r.bareOrDashP(opts, r.sem().ReadonlyListing)
+		return r.declarePrintForm(nil, form, dashP,
 			func(d declaration) bool { return d.readonly })
 	}
 	args, status, ended := r.builtinNames("readonly", args, false)

@@ -5914,7 +5914,8 @@ The criterion is not which shells have it today but **whether the command
 is the substrate's kind of thing**: does it act on state the core already
 owns, in a way a second dialect would plausibly want? `mapfile` reads a
 stream into an array; `compgen` answers from the builtin and function
-tables; `enable` turns a builtin off. All three are questions about the
+tables and from the directory the runner is in; `enable` turns a builtin
+off. All three are questions about the
 interpreter rather than about bash, so the code belongs where the state
 is, and membership is expressed by taking the name away.
 
@@ -7075,18 +7076,79 @@ So it is registered in the core and taken away by the three without it,
 the way `enable` is — the same shape `semantics.md` records above for
 builtins that belong to one shell.
 
-**What is generated, and why only this much.** `compgen` answers from
-the shell's own knowledge in two places and nowhere else:
+**What is generated.** `compgen` answers from what the shell knows
+about itself and from the filesystem, and from nowhere else:
 
 | spelling | generates |
 | --- | --- |
 | `-A builtin`, `-b` | the names of this shell's builtins |
 | `-A function` | the names of the functions defined so far |
+| `-A file`, `-f` | the directory entries carrying the word as a prefix |
+| `-A directory`, `-d` | the same, kept to the ones that resolve to a directory |
+| `-o default` | the filenames, as a **fallback** — see below |
+| `-o dirnames` | the directories, as the same fallback |
+| `-o plusdirs` | the directories, **appended** to whatever else generated |
 
-Those are the two questions the interpreter already holds the answer to.
-Homebrew's `brew` asks the first of them, `compgen -A builtin`, to check
-that none of the shell's own commands has been shadowed, which is why the
-builtin exists at all.
+The first two are questions the interpreter already holds the answer to.
+Homebrew's `brew` asks `compgen -A builtin` to check that none of the
+shell's own commands has been shadowed, which is why the builtin exists
+at all. The rest arrived with #2555 and are the filesystem half.
+
+**The filesystem half.** Measured 2026-09-12 against bash 5.3.15, and
+four rules come out of it — each one this could plausibly have got wrong:
+
+- The word is a **prefix and not a pattern**. `compgen -f 'a*'` matches
+  the names beginning with those three characters, which is none of them,
+  and answers 1. No glob machinery is involved.
+- It is split at the **last `/`**, the part in front names the directory
+  to read, and that part is written back onto every answer exactly as the
+  script spelled it: `compgen -f ../a` answers `../alink`, not a cleaned
+  path.
+- **Dotfiles are never hidden** — this is not a glob, so there is nothing
+  for the hidden rule to apply to — but `.` and `..` appear only when the
+  part after the last `/` begins with a dot. They are not entries a
+  directory read returns, so they are put in rather than filtered out.
+- **`-d` follows a link and `-f` does not.** `-d` asks whether the name
+  *resolves* to a directory, so a link to one is a directory and a broken
+  link is nothing, while `-f` takes the entry as it stands.
+
+The read goes through `Runner.readDir`, so a completion is a probe the
+policy can see: `compgen -f /etc/` enumerates a directory, and that is
+exactly the act `ActionReadDir` exists to record.
+
+**The order is this shell's own and is stated rather than borrowed.**
+bash answers in readdir order, which on the machine this was measured on
+is a hash order that differs between two directories holding the same
+names — so there is nothing stable to copy. `readDir` sorts for the same
+reason the glob machinery does, and these read through it. A corpus row
+listing more than one name pipes through `sort` for the same reason.
+
+**`-o` is not an option reader**, which is what #2412 filed it as —
+`compgen -o default | head -1` printing `cmd`. It names one of the nine
+completion options, and three of them generate. `default` and `dirnames`
+generate only when nothing else did: `compgen -o default -A builtin ec`
+answers `echo` and no file at all, and with both named the directories
+win. `plusdirs` is not a fallback and appends, so `compgen -o plusdirs -f
+a` answers the directory a second time. The other six — `bashdefault`,
+`filenames`, `fullquote`, `noquote`, `nosort`, `nospace` — generate
+nothing, and answer 1 rather than 0: an option was asked for, so the
+machinery ran and found nothing.
+
+An `-o` name that is not one of the nine is `compgen: NAME: invalid
+option name` at 2, on a line of its own with no usage after it. A bare
+`-o` is `option requires an argument` **and** the usage line, and the
+next operand is taken as the name whatever it looks like — `compgen -o
+-f` is `-f: invalid option name`.
+
+**The actions are a set, generated in the shell's order.** Measured,
+`compgen -df a` and `compgen -fd a` answer alike — the builtins, then the
+functions, then the files, then the directories — and both answer a name
+that two actions generated twice. Duplicates are not removed: a
+completion list is what the generators produced.
+
+**An option argument may be attached.** `-Abuiltin`, `-odefault` and
+`-fo default` all read the way the spaced form does, and the argument
+ends the cluster.
 
 The surrounding behavior is measured and matches bash exactly:
 
@@ -7094,6 +7156,7 @@ The surrounding behavior is measured and matches bash exactly:
     compgen -A builtin zzzznosuch →  nothing            status 1
     compgen foo                   →  nothing            status 0
     compgen -A nosuchaction x     →  invalid action name, status 2
+    compgen -o filenames a        →  nothing            status 1
 
 The two statuses are the pair worth stating together: **1 means asked and
 empty, 0 means never asked.** An empty completion is a failure because
@@ -7122,27 +7185,32 @@ the refusal is deliberate on the rule the `set -o` table follows — an
 action we cannot generate is a promise we cannot keep:
 
 - **The actions bash has and this shell does not generate** — `alias`,
-  `arrayvar`, `binding`, `command`, `directory`, `disabled`, `enabled`,
-  `export`, `file`, `group`, `helptopic`, `hostname`, `job`, `keyword`,
-  `running`, `service`, `setopt`, `shopt`, `signal`, `stopped`, `user`,
-  `variable`. Each is `not implemented` at 2, and an action bash does
+  `arrayvar`, `binding`, `command`, `disabled`, `enabled`, `export`,
+  `group`, `helptopic`, `hostname`, `job`, `keyword`, `running`,
+  `service`, `setopt`, `shopt`, `signal`, `stopped`, `user`, `variable`.
+  (`file` and `directory` were on this list until #2555 gave them an
+  answer.) Each is `not implemented` at 2, and an action bash does
   not have either is `invalid action name` at 2. The distinction matters
   to a script: the first is a shell that is missing something and the
   second is a typo. Measured divergence, recorded in
   `compgen/an-action-this-shell-does-not-generate`: bash *generates*
   these and answers 1 for no match where this refuses at 2.
 - **The letters that go with them** — the same split. `-u` and the rest
-  of `abcdefgjksuv` are `not implemented`; a letter outside that set is
-  `invalid option`, which is bash's own wording. bash also prints its
-  usage line after the complaint and this does not, which is a
-  presentation difference and not a behavioral one.
+  of `abcdefgjksuv` other than `b`, `d` and `f` are `not implemented`; a
+  letter outside that set is `invalid option`, which is bash's own
+  wording, and the usage line follows it as bash writes it — unprefixed,
+  on a line of its own. bash 3.2's usage line is shorter and in a
+  different order; the text here is bash 5.3's, since there is no bash
+  3.2 dialect to spell the other for.
 - **The generators that run something** — `-F function`, `-C command`,
   `-G globpat`, `-W wordlist`. Each is a hook for producing words from
   outside the shell's own tables, and each would need the completion
   machinery this core does not have.
 - **The filters and decorations** — `-X filterpat`, `-P prefix`,
-  `-S suffix`, `-o option`, `-V varname`. These shape a word list rather
-  than generate one, and there is nothing yet for them to shape.
+  `-S suffix`, `-V varname`. These shape a word list rather than
+  generate one, and there is nothing yet for them to shape. `-o` was on
+  this list and does not belong on it: six of its nine names shape and
+  three generate, which is why it is above rather than here.
 - **A bundle naming more than one action** — `compgen -bu` unions two
   generators in bash. Here the letters are read in order and the last one
   wins, which is only ever reachable with a letter that is refused

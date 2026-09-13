@@ -40373,6 +40373,108 @@
         "TimedOut": false
       }
     },
+    "compgen/an-option-name-that-is-not-one": {
+      "ash": {
+        "Stdout": "n=127~bare=127~next=127",
+        "Stderr": "\u003cshell\u003e: compgen: not found~\u003cshell\u003e: compgen: not found~\u003cshell\u003e: compgen: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "n=2~bare=2~next=2",
+        "Stderr": "\u003cshell\u003e: line 1: compgen: nope: invalid option name~\u003cshell\u003e: line 1: compgen: -o: option requires an argument~compgen: usage: compgen [-V varname] [-abcdefgjksuv] [-o option] [-A action] [-G globpat] [-W wordlist] [-F function] [-C command] [-X filterpat] [-P prefix] [-S suffix] [word]~\u003cshell\u003e: line 1: compgen: -f: invalid option name",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "n=2~bare=2~next=2",
+        "Stderr": "\u003cshell\u003e: line 1: compgen: nope: invalid option name~\u003cshell\u003e: line 1: compgen: -o: option requires an argument~compgen: usage: compgen [-V varname] [-abcdefgjksuv] [-o option] [-A action] [-G globpat] [-W wordlist] [-F function] [-C command] [-X filterpat] [-P prefix] [-S suffix] [word]~\u003cshell\u003e: line 1: compgen: -f: invalid option name",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "n=2~bare=2~next=2",
+        "Stderr": "\u003cshell\u003e: line 0: compgen: nope: invalid option name~\u003cshell\u003e: line 0: compgen: -o: option requires an argument~compgen: usage: compgen [-abcdefgjksuv] [-o option] [-A action] [-G globpat] [-W wordlist] [-P prefix] [-S suffix] [-X filterpat] [-F function] [-C command] [word]~\u003cshell\u003e: line 0: compgen: -f: invalid option name",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "n=127~bare=127~next=127",
+        "Stderr": "\u003cshell\u003e: 1: compgen: not found~\u003cshell\u003e: 1: compgen: not found~\u003cshell\u003e: 1: compgen: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "n=127~bare=127~next=127",
+        "Stderr": "\u003cshell\u003e: compgen: not found~\u003cshell\u003e: compgen: not found~\u003cshell\u003e: compgen: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "n=127~bare=127~next=127",
+        "Stderr": "\u003cshell\u003e:1: command not found: compgen~\u003cshell\u003e:1: command not found: compgen~\u003cshell\u003e:1: command not found: compgen",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "compgen/filenames-and-directories": {
+      "ash": {
+        "Stdout": "f=0~d=127~b=127~db=127",
+        "Stderr": "\u003cshell\u003e: compgen: not found~\u003cshell\u003e: compgen: not found~\u003cshell\u003e: compgen: not found~\u003cshell\u003e: compgen: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "adir~afile~alink~f=0~adir~d=0~blink~b=0~db=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "adir~afile~alink~f=0~adir~d=0~blink~b=0~db=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "adir~afile~alink~f=0~adir~d=0~blink~b=0~db=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "f=0~d=127~b=127~db=127",
+        "Stderr": "\u003cshell\u003e: 1: compgen: not found~\u003cshell\u003e: 1: compgen: not found~\u003cshell\u003e: 1: compgen: not found~\u003cshell\u003e: 1: compgen: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "f=0~d=127~b=127~db=127",
+        "Stderr": "\u003cshell\u003e: compgen: not found~\u003cshell\u003e: compgen: not found~\u003cshell\u003e: compgen: not found~\u003cshell\u003e: compgen: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "f=0~d=127~b=127~db=127",
+        "Stderr": "\u003cshell\u003e:1: command not found: compgen~\u003cshell\u003e:1: command not found: compgen~\u003cshell\u003e:1: command not found: compgen~\u003cshell\u003e:1: command not found: compgen",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "compgen/names-of-the-defined-functions": {
       "ash": {
         "Stdout": "st=127",
@@ -40623,6 +40725,57 @@
       "zsh": {
         "Stdout": "st=127",
         "Stderr": "\u003cshell\u003e:1: command not found: compgen",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "compgen/the-o-names-that-generate": {
+      "ash": {
+        "Stdout": "dn=127~pd=127~fn=127~fb=127~both=127",
+        "Stderr": "\u003cshell\u003e: compgen: not found~\u003cshell\u003e: compgen: not found~\u003cshell\u003e: compgen: not found~\u003cshell\u003e: compgen: not found~\u003cshell\u003e: compgen: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "adir~dn=0~adir~pd=0~fn=1~cd~fb=0~adir~both=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "adir~dn=0~adir~pd=0~fn=1~cd~fb=0~adir~both=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "adir~dn=0~adir~pd=0~fn=1~cd~fb=0~adir~both=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "dn=127~pd=127~fn=127~fb=127~both=127",
+        "Stderr": "\u003cshell\u003e: 1: compgen: not found~\u003cshell\u003e: 1: compgen: not found~\u003cshell\u003e: 1: compgen: not found~\u003cshell\u003e: 1: compgen: not found~\u003cshell\u003e: 1: compgen: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "dn=127~pd=127~fn=127~fb=127~both=127",
+        "Stderr": "\u003cshell\u003e: compgen: not found~\u003cshell\u003e: compgen: not found~\u003cshell\u003e: compgen: not found~\u003cshell\u003e: compgen: not found~\u003cshell\u003e: compgen: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "dn=127~pd=127~fn=127~fb=127~both=127",
+        "Stderr": "\u003cshell\u003e:1: command not found: compgen~\u003cshell\u003e:1: command not found: compgen~\u003cshell\u003e:1: command not found: compgen~\u003cshell\u003e:1: command not found: compgen~\u003cshell\u003e:1: command not found: compgen",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

@@ -823,6 +823,29 @@ type Diagnostics struct {
 	// which of the two happened.
 	UnimplementedOptionLetters map[string]string
 
+	// UnimplementedOptionLettersOnAFunctionLine are the same thing narrowed
+	// to a declaration that also carried `-f`: letters this shell really has
+	// on a *variable* line and does not have on a function one.
+	//
+	// Strictly narrower than [UnimplementedOptionLetters] and never derived
+	// from it, for the reason [MarkingLettersUnderPlus] is written out too —
+	// a letter belongs to one list or the other, per position, and never by
+	// inference. The reason it needs a list of its own is that one letter can
+	// name two facilities: ksh93's `-u` is the upper-case attribute, which
+	// this shell has, and on a `-f` line it marks a name to be read from
+	// `$FPATH`, which it does not. Putting `u` in the wider list would refuse
+	// `typeset -u v=abc`, which works.
+	//
+	// The sentence is [UnimplementedOptionLetters]' own — a letter the
+	// dialect really has and this shell has not got to yet — so the two lists
+	// differ in *where* they apply and not in what they say.
+	//
+	// Only a letter's own last sign under a minus counts, which is the rule
+	// [MarkingLettersUnderPlus] measures from the other side: `typeset +fu`
+	// is a names-only listing in ksh93 and not a marking, so the plus form
+	// has nothing missing to refuse.
+	UnimplementedOptionLettersOnAFunctionLine map[string]string
+
 	// MarkingLettersUnderPlus and MarkingUnderPlusRefusal are a pair, and
 	// both or neither: letters with no wording say nothing, and a wording
 	// with no letters reaches nothing.

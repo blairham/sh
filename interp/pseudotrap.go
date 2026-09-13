@@ -217,7 +217,24 @@ func (r *Runner) runReturnTrap(ctx context.Context, serial int) {
 	if body == nil || *body == "" || r.inReturnTrap || r.returnTrapInherited {
 		return
 	}
-	if serial != sourcedFrame && r.returnTrapFrame != serial && !r.functrace {
+	// functrace is what carries this trap into a function that did not set
+	// it — and it does not carry it into one called from the **DEBUG** body.
+	// Measured on bash 5.3.15, that build invoked as `sh`, and bash 3.2: with
+	// the trap set at the top level and the shell tracing calls, a function
+	// called from an ERR body, an EXIT body or a signal body fires it, and
+	// one called from a DEBUG body fires nothing. A function that sets the
+	// trap in its *own* body fires it from inside a DEBUG body like anywhere
+	// else, which is what says the exemption is about the carriage rather
+	// than about the body.
+	//
+	// Not an axis: no other column has the condition to ask. zsh, ksh93, dash
+	// and ash all refuse `trap … RETURN` outright, so the panel has one
+	// answer and this is a correction.
+	//
+	// It matters out of proportion to how narrow it reads, because a DEBUG
+	// body runs before *every* command: a traced script with both traps set
+	// carried two extra lines of output per command for its whole run.
+	if serial != sourcedFrame && r.returnTrapFrame != serial && (!r.functrace || r.inDebugTrap) {
 		return
 	}
 	if r.ctl != controlNone && r.ctl != controlReturn {

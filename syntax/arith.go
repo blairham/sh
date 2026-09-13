@@ -1141,7 +1141,7 @@ func (a *arithParser) numberInItsOwnBase() {
 	// The digits read so far are the base, in decimal — and a base of zero is
 	// read as ten, which is what the shell that has this reader does with it:
 	// `$(( 0#5 ))` is 5 there and `$(( 0#z ))` stops at the `z`.
-	named, err := strconv.Atoi(a.src[begin:a.off])
+	named, err := strconv.Atoi(a.digitSeparatorsOff(a.src[begin:a.off]))
 	if err != nil {
 		return
 	}
@@ -1157,15 +1157,49 @@ func (a *arithParser) numberInItsOwnBase() {
 	a.digitsIn(named)
 }
 
-// digitsIn consumes the run of characters the base can use.
+// digitsIn consumes the run of characters the base can use, and the
+// separators standing among them where the dialect has one.
+//
+// The separator is skipped at the top of each turn rather than at the bottom,
+// which is what makes a *trailing* one part of the numeral: `1_` is one token
+// and `1_ 2` is `operator expected at \`2'` on the shell with the separator,
+// so the underscore belongs to the numeral it follows. It is also what makes
+// `0x_1` and `2#_10` read — a separator may stand where the first digit
+// would.
 func (a *arithParser) digitsIn(base int) {
 	for a.off < len(a.src) {
+		a.skipDigitSeparators()
+		if a.off >= len(a.src) {
+			return
+		}
 		v, known := baseDigitValue(a.src[a.off], base)
 		if !known || v >= base {
 			return
 		}
 		a.off++
 	}
+}
+
+// skipDigitSeparators steps over the separators standing at the offset, where
+// the dialect has one. A no-op everywhere else, so no caller has to ask.
+func (a *arithParser) skipDigitSeparators() {
+	if !a.dial.ArithDigitSeparator {
+		return
+	}
+	for a.off < len(a.src) && a.src[a.off] == '_' {
+		a.off++
+	}
+}
+
+// digitSeparatorsOff is the cleaned text a conversion reads, for the one place
+// in the parser that converts: the base in front of a `base#digits`. `1_#5` is
+// `invalid base … : 1` on the shell with the separator, so the base is read
+// from the cleaned text and not from what was written.
+func (a *arithParser) digitSeparatorsOff(text string) string {
+	if !a.dial.ArithDigitSeparator {
+		return text
+	}
+	return strings.ReplaceAll(text, "_", "")
 }
 
 func (a *arithParser) hasPrefixAt(p string) bool {
@@ -1210,9 +1244,7 @@ func baseDigitValue(c byte, base int) (int, bool) {
 func (a *arithParser) floatTail(begin int) {
 	if a.off < len(a.src) && a.src[a.off] == '.' {
 		a.off++
-		for a.off < len(a.src) && a.src[a.off] >= '0' && a.src[a.off] <= '9' {
-			a.off++
-		}
+		a.decimalDigits()
 	}
 	next := a.off
 	if a.off < len(a.src) && (a.src[a.off] == 'e' || a.src[a.off] == 'E') {
@@ -1225,11 +1257,30 @@ func (a *arithParser) floatTail(begin int) {
 	if next < len(a.src) && (a.src[next] == '+' || a.src[next] == '-') {
 		next++
 	}
-	if next < len(a.src) && a.src[next] >= '0' && a.src[next] <= '9' {
-		a.off = next
-		for a.off < len(a.src) && a.src[a.off] >= '0' && a.src[a.off] <= '9' {
-			a.off++
+	// A separator may stand in front of the exponent's digits — `1e_2` is 100
+	// on the shell that has one — but it does not stand *for* them: `1e_` is
+	// `operator expected` there, the numeral having ended at the `1`. So the
+	// separators are stepped over to look and the exponent is taken only if a
+	// digit is what they were hiding.
+	after := next
+	for a.dial.ArithDigitSeparator && after < len(a.src) && a.src[after] == '_' {
+		after++
+	}
+	if after < len(a.src) && a.src[after] >= '0' && a.src[after] <= '9' {
+		a.off = after
+		a.decimalDigits()
+	}
+}
+
+// decimalDigits consumes a run of decimal digits with the dialect's separators
+// among them.
+func (a *arithParser) decimalDigits() {
+	for a.off < len(a.src) {
+		a.skipDigitSeparators()
+		if a.off >= len(a.src) || a.src[a.off] < '0' || a.src[a.off] > '9' {
+			return
 		}
+		a.off++
 	}
 }
 

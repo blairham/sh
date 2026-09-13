@@ -33,34 +33,41 @@ func TestCausesGroupsAndRanks(t *testing.T) {
 		// word the second fixture is refused at.
 		write(t, dir, name, "#!/bin/zsh\n[[ -nosuch - ]]\n")
 	}
-	// A different gap: a short `if` with no `else` may be closed with one
-	// redundant `fi` in that shell, and this grammar has nothing left to
-	// read once the brace body has ended. Measured 2026-09-12 on zsh 5.9.2 —
-	// `if (( 1 )) { echo A } fi` prints `A` there — and this parser stops at
-	// the `fi`. Filed as #2242, so that whoever closes it knows this fixture
-	// has to be replaced with it.
-	//
-	// It was `repeat 3 { echo x; }` until #827 implemented that,
+	// A different cause, and the seventh fixture to stand here. The six
+	// before it — `repeat 3 { echo x; }` until #827 implemented that,
 	// `echo (aa|bb)` until #995 made a bare group where a *word* stands part
 	// of the word, `if true; then; fi` until #1142 let a `;` stand where a
 	// command belongs, `case x in a) : ;| …` until #1188 read that
 	// terminator, `cat =(echo hi)` until #1878 implemented the temp-file
-	// process substitution, and `case x { x) echo hit;; }` until #1928 read
-	// the brace-spelled header — **six times now** the fixture has been
-	// overtaken by the thing it was standing in for, which is the hazard
-	// this comment exists to pass on. Whatever replaces this one, check it
-	// against the real shell and against this parser before trusting it.
+	// process substitution, `case x { x) echo hit;; }` until #1928 read the
+	// brace-spelled header, and `if (( 1 )) { echo A } fi` until #2242 read
+	// the redundant terminator — were each chosen to be a **live gap**, and
+	// every one of them was overtaken by the thing it stood in for. That is
+	// not bad luck. A live gap is by definition something somebody is going
+	// to close, so choosing one guarantees the replacement.
 	//
-	// The two gaps also have to be refused at *different* token classes,
+	// So this one is chosen the other way round: it is a **syntax error in
+	// every shell in the panel**, measured on zsh 5.9.2 — `if (( 1 )) { echo
+	// A } fi fi` is ``parse error near `fi'`` there and here alike — and
+	// nothing will ever implement it. What this test needs from a fixture is
+	// a *second distinct reason*, not a second open issue, and the sweep's
+	// one filter that would have excluded it from a real report — a file the
+	// reference shell also refuses is not counted — is stubbed out below with
+	// `/usr/bin/true`, which refuses nothing.
+	//
+	// It is the control row of #2242 rather than an arbitrary error, so it
+	// earns a second keep: exactly one redundant `fi` closes a short `if`
+	// with no `else`, and a widening that took a run of them would fail here.
+	//
+	// The two causes also have to be refused at *different* token classes,
 	// which is the constraint that decides the fixture and is easy to miss.
 	// Reason keeps an operator or a reserved word and replaces an ordinary
 	// word with "a word", so `{ … } always { … }` is no use here: it is
 	// refused at `always`, which is an ordinary word to this grammar and
 	// collapses onto the same reason as the `-` of the first three. The
-	// redundant `fi` is refused at a reserved word, which is kept, so it has
-	// a reason of its own and the report has the two causes this test is
-	// about.
-	write(t, dir, "d", "#!/bin/zsh\nif (( 1 )) { echo A } fi\n")
+	// second `fi` is a reserved word, which is kept, so it has a reason of
+	// its own and the report has the two causes this test is about.
+	write(t, dir, "d", "#!/bin/zsh\nif (( 1 )) { echo A } fi fi\n")
 
 	rep := wild.Sweep(context.Background(), wild.Scope{Dirs: []string{dir}, Shells: wild.ZshScope},
 		zsh.Dialect(), "/usr/bin/true")

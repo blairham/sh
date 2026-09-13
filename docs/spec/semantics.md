@@ -816,7 +816,7 @@ shell under `-i` with `PS1` and `PS2` set:
 | --- | --- | --- |
 | bash 5.3.15 | refuses at once, no continuation prompt | runs `echo three` |
 | ksh93u+ | the same | runs `echo three` |
-| dash | the same | — |
+| dash | the same | runs `echo three` — but see below |
 | zsh 5.9.2 | draws `PS2` and waits | swallows `echo three` |
 
 The second column is the cost and is why this is not cosmetic: a prompt that
@@ -839,6 +839,41 @@ word being in the way — and so do `echo one |`, `x='never closed`,
 
 The prompt asked only whether more input was possible, so this shell gave zsh's
 answer to all four (#1893).
+
+### dash's second column is a property of the pipe, not of the prompt
+
+The run above was `-i` on a **pipe**, and on a pipe dash's second column is
+empty: `echo three` never runs, and the shell draws one more prompt and ends.
+That is what #2234 was filed on, and reproducing the same probe on a real
+terminal is what says the reading was wrong. Measured 2026-09-13, the four
+shells driven through a pty with `script(1)` and `;;` as the refused line —
+one every column refuses where it stands, so no continuation prompt is in the
+way:
+
+| | on a pty | `$?` on the next line |
+| --- | --- | --- |
+| dash | runs the lines after it | 2 |
+| bash 5.3.15 | the same | 2 |
+| ksh93u+ | the same | 3 |
+| zsh 5.9.2 | the same | 1 |
+
+So there is no divergence at a prompt at all. **What dash does is discard the
+input it has already buffered**, and the probe that says so is a long one: with
+twenty thousand lines after the bad one, dash resumes at line 93 and runs
+everything from there, `echo three` included. A buffer's worth — about a
+kilobyte — is what goes, and a short script is entirely inside it, which is what
+made it look like abandonment. A terminal hands the shell one line at a time,
+so there is nothing buffered to lose.
+
+Nothing here is implemented and nothing is a candidate for an axis. A rule
+whose reach is "however much happened to be in the read buffer" is not a rule a
+second implementation can hold, and it is invisible to the only route on which
+it fires — the shell is not reading a person's next line, it is reading a file
+somebody spelled `-i`. What is pinned instead is the property the terminal
+probe found, in the one place a terminal exists: `make smoke`'s row *a refused
+line costs the line and not the next one*, which types `;;` and requires the
+line after it to run. The corpus cannot hold it, because no case in the corpus
+is ever a prompt (#2234).
 
 ### And what it says when it refuses one
 

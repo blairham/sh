@@ -136,6 +136,18 @@ type Parser struct {
 	// `for i (a b) { echo $i; } echo end`.
 	bodyTookTerm Pos
 
+	// shortBodyBraced says whether the short body just read was a brace
+	// group rather than the single command the same production also allows.
+	//
+	// The two are one production everywhere but here: a short `if` whose
+	// last arm is a brace group may be closed with a redundant `fi`, and one
+	// whose last arm is a bare command may not. Measured on zsh 5.9.2 —
+	// `if (( 1 )) { echo A } fi` runs, `if (( 1 )) (( 2 )) fi` is a parse
+	// error near `fi`, and `if (( 1 )) echo A fi` prints `A fi`, the word
+	// never having been in command position at all. See
+	// [Parser.redundantFi].
+	shortBodyBraced bool
+
 	// separatorStood is where a `;` the dialect stepped over stands, while
 	// it is still the innermost thing the parse is inside.
 	//
@@ -3579,6 +3591,10 @@ func (p *Parser) braceLoopBody() (body []*Stmt, stop Pos) {
 	// end` is, and without this line the inner loop's `;` terminated the
 	// outer one and the tail ran (measured on zsh 5.9.2, 2026-09-12).
 	p.bodyTookTerm = Pos{}
+	// Set after the group is read and not before, for the same reason the
+	// line above clears rather than leaves: a short form *inside* the braces
+	// runs through here too, and its answer is not this one's.
+	p.shortBodyBraced = true
 	return g.List, g.Stop
 }
 
@@ -3598,6 +3614,7 @@ func (p *Parser) shortFormBody() (body []*Stmt, stop Pos) {
 	if p.braceBodyFollows() {
 		return p.braceLoopBody()
 	}
+	p.shortBodyBraced = false
 	if p.at(TokEOF) {
 		// Nothing at all because the input ended, which is two different
 		// facts wearing one shape. To a program that is all there is, the
@@ -4039,25 +4056,65 @@ func (p *Parser) shortElse(c *IfClause) {
 			return
 		}
 	}
-	if p.atWord("else") && p.err == nil {
-		p.opensClause("else")
-		p.next()
-		c.HasElse = true
-		// Past the newlines before asking, and only here: a newline between
-		// a *condition* and its body is what puts an `if` or an `elif` in the
-		// long form, but an `else` has no condition for one to end, and the
-		// shell reads `else` ⏎ `{ echo B }` as the short arm — no `fi` is
-		// owed and appending one is refused. So the brace decides the form
-		// and the newlines in front of it do not.
-		p.skipNewlines()
-		if p.braceBodyFollows() {
-			c.Else, c.Stop = p.shortFormBody()
-			return
-		}
-		c.Else = p.parseBody()
-		c.Stop = p.tok.End
-		p.expectWord("fi")
+	if !p.atWord("else") || p.err != nil {
+		// The chain ended with a short arm and no `else`, which is the one
+		// shape that may be closed with a `fi` written anyway.
+		p.redundantFi(c)
+		return
 	}
+	p.opensClause("else")
+	p.next()
+	c.HasElse = true
+	// Past the newlines before asking, and only here: a newline between a
+	// *condition* and its body is what puts an `if` or an `elif` in the long
+	// form, but an `else` has no condition for one to end, and the shell
+	// reads `else` ⏎ `{ echo B }` as the short arm — no `fi` is owed and
+	// appending one is refused. So the brace decides the form and the
+	// newlines in front of it do not.
+	p.skipNewlines()
+	if p.braceBodyFollows() {
+		c.Else, c.Stop = p.shortFormBody()
+		return
+	}
+	c.Else = p.parseBody()
+	c.Stop = p.tok.End
+	p.expectWord("fi")
+}
+
+// redundantFi reads the `fi` a short `if` with no `else` may be closed with,
+// where there is one standing.
+//
+// It is optional and it is narrow in four directions at once. Measured on zsh
+// 5.9.2, 2026-09-13, over `-c` and a script file alike:
+//
+//	if (( 1 )) { echo A } fi                        → A
+//	if (( 1 )) { echo A } elif (( 1 )) { echo C } fi → A     an elif chain too
+//	if (( 1 )); then echo A; elif (( 1 )) { echo C } fi → A  the last arm decides
+//	if (( 1 )) { echo A } fi fi                     → parse error near `fi'
+//	if (( 1 )) { echo A } else { echo B } fi        → parse error near `fi'
+//	if (( 1 )) { echo A } ; fi                      → parse error near `fi'
+//	if (( 1 )) { echo A } ⏎ fi                      → parse error near `fi'
+//	if (( 1 )) (( 2 )) fi                           → parse error near `fi'
+//	while (( 0 )) { : } done                        → parse error near `done'
+//
+// So: exactly one, only where the chain ended with a **brace** arm, only where
+// it has no `else`, only with nothing between the `}` and the word — a `;` or
+// a newline refuses it, which is why nothing here skips either — and only for
+// `if`, the short loop forms taking no `done`. The last two rows are the
+// controls that say this is not "a short form may be closed with its keyword".
+//
+// The `else` is the row to be careful with, and it is the caller that keeps it:
+// this is reached only where the chain ended with no `else` at all, so a `fi`
+// accepted unconditionally after the chain would take a line zsh refuses. #2242.
+func (p *Parser) redundantFi(c *IfClause) {
+	if c.HasElse || !p.shortBodyBraced || !p.atWord("fi") {
+		return
+	}
+	c.Stop = p.tok.End
+	p.next()
+	// One and not a run: a second `fi` is a parse error there, and the flag
+	// is what a second call would read, so it goes down with the first.
+	p.shortBodyBraced = false
 }
 
 // condEndedItself reports whether the condition just parsed closed on its own

@@ -1511,6 +1511,17 @@ func leadingZeroRun(value string, hexPrefixSurvives bool) int {
 // dialect and `3.0/2` does.
 func (r *Runner) parseArithNum(s string) (arithNum, error) {
 	s = strings.TrimSpace(s)
+	if r.dialect().ArithDigitSeparator {
+		// The separator is removed and then the ordinary rules apply to what
+		// is left, which is the whole of that rule — see
+		// syntax.Dialect.ArithDigitSeparator. Here rather than only in the
+		// parser because a value a *variable* was holding reaches this with
+		// no parser having seen it: `x=1_0; $(( x ))` is 10 on the shell that
+		// has the separator. The dialect answers both sites for the reason
+		// the float question below does: one question, asked where it is
+		// needed, rather than two fields that could disagree.
+		s = strings.ReplaceAll(s, "_", "")
+	}
 	if !floatShaped(s) {
 		n, err := r.parseNum(s)
 		return intNum(n), err

@@ -1712,6 +1712,65 @@ a **long** `then` arm still needs its `fi`, because there the brace is an
 ordinary group inside a long else. The short spelling of `else` is
 reachable only from an arm that was itself short.
 
+### A short `if` with no `else` may be closed with a redundant `fi`
+
+The section above says a short arm owes no `fi` and refuses one written
+anyway. That is the rule for an `else`, and it is not the rule for the
+end of the chain: **an `if` whose last arm is a brace body and which has
+no `else` may be followed by one `fi`, and it is optional.** Measured
+2026-09-13 on zsh 5.9.2, `env -i PATH=/usr/bin:/bin` with a scratch
+`HOME`, over `-c` and a script file alike. The other five columns have no
+short form at all and refuse every row.
+
+| probe | zsh 5.9 |
+| --- | --- |
+| `if (( 1 )) { echo A } fi` | `A` |
+| `if (( 0 )) { echo A } fi; echo tail` | `tail` |
+| `if (( 1 )) { echo A } fi > /dev/null; echo done` | `done` |
+| `if (( 1 )) { echo A } elif (( 1 )) { echo C } fi` | `A` |
+| `if (( 1 )); then echo A; elif (( 1 )) { echo C } fi` | `A` |
+| `if (( 1 )) { if (( 1 )) { echo A } fi } fi` | `A` |
+| `if (( 1 )) { echo A } fi fi` | parse error at `fi` |
+| `if (( 1 )) { echo A } else { echo B } fi` | parse error at `fi` |
+| `if (( 0 )) { echo A } else echo B; fi fi` | parse error at `fi` |
+| `if (( 1 )) { echo A } ; fi` | parse error at `fi` |
+| `if (( 1 )) { echo A }` ⏎ `fi` | parse error at `fi` |
+| `if (( 1 )) (( 2 )) fi` | parse error at `fi` |
+| `if (( 1 )) echo A fi` | `A fi` |
+| `if (( 1 )); then echo A; fi fi` | parse error at `fi` |
+| `while (( 0 )) { : } done` | parse error at `done` |
+| `repeat 1 { echo R } done` | parse error at `done` |
+| `for i (a) { echo $i } done` | parse error at `done` |
+
+It is narrow in five directions and each of them is a row above.
+
+**Exactly one** — row 7. **Only where there is no `else`** — rows 8 and 9,
+of which the second is the one to be careful with: a long `else` has
+already taken the `fi` it required, and a second is refused there as it is
+after any long form (row 14).
+
+**Only where the last arm is a brace body** — rows 12 and 13 against rows
+1 and 4. The short form has two spellings, a brace group and a single
+command, and this is the only place they part: `if (( 1 )) (( 2 )) fi` is
+refused, and after a bare command the word is not in command position at
+all, so `if (( 1 )) echo A fi` prints `A fi`.
+
+**Only with nothing in between** — rows 10 and 11. A `;` or a newline ends
+the `if`, and the `fi` on the far side of it has nothing to close. That is
+the same rule the previous section states from the other side, so nothing
+skips a separator to find this word.
+
+**Only for `if`** — rows 15 to 17 are the controls that say this is not "a
+short form may be closed with its keyword". The short loops take no
+`done`.
+
+Rows 4 and 5 say the chain's *last* arm decides rather than its first: an
+`elif` with a brace body ends the chain short whether what came before it
+was short or long, and the optional `fi` follows the arm that ended it.
+Row 3 is what says the word is consumed by the `if` rather than left
+standing — the redirection after it belongs to the whole command, and `A`
+goes to the null device.
+
 ### A short body that took its separator took the construct's
 
 `if (( 1 )) echo A; else echo B` is `parse error near \`else\`` on zsh

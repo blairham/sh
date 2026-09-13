@@ -120,6 +120,67 @@ attribute's assignment (#1270); the two are separate axes because a single
 answer routed through the evaluator would move `$((010))` with them, and
 that is 8 in the shell that splits.
 
+### An underscore inside a numeral is a digit separator — zsh only
+
+Measured 2026-09-13, `-c`, against zsh 5.9.2 and bash 5.3.15. `_` is
+digit 63 of the base-64 alphabet, so bash reads it into the numeral and
+then refuses a digit base ten has no room for; zsh answers a number.
+
+| probe | zsh 5.9.2 | bash 5.3.15 | ksh93u+ |
+| --- | --- | --- | --- |
+| `$(( 1_ ))` | 1 | `1_: value too great for base` | syntax error |
+| `$(( 1_0 ))` | **10** | `1_0: value too great for base` | syntax error |
+| `$(( 1_0_0 ))` | 100 | error | error |
+| `$(( 1__0 ))` | 10 | error | error |
+| `$(( 1_abc ))` | ``operator expected at `abc'`` | error | error |
+
+**`$(( 1_ ))` cannot decide this and `$(( 1_0 ))` can.** One is what a
+separator gives and also what a byte the reader threw away would give, so
+the row the divergence was noticed on is the one row that answers
+nothing. Ten is a separator and nothing else: a digit would be `value too
+great for base`, which is what the other columns say, and a numeral that
+*ended* at the byte would leave `_0` standing where an operator belongs —
+an unset name in arithmetic being zero, `1` followed by a name is an
+`operator expected` rather than a 1.
+
+**The rule is: the separator is removed, and then the ordinary rules
+apply to what is left.** Every other row follows from that one sentence,
+which is why it is worth stating that way round rather than as a list:
+
+| probe | zsh 5.9.2 | what it says |
+| --- | --- | --- |
+| `$(( 0x1_f ))` | 31 | a radix prefix is unaffected |
+| `$(( 2#1_0 ))` | 2 | and so is a `base#` — binary has no digit 63 under any reading |
+| `$(( 16#f_f ))` | 255 | |
+| `$(( 1_0#5 ))` | 5 | the **base** is read from the cleaned text |
+| `$(( 1_#5 ))` | `invalid base …: 1` | which this one says from the other side |
+| `setopt octalzeroes; $(( 0_10 ))` | **8** | so the zero the separator uncovers is a prefix |
+| `$(( 0x_1 ))` | 1 | one may stand where the first digit would |
+| `$(( 2#_10 ))` | 2 | |
+| `$(( 1_ ))` | 1 | and a trailing one belongs to the numeral |
+| `$(( 1_0.5 ))` | 10.5 | floats, in the fraction … |
+| `$(( 1e1_0 ))` | `10000000000.` | … and in the exponent |
+| `$(( 1e_2 ))` | `100.` | including in front of the exponent's digits |
+| `$(( 1e_ ))` | `operator expected` | which it does not stand in for |
+| `$(( _ ))` `$(( _1 ))` | 0 | a **leading** one is a name, as it always was |
+| `x=1_0; $(( x ))` | 10 | and a stored value is read by the same rule |
+
+The last two rows are the boundaries. A numeral begins with a digit, so
+an underscore in front of one is an identifier and an unset name is zero;
+and the rule belongs to reading a numeral rather than to reading a
+script, so it reaches a value that was never in the program text.
+
+Grammar flag: `ArithDigitSeparator` — core: off; `zsh`: on. A flag rather
+than a semantics axis, asked in the two places that need it — the parser,
+where it decides how far the numeral reaches, and the conversion, where a
+stored value is read. `ArithFloat` is asked the same way and for the same
+reason: two fields could disagree and one cannot.
+
+**One shape is knowingly short of the shell, and it is a wording.** zsh
+cleans the token and then reports what is left of the *cleaned* text, so
+`$(( 1e_foo ))` blames `efoo` there and `e_foo` here. Both stop in the
+same place and both are an `operator expected`.
+
 ## The base the answer is *written* in
 
 Everything above is about the base a literal is *read* in. One shell in

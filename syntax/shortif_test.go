@@ -297,3 +297,74 @@ func TestABraceBodyTakesNoTerminatorFromWithin(t *testing.T) {
 	mustParse(t, "for i (a b) echo $i; echo end\n", short, "a short body takes its separator")
 	mustParse(t, "for i (a b) { for j (c d) echo $j; }\n", short, "the nesting itself")
 }
+
+// A short `if` with no `else` may be closed with one redundant `fi`, and the
+// rule is narrow in five directions at once.
+//
+// Measured on zsh 5.9.2, 2026-09-13, over `-c` and a script file alike. Each
+// group below is one of the five, and the refusing rows are what say the rule
+// is not the wider one it looks like — every one of them is a line that shell
+// refuses, so a `fi` accepted unconditionally after the chain would take input
+// real zsh does not read. #2242.
+func TestARedundantFiClosesAShortIfWithNoElse(t *testing.T) {
+	short := Core()
+	short.ShortForm = true
+	short.ForBraceBody = true
+	short.DoubleBracket = true
+	short.ArithCommand = true
+	short.Repeat = true
+	short.CloseBraceAlwaysReserved = true
+
+	// It is optional, and what follows it is an ordinary continuation.
+	mustParse(t, "if (( 1 )) { echo A } fi\n", short, "the redundant `fi`")
+	mustParse(t, "if (( 0 )) { echo A } fi; echo tail\n", short, "a list after it")
+	mustParse(t, "if (( 1 )) { echo A } fi > /dev/null\n", short, "a redirection after it")
+	mustParse(t, "if (( 1 )) { if (( 1 )) { echo A } fi } fi\n", short, "one at each depth")
+	// The chain's *last* arm decides, whichever way the arms before it went.
+	mustParse(t, "if (( 1 )) { echo A } elif (( 1 )) { echo C } fi\n", short, "after a short `elif`")
+	mustParse(t, "if (( 1 )); then echo A; elif (( 1 )) { echo C } fi\n", short, "after a long arm and a short one")
+
+	// Exactly one.
+	mustFail(t, "if (( 1 )) { echo A } fi fi\n", short, "a second `fi`")
+	mustFail(t, "if (( 1 )) { echo A } elif (( 1 )) { echo C } fi fi\n", short, "a second one after an `elif`")
+
+	// Only where there is no `else`. The second row is the one to be careful
+	// with: the long `else` already took the `fi` it required.
+	mustFail(t, "if (( 1 )) { echo A } else { echo B } fi\n", short, "a `fi` after a short `else`")
+	mustFail(t, "if (( 0 )) { echo A } else echo B; fi fi\n", short, "a second `fi` after a long `else`")
+	mustFail(t, "if (( 1 )); then echo A; fi fi\n", short, "a second `fi` after the long form")
+
+	// Only where the last arm is a *brace* body. This is the one place the
+	// short form's two spellings part, and the arithmetic command is the
+	// discriminator: it ends itself, so the `fi` after it is in command
+	// position and is refused, where after a bare `echo` the word is another
+	// of its arguments and the shell prints it.
+	mustFail(t, "if (( 1 )) (( 2 )) fi\n", short, "a `fi` after an unbraced short body")
+	mustFail(t, "if (( 1 )) [[ -n x ]] fi\n", short, "and after a condition body")
+
+	// Only with nothing between the `}` and the word.
+	mustFail(t, "if (( 1 )) { echo A } ; fi\n", short, "a `;` before it")
+	mustFail(t, "if (( 1 )) { echo A }\nfi\n", short, "a newline before it")
+
+	// Only for `if`. The short loops take no terminator, and these are the
+	// controls that say this is not "a short form may be closed with its
+	// keyword".
+	mustFail(t, "while (( 0 )) { : } done\n", short, "a `done` after a short `while`")
+	mustFail(t, "repeat 1 { echo R } done\n", short, "a `done` after a short `repeat`")
+	mustFail(t, "for i (a) { echo $i } done\n", short, "a `done` after a short `for`")
+}
+
+// And a dialect without the short form has none of it.
+//
+// The core reads `if (( 1 )) { echo A } fi` as an `if` whose condition is an
+// arithmetic command, and then owes a `then` — so it fails on the first row
+// for a reason that has nothing to do with the last word, which is what makes
+// the second row the one worth having: with the long form written out, the
+// trailing `fi` is a plain second terminator and every dialect refuses it.
+func TestTheRedundantFiIsNotInTheCore(t *testing.T) {
+	core := Core()
+	core.ArithCommand = true
+
+	mustFail(t, "if (( 1 )) { echo A } fi\n", core, "the short form itself")
+	mustFail(t, "if (( 1 )); then echo A; fi fi\n", core, "a second `fi` in the long form")
+}

@@ -142,10 +142,15 @@ func TestThePromptHostIsToldOrRefused(t *testing.T) {
 }
 
 // promptHostTable is the two host rows and nothing else.
+//
+// It reads counts, because the short host code takes one — without the flag
+// the count is not an argument at all but the start of an unknown code, and
+// `%2m` is refused as `%2`. See TestAHostCountIsANumberOfComponents.
 func promptHostTable() PromptStyle {
 	return PromptStyle{
-		Escape: '%',
-		Codes:  map[rune]PromptField{'m': FieldHost, 'M': FieldHostFull},
+		Escape:          '%',
+		NumericArgument: true,
+		Codes:           map[rune]PromptField{'m': FieldHost, 'M': FieldHostFull},
 	}
 }
 
@@ -334,5 +339,80 @@ func TestThePromptHostIsNotAskedUntilTheEscapeIsDrawn(t *testing.T) {
 	}
 	if asked != 0 {
 		t.Errorf("the host name was asked for %d times by a script that never drew %%m; want 0", asked)
+	}
+}
+
+// A count in front of the short host code is a number of dot-components, and
+// it points the opposite way from a path's.
+//
+// Measured on zsh 5.9.2, 2026-09-13 with `HOST=a.b.c.d`, which is the shortest
+// name that discriminates: on the two-component name this machine has, "the
+// leading two" and "the whole of it" are the same string, and a probe that
+// cannot tell its two readings apart is not one. Four components separate them
+// at every count.
+//
+// The long code is in the same table on purpose. It takes no count at all —
+// `%1M`, `%2M` and `%-1M` are all the whole name — so the two rows are what
+// says this is one code that counts rather than a pair, and a fix that widened
+// both would fail here.
+func TestAHostCountIsANumberOfComponents(t *testing.T) {
+	told := func(r *Runner) {
+		r.SetPromptStyle(promptHostTable())
+		r.SetPromptHost("a.b.c.d")
+	}
+	for _, tc := range []struct{ written, want string }{
+		{"%m", "a"},
+		{"%0m", "a"},
+		{"%1m", "a"},
+		{"%2m", "a.b"},
+		{"%3m", "a.b.c"},
+		{"%4m", "a.b.c.d"},
+		{"%5m", "a.b.c.d"},
+		// A minus counts from the other end, and a bare one is minus one.
+		{"%-m", "d"},
+		{"%-0m", "a"},
+		{"%-1m", "d"},
+		{"%-2m", "c.d"},
+		{"%-3m", "b.c.d"},
+		{"%-4m", "a.b.c.d"},
+		{"%-9m", "a.b.c.d"},
+		// The long code drops every one of them.
+		{"%M", "a.b.c.d"},
+		{"%0M", "a.b.c.d"},
+		{"%2M", "a.b.c.d"},
+		{"%-2M", "a.b.c.d"},
+	} {
+		out, st := runGrammar(t, `echo "[${(%):-`+tc.written+`}]"`, promptFlagged, told)
+		if want := "[" + tc.want + "]\n"; out != want || st != 0 {
+			t.Errorf("%s = %q (status %d), want %q at 0", tc.written, out, st, want)
+		}
+	}
+}
+
+// The dot is a separator and not a marker, so an empty component is a
+// component and a name with no dot is one of them.
+//
+// Measured in the same run. `a.b.` is three components with the last empty:
+// zsh draws `a.b.` for `%3m` and nothing at all for `%-1m`, which is what says
+// the split is plain and there is no path-style leader to keep.
+func TestAHostCountSplitsOnDotsAndNothingElse(t *testing.T) {
+	for _, tc := range []struct{ host, written, want string }{
+		{"solo", "%m", "solo"},
+		{"solo", "%2m", "solo"},
+		{"solo", "%-2m", "solo"},
+		{"a.b.", "%m", "a"},
+		{"a.b.", "%2m", "a.b"},
+		{"a.b.", "%3m", "a.b."},
+		{"a.b.", "%-1m", ""},
+		{"a.b.", "%-2m", "b."},
+	} {
+		told := func(r *Runner) {
+			r.SetPromptStyle(promptHostTable())
+			r.SetPromptHost(tc.host)
+		}
+		out, st := runGrammar(t, `echo "[${(%):-`+tc.written+`}]"`, promptFlagged, told)
+		if want := "[" + tc.want + "]\n"; out != want || st != 0 {
+			t.Errorf("host %q, %s = %q (status %d), want %q at 0", tc.host, tc.written, out, st, want)
+		}
 	}
 }

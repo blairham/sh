@@ -421,6 +421,16 @@ func TestPrintfAnswers(t *testing.T) {
 	if got, want := dash.Semantics().PrintfQuote, interp.PrintfQuoteAbsent; got != want {
 		t.Errorf("PrintfQuote = %v, want %v", got, want)
 	}
+	// And `'` is not a flag here at all: it arrives at the scan as the
+	// conversion character and is refused as any other unknown one is, which
+	// is why `printf "[%'d]" 1234567` writes `[`, `printf: %': invalid
+	// directive` and reports 2 (#2665).
+	if got, want := dash.Semantics().PrintfGroupingFlag, interp.No; got != want {
+		t.Errorf("PrintfGroupingFlag = %v, want %v", got, want)
+	}
+	if got, want := dash.Semantics().PrintfGroupingFlagAfterTheWidth, interp.No; got != want {
+		t.Errorf("PrintfGroupingFlagAfterTheWidth = %v, want %v", got, want)
+	}
 	d := dash.Diagnostics()
 	if got, want := d.PrintfBadVerbStatus, 2; got != want {
 		t.Errorf("PrintfBadVerbStatus = %d, want %d", got, want)

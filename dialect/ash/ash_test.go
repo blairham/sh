@@ -267,3 +267,22 @@ func TestPrintfStarComplaintCostsTheStatus(t *testing.T) {
 		t.Errorf("PrintfStarWithoutOperandIsRefused = %v, want %v", got, want)
 	}
 }
+
+// TestPrintfGroupingFlag: BusyBox ash has no `'` flag, as dash has none. The
+// character reaches the scan as the conversion this shell does not have, so
+// `printf "[%'d]" 1234567` writes `[`, `%'d]: invalid format` and reports 1
+// — measured 2026-09-13 on BusyBox 1.37.0 in the pinned Alpine image, where
+// the five columns that do have the flag write `[1234567]` at 0 under the
+// harness's `LC_ALL=C` (#2665).
+func TestPrintfGroupingFlag(t *testing.T) {
+	s := ash.Semantics()
+	if got, want := s.PrintfGroupingFlag, interp.No; got != want {
+		t.Errorf("PrintfGroupingFlag = %v, want %v", got, want)
+	}
+	// Answered rather than left open, because an unanswered axis is
+	// indistinguishable from one nobody thought about — and this shell never
+	// reaches the question, having refused the flag one level up.
+	if got, want := s.PrintfGroupingFlagAfterTheWidth, interp.No; got != want {
+		t.Errorf("PrintfGroupingFlagAfterTheWidth = %v, want %v", got, want)
+	}
+}

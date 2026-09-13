@@ -6164,7 +6164,7 @@ type Semantics struct {
 	// prompt to be asked again at — measured 2026-09-13 in bash and zsh
 	// alike. driver/promptrefuse_test.go carries it to the front end
 	// (TestTheFrontEndCarriesWhetherAPromptAsksAgain),
-	// repl/promptcomments_test.go's neighbours drive the retry through a
+	// the tests beside repl/promptcomments_test.go drive the retry through a
 	// session, and dialect/zsh/promptrefuse_test.go pins one shell's answer
 	// (TestAPromptKeepsAskingAfterARefusedToken) (#2058).
 	PromptAsksAgainAfterARefusedToken bool

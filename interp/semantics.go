@@ -4880,6 +4880,11 @@ type Semantics struct {
 	// before the letters were a question.
 	DeclareOptions string
 
+	// DeclareMatchingLetter is what the `m` letter of a declaration *means*,
+	// which two shells spell alike and read as two unrelated commands. See
+	// DeclareMatchingLetterPolicy.
+	DeclareMatchingLetter DeclareMatchingLetterPolicy
+
 	// DeclareOptionsWithoutEffect names letters out of DeclareOptions that
 	// this engine models as doing nothing: accepted, silent, and 0.
 	//

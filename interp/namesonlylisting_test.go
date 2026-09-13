@@ -28,6 +28,7 @@ import (
 // values, and a dialect with no such listing could not be asked.
 func withNamesOnly(s *Semantics) {
 	s.DeclareOptions = "aAfgilmprux"
+	s.DeclareMatchingLetter = DeclareMatchingLetterSelects
 	s.BareTypesetListing = BareLocalListsEveryParameter
 	s.DeclaredNameWithoutValueIsEmpty = Yes
 	s.SignAloneIsAnOptionWord = Yes
@@ -382,6 +383,7 @@ func TestALetterWithoutEffectSelectsNothingAndTheGlobalLetterSelectsEverything(t
 	inert := func(s *Semantics) {
 		withNamesOnly(s)
 		s.DeclareOptions = "aAfgilmpruxz"
+		s.DeclareMatchingLetter = DeclareMatchingLetterSelects
 		s.DeclareOptionsWithoutEffect = "z"
 	}
 	src := "qa=1\n"

@@ -601,6 +601,26 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		}
 	}
 	if f.matching {
+		switch r.sem().DeclareMatchingLetter {
+		case DeclareMatchingLetterMoves:
+			// The letter *moves* a parameter here, and the operands are
+			// `new=old` rather than patterns — a different command with the
+			// same spelling. Ahead of the empty-operand branch below because
+			// this reading has nothing to fall back to: measured, a bare
+			// `typeset -m` writes nothing at all where the pattern reading's
+			// bare form writes the whole table. See interp/declaremove.go.
+			return r.declareMove(name, args, f)
+		case DeclareMatchingLetterUnspecified:
+			// A dialect that spells the letter and has not said which of the
+			// two it means. Refused by name rather than given one shell's
+			// reading, the way every unanswered axis is: the two share no
+			// operand grammar, so a guess would read a script's patterns as
+			// renames or the other way about.
+			r.errf("%s\n", r.diag().Report(r.name(), r.line,
+				r.unanswered("the `m` letter of a declaration")))
+			r.status, r.unspecified = 2, true
+			return r.status
+		}
 		if len(args) == 0 {
 			// `-m` with nothing to match is *ignored*, which is measured
 			// rather than assumed: `typeset -m` writes the whole parameter

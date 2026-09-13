@@ -2069,6 +2069,12 @@ func Semantics() interp.Semantics {
 	// `readonly -z` are each `bad option: -z` in zsh 5.9.2, so the letter
 	// belongs to this table and to none of the other four (#1576).
 	s.DeclareOptions = "aAfFgHhiLlmpRruUTxZz"
+	// And what the `m` of that set *means*: the operands are patterns and
+	// every other letter on the line decides what a match is then used
+	// for. ksh93 spells the same letter and moves a parameter with it, so
+	// this is a disagreement about identical syntax rather than a letter
+	// one dialect has — see interp.DeclareMatchingLetterPolicy.
+	s.DeclareMatchingLetter = interp.DeclareMatchingLetterSelects
 	// `export` is this word's declaration under another name, and it takes
 	// the same letters bar six. Measured 2026-09-12, a letter at a time
 	// against `export -X q=4`: `-A`, `-g`, `-m`, `-x` and `-z` are

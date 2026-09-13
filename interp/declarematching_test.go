@@ -22,6 +22,7 @@ import (
 // could not be asked what `+m` writes.
 func withMatching(s *Semantics) {
 	s.DeclareOptions = "aAfgilmprux"
+	s.DeclareMatchingLetter = DeclareMatchingLetterSelects
 	s.BareTypesetListing = BareLocalListsEveryParameter
 	s.DeclaredNameWithoutValueIsEmpty = Yes
 }
@@ -205,6 +206,7 @@ func TestMatchingWithAPlusWritesTheAttributeWordsInOrder(t *testing.T) {
 	set := func(s *Semantics) {
 		withMatching(s)
 		s.DeclareOptions = "aAfgilmpruUxT"
+		s.DeclareMatchingLetter = DeclareMatchingLetterSelects
 	}
 	for _, tc := range []struct{ name, decl, want string }{
 		{"readonly before unique", "typeset -rU qa=(x y)", "array readonly unique qa\n"},
@@ -231,6 +233,7 @@ func TestMatchingWithAPlusNamesAnExportOnlyWhereItIsNotAPlainEnvironmentEntry(t 
 	set := func(s *Semantics) {
 		withMatching(s)
 		s.DeclareOptions = "aAfgilmpruUxT"
+		s.DeclareMatchingLetter = DeclareMatchingLetterSelects
 		s.LocalOptions = "aAgilpruUx"
 	}
 	for _, tc := range []struct{ name, decl, want string }{
@@ -258,6 +261,7 @@ func TestMatchingWithAPlusNamesTheOtherHalfOfATie(t *testing.T) {
 	set := func(s *Semantics) {
 		withMatching(s)
 		s.DeclareOptions = "aAfgilmpruUxT"
+		s.DeclareMatchingLetter = DeclareMatchingLetterSelects
 	}
 	out, errs, st := declRun(t, "typeset -T QS qs\ntypeset +m 'qs'\ntypeset +m 'QS'", set, Diagnostics{})
 	if want := "array tied QS qs\ntied qs QS\n"; out != want || errs != "" || st != 0 {
@@ -274,6 +278,7 @@ func TestMatchingReadsEachLettersSignAndNotTheLastWords(t *testing.T) {
 	set := func(s *Semantics) {
 		withMatching(s)
 		s.DeclareOptions = "aAfgilmpruUxT"
+		s.DeclareMatchingLetter = DeclareMatchingLetterSelects
 	}
 	src := "qa=1\ntypeset -x qa\n"
 	out, errs, st := declRun(t, src+"typeset -m +x 'q*'\ntypeset -p qa", set, Diagnostics{})
@@ -297,6 +302,7 @@ func TestMatchingDeclaresOverNothingTheShellProduces(t *testing.T) {
 	set := func(s *Semantics) {
 		withMatching(s)
 		s.DeclareOptions = "aAfgilmpruUxT"
+		s.DeclareMatchingLetter = DeclareMatchingLetterSelects
 	}
 	// Both kinds of produced parameter, because the guard has to name both
 	// and a test that knew only one would let the other through.

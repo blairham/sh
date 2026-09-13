@@ -1449,7 +1449,13 @@ func Semantics() interp.Semantics {
 	// local in a keyword body here and the global in the other, so a
 	// listing that dropped the word would hand back a program whose
 	// variables leak.
-	s.DeclareOptions = "aAfilprux"
+	s.DeclareOptions = "aAfilmprux"
+	// `-m` is here now, and it is not the letter zsh spells the same way:
+	// it *moves* a parameter — `typeset -m new=old` — where the other
+	// shell selects several by pattern. Measured 2026-09-13 on ksh93u+;
+	// interp/declaremove.go holds the whole measurement and
+	// interp.DeclareMatchingLetterPolicy is the axis.
+	s.DeclareMatchingLetter = interp.DeclareMatchingLetterMoves
 	// A lone `-` or `+` is an option word to *this* builtin: measured
 	// 2026-09-10, `typeset +` names every parameter and `typeset -` writes
 	// the same table with values, where bash calls the sign an identifier
@@ -1494,7 +1500,7 @@ func Semantics() interp.Semantics {
 	// fatally, since these are special builtins there — where `typeset -f
 	// nm` on the same line lists. The word carries a type and a function
 	// has none.
-	s.IntegerOptions = "aAilprux"
+	s.IntegerOptions = "aAilmprux"
 	// `-i16` and `-i 16` are an output base here — `integer -i 16 b=255` is
 	// `16#ff` — and this engine has no base to keep, so it refuses by name.
 	s.IntegerAttributeTakesABase = interp.Yes
@@ -1949,7 +1955,7 @@ func Diagnostics() interp.Diagnostics {
 			// the name and is 0. That half is #2192; the seam it needs is
 			// Semantics.FunctionLettersThatMarkUndefined, and what is
 			// missing is an FPATH search for this dialect to put behind it.
-			"typeset": "-bFhmnstCEHLMRSTXZ",
+			"typeset": "-bFhnstCEHLMRSTXZ",
 			// `functions` is `typeset -f` under a second name, so the
 			// letters it is missing are read off its own set: `-t` traces a
 			// function and `-u` marks one to be read from `$FPATH`, both of
@@ -1970,7 +1976,7 @@ func Diagnostics() interp.Diagnostics {
 			// takes. Measured 2026-09-12, `integer -f w=1` is the only
 			// letter of typeset's grammar that ksh93u+ refuses under the
 			// second name, and it refuses it with the usage line alone.
-			"integer": "-bFhmnstCEHLMRSTXZ",
+			"integer": "-bFhnstCEHLMRSTXZ",
 		},
 		// ksh93's one sentence for a dead -u descriptor, the number not
 		// named; the non-number wordings per letter are not modeled yet, so

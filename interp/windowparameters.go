@@ -147,7 +147,7 @@ func (r *Runner) ProvideWindowSize() {
 // already made. `COLUMNS=13; print $COLUMNS` is 13 in zsh, and settling late
 // is what makes it 13 here.
 func (r *Runner) windowSizeValue(name string) string {
-	rows, cols, held := r.terminalSizeHeld()
+	rows, cols, held := r.terminalSize()
 	switch {
 	case !r.windowSettled:
 		r.windowSettled = true

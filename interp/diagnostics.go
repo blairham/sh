@@ -569,6 +569,25 @@ type Diagnostics struct {
 	// which dash and ksh93 do here and almost nowhere else.
 	AliasNotFoundUnprefixed bool
 
+	// AliasInvalidName is `alias` refusing a name that holds a character an
+	// alias may not carry — see Semantics.AliasNameRefusedCharacters for
+	// which characters those are and which shells check at all. Three verbs:
+	// the builtin, the name, and the whole operand as it was written.
+	//
+	//	bash   alias: `a$b\': invalid alias name
+	//	ksh93  alias: a$b=echo: invalid alias name
+	//
+	// The two that check word it differently in exactly one way that
+	// matters: bash names the *name* and quotes it, ksh93 names the whole
+	// operand and quotes nothing — so a definition shows its value there and
+	// not here. A bare lookup gives ksh93 the same two verbs, since the
+	// operand is then the name.
+	AliasInvalidName string
+
+	// AliasInvalidNameUnprefixed writes it without the shell and line in
+	// front, which ksh93 does here as it does for AliasNotFound.
+	AliasInvalidNameUnprefixed bool
+
 	// UnaliasNotFound is the same for `unalias`, and is a separate field
 	// because zsh words it differently from anything its `alias` says — "no
 	// such hash table element: nope", where its `alias` says nothing at all.

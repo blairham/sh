@@ -17260,6 +17260,21 @@ echo end`,
 		Why:     "the paired table, from the other side: these three are zsh's remaining `alias` letters — a listing a startup file could read back, a listing restricted to the regular kind, and operands taken as patterns — and a shell that has not built them owes a refusal that says so rather than `bad option`, which claims no shell has the letter (#2081). The table is emptied first so the row is about the letters and not about whichever aliases a shell is born with",
 	},
 	{
+		ID: "alias/a-name-holding-a-character-it-may-not-carry", Category: "alias",
+		Snippet: `echo one; alias 'a$b'=echo; echo "st=$?"; alias 'a$b' >/dev/null 2>&1; echo "look=$?"`,
+		Why:     "whether `alias` checks the *name* it is given at all, and what a refusal costs. Two of the panel check and three take any name: bash 5.3 complains, defines nothing, answers 1 and carries on, ksh93u+ complains and ends the script — so `st=` never prints there and that is the only observable difference, since the builtin's own status is 1 in both — and zsh 5.9.2, dash and BusyBox ash accept the name in silence, which the trailing `look=0` is the evidence for. Semantics.AliasNameRefusedCharacters and Semantics.AliasInvalidNameFatal (#2413). The lookup's own output is discarded because how a listing quotes a name that needs quoting is a different question and would put an unrelated cell in this row",
+	},
+	{
+		ID: "alias/a-pattern-character-in-an-alias-name", Category: "alias",
+		Snippet: `alias 'a*b'=echo; echo "st=$?"; echo two`,
+		Why:     "the two shells that check do **not** refuse the same set, which is why the set is a value on the vector rather than one axis they share. Swept over every printable ASCII character on 2026-09-12: both refuse whitespace and `\" $ & ' ( ) / ; < > \\ ` |`, and ksh93u+ refuses `* ? [ { }` beside them where bash 5.3 takes all five. `]` is in neither set, which is what says the extra five are the pattern characters and not a bracket rule (#2413)",
+	},
+	{
+		ID: "alias/the-name-of-a-bare-lookup", Category: "alias",
+		Snippet: `alias 'a$b'; echo "st=$?"; echo two`,
+		Why:     "whether the name check reaches a *lookup* as well as a definition — Semantics.AliasNameCheckReachesALookup (#2413). ksh93u+ refuses the word and ends the script; bash 5.3 looks it up like any other and answers `not found`, which is the same thing it says for a name nobody ever mentioned. dash says its own not-found and zsh says nothing at all, both at 1, which is what they already do for any absent name — so for the three that check no name this row is the control rather than the question",
+	},
+	{
 		ID: "select/an-unterminated-final-reply", Category: "select",
 		Snippet: `printf 2 | { select x in a b; do echo "picked=$x"; break; done; }; echo "st=$?"`,
 		Why:     "a reply with no trailing newline is a reply in zsh and is not one in bash and ksh93, which end the loop with 1 instead. Written through a pipe because a terminal ends every line, so this is only reachable from a pipe or a file — and `read` answers the same question unanimously, which is why that one is the core's behavior and this one is an axis",

@@ -1007,6 +1007,19 @@ func Semantics() interp.Semantics {
 	// `alias` is no more special here than POSIX makes it: the complaint is
 	// said and the next command runs. Measured with `alias -g x`.
 	s.AliasBadOptionFatal = interp.No
+	// A name an alias may not carry, swept over every printable ASCII
+	// character on 2026-09-12: whitespace and the shell's own
+	// metacharacters, plus `/`. The five ksh93 refuses beside them —
+	// `* ? [ { }` — are taken here, which is why the set is a value and not
+	// an axis (#2413). `=` cannot be in it: the first one separates the name
+	// from the value, so a name reaching the check never holds one.
+	s.AliasNameRefusedCharacters = "\t\n \"$&'()/;<>\\`|"
+	// Only a definition is checked. `alias 'a$b'` is `alias: a$b: not found`
+	// here, which is the answer any name it does not hold gets.
+	s.AliasNameCheckReachesALookup = interp.No
+	// And the complaint costs the builtin 1 and the script nothing: with the
+	// refusal on line 2 of three, line 3 still runs and the shell exits 0.
+	s.AliasInvalidNameFatal = interp.No
 	s.EarlierDeclarationLetterBlocksALaterPlus = interp.No
 	// A redirection that cannot be made is where bash parts from POSIX and
 	// from three of the panel: `exec 3>/nope/x; echo after` complains and
@@ -1970,6 +1983,7 @@ func Diagnostics() interp.Diagnostics {
 		PrintfUsage:            "printf: usage: printf [-v var] format [arguments]",
 		UmaskBadMask:           "umask: %[1]s: octal number out of range",
 		AliasNotFound:          "%[1]s: %[2]s: not found",
+		AliasInvalidName:       "%[1]s: `%[2]s': invalid alias name",
 		UnaliasNotFound:        "%[1]s: %[2]s: not found",
 		AliasListPrefix:        "alias ",
 		UnaliasUsage:           "unalias: usage: unalias [-a] name [name ...]",

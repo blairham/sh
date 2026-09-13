@@ -286,6 +286,23 @@ func Probes() []Probe {
 			},
 		},
 		{
+			Field:   "AliasInvalidNameFatal",
+			Cases:   []string{"alias/a-name-holding-a-character-it-may-not-carry"},
+			Reading: "the row defines an alias under a name two of the panel will not take, then prints `st=`; a shell that refuses the name and reaches that line is not ended by the refusal, and one that refuses it and never reaches the line is",
+			Read: func(cells map[string]oracle.Result) (string, string) {
+				r := cells["alias/a-name-holding-a-character-it-may-not-carry"]
+				switch {
+				case strings.TrimSpace(r.Stderr) == "":
+					return "", "the name was taken without complaint, so this shell checks no alias name and there is no refusal for the axis to be about"
+				case strings.Contains(r.Stdout, "st="):
+					return "No", ""
+				case strings.Contains(r.Stdout, "one"):
+					return "Yes", ""
+				}
+				return "", "the row did not reach the definition at all, so nothing here is about the refusal"
+			},
+		},
+		{
 			Field:   "PrefixToAFunctionIsExported",
 			Cases:   []string{"axis/whether-a-prefix-to-a-function-is-exported"},
 			Reading: "the function asks `export -p` about the name its own prefix set, and answers YES where the prefix carried the export attribute in",

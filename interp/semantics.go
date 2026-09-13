@@ -8759,6 +8759,51 @@ type Semantics struct {
 	// reaches it, and sixteen corpus rows did (#2345).
 	AliasBadOptionFatal Answer
 
+	// AliasNameRefusedCharacters is the characters an alias **name** may not
+	// hold, in the shells that check one. Empty means the shell takes any
+	// name at all, which is what zsh 5.9.2, dash 0.5.12 and BusyBox ash do:
+	// measured 2026-09-12, `alias 'a b'=echo` is silently accepted in all
+	// three and the name is then listed back.
+	//
+	// A set rather than an axis, because the two shells that check do **not**
+	// agree on what is in it. Swept over every printable ASCII character on
+	// 2026-09-12: both refuse a space, a tab, a newline and
+	// `" $ & ' ( ) / ; < > \ ` |`, and ksh93u+ refuses `* ? [ { }` beside
+	// them where bash 5.3 takes all five. `]` is in neither set, which is
+	// what says ksh93's extra five are the pattern characters rather than a
+	// bracket rule.
+	//
+	// `=` is in no set and cannot be: the first `=` is the separator between
+	// the name and the value, so a name that reaches this check never holds
+	// one. That is measured rather than reasoned — `alias 'a=b'=echo` is
+	// accepted everywhere and defines an alias called `a`.
+	//
+	// The check is on the name a *definition* gives; whether it also reaches
+	// a bare lookup is AliasNameCheckReachesALookup below.
+	AliasNameRefusedCharacters string
+
+	// AliasNameCheckReachesALookup checks the name of a bare `alias name`
+	// as well as the name of a definition. ksh93 does and bash does not:
+	// measured 2026-09-12, `alias 'a$b'` is `alias: a$b: invalid alias name`
+	// in ksh93 and `alias: a$b: not found` in bash 5.3, which is the answer
+	// any name it does not hold gets.
+	//
+	// Asked only where a name was going to be refused, so a shell with an
+	// empty AliasNameRefusedCharacters never reaches it.
+	AliasNameCheckReachesALookup Answer
+
+	// AliasInvalidNameFatal ends the script over a name an alias may not
+	// carry. ksh93 alone, and it is not AliasBadOptionFatal reaching further:
+	// that axis is about an option letter, and a name ksh93 will not take is
+	// a different complaint with a wording of its own.
+	//
+	// Measured 2026-09-12 over a script file: with `alias 'a$b'=echo` on line
+	// 2 of three, bash 5.3 writes the complaint, runs line 3 and exits 0,
+	// where ksh93u+ writes its own and exits 1 with line 3 unrun. The
+	// builtin's own status is 1 in bash, so a caller reading `$?` cannot tell
+	// the two apart — only the line after can.
+	AliasInvalidNameFatal Answer
+
 	// EarlierDeclarationLetterBlocksALaterPlus makes a plus word that follows
 	// a minus word on one declaration take nothing off: `typeset -i +x e`
 	// leaves `e` exported and `typeset -i +i n` leaves `n` an integer. True

@@ -540,6 +540,57 @@
         "TimedOut": false
       }
     },
+    "alias/a-name-holding-a-character-it-may-not-carry": {
+      "ash": {
+        "Stdout": "one~st=0~look=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "one~st=1~look=1",
+        "Stderr": "\u003cshell\u003e: line 1: alias: `a$b': invalid alias name",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one~st=1~look=1",
+        "Stderr": "\u003cshell\u003e: line 1: alias: `a$b': invalid alias name",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one~st=1~look=1",
+        "Stderr": "\u003cshell\u003e: line 0: alias: `a$b': invalid alias name",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one~st=0~look=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one",
+        "Stderr": "alias: a$b=echo: invalid alias name",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one~st=0~look=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "alias/a-name-the-table-does-not-hold": {
       "ash": {
         "Stdout": "st=1",
@@ -585,6 +636,57 @@
       },
       "zsh": {
         "Stdout": "st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "alias/a-pattern-character-in-an-alias-name": {
+      "ash": {
+        "Stdout": "st=0~two",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "st=0~two",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0~two",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0~two",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=0~two",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "alias: a*b=echo: invalid alias name",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0~two",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -2013,6 +2115,57 @@
       },
       "zsh": {
         "Stdout": "L=0~r=0~m=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "alias/the-name-of-a-bare-lookup": {
+      "ash": {
+        "Stdout": "st=1~two",
+        "Stderr": "alias: a$b not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "st=1~two",
+        "Stderr": "\u003cshell\u003e: line 1: alias: a$b: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1~two",
+        "Stderr": "\u003cshell\u003e: line 1: alias: a$b: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1~two",
+        "Stderr": "\u003cshell\u003e: line 0: alias: a$b: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=1~two",
+        "Stderr": "alias: a$b not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "alias: a$b: invalid alias name",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1~two",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

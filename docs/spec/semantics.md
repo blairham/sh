@@ -10686,6 +10686,51 @@ anywhere else.
 
 ### the ERR, DEBUG, RETURN and EXIT conditions
 
+**`AliasNameRefusedCharacters`** — bash `` \t \n space " $ & ' ( ) / ; < > \ ` | `` · ksh93 those plus `* ? [ { }` · dash, zsh, ash empty
+
+The characters an alias **name** may not hold, in the shells that check
+one. Swept over every printable ASCII character on 2026-09-12 by
+defining `alias '<name>'=echo` for each in turn: zsh 5.9.2, dash 0.5.12
+and BusyBox ash accept every name and list it back, bash 5.3 refuses
+whitespace and the shell's own metacharacters plus `/`, and ksh93u+
+refuses the pattern characters `* ? [ { }` beside them.
+
+A **set** rather than an axis, because the two shells that check do not
+agree on what is in it — an axis would have to answer "checked" for both
+and then hide the difference somewhere else. `]` is in neither set,
+which is what says ksh93's extra five are the pattern characters and not
+a bracket rule. An empty set is the whole of "this shell does not
+check", and it is why the two axes below are never reached in three of
+the five.
+
+`=` cannot be in any set: the first `=` separates the name from the
+value, so a name that reaches the check never holds one. Measured rather
+than reasoned — `alias 'a=b'=echo` is accepted everywhere and defines an
+alias called `a` whose body is `b=echo`.
+
+**`AliasNameCheckReachesALookup`** — bash no · dash unspecified · ksh93 yes · zsh unspecified
+
+Checks the name of a bare `alias name` as well as the name of a
+definition. ksh93 does: `alias 'a$b'` is `invalid alias name` there,
+where bash 5.3 looks the word up like any other and answers `not
+found` — the same thing it says for a name nobody ever mentioned.
+Asked only where a name was going to be refused, so the three shells
+with an empty set never reach it.
+
+**`AliasInvalidNameFatal`** — bash no · dash unspecified · ksh93 yes · zsh unspecified
+
+Ends the script over a name an alias may not carry. ksh93 alone, and it
+is not `AliasBadOptionFatal` reaching further: that axis is about an
+option letter, and a name ksh93 will not take is a different complaint
+with a wording of its own.
+
+**The builtin's own status is 1 in both, so only the line after can tell
+them apart.** Measured over a script file on 2026-09-12: with `alias
+'a$b'=echo` on line 2 of three, bash writes the complaint, runs line 3
+and exits 0, where ksh93u+ writes its own and exits 1 with line 3 unrun.
+An issue reporting this said the status was 0 in every shell that checks;
+it is 1 in bash and the shell simply carries on.
+
 **`DebugTrapRefiresOnEnteringAFunction`** — bash yes · dash unspecified · ksh93 no · zsh no
 
 Fires the DEBUG trap a *second* time for a function call: once where the

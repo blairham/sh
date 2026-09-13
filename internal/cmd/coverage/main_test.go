@@ -83,6 +83,6 @@ func TestSuiteSourcesReadsEveryTestsFileAndNothingElse(t *testing.T) {
 func TestANamedSuiteThatIsNotThereIsAnError(t *testing.T) {
 	_, err := suiteSources(filepath.Join(t.TempDir(), "nothing-here"))
 	if !errors.Is(err, fs.ErrNotExist) {
-		t.Fatalf("suiteSources on a missing directory returned %v, want a not-exist error main can recognise", err)
+		t.Fatalf("suiteSources on a missing directory returned %v, want a not-exist error main can recognize", err)
 	}
 }

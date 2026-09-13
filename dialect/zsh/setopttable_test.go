@@ -5,14 +5,20 @@ package zsh
 
 import "testing"
 
-// And neither is recorded any more, which is a claim about the table rather
-// than about behavior — so it is read off the table.
+// And none of them is recorded any more, which is a claim about the table
+// rather than about behavior — so it is read off the table.
 //
 // The honest split #856 established is that `recorded` means remembered and
 // not acted on. An option something reads must leave that set, or the count
 // in docs/spec/semantics.md is a promise the code no longer keeps.
-func TestTheHistoryOptionsAreNoLongerRecordedOnly(t *testing.T) {
-	for _, base := range []string{"histignorespace", "histignoredups"} {
+//
+// The two history names are read by a session before it records a line; the
+// two prompt names are read by the line editor before it draws a prompt. Those
+// two joined the list in #2515, where the reason they had been left behind —
+// that `emulate` reset every name outside the recorded set — stopped being
+// true.
+func TestTheOptionsSomethingReadsAreNotRecordedOnly(t *testing.T) {
+	for _, base := range []string{"histignorespace", "histignoredups", "promptsp", "promptcr"} {
 		o, _, ok := resolveOptionName(base)
 		if !ok {
 			t.Fatalf("%s is not in the table at all", base)
@@ -33,7 +39,7 @@ func TestTheHistoryOptionsAreNoLongerRecordedOnly(t *testing.T) {
 			recordedCount++
 		}
 	}
-	if want := 147; recordedCount != want {
+	if want := 145; recordedCount != want {
 		t.Errorf("%d recorded names, want %d — docs/spec/semantics.md publishes the count", recordedCount, want)
 	}
 }

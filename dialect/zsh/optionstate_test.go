@@ -82,7 +82,7 @@ func TestASavedTableRestoresEveryOptionThatMoves(t *testing.T) {
 func TestASavedTableCarriesTheEmulationMode(t *testing.T) {
 	r := optionStateRunner(t)
 	saved := saveOptionState(r)
-	applyEmulation(r, "sh")
+	applyEmulation(r, "sh", false)
 	if got := currentEmulation(r); got != "sh" {
 		t.Fatalf("mode %q after emulate sh, want sh", got)
 	}

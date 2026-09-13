@@ -999,9 +999,15 @@ a third-party xtrace log — gitstatus writes its own — was read as a
 function returning before it reached its guards, when the guards had run
 and simply were not printed. A trace that silently drops a whole command
 *kind* cannot be read backwards, which is the only way anybody uses one.
-`emulate -L sh` turning xtrace off for the rest of a function is a real
-gap of the same shape, and its existence is what made the spurious kind
-hard to spot rather than easy (#2126).
+A real gap of the same shape was cited beside it at the time — an
+emulation turning xtrace off for the rest of a function — and **the letter
+was the wrong one**, measured on zsh 5.9.2 while #2515 took the emulation
+partition. `xtrace` is one of the 104 names a bare `emulate` leaves
+standing, so `setopt xtrace; f() { emulate -L sh; … }` goes on tracing to
+the end of the function; it is `-R` that stops it, in a function and at
+the top level alike. Both halves matter to somebody reading a log: a gap
+after `emulate -L` is *not* explained by the emulation, and one after
+`emulate -R` is (#2126, #2515).
 
 Thirteen are implemented. The rest are recorded and deliberately not:
 ksh93 prints pipeline elements last-first — which follows from its running
@@ -4640,9 +4646,9 @@ first is unanimous across the table.** Every name is one of five kinds:
 | substrate-backed | 15 | moves a real `set -o` switch: `setopt err_exit` **is** `set -e`, and `setopt vi` **is** `set -o vi`. `ignorebraces` is the inverted one: it is `set +o braceexpand`, zsh naming the state that *stops* the expansion where the substrate names the expansion |
 | axis- or matcher-backed | 12 | moves a semantics axis (`shwordsplit`, `nomatch`, `ksharrays`, `localtraps`, `multios`, `globsubst`, `typesetsilent`) or a pattern-matcher option (`nullglob`, `globdots`, `caseglob`, `extendedglob`, `bareglobqual`). `ksharrays` is one name over **five** axes — see below |
 | fixed | 4 | refuses to move, in zsh's own words: `can't change option: NAME`, status 1. Asking for the state it already holds is granted, and one of the four is taken at the *invocation* — see `singlecommand` below |
-| store-backed, read by the front end | 4 | `histignorespace`, read by the line editor before it records a line; `checkrunningjobs`, read by `checkjobs` when it recomputes what the exit is held for; and `cshnullcmd` and `shnullcmd`, read together when either moves so that the first can win while it is on. All four are kept where a recorded name is kept, because the substrate has no `set -o` name for any of them |
+| store-backed, read by the front end | 6 | `histignorespace`, read by the line editor before it records a line; `promptsp` and `promptcr`, read by the same editor before it draws a prompt; `checkrunningjobs`, read by `checkjobs` when it recomputes what the exit is held for; and `cshnullcmd` and `shnullcmd`, read together when either moves so that the first can win while it is on. All six are kept where a recorded name is kept, because the substrate has no `set -o` name for any of them |
 | switch-backed | 3 | `aliases`, `autocd` and `checkjobs`: each moves a capability the substrate holds under no option name of its own — alias expansion really does stop, a bare directory name really is read as a `cd`, and a job still running really does hold the exit |
-| **recorded** | 147 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
+| **recorded** | 145 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
 
 **Two names moved out of "recorded" when the history knobs were built**
 (#571). `histignorespace` is the fifth row above: its state has nowhere
@@ -4733,11 +4739,88 @@ before **every prompt** of a real interactive session (#2033). That is the
 shape of the recorded bargain failing: the complaint it was meant to stop came
 back as output instead.
 
-So 147 of 185 are recorded, the count above is the one produced by counting
+`promptsp` and `promptcr` are the most recent to leave, and they are the one
+pair that left for a reason **outside** themselves. Both were read by the line
+editor all along — `repl.EditorStyle` names them and asks this namespace for
+their state before every prompt — and both were nevertheless left marked
+`recorded` in #2502, because `emulate` reset every name outside the recorded
+set and calling them what they are would have made `setopt nopromptsp; emulate
+sh` turn the unfinished-output mark back on. That is a workaround shaped by a
+bug somewhere else, and #2515 removed the bug: the reset no longer stands on
+the `recorded` distinction, so the entries can now say what is true. The
+lesson is worth keeping — **a wrong rule elsewhere in the file was distorting
+a correct classification here**, and it did so silently, as a reason not to
+make a change rather than as a failure.
+
+So 145 of 185 are recorded, the count above is the one produced by counting
 the constructors in `dialect/zsh/setopt.go`, and **the fixed set is now
 exactly the set real zsh refuses**: `interactive`, `shinstdin`,
 `singlecommand` and `zle`. `monitor` left it in #1720 because zsh grants it
 where the shell has a terminal.
+
+### What an emulation resets, and what it leaves standing
+
+`emulate` does not put the whole option table back. Measured on zsh 5.9.2,
+2026-09-12, one name at a time through `${options[…]}` and from **two**
+starting states — the default, and the same option moved away from it,
+because a name whose emulation default happens to equal the moved-to state
+cannot be told apart from either half alone. The 185 names split three ways,
+and the split is identical for `sh`, `ksh`, `zsh` and `csh`:
+
+| what `emulate NAME` does | how many | which |
+| --- | --- | --- |
+| every form resets it | 81 | the portability-relevant ones: `shwordsplit`, `nomatch`, `ksharrays`, the nine `posix*` names, the `csh*`, `ksh*` and `sh*` families, `glob`, `clobber`, `errexit`, `multios`, the local-scoping switches, `extendedglob` |
+| only `emulate -R` resets it | 95 | the ones a *person* sets: history, completion, correction, the line editor, the prompt, `xtrace`, `verbose`, `emacs`, `vi`, `notify` |
+| no form resets it | 9 | `interactive`, `login`, `monitor`, `privileged`, `restricted`, `shinstdin`, `singlecommand`, `zle` — and `exec` |
+
+**The nine.** Eight say how the shell was *started* rather than how it
+behaves, and every one stands through `emulate -R zsh` as squarely as
+through a bare `emulate sh`. Five of them refuse to move at all in a script
+on a pipe, so they were measured again through a pseudo-terminal, where
+`monitor` and `zle` do move — and there they still stand through all four
+emulations. That second pass is not a formality: read inside `$( … )` both
+read `off`, which is the command substitution's own subshell and not the
+emulation, and the first pass of the probe had them down as reset on exactly
+that evidence.
+
+`exec` is the ninth and is **unanswerable from inside a shell**. The option
+off is `set -n`: commands are parsed and not run, so the `emulate` that
+would answer the question never executes and neither does anything that
+could report it. It is grouped with the eight rather than with the 81
+because leaving an option alone cannot make a shell run something it was
+told not to run, and because its two siblings — `verbose` and `xtrace`, the
+other two of `set -n -v -x` — are both measured as left alone.
+
+**`-L` changes neither set.** The function-local letter is `setopt
+localoptions localtraps` on top of the emulation and nothing else, so the
+same 81 go back and the same 104 stand. `-L` and `-R` compose: `emulate -LR
+sh` is the wide reset scoped to the call.
+
+**The set is measured; the value is not.** Real zsh has a default *per
+emulation* — `emulate sh` turns `posixbuiltins` on and `multios` off, where
+this shell puts both back to zsh's default — and 47 of the 81 differ that
+way under `sh`. Only the four axes in `emulations` carry an emulation's own
+value here. That is a separate gap from the partition and does not change
+which names move.
+
+**This is a dialect answer and not an axis.** No other shell in the panel
+has `emulate` at all — bash, dash, ksh93 and BusyBox ash each answer
+`command not found`, and the ash column cannot be reached for this question
+even in principle — so there is nobody to disagree with, and the whole of it
+lives in `dialect/zsh/emulateoptions.go`. Same conclusion as #2426 reached
+for `functrace` and `extdebug`, for the same reason.
+
+**How this was wrong, and what the wrongness cost.** A bare `emulate` here
+reset every name outside the `recorded` set, which stood a semantic question
+on an implementation detail. Three live divergences followed: `setopt
+nopromptsp; emulate sh` turned the unfinished-output mark back on, a
+session's `histignorespace` was dropped, and `setopt xtrace; emulate sh`
+silently ended a trace that real zsh keeps running. `-R` was read as a no-op
+on the strength of the same mistake. And it was shaping adjacent work rather
+than only being wrong: every option that ought to have been store-backed had
+to be weighed against inheriting a wrong `emulate`, which is why `promptsp`
+and `promptcr` stayed marked `recorded` for a release although the line
+editor read both (#2502, #2515).
 
 The recorded kind is the change of position, and it is deliberate. A real
 `~/.zshrc` opens with a dozen `setopt` lines about completion, correction,
@@ -5774,9 +5857,11 @@ What was built, all through the extension seam — registered builtins in each
   them is `no such option`, and one of the four kinds a name can be — the
   recorded kind — is remembered without being acted on.
 - **zsh `emulate`** (dialect/zsh/emulate.go): `sh`/`ksh`/`zsh` switch the
-  measured axes above and reset the option table to the emulation's
-  defaults, `-c` runs a string under the emulation and restores everything
-  after, and a bare `emulate` names the mode. `ksharrays` is one of the
+  measured axes above and reset **part** of the option table to the
+  emulation's defaults — 81 names bare, and every name but nine under `-R`;
+  see "what an emulation resets" below. `-c` runs a string under the
+  emulation and restores everything after, and a bare `emulate` names the
+  mode. `ksharrays` is one of the
   axes it switches and is a **group** of five, so an emulation moves the
   array base, what a plain `$a` is worth, how many fields it is, what
   `${#a}` counts and whether an unbraced name's brackets are a subscript,
@@ -6817,10 +6902,11 @@ than missing:
   the chain rather than the last; `-x` sets the tab width of a printed body.
   Each is refused as not implemented rather than as unknown, the same
   distinction `compgen` draws between an action a shell lacks and a typo.
-- zsh `setopt` names of the **recorded** kind: 141 of the 185 are recognized,
+- zsh `setopt` names of the **recorded** kind: 145 of the 185 are recognized,
   remembered and reported without being acted on. See "zsh's option names".
   (This line read 157 while the table above read 150; neither was the count
-  the table produces. It is now counted from the constructors.)
+  the table produces. It is now counted from the constructors, and the test
+  that publishes it is the reason the two agree.)
 - zsh `emulate csh`: the mode is recorded and nothing changes with it —
   csh's differences are not modeled anywhere else either. (`emulate -L` was
   on this list, refused for want of a restore-on-return seam. The seam is

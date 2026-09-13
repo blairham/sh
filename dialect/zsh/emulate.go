@@ -17,11 +17,21 @@ import (
 // than assumed, and three axes carry all of it that this shell distinguishes:
 // `emulate sh` and `emulate ksh` split unquoted expansions (shwordsplit),
 // pass an unmatched glob through as itself (nonomatch), and base arrays at
-// zero (ksharrays); `emulate zsh` puts all three back. The switch also resets
-// every changeable option to the emulation's defaults — measured: `setopt
-// err_exit; emulate zsh` turns errexit back off, no `-R` required — and the
+// zero (ksharrays); `emulate zsh` puts all three back. The switch also puts
+// options back to the emulation's defaults — measured: `setopt err_exit;
+// emulate zsh` turns errexit back off, no `-R` required — and the
 // bare-listing baseline moves with it, which the option table's `def` field
 // records.
+//
+// **Which** options is the part this file used to get wrong, and it is
+// three-valued rather than two. A bare `emulate` resets 81 of the 185 names
+// and leaves the other 104 exactly where the script left them; `emulate -R`
+// widens that to every name but the nine describing how the shell was
+// started. Until #2515 a bare emulation reset the whole table, which turned
+// `setopt nopromptsp; emulate sh` back on, dropped a `histignorespace` a
+// session had asked for, and silently ended an `xtrace`. emulateoptions.go
+// holds the partition, how it was measured, and what about an emulation is
+// still not modeled.
 //
 // The rest of what real zsh folds into an emulation — its ~180 options, csh's
 // separate glob wording, `$0`-versus-function-name rules — is not modeled;
@@ -30,7 +40,11 @@ import (
 //
 // `emulate -L`, the function-local form, is `setopt localoptions localtraps`
 // after the emulation and nothing else — measured, and it is two options
-// rather than one. It had a save-and-restore of its own once, and that was
+// rather than one. It does **not** narrow or widen the reset: the 81 names a
+// bare `emulate sh` puts back are the same 81 `emulate -L sh` puts back, and
+// `-L -R` together are the strict set scoped to the call. So `emulate -L sh`
+// leaves an `xtrace` running where `emulate -LR sh` stops it, which is the
+// other way round from a note in #2126 written before this was measured. It had a save-and-restore of its own once, and that was
 // two mistakes: it saved at its own line rather than at the function entry,
 // so an option moved earlier in the same body leaked, and it restored whether
 // or not the option was still on at the return. Both are measured the other
@@ -73,9 +87,13 @@ var emulations = map[string]struct{ split, nomatchOk, zeroBase, redirFatal bool 
 	"csh": {},
 }
 
-// applyEmulation switches the axes and resets every changeable option to the
-// emulation's default.
-func applyEmulation(r *interp.Runner, mode string) {
+// applyEmulation switches the axes and puts back the options this form of
+// the emulation resets. Which those are is measured and is not the whole
+// table — emulateoptions.go holds the partition and how it was taken.
+//
+// strict is the `-R` form, which widens the set from 81 names to 176 and is
+// the only thing the letter does here.
+func applyEmulation(r *interp.Runner, mode string, strict bool) {
 	e := emulations[mode]
 	if mode != "csh" {
 		swapAxes(r, func(s *interp.Semantics) {
@@ -90,12 +108,22 @@ func applyEmulation(r *interp.Runner, mode string) {
 			s.RedirectErrorOnSpecialBuiltinFatal = answer(e.redirFatal)
 		})
 	}
-	// The recorded names go back to their defaults in one write rather than
-	// 157 — the store holds deviations, so an empty store *is* every recorded
-	// option at its default.
-	setRecordedOptions(r, nil)
+	// The recorded names in one write rather than one write each — the store
+	// holds deviations, so dropping a name from it *is* that option back at
+	// its default, and the names this emulation leaves alone stay in it.
+	if names, _ := r.GetArray(zshRecordedStore); len(names) > 0 {
+		kept := make([]string, 0, len(names))
+		for _, n := range names {
+			if !resetByEmulation(n, strict) {
+				kept = append(kept, n)
+			}
+		}
+		if len(kept) != len(names) {
+			setRecordedOptions(r, kept)
+		}
+	}
 	for _, o := range zshOptions {
-		if o.set == nil || o.recorded {
+		if o.set == nil || o.recorded || !resetByEmulation(o.base, strict) {
 			continue
 		}
 		switch o.base {
@@ -129,7 +157,7 @@ func emulateBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 		return 0
 	}
 	if !e.hasCode {
-		applyEmulation(r, e.mode)
+		applyEmulation(r, e.mode, e.strict)
 		if e.local {
 			// `-L` is the local-scoping options and nothing besides, which
 			// is measured rather than assumed: inside `emulate -L zsh` they
@@ -161,7 +189,7 @@ func emulateBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 	// — measured, an option set before it comes back: `setopt no_glob;
 	// emulate sh -c '…'` still refuses to glob afterwards.
 	saved := saveOptionState(r)
-	applyEmulation(r, e.mode)
+	applyEmulation(r, e.mode, e.strict)
 	st := e.applyOptions(r)
 	if eval, ok := r.Builtin("eval"); ok {
 		st = eval(r, ctx, []string{e.code})
@@ -203,8 +231,13 @@ func emulateArguments(r *interp.Runner, args []string) (e emulateCall, status in
 			for _, letter := range a[1:] {
 				switch letter {
 				case 'R':
-					// A plain emulation already resets the options —
-					// measured — so the strict form adds nothing here.
+					// The strict form, and it is not the no-op this said it
+					// was until #2515: a bare emulation resets the 81
+					// portability-relevant options and `-R` resets every
+					// name but the nine that describe how the shell was
+					// started. Measured — `setopt xtrace; emulate sh` still
+					// traces and `emulate -R sh` stops.
+					e.strict = true
 				case 'L':
 					e.local = true
 				case 'o':
@@ -258,6 +291,9 @@ type emulateCall struct {
 	// local is `-L`: the emulation, and every option moved after it, last
 	// only as long as the function it stands in.
 	local bool
+	// strict is `-R`: the emulation resets the options a bare one leaves
+	// where it found them. See emulateoptions.go for which those are.
+	strict bool
 	// options are the `-o name` and `+o name` pairs, in the order written —
 	// order matters, because the same name may appear twice.
 	options []emulateOption

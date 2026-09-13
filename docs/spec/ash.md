@@ -254,6 +254,45 @@ was an axis added elsewhere with no ash value; the shipped binary stopped
 taking a flag it used to take; and `go test ./...` was green throughout,
 because nothing graded ash.
 
+## Borrowed text is named in front of the location
+
+A failure *while* text this shell borrowed is running names the text, and
+the name goes between the shell's own and the line:
+
+    ash: ./p.sh: line 2: NOPE: parameter not set
+    ./s.sh: eval: line 11: NOPE: parameter not set
+
+That is the **fourth** arrangement of three fields the panel already
+shares, and the four are worth reading together, because the shape is one
+question with four answers rather than four mechanisms:
+
+| shell | a run-time failure inside a sourced file |
+| --- | --- |
+| bash, zsh | the file's path where the shell's own name goes |
+| dash | the name **after** the location — `dash: 2: ./p.sh:` |
+| ksh93 | the whole chain of borrowed texts — `./n.sh[2]: .[2]: .:` |
+| BusyBox ash | one name **before** the location — `ash: ./p.sh: line 2:` |
+
+`Diagnostics.BorrowedTextIsNamedAtRunTime` turns the name on and
+`SourceFileNaming`/`EvalNaming` say where it goes; nothing new was needed
+beyond a second placement (#2520).
+
+The **line** beside it did need a field. This shell's own text carries a
+line only from a script file — `Location` is bare and `ScriptLocation` says
+`line N` — while text it borrowed carries one on **every** route,
+`-c` and standard input included, and for a parse failure as much as for a
+run-time one. `Diagnostics.BorrowedLocation` is that second answer. Reading
+it off `ScriptLocation` would have given the same string here and would
+have been an inference no measurement supports.
+
+Two rows keep the rule from being too wide, and both are in the corpus. A
+function frame standing above the borrowed text does not end it — a `.`
+inside a function still names the file — while the source **returning**
+does: a function defined in a sourced file and called afterwards is
+`./s.sh: line 1:` with no name at all. So the rule is over the innermost
+borrowed text still being read, which is dash's rule with this shell's
+placement.
+
 ## What could not be said
 
 Six measured behaviors have no value on any existing axis. They are
@@ -288,6 +327,15 @@ commit that invented the grade.
 numbers a builtin's line from zero — `ash -c 'unset "a[0]"'` is `line 0`
 and a second line is `line 1` — while a script file and standard input
 both number from one. No axis carries a per-route line origin.
+
+It reaches further than a builtin's own message. `eval`'s text continues
+the caller's lines here, so the origin is added to every line inside it:
+`ash -c 'eval nosuchcmd'` is `eval: line 0` where the same line in a script
+is `line 1`. That is why the corpus row for the naming above
+(`eval/the-borrowed-text-in-the-prefix`) runs from a **script** — over
+`-c` the digit would differ from every other column for a reason that has
+nothing to do with naming, exactly as it would have in
+`eval/where-the-texts-lines-are` (#2462).
 
 **3. `divide by zero`.** The reason word for a division by zero is the
 substrate's own string (`division by zero`); this shell writes `divide by

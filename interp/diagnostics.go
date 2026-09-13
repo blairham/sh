@@ -2565,6 +2565,28 @@ type Diagnostics struct {
 	// say, and what it is still EvalSourceName's and SourceFileIsTheBuiltin's
 	// — this says only that a run-time diagnostic asks them at all.
 	BorrowedTextIsNamedAtRunTime bool
+	// BorrowedLocation is Location for a diagnostic about borrowed text,
+	// when the two differ. Zero means "the same as Location", which is true
+	// of four of the five.
+	//
+	// BusyBox ash is the one that needs it, and the reason is that its two
+	// answers are about different things. Its own text carries a line only
+	// on the script route — Location and ScriptLocation above — while text
+	// it *borrowed* carries one on every route. Measured 2026-09-12,
+	// BusyBox v1.37.0, with `p.sh` holding `echo one` and `echo $NOPE`:
+	//
+	//	ash -c 'set -u; echo $NOPE'      ash: NOPE: parameter not set
+	//	ash -c 'set -u; . ./p.sh'        ash: ./p.sh: line 2: NOPE: …
+	//	the same two lines on stdin      ash: NOPE: parameter not set
+	//	the dot on stdin                 ash: ./p.sh: line 2: NOPE: …
+	//	ash -c '. ./bad.sh'              ash: ./bad.sh: line 3: syntax error: …
+	//
+	// So it is the *text* that is located and not the invocation, and the
+	// parse failure in the last row says the same thing as the run-time ones
+	// above it. A field of its own rather than reaching for ScriptLocation:
+	// the two happen to hold the same style in this shell, and reading one
+	// off the other would be an inference no measurement supports.
+	BorrowedLocation LocationStyle
 	// BorrowedTextRendersTheCallStack writes the whole chain of borrowed
 	// texts into the prefix rather than only the innermost one's name:
 	// ksh93's `./n.sh[2]: .[2]: .: line 3: NOPE: parameter not set`.
@@ -4158,16 +4180,49 @@ func escapeToken(s string) string {
 // the source after the location, bash and ksh93 before it, and zsh puts it
 // where the shell's own name goes and prints no label.
 func (d Diagnostics) SourceReport(naming SourceNaming, shell, source string, line int, msg string) string {
+	d = d.forBorrowed()
 	switch naming {
 	case SourceReplacesShell:
 		return d.prefix(source, "", false, line) + msg
 	case SourceBeforeLocation:
-		if shell == "" {
-			shell = "sh"
-		}
-		return shell + ": " + source + ": " + d.locationOnly(line) + msg
+		return d.borrowedPrefix(shell, source, line) + msg
 	}
 	return d.prefix(shell, "", false, line) + source + ": " + msg
+}
+
+// forBorrowed returns the diagnostics a message about borrowed text should
+// use: the location style is the borrowed one where the dialect has a second
+// answer for it, and everything else is unchanged.
+//
+// The same shape as ForScript and ForStdin, and for the same reason — see
+// BorrowedLocation for the shell that splits the two and the rows it is read
+// off. It is applied wherever borrowed text is located, so a parse failure
+// inside a sourced file and a run-time failure inside the same file cannot
+// disagree about whether the line is written.
+func (d Diagnostics) forBorrowed() Diagnostics {
+	if d.BorrowedLocation != LocationNone {
+		d.Location = d.BorrowedLocation
+	}
+	return d
+}
+
+// borrowedPrefix renders the start of a diagnostic for the dialects that name
+// borrowed text between their own name and the location: `ash: ./p.sh: line
+// 2: `, and bash's `bash: eval: line 2: `.
+//
+// It takes no builtin, which is the shape the two callers share rather than
+// an omission: no dialect in the panel both names borrowed text here and
+// names the builtin that is speaking in its location, so writing one would
+// pin a combination nothing has been measured on.
+//
+// The caller is expected to have applied [Diagnostics.forBorrowed] already —
+// SourceReport does it for the parse path, and Runner.locationPrefix for the
+// run-time one.
+func (d Diagnostics) borrowedPrefix(shell, source string, line int) string {
+	if shell == "" {
+		shell = "sh"
+	}
+	return shell + ": " + source + ": " + d.locationOnly(line)
 }
 
 // SourceNaming is where the name of borrowed text goes.

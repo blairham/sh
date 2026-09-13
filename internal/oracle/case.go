@@ -11917,6 +11917,18 @@ echo unreachable`,
 		Why:     "what a run-time failure inside a sourced file is located and named as, which splits four ways: bash and zsh put the file's own path where the shell's name goes, dash names it after the location, and ksh93 names the *builtin* — `<shell>: .: line 2:` — in front of a location the shell's own name would otherwise carry. It is the one-level case of Diagnostics.BorrowedTextRendersTheCallStack (#2461)",
 	},
 	{
+		ID: "eval/the-borrowed-text-in-the-prefix", Category: "eval and dot",
+		Snippet: "set -u\neval 'echo e\necho $NOPE'",
+		Script:  true,
+		Why:     "the `eval` half of `dot/the-borrowed-text-in-the-prefix`, and a second row rather than a duplicate: what a diagnostic calls borrowed text is EvalNaming for one kind and SourceFileNaming for the other, so a dialect can name a sourced file and say nothing about `eval` — which is what BusyBox ash did until #2520 turned the run-time naming on for both. From a **script** and not `-c`, which is the confound this row exists to dodge: ash numbers a `-c` program from 0, so the line beside the name would be one less than every other column's for a reason that has nothing to do with naming (see `eval/where-the-texts-lines-are`), and a row recording the raw number would read as a naming difference",
+	},
+	{
+		ID: "dot/the-name-goes-when-the-source-returns", Category: "eval and dot",
+		Snippet: "printf 'f() { echo $NOPE; }\\n' > fn.sh\nset -u\n. ./fn.sh\nf",
+		Script:  true,
+		Why:     "the row that keeps the naming above from being too wide. The rule for *which* borrowed text a run-time diagnostic names is the innermost one still being read, with no test that the failing line came from it — so a function whose body was read from a sourced file, called after the source returned, must name nothing. Every column writes its plain prefix here, and an implementation that named the defining file instead would satisfy both rows above and fail only this one",
+	},
+	{
 		ID: "dot/the-borrowed-chain-two-levels-down", Category: "eval and dot",
 		Snippet: `printf "echo one\necho \$NOPE\n" > p.sh; printf "echo s1\n. ./p.sh\n" > s.sh; set -u; . ./s.sh`,
 		Why:     "the row above with one more level, which is what separates a *name* from a chain: ksh93 writes `<shell>: .[2]: .: line 2:` — a component for each borrowed text, each carrying the line in it that entered the next — where every other column writes exactly what it wrote one level up, the innermost text and nothing about the way in. Turning ksh93's naming on without the brackets would give `<shell>: .: line 2:` here, which is closer and still wrong, and only this row can tell the two apart (#2461)",

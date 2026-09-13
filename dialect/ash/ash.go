@@ -794,6 +794,30 @@ func Diagnostics() interp.Diagnostics {
 		// line 0: nosuchcmd: not found`.
 		SourceFileNaming: interp.SourceBeforeLocation,
 		EvalNaming:       interp.SourceBeforeLocation,
+		// And the name is written while the text is *running* and not only
+		// when it fails to parse, which is the fourth arrangement of these
+		// fields: dash names the text after the location, bash and zsh put
+		// it where the shell's own name goes, ksh93 renders the whole chain,
+		// and this shell writes one name in front of the location. Measured
+		// 2026-09-12, BusyBox v1.37.0, `p.sh` holding `echo one` and
+		// `echo $NOPE`:
+		//
+		//	ash -c 'set -u; . ./p.sh'    ash: ./p.sh: line 2: NOPE: …
+		//	the same from a script       ./s.sh: ./p.sh: line 2: NOPE: …
+		//	the dot inside a function    ./s.sh: ./p.sh: line 2: NOPE: …
+		//	an eval from a script        ./s.sh: eval: line 11: NOPE: …
+		//	a function defined in a
+		//	  sourced file, called after ./s.sh: line 1: NOPE: …
+		//
+		// The last row is why this is the innermost text still being read
+		// rather than a rule about function frames — see
+		// interp.Runner.borrowedNameBefore, which is dash's rule with this
+		// shell's placement.
+		BorrowedTextIsNamedAtRunTime: true,
+		// The line beside that name is written on every route, where the
+		// shell's own text carries one only from a file. See
+		// interp.Diagnostics.BorrowedLocation for the five rows.
+		BorrowedLocation: interp.LocationLineWord,
 
 		// The parse failures, in this shell's own order: the complaint first
 		// and the token after it, all lower case.

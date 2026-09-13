@@ -162222,6 +162222,108 @@
         "TimedOut": false
       }
     },
+    "redirect/a-numbered-csh-redirect-is-not-both-streams": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: redir error",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "st=1~--~--",
+        "Stderr": "\u003cshell\u003e: line 1: qq: ambiguous redirect",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1~--~--",
+        "Stderr": "\u003cshell\u003e: line 1: qq: ambiguous redirect",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1~--~--",
+        "Stderr": "\u003cshell\u003e: qq: ambiguous redirect",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: Bad fd number",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1~--~--",
+        "Stderr": "\u003cshell\u003e: qq: bad file unit number",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "O~st=0~--~E~--",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "redirect/a-numbered-csh-redirect-names-a-file": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: redir error",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "st=1~--~--",
+        "Stderr": "\u003cshell\u003e: line 1: qq: ambiguous redirect",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1~--~--",
+        "Stderr": "\u003cshell\u003e: line 1: qq: ambiguous redirect",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1~--~--",
+        "Stderr": "\u003cshell\u003e: qq: ambiguous redirect",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: Bad fd number",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1~--~--",
+        "Stderr": "\u003cshell\u003e: qq: bad file unit number",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "O~st=0~--~E~E~--",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "redirect/a-plain-close-is-not-a-move": {
       "ash": {
         "Stdout": "bodyr=0",

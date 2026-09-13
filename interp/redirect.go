@@ -289,8 +289,13 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 		// Rebinding the operator rather than copying the open is the whole of
 		// it — a second copy is a second place to forget noclobber.
 		op := rd.Op
+		// And whether the redirection wrote a descriptor of its own, which
+		// one dialect allows and which changes what the spelling means: see
+		// cshOnANumber, read below where the descriptor is settled.
+		numbered := false
 		if r.greatAmpNamesAFile(rd, name) {
 			op = syntax.TokAmpGreat
+			numbered = rd.N != nil && fdVar == ""
 		} else if r.unspecified {
 			r.redirErr = true
 			return closers, nil
@@ -483,7 +488,9 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 				// beside this one.
 				flags |= os.O_EXCL
 			}
-			fd = -1
+			if !numbered {
+				fd = -1
+			}
 		default:
 			return closers, fmt.Errorf("not implemented yet: the %s redirection", rd.Op)
 		}
@@ -680,6 +687,23 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 				if fdVar != "" {
 					r.setFdVar(fdVar, itoa(fd))
 				}
+			}
+			if numbered {
+				// The numbered csh form is `N> word 2>&N` and not the
+				// both-streams `&> word`: the file lands on the descriptor
+				// the script named, and standard error is pointed at it as
+				// well. Measured on zsh 5.9.2, 2026-09-13, with a command
+				// writing `O` to stdout and `E` to stderr in an empty
+				// directory: `1>&qq` puts both in the file, `3>&qq` and
+				// `0>&qq` put `E` there and leave `O` on the terminal.
+				//
+				// `2>&qq` writes `E` *twice*, and that falls out rather than
+				// being arranged: the second target for standard error is
+				// the descriptor the first one just opened, so the shell
+				// that writes to every target of a stream writes to this one
+				// twice. `unsetopt multios` leaves one copy, which is the
+				// same axis answering the other way.
+				r.Stderr = r.eachTarget(2, f, opened)
 			}
 		}
 	}
@@ -1801,17 +1825,25 @@ func isDescriptorSpec(word string) bool {
 // greatAmpNamesAFile answers whether this `>&word` is the csh spelling of
 // `&>word` — see GreatAmpTargetForm.
 //
-// Only where the redirection names no descriptor of its own. `2>&qq` is a
-// duplication in every shell that has the form at all: bash calls it an
-// ambiguous redirect where the bare spelling writes a file, which is what
-// makes the leading number the whole of the question.
+// The leading descriptor number is part of the question rather than the whole
+// of it, and the two forms split on it. Measured 2026-09-13 with `echo hi
+// 2>&qq` in an empty directory: bash 5.3.15, bash 3.2.57 and bash-as-sh
+// answer `qq: ambiguous redirect`, BusyBox ash answers `redir error` and
+// ksh93 `qq: bad file unit number`, all with no file left behind — where the
+// bare `>&qq` writes one in every column but ksh93's. zsh 5.9.2 creates the
+// file for both spellings.
+//
+// So a number refuses under GreatAmpTargetNamesAFile and opens under
+// GreatAmpTargetNamesAnyFile. This used to be written down as an invariant of
+// the operator, which made zsh answer `file number expected` for a line real
+// zsh runs (#2494).
 func (r *Runner) greatAmpNamesAFile(rd *syntax.Redirect, target string) bool {
-	if rd.Op != syntax.TokGreatAmp || rd.N != nil || isDescriptorSpec(target) {
+	if rd.Op != syntax.TokGreatAmp || isDescriptorSpec(target) {
 		return false
 	}
 	switch r.greatAmpTarget() {
 	case GreatAmpTargetNamesAFile:
-		return target != ""
+		return rd.N == nil && target != ""
 	case GreatAmpTargetNamesAnyFile:
 		return true
 	}

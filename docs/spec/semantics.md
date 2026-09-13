@@ -15896,6 +15896,44 @@ parse has already succeeded, and reproducing it would mean keeping a lexer
 position that an evaluated tree does not have. Single-line programs — every
 corpus case here — agree.
 
+**`GreatAmpTarget`** — bash *names a file* · dash **descriptor only** · ksh93 **descriptor only** · zsh *names any file*
+
+`>&word` where the word is neither a run of digits nor `-`. Five of the seven
+columns read it as csh's spelling of `&>word` and open the word as a file;
+ksh93 refuses it as a bad file unit number and dash refuses it while parsing.
+`<&word` is a duplication everywhere and never asks this.
+
+**A leading descriptor number is part of the question and not the whole of
+it**, and it is what separates the two file-opening answers. Measured
+2026-09-13 with `{ printf "E\n" >&2; printf "O\n"; } 2>&qq` in an empty
+directory:
+
+| column | answer |
+| --- | --- |
+| bash 5.3 | `qq: ambiguous redirect`, status 1, no file |
+| bash-as-`sh` | the same |
+| bash 3.2 | the same |
+| ksh93 | `qq: bad file unit number`, status 1, no file |
+| dash | `Syntax error: Bad fd number`, status 2, script over |
+| ash | `redir error`, status 2, script over |
+| zsh | opens `qq` at status 0 |
+
+So `GreatAmpTargetNamesAFile` refuses a numbered `>&word` and
+`GreatAmpTargetNamesAnyFile` opens it — the same pair that already splits over
+a word that expanded to nothing. Writing bash's refusal down as an invariant
+of the *operator* is what made this shell answer `file number expected` for a
+line real zsh runs (#2494), and it is also why `exec 6>&5-` is a file called
+`5-` there rather than a refusal.
+
+**And the numbered form is not `&>`.** It is `N> word 2>&N`: the file lands on
+the descriptor the script named and standard error is pointed at it as well,
+so `1>&qq` puts both streams in the file while `3>&qq` and `0>&qq` put only
+`E` there and leave `O` on the terminal. `2>&qq` writes `E` *twice*, which
+falls out of `RedirectsUseEveryTarget` rather than being arranged — the second
+target standard error is given is the descriptor the first one just opened, so
+the shell that writes to every target of a stream writes to this one twice.
+`unsetopt multios` leaves one copy.
+
 **`FdMove`** — bash *duplicates then closes* · dash **no such operator** · ksh93 *relocates* · zsh **no such operator**
 
 `6<&5-` and `6>&5-`: make 6 a copy of 5 and close 5, as one operator. It is

@@ -12917,6 +12917,16 @@ printf 'TWO=still-running\n'`,
 		Why:     "the fourth control, and the one that says what a shell without the move operator is really doing with `5-`: it is refusing a word that names no descriptor, in the same words and at the same status it refuses any other. Four wordings and three statuses — bash's `ambiguous redirect` carrying on at 1, the same sentence ending the shell under argv[0] of `sh`, ksh93's `bad file unit number`, zsh's `file number expected`, dash's `Syntax error: Bad fd number` at 2 — so the move rows above are read against this and not against nothing",
 	},
 	{
+		ID: "redirect/a-numbered-csh-redirect-names-a-file", Category: "redirection",
+		Snippet: `{ printf "E\n" >&2; printf "O\n"; } 2>&qq; echo "st=$?"; echo --; cat qq 2>/dev/null; echo --`,
+		Why:     "the leading descriptor number after `>&`, which splits the two columns that read a bare `>&word` as a filename. bash 5.3, bash-as-sh and bash 3.2 answer `qq: ambiguous redirect` at 1, ksh93 `bad file unit number` at 1, ash `redir error` at 2 and dash `Syntax error: Bad fd number` at 2 with the script over in both, all leaving no file; zsh opens it. So the number is part of the question and not the whole of it, and reading bash's refusal as the operator's own rule made our zsh refuse a line real zsh runs (#2494)",
+	},
+	{
+		ID: "redirect/a-numbered-csh-redirect-is-not-both-streams", Category: "redirection",
+		Snippet: `{ printf "E\n" >&2; printf "O\n"; } 3>&qq; echo "st=$?"; echo --; cat qq 2>/dev/null; echo --`,
+		Why:     "and what the one column that opens the file actually does with it, which is not `&>`: the file lands on the descriptor the script named and standard error is pointed at it too, so `O` stays on standard output where `>&qq` would have taken it. A descriptor nothing writes to is what makes the second half visible — the file holds `E` and nothing put it there but the duplication",
+	},
+	{
 		ID: "redirect/an-empty-target-is-not-the-working-directory", Category: "redirection",
 		Snippet: `printf secret > in-there; cat < ""; echo "r=$?"; echo hi > ""; echo "w=$?"`,
 		Why:     "an empty target names no file, and the same rule the file tests need: joining it onto the working directory opens the *directory*, so the read succeeds and the complaint arrives from the command as `Is a directory` rather than from the shell. Every shell in the panel refuses to open the name — with four wordings and two statuses, so the case pins the wording too",

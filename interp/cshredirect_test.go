@@ -24,6 +24,7 @@ func cshRedir(dir string, form GreatAmpTargetForm, dg Diagnostics) func(*Runner)
 		sem.MultiDigitDuplicationTargetIsAnError = No
 		sem.RedirectErrorOnSpecialBuiltinFatal = No
 		sem.DuplicationTargetErrorOnABuiltinIsFatal = No
+		sem.RedirectsUseEveryTarget = No
 		sem.GreatAmpTarget = form
 		r.Semantics, r.Diagnostics, r.Dir = &sem, &dg, dir
 	}
@@ -103,17 +104,75 @@ func TestAnEmptyGreatAmpTargetSplitsTheTwoFileForms(t *testing.T) {
 	}
 }
 
-// The leading number is the whole of the question: `2>&word` is a duplication
-// in every form, including the ones that open a file for the bare spelling.
-func TestANumberedGreatAmpIsNeverAFile(t *testing.T) {
-	dir := t.TempDir()
+// The leading number is part of the question and not the whole of it, and the
+// two file-opening forms split on it: one refuses `2>&word` where it opens a
+// file for the bare spelling, and the other opens a file for both.
+//
+// This was written down as an invariant of the operator once — "a numbered
+// `>&` is never a file" — which is bash's answer read as everybody's, and it
+// made our zsh refuse a line real zsh runs (#2494).
+func TestTheNumberedGreatAmpSplitsTheTwoFileForms(t *testing.T) {
 	dg := Diagnostics{DuplicationTargetIsNotADescriptor: "%[2]s: ambiguous redirect"}
-	out, _ := run(t, `echo hi 2>&qq; printf "[%s]" "$?"`, cshRedir(dir, GreatAmpTargetNamesAFile, dg))
-	if out != "sh: qq: ambiguous redirect\n[1]" {
-		t.Errorf("out = %q, want the numbered form refused, no file opened and the command not run", out)
-	}
-	if got := readFile(t, dir, "qq"); got != "" {
-		t.Errorf("qq = %q, want no file made by a refusal", got)
+	t.Run("refused where only the bare spelling opens a file", func(t *testing.T) {
+		dir := t.TempDir()
+		out, _ := run(t, `echo hi 2>&qq; printf "[%s]" "$?"`,
+			cshRedir(dir, GreatAmpTargetNamesAFile, dg))
+		if out != "sh: qq: ambiguous redirect\n[1]" {
+			t.Errorf("out = %q, want the numbered form refused, no file opened and the command not run", out)
+		}
+		if got := readFile(t, dir, "qq"); got != "" {
+			t.Errorf("qq = %q, want no file made by a refusal", got)
+		}
+	})
+	t.Run("a file where any word is a name", func(t *testing.T) {
+		dir := t.TempDir()
+		out, _ := run(t, `echo hi 2>&qq; printf "[%s]" "$?"`,
+			cshRedir(dir, GreatAmpTargetNamesAnyFile, dg))
+		if out != "hi\n[0]" {
+			t.Errorf("out = %q, want the command run and standard output untouched", out)
+		}
+		if got := readFile(t, dir, "qq"); got != "" {
+			t.Errorf("qq = %q, want the file made and empty: stderr had nothing to put in it", got)
+		}
+	})
+}
+
+// And the numbered form is `N> word 2>&N` rather than the both-streams
+// `&> word`: the file lands on the descriptor the script named, and standard
+// error is pointed at it as well. Measured on zsh 5.9.2, 2026-09-13, in an
+// empty directory with a command writing `O` to standard output and `E` to
+// standard error.
+func TestTheNumberedGreatAmpAlsoTakesStandardError(t *testing.T) {
+	for _, tc := range []struct {
+		name, src, wantOut, wantFile string
+		everyTarget                  Answer
+	}{
+		{"the named stream keeps the file", `2>&qq`, "O\n", "E\n", No},
+		{"and standard output goes there with it", `1>&qq`, "", "E\nO\n", No},
+		{"a descriptor of its own leaves standard output alone", `3>&qq`, "O\n", "E\n", No},
+		// `2>&qq` is the one spelling where the two targets standard error
+		// is given are the same descriptor, so the shell that writes to
+		// every target of a stream writes to this one twice. It falls out
+		// of the axis rather than being arranged, which is why it is graded
+		// here beside the answer that leaves one copy.
+		{"and twice over where a stream uses every target", `2>&qq`, "O\n", "E\nE\n", Yes},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			src := `{ printf "E\n" >&2; printf "O\n"; } ` + tc.src
+			out, st := run(t, src, func(r *Runner) {
+				cshRedir(dir, GreatAmpTargetNamesAnyFile, Diagnostics{})(r)
+				sem := *r.Semantics
+				sem.RedirectsUseEveryTarget = tc.everyTarget
+				r.Semantics = &sem
+			})
+			if out != tc.wantOut || st != 0 {
+				t.Errorf("out = %q status %d, want %q at 0", out, st, tc.wantOut)
+			}
+			if got := readFile(t, dir, "qq"); got != tc.wantFile {
+				t.Errorf("qq = %q, want %q", got, tc.wantFile)
+			}
+		})
 	}
 }
 
@@ -144,6 +203,7 @@ func TestTheGreatAmpFormIsAskedAboutOnlyWhenItMatters(t *testing.T) {
 		{"a descriptor number", `echo hi >&2`, false},
 		{"a close", `exec 3>&-`, false},
 		{"a name", `echo hi >&qq`, true},
+		{"and a name after a number, which the forms disagree about", `echo hi 2>&qq`, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()

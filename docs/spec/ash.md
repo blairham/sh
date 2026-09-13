@@ -321,6 +321,51 @@ Both were left unanswered while there was no binary to ask. The three
 corpus rows that reach them already carry an ash column, so the values
 are graded by rows that existed before them (#554).
 
+## The operand a short circuit already decided
+
+This shell evaluates the right operand of `&&` and `||` inside `$(( ))`
+even when the left one has settled the answer, so an assignment or an
+increment written there takes effect. It is the sole holdout in a panel of
+seven. Measured 2026-09-13 in the pinned image:
+
+    x=0; : $((0 && (x = 9))); echo "$x"        9        elsewhere 0
+    y=0; : $((1 || (y = 8))); echo "$y"        8        elsewhere 0
+    x=0; : $((0 && (x++)));   echo "$x"        1        elsewhere 0
+    echo "$((0 && (x = 9)))"                   0        the same everywhere
+    echo "$((7 || (x = 9)))"                   1        the same everywhere
+    echo "$((0 && (1/0)))"                     divide by zero, status 2
+
+The last two lines are what make this one question rather than two. The
+value is the operator's under either reading — `0 &&` anything is 0 —
+so nothing about the number could ever have found this; the division is
+what says the operand is *evaluated* and not merely scanned for stores.
+
+The conditional does **not** do it: `w=5; $((0 ? (w = 1) : 2))` leaves w
+at 5, and an `&&` written inside an arm the conditional dropped never
+runs either. So the answer is about the two logical operators and not
+about a shell that evaluates everything it parses, which is the reading
+the `&&` line alone would have supported.
+
+`interp.Semantics.ArithShortCircuitEvaluatesTheRightOperand` is the axis;
+`docs/spec/semantics.md` has the seven columns and the bash 3.2 reading
+that axis deliberately cannot hold.
+
+### How it was found
+
+By the first run of this dialect's column in `make suite` (#2605, #2608),
+on the day the column could run at all. `share/suite/core/arith.tests`
+scored 9/10 against BusyBox with both shells at status 0 — a silent wrong
+answer, which is the class a pass/fail count is worst at surfacing and a
+whole-file diff is best at.
+
+The corpus had the case all along: `arith/short-circuit-is-observable`
+records `[0][9]` in this column against `[0][0]` in the other six, and has
+since the column existed. What it did not have was a gate — the dialect
+conformance number is report-only by design — or a `Why` that said a
+column moved. Both are fixed here, and the pairing is the lesson: **the
+corpus records, the suite reports.** A divergence can be measured, written
+to disk and shipped without anything saying it out loud.
+
 ## What could not be said
 
 Four measured behaviors have no value on any existing axis. They are

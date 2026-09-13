@@ -93,7 +93,8 @@ func TestAConditionalStillDropsTheArmItDidNotTake(t *testing.T) {
 // What is asserted is that the division was raised and the expansion given
 // up, not the sentence: this shell's word is `divide` and ours is `division`,
 // on every arithmetic failure and not only this one, which is a wording of
-// its own and not this axis.
+// its own and not this axis — docs/spec/ash.md records it as the third of the
+// things this dialect cannot yet say.
 func TestAFailureInADecidedOperandIsRaised(t *testing.T) {
 	out, st := run(t, `echo "v=$((0 && (1/0)))"; echo "after st=$?"`)
 	if !strings.Contains(out, "zero") || st == 0 || strings.Contains(out, "v=0") {

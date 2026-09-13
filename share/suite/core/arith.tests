@@ -15,12 +15,37 @@ printf '%s\n' "eq=$((2 == 2)) ne=$((2 != 2))"
 printf '%s\n' "andand=$((1 && 0)) oror=$((0 || 3)) ternary=$((1 ? 10 : 20))"
 
 # Short-circuit: the right side of && is not evaluated when the left is zero,
-# so the assignment inside it does not happen.
+# so the assignment inside it does not happen — in five of the six shells
+# graded here. BusyBox ash runs the operand anyway and leaves x at 9, then at
+# 8, which is the divergence this file found on the day the ash column could
+# first run (#2605). Each column is graded against the shell it claims to be,
+# so both readings are asserted here rather than one of them being the answer.
 x=0
 : $((0 && (x = 9)))
 printf '%s\n' "shortcircuit-and x=$x"
 : $((1 || (x = 8)))
 printf '%s\n' "shortcircuit-or x=$x"
+
+# The value is the operator's under either reading — `0 && anything` is 0 and
+# `1 || anything` is 1 — which is why it could never have been the thing that
+# split the columns, and why a case grading the number alone sat between two
+# that agree and said nothing.
+printf '%s\n' "shortcircuit-value=$((0 && (x = 7))) $((1 || (x = 6)))"
+
+# The conditional is the other short-circuiting operator and is not on that
+# axis: the arm it did not take is dropped in every shell here, BusyBox
+# included, and an && written inside that arm never runs either.
+w=5
+printf '%s\n' "dropped-arm=$((0 ? (w = 1) : 2)) w=$w"
+v=0
+printf '%s\n' "dropped-arm-holding-and=$((0 ? (0 && (v = 9)) : 4)) v=$v"
+
+# And the control for all of it: an operand the left side did not decide is
+# evaluated everywhere, so what parts the shells above is the skip and not
+# assignment inside a logical operator.
+u=0
+: $((1 && (u = 9)))
+printf '%s\n' "live-operand u=$u"
 
 # A variable is read without a $, and an unset one is zero.
 n=5

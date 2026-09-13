@@ -238,6 +238,17 @@ func Semantics() interp.Semantics {
 	// utility either, so the letter has nowhere to be written. Measured
 	// 2026-09-13 in the pinned image, `typeset -m x` is `typeset: not found`
 	// at 127 (#2345).
+	// unanswered AttributeOverAFrozenNameIsRefused: the axis is about a type
+	// **letter** meeting a frozen name, and BusyBox ash has no letters to
+	// bring. Measured 2026-09-13 in the pinned image, `typeset -i q=1` is
+	// `typeset: not found` at 127, so the declaration the axis asks about
+	// never happens. `export` over a `readonly` name — the only attribute
+	// this shell does have — is taken at 0, which is a different question
+	// and not this one (#2561).
+	// unanswered ArrayLiteralOperandRetypesAFrozenScalar: there is no array
+	// literal to be the operand. Measured 2026-09-13 in the pinned image,
+	// `q=(a b)` is `syntax error: unexpected "("`, so the shell refuses the
+	// spelling before any frozen name is consulted.
 	// unanswered DeclareMappingLetter: the same, for `typeset -M x`.
 	// unanswered ExpansionResultSuppliesGroupSyntax: BusyBox ash has no
 	// pattern groups either, for the same reason dash has none.
@@ -856,6 +867,9 @@ func Semantics() interp.Semantics {
 	// either. Measured 2026-09-12 on BusyBox in a container, `typeset` is
 	// `not found` and `export -i q=4` is `illegal option -i` — the same two
 	// walls dash meets (#2539).
+	// unanswered AttributeOverAFrozenNameIsRefused: no declaration command
+	// here either. Measured 2026-09-12 on BusyBox in a container, `typeset`
+	// is `not found` — the same wall dash meets (#2561).
 	// unanswered UpperCaseLetterBesideANumericTypeLetterRecordsNothing and
 	// unanswered TwoCaseLettersOnOneDeclarationCancel: no declaration
 	// command here either. Measured 2026-09-12 on BusyBox in a container,

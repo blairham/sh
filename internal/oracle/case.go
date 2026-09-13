@@ -5934,6 +5934,15 @@ echo "st=$?"`,
 		Why:             "text `eval` is running that defines a function and calls it. ksh93 answers exactly what it answers for `location/a-message-from-inside-an-eval` — the frame is the `eval`, and the call inside it adds nothing — which is the same rule `Runner.borrowedAtLocation` already records for dash: the innermost borrowed text answers, with no test that the failing line came from it. zsh is the one column the function reaches, naming `f` where it names `(eval)` without one",
 	},
 	{
+		ID: "location/the-line-a-function-an-eval-defined-is-numbered-from", Category: "diagnostics",
+		// The behavior under the wording the row above records: `$LINENO`
+		// rather than a diagnostic, so the claim is about what line the shell
+		// thinks it is on and not about how it words a complaint.
+		LayoutSensitive: true,
+		Snippet:         "echo pad\neval 'g() { echo L=$LINENO; }\ng'\ng",
+		Why:             "a function *defined* in `eval`'s text, called once from inside the text and once from the line after it. The offset the text was running under has to travel with the definition rather than with the run, so both calls answer alike in every column -- and they do: bash 5.3 and bash 3.2 both say `L=2`, the caller's line carried into the body, where ksh93 and dash say `L=1` for numbering the text from one and zsh says `L=0`. This shell reset the offset at the call and answered `L=1` in the bash column, so the body ran at the script's own numbering (#2565). The `-c` route and the eval on line 2, because a borrowed text on line 1 has no offset for the two readings to disagree about -- see Semantics.EvalTextContinuesTheCallersLines",
+	},
+	{
 		ID: "location/a-builtins-complaint-at-the-top-of-a-script", Category: "diagnostics",
 		// The control for the form, with nothing borrowed: a builtin's own
 		// complaint is located differently from a message the shell speaks,
@@ -22613,6 +22622,14 @@ echo "st=$?"`,
 		ID: "decl/a-numeric-type-letter-over-a-frozen-name", Category: "declarations",
 		Snippet: `readonly q=1; typeset -i q=4 2>&1; echo "st=$?"; typeset -p q 2>&1; typeset -ir r=1 2>/dev/null; typeset -i r=4 2>&1; echo "st=$?"; echo tail`,
 		Why:     "a declaration whose **numeric type letter** lands on a frozen name, which is the letter half of what `decl/an-array-literal-operand-over-a-frozen-scalar` records the literal half of. zsh takes it and leaves the freeze on -- `typeset -ir q=4` at 0, and the script carries on -- where bash refuses in both builds and ksh93 answers `q: is read only`; dash and BusyBox ash have no `typeset` at all, so the row shows what a shell that cannot be asked prints instead. The second half is the discriminator that makes it a *retype* rather than a free hand over a frozen name: a name already carrying the integer attribute meets the ordinary refusal from the identical line, so what the exemption is about is the type moving. `tail` says whether the refusal ended the script, which the columns also disagree about. No `-g` on any of it, deliberately: ksh93 has no such letter and the row would spend two of its columns on an option refusal rather than on the question, and the letter changes nothing at top level in the shells that do spell it. See Semantics.NumericTypeLetterRetypesAFrozenName (#2539)",
+	},
+	{
+		ID: "decl/an-attribute-letter-over-a-frozen-name-with-no-value", Category: "declarations",
+		// The **valueless** half of the row above, which is where the panel
+		// splits differently: the assigning form is refused by both builds of
+		// bash and a letter alone is refused by only one of them.
+		Snippet: `readonly q=1; typeset -i q 2>&1; echo "st=$?"; typeset -p q 2>&1; readonly w=1; typeset -u w 2>&1; echo "st=$?"; typeset -p w 2>&1; echo tail`,
+		Why:     "a declaration that names an attribute over a frozen name and assigns nothing. bash 5.3 refuses it -- `typeset: q: readonly variable` at 1, with the listing still `declare -r q=\"1\"` and no letter on it -- where **bash 3.2 takes it** and lists `declare -ir q=\"1\"` at 0, which is the column the filing of this got wrong by measuring the two builds together on the *assigning* form, where they do agree. ksh93 and zsh take it too, `typeset -r -i q=1` and `typeset -ir q=1`, so bash 5.3 is alone. The second half is the discriminator that says it is about the letter rather than about the numeric type: `-u` is refused by the same shell on the same terms, and the two shells that take `-i` take that as well -- bash 3.2 has no such letter and answers with a usage message instead, which is a refusal about the option and not about the freeze. `tail` says none of the columns ended the script over it, which is what separates this from the assigning form, where two of them do. See Semantics.AttributeOverAFrozenNameIsRefused (#2561)",
 	},
 	{
 		ID: "decl/a-type-letter-over-a-name-holding-an-array", Category: "declarations",

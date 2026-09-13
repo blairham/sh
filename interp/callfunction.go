@@ -120,7 +120,7 @@ func (r *Runner) RunFunctionBodyInPlace(ctx context.Context, name string) (bool,
 	// the resolution found, so the frame says so for as long as it runs.
 	if n := len(r.frames); n > 0 {
 		savedFile := r.frames[n-1].File
-		if file := r.funcFiles[name]; file != "" {
+		if file := r.functionFile(name); file != "" {
 			r.frames[n-1].File = file
 		}
 		defer func() { r.frames[n-1].File = savedFile }()

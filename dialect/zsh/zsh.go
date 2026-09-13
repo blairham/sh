@@ -986,6 +986,13 @@ func Semantics() interp.Semantics {
 	// q=(a); typeset -g q=(b)` is refused. See the axis for the rows
 	// (#2539).
 	s.NumericTypeLetterRetypesAFrozenName = interp.Yes
+	// And nothing else about a frozen name's attributes is refused here
+	// either — the letter that is not a numeric type is taken just the same.
+	// Measured 2026-09-13 under `env -i` on zsh 5.9.2, `readonly q=1;
+	// typeset -u q` lists `typeset -ur q=1` at 0. What is still refused is a
+	// *value*, which is a different question and reaches refuseReadonly
+	// (#2561).
+	s.AttributeOverAFrozenNameIsRefused = interp.No
 	s.DeclaredNameWithoutValueIsEmpty = interp.Yes
 	// The export letter carries `-g` with it, so `typeset -x v=1` inside a
 	// function declares no local — `local -x` is the spelling that still

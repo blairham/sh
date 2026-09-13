@@ -268,7 +268,7 @@ func seedTables(r *Runner) {
 	r.literalOperands = map[string]bool{"seed": true}
 	r.indexedLetterHere = map[string]bool{"seed": true}
 	r.tableLetterHere = map[string]bool{"seed": true}
-	r.funcFiles = map[string]string{"seed": "v"}
+	r.funcOrigins = map[string]funcOrigin{"seed": {file: "v"}}
 	r.funcs = map[string]*syntax.FuncDecl{"seed": nil}
 	r.hidden = map[string]bool{"seed": true}
 	r.hideInScope = map[string]bool{"seed": true}

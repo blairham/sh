@@ -60214,6 +60214,57 @@
         "TimedOut": false
       }
     },
+    "decl/an-attribute-letter-over-a-frozen-name-with-no-value": {
+      "ash": {
+        "Stdout": "\u003cshell\u003e: typeset: not found~st=127~\u003cshell\u003e: typeset: not found~\u003cshell\u003e: typeset: not found~st=127~\u003cshell\u003e: typeset: not found~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "\u003cshell\u003e: line 1: typeset: q: readonly variable~st=1~declare -r q=\"1\"~\u003cshell\u003e: line 1: typeset: w: readonly variable~st=1~declare -r w=\"1\"~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "\u003cshell\u003e: line 1: typeset: q: readonly variable~st=1~declare -r q=\"1\"~\u003cshell\u003e: line 1: typeset: w: readonly variable~st=1~declare -r w=\"1\"~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0~declare -ir q=\"1\"~\u003cshell\u003e: line 0: typeset: -u: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~st=2~declare -r w=\"1\"~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "\u003cshell\u003e: 1: typeset: not found~st=127~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found~st=127~\u003cshell\u003e: 1: typeset: not found~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0~typeset -r -i q=1~st=0~typeset -r -u w=1~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0~typeset -ir q=1~st=0~typeset -ur w=1~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "decl/an-exported-array-in-a-child-environment": {
       "ash": {
         "Stdout": "",
@@ -109636,6 +109687,57 @@
       "zsh": {
         "Stdout": "st=127",
         "Stderr": "(eval):1: command not found: nosuchcmd-xyz",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "location/the-line-a-function-an-eval-defined-is-numbered-from": {
+      "ash": {
+        "Stdout": "pad~L=1~L=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "pad~L=2~L=2",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "pad~L=2~L=2",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "pad~L=2~L=2",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "pad~L=1~L=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "pad~L=1~L=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "pad~L=0~L=0",
+        "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

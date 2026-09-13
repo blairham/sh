@@ -5574,14 +5574,14 @@ func (r *Runner) diag() Diagnostics {
 // a file, which a function remembers from where it was defined.
 //
 // Empty for a function defined at a prompt, by `-c`, or on standard input:
-// Runner.funcFiles stores currentFile at the definition, and currentFile
+// Runner.funcOrigins stores currentFile at the definition, and currentFile
 // falls back to the script file, which those three routes have not got. That
 // emptiness is the whole distinction, which is why it is read here rather
 // than off the call stack — pushFrame substitutes the shell's own name for an
 // empty file, which is right for a frame and would answer yes to everything
 // here.
 func (r *Runner) inFunctionReadFromAFile() bool {
-	return r.inFunc != "" && r.funcFiles[r.inFunc] != ""
+	return r.inFunc != "" && r.functionFile(r.inFunc) != ""
 }
 
 // RedirectLine is which line a failed redirect is reported at.

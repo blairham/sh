@@ -44,6 +44,7 @@ ash   ArrayUnderATableDeclaration
 ash   ArrayUnderATableLiteralDeclaration
 ash   ArraysAreSparse
 ash   AssignmentUpdatesPipelineStatus
+ash   AttributeOverAFrozenNameIsRefused
 ash   AttributeRereadsTheValueItFinds
 ash   AutoCdAnnouncesTheSubstitution
 ash   BadSubscriptToUnsetFatal
@@ -198,6 +199,7 @@ dash  ArrayUnderATableDeclaration
 dash  ArrayUnderATableLiteralDeclaration
 dash  ArraysAreSparse
 dash  AssignmentUpdatesPipelineStatus
+dash  AttributeOverAFrozenNameIsRefused
 dash  AttributeRereadsTheValueItFinds
 dash  AutoCdAnnouncesTheSubstitution
 dash  BadSubscriptToUnsetFatal

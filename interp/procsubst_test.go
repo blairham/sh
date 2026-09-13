@@ -659,10 +659,6 @@ func TestAWritingSubstitutionOnTheShellsOwnOutputIsJoinedAtItsEnd(t *testing.T) 
 		// three named streams, which is where the *first* version of the
 		// held-descriptor clause looked and the only place it looked.
 		{"a numbered descriptor", `exec 3> >(cat); printf hi >&3`, "hi"},
-		// Two at once: every end is closed before any body is waited for, so
-		// the first body is not waited for while the second's end is open.
-		// Closing and waiting in step deadlocks this row and no other.
-		{"two of them", `exec 3> >(cat) 4> >(cat); printf a >&3; printf b >&4`, "ab"},
 		// A close the script writes for itself has to be a close: `>&-` took
 		// the reference away and left the file open, so the body read on
 		// forever and the join at the end never came back. That is a hang
@@ -682,5 +678,39 @@ func TestAWritingSubstitutionOnTheShellsOwnOutputIsJoinedAtItsEnd(t *testing.T) 
 				t.Errorf("out = %q, want %q", out, tc.want)
 			}
 		})
+	}
+}
+
+// Two held substitutions at once, which is the row that says every end is
+// closed before any body is waited for.
+//
+// Closing and waiting in step deadlocks exactly this shape: the first body is
+// waited for while the second's end is still open, and neither comes back.
+//
+// Each body writes into a **file of its own** rather than into the shell's
+// output, and that is not tidiness. Two bodies writing one stream interleave
+// however the goroutines are scheduled, so `printf a >&3; printf b >&4` is
+// `ab` or `ba` at random — measured here, `ba` inside 60 runs. A row asserting
+// the order would be a flake that reads as a finding, which is worse than no
+// row; what this change is about is that both bodies *finish*, and two files
+// ask that without asking anything about the order.
+func TestTwoHeldSubstitutionsAreBothClosedBeforeEitherIsWaitedFor(t *testing.T) {
+	dir := t.TempDir()
+	a, b := filepath.Join(dir, "a"), filepath.Join(dir, "b")
+	src := `exec 3> >(cat > ` + a + `) 4> >(cat > ` + b + `)
+printf one >&3
+printf two >&4`
+	if _, st := run(t, src, nil); st != 0 {
+		t.Fatalf("status %d, want 0", st)
+	}
+	for _, tc := range []struct{ path, want string }{{a, "one"}, {b, "two"}} {
+		got, err := os.ReadFile(tc.path)
+		if err != nil {
+			t.Errorf("%s: %v — the body never finished writing", tc.path, err)
+			continue
+		}
+		if string(got) != tc.want {
+			t.Errorf("%s = %q, want %q", tc.path, got, tc.want)
+		}
 	}
 }

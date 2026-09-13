@@ -135,3 +135,77 @@ func failureLine(t *testing.T, out string) string {
 	t.Fatalf("no complaint in %q", out)
 	return ""
 }
+
+// A builtin's own complaint takes the name slot, and the borrowed text is not
+// named beside it (#2532).
+//
+// dash has **one** place after the location for a name, so the two are
+// alternatives rather than a pair: `./s.sh: 1: cd: can't cd to …` names the
+// builtin and not the file it was read from, where `./s.sh: 1: ./i.sh:
+// nosuchcmd: not found` names the file, because there the shell is speaking.
+//
+// The discriminator is the builtin naming *itself*, and this table exists
+// because the obvious wider question — [Runner.builtinIsSpeaking], whether a
+// builtin is involved at all — gives the wrong answer. #2532 proposed it, and
+// **the redirection row is the one that catches it**: a failed open is counted
+// against the builtin it was opened for, so the wider question drops the file
+// name where dash writes it. Mutation-proven 2026-09-13 by making that
+// substitution — the redirection row fails and the other four do not.
+//
+// The other two named rows are controls rather than discriminators, and it is
+// worth saying which is which. A command that is not found and a readonly
+// reassignment involve no builtin under either reading, so they pass whichever
+// question is asked; they are here because a table of only the rows that move
+// cannot show that the rule leaves everything else alone.
+//
+// Measured 2026-09-13, dash 0.5.12, `env -i PATH=/usr/bin:/bin` with a scratch
+// HOME, each row over a script file and again inside `eval`, both arrangements
+// agreeing.
+func TestABuiltinsOwnComplaintTakesTheNameSlot(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body string
+		// want is what follows `<name>: <line>: `. A prefix rather than the
+		// whole line: the message a failed open ends with is the platform's
+		// wording for the errno and not something this shell chooses, and
+		// pinning it here would fail on a runner rather than on a defect.
+		want string
+		// named says the borrowed file is the thing in the slot, which is
+		// checked in both directions — a row wanting no file name must not
+		// merely fail to start with one, it must not carry one anywhere.
+		named bool
+	}{
+		{name: "cd", body: "cd /nonexistent-xyz\n", want: "cd: "},
+		{name: "shift", body: "shift 99\n", want: "shift: "},
+		{name: "a command that is not there", body: "nosuchcmd-xyz\n", want: "./i.sh: ", named: true},
+		{name: "a readonly reassignment", body: "readonly R=1\nR=2\n", want: "./i.sh: ", named: true},
+		{name: "a redirection that cannot open", body: "echo hi > /nonexistent-dir-xyz/f\n", want: "./i.sh: ", named: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := writeScripts(t, map[string]string{"i.sh": tc.body})
+			out, _ := runDash(t, dir, ". ./i.sh\n")
+			got := afterTheLineNumber(t, locatedFailureLine(t, out))
+			if !strings.HasPrefix(got, tc.want) {
+				t.Errorf("after the line number the diagnostic says %q, want it to start %q", got, tc.want)
+			}
+			if !tc.named && strings.Contains(got, "./i.sh") {
+				t.Errorf("the builtin named itself and the file is named too, in %q", got)
+			}
+		})
+	}
+}
+
+// locatedFailureLine is failureLine for a table whose rows each end in a
+// different message. It takes the first line carrying a location rather than
+// the first line matching one wording, so a row cannot pass by matching the
+// wrong line of a multi-line run.
+func locatedFailureLine(t *testing.T, out string) string {
+	t.Helper()
+	for _, line := range strings.Split(out, "\n") {
+		if locatedLine.MatchString(line) {
+			return line
+		}
+	}
+	t.Fatalf("no located complaint in %q", out)
+	return ""
+}

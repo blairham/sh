@@ -11952,6 +11952,66 @@ printf 'TWO=still-running\n'`,
 		Why:     "a duplicate is a second *name* for one open file, so closing the name ends the name and not the file — every shell in the panel goes on writing to standard output afterwards, and the two rounds say it is not a one-shot. The numeric spelling is the one every shell has; the `{name}` family that only some of them parse follows the same rule, and is where this was wrong here: `exec {s}>&1; exec {s}>&-` closed the file standard output was still using and left the shell with nothing to write to, silently and at status 0 (#2127). Which is worth a row rather than only a unit test, because the unit tests of this package point standard output at a string builder — not something that can be closed — so the defect was invisible to every one of them",
 	},
 	{
+		ID: "redirect/a-move-duplicates-and-closes-the-source", Category: "redirection",
+		Snippet: `printf body > f; exec 5< f; exec 6<&5-; cat <&6; echo "|"; cat <&5; echo "r5=$?"`,
+		Why:     "the move operator, and the reason it is one operator rather than two: 6 reads the file and 5 has stopped being a name for anything. bash 5.3, bash-as-sh, bash 3.2 and ksh93 do it at status 0 and differ only in the words for the read that follows; zsh has no such operator and answers `file number expected` at 1; dash answers `Syntax error: Bad fd number` at 2 and ash `redir error` at 2. Half the panel, so it is the FdMove axis and not a correction",
+	},
+	{
+		ID: "redirect/a-move-on-the-writing-side", Category: "redirection",
+		Snippet: `exec 5> f; exec 6>&5-; echo moved >&6; exec 6>&-; cat f; echo x >&5; echo "w5=$?"`,
+		Why:     "the same operator in the other direction, which reaches the descriptor table by a different arm and is worth its own row for that alone. It is also where zsh's absence of the operator is loudest: rather than refusing, `6>&5-` falls to that shell's csh reading of `>&word` and opens a file literally called `5-`, so the line goes somewhere no other column sends it and 5 is still open afterwards. A refusal and a different destination are not the same answer, and only this direction shows the second one",
+	},
+	{
+		ID: "redirect/a-move-on-a-command-and-what-comes-back", Category: "redirection",
+		Snippet: `printf body > f; exec 5< f; true 6<&5-; cat <&5; echo "r5=$?"; cat <&6; echo "r6=$?"`,
+		Why:     "the half of the move a reader is most likely to get wrong, and the one that splits the two shells that have the operator. A redirection on an ordinary command is undone when the command ends — and bash undoes only the *duplication*, leaving 5 closed for good, where ksh93 treats the move as one relocation and gives 5 back. The destination is the command's under both, which is what says the disagreement is about the close and not about redirections in general. Pinned on `true` rather than `exec` because `exec` is where the two agree",
+	},
+	{
+		ID: "redirect/a-move-through-a-named-descriptor", Category: "redirection",
+		Snippet: `printf body > f; exec {w}< f; exec {v}<&$w-; echo "w=$w v=$v"; cat <&$v; echo "|r=$?"`,
+		Why:     "the spelling a script reaches for when it hands a descriptor to a variable and closes the original in one step, and the second thing the two forms disagree about: bash chooses the destination before giving the source up and answers `v=11`, ksh93 gives it up first and hands the name `w`'s own number back. The right-hand side has to be `$w` and not `{w}` — no shell in the panel takes a brace there, and bash calls it an ambiguous redirect — which is worth recording because the issue this row came from assumed otherwise. bash 3.2 and dash have no `{name}` redirection at all and fail to find a command called `{w}`",
+	},
+	{
+		ID: "redirect/a-move-from-a-number-nothing-is-open-at", Category: "redirection",
+		Snippet: `exec 6<&5-; echo "st=$?"; echo reached`,
+		Why:     "a move whose source is not open, which is where the two shells with the operator quote different amounts of the word back: bash reads the `-` as the operator's and says `5: Bad file descriptor`, ksh93 quotes what it was handed and says `5-: cannot open [Bad file descriptor]`. The trailing `reached` is the other half — the failure is fatal in bash-as-sh and in ksh93, where `exec` is a special builtin whose redirection failed, and not in bash or bash 3.2",
+	},
+	{
+		ID: "redirect/a-move-onto-its-own-number", Category: "redirection",
+		Snippet: `printf body > f; exec 5< f; exec 5<&5-; cat <&5; echo "r=$?"`,
+		Why:     "the degenerate move, and a real trap for an implementation that does the two halves in order: duplicating 5 onto 5 and then closing 5 leaves nothing open, which is not what any of the four columns with the operator do. All four leave it readable",
+	},
+	{
+		ID: "redirect/a-move-keeps-the-file-offset", Category: "redirection",
+		Snippet: `printf "one\ntwo\n" > f; exec 5< f; read -r a <&5; exec 6<&5-; read -r b <&6; echo "a=$a b=$b"`,
+		Why:     "what the move carries: the second read continues where the first left off, so the destination is the same open file and not a fresh one opened at the same path. Unanimous among the four that have the operator, which is what makes it the property to hold on to — an implementation that reopened the name would pass every row above this one and fail here",
+	},
+	{
+		ID: "redirect/a-bare-move-has-no-leading-descriptor", Category: "redirection",
+		Snippet: `exec 5> f; echo hi >&5-; echo "st=$?" >&2; [ -f "5-" ] && echo file-made >&2; cat f >&2`,
+		Why:     "the move written with no number in front of it, which is the one shape where the operator and the csh reading of `>&word` are competing for the same text. The four with the operator move 5 onto standard output and make no file; zsh makes the file. Pinned because the order the two readings are tried in is invisible everywhere else — a shell that asked the csh question first would put `hi` in a file called `5-` in every column",
+	},
+	{
+		ID: "redirect/a-plain-close-is-not-a-move", Category: "redirection",
+		Snippet: `printf body > f; exec 5< f; true 5<&-; cat <&5; echo "r=$?"`,
+		Why:     "the control the move rows are read against. `-` on its own is the close every shell in the panel has, and on an ordinary command it is undone when the command ends — unanimously, dash and zsh included. So the disagreement above is about the *suffix* and not about closes, and an implementation that read a bare `-` as a move would close this descriptor for keeps in half the columns",
+	},
+	{
+		ID: "redirect/a-duplication-without-the-suffix-leaves-both-open", Category: "redirection",
+		Snippet: `printf body > f; exec 5< f; exec 6<&5; cat <&6; echo "|"; cat <&5; echo "r5=$?"`,
+		Why:     "the other control: the same line with the suffix taken off is a plain duplication in all six columns, and leaves two names for one open file. It is what the move row is a difference *from*, and it is unanimous — which is also why an axis that refuses when it has no answer must not be asked here",
+	},
+	{
+		ID: "redirect/a-dash-after-a-filename-is-part-of-the-name", Category: "redirection",
+		Snippet: `echo hi > f-; cat f-; exec 3< f-; cat <&3; echo "st=$?"`,
+		Why:     "the third control, and the one that bounds the suffix rule: a trailing `-` is read as the operator's only after `<&` and `>&`. On an ordinary target it is an ordinary character in a filename, in all six columns, including on the `exec` that opens it",
+	},
+	{
+		ID: "redirect/a-word-that-is-no-descriptor-after-a-duplication", Category: "redirection",
+		Snippet: `exec 6<&qq; echo "st=$?"; echo reached`,
+		Why:     "the fourth control, and the one that says what a shell without the move operator is really doing with `5-`: it is refusing a word that names no descriptor, in the same words and at the same status it refuses any other. Four wordings and three statuses — bash's `ambiguous redirect` carrying on at 1, the same sentence ending the shell under argv[0] of `sh`, ksh93's `bad file unit number`, zsh's `file number expected`, dash's `Syntax error: Bad fd number` at 2 — so the move rows above are read against this and not against nothing",
+	},
+	{
 		ID: "redirect/an-empty-target-is-not-the-working-directory", Category: "redirection",
 		Snippet: `printf secret > in-there; cat < ""; echo "r=$?"; echo hi > ""; echo "w=$?"`,
 		Why:     "an empty target names no file, and the same rule the file tests need: joining it onto the working directory opens the *directory*, so the read succeeds and the complaint arrives from the command as `Is a directory` rather than from the shell. Every shell in the panel refuses to open the name — with four wordings and two statuses, so the case pins the wording too",

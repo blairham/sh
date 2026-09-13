@@ -157,7 +157,6 @@ func TestTheFlipVerdictsAreOnTheAxesTheyAnswer(t *testing.T) {
 		t.Fatal(err)
 	}
 	for field, dialect := range map[string]string{
-		"TypeNamesTheKindWithDashT":              "bash",
 		"PrintfEmptyIsNotANumber":                "zsh",
 		"SetBTurnsOffBraceExpansion":             "zsh",
 		"ValuelessDeclarationHidesTheOuterValue": "zsh",

@@ -260,7 +260,7 @@ func TestTypeCanNameTheBareKind(t *testing.T) {
 		func(r *Runner) {
 			sem := CoreSemantics()
 			sem.TypeEndsOptionsWithDashDash = Yes
-			sem.TypeNamesTheKindWithDashT = Yes
+			sem.TypeOptions = "t"
 			r.Semantics = &sem
 		})
 	if st != 0 {
@@ -277,7 +277,7 @@ func TestTypeKindOfNothingIsSilentFailure(t *testing.T) {
 	out, st := run(t, `type -t a-name-that-is-nothing`, func(r *Runner) {
 		sem := CoreSemantics()
 		sem.TypeEndsOptionsWithDashDash = Yes
-		sem.TypeNamesTheKindWithDashT = Yes
+		sem.TypeOptions = "t"
 		r.Semantics = &sem
 	})
 	if out != "" {
@@ -294,7 +294,7 @@ func TestTypeKindAnswersEveryNameAndReportsTheFailure(t *testing.T) {
 	out, st := run(t, `type -t nope cd`, func(r *Runner) {
 		sem := CoreSemantics()
 		sem.TypeEndsOptionsWithDashDash = Yes
-		sem.TypeNamesTheKindWithDashT = Yes
+		sem.TypeOptions = "t"
 		r.Semantics = &sem
 	})
 	if out != "builtin\n" {
@@ -305,13 +305,14 @@ func TestTypeKindAnswersEveryNameAndReportsTheFailure(t *testing.T) {
 	}
 }
 
-// Where the axis says no, `-t` is an option the builtin does not have, and it
-// is refused rather than read as a name — in the dialect's own words.
+// Where the letter is not among the dialect's, `-t` is an option the builtin
+// does not have, and it is refused rather than read as a name — in the
+// dialect's own words.
 func TestTypeRefusesTheKindLetterWhereTheDialectLacksIt(t *testing.T) {
 	out, st := run(t, `type -t cd`, func(r *Runner) {
 		sem := CoreSemantics()
 		sem.TypeEndsOptionsWithDashDash = Yes
-		sem.TypeNamesTheKindWithDashT = No
+		sem.TypeOptions = "afpP"
 		r.Semantics = &sem
 		dg := Diagnostics{BuiltinBadOption: "%[1]s: %[2]s: bad option"}
 		r.Diagnostics = &dg

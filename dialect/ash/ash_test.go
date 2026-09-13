@@ -223,3 +223,12 @@ func TestTheDialectRefusesNothingItWasNotMeasuredRefusing(t *testing.T) {
 		}
 	}
 }
+
+// TestTypeHasNoLettersAtAll. `type -- cd` reads the `--` as a name here, so
+// no letter of its own is reachable — `-t` included, which the empty
+// optstring says on its own since #2180.
+func TestTypeHasNoLettersAtAll(t *testing.T) {
+	if got := ash.Semantics().TypeOptions; got != "" {
+		t.Errorf("TypeOptions = %q, want none: this shell's type has no options", got)
+	}
+}

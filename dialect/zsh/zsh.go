@@ -1976,9 +1976,6 @@ func Semantics() interp.Semantics {
 	// Whether `type --` ends the options.
 	s.TypePrintsFunctionBody = interp.No
 	s.TypeEndsOptionsWithDashDash = interp.Yes
-	// zsh's word-per-name option is `-w`, with its own vocabulary; `-t` is
-	// a bad option there.
-	s.TypeNamesTheKindWithDashT = interp.No
 	// whence -v under another name, so the letters answer in sentences:
 	// -p searches PATH past the shell's own answer and words the hit the
 	// way plain type does, and -f *prints* a function rather than skipping
@@ -1986,7 +1983,8 @@ func Semantics() interp.Semantics {
 	// `w` names the kind — `ls: command` — which is how a syntax
 	// highlighter classifies every word on the line. See interp's typeKind,
 	// where its six words are measured against the other dialect's `-t`
-	// (#2512).
+	// (#2512). `-t` itself is a bad option here and is absent from the
+	// letters, which is the whole of how that is said since #2180.
 	s.TypeOptions = "afpw"
 	s.TypePSearchesPathPastTheShell = interp.Yes
 	s.TypePathAnswerIsASentence = interp.Yes

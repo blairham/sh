@@ -1408,10 +1408,9 @@ func Semantics() interp.Semantics {
 	// Whether `type --` ends the options.
 	s.TypePrintsFunctionBody = interp.No
 	s.TypeEndsOptionsWithDashDash = interp.Yes
-	// No `-t` here: the letter is refused the way `whence` refuses any
-	// option it does not have, usage line and all.
-	s.TypeNamesTheKindWithDashT = interp.No
-	// whence -v's other letters: -a lists every resolution, -p and -f are
+	// whence -v's letters, and no `-t` among them: that letter is refused
+	// the way `whence` refuses any option it does not have, usage line and
+	// all. -a lists every resolution, -p and -f are
 	// the PATH search and the function skip — and -p searches past the
 	// shell's own answer here, naming the bare path.
 	s.TypeOptions = "afp"

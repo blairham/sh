@@ -36,5 +36,42 @@ func FunctionLayout() syntax.Layout {
 		CaseHeaderSuffix:          "",
 		CaseArmsOnOneLine:         true,
 		CasePatternsParenthesised: true,
+
+		// Three things this shell agrees with the other engine about, and
+		// three it does not — measured on zsh 5.9.2 through `typeset -f`
+		// (#2427).
+		//
+		// Agreed: the braces of a `${x}` are kept, the `2>&1` a `|&` stands
+		// for is written out in place of the operator, and a body that is
+		// not a brace group is put in one, so `f() ( … )` lists as `f () {`
+		// with the subshell inside.
+		ParameterBracesAsWritten: true,
+		PipeBothWrittenOut:       true,
+		BodyIsAlwaysBraced:       true,
+
+		// And a subshell gets the shape a brace group gets, which the other
+		// engine does not give it: `( exit 1 )` there, three lines here.
+		SubshellBodyOnItsOwnLines: true,
+
+		// Not agreed, and left at their zero values so that saying so is
+		// this comment's job: a statement after a `&` starts a line of its
+		// own here where the other engine keeps it on the `&`'s line, and an
+		// `elif` keeps its word where the other writes it out as a nested
+		// `if`.
+		BackgroundKeepsTheLine: false,
+		ElifWrittenAsANestedIf: false,
+
+		// And the line a here-document body ended is written on again
+		// rather than left as a blank one, so a body sits directly above
+		// the `}` that closes the function.
+		BlankLineAfterAHereDocumentBody: false,
+
+		// A nested declaration is respelled with the parentheses and never
+		// the keyword: `function inner { … }` inside a listed body comes
+		// back `inner () {`, which is the same spelling this shell's own
+		// listing header uses. The word carries no meaning here — both
+		// bodies scope alike — so dropping it loses nothing a run can see.
+		FunctionHeader:                        syntax.FunctionHeaderParens,
+		BraceAfterAFunctionHeaderOnItsOwnLine: false,
 	}
 }

@@ -102,7 +102,13 @@ import (
 // `local`, so the row that asks what a declaration of `OPTIND` does to the
 // `getopts` cursor there is written with the word. Here it is one more
 // ordinary keyword definition.
-const keywordFunctionsInTheCorpus = 34
+//
+// Thirty-five since #2427, which pins what a *listing* does with a nested
+// keyword declaration: both engines respell it, and the row written with the
+// word is what says so — the row beside it uses the parenthesis form and they
+// answer alike. Here it is one more ordinary keyword definition, printed under
+// the default header spelling, which keeps the word.
+const keywordFunctionsInTheCorpus = 35
 
 func TestPrintingTheCorpusRoundTripsToTheSameProgram(t *testing.T) {
 	// The arrangement a formatter asks for, alongside the zero value that a

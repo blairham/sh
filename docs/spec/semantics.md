@@ -7295,6 +7295,61 @@ trees, each in its own arrangement (`dialect/bash/layout.go`,
 opening brace a line of its own, zsh keeps it on the header's
 (`Diagnostics.FunctionListingHeader`).
 
+**A listing is not a pretty-printer, and nine questions about it are
+not about where the lines break.** Seven were reported together and two
+more fell out of measuring them. Measured 2026-09-12 on bash 5.3.15,
+bash 3.2.57 and zsh 5.9.2 (#2427); the corpus rows are
+`declare/f-says-*-back`, each with a control beside it. Four of the nine
+the two engines agree on, so the core was wrong rather than undecided:
+
+- **A `${x}` keeps its braces.** The two spellings are one node to
+  everything that expands them, so only `Span.Bare` can say which was
+  read — and a body reprinted `"$x"` is a *different program* the moment
+  the next character continues a name.
+- **A here-document operator is written tight**: `cat <<XEOF`, never
+  `cat << XEOF`. The one exception is a delimiter that would spell a
+  longer operator with it — `<< -E` tight is `<<-E`, the tab-stripping
+  document.
+- **A `|&` comes back as the `2>&1` it stands for**, with a plain pipe
+  after it. bash 3.2 is why this is not cosmetic: the operator arrived in
+  bash 4, so a listing that kept it hands that build a body it refuses.
+- **A body that is not a brace group is put in one.** `f() ( … )` lists
+  as a subshell inside `{ … }` in both, which is a node the source did
+  not have — a normalization the listing consents to, not one the
+  printer may make on its own.
+
+Five split, so each is a field rather than a rule. Three of them are
+what the report named:
+
+| question | bash | zsh |
+| --- | --- | --- |
+| a nested declaration's header | `function inner () ` and the brace on its own line | `inner () ` and the brace on the header's line |
+| the statement after a `&` | stays on the `&`'s line | starts a line of its own |
+| an `elif` | written out as an `else` holding an `if` | kept as the word |
+
+The other two are the ones measuring turned up, in the same snippet: a
+subshell *inside* a body is inline in bash and gets a brace group's
+three lines in zsh, and the line a here-document body ended is left
+blank in bash and written on in zsh.
+
+Eight of the nine are fields on `syntax.Layout` — the header takes two
+of them, one for the spelling and one for where the brace goes — and the
+ninth is not: no engine writes the space after a here-document operator,
+so that one is the printer's own default. The zero Layout is the round
+trip: `syntax.Print` keeps every spelling, and only a caller asking for
+a listing's arrangement gets one. That matters for the header most: the
+respelling that drops the `function` keyword is correct for bash and zsh
+and would be a silent scope change in ksh93, where `typeset` in a
+keyword body declares a local (`TypesetLocalNeedsKeywordFunction`, and
+#1406 for the same question asked of the printer's default).
+
+**What is still ours alone**: zsh writes a trailing blank after a
+statement whose last word it read as an assignment — `x=1 `, `local
+q=1 `, `typeset -g w=2 ` — and this engine writes none. It is a fact
+about zsh's own parse rather than about the arrangement, since `local`'s
+operand is an argument here and an assignment there, so no layout field
+reproduces it. Open on #2427.
+
 **typeset is one of ksh93's own special builtins**, so any of its
 failures ends the script — a bad option included, usage lines and all:
 `Semantics.TypesetBadOptionFatal`.

@@ -74,3 +74,36 @@ printf 'command -v on nothing: %s\n' "$?"
 # contained.
 ( : > /nonexistent/path/that/cannot/be/made; printf 'not reached\n' ) 2>&1
 printf 'after the redirection failure: %s\n' "$?"
+
+# set -o with nothing after it writes this shell's whole option table, and
+# the table has an order: it is the shell's own rather than a sort, so the
+# names are not the names the other shells list and they are not in
+# alphabetical order either. Three of them — interactive, stdin and debug —
+# no other shell in the panel has, and two of those say how this shell was
+# started, which is the reason a script reads the listing at all.
+set -o
+
+# set +o writes the same table as commands that can be read back in, in the
+# same order.
+set +o
+
+# The three are settable in both directions, and stdin carries the $- letter
+# that names the same fact. This file is a script, so it starts off.
+printf 'started with: [%s]\n' "$-"
+set -o stdin
+printf 'after -o stdin: [%s]\n' "$-"
+set +o stdin
+printf 'and off again: [%s]\n' "$-"
+
+# `set -o interactive` is deliberately not exercised here. It is settable and
+# it does carry the `i` — measured under -c, where both shells answer `[i]` —
+# but in a *script* the real shell starts drawing prompts at the next command
+# and writes them to standard error, which this shell does not. That is a
+# divergence about entering the line editor mid-file rather than about the
+# option, and a case that measured it would be measuring the prompt.
+
+# debug is listed and remembered and earns no letter.
+set -o debug
+printf 'after -o debug: [%s]\n' "$-"
+set -o
+set +o debug

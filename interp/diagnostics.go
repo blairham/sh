@@ -417,6 +417,17 @@ type Diagnostics struct {
 	// CdStatus is what that reports. dash says 2 and the other three say 1.
 	// Zero means the substrate's own, 1.
 	CdStatus int
+	// GlobNoMatch is a pathname expansion that matched no file, on the two
+	// routes that refuse one: Semantics.GlobNoMatchIsError and the
+	// UnmatchedPatternIsError match option. One verb, the pattern as it was
+	// written. Empty means the substrate's own wording.
+	//
+	// A field rather than a constant because the two shells that reach it
+	// disagree about the sentence and not about the event — `no matches
+	// found: nosuch*` against `no match: nosuch*`, measured 2026-09-13 on
+	// zsh 5.9.2 and bash 5.3.15 — and the substrate must not carry one
+	// shell's spelling as everybody's.
+	GlobNoMatch string
 	// HashEmptyTable is what a bare `hash` says about the table this shell
 	// does not keep. bash announces it, on standard output; the other three
 	// print nothing, which the empty value means.
@@ -3404,6 +3415,16 @@ type Diagnostics struct {
 	// OptionListingHeader opens `set -o`'s table where the dialect has one:
 	// dash and ksh93 write "Current option settings" first.
 	OptionListingHeader string
+	// OptionListingOrder is the order `set -o` and `set +o` write their rows
+	// in, where the dialect publishes one that is not a sort. Empty means
+	// sorted, which is what bash and ksh93 do.
+	//
+	// dash is the one that needs it: its listing is its own option table's
+	// order — `errexit`, `noglob`, `ignoreeof`, `interactive` — and nothing
+	// derives that from the names. A name this does not mention keeps its
+	// sorted place after the ones it does, so the field is a measurement of
+	// what was seen rather than a claim to be exhaustive.
+	OptionListingOrder []string
 	// OptionListingWidth pads the name column: bash 15, dash 16, ksh93 25,
 	// zsh 22. Zero means bash's.
 	OptionListingWidth int

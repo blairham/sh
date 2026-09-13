@@ -124,11 +124,20 @@ func (r *Runner) redirectTargetForItsProcess(rd *syntax.Redirect) ([]string, boo
 // behind — an unset name under `set -u`, a bad substitution, a division by
 // zero — rather than a name.
 //
-// The two shapes a failed expansion arrives in, which is why this is not one
-// field: a fatal one has already unwound and is waiting to be caught, and one
-// that only reported itself is still in ordinary flow.
+// The three shapes a failed expansion arrives in, which is why this is not
+// one field: a fatal one has already unwound and is waiting to be caught, one
+// that gave up the statement has unwound a shorter way, and one that only
+// reported itself is still in ordinary flow.
+//
+// The middle shape is the same event as the first seen from the other side of
+// Semantics.FailedExpansionAbandonsTheLine — an unmatched pattern in `cat <
+// nosuch*` under a `shopt` name that refuses one. Reading only the fatal
+// shape let the shell that gives up the statement fall through to opening the
+// pattern as a filename, so the complaint was followed by a `No such file or
+// directory` about the same word.
 func (r *Runner) targetExpansionFailed() bool {
-	return r.pendingFileError() || (r.expandErr && r.ctl == controlNone)
+	return r.pendingFileError() || r.ctl == controlAbandon ||
+		(r.expandErr && r.ctl == controlNone)
 }
 
 // wordCanWrite reports whether expanding this word could write anything —

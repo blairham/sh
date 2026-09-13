@@ -1166,6 +1166,20 @@ type Runner struct {
 	// (#1951).
 	tracksCommands      bool
 	tracksCommandsMoved bool
+	// stdinOptionMoved and stdinOption are `set -o stdin`, one dialect's name
+	// for the route the program arrived by. The route is a fact the front
+	// end carried in, so the option *reads* it until a script writes it —
+	// which that shell allows, measured: `set +o stdin` on the standard-input
+	// route takes the `s` out of `$-`, and `set -o stdin` under `-c` puts one
+	// there. Two fields rather than one because "not moved" and "moved to
+	// off" are different answers and the route decides only the first.
+	stdinOptionMoved bool
+	stdinOption      bool
+	// debugOption is the same dialect's `debug`, which its own shipped build
+	// acts on no more than this one does: the name is listed, remembered and
+	// reported, and it earns no letter in `$-`. Measured — `set -o debug`
+	// there is `debug on` in the listing and an unchanged `$-`.
+	debugOption bool
 	// histIgnoreDups is zsh's histignoredups, which its `set -h`
 	// abbreviates. A script cannot see what it does, because a script has no
 	// history — but an interactive session does: repl reads it through the
@@ -1677,6 +1691,11 @@ type Runner struct {
 	// see extend.go.
 	optionListing func(r *Runner) []ListedOption
 	optionMover   func(r *Runner, name string, on bool) (moved, known bool)
+	// optionLetterNames are the `set` option letters this dialect spells its
+	// own way, mapped to the names in its namespace. Nil where every letter
+	// the shell has is one the panel shares. Installed through
+	// SetOptionLetterNames; see extend.go.
+	optionLetterNames map[rune]string
 	// aroundFunctionCalls is what a dialect saves and restores around every
 	// function call, whatever that call turns out to do. Each entry is
 	// handed the running runner as the body is entered and hands back the
@@ -3673,11 +3692,20 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		r.failedExpansion()
 		return nil
 	}
-	if r.ctl == controlExit {
-		// An expansion raised a fatal error of its own — an unmatched
-		// pattern, where the dialect calls that an error rather than passing
-		// it through. The command does not run, and nothing below may
-		// overwrite the status it set.
+	if r.ctl == controlExit || r.ctl == controlAbandon {
+		// An expansion raised an error of its own — an unmatched pattern,
+		// where the dialect or a `shopt` name calls that an error rather
+		// than passing it through. The command does not run, and nothing
+		// below may overwrite the status it set.
+		//
+		// **Both control values, because the same failure reaches here as
+		// either one.** How far an unmatched pattern unwinds is
+		// FailedExpansionAbandonsTheLine's answer, so the shell that gives
+		// up the statement arrives with controlAbandon and the shells that
+		// stop arrive with controlExit — and a test naming only the second
+		// let the first report the complaint and then run the command
+		// anyway, printing the pattern it had just refused. r.failedHeading
+		// one screen down reads `!= controlNone` for exactly this reason.
 		return nil
 	}
 

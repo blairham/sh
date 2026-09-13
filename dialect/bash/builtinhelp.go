@@ -53,6 +53,7 @@ func builtinUsage() map[string]string {
 		"exec":     "exec: usage: exec [-cl] [-a name] [command [argument ...]] [redirection ...]",
 		"pwd":      "pwd: usage: pwd [-LP]",
 		"shopt":    "shopt: usage: shopt [-pqsu] [-o] [optname ...]",
+		"help":     "help: usage: help [-dms] [pattern ...]",
 		"times":    "times: usage: times",
 		"compgen":  "compgen: usage: compgen [-V varname] [-abcdefgjksuv] [-o option] [-A action] [-G globpat] [-W wordlist] [-F function] [-C command] [-X filterpat] [-P prefix] [-S suffix] [word]",
 		"complete": "complete: usage: complete [-abcdefgjksuv] [-pr] [-DEI] [-o option] [-A action] [-G globpat] [-W wordlist] [-F function] [-C command] [-X filterpat] [-P prefix] [-S suffix] [name ...]",

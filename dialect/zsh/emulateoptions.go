@@ -58,12 +58,14 @@ import "strings"
 //
 // # What this is not
 //
-// The *set* is measured; the *value* each reset name goes back to is not
-// modeled beyond the four axes emulate.go swaps. Real zsh has a default per
-// emulation — `emulate sh` turns `posixbuiltins` on and `multios` off, where
-// this shell puts both back to zsh's default — and 47 of the 81 differ that
-// way under `sh`. That is a separate gap from this one and does not change
-// which names move.
+// The *set* is measured here and the *value* each reset name goes back to is
+// measured below — they are two tables of the same size and #2515 built only
+// the first, which is why #2549 existed. What is still not modeled is what
+// most of those values then *do*: 140 of the 185 names are recorded rather
+// than implemented, so an emulation now puts them at the emulation's own
+// state and the state is still read by nothing. The ones with behavior behind
+// them — `multios`, `bareglobqual`, `globsubst`, `typesetsilent`,
+// `checkjobs`, `unset`, `equals` — are where a wrong value was a wrong shell.
 //
 // # Nobody to disagree with
 //
@@ -72,6 +74,136 @@ import "strings"
 // this question even in principle. So this is a dialect answer written down
 // in `dialect/zsh` and not a semantics axis — the same conclusion #2426
 // reached for `functrace` and `extdebug`, and for the same reason.
+
+// # And what each reset name goes back to
+//
+// The set above is one table and the *value* is a second of the same size.
+// Real zsh has a default per emulation — `emulate sh` turns `posixbuiltins`
+// on and `multios` off — and until #2549 every reset name went back to
+// **zsh's** default here, so 49 of the 81 a bare `emulate sh` puts back
+// landed on the wrong value on every call.
+//
+// Measured 2026-09-13 on zsh 5.9.2, `emulate -R <mode>` from a fresh
+// `env -i zsh` reading a script, one `${options[name]}` per line for all 197
+// names in the table, four runs. `-R` is what exposes the emulation's default
+// for every name; a bare `emulate` exposes it only for the ones it resets.
+// The probe prints from *inside* the emulation, one print per name, because
+// the obvious shape does not survive the thing it is measuring:
+// `${(ko)options}` under `emulate -R sh` answers one line, since the
+// emulation has already changed how that expansion splits.
+//
+// 62 names differ from zsh's default in at least one emulation. Three of
+// them are compat spellings of another — `braceexpand`, `histexpand` and
+// `promptvars` — so they are not here: an alias resolves to its canonical
+// entry before anything reads a default, and a second entry for one option
+// is a second place for it to disagree with itself. That leaves 59, of which
+// 49 are in the bare-reset 81 and the other ten move only under `-R`.
+//
+// A name absent from this table has the same default in all four, which is
+// most of the table and is why this is a map rather than three fields on
+// every one of 197 entries.
+
+// emulationDefault is what one option is set to when the shell emulates this
+// mode: the mode's own default where they differ, and the table's otherwise.
+func emulationDefault(o zshOption, mode string) bool {
+	d, ok := emulationDefaults[o.base]
+	if !ok {
+		return o.def
+	}
+	switch mode {
+	case "sh":
+		return d.sh
+	case "ksh":
+		return d.ksh
+	case "csh":
+		return d.csh
+	}
+	// `emulate zsh` is the table's own default for every name, which is what
+	// makes zsh the mode with no column here.
+	return o.def
+}
+
+// emulationDeviates reports whether this mode's default for a name is a
+// deviation from the table's — the question the recorded store asks, since
+// what it holds is deviations rather than states.
+//
+// The second result is what keeps a recordedOver name out of it. Those hold a
+// base state that is *not* the table default — `hashdirs`, `login` and `rcs`
+// — so a deviation computed against `o.def` would be the wrong bit for them.
+// None of the three is in the table below, and
+// TestNoRecordedOverNameHasAnEmulationDefault keeps it that way rather than
+// this sentence doing it.
+func emulationDeviates(o zshOption, mode string) (dev, known bool) {
+	if _, ok := emulationDefaults[o.base]; !ok {
+		return false, false
+	}
+	return emulationDefault(o, mode) != o.def, true
+}
+
+// emulationDefaults are the 59 canonical names whose default differs from
+// zsh's in at least one emulation, with each emulation's own value. See the
+// measurement above.
+var emulationDefaults = map[string]struct{ sh, ksh, csh bool }{
+	"aliasfuncdef":        {sh: true, ksh: true, csh: false},
+	"appendcreate":        {sh: true, ksh: true, csh: false},
+	"badpattern":          {sh: false, ksh: false, csh: true},
+	"banghist":            {sh: false, ksh: false, csh: true},
+	"bareglobqual":        {sh: false, ksh: false, csh: false},
+	"bgnice":              {sh: false, ksh: false, csh: true},
+	"bsdecho":             {sh: true, ksh: false, csh: false},
+	"checkjobs":           {sh: false, ksh: false, csh: false},
+	"checkrunningjobs":    {sh: false, ksh: false, csh: false},
+	"cprecedences":        {sh: true, ksh: true, csh: true},
+	"cshjunkiehistory":    {sh: false, ksh: false, csh: true},
+	"cshjunkieloops":      {sh: false, ksh: false, csh: true},
+	"cshjunkiequotes":     {sh: false, ksh: false, csh: true},
+	"cshnullcmd":          {sh: false, ksh: false, csh: true},
+	"cshnullglob":         {sh: false, ksh: false, csh: true},
+	"equals":              {sh: false, ksh: false, csh: false},
+	"evallineno":          {sh: false, ksh: false, csh: false},
+	"extendedhistory":     {sh: false, ksh: false, csh: true},
+	"functionargzero":     {sh: false, ksh: false, csh: true},
+	"globalexport":        {sh: false, ksh: false, csh: false},
+	"globassign":          {sh: false, ksh: false, csh: true},
+	"globsubst":           {sh: true, ksh: true, csh: true},
+	"hup":                 {sh: false, ksh: false, csh: false},
+	"ignorebraces":        {sh: true, ksh: false, csh: false},
+	"interactivecomments": {sh: true, ksh: true, csh: false},
+	"ksharrays":           {sh: true, ksh: true, csh: false},
+	"kshautoload":         {sh: true, ksh: true, csh: false},
+	"kshglob":             {sh: false, ksh: true, csh: false},
+	"kshoptionprint":      {sh: false, ksh: true, csh: false},
+	"localoptions":        {sh: false, ksh: true, csh: false},
+	"localtraps":          {sh: false, ksh: true, csh: false},
+	"multifuncdef":        {sh: false, ksh: false, csh: false},
+	"multios":             {sh: false, ksh: false, csh: false},
+	"nomatch":             {sh: false, ksh: false, csh: true},
+	"notify":              {sh: false, ksh: false, csh: false},
+	"octalzeroes":         {sh: true, ksh: false, csh: false},
+	"pathscript":          {sh: true, ksh: true, csh: false},
+	"posixaliases":        {sh: true, ksh: true, csh: false},
+	"posixbuiltins":       {sh: true, ksh: true, csh: false},
+	"posixcd":             {sh: true, ksh: true, csh: false},
+	"posixidentifiers":    {sh: true, ksh: true, csh: false},
+	"posixjobs":           {sh: true, ksh: true, csh: false},
+	"posixstrings":        {sh: true, ksh: true, csh: false},
+	"posixtraps":          {sh: true, ksh: true, csh: false},
+	"promptbang":          {sh: false, ksh: true, csh: false},
+	"promptpercent":       {sh: false, ksh: false, csh: true},
+	"promptsubst":         {sh: true, ksh: true, csh: false},
+	"rmstarsilent":        {sh: true, ksh: true, csh: false},
+	"sharehistory":        {sh: false, ksh: true, csh: false},
+	"shfileexpansion":     {sh: true, ksh: true, csh: false},
+	"shglob":              {sh: true, ksh: true, csh: false},
+	"shnullcmd":           {sh: true, ksh: true, csh: false},
+	"shoptionletters":     {sh: true, ksh: true, csh: false},
+	"shortloops":          {sh: false, ksh: false, csh: true},
+	"shwordsplit":         {sh: true, ksh: true, csh: false},
+	"singlelinezle":       {sh: false, ksh: true, csh: false},
+	"typesetsilent":       {sh: true, ksh: true, csh: false},
+	"typesettounset":      {sh: true, ksh: true, csh: false},
+	"unset":               {sh: true, ksh: true, csh: false},
+}
 
 // emulationClass is what one option does when the shell emulates.
 type emulationClass uint8

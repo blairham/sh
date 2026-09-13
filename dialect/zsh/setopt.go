@@ -1075,6 +1075,105 @@ func registerSetopt(r *interp.Runner) {
 	// does not use for output, and said nothing about the 170 that decide
 	// what it does.
 	r.SetOptionTable(listedOptions, moveOption)
+	// The third face of the same namespace: this shell's `set` gives a
+	// single letter to most of its options, and the letters are its own
+	// rather than the panel's. See setLetterOptions.
+	r.SetOptionLetterNames(setLetterOptions)
+}
+
+// setLetterOptions are this shell's `set` option letters, each mapped to the
+// name in the table above that it abbreviates.
+//
+// Measured 2026-09-13 on zsh 5.9.2, one letter at a time from `env -i zsh -c`
+// and read back with `[[ -o name ]]` in **both** directions: `set -X` makes
+// the option on and `set +X` makes it off. A bulk answer would have hidden
+// the two exceptions at the bottom of this comment, which is the whole reason
+// the sweep is a letter at a time.
+//
+// Every one of these thirty was refused here as `-X is not implemented yet`
+// while `set -o <name>` already took the same option and moved it — the
+// substrate's letter table holds the letters the panel spells alike, and this
+// shell's are simply not in it. That is what #2578 found from the `set -T`
+// end: a script writing `set -T` was told the letter did not exist, where the
+// real shell turns `cdablevars` on.
+//
+// The names are the spelling the option is *listed* under when it is on,
+// which is the direction this shell gives the letter: `-F` is `noglob` and
+// `-C` is `noclobber` because the letter turns the negative on, while `-X` is
+// `listtypes` because that one is positive. Both readings are the same rule —
+// the letter names one entry of the table above, and `set -L` is `setopt` of
+// that entry — and the table is where the negation lives, not here.
+//
+// The letters deliberately **not** here are the ones the panel shares, which
+// stay in the substrate's own table so that `-e`, `-u` and `-x` cannot come
+// to mean two things: a letter belongs in this map exactly when this shell
+// disagrees with the rest of the panel about it. `-T` is the worked example —
+// trap carriage in one shell, `cdablevars` here — and it is why a shared
+// reading behind an axis could not answer it.
+//
+// Two measurements that are not a mapping, and both are recorded rather than
+// smoothed over:
+//
+//   - `-s` is taken at 0 and moves nothing at all, in either direction. It
+//     sorts no positional parameters (`set -- c a b; set -s` leaves `c a b`),
+//     it changes no row of `set -o`, and it puts no letter in `$-`. The
+//     option the letter belongs to is one the shell will not change after
+//     startup, and the letter path is silent about that where the name path
+//     is not: `set -o shinstdin` is `can't change option: shinstdin` at 1 in
+//     the same shell. That inconsistency is the reference's, so what is
+//     modeled is the observable — taken, and nothing happens.
+//   - `-i` and `-Z` are the two letters that refuse rather than move, and
+//     they refuse in the *option* wording rather than the bad-letter one:
+//     `can't change option: -i`. Mapping them to `interactive` and `zle`
+//     is what produces that, because those two names already refuse the same
+//     way when `set -o` asks for them.
+var setLetterOptions = map[rune]string{
+	'd': "noglobalrcs",
+	'g': "histignorespace",
+	// Two letters the substrate's own table already reached, and they are
+	// here so that they reach the *same place through the same seam*. Both
+	// end at the name they always ended at — `-h` writes the substrate's
+	// `histignoredups` and `-p` its `privileged`, which this dialect's table
+	// is written in terms of — so the state does not move. What changes is
+	// that `$-` shows the letter, which it could not while the letter was
+	// answered by a branch with no entry in any letter table: measured,
+	// `set -h; echo $-` is `569Xh` and `set -o histignoredups; echo $-` is
+	// the same string, so the letter reports the option rather than the
+	// spelling that moved it.
+	'h': "histignoredups",
+	'p': "privileged",
+	// Taken at 0, and it moves nothing. Not a gap — see the comment above.
+	's': "",
+	'i': "interactive",
+	'k': "interactivecomments",
+	'l': "login",
+	'r': "restricted",
+	'w': "chaselinks",
+	'y': "shwordsplit",
+	'B': "nobeep",
+	'D': "pushdtohome",
+	'E': "pushdsilent",
+	'F': "noglob",
+	'G': "nullglob",
+	'H': "rmstarsilent",
+	'I': "ignorebraces",
+	'J': "autocd",
+	'K': "nobanghist",
+	'L': "sunkeyboardhack",
+	'M': "singlelinezle",
+	'N': "autopushd",
+	'O': "correctall",
+	'P': "rcexpandparam",
+	'Q': "pathdirs",
+	'R': "longlistjobs",
+	'S': "recexact",
+	'T': "cdablevars",
+	'U': "mailwarning",
+	'V': "nopromptcr",
+	'W': "autoresume",
+	'X': "listtypes",
+	'Y': "menucomplete",
+	'Z': "zle",
 }
 
 // listedOptions is the `set -o` and `set +o` listing: every option in the

@@ -115,3 +115,29 @@ printf 'written:\n'
 cat hfile
 history -r hfile
 history
+
+# help is this shell's only self-documenting builtin, and the synopsis is the
+# half of a topic that is behavior: the option letters a builtin takes and the
+# shape of a keyword. `help -s` is that half and nothing else, which is why it
+# is what this file grades — the description a bare `help` follows it with is
+# documentation prose and is deliberately not carried here.
+help -s true
+help -s while
+help -s cd pwd
+
+# An exact topic name wins over the prefix match, which is what keeps
+# `help -s time` from also answering for `times`.
+help -s time
+
+# An operand that is only a prefix matches every topic beginning with it, and
+# writes no header.
+help -s sh
+
+# An operand with a metacharacter is a pattern anchored at both ends, and
+# writes one. `getopts` contains `pt` and is not matched, which is what says
+# the pattern is not the prefix rule with a star on the end.
+help -s '*pt'
+
+# A topic nobody has is a complaint at 1.
+help -s nosuchtopicanywhere
+printf 'status: %s\n' "$?"

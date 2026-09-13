@@ -30,9 +30,52 @@ import (
 // The `-C` rows are what make it a sort rather than an append: the capital
 // lands in front of a startup letter the shell already held, where every
 // other member of the panel keeps its startup letters together.
+//
+// The value spells the byte order out for **every** letter this shell can
+// show rather than only the letters the rows above name, and #2578 is why:
+// thirty letters that used to be refused now reach an option, and a letter
+// the order does not name keeps its produced place — which put `D` after `X`
+// where zsh puts it before. Measured on the same binary, one run rather than
+// thirty:
+//
+//	set -T -Q -D -u -e -w -y -h -p -G -M   569DGMQTXehpuwy
+//	set -Y -B -a -C -F                     569BCFXYa
+//
+// Both are the whole string by byte and nothing else, so writing the byte
+// order out in full says what the rows say rather than more.
 func TestDollarDashLetterOrder(t *testing.T) {
-	if got, want := zsh.Semantics().DollarDashLetterOrder, "569BCEFHTXZacefhilmnstuvx"; got != want {
+	want := "569" + "ABCDEFGHIJKLMNOPQRSTUVWXYZ" + "abcdefghijklmnopqrstuvwxyz"
+	if got := zsh.Semantics().DollarDashLetterOrder; got != want {
 		t.Errorf("DollarDashLetterOrder = %q, want %q", got, want)
+	}
+}
+
+// The letters #2578 added, written the way the shell writes them: a letter is
+// the *option's* state rather than a note that the letter was typed, so the
+// long name brings the letter and `set +X` takes it away again.
+//
+// Measured on zsh 5.9.2, 2026-09-13, from `env -i zsh -c`:
+//
+//	set -T                    569TX
+//	set -o cdablevars         569TX
+//	set -T; set +T            569X
+//	set +X                    569
+//	set -T -Q -D -u -e …      569DGMQTXehpuwy
+func TestTheLettersThisShellSpellsItsOwnWay(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"the letter writes the option", `set -T; [[ -o cdablevars ]]; echo "o=$? [$-]"`, "o=0 [569TX]"},
+		{"the name brings the letter", `set -o cdablevars; echo "[$-]"`, "[569TX]"},
+		{"and both take it back", `set -T; set +T; [[ -o cdablevars ]]; echo "o=$? [$-]"`, "o=1 [569X]"},
+		{"a startup letter withdraws", `set +X; [[ -o listtypes ]]; echo "o=$? [$-]"`, "o=1 [569]"},
+		{"in byte order", `set -T -Q -D -u -e -w -y -h -p -G -M; echo "[$-]"`, "[569DGMQTXehpuwy]"},
+	} {
+		out, _, err := preset.Combined(t, dialecttest.Base{}, tc.src)
+		if err != nil {
+			t.Fatalf("run %q: %v", tc.src, err)
+		}
+		if out != tc.want+"\n" {
+			t.Errorf("%s: %s = %q, want %q", tc.name, tc.src, out, tc.want+"\n")
+		}
 	}
 }
 

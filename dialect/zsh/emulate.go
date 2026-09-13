@@ -6,6 +6,7 @@ package zsh
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	"github.com/blairham/sh/interp"
 )
@@ -72,29 +73,29 @@ func currentEmulation(r *interp.Runner) string {
 	return "zsh"
 }
 
-// emulations is what each mode means on the four axes this shell can move.
-// csh changes nothing it can speak about.
+// emulations is the modes this shell knows, and the one axis an emulation
+// moves that has no option name over it.
 //
-// redirFatal is the fourth and arrived last: `emulate sh` and `emulate ksh`
-// make a failed redirection on a special builtin end the script, where
-// `emulate zsh` leaves it a complaint the script runs past. That is the same
-// switch bash's `set -o posix` throws, measured in a second binary, which is
-// what says the axis belongs to the mode rather than to either shell.
+// It held five fields until #2549 and holds one. Four of them —
+// `shwordsplit`, `nomatch`, `ksharrays` and `posixbuiltins` — are names in
+// the option table, and the table now knows each emulation's own default for
+// every name it holds, so a second copy here could only drift from it. What
+// is left is `redirFatal`: `emulate sh` and `emulate ksh` make a failed
+// redirection on a special builtin end the script where `emulate zsh` leaves
+// it a complaint the script runs past. That is the same switch bash's
+// `set -o posix` throws, measured in a second binary, which is what says the
+// axis belongs to the mode rather than to either shell — and zsh spells it
+// with no option, so nothing in the table can carry it.
 //
-// posixBuiltins is the fifth, and it is the one an emulation carries that a
-// script can also ask for by name: `emulate sh` and `emulate ksh` turn
-// `posixbuiltins` on, which is what makes `command` reach a builtin under an
-// emulation and not under a plain `emulate zsh`. Measured on 5.9.2 four ways
-// — `emulate sh` and `emulate ksh` read the option on, `emulate csh` and
-// `emulate zsh` read it off — so it moves with the mode rather than with the
-// sh-ness of it by coincidence.
-var emulations = map[string]struct {
-	split, nomatchOk, zeroBase, redirFatal, posixBuiltins bool
-}{
-	"zsh": {split: false, nomatchOk: false, zeroBase: false, redirFatal: false, posixBuiltins: false},
-	"sh":  {split: true, nomatchOk: true, zeroBase: true, redirFatal: true, posixBuiltins: true},
-	"ksh": {split: true, nomatchOk: true, zeroBase: true, redirFatal: true, posixBuiltins: true},
-	"csh": {},
+// csh's value is zsh's, which is measured rather than assumed: the four names
+// above all read the same under `emulate -R csh` as under `emulate -R zsh`,
+// so the mode that "changes nothing this shell can speak about" is a mode
+// that agrees with zsh rather than a mode to skip.
+var emulations = map[string]struct{ redirFatal bool }{
+	"zsh": {redirFatal: false},
+	"sh":  {redirFatal: true},
+	"ksh": {redirFatal: true},
+	"csh": {redirFatal: false},
 }
 
 // applyEmulation switches the axes and puts back the options this form of
@@ -104,46 +105,52 @@ var emulations = map[string]struct {
 // strict is the `-R` form, which widens the set from 81 names to 176 and is
 // the only thing the letter does here.
 func applyEmulation(r *interp.Runner, mode string, strict bool) {
-	e := emulations[mode]
-	if mode != "csh" {
-		swapAxes(r, func(s *interp.Semantics) {
-			s.SplitParamExpansion = answer(e.split)
-			s.GlobNoMatchIsError = answer(!e.nomatchOk)
-			// Five axes rather than the base alone: `ksharrays` is what the
-			// two sh-family emulations turn on, and the whole of what it
-			// means is in ksharrays.go. Setting only the base left `emulate
-			// sh` reading `$a` as the joined list and `$a[1]` as an element,
-			// which is neither shell's answer (#1726).
-			setKshArrays(s, e.zeroBase)
-			s.RedirectErrorOnSpecialBuiltinFatal = answer(e.redirFatal)
-			s.CommandReachesABuiltin = answer(e.posixBuiltins)
-		})
+	// The one axis with no option name over it, so the option table cannot
+	// carry it and this is where it is placed. The other four this used to
+	// swap here — `shwordsplit`, `nomatch`, `ksharrays` and `posixbuiltins` —
+	// are ordinary rows of the table now, because the table knows each
+	// emulation's own default for them and the swap knew only sh-ness. See
+	// emulationDefaults.
+	//
+	// And it runs for `csh` too. It used to be skipped there on the reading
+	// that csh changes nothing this shell can speak about; measured
+	// 2026-09-13, csh's value for all four of those names is zsh's, so the
+	// skip and the swap agree and the skip was a special case standing for
+	// nothing. Leaving it in would now mean csh alone kept whatever the
+	// script had set, which is the one reading nothing measures.
+	swapAxes(r, func(s *interp.Semantics) {
+		s.RedirectErrorOnSpecialBuiltinFatal = answer(emulations[mode].redirFatal)
+	})
+	// The recorded names in one write rather than one write each. The store
+	// holds deviations, so dropping a name from it is that option back at the
+	// table's default — and this emulation's default is not always the
+	// table's, which is what the second loop puts back in. The names this
+	// emulation leaves alone stay exactly as they were.
+	names, _ := r.GetArray(zshRecordedStore)
+	kept := make([]string, 0, len(names))
+	for _, n := range names {
+		if !resetByEmulation(n, strict) {
+			kept = append(kept, n)
+		}
 	}
-	// The recorded names in one write rather than one write each — the store
-	// holds deviations, so dropping a name from it *is* that option back at
-	// its default, and the names this emulation leaves alone stay in it.
-	if names, _ := r.GetArray(zshRecordedStore); len(names) > 0 {
-		kept := make([]string, 0, len(names))
-		for _, n := range names {
-			if !resetByEmulation(n, strict) {
-				kept = append(kept, n)
-			}
+	before := len(kept)
+	for _, o := range zshOptions {
+		if !o.recorded || !resetByEmulation(o.base, strict) {
+			continue
 		}
-		if len(kept) != len(names) {
-			setRecordedOptions(r, kept)
+		if dev, known := emulationDeviates(o, mode); known && dev {
+			kept = append(kept, o.base)
 		}
+	}
+	if len(kept) != len(names) || before != len(kept) {
+		sort.Strings(kept)
+		setRecordedOptions(r, kept)
 	}
 	for _, o := range zshOptions {
 		if o.set == nil || o.recorded || !resetByEmulation(o.base, strict) {
 			continue
 		}
-		switch o.base {
-		case "shwordsplit", "nomatch", "ksharrays", "posixbuiltins":
-			// Already placed by the axis swap, and their default is the
-			// emulation's rather than the table's.
-			continue
-		}
-		_ = o.set(r, o.def)
+		_ = o.set(r, emulationDefault(o, mode))
 	}
 	r.SetVar(emulationMode, mode)
 }

@@ -83,6 +83,23 @@ printf 'nullglob: [%s]\n' g/nosuch*
 shopt -u nullglob
 printf 'without it: [%s]\n' g/nosuch*
 
+# failglob is the third answer about a miss, and neither of the other two:
+# the word is not kept and it is not deleted, the statement it was in does
+# not run, and the shell goes on to the next line. The refusal wins over
+# nullglob where both are set, which is the opposite of the order zsh keeps
+# between the same two behaviors.
+#
+# The lines are separate on purpose. What the refusal gives up here is the
+# statement, so a `printf` written after a semicolon on the same line would be
+# dropped with it — measured, and the reason the next line is what proves the
+# shell carried on.
+shopt -s failglob
+printf 'failglob: [%s]\n' g/nosuch*
+printf 'the next line still runs\n'
+shopt -s nullglob
+printf 'and with nullglob too: [%s]\n' g/nosuch*
+shopt -u nullglob failglob
+
 # dotglob brings the leading-dot names into an ordinary pattern.
 : > g/.hidden
 printf 'plain: [%s]\n' g/*

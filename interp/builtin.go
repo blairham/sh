@@ -800,6 +800,28 @@ var setLetterNames = map[rune]string{
 // would be worse than refusing the whole line.
 func (r *Runner) setLetters(letters string, on bool) bool {
 	for _, opt := range letters {
+		if name, ok := r.optionLetterNames[opt]; ok {
+			// A letter this shell spells its own way, which is asked first
+			// because the letters that need a dialect table are exactly the
+			// letters two shells disagree about: `T` carries traps into
+			// functions in one shell and is `cdablevars` in another, and the
+			// shared reading below would refuse it on the axis rather than
+			// answer it. See Runner.SetOptionLetterNames.
+			if name == "" {
+				// Taken, and it moves nothing. The measurement rather than a
+				// gap — see the installing dialect, where the one letter in
+				// this state is named with what was measured about it.
+				continue
+			}
+			sign := "-"
+			if !on {
+				sign = "+"
+			}
+			if !r.setNamedOptionSpelled(name, sign+string(opt), on) {
+				return false
+			}
+			continue
+		}
 		if name, ok := setLetterNames[opt]; ok {
 			o := commonSetOptions[name]
 			if o.try != nil {

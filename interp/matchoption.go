@@ -250,6 +250,31 @@ const (
 	// syntax.Parser.SetDialect for the front end's half.
 	QuantifiedGroupsEverywhere
 
+	// UnmatchedPatternIsError refuses a pattern that matched no file: the
+	// shell reports it and the command does not run.
+	//
+	// The other half of UnmatchedPatternIsEmpty and not its negation, which
+	// is why it is a second option rather than a third state of the first.
+	// Three answers are reachable and a script picks between them a name at
+	// a time: leave the pattern in place, delete the word, or refuse.
+	//
+	// **Where it and UnmatchedPatternIsEmpty are both on, the refusal wins.**
+	// That is measured rather than chosen, and it is the opposite of the
+	// order Semantics.GlobNoMatchIsError keeps with the same emptying option
+	// one field along — the shell that has these two as `shopt` names refuses
+	// with both set (`shopt -s nullglob failglob; echo nosuch*` is the
+	// complaint at 1, in either order), and the shell that has the axis
+	// deletes the word (`setopt nullglob; echo zz*` is an empty line at 0
+	// with nomatch still on). Two shells, two orders; a single rule for both
+	// would have to be wrong for one of them.
+	//
+	// How far the refusal reaches is not this option's to say. It ends what
+	// Semantics.FailedExpansionAbandonsTheLine ends — the statement in the
+	// shell that answers yes and the script in the shells that do not — so
+	// the two dialects that can reach this path get their own measured scope
+	// without either naming the other.
+	UnmatchedPatternIsError
+
 	// lastMatchOption is the guard's subject and never a behavior. It has to
 	// stay last.
 	lastMatchOption

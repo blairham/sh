@@ -1052,7 +1052,18 @@ func Diagnostics() interp.Diagnostics {
 		ReadArgCount:        "read: arg count",
 		OptionListingHeader: "Current option settings",
 		OptionListingWidth:  16,
-		KillListing:         interp.KillListingZeroFirst,
+		// And the order, which is this shell's own option table rather than
+		// a sort: the other two shells with a `set -o` listing sort their
+		// names and this one does not, so `set -o | head` reads a different
+		// line here. Measured 2026-09-13 on dash, `env -i dash -c 'set -o'`,
+		// and again with three of them on — the order does not move with the
+		// states.
+		OptionListingOrder: []string{
+			"errexit", "noglob", "ignoreeof", "interactive", "monitor",
+			"noexec", "stdin", "xtrace", "verbose", "vi", "emacs",
+			"noclobber", "allexport", "notify", "nounset", "nolog", "debug",
+		},
+		KillListing: interp.KillListingZeroFirst,
 		// And when that directory was the PATH search's only match, dash
 		// names it in the message and still numbers the failure 127.
 		DirectoryOnPathStatus: 127,
@@ -1069,6 +1080,20 @@ func Apply(r *interp.Runner) {
 	// an absence. A runner told it draws `\u` as `\u` because this table says
 	// so, not because nobody told it anything. #1455.
 	r.SetPromptStyle(PromptStyle())
+	// The three `set -o` names this shell has and the rest of the panel does
+	// not, and all three are about **how the shell was started** rather than
+	// about a behavior a script chose — which is why a script reads `set -o`
+	// for them at all. Measured 2026-09-13: `interactive` is on under `-i`,
+	// `stdin` is on when the program arrived on standard input, and `debug`
+	// is a name this shell's shipped build lists and acts on no more than
+	// this one does. All three are settable in both directions at 0, and the
+	// first two carry the `$-` letter naming the same fact. See
+	// interp's extraSetOptions, which holds what happens for each.
+	//
+	// Their absence was three rows missing from a seventeen-row listing
+	// (#2624), and the two that describe the invocation are exactly the two
+	// nothing else in the language can tell a dash script.
+	r.AddSetOptions("interactive", "stdin", "debug")
 	// dash has no `builtin`.
 	r.Unregister("builtin")
 	// No `compgen` here; it is bash's alone.

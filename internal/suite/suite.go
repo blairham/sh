@@ -160,6 +160,11 @@ type Suite struct {
 	// record the wrong shell and look entirely healthy.
 	MustReport string
 
+	// SelfDoc is a command that makes this shell print its own
+	// documentation, and it is how [SelfDocumentation] builds the dictionary
+	// that separates differing lines nobody here may produce from differing
+	// lines that are work. Empty attributes nothing.
+	SelfDoc string
 	// Ours says the suite is this repository's own, committed and readable,
 	// rather than another project's fetched at test time. It is what scopes
 	// the no-path rule: see [Suite.attribute].
@@ -201,6 +206,11 @@ var Panel = []Suite{
 		Helpers:  []string{"support/recho.c", "support/zecho.c", "support/printenv.c"},
 		ShellVar: "THIS_SH",
 		Lookup:   []string{"/opt/homebrew/bin/bash", "/usr/local/bin/bash", "/bin/bash", "/usr/bin/bash"},
+		// Every builtin's help, three ways, plus the topic list. The suite
+		// calls the help builtin throughout one of its files and the answer
+		// is pages of manual text, which is the largest single thing in
+		// this column that is not available to be written.
+		SelfDoc: "help; help -s; for b in $(compgen -b); do help \"$b\"; help -d \"$b\"; help -s \"$b\"; done",
 	},
 	{
 		Name:    "zsh",

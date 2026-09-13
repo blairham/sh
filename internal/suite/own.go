@@ -368,7 +368,7 @@ func crossOne(ctx context.Context, s Suite, dir, name string, refs []Reference, 
 	groups := map[string][]string{}
 	var order []string
 	for _, r := range refs {
-		out := runIn(ctx, s, dir, name, r.Path, timeout)
+		out := runIn(ctx, s, dir, name, r.Path, Options{Timeout: timeout})
 		if out.TimedOut {
 			return split, true
 		}
@@ -383,7 +383,7 @@ func crossOne(ctx context.Context, s Suite, dir, name string, refs []Reference, 
 		// file under every shell to prove a case nobody disputes is four
 		// runs bought for nothing.
 		for _, r := range refs {
-			again := runIn(ctx, s, dir, name, r.Path, timeout)
+			again := runIn(ctx, s, dir, name, r.Path, Options{Timeout: timeout})
 			if again.TimedOut {
 				return split, true
 			}

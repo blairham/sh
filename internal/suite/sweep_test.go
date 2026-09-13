@@ -21,7 +21,7 @@ func gradeFile(t *testing.T, tests, name, ours, reference string) Result {
 	t.Helper()
 	s := Suite{ShellVar: "THIS_SH", TestDir: "tests", Ext: ".tests"}
 	return grade(context.Background(), s, tests, name, ours, reference,
-		bash.Dialect(), true, 2*time.Second)
+		bash.Dialect(), true, Doc{}, Options{Timeout: 2 * time.Second})
 }
 
 // TestAKilledOracleAndAKilledDialectAreDifferentFindings is the distinction
@@ -153,7 +153,7 @@ func TestEachRunGetsTheSuiteFresh(t *testing.T) {
 	})
 	s := Suite{ShellVar: "THIS_SH"}
 	for range 2 {
-		got := runIn(context.Background(), s, tests, "w.tests", "/bin/sh", 5*time.Second)
+		got := runIn(context.Background(), s, tests, "w.tests", "/bin/sh", Options{Timeout: 5 * time.Second})
 		if strings.Contains(got.Output, "LEFTOVERS") {
 			t.Fatal("a run read what the run before it left behind")
 		}

@@ -35,7 +35,7 @@ func biEnable(r *Runner, _ context.Context, args []string) int {
 	}
 	off := containsByte(opts, 'n')
 	if len(rest) == 0 {
-		r.listBuiltins(off)
+		r.listBuiltins(off, containsByte(opts, 's'))
 		return 0
 	}
 	status := 0
@@ -58,7 +58,13 @@ func biEnable(r *Runner, _ context.Context, args []string) int {
 }
 
 // listBuiltins writes the names, one to a line and in order.
-func (r *Runner) listBuiltins(disabled bool) {
+//
+// `-s` narrows it to the ones POSIX marks special, and it narrows whichever
+// listing was asked for: measured on bash 5.3.15, a name switched off with
+// `-n` leaves the plain listing and appears in the `-n` one, and `-n -s`
+// prints the disabled names that are special and nothing else. So this is an
+// intersection rather than a third listing.
+func (r *Runner) listBuiltins(disabled, special bool) {
 	names := r.BuiltinNames()
 	if disabled {
 		names = nil
@@ -66,6 +72,15 @@ func (r *Runner) listBuiltins(disabled bool) {
 			names = append(names, name)
 		}
 		sort.Strings(names)
+	}
+	if special {
+		kept := names[:0:0]
+		for _, name := range names {
+			if specialBuiltins[name] {
+				kept = append(kept, name)
+			}
+		}
+		names = kept
 	}
 	// The command that would put it back the way it is, which is the form
 	// the one shell with this builtin prints — so a listing can be fed

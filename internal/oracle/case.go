@@ -1648,6 +1648,22 @@ var Corpus = []Case{
 		Why:     "the same question one operator over, where the panel splits the *other* way: six columns protect the brace and trim, answering `[b][a]`, and zsh alone reads the quote as an ordinary character and answers `[a}b'}][a}bb'}]` — the pattern `'a` matching nothing and the leftover half-quote falling out into the word. So the line the panel splits on is the kind of the operand rather than the shell: a word operand is read in the quoting that encloses the whole expansion, where a single quote quotes nothing, and a pattern is read on its own terms. Both trim directions, so the rule is the operand's and not one operator's (#2399)",
 	},
 	{
+		ID: "core/a-quoted-brace-in-a-word-operand-in-posix-mode", Category: "quoting",
+		Snippet: `set -o posix; v=Vx}y; printf '[%s]' "${v-'a}b'}"; echo`,
+		Why:     "the mode moves where the expansion *ends*, which is a thing a grammar flag cannot be told at run time: bash 5.3 answers `[Vx}y]` without this line and `[Vx}yb'}]` with it, which is its own `sh` column reached the other way. bash 3.2 answers `[Vx}y]` in both, so the change is 5.x's and not bash's. The three shells with no such name refuse the `set` instead. Ours answers the non-posix reading in both modes — QuoteProtectsTheClosingBrace is a syntax.Dialect flag and the mode is interp's state (#2604)",
+	},
+	{
+		ID: "core/a-quoted-brace-in-a-word-operand-decided-when-the-word-expands", Category: "quoting",
+		Snippet: `v=Vx}y; f(){ printf '[%s]' "${v-'a}b'}"; echo; }; f; set -o posix; f`,
+		Why:     "the row that says *when* the answer above is decided, and it is not at the parse: one function body, parsed once before the mode was on, prints `[Vx}y]` and then `[Vx}yb'}]` in bash 5.3. So bash re-reads the operand at expansion time and a front end that handed the parser a different reading at startup would be a different mechanism that agrees only on the inputs it was tested with. bash 3.2 prints the same thing twice, and the three shells without the name print once and refuse the `set` (#2604)",
+	},
+	{
+		ID: "invoke/called-sh-moves-a-quoted-brace-in-a-word-operand", Category: "quoting",
+		Argv0:   "sh",
+		Snippet: `v=Vx}y; printf '[%s]' "${v-'a}b'}" "${v#'a}'}"; echo`,
+		Why:     "the same pair of operands under the standard's own name, which is the other door into the mode and the one a shebang takes. bash moves the *word* operand and not the pattern — `[Vx}yb'}][Vx}y]` where it answers `[Vx}y][Vx}y]` called `bash` — and **zsh does not move at all**, answering `[Vx}yb'}][Vx}yb'}]` under either name, which is the same shape the special-builtin usage error has. The pattern field is the control: it is the half the mode leaves alone, so a fix that made the quote ordinary everywhere under `sh` would pass the first field and fail the second (#2604)",
+	},
+	{
 		ID: "core/a-quoted-brace-in-an-unquoted-operand", Category: "quoting",
 		Snippet: `v=Vx}y; printf '[%s]' ${v-'a}b'} ${u-'a}b'} ${v#'V}'}; echo`,
 		Why:     "the control that bounds the split above to double quotes: written bare, the quote protects the brace in all seven columns and in both kinds of operand, so every one of them answers `[Vx}y][a}b][Vx}y]`. A fix that made the quote ordinary everywhere passes the quoted rows and fails this one, which is the whole reason it is here",

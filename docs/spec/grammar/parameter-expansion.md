@@ -371,6 +371,21 @@ protects none. Measured: `core/a-quoted-brace-in-a-word-operand`,
 `core/a-quoted-brace-in-a-nested-operand`,
 `core/a-quoted-brace-in-a-here-document-body` (#2399).
 
+**bash's POSIX mode moves it, and the answer is reached when the word
+expands rather than when it is read.** Under `set -o posix`, and under the
+name `sh`, bash reads a word operand's quote as ordinary and so answers
+the core's reading; the pattern operand does not move, and zsh under the
+same name does not move at all. One function body, parsed once before the
+mode was on, prints `[Vx}y]` and then `[Vx}yb'}]` — so bash stores the
+word and re-reads the `${ }` at expansion time, and a grammar flag chosen
+at startup would be a different mechanism that happens to agree on some
+inputs. This is not modeled: the flag is the parser's and the mode is
+`interp`'s state. Recorded by
+`core/a-quoted-brace-in-a-word-operand-in-posix-mode`,
+`core/a-quoted-brace-in-a-word-operand-decided-when-the-word-expands` and
+`invoke/called-sh-moves-a-quoted-brace-in-a-word-operand`; the options are
+in #2604.
+
 One consequence has to be carried through to the operand: where the
 scan leaves a quote unread, the half-quote after the closing brace is
 part of the **pattern**, not a quote that ran out of input.

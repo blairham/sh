@@ -252,15 +252,27 @@ func (n *ArithIndex) arithNode() {}
 // ArithCall is `name(args)` inside an arithmetic expression: a *math
 // function*, whose value is produced by running a shell function.
 //
-// One shell in the panel has the construct at all — zsh, through
-// `functions -M` — so the grammar is a dialect's, [Dialect.ArithFunctionCall],
-// and where it is off the `(` after a name is a leftover operator, which is
-// the complaint bash, dash and ksh93 make about `mf(5)`.
+// Two shells in the panel have the construct — zsh through `functions -M`,
+// and ksh93 through a built-in table it needs no registration for — so the
+// grammar is a dialect's, [Dialect.ArithFunctionCall], and where it is off
+// the `(` after a name is a leftover operator, which is the complaint bash,
+// dash and ash make about `mf(5)`. ksh93 was in that list until 2026-09-12
+// and does not belong in it: `$(( sqrt(4) ))` is `2` there. See
+// Dialect.ArithFunctionCall for the run.
 //
 // The name is not resolved here and does not have to exist: an unregistered
 // name is a runtime failure with its own sentence, not a parse error, which is
-// measured — `$(( nosuchmf(1) ))` is `unknown function: nosuchmf` in zsh 5.9.2
-// and never a syntax complaint.
+// measured in both columns — `$(( nosuchmf(1) ))` is `unknown function:
+// nosuchmf` in zsh 5.9.2 and `nosuchmf(1) : unknown function` in ksh93u+, and
+// never a syntax complaint in either.
+//
+// The two word it over different extents, which is why the sentence cannot be
+// written from one of them. zsh names the name; ksh93 names the expression
+// from the first byte of the name to the *end of the expression*, so
+// `$(( 1 + nosuchmf(1) + 2 ))` is `nosuchmf(1) + 2 : unknown function` and a
+// subscript, being its own expression, is `$(( x[nosuchmf(1)] ))` →
+// `nosuchmf(1): unknown function`. Measured 2026-09-12; see
+// interp.Diagnostics.MathFunctionUnknown, which carries one verb today.
 type ArithCall struct {
 	Name string
 	// Args are the arguments, each an expression of its own. `mf()` with

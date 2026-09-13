@@ -3277,13 +3277,34 @@ type Dialect struct {
 	// implemented in the interpreter itself. The measurement below is of the
 	// first, because it is the one a script writes.
 	//
-	// One shell in the panel has it. Measured 2026-09-08 on zsh 5.9.2 and on
-	// zsh 5.9, where `g(){ REPLY=$(($1+100)); }; functions -M mf 1 1 g;
-	// echo $(( mf(5) ))` prints 105 — against bash 5.3, bash 3.2, bash as
-	// `sh`, ksh93 and dash, none of which has the registration and all of
-	// which read `mf(5)` as a name followed by a leftover `(`. So the five
-	// columns without it record the grammar's absence rather than a different
-	// meaning for the same text, which is what makes this additive.
+	// **Two** shells in the panel have it, and this comment said one until
+	// 2026-09-12. Measured 2026-09-08 on zsh 5.9.2 and on zsh 5.9, where
+	// `g(){ REPLY=$(($1+100)); }; functions -M mf 1 1 g; echo $(( mf(5) ))`
+	// prints 105. Re-measured 2026-09-12 on ksh93u+ 2012-08-01, `env -i` with
+	// a scratch HOME, and that shell has the construct too — with a library
+	// of them built in and nothing to register:
+	//
+	//	echo $(( sqrt(4) ))        2
+	//	echo $(( pow(2,10) ))      1024
+	//	echo $(( fmod(7,3) ))      1
+	//	echo $(( int(3.7) ))       3
+	//	echo $(( nosuchmf(1) ))    nosuchmf(1) : unknown function
+	//	echo $(( atan(1,2) ))       atan(1,2) : function has wrong number of
+	//	                           arguments
+	//
+	// So it has the grammar *and* both sentences, and the flag is off for it
+	// here only because the built-in table is not implemented — a name it
+	// knows would come back `unknown function` from us, which is worse than
+	// the syntax error we give now. What the flag is **not** is a fact about
+	// that shell's grammar, and it was read as one: #2420 grouped five corpus
+	// rows as a wording difference over a syntax error when they are a shell
+	// that parsed a call we did not.
+	//
+	// bash 5.3, bash 3.2, bash as `sh`, dash and ash have neither the
+	// registration nor a table, and read `mf(5)` as a name followed by a
+	// leftover `(`. So those columns record the grammar's absence rather than
+	// a different meaning for the same text, which is what makes this
+	// additive.
 	//
 	// The `(` has to touch the name. A space between them is not a call in
 	// the shell that has one either — `$(( mf ( 5 ) ))` is

@@ -1544,6 +1544,26 @@ called as `sh` ends it, which is the POSIX special-builtin rule rather
 than a second reading of the operand. The two lenient shells cannot answer
 it, because neither refuses any word.
 
+**And `exit` asks it too**, which this paragraph was right about and the
+implementation was not: `exit` ended the script whatever the axis said,
+on the reading that ending the script is what `exit` is for. Measured
+2026-09-13 at the top of a script, with two commands after it:
+
+    exit status; echo "after=$?"; echo alive
+      bash 5.3    the complaint, then `after=2` and `alive`; status 0
+      bash as sh  the complaint alone; status 2
+      bash 3.2    the complaint alone; status **255**
+      dash        `exit: Illegal number: status`; status 2
+      ksh93, zsh  nothing at all; status 0 — neither refuses the word
+
+bash 3.2's 255 is the one figure the axis does not carry, and it belongs
+to no dialect here: it is a panel column and not a preset.
+
+`exit` and `return` reach the axis through doors of their own because
+what they set on the way out differs — `return` leaves the function and
+`exit` leaves nothing — and the operand is still read by one function for
+both, which is what the corpus row pairs check.
+
 zsh's `return r` was found in `~/.zi/bin/zi.zsh`, whose `.zi-ice` counts
 the ice-mods it consumed into an integer and ends `return retval`. Reading
 that as anything but arithmetic hands back the previous command's status

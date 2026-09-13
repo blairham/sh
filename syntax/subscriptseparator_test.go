@@ -485,3 +485,35 @@ func TestTheLineAfterTheLiteralGetsItsSeparatorsBack(t *testing.T) {
 			len(cmd.Assigns), len(cmd.Args))
 	}
 }
+
+// And the *position* is given back with them, which is a different claim and
+// needs a bracket to say it: a bare `[` opens a spanning subscript between an
+// array literal's parentheses and nowhere else, so a statement after the
+// literal is cut at the blank exactly as one before it would be.
+//
+// A mutation run is what asked for this row. Leaving the flag set after the
+// literal broke nothing anything else here looks at, because every other row
+// after a literal begins with an ordinary word.
+func TestTheStatementAfterTheLiteralIsNotElementPosition(t *testing.T) {
+	d := subscriptSeparatorGrammar()
+	d.ArrayLiteral = true
+	f, err := syntax.Parse("m=( [a]=1 )\n[x y]=2", d)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(f.Stmts) != 2 {
+		t.Fatalf("%d statements, want 2", len(f.Stmts))
+	}
+	pipe, ok := f.Stmts[1].Expr.(*syntax.Pipeline)
+	if !ok || len(pipe.Cmds) != 1 {
+		t.Fatalf("second statement is %T, want a one-command pipeline", f.Stmts[1].Expr)
+	}
+	cmd, ok := pipe.Cmds[0].(*syntax.SimpleCmd)
+	if !ok {
+		t.Fatalf("second command is %T, want a simple command", pipe.Cmds[0])
+	}
+	if len(cmd.Args)+len(cmd.Assigns) != 2 {
+		t.Errorf("%d words and %d assignments, want the blank to have cut it",
+			len(cmd.Args), len(cmd.Assigns))
+	}
+}

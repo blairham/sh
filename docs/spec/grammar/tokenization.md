@@ -393,6 +393,62 @@ and `subscript/a-blank-in-an-argument-subscript`.
 Grammar flag: `SubscriptSpansSeparators` — core: off; `bash` and `ksh`:
 on.
 
+### And at the front of a compound literal's element
+
+The same flag answers a second position, measured 2026-09-13 because a
+file of bash's own suite ended at a status bash does not end at:
+
+    typeset -A m; m=( [one]=1 [two words]=2 )
+      bash 5.3   the keys are `one` and `two words`
+      bash as sh the same
+      ksh93      the same
+      zsh        `bad pattern: [two`, status 1 — nothing is stored
+      bash 3.2   **two fields**, `[two` and `words]=2`, although the same
+                 build spans at command position
+      dash, ash  no literals at all
+
+So between a compound assignment's parentheses an element whose **first
+character** is an unquoted `[` runs to its matching `]`, and everything
+inside is a character of the subscript on exactly the rows above — a
+tab, a newline, `;`, a nested bracket, a quoted or escaped `]`.
+
+The corpus records the run-of-blanks spelling rather than the `;` one,
+and the reason is the corpus rather than the shell: every case is read
+back by one dialect-neutral grammar, and `m=( [a; b]=v )` is not a parse
+of anything without the flag — the `;` closes no bracket and the element
+list ends at a token it cannot use. The `;` is recorded at command
+position, where a grammar without the flag still reads the line, as two
+commands.
+
+bash 3.2 is why this is a position of its own rather than a consequence
+of the command-position rule: one build of one shell spans in one
+position and not the other, so nothing about having the first implies
+the second.
+
+The condition is narrower here, and each half was measured by taking it
+away:
+
+**Nothing in front of the bracket.** `a=( pre[1 2]=x )` and
+`a=( x[1 2] )` are two fields in all three bash columns. ksh93 reaches
+further — it takes `pre[1 2]=x` as a subscripted element — and that
+extra reach is recorded and not implemented, because the front of the
+element is the shape every column that spans agrees on.
+
+**An unquoted bracket.** `a=( "[1 2]"=x )` is one field holding the text
+and no key is written, unanimously, zsh included.
+
+An element whose bracket never closes falls back to the ordinary
+reading, for the reason the command-position rule falls back: bash
+refuses the text and ksh93 does something else again, so there is no
+common answer and falling back keeps the flag additive.
+
+Measured: `assoc/a-literal-element-keyed-with-a-blank`,
+`assoc/a-literal-element-keyed-with-a-run-of-blanks`,
+`assoc/a-literal-element-keyed-with-a-nested-bracket`,
+`array/a-name-before-a-literal-elements-bracket`,
+`array/a-literal-value-holding-a-bracket` and
+`array/a-quoted-bracket-at-a-literal-elements-front`.
+
 ## Comments
 
 `#` begins a comment only where a word could begin. Mid-word it is an

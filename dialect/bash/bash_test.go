@@ -168,7 +168,6 @@ func TestSemantics(t *testing.T) {
 		// function itself, and whether `--` ends its options.
 		{"TypePrintsFunctionBody", s.TypePrintsFunctionBody, interp.Yes},
 		{"TypeEndsOptionsWithDashDash", s.TypeEndsOptionsWithDashDash, interp.Yes},
-		{"TypeNamesTheKindWithDashT", s.TypeNamesTheKindWithDashT, interp.Yes},
 		{"JobsShowBackgroundCommand", s.JobsShowBackgroundCommand, interp.Yes},
 		{"JobsListNewestFirst", s.JobsListNewestFirst, interp.No},
 		{"StoppedJobTakesTheCurrentJobMarker", s.StoppedJobTakesTheCurrentJobMarker, interp.Yes},
@@ -828,5 +827,19 @@ func TestTheJobSpecThatNamesNothing(t *testing.T) {
 	}
 	if got := bash.Diagnostics().NoSuchJobStatus; got != 0 {
 		t.Errorf("NoSuchJobStatus = %d, want 0 — the shared 1", got)
+	}
+}
+
+// TestTheKindLetterIsAmongTypesLetters. `-t` is this shell's alone in the
+// panel, and since #2180 the optstring is the whole of how that is said.
+//
+// It replaces a line in the vector table above, and the replacement is the
+// point: the axis that used to carry the letter duplicated this one, so its
+// `Yes` could never be read — the branch that would have added the `t` is
+// only reached where these letters lack it, and they never have. What `-t`
+// *does* is decided by the letter being present, exactly as zsh's `-w` is.
+func TestTheKindLetterIsAmongTypesLetters(t *testing.T) {
+	if got := bash.Semantics().TypeOptions; !strings.ContainsRune(got, 't') {
+		t.Errorf("TypeOptions = %q, want the kind letter among them", got)
 	}
 }

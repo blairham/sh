@@ -2684,31 +2684,22 @@ type Semantics struct {
 	// a name there and gets answered as one before the real names are.
 	TypeEndsOptionsWithDashDash Answer
 
-	// TypeNamesTheKindWithDashT gives `type` its `-t`, which answers one
-	// bare word per name — keyword, function, builtin or file — and prints
-	// nothing at all for a name it cannot account for, only the failing
-	// status. The scripted form of the question: a word to compare against
-	// rather than a sentence to parse. True in bash alone; ksh93 and zsh
-	// refuse the letter the way they refuse any option they do not have,
-	// and dash reads it as a name like the rest of its operands.
-	//
-	// unpinned bash: never reached, so no row could catch it however it
-	// was written. The letter is already in bash's `TypeOptions`
-	// (`afpPt`), and this axis — which predates the optstring — is
-	// consulted only where the optstring does *not* carry a `t`. Measured
-	// 2026-09-12 by moving it in the bash dialect: `type -t f`, `type -t
-	// while` and `type -t nosuch` answer the same under `Yes`, under `No`
-	// and under `Unspecified` alike. The three dialects that do reach it
-	// all answer `No`, so the `Yes` this one holds is a value nothing
-	// consults — see #2180 (#2057).
-	TypeNamesTheKindWithDashT Answer
-
 	// TypeOptions is the rest of `type`'s letters, in the getopts spelling
 	// the other optstrings use — `-a` for every resolution a name has, `-p`
-	// and `-P` for the path alone, `-f` to leave the functions out. Empty
-	// means none beyond what the two axes above already give, which is
-	// dash's answer: its `type` has no options at all, and
-	// TypeEndsOptionsWithDashDash already says so.
+	// and `-P` for the path alone, `-f` to leave the functions out, `-t` for
+	// the bare kind and `-w` for zsh's word-per-name. Empty means none
+	// beyond what TypeEndsOptionsWithDashDash already gives, which is dash's
+	// answer: its `type` has no options at all.
+	//
+	// `-t` is a letter here like any other, and it was an axis of its own
+	// until #2180. `TypeNamesTheKindWithDashT` predated the optstring and
+	// duplicated it: bash's letters already carried the `t`, so the axis was
+	// consulted only where they did not, the three dialects that reached it
+	// all declined, and the branch that added the letter could never run.
+	// That is the same split zsh's `-w` had — a letter in two tables at once
+	// is refused as missing while it works — and it is settled the same way,
+	// with the optstring as the whole answer. What `-t` *does* is decided by
+	// the letter being present, in typeMode, exactly as `-w` is.
 	TypeOptions string
 
 	// TypePSearchesPathPastTheShell is what `type -p` does about a name the

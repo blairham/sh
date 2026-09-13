@@ -1407,12 +1407,11 @@ func Semantics() interp.Semantics {
 	// Whether `type --` ends the options.
 	s.TypePrintsFunctionBody = interp.Yes
 	s.TypeEndsOptionsWithDashDash = interp.Yes
-	// The one shell in the panel with `-t` at all: one bare word per name,
-	// and silence with status 1 for a name that is nothing.
-	s.TypeNamesTheKindWithDashT = interp.Yes
-	// The rest of type's letters, all implemented here: -a for every
-	// resolution, -p speaking only where the plain answer would have been a
-	// file, -P forcing the PATH search, -f leaving functions out.
+	// type's letters, all implemented here: -a for every resolution, -p
+	// speaking only where the plain answer would have been a file, -P
+	// forcing the PATH search, -f leaving functions out, and -t — the one
+	// shell in the panel with it at all — answering one bare word per name
+	// and staying silent with status 1 for a name that is nothing.
 	s.TypeOptions = "afpPt"
 	s.TypePSearchesPathPastTheShell = interp.No
 	s.TypePathAnswerIsASentence = interp.No

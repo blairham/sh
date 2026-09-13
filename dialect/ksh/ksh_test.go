@@ -183,7 +183,6 @@ func TestSemantics(t *testing.T) {
 		// function itself, and whether `--` ends its options.
 		{"TypePrintsFunctionBody", s.TypePrintsFunctionBody, interp.No},
 		{"TypeEndsOptionsWithDashDash", s.TypeEndsOptionsWithDashDash, interp.Yes},
-		{"TypeNamesTheKindWithDashT", s.TypeNamesTheKindWithDashT, interp.No},
 		{"JobsShowBackgroundCommand", s.JobsShowBackgroundCommand, interp.No},
 		{"JobsListNewestFirst", s.JobsListNewestFirst, interp.Yes},
 		{"StoppedJobTakesTheCurrentJobMarker", s.StoppedJobTakesTheCurrentJobMarker, interp.No},
@@ -844,5 +843,14 @@ func TestEvalClosesAQuoteWhereASourcedFileDoesNot(t *testing.T) {
 	}
 	if !strings.Contains(got, "after") {
 		t.Errorf("a sourced file = %q, want the script to carry on afterwards", got)
+	}
+}
+
+// TestTheKindLetterIsNotAmongTypesLetters. `whence` refuses `-t` the way it
+// refuses any option it does not have, usage line and all, and since #2180
+// the absence from the optstring is the whole of how that is said (#2180).
+func TestTheKindLetterIsNotAmongTypesLetters(t *testing.T) {
+	if got := ksh.Semantics().TypeOptions; strings.ContainsRune(got, 't') {
+		t.Errorf("TypeOptions = %q, want no kind letter: this shell refuses it", got)
 	}
 }

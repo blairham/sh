@@ -424,11 +424,10 @@ func Semantics() interp.Semantics {
 	s.UnaliasReportsNotFound = interp.Yes
 	s.AliasNotFoundStatusCounts = interp.No
 	s.UnaliasAllRefusesOperands = interp.No
-	// `type` has no `-t` that names a kind, and `type -- cd` reads the `--`
-	// as a name rather than as the end of options.
+	// `type -- cd` reads the `--` as a name rather than as the end of
+	// options, so no letter of its own is reachable — `-t` included.
 	s.TypePrintsFunctionBody = interp.No
 	s.TypeEndsOptionsWithDashDash = interp.No
-	s.TypeNamesTheKindWithDashT = interp.No
 	// `ulimit -a` is laid out with bash's labels and letters rather than
 	// dash's; the block unit and the resources it knows were read off that
 	// listing.

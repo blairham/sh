@@ -244,7 +244,6 @@ func TestSemantics(t *testing.T) {
 		// function itself, and whether `--` ends its options.
 		{"TypePrintsFunctionBody", s.TypePrintsFunctionBody, interp.No},
 		{"TypeEndsOptionsWithDashDash", s.TypeEndsOptionsWithDashDash, interp.Yes},
-		{"TypeNamesTheKindWithDashT", s.TypeNamesTheKindWithDashT, interp.No},
 		{"JobsShowBackgroundCommand", s.JobsShowBackgroundCommand, interp.Yes},
 		{"JobsListNewestFirst", s.JobsListNewestFirst, interp.No},
 		{"StoppedJobTakesTheCurrentJobMarker", s.StoppedJobTakesTheCurrentJobMarker, interp.Yes},
@@ -1073,5 +1072,14 @@ func TestAnUnquotedListKeepsItsElementsWhole(t *testing.T) {
 		if got := strings.TrimSpace(out.String()); got != tc.want {
 			t.Errorf("%s:\n got %q\nwant %q", tc.src, got, tc.want)
 		}
+	}
+}
+
+// TestTheKindLetterIsNotAmongTypesLetters. This shell's word-per-name option
+// is `-w`; `-t` is a bad option here, and since #2180 its absence from the
+// optstring is the whole of how that is said.
+func TestTheKindLetterIsNotAmongTypesLetters(t *testing.T) {
+	if got := zsh.Semantics().TypeOptions; strings.ContainsRune(got, 't') {
+		t.Errorf("TypeOptions = %q, want no kind letter: this shell refuses it", got)
 	}
 }

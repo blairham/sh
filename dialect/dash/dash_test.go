@@ -180,7 +180,6 @@ func TestSemantics(t *testing.T) {
 		// function itself, and whether `--` ends its options.
 		{"TypePrintsFunctionBody", s.TypePrintsFunctionBody, interp.No},
 		{"TypeEndsOptionsWithDashDash", s.TypeEndsOptionsWithDashDash, interp.No},
-		{"TypeNamesTheKindWithDashT", s.TypeNamesTheKindWithDashT, interp.No},
 		{"JobsShowBackgroundCommand", s.JobsShowBackgroundCommand, interp.No},
 		{"JobsListNewestFirst", s.JobsListNewestFirst, interp.Yes},
 		{"StoppedJobTakesTheCurrentJobMarker", s.StoppedJobTakesTheCurrentJobMarker, interp.Yes},
@@ -639,5 +638,14 @@ func TestNoclobberFallbackIsAnOpen(t *testing.T) {
 func TestARedirectionTargetIsExpandedInTheShell(t *testing.T) {
 	if got, want := dash.Semantics().RedirectTargetExpandsInTheCommandsProcess, interp.No; got != want {
 		t.Errorf("RedirectTargetExpandsInTheCommandsProcess = %v, want %v", got, want)
+	}
+}
+
+// TestTypeHasNoLettersAtAll. This shell's `type` takes no options, so `-t` is
+// a name like any other operand — which the empty optstring says on its own
+// since #2180, and TypeEndsOptionsWithDashDash says again.
+func TestTypeHasNoLettersAtAll(t *testing.T) {
+	if got := dash.Semantics().TypeOptions; got != "" {
+		t.Errorf("TypeOptions = %q, want none: this shell's type has no options", got)
 	}
 }

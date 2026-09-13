@@ -122,22 +122,12 @@ func (r *Runner) typeOperands(args []string) (names []string, m typeMode, code i
 	if args[0] == "--" {
 		return args[1:], m, 0
 	}
-	// The letters are the dialect's — TypeOptions, plus `-t` where the axis
-	// that predates the optstring answers for it. The `t` question is asked
-	// only where a `t` rides in the option words: any other letter is
-	// refused identically whichever way the answer goes — the ones the
-	// dialect really has are named as missing and the rest as unknown — so
-	// the question would decide nothing there.
-	known := r.sem().TypeOptions
-	if !strings.ContainsRune(known, 't') && typeOptionWordsCarryT(args) {
-		if r.ask(r.sem().TypeNamesTheKindWithDashT, "`type -t` naming the bare kind") {
-			known += "t"
-		}
-		if r.unspecified {
-			return nil, m, 2
-		}
-	}
-	rest, opts, code := r.builtinOptions("type", args, known)
+	// The letters are the dialect's, and all of them: `-t` is in TypeOptions
+	// like every other letter since #2180. The axis that used to add it
+	// duplicated the optstring — bash's already carried the `t`, so the
+	// branch that added it could never run — which is the same split zsh's
+	// `-w` had before it moved.
+	rest, opts, code := r.builtinOptions("type", args, r.sem().TypeOptions)
 	if code != 0 {
 		return nil, m, code
 	}
@@ -150,20 +140,6 @@ func (r *Runner) typeOperands(args []string) (names []string, m typeMode, code i
 		noFuncs:    strings.ContainsRune(opts, 'f'),
 	}
 	return rest, m, 0
-}
-
-// typeOptionWordsCarryT says whether a `t` rides in the leading option words —
-// the words builtinOptions would read before the first operand.
-func typeOptionWordsCarryT(args []string) bool {
-	for _, a := range args {
-		if len(a) < 2 || a[0] != '-' || a == "--" {
-			return false
-		}
-		if strings.ContainsRune(a[1:], 't') {
-			return true
-		}
-	}
-	return false
 }
 
 // asked is the shape this mode's letters want a kind written in.

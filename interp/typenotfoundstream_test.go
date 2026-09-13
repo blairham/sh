@@ -25,8 +25,7 @@ func notFoundRun(t *testing.T, src string, dg Diagnostics) (string, string, int)
 	dg.CommandVNotFound = "command: %[1]s: nothing here"
 	return declRun(t, src, func(s *Semantics) {
 		s.TypeEndsOptionsWithDashDash = Yes
-		s.TypeNamesTheKindWithDashT = Yes
-		s.TypeOptions = "afpP"
+		s.TypeOptions = "afpPt"
 	}, dg)
 }
 

@@ -13636,15 +13636,15 @@ Makes `type -- name` skip the `--`. True in bash, ksh93 and zsh; dash
 has no options for it at all, so `--` is a name there and gets answered
 as one before the real names are.
 
-**`TypeNamesTheKindWithDashT`** — bash yes · dash no · ksh93 no · zsh no
-
-Gives `type` its `-t`, which answers one bare word per name — keyword,
-function, builtin or file — and prints nothing at all for a name it
-cannot account for, only the failing status. The scripted form of the
-question: a word to compare against rather than a sentence to parse.
-True in bash alone; ksh93 and zsh refuse the letter the way they refuse
-any option they do not have, and dash reads it as a name like the rest
-of its operands.
+`type`'s `-t` was an axis of its own until #2180 and is now a letter in
+`TypeOptions` like every other. It answers one bare word per name —
+keyword, function, builtin or file — and prints nothing at all for a name
+it cannot account for, only the failing status: the scripted form of the
+question, a word to compare against rather than a sentence to parse. bash
+alone has it; ksh93 and zsh refuse the letter the way they refuse any
+option they do not have, and dash reads it as a name like the rest of its
+operands. That is a table of letters and not a disagreement about
+identical syntax, which is why the axis went.
 
 **`TypePrintsFunctionBody`** — bash yes · dash no · ksh93 no · zsh no
 
@@ -16104,9 +16104,11 @@ Four kinds, and the sweep can tell one of them apart by itself:
    "no answer" constant, which refuses *wherever the axis is consulted*,
    and reports `never reached` for a dialect that does not notice. Two
    flips tell three states apart, and it costs what the backlog costs.
-   `TypeNamesTheKindWithDashT` in bash is the clean example — the letter
-   is already in that dialect's `TypeOptions`, so the axis that predates
-   the optstring is dead there (#2180).
+   `TypeNamesTheKindWithDashT` in bash was the clean example — the letter
+   was already in that dialect's `TypeOptions`, so the axis that predated
+   the optstring was dead there. Which is how it ended: the axis is gone
+   and the optstring is the whole answer, the same way zsh's `-w` moved
+   out of the unimplemented list and into `TypeOptions` (#2180).
 3. **Reached, and both answers produce the same output anyway**, because
    a second axis swallows the difference. `PrintfEmptyIsNotANumber` in
    zsh: `Yes` sends an empty operand on to the bad-number complaint, and

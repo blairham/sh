@@ -653,11 +653,6 @@ func Semantics() interp.Semantics {
 	s.BareLocalListing = interp.BareLocalListsNothing
 	s.SetListing = interp.SetListingAssignments
 	s.SetListingQuoting = interp.ListingQuoteAlwaysDoubled
-	// Unreachable behind the answer above — dash's `type` has no options at
-	// all, so `-t` is a name — but the axis is answered rather than left
-	// looking forgotten.
-	s.TypeNamesTheKindWithDashT = interp.No
-
 	// A descriptor number the process cannot hold is not checked here: with
 	// `ulimit -n 6`, `exec 8>f` reports success and the descriptor is
 	// unusable afterwards, where bash and ksh93 hand the kernel's refusal

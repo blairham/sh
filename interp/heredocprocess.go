@@ -148,7 +148,7 @@ func arraysEqual(a, b map[string]Array) bool {
 		return false
 	}
 	for k, v := range a {
-		if w, ok := b[k]; !ok || !maps.Equal(v, w) {
+		if w, ok := b[k]; !ok || !v.equal(w) {
 			return false
 		}
 	}

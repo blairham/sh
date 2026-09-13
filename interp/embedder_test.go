@@ -61,7 +61,7 @@ func TestVariablesAndArraysHandedIn(t *testing.T) {
 	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Stdout: &out, Stderr: &strings.Builder{},
 		Vars:   map[string]string{"PRESET": "value", "PATH": "/bin:/usr/bin"},
-		Arrays: map[string]Array{"LIST": {0: "a", 1: "b"}},
+		Arrays: map[string]Array{"LIST": {0: {Str: "a"}, 1: {Str: "b"}}},
 	})
 	embed(t, r, `echo [$PRESET]; PRESET=changed; echo [$PRESET]; unset PRESET; echo [$PRESET]`+
 		"\n"+`echo [${LIST[0]}][${LIST[1]}]`)

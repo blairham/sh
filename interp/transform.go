@@ -365,7 +365,7 @@ func (r *Runner) arrayPairs(name string) (keys, vals []string, assoc, stored boo
 			// Positions are stored from zero and subscripts are written from
 			// wherever the dialect counts, the same edge subscriptsOf walks.
 			ks = append(ks, itoa(k+base))
-			vs = append(vs, a[k])
+			vs = append(vs, a[k].scalar())
 		}
 		return ks, vs, false, true
 	}

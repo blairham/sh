@@ -115,7 +115,7 @@ func (r *Runner) setListedArray(d declaration) string {
 	case DeclareListingClustered:
 		elems := make([]string, 0, len(d.arr))
 		for _, i := range d.arr.subscripts() {
-			elems = append(elems, fmt.Sprintf("[%d]=%s", i, r.declareQuoted(d.arr[i])))
+			elems = append(elems, fmt.Sprintf("[%d]=%s", i, r.declareQuoted(d.arr[i].scalar())))
 		}
 		return "(" + strings.Join(elems, " ") + ")"
 	case DeclareListingExportSpelled:

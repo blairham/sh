@@ -5393,7 +5393,7 @@ func (r *Runner) matchesSavedVar(u savedVar) bool {
 		return false
 	}
 	a, inArray := r.Arrays[u.name]
-	if inArray != u.inArray || !maps.Equal(a, u.array) {
+	if inArray != u.inArray || !a.equal(u.array) {
 		return false
 	}
 	m, inTable := r.AssocArrays[u.name]

@@ -156,7 +156,7 @@ func TestTheTwoReadingsOfParameterNamesAgree(t *testing.T) {
 	// Straight into one table each, past the setters, so that no name is
 	// reachable through a second branch.
 	r.Vars["onlyscalar"] = "1"
-	r.Arrays = map[string]Array{"onlyarray": {0: "x"}}
+	r.Arrays = map[string]Array{"onlyarray": {0: {Str: "x"}}}
 	r.AssocArrays = map[string]AssocArray{"onlyassoc": {"k": "v"}}
 	r.Dynamic = map[string]func(*Runner) string{"onlymade": func(*Runner) string { return "" }}
 	r.DynamicArrays = map[string]func(*Runner) []string{"onlymadearray": func(*Runner) []string { return nil }}

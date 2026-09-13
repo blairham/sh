@@ -1234,7 +1234,7 @@ func (r *Runner) markDeclaredCompound(name string, fresh bool, f declareFlags, h
 		switch p {
 		case ScalarUnderACompoundBecomesTheFirstElement:
 			r.markIndexed(name)
-			r.storeArray(name, Array{0: v})
+			r.storeArray(name, Array{0: str(v)})
 		case ScalarUnderACompoundDiscardsIt:
 			r.markIndexed(name)
 		case ScalarUnderACompoundStaysAScalar:
@@ -1447,7 +1447,7 @@ func (r *Runner) arrayBecomesATable(name string) {
 		return
 	}
 	for idx, v := range held {
-		r.setAssocElem(name, itoa(idx), v)
+		r.setAssocElem(name, itoa(idx), v.scalar())
 	}
 }
 

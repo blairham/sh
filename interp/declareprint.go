@@ -271,7 +271,7 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 		elems := produce(r)
 		a := make(Array, len(elems))
 		for i, v := range elems {
-			a[i] = v
+			a[i] = str(v)
 		}
 		d.arr, d.isArr = a, true
 		return d, true
@@ -624,7 +624,7 @@ func (r *Runner) clusteredDeclaration(d declaration) string {
 		}
 		elems := make([]string, 0, len(d.arr))
 		for _, i := range d.arr.subscripts() {
-			elems = append(elems, fmt.Sprintf("[%d]=%s", i, r.declareQuoted(d.arr[i])))
+			elems = append(elems, fmt.Sprintf("[%d]=%s", i, r.declareQuoted(d.arr[i].scalar())))
 		}
 		return head + "=(" + strings.Join(elems, " ") + ")"
 	case d.hasValue:
@@ -865,9 +865,9 @@ func (r *Runner) bareAssignmentValue(d declaration) (string, bool) {
 			// That is a fact about its type system, not about `-p`, and it
 			// is deliberately not followed — an empty array keeps `-a` here.
 			if r.arrayHasGaps(d.arr) {
-				elems = append(elems, fmt.Sprintf("[%d]=%s", i, r.declareQuoted(d.arr[i])))
+				elems = append(elems, fmt.Sprintf("[%d]=%s", i, r.declareQuoted(d.arr[i].scalar())))
 			} else {
-				elems = append(elems, r.declareQuoted(d.arr[i]))
+				elems = append(elems, r.declareQuoted(d.arr[i].scalar()))
 			}
 		}
 		return "(" + strings.Join(elems, " ") + ")", true

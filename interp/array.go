@@ -35,7 +35,89 @@ func (r *Runner) arrayBase() int {
 // The third shell reads the same store the other way, walking the whole
 // extent and finding an unassigned subscript empty. So the storage is sparse
 // in every dialect and only the *reading* is a question.
-type Array map[int]string
+type Array map[int]Element
+
+// Element is what one subscript holds.
+//
+// A string in five of the six columns, and a struct here because of the
+// sixth: ksh93 lets an element hold a value of its own. `a=(x y); a[1]=(p q)`
+// leaves a two-element array whose second element *is* an array — `${a[1][1]}`
+// reads `q` back there, `a[1]+=(r)` appends to it, and `typeset -p a` prints
+// `typeset -a a=(x (p q) )`. None of that survives being flattened to a
+// string, and the element's own scalar reading is not the flattening either:
+// see Element.scalar.
+//
+// Exported because Runner.Arrays is, and a field rather than a bare string so
+// that the store has one kind of element rather than two tables that can
+// drift. Every dialect but ksh93 leaves Nested nil and pays a word for it.
+type Element struct {
+	// Str is the value where the element holds a string.
+	Str string
+	// Nested is the array the element holds instead, and nil where it holds a
+	// string. An *empty* nested array is not nil and is not the empty string:
+	// `a=(x y z); a[1]=()` leaves element 1 an array with nothing in it, which
+	// still counts as an element and reads back as the two characters `(` and
+	// `)` with a newline between them.
+	Nested Array
+}
+
+// str is an element holding a string, which is every element in five of the
+// six columns.
+func str(v string) Element { return Element{Str: v} }
+
+// nested is an element holding an array of its own.
+func nested(a Array) Element { return Element{Nested: a} }
+
+// scalar is what the element reads as where one string is wanted — `${a[1]}`,
+// a field of `"${a[@]}"`, the subject of `${#a[1]}`.
+//
+// Measured on ksh93u+ 2012-08-01, which is the only column that can have a
+// nested element at all:
+//
+//	a=(x y); a[1]=(p q);    ${a[1]} -> p        the nested array's own first
+//	a=(x y z); a[1]=();     ${a[1]} -> a newline between two parens
+//
+// The empty rendering is not an economy: `printf "[%s]" "${a[@]}"` there
+// prints `[(`, a newline, `)]`, so an element holding an empty array is one
+// field and that field has a newline in it.
+func (e Element) scalar() string {
+	if e.Nested == nil {
+		return e.Str
+	}
+	if lo, _, any := e.Nested.bounds(); any {
+		return e.Nested[lo].scalar()
+	}
+	return "(\n)"
+}
+
+// equal reports whether two elements hold the same value.
+//
+// Its own method because an element may hold an array, which makes the type
+// uncomparable: `==` does not compile over it and maps.Equal does not accept
+// it. A pointer to the nested array would have compiled and been wrong — two
+// arrays built the same way are the same element and would have compared
+// different.
+func (e Element) equal(f Element) bool {
+	if e.Str != f.Str || (e.Nested == nil) != (f.Nested == nil) {
+		return false
+	}
+	return e.Nested == nil || e.Nested.equal(f.Nested)
+}
+
+// equal reports whether two arrays hold the same elements at the same
+// subscripts, to any depth.
+func (a Array) equal(b Array) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k, v := range a {
+		w, held := b[k]
+		if !held || !v.equal(w) {
+			return false
+		}
+	}
+	return true
+}
 
 // subscripts returns the assigned subscripts, in order.
 func (a Array) subscripts() []int {
@@ -92,7 +174,7 @@ func (a Array) denseElems() ([]string, bool) {
 	}
 	out := make([]string, len(a))
 	for k, v := range a {
-		out[k] = v
+		out[k] = v.scalar()
 	}
 	return out, true
 }
@@ -112,7 +194,7 @@ func (a Array) pastTheEnd() int {
 func (r *Runner) setArray(name string, elems []string) {
 	a := make(Array, len(elems))
 	for i, v := range elems {
-		a[i] = v
+		a[i] = str(v)
 	}
 	r.storeArray(name, a)
 }
@@ -172,7 +254,7 @@ func (r *Runner) storeArray(name string, a Array) {
 	// form this write would ask that question of the array it is the view of,
 	// and the answer that keeps the array would send it back through here.
 	if lo, _, any := a.bounds(); any {
-		r.setVarAs(name, a[lo], assignedAsTheCompoundView)
+		r.setVarAs(name, a[lo].scalar(), assignedAsTheCompoundView)
 	} else {
 		r.setVarAs(name, "", assignedAsTheCompoundView)
 	}
@@ -209,7 +291,7 @@ func (r *Runner) uniqueElems(a Array) Array {
 			continue
 		}
 		seen[e] = true
-		out[pos] = e
+		out[pos] = str(e)
 		pos++
 	}
 	return out
@@ -312,7 +394,7 @@ func (r *Runner) setArrayElem(name string, idx int, sub, value string) {
 			"%[1]s[%[2]s]: bad array subscript", name, sub))
 		return
 	}
-	a[pos] = value
+	a[pos] = str(value)
 	r.storeArray(name, a)
 }
 
@@ -375,7 +457,7 @@ func insertAtTheFront(a Array, value string) Array {
 	for _, pos := range a.subscripts() {
 		out[pos+1] = a[pos]
 	}
-	out[0] = value
+	out[0] = str(value)
 	return out
 }
 
@@ -416,7 +498,7 @@ func (r *Runner) appendArrayElem(name string, idx int, sub, value string) {
 		// something to join to: `a=abc; a[0]+=x` is `abcx`, and reading the
 		// store directly made it `x` — the promotion happened below, after
 		// the join had already decided there was nothing there (#1570).
-		v, ok := r.appendedValue(name, a[pos], value)
+		v, ok := r.appendedValue(name, a[pos].scalar(), value)
 		if !ok {
 			return
 		}
@@ -480,7 +562,7 @@ func (r *Runner) appendScalarToArray(name string, a Array, value string) {
 		r.appendArrayElem(name, r.arrayBase(), strconv.Itoa(r.arrayBase()), value)
 		return
 	}
-	a[a.pastTheEnd()] = value
+	a[a.pastTheEnd()] = str(value)
 	r.storeArray(name, a)
 }
 
@@ -596,7 +678,7 @@ func (r *Runner) unsetArrayElem(name string, idx int, sub string) int {
 		if _, held := a[pos]; !held {
 			return 0
 		}
-		a[pos] = ""
+		a[pos] = Element{}
 		r.storeArray(name, a)
 		return 0
 	}
@@ -819,7 +901,7 @@ func (r *Runner) unsetElementSpan(name string, a Array, from, to int) int {
 	elems := make([]string, n)
 	for pos, v := range a {
 		if pos >= 0 && pos < n {
-			elems[pos] = v
+			elems[pos] = v.scalar()
 		}
 	}
 	out := make([]string, 0, n+1)
@@ -1388,7 +1470,7 @@ func (r *Runner) unsetWholeArray(name string) (handled bool, code int) {
 		// span either, so `a=(); unset a[@]` does not gain an element.
 		if a, ok := r.Arrays[name]; ok {
 			if len(a) > 0 {
-				r.storeArray(name, Array{0: ""})
+				r.storeArray(name, Array{0: {}})
 			}
 			return true, 0
 		}
@@ -1430,7 +1512,8 @@ func (r *Runner) unsetWholeArray(name string) (handled bool, code int) {
 // and its own `unset "a[1]"` leaves an empty element in place rather than a
 // gap.
 func (r *Runner) arrayBareName(a Array) (string, bool) {
-	base, assigned := a[0]
+	elem, assigned := a[0]
+	base := elem.scalar()
 	// The two readings agree while the base element is the only element there
 	// is — which is `a=(x)` and every scalar-shaped array a script builds —
 	// so the axis is asked only where they part.
@@ -1552,21 +1635,21 @@ func (r *Runner) readArray(a Array) []string {
 	if !r.arrayHasGaps(a) {
 		out := make([]string, 0, len(subs))
 		for _, k := range subs {
-			out = append(out, a[k])
+			out = append(out, a[k].scalar())
 		}
 		return out
 	}
 	if r.ask(r.sem().ArraysAreSparse, "an unassigned subscript being no element at all") {
 		out := make([]string, 0, len(subs))
 		for _, k := range subs {
-			out = append(out, a[k])
+			out = append(out, a[k].scalar())
 		}
 		return out
 	}
 	from, to := a.extent(0)
 	out := make([]string, 0, to-from+1)
 	for i := from; i <= to; i++ {
-		out = append(out, a[i])
+		out = append(out, a[i].scalar())
 	}
 	return out
 }
@@ -2258,7 +2341,7 @@ func (r *Runner) elemAt(name string, elems []string, n int) (string, bool) {
 	}
 	if compacted {
 		v, ok := a[pos]
-		return v, ok
+		return v.scalar(), ok
 	}
 	if pos >= len(elems) {
 		return "", false
@@ -2665,7 +2748,7 @@ func (r *Runner) compoundElemsFolded(name string, a Array) Array {
 	}
 	changed := false
 	for _, sub := range a.subscripts() {
-		if r.attributeWouldChange(name, a[sub]) {
+		if r.attributeWouldChange(name, a[sub].scalar()) {
 			changed = true
 			break
 		}
@@ -2688,14 +2771,14 @@ func (r *Runner) compoundElemsFolded(name string, a Array) Array {
 func (r *Runner) foldedElems(name string, a Array) Array {
 	folded := Array{}
 	for _, sub := range a.subscripts() {
-		v, ok := r.attributeFolded(name, a[sub])
+		v, ok := r.attributeFolded(name, a[sub].scalar())
 		if !ok {
 			// The integer evaluation failed and has already said so, which
 			// is the one case attributeFolded stores nothing for. The array
 			// is left as it stands rather than half rewritten.
 			return a
 		}
-		folded[sub] = v
+		folded[sub] = str(v)
 	}
 	return folded
 }
@@ -2716,7 +2799,7 @@ func (r *Runner) arrayForWrite(name string) Array {
 	if produce, produced := r.DynamicArrays[name]; produced {
 		a := make(Array, 0)
 		for i, v := range produce(r) {
-			a[i] = v
+			a[i] = str(v)
 		}
 		return a
 	}

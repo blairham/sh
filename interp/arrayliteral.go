@@ -197,7 +197,7 @@ func (r *Runner) appendedOverAScalar(name string) (Array, int) {
 	if !held {
 		return Array{}, 0
 	}
-	return Array{0: v}, 1
+	return Array{0: str(v)}, 1
 }
 
 // literalInto places a literal's elements into an array, starting at next.
@@ -215,7 +215,7 @@ func (r *Runner) literalInto(name string, a Array, next int, parsed []literalEle
 	for _, e := range parsed {
 		if !e.subscripted {
 			for _, f := range e.fields {
-				a[next] = f
+				a[next] = str(f)
 				next++
 			}
 			continue
@@ -258,13 +258,13 @@ func (r *Runner) literalInto(name string, a Array, next int, parsed []literalEle
 			// not the question KeyedLiteralAppendJoinsTheReplacedValue asks:
 			// see keyedLiteralAppend, where one column reads the replaced
 			// table instead.
-			v, ok := r.appendedValue(name, a[pos], value)
+			v, ok := r.appendedValue(name, a[pos].scalar(), value)
 			if !ok {
 				return nil, false
 			}
 			value = v
 		}
-		a[pos] = value
+		a[pos] = str(value)
 		// A bare element after a subscripted one continues from there rather
 		// than from where the count had reached: `a=(x [3]=y z)` puts z at 4.
 		// Measured in both shells that accept the mixture, and it follows the

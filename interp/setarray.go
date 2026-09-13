@@ -92,7 +92,7 @@ func (r *Runner) setArrayOperands(name string, front bool, values []string) int 
 			a[k] = v
 		}
 		for i, v := range values {
-			a[i] = v
+			a[i] = str(v)
 		}
 		r.storeArray(name, a)
 	case len(values) == 0:

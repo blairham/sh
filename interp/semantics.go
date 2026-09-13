@@ -3936,6 +3936,15 @@ type Semantics struct {
 	// A later declaration is a different question and all three agree on it:
 	// `typeset -l z=Ab; typeset -u z` is `-u` everywhere. It is one word that
 	// splits them (#2541).
+	//
+	// **No** is the later letter winning, which is what the *value* does in
+	// the shell that answers it that way. Its listing is a third answer this
+	// field has no room for and does not claim: ksh93 keeps both letters and
+	// then writes the name with neither, so `typeset -lu z=Ab; typeset -p z`
+	// is a bare `z=AB` there against this engine's `typeset -u z=AB`. The
+	// value is right in every column and the listing is one letter's worth
+	// wrong in one of them, which is the trade a two-valued answer buys; the
+	// row is in the record so the next reader measures rather than assumes.
 	TwoCaseLettersOnOneDeclarationCancel Answer
 	// CaseAttributeReplacesTheNumericAttribute is the other direction: `-l`
 	// and `-u` take the integer or float letter off the name they are given.

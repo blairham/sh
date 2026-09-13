@@ -1231,6 +1231,43 @@ func (r *Runner) SetOptionTable(listed func(r *Runner) []ListedOption, move func
 	r.optionListing, r.optionMover = listed, move
 }
 
+// SetOptionLetterNames declares the `set` option letters this shell spells
+// its own way, each mapped to the name it abbreviates in this shell's option
+// namespace.
+//
+// The third face of [Runner.SetOptionTable]'s namespace, and the reason it is
+// a table rather than more branches: a shell whose options number in the
+// hundreds gives single letters to most of them, and the letters are its own
+// choices rather than the panel's. Measured 2026-09-13 on zsh 5.9.2 by
+// setting each letter alone from a bare shell and reading the option back
+// with `[[ -o name ]]` in both directions — thirty of them abbreviate a name
+// this shell already has, and every one of the thirty was refused here as a
+// letter we had not built while `set -o` took the very same option by name.
+// `set -T` is `cdablevars` and `set -Q` is `pathdirs`; neither has anything
+// to do with the trap-carriage letters another shell spells `T` with, which
+// is why a shared reading cannot serve (#2578).
+//
+// **A letter here wins over the shared reading**, and that is the point of
+// installing one: the letters that need a table are exactly the letters two
+// shells disagree about. The ones the panel spells alike are deliberately
+// left out, so `-e` and `-x` still go through the shared table and cannot
+// come to mean two things.
+//
+// The name is looked up through [Runner.SetNamedOption]'s seam, so a letter
+// and the name it abbreviates are one request with one answer: a name the
+// shell has and will not move refuses through the same wording every other
+// `set -o` refusal uses, with the letter echoed back as it was written rather
+// than the name it stands for — `can't change option: -i`, measured, against
+// `can't change option: interactive` for the same option asked for by name.
+//
+// An empty name is a letter the shell **takes and moves nothing**, which is a
+// measurement rather than a shortcut: it is what the reference does, and
+// modeling it as a refusal would stop a script the real shell carries on.
+// Only one letter is in that state and the entry says which.
+func (r *Runner) SetOptionLetterNames(names map[rune]string) {
+	r.optionLetterNames = names
+}
+
 // DialectOption reads one option name through this shell's own option
 // namespace: the names `setopt` and `[[ -o ]]` take where a dialect has
 // installed one, and the `set -o` names where it has not.

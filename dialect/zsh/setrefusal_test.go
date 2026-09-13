@@ -82,20 +82,28 @@ func TestZshKeepsTheSetLettersItHasAndThisShellDoesNot(t *testing.T) {
 	// spelling of `privileged`, a name this shell's own option table records,
 	// so both directions of the letter are granted at 0 — which is what real
 	// zsh answers. See Semantics.SetHasThePrivilegedLetter (#2412).
-	const missing = "dgiklrswyBDEFGHIJKLMNOPQRSTUVWXYZ"
-	if got := zsh.Diagnostics().UnimplementedOptionLetters["set"]; got != missing {
-		t.Errorf("UnimplementedOptionLetters[set] = %q, want %q", got, missing)
-	}
-	for _, l := range missing {
-		src := "set -" + string(l) + "\n"
-		if got := refuseInScript(t, src); !strings.Contains(got, "is not implemented yet") {
-			t.Errorf("%q said %q, want it called missing rather than bad", src, got)
-		}
+	//
+	// **And now no letter is in it at all.** The thirty-three that were are
+	// the subject of #2578: each abbreviates a name this shell's option table
+	// already had, so they are entries in setLetterOptions rather than
+	// refusals. An empty entry is what says so; a stale string here would be
+	// a claim the shell contradicts on every one of them.
+	if got := zsh.Diagnostics().UnimplementedOptionLetters["set"]; got != "" {
+		t.Errorf("UnimplementedOptionLetters[set] = %q, want no letters left", got)
 	}
 	// The five zsh refuses itself get zsh's own words.
 	for _, l := range "bcjqz" {
 		src := "set -" + string(l) + "\n"
 		want := "zsh:set:1: bad option: -" + string(l) + "\n"
+		if got := refuseInScript(t, src); got != want {
+			t.Errorf("%q said %q, want %q", src, got, want)
+		}
+	}
+	// And the three the shell has and will not move are the other sentence,
+	// with the letter echoed back rather than the name it abbreviates.
+	for _, l := range "imtZ" {
+		src := "set -" + string(l) + "\n"
+		want := "zsh:set:1: can't change option: -" + string(l) + "\n"
 		if got := refuseInScript(t, src); got != want {
 			t.Errorf("%q said %q, want %q", src, got, want)
 		}

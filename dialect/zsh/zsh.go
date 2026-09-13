@@ -758,7 +758,24 @@ func Semantics() interp.Semantics {
 	//
 	// The `-C` rows are what make it a sort rather than an append: the
 	// letter lands in front of a startup letter this shell already held.
-	s.DollarDashLetterOrder = "569BCEFHTXZacefhilmnstuvx"
+	//
+	// The string spells the sort out for **every** letter this shell can
+	// show rather than only the handful the rows above name, and that is a
+	// correction rather than padding: the thirty letters #2578 added were
+	// refused when it was written, so a string naming only the letters that
+	// could then be produced left each new one to "keeps its produced place
+	// and follows the ones it does" — which put `D` after `X` where zsh puts
+	// it before. Measured on the same binary, one run rather than thirty:
+	//
+	//	set -T -Q -D -u -e -w -y -h -p -G -M   569DGMQTXehpuwy
+	//	set -Y -B -a -C -F                     569BCFXYa
+	//
+	// Both are the whole string by byte with nothing else to explain, which
+	// is why writing the byte order out in full is the same claim the rows
+	// make and not a wider one.
+	s.DollarDashLetterOrder = "569" +
+		"ABCDEFGHIJKLMNOPQRSTUVWXYZ" +
+		"abcdefghijklmnopqrstuvwxyz"
 	// The panel's holdout: `echo hi >&-` is status 0 here and 1 in the other
 	// three — the text is quietly lost and nothing is said about a simple
 	// command's own closed stream. What zsh prints when the stream was
@@ -2613,20 +2630,31 @@ func Diagnostics() interp.Diagnostics {
 		// something the shell itself refuses (#1716).
 		ImmovableOptionLetters: map[string]string{"set": "t"},
 		UnimplementedOptionLetters: map[string]string{
-			// zsh gives a single letter to far more of its options than the
-			// rest of the panel does: measured 2026-09-05, it refuses only
-			// b, c, j, q and z of the fifty-two, and has the other
-			// forty-seven. These are the ones it has and this shell does
-			// not, so a script asking for one is told it is missing rather
-			// than told this shell knows better than zsh what zsh has.
-			// `-A` has left this list: it assigns an array and is
-			// implemented, in Semantics.SetArrayLetter.
+			// **`set` has left this table entirely**, and the emptiness is
+			// the measurement. zsh gives a single letter to far more of its
+			// options than the rest of the panel does — measured 2026-09-05,
+			// it refuses only b, c, j, q and z of the fifty-two — and
+			// thirty-three of the ones it has were listed here as letters
+			// this shell had not built, while `set -o <name>` already took
+			// and moved every one of the options behind them. The letters
+			// were the only thing missing, so they are a table of names now
+			// rather than a table of refusals: see setLetterOptions in
+			// setopt.go, which #2578 measured a letter at a time.
 			//
-			// `-t` has left it for the opposite reason, and that is the
-			// point of the pair: this shell will not move that option at
-			// all, which is a different sentence from a letter we have not
-			// built — see ImmovableOptionLetters below.
-			"set": "dgiklrswyBDEFGHIJKLMNOPQRSTUVWXYZ",
+			// The three reasons a letter is in neither table are worth
+			// keeping, because each is a different sentence:
+			//
+			//   - `-A` assigns an array and is implemented, in
+			//     Semantics.SetArrayLetter.
+			//   - `-t`, `-i` and `-Z` are options this shell will not
+			//     *move*, which zsh words differently from a letter nobody
+			//     has: `can't change option: -i`. `-t` reaches that through
+			//     ImmovableOptionLetters above and the other two through
+			//     setLetterOptions, since the names they abbreviate already
+			//     refuse the same way.
+			//   - `-b`, `-c`, `-j`, `-q` and `-z` are letters zsh itself has
+			//     not got, so the substrate's own bad-letter refusal is
+			//     already zsh's answer.
 			// zsh's hash past `-r`: `-d` is the *named directory* table
 			// rather than a forgetting, `-f` hashes every command on PATH
 			// at once, `-m` reads the operands as patterns, `-v` reports

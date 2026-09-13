@@ -1671,6 +1671,11 @@ type Runner struct {
 	// see extend.go.
 	optionListing func(r *Runner) []ListedOption
 	optionMover   func(r *Runner, name string, on bool) (moved, known bool)
+	// optionLetterNames are the `set` option letters this dialect spells its
+	// own way, mapped to the names in its namespace. Nil where every letter
+	// the shell has is one the panel shares. Installed through
+	// SetOptionLetterNames; see extend.go.
+	optionLetterNames map[rune]string
 	// aroundFunctionCalls is what a dialect saves and restores around every
 	// function call, whatever that call turns out to do. Each entry is
 	// handed the running runner as the body is entered and hands back the

@@ -19,7 +19,8 @@ import (
 // fails, and adding one here without a reason in ownTables reads as the
 // deliberate act it has to be.
 var sharedTables = map[string]string{
-	"preludeFuncs": "written only while the prelude is sourced and never deleted from, so no subshell can change it",
+	"preludeFuncs":      "written only while the prelude is sourced and never deleted from, so no subshell can change it",
+	"optionLetterNames": "the dialect's `set` option letters, handed in whole by Apply and never written to afterwards — the same terms optionLists is on, one field kind along",
 }
 
 // sharedStacks names every slice a clone is allowed to share with its parent,
@@ -279,6 +280,7 @@ func seedTables(r *Runner) {
 	r.lowered = map[string]bool{"seed": true}
 	r.mathFuncs = map[string]mathFunc{"seed": {}}
 	r.precommands = map[string]PrecommandModifier{"seed": PrecommandNoGlob}
+	r.optionLetterNames = map[rune]string{'Z': "seed"}
 	r.preludeFuncs = map[string]*syntax.FuncDecl{"seed": nil}
 	r.readonly = map[string]bool{"seed": true}
 	r.removed = map[string]bool{"seed": true}

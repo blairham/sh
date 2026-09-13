@@ -791,13 +791,27 @@ func (r *Runner) namedOptionAnswer(ok bool) int {
 // This is the seam a `set -o` operand and an invocation's `-o` arrive at, and
 // setOption is the seam a dialect's own option builtin arrives at.
 func (r *Runner) setNamedOption(name string, on bool) bool {
+	return r.setNamedOptionSpelled(name, name, on)
+}
+
+// setNamedOptionSpelled is setNamedOption for a caller whose script wrote the
+// option some other way — a single letter this dialect gives it.
+//
+// The two spellings are one request with one answer, which is the whole
+// reason the letters go through here rather than through a switch of their
+// own. What differs is only what a refusal echoes back: measured 2026-09-13
+// on zsh 5.9.2, an option the shell has and will not move is `can't change
+// option: -i` when a letter asked and `can't change option: interactive` when
+// the name did, so the sentence is one wording with the caller's own spelling
+// in it.
+func (r *Runner) setNamedOptionSpelled(name, spelled string, on bool) bool {
 	if r.optionMover == nil {
 		return r.setOption(name, on)
 	}
 	moved, known := r.optionMover(r, name, on)
 	switch {
 	case !known:
-		return r.badSetOptionName(name)
+		return r.badSetOptionName(spelled)
 	case moved:
 		return true
 	}
@@ -805,7 +819,7 @@ func (r *Runner) setNamedOption(name string, on bool) bool {
 	// dialect so that the location, the status and whether it ends the script
 	// are the same three answers every other refused `set` option gets.
 	d := r.diag()
-	r.saySetRefusal(Wording(d.SetImmovableOptionName, "set: %[1]s: not implemented", name),
+	r.saySetRefusal(Wording(d.SetImmovableOptionName, "set: %[1]s: not implemented", spelled),
 		d.SetInvalidOptionNameUsage, true)
 	return r.setRefusalStatus(refusedOptionName,
 		"a `set -o` name this shell will not move ending the script")

@@ -6,6 +6,7 @@ package interp
 import (
 	"math/rand/v2"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -208,6 +209,7 @@ func (r *Runner) optionLetters() string {
 	if r.noclobber {
 		b.WriteByte('C')
 	}
+	b.WriteString(r.dialectOptionLetters())
 	return orderedOptionLetters(b.String(), r.sem().DollarDashLetterOrder)
 }
 
@@ -318,9 +320,65 @@ func withdrawnStartupLetters(r *Runner, letters string) string {
 		if on, ok := startupLetterIsOn[letters[i]]; ok && !on(r) {
 			continue
 		}
+		if !r.dialectLetterIsOn(letters[i]) {
+			continue
+		}
 		b.WriteByte(letters[i])
 	}
 	return b.String()
+}
+
+// dialectLetterIsOn answers the same question startupLetterIsOn does, for a
+// letter this shell spells its own way: is the option behind it still on.
+//
+// The table is the dialect's rather than this package's — see
+// Runner.SetOptionLetterNames — so this is the entry that keeps one letter
+// from needing two declarations. A shell whose `X` is a startup letter and
+// whose `set +X` turns the option off has said both things once: `X` is in
+// DefaultOptionLetters, and the map says which option `X` names.
+//
+// A letter the dialect has no name for is on as far as this is concerned,
+// which is the same default the static table keeps: the string is a claim
+// about what was measured, and a letter nothing here can answer for must not
+// be withdrawn on the strength of a state nobody holds.
+func (r *Runner) dialectLetterIsOn(letter byte) bool {
+	name, ok := r.optionLetterNames[rune(letter)]
+	if !ok || name == "" {
+		return true
+	}
+	on, known := r.conditionOption(name)
+	return !known || on
+}
+
+// dialectOptionLetters are the `$-` letters for the options this shell spells
+// its own way, in byte order so that a map's iteration cannot move them.
+//
+// The other half of Runner.SetOptionLetterNames, and it is one half rather
+// than two tables for the reason the paired letter tables next door are one:
+// a letter `set` takes and `$-` never shows is a shell that cannot tell a
+// script what it was asked for. Measured 2026-09-13 on zsh 5.9.2 —
+// `set -T; echo $-` is `569TX` where the same shell with nothing set is
+// `569X` — and every one of the thirty letters behaves that way.
+//
+// The startup letters are left to startupOptionLetters, which already carries
+// them and already knows how to take one back: a letter written in both
+// places would come out twice.
+func (r *Runner) dialectOptionLetters() string {
+	if len(r.optionLetterNames) == 0 {
+		return ""
+	}
+	startup := r.declaredStartupLetters()
+	letters := make([]byte, 0, len(r.optionLetterNames))
+	for letter, name := range r.optionLetterNames {
+		if name == "" || strings.IndexByte(startup, byte(letter)) >= 0 {
+			continue
+		}
+		if on, _ := r.conditionOption(name); on {
+			letters = append(letters, byte(letter))
+		}
+	}
+	slices.Sort(letters)
+	return string(letters)
 }
 
 // showsS reports whether `$-` carries the `s` of the standard-input route.

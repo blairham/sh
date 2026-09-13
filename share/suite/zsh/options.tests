@@ -49,3 +49,58 @@ printf 'printf "zero [%%s]\\n" "$0"\n' > s0.sh
 # does not exist — where bash says 1 and ksh93 and dash end the script.
 ( . ./nosuchfile_zz.sh ) 2> /dev/null
 printf 'missing dot -> %s\n' "$?"
+
+# The option letters this shell spells its own way.
+#
+# This shell gives a single letter to most of its options, and the letters are
+# its own choices rather than the panel's: `-T` is `cdablevars` here and the
+# trap-carriage option in bash, `-F` is `noglob` where bash has no `-F` at
+# all. So a letter is not portable and every line below is answered by this
+# shell alone, which is what puts the file in this tier.
+#
+# Three claims, and each was a separate defect before #2578: the letter moves
+# the option, the option's *name* moves the same state, and `$-` reports the
+# option rather than the spelling that moved it.
+
+# The letter turns the option on, and `+` turns it back off.
+set -T
+[[ -o cdablevars ]] && printf 'the letter set it\n'
+set +T
+[[ -o cdablevars ]] || printf 'and unset it\n'
+
+# The name reaches the same state, which is what makes the letter an
+# abbreviation rather than a second switch.
+set -o cdablevars
+[[ -o cdablevars ]] && printf 'the name set it too\n'
+set +o cdablevars
+
+# $- carries the letter for the option's state, whichever spelling moved it.
+set -Q
+printf 'letter: %s\n' "$-"
+set -o pathdirs
+printf 'still one letter: %s\n' "$-"
+set +Q
+printf 'gone: %s\n' "$-"
+
+# A startup letter is withdrawn when its option goes off. `X` is `listtypes`,
+# which this shell starts with on.
+[[ -o listtypes ]] && printf 'listtypes starts on\n'
+set +X
+[[ -o listtypes ]] || printf 'and +X turns it off\n'
+printf 'without X: %s\n' "$-"
+set -X
+
+# The letters are sorted into byte order rather than the order they were
+# written in.
+set -y -T -G -e
+printf 'in order: %s\n' "$-"
+set +y +T +G +e
+
+# An option this shell will not change after startup refuses, and the refusal
+# echoes back the spelling that asked for it.
+set -i 2>&1 | sed 's/^[^ ]*: //'
+printf 'status: %s\n' "$?"
+set -o interactive 2>&1 | sed 's/^[^ ]*: //'
+
+# A letter this shell has not got at all is the other sentence.
+set -q 2>&1 | sed 's/^[^ ]*: //'

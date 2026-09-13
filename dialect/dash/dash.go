@@ -461,6 +461,11 @@ func Semantics() interp.Semantics {
 	// and nothing in the line runs. The grammar takes it here, so the
 	// refusal is this axis and the wording is the ordinary one.
 	s.GreatAmpTarget = interp.GreatAmpTargetIsADescriptor
+	// dash has no move operator: `5-` is a word naming no descriptor and is
+	// refused as one, with the same `Bad fd number` sentence and the same 2
+	// that `<&qq` gets. Worded as a syntax error and raised at run time —
+	// the same text inside `if false; then … fi` runs clean.
+	s.FdMove = interp.FdMoveIsNotAnOperator
 	s.DuplicationTargetErrorOnABuiltinIsFatal = interp.No
 	s.LocalOutsideAFunctionIsAnError = interp.Yes
 	s.LocalOutsideAFunctionIsFatal = interp.Yes

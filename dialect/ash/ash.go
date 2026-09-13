@@ -543,6 +543,9 @@ func Semantics() interp.Semantics {
 	// And `>&word` names a file rather than being refused: `f=/tmp/gw; echo
 	// hi >&$f` writes the file. dash is the panel's holdout on this.
 	s.GreatAmpTarget = interp.GreatAmpTargetNamesAFile
+	// BusyBox ash has no move operator either, and answers `redir error` at
+	// 2 — its own sentence for any word after `<&` that is not a descriptor.
+	s.FdMove = interp.FdMoveIsNotAnOperator
 	s.RedirectTargetIsAnOrdinaryWord = interp.No
 	// A here-document body and a redirection target are both expanded in the
 	// shell rather than in the process the redirection is for, so what they

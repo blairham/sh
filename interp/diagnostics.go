@@ -2984,6 +2984,18 @@ type Diagnostics struct {
 	// `nosuch: No such file or directory` in bash (#734).
 	NamesTheDuplicationTargetAsWritten bool
 
+	// NamesTheMoveSuffixInTheTarget keeps the `-` of `6<&5-` in that same
+	// message. The two shells with the move operator disagree: bash reads the
+	// suffix as the operator's and reports `5: Bad file descriptor`, where
+	// ksh93 quotes the word it was handed and reports `5-: cannot open [Bad
+	// file descriptor]`.
+	//
+	// A wording rather than a semantics axis, because the two shells parse the
+	// text identically — see Semantics.FdMove for the parts of the move they
+	// really do disagree about — and differ only in how much of it they quote
+	// back. Read only where a move was written.
+	NamesTheMoveSuffixInTheTarget bool
+
 	// FdNumberOverLimit is a redirection whose descriptor number is at or
 	// above the process's limit on open files, where the dialect refuses one
 	// — see Semantics.FdNumberBoundedByOpenFileLimit. One verb: the number.

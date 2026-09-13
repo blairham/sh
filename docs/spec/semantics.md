@@ -14272,6 +14272,84 @@ parse has already succeeded, and reproducing it would mean keeping a lexer
 position that an evaluated tree does not have. Single-line programs — every
 corpus case here — agree.
 
+**`FdMove`** — bash *duplicates then closes* · dash **no such operator** · ksh93 *relocates* · zsh **no such operator**
+
+`6<&5-` and `6>&5-`: make 6 a copy of 5 and close 5, as one operator. It is
+how a script moves a descriptor rather than leaving two names for one open
+file, and it is what a wrapper that swaps a command's input and output is
+written with.
+
+Half the panel has it and half does not, so it is an axis. Measured
+2026-09-12 with `exec 5< f; exec 6<&5-`:
+
+| column | answer |
+| --- | --- |
+| bash 5.3 | moves it, status 0 |
+| bash-as-`sh` | moves it, status 0 |
+| bash 3.2 | moves it, status 0 |
+| ksh93 | moves it, status 0 |
+| zsh | `file number expected`, status 1 |
+| dash | `Syntax error: Bad fd number`, status 2 |
+| ash | `redir error`, status 2 |
+
+**None of the three refusals is a parse refusal**, though two are worded as
+one. `if false; then exec 6<&5-; fi; echo reached` prints `reached` and exits
+0 in every column, so the grammar takes the text everywhere and the answer is
+the vector's — the same reasoning, and the same probe, as
+`MultiDigitDuplicationTargetIsAnError` above.
+
+**A form rather than a flag, because the two shells that have it disagree
+about what a move *is*,** and one answer decides both halves of the
+disagreement:
+
+- **bash duplicates and then closes.** Two steps, and only the first is a
+  redirection the command takes back. `exec 5< f; true 6<&5-` leaves 5
+  *closed* once the command has ended; and `{v}<&$w-` chooses the destination
+  before the source is given up, so the name receives the number above the one
+  it moved from.
+- **ksh93 relocates.** One step, so both halves are undone with the command —
+  the same line leaves 5 open — and the number the source gives up is free for
+  the name to receive, so `{v}<&$w-` answers with `$w`'s own number.
+
+The destination is the command's under both, which is what says the
+disagreement is about the close and not about redirections in general.
+
+**The plain close is not a move and never asks this axis.** `true 5<&-` is
+undone when the command ends in all seven columns, dash and zsh included, so
+the suffix is the whole of the question. Nor does an ordinary target ask it:
+a trailing `-` after `>` or `<` is an ordinary character in a filename
+everywhere.
+
+**Moving onto its own number closes nothing.** `exec 5<&5-` leaves 5 readable
+in all four columns that have the operator — a trap for an implementation that
+performs the two halves in written order, which would close the descriptor it
+had just installed.
+
+**zsh's absence shows as two different answers rather than one refusal**, and
+the writing side is where it matters. `<&` wants a number and says so; but
+`>&5-` is a word that names no descriptor, so it falls to that shell's csh
+reading of `>&word` — see `GreatAmpTarget` — and opens a file literally called
+`5-`. A refusal and a different destination are not the same answer, which is
+why the corpus pins both directions.
+
+**The right-hand side takes `$w` and not `{w}`.** No shell in the panel reads
+a brace-spelled name as the *source* of a duplication: bash calls `{v}<&{w}-`
+an ambiguous redirect, ksh93 `{w}-: bad file unit number`. Only the left side
+of the operator has the `{name}` spelling.
+
+The wording of a move whose source is not open is a dialect's, and the two
+that have the operator split the opposite way from every other duplication:
+bash reads the `-` as the operator's and names the number alone (`5: Bad file
+descriptor`), where ksh93 quotes the word it was handed (`5-: cannot open [Bad
+file descriptor]`). That is `Diagnostics.NamesTheMoveSuffixInTheTarget`,
+distinct from `NamesTheDuplicationTargetAsWritten`, which bash holds and ksh93
+does not.
+
+The core leaves this unanswered and refuses, the way it does every axis where
+the panel splits over whether a construct exists at all. `PosixSemantics`
+answers `FdMoveIsNotAnOperator`: XCU gives `[n]<&word` a number or `-` and has
+no third reading.
+
 **`RedirectErrorOnSpecialBuiltinFatal`** — bash no · dash yes · ksh93 yes · zsh no
 
 Ends a non-interactive shell when a redirection written on a *special*

@@ -552,12 +552,6 @@ func Semantics() interp.Semantics {
 	// arithmetic syntax error here: `${s:(-2)}` is `\(-2\): arithmetic
 	// syntax error` where bash and zsh both slice the last two characters.
 	// Measured 2026-09-13 against 93u+ 2012-08-01 (#2618).
-	// A compound assignment holding unkeyed words is refused on a name with
-	// the associative attribute: `typeset -A m=(alpha one)` is `cannot
-	// append index array to associative array m` at status 1, and it ends
-	// the shell, where bash and zsh both read the words as alternating keys
-	// and values. Measured 2026-09-13 against 93u+ 2012-08-01 (#2611).
-	s.KeyedLiteralBareWordsArePairs = interp.No
 	s.SubstringRangeQuotesPatternCharacters = interp.Yes
 	s.NamePrefixListingExcludesTheExactName = interp.Yes
 	// `${s[@]:off:len}` on a name holding one string slices a *list of one*
@@ -1720,11 +1714,6 @@ func Diagnostics() interp.Diagnostics {
 		// The array alone is named, not the subscript that was written.
 		BadArraySubscript:         "%[1]s: subscript out of range",
 		CannotConvertTableToArray: "%[2]s: cannot change associative array %[1]s to index array",
-		// A compound assignment holding unkeyed words, refused on a name
-		// with the associative attribute. The sentence names an index array
-		// where the line mentions none, and it says "append" for a plain
-		// `=` — both measured, and both kept as written.
-		KeyedLiteralBareWords: "cannot append index array to associative array %[1]s",
 		// The subscript is the verb, not the name — see
 		// Semantics.WholeArraySubscriptAssigningAnArray.
 		InvalidSubscriptInAssignment: "%s: invalid subscript in assignment",

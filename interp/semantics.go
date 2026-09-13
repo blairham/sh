@@ -8678,34 +8678,6 @@ type Semantics struct {
 	// (#2581).
 	ArithSubscriptRereadsItsExpandedText Answer
 
-	// KeyedLiteralBareWordsArePairs reads a compound assignment's unkeyed
-	// words as alternating keys and values on a name carrying the
-	// associative attribute — `m=(a 1 b 2)` is two elements. bash and zsh;
-	// ksh93 refuses the shape outright.
-	//
-	// Measured 2026-09-13 against ksh93u+ 2012-08-01. `typeset -A m=(alpha
-	// one)` there is `cannot append index array to associative array m` at
-	// status 1, and it ends the shell — the same three words for `typeset
-	// -A m; m=(a b)` and for `m+=(a b)` on a table that has elements. bash
-	// 5.3.15 lists `declare -A m=([alpha]="one" )` and zsh 5.9.2 lists
-	// `typeset -A m=( [alpha]=one )`, so the two that take it agree about
-	// what it means. dash and ash have no associative arrays at all.
-	//
-	// The keyed spelling is not this axis and is unanimous: `typeset -A
-	// m=([a]=1 [b]=2)` is the table in all three, and an empty `typeset -A
-	// m=()` is a declared empty table in all three.
-	//
-	// One measured corner is deliberately **not** implemented under the
-	// refusing answer, because it is not self-consistent. On a table that
-	// already holds an element, a *replacing* `m=(a b)` is taken in ksh93
-	// and demotes the name — `typeset -A m=([x]=1); m=(a b); typeset -p m`
-	// is `typeset -a m=(a b)` — while the same line on a table with no
-	// elements is the refusal above. The discriminator is whether the table
-	// happens to be empty, which is a state and not a shape, and copying it
-	// would put that state into the rule. It is recorded in the corpus so
-	// the divergence is visible rather than silent (#2611).
-	KeyedLiteralBareWordsArePairs Answer
-
 	// SubstringRangeQuotesPatternCharacters protects the pattern
 	// metacharacters in a substring's offset and length before the range is
 	// read as arithmetic, which turns every one of them into an arithmetic
@@ -11835,10 +11807,6 @@ func PosixSemantics() Semantics {
 		// associative arrays that keep a key a string. zsh is the column
 		// that overrides it.
 		ArithSubscriptRereadsItsExpandedText: No,
-		// The standard has no associative arrays, so this follows the two
-		// columns that take the shape at all. ksh93 is the column that
-		// overrides it.
-		KeyedLiteralBareWordsArePairs: Yes,
 		// The standard has no substrings, so this follows the three columns
 		// that have one and evaluate the range they were given. ksh93 is the
 		// column that overrides it.

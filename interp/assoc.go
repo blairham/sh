@@ -531,19 +531,6 @@ func (r *Runner) assignAssocElems(name string, parsed []literalElem, appendTo bo
 		r.diagf("%s: assigning to the whole of a produced association is not implemented yet\n", name)
 		return
 	}
-	if literalHoldsBareWords(parsed) {
-		// A shape one column refuses outright, asked before anything is
-		// written: the table this would have replaced is still standing when
-		// the refusal lands, which is where the shell that refuses leaves it.
-		if !r.ask(r.sem().KeyedLiteralBareWordsArePairs,
-			"a keyed literal's unkeyed words being alternating keys and values") {
-			if !r.unspecified {
-				r.fatal("%s\n", Wording(r.diag().KeyedLiteralBareWords,
-					"%s: a keyed literal may not hold unkeyed words", name))
-			}
-			return
-		}
-	}
 	// Written to, so the name leaves the declared-only set. Here rather than
 	// only in setAssocElem below, because an empty literal — `m=()`, the very
 	// case the listing tells apart — writes no element and would otherwise
@@ -586,28 +573,6 @@ func (r *Runner) assignAssocElems(name string, parsed []literalElem, appendTo bo
 		}
 		r.setAssocElem(name, pairs[i], value)
 	}
-}
-
-// literalHoldsBareWords reports whether any element of a compound assignment
-// arrived without a `[key]=` head.
-//
-// The **written** element and not the fields it came to. `typeset -A
-// m=($nosuch)` is `cannot append index array to associative array m` in
-// ksh93u+ measured 2026-09-13, with nothing set and nothing to store, so the
-// shape is decided before anything is expanded. Asking about the fields
-// instead made the answer depend on whether an expansion produced one empty
-// field or none, which is not a question this level should be able to see —
-// and it did not answer the same way on two machines.
-//
-// An empty literal has no elements at all and is not this: `typeset -A m=()`
-// is a declared empty table in every column that has the attribute.
-func literalHoldsBareWords(parsed []literalElem) bool {
-	for _, e := range parsed {
-		if !e.subscripted {
-			return true
-		}
-	}
-	return false
 }
 
 // replacedElems is what the append elements of a *replacing* keyed literal

@@ -3110,16 +3110,6 @@ type Diagnostics struct {
 	// ScalarOverACompoundIsAnInconsistentType answers — the wording exists
 	// only for the dialect that says yes.
 	InconsistentType string
-	// KeyedLiteralBareWords is what a compound assignment holding unkeyed
-	// words says on a name carrying the associative attribute, where the
-	// dialect refuses the shape. One verb: the name.
-	//
-	// Empty means the dialect takes the words as alternating keys and
-	// values, which is what Semantics.KeyedLiteralBareWordsArePairs answers
-	// — the wording exists only for the dialect that says no. ksh93 is the
-	// only column with one, and it names an *index array* in a sentence
-	// about a line that mentions neither (#2611).
-	KeyedLiteralBareWords string
 
 	// ReadonlyVariableInDeclaration replaces it when the assignment was made
 	// through a declaration utility. Two verbs: the name and the builtin.

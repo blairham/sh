@@ -1074,6 +1074,13 @@ var Corpus = []Case{
 		Why:             "the control on the other side: `case` and `[[ ]]` are heads whose own work is a word rather than a command, and **all three** readings write a head for each of them. So the axis is three readings of which heads fire and not one column firing where another does not — a row where the panel agrees is what says the rows where it does not are about the reading. dash and ash refuse the trap and ash reads the condition as a command",
 	},
 	{
+		ID: "axis/debug-head-entering-a-function", Category: "semantics axes",
+		Script:          true,
+		LayoutSensitive: true,
+		Snippet:         "f()\n{\n  echo in-f\n}\nset -T\ntrap 'echo D=$LINENO' DEBUG\nf\ntrap - DEBUG",
+		Why:             "one more head, written as a call *enters* the body, and the row that says which **line** it names: bash 5.3, that build as `sh` and bash 3.2 all write `D=7` for the call, `D=2` for the entry and `D=3` for the body's command. That the second head fires at all is Semantics.DebugTrapRefiresOnEnteringAFunction (#2437) and `opt/a-debug-trap-fires-twice-for-a-function-call` counts the firings; neither can see where it fires, so until this row a head that named the wrong line moved no cell. `D=2` is the `{` and not the `f()` above it — the definition is spread over two lines for exactly that reason, and a head named after the definition would write `D=1` here. zsh writes the call and the command alone, and its second line reads `D=2` as well, because zsh numbers a function body from the definition and its `echo` is line 2 where bash's is line 3; the body's own head is in the row so that the coincidence does not read as agreement — over a three-command body the bash columns write 2, 3, 4, 5 and zsh writes 2, 3, 4. ksh93, dash and BusyBox ash refuse `set -T` and end the script, which is what this row records for them; measured without the option, ksh93 writes no entry head either. A function body is a group and no column writes a head for one — the column that writes a head for a `{ }` standing on its own does not write one here — so this is its own answer rather than a fourth reading of the compound heads",
+	},
+	{
 		ID: "trap/the-return-trap-is-not-carried-into-a-debug-body", Category: "traps and exit",
 		Script:  true,
 		Snippet: "set -T\nact() { echo ran; }\ntrap 'echo RET' RETURN\ntrap 'act' DEBUG\nfalse\ntrap - DEBUG\ntrap - RETURN\necho done",

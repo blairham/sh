@@ -665,6 +665,21 @@ func TestAWritingSubstitutionOnTheShellsOwnOutputIsJoinedAtItsEnd(t *testing.T) 
 		// rather than a loss, and it is the row that fails by timing out.
 		{"closed by the script", `exec > >(cat); printf hi; exec >&-`, "hi"},
 		{"a numbered one closed by the script", `exec 3> >(cat); printf hi >&3; exec 3>&-`, "hi"},
+		// A descriptor moved out from under the pipe rather than closed.
+		// This is why the shell's own ends are *recorded* when the pipe is
+		// held instead of looked up again at the end: after `exec 3>&1` the
+		// writing end is open and unreachable from the table, so a lookup
+		// finds nothing, closes nothing, and the wait never comes back.
+		// It fails by timing out rather than by an empty string.
+		{"a descriptor moved off it", `exec 3> >(cat); exec 3>&1; printf hi >&3`, "hi"},
+		{"a descriptor reopened elsewhere", `exec 3> >(cat); exec 3>/dev/null; printf hi`, "hi"},
+		// And one aliased before it is closed: the close must not reach a
+		// file another number still names, or the write below is `File
+		// already closed`. This is the row fdAliased guards.
+		{"aliased, then the first closed", `exec 3> >(cat); exec 4>&3; exec 3>&-; printf hi >&4`, "hi"},
+		// A held one and an ordinary one in the same shell, so the join at
+		// the end and the wait at the command are not the same path.
+		{"beside an ordinary one", `exec > >(cat); printf hi > >(tr a-z A-Z)`, "HI"},
 		// The control: a shell that closed its end and never opened one has
 		// nothing to wait for, and must not wait anyway.
 		{"nothing written into it", `exec 3> >(cat); exec 3>&-; printf done`, "done"},

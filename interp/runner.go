@@ -1667,10 +1667,15 @@ type Runner struct {
 	// where a trap fired rather than where in its body a failure was.
 	linePin int
 
-	// inCommandTrap marks a DEBUG or ERR body as running, which is the one
-	// thing enterTrapBody needs that the name of the condition would tell
-	// it: one dialect numbers those two bodies differently from every other
-	// trap body — Semantics.CommandTrapBodyLine. Set by the single site that
+	// suppressedHead says the next command dispatched is a function's body
+	// and fires no compound head of its own. Set by callFuncAs and cleared
+	// by the dispatch it was set for, so nothing deeper inherits it.
+	suppressedHead bool
+
+	// inCommandTrap marks a DEBUG, ERR or RETURN body as running, which is
+	// the one thing enterTrapBody needs that the name of the condition would
+	// tell it: one dialect numbers those three bodies differently from every
+	// other trap body — Semantics.CommandTrapBodyLine. Set by the single site that
 	// runs a pseudo-trap and put back there, so a body that fires another
 	// trap leaves this as it found it.
 	inCommandTrap bool
@@ -3323,6 +3328,25 @@ func (r *Runner) command(ctx context.Context, c syntax.Command) error {
 	if _, simple := c.(*syntax.SimpleCmd); !simple {
 		r.shellStdin = nil
 	}
+	// A command that is not a simple one fires the DEBUG trap here, where
+	// the dialect's reading says a head fires at all. Before the dispatch
+	// and after the line record, so the trap names the head's own line, and
+	// an action that sets control flow takes the command it was about to
+	// precede with it — the same two rules the simple-command site follows.
+	//
+	// A function's body is the exception and is not a head in any column,
+	// however it is written: measured, no shell in the panel writes a head
+	// for it, though the one that writes most of them writes one for a `{ }`
+	// standing on its own. The caller says so for the one dispatch; see
+	// callFuncAs, which fires bash's separate entry head itself.
+	head := !r.suppressedHead
+	r.suppressedHead = false
+	if head {
+		r.debugCompoundHead(ctx, c)
+		if r.ctl != controlNone {
+			return nil
+		}
+	}
 	switch x := c.(type) {
 	case *syntax.SimpleCmd:
 		return r.simple(ctx, x)
@@ -3367,9 +3391,12 @@ func (r *Runner) unsupported(what string) error {
 
 func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 	// The DEBUG trap fires here, before anything about the command is even
-	// expanded — a simple command is its unit, measured: compound headings
-	// fire nothing and each command inside one fires its own. An action
-	// that exits takes the command it was about to precede with it.
+	// expanded. A simple command fires it in every column that has the
+	// condition; which *compound* heads fire it as well is the dialect's
+	// answer and is fired from the dispatcher — see debugCompoundHead, whose
+	// table replaced a claim here that a compound heading fires nothing,
+	// which no column in the panel does. An action that exits takes the
+	// command it was about to precede with it.
 	r.runDebugTrap(ctx)
 	if r.ctl != controlNone {
 		return nil

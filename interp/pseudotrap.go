@@ -123,7 +123,15 @@ func (r *Runner) runPseudoTrapBody(ctx context.Context, name, body string, sees 
 	r.status = sees
 	r.ctl = controlNone
 	outer := r.inCommandTrap
-	r.inCommandTrap = name == "DEBUG" || name == "ERR"
+	// DEBUG and ERR fire at a command, and RETURN fires at the line a
+	// function's body opened on — all three are numbered from where they
+	// fired in the one dialect that tells the two questions apart. RETURN
+	// was read as going with the signals, from a probe that could not tell
+	// the readings apart: the function in it opened on line 1, where "the
+	// body's own first line" and "where it fired" are the same number.
+	// Re-measured 2026-09-13 with the body opening on line 4, bash 5.3.15
+	// numbers a RETURN body from 4.
+	r.inCommandTrap = name == "DEBUG" || name == "ERR" || name == "RETURN"
 	r.runTrapBody(ctx, body)
 	r.inCommandTrap = outer
 	if r.ctl == controlNone {

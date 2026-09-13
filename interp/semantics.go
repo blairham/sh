@@ -5798,10 +5798,33 @@ type Semantics struct {
 	// cannot tell "the body's first line" from "wherever it fired", and a
 	// one-line probe is exactly why this looked like one question.
 	//
-	// RETURN is *not* one of these: bash prints 1 for the same body on a
-	// RETURN trap, so it goes with the signals. Measured rather than
-	// reasoned — a rule of "the pseudo-conditions" would have taken it.
+	// RETURN *is* one of these, and it was recorded as not being one from a
+	// probe that could not tell the two readings apart: the function in it
+	// opened its body on line 1, where "the body's own first line" and
+	// "where it fired" are both 1. Re-measured 2026-09-13 with the body
+	// opening on line 4 and its last command on line 6, bash 5.3.15 runs a
+	// two-line RETURN body reporting 4 and 5 — the line the body *opened*
+	// on, which is the same line bash's entry head names, and not the line
+	// the return happened at.
 	CommandTrapBodyLine TrapBodyLineStyle
+
+	// DebugTrapCompoundHeads is which commands other than the simple ones
+	// fire the DEBUG trap. See DebugTrapHeads, which carries the panel.
+	DebugTrapCompoundHeads DebugTrapHeads
+
+	// DebugTrapFiresOnEnteringAFunction fires the DEBUG trap once more as a
+	// call enters the function's body, ahead of the body's first command and
+	// naming the line the body opens on.
+	//
+	// bash alone: measured 2026-09-13 with the shell tracing calls, a call to
+	// a function whose body opens on line 4 writes a DEBUG at 4 and then one
+	// at each of the body's own commands, where ksh93 writes only the body's
+	// commands and zsh writes only those. Separate from
+	// DebugTrapCompoundHeads because a function body is a group and a group
+	// at the top level fires nothing in bash — so the two cannot be one
+	// question, and the dialect that fires most at the heads is not the one
+	// that fires here.
+	DebugTrapFiresOnEnteringAFunction Answer
 
 	// ExitTrapFiresPastTheEnd counts the EXIT trap as having fired on the
 	// line after the script's last, rather than on its first.

@@ -58,6 +58,7 @@ ash   CompoundAttribute
 ash   CompoundElementsGoThroughTheAttribute
 ash   CompoundPipelineStatusRecord
 ash   CoprocEndsInAnArray
+ash   DebugTrapFiresOnEnteringAFunction
 ash   DebugTrapRunsInSubshells
 ash   DebugTrapRunsInsideCalls
 ash   DeclarationListingFilter
@@ -201,6 +202,7 @@ dash  CompoundAttribute
 dash  CompoundElementsGoThroughTheAttribute
 dash  CompoundPipelineStatusRecord
 dash  CoprocEndsInAnArray
+dash  DebugTrapFiresOnEnteringAFunction
 dash  DebugTrapRunsInSubshells
 dash  DebugTrapRunsInsideCalls
 dash  DeclarationListingFilter

@@ -405,6 +405,9 @@ func Semantics() interp.Semantics {
 	s.TrapHasErrCondition = interp.No
 	s.TrapHasDebugCondition = interp.No
 	s.TrapHasReturnCondition = interp.No
+	// unanswered DebugTrapFiresOnEnteringAFunction: there is no DEBUG trap
+	// here to fire one. `trap 'echo D' DEBUG` is `bad trap`, so the question
+	// cannot be put to this shell at all.
 	// A subshell's listing shows only what survived the entry — the ignored
 	// signals — in every boundary measured: `(trap)`, `$(trap)`, a pipeline
 	// element and a background job all print nothing for a handled trap and

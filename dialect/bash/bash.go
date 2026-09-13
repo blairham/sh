@@ -449,6 +449,14 @@ func Semantics() interp.Semantics {
 	// trap prints 1 and locates the failure at line 2. bash 5.3,
 	// bash-as-sh and bash 3.2 all answer this way.
 	s.CommandTrapBodyLine = interp.TrapBodyLineOffsetFromWhereItFired
+	// The heads that fire a DEBUG trap besides the simple commands: `case`,
+	// `[[`, `((` and `select` once each, and the list `for` and each of the
+	// arithmetic `for`'s three expressions every time one is reached. Nothing
+	// for `if`, `while`, a group or a subshell. The zero value, and shared
+	// with ksh93; see interp.DebugTrapHeads for the panel.
+	s.DebugTrapCompoundHeads = interp.DebugTrapHeadsWordAndArithmetic
+	// And one more as a call enters a function's body, which is bash's alone.
+	s.DebugTrapFiresOnEnteringAFunction = interp.Yes
 	s.ReportsAKilledCommandInACommandSubstitution = interp.No
 	s.SelectAssumesUnboundedWidth = interp.No
 	s.SelectEofEndsPromptLine = interp.No

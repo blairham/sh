@@ -865,6 +865,14 @@ func Semantics() interp.Semantics {
 	// firing line for every line of every body, so there is no second
 	// answer to give.
 	s.CommandTrapBodyLine = interp.TrapBodyLineWhereItFired
+	// Every command that is not a simple one fires a DEBUG trap at its head,
+	// once: `if`, `while`, a group, a subshell, `repeat` and a function
+	// *definition* among them, and a loop's head no more often than a loop.
+	// The other reading counts a `for`'s passes and writes nothing for the
+	// rest; see interp.DebugTrapHeads.
+	s.DebugTrapCompoundHeads = interp.DebugTrapHeadsEveryCompound
+	// And nothing extra on entering a function's body, where bash writes one.
+	s.DebugTrapFiresOnEnteringAFunction = interp.No
 	s.TrapActionIsParsedWhenSet = interp.Yes
 	// The strict end of the symbolic mask: one operator per clause, a who
 	// before `=`, and neither `s` nor `t`.

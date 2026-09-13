@@ -488,6 +488,11 @@ func Semantics() interp.Semantics {
 	// shell counts every trap body from where it fired, so the second
 	// question has the same answer as the first.
 	s.CommandTrapBodyLine = interp.TrapBodyLineOffsetFromWhereItFired
+	// The same heads bash fires a DEBUG trap at — measured 2026-09-13, the
+	// two columns are line for line identical over a script of one construct
+	// per line — and *not* bash's extra head on entering a function's body.
+	s.DebugTrapCompoundHeads = interp.DebugTrapHeadsWordAndArithmetic
+	s.DebugTrapFiresOnEnteringAFunction = interp.No
 	s.ExitTrapFiresPastTheEnd = interp.No
 	s.SelectEofEndsPromptLine = interp.No
 	s.SelectEofIsSuccess = interp.No

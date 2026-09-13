@@ -34,6 +34,10 @@ func pseudoSem() Semantics {
 	s.DebugTrapRunsInsideCalls = No
 	s.ErrTrapRunsInSubshells = No
 	s.DebugTrapRunsInSubshells = No
+	// One head per command and no more, which is what these tests count.
+	// The extra head one column writes as a call enters a body is its own
+	// axis and its own suite; see debughead_test.go.
+	s.DebugTrapFiresOnEnteringAFunction = No
 	return s
 }
 

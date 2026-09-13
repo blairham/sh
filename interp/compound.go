@@ -309,6 +309,13 @@ func (r *Runner) forClause(ctx context.Context, c *syntax.ForClause) error {
 			return nil
 		}
 		for i := 0; i < len(items); i += stride {
+			// The head again, for the reading that writes one per pass. A
+			// loop over no items writes none, which is what an empty list
+			// measures to: the head is the pass and not the construct.
+			r.debugPass(ctx, c.Pos())
+			if r.ctl != controlNone {
+				return nil
+			}
 			// A final pass with fewer words than names leaves the names it
 			// did not reach **empty rather than unset** — measured 2026-09-06
 			// in zsh 5.9.2, `for a b ( 1 2 3 ) { … }` reads `[3][]` on its
@@ -374,12 +381,14 @@ func (r *Runner) forArithClause(ctx context.Context, c *syntax.ForArithClause) e
 		// complaint quotes back is the text of the part, and the fields are
 		// trimmed for the printer's sake. See ForArithClause.PartsAsWritten.
 		initText, condText, postText := c.PartsAsWritten()
+		r.debugArithPart(ctx, c.Pos(), c.Init, initText)
 		if _, ok := r.forArithPart(c.Init, initText); !ok {
 			return nil
 		}
 		defer r.enteringLoop()()
 		for {
 			if c.Cond != nil || c.CondText != "" {
+				r.debugArithPart(ctx, c.Pos(), c.Cond, condText)
 				v, ok := r.forArithPart(c.Cond, condText)
 				if !ok {
 					return nil
@@ -405,6 +414,7 @@ func (r *Runner) forArithClause(ctx context.Context, c *syntax.ForArithClause) e
 			// it, so a step that fails does not decide whether the job
 			// settled.
 			r.settleBackgroundJobAtALoopsBackEdge()
+			r.debugArithPart(ctx, c.Pos(), c.Post, postText)
 			if _, ok := r.forArithPart(c.Post, postText); !ok {
 				return nil
 			}
@@ -874,6 +884,12 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	// function set one of its own.
 	outerTrap, outerDepth := r.exitTrap, r.trapDepth
 
+	// bash alone writes one more DEBUG as the call enters the body, naming
+	// the line the body opens on — see Semantics.DebugTrapFiresOnEnteringAFunction.
+	// The body's own group is never a head, in any column, which is what the
+	// suppression below says.
+	r.debugFunctionEntry(ctx, fn)
+	r.suppressedHead = true
 	err := r.command(ctx, fn.Body)
 	// Whatever arrived while the body's *last* command ran, handled before
 	// the call unwinds. stmt drains between commands, which leaves the last
@@ -1036,7 +1052,19 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	// The RETURN trap, if this call's own body set one. After the locals
 	// and parameters are back — the action runs in the caller — and before
 	// controlReturn is cleared, so an explicit `return` still fires it.
+	//
+	// It fires at the line the body *opened* on rather than at the body's
+	// last command, which is where the shell's record of the line has got to
+	// by now. Measured 2026-09-13 on bash 5.3.15: a function whose `{` is on
+	// line 4 and whose last command is on line 6 runs a two-line RETURN body
+	// reporting 4 and 5. The same line the entry head above names, which is
+	// what says it is the frame's line and not the body's last.
+	returnedAt := r.line
+	if fn.Body != nil {
+		r.line = r.lineOf(fn.Body.Pos())
+	}
 	r.runReturnTrap(ctx, frameSerial)
+	r.line = returnedAt
 	if r.ctl == controlReturn {
 		r.ctl = controlNone
 	}

@@ -68,6 +68,11 @@ func permissive() Semantics {
 	// about either question, so a test that is not about those gets silence.
 	s.UnsetFunctionChecksTheName = No
 	s.UnsetFunctionReportsMissing = No
+	// The extra DEBUG head one column writes as a call enters a body. No,
+	// because three of the four columns with a DEBUG trap write none, and
+	// because a test that is not about the heads should see one D per
+	// command; debughead_test.go asks the axis itself.
+	s.DebugTrapFiresOnEnteringAFunction = No
 	// A redirection that will not open is fatal on a special builtin under
 	// POSIX, and `exec` is one. A test asking what a *redirection* did needs
 	// the shell still running to answer, so the permissive answer here is

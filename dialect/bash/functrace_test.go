@@ -67,9 +67,14 @@ func TestFunctraceCarriesTheDebugTrapIntoACall(t *testing.T) {
 	}{
 		// The bound this shell keeps with the option off: one D, for `f`.
 		{"off", `f() { echo in-f; }; trap 'echo D' DEBUG; f`, "D\nin-f\n"},
-		{"by name", `f() { echo in-f; }; set -o functrace; trap 'echo D' DEBUG; f`, "D\nD\nin-f\n"},
-		{"by letter", `f() { echo in-f; }; set -T; trap 'echo D' DEBUG; f`, "D\nD\nin-f\n"},
-		{"by extdebug", `f() { echo in-f; }; shopt -s extdebug; trap 'echo D' DEBUG; f`, "D\nD\nin-f\n"},
+		// Three with it on, and the third is the one a count would miss:
+		// the call, then bash's own head as the call *enters* the body, then
+		// the body's command. Measured 2026-09-13 on bash 5.3.15 — this
+		// table said two, from a probe that read the option's effect as
+		// "one more" rather than counting what came out.
+		{"by name", `f() { echo in-f; }; set -o functrace; trap 'echo D' DEBUG; f`, "D\nD\nD\nin-f\n"},
+		{"by letter", `f() { echo in-f; }; set -T; trap 'echo D' DEBUG; f`, "D\nD\nD\nin-f\n"},
+		{"by extdebug", `f() { echo in-f; }; shopt -s extdebug; trap 'echo D' DEBUG; f`, "D\nD\nD\nin-f\n"},
 		// A subshell is the other boundary the option crosses, and the half
 		// a function-only implementation would pass the rows above without.
 		// The group itself fires nothing in either state.

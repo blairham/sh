@@ -431,6 +431,9 @@ func Semantics() interp.Semantics {
 	s.TrapHasErrCondition = interp.Yes
 	s.TrapHasDebugCondition = interp.No
 	s.TrapHasReturnCondition = interp.No
+	// unanswered DebugTrapFiresOnEnteringAFunction: there is no DEBUG trap
+	// here to fire one. `trap 'echo D' DEBUG` is `invalid signal
+	// specification`, so the question cannot be put to this shell at all.
 	// `trap` reads options and has none of them: `-p` and `-l` are both
 	// `illegal option`.
 	s.TrapParsesOptions = interp.Yes

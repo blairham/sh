@@ -297,6 +297,30 @@ does: a function defined in a sourced file and called afterwards is
 borrowed text still being read, which is dash's rule with this shell's
 placement.
 
+## The two hexadecimal-escape axes, and the probe that cannot decide them
+
+`$'\x…'` splits the panel twice and this shell answers bash's way both
+times. Measured 2026-09-12 in the pinned image:
+
+    printf '[%s]' $'\x414'   [A4]      two digits, and the rest is text
+    printf '[%s]' $'\xzz'    [\xzz]    a digitless escape is kept as written
+    printf '[%s]' $'\x'      [\x]
+    printf '[%s]' $'\uZ'     [\uZ]
+
+where ksh93 takes every digit and reads a code point (`$'\x414'` is
+U+0414) and zsh reads a zero byte from a digitless escape.
+
+**The obvious probe cannot decide the first one here**, and that is worth
+keeping written down because it is specific to this column: `$'a\x00b'`
+is length 2 under *both* readings, since a three-digit run read short
+gives a NUL — which this shell **drops** — and read long gives U+000B,
+one byte either way. Only a run whose long reading is a *different*
+character separates them, which is what `\x414` is for.
+
+Both were left unanswered while there was no binary to ask. The three
+corpus rows that reach them already carry an ash column, so the values
+are graded by rows that existed before them (#554).
+
 ## What could not be said
 
 Four measured behaviors have no value on any existing axis. They are

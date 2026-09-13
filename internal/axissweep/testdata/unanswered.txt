@@ -65,8 +65,6 @@ ash   DeclareGlobalReachesPastALocal
 ash   DeclareListing
 ash   DeclarePrintReportsAMissingName
 ash   DisownRemovesTheJob
-ash   DollarSingleDigitlessEscapeIsAZeroByte
-ash   DollarSingleHexReadsEveryDigit
 ash   EarlierDeclarationLetterBlocksALaterPlus
 ash   EmptyArithSubscript
 ash   EmptyAssociativeKeyIsAnError

@@ -85,6 +85,17 @@ func TestNoAnsweredAxisRefusesAtRunTime(t *testing.T) {
 				"written as until #2276 widened the axis from an Answer to a policy",
 		},
 		{
+			"how far a hexadecimal escape's digits reach",
+			`printf '[%s]' $'\x414'`,
+			"DollarSingleHexReadsEveryDigit — measured with a three-digit run, " +
+				"which is the only length the two readings answer differently",
+		},
+		{
+			"a hexadecimal escape with no digits after it",
+			`printf '[%s]' $'\xzz' $'\x' $'\uZ'`,
+			"DollarSingleDigitlessEscapeIsAZeroByte",
+		},
+		{
 			"errexit and a failure only pipefail saw",
 			"set -eo pipefail\nfalse | true\necho reached\n",
 			"ErrexitSeesPipefailFailure",

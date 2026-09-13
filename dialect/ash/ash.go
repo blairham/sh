@@ -723,15 +723,27 @@ func Semantics() interp.Semantics {
 	// the third column could then only be recorded by being wrong.
 	s.DollarSingleNul = interp.DollarSingleNulIsDropped
 
-	// And two more this file leaves unanswered for want of a binary rather
-	// than for want of room in the vector: `DollarSingleHexReadsEveryDigit`
-	// and `DollarSingleDigitlessEscapeIsAZeroByte` (#554). The panel splits
-	// three ways on `$'\x00b'` and `$'\xzz'` — bash stops at two digits and
-	// keeps a digitless escape as written, zsh stops at two and reads a zero
-	// byte, ksh93 takes every digit — and this shell's answer was not
-	// measured, so nothing is written down for it. `$'\x41'` and every other
-	// two-digit spelling reaches neither, which is the shape a script writes.
+	// The two hexadecimal-escape axes, measured 2026-09-12 in the pinned
+	// alpine image and with probes chosen so the readings cannot agree.
+	// They were left unanswered for want of a binary — the note that said
+	// so is gone with them — and the probe that reads like the obvious one
+	// is the one to avoid: `$'a\x00b'` is length 2 under **both** readings
+	// here, because a run of three digits read short gives a NUL this shell
+	// drops and read long gives U+000B, one byte either way.
 	//
+	//	printf '[%s]' $'\x414'   [A4]      two digits and the rest is text
+	//	printf '[%s]' $'\xzz'    [\xzz]    kept as it was written
+	//	printf '[%s]' $'\x'      [\x]
+	//	printf '[%s]' $'\uZ'     [\uZ]
+	//
+	// So both are bash's answer and neither is ksh93's, which takes every
+	// digit and reads a code point, or zsh's, which reads a zero byte from
+	// a digitless escape. The three corpus rows that reach them already
+	// record this column, so the values are graded by rows that exist
+	// (#554).
+	s.DollarSingleHexReadsEveryDigit = interp.No
+	s.DollarSingleDigitlessEscapeIsAZeroByte = interp.No
+
 	// The ones the sweep reached and this file deliberately leaves unanswered,
 	// each with what BusyBox answered and what stands in the way of writing
 	// it down. None is a guess deferred; each is a measurement the vector

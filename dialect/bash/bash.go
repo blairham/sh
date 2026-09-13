@@ -679,6 +679,14 @@ func Semantics() interp.Semantics {
 	// both orders: `declare -l z; declare -i z` and the reverse are both
 	// `declare -il z="1"`.
 	s.NumericAttributeReplacesTheCaseAttribute = interp.No
+	// And `-u` beside the same letter records exactly as `-l` does. Measured
+	// 2026-09-12, `typeset -ui v=4` lists `declare -iu v="4"` (#2541).
+	s.UpperCaseLetterBesideANumericTypeLetterRecordsNothing = interp.No
+	// Both case letters on one declaration cancel, and take off a standing
+	// one with them. Measured 2026-09-12, `typeset -lu z=Ab` lists `declare
+	// -- z="Ab"` with the value unfolded, and `typeset -l z=Ab; typeset -lu
+	// z=Cd` lists `declare -- z="Cd"` (#2541).
+	s.TwoCaseLettersOnOneDeclarationCancel = interp.Yes
 	s.CaseAttributeReplacesTheNumericAttribute = interp.No
 	// One reader for both: `$((010))` and `typeset -i d=010` are eight
 	// alike, where ksh93 answers eight and ten.

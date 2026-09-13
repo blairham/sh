@@ -967,6 +967,17 @@ func Semantics() interp.Semantics {
 	// y=1`. The one column that answers the two directions differently,
 	// which is why they are two axes.
 	s.NumericAttributeReplacesTheCaseAttribute = interp.Yes
+	// But within one declaration the two letters part company: `-l` records
+	// beside a numeric type letter and `-u` records nothing. Measured
+	// 2026-09-12, `typeset -li v=4` lists `typeset -il v=4` where `typeset
+	// -ui v=4` lists `typeset -i v=4` — upper case being the rendering a
+	// based integer already has here (#2541).
+	s.UpperCaseLetterBesideANumericTypeLetterRecordsNothing = interp.Yes
+	// Both case letters on one declaration cancel, and take off a standing
+	// one with them. Measured 2026-09-12, `typeset -lu z=Ab` lists `typeset
+	// z=Ab` with the value unfolded, and `typeset -l z=Ab; typeset -lu z=Cd`
+	// lists `typeset z=Cd` (#2541).
+	s.TwoCaseLettersOnOneDeclarationCancel = interp.Yes
 	s.CaseAttributeReplacesTheNumericAttribute = interp.No
 	// The same reading of an undeclared name reached through a subscript:
 	// a name that is not an array here reads as a scalar, so a quoted

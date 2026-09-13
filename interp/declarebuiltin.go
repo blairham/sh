@@ -1590,19 +1590,28 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 	// read agrees with the other two, and only its `typeset -p` betrays the
 	// difference by listing the raw value. That listing nuance is
 	// deliberately not modeled; the fold every script observes is.
-	// A numeric letter on the *same* declaration beats a case letter, and
-	// beats it outright: the name is an integer and the case attribute is
-	// never set. Measured 2026-09-12 on ksh93u+, bash 5.3.15 and zsh 5.9.2,
-	// all three of which answer `typeset -li i=3+4` with `7` and
-	// `typeset -li v=AB` with `0`, in either order of the two letters.
+	// A numeric letter on the *same* declaration does not take the value out
+	// of the case attribute's hands — `typeset -li i=3+4` is `7` and
+	// `typeset -li v=AB` is `0` on ksh93u+, bash 5.3.15 and zsh 5.9.2 alike,
+	// in either order of the two letters — but it does not take the
+	// *attribute* off either, which is what this used to read it as.
+	// Measured 2026-09-12, `typeset -li v=4` lists `typeset -il v=4` in zsh,
+	// `declare -il v="4"` in bash and `typeset -l -i v=4` in ksh93, where
+	// this shell listed a bare `typeset -i v=4` in all three (#2541). So the
+	// letter is recorded and only the two questions below are asked of the
+	// dialect.
 	//
 	// Not the same question as CaseAttributeReplacesTheNumericAttribute,
 	// which is about a *later* declaration and where the three disagree:
 	// `typeset -i i; typeset -l i` leaves `3+4` in ksh93 and `7` in the
 	// other two. One command is not two, and this shell was reading the
 	// axis for both — so `integer='typeset -li'`, this shell's own alias
-	// for its own builtin, stopped evaluating anything (#2345).
-	if numeric := f.integer || f.float; f.lower && !numeric {
+	// for its own builtin, stopped evaluating anything (#2345). That is why
+	// caseLetterReplacesTheNumeric is still asked only where no numeric
+	// letter shares the line.
+	numeric := f.integer || f.float
+	cancelled := r.caseLettersCancel(name, f)
+	if f.lower && !cancelled {
 		if r.lowered == nil {
 			r.lowered = map[string]bool{}
 		}
@@ -1613,10 +1622,12 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 			// The two case attributes cannot both stand: the later one
 			// speaks, which is what both shells measured do.
 			delete(r.uppered, name)
-			r.caseLetterReplacesTheNumeric(name)
+			if !numeric {
+				r.caseLetterReplacesTheNumeric(name)
+			}
 		}
 	}
-	if numeric := f.integer || f.float; f.upper && !numeric {
+	if f.upper && !cancelled && !(numeric && r.upperLetterRecordsNothing()) {
 		if r.uppered == nil {
 			r.uppered = map[string]bool{}
 		}
@@ -1625,7 +1636,9 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 		} else {
 			r.uppered[name] = true
 			delete(r.lowered, name)
-			r.caseLetterReplacesTheNumeric(name)
+			if !numeric {
+				r.caseLetterReplacesTheNumeric(name)
+			}
 		}
 	}
 	if f.unique {
@@ -1736,6 +1749,51 @@ func (r *Runner) numericTypeLetterRetypesFrozen(name string, f declareFlags) boo
 	}
 	return r.ask(r.sem().NumericTypeLetterRetypesAFrozenName,
 		"a numeric type letter retyping a frozen name")
+}
+
+// caseLettersCancel reports whether this declaration wrote **both** case
+// letters under a minus, which one reading makes a declaration that records
+// neither and takes off whichever the name was already carrying — see
+// Semantics.TwoCaseLettersOnOneDeclarationCancel.
+//
+// The removal happens here rather than in the two branches below, because the
+// branches are what the cancel switches *off* and a rule that only declined to
+// add would leave a standing attribute where two of the three shells take it
+// away.
+//
+// The sign is read per letter and not off the word, which is measured:
+// `typeset +l -u z=Ab` lists `typeset -u z=Ab` in zsh and `declare -u z="AB"`
+// in bash, so a letter written under a plus is not one of the two that cancel.
+// Same reading `readonlyOff` already takes for the `r` letter.
+func (r *Runner) caseLettersCancel(name string, f declareFlags) bool {
+	if !f.lower || !f.upper {
+		return false
+	}
+	lowerPlus, lowerWritten := f.lastSign('l')
+	upperPlus, upperWritten := f.lastSign('u')
+	if !lowerWritten || !upperWritten || lowerPlus || upperPlus {
+		return false
+	}
+	if !r.ask(r.sem().TwoCaseLettersOnOneDeclarationCancel,
+		"both case letters written on one declaration") {
+		return false
+	}
+	delete(r.lowered, name)
+	delete(r.uppered, name)
+	return true
+}
+
+// upperLetterRecordsNothing reports whether `-u` beside a numeric type letter
+// on the same declaration records no attribute, where `-l` beside the same
+// letter records one — see
+// Semantics.UpperCaseLetterBesideANumericTypeLetterRecordsNothing.
+//
+// A name is not passed and none is needed: the answer is about the pair of
+// letters and not about the cell, and the shell that drops the letter drops it
+// for every name.
+func (r *Runner) upperLetterRecordsNothing() bool {
+	return r.ask(r.sem().UpperCaseLetterBesideANumericTypeLetterRecordsNothing,
+		"the upper-case letter written beside a numeric type letter")
 }
 
 // numericLetterReplacesTheCase takes a case attribute off a name the integer

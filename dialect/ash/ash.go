@@ -737,6 +737,10 @@ func Semantics() interp.Semantics {
 	// either. Measured 2026-09-12 on BusyBox in a container, `typeset` is
 	// `not found` and `export -i q=4` is `illegal option -i` — the same two
 	// walls dash meets (#2539).
+	// unanswered UpperCaseLetterBesideANumericTypeLetterRecordsNothing and
+	// unanswered TwoCaseLettersOnOneDeclarationCancel: no declaration
+	// command here either. Measured 2026-09-12 on BusyBox in a container,
+	// `typeset -lu z=Ab` is `typeset: not found` (#2541).
 	// unanswered EarlierDeclarationLetterBlocksALaterPlus: there is no
 	// declaration command to write the letter on. `typeset` is not a
 	// builtin here and `integer` is not a word, so neither sign of `-i`

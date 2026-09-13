@@ -104,6 +104,7 @@ ash   NegativeSubscriptCountsOverAPromotedScalar
 ash   NegativeSubscriptPastTheStartInserts
 ash   NumericAttributeReplacesTheArrayAttribute
 ash   NumericAttributeReplacesTheCaseAttribute
+ash   NumericTypeLetterRetypesAFrozenName
 ash   NumericTypeWithNoValueReachesAChildAsZero
 ash   OneCommandStopsACommandString
 ash   OperatorDistributesOverStarSubscript
@@ -143,6 +144,7 @@ ash   TableLetterReachesItsOwnOperandsSubscript
 ash   TableUnderAnArrayDeclaration
 ash   TestAndArithmeticUpdatePipelineStatus
 ash   TransformLetterCheckedOnlyWhenValued
+ash   TwoCaseLettersOnOneDeclarationCancel
 ash   TypeFSaysTheFunctionBack
 ash   TypeLetterAndAnArrayLiteralIsAnInconsistentType
 ash   TypePSearchesPathPastTheShell
@@ -154,7 +156,7 @@ ash   UnsetEndsTheProducedPipelineStatus
 ash   UnsetReferenceLetterRemovesANonReference
 ash   UnsetStatusIsTheLastSubscripts
 ash   UnsetSubscriptSkippedWhenNameUnset
-
+ash   UpperCaseLetterBesideANumericTypeLetterRecordsNothing
 bash  ArithIntegerOperatorRefusesFloat
 bash  ArithSubscriptSkippedWhenNameUnset
 bash  BareSubscriptIsASubscript
@@ -166,7 +168,6 @@ bash  SetArrayBadNameLeavesZeroFromCommandString
 bash  SetArrayLetter
 bash  SetArrayOptionsContinuePastTheName
 bash  SetArrayWithNoValuesUnsetsTheName
-
 dash  AppendedArrayLiteralOverANameNotDeclaredAnArrayStartsItOver
 dash  ArithIntegerOperatorRefusesFloat
 dash  ArithNegativeExponentIsError
@@ -252,6 +253,7 @@ dash  NegativeSubscriptCountsOverAPromotedScalar
 dash  NegativeSubscriptPastTheStartInserts
 dash  NumericAttributeReplacesTheArrayAttribute
 dash  NumericAttributeReplacesTheCaseAttribute
+dash  NumericTypeLetterRetypesAFrozenName
 dash  NumericTypeWithNoValueReachesAChildAsZero
 dash  OneCommandStopsACommandString
 dash  OperatorDistributesOverStarSubscript
@@ -296,6 +298,7 @@ dash  TableLetterReachesItsOwnOperandsSubscript
 dash  TableUnderAnArrayDeclaration
 dash  TestAndArithmeticUpdatePipelineStatus
 dash  TransformLetterCheckedOnlyWhenValued
+dash  TwoCaseLettersOnOneDeclarationCancel
 dash  TypeFSaysTheFunctionBack
 dash  TypeLetterAndAnArrayLiteralIsAnInconsistentType
 dash  TypePSearchesPathPastTheShell
@@ -307,8 +310,8 @@ dash  UnsetEndsTheProducedPipelineStatus
 dash  UnsetReferenceLetterRemovesANonReference
 dash  UnsetStatusIsTheLastSubscripts
 dash  UnsetSubscriptSkippedWhenNameUnset
+dash  UpperCaseLetterBesideANumericTypeLetterRecordsNothing
 dash  ValuelessDeclarationOfAHeldNameListsIt
-
 ksh   ArithSubscriptSkippedWhenNameUnset
 ksh   AssignmentUpdatesPipelineStatus
 ksh   AutoCdAnnouncesTheSubstitution
@@ -334,7 +337,6 @@ ksh   TransformLetterCheckedOnlyWhenValued
 ksh   TrapReportsAnUnknownSingleCondition
 ksh   TrapSingleUnknownConditionIsUsage
 ksh   UnsetEndsTheProducedPipelineStatus
-
 zsh   ExpansionResultSuppliesGroupSyntax
 zsh   ForNameWhenTheLoopRuns
 zsh   FunctionNameWhenTheDefinitionRuns

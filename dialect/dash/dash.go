@@ -262,6 +262,12 @@ func Semantics() interp.Semantics {
 	// here and `export -i q=4` is `Illegal option -i`, so the only two words
 	// that could carry the letter refuse it before a frozen name is reached
 	// (#2539).
+	// unanswered UpperCaseLetterBesideANumericTypeLetterRecordsNothing and
+	// unanswered TwoCaseLettersOnOneDeclarationCancel: there is no
+	// declaration command, so neither case letter can be written at all.
+	// Measured 2026-09-12, `typeset -lu z=Ab` is `typeset: not found` and
+	// leaves `z` unset — the same wall the other declaration axes meet, and
+	// there is no second word here that reads a case letter (#2541).
 	// unanswered EarlierDeclarationLetterBlocksALaterPlus: there is no
 	// declaration command to write the letter on. `typeset` is not a
 	// builtin here and `integer` is not a word, so neither sign of `-i`

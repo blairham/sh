@@ -3877,6 +3877,66 @@ type Semantics struct {
 	// Only a listing observes it, so the whole cost of the wrong answer is a
 	// `typeset -p` that says more than the shell would.
 	NumericAttributeReplacesTheCaseAttribute Answer
+	// UpperCaseLetterBesideANumericTypeLetterRecordsNothing makes the `-u`
+	// letter written on the *same* declaration as the integer or float letter
+	// record no attribute at all, where `-l` beside the same letter records
+	// one.
+	//
+	// One shell's asymmetry and not a family, which is why it names the one
+	// letter. Measured 2026-09-12 under `env -i`:
+	//
+	//	typeset -li v=4; typeset -p v    typeset -ui v=4; typeset -p v
+	//
+	//	zsh 5.9.2    typeset -il v=4              typeset -i v=4
+	//	bash 5.3.15  declare -il v="4"            declare -iu v="4"
+	//	ksh93u+      typeset -l -i v=4            typeset -u -i v=4
+	//
+	// The order of the two letters decides nothing — `-il` and `-li` agree,
+	// and so do `-ui` and `-iu` — so it is not "the later letter wins". What
+	// the one shell that drops it is doing is visible in what the attribute
+	// is *for* there: a based integer renders in upper case by default, so
+	// `typeset -li16 v=255` reads `16#ff` and `-u` asks for the rendering the
+	// name already has. Nothing is written down for it.
+	//
+	// A *later* declaration is the other question and this shell answers it
+	// the other way: `typeset -i z=4; typeset -u z` lists `typeset -iu z=4`,
+	// so the letter records perfectly well once it is on a line of its own.
+	// One command is not two, the same split
+	// NumericAttributeReplacesTheCaseAttribute already draws.
+	//
+	// Only a listing observes it (#2541).
+	UpperCaseLetterBesideANumericTypeLetterRecordsNothing Answer
+	// TwoCaseLettersOnOneDeclarationCancel makes a declaration that writes
+	// both `-l` and `-u` record neither, and take off whichever of them the
+	// name was already carrying.
+	//
+	// Measured 2026-09-12 under `env -i`:
+	//
+	//	typeset -lu z=Ab; typeset -p z; echo "[$z]"
+	//
+	//	zsh 5.9.2    typeset z=Ab      [Ab]   neither letter, no fold
+	//	bash 5.3.15  declare -- z="Ab" [Ab]   the same
+	//	ksh93u+      z=AB              [AB]   the later letter wins
+	//
+	// and over a name already carrying one, which is what says the cancel
+	// *removes* rather than merely declining to add:
+	//
+	//	typeset -l z=Ab; typeset -lu z=Cd; typeset -p z
+	//
+	//	zsh 5.9.2    typeset z=Cd      the standing `-l` is gone
+	//	bash 5.3.15  declare -- z="Cd" the same
+	//
+	// The sign is per letter and not per word, which is the third row:
+	// `typeset +l -u z=Ab` lists `typeset -u z=Ab` in zsh and `declare -u
+	// z="AB"` in bash, so a letter written under a plus is not one of the two
+	// that cancel. Order decides nothing — `-lu`, `-ul` and `-l -u -l` all
+	// cancel — which is what makes this a rule rather than
+	// last-occurrence-wins with a twist.
+	//
+	// A later declaration is a different question and all three agree on it:
+	// `typeset -l z=Ab; typeset -u z` is `-u` everywhere. It is one word that
+	// splits them (#2541).
+	TwoCaseLettersOnOneDeclarationCancel Answer
 	// CaseAttributeReplacesTheNumericAttribute is the other direction: `-l`
 	// and `-u` take the integer or float letter off the name they are given.
 	//

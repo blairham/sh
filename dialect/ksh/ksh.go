@@ -655,6 +655,16 @@ func Semantics() interp.Semantics {
 	// `typeset -i y; typeset -l y` is `typeset -l y=1`. This is the one
 	// column that answers both directions yes.
 	s.NumericAttributeReplacesTheCaseAttribute = interp.Yes
+	// Within one declaration both case letters record beside the numeric one
+	// alike. Measured 2026-09-12, `typeset -li v=4` lists `typeset -l -i
+	// v=4` and `typeset -ui v=4` lists `typeset -u -i v=4` — which is also
+	// what this shell's own `integer` word lists as, since it is `typeset
+	// -li` (#2541).
+	s.UpperCaseLetterBesideANumericTypeLetterRecordsNothing = interp.No
+	// And two case letters on one declaration do not cancel here: the later
+	// one wins and folds. Measured 2026-09-12, `typeset -lu z=Ab` reads `AB`
+	// and `typeset -ul z=Ab` reads `ab` (#2541).
+	s.TwoCaseLettersOnOneDeclarationCancel = interp.No
 	s.CaseAttributeReplacesTheNumericAttribute = interp.Yes
 	// But an attribute added to a name that already holds a value re-reads
 	// that value at once: `FOO=bar; typeset -i FOO` stores 0 over the text,

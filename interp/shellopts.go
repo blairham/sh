@@ -50,11 +50,52 @@ import (
 // The one place the name is *used* checks it, which is where it matters.
 func (r *Runner) SetShellOptions(name string) {
 	r.shellOptsName = name
-	r.SetDynamic(name, (*Runner).shellOptions)
+	r.SetOptionList(name, (*Runner).shellOptions, (*Runner).applyInheritedSetOptions)
+}
+
+// optionList is one produced, readonly variable bound to an option namespace:
+// what it says, and what an inherited value of it does.
+type optionList struct {
+	name    string
+	value   func(*Runner) string
+	inherit func(*Runner, string)
+}
+
+// SetOptionList names a produced, readonly variable holding the names that
+// are on in one option namespace, and says how a value inherited from the
+// environment is read back into it. SetShellOptions is this for the namespace
+// the core owns, and the general form exists because a dialect may have a
+// second one the core knows nothing about: bash's `shopt` names are that
+// shell's own table, and `$BASHOPTS` is bound to them in both directions
+// exactly as `$SHELLOPTS` is bound to `set -o` (#2475).
+//
+// Registering rather than special-casing is what keeps the three things a
+// bound variable needs in one place. It is produced, so a script never reads
+// a stale copy; it is readonly, so nothing can make it lie; and the value a
+// *child* is handed is recomputed at the moment of the exec rather than
+// inherited — see Runner.environ, where a second namespace written as a
+// second `if` would have been the one that quietly kept its startup string.
+func (r *Runner) SetOptionList(name string, value func(*Runner) string, inherit func(*Runner, string)) {
+	r.optionLists = append(r.optionLists, optionList{name: name, value: value, inherit: inherit})
+	r.SetDynamic(name, value)
 	if r.readonly == nil {
 		r.readonly = map[string]bool{}
 	}
 	r.readonly[name] = true
+}
+
+// producedOptionList answers with the live value of a bound option variable,
+// and whether the name is one. Read where a child's environment is built.
+func (r *Runner) producedOptionList(name string) (string, bool) {
+	if name == "" {
+		return "", false
+	}
+	for _, l := range r.optionLists {
+		if l.name == name {
+			return l.value(r), true
+		}
+	}
+	return "", false
 }
 
 // shellOptions is the value: every long option name this shell has on, sorted
@@ -117,23 +158,28 @@ func (r *Runner) shellOptions() string {
 // variable here would still be the wrong question: what is being asked is what
 // this shell was launched with.
 func (r *Runner) ApplyInheritedShellOptions() {
-	if r.shellOptsName == "" {
-		// No dialect named it, so there is no such variable and nothing to
-		// read out of the environment. This is the answer for three of the
-		// four presets, and it is why the entry is left an ordinary string
-		// for them exactly as it is in the shells they name.
-		return
+	// Every bound namespace, not only the core's. No dialect naming one means
+	// there is nothing to read out of the environment, which is the answer for
+	// three of the four presets and is why the entry is left an ordinary
+	// string for them exactly as it is in the shells they name.
+	for _, l := range r.optionLists {
+		value, ok := r.inheritedValue(l.name)
+		if !ok || value == "" {
+			continue
+		}
+		// No script line has run, and a complaint about the environment names
+		// line 0 the way an invocation option's does. The prelude may have
+		// moved the counter, so it is put back rather than assumed.
+		r.line = 0
+		r.fromEnvironment = true
+		l.inherit(r, value)
+		r.fromEnvironment = false
 	}
-	value, ok := r.inheritedValue(r.shellOptsName)
-	if !ok || value == "" {
-		return
-	}
-	// No script line has run, and a complaint about the environment names
-	// line 0 the way an invocation option's does. The prelude may have moved
-	// the counter, so it is put back rather than assumed.
-	r.line = 0
-	r.fromEnvironment = true
-	defer func() { r.fromEnvironment = false }()
+}
+
+// applyInheritedSetOptions is the write direction for the namespace the core
+// owns: every `set -o` name in the value is turned on.
+func (r *Runner) applyInheritedSetOptions(value string) {
 	for _, name := range strings.Split(value, ":") {
 		// An empty piece is a name of nothing rather than a separator to
 		// skip, which is measured: a value with a leading or trailing colon

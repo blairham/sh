@@ -2168,6 +2168,11 @@ func Apply(r *interp.Runner) {
 	// the state and this names it; the other three leave the name an ordinary
 	// string and read nothing out of it at startup, which is measured.
 	r.SetShellOptions("SHELLOPTS")
+	// And the same binding for this shell's *other* option namespace, which
+	// the core does not have: the `shopt` names that are on, produced and
+	// readonly, read back out of the environment at startup. bash 3.2 has no
+	// such variable, so this is bash 5's answer — see bashOptions.
+	r.SetOptionList("BASHOPTS", bashOptions, applyInheritedBashOptions)
 	// Parameters bash provides and the others do not all have. Which
 	// variables a shell supplies is the same kind of question as which
 	// builtins it has, so it is answered here rather than as an axis.

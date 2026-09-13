@@ -2009,6 +2009,9 @@ interactive. bash-as-`sh` is the same 5.3 binary through a link named `sh`.
 | `SHELLOPTS=xtrace:nounset` inherited | **applied**: `$-` gains `ux` | **applied** | **applied** | ignored | ignored | ignored |
 | `SHELLOPTS` after startup | rewritten, sorted, with the shell's own defaults | same | same, plus `posix` | the string as given | the string as given | the string as given |
 | assigning to `SHELLOPTS` | refused, `readonly variable`, 1 | refused, 1 | refused, 127, fatal | ordinary variable, 0 | ordinary variable, 0 | ordinary variable, 0 |
+| `$BASHOPTS` after startup | the `shopt` names that are on, sorted | **empty** | same as 5.3 | unset | unset | unset |
+| `BASHOPTS=cdspell` inherited | **applied** | ignored | **applied** | ignored | ignored | ignored |
+| assigning to `BASHOPTS` | refused, `readonly variable`, 1 | ordinary variable, 0 | refused, 127, fatal | ordinary variable, 0 | ordinary variable, 0 | ordinary variable, 0 |
 
 ## The file a shell reads when it is not going to prompt
 
@@ -2133,13 +2136,45 @@ nothing was hashed at all, and since #2554 something is. Reporting either one th
 listing would be the lie this whole design avoids, which is also why every
 corpus case here asks about membership of a name it set itself.
 
+### The second namespace, which one shell has
+
+`$BASHOPTS` is to `shopt` what `$SHELLOPTS` is to `set -o`, and it is bound the
+same way in both directions. It is registered through the same seam —
+`interp.Runner.SetOptionList`, which `SetShellOptions` is itself written in
+terms of — because a namespace bound by a second mechanism beside the first is
+this repository's recurring failure shape: the child-environment recompute
+above was written once for one name, and a second `if` beside it is exactly the
+copy that would have kept its startup string.
+
+The table the names come from is the dialect's rather than the core's, so the
+value and the seeding are bash's closures (`dialect/bash/shopt.go`). Three
+differences from `$SHELLOPTS` are measured, all on bash 5.3.15, 2026-09-13:
+
+- **An unknown name is skipped in silence.** `BASHOPTS=nosuchopt:cdspell bash
+  -c 'shopt -p cdspell'` answers `shopt -s cdspell` at status 0 with nothing on
+  standard error, and a leading or trailing colon is ignored the same way —
+  where the `set -o` list calls both a bad name at line 0. A `set -o` name in
+  the value is ignored too: the two namespaces stay separate here as they do
+  everywhere else in that builtin.
+- **The two bash columns disagree.** bash 3.2 writes nothing for `$BASHOPTS`
+  and reads nothing out of an inherited one, so this is bash 5's answer and
+  every corpus row says so.
+- **Our list is longer than bash's**, for the reason `hashall` is missing from
+  the other one: `histappend` and `lithist` are on here because this shell
+  really appends its history and really keeps a recalled entry's newlines. The
+  value is this shell's own state, so the rows ask about membership of a name
+  they set themselves.
+
+It was empty in both directions until #2475, which meant a capture harness
+reading it back saw a shell with no options set at all.
+
 ### Where it lives
 
-`interp/shellopts.go` — the produced value, the readonly mark and
-`ApplyInheritedShellOptions`, which the front end calls. It is a call rather
-than something the Runner does for itself because it is a startup action: a
-library Runner handed an environment is not entitled to change its embedder's
-options on the strength of a name in it.
+`interp/shellopts.go` — the produced value, the readonly mark,
+`SetOptionList` and `ApplyInheritedShellOptions`, which the front end calls.
+It is a call rather than something the Runner does for itself because it is a
+startup action: a library Runner handed an environment is not entitled to
+change its embedder's options on the strength of a name in it.
 
 `Case.Env` is how the corpus asks about either of these. The harness hands every
 case the same four entries, and a snippet cannot put anything into the

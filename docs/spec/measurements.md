@@ -20957,6 +20957,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | `env/the-option-list-drops-an-option-turned-off` | `not-listed` | `not-listed` | `not-listed` | `not-listed` | `not-listed` | `not-listed` | `not-listed` |
 | `env/the-option-list-uses-long-names` | `neither` | `long` | `long` | `long` | `neither` | `neither` | `neither` |
 | `env/the-option-list-is-readonly` | `after` | **2>** `<shell>: line 1: SHELLOPTS: readonly variable` *(status 1)* | **2>** `<shell>: line 1: SHELLOPTS: readonly variable` *(status 127)* | **2>** `<shell>: SHELLOPTS: readonly variable` *(status 1)* | `after` | `after` | `after` |
+| `env/the-shopt-option-list-follows-the-shopt-builtin` | `not-listed` | `listed` | `listed` | `not-listed` | `not-listed` | `not-listed` | `not-listed` |
+| `env/the-shopt-option-list-drops-an-option-turned-off` | `gone~other-gone` | `gone~other-listed` | `gone~other-listed` | `gone~other-gone` | `gone~other-gone` | `gone~other-gone` | `gone~other-gone` |
+| `env/an-inherited-shopt-option-list-turns-an-option-on` | **2>** `<shell>: 1: shopt: not found` *(status 127)* | `shopt -s cdspell` | `shopt -s cdspell` | `shopt -u cdspell` *(status 1)* | **2>** `<shell>: shopt: not found` *(status 127)* | **2>** `<shell>:1: command not found: shopt` *(status 127)* | **2>** `<shell>: shopt: not found` *(status 127)* |
+| `env/an-unknown-name-in-an-inherited-shopt-option-list` | `st=127` **2>** `<shell>: 1: shopt: not found` | `shopt -s cdspell~st=0` | `shopt -s cdspell~st=0` | `shopt -u cdspell~st=1` | `st=127` **2>** `<shell>: shopt: not found` | `st=127` **2>** `<shell>:1: command not found: shopt` | `st=127` **2>** `<shell>: shopt: not found` |
+| `env/the-shopt-option-list-is-readonly` | `after` | **2>** `<shell>: line 1: BASHOPTS: readonly variable` *(status 1)* | **2>** `<shell>: line 1: BASHOPTS: readonly variable` *(status 127)* | `after` | `after` | `after` | `after` |
 | `env/a-file-named-for-a-non-interactive-shell-is-sourced` | `main` | `sourced~main` | `main` | `sourced~main` | `main` | `main` | `main` |
 | `env/that-file-sees-the-invocations-parameters` | `main` | `[name] n=1 [A]~main` | `main` | `[<shell>] n=0 []~main` | `main` | `main` | `main` |
 | `env/that-file-can-end-the-shell` | `main` | `in-file` *(status 3)* | `main` | `in-file` *(status 3)* | `main` | `main` | `main` |
@@ -21303,6 +21308,26 @@ grades it and nothing drift-checks it either, for the same reason.
 - `env/the-option-list-is-readonly` — a name whose value is produced cannot be assigned to meaningfully, and the shell that has it refuses rather than accepting quietly. The refusal is its ordinary readonly one — wording, status and whether the script survives are all the dialect's — and the other three take the assignment as the ordinary variable it is for them
   ```sh
   SHELLOPTS=whatever; echo after
+  ```
+- `env/the-shopt-option-list-follows-the-shopt-builtin` — `$BASHOPTS` is to `shopt` what `$SHELLOPTS` is to `set -o`, and the same binding: produced when it is read, so a name turned on after startup is in it. bash 5.3 answers `listed`; bash 3.2 has no such variable at all and answers `not-listed` even though its `shopt -s` worked, which is why this is bash 5's answer and not bash's. The three shells with no `shopt` are the control, and the redirection is what keeps their command-not-found off the comparison
+  ```sh
+  shopt -s cdspell 2>/dev/null; case ":$BASHOPTS:" in *:cdspell:*) echo listed ;; *) echo not-listed ;; esac
+  ```
+- `env/the-shopt-option-list-drops-an-option-turned-off` — the other half of that binding, on a name bash has *on* with nothing said: turning it off takes it back out of the value, which a copy taken at startup would not do. The second question is what keeps the row from being unanimous — a shell with no such variable answers `gone` to the first for the wrong reason, and only `other-listed` says the value is really there. Read as membership rather than as a whole string, for the reason the `$SHELLOPTS` rows are: what a shell has on by default is its own business
+  ```sh
+  shopt -u patsub_replacement 2>/dev/null; case ":$BASHOPTS:" in *:patsub_replacement:*) echo listed ;; *) echo gone ;; esac; case ":$BASHOPTS:" in *:promptvars:*) echo other-listed ;; *) echo other-gone ;; esac
+  ```
+- `env/an-inherited-shopt-option-list-turns-an-option-on` — the write direction, and the half a capture harness needs: the name is read out of the environment before the first line runs. bash 5.3 answers `shopt -s cdspell`; bash 3.2 answers `shopt -u cdspell`, so it neither writes the variable nor reads one
+  ```sh
+  shopt -p cdspell
+  ```
+- `env/an-unknown-name-in-an-inherited-shopt-option-list` — and this namespace is silent about a name it does not know, which is the opposite of what the `set -o` list does with one: no complaint, status 0, and the good name in the same value still applied. A leading or trailing colon is ignored the same way, where the other list calls the empty piece a bad name
+  ```sh
+  shopt -p cdspell; echo "st=$?"
+  ```
+- `env/the-shopt-option-list-is-readonly` — a produced value cannot be assigned to meaningfully, and the shell that has it refuses rather than accepting quietly — the same refusal `$SHELLOPTS` gets, from the same rule. bash 3.2 has no such name and takes the assignment as the ordinary variable it is for it, alongside the three shells with no `shopt`
+  ```sh
+  BASHOPTS=whatever; echo after
   ```
 - `env/a-file-named-for-a-non-interactive-shell-is-sourced` — the non-interactive counterpart of `$ENV`, and one shell's alone: bash sources the file before the command string and the other three do nothing with the name. The snippet is the *file*, which is why the argv runs something else
   ```sh

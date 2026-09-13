@@ -20850,6 +20850,37 @@ echo "st=$?"`,
 		Snippet: `SHELLOPTS=whatever; echo after`,
 		Why:     "a name whose value is produced cannot be assigned to meaningfully, and the shell that has it refuses rather than accepting quietly. The refusal is its ordinary readonly one — wording, status and whether the script survives are all the dialect's — and the other three take the assignment as the ordinary variable it is for them",
 	},
+	// --- and the second option namespace, which one shell has and the rest
+	// have no builtin for at all (#2475). The two bash columns disagree, so
+	// every row here says which of them is being copied.
+	{
+		ID: "env/the-shopt-option-list-follows-the-shopt-builtin", Category: "invocation",
+		Snippet: `shopt -s cdspell 2>/dev/null; case ":$BASHOPTS:" in *:cdspell:*) echo listed ;; *) echo not-listed ;; esac`,
+		Why:     "`$BASHOPTS` is to `shopt` what `$SHELLOPTS` is to `set -o`, and the same binding: produced when it is read, so a name turned on after startup is in it. bash 5.3 answers `listed`; bash 3.2 has no such variable at all and answers `not-listed` even though its `shopt -s` worked, which is why this is bash 5's answer and not bash's. The three shells with no `shopt` are the control, and the redirection is what keeps their command-not-found off the comparison",
+	},
+	{
+		ID: "env/the-shopt-option-list-drops-an-option-turned-off", Category: "invocation",
+		Snippet: `shopt -u patsub_replacement 2>/dev/null; case ":$BASHOPTS:" in *:patsub_replacement:*) echo listed ;; *) echo gone ;; esac; ` +
+			`case ":$BASHOPTS:" in *:promptvars:*) echo other-listed ;; *) echo other-gone ;; esac`,
+		Why: "the other half of that binding, on a name bash has *on* with nothing said: turning it off takes it back out of the value, which a copy taken at startup would not do. The second question is what keeps the row from being unanimous — a shell with no such variable answers `gone` to the first for the wrong reason, and only `other-listed` says the value is really there. Read as membership rather than as a whole string, for the reason the `$SHELLOPTS` rows are: what a shell has on by default is its own business",
+	},
+	{
+		ID: "env/an-inherited-shopt-option-list-turns-an-option-on", Category: "invocation",
+		Env:     []string{"BASHOPTS=cdspell"},
+		Snippet: `shopt -p cdspell`,
+		Why:     "the write direction, and the half a capture harness needs: the name is read out of the environment before the first line runs. bash 5.3 answers `shopt -s cdspell`; bash 3.2 answers `shopt -u cdspell`, so it neither writes the variable nor reads one",
+	},
+	{
+		ID: "env/an-unknown-name-in-an-inherited-shopt-option-list", Category: "invocation",
+		Env:     []string{"BASHOPTS=nosuchopt:cdspell"},
+		Snippet: `shopt -p cdspell; echo "st=$?"`,
+		Why:     "and this namespace is silent about a name it does not know, which is the opposite of what the `set -o` list does with one: no complaint, status 0, and the good name in the same value still applied. A leading or trailing colon is ignored the same way, where the other list calls the empty piece a bad name",
+	},
+	{
+		ID: "env/the-shopt-option-list-is-readonly", Category: "invocation",
+		Snippet: `BASHOPTS=whatever; echo after`,
+		Why:     "a produced value cannot be assigned to meaningfully, and the shell that has it refuses rather than accepting quietly — the same refusal `$SHELLOPTS` gets, from the same rule. bash 3.2 has no such name and takes the assignment as the ordinary variable it is for it, alongside the three shells with no `shopt`",
+	},
 	{
 		ID: "env/a-file-named-for-a-non-interactive-shell-is-sourced", Category: "invocation",
 		Env:     []string{"BASH_ENV=" + ArgScript},

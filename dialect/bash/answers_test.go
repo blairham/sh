@@ -121,6 +121,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		// The one column that refuses to store under an empty key (#1938).
 		{"EmptyAssociativeKeyIsAnError", s.EmptyAssociativeKeyIsAnError, interp.Yes},
 		{"EmptyAssociativeKeyIsReportedWhenRead", s.EmptyAssociativeKeyIsReportedWhenRead, interp.Yes},
+		{"EmptyAssociativeKeyRefusesTheLength", s.EmptyAssociativeKeyRefusesTheLength, interp.Yes},
 		{"AssignThroughExpansionMayNameAPositional", s.AssignThroughExpansionMayNameAPositional, interp.No},
 		{"ShiftPastEndFatal", s.ShiftPastEndFatal, interp.No},
 		{"TraceAssignmentsSeparately", s.TraceAssignmentsSeparately, interp.Yes},

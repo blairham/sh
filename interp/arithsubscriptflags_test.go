@@ -88,6 +88,58 @@ func TestAFlagGroupNamesTheElementAWriteInsideAnExpressionReaches(t *testing.T) 
 	}
 }
 
+// A search naming a place to *write* in a table writes nowhere and says
+// nothing, which is the one shell with the construct measured rather than a
+// shape chosen: 2026-09-12 on zsh 5.9.2, with `typeset -A m; m=(aa 1)`,
+// `(( m[(r)1] = 5 ))`, `(( m[(k)aa] = 5 ))` and `(( m[(k)aa]++ ))` all leave
+// the table exactly as it was at status 0, and `x=$(( m[(k)aa] = 5 ))` gives
+// `x` the 5 while the table keeps its 1 — so the expression has its value and
+// only the store is dropped.
+//
+// The same search on the left of a plain `=` is refused by name there, which
+// is one shell giving two answers to what looks like one question and not
+// something this engine reconciles.
+//
+// This route consulted the association before the group, so the whole
+// subscript text became the key: `(( m[(r)1] = 5 ))` left a table holding a
+// key literally named `(r)1`, silently, at status 0 — a plausible table with
+// an element nobody wrote (#2288).
+func TestASearchWritingATableInsideAnExpressionWritesNothing(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"a value search", `typeset -A m; m[aa]=1; (( m[(r)1] = 5 )); printf "%d[%s]" "${#m[@]}" "${m[aa]}"`, "1[1]"},
+		{"a key search", `typeset -A m; m[aa]=1; (( m[(k)aa] = 5 )); printf "%d[%s]" "${#m[@]}" "${m[aa]}"`, "1[1]"},
+		{"a step through one", `typeset -A m; m[aa]=1; (( m[(k)aa]++ )); printf "%d[%s]" "${#m[@]}" "${m[aa]}"`, "1[1]"},
+		{
+			"the expression still has its value",
+			`typeset -A m; m[aa]=1; x=$(( m[(k)aa] = 5 )); printf "[%s]%d[%s]" "$x" "${#m[@]}" "${m[aa]}"`,
+			"[5]1[1]",
+		},
+		// The control: a group selecting nothing leaves an ordinary key
+		// behind it, and that key is written — so the silence above is the
+		// search's and not the group's.
+		{
+			"a group that selects nothing is a key",
+			`typeset -A m; m[aa]=1; (( m[(e)aa] = 5 )); printf "%d[%s]" "${#m[@]}" "${m[aa]}"`,
+			"1[5]",
+		},
+		{
+			"and one naming a key that is not there makes it",
+			`typeset -A m; m[aa]=1; (( m[(e)zz] = 5 )); printf "%d[%s]" "${#m[@]}" "${m[zz]}"`,
+			"2[5]",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, status := runSubArith(t, tc.src)
+			if out != tc.want || status != 0 {
+				t.Errorf("%s = %q (status %d), want %q at 0", tc.src, out, status, tc.want)
+			}
+			if strings.Contains(out, "(r)") || strings.Contains(out, "(k)") {
+				t.Errorf("%s = %q, want no key named after the group's own letters", tc.src, out)
+			}
+		})
+	}
+}
+
 // A letter the group is read with and this does not carry is refused by name
 // here as it is in an expansion, rather than becoming part of a key or of an
 // expression.

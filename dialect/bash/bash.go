@@ -1180,6 +1180,18 @@ func Semantics() interp.Semantics {
 	// per read. `${m[ ]}` is the control and says nothing, so this is
 	// emptiness rather than blankness (#1972).
 	s.EmptyAssociativeKeyIsReportedWhenRead = interp.Yes
+	// And the *length* of that same element is refused outright, which is a
+	// third answer to one emptiness rather than a louder second: measured
+	// 2026-09-12, `typeset -A m; m[k]=v; w=; echo "[${#m[$w]}]"; echo after`
+	// writes `[$w]: bad array subscript` — the subscript as written, brackets
+	// and all, with no name in front of it — leaves 1 behind and runs neither
+	// the `echo` it is in nor the one after it, where ksh93 and zsh both
+	// print `[0]` and `after` at 0. The length operator alone: every other
+	// operator over the same emptiness takes the read's report and its 0. A
+	// name the letters merely declared is not this either — `typeset -A m;
+	// ${#m[$w]}` is a silent `0` where `typeset -A m; m=()` in front of it is
+	// refused (#2286).
+	s.EmptyAssociativeKeyRefusesTheLength = interp.Yes
 	// `$@` with no positional parameters is **unset** here, so a colon-less
 	// conditional fires: measured 2026-09-12 after `set --`, `"${@-word}"`
 	// is `word` and `"${@+word}"` is empty in 5.3.15, 3.2.57 and as `sh`,
@@ -1674,7 +1686,9 @@ func Diagnostics() interp.Diagnostics {
 		CannotConvertTableToArrayAtTheAssignment: "%[1]s: cannot convert associative to indexed array",
 		CannotConvertArrayToTableAtTheAssignment: "%[1]s: cannot convert indexed to associative array",
 		EmptyAssociativeKeyRead:                  "%[1]s: bad array subscript",
+		EmptyAssociativeKeyLength:                "[%[1]s]: bad array subscript",
 		ArithEmptySubscript:                      "%[1]s[]: bad array subscript",
+		ArithEmptySubscriptTarget:                "`%[1]s[]': not a valid identifier",
 		ArithWholeArraySubscript:                 "%[1]s[%[2]s]: bad array subscript",
 		ArrayLiteralThroughASubscript:            "%[1]s[%[2]s]: cannot assign list to array member",
 		// Through a literal the element is named as it stands between the

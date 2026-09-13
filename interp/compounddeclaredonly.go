@@ -6,9 +6,9 @@ package interp
 // An empty compound name has two states one shell tells apart and the others
 // do not: a name whose letters *declared* it an array or a table and which
 // nothing has written to, and one that has been written to and is empty now.
-// Nothing a script can expand distinguishes them — both have no elements and
-// `${m[@]}` answers alike — and the one place the difference reaches is the
-// listing:
+// Almost nothing a script can expand distinguishes them — both have no
+// elements and `${m[@]}` answers alike — and for a long time the only place
+// the difference reached was the listing:
 //
 //	$ bash -c 'declare -A m;    declare -p m'   declare -A m
 //	$ bash -c 'declare -A m=(); declare -p m'   declare -A m=()
@@ -28,6 +28,15 @@ package interp
 // `typeset -a q` for an empty indexed array however it got there, and zsh
 // 5.9.2 writes `typeset -A m=( )` and `typeset -a q=(  )` for both. So the
 // record is kept for every dialect and read by the one form that asks.
+//
+// **There is a second reader now, and it is not a listing.** The *length* of
+// a table's element under an empty key is refused in the same column — see
+// Semantics.EmptyAssociativeKeyRefusesTheLength — and measured 2026-09-12 the
+// refusal turns on exactly this pair: `typeset -A m; ${#m[$w]}` is a silent
+// `0` and `typeset -A m; m=(); ${#m[$w]}` beside it is `[$w]: bad array
+// subscript` with the shell ending. So the sentence above was true of the
+// consumers and never of the state, and the same measurement — the assignment
+// moves the name, the emptiness does not — is what both readers stand on.
 //
 // The set kept is the *declared-only* one rather than its complement, because
 // that is the side with two writers — the two mark functions, which are the

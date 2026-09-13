@@ -228,6 +228,12 @@ func Semantics() interp.Semantics {
 	s.ReadOptions = "rp:t:n:"
 	// `unset` has the two POSIX letters and calls anything else illegal:
 	// `unset -q x` is `illegal option -q`.
+	// unanswered EmptyAssociativeKeyRefusesTheLength: there is no keyed table
+	// to take the length of an element of. Measured 2026-09-12 in a
+	// container, `w=; typeset -A m; ${#m[$w]}` is `typeset: not found` and
+	// then `syntax error: bad substitution` at 2 — no subscript reaches a
+	// parameter expansion here at all, the same wall dash meets one construct
+	// earlier than this axis (#2286).
 	// unanswered ExpansionResultSuppliesGroupSyntax: BusyBox ash has no
 	// pattern groups either, for the same reason dash has none.
 	// unanswered TableLetterReachesItsOwnOperandsSubscript: BusyBox ash has

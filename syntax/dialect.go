@@ -1944,6 +1944,44 @@ type Dialect struct {
 	// reading rather than depending on which case came first in the file.
 	ParamColonBeforeTrimIsIgnored bool
 
+	// NestedQuoteResetsOperandEscapes says the escaping context of a `${ }`
+	// operand stops at a `"` written inside it, so the brace that would close
+	// the expansion is no longer escapable there. One shell in the panel says
+	// so and five say the whole body is the context, nested quotes included.
+	//
+	// Measured 2026-09-10, `u` unset:
+	//
+	//	printf '[%s]' "${u-"A\}B"}"
+	//
+	//	dash                      [A}B]
+	//	bash 5.3.15               [A}B]
+	//	that build as `sh`        [A}B]
+	//	bash 3.2.57               [A}B]
+	//	ksh93u+                   [A}B]
+	//	BusyBox ash               [A}B]
+	//	zsh 5.9.2                 [A\}B]
+	//
+	// Note that bash 3.2 joins the majority *here*, which is the reverse of
+	// its position on the bare-operand row `operandEscapes` records — the two
+	// rows are independent and neither predicts the other.
+	//
+	// A grammar flag rather than a semantics axis, for the reason
+	// ParamColonBeforeTrimIsIgnored is one: it decides what text the operand
+	// *is*, at the stage that reads it, and by the time a value could switch
+	// on it the backslash is either in the word or gone. The lexer is also
+	// the only thing that knows a `"` was written inside an operand at all.
+	//
+	// False is the majority and the core's answer, which is a change of
+	// answer rather than a new construct: this engine gave zsh's reading in
+	// every dialect, arrived at without anyone choosing it — a `"` inside an
+	// operand calls the plain double-quote scanner, and that scanner's escape
+	// set has never had the brace in it (#2001).
+	//
+	// The single-quoted spelling is not this question and is unanimous apart
+	// from bash 3.2: `"${u-A'\}'B}"` is `[A'}'B]` in six of the seven
+	// columns, single quotes opening no run at all inside a quoted operand.
+	NestedQuoteResetsOperandEscapes bool
+
 	// ParamLengthTakesAnOperator lets `${#name}` carry an operator as well:
 	// `${#v#a}` is the length of what the trim leaves. One shell in the
 	// panel accepts it; the other four call the whole expansion a bad

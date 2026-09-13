@@ -1682,8 +1682,26 @@ var Corpus = []Case{
 			"answers `A\\}B` and the other five answer `A}B`, so the brace is " +
 			"escapable there for everyone but zsh. Single quotes are not a run " +
 			"at all in a quoted operand, so the second field is `A'}'B` in five " +
-			"and `A'\\}'B` only in bash 3.2. Recorded as the measurement behind " +
-			"the split; ours gives zsh's answer in every dialect (#2001)",
+			"and `A'\\}'B` only in bash 3.2. The measurement behind " +
+			"Dialect.NestedQuoteResetsOperandEscapes, which zsh alone sets: " +
+			"before it existed this engine gave zsh's answer in every dialect, " +
+			"arrived at because a `\"` inside an operand called the plain " +
+			"double-quote scanner and that scanner's escape set has never had " +
+			"the brace in it (#2001)",
+	},
+	{
+		ID: "core/a-substitution-inside-a-quoted-operand-starts-over", Category: "quoting",
+		Snippet: "unset u; printf '[%s]' \"${u-$(printf %s \"A\\}B\")}\"" +
+			" \"${u-`printf %s \"A\\}B\"`}\"; echo",
+		Why: "the control for the row above, and the one that says the operand's " +
+			"widened escape set stops at a *substitution* rather than only at a " +
+			"quote. Both spellings answer `A\\}B` in every column, zsh and bash " +
+			"alike — the two that disagree about the plain nested run agree here — " +
+			"so a `\"` inside `$( )` or backticks is an ordinary double-quoted run " +
+			"and the brace is not escapable in it. Without this row the split the " +
+			"row above records could be read as being about quotes at large, and a " +
+			"flag written that way would take the backslash out of every " +
+			"substitution written in an operand (#2001)",
 	},
 	{
 		ID: "param/bare-brace-in-an-unquoted-operand", Category: "expansion",
@@ -6402,6 +6420,16 @@ echo "st=$?"`,
 		Why:     "brackets with nothing between them, which is what `$(( a[$w] ))` *is* by the time the expression exists — an arithmetic expansion substitutes its parameters before it parses, so an empty `$w` never reaches the subscript as text. Three answers and no common denominator: bash names the subscript and carries on with a flat zero, zsh refuses with the subscript machinery's own `invalid subscript` and produces no value, and ksh93 reads the brackets as the empty *expression*, which is element zero and not the number zero. The array is what carries that last distinction — against an unset name every column reads zero and no probe could tell bash's answer from ksh93's, which is how an earlier reading came to call ksh93's `zero`. It was one refusal here for all three (#1745)",
 	},
 	{
+		ID: "arithmetic/an-empty-subscript-as-an-assignment-target", Category: "expansion",
+		Snippet: `a=(5 6 7); (( a[] = 4 )); s=$?; printf '[%s]' "${a[*]}"; echo " st=$s"; echo after`,
+		Why:     "the same emptiness where the brackets name a place to *write*, which is the row above's question one operator over and answered by the same three shells three ways. zsh says `not an identifier: a[]` and the expression fails, leaving the array alone and the `(( ))` at 2; bash says `` `a[]': not a valid identifier ``, leaves the array alone and answers **0**, because the expression keeps its value and only the store is dropped; ksh93 says nothing and writes element zero, so the array is `4 6 7`. Each of the three is that shell's own answer to the *read* one row up, which is what makes this one axis and two wordings rather than a second axis — the wording is the half that does not carry over, the same shell saying `a[]: bad array subscript` of a read and this of a write. bash 3.2 is the one column that splits them: it reports the read and is silent here, at 0 with nothing written, which is bash 5.3 minus the sentence and has no dialect to answer for it. The `st` field is separate from the `printf` so it is the `(( ))`'s status and not the printf's, and `after` shows which columns keep the script. This engine refused all three while parsing, with a sentence — `operand expected` — that is nobody's (#1764)",
+	},
+	{
+		ID: "arithmetic/an-empty-subscript-target-that-evaluates-to-zero", Category: "expansion",
+		Snippet: `a=(5 6 7); (( a[] = 0 )); echo "st=$?"; x=$(( a[] = 4 )); echo "x=$x st2=$?"`,
+		Why:     "the two fields that say bash drops the *store* and not the expression. `(( a[] = 0 ))` is 1 there where `(( a[] = 4 ))` is 0, so the command's status is the value's and the report did not fail it; and the expansion spelling hands `x` the 4 with the array still untouched. ksh93 answers both the same way with the element written, and zsh's expansion spelling ends the script outright — the one column where a refusal on this route costs the rest of the input. Without these two fields the reporting answer and a silent one are indistinguishable from the array alone (#1764)",
+	},
+	{
 		ID: "arithmetic/an-empty-subscript-on-a-name-that-is-not-set", Category: "expansion",
 		Snippet: `echo $(( nodecl[] )); echo after`,
 		Why:     "the same text on a name nothing declared, which is the row that makes this two questions rather than one: zsh is a silent zero here and `invalid subscript` above, because it looks the name up before it reads the brackets. bash reports either way and ksh93 is silent either way, so the shell that parts is the one whose answer depends on the name. The pair is the shape a completion plugin runs as `bind_count=$((_ZSH_AUTOSUGGEST_BIND_COUNTS[$widget]))` with an empty `$widget`, and a case holding only this row would pass under a rule that answered zero for every empty subscript",
@@ -8082,6 +8110,18 @@ echo "st=$?"`,
 		Why: "an empty key, written and reached through a parameter, on the three columns that have the attribute -- and they answer three different ways. bash refuses to store under one at all, names the subscript **as it was written** (the quotation, or the `$w`, and not what either came to), leaves the table untouched, reports 1 and gives up the rest of the line, so nothing after the first refusal on it runs. ksh93 stores, and the two spellings are one key because its subscript is a quoting context, so the table ends with two elements and the empty key holds the second value. zsh stores too and the spellings are two keys, because its subscript is not a quoting context and an empty quotation is a two-character key there -- three elements, and the quotation still holds the 4. The one-space field is the control that says this is emptiness and not blankness: a blank is an ordinary key in every column. dash has no such attribute. Answered by Semantics.EmptyAssociativeKeyIsAnError, with SubscriptIsAQuotingContext deciding which key the storing columns hold (#1938)",
 	},
 	{
+		ID: "assoc/the-length-of-an-empty-key", Category: "expansion",
+		Snippet: "typeset -A m 2>/dev/null || { echo no-attribute; exit 0; }\n" +
+			`m[k]=v; w=; echo "[${#m[$w]}]"; echo after`,
+		Why: "the *length* of an element under a key that came out empty, which is a third answer to the emptiness two rows up rather than a louder version of it. bash refuses outright: `[$w]: bad array subscript` — the subscript as it was written, brackets and all, with **no name** in front of it, which is neither the bare `m` its own plain read names nor the `m[\"\"]` its store names — and then abandons the word, leaves 1 behind and runs neither the `echo` the expansion is in nor the `after` beside it. ksh93 and zsh both print `[0]` and `after` at status 0, so the value the refusal stands in front of is the same one two columns give freely. The `after` field is what separates a report from a refusal here: the plain read one row up writes a sentence and still prints both. It is the length operator alone — every other operator over the same emptiness takes the read's report and its 0. bash 3.2 has no such attribute and dash reaches no subscript in an expansion at all. Answered by Semantics.EmptyAssociativeKeyRefusesTheLength, worded by Diagnostics.EmptyAssociativeKeyLength (#2286)",
+	},
+	{
+		ID: "assoc/the-length-of-an-empty-key-on-a-table-nothing-has-written-to", Category: "expansion",
+		Snippet: "typeset -A m 2>/dev/null || { echo no-attribute; exit 0; }\n" +
+			`w=; echo "[${#m[$w]}]"; echo declared-only; m=(); echo "[${#m[$w]}]"; echo after`,
+		Why: "the carve-out on the row above, and the control that says the refusal is about the *name having been written to* rather than about the table being empty. A name the declaration's letters merely brought into being answers a silent `[0]` in every column, bash included; an assignment of an empty table in front of the identical expansion is what makes bash refuse it. So the two `${#m[$w]}` in this snippet are the same text over the same empty table and only the second is refused, which no probe over one of them could show. Empty either way — `m=()` stores nothing — so it is the assignment and not the contents. This is the same pair the listing tells apart, `declare -A m` against `declare -A m=()`, reaching a second consumer (#2286)",
+	},
+	{
 		ID: "assoc/a-substituted-key-keeps-its-backslash", Category: "expansion",
 		Snippet: `typeset -A m; kk='a\b'; m[$kk]=ESC; m[ab]=PLAIN; printf "%d" "${#m[@]}"`,
 		Why:     "two keys or one, which is the associative face of a value's backslash surviving a word: the substituted key is three characters in the three shells with the attribute, so the array holds two elements. Where the backslash is eaten on its way in the two keys collide and the array holds one — an array given two keys and holding one, at status 0 (#1222). dash and bash 3.2 have no such attribute and refuse the line",
@@ -8105,6 +8145,24 @@ echo "st=$?"`,
 		ID: "subscript/a-flag-group-on-the-left-of-an-assignment", Category: "expansion",
 		Snippet: `b=(x y z); b[(r)y]=Q; printf '[%s]' "${b[@]}"; echo`,
 		Why:     "the flag group a *read* takes, on the other side of the `=`: the search names an index and the assignment writes there, so the element whose value is `y` is replaced. zsh alone has the construct; the other five read the whole subscript as arithmetic and fail on the parenthesis, at three wordings and two statuses",
+	},
+	{
+		ID: "subscript/a-flag-group-searching-a-table-on-the-left", Category: "expansion",
+		Snippet: "typeset -A m 2>/dev/null || { echo no-attribute; exit 0; }\n" +
+			`m[aa]=1; m[bb]=2; m[(r)1]=Z; echo after`,
+		Why: "the same flag group over a **table** on the left of `=`, which is where the letters stop meaning what they mean on the right. zsh carries `(r)`, `(R)`, `(k)`, `(K)`, `(i)` and `(I)` on the read side of a table and refuses every one of them here as `m: attempt to set slice of associative array` at 1, ending the input — so it is the *construct* it names and not the letter, a search naming several elements naming no place to write. The `after` field is what shows the input ending. This shell said the flag was not implemented, which is the one thing that is not wrong with it. The same sentence a whole-array subscript on the left of a table's assignment draws, which is one wording for one reason and why there is one Diagnostics field for both. The other five read the whole subscript as arithmetic and fail on the parenthesis (#2288)",
+	},
+	{
+		ID: "subscript/a-flag-group-selecting-nothing-is-a-tables-key", Category: "expansion",
+		Snippet: "typeset -A m 2>/dev/null || { echo no-attribute; exit 0; }\n" +
+			`m[aa]=1; m[(e)aa]=Z; m[(e)zz]=Y; printf '[%s][%s]%d' "${m[aa]}" "${m[zz]}" "${#m[@]}"; echo`,
+		Why: "the control for the row above, and the half that was wrong in the other direction. `(e)` is exact matching rather than a search, so the operand behind it is an ordinary key: zsh stores `Z` under `aa` and makes a `zz` for the `Y`, at status 0. This shell dropped both stores in silence — a no-op at 0 beside a read of the identical text that found the key, which is the quiet kind of wrong. Two fields rather than one because the key that exists and the key that does not take different roads to the same store (#2288)",
+	},
+	{
+		ID: "arithmetic/a-flag-group-searching-a-table-on-the-left", Category: "expansion",
+		Snippet: "typeset -A m 2>/dev/null || { echo no-attribute; exit 0; }\n" +
+			`m[aa]=1; (( m[(r)1] = 5 )); x=$(( m[(k)aa] = 7 )); (( m[(e)aa] = 9 )); printf '%d[%s][%s]' "${#m[@]}" "${m[aa]}" "$x"; echo`,
+		Why: "the same question inside an expression, where the one shell with the construct gives a **different** answer from the one it gives on the left of a plain `=`: a search naming a place to write in a table writes nothing and says nothing at status 0, where the assignment spelling refuses it by name and ends the input. The third field is what makes it a dropped store rather than a dropped expression -- `x` is the 7 the assignment evaluated to while the table still holds its 1 -- and the `(e)` write is the control that says the silence belongs to the search and not to the group, since that one lands and leaves `9`. This shell consulted the association before the group and made the whole subscript text a key, so the table came out holding keys literally named `(r)1` and `(k)aa`: a plausible table at status 0 with elements nobody wrote (#2288)",
 	},
 	{
 		ID: "subscript/a-flag-group-that-matched-nothing-appends", Category: "expansion",
@@ -17959,6 +18017,31 @@ echo "read=[$l]"`,
 		ID: "set/leaving-posix-mode-restores-the-shells-own-answer", Category: "invocation",
 		Snippet: `set -o posix; set +o posix; exec 3>/nope/x; echo after`,
 		Why:     "the round trip, which is what makes it a mode rather than a one-way door: bash goes back to printing `after` at 0. Turning it off is also the direction a shell without a posix mode can honestly grant, and the thirteenth line of Homebrew's own script",
+	},
+	{
+		ID: "set/posix-mode-writes-the-export-listing-with-the-command-word", Category: "invocation",
+		Snippet: `zqv="a b"; export zqv; set -o posix; export -p | grep zqv`,
+		Why:     "the listing axes the mode moves, which no preset can show: both bash builds write the clustered `declare -x zqv=\"a b\"` under their own name and repeat the command word — `export zqv=\"a b\"` — the moment `set -o posix` is on, keeping the double quotes the clustered form uses. The other three refuse the `set` and list in their own shape. Semantics.ExportListing, reached through Runner.SetPosixMode rather than through a vector (#2154)",
+	},
+	{
+		ID: "set/posix-mode-writes-the-readonly-listing-with-the-command-word", Category: "invocation",
+		Snippet: `zqr=2; readonly zqr; set -o posix; readonly -p | grep zqr`,
+		Why:     "the second of the three, and a separate field because the panel splits them: zsh writes `export zqv='a b'` for the first and `typeset -r zqr=2` for this one. bash moves both together — `readonly zqr=\"2\"` under the mode — which is what says one mode moves two axes rather than one axis serving two builtins. Semantics.ReadonlyListing (#2154)",
+	},
+	{
+		ID: "set/posix-mode-moves-the-bare-declaration-listing-too", Category: "invocation",
+		Snippet: `zqv="a b"; export zqv; set -o posix; export | grep zqv`,
+		Why:     "the third, asked without `-p` because the bare form is its own axis: ksh93 and zsh drop the command word there and write a plain `zqv='a b'` where their `-p` keeps it. bash's bare form follows its `-p` in both modes, so the mode moves this one too. Semantics.BareDeclarationListing (#2154)",
+	},
+	{
+		ID: "set/posix-mode-leaves-the-declare-listing-alone", Category: "invocation",
+		Snippet: `zqv="a b"; export zqv; set -o posix; declare -p zqv`,
+		Why:     "the control that makes the mode three axes and not one. `declare -p` writes `declare -x zqv=\"a b\"` in both modes on both bash builds, so Semantics.DeclareListing is the listing axis POSIX mode does *not* move — a row that would have caught a fix reaching for one field to cover all four (#2154)",
+	},
+	{
+		ID: "set/leaving-posix-mode-restores-the-clustered-listing", Category: "invocation",
+		Snippet: `zqv="a b"; export zqv; set -o posix; set +o posix; export -p | grep zqv`,
+		Why:     "the round trip for the listing axes, which is what says it is a mode the shell enters and leaves rather than the build or the invocation: bash goes back to `declare -x zqv=\"a b\"`. It is also the row that requires the dialect's own answer to be *saved*, since a shell that asserted the clustered form on the way out would hand zsh bash's shape (#2154)",
 	},
 	{
 		ID: "shift/an-operand-that-was-never-given", Category: "builtins",

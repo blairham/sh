@@ -2420,8 +2420,6 @@ func (l *Lexer) scanDouble() []Span {
 // double quotes is. The quote that put it in this context is outside the text,
 // so there is none to find and running out is not a failure.
 func (l *Lexer) scanDoubleBody(open Pos, closing bool) []Span {
-	var out []Span
-	var b strings.Builder
 	// Without a closing quote to find, this text is a `${ }` operand — the one
 	// place a backslash also escapes the brace that would end the expansion.
 	// See operandEscapes.
@@ -2429,6 +2427,40 @@ func (l *Lexer) scanDoubleBody(open Pos, closing bool) []Span {
 	if !closing {
 		escapes = operandEscapes
 	}
+	return l.scanDoubleEscaping(open, closing, escapes)
+}
+
+// scanNestedDoubleInOperand is a `"` run written *inside* a `${ }` operand,
+// which is where the panel splits: five shells say the whole body of the
+// expansion is the escaping context, so the brace is still escapable in the
+// nested run, and one says the context resets at the quote. See
+// Dialect.NestedQuoteResetsOperandEscapes.
+//
+// A function rather than a flag threaded through scanDoubleBody, because the
+// nested run is the *only* caller that can be in this position: every other
+// `"` either opens a word's own run or stands inside one, and neither has an
+// operand around it to inherit an escape set from.
+func (l *Lexer) scanNestedDoubleInOperand() []Span {
+	open := l.pos()
+	l.advance() // "
+	escapes := operandEscapes
+	if l.dialect.NestedQuoteResetsOperandEscapes {
+		escapes = dquoteEscapes
+	}
+	return l.scanDoubleEscaping(open, true, escapes)
+}
+
+// scanDoubleEscaping is the body of both, with the escape set handed in.
+//
+// The set reaches the backslash and nothing else: a `$( )` or a backtick
+// inside this run is scanned by its own reader in its own context, so an
+// operand's widened set never leaks into a substitution written in one.
+// Measured 2026-09-12, `"${u-$(printf %s "A\}B")}"` is `A\}B` in bash 5.3.15
+// and zsh 5.9.2 alike — the two columns that disagree about the plain nested
+// run agree here, which is what says the substitution starts over.
+func (l *Lexer) scanDoubleEscaping(open Pos, closing bool, escapes string) []Span {
+	var out []Span
+	var b strings.Builder
 	litPos := l.pos()
 	flush := func() {
 		if b.Len() > 0 {
@@ -2459,7 +2491,7 @@ func (l *Lexer) scanDoubleBody(open Pos, closing bool) []Span {
 		// quote characters part company here and each keeps its own rule.
 		case c == '"' && !closing:
 			flush()
-			out = append(out, l.scanDouble()...)
+			out = append(out, l.scanNestedDoubleInOperand()...)
 			litPos = l.pos()
 		case c == '"':
 			l.advance()

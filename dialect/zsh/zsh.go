@@ -421,6 +421,18 @@ func Dialect() syntax.Dialect {
 	// shell has — the trims, the substring, the replacement, the four
 	// conditionals and the element exclusion — measured 2026-09-06.
 	d.ParamLengthTakesAnOperator = true
+	// A `"` written inside a `${ }` operand opens a run whose escaping starts
+	// over, so the brace that would close the expansion is not escapable in
+	// it. This shell alone: measured 2026-09-10 with `u` unset,
+	// `printf '[%s]' "${u-"A\}B"}"` is `[A\}B]` here and `[A}B]` in dash,
+	// bash 5.3.15, that build as `sh`, bash 3.2.57, ksh93u+ and BusyBox ash —
+	// six columns saying the whole body of the expansion is the escaping
+	// context and this one saying the context resets at the quote.
+	//
+	// The engine gave this reading in every dialect before the flag existed,
+	// arrived at without anyone choosing it, so what changed for the other
+	// four is the answer and not the construct (#2001).
+	d.NestedQuoteResetsOperandEscapes = true
 	// `${name::=word}`, the assignment that runs every time. Measured
 	// 2026-09-07 on zsh 5.9.2 against the rest of the panel: bash 5.3, bash
 	// 3.2 and bash as `sh` read the same text as a substring and answer
@@ -1781,6 +1793,10 @@ func Semantics() interp.Semantics {
 	// m[k]=v; w=; ${m[$w]}` is the empty string at status 0 and silent
 	// (#1972).
 	s.EmptyAssociativeKeyIsReportedWhenRead = interp.No
+	// Nor is its *length* refused: measured 2026-09-12, `typeset -A m;
+	// m[k]=v; w=; echo "[${#m[$w]}]"; echo after` is `[0]`, `after` and
+	// status 0, where bash stops the script on the same line (#2286).
+	s.EmptyAssociativeKeyRefusesTheLength = interp.No
 	// An empty positional list is a **set** parameter here, with dash and
 	// against the four bash-and-ksh columns: measured 2026-09-12, `set --;
 	// "${@-word}"` is empty and `"${@+word}"` is `word` (#1941).
@@ -2328,8 +2344,9 @@ func Diagnostics() interp.Diagnostics {
 		UnsetFunctionNotFound: "no such hash table element: %[1]s",
 		// The array alone, and a sentence about the assignment rather than
 		// about the subscript.
-		BadArraySubscript:   "%[1]s: assignment to invalid subscript range",
-		ArithEmptySubscript: "invalid subscript",
+		BadArraySubscript:         "%[1]s: assignment to invalid subscript range",
+		ArithEmptySubscript:       "invalid subscript",
+		ArithEmptySubscriptTarget: "not an identifier: %[1]s[]",
 		// The same sentence at the parameter site, and its own field because
 		// the two coincide here and do not in bash — see the field.
 		EmptyParamSubscript: "invalid subscript",

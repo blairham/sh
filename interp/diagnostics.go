@@ -1586,6 +1586,18 @@ type Diagnostics struct {
 	// has anything to put here.
 	EmptyAssociativeKeyRead string
 
+	// EmptyAssociativeKeyLength is what the *length* of the same element says
+	// where the dialect refuses it outright. One verb, and it is neither of
+	// the subjects the two neighbors above use: the subscript **as written,
+	// with its brackets and without the name** — bash writes `[$w]: bad array
+	// subscript`, where its own read of the same element names `m` alone and
+	// its store names `m[""]`. The brackets are in the wording rather than in
+	// the verb, so a dialect that words the subject differently can say so.
+	//
+	// Only a dialect answering Semantics.EmptyAssociativeKeyRefusesTheLength
+	// has anything to put here.
+	EmptyAssociativeKeyLength string
+
 	// BadArrayLiteralSubscript is the same refusal reached through an array
 	// literal, `a=([0]=p)`, which two of the three word differently from the
 	// plain form. Three verbs: the name, the subscript as written, and the
@@ -3592,6 +3604,24 @@ type Diagnostics struct {
 	// writes, and whether the expression survives it, is
 	// Semantics.EmptyArithSubscript; this is only the wording.
 	ArithEmptySubscript string
+	// ArithEmptySubscriptTarget is the same emptiness where the brackets name
+	// a place to *write*: `(( m[] = 4 ))` and `(( m[]++ ))`. One verb, the
+	// name, and the sentences carry their own brackets because the two shells
+	// that write one put them in different places.
+	//
+	// A field of its own rather than a second use of ArithEmptySubscript,
+	// because the same shell words the two apart. Measured 2026-09-12:
+	//
+	//	                 read `$(( m[] ))`         write `(( m[] = 4 ))`
+	//	bash 5.3.15      m[]: bad array subscript  `m[]': not a valid identifier
+	//	zsh 5.9.2        invalid subscript         not an identifier: m[]
+	//	ksh93u+          nothing                   nothing
+	//
+	// Which of them a dialect writes, and whether the expression survives it,
+	// is Semantics.EmptyArithSubscript — one axis for both sides, because
+	// every shell that has the construct gives the write the disposition it
+	// gives the read. This is only the wording (#1764).
+	ArithEmptySubscriptTarget string
 
 	// ArithWholeArraySubscript is the complaint about a `*` or `@` subscript
 	// on an indexed name where an expression reads it — `$(( a[*] ))`. Two

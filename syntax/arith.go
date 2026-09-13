@@ -307,6 +307,21 @@ type ArithAssign struct {
 	// ArithIndex.Flags is: `(( a[(r)20] = 9 ))` writes the element the same
 	// search reads.
 	Flags *SubscriptFlags
+	// Empty says the brackets held nothing — `(( m[] = 4 ))` — which Index
+	// and Sub cannot say between them, a plain name having neither either.
+	// The same field ArithIndex carries and for the same reason: an
+	// arithmetic expansion substitutes its parameters before it parses, so
+	// `(( m[$w] = 4 ))` with an empty `$w` *is* this by the time the
+	// expression exists.
+	//
+	// Carried rather than refused while parsing, which is a change: the pair
+	// was a parse error in this one position while `$(( a[] ))` beside it was
+	// carried, on the grounds that the three shells with the construct part
+	// over the write as well as over the read. They do — and each of the
+	// three writes is the same shell's *read* answer wearing a different
+	// sentence, which is what makes it one axis and two wordings rather than
+	// a refusal (#1764).
+	Empty bool
 	Op    string // = += -= *= /= %= <<= >>= &= ^= |=
 	Value ArithExpr
 	Start Pos
@@ -718,17 +733,16 @@ func (a *arithParser) assign() ArithExpr {
 			}
 			at := a.off
 			if a.take(op) {
-				if sub.Empty {
-					// An assignment *target* with nothing between the
-					// brackets keeps the refusal it has always had. The three
-					// shells with the construct part here too and part
-					// differently from the way they part over reading one —
-					// `not an identifier: a[]`, `not a valid identifier`, and
-					// a silent write to element zero — so the grammar holds
-					// until that second disagreement has an axis of its own.
-					a.p.failKind(ErrArithOperand, "bad array subscript: %s", "")
-					return nil
-				}
+				// An assignment *target* with nothing between the brackets is
+				// carried rather than refused, exactly as a read one is. The
+				// three shells with the construct part over it — `not an
+				// identifier: a[]`, `not a valid identifier` with the store
+				// dropped, and a silent write to element zero — and each of
+				// the three is that shell's own answer to the *read* wearing
+				// a sentence of its own, so it is one axis and two wordings.
+				// A question for whoever evaluates it, which is the only
+				// place the answer is knowable. See ArithAssign.Empty and
+				// Semantics.EmptyArithSubscript (#1764).
 				v := a.assign()
 				if v == nil {
 					a.failArith(ErrArithOperandEnd, a.src[at:])
@@ -736,7 +750,7 @@ func (a *arithParser) assign() ArithExpr {
 				}
 				return &ArithAssign{
 					Name: name, Index: sub.Index, Sub: sub.Text, Flags: sub.Flags,
-					Op: op, Value: v, Start: start,
+					Empty: sub.Empty, Op: op, Value: v, Start: start,
 				}
 			}
 		}

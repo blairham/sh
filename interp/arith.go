@@ -608,6 +608,74 @@ func (r *Runner) emptyArithSubscript(name string) (handled bool, v arithNum, err
 	}
 }
 
+// emptyArithSubscriptTarget is the same axis where the brackets name a place
+// to *write* — `(( m[] = 4 ))` and `(( m[]++ ))` — and reports whether the
+// write was answered here rather than by the store below.
+//
+// One axis and not a second beside it, which is measured rather than tidy:
+// each of the three shells with the construct gives the write the same
+// disposition it gives the read. ksh93 reads the brackets as the empty
+// expression and writes the element that names; bash reports and carries on,
+// dropping the store and leaving the expression its value; zsh fails the
+// expression. Measured 2026-09-12, `-c`:
+//
+//	(( m[] = 4 )); echo "st=$?"; echo after
+//
+//	zsh 5.9.2      `not an identifier: m[]`, the (( )) at 2, `after` runs,
+//	               and the expansion spelling ends the script outright
+//	bash 5.3.15    m[]': not a valid identifier — with bash's own leading
+//	               backquote — nothing written, and
+//	               the (( )) at **0** — `x=$(( m[] = 4 ))` gives x the 4 and
+//	               `(( m[] = 0 ))` is 1, so the expression keeps its value
+//	               and only the store is dropped
+//	ksh93u+        silent at 0, and `a=(9 8 7); (( a[] = 4 ))` leaves
+//	               `4 8 7` while a table gains the empty key
+//	bash 3.2.57    silent at 0 with nothing written, which is bash 5.3
+//	               minus the sentence and the one column that splits the
+//	               write from the read — its read reports. No dialect here
+//	               targets that build, so it is a corpus row rather than a
+//	               fourth value.
+//
+// **The wording is the half that does not carry over**, which is why there is
+// a second Diagnostics field and not a second axis: the same shell says
+// `m[]: bad array subscript` of a read and, of a write, the sentence
+// `m[]': not a valid identifier — with the leading backquote bash puts on it.
+// zsh says `invalid subscript` and `not an identifier: m[]`.
+//
+// One thing measured is deliberately not reproduced: bash puts `((: ` in
+// front of this sentence on the *command* route and not on the expansion one,
+// which is Diagnostics.ArithErrorNamesTheConstruct's rule reaching a sentence
+// that is not an error — the expression carries on. Doing it would mean
+// holding the report until the construct that raised it flushes it, at every
+// one of the five sites that word a math failure, and a site left out is
+// silence. The expansion route is byte-identical today (#1764).
+func (r *Runner) emptyArithSubscriptTarget(name string) (handled bool, err error) {
+	switch r.sem().EmptyArithSubscript {
+	case EmptyArithSubscriptIsTheEmptyExpression:
+		return false, nil
+	case EmptyArithSubscriptIsReported:
+		// Reported and then dropped: the expression keeps going and keeps
+		// its value, which is why this writes here rather than returning an
+		// error for a caller to word.
+		r.errf("%s\n", r.diag().Report(r.name(), r.line,
+			Wording(r.diag().ArithEmptySubscriptTarget,
+				"`%[1]s[]': not a valid identifier", name)))
+		return true, nil
+	case EmptyArithSubscriptIsInvalid:
+		// complete, for the reason the read's is: the sentence is the whole
+		// complaint, with no `bad math expression` in front of it.
+		return true, arithError{
+			msg: Wording(r.diag().ArithEmptySubscriptTarget,
+				"not an identifier: %[1]s[]", name),
+			complete: true,
+		}
+	}
+	return true, arithError{
+		msg:      r.unanswered("a subscript written with nothing in it, naming a place to write"),
+		complete: true,
+	}
+}
+
 // arithPlace is what an expression reads from and writes back to: a name, and
 // the subscript it carries when it names an element.
 //
@@ -764,30 +832,32 @@ func (r *Runner) writePlace(p arithPlace, v arithNum, from syntax.ArithExpr) err
 	// 255 ))` leaves x holding the six characters `16#FF`.
 	text := r.formatArith(v)
 	if p.empty {
-		// A write through brackets with nothing in them stores nothing unless
-		// the dialect reads them as the empty expression, where `(( a[]++ ))`
-		// steps the element the empty subscript names — measured, element
-		// zero in ksh93. The guard is load-bearing rather than defensive: the
-		// branch below writes through the *bare name*, so without it a
-		// refused `(( a[]++ ))` would silently overwrite `a` the moment the
-		// read stopped refusing.
-		if handled, _, err := r.emptyArithSubscript(p.name); handled {
-			if err == nil {
-				err = arithError{
-					msg: Wording(r.diag().ArithEmptySubscript,
-						"%[1]s[]: bad array subscript", p.name),
-					complete: true,
-				}
-			}
+		// A write through brackets with nothing in them is the same axis the
+		// read asks, in a sentence of its own — see
+		// emptyArithSubscriptTarget, and Semantics.EmptyArithSubscript for
+		// the three answers.
+		if handled, err := r.emptyArithSubscriptTarget(p.name); handled {
 			return err
 		}
+		// Not handled: the brackets hold the empty *expression*, which names
+		// element zero on an ordered name and the empty key on a table —
+		// exactly the element `$(( a[] ))` reads. Measured 2026-09-12 on
+		// ksh93u+, `a=(9 8 7); (( a[] = 4 ))` leaves `4 8 7` and a table
+		// gains the empty key.
+		//
+		// The flag stays set, because it is what makes arithSubscriptIndex
+		// answer zero below without reading a text there is none of. What
+		// the branch beneath used to do instead is write through the *bare
+		// name*, which would have replaced the array with a number.
 	}
-	if !p.subscripted || p.empty {
-		// The empty pair joins the bare name here rather than below, which is
-		// where it has always been written: a dialect that read `a[]` as the
-		// empty expression and did not answer it above writes through the
-		// name. Only the two of them — a target with a subscript in it is an
-		// element, and stops being one the moment this condition widens.
+	if !p.subscripted {
+		// The bare name alone. The empty pair used to join it here, on the
+		// grounds that a dialect reading `a[]` as the empty expression and
+		// not answering it above had nowhere else to go — and that was the
+		// wrong place: the shell with that reading writes the *element* the
+		// empty expression names, so the pair goes to the element path with
+		// everything else and only a target with no brackets at all is here
+		// (#1764).
 		if r.arithAssignmentDeclaresAnInteger(p.name) {
 			// A name the arithmetic itself created carries the base on the
 			// *name* rather than in the characters it holds, which is the
@@ -803,6 +873,46 @@ func (r *Runner) writePlace(p arithPlace, v arithNum, from syntax.ArithExpr) err
 		}
 		r.setVar(p.name, text)
 		return nil
+	}
+	if p.flags != nil && r.assocDeclared(p.name) {
+		// The group is read before the association, exactly as arithElement
+		// reads it before the association on the way in: a table consulted
+		// first takes the group's own letters for part of the key, which is
+		// what this shell did — `(( m[(r)1] = 5 ))` left a table holding a
+		// key literally named `(r)1`, silently, at status 0.
+		//
+		// Measured 2026-09-12 on zsh 5.9.2, the one shell with the construct,
+		// with `typeset -A m; m=(aa 1)`:
+		//
+		//	(( m[(r)1] = 5 ))     nothing written, nothing said, status 0
+		//	(( m[(k)aa] = 5 ))    the same, and the key it matched is untouched
+		//	(( m[(k)aa]++ ))      the same again, so it is the store and not
+		//	                      the operator
+		//	x=$(( m[(k)aa] = 5 )) x is 5 and the table is unchanged, so the
+		//	                      expression has its value and only the store
+		//	                      is dropped
+		//	(( m[(e)aa] = 5 ))    the key `aa`, so a group selecting nothing
+		//	                      leaves an ordinary key behind it
+		//
+		// A search naming a place to *write* in a table is refused by name on
+		// the left of `=` — see assignFlaggedTableElement — and dropped in
+		// silence here, which is one shell giving two answers to what looks
+		// like one question. The reading is not this engine's to reconcile:
+		// the store is the same store, and only the route to it differs.
+		search, ok := r.subscriptSearch(&syntax.ParamExpr{
+			Name: p.name, Index: p.flags.Arg, IndexFlags: p.flags,
+		})
+		if !ok || search != 0 {
+			// Either a letter this does not carry, refused by name already,
+			// or a search over a table — which writes nowhere and says
+			// nothing, and is why this returns no error: the expression keeps
+			// its value and `(( ))` still ends at the value's own status.
+			return nil
+		}
+		// The group selects nothing, so the operand behind it is the key —
+		// the same rewrite arithElement makes on the way in, and through the
+		// same accessor, so the two spellings cannot name different keys.
+		p.sub, p.flags = r.joinWord(p.flags.Arg), nil
 	}
 	if r.assocDeclared(p.name) {
 		r.setAssocElem(p.name, p.sub, text)
@@ -970,11 +1080,12 @@ func (r *Runner) addNum(n arithNum, step float64) arithNum {
 
 func (r *Runner) evalAssign(x *syntax.ArithAssign) (arithNum, error) {
 	place := arithPlace{
-		name: x.Name, index: x.Index, sub: x.Sub, flags: x.Flags,
-		// An assignment target with an empty subscript is refused while
-		// parsing, so brackets here are exactly a subscript that held
-		// something — an expression the parser read, or a text it could not.
-		subscripted: x.Index != nil || x.Sub != "",
+		name: x.Name, index: x.Index, sub: x.Sub, flags: x.Flags, empty: x.Empty,
+		// Brackets were written at all, which none of the three fields above
+		// can say on its own: an empty pair has no index and no text, and so
+		// has a plain name. The empty pair used to be refused while parsing
+		// and so could be left out of this — see ArithAssign.Empty (#1764).
+		subscripted: x.Index != nil || x.Sub != "" || x.Empty,
 	}
 	v, err := r.evalNum(x.Value)
 	if err != nil {

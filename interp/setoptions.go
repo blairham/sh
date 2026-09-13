@@ -246,11 +246,12 @@ var extraSetOptions = map[string]setOption{
 	// It moves the axes measured to move with it and no others, which is the
 	// same partial honesty `emulate` keeps in the zsh dialect: real posix
 	// modes fold in dozens of behaviors, and claiming those would be a
-	// promise nothing here keeps. Today that is one axis, and the evidence
-	// is direct — `set -o posix` makes a failed redirection on a special
-	// builtin end bash 5.3 and bash 3.2, `set +o posix` makes bash invoked
-	// as `sh` carry on, and the two states are exactly the panel's `bash`
-	// and `bash-as-sh` columns.
+	// promise nothing here keeps. Today that is seven axes, and the evidence
+	// is direct in every case — `set -o posix` makes a failed redirection on
+	// a special builtin end bash 5.3 and bash 3.2, `set +o posix` makes bash
+	// invoked as `sh` carry on, and the two states are exactly the panel's
+	// `bash` and `bash-as-sh` columns. See SetPosixMode for the list and for
+	// the measurement behind each.
 	//
 	// Turning it *off* puts back the answer the dialect started with rather
 	// than writing the opposite of the standard's, which is not the same
@@ -317,12 +318,13 @@ var extraSetOptions = map[string]setOption{
 // two questions; this is the mode, and it is the core's for the same reason
 // PosixSemantics is.
 //
-// The two fields are the whole of the care it needs, and the reason it is one
-// function rather than a line at each call site. Entering records the answer
-// the dialect held, and leaving puts *that* back rather than asserting the
-// standard's opposite: a shell POSIX already agrees with would otherwise lose
-// its own answer on the way out. A caller that wrote the axis directly instead
-// would leave nothing to restore, and the mode could then never be left —
+// The saved fields are the whole of the care it needs, and the reason it is
+// one function rather than a line at each call site. Entering records the
+// answer the dialect held, and leaving puts *that* back rather than asserting
+// the standard's opposite: a shell POSIX already agrees with would otherwise
+// lose its own answer on the way out. A caller that wrote the axis directly
+// instead would leave nothing to restore, and the mode could then never be
+// left —
 // measured, `set +o posix` in a shell invoked as `sh` carries on past a failed
 // redirection on a special builtin, so leaving it has to reach the dialect's
 // own answer.
@@ -337,11 +339,24 @@ func (r *Runner) SetPosixMode(on bool) {
 	redir, unsetRO := r.posixSaved, r.posixSavedUnsetReadonly
 	forName := r.posixSavedForName
 	funcName := r.posixSavedFuncName
+	exportListing := r.posixSavedExportListing
+	readonlyListing := r.posixSavedReadonlyListing
+	bareListing := r.posixSavedBareListing
 	if on {
 		r.posixSaved = r.sem().RedirectErrorOnSpecialBuiltinFatal
 		r.posixSavedUnsetReadonly = r.sem().UnsetReadonlyFatal
 		r.posixSavedForName = r.sem().ForNameWhenTheLoopRuns
 		r.posixSavedFuncName = r.sem().FunctionNameWhenTheDefinitionRuns
+		r.posixSavedExportListing = r.sem().ExportListing
+		r.posixSavedReadonlyListing = r.sem().ReadonlyListing
+		r.posixSavedBareListing = r.sem().BareDeclarationListing
+		// Unanswered stays unanswered, exactly as the two forms above do
+		// and for the same reason: the mode moves an answer and does not
+		// invent one, so a dialect that never took a position on a listing
+		// still refuses it by name rather than acquiring the standard's.
+		exportListing = posixListing(r.posixSavedExportListing)
+		readonlyListing = posixListing(r.posixSavedReadonlyListing)
+		bareListing = posixListing(r.posixSavedBareListing)
 		redir, unsetRO = Yes, Yes
 		forName = ForNameEndsTheScriptAsASyntaxError
 		funcName = FuncNameEndsTheScriptAsASyntaxError
@@ -388,6 +403,32 @@ func (r *Runner) SetPosixMode(on bool) {
 		// that asserted the standard's answer on the way out would hand it
 		// bash's (#1296).
 		s.FunctionNameWhenTheDefinitionRuns = funcName
+		// The fifth, sixth and seventh, and the first the mode moves that
+		// are about what a builtin *writes* rather than about what ends a
+		// script. Measured 2026-09-12 on bash 5.3.15 and the 3.2.57 macOS
+		// ships, over `V='a b'; export V; R=2; readonly R`: `export -p`,
+		// `readonly -p` and the bare forms of both write the clustered
+		// `declare -x V="a b"` under bash's own name and repeat the command
+		// word — `export V="a b"` — under `set -o posix`, and `set +o posix`
+		// puts the clustered form back. Both builds agree, so it is a mode
+		// the shell enters and leaves rather than the build or the
+		// invocation.
+		//
+		// `declare -p` is the control that makes this three axes and not
+		// one: it writes `declare -x V="a b"` in both modes, so
+		// DeclareListing is deliberately not moved here. Nor does the
+		// quoting move — `export V="a b"` keeps the double quotes the
+		// clustered form uses — so DeclareValueQuoting stays where the
+		// dialect put it (#2154).
+		//
+		// Saved and restored one per axis for the reason the four above
+		// are: the panel does not answer the three alike — zsh writes
+		// `export V='a b'` for the first and `typeset -r R=2` for the
+		// second — so a single remembered form would hand one axis
+		// another's answer on the way out.
+		s.ExportListing = exportListing
+		s.ReadonlyListing = readonlyListing
+		s.BareDeclarationListing = bareListing
 	})
 	r.posixMode = on
 	// The standard has aliases expand in a script, so the mode turns the
@@ -400,6 +441,16 @@ func (r *Runner) SetPosixMode(on bool) {
 	} else {
 		r.aliasExpansion = r.aliasExpansionBase
 	}
+}
+
+// posixListing is what POSIX mode makes of one listing axis, given the answer
+// the dialect held. One function for all three, so a fourth axis cannot be
+// added with the silence carve-out left off it.
+func posixListing(saved DeclarationListingForm) DeclarationListingForm {
+	if saved == DeclarationListingUnspecified {
+		return DeclarationListingUnspecified
+	}
+	return DeclareListingCommandWord
 }
 
 // PosixMode reports whether the shell is in POSIX mode, which is the read

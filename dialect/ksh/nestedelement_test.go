@@ -80,6 +80,31 @@ func TestAnArrayLiteralThroughASubscriptNests(t *testing.T) {
 	}
 }
 
+// A nested element is a *map*, so a copy of the array that a write may reach
+// has to go a level deeper than the copy every other column needed.
+//
+// Its own test because the failure is invisible from inside the construct: the
+// array looks right, the element looks right, and only a second scope can see
+// that the two are the same storage. Measured on ksh93u+ 2012-08-01 — a
+// subshell's write is the subshell's — and this engine left `(Z q)` standing in
+// the parent before the copy went deep.
+func TestANestedElementIsCopiedNotShared(t *testing.T) {
+	for _, c := range []struct {
+		src, want string
+	}{
+		// A subshell, which is where the shallow copy showed.
+		{`a=(x y); a[1]=(p q); ( a[1]=Z ); typeset -p a`, "typeset -a a=(x (p q) )\n"},
+		{`a=(x y); a[1]=(p q); ( a[1]+=(r) ); typeset -p a`, "typeset -a a=(x (p q) )\n"},
+		// A keyed table nests too, and shares the same copy.
+		{`typeset -A h; h[k]=(p q); ( h[k]=Z ); typeset -p h`, "typeset -A h=([k]=(p q) )\n"},
+	} {
+		out, _ := kshOut(t, c.src)
+		if out != c.want {
+			t.Errorf("%s\n got %q\nwant %q", c.src, out, c.want)
+		}
+	}
+}
+
 // And the answer is ksh's alone. bash refuses `a[1]=(p q)` outright and zsh
 // splices the words in; a dialect that started nesting would be storing a
 // value its own shell has no spelling for.

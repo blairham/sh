@@ -46,6 +46,20 @@ func (a AssocArray) values() []string {
 	return out
 }
 
+// clone is a copy a write may reach without the original seeing it, to any
+// depth — Array.clone's rule for a keyed table, and see it for why the shallow
+// copy was not enough.
+func (a AssocArray) clone() AssocArray {
+	if a == nil {
+		return nil
+	}
+	out := make(AssocArray, len(a))
+	for k, v := range a {
+		out[k] = v.clone()
+	}
+	return out
+}
+
 // equal reports whether two tables hold the same value under the same keys.
 //
 // Its own method for Array.equal's reason: an element may hold an array, which

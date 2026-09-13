@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"maps"
 	"os"
 	"os/exec"
 	"sort"
@@ -5286,8 +5285,8 @@ func (r *Runner) saveVar(name string) savedVar {
 	exported, exportSpoken := r.exported[name]
 	return savedVar{
 		name: name, value: old, present: present, removed: r.removed[name],
-		array: maps.Clone(a), inArray: inArray,
-		table: maps.Clone(m), inTable: inTable,
+		array: a.clone(), inArray: inArray,
+		table: m.clone(), inTable: inTable,
 		exported: exported, exportSpoken: exportSpoken,
 	}
 }

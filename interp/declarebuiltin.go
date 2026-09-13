@@ -3608,11 +3608,7 @@ func (r *Runner) shadow(name string) (fresh bool) {
 		// would save a reference to the very table the function is about to
 		// write into, and putting it back would put back the changes.
 		if existed {
-			kept := make(Array, len(old))
-			for k, v := range old {
-				kept[k] = v
-			}
-			old = kept
+			old = old.clone()
 		}
 		sc.savedArrays[name] = old
 		sc.arrayExisted[name] = existed
@@ -3628,11 +3624,7 @@ func (r *Runner) shadow(name string) (fresh bool) {
 			sc.assocExisted = map[string]bool{}
 		}
 		if existed {
-			kept := make(AssocArray, len(old))
-			for k, v := range old {
-				kept[k] = v
-			}
-			old = kept
+			old = old.clone()
 		}
 		sc.savedAssoc[name] = old
 		sc.assocExisted[name] = existed

@@ -60,11 +60,11 @@ func (c *Runner) ownTables(r *Runner) {
 	// own name table pointing at the parent's elements.
 	c.Arrays = make(map[string]Array, len(r.Arrays))
 	for k, v := range r.Arrays {
-		c.Arrays[k] = maps.Clone(v)
+		c.Arrays[k] = v.clone()
 	}
 	c.AssocArrays = make(map[string]AssocArray, len(r.AssocArrays))
 	for k, v := range r.AssocArrays {
-		c.AssocArrays[k] = maps.Clone(v)
+		c.AssocArrays[k] = v.clone()
 	}
 	c.Params = append([]string(nil), r.Params...)
 
@@ -328,13 +328,13 @@ func cloneScopes(scopes []*scope) []*scope {
 		if sc.savedArrays != nil {
 			c.savedArrays = make(map[string]Array, len(sc.savedArrays))
 			for k, v := range sc.savedArrays {
-				c.savedArrays[k] = maps.Clone(v)
+				c.savedArrays[k] = v.clone()
 			}
 		}
 		if sc.savedAssoc != nil {
 			c.savedAssoc = make(map[string]AssocArray, len(sc.savedAssoc))
 			for k, v := range sc.savedAssoc {
-				c.savedAssoc[k] = maps.Clone(v)
+				c.savedAssoc[k] = v.clone()
 			}
 		}
 		// The return hooks are appended to in place too, by AtFunctionReturn

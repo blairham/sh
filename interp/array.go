@@ -110,6 +110,41 @@ func (e Element) equal(f Element) bool {
 	return e.Nested == nil || e.Nested.equal(f.Nested)
 }
 
+// clone is a copy a write may reach without the original seeing it, to any
+// depth.
+//
+// maps.Clone is one level short of that now, and the level it is short by is
+// the one a script can see: an element holding a nested array holds a *map*,
+// which a shallow copy shares. Measured — `a=(x y); a[1]=(p q); ( a[1]=Z )`
+// left `typeset -a a=(x (Z q) )` in the **parent**, because a string written
+// through a subscript reaches the nested array's own first element and the
+// subshell's table was pointing at the parent's.
+//
+// Every place that copied an array shallowly calls this instead, rather than
+// the one that showed the bug: a subshell, a scope's shadow, a saved
+// assignment prefix and a heredoc's snapshot are four spellings of the same
+// promise, and a rule stated at one of them is a rule the other three
+// contradict.
+func (a Array) clone() Array {
+	if a == nil {
+		return nil
+	}
+	out := make(Array, len(a))
+	for k, v := range a {
+		out[k] = v.clone()
+	}
+	return out
+}
+
+// clone is the same for one element: free for the string every column but one
+// stores, and a copy of the nested array otherwise.
+func (e Element) clone() Element {
+	if e.Nested == nil {
+		return e
+	}
+	return Element{Str: e.Str, Nested: e.Nested.clone()}
+}
+
 // equal reports whether two arrays hold the same elements at the same
 // subscripts, to any depth.
 func (a Array) equal(b Array) bool {

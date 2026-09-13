@@ -266,6 +266,7 @@ func seedTables(r *Runner) {
 	r.integer = map[string]bool{"seed": true}
 	r.integerBase = map[string]int{"seed": 16}
 	r.floatPrecision = map[string]int{"seed": 3}
+	r.fieldWidth = map[string]fieldWidth{"seed": {letter: 76, width: 3}}
 	r.lowered = map[string]bool{"seed": true}
 	r.mathFuncs = map[string]mathFunc{"seed": {}}
 	r.precommands = map[string]PrecommandModifier{"seed": PrecommandNoGlob}

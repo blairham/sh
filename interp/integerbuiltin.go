@@ -357,6 +357,14 @@ func (r *Runner) readOptionNumber(builtin string, f *declareFlags, letter byte, 
 	if letter == 'i' {
 		return r.readIntegerBase(builtin, f, written)
 	}
+	if letter == 'L' || letter == 'R' || letter == 'Z' {
+		n, err := strconv.Atoi(written)
+		if err != nil {
+			return true
+		}
+		f.width, f.widthNamed = n, true
+		return true
+	}
 	n, err := strconv.Atoi(written)
 	if err != nil {
 		// Not a number at all, so not this letter's argument — the callers

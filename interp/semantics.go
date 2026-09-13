@@ -2680,6 +2680,48 @@ type Semantics struct {
 	// reaches it.
 	ArithCommandErrorIsFatal Answer
 
+	// ForHeaderArithmeticErrorIsFatal abandons the input when one of the
+	// three expressions of a C-style `for (( ; ; ))` header could not be
+	// evaluated, instead of ending the loop and leaving the status for the
+	// next line. True in ksh93 **and zsh**.
+	//
+	// Measured 2026-09-13 on ksh93u+ 2012-08-01 and zsh 5.9.2 against bash
+	// 5.3.15, bash 3.2.57 and bash as `sh`. dash and BusyBox ash have no
+	// C-style `for` at all and answer `Bad for loop variable` at 2, so this
+	// is three columns against two rather than a split of the whole panel:
+	//
+	//	for ((i=0; i<1/0; i++)); do :; done; echo "A st=$?"
+	//	  bash x3   the complaint, then `A st=1`, ending 0
+	//	  ksh93     the complaint and nothing after it, ending 1
+	//	  zsh       the complaint and nothing after it, ending 1
+	//
+	// It is **not** ArithCommandErrorIsFatal and the two do not cut the panel
+	// the same way, which is the whole reason it is a field of its own. zsh
+	// stays for `(( 1/0 ))`, for `if (( 1/0 ))` and for a `while` condition —
+	// all three measured the same day, and all three already right here — and
+	// gives up the header. A single field would have made zsh's `(( ))` fatal
+	// to buy this, which is the shape ConditionArithmeticErrorIsFatal was
+	// split out for.
+	//
+	// The same question for both ways the expression can fail: `for ((i=0;
+	// 1+; i++))` never reaches the evaluator and `for ((i=0; i<1/0; i++))`
+	// does, and both shells abandon the input for both — the same pairing
+	// ArithCommandErrorStatusIsTwo found one construct over.
+	//
+	// All three parts, not the condition alone. The initializer
+	// (`for ((i=1/0;;))`) and the step (`for ((i=0; i<3; i=1/0))`) are fatal
+	// in both, and the step needs a body that does not `break` before the
+	// back edge is reached — a probe written with one measures nothing,
+	// because the step never runs.
+	//
+	// The reach is the ordinary one for a fatal error and is not this
+	// construct's: measured, a sourced file catches it and `echo after` still
+	// runs, exactly as it does for `(( ))`.
+	//
+	// Asked only on the error path. A header that reads cleanly never reaches
+	// it, which is what keeps `for ((;;))` endless rather than fatal.
+	ForHeaderArithmeticErrorIsFatal Answer
+
 	// LetKeepsTheValueBeforeAnIllegalByte leaves `let` with the value its
 	// expression had reached when the arithmetic reader met a byte it refuses,
 	// instead of leaving it with nothing. True in zsh alone.
@@ -11009,6 +11051,14 @@ func PosixSemantics() Semantics {
 		// the answer three of the four give: the status is left for the next
 		// line, which runs.
 		ArithCommandErrorIsFatal: No,
+		// POSIX has no C-style `for` either — it is the same extension, one
+		// construct over — so there is no text to read here and the base
+		// takes the answer the three columns that have it and stay give:
+		// the loop ends, the status is left for the next line, and the next
+		// line runs. dash and ash inherit it and can never be asked, because
+		// neither parses the header at all: `for ((i=0;;))` is
+		// `Bad for loop variable` at 2 before any expression is evaluated.
+		ForHeaderArithmeticErrorIsFatal: No,
 		// POSIX has no `let` either, and the answer three of the four give is
 		// that a failed expression leaves nothing behind: the status is 1.
 		LetKeepsTheValueBeforeAnIllegalByte: No,

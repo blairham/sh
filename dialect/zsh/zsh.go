@@ -1375,6 +1375,10 @@ func Semantics() interp.Semantics {
 	// never reaches `two`. Note it is `[[ ]]` alone: the same expression
 	// in `(( ))` complains and the shell goes on.
 	s.ConditionArithmeticErrorIsFatal = interp.Yes
+	// And a C-style `for` header. Not `(( ))`, which zsh reports and carries
+	// on from — the two are a field apart for exactly that reason. Measured
+	// 2026-09-13; see [interp.Semantics.ForHeaderArithmeticErrorIsFatal].
+	s.ForHeaderArithmeticErrorIsFatal = interp.Yes
 	// The arithmetic reader stops at a byte it refuses and what it had by
 	// then stands, which `let` then reads for truth: `let '1 @'` is 0 here
 	// and 1 in the other three. Only that failure — `let '1+'` is 1 here too.

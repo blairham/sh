@@ -126,7 +126,7 @@ func (r *Runner) startCoproc(ctx context.Context, name string, run func(*Runner)
 		stopNote: make(chan struct{}),
 		// And the number a script names it by where the body never reaches a
 		// program, which `NAME_PID` reads as `$!` does. See jobident.go.
-		ident: inventJobIdent(),
+		ident: r.inventJobIdent(),
 		// The body itself, released when its pid settles either way — the
 		// same count `&` keeps, for the same reason. See Job.expectPart.
 		parts:   1,

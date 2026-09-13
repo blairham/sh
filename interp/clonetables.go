@@ -253,6 +253,13 @@ func (c *Runner) ownTables(r *Runner) {
 	c.redirFds = slices.Clone(r.redirFds)
 	c.jobs = slices.Clone(r.jobs)
 	c.jobOrder = slices.Clone(r.jobOrder)
+	// And the memory of the ones already reported, which a body a real shell
+	// would have forked does not inherit at all — inheritJobs empties it a
+	// moment after this. It is cloned here anyway rather than left aliased,
+	// because "the next thing that runs clears it" is a fact about the caller
+	// and not about the field: `reap` appends, and an append into an array
+	// the parent still holds is the shape this whole file exists to prevent.
+	c.reaped = slices.Clone(r.reaped)
 	c.aroundFunctionCalls = slices.Clone(r.aroundFunctionCalls)
 	c.freezeAfter = slices.Clone(r.freezeAfter)
 

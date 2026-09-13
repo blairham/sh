@@ -54,19 +54,35 @@ import "sync/atomic"
 // process id any Unix can issue, for the reason given above.
 const inventedJobIdentBase = 1 << 30
 
-// inventedJobIdents hands out the numbers. Process-wide rather than per
-// Runner, so that a job started by a subshell cannot be handed a number a job
-// of the shell around it already answers to — the two tables meet whenever a
-// job is inherited, and two jobs with one number is the defect this is fixing
-// rather than a smaller version of it.
-var inventedJobIdents atomic.Uint32
-
-// inventJobIdent is the next such number.
+// inventJobIdent is the next such number for this shell.
+//
+// **Per shell rather than per process, and shared down the clone chain.** A
+// counter of one shell's own is what makes the value reproducible: the same
+// script run twice hands out the same numbers, where a process-wide counter
+// would hand out different ones on the second run and put a value in the
+// output that is not the same twice. This repository forbids exactly that —
+// see interp/printbehaviour_test.go, which runs a case and then runs its
+// printed form and compares, and which a drifting counter failed.
+//
+// Shared down the chain because that is where a collision could come from: a
+// subshell inherits its parent's job table, so a number it invented for a job
+// of its own must not be a number one of those already answers to. Runner.clone
+// copies the pointer, so every shell descended from one root draws from one
+// counter. Two shells that never share a table may share a number and it
+// reaches nothing — a child's jobs are never in a parent's table.
+//
+// Allocated at the first read rather than at setup, which is the same choice
+// and the same reason as every other lazily built table here: a script that
+// backgrounds nothing costs one nil check. It is read only on the shell's own
+// goroutine, before the clone the job will run on exists.
 //
 // Masked back into range rather than allowed to climb, so that the result
 // always fits an int on a 32-bit platform. A session would have to start a
 // billion processless background jobs to reach the wrap, and at that point the
 // oldest of them is long gone.
-func inventJobIdent() int {
-	return inventedJobIdentBase + int(inventedJobIdents.Add(1)&(inventedJobIdentBase-1))
+func (r *Runner) inventJobIdent() int {
+	if r.jobIdents == nil {
+		r.jobIdents = new(atomic.Uint32)
+	}
+	return inventedJobIdentBase + int(r.jobIdents.Add(1)&(inventedJobIdentBase-1))
 }

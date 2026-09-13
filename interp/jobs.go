@@ -564,7 +564,7 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 		// happens on the job's own goroutine and `$!` is read on the shell's
 		// — and because a job the shell never gets a process for must still
 		// have an answer by the time `&` returns. See jobident.go.
-		ident: inventJobIdent(),
+		ident: r.inventJobIdent(),
 		// The job body itself, released when its pid settles either way. It
 		// is raised here rather than inside the goroutine so that nothing can
 		// read the count before it is there.

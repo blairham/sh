@@ -595,26 +595,43 @@ func (r *Runner) glob(field string) ([]string, bool) {
 	// is `f1` where the name alone is no pattern at all, so the qualifiers
 	// are what sent it to the filesystem.
 	defer func() {
-		if r.ctl == controlExit {
-			// The pattern was rejected while it was being read, and the
-			// script is already being abandoned. Reporting a miss on top of
-			// that says the pattern matched nothing, which is a different
-			// and weaker claim than the one already made.
+		if r.ctl == controlExit || r.ctl == controlAbandon {
+			// The pattern was rejected while it was being read, or something
+			// before it gave up, and either way what is running is already
+			// on its way out. Reporting a miss on top of that says the
+			// pattern matched nothing, which is a different and weaker claim
+			// than the one already made.
+			//
+			// It also keeps one refusal to one sentence where a word is
+			// expanded more than once. A redirection target is expanded in
+			// three views — see Runner.expandRedirectTargetViews — so a
+			// pattern that misses in the target of `cat < nosuch*` reaches
+			// here twice, and the second pass finds the first pass's
+			// unwinding here. Naming only controlExit covered the shell that
+			// stops and not the one that gives up the statement, which wrote
+			// the complaint twice.
 			r.globMissed = false
 			return
 		}
-		if r.globMissed && r.ask(r.sem().GlobNoMatchIsError, "an unmatched pattern being an error") &&
-			!r.MatchOption(UnmatchedPatternIsEmpty) {
-			// An error, which in zsh means the command does not run and the
-			// script stops. Reporting it and then passing the pattern
-			// through was the same report-then-continue bug as the others.
+		if r.globMissed {
+			// The axis is asked whether or not the option has already
+			// decided, so a dialect that answered nothing about it is still
+			// told so.
+			axis := r.ask(r.sem().GlobNoMatchIsError, "an unmatched pattern being an error")
+			// Two routes to one refusal, and they order themselves against
+			// the emptying option differently — see UnmatchedPatternIsError,
+			// where the measurement for each is written down. The option is
+			// a script's own request and wins outright; the axis is the
+			// shell's standing answer and yields to a script that asked for
+			// the word to be deleted.
 			//
-			// Deleting the word wins over complaining about it, which is the
-			// only ordering the two settings can have: measured, `setopt
-			// nullglob; echo "[" zz* "]"` prints `[ ]` at 0 in a zsh where
-			// nomatch is still on. The axis is still asked, so a dialect
-			// that answered nothing about it is still told so.
-			r.fatal("no matches found: %s\n", globUnescape(whole))
+			// Reporting it and then passing the pattern through was the same
+			// report-then-continue bug as the others, which is why neither
+			// route stops at the diagnostic.
+			if r.MatchOption(UnmatchedPatternIsError) ||
+				(axis && !r.MatchOption(UnmatchedPatternIsEmpty)) {
+				r.refuseUnmatchedPattern(globUnescape(whole))
+			}
 		}
 		r.globMissed = false
 	}()
@@ -1265,4 +1282,22 @@ func (r *Runner) workDir() string {
 		return r.Dir
 	}
 	return "."
+}
+
+// refuseUnmatchedPattern reports a pattern that matched no file and ends what
+// the dialect says such a failure ends.
+//
+// Both routes into it — the axis and the option — arrive here so that the
+// wording is written once. The wording itself is the dialect's, because the
+// two shells that can reach this path spell the same complaint differently;
+// Diagnostics.GlobNoMatch carries it and the fallback is the substrate's.
+//
+// The *scope* is deliberately not decided here either. A failed pathname
+// expansion is a failed expansion, so it ends exactly what every other one
+// ends — Semantics.FailedExpansionAbandonsTheLine — which is how one call
+// site produces bash giving up the statement and going on to the next, and
+// zsh stopping the script, with neither dialect named.
+func (r *Runner) refuseUnmatchedPattern(pattern string) {
+	r.diagf("%s\n", Wording(r.diag().GlobNoMatch, "no matches found: %s", pattern))
+	r.failedExpansion()
 }

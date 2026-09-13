@@ -88,7 +88,6 @@ func TestShoptRefusals(t *testing.T) {
 		{`shopt -z`, "shopt: usage: shopt [-pqsu] [-o] [optname ...]", 2},
 		// A name this shell recognizes and cannot move: refused out loud,
 		// never accepted quietly.
-		{`shopt -s failglob`, "shopt: failglob: not implemented", 1},
 		{`shopt -u sourcepath`, "shopt: sourcepath: not implemented", 1},
 	} {
 		out, st := runBash(t, t.TempDir(), tc.src)
@@ -98,7 +97,7 @@ func TestShoptRefusals(t *testing.T) {
 		}
 	}
 	// The states already held are granted: off may be turned off, on on.
-	for _, src := range []string{`shopt -u failglob`, `shopt -s sourcepath`} {
+	for _, src := range []string{`shopt -u execfail`, `shopt -s sourcepath`} {
 		if out, st := runBash(t, t.TempDir(), src); st != 0 || out != "" {
 			t.Errorf("%s = %q status %d, want a quiet success", src, out, st)
 		}
@@ -116,6 +115,25 @@ func TestShoptWiresTheGlobOptions(t *testing.T) {
 	for _, tc := range []struct{ src, want string }{
 		{`shopt -s nullglob; echo zz*zz; echo done`, "\ndone"},
 		{`shopt -s nullglob; shopt -u nullglob; echo zz*zz`, "zz*zz"},
+		// `failglob` is the third answer about a miss, and these rows are
+		// what make it a third: the word is neither kept nor deleted.
+		//
+		// **The lines are separate on purpose.** How far the refusal reaches
+		// is Semantics.FailedExpansionAbandonsTheLine's answer, and this
+		// preset gives up the *statement* — so `echo done` written after a
+		// semicolon on the same line is dropped with it and one written on
+		// the next line runs. Measured on bash 5.3.15, which does both:
+		// `-c 'shopt -s failglob; echo nosuch*; echo done'` prints the
+		// complaint alone, and a script whose second line is `echo nosuch*`
+		// still runs its third.
+		{"shopt -s failglob\necho zz*zz\necho done", "bash: line 2: no match: zz*zz\ndone"},
+		{`shopt -s failglob; echo zz*zz; echo done`, "bash: line 1: no match: zz*zz"},
+		{`shopt -s failglob; shopt -u failglob; echo zz*zz`, "zz*zz"},
+		// The refusal wins over the emptying, which is this shell's own
+		// order and the opposite of the one the zsh dialect keeps between
+		// the same two behaviors. Measured in either order on bash 5.3.15.
+		{"shopt -s nullglob failglob\necho zz*zz\necho done", "bash: line 2: no match: zz*zz\ndone"},
+		{"shopt -s failglob nullglob\necho zz*zz\necho done", "bash: line 2: no match: zz*zz\ndone"},
 		{`shopt -s nocasematch; case A in a) echo hit;; esac`, "hit"},
 		{`shopt -s nocaseglob; case A in a) echo hit;; *) echo exact;; esac`, "exact"},
 	} {

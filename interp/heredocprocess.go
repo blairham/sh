@@ -217,10 +217,29 @@ func (r *Runner) giveUpTheCommand() {
 		// to cost the command, and fatalQuiet is what gives it a status.
 		r.fatalQuiet()
 	}
-	if !r.pendingFileError() {
+	switch {
+	case r.ctl == controlAbandon:
+		// The same failure in the dialect that gives up the *statement* over
+		// one rather than the shell — Semantics.FailedExpansionAbandonsTheLine
+		// is what parts them, and neither reading survives the boundary this
+		// function is. Measured 2026-09-13 on bash 5.3.15, which is the
+		// shell that answers yes: with `shopt -s failglob` set, `cat <
+		// nosuch*; echo "st=$?"; echo after` reports the miss, leaves 1
+		// behind and runs both commands after it, where the same
+		// redirection on a *builtin* — `: > nosuch*` — takes the statement
+		// with it. The external command is the one whose redirections a
+		// real shell opens in a forked child, so the failure is that
+		// child's and costs only the command.
+		//
+		// Without this branch the unwinding stood and the statement went
+		// with it, which is the same divergence the fatal shape had before
+		// this function existed, one control value along.
+		r.ctl, r.abandonLine = controlNone, 0
+	case r.pendingFileError():
+		r.takeFileError()
+	default:
 		return
 	}
-	r.takeFileError()
 	// The status fatalQuiet or whoever failed already set stands; what this
 	// adds is that the command does not run. redirErr is the flag both
 	// simple and withRedirs already read for "the redirections did not come

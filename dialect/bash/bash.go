@@ -2157,6 +2157,12 @@ func Diagnostics() interp.Diagnostics {
 		// bash names the path it tried, absolute, where the other three
 		// report the operand as written.
 		NamesResolvedPath: true,
+		// `shopt -s failglob` refusing a pattern that matched nothing.
+		// Three words where zsh's is four, measured 2026-09-13 on bash
+		// 5.3.15: `no match: nosuch*` against zsh's `no matches found:
+		// nosuch*`. Same event, same position prefix, different sentence,
+		// which is why the substrate carries neither.
+		GlobNoMatch: "no match: %s",
 		// A bare `hash` announces the table, on standard output.
 		HashEmptyTable: "hash: hash table empty",
 		// The `hits<TAB>command` table, which is bash's alone: it is the only

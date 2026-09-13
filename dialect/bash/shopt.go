@@ -47,6 +47,29 @@ var shoptModes = map[string][]interp.MatchOption{
 	// left it there deliberately rather than flip a flag over behavior
 	// nothing provided, and this is the other half of that (#1862).
 	"patsub_replacement": {interp.ReplacementAmpersandIsTheMatch},
+	// The third answer a script can ask for about a pattern that matched
+	// nothing, beside leaving it in place and `nullglob` deleting it.
+	// Measured 2026-09-13 on bash 5.3.15, in a directory holding `a1` and
+	// `a2`:
+	//
+	//	shopt -s failglob; echo nosuch*     `no match: nosuch*`, and the
+	//	                                    command does not run
+	//	shopt -s failglob; echo a*          `a1 a2`
+	//	shopt -s nullglob failglob; …       the complaint, in either order
+	//
+	// The last of those is why it is a match option of its own rather than a
+	// second state of `nullglob`'s: bash refuses with both set where zsh
+	// deletes the word with `nullglob` beside `nomatch`, so one rule cannot
+	// serve both. interp.UnmatchedPatternIsError carries the measurement.
+	//
+	// How far the refusal reaches is the ordinary failed-expansion question
+	// and is answered by this preset's FailedExpansionAbandonsTheLine, which
+	// is `Yes` — so the statement is given up and the shell goes on to the
+	// next one. Measured on the same binary: a script whose second line is
+	// `echo nosuch*` prints the complaint and still runs its third line,
+	// where a `-c` string is one statement and loses everything after the
+	// semicolon.
+	"failglob": {interp.UnmatchedPatternIsError},
 }
 
 // shoptSwitches are the names wired to a switch the core holds rather than to
@@ -461,7 +484,6 @@ var shoptStates = map[string]bool{
 	"complete_fullquote":   true,
 	"execfail":             false,
 	"extquote":             true,
-	"failglob":             false,
 	"globasciiranges":      true,
 	"globskipdots":         true,
 	"gnu_errfmt":           false,

@@ -417,6 +417,17 @@ type Diagnostics struct {
 	// CdStatus is what that reports. dash says 2 and the other three say 1.
 	// Zero means the substrate's own, 1.
 	CdStatus int
+	// GlobNoMatch is a pathname expansion that matched no file, on the two
+	// routes that refuse one: Semantics.GlobNoMatchIsError and the
+	// UnmatchedPatternIsError match option. One verb, the pattern as it was
+	// written. Empty means the substrate's own wording.
+	//
+	// A field rather than a constant because the two shells that reach it
+	// disagree about the sentence and not about the event — `no matches
+	// found: nosuch*` against `no match: nosuch*`, measured 2026-09-13 on
+	// zsh 5.9.2 and bash 5.3.15 — and the substrate must not carry one
+	// shell's spelling as everybody's.
+	GlobNoMatch string
 	// HashEmptyTable is what a bare `hash` says about the table this shell
 	// does not keep. bash announces it, on standard output; the other three
 	// print nothing, which the empty value means.

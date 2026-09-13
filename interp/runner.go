@@ -3667,11 +3667,20 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		r.failedExpansion()
 		return nil
 	}
-	if r.ctl == controlExit {
-		// An expansion raised a fatal error of its own — an unmatched
-		// pattern, where the dialect calls that an error rather than passing
-		// it through. The command does not run, and nothing below may
-		// overwrite the status it set.
+	if r.ctl == controlExit || r.ctl == controlAbandon {
+		// An expansion raised an error of its own — an unmatched pattern,
+		// where the dialect or a `shopt` name calls that an error rather
+		// than passing it through. The command does not run, and nothing
+		// below may overwrite the status it set.
+		//
+		// **Both control values, because the same failure reaches here as
+		// either one.** How far an unmatched pattern unwinds is
+		// FailedExpansionAbandonsTheLine's answer, so the shell that gives
+		// up the statement arrives with controlAbandon and the shells that
+		// stop arrive with controlExit — and a test naming only the second
+		// let the first report the complaint and then run the command
+		// anyway, printing the pattern it had just refused. r.failedHeading
+		// one screen down reads `!= controlNone` for exactly this reason.
 		return nil
 	}
 

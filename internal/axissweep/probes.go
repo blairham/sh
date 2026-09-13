@@ -438,34 +438,36 @@ func Probes() []Probe {
 		},
 		{
 			Field: "SetValidatesOptionLettersFirst",
-			Cases: []string{"opt/a-bad-letter-behind-a-good-one"},
-			// Only the two columns that survive a refused letter can answer
-			// this from a recorded cell at all, and that is the honest state
-			// of it rather than a gap to paper over: in the other five the
-			// refusal ends the script before it can say what was applied, so
-			// the record holds a fatality and not an answer. They were asked
-			// with `command set` in front, which is a probe and not a row.
+			Cases: []string{"opt/a-refusable-letter-behind-a-refusable-name"},
+			// Read from *which word was complained about* rather than from
+			// what the shell was left holding, because the state is visible
+			// only in the two columns that survive a refused letter. This
+			// row is answered by every column that stops at one, which is
+			// what makes the reading tell shells apart at all.
 			//
-			// Two controls, and both are the #2645 one pointing at this row's
-			// two ways of holding nothing. A cell with empty standard error
-			// refused nothing, so it says nothing about what a refusal
-			// leaves behind; and a cell whose standard output never reaches
-			// the `u=` word was ended by the refusal, which is the other
-			// axis's answer and not this one's. Scoring either `No` would
-			// make silence agree with whatever the preset already held.
-			Reading: "`set -u -q; …; case $- in *u*)` leaves nounset **off** in a shell that reads every option word's letters before applying one, and **on** in a shell that applies them as it goes",
+			// The empty-stderr control is the #2645 one: a cell that refused
+			// nothing has not been asked the question, and scoring it would
+			// make silence agree with whatever the preset already held. The
+			// second control is this row's own — a cell naming *both* words
+			// is the dialect that reports every bad option, which is a
+			// different axis and not an answer to this one.
+			Reading: "`set -o zzznosuch -q` names the **letter** from the second word, and never the name, in a shell that reads every option word's letters before applying one; a shell that applies as it goes stops at the name in the first word and names that instead",
 			Read: func(cells map[string]oracle.Result) (string, string) {
-				r := cells["opt/a-bad-letter-behind-a-good-one"]
+				r := cells["opt/a-refusable-letter-behind-a-refusable-name"]
 				if strings.TrimSpace(r.Stderr) == "" {
-					return "", "this shell refused nothing — the recorded cell holds no refusal, so the row says nothing about what one leaves applied"
+					return "", "this shell refused nothing — the recorded cell holds no refusal, so the row says nothing about which pass reached one first"
 				}
+				name := strings.Contains(r.Stderr, "zzznosuch")
+				letter := strings.Contains(r.Stderr, "q")
 				switch {
-				case strings.Contains(r.Stdout, "u=off"):
+				case name && letter:
+					return "", "the cell names both bad words, which is the dialect that reports every one of them rather than an answer about which pass ran first"
+				case letter:
 					return "Yes", ""
-				case strings.Contains(r.Stdout, "u=on"):
+				case name:
 					return "No", ""
 				}
-				return "", "the refusal ended the script before it could say what had been applied — the cell holds a fatality rather than an answer"
+				return "", "the cell names neither of the two bad words, so it is not this row's refusal"
 			},
 		},
 		{

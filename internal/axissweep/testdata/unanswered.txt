@@ -351,6 +351,7 @@ ksh   NegatedTestRecordsThePostNegationStatus
 ksh   QuitResetRestoresTheDefault
 ksh   ReadonlyRecordsTheCompoundAttribute
 ksh   SelectAssumesUnboundedWidth
+ksh   SetValidatesOptionLettersFirst
 ksh   SubscriptedArrayLiteral
 ksh   TestAndArithmeticUpdatePipelineStatus
 ksh   TransformLetterCheckedOnlyWhenValued

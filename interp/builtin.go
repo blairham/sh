@@ -594,9 +594,9 @@ func (r *Runner) setOptionsAndOperands(_ context.Context, args []string) int {
 	return 0
 }
 
-// refuseBeforeApplyingSetOptions is the pass bash and ksh93 make over every
-// option word before either of them applies one, and is the whole of where
-// that reading is decided.
+// refuseBeforeApplyingSetOptions is the pass bash makes over every option
+// word's letters before it applies one, and is the whole of where that
+// reading is decided.
 //
 // A dialect that applies as it goes needs nothing here: the loop below is
 // already that reading. What this adds is the other one, where a single bad

@@ -61,9 +61,15 @@ type Element struct {
 	Nested Array
 }
 
-// str is an element holding a string, which is every element in five of the
+// Scalar is an element holding a string, which is every element in five of the
 // six columns.
-func str(v string) Element { return Element{Str: v} }
+//
+// Exported because a dialect builds produced tables of them and an embedder
+// hands whole arrays in; `str` is the same thing under the name the rest of
+// this package reads better with.
+func Scalar(v string) Element { return Element{Str: v} }
+
+func str(v string) Element { return Scalar(v) }
 
 // nested is an element holding an array of its own.
 func nested(a Array) Element { return Element{Nested: a} }
@@ -1185,7 +1191,7 @@ func (r *Runner) assignWholeArraySubscript(a *syntax.Assign) {
 		}
 		value := r.assignValue(a)
 		if a.Append {
-			v, joined := r.appendedValue(a.Name, r.AssocArrays[a.Name][key], value)
+			v, joined := r.appendedValue(a.Name, r.AssocArrays[a.Name][key].scalar(), value)
 			if !joined {
 				return
 			}

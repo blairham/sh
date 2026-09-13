@@ -18,7 +18,7 @@ import (
 // associative one — measured, and the whole reason `declare -A` exists. The
 // attribute has to be on the *name*, set by `declare -A` or `typeset -A`,
 // because the subscript's meaning is decided before any value is looked at.
-type AssocArray map[string]string
+type AssocArray map[string]Element
 
 // keys returns the assigned keys, sorted.
 //
@@ -41,9 +41,26 @@ func (a AssocArray) values() []string {
 	keys := a.keys()
 	out := make([]string, 0, len(keys))
 	for _, k := range keys {
-		out = append(out, a[k])
+		out = append(out, a[k].scalar())
 	}
 	return out
+}
+
+// equal reports whether two tables hold the same value under the same keys.
+//
+// Its own method for Array.equal's reason: an element may hold an array, which
+// makes it uncomparable, so maps.Equal does not compile over this type.
+func (a AssocArray) equal(b AssocArray) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k, v := range a {
+		w, held := b[k]
+		if !held || !v.equal(w) {
+			return false
+		}
+	}
+	return true
 }
 
 // assocDeclared reports whether the name carries the associative attribute.
@@ -133,7 +150,7 @@ func (r *Runner) setAssocElem(name, key, value string) {
 			return
 		}
 	}
-	a[key] = value
+	a[key] = str(value)
 	// Written to, so the name leaves the declared-only set — see
 	// compounddeclaredonly.go.
 	r.compoundWasAssigned(name)
@@ -182,7 +199,7 @@ func (r *Runner) assocSubscript(a AssocArray, e *syntax.ParamExpr) []string {
 		return nil
 	}
 	if v, ok := a[key]; ok {
-		return []string{v}
+		return []string{v.scalar()}
 	}
 	return r.absentAssocElement(e, key)
 }
@@ -410,7 +427,7 @@ func (r *Runner) assocScalar(a AssocArray) (string, bool) {
 	if v, ok := a["0"]; ok && len(a) == 1 {
 		// The two answers agree, so nothing is asked — the join of one value
 		// is that value.
-		return v, true
+		return v.scalar(), true
 	}
 	if r.ask(r.sem().ArrayScalarIsTheWholeArray, "a plain `$a` giving the whole array") {
 		return strings.Join(a.values(), " "), true
@@ -427,7 +444,7 @@ func (r *Runner) assocScalar(a AssocArray) (string, bool) {
 		return vs[0], true
 	}
 	v, ok := a["0"]
-	return v, ok
+	return v.scalar(), ok
 }
 
 // assignAssocLiteral is `m=([k]=v …)` on a declared name — and `m+=(…)`,
@@ -820,14 +837,14 @@ func (r *Runner) assocElementProducer(name string) (func(*Runner, string) (strin
 // one is what that seam exists to avoid, and an append is a read.
 func (r *Runner) assocElemCurrent(name, key string) string {
 	if a, stored := r.AssocArrays[name]; stored {
-		return a[key]
+		return a[key].scalar()
 	}
 	if produce, ok := r.dynamicAssocElements[name]; ok {
 		v, _ := produce(r, key)
 		return v
 	}
 	if produce, ok := r.DynamicAssocs[name]; ok {
-		return produce(r)[key]
+		return produce(r)[key].scalar()
 	}
 	return ""
 }

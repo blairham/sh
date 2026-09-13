@@ -123,10 +123,10 @@ const (
 func zshWidgetsView(r *interp.Runner) interp.AssocArray {
 	out := make(interp.AssocArray, len(bindkeyWidgets))
 	for name := range bindkeyWidgets {
-		out[name] = zshWidgetBuiltin
+		out[name] = interp.Scalar(zshWidgetBuiltin)
 	}
 	for name, def := range readWidgets(r) {
-		out[name] = zshWidgetSpelling(def)
+		out[name] = interp.Scalar(zshWidgetSpelling(def))
 	}
 	return out
 }

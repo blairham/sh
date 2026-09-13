@@ -3164,13 +3164,13 @@ func (r *Runner) compoundMeetingAnAttribute(name string) (startedOver bool) {
 // compoundMeetingAnAttribute gives: that path asks the write question.
 func (r *Runner) foldAssocElems(name string, a AssocArray) {
 	for k, v := range a {
-		folded, ok := r.attributeFolded(name, v)
+		folded, ok := r.attributeFolded(name, v.scalar())
 		if !ok {
 			// The evaluation failed and has said so; the table is left as it
 			// stands rather than half rewritten.
 			return
 		}
-		a[k] = folded
+		a[k] = str(folded)
 	}
 }
 

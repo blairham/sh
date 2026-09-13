@@ -307,7 +307,7 @@ func (r *Runner) arithElement(x *syntax.ArithIndex) (arithNum, error) {
 	// answer `$(( m[k] ))` with 7. Evaluating it instead read the wrong
 	// element and said nothing, which is the silent half of a wrong answer.
 	if a, ok := r.assocFor(x.Name); ok {
-		return r.arithElemValue(a[x.Sub])
+		return r.arithElemValue(a[x.Sub].scalar())
 	}
 	if r.reportArithWholeArraySubscript(x) {
 		// Named and answered: the operand is zero and the expression keeps

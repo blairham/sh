@@ -60,7 +60,7 @@ func zshParametersView(r *interp.Runner) interp.AssocArray {
 	out := make(interp.AssocArray, len(names))
 	for _, name := range names {
 		if a, ok := r.ParameterAttributes(name); ok {
-			out[name] = describeParameter(a)
+			out[name] = interp.Scalar(describeParameter(a))
 		}
 	}
 	return out

@@ -307,7 +307,7 @@ func TestMatchingDeclaresOverNothingTheShellProduces(t *testing.T) {
 	// Both kinds of produced parameter, because the guard has to name both
 	// and a test that knew only one would let the other through.
 	before := func(r *Runner) {
-		r.SetDynamicAssoc("qtable", func(*Runner) AssocArray { return AssocArray{"k": "v"} })
+		r.SetDynamicAssoc("qtable", func(*Runner) AssocArray { return AssocArray{"k": Scalar("v")} })
 		r.MarkReadonly("qtable")
 		r.SetDynamicArray("qlist", func(*Runner) []string { return []string{"x"} })
 		r.MarkReadonly("qlist")

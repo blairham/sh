@@ -98,7 +98,7 @@ func TestAnAbsentParameterIsNotADynamicOne(t *testing.T) {
 	var out, errs strings.Builder
 	r := seamRunner(t, &out, &errs)
 	r.SetAbsentParameter("nothere", "parameter not implemented yet")
-	r.SetDynamicAssoc("real", func(*Runner) AssocArray { return AssocArray{"k": "v"} })
+	r.SetDynamicAssoc("real", func(*Runner) AssocArray { return AssocArray{"k": Scalar("v")} })
 	if r.DynamicParameter("nothere") {
 		t.Error("DynamicParameter(nothere) = true, want false — nothing produces it")
 	}

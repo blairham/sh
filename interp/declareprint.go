@@ -611,7 +611,7 @@ func (r *Runner) clusteredDeclaration(d declaration) string {
 			// Sorted keys are this implementation's choice: the shells
 			// promise no order at all, and a deterministic listing is worth
 			// having. See AssocArray.keys.
-			b.WriteString("[" + r.clusteredKey(k) + "]=" + r.declareQuoted(d.assoc[k]) + " ")
+			b.WriteString("[" + r.clusteredKey(k) + "]=" + r.declareQuoted(d.assoc[k].scalar()) + " ")
 		}
 		b.WriteString(")")
 		return b.String()
@@ -814,7 +814,7 @@ func (r *Runner) exportSpelledDeclaration(d declaration) string {
 			// do, which is the trap listing's style rather than the alias
 			// one — measured, not assumed.
 			key := r.quoteListedValue(ListingQuoteWhenNeededPlain, "`typeset -p`", k)
-			pairs = append(pairs, "["+key+"]="+r.declareQuoted(d.assoc[k]))
+			pairs = append(pairs, "["+key+"]="+r.declareQuoted(d.assoc[k].scalar()))
 		}
 		return head + "=( " + strings.Join(pairs, " ") + " )"
 	case d.isArr:
@@ -850,7 +850,7 @@ func (r *Runner) bareAssignmentValue(d declaration) (string, bool) {
 		pairs := make([]string, 0, len(d.assoc))
 		for _, k := range d.assoc.keys() {
 			// Keys quote the way values do here, `$'...'` included.
-			pairs = append(pairs, "["+r.declareQuoted(k)+"]="+r.declareQuoted(d.assoc[k]))
+			pairs = append(pairs, "["+r.declareQuoted(k)+"]="+r.declareQuoted(d.assoc[k].scalar()))
 		}
 		return "(" + strings.Join(pairs, " ") + ")", true
 	case d.isArr:

@@ -32,7 +32,7 @@ func TestDescribingAProducedTableDoesNotAskItToDescribeItself(t *testing.T) {
 			table := AssocArray{}
 			for _, name := range inner.ParameterNames() {
 				if a, ok := inner.ParameterAttributes(name); ok {
-					table[name] = kindWord(a.Kind)
+					table[name] = Scalar(kindWord(a.Kind))
 				}
 			}
 			return table
@@ -157,7 +157,7 @@ func TestTheTwoReadingsOfParameterNamesAgree(t *testing.T) {
 	// reachable through a second branch.
 	r.Vars["onlyscalar"] = "1"
 	r.Arrays = map[string]Array{"onlyarray": {0: {Str: "x"}}}
-	r.AssocArrays = map[string]AssocArray{"onlyassoc": {"k": "v"}}
+	r.AssocArrays = map[string]AssocArray{"onlyassoc": {"k": Scalar("v")}}
 	r.Dynamic = map[string]func(*Runner) string{"onlymade": func(*Runner) string { return "" }}
 	r.DynamicArrays = map[string]func(*Runner) []string{"onlymadearray": func(*Runner) []string { return nil }}
 	r.DynamicAssocs = map[string]func(*Runner) AssocArray{"onlymadeassoc": func(*Runner) AssocArray { return nil }}

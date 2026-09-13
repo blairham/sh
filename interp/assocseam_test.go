@@ -170,7 +170,7 @@ func TestAProducedAssociationIsAViewAndNotASnapshot(t *testing.T) {
 	r.SetDynamicAssoc("view", func(*Runner) AssocArray {
 		copied := make(AssocArray, len(table))
 		for k, v := range table {
-			copied[k] = v
+			copied[k] = Scalar(v)
 		}
 		return copied
 	})
@@ -203,7 +203,7 @@ func TestAWriteToAProducedAssociationCannotShadowIt(t *testing.T) {
 	r.SetDynamicAssoc("view", func(*Runner) AssocArray {
 		copied := make(AssocArray, len(table))
 		for k, v := range table {
-			copied[k] = v
+			copied[k] = Scalar(v)
 		}
 		return copied
 	})
@@ -238,7 +238,7 @@ func TestDeclaringAProducedAssociationDoesNotShadowIt(t *testing.T) {
 	var out, errs strings.Builder
 	r := seamRunner(t, &out, &errs)
 	r.SetDynamicAssoc("view", func(*Runner) AssocArray {
-		return AssocArray{"a": "1"}
+		return AssocArray{"a": Scalar("1")}
 	})
 	runSeam(t, r, "typeset -A view\nprintf '[%s]' \"${view[a]}\"\n")
 	if out.String() != "[1]" {
@@ -371,7 +371,7 @@ func TestRemoveFunctionWillNotTakeAPreludeFunction(t *testing.T) {
 func TestAKeyAProducedAssociationDoesNotAnswerRefusesByName(t *testing.T) {
 	var out, errs strings.Builder
 	r := seamRunner(t, &out, &errs)
-	r.SetDynamicAssoc("partial", func(*Runner) AssocArray { return AssocArray{"here": "yes"} })
+	r.SetDynamicAssoc("partial", func(*Runner) AssocArray { return AssocArray{"here": Scalar("yes")} })
 	r.SetAbsentElements("partial", "no answer for that one")
 	runSeam(t, r, `printf '[%s]' "${partial[here]}"
 printf '[%s]' "${partial[nowhere]}"
@@ -394,7 +394,7 @@ printf '[%s]' "after"`)
 func TestAskingAboutAKeyAProducedAssociationLacksIsAnswered(t *testing.T) {
 	var out, errs strings.Builder
 	r := seamRunner(t, &out, &errs)
-	r.SetDynamicAssoc("partial", func(*Runner) AssocArray { return AssocArray{"here": "yes"} })
+	r.SetDynamicAssoc("partial", func(*Runner) AssocArray { return AssocArray{"here": Scalar("yes")} })
 	r.SetAbsentElements("partial", "no answer for that one")
 	// The set test needs the grammar that has it, which is one dialect's —
 	// named as a flag rather than as a shell, which is the rule for a test in
@@ -427,7 +427,7 @@ func TestAskingAboutAKeyAProducedAssociationLacksIsAnswered(t *testing.T) {
 func TestTheWholeOfAPartialAssociationIsStillReadable(t *testing.T) {
 	var out, errs strings.Builder
 	r := seamRunner(t, &out, &errs)
-	r.SetDynamicAssoc("partial", func(*Runner) AssocArray { return AssocArray{"here": "yes"} })
+	r.SetDynamicAssoc("partial", func(*Runner) AssocArray { return AssocArray{"here": Scalar("yes")} })
 	r.SetAbsentElements("partial", "no answer for that one")
 	runSeam(t, r, `printf '[%s]' "${partial[@]}" "${partial[*]}" "${#partial[@]}"`+"\n")
 	if got, want := out.String(), "[yes][yes][1]"; got != want {
@@ -448,7 +448,7 @@ func TestTheWholeOfAPartialAssociationIsStillReadable(t *testing.T) {
 func TestAProducedAssociationWithoutTheReasonStillReadsEmpty(t *testing.T) {
 	var out, errs strings.Builder
 	r := seamRunner(t, &out, &errs)
-	r.SetDynamicAssoc("plain", func(*Runner) AssocArray { return AssocArray{"here": "yes"} })
+	r.SetDynamicAssoc("plain", func(*Runner) AssocArray { return AssocArray{"here": Scalar("yes")} })
 	runSeam(t, r, `printf '[%s]' "${plain[nowhere]}"; printf '[%s]' "after"`+"\n")
 	if got, want := out.String(), "[][after]"; got != want {
 		t.Errorf("output = %q, want %q", got, want)
@@ -477,11 +477,11 @@ func TestAKeyedProducerAnswersWithoutBuildingTheTable(t *testing.T) {
 	whole := 0
 	r.SetDynamicAssoc("view", func(*Runner) AssocArray {
 		whole++
-		return AssocArray{"a": "1", "b": "2"}
+		return AssocArray{"a": Scalar("1"), "b": Scalar("2")}
 	})
 	r.SetDynamicAssocElement("view", func(_ *Runner, key string) (string, bool) {
-		v, ok := AssocArray{"a": "1", "b": "2"}[key]
-		return v, ok
+		v, ok := AssocArray{"a": Scalar("1"), "b": Scalar("2")}[key]
+		return v.Str, ok
 	})
 	runSeam(t, r, `printf '[%s][%s][%s]' "${view[a]}" "${view[b]}" "${view[nope]}"`)
 	if got, want := out.String(), "[1][2][]"; got != want {
@@ -498,7 +498,7 @@ func TestAKeyedProducerAnswersWithoutBuildingTheTable(t *testing.T) {
 func TestAKeyedProducerSayingNotFoundIsAnAbsentElement(t *testing.T) {
 	var out, errs strings.Builder
 	r := seamRunner(t, &out, &errs)
-	r.SetDynamicAssoc("view", func(*Runner) AssocArray { return AssocArray{"here": ""} })
+	r.SetDynamicAssoc("view", func(*Runner) AssocArray { return AssocArray{"here": Scalar("")} })
 	r.SetDynamicAssocElement("view", func(_ *Runner, key string) (string, bool) {
 		return "", key == "here"
 	})
@@ -523,11 +523,11 @@ func TestTheWholeArraySpellingsStillBuildTheTable(t *testing.T) {
 	whole := 0
 	r.SetDynamicAssoc("view", func(*Runner) AssocArray {
 		whole++
-		return AssocArray{"a": "1"}
+		return AssocArray{"a": Scalar("1")}
 	})
 	r.SetDynamicAssocElement("view", func(_ *Runner, key string) (string, bool) {
-		v, ok := AssocArray{"a": "1"}[key]
-		return v, ok
+		v, ok := AssocArray{"a": Scalar("1")}[key]
+		return v.Str, ok
 	})
 	runSeam(t, r, `printf '[%s]' "${view[@]}" "${view[*]}"`)
 	if got, want := out.String(), "[1][1]"; got != want {
@@ -550,7 +550,7 @@ func TestTheWholeArraySpellingsStillBuildTheTable(t *testing.T) {
 func TestAKeyedProducerStillRefusesAnAbsentElementByName(t *testing.T) {
 	var out, errs strings.Builder
 	r := seamRunner(t, &out, &errs)
-	r.SetDynamicAssoc("view", func(*Runner) AssocArray { return AssocArray{"here": "yes"} })
+	r.SetDynamicAssoc("view", func(*Runner) AssocArray { return AssocArray{"here": Scalar("yes")} })
 	r.SetDynamicAssocElement("view", func(_ *Runner, key string) (string, bool) {
 		return "yes", key == "here"
 	})
@@ -579,7 +579,7 @@ func TestAKeyedProducerStillRefusesAnAbsentElementByName(t *testing.T) {
 func TestAStoredTableShadowsTheKeyedProducerToo(t *testing.T) {
 	var out, errs strings.Builder
 	r := seamRunner(t, &out, &errs)
-	r.SetDynamicAssoc("view", func(*Runner) AssocArray { return AssocArray{"a": "produced"} })
+	r.SetDynamicAssoc("view", func(*Runner) AssocArray { return AssocArray{"a": Scalar("produced")} })
 	r.SetDynamicAssocElement("view", func(*Runner, string) (string, bool) {
 		return "keyed", true
 	})
@@ -606,7 +606,7 @@ func TestAskingWhetherANameIsAnAssociationProducesNothing(t *testing.T) {
 		whole++
 		copied := make(AssocArray, len(table))
 		for k, v := range table {
-			copied[k] = v
+			copied[k] = Scalar(v)
 		}
 		return copied
 	})

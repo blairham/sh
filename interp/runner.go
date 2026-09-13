@@ -5397,7 +5397,7 @@ func (r *Runner) matchesSavedVar(u savedVar) bool {
 		return false
 	}
 	m, inTable := r.AssocArrays[u.name]
-	return inTable == u.inTable && maps.Equal(m, u.table)
+	return inTable == u.inTable && m.equal(u.table)
 }
 
 // assignForm says how an assignment was written, which one dialect answers a
@@ -6449,7 +6449,7 @@ func (r *Runner) assign(a *syntax.Assign) {
 			// name already holding a compound is one question for an array
 			// and a table alike, and it is asked at the store instead — see
 			// scalarOverCompound.
-			v, ok := r.appendedValue(a.Name, r.AssocArrays[a.Name]["0"], value)
+			v, ok := r.appendedValue(a.Name, r.AssocArrays[a.Name]["0"].scalar(), value)
 			if !ok {
 				return
 			}

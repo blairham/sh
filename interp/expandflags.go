@@ -1120,7 +1120,7 @@ func (r *Runner) namedBase(name, flags string) (words []string, set, isList bool
 			keys := a.keys()
 			out := make([]string, 0, 2*len(keys))
 			for _, k := range keys {
-				out = append(out, k, a[k])
+				out = append(out, k, a[k].scalar())
 			}
 			return out, len(a) > 0, true
 		case hasK:

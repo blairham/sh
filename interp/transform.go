@@ -353,7 +353,7 @@ func (r *Runner) arrayPairs(name string) (keys, vals []string, assoc, stored boo
 		ks := a.keys()
 		vs := make([]string, len(ks))
 		for i, k := range ks {
-			vs[i] = a[k]
+			vs[i] = a[k].scalar()
 		}
 		return ks, vs, true, true
 	}

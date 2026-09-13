@@ -111,9 +111,9 @@ func echotiBuiltin(r *interp.Runner, tables *capabilityTables, args []string) in
 	}
 	if kinds[name] == repl.StringCapability {
 		// Bytes for the terminal, and nothing added to them.
-		_, _ = fmt.Fprint(r.Out(), value)
+		_, _ = fmt.Fprint(r.Out(), value.Str)
 		return 0
 	}
-	_, _ = fmt.Fprintln(r.Out(), value)
+	_, _ = fmt.Fprintln(r.Out(), value.Str)
 	return 0
 }

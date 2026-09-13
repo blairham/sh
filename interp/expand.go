@@ -310,17 +310,43 @@ func (r *Runner) globFields(fields []string) []string {
 	if fields == nil {
 		return nil
 	}
-	out := make([]string, 0, len(fields))
-	for _, f := range fields {
+	// out stays nil while every field so far has come back as itself, which
+	// is what happens to a command line with no pattern in it — and that is
+	// most command lines. The slice is built from the first field that
+	// actually changes, carrying the untouched ones over, so the ordinary
+	// case returns the slice it was given and allocates nothing. It was a
+	// fifth of the allocations in the gate's workload (#1403), which has no
+	// pattern in it at all.
+	var out []string
+	begin := func(upTo, extra int) {
+		out = make([]string, 0, len(fields)+extra)
+		out = append(out, fields[:upTo]...)
+	}
+	for i, f := range fields {
 		matches, dropped := r.glob(f)
-		if len(matches) > 0 {
+		switch {
+		case len(matches) > 0:
+			if out == nil {
+				begin(i, len(matches))
+			}
 			out = append(out, matches...)
-			continue
+		case dropped:
+			if out == nil {
+				begin(i, 0)
+			}
+		default:
+			unescaped := globUnescape(f)
+			if out == nil {
+				if unescaped == f {
+					continue
+				}
+				begin(i, 0)
+			}
+			out = append(out, unescaped)
 		}
-		if dropped {
-			continue
-		}
-		out = append(out, globUnescape(f))
+	}
+	if out == nil {
+		return fields
 	}
 	return out
 }

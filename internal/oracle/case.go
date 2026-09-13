@@ -2696,6 +2696,21 @@ echo "reached-after st=$?"`,
 		Why:     "the two rules meeting: an empty arm holds a `;` the dialect steps over and then the terminator, and ksh93 names the `;` rather than the `;;` — so #1207's step-over outranks the terminator where both could apply. The same text with a newline after the `;` goes back to naming the `;;`, which is why the pair could not be read as one rule from two probes (#2233)",
 	},
 	{
+		ID: "unterminated/a-case-arms-pattern-that-ran-out", Category: "syntax errors", SyntaxError: true,
+		Snippet: "case x in x) : ;; zzz",
+		Why:     "an arm's pattern begun and never closed, with the input ending on it. Five columns say the input ran out — dash and ash `(expecting \")\")`, ksh93 `` `case' unmatched ``, zsh naming the word — and bash alone names the **newline** and echoes the source line, at the line the pattern is on rather than the line after. Pairs with the row below, which is what says bash is *reading* the run-out as a newline rather than happening to word it that way (#2251)",
+	},
+	{
+		ID: "unterminated/the-same-pattern-with-its-newline-written", Category: "syntax errors", SyntaxError: true,
+		Snippet: "case x in x) : ;; zzz\n",
+		Why:     "the discriminator for the row above: the identical script with the trailing newline actually present. Every other column changes its answer — dash to `newline unexpected`, ash to `unexpected newline`, ksh93 to `` `newline' unexpected `` a line further on, zsh to `\\n` — and bash gives the same sentence, the same echoed line and the same line number as without it. One column answering both spellings alike is what puts the rule in the grammar rather than in the wording, and it is why the flag substitutes a token instead of adding a message",
+	},
+	{
+		ID: "unterminated/an-arms-open-paren-with-nothing-behind-it", Category: "syntax errors", SyntaxError: true,
+		Snippet: "case x in (",
+		Why:     "the same position reached with no pattern word read at all, which says the reading is the *position* and not the word: bash names the newline here too, where `case x in` — one character less, and the arm never begun — is the unterminated `case` in bash as well. So the substitution starts at the arm's paren rather than at the first pattern token",
+	},
+	{
 		ID: "core/a-separator-where-a-loop-variable-belongs", Category: "command language", SyntaxError: true,
 		Snippet: `for ; in a b`,
 		Why:     "a token that is present and could never be a name, which separates the two questions the bare `for` runs together: there is no end of input here, so a shell answering it as an unfinished construct would be wrong. Three of the four name the `;` exactly as they name it anywhere else and dash gives the same bad-loop-variable sentence it gives `for` itself, which is what says the classification is the dialect's and not the token's",
@@ -5005,6 +5020,41 @@ echo "st=$?"`,
 		ID: "procsub/a-file-substitution-in-a-condition", Category: "redirection",
 		Snippet: `[[ x == =(x) ]] && echo hit || echo miss; echo after`,
 		Why:     "a condition is not a place a substitution may stand, even at the front of a word where one would otherwise open: the shell with the construct names it and abandons the rest of the input, so neither `miss` nor `after` is printed. Its status is 1 where the same refusal for `<(x)` is 2, which is the only thing that distinguishes the two — the sentence is identical",
+	},
+	{
+		ID: "procsub/a-condition-operand", Category: "redirection",
+		Snippet: `[[ x == <(:) ]] && echo hit || echo miss; echo after`,
+		Why:     "the pipe spelling of the row above, and the position #930 was filed from. Three columns say no and each says it differently: bash performs the substitution and matches against a path, so it prints `miss` and then `after`; zsh reads the word and refuses it at the run, at status 2; ksh93 refuses the opener **while reading**, at status 3, and never runs a line of the input. Neither `hit`, `miss` nor `after` is printed in the two that refuse",
+	},
+	{
+		ID: "procsub/a-condition-in-a-branch-never-taken", Category: "redirection",
+		Snippet: `false && [[ x == <(:) ]]; echo reached`,
+		Why:     "the discriminator that separates the two refusals in the row above, and the reason this shell's ksh answer was in the wrong place rather than merely worded wrong. The condition is in a branch that never runs, so a shell refusing it at the run prints `reached` and a shell refusing it at the parse prints nothing: zsh prints it and ksh93 exits 3 with the input abandoned. A corpus that only held the row above would grade both readings the same",
+	},
+	{
+		ID: "procsub/a-case-arms-pattern", Category: "redirection",
+		Snippet: `case x in <(:)) echo hit;; *) echo star;; esac; echo after`,
+		Why:     "the second of the five positions ksh93 refuses the opener in, and the one that says the rule is not about conditions. bash and zsh take the arm — the pattern is a path, which `x` does not match, so both print `star` — and ksh93 is `` `<(' unexpected `` at status 3 with nothing run. Filed as a fact about a condition's operand; a flag written to that description would have accepted this line",
+	},
+	{
+		ID: "procsub/a-loop-headers-word-list", Category: "redirection",
+		Snippet: `for i in <(:); do echo "[${i%%/*}]"; done; echo after`,
+		Why:     "the third position, and the one that shows the refusal is the *header's* and not the loop's: bash and zsh iterate once over a path, and `for i in a; do echo <(:) >/dev/null; done` — the same construct in the body, where commands stand — runs in ksh93 too. The subject is trimmed to its first path component so the record holds no descriptor number",
+	},
+	{
+		ID: "procsub/an-array-literals-element", Category: "redirection",
+		Snippet: `a=( <(:) ); echo "[${#a[@]}]"; echo after`,
+		Why:     "the fourth. bash and zsh build a one-element array holding a path and ksh93 refuses the opener while reading. A count rather than the element, because the element is a descriptor path and no record can hold one",
+	},
+	{
+		ID: "procsub/a-here-strings-operand", Category: "redirection",
+		Snippet: `cat <<< <(:) > /dev/null; echo "st=$?"; echo after`,
+		Why:     "the fifth, and the one that draws the boundary the flag needs: a here-string's operand is text to be fed in rather than a file to be opened, and ksh93 refuses it there while taking `cat < <(:)`, which is a redirection *target*. So the allowance is not \"a redirection's operand\" — the operator decides, and a rule written from the `<` row alone would have accepted this one",
+	},
+	{
+		ID: "procsub/a-redirection-target-is-taken", Category: "redirection",
+		Snippet: `cat < <(echo hi); echo "st=$?"`,
+		Why:     "the control for the six rows above: the position ksh93 does take, so the refusals are a rule about where a word stands rather than the construct being unreachable outside an argument. Every column with the construct prints `hi` and `st=0`",
 	},
 	{
 		ID: "procsub/an-unterminated-file-substitution", Category: "redirection", SyntaxError: true,

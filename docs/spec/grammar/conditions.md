@@ -244,9 +244,45 @@ the operand must not have started the command first, and that is
 observable: the command has side effects, and a refusal that came after
 the expansion would leave them behind.
 
-What is not reproduced yet: ksh93 refuses while *reading*, at status 3,
-and this implementation reads the word and refuses it at the run, at
-status 2. Same answer, wrong moment.
+ksh93's refusal is the parser's, and it is **not about conditions**.
+Re-measured 2026-09-13 under `env -i PATH=/usr/bin:/bin` with a scratch
+`HOME`, ksh93u+ 2012-08-01 over `-c`, the opener is refused in five
+positions and taken in two:
+
+| written | ksh93 |
+| --- | --- |
+| `[[ x == <(:) ]]`, `[[ -f <(:) ]]`, `[[ <(:) ]]` | ``` `<(' unexpected ```, 3 |
+| `case <(:) in *) :;; esac` | the same |
+| `case x in <(:)) :;; esac` | the same |
+| `for i in <(:); do :; done` | the same |
+| `select i in <(:); do break; done` | the same |
+| `a=( <(:) )` | the same |
+| `cat <<< <(:)` | the same |
+| `[[ x == >(:) ]]` | ``` `>(' unexpected ```, 3 |
+| `echo <(:)`, `cat <(:)`, `: <(:)`, `set -- <(:)` | a path |
+| `cat < <(:)` | runs — a redirection target |
+| `for i in a; do echo <(:); done` | a path — the body is commands |
+
+So the rule is **where a word stands**, not what a condition may hold: a
+process substitution stands only where a command takes a word — an
+argument, or a file redirection's target — and the condition is one of
+five positions that are not it. The grammar flag is named for that:
+`ProcessSubstitutionOnlyWhereACommandTakesAWord`, ksh93 only. A flag
+spelled for the condition operand would have accepted the other eight
+lines.
+
+It is the parse and not the run, which the rows above cannot show on
+their own. `false && [[ x == <(:) ]]; echo reached` prints nothing and
+exits 3 — the condition is in a branch never taken, so a shell refusing
+it at the run would have printed `reached`. zsh prints it.
+
+Two boundaries the same measurement draws, and neither is this rule:
+
+- At the *start* of a command ksh93 never lexes the opener, `<` being a
+  redirection operator there. `if <(:); then :; fi`, `echo | <(:)` and
+  `! <(:)` are ``` `)' unexpected ``` — the paren, not the pair.
+- The opener also ends the word before it: `echo a<(:)b` writes three
+  fields in ksh93 where this shell writes one.
 
 ## `-gt` is numeric and `>` is a string comparison
 

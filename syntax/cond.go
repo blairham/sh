@@ -215,7 +215,16 @@ func (p *Parser) condWord() *Word {
 	if p.atWord("]]") {
 		return nil
 	}
-	return p.word()
+	w := p.word()
+	// One dialect has no word here for a process substitution and says so
+	// while reading, before the condition is ever reached. See
+	// Parser.refuseProcSubstOutOfPlace; the axis that answers the *other*
+	// three columns is interp.Semantics.ProcessSubstitutionInCondition, and
+	// this is deliberately not it (#930).
+	if p.refuseProcSubstOutOfPlace(w) {
+		return nil
+	}
+	return w
 }
 
 // condOperatorHasItsOperand reports whether a one-operand test really has one

@@ -640,6 +640,10 @@ func Semantics() interp.Semantics {
 	// As in bash: `set -oe x` is `Illegal option -o x`, and `set -ozzznosuch`
 	// with nothing behind it lists the options and then stops at `-z`.
 	s.SetOLetterAttachesItsName = interp.No
+	// And it applies as it goes: `command set -e -Z` leaves errexit **on**,
+	// which is why the unguarded `set -e -Z` ends the script — errexit was
+	// already in force when the refusal failed the builtin.
+	s.SetValidatesOptionLettersFirst = interp.No
 	s.BadSetOptionNameAtInvocationExitsZero = interp.No
 	// dash has no `[[ ]]` to ask it in; answered so that a shell built from
 	// this preset with the construct turned back on is not left refusing.

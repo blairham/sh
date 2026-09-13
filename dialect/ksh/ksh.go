@@ -1480,6 +1480,20 @@ func Semantics() interp.Semantics {
 	// an option *name* rather than reading it as a letter. Its own usage
 	// line spells the form, `[-o[option]]`.
 	s.SetOLetterAttachesItsName = interp.Yes
+	// unanswered SetValidatesOptionLettersFirst: this column does agree with
+	// bash about what a refusal leaves behind — `command set -e -Z` is
+	// errexit off, and `set -o -Z`, where a bare `-o` takes no next word,
+	// lists nothing at all — but it gets there by a different reading. It
+	// takes in every option word, reports every bad one in the order they
+	// were written, names and letters alike, and applies none of them:
+	// `set -o nosuch -z` draws both sentences and one usage line, and
+	// `command set -u -o zzznosuch` is nounset off where bash's is on. That
+	// is SetReportsEveryBadOption carried one step further, and folding it
+	// into an axis about *letters* would either lose the name reports or put
+	// bash's errexit off where the measurement says it is on. The builtin
+	// declines to put the question to any dialect that reports every bad
+	// option, so the unanswered field is never reached rather than quietly
+	// defaulting; #2670 is where the second mechanism is filed.
 	s.BadSetOptionNameAtInvocationExitsZero = interp.No
 	s.UnknownConditionOptionIsAStatus = interp.No
 	s.ReturnOutsideAFunctionIsRefused = interp.No

@@ -12469,11 +12469,78 @@ rest of the word never read (#2640). Asked only where characters follow the
 `o`; `set -o name`, `set -euo pipefail` and a bare `set -o` are read alike in
 all seven and consult nothing.
 
-Not folded in: bash reports the letter it refuses *after* the listing at 1
-and survivably, where its own `set -Z` is 2 and ends an `sh` script. That is
-not a third value of this axis — `set -oe -Q` in bash applies neither the `e`
-nor the listing and reports the *later* word's error, so bash validates every
-option word before applying any, which no per-refusal status can express.
+Not a third value of this axis, and now an axis of its own: bash reports the
+letter it refuses *after* the listing at 1 and survivably, where its own
+`set -Z` is 2 and ends an `sh` script. That is
+`SetValidatesOptionLettersFirst` below (#2660).
+
+**`SetValidatesOptionLettersFirst`** — bash **yes** · dash no · ksh93 *not
+asked* · zsh no · ash no
+
+Makes the `set` builtin read the option letters of every word it was given
+before it applies any of them, so that one bad letter anywhere leaves the
+shell exactly as it was.
+
+Measured 2026-09-13 across all seven columns, with `command set` in front of
+the builtin so that the columns where a refusal is fatal live long enough to
+be asked what they applied — and with a control row, `command set -e` alone,
+proving the probe can see errexit at all:
+
+| written | bash 5.3, bash-as-`sh`, bash 3.2, ksh93 | dash, BusyBox ash |
+| --- | --- | --- |
+| `command set -e -Z` | errexit **off** | errexit **on** |
+| `command set -Z -e` | errexit off | errexit off |
+
+The second row is the control that makes the first one about *order* rather
+than about the refusal: with the bad letter in front, nothing is applied
+anywhere, and neither reading can be told from the other. zsh takes neither
+probe — its refusal ends a `-c` script whatever stands around it, and
+`command` does not reach its builtins — so it was asked with an action
+instead of a state: `set -e -Z -o` there writes the whole option table with
+`errexit on` in it, and `set -Z -e -o` does too. A column that read
+everything first would have written no table at all, which is exactly what
+`set -o -Z` does in ksh93, where a bare `-o` takes no next word.
+
+The reach is letters, and only letters. A bad `-o` **name** behind a good
+letter leaves that letter applied in every bash column — `command set -e -o
+zzznosuch` is errexit on — so what runs first knows the letter table and not
+the name table, and the name is refused later, by the pass that applies. Word
+boundaries need no axis: `set -e -- -Z` and `set -e x -Z` turn errexit on and
+make `-Z` a positional parameter in all seven, so the pass stops where option
+parsing stops.
+
+**The consequence it was found by.** Characters welded behind an `o` are what
+the `-o` takes under either reading, so the validating pass never reads them
+as letters — and where the dialect does not weld, the applying pass reads
+them as letters afterwards and is the one that refuses. That refusal is an
+ordinary failure rather than a usage error: `set -ozzznosuch` in bash lists
+the options, says `-z: invalid option` with the usage block under it, reports
+**1** and carries on. 1 is not a dialect's number here. bash is the only
+column that can reach the second pass at all — the two whose first pass
+reaches names as well also weld, so they have no unvalidated letters — which
+is why it is written where it is decided rather than added to `Diagnostics`
+as a field one preset could fill in.
+
+**ksh93 is not asked this and does not answer it**, which is a decision and
+not an omission. It leaves nothing applied, like bash, but it gets there by a
+different reading: it takes in every option word, reports every bad one in
+the order they were written, names and letters alike — `set -o nosuch -z`
+draws both sentences and one usage line — and applies none of them.
+`command set -u -o zzznosuch` is nounset **off** there where bash's is on.
+That is `SetReportsEveryBadOption` carried one step further, and folding it
+in would either lose the name reports or put bash's errexit off where the
+measurement says it is on. The builtin declines to ask the question of any
+dialect that reports every bad option, so the unanswered field is never
+reached rather than quietly defaulting.
+
+**The invocation is a different mechanism** and is deliberately outside this
+axis, which is read only where `set` itself is speaking. Measured the same
+day: `bash -eZ -c cmd` and `bash -e -Z -c cmd` both exit **1** with no usage
+block, while `bash -Ze -c cmd` and `bash -Z -e -c cmd` both exit **2** with
+the whole shell usage. So the front end is position-sensitive where the
+builtin is not — `set -eZ` and `set -Ze` are both 2 and both apply nothing —
+and one pass cannot be both. docs/spec/invocation.md records that wrinkle
+where it was already noted.
 
 **It is `set`'s fatality and not the option's**, which a dialect with a
 second option builtin makes visible. Measured on a pipe in zsh 5.9.2,

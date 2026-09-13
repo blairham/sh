@@ -1546,6 +1546,12 @@ type Runner struct {
 	// call of the builtin.
 	setRefusalOwed bool
 	setUsageOwed   bool
+
+	// setLettersWelded records that the letters being read are the ones that
+	// were welded behind an `-o` in the same word, which the pass that
+	// validates every letter before applying any cannot see. See
+	// setWeldedLetters and Semantics.SetValidatesOptionLettersFirst.
+	setLettersWelded bool
 	// setRefusalSpelling is which of `set`'s two refusals owes the fatality
 	// above — the long `-o` name or the option letter — because the two have
 	// their own status and their own axis and one dialect answers them

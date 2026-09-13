@@ -1952,19 +1952,33 @@ table — where `o` is nobody's option letter — and the whole word came back
 in a comment and took neither side, so `sh -oerrexit` was `unknown option` in
 every dialect. The core still answers neither and still refuses the word.
 
-**A second wrinkle here is measured and deliberately not modeled.** bash
-reports the letter it refuses *after* the listing at 1 and survivably, where
-its own `set -Z` is 2 and ends an `sh` script. That is not a third value of
-the axis: `set -oe -Q` in bash applies neither the `e` nor the listing and
-reports the *later* word's error, so bash validates every option word before
-applying any — which no per-refusal status can express.
+**A second wrinkle here is now an axis of its own.** bash reports the letter
+it refuses *after* the listing at 1 and survivably, where its own `set -Z` is
+2 and ends an `sh` script. That is not a third value of the welding axis:
+`set -oe -Q` in bash applies neither the `e` nor the listing and reports the
+*later* word's error, so bash reads every option word's letters before it
+applies any — `Semantics.SetValidatesOptionLettersFirst`, #2660, described in
+docs/spec/semantics.md. The characters welded behind an `o` are what the `-o`
+takes under either reading, so that pass never sees them, and the pass that
+applies is the one left to refuse them.
 
 **One wrinkle is measured and deliberately not modeled.** bash exits **1**,
-with no usage block, when a letter it *has* comes before the bad one in the
-same word: `bash -eq -c cmd` is 1 where `bash -qe -c cmd` is 2. dash and
-ksh93 answer 2 either way and zsh 1 either way, so bash is alone and only in
-one of the two orders. An axis for the position of a letter within a bundle
-would be a field asked once.
+with no usage block, when a letter it *has* comes before the bad one:
+`bash -eq -c cmd` is 1 where `bash -qe -c cmd` is 2. dash and ksh93 answer 2
+either way and zsh 1 either way, so bash is alone and only in one of the two
+orders. An axis for the position of a letter within a bundle would be a field
+asked once.
+
+**And it is not the builtin's pass seen from the front end**, which is what
+#2660 went looking for. Measured 2026-09-13 with the same letters spaced out
+as well as bundled: `bash -eZ -c cmd` and `bash -e -Z -c cmd` are both 1 with
+no usage block, and `bash -Ze -c cmd` and `bash -Z -e -c cmd` are both 2 with
+the whole shell usage — so the seam here is whether *anything* was accepted
+first, in this word or an earlier one, and not the bundle at all. A good
+long name in front does it too: `bash -o errexit -Z -c cmd` is 1. The builtin
+is the other way round — `set -eZ` and `set -Ze` both report 2 and both leave
+nothing applied — so a validating pass cannot be what produces this, and one
+mechanism does not serve both routes.
 
 ## Naming a version: `--version`
 

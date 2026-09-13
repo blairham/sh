@@ -40,6 +40,7 @@ ash    QuitIgnoredWhenNotInteractive                        Yes
 ash    QuitResetRestoresTheDefault                          No
 ash    ReadonlyReassignmentFatal                            Yes
 ash    SetOLetterAttachesItsName                            No
+ash    SetValidatesOptionLettersFirst                       No
 ash    ShiftPastEndFatal                                    No
 ash    WaitRemembersAReapedJob                              Yes
 bash   AliasInvalidNameFatal                                No
@@ -65,6 +66,7 @@ bash   QuitIgnoredWhenNotInteractive                        Yes
 bash   QuitResetRestoresTheDefault                          No
 bash   ReadonlyReassignmentFatal                            No
 bash   SetOLetterAttachesItsName                            No
+bash   SetValidatesOptionLettersFirst                       Yes
 bash   ShiftPastEndFatal                                    No
 bash   WaitRemembersAReapedJob                              Yes
 dash   AliasInvalidNameFatal                                -
@@ -90,6 +92,7 @@ dash   QuitIgnoredWhenNotInteractive                        No
 dash   QuitResetRestoresTheDefault                          -
 dash   ReadonlyReassignmentFatal                            Yes
 dash   SetOLetterAttachesItsName                            No
+dash   SetValidatesOptionLettersFirst                       No
 dash   ShiftPastEndFatal                                    Yes
 dash   WaitRemembersAReapedJob                              Yes
 ksh    AliasInvalidNameFatal                                Yes
@@ -115,6 +118,7 @@ ksh    QuitIgnoredWhenNotInteractive                        No
 ksh    QuitResetRestoresTheDefault                          -
 ksh    ReadonlyReassignmentFatal                            Yes
 ksh    SetOLetterAttachesItsName                            Yes
+ksh    SetValidatesOptionLettersFirst                       -
 ksh    ShiftPastEndFatal                                    Yes
 ksh    WaitRemembersAReapedJob                              No
 zsh    AliasInvalidNameFatal                                -
@@ -140,5 +144,6 @@ zsh    QuitIgnoredWhenNotInteractive                        Yes
 zsh    QuitResetRestoresTheDefault                          Yes
 zsh    ReadonlyReassignmentFatal                            Yes
 zsh    SetOLetterAttachesItsName                            Yes
+zsh    SetValidatesOptionLettersFirst                       No
 zsh    ShiftPastEndFatal                                    No
 zsh    WaitRemembersAReapedJob                              Yes

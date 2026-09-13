@@ -2032,6 +2032,12 @@ func Semantics() interp.Semantics {
 	// behavior: `set -oerrexit zzznosuch` is errexit with `zzznosuch` as $1,
 	// and `set -oe` is `no such option: e`.
 	s.SetOLetterAttachesItsName = interp.Yes
+	// And it applies as it goes, asked with an action rather than a state
+	// because its refusal ends a `-c` script whatever stands around it:
+	// `set -e -Z -o` writes the whole option table with `errexit on` in it,
+	// and `set -Z -e -o` does too — this column does not even stop at the
+	// bad word.
+	s.SetValidatesOptionLettersFirst = interp.No
 	s.BadSetOptionNameAtInvocationExitsZero = interp.No
 	s.UnknownConditionOptionIsAStatus = interp.Yes
 	s.ReturnOutsideAFunctionIsRefused = interp.No

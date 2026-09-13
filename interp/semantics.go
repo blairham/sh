@@ -5692,6 +5692,78 @@ type Semantics struct {
 	// than guessed at here.
 	SetOLetterAttachesItsName Answer
 
+	// SetValidatesOptionLettersFirst makes the `set` builtin read the option
+	// letters of every word it was given before it applies any of them, so
+	// that one bad letter anywhere leaves the shell exactly as it was.
+	//
+	// Yes in the three bash columns; No in dash, BusyBox ash and zsh.
+	// Measured 2026-09-13 across all seven, with `command set` in front of
+	// the builtin so that the four columns where a refusal is fatal live long
+	// enough to be asked what they applied, and with a control row —
+	// `command set -e` alone — proving the probe can see errexit at all:
+	//
+	//	command set -e -Z || true; case $- in *e*) …    bash, ksh93  errexit off
+	//	                                                dash, ash    errexit on
+	//	command set -Z -e || true; case $- in *e*) …    all six      errexit off
+	//
+	// zsh takes neither probe — its refusal ends a `-c` script whatever
+	// stands around it, and `command` does not reach its builtins — so it was
+	// asked the other way, with an action rather than a state: `set -e -Z -o`
+	// writes the whole option table with `errexit on` in it. A column that
+	// validated first would have listed nothing, which is exactly what
+	// `set -o -Z` does in ksh93, where a bare `-o` takes no next word.
+	//
+	// The reach is letters, and only letters. A bad `-o` *name* behind a good
+	// letter leaves that letter applied in every bash column — `command set
+	// -e -o zzznosuch` is errexit on — so the pass that runs first knows the
+	// letter table and not the name table, and the name is refused later by
+	// the applying pass. Word boundaries are unanimous and need no axis:
+	// `set -e -- -Z` and `set -e x -Z` turn errexit on and make `-Z` a
+	// positional parameter in all seven, so the pass stops where option
+	// parsing stops.
+	//
+	// **ksh93 is not asked this and does not answer it**, which is a decision
+	// and not an omission. It leaves nothing applied, like bash — but it gets
+	// there by reading every option word, reporting every bad one in the
+	// order they were written, names and letters alike, and applying none of
+	// them: `set -o nosuch -z` draws both sentences and one usage line, and
+	// `command set -u -o zzznosuch` is nounset **off** where bash's is on.
+	// That is SetReportsEveryBadOption carried one step further and it is a
+	// second mechanism, not a value of this one — a letters-only pass there
+	// would lose the name reports, and a pass over both would put bash's
+	// errexit off where the measurement says it is on. refuseBeforeApplying
+	// SetOptions declines to ask any dialect that reports every bad option,
+	// so the unanswered field is never reached rather than quietly defaulting.
+	//
+	// The consequence this was found by. Characters welded behind an `o` are
+	// what the `-o` takes under either reading, so the validating pass never
+	// reads them as letters — and where the dialect does not weld, the
+	// applying pass reads them as letters afterwards and is the one that
+	// refuses. That refusal is an ordinary failure rather than a usage error:
+	// `set -ozzznosuch` in bash lists the options, says `-z: invalid option`
+	// with the usage block under it, reports **1** and carries on, where the
+	// same shell's `set -Z` is 2 and ends an `sh` script (#2660). 1 is not a
+	// dialect's number here — bash is the only column that can reach the
+	// second pass at all, because the two that validate names as well also
+	// weld — so it is written where it is decided rather than added to
+	// Diagnostics as a field one preset could answer.
+	//
+	// The invocation is a different mechanism and is deliberately outside
+	// this axis, which is read only where `set` itself is speaking. Measured
+	// on the same day: `bash -eZ -c cmd` and `bash -e -Z -c cmd` both exit
+	// **1** with no usage block, while `bash -Ze -c cmd` and `bash -Z -e -c
+	// cmd` both exit 2 with the whole shell usage. So the front end is
+	// position-sensitive where the builtin is not — `set -eZ` and `set -Ze`
+	// are both 2 and both apply nothing — and one pass cannot be both.
+	// docs/spec/invocation.md records it where it was already noted.
+	//
+	// Asked only at the disagreement: a bad option letter with something
+	// already read in front of it, and a bad letter welded behind an `-o`.
+	// A `set` whose letters are all letters the dialect has consults nothing,
+	// and neither does a refusal of the first letter of the first word, where
+	// applying as you go has applied nothing either.
+	SetValidatesOptionLettersFirst Answer
+
 	// SetArrayLetter is `set -A name value …`, which assigns an array through
 	// a name a variable holds — the thing `name=(…)` cannot do, because the
 	// name is a literal there.

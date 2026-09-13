@@ -17580,6 +17580,46 @@ echo "read=[$l]"`,
 		Why:     "a plain emulation resets options to its defaults with no -R asked for: the errexit set before it is gone and the script reaches its end",
 	},
 	{
+		ID: "emulate/leaves-a-history-option-alone", Category: "builtins",
+		Snippet: `setopt histignorespace; emulate sh; [[ -o histignorespace ]]; echo "kept=$?"`,
+		Why:     "and it resets *some* options rather than all of them, which is the half resets-the-options cannot show. Measured one name at a time on zsh 5.9.2: a bare emulation puts back 81 of the 185 names and leaves 104 where the script left them. This is one of the 104, and it is the one a session reads before it records a line — so the divergence was a shell quietly forgetting that leading spaces were to be kept",
+	},
+	{
+		ID: "emulate/leaves-the-unfinished-output-mark-alone", Category: "builtins",
+		Snippet: `setopt nopromptsp; emulate sh; [[ -o promptsp ]]; echo "sp=$?"`,
+		Why:     "the same claim on the option this was first noticed on. `nopromptsp` is what somebody sets when a plugin draws progress on a line of its own, and an emulation later in the same rc file turning the mark back on is a shell arguing with its own configuration",
+	},
+	{
+		ID: "emulate/leaves-the-editing-mode-alone", Category: "builtins",
+		Snippet: `setopt vi; emulate sh; [[ -o vi ]]; echo "vi=$?"`,
+		Why:     "a third of the 104, chosen because nothing about the editing mode is portability: `emulate sh` is a claim about how a script is read and not about which keys the person at the keyboard presses",
+	},
+	{
+		ID: "emulate/resets-a-glob-option", Category: "builtins",
+		Snippet: `setopt extendedglob; emulate sh; [[ -o extendedglob ]]; echo "gone=$?"`,
+		Why:     "the control for the three rows above, and it is what makes them readable: a name from the 81 really is put back, so those three are not a shell that has stopped emulating at all. Which way an option goes is the whole question, and a row asserting only the leaving half would pass for either answer",
+	},
+	{
+		ID: "emulate/resets-a-warning-option", Category: "builtins",
+		Snippet: `setopt warncreateglobal; emulate sh; [[ -o warncreateglobal ]]; echo "gone=$?"`,
+		Why:     "a second control, and one that is not about globbing — so the partition is not being read as `emulate` moving the pattern matcher and nothing else",
+	},
+	{
+		ID: "emulate/dash-r-resets-what-a-bare-emulation-leaves", Category: "builtins",
+		Snippet: `setopt histignorespace; emulate -R sh; [[ -o histignorespace ]]; echo "gone=$?"`,
+		Why:     "and the letter is what the wider set is for. `-R` was read here as adding nothing, on the strength of a bare emulation already resetting everything; with the bare form narrowed to the 81, `-R` is the form that reaches the rest — every name but the nine saying how the shell was started. Same option as leaves-a-history-option-alone and the opposite answer, which is what says the two forms differ",
+	},
+	{
+		ID: "emulate/dash-l-resets-the-same-set-as-a-bare-one", Category: "builtins",
+		Snippet: `f() { setopt histignorespace extendedglob; emulate -L sh; [[ -o histignorespace ]]; echo "kept=$?"; [[ -o extendedglob ]]; echo "gone=$?"; }; f`,
+		Why:     "`-L` scopes the emulation to the call and does not widen or narrow what it resets: inside the function the same 81 are back at their defaults and the same 104 are untouched. Both halves in one case on purpose, since a letter that reset nothing and a letter that reset everything would each pass half of it",
+	},
+	{
+		ID: "emulate/ksh-partitions-the-options-the-same-way", Category: "builtins",
+		Snippet: `setopt correct; emulate ksh; [[ -o correct ]]; echo "kept=$?"; setopt nullglob; emulate ksh; [[ -o nullglob ]]; echo "gone=$?"`,
+		Why:     "which names move is a property of the option and not of the emulation — measured for `sh`, `ksh`, `zsh` and `csh` separately and identical in all four, though what each name is reset *to* is not. So this is one table consulted four ways rather than four tables",
+	},
+	{
 		ID: "emulate/dash-c-restores-after", Category: "builtins",
 		Snippet: `setopt no_glob; emulate sh -c 'echo inner'; echo x*; echo "st=$?"`,
 		Why:     "-c runs the string under the emulation and puts everything back, options included: the no_glob set before it still holds after, so the glob prints literal at 0",

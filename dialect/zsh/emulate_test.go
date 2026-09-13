@@ -64,6 +64,95 @@ func TestEmulateResetsOptions(t *testing.T) {
 	}
 }
 
+// TestEmulateLeavesTheOptionsItDoesNotOwn — and it resets *some* options
+// rather than all of them, which TestEmulateResetsOptions cannot show on its
+// own.
+//
+// Measured on zsh 5.9.2, one name at a time: a bare emulation puts 81 of the
+// 185 names back to a default and leaves the other 104 where the script left
+// them. Every case below pairs a name from the 104 with one from the 81, and
+// the pairing is the point — a shell that had stopped emulating altogether
+// would pass the first half of each, and the pre-#2515 shell passed the
+// second.
+func TestEmulateLeavesTheOptionsItDoesNotOwn(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct{ src, want string }{
+		// The one a session reads before it records a line, which is why
+		// #2515 was filed against a live option rather than a hypothesis.
+		{
+			`setopt histignorespace; setopt extendedglob; emulate sh; ` +
+				`[[ -o histignorespace ]]; echo "kept=$?"; [[ -o extendedglob ]]; echo "gone=$?"`,
+			"kept=0\ngone=1\n",
+		},
+		// The one the divergence was first noticed on.
+		{
+			`setopt nopromptsp; setopt nullglob; emulate sh; ` +
+				`[[ -o promptsp ]]; echo "sp=$?"; [[ -o nullglob ]]; echo "gone=$?"`,
+			"sp=1\ngone=1\n",
+		},
+		// Nothing about which keys the person at the keyboard presses is
+		// portability.
+		{
+			`setopt vi; setopt warncreateglobal; emulate ksh; ` +
+				`[[ -o vi ]]; echo "vi=$?"; [[ -o warncreateglobal ]]; echo "gone=$?"`,
+			"vi=0\ngone=1\n",
+		},
+		// `emulate zsh` partitions the table the same way, which is what says
+		// the set belongs to the option rather than to the emulation.
+		{
+			`setopt correct; setopt kshglob; emulate zsh; ` +
+				`[[ -o correct ]]; echo "kept=$?"; [[ -o kshglob ]]; echo "gone=$?"`,
+			"kept=0\ngone=1\n",
+		},
+	} {
+		if out, st := runZsh(t, dir, tc.src); out != tc.want || st != 0 {
+			t.Errorf("%s: out %q status %d, want %q", tc.src, out, st, tc.want)
+		}
+	}
+}
+
+// TestEmulateDashRResetsWhatABareEmulationLeaves — the letter is what the
+// wider set is for.
+//
+// It was read here as adding nothing, on the strength of a bare emulation
+// already resetting the whole table. With the bare form narrowed to the 81,
+// `-R` is the form that reaches the rest: every name but the nine describing
+// how the shell was started.
+func TestEmulateDashRResetsWhatABareEmulationLeaves(t *testing.T) {
+	dir := t.TempDir()
+	// The same option as the first row above and the opposite answer, which
+	// is what says the two forms differ rather than that the option moved.
+	out, st := runZsh(t, dir, `setopt histignorespace; emulate -R sh; [[ -o histignorespace ]]; echo "gone=$?"`)
+	if out != "gone=1\n" || st != 0 {
+		t.Errorf("out %q status %d, want the option back at its default", out, st)
+	}
+	out, _ = runZsh(t, dir, `setopt histignorespace; emulate sh; [[ -o histignorespace ]]; echo "kept=$?"`)
+	if out != "kept=0\n" {
+		t.Errorf("out %q, want a bare emulation to leave the same option alone", out)
+	}
+	// And the nine stand through the strict form too — `login` here, which a
+	// script may move in both directions and no emulation puts back.
+	out, _ = runZsh(t, dir, `setopt login; emulate -R zsh; [[ -o login ]]; echo "still=$?"`)
+	if out != "still=0\n" {
+		t.Errorf("out %q, want the shell's own state left standing", out)
+	}
+}
+
+// TestEmulateDashLResetsTheSameSetAsABareOne — `-L` scopes the emulation to
+// the call and does not widen or narrow what it resets.
+//
+// Worth its own case because the letter looks like it might: it is the form a
+// prompt theme opens every function with, so a wrong set here is wrong on
+// every function call rather than once in an rc file.
+func TestEmulateDashLResetsTheSameSetAsABareOne(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(),
+		`f() { setopt histignorespace extendedglob; emulate -L sh; `+
+			`[[ -o histignorespace ]]; echo "kept=$?"; [[ -o extendedglob ]]; echo "gone=$?"; }; f`)
+	if out != "kept=0\ngone=1\n" || st != 0 {
+		t.Errorf("out %q status %d, want the same 81 back and the same 104 untouched", out, st)
+	}
+}
+
 // A word naming no emulation is passed over in silence, the mode unchanged —
 // measured on `fish` and on `SH`, whose case does not match.
 func TestEmulateIgnoresAnUnknownMode(t *testing.T) {

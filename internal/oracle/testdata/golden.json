@@ -72146,6 +72146,57 @@
         "TimedOut": false
       }
     },
+    "emulate/dash-l-resets-the-same-set-as-a-bare-one": {
+      "ash": {
+        "Stdout": "kept=2~gone=2",
+        "Stderr": "\u003cshell\u003e: setopt: not found~\u003cshell\u003e: emulate: not found~\u003cshell\u003e: histignorespace: unknown operand~\u003cshell\u003e: extendedglob: unknown operand",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "kept=1~gone=1",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found~\u003cshell\u003e: line 1: emulate: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "kept=1~gone=1",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found~\u003cshell\u003e: line 1: emulate: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "kept=1~gone=1",
+        "Stderr": "\u003cshell\u003e: setopt: command not found~\u003cshell\u003e: emulate: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "kept=127~gone=127",
+        "Stderr": "\u003cshell\u003e: 1: setopt: not found~\u003cshell\u003e: 1: emulate: not found~\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "kept=1~gone=1",
+        "Stderr": "\u003cshell\u003e: setopt: not found~\u003cshell\u003e: emulate: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "kept=0~gone=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "emulate/dash-o-sets-an-option": {
       "ash": {
         "Stdout": "st=127~on=2~off=2",
@@ -72197,6 +72248,261 @@
         "TimedOut": false
       }
     },
+    "emulate/dash-r-resets-what-a-bare-emulation-leaves": {
+      "ash": {
+        "Stdout": "gone=2",
+        "Stderr": "\u003cshell\u003e: setopt: not found~\u003cshell\u003e: emulate: not found~\u003cshell\u003e: histignorespace: unknown operand",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "gone=1",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found~\u003cshell\u003e: line 1: emulate: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "gone=1",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found~\u003cshell\u003e: line 1: emulate: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "gone=1",
+        "Stderr": "\u003cshell\u003e: setopt: command not found~\u003cshell\u003e: emulate: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "gone=127",
+        "Stderr": "\u003cshell\u003e: 1: setopt: not found~\u003cshell\u003e: 1: emulate: not found~\u003cshell\u003e: 1: [[: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "gone=1",
+        "Stderr": "\u003cshell\u003e: setopt: not found~\u003cshell\u003e: emulate: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "gone=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "emulate/ksh-partitions-the-options-the-same-way": {
+      "ash": {
+        "Stdout": "kept=2~gone=2",
+        "Stderr": "\u003cshell\u003e: setopt: not found~\u003cshell\u003e: emulate: not found~\u003cshell\u003e: correct: unknown operand~\u003cshell\u003e: setopt: not found~\u003cshell\u003e: emulate: not found~\u003cshell\u003e: nullglob: unknown operand",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "kept=1~gone=1",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found~\u003cshell\u003e: line 1: emulate: command not found~\u003cshell\u003e: line 1: setopt: command not found~\u003cshell\u003e: line 1: emulate: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "kept=1~gone=1",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found~\u003cshell\u003e: line 1: emulate: command not found~\u003cshell\u003e: line 1: setopt: command not found~\u003cshell\u003e: line 1: emulate: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "kept=1~gone=1",
+        "Stderr": "\u003cshell\u003e: setopt: command not found~\u003cshell\u003e: emulate: command not found~\u003cshell\u003e: setopt: command not found~\u003cshell\u003e: emulate: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "kept=127~gone=127",
+        "Stderr": "\u003cshell\u003e: 1: setopt: not found~\u003cshell\u003e: 1: emulate: not found~\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: setopt: not found~\u003cshell\u003e: 1: emulate: not found~\u003cshell\u003e: 1: [[: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "kept=1~gone=1",
+        "Stderr": "\u003cshell\u003e: setopt: not found~\u003cshell\u003e: emulate: not found~\u003cshell\u003e: setopt: not found~\u003cshell\u003e: emulate: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "kept=0~gone=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "emulate/leaves-a-history-option-alone": {
+      "ash": {
+        "Stdout": "kept=2",
+        "Stderr": "\u003cshell\u003e: setopt: not found~\u003cshell\u003e: emulate: not found~\u003cshell\u003e: histignorespace: unknown operand",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "kept=1",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found~\u003cshell\u003e: line 1: emulate: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "kept=1",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found~\u003cshell\u003e: line 1: emulate: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "kept=1",
+        "Stderr": "\u003cshell\u003e: setopt: command not found~\u003cshell\u003e: emulate: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "kept=127",
+        "Stderr": "\u003cshell\u003e: 1: setopt: not found~\u003cshell\u003e: 1: emulate: not found~\u003cshell\u003e: 1: [[: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "kept=1",
+        "Stderr": "\u003cshell\u003e: setopt: not found~\u003cshell\u003e: emulate: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "kept=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "emulate/leaves-the-editing-mode-alone": {
+      "ash": {
+        "Stdout": "vi=2",
+        "Stderr": "\u003cshell\u003e: setopt: not found~\u003cshell\u003e: emulate: not found~\u003cshell\u003e: vi: unknown operand",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "vi=1",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found~\u003cshell\u003e: line 1: emulate: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "vi=1",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found~\u003cshell\u003e: line 1: emulate: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "vi=1",
+        "Stderr": "\u003cshell\u003e: setopt: command not found~\u003cshell\u003e: emulate: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "vi=127",
+        "Stderr": "\u003cshell\u003e: 1: setopt: not found~\u003cshell\u003e: 1: emulate: not found~\u003cshell\u003e: 1: [[: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "vi=1",
+        "Stderr": "\u003cshell\u003e: setopt: not found~\u003cshell\u003e: emulate: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "vi=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "emulate/leaves-the-unfinished-output-mark-alone": {
+      "ash": {
+        "Stdout": "sp=2",
+        "Stderr": "\u003cshell\u003e: setopt: not found~\u003cshell\u003e: emulate: not found~\u003cshell\u003e: promptsp: unknown operand",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "sp=1",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found~\u003cshell\u003e: line 1: emulate: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "sp=1",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found~\u003cshell\u003e: line 1: emulate: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "sp=1",
+        "Stderr": "\u003cshell\u003e: setopt: command not found~\u003cshell\u003e: emulate: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "sp=127",
+        "Stderr": "\u003cshell\u003e: 1: setopt: not found~\u003cshell\u003e: 1: emulate: not found~\u003cshell\u003e: 1: [[: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "sp=1",
+        "Stderr": "\u003cshell\u003e: setopt: not found~\u003cshell\u003e: emulate: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "sp=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "emulate/names-the-current-mode": {
       "ash": {
         "Stdout": "",
@@ -72242,6 +72548,108 @@
       },
       "zsh": {
         "Stdout": "zsh~sh",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "emulate/resets-a-glob-option": {
+      "ash": {
+        "Stdout": "gone=2",
+        "Stderr": "\u003cshell\u003e: setopt: not found~\u003cshell\u003e: emulate: not found~\u003cshell\u003e: extendedglob: unknown operand",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "gone=1",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found~\u003cshell\u003e: line 1: emulate: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "gone=1",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found~\u003cshell\u003e: line 1: emulate: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "gone=1",
+        "Stderr": "\u003cshell\u003e: setopt: command not found~\u003cshell\u003e: emulate: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "gone=127",
+        "Stderr": "\u003cshell\u003e: 1: setopt: not found~\u003cshell\u003e: 1: emulate: not found~\u003cshell\u003e: 1: [[: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "gone=1",
+        "Stderr": "\u003cshell\u003e: setopt: not found~\u003cshell\u003e: emulate: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "gone=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "emulate/resets-a-warning-option": {
+      "ash": {
+        "Stdout": "gone=2",
+        "Stderr": "\u003cshell\u003e: setopt: not found~\u003cshell\u003e: emulate: not found~\u003cshell\u003e: warncreateglobal: unknown operand",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "gone=1",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found~\u003cshell\u003e: line 1: emulate: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "gone=1",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found~\u003cshell\u003e: line 1: emulate: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "gone=1",
+        "Stderr": "\u003cshell\u003e: setopt: command not found~\u003cshell\u003e: emulate: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "gone=127",
+        "Stderr": "\u003cshell\u003e: 1: setopt: not found~\u003cshell\u003e: 1: emulate: not found~\u003cshell\u003e: 1: [[: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "gone=1",
+        "Stderr": "\u003cshell\u003e: setopt: not found~\u003cshell\u003e: emulate: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "gone=1",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

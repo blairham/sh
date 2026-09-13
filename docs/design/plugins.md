@@ -108,6 +108,62 @@ What does **not** belong in a plugin:
   supplied by a foreign process at an unpredictable moment is not a
   table; it is a negotiation, and the parser has nowhere to wait.
 
+### The default shape is a bridge, not a reimplementation
+
+Given a plugin that passes the test above, there is still a choice about
+what it *contains*, and the default is not obvious enough to leave
+unwritten: **a plugin should drive the user's own installation of a tool
+rather than reimplement it.** #1316 is where this was asked for, and it
+reports the pattern from the author's earlier shell work, whose plugins
+each front an installed tool — a history recorder, a directory-environment
+loader, a completion registry — rather than containing a copy of one.
+
+Three arguments, and only the first is about this repository in
+particular.
+
+**It removes a licensing question rather than answering one.**
+`CLEANROOM.md`'s red list bars vendored or pasted code "however
+reformatted, renamed or 'rewritten line by line'", and bars AI-generated
+code produced by prompting a model to reproduce, port, translate or
+imitate a specific existing implementation. A reimplementation of a
+known tool sits directly under both sentences and has to argue its way
+out every time. A bridge executes the binary the user installed and reads
+what it prints: there is nothing to copy, so there is nothing to argue
+about, and the argument does not have to be had again by the next person.
+
+**It does not inherit the upstream project's maintenance.** A
+reimplementation takes on the tool's bug reports, its feature requests
+and its version skew permanently, with a smaller maintainer count than
+the thing it copied. A bridge takes on none of it — and when it does
+break, it breaks naming the tool rather than naming the shell, which is
+the difference between a report someone can act on and one that lands
+here.
+
+**The user has already configured the thing.** Someone who installed a
+tool chose its settings. A shell that reimplements it hands them a second
+thing to configure and a worse version of what they had.
+
+**The shape to look for is a bridge that inherits an ecosystem.** A
+completion registry covering hundreds of programs is one plugin whose
+benefit is every tool that registry knows, and no per-tool strategy
+reaches that. Note what it costs today: the completion role does not
+exist yet, for the reasons under *Completions are excluded* below, so
+that particular bridge is an argument for taking the third role
+seriously rather than an example of one that could be written now.
+
+Three exceptions, which is why this is a default and not a rule:
+
+- **A capability no tool provides.** Bridging needs something to bridge.
+  Repository status fast enough for a prompt is the standing example
+  (#1314): the best-known implementation of it had to ship a persistent
+  daemon precisely because nothing else answered the question quickly.
+- **Anything on a hot path**, per the exclusion above. A bridge pays a
+  process boundary, and per-keystroke work cannot afford one — which is
+  the same objection the completion role has to answer.
+- **Where the tool's own interface is the problem** rather than its
+  absence. Wrapping an interface nobody can drive produces a plugin with
+  the interface still in it.
+
 ## The surface: two roles, and what is excluded
 
 A plugin declares its roles at the handshake. There are two.

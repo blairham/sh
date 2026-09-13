@@ -3655,8 +3655,8 @@ func (l *Lexer) readOneHeredoc(r *Redirect, quoted bool) {
 			break
 		}
 		linePos := l.pos()
-		line, done := l.heredocLine(strip)
-		if done == delim {
+		line, done, join := l.heredocLine(strip, !quoted)
+		if done == delim && l.delimiterIsReachable(join) {
 			// The delimiter's own line is the command's last, and it is not
 			// part of the body.
 			l.markHeredocEnd(linePos)
@@ -3689,26 +3689,109 @@ func (l *Lexer) markHeredocEnd(at Pos) {
 	}
 }
 
-// heredocLine reads one line. It returns the line including its newline, and
-// separately the line's content with tabs stripped when the operator asked for
-// it, so the caller can compare that against the delimiter.
-func (l *Lexer) heredocLine(strip bool) (line, content string) {
-	begin := l.off
-	for !l.eof() && l.peek() != '\n' {
-		l.advance()
+// heredocJoin says what a body line's backslash-newlines did to it, which is
+// the question [Dialect.HeredocDelimiterAcrossAContinuation] is asked about.
+type heredocJoin uint8
+
+const (
+	// heredocOnePhysicalLine is a line that took no continuation at all.
+	// Every dialect compares it against the delimiter.
+	heredocOnePhysicalLine heredocJoin = iota
+	// heredocJoinedFromTheStart is a line whose every continuation stood
+	// before any text of it, so what the delimiter would be compared against
+	// began at the start of a physical line all the same.
+	heredocJoinedFromTheStart
+	// heredocJoinedAfterText is a line that continued after text, so the
+	// delimiter would have to be recognised in the middle of what was
+	// written as a line.
+	heredocJoinedAfterText
+)
+
+// delimiterIsReachable reports whether a line joined this way is one this
+// dialect will compare against the delimiter at all.
+func (l *Lexer) delimiterIsReachable(j heredocJoin) bool {
+	switch j {
+	case heredocOnePhysicalLine:
+		return true
+	case heredocJoinedFromTheStart:
+		return l.dialect.HeredocDelimiterAcrossAContinuation >= HeredocDelimiterAfterALeadingContinuation
+	default:
+		return l.dialect.HeredocDelimiterAcrossAContinuation == HeredocDelimiterOnTheJoinedLine
 	}
-	content = l.src[begin:l.off]
-	if !l.eof() {
+}
+
+// heredocLine reads one line of a here-document body. It returns the line as
+// written, including its newline and any continuations inside it; the line's
+// content with those continuations removed and tabs stripped when the
+// operator asked for it, so the caller can compare that against the
+// delimiter; and what the continuations did to it.
+//
+// `join` is off for a quoted delimiter, whose body is literal throughout —
+// there a backslash before a newline is two ordinary characters, which is
+// what makes `<<'EOF'` and `<<\EOF` the control for all of this.
+//
+// The line is returned **raw**, with the backslash and the newline still in
+// it, because the body is kept raw: an unquoted body is re-read at expansion
+// time and [Lexer.heredocSpans] already removes a continuation there, the
+// same treatment the escapes beside it get. Removing it here as well would
+// remove it twice.
+//
+// Tabs are stripped from the start of the line *as written*, which is its
+// first physical line, and not from what a continuation brings into it —
+// `<<-EOF` over `→A\` and `→B` is `A→B` in every column of the panel, so the
+// tab the second line opens with survives the join.
+func (l *Lexer) heredocLine(strip, join bool) (line, content string, j heredocJoin) {
+	begin := l.off
+	var joined strings.Builder
+	for {
+		from := l.off
+		for !l.eof() && l.peek() != '\n' {
+			l.advance()
+		}
+		text := l.src[from:l.off]
+		if strip && from == begin {
+			// Tabs only. Spaces are not stripped, which is why a delimiter
+			// indented with spaces never matches.
+			text = strings.TrimLeft(text, "\t")
+		}
+		if !join || l.eof() || !endsInAnOddBackslashRun(text) {
+			joined.WriteString(text)
+			if !l.eof() {
+				l.advance() // the newline
+			}
+			break
+		}
+		if j != heredocJoinedAfterText {
+			if joined.Len() == 0 && len(text) == 1 {
+				j = heredocJoinedFromTheStart
+			} else {
+				j = heredocJoinedAfterText
+			}
+		}
+		// The backslash escapes the newline, so neither is content and the
+		// line goes on into the one below it.
+		joined.WriteString(text[:len(text)-1])
 		l.advance() // the newline
 	}
 	line = l.src[begin:l.off]
 	if strip {
-		// Tabs only. Spaces are not stripped, which is why a delimiter
-		// indented with spaces never matches.
 		line = strings.TrimLeft(line, "\t")
-		content = strings.TrimLeft(content, "\t")
 	}
-	return line, content
+	return line, joined.String(), j
+}
+
+// endsInAnOddBackslashRun reports whether the backslashes ending s leave one
+// of them free to escape whatever comes next.
+//
+// Parity rather than "the last character is a backslash", because a backslash
+// escapes a backslash: `A\\` ends a line in every column of the panel and
+// `A\\\` continues it.
+func endsInAnOddBackslashRun(s string) bool {
+	n := 0
+	for i := len(s) - 1; i >= 0 && s[i] == '\\'; i-- {
+		n++
+	}
+	return n%2 == 1
 }
 
 // bareParamSpecials are the one-character parameters that may follow a `$`

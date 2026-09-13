@@ -12822,6 +12822,15 @@ grades it and nothing drift-checks it either, for the same reason.
 | `heredoc/no-delimiter-and-no-body` | *(no output, status 0)* | **2>** `<script>: line 2: warning: here-document at line 1 delimited by end-of-file (wanted `X')` | **2>** `<script>: line 2: warning: here-document at line 1 delimited by end-of-file (wanted `X')` | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* |
 | `heredoc/a-body-that-runs-to-the-end` | `[body]` | `[body]` | `[body]` | `[body]` | `[body]` | `[body]` | `[body]` |
 | `heredoc/the-delimiter-is-the-whole-line` | `line~EOF x~echo "st=0"` | `line~EOF x~echo "st=0"` **2>** `<script>: line 5: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')` | `line~EOF x~echo "st=0"` **2>** `<script>: line 5: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')` | `line~EOF x~echo "st=0"` | `line~EOF x~echo "st=0"` | `line~EOF x~echo "st=0"` | `line~EOF x~echo "st=0"` |
+| `heredoc/a-continued-body-line-is-joined-before-the-delimiter-is-looked-for` | `AEOF~B~done` | `AEOF~B~done` | `AEOF~B~done` | `AEOF~B~done` | `AEOF~B~done` | `AEOF~B~done` | `AEOF~B~done` |
+| `heredoc/a-quoted-delimiter-joins-no-lines` | `A\~done` | `A\~done` | `A\~done` | `A\~done` | `A\~done` | `A\~done` | `A\~done` |
+| `heredoc/backslashes-before-a-body-lines-newline-pair-off` | `A\~done` | `A\~done` | `A\~done` | `A\~done` | `A\~done` | `A\~done` | `A\~done` |
+| `heredoc/an-odd-run-of-backslashes-still-continues-the-line` | `A\EOF~B~done` | `A\EOF~B~done` | `A\EOF~B~done` | `A\EOF~B~done` | `A\EOF~B~done` | `A\EOF~B~done` | `A\EOF~B~done` |
+| `heredoc/a-joined-line-that-spells-the-delimiter` | `ABC~tail` | `tail` **2>** `<shell>: line 4: ABC: command not found` | `tail` **2>** `<shell>: line 4: ABC: command not found` | `tail` **2>** `<shell>: line 3: ABC: command not found` | `A\~BC~tail` | `tail` **2>** `<shell>:4: command not found: ABC` | `ABC~tail` |
+| `heredoc/a-continuation-before-any-text-still-reaches-the-delimiter` | `tail` **2>** `<shell>: 4: Y: not found~<shell>: 5: ABC: not found` | `tail` **2>** `<shell>: line 4: Y: command not found~<shell>: line 5: ABC: command not found` | `tail` **2>** `<shell>: line 4: Y: command not found~<shell>: line 5: ABC: command not found` | `tail` **2>** `<shell>: line 3: Y: command not found~<shell>: line 4: ABC: command not found` | `ABC~Y~tail` | `tail` **2>** `<shell>:4: command not found: Y~<shell>:5: command not found: ABC` | `tail` **2>** `<shell>: Y: not found~<shell>: ABC: not found` |
+| `heredoc/tabs-are-stripped-from-the-line-and-not-from-what-it-joins-to` | `A	B~done` | `A	B~done` | `A	B~done` | `A	B~done` | `A	B~done` | `A	B~done` | `A	B~done` |
+| `heredoc/stripping-and-joining-are-ordered-and-the-panel-parts-over-which-comes-first` | `\~	EOF~X~done` | `done` **2>** `<shell>: line 4: X: command not found~<shell>: line 5: EOF: command not found` | `done` **2>** `<shell>: line 4: X: command not found~<shell>: line 5: EOF: command not found` | `done` **2>** `<shell>: line 3: X: command not found~<shell>: line 4: EOF: command not found` | `	EOF~X~done` | `	EOF~X~done` | `\~	EOF~X~done` |
+| `heredoc/a-body-line-opening-with-the-delimiters-own-letters` | `ABX~tail` | `ABX~tail` | `ABX~tail` | `ABX~tail` | `AB\~X~tail` | `ABX~tail` | `ABX~tail` |
 | `heredoc/a-delimiter-that-closes-a-command-substitution` | **2>** `<script>: 6: Syntax error: end of file unexpected (expecting ")")` *(status 2)* | `v=[a] st=0` **2>** `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')` | `v=[a] st=0` **2>** `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')` | `v=[a] st=0` | `v=[a] st=0` | **2>** `<script>:6: parse error near `v=$(cat <<EOF'` *(status 1)* | **2>** `<script>: line 6: syntax error: unexpected end of file (expecting ")")` *(status 2)* |
 | `heredoc/a-substitutions-delimiter-is-remarked-on-before-it-runs` | **2>** `<script>: 6: Syntax error: end of file unexpected (expecting ")")` *(status 2)* | `done` **2>** `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')` | `done` **2>** `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')` | `done` | `done` | **2>** `<script>:6: parse error near `v=$(cat <<EOF'` *(status 1)* | **2>** `<script>: line 6: syntax error: unexpected end of file (expecting ")")` *(status 2)* |
 | `heredoc/a-second-delimiter-closes-the-substitution` | **2>** `<script>: 9: Syntax error: end of file unexpected (expecting ")")` *(status 2)* | `v=[x~y]` **2>** `<script>: line 6: warning: here-document at line 4 delimited by end-of-file (wanted `B')` | `v=[x~y]` **2>** `<script>: line 6: warning: here-document at line 4 delimited by end-of-file (wanted `B')` | `v=[x~y]` | `v=[x~y]` | **2>** `<script>:9: parse error near `v=$(cat <<A'` *(status 1)* | **2>** `<script>: line 9: syntax error: unexpected end of file (expecting ")")` *(status 2)* |
@@ -13185,6 +13194,80 @@ grades it and nothing drift-checks it either, for the same reason.
   line
   EOF x
   echo "st=$?"
+  ```
+- `heredoc/a-continued-body-line-is-joined-before-the-delimiter-is-looked-for` — a body line ending in a backslash continues onto the line under it, and the delimiter is looked for on the joined text — so the first `EOF` here was asked for by the line above it and the second one ends the document. Unanimous across the panel, and the one this parser got wrong: it ended the document at the first `EOF` and ran `B` and `EOF` as commands (#2430)
+  ```sh
+  cat <<EOF
+  A\
+  EOF
+  B
+  EOF
+  echo done
+  ```
+- `heredoc/a-quoted-delimiter-joins-no-lines` — the control for the row above: a quoted delimiter makes the body literal throughout, so the backslash before the newline is two ordinary characters, nothing is joined, and the first `EOF` is the delimiter. Unanimous, and already right here — which is what said the gap was in the unquoted reading and not in here-documents generally
+  ```sh
+  cat <<'EOF'
+  A\
+  EOF
+  echo done
+  ```
+- `heredoc/backslashes-before-a-body-lines-newline-pair-off` — two backslashes are an escaped backslash and leave the newline with nothing before it, so this `EOF` *is* the delimiter and the body is a single `A\`. Parity and not the last character, which is what the row below shows from the other side
+  ```sh
+  cat <<EOF
+  A\\
+  EOF
+  echo done
+  ```
+- `heredoc/an-odd-run-of-backslashes-still-continues-the-line` — three backslashes: the first two pair off and the third escapes the newline, so the line continues and the body is `A\EOF` then `B`. Unanimous, and the pair of rows is what makes the rule parity rather than a last-character test
+  ```sh
+  cat <<EOF
+  A\\\
+  EOF
+  B
+  EOF
+  echo done
+  ```
+- `heredoc/a-joined-line-that-spells-the-delimiter` — the axis. `A\` over `BC` joins to exactly the delimiter, and the panel parts three ways over whether that ends the document: bash 5.3, bash 3.2, bash as `sh` and zsh take it, so the body is empty and the `ABC` below is a command; dash and BusyBox ash read it as body and end at the line under it; ksh93 joins nothing here at all. syntax.ContinuedHeredocDelimiter is the field (#2430)
+  ```sh
+  cat <<ABC
+  A\
+  BC
+  ABC
+  echo tail
+  ```
+- `heredoc/a-continuation-before-any-text-still-reaches-the-delimiter` — the same axis at its other value, and the row that separates dash and BusyBox ash from ksh93: the continuation stands before any text of the line, so what the delimiter is compared against still begins where a line begins. Six of the seven columns end the document here and ksh93 alone reads `ABC` as body
+  ```sh
+  cat <<ABC
+  \
+  ABC
+  Y
+  ABC
+  echo tail
+  ```
+- `heredoc/tabs-are-stripped-from-the-line-and-not-from-what-it-joins-to` — `<<-` strips tabs from the start of the line *as written*, which is its first physical line — so the tab the second one opens with is content and the body is `A`, a tab, `B`. Unanimous, and it says the stripping and the joining are ordered rather than independent
+  ```sh
+  cat <<-EOF
+  	A\
+  	B
+  	EOF
+  echo done
+  ```
+- `heredoc/stripping-and-joining-are-ordered-and-the-panel-parts-over-which-comes-first` — the corner below the axis, measured and deliberately not modeled. A `<<-` body line of one tab and a backslash joins to the line under it, and the columns part three ways over what the delimiter is then compared against: bash 5.3, bash 3.2 and bash as `sh` strip the tabs of the *joined* text and end the document there; zsh and ksh93 strip only the tabs the logical line opens with, so `<tab>EOF` is body and the document runs on, which is what this implementation does; dash and BusyBox ash keep the backslash-newline outright and join nothing. Three answers over tab stripping rather than over the delimiter, so a rule for the others would be three rules (#2430)
+  ```sh
+  cat <<-EOF
+  	\
+  	EOF
+  X
+  	EOF
+  echo done
+  ```
+- `heredoc/a-body-line-opening-with-the-delimiters-own-letters` — six of the seven columns join this like any other line and the body is `ABX`. ksh93u+ 2012 alone keeps the backslash and the newline, and the discriminator is that `AB` is a non-empty *prefix* of the delimiter — `B\` over `X` and `ABCD\` over `X` both join there. It reads as an incremental matcher failing to back out rather than as a rule, so it is recorded here and not modeled; the cost is the spelling of a body and never where one ends
+  ```sh
+  cat <<ABC
+  AB\
+  X
+  ABC
+  echo tail
   ```
 - `heredoc/a-delimiter-that-closes-a-command-substitution` — the one place a line that merely *begins* with the delimiter ends the body: `EOF)` inside `$( )`, where the parenthesis that closes the substitution is what follows it. bash and ksh93 take it and the body is `a`; dash and zsh refuse the whole construct, dash wanting the `)` and zsh naming the assignment. So the prefix rule the case above disproves is real for this one shape and in only two of the six — and `EOF junk` in the same position is body in every one of them, which is how the two shapes tell each other apart
   ```sh

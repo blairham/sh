@@ -22,6 +22,11 @@ func Dialect() syntax.Dialect {
 	// what made the failure `no matches found`, which points a
 	// person at globbing rather than at arithmetic (#900).
 	d.DollarBracketArith = true
+	// A here-document body line joined out of two physical ones is compared
+	// against the delimiter whole, as it is in bash: `A\` over `BC` ends an
+	// `ABC` document. dash and BusyBox ash take only a join that began at
+	// the start of a line, and ksh93 takes neither (#2430).
+	d.HeredocDelimiterAcrossAContinuation = syntax.HeredocDelimiterOnTheJoinedLine
 	// `exec {1}>&-` closes the descriptor a *positional parameter* holds,
 	// which is how a prompt theme's scheduler closes the one it was handed.
 	// zsh alone — see the flag for what bash and ksh93 answer instead.

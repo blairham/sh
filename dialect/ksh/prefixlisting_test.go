@@ -18,22 +18,22 @@ import (
 // three (#2619).
 func TestAPrefixListingLeavesOutTheNameThatIsThePrefix(t *testing.T) {
 	for _, c := range []struct{ src, want string }{
-		{`ab=1; abc=2; abd=3; printf "[%s]" "${!ab@}"`, `[abc][abd]`},
-		{`ab=1; abc=2; abd=3; printf "[%s]" "${!ab*}"`, `[abc abd]`},
+		{`zqp=1; zqp_c=2; zqp_d=3; printf "[%s]" "${!zqp@}"`, `[zqp_c][zqp_d]`},
+		{`zqp=1; zqp_c=2; zqp_d=3; printf "[%s]" "${!zqp*}"`, `[zqp_c zqp_d]`},
 		// Unquoted, which is the same list through the splitting rather
 		// than a second rule.
-		{`ab=1; abc=2; abd=3; printf "[%s]" ${!ab@}`, `[abc][abd]`},
+		{`zqp=1; zqp_c=2; zqp_d=3; printf "[%s]" ${!zqp@}`, `[zqp_c][zqp_d]`},
 		// The exact name is the *only* one that matches, so the answer is
 		// nothing at all rather than the name — which is what says the
 		// filter is on the name and not on how many matched.
-		{`ab=1; printf "[%s]" "${!ab@}"`, `[]`},
+		{`zqp=1; printf "[%s]" "${!zqp@}"`, `[]`},
 		// And a prefix nothing extends is still empty rather than a
 		// refusal.
 		{`printf "[%s]" "${!zqnosuch@}"`, `[]`},
 		// A name that only *begins* with the prefix is listed, so the rule
 		// is about equality and not about the prefix having to end at a
 		// separator.
-		{`ab=1; abX=2; printf "[%s]" "${!ab@}"`, `[abX]`},
+		{`zqp=1; zqp_X=2; printf "[%s]" "${!zqp@}"`, `[zqp_X]`},
 	} {
 		if out, st := kshOut(t, c.src); out != c.want || st != 0 {
 			t.Errorf("%s = %q status %d, want %q at 0", c.src, out, st, c.want)

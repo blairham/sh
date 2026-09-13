@@ -50,8 +50,12 @@ func TestAKeyedLiteralOfKeyedElementsIsTaken(t *testing.T) {
 		{`typeset -A m=(); printf "[%s]" "${#m[@]}"`, `[0]`},
 		{`typeset -A m; m[k]=v; printf "[%s]" "${m[k]}"`, `[v]`},
 		// An element that expands to nothing contributes no word, so the
-		// literal is empty rather than unkeyed.
-		{`typeset -A m=($nosuch); printf "[%s]" "${#m[@]}"`, `[0]`},
+		// literal is empty rather than unkeyed. Unset first, because this
+		// helper's runner reads the environment it was started in and a
+		// name that happens to be exported there is a word like any other
+		// — which is how this row passed on a laptop and failed on a Linux
+		// runner.
+		{`unset zqnosuch; typeset -A m=($zqnosuch); printf "[%s]" "${#m[@]}"`, `[0]`},
 	} {
 		if out, st := kshOut(t, c.src); out != c.want || st != 0 {
 			t.Errorf("%s = %q status %d, want %q at 0", c.src, out, st, c.want)

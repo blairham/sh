@@ -174,6 +174,40 @@ type Parser struct {
 	// once is how a wrong rule gets into the tables.
 	separatorStood Pos
 
+	// terminatorStood is where a `case` arm's terminator — `;;` or `;&` —
+	// stands when a command separator stood in front of it, and armTerminator
+	// is how that terminator was spelled.
+	//
+	// The same question separatorStood answers, one construct over, and the
+	// two neighbors that field's comment left unmodeled are what this is.
+	// Measured on ksh93u+ 2012-08-01, 2026-09-12, `-n` over a script file
+	// ending where it is shown:
+	//
+	//	case x in x) : ;;        `case' unmatched  — nothing in front of it
+	//	case x in x) : ;&        `case' unmatched
+	//	case x in x) : ; ;;      `;;' unmatched
+	//	case x in x) : & ;;      `;;' unmatched
+	//	case x in x) : ⏎ ;;      `;;' unmatched    — a newline counts too
+	//	case x in x) : ; ⏎ ;;    `;;' unmatched
+	//	case x in x) : ; ⏎ ;&    `;&' unmatched
+	//	case x in x) ; ;;        `;' unmatched     — the arm has no command
+	//	case x in x) : ; ;; y) : ;
+	//	                         `case' unmatched  — the next arm clears it
+	//
+	// #2233 filed the pair as "the newline may be what decides". It is not:
+	// row three has no newline in it and answers the same as row five, and
+	// row one has neither and answers `case`. What decides is a separator —
+	// `;`, `&` or a newline — standing between the arm's last command and
+	// its terminator. Row eight is separatorStood's and keeps that answer:
+	// an arm with no command at all is the step-over that field measures,
+	// and it outranks this.
+	//
+	// **Diagnostic only**, for the reason written on separatorStood: that
+	// shell has no open-state prompt escape, so what it prompts cannot be
+	// measured and this never reaches Parser.Open().
+	terminatorStood Pos
+	armTerminator   string
+
 	// inCondition says the list about to be read is a keyword's condition,
 	// where one dialect refuses the `;` it steps over elsewhere. Set by
 	// parseCondition and cleared by the parseList that reads it.
@@ -500,10 +534,15 @@ func (p *Parser) opens(word string) func() {
 	// one of these, where `{ ; ` on its own names the `;` — measured.
 	stood := p.separatorStood
 	p.separatorStood = Pos{}
+	// And an arm terminator recorded inside this construct goes with it, for
+	// the same reason: `case x in x) : ; ;; esac` then `{` names the `{`.
+	termStood, termText := p.terminatorStood, p.armTerminator
+	p.terminatorStood, p.armTerminator = Pos{}, ""
 	p.open = append(p.open, opener{word: word, line: int(p.tok.Pos.Line), construct: true})
 	return func() {
 		p.open = p.open[:depth]
 		p.separatorStood = stood
+		p.terminatorStood, p.armTerminator = termStood, termText
 	}
 }
 
@@ -590,6 +629,10 @@ func (p *Parser) unterminated(expected string) *Error {
 			// `` `;' unmatched `` in ksh93u+ where `if :; then` is
 			// `` `then' unmatched ``. See Parser.separatorStood.
 			e.Innermost = ";"
+		} else if p.terminatorStood.IsValid() {
+			// And a `case` arm's terminator with a separator in front of it
+			// is what that same shell names. See Parser.terminatorStood.
+			e.Innermost = p.armTerminator
 		}
 		for i := n - 1; i >= 0; i-- {
 			if p.open[i].construct {
@@ -1072,6 +1115,55 @@ func (p *Parser) parseList() []*Stmt {
 // parseGroup already draws for a reserved word it cannot use.
 func (p *Parser) parseBody() []*Stmt {
 	return p.requireBody(p.parseList())
+}
+
+// recordArmTerminator notes a `case` arm's terminator as the innermost
+// unclosed thing, where a command separator stood in front of it.
+//
+// The separator is read off the source rather than off the tree, because
+// which of the three it was does not matter and a blank between the body and
+// the terminator is not one: `case x in x) : ;;` names the `case` and
+// `case x in x) : ⏎ ;;` names the `;;`. See Parser.terminatorStood for the
+// panel row this answers and for why it is diagnostic only.
+func (p *Parser) recordArmTerminator(it *CaseItem, bodyFrom Pos) {
+	p.terminatorStood, p.armTerminator = Pos{}, ""
+	take := func(text string) {
+		p.terminatorStood, p.armTerminator = p.tok.Pos, text
+	}
+	// Read off the source rather than off the last statement's End(), which
+	// a bare `!` has none of — and a bare `!` is one of the rows: measured,
+	// `case x in x) ! ;;` names the `;;` where `case x in x) : ;;` names the
+	// `case`, so an arm that ran no command answers as the empty one does.
+	before := strings.TrimRight(p.sourceBetween(bodyFrom, p.tok.Pos), " \t")
+	if !armRanACommand(it.Body) {
+		// An arm with no command in it is the terminator's either way, and
+		// the one shape that is not is the step-over: a `;` standing alone
+		// in front of the terminator on the same line is what that shell
+		// names. A newline after it gives the terminator back, which is the
+		// row #2233 says two probes could not tell apart.
+		if strings.TrimLeft(before, " \t") == ";" {
+			take(";")
+			return
+		}
+		take(p.tok.Kind.String())
+		return
+	}
+	if before == "" || !strings.ContainsAny(before[len(before)-1:], ";&\n") {
+		return
+	}
+	take(p.tok.Kind.String())
+}
+
+// armRanACommand reports whether a `case` arm's body ends in a statement that
+// has a command in it. A bare `!` is a pipeline with no commands, which is
+// both the one shape with no End() to ask and the one the shell answers as
+// though the arm were empty.
+func armRanACommand(body []*Stmt) bool {
+	if len(body) == 0 {
+		return false
+	}
+	pipe, isPipe := body[len(body)-1].Expr.(*Pipeline)
+	return !isPipe || len(pipe.Cmds) > 0
 }
 
 // insideACaseArm reports whether the innermost construct the parse is inside
@@ -4614,6 +4706,11 @@ func (p *Parser) parseCase() Command {
 	for p.err == nil && !p.at(TokEOF) && !atEnd() {
 		esacIsAPattern = false
 		p.lex.inCaseArm = false
+		// The arm before this one closed, so its terminator is no longer the
+		// innermost thing anything is inside: measured, `case x in x) : ; ;;
+		// y) : ;` names the `case` where the same text without the second arm
+		// names the `;;`. See Parser.terminatorStood.
+		p.terminatorStood, p.armTerminator = Pos{}, ""
 		it := &CaseItem{Start: p.tok.Pos}
 		// A pattern may carry a leading open paren. Where the paren opened
 		// the *pattern* instead the lexer has already folded it into the
@@ -4668,11 +4765,13 @@ func (p *Parser) parseCase() Command {
 		// ordinary commands, where a newline is a statement separator again.
 		p.lex.inCaseParenList = savedList
 		p.next()
+		bodyFrom := p.tok.Pos
 		it.Body = p.parseList()
 
 		switch p.tok.Kind {
 		case TokDSemi, TokSemiAmp, TokDSemiAmp, TokSemiPipe:
 			it.Term, it.TermPos = p.tok.Kind, p.tok.Pos
+			p.recordArmTerminator(it, bodyFrom)
 			// The terminator's own `p.next()` reads the *next arm's* first
 			// token, so the flag goes back on in front of it.
 			p.lex.inCaseArm = true

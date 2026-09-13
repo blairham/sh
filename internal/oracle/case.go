@@ -2479,6 +2479,26 @@ echo "reached-after st=$?"`,
 		Why:     "an input that ran out after a `;` the dialect stepped over. ksh93 is the shell that names an *innermost keyword* when a construct is left open, and after such a separator the thing it names is the separator: `` `;' unmatched `` where `{ echo a` alone is `` `{' unmatched ``. Ours named the brace. Filed as the `;` that admitted an empty and-or operand, and measured wider — `{ ;` with no and-or in it answers the same, so it is the step-over (#1207)",
 	},
 	{
+		ID: "unterminated/a-case-arm-closed-by-its-terminator", Category: "syntax errors", SyntaxError: true,
+		Snippet: "case x in x) : ;;",
+		Why:     "the control for the three rows below: an arm whose terminator follows its command directly, with the `case` left open. ksh93 — the shell that names an innermost keyword — names the `case` here, so the terminator is not simply what an unterminated `case` always reports",
+	},
+	{
+		ID: "unterminated/a-case-arms-terminator-after-a-separator", Category: "syntax errors", SyntaxError: true,
+		Snippet: "case x in x) : ; ;;",
+		Why:     "the same arm with a `;` between the command and the terminator, which is the whole difference: ksh93 answers `` `;;' unmatched `` where the row above is `` `case' unmatched ``. Filed as a fact about the *newline* — the pair that reached #2233 differed by one — and this row is what says it is not: there is no newline in it and it answers the same as the newline spelling. Ours named the `case` for both (#2233)",
+	},
+	{
+		ID: "unterminated/a-case-arm-with-no-command-at-all", Category: "syntax errors", SyntaxError: true,
+		Snippet: "case x in x) ;;",
+		Why:     "an arm holding nothing, which is the terminator's row from the other side: ksh93 names the `;;` with no separator anywhere in it, so what the row above measures is the arm's body having ended rather than a separator having been seen. #1207's stepped-over `;` is the one shape that displaces it, which the row below is",
+	},
+	{
+		ID: "unterminated/a-stepped-over-separator-outranks-a-case-terminator", Category: "syntax errors", SyntaxError: true,
+		Snippet: "case x in x) ; ;;",
+		Why:     "the two rules meeting: an empty arm holds a `;` the dialect steps over and then the terminator, and ksh93 names the `;` rather than the `;;` — so #1207's step-over outranks the terminator where both could apply. The same text with a newline after the `;` goes back to naming the `;;`, which is why the pair could not be read as one rule from two probes (#2233)",
+	},
+	{
 		ID: "core/a-separator-where-a-loop-variable-belongs", Category: "command language", SyntaxError: true,
 		Snippet: `for ; in a b`,
 		Why:     "a token that is present and could never be a name, which separates the two questions the bare `for` runs together: there is no end of input here, so a shell answering it as an unfinished construct would be wrong. Three of the four name the `;` exactly as they name it anywhere else and dash gives the same bad-loop-variable sentence it gives `for` itself, which is what says the classification is the dialect's and not the token's",

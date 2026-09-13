@@ -339,3 +339,55 @@ func TestTheExportAxisIsAskedEvenForANameAlreadyExported(t *testing.T) {
 		t.Errorf("stderr = %q, want the unanswered export axis named", errs)
 	}
 }
+
+// And a prefix in front of `command` reaches the command it names, because
+// `command` is a precommand word rather than a command of its own.
+//
+// Unanimous, so it is not an axis: `v=1; v=9 command env` shows the child
+// `v=9` in bash 5.3, ksh93u+, zsh 5.9.2 and dash 0.5.12, measured
+// 2026-09-12, where this shell showed it nothing (#2408). Setting the name
+// is not enough — a child is handed the exported names — so the prefix has
+// to carry the export attribute for the length of the command.
+func TestAPrefixThroughCommandReachesTheChild(t *testing.T) {
+	out, st := run(t,
+		`v=1; v=9 command /usr/bin/env | grep '^v=' || echo "(none)"`, nil)
+	if st != 0 || out != "v=9\n" {
+		t.Errorf("got %q status %d, want the child shown v=9", out, st)
+	}
+}
+
+// Written twice over, which is the arrangement that distinguishes carrying
+// the attribute for the command from handing one child a one-off environment:
+// the inner `command` has no prefix of its own to hand on.
+func TestAPrefixThroughTwoCommandWordsStillReachesTheChild(t *testing.T) {
+	out, st := run(t,
+		`v=1; v=9 command command /usr/bin/env | grep '^v=' || echo "(none)"`, nil)
+	if st != 0 || out != "v=9\n" {
+		t.Errorf("got %q status %d, want the child shown v=9", out, st)
+	}
+}
+
+// The attribute is the command's and not the shell's afterward. All four
+// columns leave `v` holding `1` and leave it unexported, so a later child
+// sees nothing — which is what savedVar's export tri-state is for: the name
+// goes back to never having been spoken about rather than to a recorded
+// `false`.
+func TestAPrefixThroughCommandIsNotExportedAfterward(t *testing.T) {
+	out, st := run(t,
+		`v=1; v=9 command true; echo "read=[$v]"; `+
+			`/usr/bin/env | grep '^v=' || echo "(none)"`, nil)
+	if st != 0 || out != "read=[1]\n(none)\n" {
+		t.Errorf("got %q status %d, want the prefix taken back with the attribute", out, st)
+	}
+}
+
+// A name the shell had exported keeps its own value for the later child, and
+// the prefix reaches only the one command. Measured identically in all four.
+func TestAPrefixThroughCommandLeavesAnExportedNameAsItWas(t *testing.T) {
+	out, st := run(t,
+		`export v=1; v=9 command /usr/bin/env | grep '^v='; `+
+			`/usr/bin/env | grep '^v='`, nil)
+	if st != 0 || out != "v=9\nv=1\n" {
+		t.Errorf("got %q status %d, want v=9 to the command and v=1 after", out, st)
+	}
+}

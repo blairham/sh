@@ -25887,6 +25887,57 @@
         "TimedOut": false
       }
     },
+    "axis/debug-head-entering-a-function": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: set: line 5: illegal option -T",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "D=7~D=2~D=3~in-f~D=8",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "D=7~D=2~D=3~in-f~D=8",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "D=7~D=2~D=3~in-f~D=8",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 5: set: Illegal option -T",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e[5]: set: -T: unknown option~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "D=7~D=2~in-f~D=8",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "axis/debug-head-of-a-case-and-a-condition": {
       "ash": {
         "Stdout": "c",

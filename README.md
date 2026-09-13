@@ -7,16 +7,31 @@
 
 A shell parser and interpreter in Go.
 
-**Status: implemented and measured.** The core parser and interpreter are
-in place, and all four dialect binaries grade against the live shell
-panel — `make conformance`. Behavior still lands spec-first, per
-`CLEANROOM.md`.
+**Status: early — the first tag is `v0.0.0` and means it.** The core parser
+and interpreter are in place, and all five dialect binaries grade against a
+panel of the real shells they model. Measured on macOS with
+`make conformance-dialects`, 2026-09-12, 3670 cases each:
+
+| our binary | graded against | exact | behavioral |
+| --- | --- | --- | --- |
+| `bash` | bash 5.3.15 | 96% | **100%** |
+| `zsh` | zsh 5.9.2 | 98% | 99% |
+| `dash` | dash | 98% | **100%** |
+| `ksh` | ksh93 AJM 93u+ | 91% | 97% |
+| `ash` | BusyBox 1.37 ash | 79% | 97% |
+
+**Exact** is byte-identical stdout, stderr and exit status. **Behavioral**
+lets a diagnostic be worded differently so long as the status and the output
+agree, and the difference between the two columns is almost entirely message
+wording — which is why `ash` reads as the weakest column on the left and is
+mid-pack on the right. Behavior lands spec-first, per `CLEANROOM.md`.
 
 ## What makes this different
 
 The core language is the **common denominator of real shells** — not
-strict POSIX, and not bash. Dialects (`posix`, `bash`, `zsh`, `ksh`) are
-**presets over a semantics vector**, not layers, translations or forks.
+strict POSIX, and not bash. Dialects (`bash`, `zsh`, `ksh`, `dash`, `ash`,
+plus `core` and `posix`) are **presets over a semantics vector**, not
+layers, translations or forks.
 
 That distinction is not stylistic. Measuring twenty-eight behavioral axes
 across dash, bash, ksh93 and zsh produces eight different groupings of
@@ -42,20 +57,52 @@ spec. `CLEANROOM.md` is the binding rule set.
 
 ## Installing
 
+From the tap:
+
+    brew install blairham/tap/sh
+
+Or from source:
+
     make install                           # /usr/local/libexec/sh — needs sudo to write
     make install PREFIX="$HOME/.local"     # no sudo
 
-Five binaries: `sh`, and the dialect binaries `bash`, `zsh`, `ksh` and
-`dash`. They land in `libexec` and **not** in a `bin` directory, because
+Six binaries: `sh`, and the dialect binaries `bash`, `zsh`, `ksh`, `dash`
+and `ash`. They land in `libexec` and **not** in a `bin` directory, because
 they are named after the shells they model — a directory ahead of `/bin`
 on `PATH` would answer for every program on the machine that resolves a
 shell by name. `make install` refuses a `SHELLDIR` that is on `PATH`
-unless it is told to go ahead.
+unless it is told to go ahead, and the formula links nothing into
+Homebrew's `bin` for the same reason.
 
-`docs/install.md` has the whole of it, including what `/etc/shells` and
-`chsh` need to make one of them a login shell — and the warning to read
-first, which is that an interactive session does not read `~/.bashrc` or
-`~/.zshrc` yet.
+So you run one by its full path, and `docs/install.md` has the whole of
+it — including what `/etc/shells` and `chsh` need to make one of them a
+login shell, and how to try one first as a terminal profile's command,
+which is a checkbox to revert rather than a rescue.
+
+A session reads everything a real shell of the same name reads, in the
+same order: `~/.bashrc`, `~/.zshrc`, the profile files, and the machine's
+own file in front of each. `docs/install.md` has the measured grid.
+
+## What is not there yet
+
+The first tag is `v0.0.0` because this list is real, not because the list
+is short.
+
+- **A prompt can land on top of unfinished output.** There is no
+  `PROMPT_SP`/`PROMPT_CR` handling yet, so a command whose last line has
+  no newline gets the next prompt drawn onto it — [#2477][2477].
+- **Diagnostic wording is the biggest remaining gap**, and it is most of
+  the distance between the two columns above — `ksh` and `ash` agree on
+  what happens and still phrase the complaint differently.
+- **The sandbox contains the shell, not the process tree.** A policy
+  decides what the *shell* opens, runs and signals; a command it was
+  allowed to start makes its own accesses and nothing here sees them.
+  `docs/design/sandboxing.md` has the scope limit in full.
+- **POSIX only.** No Windows target — every route into this program is a
+  process group, a controlling terminal, a signal or a `syscall.Exec`,
+  and a binary that cannot start is worse than no binary.
+
+[2477]: https://github.com/blairham/sh/issues/2477
 
 ## Using it as a library
 

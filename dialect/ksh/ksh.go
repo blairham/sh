@@ -1037,6 +1037,12 @@ func Semantics() interp.Semantics {
 	// `>&` is a duplication and nothing else here: `echo hi >&qq` is
 	// `qq: bad file unit number` and no file is made.
 	s.GreatAmpTarget = interp.GreatAmpTargetIsADescriptor
+	// ksh93 has the move operator too and reads it as one operation: the
+	// descriptor changes number. So both halves are the command's redirection
+	// and both are taken back — `exec 5<f; true 6<&5-` leaves 5 open, where
+	// bash leaves it closed — and the number the source gives up is the one
+	// `{v}<&$w-` receives, so the name answers with `$w`'s own number.
+	s.FdMove = interp.FdMoveRelocates
 	s.DuplicationTargetErrorOnABuiltinIsFatal = interp.No
 	// Fatal to `export` and `readonly` and not to `unset`, which prints the
 	// same kind of complaint, returns 1 and carries on. Not `unset` being
@@ -1558,6 +1564,10 @@ func Diagnostics() interp.Diagnostics {
 		// CannotOpen is worded reason-first in one of the other dialects
 		// (#734).
 		DuplicationSourceNotOpen: "%[1]s: cannot open [%[2]s]",
+		// And quotes the move's suffix with it: `exec 6<&5-` with nothing
+		// open at 5 is `5-: cannot open [Bad file descriptor]`, where bash
+		// names the number alone.
+		NamesTheMoveSuffixInTheTarget: true,
 		// No BuiltinWriteError: `echo hi >&-` reports 1 here and says
 		// nothing, which is the semantics axis answering and the wording
 		// staying empty. A broken pipe is silent as well, and there the

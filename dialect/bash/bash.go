@@ -967,6 +967,13 @@ func Semantics() interp.Semantics {
 	// it, which is the csh spelling bash kept. A word that expanded to
 	// nothing is not a name, and is refused as a descriptor instead.
 	s.GreatAmpTarget = interp.GreatAmpTargetNamesAFile
+	// `exec 5<f; exec 6<&5-` moves the descriptor and reports 0, in 5.3, in
+	// 3.2 and under argv[0] of `sh` alike. Two steps rather than one, which
+	// shows twice: `true 6<&5-` leaves 5 closed once the command has ended,
+	// where the plain `true 5<&-` is undone; and `{v}<&$w-` hands the name
+	// the number *above* the one it moved from, because the destination is
+	// chosen before the source is given up.
+	s.FdMove = interp.FdMoveDuplicatesThenCloses
 	s.DuplicationTargetErrorOnABuiltinIsFatal = interp.No
 	s.LocalOutsideAFunctionIsAnError = interp.Yes
 	s.LocalOutsideAFunctionIsFatal = interp.No

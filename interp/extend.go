@@ -893,7 +893,7 @@ func (r *Runner) SeekDescriptor(fd int, offset int64, whence int) bool {
 // the same thing `exec 3>&4` does to a 3 that was already open. Numbers are the
 // script's to reuse and the shell does not audit them.
 func (r *Runner) OpenDescriptor(f *os.File) int {
-	fd := r.nextFreeFd()
+	fd := r.nextFreeFd(-1)
 	r.setFd(fd, f)
 	return fd
 }

@@ -182,9 +182,9 @@ func (r *Runner) startCoproc(ctx context.Context, name string, run func(*Runner)
 	// Marked as the shell's own, so they stay out of an external child's
 	// descriptor table — see shellOwnedFd for what a child holding the write
 	// end open would cost the coprocess.
-	rfd := r.nextFreeFd()
+	rfd := r.nextFreeFd(-1)
 	r.setFd(rfd, shellOwnedFd{shellR})
-	wfd := r.nextFreeFd()
+	wfd := r.nextFreeFd(-1)
 	r.setFd(wfd, shellOwnedFd{shellW})
 	// Kept whichever dialect this is: `print -p` and `read -p` need them in
 	// the shell that has no array to find them in, and the shell that has one

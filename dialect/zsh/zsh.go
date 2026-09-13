@@ -1563,6 +1563,12 @@ func Semantics() interp.Semantics {
 	// nothing is a name too, so `>&""` opens the empty path and fails on it
 	// rather than complaining about a descriptor.
 	s.GreatAmpTarget = interp.GreatAmpTargetNamesAnyFile
+	// zsh has no move operator, and the absence shows in two different
+	// answers rather than one refusal. `<&` wants a number and says `file
+	// number expected` at 1; `>&5-` is a word that names no descriptor, so
+	// GreatAmpTarget above sends it to a *file* called `5-` — measured, and
+	// the file really appears.
+	s.FdMove = interp.FdMoveIsNotAnOperator
 	// And the reading side ends the shell, on a builtin alone.
 	s.DuplicationTargetErrorOnABuiltinIsFatal = interp.Yes
 	// zsh takes it and sets a global instead of refusing.

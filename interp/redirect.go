@@ -93,23 +93,77 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 	// first write, and a closer that puts the original back. `exec` skips
 	// every closer, so what it wrote stays written.
 	fdsTouched := false
+	// Held outside the closure because a move under FdMoveDuplicatesThenCloses
+	// has to reach *into* the save: the source's close is not a redirection
+	// the command takes back, so the table that is put back afterwards must
+	// not have it either. See closeMovedSource.
+	var savedFds map[int]any
+	var savedExecFds map[int]bool
 	saveFds := func() {
 		if fdsTouched {
 			return
 		}
 		fdsTouched = true
-		saved := r.fds
+		savedFds = r.fds
 		// The marks travel with the table, because they are about the table:
 		// a command that redirects a number `exec` had opened is using that
 		// number for itself, and when the command ends the number goes back
 		// to being `exec`'s.
-		savedExec := r.execFds
+		savedExecFds = r.execFds
 		r.fds = maps.Clone(r.fds)
 		r.execFds = maps.Clone(r.execFds)
 		closers = append(closers, closerFunc(func() error {
-			r.fds, r.execFds = saved, savedExec
+			r.fds, r.execFds = savedFds, savedExecFds
 			return nil
 		}))
+	}
+	// closeMovedSource is the second half of `N<&M-`: M is closed, and
+	// forKeeps says whether the command takes that back when it ends.
+	//
+	// No descriptor is really closed here. The move duplicated the source
+	// first, so the open file behind it has another name and ending it would
+	// take that one with it — the same rule `exec {s}>&1; exec {s}>&-` is
+	// about (#2127). Dropping the name is the whole of a move's close.
+	closeMovedSource := func(m int, forKeeps bool) {
+		switch m {
+		case 0:
+			r.Stdin = closedFd{}
+			if forKeeps {
+				savedIn = closedFd{}
+			}
+		case 1:
+			r.Stdout = closedFd{}
+			// The same note dupFd's close carries: one dialect stays quiet
+			// about a failed write exactly when the command that wrote
+			// closed the stream itself.
+			r.outputClosedByThisCommand = true
+			if forKeeps {
+				savedOut = closedFd{}
+			}
+		case 2:
+			r.Stderr = closedFd{}
+			if forKeeps {
+				savedErr = closedFd{}
+			}
+		default:
+			if !forKeeps {
+				// There has to be something to put the number back from.
+				// The destination's own save is not enough: `0<&5-` writes
+				// a named stream and never touches the table, and the
+				// relocating form still owes 5 back when the command ends.
+				saveFds()
+			}
+			delete(r.fds, m)
+			delete(r.execFds, m)
+			if forKeeps && fdsTouched {
+				// Clone before writing: the saved table is the one the
+				// Runner had, and a sibling may be holding it.
+				savedFds = maps.Clone(savedFds)
+				delete(savedFds, m)
+				savedExecFds = maps.Clone(savedExecFds)
+				delete(savedExecFds, m)
+			}
+		}
 	}
 
 	// Where a failed open is reported is the dialect's answer, and the three
@@ -204,6 +258,28 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 		// streams, the same `set -C`, the same words for an open that failed.
 		// Rebinding the operator rather than copying the open is the whole of
 		// it — a second copy is a second place to forget noclobber.
+		// `N<&M-` and `N>&M-` are the move operators: duplicate M onto N and
+		// close M, as one operator rather than as a duplication followed by a
+		// separate close. The suffix is read here, before anything else looks
+		// at the word, because two later readings would otherwise take it
+		// first: `5-` is not a descriptor spec, and a bare `>&5-` is a word
+		// that names no descriptor, which is the csh file reading. Both are
+		// the right answer where the operator does not exist and the wrong
+		// one where it does — bash moves for `>&5-` and makes no file.
+		moveFrom := -1
+		if src, isMove := fdMoveSource(name); isMove {
+			form := r.fdMove()
+			if r.unspecified {
+				r.redirErr = true
+				return closers, nil
+			}
+			if form != FdMoveIsNotAnOperator {
+				// atoi cannot fail: fdMoveSource answered for digits.
+				moveFrom, _ = atoi(src)
+				name = src
+			}
+		}
+
 		op := rd.Op
 		if r.greatAmpNamesAFile(rd, name) {
 			op = syntax.TokAmpGreat
@@ -267,7 +343,12 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 				}
 				// `exec {name}>&2` picks a fresh descriptor aimed where the
 				// target aims now, and the name receives its number.
-				fd = r.nextFreeFd()
+				//
+				// The relocating form gives the source's number back before
+				// it chooses, so `{v}<&$w-` answers with `$w`'s own number
+				// and the move is a rename. The duplicating form chooses
+				// first and closes after, so the name gets the next one up.
+				fd = r.nextFreeFd(moveFrom)
 			}
 			persists := fdVar != "" &&
 				r.ask(r.sem().FdVariableOutlivesTheCommand, "a variable-named descriptor outliving its command")
@@ -285,7 +366,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			if fd > 2 && !persists {
 				saveFds()
 			}
-			if err := r.dupFd(fd, name, rd.Text, opened); err != nil {
+			if err := r.dupFd(fd, name, r.dupTargetText(rd, moveFrom), opened); err != nil {
 				r.diagf("%v\n", err)
 				// A duplication that fails is a redirection that failed, and
 				// carries the same number as one whose file would not open.
@@ -296,6 +377,14 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 				r.status = r.diag().redirectFailureStatus()
 				r.redirErr = true
 				return closers, nil
+			}
+			// The close half of a move, once the duplication it follows has
+			// happened. Never where the two numbers are the same — `5<&5-`
+			// relocates a descriptor onto itself, which is a descriptor that
+			// is still open, and closing it would be a close the script did
+			// not write.
+			if moveFrom >= 0 && moveFrom != fd {
+				closeMovedSource(moveFrom, persists || r.sem().FdMove == FdMoveDuplicatesThenCloses)
 			}
 			r.redirWrote(fd)
 			if fdVar != "" {
@@ -415,7 +504,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			// second file — measured on zsh 5.9.2, which is the only shell
 			// that has both halves.
 			if fdVar != "" {
-				fd = r.nextFreeFd()
+				fd = r.nextFreeFd(-1)
 			}
 			// A name that is not there is not a relative one. Joining it to the
 			// working directory turns "no name" into *the directory*, which then
@@ -992,11 +1081,16 @@ func (r *Runner) refuseWideDupTarget(target string) bool {
 // The sentence around it is the dialect's too — ksh93 puts the errno in a
 // bracket after a verb — and so is *which spelling of the target* it names:
 // bash quotes the word the script wrote where the other two print the number
-// it came to. written is that word, empty where there is none to quote. See
-// Diagnostics.DuplicationSourceNotOpen and NamesTheDuplicationTargetAsWritten.
+// it came to.
+//
+// written is the name to print, and empty means the number. Which it is has
+// already been decided by dupTargetText, because the answer is not one flag:
+// a *move* splits the two shells the other way round, with ksh93 quoting the
+// word and bash naming the number. See Diagnostics.DuplicationSourceNotOpen,
+// NamesTheDuplicationTargetAsWritten and NamesTheMoveSuffixInTheTarget.
 func (r *Runner) errBadFd(fd int, written string) error {
 	name := itoa(fd)
-	if written != "" && r.diag().NamesTheDuplicationTargetAsWritten {
+	if written != "" {
 		name = written
 	}
 	return errors.New(Wording(r.diag().DuplicationSourceNotOpen, "%[1]s: %[2]s",
@@ -1120,14 +1214,46 @@ func (r *Runner) dupFd(fd int, target, written string, opened map[int]io.Writer)
 // entry from the dialect's base up, clear of the single digits a script
 // addresses itself. Where that base is is a disagreement — see
 // Semantics.FirstAllocatedDescriptor.
-func (r *Runner) nextFreeFd() int {
+//
+// freeing is a number to count as free although it is held, or -1 for none.
+// It is the source of a relocating `{name}<&$w-`, whose close has not
+// happened yet and cannot: the source has to be read before it is given up.
+// Counting it free here is the same answer as closing it first, without the
+// ordering that would need — and the answer is observable, since that form
+// hands the name the number it moved from where the duplicating one hands it
+// the next number up.
+func (r *Runner) nextFreeFd(freeing int) int {
+	if freeing >= 0 && r.sem().FdMove != FdMoveRelocates {
+		freeing = -1
+	}
 	fd := r.sem().FirstAllocatedDescriptor.number()
 	for {
-		if _, held := r.fds[fd]; !held {
+		if _, held := r.fds[fd]; !held || fd == freeing {
 			return fd
 		}
 		fd++
 	}
+}
+
+// dupTargetText is the target as written, for the message a duplication makes
+// when nothing is open at the number it names.
+//
+// A move is where the two shells that have one disagree about what "as
+// written" means. bash reads the `-` as the operator's and names the number
+// alone — `exec 6<&5-` with 5 closed is `5: Bad file descriptor` — where
+// ksh93 quotes the whole word it was handed and says `5-: cannot open`. Both
+// name what they parsed; they parsed the same text into different pieces.
+func (r *Runner) dupTargetText(rd *syntax.Redirect, moveFrom int) string {
+	if moveFrom >= 0 {
+		if r.diag().NamesTheMoveSuffixInTheTarget {
+			return rd.Text
+		}
+		return ""
+	}
+	if r.diag().NamesTheDuplicationTargetAsWritten {
+		return rd.Text
+	}
+	return ""
 }
 
 // shellOwnedFd marks a descriptor the shell opened for its own plumbing
@@ -1517,6 +1643,100 @@ func (f GreatAmpTargetForm) String() string {
 		return "GreatAmpTargetNamesAnyFile"
 	}
 	return "GreatAmpTargetUnspecified"
+}
+
+// FdMoveForm is what a trailing `-` on a duplication target means: `6<&5-`
+// and `6>&5-`, the operators that make 6 a copy of 5 and close 5 in one
+// step, so that a script moves a descriptor rather than leaving two names
+// for one open file.
+//
+// A form rather than a flag because the two shells that have it disagree
+// about what the move *is*, and the disagreement is visible twice from one
+// answer — see the two constants. Measured 2026-09-12 across the panel:
+//
+//	exec 5< f; exec 6<&5-     bash 5.3, bash-as-sh, bash 3.2 and ksh93 move
+//	                          it at status 0; zsh answers `file number
+//	                          expected` at 1; dash answers `Syntax error:
+//	                          Bad fd number` at 2 and ash `redir error` at 2
+//
+// None of the three refusals is a parse refusal, though two are worded as
+// one: the same text inside `if false; then … fi` runs clean in every column,
+// so the question belongs here and not to syntax.Dialect.
+//
+// The core has no such form. The intersection of six shells does not contain
+// it, and the three that refuse do not agree on what to say or what status
+// to end at.
+type FdMoveForm int
+
+const (
+	// FdMoveUnspecified is no answer, and is refused like any other.
+	FdMoveUnspecified FdMoveForm = iota
+	// FdMoveIsNotAnOperator leaves the `-` in the target word, where
+	// whatever refuses a word that is not a descriptor refuses it. zsh,
+	// dash and ash — and their three refusals differ, which is the point of
+	// routing them all back through the existing path rather than giving
+	// the move a refusal of its own.
+	//
+	// zsh is the one worth naming, because it does not merely refuse: `<&`
+	// wants a number there and says so, while `>&5-` falls to that shell's
+	// csh reading of `>&word` and opens a file named `5-`. Both are the
+	// absence of this operator rather than two answers to it.
+	FdMoveIsNotAnOperator
+	// FdMoveDuplicatesThenCloses is two steps in written order: copy the
+	// source onto the destination, then close the source — and only the
+	// copy is a redirection the command takes back. bash.
+	//
+	// Both halves are observable. `exec 5<f; true 6<&5-` leaves 5 closed
+	// once the command has ended, where the plain close `true 5<&-` is
+	// undone like any other redirection; and `{v}<&$w-` picks the
+	// destination number before the source is closed, so the name receives
+	// a number one higher than the one it moved from.
+	FdMoveDuplicatesThenCloses
+	// FdMoveRelocates is one operation: the descriptor changes number.
+	// Both halves are the command's redirection, so both are taken back —
+	// `exec 5<f; true 6<&5-` leaves 5 open — and the number the source
+	// gives up is free for `{v}` to receive, so `{v}<&$w-` answers with
+	// `$w`'s own number. ksh93.
+	FdMoveRelocates
+)
+
+func (f FdMoveForm) String() string {
+	switch f {
+	case FdMoveIsNotAnOperator:
+		return "FdMoveIsNotAnOperator"
+	case FdMoveDuplicatesThenCloses:
+		return "FdMoveDuplicatesThenCloses"
+	case FdMoveRelocates:
+		return "FdMoveRelocates"
+	}
+	return "FdMoveUnspecified"
+}
+
+// fdMoveSource splits `5-` into the descriptor it names and the fact that a
+// move was written. It answers only for a run of digits followed by the
+// suffix, which is what keeps the axis from being asked about `-` on its own
+// — the plain close, which every shell in the panel has — or about any other
+// word ending in a dash.
+func fdMoveSource(word string) (string, bool) {
+	src, ok := strings.CutSuffix(word, "-")
+	if !ok || src == "" || !allDigits(src) {
+		return "", false
+	}
+	return src, true
+}
+
+// fdMove resolves the axis, and only where a trailing `-` has actually been
+// written after a run of digits. `6<&5` is nobody's question, so a dialect
+// that has not answered this still duplicates.
+func (r *Runner) fdMove() FdMoveForm {
+	f := r.sem().FdMove
+	if f == FdMoveUnspecified {
+		r.errf("%s\n", r.diag().Report(r.name(), r.line,
+			r.unanswered("a trailing `-` on a duplication target")))
+		r.status = 2
+		r.unspecified = true
+	}
+	return f
 }
 
 // noclobberBlocksAppend reports whether `set -C` stops an append from

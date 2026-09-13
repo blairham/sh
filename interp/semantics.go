@@ -8326,6 +8326,19 @@ type Semantics struct {
 	// word that expanded to nothing; see GreatAmpTargetForm.
 	GreatAmpTarget GreatAmpTargetForm
 
+	// FdMove is what a trailing `-` on a duplication target means: `6<&5-`
+	// and `6>&5-` make 6 a copy of 5 and close 5 in one step, which is how a
+	// script moves a descriptor rather than leaving two names for one open
+	// file. A form rather than a flag because the two shells that have the
+	// operator disagree about what the move is — whether the close is the
+	// command's to take back, and which number `{name}<&$w-` receives; see
+	// FdMoveForm.
+	//
+	// Asked only where a run of digits really is followed by the suffix.
+	// `6<&5` is nobody's question, and neither is the plain close `6<&-`,
+	// which every shell in the panel has.
+	FdMove FdMoveForm
+
 	// DuplicationTargetErrorOnABuiltinIsFatal ends a non-interactive shell
 	// when `<&word` names something that is not a descriptor and the command
 	// it is written on runs *in* the shell.
@@ -9752,8 +9765,15 @@ func PosixSemantics() Semantics {
 		// as well, and the standard names it in so many words. Three of the
 		// five follow it, and the two that do not both reach this answer as
 		// soon as their own posix mode is on.
-		RedirectErrorOnSpecialBuiltinFatal:      Yes,
-		GreatAmpTarget:                          GreatAmpTargetIsADescriptor,
+		RedirectErrorOnSpecialBuiltinFatal: Yes,
+		GreatAmpTarget:                     GreatAmpTargetIsADescriptor,
+		// XCU's `[n]<&word` and `[n]>&word` take a number or `-`, and the
+		// standard has no third reading: there is no move operator in it, so
+		// `5-` is a word naming no descriptor and is refused as one. The core
+		// leaves this unanswered instead, for the reason on FdMoveForm — half
+		// the panel has the operator and half does not, which is a
+		// disagreement rather than an absence.
+		FdMove:                                  FdMoveIsNotAnOperator,
 		DuplicationTargetErrorOnABuiltinIsFatal: No,
 		// A bad name is a special builtin's failure too, and the standard
 		// makes no exception for `unset`.

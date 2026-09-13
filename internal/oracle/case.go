@@ -1724,6 +1724,35 @@ var Corpus = []Case{
 		Why:     "the same pair of operands under the standard's own name, which is the other door into the mode and the one a shebang takes. bash moves the *word* operand and not the pattern — `[Vx}yb'}][Vx}y]` where it answers `[Vx}y][Vx}y]` called `bash` — and **zsh does not move at all**, answering `[Vx}yb'}][Vx}yb'}]` under either name, which is the same shape the special-builtin usage error has. The pattern field is the control: it is the half the mode leaves alone, so a fix that made the quote ordinary everywhere under `sh` would pass the first field and fail the second (#2604)",
 	},
 	{
+		ID: "core/a-quoted-brace-in-a-word-operand-parsed-in-posix-mode-and-expanded-outside-it", Category: "quoting",
+		Snippet: `set -o posix; v=Vx}y; f(){ printf '[%s]' "${v-'a}b'}"; echo; }; set +o posix; f`,
+		Why:     "the complement of the row above, and between them the pair says the parse contributes *nothing*: here the whole function body is read with the mode on and expanded with it off, and bash 5.3 answers `[Vx}y]` — the non-posix reading, chosen after the text was parsed. The row above has the mode arrive after the parse and the reading move; this one has it leave after the parse and the reading move back. So neither direction is decided where the word is cut, and a front end that fixed the extent at startup would answer this row with the mode the shell *started* in rather than the one it expands in. The `sh` column answers `[Vx}y]` too, which is the sharper half: the mode that name turns on is one a script can leave, so even the door an invocation takes does not fix the reading for the run. bash 3.2 answers `[Vx}y]` because it never moves, and the three shells without the name refuse the first `set` (#2604)",
+	},
+	{
+		ID: "core/a-quoted-brace-in-a-word-operand-moves-back-when-posix-mode-ends", Category: "quoting",
+		Snippet: `v=Vx}y; printf '[%s]' "${v-'a}b'}"; set -o posix; printf '[%s]' "${v-'a}b'}"; set +o posix; printf '[%s]' "${v-'a}b'}"; echo`,
+		Why:     "the same three words on one line, parsed in one pass before any of them ran, answering `[Vx}y][Vx}yb'}][Vx}y]` in bash 5.3: the mode moves the reading on and off again inside a program that was read once. It is the row a one-way latch passes and a two-way one does not — a mechanism that could enter the posix reading but not leave it answers the third field with the second's — The `sh` column is the one to read twice: it answers `[Vx}yb'}][Vx}yb'}][Vx}y]`, starting in the posix reading because of its name and **leaving it** on the third field, so the name is a starting position rather than a setting. bash 3.2 prints the same field three times because it never moves at all, and dash stops at the `set`, having answered the first field already (#2604)",
+	},
+	{
+		ID: "invoke/the-posix-option-moves-a-quoted-brace-in-a-word-operand", Category: "quoting",
+		Args:    []string{"--posix", "-c", ArgSnippet},
+		Snippet: `v=Vx}y; printf '[%s]' "${v-'a}b'}" "${v#'a}'}"; echo`,
+		Why:     "the second of the three doors into the mode, after the name `sh`, and the one an invocation takes deliberately. bash 5.3 answers `[Vx}yb'}][Vx}y]`, the same pair it answers called `sh`; dash, ksh93, zsh and ash have no such spelling and refuse the word outright. bash 3.2 is the control that separates *having* the option from the option *moving this axis*: it accepts `--posix` and still answers `[Vx}y][Vx}y]`, so a row that graded the option's existence would call 3.2 a match. The pattern field is the half the mode leaves alone, here as in the `sh` row (#2604)",
+	},
+	{
+		ID: "invoke/posixly-correct-in-the-environment-moves-a-quoted-brace-in-a-word-operand", Category: "quoting",
+		Env:     []string{"POSIXLY_CORRECT=1"},
+		Args:    []string{"-c", ArgSnippet},
+		Snippet: `v=Vx}y; printf '[%s]' "${v-'a}b'}" "${v#'a}'}"; echo`,
+		Why:     "the third door, and the one nothing on the command line shows: a name in the environment, which a build system or a parent shell can set without the script knowing. bash 5.3 answers `[Vx}yb'}][Vx}y]` — the posix reading — where the same invocation without the variable answers `[Vx}y][Vx}y]`. The other five are unmoved and answer exactly what they answer without it, which is what makes this a bash row rather than a variable every shell reads (#2604)",
+	},
+	{
+		ID: "invoke/leaving-the-posix-mode-a-startup-option-turned-on", Category: "quoting",
+		Args:    []string{"--posix", "-c", ArgSnippet},
+		Snippet: `v=Vx}y; set +o posix; printf '[%s]' "${v-'a}b'}" "${v#'a}'}"; echo`,
+		Why:     "the mode entered at startup and left before the word expands, which is the row that tells a startup mechanism apart from an expansion-time one. bash 5.3 answers `[Vx}y][Vx}y]` — the non-posix reading — so the option that was on when the text was parsed decides nothing; only the mode standing when the expansion runs does. A shell that read the invocation and handed its parser a reading would answer `[Vx}yb'}][Vx}y]` here and be right about every row where the mode never moves. bash 3.2 answers the same pair for its own reason, never having moved (#2604)",
+	},
+	{
 		ID: "core/a-quoted-brace-in-an-unquoted-operand", Category: "quoting",
 		Snippet: `v=Vx}y; printf '[%s]' ${v-'a}b'} ${u-'a}b'} ${v#'V}'}; echo`,
 		Why:     "the control that bounds the split above to double quotes: written bare, the quote protects the brace in all seven columns and in both kinds of operand, so every one of them answers `[Vx}y][a}b][Vx}y]`. A fix that made the quote ordinary everywhere passes the quoted rows and fails this one, which is the whole reason it is here",
@@ -16141,6 +16170,11 @@ echo "st=$? alive"`,
 		ID: "opt/set-o-takes-a-name-only-this-shell-has", Category: "shell options",
 		Snippet: `set -o autocd; echo "st=$?"`,
 		Why:     "the setting half of the same namespace, and four refusals against one acceptance. `autocd` is one shell's own: it takes it at 0, and the rest split every way a refused `set -o` name can — bash 5.3 says `invalid option name` at 2 and carries on, bash 3.2 says the same at 1 and carries on, the same 5.3 binary under an `argv[0]` of `sh` says it and **stops**, and dash and ksh93 each have wording of their own and stop too. A shell listing 185 names it would then refuse would be writing a capture it could not read back",
+	},
+	{
+		ID: "opt/a-refused-set-o-name-is-not-a-refused-option-letter", Category: "shell options",
+		Snippet: `set -o nosuchname; echo one; set -Z; echo two`,
+		Why:     "the two refusals `set` can produce, in one program, because one column answers them differently and the substrate was built on the reading that nothing does. bash 5.3 and bash 3.2 complain twice and print both words; dash, ksh93 and zsh stop at the *name* and never reach the letter; and BusyBox ash complains about the name, prints `one`, and then stops at the **letter** at 2 — a shell for which the unknown letter is worse than the unknown name, which is the pairing neither of the other two shapes has. Measured with `-Z` because it is a letter no panel member has and `nosuchname` because no panel member has it either, so neither field can be answered by a shell that simply owns the spelling",
 	},
 	{
 		ID: "opt/set-o-and-the-listing-are-one-namespace", Category: "shell options",

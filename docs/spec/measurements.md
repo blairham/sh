@@ -19335,6 +19335,22 @@ grades it and nothing drift-checks it either, for the same reason.
   v=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done; ( trap '' PIPE; { echo "$v" 2>/dev/null; echo reached >&2; } | true ); echo after
   ```
 
+## options
+
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh | ash |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `options/bang-history-is-on-in-a-fresh-shell` | `off` **2>** `<shell>: 1: [[: not found` | `off` | `off` | `off` | `off` | `on` | `off` **2>** `<shell>: banghist: unknown operand` |
+| `options/bang-history-under-its-other-name` | `off` **2>** `<shell>: 1: [[: not found` | `off` | `off` | `off` | `off` | `on` | `off` **2>** `<shell>: histexpand: unknown operand` |
+
+- `options/bang-history-is-on-in-a-fresh-shell` — csh-style history expansion is on in a fresh shell in the one dialect that has the option under this name, and the condition is where a script asks. The others have no such option and each refuses the name its own way
+  ```sh
+  [[ -o banghist ]] && echo on || echo off
+  ```
+- `options/bang-history-under-its-other-name` — the same option under the name the other shells spell it with, which is what says the two are one entry rather than two that happen to agree — moving either has to move both
+  ```sh
+  [[ -o histexpand ]] && echo on || echo off
+  ```
+
 ## builtin names
 
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh | ash |

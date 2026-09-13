@@ -15455,6 +15455,16 @@ echo "st=$? alive"`,
 		Why:     "the `shopt` half of the round trip above, on the four names whose defaults this shell read backwards. bash 5.3 writes four `shopt -s` lines and reads its own file back with nothing on standard error; bash 3.2 has three of the four and complains about `complete_fullquote`, which is what says the set grew. Ours reported all four off and answered each `shopt -s` with `not implemented`, so a harness sourcing a real bash's dump began every command with four complaints (#1712)",
 	},
 	{
+		ID: "options/bang-history-is-on-in-a-fresh-shell", Category: "options",
+		Snippet: `[[ -o banghist ]] && echo on || echo off`,
+		Why:     "csh-style history expansion is on in a fresh shell in the one dialect that has the option under this name, and the condition is where a script asks. The others have no such option and each refuses the name its own way",
+	},
+	{
+		ID: "options/bang-history-under-its-other-name", Category: "options",
+		Snippet: `[[ -o histexpand ]] && echo on || echo off`,
+		Why:     "the same option under the name the other shells spell it with, which is what says the two are one entry rather than two that happen to agree — moving either has to move both",
+	},
+	{
 		ID: "opt/setopt-moves-a-name-this-shell-holds-still", Category: "shell options",
 		Snippet: "setopt banghist; printf 'on=%s ' \"$?\"; unsetopt banghist; printf 'off=%s\\n' \"$?\"\n",
 		Why:     "one shell's own option builtin, asked to move a name in both directions. It answers `on=0 off=0` — it moves every one of its 185 names except the five about being interactive, measured a name at a time — and the other five shells have no such command at all, so the row records five `command not found` pairs beside it. Ours refused eleven names that shell moves, which made `setopt` a table whose refusals described this implementation rather than the shell it imitates (#1739)",

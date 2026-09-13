@@ -133,15 +133,16 @@ type zshOption struct {
 	// def is the state a zsh default run has, which is what the listings
 	// compare against.
 	//
-	// Two of the entries this file inherited still hold this shell's own
-	// state here instead of zsh's — `banghist` and `hashcmds` are both
-	// measured the other way round in real zsh — which silences two
-	// deviations the listing exists to show. They are left as they were found; see
-	// docs/spec/semantics.md. `interactivecomments` was a third and was
-	// corrected in #2516, `emacs` a fourth in #1858, and neither correction
-	// says anything about the two that remain: each of those needs its own
-	// measurement, and `hashcmds` in particular has a real state behind it
-	// where the corrected two did not.
+	// One entry this file inherited still holds this shell's own state here
+	// instead of zsh's — `hashcmds`, measured the other way round in real
+	// zsh — which silences a deviation the listing exists to show. It is left
+	// as it was found; see docs/spec/semantics.md. `interactivecomments` was
+	// corrected in #2516, `emacs` in #1858 and `banghist` in #2542, and none
+	// of those says anything about the one that remains: `hashcmds` has a
+	// real state behind it where the corrected three did not: it is backed by
+	// `hashall`, which is genuinely off here because nothing is hashed, so
+	// correcting its default alone would print `nohashcmds` as a deviation
+	// where zsh prints nothing — moving a row rather than removing one.
 	def bool
 	// recorded marks a name that is remembered and not acted on. It is what
 	// tells the listings and `emulate` that the state lives in the store
@@ -225,7 +226,13 @@ var zshOptions = []zshOption{
 	recorded("autoremoveslash", true),
 	recorded("autoresume", false),
 	recorded("badpattern", true),
-	recorded("banghist", false),
+	// On in a fresh zsh, measured 2026-09-13 across all four surfaces it
+	// shows on: `[[ -o banghist ]]`, `[[ -o histexpand ]]`, the `unsetopt`
+	// listing and `${options[banghist]}`. parameter.go has needed it to be on
+	// since #1527 — its `unset "options[name]"` measurement moves `equals`
+	// and `banghist` *off* to show that an unset is a move rather than a
+	// reset, which an option already off could not have demonstrated (#2542).
+	recorded("banghist", true),
 	// BARE_GLOB_QUAL: whether a trailing `(…)` on a pattern is a glob
 	// qualifier list or part of the pattern. On by default and implemented
 	// rather than recorded since #1729 — see

@@ -17186,13 +17186,27 @@ element is anything else is not. `(x (p q) )` and `((m n) (p q) )`, but
 element a trailing space writes two spaces in the second of those; a rule
 that gave the list one unconditionally writes it in the last three.
 
-Two surfaces are **not modeled** and are recorded here rather than left to
-be rediscovered. A second subscript — `${a[1][1]}` — is still a parse error
-here, so the nested words are reachable only through the listing. And a
-nested array with nothing at subscript 0 splits the shell's own two
-readings: `a=(x y); a[1]=([2]=z)` answers `${a[1]}` with the empty string
-there and `"${a[@]}"` with `x z`, where one store can give only one of them.
-The first is what is implemented, so the second field reads empty.
+Four surfaces are **not modeled** and are recorded here rather than left to
+be rediscovered, all of them reachable only by writing a nested element and
+then asking it something the seventeen rows do not:
+
+    ${a[1][1]}                        a second subscript is still a parse error
+    a[1]=([2]=z); "${a[@]}"           x z there, x and an empty field here
+    a[1]=([2]=z); a[1]+=(w)           refused there, appended at 3 here
+    a[1]=(); a[1]+=(w)                ([1]=w) there, ([0]=w) here
+
+The second is the shell disagreeing with *itself*: with nothing at subscript
+0, `${a[1]}` is the empty string there and `"${a[@]}"` yields `z`, and one
+store can give only one of those. The strict element-0 reading is what is
+implemented, so the whole-array field reads empty.
+
+The third says the nested value has a *kind* — ksh93 answers `cannot append
+index array to associative array a[1]`, having made an array with an
+explicit subscript in it something else — which is its type system rather
+than this construct, and belongs with the compound variable that has none
+of its own here yet. The fourth is that shell's own next subscript after an
+empty literal, which is 1 rather than 0 and follows from nothing else
+measured.
 
 ### The letter that had to start meaning something
 

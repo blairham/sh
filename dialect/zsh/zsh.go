@@ -1968,6 +1968,13 @@ func Semantics() interp.Semantics {
 	// `readonly -z` are each `bad option: -z` in zsh 5.9.2, so the letter
 	// belongs to this table and to none of the other four (#1576).
 	s.DeclareOptions = "aAfFgHhilmpruUTxz"
+	// `export` is this word's declaration under another name, and it takes
+	// the same letters bar six. Measured 2026-09-12, a letter at a time
+	// against `export -X q=4`: `-A`, `-g`, `-m`, `-x` and `-z` are
+	// `bad option` and `-f` is `invalid option(s)`, and every other letter
+	// above is read. See Semantics.ExportOptions for why the refused six are
+	// the six they are.
+	s.ExportOptions = "aFHhilpruUT"
 	// `-z` and `+z` are taken and do nothing here, which is measured on both
 	// signs and on both sides of the builtin: `typeset -z p q` leaves `p`
 	// alone and declares an empty `q` exactly as a bare `typeset q` would,

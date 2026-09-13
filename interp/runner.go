@@ -6069,7 +6069,8 @@ func (r *Runner) signalDeathStatus(sig syscall.Signal) int {
 //   - the operand is a declaration's array literal, so a bare `q=(b)` and a
 //     scalar `typeset -g q=b` both keep the refusal they had;
 //   - the name is not already an array or a table, which is the *retype* half
-//     — a frozen array's elements may not be replaced in either shell.
+//     — a frozen array's elements may not be replaced in either shell — and
+//     is not a module's absent parameter, whose kind this shell does not know.
 //
 // An append is not one of these and needs no guard of its own: the spelling
 // does not exist on a declaration operand, and `typeset -g q+=(b)` is `not
@@ -6079,6 +6080,18 @@ func (r *Runner) frozenScalarRetyped(a *syntax.Assign) bool {
 		return false
 	}
 	if r.nameIsAnArray(a.Name) {
+		return false
+	}
+	if r.AbsentParameter(a.Name) {
+		// A name a module reserved and this shell holds no cell for. It is
+		// not a scalar the script may retype: the shell being modeled has a
+		// real parameter of a real kind under the name, and it refuses the
+		// same line — measured 2026-09-12, `typeset -g jobstates=(a)` is
+		// `can't change type of autoloaded parameter` before the module is
+		// loaded and `read-only variable: jobstates` after it. What this
+		// engine has under the name is a refusal rather than a kind, so it
+		// cannot tell a scalar from a table here and must not guess the one
+		// answer that lets the write through.
 		return false
 	}
 	return r.ask(r.sem().ArrayLiteralOperandRetypesAFrozenScalar,

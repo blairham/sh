@@ -4811,6 +4811,36 @@ type Semantics struct {
 	// which is what those two really do with it.
 	IntegerOptions string
 
+	// ExportOptions is the set of *declaration* letters `export` takes on top
+	// of its own, spelled the way DeclareOptions is, for the shell whose
+	// `export` is `typeset -gx` under another word.
+	//
+	// Empty is every other dialect and is the answer that was here before the
+	// field: `export` reads `-p` and, where the dialect has them, `-n` and
+	// `-f`, and any other letter is a bad option.
+	//
+	// Not DeclareOptions over again, for the reason IntegerOptions is not:
+	// the shell that has this narrows it, and narrows it in a shape that says
+	// what the word means. Measured 2026-09-12 on zsh 5.9.2, a letter at a
+	// time against `export -X q=4`, its `export` refuses exactly `-A`, `-g`,
+	// `-m`, `-x`, `-f` and `-z` out of what its `typeset` takes — the table
+	// letter, which cannot go in an environment; the two the word already
+	// implies; the pattern letter; the function letter, which is refused in
+	// its own words; and the one letter this engine models as inert. Every
+	// other declaration letter is accepted, including the ones whose refusal
+	// is about the operand rather than the option: `export -a q=4` is
+	// `q: inconsistent type for assignment` and `export -T q=4` is
+	// `-T requires names of scalar and array`, both of which are the letter
+	// having been *read*.
+	//
+	// The reason it is worth a field rather than a note is that this shell's
+	// own `typeset -p` writes these letters: an exported integer lists as
+	// `export -i xi=7`, so a state dump cannot be read back by the shell that
+	// wrote it while `export` refuses the spelling. That refusal is silent
+	// about the value — the name is simply not set and the script carries on
+	// (#2175).
+	ExportOptions string
+
 	// FunctionsOptions is the set of letters the `functions` builtin takes,
 	// spelled the way DeclareOptions is.
 	//

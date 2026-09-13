@@ -722,6 +722,10 @@ func Semantics() interp.Semantics {
 	// dropped, and the octal and hex spellings agree. `Answer` has no room
 	// for it, so a value here would have to be one of the two wrong ones.
 	//
+	// unanswered ArrayLiteralOperandRetypesAFrozenScalar: no declaration
+	// utility and no array literal here either. Measured 2026-09-12 on
+	// BusyBox, `readonly q=1; typeset -g q=(b)` is `syntax error: unexpected
+	// "("` at 2 — the same wall dash meets, and for the same reason (#2250).
 	// unanswered EarlierDeclarationLetterBlocksALaterPlus: there is no
 	// declaration command to write the letter on. `typeset` is not a
 	// builtin here and `integer` is not a word, so neither sign of `-i`

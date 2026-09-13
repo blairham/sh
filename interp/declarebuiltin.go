@@ -99,6 +99,15 @@ type declareFlags struct {
 	// carries the type itself — see Semantics.IntegerNameForcesTheAttribute,
 	// which is where the other reading lives.
 	integerForced bool
+	// exportForced records that the *name* the command was called by is what
+	// asked for the export attribute, so a plus word on the same line cannot
+	// take it off again. It is `export` in the dialect whose `export` reads
+	// the declaration letters — the word carries the attribute itself, the
+	// way `integer` carries the type — and the letter that spells it is one
+	// that dialect refuses outright, so nothing else could have written it.
+	// See Semantics.ExportOptions and integerForced just above, which is the
+	// same reading for the same reason.
+	exportForced bool
 	// readonlyOff records the sign of the *last* `r` letter the command
 	// wrote, rather than the sign of its last option word, because those are
 	// not the same question and the letter is the one that decides.
@@ -1532,7 +1541,13 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 		if r.exported == nil {
 			r.exported = map[string]bool{}
 		}
-		r.exported[name] = !f.remove
+		// A plus word takes the attribute off — unless the *name the command
+		// was called by* is what asked for it, which no plus on some other
+		// letter may cancel. The same reading `integer` takes for its own
+		// type letter: measured 2026-09-12, `export +i q=4` still exports in
+		// the shell whose `export` reads the declaration letters, and lists
+		// as `export q=4`. See exportForced.
+		r.exported[name] = !f.remove || f.exportForced
 	}
 	// The case attributes fold at assignment here, which is what bash and
 	// ksh93 do. zsh stores the raw text and folds on *expansion* — every

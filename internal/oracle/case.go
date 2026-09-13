@@ -17992,6 +17992,129 @@ echo end`,
 		Why:     "whether the name check reaches a *lookup* as well as a definition — Semantics.AliasNameCheckReachesALookup (#2413). ksh93u+ refuses the word and ends the script; bash 5.3 looks it up like any other and answers `not found`, which is the same thing it says for a name nobody ever mentioned. dash says its own not-found and zsh says nothing at all, both at 1, which is what they already do for any absent name — so for the three that check no name this row is the control rather than the question",
 	},
 	{
+		ID: "alias/a-reserved-word-is-read-the-way-the-grammar-reads-it", Category: "alias",
+		Script: true,
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias for='echo took;for'
+for x in a
+do echo "[$x]"
+done`,
+		Why: "whether an alias may stand in for a word the grammar reserves — syntax.Dialect.AliasesExpandReservedWords. The body ends in the word it shadows so that both readings run and the difference is one line of output rather than a parse error: `took` means the alias won, its absence means the loop did. bash 5.3, bash 3.2 and zsh take the alias; dash, ksh93, BusyBox ash and bash called `sh` read the word the grammar's way. From a file because zsh expands no alias under -c",
+	},
+	{
+		ID: "alias/a-reserved-word-after-an-alias-ending-in-a-blank", Category: "alias",
+		Script: true,
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias sp=' '
+alias for='echo took;for'
+sp for x in a
+do echo "[$x]"
+done`,
+		Why: "the same question one position further in: a value ending in a space makes the next word eligible, and the word made eligible that way is judged by the same rule. The control for the row above, and the same split — the protection is about the name and not about where the lexer found it",
+	},
+	{
+		ID: "alias/a-reserved-word-alias-in-posix-mode", Category: "alias",
+		Script: true,
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias for='echo took;for'
+set -o posix
+for x in a
+do echo "[$x]"
+done`,
+		Why: "the mode moves it: the two bash builds print only the loop here where they print `took` above. The other three have no `posix` option at all and say so in three different ways — an illegal option, bad option(s) with the usage line, and no such option — which is the same taxonomy this corpus records everywhere the name is bash's",
+	},
+	{
+		ID: "alias/leaving-posix-mode-hands-the-reserved-word-back", Category: "alias",
+		Script: true,
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias for='echo took;for'
+set -o posix
+set +o posix
+shopt -s expand_aliases 2>/dev/null
+for x in a
+do echo "[$x]"
+done`,
+		Why: "the other direction, which is what makes it a mode rather than a build: `took` is back in both bash builds and in the same build called `sh`. The second `shopt` is not decoration — leaving the mode turns alias expansion off on its own, measured, so without it this row would be measuring that instead",
+	},
+	{
+		ID: "alias/a-word-the-grammar-does-not-reserve-expands-in-posix-mode", Category: "alias",
+		Script: true,
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+set -o posix
+alias hi='echo took'
+hi there`,
+		Why: "the control that says the mode takes away one name and not the feature: an ordinary alias still stands in for its word with the mode on. Without it a shell that stopped expanding aliases altogether in POSIX mode would pass the three rows above",
+	},
+	{
+		ID:       "invoke/posix-mode-from-the-invocation-reaches-the-first-line",
+		Category: "invocation",
+		Args:     []string{"-o", "posix", ArgScript},
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias for='echo took;for'
+for x in a
+do echo "[$x]"
+done`,
+		Why: "the mode asked for on the command line, which is the same axis as the `set -o posix` row and a different route to it. It is a row of its own because the routes are not the same code: the mode is entered before a line of the program has been read, and a front end that seeded its watch with what the runner already held would hand the parser the mode for every *later* line and not for the program's own. Both bash builds print only the loop; the other three have no such option",
+	},
+	{
+		ID:       "invoke/called-sh-protects-a-reserved-word-alias",
+		Category: "invocation",
+		Argv0:    "sh",
+		Script:   true,
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias for='echo took;for'
+for x in a
+do echo "[$x]"
+done`,
+		Why: "the third door into the same axis, and the one a shebang takes: the name alone. bash and zsh both stop taking the alias under it, which is what puts this axis with the seven the mode answers the standard's way rather than with the one it asks the dialect about. dash, ksh93 and BusyBox ash never took it, so they are the control that the name changed nothing for them",
+	},
+	{
+		ID: "jobs/wait-n-waits-for-the-job-it-was-given", Category: "builtins",
+		Script: true,
+		Snippet: `{ sleep 0.2; exit 4; } &
+{ sleep 0.6; exit 5; } &
+wait -n %2
+echo "st=$?"
+wait`,
+		Why: "`wait -n` with operands waits for the first of *those* jobs, not for the first of all of them: 5 rather than 4, and the shorter job goes on being a job. BusyBox ash has the letter too and answers the same here, which is worth the row on its own — the other three refuse it, one of them by reading `-n` as a job spec that names nothing",
+	},
+	{
+		ID: "jobs/wait-n-with-nothing-after-it-takes-the-first", Category: "builtins",
+		Script: true,
+		Snippet: `{ sleep 0.2; exit 4; } &
+{ sleep 0.6; exit 5; } &
+wait -n
+echo "st=$?"
+wait`,
+		Why: "the control for the row above, and the pair is the whole of the rule: the same two jobs with no operands give 4, the job the narrowed form deliberately steps over. The two rows differ by two words and by which job is reported",
+	},
+	{
+		ID: "jobs/wait-p-names-the-job-the-status-came-from", Category: "builtins",
+		Script: true,
+		Snippet: `{ sleep 0.2; exit 4; } & b1=$!
+wait -p V %1
+echo "st=$? named=$([ "$V" = "$b1" ] && echo yes || echo no)"`,
+		Why: "`wait -p var` stores the finished job's process id. Compared rather than printed, because the number is the machine's. bash 5's letter alone: the 3.2 build macOS ships calls it an invalid option beside its one-line usage, and ksh93, dash, BusyBox ash and zsh each refuse it their own way",
+	},
+	{
+		ID: "jobs/wait-p-with-no-job-to-name-empties-the-variable", Category: "builtins",
+		Script: true,
+		Snippet: `V=preset
+{ sleep 0.2; } &
+wait -p V
+echo "st=$? V=[$V]"`,
+		Why: "the control: a bare `wait` names no single job, and the letter still writes — V is empty afterwards rather than holding what it held. That is the half a store written only on success would get wrong, and the shells that refuse the letter leave `preset` where it was, which is the same fact from the other side",
+	},
+	{
+		ID: "jobs/wait-p-writes-through-an-array-element", Category: "builtins",
+		Script: true,
+		Snippet: `k=key
+{ sleep 0.2; exit 4; } & b1=$!
+wait -p "A[$k]" %1
+echo "st=$? named=$([ "${A[$k]}" = "$b1" ] && echo yes || echo no)"`,
+		Why: "the name is stored through the same route an assignment takes, so a subscripted one reaches an element — which is the spelling a real suite uses and the reason this builtin now evaluates arithmetic. The two shells with no arrays refuse the substitution as well as the letter, which the row records rather than avoids",
+	},
+	{
 		ID: "select/an-unterminated-final-reply", Category: "select",
 		Snippet: `printf 2 | { select x in a b; do echo "picked=$x"; break; done; }; echo "st=$?"`,
 		Why:     "a reply with no trailing newline is a reply in zsh and is not one in bash and ksh93, which end the loop with 1 instead. Written through a pipe because a terminal ends every line, so this is only reachable from a pipe or a file — and `read` answers the same question unanimously, which is why that one is the core's behavior and this one is an axis",

@@ -112,6 +112,24 @@ const (
 	// descended whatever this says.
 	StarStarSeesLinkedDirectories
 
+	// RepeatedStarStarIsOneComponent reads a run of `**` components with
+	// nothing but separators between them as a single one, so `**/**` is
+	// `**` and `**//**` is `**` as well — the empty component goes with the
+	// run rather than surviving it.
+	//
+	// Without it each `**` is an alternative of its own and the run is a
+	// cross product, which is visible because **no shell takes duplicates
+	// out of a pathname expansion**. Measured 2026-09-13 in a tree of
+	// directories `a` and `b` nested three deep: `echo **/**/` is 14 names
+	// in bash 5.3.15 under `shopt -s globstar` and in ksh93 under `set -o
+	// globstar`, and 48 in zsh — the same 14 with each name repeated once
+	// per way of splitting it between the two components, `a/` twice and
+	// `a/a/a/` four times.
+	//
+	// Consulted only where StarStarCrossesDirectories is already on, since a
+	// shell that reads `**` as `*` has no run to collapse.
+	RepeatedStarStarIsOneComponent
+
 	// ExtendedPatternOperators reads the pattern operators one shell keeps
 	// behind an option of its own: the parenthesized flag groups `(#…)`, the
 	// closures `#` and `##`, the negation `^pat` and the exclusion

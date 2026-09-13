@@ -505,6 +505,23 @@ func closesBracket(s string, i int) bool {
 // UnmatchedPatternIsEmpty on, a miss deletes the word, and true says so —
 // distinct from a nil match list, which means the field was never a pattern
 // or should stand as written.
+// describesRatherThanSpells reports whether a piece of a field describes a
+// name rather than spelling one out — whether it is a pattern at all.
+//
+// One function because two callers need the identical answer and they are a
+// hundred lines apart: the gate at the top of [Runner.glob], which decides
+// whether the field reaches the filesystem, and the question a zero-level
+// `**` asks of everything ahead of it. A second copy of the composition is
+// how the two would come to disagree about a `|`.
+func (r *Runner) describesRatherThanSpells(s string) bool {
+	if hasUnescapedMeta(s, r.dialect().NumericRangePattern,
+		r.dialect().PatternAlternation, r.dialect().ExtendedPattern,
+		r.MatchOption(ExtendedPatternOperators)) {
+		return true
+	}
+	return r.dialect().PatternTopLevelAlternation && hasUnescapedByte(s, '|')
+}
+
 func (r *Runner) glob(field string) ([]string, bool) {
 	if r.noglob || r.globSuspended {
 		// `set -f`, or a context that reads a word as text. Only the
@@ -542,10 +559,7 @@ func (r *Runner) glob(field string) ([]string, bool) {
 		r.fatalPattern(field, 1)
 		return nil, false
 	}
-	if !hasQuals && !hasUnescapedMeta(field, r.dialect().NumericRangePattern,
-		r.dialect().PatternAlternation, r.dialect().ExtendedPattern,
-		r.MatchOption(ExtendedPatternOperators)) &&
-		(!r.dialect().PatternTopLevelAlternation || !hasUnescapedByte(field, '|')) {
+	if !hasQuals && !r.describesRatherThanSpells(field) {
 		// The bar is the one metacharacter hasUnescapedMeta must not count
 		// on its own — a field holding nothing else is not a pattern in the
 		// dialects where it only means something inside a group, and
@@ -630,6 +644,26 @@ func (r *Runner) glob(field string) ([]string, bool) {
 	starstar := r.MatchOption(StarStarCrossesDirectories)
 	starstarAlone := r.MatchOption(StarStarAloneCrossesDirectories)
 	parts := strings.Split(field, "/")
+	// Whether a zero-level `**` is reported with the separator the pattern
+	// wrote in front of it, which is decided by what stands ahead of the
+	// last `**` **as written** — ahead of it in the field, before the run
+	// below is collapsed and before the walk has looked at anything.
+	//
+	// Read here rather than at the component for a reason the collapse makes
+	// plain: `a/**/**` and `a/**` list the same names, and bash reports the
+	// zero-level one as `a` for the first and `a/` for the second. The run
+	// that collapses away is still a component that described rather than
+	// spelled, so the answer cannot be taken from what is left.
+	selfKeepsSeparator := false
+	for j := len(parts) - 1; j >= 0; j-- {
+		if parts[j] == "**" {
+			selfKeepsSeparator = r.spelledOut(parts[:j])
+			break
+		}
+	}
+	if starstar && r.MatchOption(RepeatedStarStarIsOneComponent) {
+		parts = collapseStarStarRun(parts)
+	}
 
 	// The slashes a pattern ends with are text, and they come back on every
 	// match. `*/` is the standard spelling of "directories only" and the
@@ -665,10 +699,9 @@ func (r *Runner) glob(field string) ([]string, bool) {
 	}
 
 	// The directories `**` matched zero levels deep, when it was the last
-	// component: the one shell with the option reports those with a trailing
-	// slash — `d/**` lists `d/` ahead of what is inside it.
+	// component: the one shell with the option reports those ahead of what
+	// is inside them — `d/**` lists `d/` and then `d/e`.
 	var selfDirs map[string]bool
-	crossed := false
 
 	// An empty component — two adjacent slashes — is a separator the pattern
 	// wrote and every column writes back: `cx//*` is `cx//ax` in all six, and
@@ -730,7 +763,6 @@ func (r *Runner) glob(field string) ([]string, bool) {
 			// The component is the directory itself and everything beneath
 			// it. Exactly `**`: anything more — `a**`, an escaped star — is
 			// an ordinary component, where adjacent stars collapse to one.
-			crossed = true
 			last := lastComponent(parts, i)
 			onward = map[string]bool{}
 			for _, dir := range dirs {
@@ -750,7 +782,6 @@ func (r *Runner) glob(field string) ([]string, bool) {
 				next = r.appendDescendants(next, dir, seeHidden, onward)
 			}
 			sortMatches(next)
-			next = compactSorted(next)
 		} else if lit := globUnescape(part); lit == "." || lit == ".." {
 			// `.` and `..` **name** a directory rather than describe one, so
 			// this component is joined and never matched. No listing reports
@@ -849,12 +880,21 @@ func (r *Runner) glob(field string) ([]string, bool) {
 			}
 			d = strings.TrimPrefix(d, rel)
 		}
-		if self && trail == "" {
-			// The zero-level `**` writes its own separator, and only when
-			// the pattern did not already ask for one. `cx/**/` is
+		if self && trail == "" && selfKeepsSeparator && !strings.HasSuffix(d, "/") {
+			// The zero-level `**` writes its own separator, and only three
+			// things can stop it.
+			//
+			// **The pattern already asked for one.** `cx/**/` is
 			// `cx/ cx/dx/` in the two shells that cross levels, not
 			// `cx// cx/dx/`, so the two sources of a trailing slash are one
-			// slash and not two.
+			// slash and not two — which is what `trail` covers. The same
+			// answer a second way for a run the pattern wrote mid-word:
+			// `a//**` is `a// a//b …`, so the separators already standing
+			// are the ones reported and none is added behind them.
+			//
+			// **Something ahead of the component described a name rather
+			// than spelling one.** See [Runner.spelledOut] — this is the
+			// whole of what selfKeepsSeparator carries.
 			d += "/"
 		}
 		return d + trail, true
@@ -923,9 +963,6 @@ func (r *Runner) glob(field string) ([]string, bool) {
 		}
 	}
 	sortMatches(out)
-	if crossed {
-		out = compactSorted(out)
-	}
 	if len(out) == 0 {
 		// Everything matched was the starting point itself — `**` over an
 		// empty directory — which is no match at all.
@@ -974,6 +1011,56 @@ func (r *Runner) excludedBy(word string, rights []string) bool {
 }
 
 // lastComponent reports whether nothing but trailing slashes follows parts[i].
+// spelledOut reports whether every component ahead of a `**` is a name the
+// pattern wrote out rather than one it described.
+//
+// It is the question that decides how a **zero-level** `**` is reported, and
+// it is the only thing that decides it. Measured 2026-09-13 against bash
+// 5.3.15 under `shopt -s globstar`, in a tree holding `a/b/c`, `a/f1`,
+// `a/b/f2`, `a/b/c/f3`, `d/e/f4` and `top`:
+//
+//	a/**        a/ a/b a/b/c a/b/c/f3 a/b/f2 a/f1
+//	a/b/**      a/b/ a/b/c a/b/c/f3 a/b/f2
+//	a//**       a// a//b a//b/c a//b/c/f3 a//b/f2 a//f1
+//	"a"/**      a/ a/b a/b/c a/b/c/f3 a/b/f2 a/f1
+//	*/**        a a/b a/b/c a/b/c/f3 a/b/f2 a/f1 d d/e d/e/f4
+//	?/**        a a/b …  d d/e d/e/f4
+//	[a]/**      a a/b a/b/c a/b/c/f3 a/b/f2 a/f1
+//	a/*/**      a/b a/b/c a/b/c/f3 a/b/f2
+//	a/**/**     a a/b a/b/c a/b/c/f3 a/b/f2 a/f1
+//	**/c/**     a/b/c a/b/c/f3
+//
+// So the separator is not a property of the directory and not a property of
+// the `**`: `a/**` and `*/**` report the same directory two different ways,
+// and the only difference between the two patterns is one component nobody
+// looked at. Quoting it or escaping the slash changes nothing, which is what
+// makes this a question about the pattern's **metacharacters** rather than
+// about its source text — `"a"/**` reports `a/` exactly as `a/**` does.
+//
+// An earlier `**` counts as describing, so the rule composes with itself:
+// `a/**/**` reports `a`, not `a/`, even though everything the reader can see
+// ahead of the last component was spelled out.
+//
+// zsh is not a second reading of this. Its bare `**` does not cross levels at
+// all, so no zero-level match arises there without a trailing slash — and
+// with one, the slash comes from the pattern and this never runs.
+//
+// ksh93 *is* a second reading and is deliberately not modeled here, because
+// nothing in this tree can reach it yet: it drops the zero-level match
+// entirely where the prefix is spelled out, so `a/b/**` is the three names
+// beneath `a/b` and `a/*/**` is `a/b a/f1 …` — the mirror image, and it
+// counts a plain file as a zero-level match where bash keeps only
+// directories. `set -o globstar` is not wired into that dialect, so writing
+// the axis today would be writing a branch no run can take.
+func (r *Runner) spelledOut(ahead []string) bool {
+	for _, p := range ahead {
+		if r.describesRatherThanSpells(p) {
+			return false
+		}
+	}
+	return true
+}
+
 func lastComponent(parts []string, i int) bool {
 	for _, p := range parts[i+1:] {
 		if p != "" {
@@ -1021,16 +1108,42 @@ func (r *Runner) appendDescendants(out []string, dir string, seeHidden bool, onw
 	return out
 }
 
-// compactSorted removes adjacent duplicates, which is all the duplicates a
-// sorted list has. Only `**` can produce one: two components can expand to
-// the same directory by different routes.
-func compactSorted(names []string) []string {
-	out := names[:0]
-	for i, n := range names {
-		if i > 0 && n == names[i-1] {
+// collapseStarStarRun reads a run of `**` components, separators and all, as
+// a single `**`.
+//
+// The run rather than the pair, and the separators with it: `**/**/**` is one
+// component in the shells that do this, and so is `**//**`, where the empty
+// component an ordinary pattern reproduces — `cx//*` is `cx//ax` in all six
+// columns — goes with the run instead of surviving it.
+//
+// It matters because nothing downstream takes duplicates out of a pathname
+// expansion, and no shell in the panel does either. Two `**` components are
+// two alternatives, each standing for zero or more levels, so a directory
+// three deep is reached four ways and named four times. That is what zsh
+// answers; what the shells with this option answer is the list once. See
+// RepeatedStarStarIsOneComponent for the measurement.
+func collapseStarStarRun(parts []string) []string {
+	var out []string
+	for i := 0; i < len(parts); i++ {
+		if parts[i] != "**" {
+			out = append(out, parts[i])
 			continue
 		}
-		out = append(out, n)
+		// The last `**` reachable from here across nothing but separators.
+		// Ending the run at that one rather than at the first component
+		// which is neither is what keeps a trailing slash out of it: the
+		// empty component a pattern ends with has no further `**` behind it,
+		// so it is never inside a run and still writes its own separator.
+		last := i
+		for j := i + 1; j < len(parts); j++ {
+			if parts[j] == "**" {
+				last = j
+			} else if parts[j] != "" {
+				break
+			}
+		}
+		out = append(out, "**")
+		i = last
 	}
 	return out
 }

@@ -2014,6 +2014,28 @@ pattern matches and everything about what it reports:
     [[ abcabc == (#b)(*)(abc) ]]    match=(abc abc)
     [[ abab == (#b)(ab)# ]]         mbegin=(3)     — a closure reports its *last* repetition
 
+**Greedy, and the rows above cannot show it.** Each of those three forces the
+split: there is exactly one way to divide the subject that matches at all, so a
+shell reading the star either way answers them identically. This tree read
+them *shortest* first until #2513 and passed all three. What separates the two
+readings is a pattern where **both** divisions match, which is any repetition
+followed by something that can take the rest:
+
+    [[ xx93 == (#b)x#(*) ]]         match=(93)     — the closure took both, not neither
+    [[ xx93 == (#b)x##(*) ]]        match=(93)
+    [[ abc93 == (#b)*(*) ]]         match=("")     — the star took the lot
+    [[ xxy == (#b)(x)#(*) ]]        match=(x y)
+    [[ xxxxy == (#b)x(#c2,4)(*) ]]  match=(y)      — a counted closure counts up
+
+Read shortest first, every left-hand column above matches nothing and the
+right-hand one takes the whole subject, which is a correct *match* and a wrong
+*report*. It cost a real configuration: `key = value` lines parsed with
+
+    (#b)[[:blank:]]#([^[:blank:]=]##)[[:blank:]]#[=][[:blank:]]#(*)
+
+gave every value a leading blank, because `[[:blank:]]#` matched none of the
+space and `(*)` took it. That is the idiom every ini reader in shell uses.
+
 #### Nothing is written unless the pattern asked and matched
 
     match=(zz); [[ abc == (#b)abc ]]      match is still (zz)  — no group

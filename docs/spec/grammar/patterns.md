@@ -1642,6 +1642,72 @@ Reading it as one question is what made `**/a*` come back **short at
 status 0** in the zsh dialect, with the match in the starting directory
 missing and nothing said (#1339).
 
+### What a `**` that stood for nothing is called
+
+The zero-level half of the component has a spelling, and it is not the
+one the directory has. Measured 2026-09-13 against bash 5.3.15 under
+`shopt -s globstar`, in a tree holding `a/b/c`, `a/f1`, `a/b/f2`,
+`a/b/c/f3`, `d/e/f4` and `top`:
+
+| pattern | the zero-level match is called |
+| --- | --- |
+| `a/**` | `a/` |
+| `a/b/**` | `a/b/` |
+| `a//**` | `a//` |
+| `"a"/**` | `a/` |
+| `*/**` | `a` |
+| `?/**` | `a` |
+| `a/*/**` | `a/b` |
+| `a/**/**` | `a` |
+| `**/c/**` | `a/b/c` |
+
+So the separator is not a property of the directory: `a/**` and `*/**`
+report the same directory two different ways, and the only difference
+between the two patterns is a component nobody looked at. **It is kept
+exactly where everything ahead of the component was spelled out rather
+than described**, and the separators already standing are reported as
+written — `a//**` is `a//`, not `a///`. Quoting the prefix does not
+change the answer, so the question is about the pattern's
+*metacharacters* and not about its source text.
+
+ksh93 gives a second reading and this shell does not implement it: it
+drops the zero-level match altogether where the prefix is spelled out,
+so `a/b/**` is what lies beneath `a/b` and `a/*/**` is `a/b a/f1 …` —
+the mirror image, and it counts a plain file as a zero-level match
+where bash keeps only directories. Nothing here can reach it, because
+`set -o globstar` is not wired into that dialect.
+
+zsh never reaches the question: its bare `**` does not cross levels at
+all, and with a slash behind it the separator comes from the pattern.
+
+### Nothing takes duplicates out, so a run of `**` is an axis
+
+**A pathname expansion is not a set.** Two `**` components are two
+alternatives, each standing for zero or more levels, so a name
+reachable by several splits is written once per split. Measured over a
+tree of directories `a` and `b` nested three deep:
+
+| pattern | bash 5.3 `-s globstar` | ksh93 `-o globstar` | zsh 5.9.2 |
+| --- | --- | --- | --- |
+| `**/a/**` | 17 names, `a/a/a` three times | the same | — |
+| `**/a/**/` | 17 names | the same | the same |
+| `a/**/**/b` | `a/a/b a/b a/b/b` | the same | each of the two deeper ones twice |
+| `**/**/` | 14 names, each once | the same | 48 names |
+
+The last row is the axis, and the third is the same axis read from the
+other side. **bash and ksh93 read a run of `**` components as one
+component**; zsh does not, so its `**/**/` is the cross product and
+names a directory three deep four times. `RepeatedStarStarIsOneComponent`
+carries it, consulted only where `**` crosses levels at all, and the
+collapse takes the separators inside the run with it — `**//**` is `**`
+in bash, where an ordinary empty component is reproduced (`cx//*` is
+`cx//ax` in all six columns).
+
+The two sections interact and the order is measured. `a/**/**` and
+`a/**` list the same names and spell the zero-level one differently, so
+what the separator rule reads is the field **as written** — before the
+run is collapsed, and before the walk has looked at anything.
+
 `extglob` is the odd one, because it changes the grammar. bash parses a
 line before running any of it, so the option takes effect on the *next*
 line: `shopt -s extglob; echo @(x)` on one line is a syntax error and

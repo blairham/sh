@@ -11163,6 +11163,13 @@ grades it and nothing drift-checks it either, for the same reason.
 | `shopt/globstar-lists-a-symbolic-link-it-will-not-enter` | `r/ s/` | `r/ s/` | `r/ s/` | `r/ s/` | `r/ s/` | `r/` | `r/ s/` |
 | `shopt/globstar-is-bounded-by-a-link-to-its-own-ancestor` | `up/y` | `y` | `y` | `up/y` | `up/y` | `y` | `up/y` |
 | `shopt/globstar-enters-a-link-when-it-does-not-lead-the-pattern` | `./r/x ./s/x` | `./r/x ./s/x` | `./r/x ./s/x` | `./r/x ./s/x` | `./r/x ./s/x` | `./r/x` | `./r/x ./s/x` |
+| `shopt/globstar-zero-level-keeps-a-separator-it-was-given` | `cx/dx` | `cx/ cx/dx cx/dx/ax` | `cx/ cx/dx cx/dx/ax` | `cx/dx` | `cx/dx` | `cx/dx` | `cx/dx` |
+| `shopt/globstar-zero-level-drops-it-after-a-pattern` | `cx/dx` | `cx cx/dx cx/dx/ax` | `cx cx/dx cx/dx/ax` | `cx/dx` | `cx/dx` | `cx/dx` | `cx/dx` |
+| `shopt/globstar-zero-level-after-an-earlier-crossing` | `cx/dx/ax` | `cx cx/dx cx/dx/ax` | `cx cx/dx cx/dx/ax` | `cx/dx/ax` | `cx/dx/ax` | `cx/dx cx/dx/ax` | `cx/dx/ax` |
+| `shopt/globstar-names-a-file-once-per-route-to-it` | `cx/cx/ax` | `cx cx/cx cx/cx cx/cx/ax cx/cx/ax` | `cx cx/cx cx/cx cx/cx/ax cx/cx/ax` | `cx/cx/ax` | `cx/cx/ax` | `cx/cx cx/cx/ax` | `cx/cx/ax` |
+| `shopt/globstar-run-is-one-component` | `cx/dx/` | `cx/ cx/dx/` | `cx/ cx/dx/` | `cx/dx/` | `cx/dx/` | `cx/ cx/ cx/dx/ cx/dx/ cx/dx/` | `cx/dx/` |
+| `shopt/globstar-run-stops-at-the-next-component` | `cx/dx/ax` | `ax cx/dx/ax` | `ax cx/dx/ax` | `cx/dx/ax` | `cx/dx/ax` | `ax cx/dx/ax cx/dx/ax cx/dx/ax` | `cx/dx/ax` |
+| `shopt/globstar-zero-level-reproduces-a-written-separator-run` | `cx//dx` | `cx// cx//dx cx//dx/ax` | `cx// cx//dx cx//dx/ax` | `cx//dx` | `cx//dx` | `cx//dx` | `cx//dx` |
 | `shopt/nocasematch-folds-case` | `exact` | `hit` | `hit` | `hit` | `exact` | `exact` | `exact` |
 | `shopt/nocasematch-folds-a-substitution` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[AXC]` | `[AXC]` | `[ABC]` | `[ABC]` | `[ABC]` | `[ABC]` |
 | `shopt/nocasematch-leaves-a-trim-exact` | `[ABC]` | `[ABC]` | `[ABC]` | `[ABC]` | `[ABC]` | `[ABC]` | `[ABC]` |
@@ -11520,6 +11527,34 @@ grades it and nothing drift-checks it either, for the same reason.
 - `shopt/globstar-enters-a-link-when-it-does-not-lead-the-pattern` — bash alone, and **recorded rather than implemented**. The same pattern with one directory component in front of the `**` answers `./r/x ./s/x` in bash 5.3 where `**/x` answers `r/x`, so the shell disagrees with its own leading form; zsh answers `./r/x` either way, and so does ksh93 once `set -o globstar` reaches it. Following it would mean reproducing a walk that is unbounded on a tree holding a link to its own ancestor — measured, `w/**/y` under `ln -s . w/up` is `w/up/y w/y` there — so this walk answers what the other two answer and what bash itself answers where the component leads. The row is the evidence for that choice (#2360)
   ```sh
   mkdir -p g/r && cd g && : > r/x && ln -s r s && shopt -s globstar 2>/dev/null; echo ./**/x
+  ```
+- `shopt/globstar-zero-level-keeps-a-separator-it-was-given` — what the zero-level match is **called**, which is a second question after whether it happens at all. bash 5.3 with the option answers `cx/ cx/dx cx/dx/ax` — the directory with the separator the pattern wrote in front of the component — and the row below is the same pattern with one metacharacter added, where the same directory comes back as `cx`. zsh reads a bare `**` as `*` and the four columns without the option do too, so all five answer `cx/dx` (#2298)
+  ```sh
+  mkdir -p g/cx/dx && cd g && : > ax && : > cx/dx/ax && shopt -s globstar 2>/dev/null; echo cx/**
+  ```
+- `shopt/globstar-zero-level-drops-it-after-a-pattern` — the pair of the row above, and the whole difference between them is a component nobody looked at: `cx cx/dx cx/dx/ax` in bash 5.3, where `cx/**` answers `cx/`. So the separator is not a property of the directory and not a property of the `**` — it is kept exactly where everything ahead of the component was spelled out rather than described. Quoting does not decide it either: `"cx"/**` answers `cx/` like the row above, so the question is about metacharacters and not about source text (#2298)
+  ```sh
+  mkdir -p g/cx/dx && cd g && : > ax && : > cx/dx/ax && shopt -s globstar 2>/dev/null; echo c*/**
+  ```
+- `shopt/globstar-zero-level-after-an-earlier-crossing` — and a `**` counts as describing, so the rule composes with itself: bash 5.3 answers `cx cx/dx cx/dx/ax` here and `cx/ cx/dx cx/dx/ax` for `cx/**`, which lists the same three names. That is what makes this a question about the field **as written** rather than about what is left after a run of `**` is folded into one — the folded pattern is `cx/**`, and it does not answer this (#2298)
+  ```sh
+  mkdir -p g/cx/dx && cd g && : > ax && : > cx/dx/ax && shopt -s globstar 2>/dev/null; echo cx/**/**
+  ```
+- `shopt/globstar-names-a-file-once-per-route-to-it` — **a pathname expansion is not a set.** Two `**` components are two alternatives, each standing for zero or more levels, so a name reachable by two splits is written twice: bash 5.3 answers `cx cx/cx cx/cx cx/cx/ax cx/cx/ax`. Nothing in any column takes the duplicates out. zsh reads the trailing `**` as `*` and answers `cx/cx cx/cx/ax`; the four columns without the option read both as `*` and answer `cx/cx/ax` (#2298)
+  ```sh
+  mkdir -p g/cx/cx && cd g && : > ax && : > cx/cx/ax && shopt -s globstar 2>/dev/null; echo **/cx/**
+  ```
+- `shopt/globstar-run-is-one-component` — where the panel splits once duplicates are known to survive. bash 5.3 answers `cx/ cx/dx/` — a run of `**` components is one component there, and ksh93 under `set -o globstar` agrees — against `cx/ cx/ cx/dx/ cx/dx/ cx/dx/` in zsh, which is the cross product: one copy per way of splitting the path between the two components. The four columns without the crossing answer `cx/dx/`, a plain `*/*/` (#2298)
+  ```sh
+  mkdir -p g/cx/dx && cd g && : > ax && : > cx/dx/ax && shopt -s globstar 2>/dev/null; echo **/**/
+  ```
+- `shopt/globstar-run-stops-at-the-next-component` — the control for the row above: folding a run of `**` into one must not reach past the run. bash 5.3 answers `ax cx/dx/ax`, which is what `**/ax` answers, and zsh answers `ax cx/dx/ax cx/dx/ax cx/dx/ax` — the deeper name once per split, and the shallow one only the one way. The four columns without the crossing answer `cx/dx/ax` (#2298)
+  ```sh
+  mkdir -p g/cx/dx && cd g && : > ax && : > cx/dx/ax && shopt -s globstar 2>/dev/null; echo **/**/ax
+  ```
+- `shopt/globstar-zero-level-reproduces-a-written-separator-run` — and the separators already standing are the ones reported: `cx//` in bash 5.3, not `cx///`. An empty component is a separator the pattern wrote and every column writes it back — `cx//*` is `cx//dx` in all six — so the zero-level match adds nothing behind what is already there. zsh and the three columns without the option read the bare `**` as `*` and answer `cx//dx` (#2298)
+  ```sh
+  mkdir -p g/cx/dx && cd g && : > ax && : > cx/dx/ax && shopt -s globstar 2>/dev/null; echo cx//**
   ```
 - `shopt/nocasematch-folds-case` — the option folds `case` and `[[ ]]` matching in bash and nothing else has it: the other three keep matching exact because the command that would have changed it was never theirs
   ```sh

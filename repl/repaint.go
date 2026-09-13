@@ -37,6 +37,16 @@ import (
 // most of what it wrote was the prompt. zsh does not rewrite the prompt for a
 // keystroke and neither does this.
 //
+// Those figures predate [styleInForce], which is a correction and not free: a
+// keystroke landing *inside* a coloured run now carries the run's escape as
+// well as the character, because the terminal has to be put back into a state
+// the shared prefix does not leave it in. Measured 2026-09-13 on the built
+// shell under `-highlight`, typing the eight characters of `"one two` into an
+// unclosed quotation: 80 bytes, against 45 for the draws that were losing the
+// colour and 130 for redrawing the run from its opening sequence. A keystroke
+// outside a run — which is every keystroke on a line with no highlighting on
+// it, and the rows above — is untouched.
+//
 // **What makes it safe is that the editor knows exactly what it last drew.**
 // The state below is written only by a redraw, and [editor.write] clears it —
 // so anything else that puts bytes on the terminal, a completion listing, a

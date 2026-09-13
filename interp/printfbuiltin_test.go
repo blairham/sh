@@ -1272,23 +1272,49 @@ func TestPrintfGroupingFlagAfterTheWidthIsAnAxis(t *testing.T) {
 	}
 }
 
-// The second axis is asked only where the first has already said yes, so a
-// dialect without the flag is never questioned about where it may be written.
-// Run with the flag refused and the position axis unanswered: an
-// implementation that asked the second question first would refuse the
-// command and name it, and this shell has to answer `%'d` as dash does.
-func TestPrintfGroupingPositionIsAskedOnlyWhereTheFlagExists(t *testing.T) {
-	sem := printfSem()
-	sem.PrintfGroupingFlag = No
-	sem.PrintfGroupingFlagAfterTheWidth = Unspecified
-	for _, src := range []string{`printf "[%'d]" 1234567`, `printf "[%10'd]" 1234567`} {
-		out, st := run(t, src, func(r *Runner) { r.Semantics = &sem })
-		if !strings.Contains(out, "invalid directive") || st != 1 {
-			t.Errorf("%s: got %q status %d, want the bad-directive refusal at 1", src, out, st)
-		}
-		if strings.Contains(out, "disagree") {
-			t.Errorf("%s: got %q — the position axis was consulted where the flag does not exist", src, out)
-		}
+// The second axis is asked at its own disagreement and nowhere else, and both
+// halves of that are here. Run with it *unanswered*, so an implementation
+// that consults it refuses the command and names it on stderr rather than
+// passing quietly wherever a preset happens to agree.
+//
+// The first half: a dialect that has no `'` flag is never questioned about
+// where the flag may be written, so `%10'd` there is dash's ordinary refusal
+// of a conversion it does not have.
+//
+// The second: a conversion with the flag written *among* its flags settles
+// nothing about the late position either, so `%'d` and `%'10d` must run under
+// a shell that has the flag and has not answered where it goes. That row is
+// the one a "consult it whenever the flag exists" implementation fails, and
+// it is the difference between asking at the disagreement and asking at the
+// feature.
+func TestPrintfGroupingPositionIsAskedOnlyAtItsOwnDisagreement(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		flag    Answer
+		src     string
+		refused bool
+	}{
+		{"no flag at all, and the late position is not the reason", No, `printf "[%10'd]" 1234567`, true},
+		{"no flag at all, plainly written", No, `printf "[%'d]" 1234567`, true},
+		{"the flag among the flags asks nothing about the late position", Yes, `printf "[%'d]" 1234567`, false},
+		{"nor does the flag ahead of a width", Yes, `printf "[%'10d]" 1234567`, false},
+		{"nor a conversion with no quote in it", Yes, `printf "[%10d]" 1234567`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := printfSem()
+			sem.PrintfGroupingFlag = tc.flag
+			sem.PrintfGroupingFlagAfterTheWidth = Unspecified
+			out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+			if strings.Contains(out, "disagree") {
+				t.Fatalf("got %q — the position axis was consulted where nothing disagrees", out)
+			}
+			switch {
+			case tc.refused && (!strings.Contains(out, "invalid directive") || st != 1):
+				t.Errorf("got %q status %d, want the bad-directive refusal at 1", out, st)
+			case !tc.refused && (!strings.Contains(out, "1234567") || st != 0):
+				t.Errorf("got %q status %d, want the number at 0", out, st)
+			}
+		})
 	}
 }
 

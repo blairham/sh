@@ -19,6 +19,12 @@ func readonlyCompoundRun(t *testing.T, src string, a Answer) (string, string, in
 	t.Helper()
 	return declRun(t, src, func(s *Semantics) {
 		s.DeclareOptions = "aAgiprx"
+		// The kind letters have to be on `readonly` for this axis to be
+		// reachable at all: Semantics.ReadonlyOptions is POSIX's `p` alone
+		// unless a dialect widens it, and two of the panel's shells never
+		// do — which is why the axis they cannot be asked is now refused as
+		// an *option* rather than as an axis (#2277).
+		s.ReadonlyOptions = "paAf"
 		s.TypesetLocalNeedsKeywordFunction = No
 		s.ReadonlyRecordsTheCompoundAttribute = a
 	}, Diagnostics{})
@@ -64,6 +70,7 @@ func TestReadonlyWithNoKindLetterAsksNothing(t *testing.T) {
 	// And with the letter it is, which says the silence above is the guard.
 	out, errs, _ = declRun(t, `readonly -a a`, func(s *Semantics) {
 		s.DeclareOptions = "aAgiprx"
+		s.ReadonlyOptions = "paAf"
 		s.ReadonlyRecordsTheCompoundAttribute = Unspecified
 	}, Diagnostics{})
 	if !strings.Contains(errs, "the array letter on `readonly` declaring an array") {

@@ -1269,6 +1269,15 @@ func Semantics() interp.Semantics {
 	// this shell's letters. Measured 2026-09-12, `unset -n x` is
 	// `unset: bad option: -n` at 1 and `x` keeps its value (#932).
 	s.UnsetOptions = "vfm"
+	// `readonly` here is `typeset -r` under another name, so it takes far
+	// more than these four: measured 2026-09-12, `-i`, `-x`, `-g`, `-l`,
+	// `-u` and `-t` are all taken at status 0 as well, and only `-n` and
+	// `-r` are refused. The set stops at the letters this builtin does
+	// something with, because a letter accepted and then ignored hands a
+	// script a success it did not earn — see Semantics.ReadonlyOptions.
+	// Making `readonly` read DeclareOptions here is the honest fix and has
+	// its own measurements to make.
+	s.ReadonlyOptions = "paAf"
 	s.ReadZeroTimeout = interp.ReadZeroTimeoutFinishesWhatItStarted
 	s.ReadTimeoutKeepsWhatArrived = interp.No
 	s.ReadTimeoutBoundsReadability = interp.Yes

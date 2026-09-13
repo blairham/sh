@@ -153,16 +153,15 @@ func TestNoAnsweredAxisRefusesAtRunTime(t *testing.T) {
 	}
 }
 
-// TestTheThreeAxesLeftUnansweredStillRefuse is the other half, and it is not
-// redundant: the three this dialect cannot answer are recorded as open
-// questions, and a value quietly appearing for one of them — copied from a
-// neighboring dialect to make the message go away — is exactly what
-// docs/spec/ash.md forbids. When one is closed properly, its issue moves the
-// row from here to the table above.
-func TestTheThreeAxesLeftUnansweredStillRefuse(t *testing.T) {
+// TestTheAxesLeftUnansweredStillRefuse is the other half, and it is not
+// redundant: what this dialect cannot answer is recorded as an open question,
+// and a value quietly appearing for one of them — copied from a neighboring
+// dialect to make the message go away — is exactly what docs/spec/ash.md
+// forbids. When one is closed properly, its issue moves the row from here to
+// the table above.
+func TestTheAxesLeftUnansweredStillRefuse(t *testing.T) {
 	for _, tc := range []struct{ name, src, issue string }{
 		{"a NUL inside $'…'", `x=$'a\0b'; echo ${#x}`, "#2276"},
-		{"the array letter on readonly", `f() { readonly -a a; }; f`, "#2277"},
 	} {
 		out, _ := runIn(t, tc.src)
 		if !strings.Contains(out, "no dialect was chosen") {
@@ -174,7 +173,20 @@ func TestTheThreeAxesLeftUnansweredStillRefuse(t *testing.T) {
 				"measurement — revert it.", tc.name, tc.issue, strings.TrimSpace(out))
 		}
 	}
-	// The third is asked of the vector rather than of a run, because the
+	// `readonly -a` used to be a third row here and is not one any more, and
+	// the way it left is the point rather than the arithmetic: the axis was
+	// never unanswered, it was **unreachable**. This shell has no `-a` on the
+	// word — `readonly: line 0: illegal option -a`, measured 2026-09-12 —
+	// so it cannot be asked whether the letter records a kind. The fix was to
+	// take the letters from the vector, where every other builtin's already
+	// come from, rather than to invent a value for the axis (#2277).
+	if out, _ := runIn(t, `f() { readonly -a a; }; f`); !strings.Contains(out, "-a") ||
+		strings.Contains(out, "no dialect was chosen") {
+		t.Errorf("`readonly -a` wrote %q, want the option refused: an axis a "+
+			"shell cannot be asked must be closed at the option and not by "+
+			"choosing one of the answers for it (#2277)", strings.TrimSpace(out))
+	}
+	// The last one is asked of the vector rather than of a run, because the
 	// test harness gives the runner no resource limits at all and `ulimit
 	// -a` stops on *that* first — a refusal that would pass this test while
 	// saying nothing about the table.

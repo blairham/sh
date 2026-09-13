@@ -286,6 +286,13 @@ func Semantics() interp.Semantics {
 	// status left behind for a following operand to overwrite or keep
 	// (#2373).
 	s.UnsetOptions = "vf"
+	// `readonly` keeps POSIX's single letter: measured 2026-09-12,
+	// `readonly -a zz` is `readonly: Illegal option -a` and, this being a
+	// special builtin, it ends the shell. `-A`, `-f` and `-n` are refused
+	// the same way. Stated rather than left to the inherited value, since
+	// the interpreter used to fix the set at `paAf` and this column
+	// accepted three letters its shell has never had (#2277).
+	s.ReadonlyOptions = "p"
 	s.ExportListing = interp.DeclareListingCommandWord
 	s.ReadonlyListing = interp.DeclareListingCommandWord
 	// dash single-quotes every listed value; it has no declare, so this

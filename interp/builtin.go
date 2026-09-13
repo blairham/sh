@@ -4234,7 +4234,15 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 		func(d declaration) bool { return d.readonly }); answered {
 		return code
 	}
-	args, opts, code := r.builtinOptions("readonly", args, "paAf")
+	// The letters are the dialect's, the way `read`'s and `unset`'s are: they
+	// were fixed here as `paAf` until #2277, so three columns took kind
+	// letters their shell has never had and then walked into an axis they
+	// cannot be asked. Empty is POSIX's set.
+	letters := r.sem().ReadonlyOptions
+	if letters == "" {
+		letters = "p"
+	}
+	args, opts, code := r.builtinOptions("readonly", args, letters)
 	if code != 0 {
 		return code
 	}

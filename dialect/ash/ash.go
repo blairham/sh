@@ -238,6 +238,13 @@ func Semantics() interp.Semantics {
 	// status left behind for a following operand to overwrite or keep
 	// (#2373).
 	s.UnsetOptions = "vf"
+	// `readonly` keeps POSIX's single letter. Measured 2026-09-12,
+	// BusyBox v1.37.0: `readonly -a zz` is `readonly: line 0: illegal
+	// option -a`, and so are `-A` and `-f`. There is no `typeset` here at
+	// all, so even the listing that would show the attribute is missing —
+	// which is why ReadonlyRecordsTheCompoundAttribute is unreachable in
+	// this column rather than unanswered (#2277).
+	s.ReadonlyOptions = "p"
 	// `export -n` is accepted and reports 0, which dash refuses outright.
 	s.ExportTakesTheAttributeOff = interp.Yes
 	// `export -f` is `illegal option -f`, so a function does not travel.

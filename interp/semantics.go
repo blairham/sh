@@ -715,6 +715,43 @@ type Semantics struct {
 	// one, is zsh's alone. Measured 2026-09-05 across the panel. Empty means
 	// `vf`, which is what POSIX gives the builtin.
 	UnsetOptions string
+	// ReadonlyOptions is the same question asked of `readonly`, spelled the
+	// same way. Empty means `p`, which is the whole of what POSIX gives the
+	// builtin.
+	//
+	// It exists because the letters were fixed in the interpreter — a
+	// literal `paAf` — while every other builtin whose letters differ by
+	// shell reads them from here. Three columns then accepted a letter their
+	// shell refuses, and `readonly -a` walked on into
+	// ReadonlyRecordsTheCompoundAttribute, an axis two of them cannot be
+	// asked because they cannot reach the question (#2277).
+	//
+	// Measured 2026-09-12, `env -i PATH=/usr/bin:/bin`, `readonly -X zz`:
+	//
+	//	bash 5.3, bash-as-sh   p a A f     `-f` is `zz: not a function`
+	//	bash 3.2               p a   f     `-A: invalid option`
+	//	zsh 5.9.2              p a A f     and more — see below
+	//	dash 0.5.12            p           `Illegal option -a`, and fatal
+	//	ksh93u+                p           `-a: unknown option`
+	//	BusyBox ash            p           `readonly: line 0: illegal option -a`
+	//
+	// Two things the table deliberately leaves out, both measured and
+	// neither modeled.
+	//
+	// **`-n`.** bash 5.3, bash 3.2 and BusyBox ash all take `readonly -n zz`
+	// at status 0; dash, ksh93 and zsh refuse it. It is not in any set here
+	// because nothing in this shell does anything with it, and a letter
+	// accepted with no effect is a worse answer than a refusal: the script
+	// gets a success it did not earn. A row that grades an *effect* is what
+	// would earn it a place.
+	//
+	// **zsh's wider set.** `readonly` there is `typeset -r` wearing another
+	// name, so `-i`, `-x`, `-g`, `-l`, `-u` and `-t` are all taken at status
+	// 0 as well. Adding them would accept six letters this builtin then
+	// ignores, which is the same trap as `-n` six times over; the honest fix
+	// is `readonly` reading DeclareOptions there, and that is a change with
+	// its own measurements to make.
+	ReadonlyOptions string
 	// UnsetReferenceLetterRemovesANonReference decides `unset -n name` where
 	// the name is an ordinary variable rather than a name reference.
 	//
@@ -10013,6 +10050,9 @@ func PosixSemantics() Semantics {
 		ReadOptions: "r",
 		// POSIX gives `unset` both letters and no others.
 		UnsetOptions: "vf",
+		// And `readonly` exactly one. The kind letters are bash's and zsh's
+		// to add, and the axis `-a` raises is unreachable without them.
+		ReadonlyOptions: "p",
 		// The POSIX jobs: -l and -p, and `-p` means the process ids alone.
 		// The state filters and the rest are the dialects' additions, and
 		// the two axes their letters raise are unreachable without them.

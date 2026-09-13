@@ -56,6 +56,11 @@ func permissive() Semantics {
 	// see exportedcompound_test.go (#1380).
 	s.ExportedCompoundReachesAChildAsItsFirstValue = No
 	s.SubscriptedOperandCarriesTheAttributes = Yes
+	// `readonly`'s kind letters, which POSIX does not give it and two of the
+	// panel's shells refuse outright — see Semantics.ReadonlyOptions. A suite
+	// asking what `readonly -a` *does* needs the letter to exist first, and
+	// the suite that asks whether it exists sets the field itself (#2277).
+	s.ReadonlyOptions = "paAf"
 	s.BuiltinSyntaxErrorFatal = No
 	s.DotMissingFileFatal = No
 	s.DotWithNoOperandIsAnError = Yes

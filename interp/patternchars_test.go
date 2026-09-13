@@ -123,6 +123,31 @@ func TestACharacterClassOutsideAscii(t *testing.T) {
 func TestTwoClassesWhoseAnswersAreNotTheObviousOnes(t *testing.T) {
 	bothLocales(t, `case ٣ in [[:digit:]]) printf digit;; *) printf no;; esac`, "no", "no")
 	bothLocales(t, `case ٣ in [[:alnum:]]) printf alnum;; *) printf no;; esac`, "alnum", "no")
+	// And `alnum` is `Nd` and not every kind of number. `Ⅷ` U+2167 is `Nl`
+	// and `½` U+00BD is `No`, and both were alphanumeric here: `No` in no
+	// column of the panel at all, `Nl` in BusyBox ash alone and in none of
+	// the other six (#2465). This follows the six, which is the same call
+	// inWideClass already makes where ksh93 is the odd one.
+	//
+	// The pair is what makes the assertion discriminating. `Nl` and `No` are
+	// separate categories, so a fix that dropped only one of them would pass
+	// a single-character test; and neither is `Nd`, so the `٣` row above —
+	// which must not move — cannot stand in for them. The panel's own answers
+	// are graded by the corpus row
+	// `pat/alnum-outside-ascii-is-a-letter-or-a-decimal-digit`, which is where
+	// ash's disagreement is recorded; these assertions are about this
+	// implementation.
+	bothLocales(t, `case Ⅷ in [[:alnum:]]) printf alnum;; *) printf no;; esac`, "no", "no")
+	bothLocales(t, `case ½ in [[:alnum:]]) printf alnum;; *) printf no;; esac`, "no", "no")
+	// The same three characters through the classes `alnum` is named after,
+	// because the bug was as much an inconsistency as a wrong answer: alpha
+	// said no, digit said no, and alnum said yes. No shell in the panel
+	// disagrees with itself that way.
+	bothLocales(t, `case Ⅷ in [[:alpha:]]) printf alpha;; *) printf no;; esac`, "no", "no")
+	bothLocales(t, `case Ⅷ in [[:digit:]]) printf digit;; *) printf no;; esac`, "no", "no")
+	// A letter is still alphanumeric, so the fix is not "alnum matches
+	// nothing outside ASCII".
+	bothLocales(t, `case é in [[:alnum:]]) printf alnum;; *) printf no;; esac`, "alnum", "no")
 	const nbsp = " "
 	bothLocales(t, `case `+nbsp+` in [[:graph:]]) printf graph;; *) printf no;; esac`, "no", "no")
 	bothLocales(t, `case `+nbsp+` in [[:print:]]) printf print;; *) printf no;; esac`, "print", "no")

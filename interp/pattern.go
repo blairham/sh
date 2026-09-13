@@ -1780,9 +1780,43 @@ func inPosixClass(name string, unit string) bool {
 // one class, which is #956 — either an axis or a decision written down, and
 // not something to inherit from a comment.
 //
-// xdigit, blank and cntrl are deliberately absent: no character outside ASCII
-// is in any of them in the shells measured, and Go's unicode tables would put
-// characters in cntrl that none of them do.
+// **xdigit splits identically and this comment used to say it could not.**
+// Measured 2026-09-12: `case ٣ in [[:xdigit:]]` is a hit in bash 5.3 and 3.2
+// and a miss in ksh93, zsh and dash — so the sentence below claiming no
+// character outside ASCII is in it "in the shells measured" was true of three
+// columns and never checked against the fourth. It is still absent from the
+// table, which keeps it answering false and keeps it agreeing with digit; both
+// classes are one question and #956 is where it is asked. blank and cntrl are
+// absent for the original reason, which does hold: Go's unicode tables would
+// put characters in cntrl that no shell here does.
+//
+// alnum is **IsLetter or IsDigit** and deliberately not IsLetter or IsNumber.
+// IsNumber is Nd, Nl and No together, so every roman numeral, vulgar fraction
+// and superscript digit was alphanumeric here (#2465). Measured 2026-09-12
+// under LC_ALL=C.UTF-8, one character per Unicode category, and the two
+// categories do not answer alike:
+//
+//	              bash 5.3/3.2  ksh93  zsh  dash  ash
+//	`½` U+00BD No    no          no     no   no    no
+//	`Ⅷ` U+2167 Nl    no          no     no   no    YES
+//	`٣` U+0663 Nd    alnum       no     alnum no   alnum
+//
+// So No is unanimous and Nl is five columns to one — BusyBox ash is the
+// exception, and it is the column no hand-run probe on this machine can
+// reach, which is why it was found by the corpus row and not by the five
+// shells that are here. IsDigit is Nd alone, which matches every column on No,
+// six of seven on Nl, and leaves the Nd row exactly where it was: still alnum,
+// which is bash's, zsh's and ash's answer and is the residue #956 owns.
+//
+// It also stopped this shell disagreeing with itself in a way none of the
+// panel does — alpha said no to `Ⅷ`, digit said no, and alnum said yes.
+//
+// ksh93 and ash are both wider than the rest on alpha rather than merely
+// narrower on digit, which is worth having written down before anyone reads
+// either as the conservative column: `Ⅷ` and `٣` are alpha in both and alpha
+// in no other member.
+//
+// Corpus: `pat/alnum-outside-ascii-is-a-letter-or-a-decimal-digit`.
 //
 // graph excludes a space where print does not, which is the one place the two
 // part company: a non-breaking space is print in bash and zsh and graph in
@@ -1794,7 +1828,7 @@ func inWideClass(name string, c rune) bool {
 	case "digit":
 		return false
 	case "alnum":
-		return unicode.IsLetter(c) || unicode.IsNumber(c)
+		return unicode.IsLetter(c) || unicode.IsDigit(c)
 	case "upper":
 		return unicode.IsUpper(c)
 	case "lower":

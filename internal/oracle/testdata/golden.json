@@ -123817,6 +123817,57 @@
         "TimedOut": false
       }
     },
+    "pat/alnum-outside-ascii-is-a-letter-or-a-decimal-digit": {
+      "ash": {
+        "Stdout": "YnYY YnYY",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "nnYY nnnY",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "nnYY nnnY",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "nnYY nnnY",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "nnnn nnnn",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "nnnn YnYY",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "nnYY nnnY",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "pat/an-alternative-written-as-nothing-after-a-group": {
       "ash": {
         "Stdout": "",

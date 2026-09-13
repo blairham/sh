@@ -1898,6 +1898,116 @@ answers `a[\&]c` where with the reading on it answers `a[&]c`. A written
 `[\&]` answers `a[&]c` in both states, because that backslash is removed
 by ordinary quote removal before the replacement is ever read.
 
+## Another shell's pattern-modifier prefix, and the one regular expression it has
+
+ksh93 writes a letter set in parentheses after a `~` in front of a pattern,
+and the letters say what language the pattern is written in and how it is
+compared. It is that shell's **only** spelling for a regular expression —
+bash has `=~`, zsh has `=~`, and ksh93 has this — so a ksh script wanting
+an ERE has nowhere else to go.
+
+**It is a lexical rule first.** A `(` straight after a `~` belongs to the
+word, wherever the word stands and whether or not it is being matched.
+Measured on ksh93u+ 2012-08-01, 2026-09-13, `env -i` with a scratch `HOME`,
+`-c`:
+
+| written | ksh93 |
+| --- | --- |
+| `echo ~(E)abc` | `~(E)abc` — an ordinary word, kept as written |
+| `x=~(Z)abc; echo "$x"` | `~(Z)abc` — and so is an assignment's value |
+| `echo a~(x)b` | `a~(x)b` — mid-word too |
+| `[[ abc == ~(E)a.c ]]` | matches |
+| `case abc in ~(E)^a.c$)` | matches |
+| `s=aXbXc; ${s//~(E)X/-}` | `a-b-c` |
+
+The other five columns refuse the paren while reading the file — bash 5.3.15,
+that binary as `sh`, bash 3.2.57, dash and BusyBox ash, unanimously, at parse
+time. zsh neither refuses nor honors it: there `~` is the exclusion operator,
+so `~(E)abc` is a pattern that reads and does not match. So this is
+`syntax.Dialect.TildeGroup`, a grammar flag one dialect holds, and not an axis:
+nobody else has a reading of the construct to disagree about.
+
+### The letters, measured one at a time
+
+Two probes separate the readings. `[[ abc == ~(X)a.c ]]` tells a regular
+expression from a glob, since `a.c` describes `abc` only where the `.` is a
+metacharacter; `[[ xabcx == ~(X)a.c ]]` tells a **substring** search from a
+whole-string one.
+
+| letter | what the probes say |
+| --- | --- |
+| `E` | an extended regular expression, matching a substring |
+| `G` | a regular expression that is not ERE: `^a.c$` and `a.c` match and `a?c` does not, which is grep's *basic* syntax |
+| `A` `B` `P` `V` `X` | each answers as `E` does on every probe written here |
+| `F` | a literal string, matching a substring: `~(F)a.c` is the three characters |
+| `L` | a literal string as well, and no probe here separates it from `F` |
+| `K` | the ksh glob, which is what a pattern with no prefix already is |
+| `M` `N` `O` `S` `U` `a` `g` `m` `p` `s` `x` | accepted, and no probe here makes any of them change an answer |
+| `i` | case-insensitive, and the fold reaches a bracket and a character class as well as a literal |
+| `l` `r` | left and right anchors, which only a substring flavor can show |
+| `+` `-` | turn the letters after them on and off |
+
+`~()` is a group that says nothing, and matches. A letter ksh93 does **not**
+have is a pattern that cannot match rather than one that cannot be read:
+`[[ abc == ~(Z)abc ]]` and `[[ abc == ~(Z)* ]]` are both status 1 with nothing
+on standard error.
+
+`~(G)` is worth naming because the issue that filed this guessed it meant
+"glob, said explicitly". It does not; `K` does. The guess would have read
+`~(G)a?c` as a glob where that shell reads the `?` as a literal character.
+
+The anchors:
+
+| written | `xabcx` | `abcx` | `xabc` | `abc` |
+| --- | --- | --- | --- | --- |
+| `~(E)a.c` | matches | matches | matches | matches |
+| `~(El)a.c` | no | matches | no | matches |
+| `~(Er)a.c` | no | no | matches | matches |
+| `~(Elr)a.c` | no | no | no | matches |
+
+### What this shell honors, and what it refuses by name
+
+Honored: `E`, `F`, `L`, `K`, `i`, `l`, `r`, the `+`/`-` toggles and the empty
+group. The regular-expression flavors are compiled by Go's `regexp`, which is
+the engine `=~` already uses here.
+
+The rest are **refused by name rather than accepted and ignored** — `<pattern>:
+the ~(G) pattern modifier is not implemented`, at status 1. `G` is a different
+regular-expression syntax and translating it is work of its own; `A`, `B`, `P`,
+`V` and `X` agreeing with `E` on the probes above is not evidence that they
+*are* `E`; and no probe gives `M`, `N`, `O`, `S`, `U`, `a`, `g`, `m`, `p`, `s`
+or `x` anything to do — `~(g)` does not make `${v/p/r}` global, which is the
+one surface a "global" letter could have shown in. A flag taken and dropped is
+a wrong answer at status 0, which is worse than a refusal.
+
+### A regular expression matches a substring, and that reaches the matcher
+
+This is the one property of the construct that the rest of the matcher cannot
+express, because every other question it answers is about the piece it was
+handed. A condition asks whether the pattern describes the whole subject; a
+substitution asks how much of the subject one match takes. The same `~(E)X`
+has to answer them differently, so `interp.patternOpts` carries a `whole` flag
+that the whole-subject entry points set and the span-choosing ones do not.
+
+Measured both ways: `[[ xabcx == ~(E)a.c ]]` matches, and
+`s=aXbXc; ${s//~(E)X/-}` is `a-b-c` rather than `-c`, which is what searching
+each candidate span would have given.
+
+### What is not modeled
+
+- **A group standing anywhere but the front of a pattern.** Measured,
+  `[[ abc == a~(E)b.? ]]` matches there, so the prefix is really a flag group
+  that may appear mid-pattern. Here only a leading one is read.
+- **A trim whose flavor searches.** Measured, `s=abc; ${s#~(E)b}` is `ac`
+  there: the matched *span* is removed wherever it sits, so `#` and `%` stop
+  being prefix and suffix operators. The trims here go on trying prefixes and
+  suffixes, so such a pattern does not match and the value comes back whole.
+- **A word made a pattern by the prefix alone.** `echo ~(E)a.c` expands
+  against the filesystem on ksh93 and is the literal word here, because a
+  `~(` does not yet count as a glob character. With one present —
+  `echo ~(E)b.*` — the walk begins and the flavor is honored.
+- **`${.sh.match}` after an ERE with capture groups.**
+
 ## One shell's extended pattern operators, and the option that gates them
 
 zsh has a second pattern language on top of the one above, and every part

@@ -74,19 +74,27 @@ func TestAShortLineStaysOnItsRow(t *testing.T) {
 // so a line ending exactly at the right-hand edge leaves the cursor on the
 // row it filled. Everything counted from there would be one row out.
 func TestALineEndingAtTheEdgeIsWrapped(t *testing.T) {
-	// A prompt with no space in it, so the space being looked for can only be
-	// the one that forces the wrap. With "$ " it would be found in the prompt
-	// itself and the test would pass whether the code did this or not.
+	// A prompt with no space in it, so nothing can be satisfied by a space
+	// the prompt happened to contain. One column of prompt and nine
+	// characters is exactly ten columns.
 	const prompt = "#"
-	// One column of prompt and nine characters is exactly ten columns.
-	out := typedAtWith(t, 10, prompt, "123456789\r")
-	if !strings.Contains(out, "123456789 \r") {
-		t.Errorf("want the wrap forced past the last character, got %q", out)
+
+	// Asked of the screen rather than of the bytes. What matters is where the
+	// *next* character lands: if the deferred wrap is mishandled the tenth
+	// character goes on the row that is already full, or the row count after
+	// it is out by one. Typing one more character is what asks the question,
+	// and it cannot be answered by a shell that merely wrote a space.
+	full := newScreen(10).feed(typedAtWith(t, 10, prompt, "123456789X\r"))
+	if got := full.text(); got != "#123456789\nX" {
+		t.Errorf("the character past the edge did not start a new row:\n got %q\nwant %q",
+			got, "#123456789\nX")
 	}
-	// And a line one short of the edge does not force it.
-	short := typedAtWith(t, 10, prompt, "12345678\r")
-	if strings.Contains(short, "12345678 \r") {
-		t.Errorf("forced a wrap that was not needed: %q", short)
+
+	// And a line one short of the edge keeps the next character on the row.
+	short := newScreen(10).feed(typedAtWith(t, 10, prompt, "12345678X\r"))
+	if got := short.text(); got != "#12345678X" {
+		t.Errorf("wrapped a line that still had a column left:\n got %q\nwant %q",
+			got, "#12345678X")
 	}
 }
 
@@ -98,9 +106,16 @@ func TestALineEndingAtTheEdgeIsWrapped(t *testing.T) {
 // A count that left the prompt out would put the cursor on top of it, and
 // every key typed after that would insert in the wrong place.
 func TestTheCursorIsPlacedPastThePrompt(t *testing.T) {
-	out := typedAtWith(t, 20, "ab> ", "xyz\x01\r")
-	if !strings.Contains(out, "\r\x1b[4C") {
-		t.Errorf("want the cursor moved back to column 4, past the prompt, got %q", out)
+	// ^A and then a character. Where the cursor *is* is asked by putting
+	// something there: land it at column 4 and the line reads "wxyz", land it
+	// on top of the prompt and it does not. A row that read the escape bytes
+	// instead asserted one spelling of the move — `\r` and a count from the
+	// left-hand edge — and failed for a draw that stepped there relatively,
+	// which is the same cell by a shorter road.
+	out := typedAtWith(t, 20, "ab> ", "xyz\x01w\r")
+	if got := newScreen(20).feed(out).text(); got != "ab> wxyz" {
+		t.Errorf("^A did not put the cursor at the start of the line, past the prompt:\n got %q\nwant %q",
+			got, "ab> wxyz")
 	}
 }
 

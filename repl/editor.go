@@ -206,9 +206,32 @@ type editor struct {
 	// width is how many columns the terminal has, asked each time it is
 	// needed; nil, or an answer of 0, means it will not say. row is which
 	// screen row the last draw left the cursor on, counted from the row the
-	// prompt starts in — 0 until the line is long enough to wrap.
+	// prompt starts in — 0 until the line is long enough to wrap, and col is
+	// the column beside it.
 	width func() int
 	row   int
+	col   int
+
+	// What the editor believes is on the screen: the runs it last drew, and
+	// the prompt it drew them against. The next draw sends the difference
+	// against this rather than the line again — see redrawdiff.go, which is
+	// the whole of it and the reason a keystroke no longer costs the line.
+	//
+	// drawnValid is the belief itself, and it is held false by default:
+	// write clears it, so anything that puts something on the terminal
+	// without going through a redraw — a completion listing, a job notice,
+	// the ground under a fresh prompt — leaves the next draw to write the
+	// line whole. That is the safe direction, and it is the only direction
+	// that stays safe when something new learns to print.
+	drawn           []styledRun
+	drawnPromptText string
+	drawnValid      bool
+
+	// neverRemember makes every draw a whole-line one, which is what the
+	// difference replaced. It exists so a test can run the same keystrokes
+	// both ways and require the same screen — see
+	// TestTheDifferenceDrawsWhatTheWholeLineDraws. Never set in a session.
+	neverRemember bool
 }
 
 // readLine reads one line, drawing it as it is typed.
@@ -661,6 +684,13 @@ func (e *editor) moveTo(pos int, prompt drawnPrompt) {
 func (e *editor) redraw(prompt drawnPrompt) {
 	e.pendingDraw = false
 	cols := e.cols()
+	runs := e.styledRuns()
+	// Only what changed, where the editor still knows what is on the screen.
+	// It declines whenever it cannot be sure, and then the whole line is
+	// written below exactly as it always was. See redrawdiff.go.
+	if cols > 0 && e.redrawDifference(prompt, runs, cols) {
+		return
+	}
 	if cols <= 0 {
 		// Nothing known about the terminal, so the line is assumed to fit on
 		// the row it started on. Wrong for a long line, and the best that can
@@ -677,8 +707,11 @@ func (e *editor) redraw(prompt drawnPrompt) {
 			b.WriteString(itoa(back))
 			b.WriteString("D")
 		}
-		e.row = 0
+		e.row, e.col = 0, 0
 		e.write(b.String())
+		// Nothing is remembered: without a width there is no column
+		// arithmetic to send a difference against, so the next draw writes
+		// the line whole as this one did.
 		return
 	}
 
@@ -698,6 +731,10 @@ func (e *editor) redraw(prompt drawnPrompt) {
 	// first leaves the rest of the old line below the new one.
 	b.WriteString("\x1b[J")
 	b.WriteString(prompt.text)
+	// styled() and not the runs: it works in bytes and is what this path has
+	// always written, so a highlighter returning an offset inside a character
+	// produces exactly what it always produced. The runs are the difference
+	// path's, and that path declines such a highlighter outright.
 	b.WriteString(e.styled())
 
 	curRow, curCol, endRow, endCol := place(prompt.cells, e.line, e.pos, cols)
@@ -726,8 +763,8 @@ func (e *editor) redraw(prompt drawnPrompt) {
 		b.WriteString(itoa(curCol))
 		b.WriteString("C")
 	}
-	e.row = curRow
 	e.write(b.String())
+	e.rememberDrawn(prompt, runs, curRow, curCol)
 }
 
 // cols is the terminal's width, or 0 when there is nothing to ask.
@@ -942,7 +979,17 @@ func columns(matches []string, width int) []string {
 	return out
 }
 
-func (e *editor) write(s string) { _, _ = io.WriteString(e.out, s) }
+// write puts bytes on the terminal, and says the editor no longer knows what
+// is on the screen.
+//
+// Clearing the belief here rather than at each call site is what makes it
+// safe: a redraw sets it back immediately afterwards, and everything else in
+// this package — and anything added to it later — is correct by default
+// instead of correct if somebody remembered. See redrawdiff.go.
+func (e *editor) write(s string) {
+	e.forget()
+	_, _ = io.WriteString(e.out, s)
+}
 
 // itoa without importing strconv for one call on the keystroke path.
 func itoa(n int) string {

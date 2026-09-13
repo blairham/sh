@@ -149,6 +149,12 @@ which `Diagnostics.RemarkNamesItsOwnLine` records.
 Corpus: `core/a-backquote-substitution-under-a-syntax-check`,
 `core/a-backquote-substitution-when-it-runs`.
 
+And it is not alone. `ksh -n` is a **lint mode with rules** rather than a
+parse check that happens to warn: two operators written with no blank
+between them draw a second line of the same shape, on the same route and
+under the same restriction. See *Two operators with no blank between
+them* in `tokenization.md` (#2409).
+
 ## `${…}`
 
 `${x:-y}` and its relatives lex as one word, and the delimiting rule is

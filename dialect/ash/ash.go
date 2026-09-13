@@ -234,6 +234,11 @@ func Semantics() interp.Semantics {
 	// then `syntax error: bad substitution` at 2 — no subscript reaches a
 	// parameter expansion here at all, the same wall dash meets one construct
 	// earlier than this axis (#2286).
+	// unanswered DeclareMatchingLetter: BusyBox ash has no declaration
+	// utility either, so the letter has nowhere to be written. Measured
+	// 2026-09-13 in the pinned image, `typeset -m x` is `typeset: not found`
+	// at 127 (#2345).
+	// unanswered DeclareMappingLetter: the same, for `typeset -M x`.
 	// unanswered ExpansionResultSuppliesGroupSyntax: BusyBox ash has no
 	// pattern groups either, for the same reason dash has none.
 	// unanswered TableLetterReachesItsOwnOperandsSubscript: BusyBox ash has
@@ -380,6 +385,12 @@ func Semantics() interp.Semantics {
 	// $OLDPWD'` answers the path it was given, and `cd -` then answers `can't cd
 	// to /nonexistent: No such file or directory` at 2.
 	s.InheritedOldpwd = interp.InheritedOldpwdTaken
+	// A handed-in `PWD` names the starting directory here too, but only where
+	// it really is that directory: measured 2026-09-13 in the pinned image,
+	// `PWD=/link/d` under a symbolic link survives and `PWD=/usr` in a
+	// directory that is not `/usr` is dropped for the real path. ksh93 keeps
+	// that second one, and also looks at `$HOME` where this shell does not.
+	s.StartupPwdName = interp.StartupPwdNameFromTheEnvironmentWhenItFits
 	s.CdWithoutHomeIsAnError = interp.No
 	s.CdEmptyOperandIsAnError = interp.No
 	s.CdEmptyHomeIsAnError = interp.No

@@ -971,6 +971,9 @@ func Semantics() interp.Semantics {
 	// stat rather than the one `cd` makes. bash 3.2 drops an inherited OLDPWD
 	// whatever it names, which is a fourth answer and not this dialect's.
 	s.InheritedOldpwd = interp.InheritedOldpwdTakenIfADirectory
+	// `PWD` is a different answer from OLDPWD's here: the starting directory
+	// is named by what the kernel reports, in 5.3 and 3.2 alike.
+	s.StartupPwdName = interp.StartupPwdNameFromTheKernel
 	s.CdWithoutHomeIsAnError = interp.Yes
 	s.CdDashPrintsTheDirectory = interp.Yes
 	s.PrintfAssignsWithV = interp.Yes
@@ -1448,6 +1451,11 @@ func Semantics() interp.Semantics {
 	// trace letters this shell also has ride in
 	// Diagnostics.UnimplementedOptionLetters.
 	s.DeclareOptions = "aAfFgilprux"
+	// unanswered DeclareMatchingLetter: bash has no `m` letter under either
+	// reading. Measured 2026-09-13 on 5.3 and 3.2 alike, `declare -m q=1` is
+	// `declare: -m: invalid option` followed by the usage line, so the
+	// question of what the letter *means* never arises (#2345).
+	// unanswered DeclareMappingLetter: the same, for `typeset -M tolower v`.
 	s.LocalOptions = "aAgilprux"
 	// A bad `declare` option is reported and the script goes on.
 	s.TypesetBadOptionFatal = interp.No

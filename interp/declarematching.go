@@ -8,13 +8,17 @@ import "strings"
 // `typeset -m` and `typeset +m`, where the operands are *patterns* rather
 // than names.
 //
-// One shell has the letter: zsh, whose `typeset` and `declare` take it and
-// whose `local`, `export`, `readonly`, `integer` and `float` do not — measured
-// a letter at a time, and each of the five says `bad option: -m` back. bash
-// refuses `-m` under both spellings. ksh93 has an `m` and it is a wholly
-// different thing — a *rename*, `typeset -m new=old`, which moves a parameter
-// rather than selecting several — so there is no axis here either, only a
-// letter one dialect has. See Semantics.DeclareOptions.
+// Two shells have the letter and read it as two unrelated commands, which is
+// what makes it an axis rather than a letter one dialect has:
+// Semantics.DeclareMatchingLetter, below, and interp/declaremove.go for the
+// other reading.
+//
+// zsh's `typeset` and `declare` take it and its `local`, `export`,
+// `readonly`, `integer` and `float` do not — measured a letter at a time, and
+// each of the five says `bad option: -m` back. bash refuses `-m` under both
+// spellings. ksh93's `m` *moves* a parameter — `typeset -m new=old` — and its
+// operands are names rather than patterns. See Semantics.DeclareOptions for
+// which dialect spells the letter at all.
 //
 // What makes it worth its own file is that the letter decides nothing on its
 // own. Every other letter on the line decides what matching *means*, and the
@@ -42,6 +46,37 @@ import "strings"
 // table rather than of the language. Sorted for both is the deterministic
 // reading, and it agrees with zsh wherever a pattern matches one name, which
 // is what a script that writes a name as its own pattern is doing.
+
+// DeclareMatchingLetterPolicy is what the letter means to a dialect that has
+// it. The two readings share no operand grammar, no status and no output, so
+// there is nothing here to fall back on and the unanswered value is refused
+// by name the way every other unanswered axis is.
+type DeclareMatchingLetterPolicy int
+
+const (
+	// DeclareMatchingLetterUnspecified is no answer. bash and dash hold it
+	// and never reach it: neither spells the letter, so DeclareOptions
+	// refuses the word before the meaning is asked for.
+	DeclareMatchingLetterUnspecified DeclareMatchingLetterPolicy = iota
+	// DeclareMatchingLetterSelects is zsh's: the operands are *patterns*,
+	// and every other letter on the line decides what a match is then used
+	// for. The four readings are in this file.
+	DeclareMatchingLetterSelects
+	// DeclareMatchingLetterMoves is ksh93's: each operand is `new=old` and
+	// the parameter named by `old` is moved to `new`, value and array kind
+	// and all, leaving `old` unset. See interp/declaremove.go.
+	DeclareMatchingLetterMoves
+)
+
+func (p DeclareMatchingLetterPolicy) String() string {
+	switch p {
+	case DeclareMatchingLetterSelects:
+		return "selects by pattern"
+	case DeclareMatchingLetterMoves:
+		return "moves a parameter"
+	}
+	return "unspecified"
+}
 
 // declareMatching is `typeset -m` with at least one pattern. See the file
 // comment for why the letters around it are the whole question.

@@ -3044,6 +3044,19 @@ type Diagnostics struct {
 	// already names the builtin. Reached only where
 	// DeclarePrintReportsAMissingName said yes.
 	DeclareNoSuchVariable string
+
+	// DeclareUnknownMapping is what `typeset -M nosuch` says in the dialect
+	// whose `M` letter names a character mapping. Two verbs: the builtin's
+	// complaint name and the mapping asked for. See
+	// interp/declaremapping.go, and Semantics.DeclareMappingLetter for the
+	// other reading of the same letter.
+	DeclareUnknownMapping string
+
+	// DeclareMappingNeedsAName is what the same letter says when a `--` has
+	// put the operands out of its reach — `typeset -M -- mf 1 1 g`, which
+	// has operands and no mapping to apply to them. One verb: the builtin's
+	// complaint name.
+	DeclareMappingNeedsAName string
 	// IntegerBadBase is an output base the dialect will not spell — `typeset
 	// -i64 a=100` and `typeset -i1 f=5`.
 	//

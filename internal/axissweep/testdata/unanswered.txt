@@ -67,6 +67,8 @@ ash   DebugTrapRunsInsideCalls
 ash   DeclarationListingFilter
 ash   DeclareGlobalReachesPastALocal
 ash   DeclareListing
+ash   DeclareMappingLetter
+ash   DeclareMatchingLetter
 ash   DeclarePrintReportsAMissingName
 ash   DisownRemovesTheJob
 ash   EarlierDeclarationLetterBlocksALaterPlus
@@ -166,6 +168,8 @@ ash   WholeArraySubscriptAssigningAnArray
 bash  ArithIntegerOperatorRefusesFloat
 bash  ArithSubscriptSkippedWhenNameUnset
 bash  BareSubscriptIsASubscript
+bash  DeclareMappingLetter
+bash  DeclareMatchingLetter
 bash  ExitTrapFiresPastTheEnd
 bash  ImmovableOptionsSetAtInvocation
 bash  IntegerPlusFormTakesAttributesOff
@@ -217,6 +221,8 @@ dash  DebugTrapRunsInsideCalls
 dash  DeclarationListingFilter
 dash  DeclareGlobalReachesPastALocal
 dash  DeclareListing
+dash  DeclareMappingLetter
+dash  DeclareMatchingLetter
 dash  DeclarePrintReportsAMissingName
 dash  DisownRemovesTheJob
 dash  DollarSingleBackslashC

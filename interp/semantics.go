@@ -1776,6 +1776,11 @@ type Semantics struct {
 	// directory, or not read at all. See InheritedOldpwdPolicy, which carries
 	// the measurements and the reason this is not a question about `cd`.
 	InheritedOldpwd InheritedOldpwdPolicy
+
+	// StartupPwdName is the name a shell gives the directory it starts in —
+	// one it was handed in its environment, or the one the kernel reports.
+	// See StartupPwdNamePolicy.
+	StartupPwdName StartupPwdNamePolicy
 	// CdWithoutHomeIsAnError makes `cd` with no operand and no HOME a
 	// failure. True in bash and ksh93; dash and zsh stay where they are and
 	// report success, which is the quieter answer and the surprising one.
@@ -4879,6 +4884,16 @@ type Semantics struct {
 	// other two. Empty means `aAiprx`, the set the substrate implemented
 	// before the letters were a question.
 	DeclareOptions string
+
+	// DeclareMatchingLetter is what the `m` letter of a declaration *means*,
+	// which two shells spell alike and read as two unrelated commands. See
+	// DeclareMatchingLetterPolicy.
+	DeclareMatchingLetter DeclareMatchingLetterPolicy
+
+	// DeclareMappingLetter is the same question about the `M` letter, which
+	// two shells also spell alike and also read as two unrelated commands.
+	// See DeclareMappingLetterPolicy.
+	DeclareMappingLetter DeclareMappingLetterPolicy
 
 	// DeclareOptionsWithoutEffect names letters out of DeclareOptions that
 	// this engine models as doing nothing: accepted, silent, and 0.

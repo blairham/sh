@@ -1598,6 +1598,9 @@ func Semantics() interp.Semantics {
 	// is why `OLDPWD=/nonexistent zsh -c 'cd -'` says nothing and reports 0:
 	// there is no unusable value to refuse.
 	s.InheritedOldpwd = interp.InheritedOldpwdIgnored
+	// And the starting directory is named by what the kernel reports, however
+	// the parent spelled it.
+	s.StartupPwdName = interp.StartupPwdNameFromTheKernel
 	s.CdWithoutHomeIsAnError = interp.No
 	s.CdDashPrintsTheDirectory = interp.No
 	s.PrintfAssignsWithV = interp.Yes
@@ -2069,6 +2072,16 @@ func Semantics() interp.Semantics {
 	// `readonly -z` are each `bad option: -z` in zsh 5.9.2, so the letter
 	// belongs to this table and to none of the other four (#1576).
 	s.DeclareOptions = "aAfFgHhiLlmpRruUTxZz"
+	// And what the `m` of that set *means*: the operands are patterns and
+	// every other letter on the line decides what a match is then used
+	// for. ksh93 spells the same letter and moves a parameter with it, so
+	// this is a disagreement about identical syntax rather than a letter
+	// one dialect has — see interp.DeclareMatchingLetterPolicy.
+	s.DeclareMatchingLetter = interp.DeclareMatchingLetterSelects
+	// And the `M` of `functions`: it registers a shell function as a math
+	// function here, where ksh93's `M` names a character mapping. The same
+	// shape as the `m` letter above and for the same reason.
+	s.DeclareMappingLetter = interp.DeclareMappingLetterRegistersAMathFunction
 	// `export` is this word's declaration under another name, and it takes
 	// the same letters bar six. Measured 2026-09-12, a letter at a time
 	// against `export -X q=4`: `-A`, `-g`, `-m`, `-x` and `-z` are

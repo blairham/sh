@@ -5798,6 +5798,14 @@ func (r *Runner) ensurePWD() {
 	if _, ok := r.Vars["PWD"]; ok {
 		return
 	}
+	// Two shells in the panel take a name from the environment rather than
+	// asking the kernel, and which name the shell knows its own directory by
+	// follows from that — see StartupPwdNamePolicy, where the paragraph above
+	// is half the measurement and the other half is why eight corpus rows
+	// read `/private`.
+	if r.settleStartupPwd() {
+		return
+	}
 	r.setVar("PWD", r.workDir())
 }
 

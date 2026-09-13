@@ -75,6 +75,19 @@ type Result struct {
 	// Unstable says the reference did not produce the same run twice, so the
 	// file says nothing about either shell.
 	Unstable bool
+	// OurLines and RefLines are how many lines each run wrote. They are what
+	// tells the two halves of a disagreement apart: the reference's lines we
+	// never produced is RefLines-Common, ours it never asked for is
+	// OurLines-Common, and the single differing-line figure is the larger of
+	// the two. A file where we print more than the reference is one whose
+	// count is driven by our own excess, which is a different kind of work
+	// from a missing answer and used to be invisible.
+	OurLines, RefLines int
+	// Prose is how many of the differing lines are the reference printing
+	// its own documentation — see [Doc]. Those are not work: matching them
+	// means copying the text. It is a lower bound and it is never more than
+	// Longest-Common.
+	Prose int
 }
 
 // Cause is one reason our parser refused a file, and how many files it
@@ -147,6 +160,18 @@ type Report struct {
 	// LineCapped counts files whose outputs were longer than the comparison's
 	// bound and were compared on their first lines.
 	LineCapped int
+	// Missing and Excess are the two halves of the disagreement, summed: the
+	// reference's lines we never printed, and the lines we printed that it
+	// never asked for. The differing-line figure this burndown tracks is
+	// Longest-Common, which is the larger of the two per file — so a file
+	// whose count is driven by Excess is one where we are printing too much
+	// rather than answering too little, and those are different work.
+	Missing, Excess int64
+	// Prose is the sum of [Result.Prose]: how many of this column's
+	// differing lines are the reference quoting its own documentation, and
+	// so are not available to be written here at all. Zero for a column with
+	// no [Suite.SelfDoc], where the question was never put.
+	Prose int64
 
 	OracleHung    int
 	DialectHung   int
@@ -188,6 +213,11 @@ func (r Report) NotStrict() []NamedResult {
 	return out
 }
 
+// ProseAsked says this column has a [Suite.SelfDoc], so [Report.Prose] is a
+// measurement rather than a question nobody put. Zero means two different
+// things without it, and the report may not print them alike.
+func (r Report) ProseAsked() bool { return r.Suite.SelfDoc != "" }
+
 // StrictRate, ParseRate and LineRate are the three numbers, as fractions.
 func (r Report) StrictRate() float64 { return ratio(r.Strict, r.Scored) }
 func (r Report) ParseRate() float64  { return ratio(r.Parsed, r.Files) }
@@ -220,6 +250,15 @@ type Options struct {
 	// developing the harness; a name here comes from a person, never from
 	// the report.
 	Only map[string]bool
+	// Extra is environment added to *both* runs, and it is the attribution
+	// instrument: naming a startup file that defines a builtin away, in both
+	// columns at once, turns "how much of this file is that builtin" from a
+	// suspicion into a line count. Both columns, because a neutralisation
+	// applied to one of them measures the neutralisation.
+	//
+	// It reads nothing and prints nothing — the file it names is ours, and
+	// what comes back is the same differing-line count as any other run.
+	Extra []string
 }
 
 func (o Options) timeout() time.Duration {
@@ -253,6 +292,9 @@ func Sweep(ctx context.Context, s Suite, dir, ours, reference string, opts Optio
 	rep.Files = len(files)
 
 	dial, haveDialect := s.Syntax()
+	// Asked once, before the runs: the dictionary is a property of the
+	// reference binary and does not change between files.
+	doc := SelfDocumentation(ctx, s, reference)
 	results := make([]Result, len(files))
 	sem := make(chan struct{}, opts.jobs())
 	var wg sync.WaitGroup
@@ -262,7 +304,7 @@ func Sweep(ctx context.Context, s Suite, dir, ours, reference string, opts Optio
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			results[i] = grade(ctx, s, f.Dir, f.Name, ours, reference, dial, haveDialect, opts.timeout())
+			results[i] = grade(ctx, s, f.Dir, f.Name, ours, reference, dial, haveDialect, doc, opts)
 		}()
 	}
 	wg.Wait()
@@ -314,6 +356,9 @@ func Sweep(ctx context.Context, s Suite, dir, ours, reference string, opts Optio
 				rep.Refused.Common += int64(res.Common)
 				rep.Refused.Longest += int64(res.Longest)
 			}
+			rep.Prose += int64(res.Prose)
+			rep.Missing += int64(res.RefLines - res.Common)
+			rep.Excess += int64(res.OurLines - res.Common)
 			meanSum += ratio(res.Common, res.Longest)
 			if res.LineCapped {
 				rep.LineCapped++
@@ -370,7 +415,7 @@ func plan(s Suite, dir string, opts Options) ([]file, error) {
 }
 
 // grade is one file, both ways.
-func grade(ctx context.Context, s Suite, tests, name, ours, reference string, dial syntax.Dialect, haveDialect bool, timeout time.Duration) Result {
+func grade(ctx context.Context, s Suite, tests, name, ours, reference string, dial syntax.Dialect, haveDialect bool, doc Doc, opts Options) Result {
 	var res Result
 	src, err := os.ReadFile(filepath.Join(tests, name))
 	if err != nil {
@@ -397,7 +442,7 @@ func grade(ctx context.Context, s Suite, tests, name, ours, reference string, di
 		res.ReferenceRead = staticParse(ctx, reference, filepath.Join(tests, name), staticTimeout)
 	}
 
-	ref := runIn(ctx, s, tests, name, reference, timeout)
+	ref := runIn(ctx, s, tests, name, reference, opts)
 	switch {
 	case ref.Failed:
 		res.OracleFailed = true
@@ -406,7 +451,7 @@ func grade(ctx context.Context, s Suite, tests, name, ours, reference string, di
 		res.OracleHung = true
 		return res
 	}
-	own := runIn(ctx, s, tests, name, ours, timeout)
+	own := runIn(ctx, s, tests, name, ours, opts)
 	switch {
 	case own.Failed:
 		res.DialectFailed = true
@@ -424,6 +469,7 @@ func grade(ctx context.Context, s Suite, tests, name, ours, reference string, di
 		res.Scored, res.Strict = true, true
 		l := lines(own.Output)
 		res.Common, res.Longest = len(l), len(l)
+		res.OurLines, res.RefLines = len(l), len(l)
 		return res
 	}
 
@@ -433,9 +479,10 @@ func grade(ctx context.Context, s Suite, tests, name, ours, reference string, di
 		res.Scored, res.Strict = true, true
 		l := lines(mine)
 		res.Common, res.Longest = len(l), len(l)
+		res.OurLines, res.RefLines = len(l), len(l)
 		return res
 	}
-	if !repeats(ctx, s, tests, name, reference, timeout, theirs, ref.Status) {
+	if !repeats(ctx, s, tests, name, reference, opts, theirs, ref.Status) {
 		// The reference does not produce the same run twice, so the two
 		// shells were never going to agree and this file is evidence about
 		// neither. A process id, a clock reading, a scheduling order: the
@@ -445,7 +492,10 @@ func grade(ctx context.Context, s Suite, tests, name, ours, reference string, di
 		return res
 	}
 	res.Scored = true
-	res.Common, res.Longest, res.LineCapped = agreement(lines(mine), lines(theirs))
+	ourLines, refLines := lines(mine), lines(theirs)
+	res.OurLines, res.RefLines = len(ourLines), len(refLines)
+	res.Common, res.Longest, res.LineCapped = agreement(ourLines, refLines)
+	res.Prose = min(doc.Attribute(ourLines, refLines), res.Longest-res.Common)
 	return res
 }
 
@@ -462,7 +512,7 @@ type placed struct {
 // them, and several of them delete what they made only if they got that far.
 // Running twice in one directory would have the second run reading the first
 // one's leftovers, and the fetched tree would stop being what was unpacked.
-func runIn(ctx context.Context, s Suite, tests, name, shell string, timeout time.Duration) placed {
+func runIn(ctx context.Context, s Suite, tests, name, shell string, opts Options) placed {
 	dir, err := os.MkdirTemp("", "suite")
 	if err != nil {
 		return placed{Outcome: Outcome{Output: err.Error(), Status: -1, Failed: true}}
@@ -472,14 +522,14 @@ func runIn(ctx context.Context, s Suite, tests, name, shell string, timeout time
 	if err := copyTree(tests, run); err != nil {
 		return placed{Outcome: Outcome{Output: err.Error(), Status: -1, Failed: true}, Dir: run}
 	}
-	out := runFile(ctx, shell, run, name, environ(s, run, shell), timeout)
+	out := runFile(ctx, shell, run, name, append(environ(s, run, shell), opts.Extra...), opts.timeout())
 	return placed{Outcome: out, Dir: run}
 }
 
 // repeats asks the reference for the same file again, and only where the two
 // shells differed — the one place the answer changes anything.
-func repeats(ctx context.Context, s Suite, tests, name, reference string, timeout time.Duration, want string, status int) bool {
-	again := runIn(ctx, s, tests, name, reference, timeout)
+func repeats(ctx context.Context, s Suite, tests, name, reference string, opts Options, want string, status int) bool {
+	again := runIn(ctx, s, tests, name, reference, opts)
 	if again.TimedOut {
 		return false
 	}

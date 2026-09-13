@@ -245,6 +245,8 @@ func printReport(w io.Writer, rep suite.Report) {
 		"", 100*rep.MeanFile)
 	o.println()
 
+	printDiffering(o, rep)
+
 	printRefused(o, rep)
 
 	o.printf("  not scored       %d unstable · %d oracle hung · %d dialect hung\n",
@@ -303,6 +305,40 @@ func printReport(w io.Writer, rep suite.Report) {
 		}
 		o.println()
 	}
+}
+
+// printDiffering is the figure this column is burned down by, and the two
+// things it is made of that the single number hides.
+//
+// It is the larger of the two sides per file — the reference's lines we never
+// printed, and ours it never asked for — so a column can be carrying a large
+// figure because it prints too much rather than because it answers too
+// little, and those are different work. Both are printed.
+//
+// And some of the reference's side is not available to anybody here: the text
+// of its own help builtin, the usage block it answers a bad option with, its
+// version and its license. Matching those means copying them, which
+// CLEANROOM.md's red list forbids, so they are counted and taken off rather
+// than left in a number somebody estimates from. See [suite.Doc].
+func printDiffering(o out, rep suite.Report) {
+	differing := rep.Longest - rep.Common
+	if differing == 0 {
+		return
+	}
+	o.printf("  differing lines  %6d   the longer side of each file, less the lines the two\n", differing)
+	o.printf("                            runs have in common — the figure a burndown moves\n")
+	o.printf("                   %6d   the reference printed and we did not\n", rep.Missing)
+	o.printf("                   %6d   we printed and the reference never asked for\n", rep.Excess)
+	if !rep.ProseAsked() {
+		o.println()
+		return
+	}
+	o.printf("                   %6d   of the first, the reference quoting its own\n", rep.Prose)
+	o.printf("                            documentation: help text, a usage block, a version\n")
+	o.printf("                            and a license. Not work — matching it means copying\n")
+	o.printf("                            it. A floor, counted by asking the shell for its own\n")
+	o.printf("                            help and testing membership, never by reading\n")
+	o.println()
 }
 
 // printRefused is what a refused static read actually cost, and what part of

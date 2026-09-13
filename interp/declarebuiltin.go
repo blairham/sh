@@ -1627,7 +1627,15 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 			}
 		}
 	}
-	if f.upper && !canceled && !(numeric && r.upperLetterRecordsNothing()) {
+	upperRecords := f.upper && !canceled
+	if upperRecords && numeric {
+		// One shell writes nothing down for the upper letter beside a
+		// numeric type letter, where it writes the lower one down. Asked
+		// only here, so a line with no numeric letter on it meets no
+		// question — see upperLetterRecordsNothing.
+		upperRecords = !r.upperLetterRecordsNothing()
+	}
+	if upperRecords {
 		if r.uppered == nil {
 			r.uppered = map[string]bool{}
 		}

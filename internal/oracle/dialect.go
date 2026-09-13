@@ -8,7 +8,18 @@ import "github.com/blairham/sh/syntax"
 // Dialect is the flag set the corpus needs, constructed here so that no
 // consumer borrows a shell's preset: the corpus is dialect-neutral,
 // and each flag beyond the core is named for the construct some case uses.
-// A new case wanting a sixth flag adds it here by name.
+// A new case wanting a flag beyond these adds it here by name.
+//
+// **Every flag below was re-read against the `ash` column when it became the
+// panel's seventh (#2331), and none came off.** That is the argument these
+// comments make, checked rather than assumed: a flag is on because the
+// grammar that has to *read* every case is the one that takes the construct,
+// so a column can only widen the set of constructs the corpus records. ash is
+// the narrowest member of the panel and refuses every construct these flags
+// stand for, which is the strongest form the check could have taken — a
+// seventh column that took one of them would have been the interesting
+// outcome and there was none. The tallies did move, and they are re-derived
+// below from the recorded cells rather than incremented.
 //
 // It lives beside the corpus rather than in a test file because two gates now
 // ask the question — the printer's round trip and the formatter's — and two
@@ -18,19 +29,23 @@ func Dialect() syntax.Dialect {
 	// `${!x}` and `${!prefix*}` — the param/ indirection cases.
 	d.ParamIndirection = true
 	// `$+v`, `$=v`, `$~v` and `$^a` — the flag sigils written without the
-	// braces. One of the six columns reads them as expansions and the other
-	// five as text, and the corpus records both answers, so the grammar that
+	// braces. One of the seven columns reads them as expansions and the other
+	// six as text, and the corpus records both answers, so the grammar that
 	// has to *read* every case is the one that takes them.
 	d.BareParamFlags = true
-	// `$[1+2` — the older arithmetic spelling. Two of the six shells have
-	// the construct and refuse it unterminated; the other two run the line
-	// as text, and the corpus records both answers. Same reason as
+	// `$[1+2` — the older arithmetic spelling. Four of the seven columns
+	// have the construct and refuse it unterminated; the other three — dash,
+	// ksh93 and ash — run the line as text, and the corpus records both
+	// answers. The sentence here used to say two and two, which did not add
+	// up to six either: it counted distinct shells where the rest of this
+	// file counts columns. Same reason as
 	// HeredocEndsAtClosingParen below: the grammar that has to *read* every
 	// case is the one that takes the construct.
 	d.DollarBracketArith = true
 	// `!` with no pipeline after it, and a second `!` that toggles the first.
-	// Three of the six take a bare negation and three take the toggle, in two
-	// different groupings, so the widest reading here would be
+	// Four of the seven take a bare negation before a terminator and three
+	// take the toggle, in two different groupings — zsh is in the first and
+	// not the second — so the widest reading here would be
 	// BareNegationAtEitherPlace — and it is deliberately **not** taken. This
 	// dialect is the one SyntaxError names, so a case it reads is a case the
 	// printer has to write back; the two rows recording a bare `!` at a
@@ -47,55 +62,61 @@ func Dialect() syntax.Dialect {
 	// than any one shell, and the corpus records both spellings.
 	d.CaseContinuePipe = true
 	// `case a in (a|` newline `b)` — the arm whose parenthesized pattern
-	// list spans a newline. One of the six takes it and the other five call
+	// list spans a newline. One of the seven takes it and the other six call
 	// the line a syntax error, and the corpus records both; the grammar that
 	// has to *read* every case is the one that takes the construct, which is
 	// the same argument as DollarBracketArith above.
 	d.CasePatternListSpansNewlines = true
 	// `case 'a b' in (a b)` — the arm whose parenthesized pattern holds a
 	// blank. Same shape and same argument as the newline above: one of the
-	// six matches it and the other five call the line a syntax error, and
+	// seven matches it and the other six call the line a syntax error, and
 	// the corpus records both.
 	d.CasePatternListSpansBlanks = true
 	// `function f() { …; }`, both markers at once.
 	d.FunctionKeywordParens = true
 	// `function _p_${w} { … }` — a keyword name that is not a name, carried
-	// to the definition instead of refused while parsing. Two of the six
-	// answer that way and the corpus records what the other four do, so the
-	// grammar that has to *read* every case is the one that takes the
-	// construct, as above. The `name()` spelling is deliberately not widened
+	// to the definition instead of refused while parsing. Five of the seven
+	// answer that way — the three bash columns call the name invalid where
+	// the definition runs, zsh defines it, and ash reads the line without a
+	// word and defines nothing — and the corpus records that dash and ksh93
+	// refuse it while reading, so the grammar that has to *read* every case
+	// is the one that takes the construct, as above. The `name()` spelling is deliberately not widened
 	// with it: ksh93 refuses that one while reading, which is the split
 	// `cmd/a-function-name-may-hold-an-expansion` records.
 	d.FunctionNameCheckedWhenTheDefinitionRuns = true
-	// `function '' { … }` — the empty string as a name, which one of the six
-	// defines and four refuse where the definition runs rather than while
-	// reading it. The grammar that has to *read* every case is the one that
-	// takes the construct, as above.
+	// `function '' { … }` — the empty string as a name, which one of the
+	// seven defines and four refuse where the definition runs rather than
+	// while reading it; ash is the seventh and takes the line in silence.
+	// The grammar that has to *read* every case is the one that takes the
+	// construct, as above.
 	d.FunctionKeywordNameIsAnyWord = true
 	// `function a b { … }` — one body under several names, which one of the
-	// six defines and the other five read as a different program: three are
+	// seven defines and the other six read as a different program: four are
 	// a syntax error at the second name, dash has no keyword at all, and
 	// ksh93 parses the line and defines only the first. The corpus records
 	// all of those, so the grammar that has to *read* every case is the one
 	// that takes the construct, as above.
 	d.FunctionMultipleNames = true
 	// `function a b` with no body, and the `;` that may stand between a name
-	// list and the body it does have. One of the six declares each name with
-	// an empty body and the other five call the line a syntax error, and the
-	// corpus records both — so the grammar that has to *read* every case is
-	// the one that takes the construct, as above.
+	// list and the body it does have. One of the seven declares each name
+	// with an empty body and the other six refuse the line — dash alone by
+	// having no keyword, so it reads `function` as a command it cannot find —
+	// and the corpus records all of it, so the grammar that has to *read*
+	// every case is the one that takes the construct, as above.
 	//
 	// EmptyCompoundBody does **not** come with it, which bounds what a case
 	// may be written as: a declaration with no body prints back as `{ }` and
 	// this grammar cannot read that, so a bodyless declaration belongs inside
 	// an `eval` string where the printer never reaches it. The three cases
 	// recording `{ }`, `( )` and an empty loop body as refusals are why the
-	// flag stays off — one of the six takes them and the corpus keeps the
+	// flag stays off — one of the seven takes them and the corpus keeps the
 	// refusal, which is the one place this dialect is not the widest reading.
 	d.FunctionKeywordBodyIsOptional = true
 	// `'a b'() { … }` — the POSIX form's name read as any word, which one of
-	// the six defines and four refuse where the definition runs rather than
-	// while reading it. Only dash refuses to parse it, so the grammar that
+	// the seven defines and four refuse where the definition runs rather than
+	// while reading it; ash reads it in silence and defines nothing, the same
+	// answer it gives the two rows above. Only dash refuses to parse it, so
+	// the grammar that
 	// has to *read* every case is the one that takes the construct, as above.
 	d.FunctionNameIsAnyWord = true
 	// `[[ x == @(a|b) ]]` — extended patterns where a condition reads them.
@@ -138,9 +159,9 @@ func Dialect() syntax.Dialect {
 	d.Coproc = true
 	d.CoprocName = true
 	// `v=$(cat <<EOF` / `a` / `EOF)` — the here-document cases whose delimiter
-	// carries the closing parenthesis. Two of the six shells refuse them and
-	// the corpus records both answers, so the grammar that has to *read* every
-	// case is the one that takes them.
+	// carries the closing parenthesis. Three of the seven columns refuse them
+	// — dash, zsh and ash — and the corpus records both answers, so the
+	// grammar that has to *read* every case is the one that takes them.
 	d.HeredocEndsAtClosingParen = true
 	// And the widest reading of a body line that joined across a
 	// backslash-newline, for the same reason: four of the seven columns end
@@ -148,32 +169,35 @@ func Dialect() syntax.Dialect {
 	// three do instead, so the grammar that has to read every case is the
 	// one that recognizes the delimiter wherever any column does (#2430).
 	d.HeredocDelimiterAcrossAContinuation = syntax.HeredocDelimiterOnTheJoinedLine
-	// `${ echo hi;}` — the body that runs in the current shell. Two of the
-	// six have it, one of them only since 5.3, and the other four call it a
-	// bad substitution; the corpus records both. Same argument as the flags
+	// `${ echo hi;}` — the body that runs in the current shell. Three of the
+	// seven columns have it — bash 5.3 in both of its columns, which is why
+	// bash 3.2 does not, and ksh93 — and the other four call it a bad
+	// substitution; the corpus records both. Same argument as the flags
 	// above — the grammar that has to *read* every case is the one that
 	// takes the construct — and here it is load-bearing rather than tidy: a
 	// `#` is a comment in that body and the strip operator in `${x#a}`, so
 	// without the flag a case with a comment in one is lexed as an ordinary
 	// expansion and the apostrophe in `# it's fine` runs off the end (#1397).
 	d.CurrentShellSubstitution = true
-	// `a |& b` — the pipe-of-both-streams cases. Four of the six columns
-	// take the operator and the corpus records what the other two say about
-	// it, so the grammar that reads every case has to have it.
+	// `a |& b` — the pipe-of-both-streams cases. Four of the seven columns
+	// take the operator — three as a pipe and ksh93 as a coprocess — and the
+	// corpus records what the other three say about it, so the grammar that
+	// reads every case has to have it.
 	d.PipeBothStreams = true
 	// `>!`, `>>|`, `>>!` and the same four behind `&>` — the
-	// clobber-override marker in its other spellings. One of the six columns
-	// reads them and the corpus records what the other five do instead,
+	// clobber-override marker in its other spellings. One of the seven
+	// columns reads them and the corpus records what the other six do instead,
 	// which for the `|` spellings is a syntax error, so the grammar that has
 	// to read every case is the one that takes them.
 	d.ClobberOverrideMarker = true
 	// `b[(r)y]=Q` — the subscript flag group, on the left of an assignment.
-	// One of the six takes it and the other five read the whole subscript as
-	// arithmetic and fail on the parenthesis; the corpus records both, so the
-	// grammar that has to *read* every case is the one that takes it.
+	// One of the seven takes it; four read the whole subscript as arithmetic
+	// and fail on the parenthesis, and dash and ash refuse the `(` while
+	// reading. The corpus records all of that, so the grammar that has to
+	// *read* every case is the one that takes it.
 	d.ArraySubscriptFlags = true
 	// `=(cmd)` — the temp-file spelling of process substitution. One of the
-	// six writes a file and the other five refuse the `(`; the corpus
+	// seven writes a file and the other six refuse the `(`; the corpus
 	// records both, so the grammar that has to *read* every case is the one
 	// that takes the construct, as above.
 	d.ProcessSubstitutionToFile = true

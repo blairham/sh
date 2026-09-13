@@ -292,6 +292,118 @@ longer dies of it: the shell knows those numbers and leaves them alone,
 so the command runs with that one descriptor missing, which is what
 every other unplaceable number already costs it.
 
+## The import policy: the surface is empty, and a test says so
+
+`go list -deps ./cmd/sh` lists **zero** packages outside the standard
+library and this module. Re-verified 2026-09-13, and the same is true of
+`go list -deps ./...` — nothing in the tree links anything.
+
+That is a **red test rather than a convention**.
+`internal/depsurface`'s `TestTheDependencySurfaceIsPinned` runs
+`go list -deps` on `cmd/sh`, compares the external packages against
+`runtimeDeps`, and fails on anything not named there. `runtimeDeps` is
+the empty list. So an import that arrives by accident — through a helper
+someone reached for, through a transitive edge — fails a test in
+`make check` rather than being noticed later by someone reading `go.mod`.
+
+**It is asked of the binary, not of `go.mod`,** because `go.mod` is not
+the question. This module's require block is almost entirely the
+linter's and the formatter's transitive closure, every line of it marked
+`// indirect`, and none of it reaches anything shipped. `golang.org/x/text`
+sits in there right now for exactly that reason and is linked by nothing.
+
+### The default answer is to generate the table, not to import it
+
+Twice the thing wanted was Unicode data the standard library does not
+ship, and both times the answer was a generator committed beside the
+table it writes:
+
+- `internal/widthgen` reads `EastAsianWidth.txt` and writes
+  `internal/eastasian`. Go ships the general categories, so combining
+  marks come free; East Asian Width does not.
+- `internal/normgen` reads `UnicodeData.txt` and writes `internal/unorm`.
+  Canonical combining classes and decomposition mappings are likewise
+  not in the standard library, and without them a sandbox rule cannot
+  tell that two spellings of `café` are one filename.
+
+The input files are not checked in — they are read once, and what the
+build uses is the Go the generator wrote.
+
+**What is given up is somebody else's correctness, and it is bought back
+rather than assumed.** `internal/unorm`'s test runs Unicode's own
+`NormalizationTest.txt`, every line, in all three canonically equivalent
+spellings. The oracle is the standard, which is the same move
+`docs/spec/oracle.md` makes for shell behavior.
+
+### One dependency has been taken, and the record of it is the policy in action
+
+#2045 — a deny naming an NFC path bypassed by its NFD spelling, which
+leaked a credential and then overwrote it — was closed by taking
+`golang.org/x/text/unicode/norm`. That was deliberate, reviewed as the
+change rather than as a detail, and correct at the time: the bug was a
+live escape and the table did not exist yet.
+
+It was a direct requirement of this module for **54 minutes**, between
+two merges on 2026-09-11, and `internal/normgen` replaced it in the
+second. The empty list in `internal/depsurface` is what remains, and it
+is kept rather than deleted for the reason its own comment gives: a
+guard that exists only while it has something to hold is a guard that is
+missing next time.
+
+### What an entry costs
+
+An addition to `runtimeDeps` is a deliberate edit plus a sentence saying
+why — which is the price a dependency should cost a substrate, and is
+the whole mechanism. Two things come with it:
+
+- **The linter that understands the technology arrives in the same
+  change**, per `AGENTS.md`. protobuf brings `protogetter`, testify
+  brings `testifylint`. A dependency landing without its linter is an
+  incomplete change, and the reverse holds when the last use goes.
+- **The argument is made against the alternatives, in writing.**
+  `docs/design/plugins.md` is the worked example: gRPC was the obvious
+  transport for a plugin system and was declined, in part on this
+  measurement and in part because `internal/jsonrpc` — JSON-RPC 2.0 over
+  newline-delimited stdio, no third-party code — already drives
+  other-language agents in `docs/design/acp.md`. The point is not that
+  gRPC is bad; it is that "reaching other languages needs a dependency"
+  was falsified thirty lines away in this tree.
+
+## Where the substrate ends
+
+The core is a library others build dialects on, and the boundary is held
+by structure rather than by agreement. Four rules, each enforced
+somewhere:
+
+1. **The core does not know its successors.** Nothing under `syntax/` or
+   `interp/` imports a dialect package or names a shell; the substrate
+   defines the questions — a grammar flag, a semantics axis, a
+   diagnostic value — and `dialect/<shell>` answers them. Adding a shell
+   adds a directory. The rule reaches the tests: a test in `syntax` or
+   `interp` names a flag or an axis, and a test that asserts what bash
+   does lives in `dialect/bash`.
+2. **There are exactly three ways to extend it** — choose the vectors,
+   register a builtin, source a prelude — and `interp/extend_test.go`
+   builds a miniature dialect with all three. A fourth way is a decision
+   to argue for, not something that arrives by drift.
+3. **`interp` may not touch the process.** Not the working directory,
+   not the environment, not the process image. Where a shell genuinely
+   must, the core holds a hook that is nil in a library and filled in by
+   `driver` — `ReplaceProcess` and `DieBySignal` are the two.
+4. **Packages start under `internal/` and are promoted once something
+   has consumed them.** `syntax`, `interp` and `driver` are public;
+   `driver` is the deliberate exception to the ordering, because a
+   dialect built outside this repository needs a front end as much as it
+   needs a semantics vector.
+
+**What is not settled here.** Whether a given product-layer feature — a
+prompt engine, history sync, directory jumping — belongs in this tree at
+all is a scope question rather than a structural one, and the four rules
+above do not answer it. #503 holds a proposed filter for it. That
+proposal is **not ratified**, and it is deliberately not written down
+here as though it were: recording an unagreed rule in the architecture
+document is how it gets cited back as policy.
+
 ## What is deliberately not here
 
 - **fish.** fish is not a Bourne descendant and shares no grammar below

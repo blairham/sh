@@ -1690,7 +1690,11 @@ type Dialect struct {
 	//	bash as sh  yes    yes           yes
 	//	dash        yes    yes           yes
 	//	ksh93       yes    yes           yes
+	//	ash         yes    yes           yes
 	//	zsh         *no*   yes           yes
+	//
+	// The ash row is measured 2026-09-13, BusyBox v1.37.0 in the pinned
+	// alpine image, and it moved: see below.
 	//
 	// **One cell, and it is zsh's.** The row is not really about aliases:
 	// zsh reads a `-c` string *whole* before running any of it — see
@@ -1700,10 +1704,13 @@ type Dialect struct {
 	// command string a line at a time and would otherwise expand where zsh
 	// does not.
 	//
-	// ash holds the same value and #2338 is the doubt about it: the probe it
-	// was recorded from was a one-liner, which dash — recorded as expanding
-	// on every route — answers exactly the same way. Left as measured rather
-	// than changed on a guess; there is no BusyBox here to ask.
+	// ash held that value too until #2338, and it never should have: the
+	// probe behind it was a one-liner, which dash — expanding on every route
+	// — answers identically. Asked with two lines, BusyBox expands under
+	// `-c`, so the cell is dash's and zsh's is the only one in the column.
+	// That is worth saying out loud, because the reading above depends on
+	// it: the route set stands in for a reading strategy, and exactly one
+	// shell in the panel has that strategy.
 	//
 	// Whether a word *is* expanded, and into what, is not a dialect question:
 	// every shell that expands agrees on the whole algorithm, so that is the

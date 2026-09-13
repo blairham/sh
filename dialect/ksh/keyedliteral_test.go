@@ -25,6 +25,13 @@ func TestAKeyedLiteralMayNotHoldUnkeyedWords(t *testing.T) {
 		`typeset -A m=(a 1 b 2); echo after`,
 		`typeset -A m; m=(a b); echo after`,
 		`typeset -A m; m+=(a b); echo after`,
+		// The shape is decided on the element as *written*, so a word that
+		// expands to nothing is still an unkeyed word: measured, ksh93u+
+		// refuses this with nothing set and nothing to store. Asking about
+		// the fields instead left the answer depending on whether an
+		// expansion produced one empty field or none.
+		`unset zqnosuch; typeset -A m=($zqnosuch); echo after`,
+		`typeset -A m=(""); echo after`,
 	} {
 		out, st := kshOut(t, src)
 		if st == 0 {
@@ -49,13 +56,6 @@ func TestAKeyedLiteralOfKeyedElementsIsTaken(t *testing.T) {
 		{`typeset -A m=([a]=1 [b]=2); printf "[%s]" "${m[a]}" "${m[b]}"`, `[1][2]`},
 		{`typeset -A m=(); printf "[%s]" "${#m[@]}"`, `[0]`},
 		{`typeset -A m; m[k]=v; printf "[%s]" "${m[k]}"`, `[v]`},
-		// An element that expands to nothing contributes no word, so the
-		// literal is empty rather than unkeyed. Unset first, because this
-		// helper's runner reads the environment it was started in and a
-		// name that happens to be exported there is a word like any other
-		// — which is how this row passed on a laptop and failed on a Linux
-		// runner.
-		{`unset zqnosuch; typeset -A m=($zqnosuch); printf "[%s]" "${#m[@]}"`, `[0]`},
 	} {
 		if out, st := kshOut(t, c.src); out != c.want || st != 0 {
 			t.Errorf("%s = %q status %d, want %q at 0", c.src, out, st, c.want)

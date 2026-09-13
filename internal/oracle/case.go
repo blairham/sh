@@ -8507,6 +8507,11 @@ echo "st=$?"`,
 		Why:     "the append spelling of the row above, and it is the one that says the demotion belongs to replacement rather than to the words: the same table and the same words are refused here in the shell that took them with `=`. The two rows together are what keep a fix for either from being written as a rule about unkeyed words alone. Read element by element rather than with a listing, because two keys are in the table afterwards and no shell promises which order it prints them in",
 	},
 	{
+		ID: "assoc/a-keyed-literal-whose-only-word-expands-to-nothing", Category: "expansion",
+		Snippet: `typeset -A m=($zqnosuch); echo "st=$?"; echo after`,
+		Why:     "where the *shape* of a keyed literal is decided, and the three columns with the attribute give three different answers. ksh93 refuses it as an unkeyed word with nothing set and nothing to store, so it reads the element as written; zsh answers with a declared empty table, so it reads the fields; and bash reads one empty field and refuses the empty *key* it makes — `'': bad array subscript`. Three readings of a line that stores nothing under any of them, which is why it needs a row rather than an assumption",
+	},
+	{
 		ID: "assoc/a-keyed-literal-of-keyed-elements", Category: "expansion",
 		Snippet: `typeset -A m=([a]=1 [b]=2); echo "[${m[a]}][${m[b]}]"; echo after`,
 		Why:     "the control the three rows above need: written with `[key]=value` heads the same literal is the table in every column that has the attribute, so what one of them refuses is the *unkeyed* shape and not compound assignment to a table. Without it the refusal reads as a shell with no literal syntax for a table at all",

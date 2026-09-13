@@ -517,13 +517,19 @@ func (r *Runner) assignAssocElems(name string, parsed []literalElem, appendTo bo
 // literalHoldsBareWords reports whether any element of a compound assignment
 // arrived without a `[key]=` head.
 //
-// The fields rather than the words: an element that expanded to nothing
-// contributes no pair and is not the shape being asked about, so `m=($empty)`
-// is an empty literal in the columns that take the form and must not be
-// refused by the column that does not.
+// The **written** element and not the fields it came to. `typeset -A
+// m=($nosuch)` is `cannot append index array to associative array m` in
+// ksh93u+ measured 2026-09-13, with nothing set and nothing to store, so the
+// shape is decided before anything is expanded. Asking about the fields
+// instead made the answer depend on whether an expansion produced one empty
+// field or none, which is not a question this level should be able to see —
+// and it did not answer the same way on two machines.
+//
+// An empty literal has no elements at all and is not this: `typeset -A m=()`
+// is a declared empty table in every column that has the attribute.
 func literalHoldsBareWords(parsed []literalElem) bool {
 	for _, e := range parsed {
-		if !e.subscripted && len(e.fields) > 0 {
+		if !e.subscripted {
 			return true
 		}
 	}

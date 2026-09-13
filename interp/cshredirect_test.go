@@ -23,7 +23,7 @@ func cshRedir(dir string, form GreatAmpTargetForm, dg Diagnostics) func(*Runner)
 		sem.RedirectTargetIsAnOrdinaryWord = No
 		sem.MultiDigitDuplicationTargetIsAnError = No
 		sem.RedirectErrorOnSpecialBuiltinFatal = No
-		sem.DuplicationTargetErrorOnABuiltinIsFatal = No
+		sem.DuplicationTargetError = DuplicationTargetErrorCarriesOn
 		sem.RedirectsUseEveryTarget = No
 		sem.GreatAmpTarget = form
 		r.Semantics, r.Diagnostics, r.Dir = &sem, &dg, dir
@@ -230,10 +230,10 @@ func TestTheGreatAmpFormIsAskedAboutOnlyWhenItMatters(t *testing.T) {
 	}
 }
 
-// DuplicationTargetErrorOnABuiltinIsFatal ends the shell over a `<&word` that
-// named no descriptor — and only where the command runs *in* the shell. An
-// external command takes the same refusal and the script carries on, which is
-// what makes the boundary the command rather than the redirection.
+// DuplicationTargetErrorEndsTheShellOnABuiltin ends the shell over a `<&word`
+// that named no descriptor — and only where the command runs *in* the shell.
+// An external command takes the same refusal and the script carries on, which
+// is what makes the boundary the command rather than the redirection.
 func TestABadDuplicationTargetEndsTheShellOnlyOnABuiltin(t *testing.T) {
 	for _, tc := range []struct {
 		name, src string
@@ -249,7 +249,7 @@ func TestABadDuplicationTargetEndsTheShellOnlyOnABuiltin(t *testing.T) {
 				cshRedir(dir, GreatAmpTargetNamesAFile,
 					Diagnostics{DuplicationTargetIsNotADescriptor: "file number expected"})(r)
 				sem := *r.Semantics
-				sem.DuplicationTargetErrorOnABuiltinIsFatal = Yes
+				sem.DuplicationTargetError = DuplicationTargetErrorEndsTheShellOnABuiltin
 				sem.FatalErrorStatusIsOne = Yes
 				r.Semantics = &sem
 			})
@@ -278,6 +278,37 @@ func TestNoclobberRefusesBothStreamsToOneFile(t *testing.T) {
 				cshRedir(dir, GreatAmpTargetNamesAFile, dg))
 			if out != "sh: qq: cannot overwrite existing file\n[1]" {
 				t.Errorf("out = %q, want the refusal and a status of 1", out)
+			}
+		})
+	}
+}
+
+// DuplicationTargetErrorEndsTheShell ends it whatever the command was, which
+// is the answer dash and BusyBox ash give — and it is not a parse refusal in
+// either, though both word it as one.
+func TestABadDuplicationTargetCanEndTheShellOnAnyCommand(t *testing.T) {
+	for _, tc := range []struct {
+		name, src, want string
+		wantStatus      int
+	}{
+		{"a builtin", `true <&qq; echo after`, "sh: bad fd number\n", 2},
+		{"an external command", `/bin/cat <&qq; echo after`, "sh: bad fd number\n", 2},
+		{"an earlier command still runs", `echo before; true <&qq; echo after`, "before\nsh: bad fd number\n", 2},
+		{"and a branch nobody takes asks nothing", `if false; then true <&qq; fi; echo after`, "after\n", 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			touch(t, dir, "qq")
+			out, st := run(t, tc.src, func(r *Runner) {
+				cshRedir(dir, GreatAmpTargetNamesAFile,
+					Diagnostics{DuplicationTargetIsNotADescriptor: "bad fd number"})(r)
+				sem := *r.Semantics
+				sem.DuplicationTargetError = DuplicationTargetErrorEndsTheShell
+				sem.FatalErrorStatusIsOne = No
+				r.Semantics = &sem
+			})
+			if out != tc.want || st != tc.wantStatus {
+				t.Errorf("out = %q status %d, want %q at %d", out, st, tc.want, tc.wantStatus)
 			}
 		})
 	}

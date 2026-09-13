@@ -1763,6 +1763,91 @@ func (f FdMoveForm) String() string {
 	return "FdMoveUnspecified"
 }
 
+// DuplicationTargetErrorForm is what becomes of the shell when `<&word` or
+// `>&word` names something that is not a descriptor.
+//
+// Every shell in the panel refuses the word. What they do next splits them
+// three ways, and one of the three is conditional on the *command* the
+// redirection was written on, which is why this cannot be a flag: two
+// independent flags would admit a shell that is fatal on a builtin and fatal
+// everywhere at once, which is a reading nothing exhibits.
+//
+// Measured 2026-09-12 and 2026-09-13 with `exec 6<&qq; echo "st=$?"; echo
+// reached` in an empty directory:
+//
+//	bash 5.3, bash-as-sh, bash 3.2  `qq: ambiguous redirect`, status 1, on it goes
+//	ksh93                           `qq: bad file unit number`, status 1, on it goes
+//	zsh                             `file number expected`, status 1, and the
+//	                                shell ends — but only on a builtin
+//	dash                            `Syntax error: Bad fd number`, status 2, over
+//	ash                             `redir error`, status 2, over
+//
+// **Neither of the last two is a parse refusal**, though both are worded as
+// one: `if false; then exec 6<&qq; fi; echo reached` prints `reached` and
+// exits 0 in both, and `echo A; echo hi >&qq` prints `A` first. So the
+// grammar takes the text everywhere and the answer is the vector's — the same
+// reasoning, and the same probe, as MultiDigitDuplicationTargetIsAnError.
+//
+// The status of a shell that stops is FatalErrorStatusIsOne's, which is why
+// dash and ash exit 2 without this needing a status of its own; and a
+// subshell that stops takes only itself, which is what `( exec 6<&qq ); echo
+// reached` shows in both.
+type DuplicationTargetErrorForm int
+
+const (
+	// DuplicationTargetErrorUnspecified is no answer, and is refused like
+	// any other.
+	DuplicationTargetErrorUnspecified DuplicationTargetErrorForm = iota
+	// DuplicationTargetErrorCarriesOn reports the word at status 1 and runs
+	// the next command. bash and ksh93, and the standard's reading: XCU
+	// makes a redirection error fatal for a special builtin alone, which
+	// RedirectErrorOnSpecialBuiltinFatal already answers.
+	DuplicationTargetErrorCarriesOn
+	// DuplicationTargetErrorEndsTheShellOnABuiltin reports it at status 1
+	// and ends a non-interactive shell, but only where the command it is
+	// written on runs *in* the shell. zsh alone, and the boundary is the
+	// command rather than the redirection: measured 2026-09-06, `cat <&""`
+	// and `/bin/echo hi <&""` complain and carry on, while `read x <&""`,
+	// `echo hi <&""`, `true <&""` and `: <&""` end it — the same word, the
+	// same complaint, and a builtin on the left.
+	//
+	// Not RedirectErrorOnSpecialBuiltinFatal, which zsh answers No and which
+	// would not reach `read` or `echo` in any case. Nor is it redirection
+	// failure in general: an ordinary one on a zsh builtin — `read x
+	// 3>/nope/x`, `read x <&9` — complains and carries on there too.
+	DuplicationTargetErrorEndsTheShellOnABuiltin
+	// DuplicationTargetErrorEndsTheShell reports it and ends the shell
+	// whatever the command was — a builtin, a function or `/bin/echo` — at
+	// the fatal status. dash and ash.
+	DuplicationTargetErrorEndsTheShell
+)
+
+func (f DuplicationTargetErrorForm) String() string {
+	switch f {
+	case DuplicationTargetErrorCarriesOn:
+		return "DuplicationTargetErrorCarriesOn"
+	case DuplicationTargetErrorEndsTheShellOnABuiltin:
+		return "DuplicationTargetErrorEndsTheShellOnABuiltin"
+	case DuplicationTargetErrorEndsTheShell:
+		return "DuplicationTargetErrorEndsTheShell"
+	}
+	return "DuplicationTargetErrorUnspecified"
+}
+
+// duplicationTargetError resolves the axis, and only where a word after `<&`
+// or `>&` really has been refused. `<&2` is nobody's question, so a dialect
+// that has not answered this still duplicates.
+func (r *Runner) duplicationTargetError() DuplicationTargetErrorForm {
+	f := r.sem().DuplicationTargetError
+	if f == DuplicationTargetErrorUnspecified {
+		r.errf("%s\n", r.diag().Report(r.name(), r.line,
+			r.unanswered("a duplication target that is not a descriptor")))
+		r.status = 2
+		r.unspecified = true
+	}
+	return f
+}
+
 // fdMoveSource splits `5-` into the descriptor it names and the fact that a
 // move was written. It answers only for a run of digits followed by the
 // suffix, which is what keeps the axis from being asked about `-` on its own
@@ -1894,11 +1979,18 @@ func (r *Runner) refuseDupTarget(rd *syntax.Redirect, target string) {
 	r.diagf("%s\n", general)
 	r.status = 1
 	r.redirErr = true
-	// One dialect ends the shell over this, and only when the command it is
-	// written on runs *in* the shell — see
-	// DuplicationTargetErrorOnABuiltinIsFatal. The command is not known here,
-	// so the fact travels to where it is.
-	r.badDupTarget = true
+	switch r.duplicationTargetError() {
+	case DuplicationTargetErrorEndsTheShell:
+		// Two dialects end the shell over this whatever the command was, and
+		// they are the two that word it as a syntax error without it being
+		// one. The status is the fatal one the vector already carries, so
+		// both reach 2 without a number of their own.
+		r.fatalQuiet()
+	case DuplicationTargetErrorEndsTheShellOnABuiltin:
+		// And one ends it only when the command runs *in* the shell. The
+		// command is not known here, so the fact travels to where it is.
+		r.badDupTarget = true
+	}
 }
 
 // fdAliased reports whether anything else this shell still holds open refers

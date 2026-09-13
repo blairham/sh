@@ -1132,7 +1132,7 @@ func Semantics() interp.Semantics {
 	// bash leaves it closed — and the number the source gives up is the one
 	// `{v}<&$w-` receives, so the name answers with `$w`'s own number.
 	s.FdMove = interp.FdMoveRelocates
-	s.DuplicationTargetErrorOnABuiltinIsFatal = interp.No
+	s.DuplicationTargetError = interp.DuplicationTargetErrorCarriesOn
 	// Fatal to `export` and `readonly` and not to `unset`, which prints the
 	// same kind of complaint, returns 1 and carries on. Not `unset` being
 	// less special: a bad *option* to it is fatal, just above.

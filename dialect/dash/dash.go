@@ -536,7 +536,7 @@ func Semantics() interp.Semantics {
 	// that `<&qq` gets. Worded as a syntax error and raised at run time —
 	// the same text inside `if false; then … fi` runs clean.
 	s.FdMove = interp.FdMoveIsNotAnOperator
-	s.DuplicationTargetErrorOnABuiltinIsFatal = interp.No
+	s.DuplicationTargetError = interp.DuplicationTargetErrorEndsTheShell
 	s.LocalOutsideAFunctionIsAnError = interp.Yes
 	s.LocalOutsideAFunctionIsFatal = interp.Yes
 	// A special builtin's failure is fatal, and a bad name is one — for all
@@ -700,6 +700,11 @@ func Diagnostics() interp.Diagnostics {
 		// descriptor is looked at, and worded as a syntax error even though
 		// the parse succeeded — no number, no file, one sentence.
 		MultiDigitDuplicationTarget: "Syntax error: Bad fd number",
+		// And a target that is not a number at all gets the same sentence,
+		// again with the parse already over: `echo A; echo hi >&qq` prints
+		// `A` first and then this, and exits 2 without running what follows.
+		// Neither the word nor the number appears in it.
+		DuplicationTargetIsNotADescriptor: "Syntax error: Bad fd number",
 
 		TypeKeyword:  "%[1]s is a shell keyword",
 		TypeFunction: "%[1]s is a shell function",

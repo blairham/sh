@@ -594,7 +594,7 @@ func Semantics() interp.Semantics {
 	// A redirection a special builtin cannot make ends the script: `exec
 	// 3>/nope/x` stops at 1.
 	s.RedirectErrorOnSpecialBuiltinFatal = interp.Yes
-	s.DuplicationTargetErrorOnABuiltinIsFatal = interp.No
+	s.DuplicationTargetError = interp.DuplicationTargetErrorEndsTheShell
 	// A duplication target wider than one digit is not refused while
 	// parsing: `echo hi >&10` reaches the kernel and comes back `dup2(10,1):
 	// Bad file descriptor`, where dash refuses the word outright.
@@ -969,6 +969,17 @@ func Diagnostics() interp.Diagnostics {
 		FileNotFound:          "no such file",
 		DirectoryNotFound:     "nonexistent directory",
 		RedirectFailureStatus: 1,
+
+		// A word after `<&` or `>&` that names no descriptor, and this shell
+		// has two sentences for it rather than one — the same split bash and
+		// ksh93 make, the other way round. A word that came to something is
+		// `redir error`, three words with nothing of the script in them; a
+		// word that came to nothing is `syntax error: bad fd number`, which
+		// is a parse failure's wording on a parse that succeeded. Measured
+		// 2026-09-13: `echo A; echo hi 2>&qq` prints `A` and then the first,
+		// and `<&""`, `>&""` and `<&$UNSET` all print the second.
+		DuplicationTargetIsNotADescriptor: "redir error",
+		EmptyDuplicationTarget:            "syntax error: bad fd number",
 
 		// The declarations. One wording for all of them, naming the part in
 		// front of any `=`.

@@ -19,7 +19,7 @@ func fdMove(dir string, form FdMoveForm, dg Diagnostics) func(*Runner) {
 		sem.GreatAmpTarget = GreatAmpTargetIsADescriptor
 		sem.MultiDigitDuplicationTargetIsAnError = No
 		sem.RedirectErrorOnSpecialBuiltinFatal = No
-		sem.DuplicationTargetErrorOnABuiltinIsFatal = No
+		sem.DuplicationTargetError = DuplicationTargetErrorCarriesOn
 		sem.FdVariableOutlivesTheCommand = No
 		sem.FdVariableBadCloseIsAnError = No
 		// Not this axis: the snippets run `cat` with a descriptor `exec`

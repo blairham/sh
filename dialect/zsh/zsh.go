@@ -1694,7 +1694,7 @@ func Semantics() interp.Semantics {
 	// the file really appears.
 	s.FdMove = interp.FdMoveIsNotAnOperator
 	// And the reading side ends the shell, on a builtin alone.
-	s.DuplicationTargetErrorOnABuiltinIsFatal = interp.Yes
+	s.DuplicationTargetError = interp.DuplicationTargetErrorEndsTheShellOnABuiltin
 	// zsh takes it and sets a global instead of refusing.
 	s.LocalOutsideAFunctionIsAnError = interp.No
 	// Fatal to all three, which is the one place zsh is stricter than bash

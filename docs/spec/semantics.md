@@ -16019,6 +16019,47 @@ the panel splits over whether a construct exists at all. `PosixSemantics`
 answers `FdMoveIsNotAnOperator`: XCU gives `[n]<&word` a number or `-` and has
 no third reading.
 
+**`DuplicationTargetError`** — bash *carries on* · dash **ends the shell** · ksh93 *carries on* · zsh **ends it on a builtin**
+
+What becomes of the shell when `<&word` or `>&word` names something that is
+not a descriptor. Every column refuses the word; what they do next splits them
+three ways. Measured 2026-09-12 and 2026-09-13 with `exec 6<&qq; echo "st=$?";
+echo reached` in an empty directory:
+
+| column | answer |
+| --- | --- |
+| bash 5.3 | `qq: ambiguous redirect`, status 1, on it goes |
+| bash-as-`sh` | the same |
+| bash 3.2 | the same |
+| ksh93 | `qq: bad file unit number`, status 1, on it goes |
+| zsh | `file number expected`, status 1, and the shell ends — on a builtin |
+| dash | `Syntax error: Bad fd number`, status 2, over |
+| ash | `redir error`, status 2, over |
+
+**A form rather than a flag, because one of the three is conditional on the
+command.** Two independent flags would admit a shell that is fatal on a
+builtin *and* fatal everywhere, which is a reading nothing exhibits — the
+shape #2029 is about. zsh's boundary is the command: `cat <&""` and `/bin/echo
+hi <&""` complain and carry on there, while `read x <&""`, `echo hi <&""`,
+`true <&""` and `: <&""` end it. dash's and ash's boundary is the redirection,
+so an external command stops them too.
+
+**Neither of the two that always stop is a parse refusal**, though both are
+worded as one. `if false; then exec 6<&qq; fi; echo reached` prints `reached`
+and exits 0 in both, and `echo A; echo hi >&qq` prints `A` before complaining
+— the same probe, and the same conclusion, as
+`MultiDigitDuplicationTargetIsAnError`. The status is
+`FatalErrorStatusIsOne`'s, which is why both reach 2 without this carrying a
+number of its own, and a subshell that stops takes only itself.
+
+**The wording is the dialect's and ash has two of it.** A word that came to
+something is `redir error`; a word that came to nothing is `syntax error: bad
+fd number`, which is the split bash and ksh93 also make and ash makes the
+other way round. That is `Diagnostics.DuplicationTargetIsNotADescriptor` and
+`EmptyDuplicationTarget`. Until #2495 dash and ash had neither, so both
+answered in bash's words, at bash's status, and let the script keep going with
+the wrong streams.
+
 **`RedirectErrorOnSpecialBuiltinFatal`** — bash no · dash yes · ksh93 yes · zsh no
 
 Ends a non-interactive shell when a redirection written on a *special*

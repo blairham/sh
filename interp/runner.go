@@ -3822,9 +3822,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		// measurement puts a function on the fatal side.
 		_, isBuiltin := r.lookupBuiltin(argv[0])
 		_, isFunc := r.funcs[argv[0]]
-		if r.badDupTarget && !isFunc && isBuiltin &&
-			r.ask(r.sem().DuplicationTargetErrorOnABuiltinIsFatal,
-				"a duplication target that is not a descriptor ending the script on a builtin") {
+		if r.badDupTarget && !isFunc && isBuiltin {
 			r.fatalQuiet()
 		}
 		return nil

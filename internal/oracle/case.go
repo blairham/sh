@@ -9161,6 +9161,11 @@ echo "st=$?"`,
 		Why:     "the same refusal on a command that runs *in* the shell, which is where zsh alone stops: nothing after it runs. The external command in the row above survives it there, so the boundary is the command and not the redirection",
 	},
 	{
+		ID: "redir/an-amp-target-that-came-to-nothing-on-an-external-command", Category: "redirection",
+		Snippet: `echo A; /bin/echo B <&qq; echo reached`,
+		Why:     "and the same refusal on a command that runs *outside* the shell, which is what separates the two shells that always stop from the one that stops on a builtin. bash 5.3, bash-as-sh, bash 3.2, ksh93 and zsh all print `A`, complain, and reach the end; dash and ash print `A` and are over, at 2. So zsh's boundary is the command and dash's and ash's is the redirection — three answers, which is why this is a form and not a flag. `A` first is the other half: both word it as a syntax error and neither is one",
+	},
+	{
 		ID: "redir/noclobber-refuses-both-streams-to-one-file", Category: "redirection",
 		Snippet: `set -C; : > qq; true &>qq; echo "st=$?"`,
 		Why:     "`set -C` refuses this truncation exactly as it refuses a plain `>`, unanimously and each in its own words. The override, where there is one, is spelled after the whole operator rather than inside it — `>|&` is a syntax error in all six, but `&>|` and `&>!` are not, and one column reads both, which is redir/both-streams-clobber-override-bang. A command with no output on purpose: the two shells that have no `&>` read the line as a background `true` and a bare `>qq`, and anything the job printed would arrive against the clock",

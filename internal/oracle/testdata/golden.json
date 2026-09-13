@@ -158958,6 +158958,57 @@
         "TimedOut": false
       }
     },
+    "redir/an-amp-target-that-came-to-nothing-on-an-external-command": {
+      "ash": {
+        "Stdout": "A",
+        "Stderr": "\u003cshell\u003e: redir error",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "A~reached",
+        "Stderr": "\u003cshell\u003e: line 1: qq: ambiguous redirect",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "A~reached",
+        "Stderr": "\u003cshell\u003e: line 1: qq: ambiguous redirect",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "A~reached",
+        "Stderr": "\u003cshell\u003e: qq: ambiguous redirect",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "A",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: Bad fd number",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "A~reached",
+        "Stderr": "\u003cshell\u003e: qq: bad file unit number",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "A~reached",
+        "Stderr": "\u003cshell\u003e:1: file number expected",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "redir/an-empty-stdin-is-not-a-closed-one": {
       "ash": {
         "Stdout": "st=0~silent",

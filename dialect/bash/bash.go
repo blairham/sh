@@ -1084,7 +1084,7 @@ func Semantics() interp.Semantics {
 	// the number *above* the one it moved from, because the destination is
 	// chosen before the source is given up.
 	s.FdMove = interp.FdMoveDuplicatesThenCloses
-	s.DuplicationTargetErrorOnABuiltinIsFatal = interp.No
+	s.DuplicationTargetError = interp.DuplicationTargetErrorCarriesOn
 	s.LocalOutsideAFunctionIsAnError = interp.Yes
 	s.LocalOutsideAFunctionIsFatal = interp.No
 	// bash reports every operand that is not a name, exports the ones that

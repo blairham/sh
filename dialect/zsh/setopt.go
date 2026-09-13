@@ -133,10 +133,10 @@ type zshOption struct {
 	// def is the state a zsh default run has, which is what the listings
 	// compare against.
 	//
-	// Entries this file inherited hold this shell's own state here instead
-	// of zsh's — `banghist` and `hashcmds` are both still measured the other
-	// way round in real zsh — which silences two deviations the listing
-	// exists to show. They are left as they were found; see
+	// Two of the entries this file inherited still hold this shell's own
+	// state here instead of zsh's — `banghist` and `hashcmds` are both
+	// measured the other way round in real zsh — which silences two
+	// deviations the listing exists to show. They are left as they were found; see
 	// docs/spec/semantics.md. `interactivecomments` was a third and was
 	// corrected in #2516, `emacs` a fourth in #1858, and neither correction
 	// says anything about the two that remain: each of those needs its own
@@ -397,7 +397,7 @@ var zshOptions = []zshOption{
 	//
 	// Claiming otherwise was not cosmetic. A syntax highlighter reads this
 	// option to pick a tokenizer; told it is on, it splits the line
-	// comment-aware and classified a bare `ls` as a comment, so every command
+	// comment-aware and classifies a bare `ls` as a comment, so every command
 	// typed came out in the comment style (#2516).
 	recorded("interactivecomments", false),
 	{

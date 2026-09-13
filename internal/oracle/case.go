@@ -18756,6 +18756,12 @@ echo "read=[$l]"`,
 		Why:     "a bare setopt lists what differs from zsh's defaults, canonically spelled and ordered by the base name — noclobber prints between allexport's place and errexit — with nohashdirs as the -c baseline's one line",
 	},
 	{
+		ID: "setopt/the-interactive-listing-drops-nohashdirs", Category: "builtins",
+		Args:    []string{"-f", "-i", "-c", ArgSnippet},
+		Snippet: `setopt; echo "st=$?"`,
+		Why:     "the same bare listing on the route nothing swept, which is where the two shells parted. `hashdirs` is on by default in zsh and off in a `-c` shell, so `nohashdirs` is the baseline's one line — and an *interactive* shell has it on, so the name is absent altogether and `interactive` and `zle` are what the listing carries. `-f` is here so the row is about the invocation rather than about whatever rc file the machine has. The other six columns have no `setopt` and say so, most of them after a line or two about the terminal an interactive shell was asked for and not given (#2351)",
+	},
+	{
 		ID: "setopt/shwordsplit-is-an-option", Category: "builtins",
 		Snippet: `x="a b"; setopt shwordsplit; set -- $x; echo "n=$#"`,
 		Why:     "zsh's no-splitting is an option, not a law: shwordsplit turns the sh behavior on. The name is zsh's own for a semantics axis, which is what makes it a one-line dialect answer",

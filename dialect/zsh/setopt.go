@@ -30,11 +30,11 @@ import (
 // states, and the twelve extras were each identified by flipping them one at
 // a time and reading which canonical entry moved with it.
 //
-// The default recorded for each name is that same measured state in a
-// non-interactive `zsh -c` with an empty HOME, with one correction that a
-// bare `setopt` reports itself: `hashdirs` is the single option whose
-// compiled-in default differs from its state in such a shell, which is why
-// `nohashdirs` is the one line a bare `setopt` prints there.
+// The default recorded for each name is zsh's compiled-in default, which is
+// its measured state in a non-interactive `zsh -c` with an empty HOME for
+// every name but one: `hashdirs` is on by default and off in such a shell,
+// which is why `nohashdirs` is the one line a bare `setopt` prints there and
+// why it is not a line an *interactive* zsh prints at all (#2351).
 //
 // # Recognized, recorded, and implemented are three different claims
 //
@@ -356,7 +356,17 @@ var zshOptions = []zshOption{
 		},
 	},
 	setOptBacked("hashcmds", false, "hashall", false),
-	recordedOver("hashdirs", true, constantState(false)),
+	// `hashdirs` follows **interactive**, the same shape `zle` has and
+	// measured the same way on zsh 5.9.2, 2026-09-12: `zsh -f script` and
+	// `zsh -f -c …` report it off, `zsh -f -i script` reports it on with
+	// or without a terminal. Its compiled-in default is on, so the state
+	// being off is what puts `nohashdirs` in a `-c` shell's listing and
+	// what takes the line back out of an interactive one's (#2351).
+	//
+	// Recorded, and it stays recorded: this shell remembers no directory
+	// it found a command in, so neither state promises anything. What was
+	// wrong was the report.
+	recordedOver("hashdirs", true, func(r *interp.Runner) bool { return r.Interactive }),
 	recorded("hashexecutablesonly", false),
 	recorded("hashlistall", true),
 	recorded("histallowclobber", false),
@@ -850,10 +860,10 @@ func recorded(base string, def bool) zshOption {
 // else to begin with, or because the invocation decided it.
 //
 // The store holds deviations, so the base state has to be supplied rather
-// than assumed: `hashdirs` is off here where zsh's compiled-in default is on,
-// and `login` and `rcs` are whatever the front end was told. Everything else is
-// `recorded`'s bargain unchanged — remembered, reported, and acted on by
-// nothing.
+// than assumed, and the base need not be a constant: `hashdirs` and `zle`
+// follow whether the shell is interactive, and `login` and `rcs` are whatever
+// the front end was told. Everything else is `recorded`'s bargain unchanged —
+// remembered, reported, and acted on by nothing.
 func recordedOver(base string, def bool, state func(*interp.Runner) bool) zshOption {
 	return zshOption{
 		base: base, def: def, recorded: true,
@@ -863,11 +873,6 @@ func recordedOver(base string, def bool, state func(*interp.Runner) bool) zshOpt
 			return 0
 		},
 	}
-}
-
-// constantState is the base state of a recorded name this shell holds still.
-func constantState(state bool) func(*interp.Runner) bool {
-	return func(*interp.Runner) bool { return state }
 }
 
 // singleCommandOption is zsh's `singlecommand`, and the one name in this

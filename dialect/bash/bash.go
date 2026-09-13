@@ -1610,6 +1610,11 @@ func Semantics() interp.Semantics {
 	// `echo x >&${CP[1]}` is an ambiguous redirect at 1 rather than a write
 	// into a pipe nobody is reading (#2411).
 	s.ReapedCoprocessEnds = interp.CoprocEndsGoWithTheCoprocess
+	// And the ends are put out of the way of the numbers a script allocates
+	// for itself. Measured 2026-09-13: four coprocesses in a row publish
+	// `63 60`, `62 58`, `61 56` and `59 54`, while `exec {v}>/dev/null` with
+	// one running still answers 10 (#2596).
+	s.CoprocessEndPlacement = interp.CoprocEndsAtTheTopOfTheTable
 	s.SetListingQuoting = interp.ListingQuoteWhenNeededEscaped
 
 	// `[[ -v 1 ]]` and `[[ -v 0 ]]` ask about a positional parameter here,

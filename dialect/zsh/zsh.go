@@ -2377,6 +2377,12 @@ func Semantics() interp.Semantics {
 	// No array and no name: a coprocess here is reached by `print -p` and
 	// `read -p`, measured — `${COPROC[0]}` is empty after `coproc cat`.
 	s.CoprocEndsInAnArray = interp.No
+	// The ends are numbered where any other allocation goes rather than at
+	// the top of the table, which a shell publishing no array still shows in
+	// what is left for it to hand out. Measured 2026-09-13: `exec
+	// {a}>/dev/null {b}>/dev/null {c}>/dev/null` answers `11 12 13` with no
+	// coprocess running and `12 13 15` with one (#2596).
+	s.CoprocessEndPlacement = interp.CoprocEndsWhereAnyDescriptorGoes
 	// And nothing is taken back when the coprocess ends: both ends stay open
 	// and stay reachable by their letters. Measured 2026-09-12 — a `print -p`
 	// after the coprocess has gone writes into a pipe with no reader and the

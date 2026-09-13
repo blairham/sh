@@ -846,6 +846,17 @@ func Semantics() interp.Semantics {
 	// option. So no spelling of the numeric type letter reaches a frozen
 	// name (#2539).
 	s.NumericTypeLetterRetypesAFrozenName = interp.No
+	// And the wider rule the same probe found on its valueless half: a
+	// declaration naming a value-shaping letter over a frozen name is
+	// refused whole here, so nothing of it lands. Measured 2026-09-13 under
+	// `env -i`, after a `readonly q=1`: `typeset -i q`, `typeset -u q` and
+	// `typeset -a q` are each `typeset: q: readonly variable` at 1 with the
+	// listing still `declare -r q="1"`, where `typeset -x q`, `typeset -t
+	// q`, `typeset -r q` and a bare `typeset q` are all taken. **bash 3.2
+	// is the other way on that half** and takes every one of them, which is
+	// why this preset is bash 5.3's answer and the record carries 3.2's in
+	// its own column (#2561).
+	s.AttributeOverAFrozenNameIsRefused = interp.Yes
 	s.BuiltinSyntaxErrorFatal = interp.No
 	// An error inside a file `.` read ends the shell here, not just the file:
 	// measured, a sourced file whose third line is `echo X${NOPE}` under

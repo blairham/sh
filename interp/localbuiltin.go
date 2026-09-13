@@ -202,7 +202,15 @@ func (r *Runner) attributeWordDeclaration(d declaration, isLocal bool) string {
 		// error names and a fifty-five-key locale table into the middle of
 		// `typeset` — where the shell this models writes `array readonly
 		// errnos` and stops. One of them was a *clock*, so the same listing
-		// asked for twice differed from itself in its own output (#1618).
+		// asked for twice differed from itself in its own output.
+		//
+		// This carried `(#1618)` for a while and that number is wrong:
+		// #1618 is four missing zsh modules, and the clock was found in the
+		// same work rather than filed there. What guards against it is this
+		// branch and nothing else, which is why the warning belongs here.
+		// The open question the warning is about — which produced names a
+		// listing with no operands writes at all, and whether the row
+		// carries a value — is #2518.
 		return head + d.name
 	}
 	return head + d.name + "=" + r.listedDeclarationValue(d)

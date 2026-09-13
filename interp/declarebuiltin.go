@@ -1024,6 +1024,22 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 			r.retypingFrozen = name
 		} else {
 			r.retypingFrozen = outerRetyping
+			// And where the dialect does *not* exempt it, a value-shaping
+			// letter over a frozen name may be refused before any of the
+			// declaration happens. Here rather than at the store, because
+			// what the panel refuses is the whole operand: the attribute has
+			// to not land either, and a gate inside the store leaves a name
+			// carrying a letter the shell being imitated never gave it
+			// (#2561). See attributeOverFrozenRefused.
+			if r.attributeOverFrozenRefused(name, df) {
+				if r.unspecified || r.ctl == controlExit {
+					return r.status
+				}
+				// Reported, and the next operand still declared — the shape
+				// every other per-operand refusal in this loop takes.
+				r.assignFailed = true
+				continue
+			}
 		}
 		r.applyAttributes(name, df)
 		if !df.global {
@@ -2004,6 +2020,63 @@ func (f declareFlags) namesANumericType(r *Runner) bool {
 // rendering — measured, `typeset -Fr q=1; typeset -gE q=4` is refused in zsh,
 // which says the two letters name one type — and it is not implemented here
 // yet, so no third branch would have anything to read.
+// namesAValueShapingAttribute reports whether this declaration writes a letter
+// that says what the name's values *are* or what kind of cell holds them.
+//
+// The same list clearTypeAttributes takes off — the integer and float letters,
+// the two case letters and a field width — plus the two array letters, which
+// say the kind rather than the type. Every one of them changes what a read of
+// the name produces or what a write to it means, which is the distinction the
+// panel draws: `-x`, `-t`, `-r` and `-g` are permissions and placement and are
+// deliberately outside it. See Semantics.AttributeOverAFrozenNameIsRefused for
+// where the line was measured.
+//
+// The **sign is not read**, and that is measured rather than convenient:
+// bash 5.3 refuses `typeset +i q` over a frozen `-i` name exactly as it
+// refuses `typeset -i q`, so what the refusal is about is the letter being
+// written at all. A helper that asked namesANumericType here would answer No
+// for the plus form and let it through, which is the second-helper shape this
+// tree keeps rediscovering.
+func (f declareFlags) namesAValueShapingAttribute() bool {
+	return f.integer || f.float || f.widthLetter != 0 ||
+		f.lower || f.upper || f.array || f.assoc
+}
+
+// attributeOverFrozenRefused reports whether this operand is refused for
+// naming an attribute over a frozen name, having said so.
+//
+// It stands in front of applyAttributes and not inside the store, which is the
+// ordering #1673 deliberately chose against for the *value* — `declare -r c=1`
+// has to set `c` and then freeze it, so applying the attributes up front made
+// a declaration refuse its own value. This is a third branch rather than a
+// move of that one: the name is frozen *before* this line runs, so nothing on
+// this line can be the thing that froze it.
+//
+// Two guards before the dialect is reached, and both are measured:
+//
+//   - the name is frozen, or there is nothing to refuse;
+//   - a value-shaping letter is written, since the panel takes `-x`, `-t`,
+//     `-r`, `-g` and a bare word over a frozen name in every column.
+//
+// numericTypeLetterRetypesFrozen is asked by the caller first and takes its
+// own names out, so a dialect that exempts a retype never arrives here.
+func (r *Runner) attributeOverFrozenRefused(name string, f declareFlags) bool {
+	if !r.readonly[name] {
+		return false
+	}
+	if !f.namesAValueShapingAttribute() {
+		return false
+	}
+	if !r.ask(r.sem().AttributeOverAFrozenNameIsRefused,
+		"an attribute letter over a frozen name being refused") {
+		return false
+	}
+	if r.unspecified {
+		return true
+	}
+	return r.refuseReadonly(name, assignedByDeclaration)
+}
+
 func (r *Runner) numericTypeLetterRetypesFrozen(name string, f declareFlags) bool {
 	if !r.readonly[name] {
 		return false

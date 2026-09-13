@@ -274,6 +274,10 @@ func Semantics() interp.Semantics {
 	// here and `export -i q=4` is `Illegal option -i`, so the only two words
 	// that could carry the letter refuse it before a frozen name is reached
 	// (#2539).
+	// unanswered AttributeOverAFrozenNameIsRefused: there is no declaration
+	// command to write an attribute letter with. Measured 2026-09-12,
+	// `typeset` is `not found` here, so a frozen name is never reached with
+	// one (#2561).
 	// unanswered UpperCaseLetterBesideANumericTypeLetterRecordsNothing and
 	// unanswered TwoCaseLettersOnOneDeclarationCancel: there is no
 	// declaration command, so neither case letter can be written at all.

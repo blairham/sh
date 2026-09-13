@@ -680,6 +680,12 @@ func Semantics() interp.Semantics {
 	// only` and so are the `-F` and `export -i` spellings, with the name
 	// left at 1 (#2539).
 	s.NumericTypeLetterRetypesAFrozenName = interp.No
+	// The valueless half is the other way, and that is the split: a letter
+	// alone over a frozen name is taken here, silently and at 0. Measured
+	// 2026-09-13 under `env -i` on ksh93u+, `readonly q=1; typeset -i q`
+	// lists `typeset -r -i q=1` and `typeset -u q` lists `typeset -r -u
+	// q=1`, where bash 5.3 refuses both (#2561).
+	s.AttributeOverAFrozenNameIsRefused = interp.No
 	// An exported name whose declaration named a numeric type reaches a
 	// child as `0`, even though the shell itself reads the name as unset:
 	// `typeset -ix Z; env` hands over `Z=0` where `${Z+set}` is empty.

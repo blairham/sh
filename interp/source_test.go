@@ -102,6 +102,13 @@ func permissive() Semantics {
 	// assignprefix_test.go (#2407).
 	s.AssignmentPrefixPersistsAfterAFunction = No
 	s.PrefixToAFunctionIsExported = Yes
+	// Whether an attribute letter over a frozen name is refused before any
+	// of the declaration happens, at the answer three of the four panel
+	// columns give — and the quiet one, since Yes is a refusal with a
+	// wording a suite about something else has not set. The suite that is
+	// about it answers the axis itself; see
+	// interp/frozenattribute_test.go (#2561).
+	s.AttributeOverAFrozenNameIsRefused = No
 	return s
 }
 

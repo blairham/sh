@@ -3753,6 +3753,58 @@ type Semantics struct {
 	// keep apart (#2539).
 	NumericTypeLetterRetypesAFrozenName Answer
 
+	// AttributeOverAFrozenNameIsRefused refuses a declaration that would give
+	// a **frozen** name a value-shaping attribute, before any of the
+	// declaration is carried out — so the letter does not land, the value
+	// does not land, and the builtin reports the ordinary refusal.
+	//
+	// Two things are value-shaping and neither of them is a permission: the
+	// letters that say what a name's values *are* — the integer and float
+	// letters, the two case letters, a field width — and the letters that say
+	// what **kind** of cell holds them, the two array letters. The export,
+	// trace, readonly and scope letters are outside it, which is measured
+	// rather than assumed.
+	//
+	// The sign does not matter: the letter being *written* is the refusal,
+	// under a plus as much as under a minus, so this is not a retype test the
+	// way NumericTypeLetterRetypesAFrozenName is. That field is asked first
+	// and takes its own names out — where a dialect exempts a retype there is
+	// nothing here to refuse.
+	//
+	// Measured 2026-09-13, `env -i PATH=/bin HOME=/tmp`, over `-c`, each line
+	// after a `readonly q=1` and read back with `typeset -p q`:
+	//
+	//	                     bash 5.3      bash 3.2   ksh93u+   zsh 5.9.2
+	//	typeset -i q       refused, -r     -ir, at 0  -r -i     -ir, taken
+	//	typeset -u q       refused, -r     no letter  -r -u     -ur, taken
+	//	typeset -a q       refused, -r     -ar, taken n/a       n/a
+	//	typeset -x q       -rx, taken      -rx        -x -r     -r, exported
+	//	typeset -t q       -rt, taken      -rt        n/a       n/a
+	//	typeset -r q       -r, taken       -r         -r        -r
+	//	typeset q          -r, taken       -r         -r        -r
+	//
+	// So it is bash 5.3 alone in the panel, and **bash 3.2 is on the other
+	// side of it** — which is the fact the filing of this got wrong, having
+	// measured the two builds together on the assigning form (where they do
+	// agree) and only bash 5.3 on the valueless one.
+	//
+	// Two more rows say it is a rule about the *attribute* and not about the
+	// name's type moving, and both are bash 5.3:
+	//
+	//	typeset -ir q=1; typeset -i q   refused — the letter it already has
+	//	typeset -ir q=1; typeset +i q   refused — the letter coming back off
+	//
+	// The **assigning** form is where the panel stops splitting, and it is
+	// the reason this reaches further than the valueless one: a declaration
+	// that both names a letter and assigns is refused by both builds of bash
+	// with the letter **not** recorded, `readonly q=1; typeset -i q=4`
+	// listing `declare -r q="1"`. This engine applied the attributes and then
+	// met the refusal at the store, so it listed `declare -ir q="1"` — the
+	// name carrying a letter the shell it is imitating never gave it (#2561).
+	// ksh93 and zsh cannot be asked that half: the refusal ends the script in
+	// both, so there is no listing after it.
+	AttributeOverAFrozenNameIsRefused Answer
+
 	// SetArrayBadNameLeavesZeroFromCommandString makes `set -A` refuse a
 	// name that is not one and leave the shell exiting **0**, where the same
 	// refusal from a script file leaves 1.

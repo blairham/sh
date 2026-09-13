@@ -851,6 +851,9 @@ func Semantics() interp.Semantics {
 	// either. Measured 2026-09-12 on BusyBox in a container, `typeset` is
 	// `not found` and `export -i q=4` is `illegal option -i` — the same two
 	// walls dash meets (#2539).
+	// unanswered AttributeOverAFrozenNameIsRefused: no declaration command
+	// here either. Measured 2026-09-12 on BusyBox in a container, `typeset`
+	// is `not found` — the same wall dash meets (#2561).
 	// unanswered UpperCaseLetterBesideANumericTypeLetterRecordsNothing and
 	// unanswered TwoCaseLettersOnOneDeclarationCancel: no declaration
 	// command here either. Measured 2026-09-12 on BusyBox in a container,

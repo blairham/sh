@@ -1999,7 +1999,16 @@ func (sh Shell) executeLines(
 	// says so by replacing its Dialect, never by writing through it, so a
 	// changed pointer is the whole signal; the front end is the only place
 	// the runner and the parser meet, exactly as it is for aliases.
-	dialect := r.Dialect
+	//
+	// Started at nil rather than at what the runner holds now, so the first
+	// turn of the loop always hands the parser the runner's dialect. The
+	// program was built from the *shell's* dialect before a line of the
+	// startup sequence ran, and that sequence can move the grammar: `sh` and
+	// `-o posix` enter POSIX mode, which decides whether an alias may stand
+	// in for a reserved word. Seeded with the runner's pointer instead, the
+	// two were already equal and the mode reached every later line and not
+	// the program's own.
+	var dialect *syntax.Dialect
 	for {
 		if r.Dialect != dialect && r.Dialect != nil {
 			dialect = r.Dialect

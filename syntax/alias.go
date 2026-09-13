@@ -76,6 +76,15 @@ func (p *Parser) expandAlias(done map[string]bool, look Aliases) {
 		if done[name] {
 			return
 		}
+		if !p.dialect.AliasesExpandReservedWords && p.reservedInDialect(name) {
+			// A name the grammar reserves keeps meaning what the grammar
+			// says. The table still holds it — the `alias` builtin stored it
+			// and lists it — and only the substitution is declined, which is
+			// what the standard asks for and what both shells with a POSIX
+			// mode do while they are in it. See
+			// [Dialect.AliasesExpandReservedWords].
+			return
+		}
 		value, ok := look(name)
 		if !ok {
 			return

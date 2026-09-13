@@ -48,6 +48,12 @@ func Dialect() syntax.Dialect {
 	// And a body's newlines do not count: bash alone leaves the whole of an
 	// expanded body on the line the alias word was written on.
 	d.AliasBodyCountsLines = false
+	// A reserved word may be aliased and the alias wins: `alias for=echo` on
+	// one line makes `for x in 1` on the next a command, in 5.3 and in the
+	// 3.2 macOS ships alike. POSIX mode takes it back — that half is
+	// interp.Runner.SetPosixMode, in both directions — which is what makes
+	// it a mode this shell enters and leaves rather than a build.
+	d.AliasesExpandReservedWords = true
 	// The utilities that take an array assignment as an operand. bash has
 	// all five.
 	d.DeclarationUtilities = map[string]bool{

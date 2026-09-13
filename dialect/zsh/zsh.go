@@ -46,6 +46,12 @@ func Dialect() syntax.Dialect {
 	// And a body's newlines are lines of the program, as they are in the two
 	// that expand by every route.
 	d.AliasBodyCountsLines = true
+	// A reserved word may be aliased and the alias wins, as in bash: `alias
+	// for=echo` on one line makes `for x in 1` on the next a command.
+	// Measured 2026-09-13, zsh 5.9.2 from a script file. Invoking this shell
+	// as `sh` takes it back, which is interp.Runner.SetPosixMode's half and
+	// is why the value here is the shell's own and not the mode's.
+	d.AliasesExpandReservedWords = true
 	// zsh has all five, like bash.
 	d.DeclarationUtilities = map[string]bool{
 		"declare": true, "typeset": true, "local": true,

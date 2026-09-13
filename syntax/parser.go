@@ -452,6 +452,26 @@ var reservedWords = map[string]bool{
 	"!": true,
 }
 
+// reservedInDialect reports whether name is a word *this* dialect reserves.
+//
+// [reservedWords] is the union, because the class distinction a diagnostic
+// draws is the same in every dialect. Three of its members are constructs a
+// preset adds, and an alias expansion is the one caller that has to tell them
+// apart: a shell with no `select` loop has nothing to protect the word for,
+// and dash, which has none of the three, takes an alias for all three where
+// ksh93 takes none. See [Dialect.AliasesExpandReservedWords] for the panel.
+func (p *Parser) reservedInDialect(name string) bool {
+	switch name {
+	case "select":
+		return p.dialect.Select
+	case "function":
+		return p.dialect.FunctionKeyword
+	case "time":
+		return p.dialect.TimeKeyword
+	}
+	return reservedWords[name]
+}
+
 // atReservedWord reports whether the current token is one of the words the
 // grammar reserves, written unquoted. Quoting removes the reservation exactly
 // as it does for [Parser.atWord]: `"if"` is a command name.

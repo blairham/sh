@@ -383,6 +383,36 @@ func Probes() []Probe {
 			},
 		},
 		{
+			Field: "SetOLetterAttachesItsName",
+			Cases: []string{"opt/a-set-o-name-welded-to-the-letter"},
+			// The welded characters spell `errexit` — a name every column
+			// has — so that the two readings part on *behavior* rather than
+			// on wording. A name nobody owns would be refused under both,
+			// and the row could then be read only by comparing four
+			// different complaints.
+			//
+			// The empty-stderr control is the same one the two axes below
+			// carry, pointing the other way: a cell that said nothing and
+			// did not turn errexit on has not answered the question, and
+			// scoring it `No` would make silence agree with whatever the
+			// preset already held.
+			Reading: "`set -oerrexit zzznosuch; …; case $- in *e*)` leaves errexit **on** and says nothing in a shell that reads `errexit` as the name, and refuses `zzznosuch` as the name with errexit still off in one that gives `-o` the next word instead",
+			Read: func(cells map[string]oracle.Result) (string, string) {
+				r := cells["opt/a-set-o-name-welded-to-the-letter"]
+				on := strings.Contains(r.Stdout, "e=on")
+				if strings.TrimSpace(r.Stderr) == "" {
+					if on {
+						return "Yes", ""
+					}
+					return "", "this shell refused nothing and turned errexit on for nothing — the recorded cell holds neither reading"
+				}
+				if on {
+					return "", "the cell holds a refusal *and* errexit on, which neither reading produces"
+				}
+				return "No", ""
+			},
+		},
+		{
 			Field: "BadSetOptionLetterFatal",
 			Cases: []string{"opt/an-unknown-letter-is-refused"},
 			// The mirror, and the reason the two are separate axes at all:

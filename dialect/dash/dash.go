@@ -632,6 +632,9 @@ func Semantics() interp.Semantics {
 	s.BadSetOptionNameFatal = interp.Yes
 	// And the letter too: `set -Z; echo one` prints nothing and exits 2.
 	s.BadSetOptionLetterFatal = interp.Yes
+	// As in bash: `set -oe x` is `Illegal option -o x`, and `set -ozzznosuch`
+	// with nothing behind it lists the options and then stops at `-z`.
+	s.SetOLetterAttachesItsName = interp.No
 	// dash has no `[[ ]]` to ask it in; answered so that a shell built from
 	// this preset with the construct turned back on is not left refusing.
 	s.UnknownConditionOptionIsAStatus = interp.No

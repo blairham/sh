@@ -5497,6 +5497,47 @@ type Semantics struct {
 	// two readings differ — every other spelling is parsed identically.
 	IntegerPlusFormTakesAttributesOff Answer
 
+	// SetOLetterAttachesItsName reads `set -oNAME` — the `-o` letter with its
+	// operand welded to the same word — as the long name NAME, instead of as
+	// a bare `-o` followed by more option letters.
+	//
+	// Yes in ksh93 and zsh; No in the three bash columns, dash and BusyBox
+	// ash. Measured 2026-09-13 across all seven columns, at the builtin and
+	// at the invocation, which answer alike:
+	//
+	//	set -oerrexit zzznosuch    ksh93, zsh  errexit on, `zzznosuch` is $1
+	//	                           the other five  `zzznosuch` refused as the name
+	//	sh -oerrexit -c 'echo hi'  ksh93, zsh  errexit on, prints `hi`
+	//	                           the other five  `-c` refused as the name
+	//
+	// So the seam is not "welded or not". The five that answer No give `-o`
+	// the **next word** whether or not characters follow the letter, and read
+	// those characters as further option letters afterwards. With no word
+	// behind it, `set -oe` lists the options — which is what a bare `-o` does
+	// — and then turns errexit on, in all five. That listing is not
+	// incidental: `set -ozzznosuch` writes the whole option table to standard
+	// output before it complains.
+	//
+	// Ours matched no column at all. It cut the word at a *trailing* `o`
+	// only, so `-o` anywhere else in a word fell through to the letter table
+	// and was refused as `set: -o: invalid option`, with the rest of the word
+	// never read (#2640). The front end said as much in a comment and took
+	// neither side, so `sh -oerrexit` was `unknown option "-oerrexit"` in
+	// every dialect.
+	//
+	// Asked only where characters follow the `o`. `set -o name`, `set -euo
+	// pipefail` and a bare `set -o` are read alike in all seven and consult
+	// nothing.
+	//
+	// Not folded in: bash reports the letter it refuses *after* the listing
+	// at 1 and survivably, where its own `set -Z` is 2 and ends an `sh`
+	// script. That is not a third value of this axis — `set -oe -Q` in bash
+	// applies neither `e` nor the listing and reports the *later* word's
+	// error, so bash validates every option word before applying any, which
+	// no per-refusal status can express. Filed with its measurement rather
+	// than guessed at here.
+	SetOLetterAttachesItsName Answer
+
 	// SetArrayLetter is `set -A name value …`, which assigns an array through
 	// a name a variable holds — the thing `name=(…)` cannot do, because the
 	// name is a literal there.

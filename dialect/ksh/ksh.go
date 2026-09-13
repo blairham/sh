@@ -1421,6 +1421,11 @@ func Semantics() interp.Semantics {
 	s.BadSetOptionNameFatal = interp.Yes
 	// And the letter too: `set -Z; echo one` prints nothing and exits 2.
 	s.BadSetOptionLetterFatal = interp.Yes
+	// One of the two columns that weld: `set -oerrexit zzznosuch` turns
+	// errexit on and leaves `zzznosuch` as $1, and `set -oe` refuses `e` as
+	// an option *name* rather than reading it as a letter. Its own usage
+	// line spells the form, `[-o[option]]`.
+	s.SetOLetterAttachesItsName = interp.Yes
 	s.UnknownConditionOptionIsAStatus = interp.No
 	s.ReturnOutsideAFunctionIsRefused = interp.No
 	// And a `break` with no loop around it is ignored, silently: measured on

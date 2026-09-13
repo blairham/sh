@@ -336,6 +336,12 @@ func Semantics() interp.Semantics {
 	// end scripts that really carry on (#2629).
 	s.BadSetOptionNameFatal = interp.No
 	s.BadSetOptionLetterFatal = interp.Yes
+	// `set -ozzznosuch` here is a bare `-o` — the whole option table on
+	// standard output — and then the letters of `zzznosuch`, so it stops at
+	// 2 on `z` where `set -o zzznosuch` reports 1 and carries on. Which is
+	// also the probe that showed the seam above is the *spelling* refused
+	// rather than the `-o` route (#2629).
+	s.SetOLetterAttachesItsName = interp.No
 	// `read` is not one of the three: `printf 'x\n' | read 1bad` reports at 1
 	// — not dash's 2 — and the script carries on.
 	s.BadNameToReadFatal = interp.No

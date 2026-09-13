@@ -2010,6 +2010,10 @@ func Semantics() interp.Semantics {
 	// And the letter too, at zsh's own 1: `set -Z; echo one` prints
 	// nothing and exits 1.
 	s.BadSetOptionLetterFatal = interp.Yes
+	// The other welding column, and it agrees with ksh93 word for word on
+	// behavior: `set -oerrexit zzznosuch` is errexit with `zzznosuch` as $1,
+	// and `set -oe` is `no such option: e`.
+	s.SetOLetterAttachesItsName = interp.Yes
 	s.UnknownConditionOptionIsAStatus = interp.Yes
 	s.ReturnOutsideAFunctionIsRefused = interp.No
 	// And `break` with no loop around it stops the script here, which is the

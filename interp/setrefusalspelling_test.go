@@ -29,6 +29,9 @@ func ashLike() (Semantics, Diagnostics) {
 	sem.BadSetOptionNameFatal = No
 	sem.BadSetOptionLetterFatal = Yes
 	sem.FatalErrorStatusIsOne = No
+	// ash gives `-o` the next word and reads the rest of its own as letters,
+	// which is what makes the attached form below a *letter* refusal at all.
+	sem.SetOLetterAttachesItsName = No
 	return sem, Diagnostics{
 		Location:                     LocationNone,
 		SetInvalidOptionName:         "set: illegal option -o %[1]s",
@@ -88,11 +91,16 @@ func TestAGrantedSetOptionAsksNothing(t *testing.T) {
 		{"a name turned back off", `set -o nounset; set +o nounset; echo "ok=$?"`},
 		{"the positional parameters", `set -- a b; echo "ok=$?"`},
 		{"the listing", `set -o >/dev/null; echo "ok=$?"`},
+		// And the welding axis with them, for the same reason: it is a
+		// question about a word with characters *behind* the `o`, and none
+		// of these has one. `set -euo pipefail` is the line this protects.
+		{"a bundle ending in the o letter", `set -uo nounset; echo "ok=$?"`},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			sem := PosixSemantics()
 			sem.BadSetOptionNameFatal = Unspecified
 			sem.BadSetOptionLetterFatal = Unspecified
+			sem.SetOLetterAttachesItsName = Unspecified
 			out, st := run(t, c.src, func(r *Runner) { r.Semantics = &sem })
 			if out != "ok=0\n" || st != 0 {
 				t.Errorf("got %q at %d, want %q at 0 and nothing asked", out, st, "ok=0\n")
@@ -143,11 +151,12 @@ func TestEachRefusalReachesItsOwnAxis(t *testing.T) {
 // the word as a bare `-o` followed by the letters of `zzznosuch` and refuses
 // the `z`. So what decides is the spelling that was refused.
 //
-// Where the parse lands is a separate question this does not assert, because
-// ours and BusyBox's differ on it: this engine refuses the `-o` itself as an
-// attached letter where BusyBox lists the options and then refuses the `z`.
-// Both are letters and both take this pair, which is what is pinned here; the
-// parse itself is #2640.
+// Where the parse lands is now asserted with it. It used to be left out
+// because ours and BusyBox's differed — this engine refused the `-o` itself
+// as an attached letter, which no panel column does — and that was #2640.
+// With Semantics.SetOLetterAttachesItsName answered, the word is a bare `-o`
+// and then the letters of `zzznosuch`, so the option listing is written
+// before the `z` is refused.
 func TestTheAttachedFormIsALetterAndNotAName(t *testing.T) {
 	sem, dg := ashLike()
 	out, st := run(t, "set -ozzznosuch\necho after\n", func(r *Runner) {
@@ -156,11 +165,47 @@ func TestTheAttachedFormIsALetterAndNotAName(t *testing.T) {
 	if strings.Contains(out, "after") || st != 2 {
 		t.Errorf("got %q at %d, want the letter's fatal 2 and no `after` — an `-o` in the word is not the name's answer", out, st)
 	}
-	if !strings.Contains(out, "illegal option ") {
-		t.Errorf("got %q, want the letter's wording and not the name's", out)
+	if !strings.Contains(out, "illegal option -z") {
+		t.Errorf("got %q, want the letter's wording, on the `z` and not on the `-o`", out)
 	}
 	if strings.Contains(out, "-o zzznosuch") {
 		t.Errorf("got %q, want the word read as letters rather than as a name", out)
+	}
+	// The bare `-o` ran, which is the half that says the rest of the word
+	// was read as letters *after* a listing rather than instead of one.
+	if !strings.Contains(out, "errexit") {
+		t.Errorf("got %q, want the option listing a bare `-o` writes in front of the refusal", out)
+	}
+}
+
+// The welding axis is asked at the disagreement and nowhere else, and the
+// disagreement is one word: an `-o` with characters welded behind it. Both
+// readings are exercised from one vector so that neither is the default —
+// under `Yes` the rest of the word is the long name and the next word is left
+// alone as an operand, under `No` the next word is the name and the rest is
+// more letters.
+func TestTheWeldedFormAsksTheDialect(t *testing.T) {
+	for _, c := range []struct {
+		name   string
+		answer Answer
+		want   string
+	}{
+		// `nounset` is a name every shell has, `zzz` is nobody's option name
+		// and nobody's letter — so which of the two is refused says which
+		// word `-o` took, with no wording to compare.
+		{"welded", Yes, "u=on zzz=[zzz]"},
+		{"the next word", No, "u=off zzz=[]"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			sem := PosixSemantics()
+			sem.BadSetOptionNameFatal, sem.BadSetOptionLetterFatal = No, No
+			sem.SetOLetterAttachesItsName = c.answer
+			const src = `set -onounset zzz 2>/dev/null; case $- in *u*) printf 'u=on';; *) printf 'u=off';; esac; printf ' zzz=[%s]\n' "$1"`
+			out, _ := run(t, src, func(r *Runner) { r.Semantics = &sem })
+			if strings.TrimSpace(out) != c.want {
+				t.Errorf("got %q, want %q", strings.TrimSpace(out), c.want)
+			}
+		})
 	}
 }
 

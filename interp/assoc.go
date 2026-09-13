@@ -175,36 +175,90 @@ func (r *Runner) assocSubscript(a AssocArray, e *syntax.ParamExpr) []string {
 		return a.values()
 	}
 	key := r.assocKey(e.Subscript())
-	r.reportEmptyAssocKeyRead(e.Name, key)
+	if r.reportEmptyAssocKeyRead(e, key) {
+		// Refused outright rather than reported and answered, which is the
+		// length operator's row alone. Nothing to give back: the word is
+		// abandoned and the shell is ending.
+		return nil
+	}
 	if v, ok := a[key]; ok {
 		return []string{v}
 	}
 	return r.absentAssocElement(e, key)
 }
 
-// reportEmptyAssocKeyRead says that a read's key came out empty, where the
-// dialect says so, and leaves the read to answer as it would have.
+// reportEmptyAssocKeyRead says what a read's key coming out empty draws, where
+// the dialect says anything, and reports whether the read was **refused** —
+// which only the length operator's row is.
 //
-// The other face of assocAssignKey, and deliberately not the same code: the
-// store refuses, names the subscript as it was *written* and reports 1, while
-// this reports the **name** alone and the expansion carries on with the empty
-// string at status 0. One column does both and words them differently, which
-// is what says they are two questions — see
+// One function for both faces of the emptiness rather than a second helper
+// beside it, because the two are chosen between rather than added together:
+// every route that reads a key reaches here, and a route that asked only the
+// report would silently give the length operator the wrong one of the two.
+//
+// The plain read is the other face of assocAssignKey, and deliberately not
+// the same code: the store refuses, names the subscript as it was *written*
+// and reports 1, while this reports the **name** alone and the expansion
+// carries on with the empty string at status 0. One column does both and
+// words them differently, which is what says they are two questions — see
 // Semantics.EmptyAssociativeKeyIsReportedWhenRead.
 //
-// Nothing here sets the failed-expansion flag. Measured 2026-09-12,
+// That face sets no failed-expansion flag. Measured 2026-09-12,
 // `"[${m[$w]}]${m[$w]}"` writes the sentence once per read and still prints
 // `[]`, so the word is completed rather than abandoned.
-func (r *Runner) reportEmptyAssocKeyRead(name, key string) {
+func (r *Runner) reportEmptyAssocKeyRead(e *syntax.ParamExpr, key string) bool {
 	if key != "" {
-		return
+		return false
+	}
+	if e.Length {
+		// The length operator asks its own axis and never the read's, which
+		// is measured rather than tidy: the shell that reports the plain read
+		// of a *declared-only* table says nothing at all about the length of
+		// the same element. See refusesTheLengthOfAnEmptyAssocKey.
+		return r.refusesTheLengthOfAnEmptyAssocKey(e)
 	}
 	if !r.ask(r.sem().EmptyAssociativeKeyIsReportedWhenRead,
 		"a read whose key on a keyed table came out empty") {
-		return
+		return false
 	}
 	r.diagf("%s\n", Wording(r.diag().EmptyAssociativeKeyRead,
-		"%[1]s: bad array subscript", name))
+		"%[1]s: bad array subscript", e.Name))
+	return false
+}
+
+// refusesTheLengthOfAnEmptyAssocKey is `${#m[$w]}` with `$w` empty, where the
+// dialect refuses it, and reports whether it did.
+//
+// The subject is the subscript **as it was written**, brackets included and
+// with no name in front of it, which is neither of the two subjects the
+// neighbouring shapes use. IndexText is the text between the brackets, so the
+// brackets are in the wording — see Diagnostics.EmptyAssociativeKeyLength.
+//
+// A name the declaration's letters merely brought into being is not this, and
+// that carve-out is measured rather than inferred: `typeset -A m; ${#m[$w]}`
+// is `0` and silent in the column that refuses `typeset -A m; m=();
+// ${#m[$w]}` beside it. It is the *assignment* that moves the name and not
+// the emptiness, which is exactly the pair declaredOnlyCompound already keeps
+// — so this is the second reader of that set, and the first outside the
+// listing.
+//
+// Unlike the read's report this abandons the word: status 1, nothing
+// expanded, and the shell ends. See Semantics.EmptyAssociativeKeyRefusesTheLength.
+func (r *Runner) refusesTheLengthOfAnEmptyAssocKey(e *syntax.ParamExpr) bool {
+	if r.declaredOnlyCompound[e.Name] {
+		return false
+	}
+	if !r.ask(r.sem().EmptyAssociativeKeyRefusesTheLength,
+		"`${#m[$w]}`, the length of a keyed table's element under an empty key") {
+		// Either the dialect answers the length as an ordinary absent
+		// element — ksh93 and zsh, which give the `0` the refusal stands in
+		// front of — or no dialect was chosen and ask has said so.
+		return r.unspecified
+	}
+	r.diagf("%s\n", Wording(r.diag().EmptyAssociativeKeyLength,
+		"[%[1]s]: bad array subscript", e.IndexText))
+	r.expandErr = true
+	return true
 }
 
 // assocSubscriptOfTheName is a subscript on a name that reads as an
@@ -225,7 +279,9 @@ func (r *Runner) assocSubscriptOfTheName(e *syntax.ParamExpr) []string {
 		// the two spellings into one.
 		if w := r.searchOperand(e.Subscript()); w != "@" && w != "*" {
 			key := r.assocKey(e.Subscript())
-			r.reportEmptyAssocKeyRead(e.Name, key)
+			if r.reportEmptyAssocKeyRead(e, key) {
+				return nil
+			}
 			if v, ok := produce(r, key); ok {
 				return []string{v}
 			}

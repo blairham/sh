@@ -1213,6 +1213,11 @@ func Semantics() interp.Semantics {
 	// m; m[k]=v; w=; ${m[$w]}` is the empty string at status 0 with no
 	// diagnostic, where bash names the table (#1972).
 	s.EmptyAssociativeKeyIsReportedWhenRead = interp.No
+	// And its *length* is the `0` an absent element gives, silently:
+	// measured 2026-09-12, `typeset -A m; m[k]=v; w=; echo "[${#m[$w]}]";
+	// echo after` is `[0]`, `after` and status 0, with zsh and against bash
+	// (#2286).
+	s.EmptyAssociativeKeyRefusesTheLength = interp.No
 	// The bash column's answer for whether an empty positional list is a set
 	// parameter: measured 2026-09-12, `set --; "${@-word}"` is `word` here
 	// and `${@=abc}` is `${@=abc}: bad substitution` because the operator

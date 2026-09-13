@@ -1781,6 +1781,10 @@ func Semantics() interp.Semantics {
 	// m[k]=v; w=; ${m[$w]}` is the empty string at status 0 and silent
 	// (#1972).
 	s.EmptyAssociativeKeyIsReportedWhenRead = interp.No
+	// Nor is its *length* refused: measured 2026-09-12, `typeset -A m;
+	// m[k]=v; w=; echo "[${#m[$w]}]"; echo after` is `[0]`, `after` and
+	// status 0, where bash stops the script on the same line (#2286).
+	s.EmptyAssociativeKeyRefusesTheLength = interp.No
 	// An empty positional list is a **set** parameter here, with dash and
 	// against the four bash-and-ksh columns: measured 2026-09-12, `set --;
 	// "${@-word}"` is empty and `"${@+word}"` is `word` (#1941).

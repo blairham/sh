@@ -9583,6 +9583,62 @@ type Semantics struct {
 	// the name (#1972).
 	EmptyAssociativeKeyIsReportedWhenRead Answer
 
+	// EmptyAssociativeKeyRefusesTheLength refuses `${#m[$w]}` — the *length*
+	// of a keyed table's element under a key that came out empty — where the
+	// plain read of the same element is answered.
+	//
+	// The third face of the same emptiness and not a louder
+	// EmptyAssociativeKeyIsReportedWhenRead: the subject, the status and what
+	// happens next are all different, and the shell that has both gives both
+	// in one script.
+	//
+	// Measured 2026-09-12, `-c`, with `typeset -A m; m[k]=v` and `w=`:
+	//
+	//	shell         ${#m[$w]}
+	//	bash 5.3.15   `[$w]: bad array subscript`, status 1, nothing after
+	//	              the line runs
+	//	ksh93u+       `0`, `after`, status 0
+	//	zsh 5.9.2     `0`, `after`, status 0
+	//	bash 3.2.57   no `typeset -A` to ask it of
+	//	dash, ash     no subscript in an expansion at all
+	//
+	// So one column refuses and two answer the same `0` the refusal is
+	// standing in front of, which is why the value the other two give is not
+	// an argument for leaving it alone.
+	//
+	// **The subject is the subscript as it was written, brackets and all, and
+	// without the name.** `[$w]`, not `m:` and not `m[$w]:` — which is
+	// neither of the two subjects the neighbouring shapes use, the plain read
+	// naming the bare name and the refused *store* naming `m[""]`. Measured
+	// verbatim: `${#m["$w"]}` says `["$w"]` and `${#m[${w}]}` says `[${w}]`,
+	// so it is the source text rather than anything the expansion produced.
+	// The wording is Diagnostics.EmptyAssociativeKeyLength.
+	//
+	// **It is the length operator alone.** Measured the same day, every other
+	// operator over the same emptiness — `${m[$w]-d}`, `${m[$w]:-d}`,
+	// `${m[$w]#x}`, `${m[$w]/x/y}`, `${m[$w]:1}`, `${!m[$w]}`, `${m[$w]@Q}` —
+	// takes the read's report and its status 0. So this is asked where the
+	// length is answered rather than where a subscript is read.
+	//
+	// **It is a table alone, and one that has been written to.** An indexed
+	// name asks nothing here — `a=(1 2 3); ${#a[$w]}` is 1, the length of
+	// element zero, silently — and neither does a name the letters merely
+	// declared: `typeset -A m; ${#m[$w]}` is `0` and says nothing, where
+	// `typeset -A m; m=(); ${#m[$w]}` beside it is refused. That is the same
+	// two states declaredOnlyCompound already keeps for the listing, and it
+	// is the *assignment* that moves the name rather than the emptiness —
+	// `m[k]=v; unset "m[k]"` is refused too. The plain read is the control
+	// and does not follow: it reports for a declared-only table as readily as
+	// for a written one.
+	//
+	// **What it refuses, it abandons.** The status is 1, the expansion
+	// produces nothing and the shell ends — a subshell or a command
+	// substitution dies alone and its parent carries on at 0, measured. That
+	// is the ordinary shape of a failed expansion here, and it is what
+	// separates this from the read's report, which writes a sentence and lets
+	// the word finish (#2286).
+	EmptyAssociativeKeyRefusesTheLength Answer
+
 	// EmptyParamSubscriptIsAnError refuses `${a[]}` — a subscript written
 	// with nothing at all between the brackets — where a *parameter
 	// expansion* reads it. The same text one level over from

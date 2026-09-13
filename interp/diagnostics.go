@@ -1571,6 +1571,18 @@ type Diagnostics struct {
 	// has anything to put here.
 	EmptyAssociativeKeyRead string
 
+	// EmptyAssociativeKeyLength is what the *length* of the same element says
+	// where the dialect refuses it outright. One verb, and it is neither of
+	// the subjects the two neighbours above use: the subscript **as written,
+	// with its brackets and without the name** — bash writes `[$w]: bad array
+	// subscript`, where its own read of the same element names `m` alone and
+	// its store names `m[""]`. The brackets are in the wording rather than in
+	// the verb, so a dialect that words the subject differently can say so.
+	//
+	// Only a dialect answering Semantics.EmptyAssociativeKeyRefusesTheLength
+	// has anything to put here.
+	EmptyAssociativeKeyLength string
+
 	// BadArrayLiteralSubscript is the same refusal reached through an array
 	// literal, `a=([0]=p)`, which two of the three word differently from the
 	// plain form. Three verbs: the name, the subscript as written, and the

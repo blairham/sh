@@ -121,6 +121,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"EmptyParamSubscriptIsAnError", s.EmptyParamSubscriptIsAnError, interp.No},
 		{"EmptyAssociativeKeyIsAnError", s.EmptyAssociativeKeyIsAnError, interp.No},
 		{"EmptyAssociativeKeyIsReportedWhenRead", s.EmptyAssociativeKeyIsReportedWhenRead, interp.No},
+		{"EmptyAssociativeKeyRefusesTheLength", s.EmptyAssociativeKeyRefusesTheLength, interp.No},
 		{"AssignThroughExpansionMayNameAPositional", s.AssignThroughExpansionMayNameAPositional, interp.No},
 		{"ShiftPastEndFatal", s.ShiftPastEndFatal, interp.Yes},
 		{"TraceAssignmentsSeparately", s.TraceAssignmentsSeparately, interp.Yes},

@@ -2379,15 +2379,86 @@ func (r *Runner) locationPrefix() string {
 	if r.speaker != "" {
 		line = r.speakerLine
 	}
+	if d.BorrowedTextRendersTheCallStack && len(r.borrowed) > 0 {
+		// One shell writes every borrowed text it is inside, each with the
+		// line that entered the next, and names the innermost where the
+		// script's own name would have gone. See
+		// Diagnostics.BorrowedTextRendersTheCallStack for the six rows this
+		// is read off, and borrowedStack for the chain itself.
+		chain, innermost := r.borrowedStack(d, name)
+		return chain + d.prefix(innermost, r.speaking(), r.builtinIsSpeaking(), line)
+	}
 	return d.prefix(name, r.speaking(), r.builtinIsSpeaking(), line) + r.borrowedName(d)
 }
 
-// borrowedText is one level of Runner.borrowed: what the text is called.
+// borrowedText is one level of Runner.borrowed: what the text is called, and
+// the line it was entered from.
 //
 // A named type over `sourced` rather than `sourced` itself, so that the stack
-// says what it is a stack *of* — and so that the shape has somewhere to grow
-// when the dialect that renders the whole chain arrives (#2461).
-type borrowedText struct{ sourced }
+// says what it is a stack *of* — and so that the shape had somewhere to grow
+// when the dialect that renders the whole chain arrived (#2461).
+type borrowedText struct {
+	sourced
+	// callerLine is the line, in whatever text was running, that the `.` or
+	// the `eval` was written on. It is `r.line` at the moment of the push,
+	// which is that number for both — verified against every measured row of
+	// Diagnostics.BorrowedTextRendersTheCallStack, including the one where
+	// the `.` is inside a function and the line is the function's own.
+	callerLine int
+}
+
+// locationFileOrName is the name a diagnostic carries when nothing borrowed
+// is in front of it: the file this shell is reading where the dialect names
+// one, and the shell's own name otherwise.
+//
+// The first component of a rendered chain, and the same choice
+// locationNameAndLine makes — read from one place rather than two, because a
+// parse failure and a run-time failure inside the same sourced file must not
+// disagree about what the outermost frame is called.
+func (r *Runner) locationFileOrName() string {
+	if r.diag().LocationNamesTheCurrentFile {
+		if f := r.locationFile(); f != "" {
+			return f
+		}
+	}
+	return r.name()
+}
+
+// borrowedStack renders the chain of borrowed texts above the innermost one,
+// and names the innermost.
+//
+// The rendering is one shell's and is described on
+// [Diagnostics.BorrowedTextRendersTheCallStack]: every component but the last
+// is `<name>[<the line in it that entered the next>]: `, and the last is left
+// to the caller, which writes a location after it for a run-time failure and
+// nothing for a parse failure.
+//
+// `outer` is the name the diagnostic would have carried on its own — the
+// script's path — which is the first component. The names after it are the
+// borrowed texts' own, so a chain of two sourced files reads `.[2]` for the
+// middle one in the shell that names the builtin rather than the path.
+func (r *Runner) borrowedStack(d Diagnostics, outer string) (chain, inner string) {
+	var b strings.Builder
+	name := outer
+	for i, t := range r.borrowed {
+		if i == 0 && d.locationOnly(t.callerLine) == "" {
+			// The outermost frame is the shell itself where there is no
+			// script, and this shell names no line for one: measured
+			// 2026-09-12, `ksh -u -c '. ./p.sh'` is
+			// `/bin/ksh: .: line 3: …` with no bracket, exactly as its plain
+			// `-c` diagnostic is `/bin/ksh: NOPE: parameter not set` with no
+			// line. The frames *inside* keep theirs — `ksh -c '. ./s.sh'` is
+			// `/bin/ksh: .[2]: .: line 3:` — so this is the outermost
+			// component following the route's own location and not a rule
+			// about brackets.
+			fmt.Fprintf(&b, "%s: ", name)
+		} else {
+			fmt.Fprintf(&b, "%s[%d]: ", name, t.callerLine)
+		}
+		name = t.sourceName(d)
+	}
+	return b.String(), name
+}
 
 // borrowedAtLocation is the text a diagnostic's line was read from, when that
 // is text the shell borrowed rather than the file it was handed.

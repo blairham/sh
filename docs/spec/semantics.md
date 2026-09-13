@@ -500,8 +500,8 @@ for a parse failure, and three of the four rows are already answered by
 something else: zsh's and bash's `SourceReplacesShell` is what
 `LocationNamesTheCurrentFile` and `LocationNamesTheEvalText` do, and ksh93's
 `SourceBeforeLocation` is a *stack* rendered into the prefix rather than a
-name — #2461. **dash's `SourceAfterLocation` is the one this rule adds**,
-and `Runner.borrowedName` is where it is written.
+name — see the section after this one. **dash's `SourceAfterLocation` is the
+one this rule adds**, and `Runner.borrowedName` is where it is written.
 
 `Diagnostics.BorrowedTextIsNamedAtRunTime` is what turns it on, and it is a
 field of its own rather than the enum answering for itself. `SourceAfterLocation`
@@ -536,9 +536,125 @@ parent's array.
 
 bash's `eval` row above is a fourth question and not this one: its `line 4`
 where every other shell says `line 3` is bash numbering the evaluated text on
-from the line the `eval` word is written on, `$LINENO` included. Measured with
-the whole `eval` on one physical line, which is what tells that reading from
-the physical one — #2462.
+from the line the `eval` word is written on, `$LINENO` included. That is
+`Semantics.EvalTextContinuesTheCallersLines`, two sections below.
+
+### The whole chain of borrowed texts in the prefix
+
+ksh93 does not name the innermost borrowed text — it renders **every** one it
+is inside, each with the line in it that entered the next. Measured
+2026-09-12, ksh93u+ 2012-08-01, `env -i PATH=/usr/bin:/bin` with a scratch
+`HOME`, over a script file, `./p.sh` failing on its third line under `set -u`
+and `bad.sh` holding an `if` that never closes:
+
+| arrangement | ksh93 |
+| --- | --- |
+| `s.sh` line 2 sources `p.sh` | `./s.sh[2]: .: line 3: …` |
+| `t.sh` line 1 defines `f` that sources `p.sh` | `./t.sh[1]: .: line 3: …` |
+| `n.sh` sources `s.sh` sources `p.sh` | `./n.sh[2]: .[2]: .: line 3: …` |
+| `e.sh` line 2 runs a 4-line `eval` | `./e.sh[2]: eval: line 3: …` |
+| `bs.sh` line 2 sources an unparseable file | ``./bs.sh[2]: .: syntax error at line 3: `if' unmatched`` |
+| `be.sh` line 2 evals unparseable text | `./be.sh[2]: eval: syntax error at line 2: …` |
+
+Read as one rule it is a chain: every component but the last is
+`<name>[<the line in it that entered the next>]: `, and the last is
+`<name>: <the location>: ` for a run-time failure and `<name>: ` for a parse
+failure, where the message already carries `at line N` and this shell does not
+say it twice.
+
+Three things in those rows are the whole of the rule, and each is a way to get
+it wrong:
+
+- **A function frame is not a component.** The `t.sh` row says so: a function
+  that sources a file contributes no `f[…]`, and the bracket is the line the
+  `.` itself was written on — which inside a one-line function is that
+  function's own line. So it is a chain of *borrowed texts*, not of calls,
+  whatever the shape looks like.
+- **The outermost component takes no bracket where the route names no line.**
+  Measured over `-c`: `ksh -c '. ./p.sh'` is `<shell>: .: line 3:` and
+  `ksh -c '. ./s.sh'` is `<shell>: .[2]: .: line 3:` — the inner components
+  keep theirs. That is the route's own location showing through rather than a
+  second rule, since this shell's plain `-c` complaint carries no line either.
+- **The name is the builtin.** `SourceFileIsTheBuiltin` already said that for
+  the innermost; the components above it are the same word.
+
+`Diagnostics.BorrowedTextRendersTheCallStack` turns it on and
+`Runner.borrowedStack` renders it, from `Runner.borrowed` with the caller's
+line recorded beside each entry — `r.line` at the push, which is that number
+for both `.` and `eval`. It is separate from `BorrowedTextIsNamedAtRunTime`
+above rather than implied by it: turning *that* on for ksh93 gives
+`./s.sh: .: line 3:`, which is closer and still wrong, and only the two-level
+row can tell the two apart. That is why the corpus carries both
+`dot/the-borrowed-text-in-the-prefix` and
+`dot/the-borrowed-chain-two-levels-down`.
+
+The two paths render it separately because they are separate code —
+`Runner.locationPrefix` for a run-time failure and
+`Runner.reportBorrowedParseFailure` for a parse failure — and the rule differs
+between them in exactly the last component, which is the reason it is worth
+saying twice rather than once.
+
+### The lines of `eval`'s text
+
+Whether they continue the caller's or start at one, and it is not a wording:
+`$LINENO` moves with them, so it is what line the shell thinks it is on, and a
+diagnostic and a parameter read the same number.
+
+**The obvious probe cannot decide it.** With the `eval` spread over several
+physical lines, "the physical line the failing text sits on" and "the caller's
+line plus the text's, less one" are the same number, so a green check there
+proves nothing. The discriminator is the whole `eval` on **one** physical
+line — with `$'…\n…'`, or with a newline carried in through a parameter.
+
+Measured 2026-09-12, `env -i PATH=/usr/bin:/bin` with a scratch `HOME`, over a
+script file. `b1.sh` starts its `eval` on line 3 and fails on the text's line
+3; `b2.sh` has the whole `eval` on line 2 and fails on the text's line 3:
+
+| | b1.sh | b2.sh |
+| --- | --- | --- |
+| the physical outer line | 5 | **2** |
+| the text's own line | 3 | 3 |
+| the eval's line + the text's − 1 | 5 | **4** |
+| bash 5.3 | `line 5` | **`line 4`** |
+| BusyBox ash | `line 5` | **`line 4`** |
+| ksh93u+, zsh 5.9.2 | `line 3` | `line 3` |
+| dash 0.5.12 | `line 3` | *(no `$'…'` to ask with)* |
+
+And the same split in `$LINENO`, with the `eval` on line 2 and the read on the
+text's line 2 — so a continued reading is 3: bash and ash say `L=3`, ksh93,
+zsh and dash say `L=2`. So `Semantics.EvalTextContinuesTheCallersLines`:
+**yes** for bash and BusyBox ash, **no** for the other three.
+
+**ash had to be run rather than reasoned about.** There is no BusyBox ash on
+this machine, so the five shells a hand probe reaches are not the panel — and
+this column sides with bash, not with its sibling. It is the second time in
+one day that assuming otherwise would have written a false unanimity down.
+
+The offset is `Runner.lineBase`, which is what a command substitution's body
+already runs under, so nothing downstream has to know which kind of borrowed
+text it is inside. Two things fell out of putting it there, and both were bugs
+this shell already had:
+
+- **A sourced file's lines are its own** in every shell in the panel, and
+  whatever offset was in force stayed in force: `x=$(. ./inc.sh)` on line 3
+  read `$LINENO` in the file as 3, where bash and zsh both say 1.
+- **A function's body is not the caller's text either.** `f() { echo
+  $LINENO; }` called as `x=$(f)` on line 4 read 4, where bash and zsh say 1
+  — and zsh, which numbers a function from its own first line, said 3 where
+  the real shell says 0.
+
+Both are the same field leaking through a boundary, and the `eval` offset
+would have leaked through the same two. `runSourced` and `callFuncAs` reset it
+now.
+
+Asked only where the two readings can differ: on the shell's first line the
+offset is nothing either way, which is the shape most `-c` text has.
+
+Corpus: `eval/where-the-texts-lines-are`, which records the *difference*
+between a read inside the text and one just outside it rather than either
+number — because BusyBox ash numbers a `-c` program from **0** where every
+other column starts at 1, and a row recording the raw number would have shown
+ash agreeing with dash for a reason that has nothing to do with this question.
 
 ### The one operand that is not an error
 

@@ -838,6 +838,16 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	// Where the function was written, so a dialect that numbers a message
 	// from the function rather than from the file can subtract it.
 	r.funcLine = int(fn.Pos().Line)
+	// And the body's lines are the body's, whatever offset the *caller* was
+	// running under. A command substitution and — in two dialects — `eval`
+	// run their text at an offset into the script (Runner.lineBase), and it
+	// used to stay in force through a call made from inside one: measured
+	// 2026-09-12, `f() { echo $LINENO; }` called as `x=$(f)` on line 4 read
+	// 4 here where bash and zsh both say 1. The frame already carries the
+	// same idea for the file a body came out of; this is its line half.
+	savedBase := r.lineBase
+	r.lineBase = 0
+	defer func() { r.lineBase = savedBase }()
 	// This call's own serial, because the RETURN trap fires for the one
 	// function whose body set it and for nobody else — not a caller, and
 	// not a sibling entered after it returned.

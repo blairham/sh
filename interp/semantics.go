@@ -7631,6 +7631,47 @@ type Semantics struct {
 	// by, and measured the same way (#2037).
 	LinenoCountsFromTheFunction Answer
 
+	// EvalTextContinuesTheCallersLines numbers the lines of `eval`'s text on
+	// from the line the `eval` word is written on, rather than from one.
+	//
+	// It is not a wording: `$LINENO` moves with it, so it is about what line
+	// the shell thinks it is on, and a diagnostic and a parameter read the
+	// same number.
+	//
+	// Measured 2026-09-12, `env -i PATH=/usr/bin:/bin` with a scratch HOME,
+	// over a script file. **The obvious probe cannot decide it**, which is
+	// the whole difficulty: spread an `eval` over four physical lines and
+	// "the outer line the failing text sits on" and "the caller's line plus
+	// the text's line, less one" are the same number. The discriminator is an
+	// `eval` written on **one** physical line with `$'…\n…'` in it, where the
+	// two part company:
+	//
+	//	# b1.sh — the eval starts on line 3 and the text fails on its line 3
+	//	# b2.sh — the whole eval is on line 2 and the text fails on its line 3
+	//
+	//	                                     b1.sh    b2.sh
+	//	the physical outer line                5        2
+	//	the text's own line                    3        3
+	//	the eval's line + the text's, less 1   5        4
+	//	bash 5.3                             line 5   line 4
+	//	BusyBox ash                          line 5   line 4
+	//	ksh93u+                              line 3   line 3
+	//	zsh 5.9.2                            line 3   line 3
+	//	dash 0.5.12                          line 3   (no $'…' to ask with)
+	//
+	// And the same split in `$LINENO`, with the eval on line 2 of the file
+	// and the read on the text's line 2 — so a continued reading is 3:
+	//
+	//	bash 5.3, BusyBox ash        L=3
+	//	ksh93u+, zsh 5.9.2, dash     L=2
+	//
+	// dash cannot be asked with the single-line probe, since it has no
+	// `$'…'`, and it answers the multi-line one at the text's own line for
+	// both the diagnostic and `$LINENO`, which is No on everything visible.
+	// ash is the column that had to be measured rather than guessed: it
+	// sides with bash here, not with its sibling (#2462).
+	EvalTextContinuesTheCallersLines Answer
+
 	// ArithBaseAbove36 admits `37#…` through `64#…`, whose letters split
 	// into cases and whose last two digits are `@` and `_`. bash and ksh93
 	// take the full 64; zsh stops at 36 and says so.
@@ -10214,7 +10255,11 @@ func PosixSemantics() Semantics {
 		// four of the five read the `unset` as having ended the parameter
 		// and only zsh lets an assignment bring the producer back (#2450).
 		AssignmentRestoresAnUnsetProducedParameter: No,
-		ArithBaseAbove36: Yes,
+		// The standard has no `$LINENO` inside `eval` to speak of and says
+		// nothing about how the text is numbered, so this follows the
+		// panel: three of the five number it from one (#2462).
+		EvalTextContinuesTheCallersLines: No,
+		ArithBaseAbove36:                 Yes,
 		// The standard's numeral is C's, where a leading zero opens an octal
 		// constant — so a base cannot be written with one, and a radix prefix
 		// needs at least one digit after it. Neither is a base spelling the

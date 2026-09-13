@@ -70412,6 +70412,108 @@
         "TimedOut": false
       }
     },
+    "dot/the-borrowed-chain-two-levels-down": {
+      "ash": {
+        "Stdout": "s1~one",
+        "Stderr": "\u003cshell\u003e: ./p.sh: line 2: NOPE: parameter not set",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "s1~one",
+        "Stderr": "./p.sh: line 2: NOPE: unbound variable",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "s1~one",
+        "Stderr": "./p.sh: line 2: NOPE: unbound variable",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "s1~one",
+        "Stderr": "./p.sh: line 2: NOPE: unbound variable",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "s1~one",
+        "Stderr": "\u003cshell\u003e: 2: ./p.sh: NOPE: parameter not set",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "s1~one",
+        "Stderr": "\u003cshell\u003e: .[2]: .: line 2: NOPE: parameter not set",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "s1~one",
+        "Stderr": "./p.sh:2: NOPE: parameter not set",
+        "Status": 126,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "dot/the-borrowed-text-in-the-prefix": {
+      "ash": {
+        "Stdout": "one",
+        "Stderr": "\u003cshell\u003e: ./p.sh: line 2: NOPE: parameter not set",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "one",
+        "Stderr": "./p.sh: line 2: NOPE: unbound variable",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one",
+        "Stderr": "./p.sh: line 2: NOPE: unbound variable",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one",
+        "Stderr": "./p.sh: line 2: NOPE: unbound variable",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one",
+        "Stderr": "\u003cshell\u003e: 2: ./p.sh: NOPE: parameter not set",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one",
+        "Stderr": "\u003cshell\u003e: .: line 2: NOPE: parameter not set",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one",
+        "Stderr": "./p.sh:2: NOPE: parameter not set",
+        "Status": 126,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "dot/unterminated-file-names-the-source": {
       "ash": {
         "Stdout": "",
@@ -73671,6 +73773,57 @@
       "zsh": {
         "Stdout": "REACHED st=1",
         "Stderr": "(eval):1: parse error near `if'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "eval/where-the-texts-lines-are": {
+      "ash": {
+        "Stdout": "diff=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "diff=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "diff=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "diff=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "diff=-1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "diff=-1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "diff=-1",
+        "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

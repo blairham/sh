@@ -166,6 +166,13 @@ func Semantics() interp.Semantics {
 	// primary and stops the script.
 	s.EmptyArithExpressionIsAnError = interp.No
 
+	// The lines of `eval`'s text continue the line the `eval` is written on,
+	// and `$LINENO` moves with them — this shell with bash rather than with
+	// dash, measured 2026-09-12 in the pinned alpine image with the whole
+	// `eval` on one physical line, which is the only arrangement that tells
+	// this from the physical reading (#2462).
+	s.EvalTextContinuesTheCallersLines = interp.Yes
+
 	// ---- invocation and options ----
 
 	s.CommandNotFoundStatusIsNotFound = interp.Yes

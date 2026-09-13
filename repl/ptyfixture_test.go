@@ -76,6 +76,7 @@ func openTerminalAt(t *testing.T, rows, cols int) (control, terminal *os.File) {
 // and overwrites — `\e[4Dseeded` — and the literal is never written at all.
 // The screen says the same thing either way, which is why the wait moved here
 // (#2627).
+//
 // Leading blanks come off, and that is the fixture's doing rather than the
 // shell's. These sessions hand the Runner the same buffer they hand the editor
 // rather than the terminal, so a command's output arrives as a bare `\n` — no

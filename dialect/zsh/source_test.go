@@ -674,3 +674,101 @@ func TestEvalIsTheSameBoundaryWithADifferentStatus(t *testing.T) {
 		t.Errorf("status = %d, want 0", st)
 	}
 }
+
+// TestSourceIsNotASynonymForDot is the one row this shell does not share with
+// bash. Measured 2026-09-12 on zsh 5.9.2 (`-f`), in a directory holding
+// `plain.sh` with a *different* file of the same name on `$path`:
+//
+//	source plain.sh   the copy in the current directory, status 0
+//	. plain.sh        the copy on PATH, status 0
+//
+// and with the file only in the current directory, `source` reads it while `.`
+// is `no such file or directory` at 127.
+//
+// The two rows discriminate in opposite directions, which is why both are
+// here: a shell that searched the current directory for neither passes the
+// PATH rows and fails the fallback ones, and a shell that searched it for both
+// — which is what this dialect did while it called the second name a synonym —
+// does the reverse. The contents differ per directory so a row cannot pass by
+// finding the wrong file.
+func TestSourceIsNotASynonymForDot(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		inPath  bool
+		src     string
+		want    string
+		wantOut int
+	}{
+		{"source prefers the current directory", true, `source plain.sh`, "fromcwd\n", 0},
+		{"dot takes the one on PATH", true, `. plain.sh`, "frompath\n", 0},
+		{"source falls back to the current directory", false, `source plain.sh`, "fromcwd\n", 0},
+		{"dot does not", false, `. plain.sh`, "zsh:.:1: no such file or directory: plain.sh\n", 127},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			work, path := t.TempDir(), t.TempDir()
+			if err := os.WriteFile(filepath.Join(work, "plain.sh"), []byte("echo fromcwd\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if tc.inPath {
+				if err := os.WriteFile(filepath.Join(path, "plain.sh"), []byte("echo frompath\n"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			out, st, err := preset.Combined(t, dialecttest.Base{
+				Dir: work, Vars: map[string]string{"PATH": path},
+			}, tc.src)
+			if err != nil {
+				t.Fatalf("run %q: %v", tc.src, err)
+			}
+			if out != tc.want || st != tc.wantOut {
+				t.Errorf("%s = %q at %d, want %q at %d", tc.src, out, st, tc.want, tc.wantOut)
+			}
+		})
+	}
+}
+
+// TestSourceLooksInTheCurrentDirectoryForItsOwnCallOnly is the neighbor of the
+// row above, and the reason the lookup is taken by the call rather than left
+// standing while the file runs. Measured on the same shell: a file `source`
+// found in the current directory can `source` another one there, and a `.`
+// inside it is the ordinary builtin again and reports the file missing.
+func TestSourceLooksInTheCurrentDirectoryForItsOwnCallOnly(t *testing.T) {
+	work, path := t.TempDir(), t.TempDir()
+	write := func(name, body string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(work, name), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("inner.sh", "echo inner\n")
+	write("outer.sh", ". inner.sh; echo \"nested-dot=$?\"\nsource inner.sh; echo \"nested-source=$?\"\n")
+	out, st, err := preset.Combined(t, dialecttest.Base{
+		Dir: work, Vars: map[string]string{"PATH": path},
+	}, `source outer.sh; echo "outer=$?"`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "outer.sh:.:1: no such file or directory: inner.sh\nnested-dot=127\ninner\nnested-source=0\nouter=0\n"
+	if out != want || st != 0 {
+		t.Errorf("nested lookup = %q at %d, want %q at 0", out, st, want)
+	}
+}
+
+// TestSourceNamesItselfWhenItCannotOpen keeps the half of the wording the split
+// above must not collapse. Measured 2026-09-12 with nothing of the name
+// anywhere: this shell puts the builtin it was given in the *location*, so the
+// two names produce two different lines for one failure.
+func TestSourceNamesItselfWhenItCannotOpen(t *testing.T) {
+	work, path := t.TempDir(), t.TempDir()
+	out, st, err := preset.Combined(t, dialecttest.Base{
+		Dir: work, Vars: map[string]string{"PATH": path},
+	}, `source nope.sh; echo "st=$?"; . nope.sh; echo "st=$?"`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "zsh:source:1: no such file or directory: nope.sh\nst=127\n" +
+		"zsh:.:1: no such file or directory: nope.sh\nst=127\n"
+	if out != want || st != 0 {
+		t.Errorf("failures = %q at %d, want %q at 0", out, st, want)
+	}
+}

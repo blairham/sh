@@ -68,6 +68,10 @@ func Dialect() syntax.Dialect {
 	// `set -C; echo x >| f` overwrites.
 	d.AmpersandRedirect = true
 	d.ClobberOverrideMarker = true
+	// A here-document body line that joined *before* any text of it was
+	// written still reaches the delimiter, as in dash; one that joined after
+	// text does not (#2430).
+	d.HeredocDelimiterAcrossAContinuation = syntax.HeredocDelimiterAfterALeadingContinuation
 	// `time echo hi` prints the three-row summary this shell words its own
 	// way, so the keyword is here rather than the external.
 	d.TimeKeyword = true

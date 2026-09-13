@@ -184,6 +184,14 @@ func Dialect() syntax.Dialect {
 	// dash and zsh read the body from the whole input instead, so the `)`
 	// goes into it and the construct is never closed (#963).
 	d.HeredocEndsAtClosingParen = true
+	// And a body line that took a continuation is never the delimiter here,
+	// however it joined — which is the core answer and is written out because
+	// it is measured rather than inherited (#2430). The measured build also
+	// declines to join at all when the text before the backslash is a
+	// non-empty prefix of the delimiter, which is recorded in the corpus and
+	// not modeled: it reads as an incremental matcher failing to back out
+	// rather than as a rule, and it costs only the spelling of the body.
+	d.HeredocDelimiterAcrossAContinuation = syntax.NoHeredocDelimiterAcrossAContinuation
 	// The measured ksh93 is 93u+ 2012, which has no `&>`. Later ksh93u+m
 	// does, twelve years apart under the same name — which is the divergence
 	// syntax.Dialect's own comment names as the reason its fields are called

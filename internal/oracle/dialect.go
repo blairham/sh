@@ -142,6 +142,12 @@ func Dialect() syntax.Dialect {
 	// the corpus records both answers, so the grammar that has to *read* every
 	// case is the one that takes them.
 	d.HeredocEndsAtClosingParen = true
+	// And the widest reading of a body line that joined across a
+	// backslash-newline, for the same reason: four of the seven columns end
+	// the document on the joined text and the corpus records what the other
+	// three do instead, so the grammar that has to read every case is the
+	// one that recognises the delimiter wherever any column does (#2430).
+	d.HeredocDelimiterAcrossAContinuation = syntax.HeredocDelimiterOnTheJoinedLine
 	// `${ echo hi;}` — the body that runs in the current shell. Two of the
 	// six have it, one of them only since 5.3, and the other four call it a
 	// bad substitution; the corpus records both. Same argument as the flags

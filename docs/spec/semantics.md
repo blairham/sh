@@ -4196,11 +4196,14 @@ The rest are declared by each dialect that has them:
 
 dash declares none of them: it has the fourteen and nothing else.
 
-Of these, six are real here — `pipefail` (the pipeline code reads it),
+Of these, eight are real here — `pipefail` (the pipeline code reads it),
 `hashall`/`trackall` (one state behind both names: permission to cache
 rather than a promise to), `histignoredups` (kept truthfully over a
-history this shell does not keep), `braceexpand` (below), and `onecmd`
-(below). The rest are recorded with the state we are already in, so that
+history this shell does not keep), `braceexpand` (below), `onecmd`
+(below), and `errtrace`/`functrace`, which are the long spellings of
+`set -E` and `set -T` and write the same state those letters do — see
+*the two options that override all four* under the ERR, DEBUG, RETURN and
+EXIT conditions. The rest are recorded with the state we are already in, so that
 turning them off succeeds honestly: `interactive-comments` is **on**,
 because we do honor comments wherever they are written; everything else is
 **off**. That is not a claim about what any other shell defaults to —
@@ -10080,6 +10083,75 @@ set inside a function fires in that function and at the top level after
 it returns, and does not fire inside a sibling function entered
 afterwards, though the sibling's own failing call still does.
 
+#### the two options that override all four
+
+The four axes above are where a shell stands with nothing asked. bash —
+alone in the panel — lets a script move it, and the four `No` answers
+above are the reason it has to: they are what the options exist to turn
+off.
+
+`errtrace`, reachable as `set -E`, `set -o errtrace` or as half of
+`shopt -s extdebug`, carries the ERR trap into functions *and* into
+subshells, so it overrides ErrTrapRunsInsideFunctions and
+ErrTrapRunsInSubshells together. `functrace` — `set -T`, `set -o
+functrace`, or the other half of `extdebug` — does the same for the DEBUG
+trap at both boundaries, overriding DebugTrapRunsInsideCalls and
+DebugTrapRunsInSubshells, and carries the RETURN trap into calls the same
+way. RETURN fires in no subshell either way, so there is nothing there
+for it to override. Measured on bash 5.3.15, 2026-09-12:
+
+| snippet | option off | option on |
+| --- | --- | --- |
+| `trap 'echo E' ERR; f() { false; }; f` | one `E`, for the call | two |
+| `trap 'echo E' ERR; (false); echo x` | one `E`, for the group | two |
+| `trap 'echo D' DEBUG; . ./lib.sh` (one line inside) | one `D`, for the `.` | two |
+| `trap 'echo D' DEBUG; (echo s); echo x` | one `D`, after `s` | two, one before it |
+
+Each of those four is a pair of corpus rows rather than one — the
+`…-with-nothing-asked` row is the control, and it is the control for the
+axis as much as for the option: it is where ksh93 and zsh are seen tracing
+a call with nothing asked, and where bash 3.2 is seen not judging a failing
+subshell that 5.3 judges.
+
+A **function** call is the one shape where the count is not simply
+doubled at the boundary: bash fires the trap twice for the call itself
+once `functrace` has it running inside, so
+`f() { echo in-f; }; trap 'echo D' DEBUG; f` writes three `D` lines
+there and two here. That extra firing is bash's alone — zsh and ksh93,
+which trace calls with nothing asked, write one per command — and it is
+#2437 rather than part of this.
+
+They are a pair rather than one option with two names: `functrace` says
+nothing about the ERR trap and `errtrace` nothing about DEBUG.
+
+The listing follows the firing. An inherited trap the option keeps alive
+in a subshell is listed there through a modification that would otherwise
+drop it with the inherited snapshot: `set -T; trap 'echo D' DEBUG;
+(trap "" USR2; trap)` writes `SIGUSR2` *and* the DEBUG trap, where the
+same line without `-T` writes `SIGUSR2` alone.
+
+Neither is an axis, because there is nobody to disagree with: the other
+three shells have no such option, and two of them fire both traps inside
+a call with nothing asked. They are switches over the axes, the shape
+`shopt -s lastpipe` already has.
+
+`extdebug` is an indicator as well as those two options, and the three
+come apart. `shopt -s extdebug` turns both on; `shopt -u extdebug` turns
+both off; `set +T` afterwards leaves `shopt -p extdebug` still writing
+`shopt -s extdebug` with `functrace off`; and `set -T` alone never turns
+the indicator on. bash 3.2.57 moves the indicator alone and leaves both
+options where they were — a change within bash rather than a difference
+between shells, so the corpus's `bash32` column disagrees with the other
+two on purpose (`shopt/extdebug-turns-on-function-tracing`).
+
+What bash's extended debugging *also* names is not provided here:
+`declare -F` reporting a definition's file and line, a DEBUG action's
+status skipping the next command or simulating a `return`, and the
+BASH_ARGC/BASH_ARGV record. The name is taken for what it moves rather
+than refused for what it does not, which is the same partial honesty
+`set -o posix` keeps — and the remainder is itemized and measured in
+#2476 rather than left as this paragraph, so it is countable.
+
 **`ExitTrapFiresPastTheEnd`** — bash unspecified · dash unspecified · ksh93 no · zsh yes
 
 Counts the EXIT trap as having fired on the line after the script's
@@ -12017,6 +12089,41 @@ after PATH has missed.
 True only in bash. PATH is searched first everywhere, and wins over an
 identically named file in the current directory in all four — this is
 only about what happens when PATH does not have it.
+
+**And it is about `.`, not about sourcing.** One shell's second name for
+the builtin answers differently, which is a disagreement inside a single
+shell and so cannot be an axis at all: a semantics field is one answer
+per runner. Measured 2026-09-12 on zsh 5.9.2 (`-f`), in a directory
+holding `plain.sh` with a *different* file of the same name on `$path`:
+
+| written | zsh 5.9.2 | bash 5.3.15 | ksh93u+ | dash | BusyBox ash |
+| --- | --- | --- | --- | --- | --- |
+| `source plain.sh`, file on `$path` too | the one in the current directory | the one on PATH | `cannot open`, 1 | `source: not found`, 127 | `not found` |
+| `. plain.sh`, file on PATH too | the one on PATH | the one on PATH | `cannot open`, 1 | `not found` | `not found` |
+| `source plain.sh`, file only here | `sourced`, 0 | `sourced`, 0 | `cannot open`, 1 | `source: not found`, 127 | `not found` |
+| `. plain.sh`, file only here | `no such file or directory`, 127 | `sourced`, 0 | `cannot open`, 1 | `not found` | `not found` |
+
+So zsh's `source` searches the current directory *before* `$path` and its
+`.` never searches it at all. The second and fourth rows are what make the
+measurement discriminating: a shell that simply searched the current
+directory for both names agrees with the first and third and breaks the
+other two. bash's two names agree with each other, and ksh93 has the
+second name while answering `.` for both — the diagnostic says `.`
+whichever was written.
+
+The lookup is therefore a property of the *call*, taken by it rather than
+left standing: measured on the same shell, a `.` inside a file that
+`source` found in the current directory is the ordinary builtin again and
+reports the file missing, while a `source` inside it looks there.
+
+Two neighbors measured in the same session and deliberately not modeled
+here. `setopt PATH_DIRS` changes neither name's answer to a bare operand;
+what it does is make an operand *with* a slash in it searched on `$path`
+as well, for `.` and `source` alike — the option is recorded in this
+dialect and not implemented, so that is a gap of its own rather than part
+of this row. And a current-directory hit is reported as the **bare
+operand** in diagnostics, `$0` and the source stack, where a `$path` hit
+is the joined path and `source ./x` is `./x`.
 
 **`DotPassesArguments`** — bash yes · dash no · ksh93 yes · zsh yes
 

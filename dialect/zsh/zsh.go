@@ -5,6 +5,7 @@
 package zsh
 
 import (
+	"context"
 	"os"
 	"strconv"
 
@@ -21,6 +22,11 @@ func Dialect() syntax.Dialect {
 	// what made the failure `no matches found`, which points a
 	// person at globbing rather than at arithmetic (#900).
 	d.DollarBracketArith = true
+	// A here-document body line joined out of two physical ones is compared
+	// against the delimiter whole, as it is in bash: `A\` over `BC` ends an
+	// `ABC` document. dash and BusyBox ash take only a join that began at
+	// the start of a line, and ksh93 takes neither (#2430).
+	d.HeredocDelimiterAcrossAContinuation = syntax.HeredocDelimiterOnTheJoinedLine
 	// `exec {1}>&-` closes the descriptor a *positional parameter* holds,
 	// which is how a prompt theme's scheduler closes the one it was handed.
 	// zsh alone — see the flag for what bash and ksh93 answer instead.
@@ -2645,8 +2651,17 @@ func Diagnostics() interp.Diagnostics {
 		SourcedSyntaxErrorStatus: 126,
 		// And the same number for a sourced file given up over an *error*,
 		// where a fatal error that reaches the top of a script reports 1.
-		SourcedFatalStatus:  126,
-		DotCannotOpen:       ".: no such file or directory: %[1]s",
+		SourcedFatalStatus: 126,
+		// The builtin the script wrote rather than a literal `.`, because
+		// this shell has two names for it and says the one it was given.
+		// Measured 2026-09-12 on zsh 5.9.2 with nothing of that name
+		// anywhere: `source nope.sh` is `zsh:source:1: no such file or
+		// directory: nope.sh` and `. nope.sh` is `zsh:.:1: …`. The name is
+		// in the location either way — see NamesBuiltinInLocation — and
+		// spelling it here lets the rule that strips a duplicated name reach
+		// the second one too. A literal `.` survived it and made every
+		// `source` failure read `zsh:source:1: .: no such file …`.
+		DotCannotOpen:       "%[3]s: no such file or directory: %[1]s",
 		DotCannotOpenStatus: 127,
 		DotNoOperand:        ".: not enough arguments",
 		DotNoOperandStatus:  1,
@@ -2819,9 +2834,20 @@ func Diagnostics() interp.Diagnostics {
 
 // Apply adds what zsh has and the substrate does not.
 //
-// `source` is a synonym for `.`, which dash does not have at all — so the name
-// is a dialect's answer, and it is the same function under a second name
-// rather than a second implementation.
+// `source` is the second name for `.`, which dash does not have at all — so
+// the name is a dialect's answer, and it is the same function under a second
+// name rather than a second implementation.
+//
+// It is not a *synonym*, which this comment used to say and which is true only
+// of bash and ksh93. Measured 2026-09-12 on zsh 5.9.2, in a directory holding
+// `plain.sh`:
+//
+//	source plain.sh   `sourced`, status 0
+//	. plain.sh        `no such file or directory`, status 127
+//
+// The second row is what makes the measurement discriminating: a shell that
+// simply searched the current directory for both would agree with the first
+// and break the second. See where the name is registered below.
 func Apply(r *interp.Runner) {
 	// This shell has an `enable`, but a different one: it works on hash
 	// tables and takes none of bash's options — `enable -n` is a bad option
@@ -3119,7 +3145,17 @@ func Apply(r *interp.Runner) {
 	// see promptnames.go, and the theme that could not draw without them.
 	registerPromptNames(r)
 	if dot, ok := r.Builtin("."); ok {
-		r.Register("source", dot)
+		// The same function under a second name — and *not* a synonym, which
+		// is the one row this shell does not share with bash. `source` looks
+		// in the current directory before `$path` and `.` never looks there
+		// at all, so the second name is the same builtin with one thing asked
+		// of it. See interp.Runner.DotLooksInCurrentDirectoryFirst for what
+		// was measured and why the difference cannot be an axis.
+		r.Register("source", func(rr *interp.Runner, ctx context.Context, args []string) int {
+			restore := rr.DotLooksInCurrentDirectoryFirst()
+			defer restore()
+			return dot(rr, ctx, args)
+		})
 	}
 	// `declare` is `typeset` under a second name rather than a second
 	// implementation. ksh93 has only the older name and dash has neither, so

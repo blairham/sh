@@ -4300,6 +4300,56 @@ echo "st=$?"`,
 		Why: "the shape people meet the problem in rather than the minimal one: `cmd | while read; do …; done` losing the body's assignments at the pipe is the most cited surprise in shell scripting, and it is the same axis as the `read` above rather than anything about loops. bash 5.3 and bash-as-sh count 3 with the option, zsh and ksh93 count 3 without one, and bash 3.2, dash and ash count nothing",
 	},
 	{
+		ID: "opt/a-debug-trap-and-a-dotted-file-with-nothing-asked", Category: "shell options",
+		Snippet: "printf 'echo S1\n' > lib.sh; trap 'echo D' DEBUG; . ./lib.sh; echo after",
+		Why:     "the control for the row below, and the axis standing on its own: the same snippet with no option set, so what the next row measures is the option rather than the trap. bash writes a D for the `.` and a D for the command after it and nothing for the line inside the file; ksh93 and zsh trace the file's commands with nothing asked, which is the answer `set -o functrace` moves bash to rather than a new one. dash and ash have no DEBUG condition at all and say so",
+	},
+	{
+		ID: "opt/set-o-functrace-carries-the-debug-trap-into-a-call", Category: "shell options",
+		Snippet: "printf 'echo S1\n' > lib.sh; set -o functrace; trap 'echo D' DEBUG; . ./lib.sh; echo after",
+		Why:     "what the option is *for*, asked through the trap rather than through a status: without it a DEBUG trap sees the `.` and nothing the dotted file does, so a tracing or debugging script watches its own call and none of the work. The three bash columns take the name at 0 and write a D for the source, one for each line inside it and one for the command after; dash and ksh93 have no such name and each ends the shell on the `set`, and zsh refuses it with `no such option` and carries on. Ours refused the name as `not implemented`, left the option off and traced nothing inside the file (#2426)",
+	},
+	{
+		ID: "opt/a-debug-trap-and-a-subshell-with-nothing-asked", Category: "shell options",
+		Snippet: `trap 'echo D' DEBUG; (echo s); echo after`,
+		Why:     "the control for the row below: a subshell group fires nothing of its own in bash, so the single D belongs to the `echo after` and arrives behind the `s`. ksh93 and zsh carry the trap into the child",
+	},
+	{
+		ID: "opt/set-o-functrace-carries-the-debug-trap-into-a-subshell", Category: "shell options",
+		Snippet: `set -o functrace; trap 'echo D' DEBUG; (echo s); echo after`,
+		Why:     "the other boundary the same option crosses, and the half a function-only implementation passes the row above without: a subshell group fires nothing of its own — with the trap set and the option off the bash columns write `s` and then a single D for the command after — and with the option on a D arrives ahead of the `echo s` inside. dash and ksh93 stop on the `set` and zsh refuses the name",
+	},
+	{
+		ID: "opt/an-err-trap-and-a-function-with-nothing-asked", Category: "shell options",
+		Snippet: `trap 'echo E' ERR; f() { false; }; f; echo done`,
+		Why:     "the control for the row below and for `opt/set-e-carries-the-err-trap`: one E, for the failing call, because bash does not carry the ERR trap into a function it was not set in. ksh93 counts the failure inside the body as well, and zsh — which does carry it in — still writes one here, so the axis is not read off this row alone. ash has the ERR condition where dash refuses the name outright, so the two smallest shells in the panel are not one answer",
+	},
+	{
+		ID: "opt/an-err-trap-and-a-subshell-with-nothing-asked", Category: "shell options",
+		Snippet: `trap 'echo E' ERR; (false); echo done`,
+		Why:     "the other boundary's control, and the one that turned up a difference within bash rather than between shells: 5.3 judges the failing subshell command in the parent and writes one E where 3.2 writes none. zsh fires inside the child as well as for the group, and ash answers as 5.3 does",
+	},
+	{
+		ID: "opt/set-o-errtrace-carries-the-err-trap-into-a-function", Category: "shell options",
+		Snippet: `set -o errtrace; trap 'echo E' ERR; f() { false; }; f; echo done`,
+		Why:     "the ERR half of the same pair, and it is a pair rather than one option with two names: this one says nothing about DEBUG and moves a trap the bash columns otherwise bound to the frame that set it. With it on the failure inside `f` and the failing call itself each fire, so two E lines arrive where the option off gives one. The refusals are the same three: dash and ksh93 end the shell on the `set`, zsh says `no such option`",
+	},
+	{
+		ID: "opt/set-o-errtrace-carries-the-err-trap-into-a-subshell", Category: "shell options",
+		Snippet: `set -o errtrace; trap 'echo E' ERR; (false); echo done`,
+		Why:     "the fourth boundary, and the one that completes the pair of pairs: the option carries the ERR trap into the child as well as into a function, so the failure inside the group and the failing group itself each fire and 5.3 writes two E lines where its control writes one. bash 3.2 is the column to read here — its control writes none at all, and with the name taken it writes one — so the two bash versions arrive at different counts from different starting points and only their movement agrees",
+	},
+	{
+		ID: "shopt/extdebug-is-taken-and-reads-back", Category: "shell options",
+		Snippet: `shopt -s extdebug; echo "st=$?"; shopt -p extdebug; shopt -u extdebug; shopt -p extdebug`,
+		Why:     "the name a debugger's preamble sets, and it has to survive the round trip a capture depends on: all three bash columns take it at 0, write `shopt -s extdebug` back, take the unset and write `shopt -u extdebug` — the closing query answering 1 because the name is off, which is what makes the status a reading rather than a formality. Ours said `not implemented` at 1 and omitted the name from what it wrote back",
+	},
+	{
+		ID: "shopt/extdebug-turns-on-function-tracing", Category: "shell options",
+		Snippet: "printf 'echo S1\n' > lib.sh; shopt -s extdebug; trap 'echo D' DEBUG; . ./lib.sh; echo after",
+		Why:     "the name is not only an indicator: in bash 5.3 — under either argv[0] — it turns both trap-carriage options on with it, so this traces the dotted file exactly as `set -o functrace` does above. bash 3.2 moves the indicator alone and traces nothing inside the file, which is a change within bash rather than a difference between shells and the reason the `bash32` column is one D short here on purpose. The other three have no `shopt` at all, and two of them run the DEBUG trap inside a sourced file with nothing asked",
+	},
+	{
 		ID: "readonly/reassignment-by-a-declaration", Category: "builtins",
 		Snippet: "readonly x=1; export x=2; echo after",
 		Why:     "the same refusal reached through a declaration utility rather than by an assignment standing alone, and a different set of shells stops for it — three here, where a plain assignment stops all four. So which of the two ways the name was set decides, and one shell answers the two oppositely: it stops for the plain form given as an argument and never stops for this one",
@@ -7786,6 +7836,51 @@ EOF
 		Unfinished: true,
 		Snippet:    "cat <<EOF\nline\nEOF x\necho \"st=$?\"\n",
 		Why:        "the delimiter is compared against the *physical line as written*, so `EOF x` is body and not a terminator — unanimously, in a shape that would read as a terminator to anything matching a prefix. The body then runs to the end of the input, which is why the last line is printed rather than run, and bash 5.3 alone remarks that the document ended at end of file where bash 3.2 says nothing. Prior work of our own had this as a rule about prefixes, and the prefix reading is exactly what is false",
+	},
+	{
+		ID: "heredoc/a-continued-body-line-is-joined-before-the-delimiter-is-looked-for", Category: "redirection",
+		Snippet: "cat <<EOF\nA\\\nEOF\nB\nEOF\necho done\n",
+		Why:     "a body line ending in a backslash continues onto the line under it, and the delimiter is looked for on the joined text — so the first `EOF` here was asked for by the line above it and the second one ends the document. Unanimous across the panel, and the one this parser got wrong: it ended the document at the first `EOF` and ran `B` and `EOF` as commands (#2430)",
+	},
+	{
+		ID: "heredoc/a-quoted-delimiter-joins-no-lines", Category: "redirection",
+		Snippet: "cat <<'EOF'\nA\\\nEOF\necho done\n",
+		Why:     "the control for the row above: a quoted delimiter makes the body literal throughout, so the backslash before the newline is two ordinary characters, nothing is joined, and the first `EOF` is the delimiter. Unanimous, and already right here — which is what said the gap was in the unquoted reading and not in here-documents generally",
+	},
+	{
+		ID: "heredoc/backslashes-before-a-body-lines-newline-pair-off", Category: "redirection",
+		Snippet: "cat <<EOF\nA\\\\\nEOF\necho done\n",
+		Why:     "two backslashes are an escaped backslash and leave the newline with nothing before it, so this `EOF` *is* the delimiter and the body is a single `A\\`. Parity and not the last character, which is what the row below shows from the other side",
+	},
+	{
+		ID: "heredoc/an-odd-run-of-backslashes-still-continues-the-line", Category: "redirection",
+		Snippet: "cat <<EOF\nA\\\\\\\nEOF\nB\nEOF\necho done\n",
+		Why:     "three backslashes: the first two pair off and the third escapes the newline, so the line continues and the body is `A\\EOF` then `B`. Unanimous, and the pair of rows is what makes the rule parity rather than a last-character test",
+	},
+	{
+		ID: "heredoc/a-joined-line-that-spells-the-delimiter", Category: "redirection",
+		Snippet: "cat <<ABC\nA\\\nBC\nABC\necho tail\n",
+		Why:     "the axis. `A\\` over `BC` joins to exactly the delimiter, and the panel parts three ways over whether that ends the document: bash 5.3, bash 3.2, bash as `sh` and zsh take it, so the body is empty and the `ABC` below is a command; dash and BusyBox ash read it as body and end at the line under it; ksh93 joins nothing here at all. syntax.ContinuedHeredocDelimiter is the field (#2430)",
+	},
+	{
+		ID: "heredoc/a-continuation-before-any-text-still-reaches-the-delimiter", Category: "redirection",
+		Snippet: "cat <<ABC\n\\\nABC\nY\nABC\necho tail\n",
+		Why:     "the same axis at its other value, and the row that separates dash and BusyBox ash from ksh93: the continuation stands before any text of the line, so what the delimiter is compared against still begins where a line begins. Six of the seven columns end the document here and ksh93 alone reads `ABC` as body",
+	},
+	{
+		ID: "heredoc/tabs-are-stripped-from-the-line-and-not-from-what-it-joins-to", Category: "redirection",
+		Snippet: "cat <<-EOF\n\tA\\\n\tB\n\tEOF\necho done\n",
+		Why:     "`<<-` strips tabs from the start of the line *as written*, which is its first physical line — so the tab the second one opens with is content and the body is `A`, a tab, `B`. Unanimous, and it says the stripping and the joining are ordered rather than independent",
+	},
+	{
+		ID: "heredoc/stripping-and-joining-are-ordered-and-the-panel-parts-over-which-comes-first", Category: "redirection",
+		Snippet: "cat <<-EOF\n\t\\\n\tEOF\nX\n\tEOF\necho done\n",
+		Why:     "the corner below the axis, measured and deliberately not modeled. A `<<-` body line of one tab and a backslash joins to the line under it, and the columns part three ways over what the delimiter is then compared against: bash 5.3, bash 3.2 and bash as `sh` strip the tabs of the *joined* text and end the document there; zsh and ksh93 strip only the tabs the logical line opens with, so `<tab>EOF` is body and the document runs on, which is what this implementation does; dash and BusyBox ash keep the backslash-newline outright and join nothing. Three answers over tab stripping rather than over the delimiter, so a rule for the others would be three rules (#2430)",
+	},
+	{
+		ID: "heredoc/a-body-line-opening-with-the-delimiters-own-letters", Category: "redirection",
+		Snippet: "cat <<ABC\nAB\\\nX\nABC\necho tail\n",
+		Why:     "six of the seven columns join this like any other line and the body is `ABX`. ksh93u+ 2012 alone keeps the backslash and the newline, and the discriminator is that `AB` is a non-empty *prefix* of the delimiter — `B\\` over `X` and `ABCD\\` over `X` both join there. It reads as an incremental matcher failing to back out rather than as a rule, so it is recorded here and not modeled; the cost is the spelling of a body and never where one ends",
 	},
 	{
 		ID: "unterminated/a-substitution-is-quoted-back-with-its-word", Category: "diagnostics", SyntaxError: true,
@@ -11573,6 +11668,11 @@ echo unreachable`,
 		ID: "dot/searches-path-and-path-wins", Category: "eval and dot",
 		Snippet: `mkdir -p d; echo "echo from-path" > d/amb.sh; echo "echo from-cwd" > amb.sh; PATH=$PWD/d:$PATH; . amb.sh`,
 		Why:     "an operand with no slash is a PATH lookup and PATH beats an identically named file next to you, which surprises everyone and is unanimous",
+	},
+	{
+		ID: "dot/source-is-not-always-the-same-builtin", Category: "eval and dot",
+		Snippet: `mkdir -p d; echo "echo from-path" > d/amb.sh; echo "echo from-cwd" > amb.sh; PATH=$PWD/d:$PATH; source amb.sh; echo "source=$?"; . amb.sh; echo "dot=$?"`,
+		Why:     "the row above says PATH beats a file next to you, and one shell's *second* name for the builtin is the exception: zsh's `source` looks in the current directory before `$path` and its `.` never looks there at all, so the same operand reads two different files in one shell. bash's two names agree with each other and with PATH, ksh93 has the second name and answers `.` for both — including in the diagnostic, which names `.` whichever was written — and dash has no such builtin. Written as one snippet asking both names because that is the whole of the finding: either line alone is a shell searching the current directory or not, and only the pair says the two builtins disagree. Which file each read is printed rather than only the status, since a `from-path` that should have been `from-cwd` is success either way (#2459)",
 	},
 	{
 		ID: "dot/arguments-diverge", Category: "eval and dot",

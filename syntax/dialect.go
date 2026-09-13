@@ -156,6 +156,74 @@ const (
 	SemicolonSeparatesArrayElementsLikeANewline
 )
 
+// ContinuedHeredocDelimiter is how far a here-document body line assembled
+// across a backslash-newline may go toward being the delimiter. See
+// [Dialect.HeredocDelimiterAcrossAContinuation].
+//
+// A place rather than a bool, for the reason [SeparatorSkip] and
+// [ArraySemicolon] are: the panel draws this in three sets, not two, and a
+// single yes/no could not be given a value for any of them without taking a
+// line one of the others reads as body.
+//
+// That a body line ends in a backslash and continues at all is unanimous and
+// is not this question — every column joins `A\` to the line under it and
+// looks for the delimiter afterwards, which is what #2430 was. This is the
+// narrower one: the *joined* text is spelled exactly like the delimiter, and
+// the columns part over whether that ends the document.
+//
+// Measured 2026-09-12 with `-c` and the null device on standard input, the
+// body printed by `cat`:
+//
+//	delimiter ABC, body line    A\ ⏎ BC        \ ⏎ ABC
+//	                            joins to ABC   joins to ABC
+//	                            after text     before any
+//	bash 5.3 / 3.2 / as `sh`    delimiter      delimiter
+//	zsh 5.9.2                   delimiter      delimiter
+//	dash                        body           delimiter
+//	BusyBox ash                 body           delimiter
+//	ksh93u+ 2012                body           body
+//
+// So the second column is what separates dash and BusyBox ash from ksh93: a
+// continuation standing *before* any text of the line still leaves the
+// delimiter reachable there, and one standing after text does not.
+//
+// One corner below this is measured and deliberately not modeled, because the
+// panel parts three ways again and over tab-stripping rather than over the
+// delimiter. `<<-EOF` with a body line of one tab and a backslash, the
+// delimiter written under it with its own tab:
+//
+//	cat <<-EOF ⏎ →\ ⏎ →EOF ⏎ X ⏎ →EOF
+//
+// bash strips the tabs of the *joined* text and so reads the line as `EOF`
+// and ends the document there; zsh and ksh93 strip only the tabs the logical
+// line opens with, leaving `<tab>EOF` as body, which is what this
+// implementation does; dash and BusyBox ash keep the backslash-newline
+// outright and join nothing. Two of the five columns agree with what is here
+// and a rule for the other three would be three rules.
+type ContinuedHeredocDelimiter uint8
+
+const (
+	// NoHeredocDelimiterAcrossAContinuation is the core answer and the safe
+	// one: a line that took a continuation is never the delimiter. ksh93u+.
+	//
+	// Safe because of which way the two readings fail. Reading a line as the
+	// delimiter that the writer meant as body ends the document early and
+	// hands the rest of the body to the parser as *commands*; reading a
+	// delimiter as body only runs the document on, which is unfinished input
+	// and says so.
+	NoHeredocDelimiterAcrossAContinuation ContinuedHeredocDelimiter = iota
+
+	// HeredocDelimiterAfterALeadingContinuation lets the delimiter be found
+	// after continuations that stand before any text of the line, and not
+	// after one that stands after text. dash and BusyBox ash.
+	HeredocDelimiterAfterALeadingContinuation
+
+	// HeredocDelimiterOnTheJoinedLine compares the whole joined text, however
+	// many physical lines went into it. bash 5.3, bash 3.2, bash as `sh`, and
+	// zsh.
+	HeredocDelimiterOnTheJoinedLine
+)
+
 // CaseBraceSpelling is how a dialect writes a `case` header's second
 // spelling, `case x { … }`. See [Dialect.CaseBraceBody], where the rows are.
 //
@@ -1489,6 +1557,23 @@ type Dialect struct {
 	// than at end of input — but the `)` was inside the body either way, so
 	// the construct is unclosed all the same and the answer does not change.
 	HeredocEndsAtClosingParen bool
+
+	// HeredocDelimiterAcrossAContinuation says whether a body line built out
+	// of two or more physical lines may itself be the delimiter, and how far.
+	// See [ContinuedHeredocDelimiter], which carries the measurement.
+	//
+	// The *joining* is not this flag's to decide and happens in every
+	// dialect: an unquoted here-document's body line that ends in an odd
+	// number of backslashes continues onto the line under it, and the
+	// delimiter is looked for on the result. Without that, a body holding a
+	// continued line ends at the first line that merely looks like the
+	// delimiter and everything under it is run as commands — which, where the
+	// real delimiter never arrives, reads on to the end of the input and
+	// under a terminal is a hang rather than a diagnostic (#2430).
+	//
+	// A quoted delimiter — `<<'EOF'` or `<<\EOF` — makes the body literal
+	// throughout, continuation included, and never reaches this.
+	HeredocDelimiterAcrossAContinuation ContinuedHeredocDelimiter
 
 	// ArithCommand enables `(( expr ))` as a command. Consumed by the lexer,
 	// which scans the expression as raw text: what is inside is an arithmetic

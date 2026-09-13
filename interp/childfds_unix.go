@@ -66,7 +66,25 @@ func tableFile(v any) *os.File {
 	return nil
 }
 
-func (r *Runner) childFiles() []*os.File {
+func (r *Runner) childFiles() []*os.File { return r.fileTable(true) }
+
+// imageFiles is the same table for a file this shell is about to run as a
+// shell script itself, because the kernel would not start it — see
+// noexecscript.go.
+//
+// One difference, and it is measured. The dialect that keeps `exec`'s own
+// descriptors from a command does *not* keep them from such a script:
+// `exec 3>out3; ./t.scr` with a `t.scr` of `echo via3 >&3` writes in ksh93
+// exactly as it does in the other five, where `exec 3>out3; cmd` does not.
+// The reading behind that is the one the shells implement — the script is the
+// shell running on, not a command it launched — and it is why this is a
+// second caller of the table rather than a second table.
+func (r *Runner) imageFiles() []*os.File { return r.fileTable(false) }
+
+// fileTable rebuilds the table. asACommand says whether what is about to be
+// handed it is a command this shell is starting, which is the one question
+// the two callers answer differently.
+func (r *Runner) fileTable(asACommand bool) []*os.File {
 	highest := 0
 	for i, f := range r.InheritedFiles {
 		if fd := firstExtraFd + i; f != nil && fd <= maxInheritedFd && fd > highest {
@@ -124,7 +142,9 @@ func (r *Runner) childFiles() []*os.File {
 			files[fd-firstExtraFd] = f
 		}
 	}
-	r.dropExecOpened(files)
+	if asACommand {
+		r.dropExecOpened(files)
+	}
 	r.dropCloseOnExec(files)
 	return files
 }

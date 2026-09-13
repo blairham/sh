@@ -4189,6 +4189,14 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 		// Started rather than run, so the pid can be recorded before it is
 		// waited for — `$!` has to be answerable immediately.
 		if err := cmd.Start(); err != nil {
+			// A file the kernel will not start may still be a shell script,
+			// which is this shell's to run — see noexecscript.go. Asked at
+			// every door a start can fail at, because a door that did not ask
+			// would be the same bug in a different room.
+			if st, ran := r.imageAsScript(ctx, action, path, argv, env, err); ran {
+				r.status = st
+				return nil
+			}
 			r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
 			r.diagf("%s: %v\n", argv[0], err)
 			r.status = 126
@@ -4229,6 +4237,10 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 			r.reportKilled(sig, cmd.Process.Pid)
 		}
 	default:
+		if st, ran := r.imageAsScript(ctx, action, path, argv, env, err); ran {
+			r.status = st
+			return nil
+		}
 		r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
 		r.diagf("%s: %v\n", argv[0], err)
 		r.status = 126
@@ -4302,6 +4314,10 @@ func (r *Runner) waitForBackgroundProcess(cmd *exec.Cmd) int {
 // gets an error instead of a status.
 func (r *Runner) runWatched(ctx context.Context, cmd *exec.Cmd, argv []string, action Action, ownGroup bool) error {
 	if err := cmd.Start(); err != nil {
+		if st, ran := r.imageAsScript(ctx, action, cmd.Path, argv, cmd.Env, err); ran {
+			r.status = st
+			return nil
+		}
 		r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
 		r.diagf("%s: %v\n", argv[0], err)
 		r.status = 126

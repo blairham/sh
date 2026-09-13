@@ -8493,6 +8493,31 @@ type Semantics struct {
 	// status even then, which is DirectoryOnPathStatus's question.
 	DirectoryOnPathIsACandidate Answer
 
+	// BinaryContentIsNotRunAsAScript stops a file the kernel refused with
+	// ENOEXEC from being read as a shell script when its first line holds a
+	// NUL byte — the shell looking before it leaps, so that a binary for
+	// another architecture stays a failure instead of becoming a spray of
+	// `command not found`.
+	//
+	// Six of the seven columns look. BusyBox ash is the one that does not:
+	// measured 2026-09-13 in the pinned alpine image, a Mach-O header, a file
+	// beginning with a NUL and a file with a NUL mid-line are all read as
+	// scripts there and all three are status 126 in dash, both bash builds,
+	// bash as `sh`, ksh93 and zsh. See interp/noexecscript.go for the grid
+	// that drew the rule at the first line rather than at the whole file.
+	BinaryContentIsNotRunAsAScript Answer
+
+	// ScriptImageSeesTheResolvedPath gives a file run as a shell script — one
+	// the kernel would not start — the path the PATH search resolved as its
+	// `$0`, rather than the word that was typed.
+	//
+	// ksh93 alone hands over the word. It is the same split
+	// Diagnostics.NamesResolvedPath records for a failed command's
+	// diagnostic, asked about a parameter instead, and it shows only on a
+	// name that came from PATH: a word already written with a slash is the
+	// same string under either reading.
+	ScriptImageSeesTheResolvedPath Answer
+
 	// ExecTakesOptions lets `exec` read options of its own, such as
 	// `-a name` to choose the argv[0] the command sees. True in bash, ksh93
 	// and zsh; false in dash, where a leading `-a` is the name of a command
@@ -10658,6 +10683,14 @@ func PosixSemantics() Semantics {
 		// The standard's 126 is for a command that was found and cannot be
 		// executed; a directory qualifies, and three of the four report it.
 		DirectoryOnPathIsACandidate: Yes,
+		// The standard says the shell executes a file it cannot exec "in a
+		// subshell environment" as if it were a script, and says nothing
+		// about refusing one; the shells that look before they leap are the
+		// majority and the preset follows them, with the one that does not
+		// overriding. The resolved path is what POSIX's `$0` rule gives a
+		// script found on PATH.
+		BinaryContentIsNotRunAsAScript: Yes,
+		ScriptImageSeesTheResolvedPath: Yes,
 		// POSIX's hash concerns utilities, and dash — its closest reading —
 		// counts builtins and functions too, and reports a missing name.
 		HashReportsAMissingName: Yes,

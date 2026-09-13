@@ -16,6 +16,10 @@ import "os"
 // same way process groups are.
 func (r *Runner) childFiles() []*os.File { return nil }
 
+// imageFiles hands nothing over for the same reason — see the unix file for
+// the one way the two tables differ.
+func (r *Runner) imageFiles() []*os.File { return nil }
+
 // replacementFiles hands nothing over for the same reason, named streams
 // included. Placing a descriptor on a number is the POSIX call childFiles'
 // absence here already stands for, and a platform with no such call has

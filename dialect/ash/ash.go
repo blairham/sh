@@ -127,6 +127,13 @@ func Semantics() interp.Semantics {
 
 	// `export a+=2` is `a+: bad variable name`, so the append operator is not
 	// an operand this shell's declarations take.
+	// BusyBox does not look before it leaps: a file the kernel refused is
+	// read as a shell script whatever is in it. Measured 2026-09-13 in the
+	// pinned alpine image — a Mach-O header, a file beginning with a NUL and
+	// a file with a NUL mid-line all run here, where the other six columns
+	// answer 126.
+	s.BinaryContentIsNotRunAsAScript = interp.No
+
 	s.DeclarationTakesAnAppendOperand = interp.No
 	// A prefix to a function, both halves with its sibling: visible and
 	// exported for the length of the call, gone afterwards. Measured

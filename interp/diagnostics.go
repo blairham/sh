@@ -227,6 +227,21 @@ type Diagnostics struct {
 	// pair.
 	DirectoryReason string
 
+	// BinaryFileReason is the reason this dialect gives for a file the
+	// kernel would not start whose content is not shell text, when it is not
+	// the one the operating system reported.
+	//
+	// bash has a phrase of its own — `cannot execute binary file: Exec format
+	// error` — where zsh, ksh93 and dash print the strerror text and let
+	// their own CannotExecute shape arrange it: `exec format error: ./x`,
+	// `./x: cannot execute [Exec format error]`. Same failure, same status of
+	// 126, one dialect with more to say about it.
+	//
+	// Empty means "whatever the operating system said", which is everyone
+	// but bash. It is the same shape DirectoryReason has and for the same
+	// reason: the difference is what the shell noticed, not what happened.
+	BinaryFileReason string
+
 	// TimeLayout is how the `time` keyword arranges its report. Zero is the
 	// substrate's own: a blank line, then labeled `real`, `user` and `sys`
 	// lines in the minutes-and-seconds form — the shape bash and ksh93

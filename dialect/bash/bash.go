@@ -1840,6 +1840,14 @@ func Diagnostics() interp.Diagnostics {
 		// bash names neither the builtin nor the operation: just the command
 		// and the reason, the same shape it uses for `.`.
 		CannotExecute: "%[1]s: %[2]s",
+		// And it has a phrase of its own for a file the kernel would not
+		// start that turned out not to be shell text either. Measured
+		// 2026-09-13, `./elf64_hdr.bin` and `exec ./elf64_hdr.bin` both:
+		// `<file>: cannot execute binary file: Exec format error` at 126,
+		// where zsh says `exec format error: <file>` and ksh93 says
+		// `<file>: cannot execute [Exec format error]` — the strerror alone,
+		// arranged by their own CannotExecute.
+		BinaryFileReason: "cannot execute binary file: Exec format error",
 		// bash names the builtin only when the command was not found at all.
 		ExecNotFound: "exec: %[1]s: not found",
 		// bash is the only one that says which *kind* of operator it wanted.

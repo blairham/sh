@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 )
 
 // Finding a command is this shell's job, not the process's.
@@ -251,6 +252,12 @@ func (r *Runner) cannotRun(err error, how naming) int {
 
 	if !pe.missing {
 		why := reason(pe.err)
+		if errors.Is(pe.err, syscall.ENOEXEC) && r.diag().BinaryFileReason != "" {
+			// A file the kernel refused that this shell then looked inside
+			// and found was not shell text. One dialect has a phrase for it
+			// — see Diagnostics.BinaryFileReason and noexecscript.go.
+			why = r.diag().BinaryFileReason
+		}
 		if errors.Is(pe.err, errIsDirectory) && r.diag().DirectoryReason != "" {
 			// This dialect does not pre-check for a directory; it reports
 			// what execve came back with, which is a permission error.

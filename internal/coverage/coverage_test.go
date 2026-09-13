@@ -215,7 +215,7 @@ func TestTheReportSaysWhatAMentionIsNot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	out := coverage.Report([]coverage.Column{col}, 5)
+	out := coverage.Report([]coverage.Column{col}, 5, []coverage.Origin{{Name: "cases", Count: 1}})
 	for _, want := range []string{"A mention is not coverage", "axis-sweep", "Report only"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("the report does not say %q", want)
@@ -252,7 +252,7 @@ func TestTheRollupForgivesWhatOnlyOneGrammarHas(t *testing.T) {
 		t.Errorf("the silent column does not report `read` as unmentioned; it has %v", silentMisses)
 	}
 
-	out := coverage.Report([]coverage.Column{asks, silent}, 0)
+	out := coverage.Report([]coverage.Column{asks, silent}, 0, nil)
 	roll := out[strings.Index(out, "no dialect mentions these at all"):]
 	names := rolledUp(t, roll, coverage.KindBuiltin)
 	if slices.Contains(names, "read") {
@@ -273,4 +273,42 @@ func rolledUp(t *testing.T, roll, kind string) []string {
 		}
 	}
 	return nil
+}
+
+// TestTheReportSaysWhatItRead. The denominator of this instrument is whatever
+// body of cases it was handed, and for a day it was handed half of one: the
+// corpus, with our own 35-file suite sitting unread in the tree. The number
+// was right and answered a question nobody meant to ask, which is a failure a
+// reader cannot see unless the report says what it read (#2630).
+func TestTheReportSaysWhatItRead(t *testing.T) {
+	col, err := coverage.Run("core", syntax.Core(), []string{"echo"}, []coverage.Source{{Label: "x", Text: `echo hi`}})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	out := coverage.Report([]coverage.Column{col}, 5, []coverage.Origin{
+		{Name: "corpus cases", Count: 12},
+		{Name: "files under share/suite", Count: 35},
+	})
+	if !strings.Contains(out, "read 12 corpus cases, 35 files under share/suite") {
+		t.Errorf("the report does not say what it read; it begins\n%s", first(out, 4))
+	}
+	// A body of cases that could not be read has no count, and saying so is
+	// the whole point: a report that quietly dropped it would understate the
+	// denominator in exactly the way this line exists to prevent.
+	out = coverage.Report([]coverage.Column{col}, 5, []coverage.Origin{
+		{Name: "corpus cases", Count: 12},
+		{Name: "share/suite — not found from here"},
+	})
+	if !strings.Contains(out, "read 12 corpus cases, share/suite — not found from here") {
+		t.Errorf("an unread body of cases is not named; the report begins\n%s", first(out, 4))
+	}
+}
+
+// first is the opening lines of a report, for a failure message.
+func first(s string, n int) string {
+	lines := strings.SplitN(s, "\n", n+1)
+	if len(lines) > n {
+		lines = lines[:n]
+	}
+	return strings.Join(lines, "\n")
 }

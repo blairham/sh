@@ -9,8 +9,10 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,6 +24,7 @@ import (
 	"github.com/blairham/sh/dialect/zsh"
 	"github.com/blairham/sh/internal/coverage"
 	"github.com/blairham/sh/internal/oracle"
+	"github.com/blairham/sh/internal/suite"
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
 )
@@ -32,9 +35,24 @@ type preset struct {
 	apply   func(*interp.Runner)
 }
 
+// DefaultSuite is our own committed suite, and it is read on every run.
+//
+// It was a flag defaulting to the empty string for as long as there was
+// nothing to point it at. There is now: 35 files across core/, ext/ and the
+// five dialect tiers. Nothing passed the flag, so the work-list this
+// instrument prints was computed from the corpus alone and named `-le`, `-ne`
+// and `ParamLowerFirst` as elements nobody had asked about — all three asked
+// by our own suite, for a day, in files written by this campaign (#2630).
+//
+// A default rather than a line in the Makefile, so a bare `go run
+// ./internal/cmd/coverage` is the same measurement the target reports. Two
+// spellings of one instrument is how the two drift apart.
+const DefaultSuite = suite.OurRoot
+
 func main() {
 	list := flag.Int("list", 40, "how many never-mentioned names to print per kind; 0 for all")
-	suite := flag.String("suite", "", "a directory of shell files to read alongside the corpus")
+	suiteDir := flag.String("suite", DefaultSuite,
+		"a directory of our own .tests files to read alongside the corpus; empty reads the corpus alone")
 	flag.Parse()
 
 	presets := []preset{
@@ -47,13 +65,31 @@ func main() {
 	}
 
 	srcs := corpusSources()
-	if *suite != "" {
-		more, err := suiteSources(*suite)
-		if err != nil {
+	read := []coverage.Origin{{Name: "corpus cases", Count: len(srcs)}}
+	if *suiteDir != "" {
+		more, err := suiteSources(*suiteDir)
+		switch {
+		case errors.Is(err, fs.ErrNotExist) && !given("suite"):
+			// The default, from a directory this run cannot see — a build
+			// from somewhere other than the module root. Not fatal, because
+			// the corpus half of the report is still a true thing about the
+			// corpus, and not silent either: understating the denominator
+			// without saying so is the whole of #2630.
+			read = append(read, coverage.Origin{
+				Name: *suiteDir + " — not found from here, so this is the corpus alone",
+			})
+		case err != nil:
+			// Asked for by name and not there. That is a typo or a moved
+			// directory, and carrying on would answer a question nobody put.
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
+		default:
+			srcs = append(srcs, more...)
+			read = append(read, coverage.Origin{
+				Name:  "files under " + *suiteDir,
+				Count: len(more),
+			})
 		}
-		srcs = append(srcs, more...)
 	}
 
 	var cols []coverage.Column
@@ -69,7 +105,7 @@ func main() {
 		}
 		cols = append(cols, col)
 	}
-	fmt.Print(coverage.Report(cols, *list))
+	fmt.Print(coverage.Report(cols, *list, read))
 }
 
 // corpusSources is every case the oracle records, which is the body of cases
@@ -82,16 +118,31 @@ func corpusSources() []coverage.Source {
 	return out
 }
 
-// suiteSources reads a directory of shell files, for the suite of our own
-// that a later change adds. A path is fine here and is not the rule the
-// fetched suites live under: these are our files, Apache-2.0 and readable.
+// given reports whether a flag was typed rather than left at its default.
+//
+// The difference decides what a missing suite directory means: named on the
+// command line it is a mistake worth stopping for, left at the default it is
+// a run from somewhere other than the module root.
+func given(name string) bool {
+	found := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == name {
+			found = true
+		}
+	})
+	return found
+}
+
+// suiteSources reads our own suite. A path is fine here and is not the rule
+// the fetched suites live under: these are our files, Apache-2.0 and
+// readable.
 func suiteSources(dir string) ([]coverage.Source, error) {
 	var out []coverage.Source
-	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if d.IsDir() || !strings.HasSuffix(path, ".tests") {
+		if d.IsDir() || !strings.HasSuffix(path, suite.OurExt) {
 			return nil
 		}
 		b, err := os.ReadFile(path)

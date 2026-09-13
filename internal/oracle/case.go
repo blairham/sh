@@ -7923,8 +7923,8 @@ echo "st=$?"`,
 	},
 	{
 		ID: "pattern/a-written-bar-is-an-ordinary-character", Category: "patterns",
-		Snippet: `setopt globsubst 2>/dev/null; v=abc; L='a|ab'; printf "[written=%s]" "${v#a|ab}"; printf "[value=%s]" "${v#$L}"; printf "[group=%s]" "${v#(a|ab)}"; echo`,
-		Why:     "where a bar came from is the whole of what decides it, and the braces are what let the question be asked: a `|` is a parse error in a condition and a grammar separator in a `case`, so a parameter expansion's operand is the one place a *written* bar reaches the matcher. zsh reads a top-level bar as an alternation of the whole pattern only when it arrived in a value — so the middle column trims under the option this line sets and the first does not, even though the two patterns are the same three characters. The third is the control that says the reading itself is still there: a written *group* splits in zsh and is two ordinary parentheses everywhere else. This implementation gave the written bar the live reading and answered `bc` to the first column (#2168)",
+		Snippet: `setopt globsubst 2>/dev/null; v=abc; L='a|ab'; printf "[written=%s]" "${v#a|ab}"; printf "[value=%s]" "${v#$L}"; echo`,
+		Why:     "where a bar came from is what decides it in zsh, and the braces are what let the question be asked at all: a `|` is a parse error in a condition and a grammar separator in a `case`, so a parameter expansion's operand is the one place a *written* bar reaches the matcher. The two columns hold the same three characters and part on provenance — zsh trims the value's bar under the option this line sets and leaves the written one alone. Four shells read neither as an alternation. ksh93 is the column that says provenance is zsh's rule rather than the rule: it answers `bc` to **both**, so its pattern language has a top-level bar outright, which this implementation gives no dialect and which is not what the zsh reading is. This gave the written bar zsh's live reading and answered `bc` to the first column there (#2168)",
 	},
 	{
 		ID: "pattern/a-live-bar-splits-the-whole-pattern", Category: "patterns",

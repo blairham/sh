@@ -6,6 +6,7 @@ package interp_test
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
@@ -122,4 +123,56 @@ func enableRun(t *testing.T, src string, setup func(*Runner)) string {
 		t.Fatal(err)
 	}
 	return buf.String()
+}
+
+// `-s` narrows the listing to the special builtins, and the reason it is
+// worth having is that the alternative is not a smaller answer but a wrong
+// one: this shell used to accept the letter and list all fifty-five of its
+// builtins where the one shell with this option lists sixteen.
+//
+// Measured against bash 5.3.15, 2026-09-13: `enable -s` is `.` `:` `break`
+// `continue` `eval` `exec` `exit` `export` `readonly` `return` `set` `shift`
+// `source` `times` `trap` `unset`, and the listing is byte-identical here.
+func TestEnableDashSListsTheSpecialBuiltins(t *testing.T) {
+	out := enableRun(t, "enable -s\n", nil)
+	var names []string
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		names = append(names, strings.TrimPrefix(line, "enable "))
+	}
+	for _, want := range []string{
+		".", ":", "break", "continue", "eval", "exec",
+		"exit", "export", "readonly", "return", "set", "shift", "trap", "unset",
+	} {
+		if !slices.Contains(names, want) {
+			t.Errorf("%q is special and is not in the listing %q", want, names)
+		}
+	}
+	for _, unwanted := range []string{"cd", "echo", "enable", "read", "type"} {
+		if slices.Contains(names, unwanted) {
+			t.Errorf("%q is not a special builtin and is in the listing %q", unwanted, names)
+		}
+	}
+}
+
+// `-n` and `-s` intersect rather than making a third listing. Measured on the
+// same shell: with two builtins switched off and only one of them special,
+// `enable -n -s` prints that one and nothing else.
+func TestEnableDashNDashSIsTheIntersection(t *testing.T) {
+	out := enableRun(t, "enable -n exit cd\nenable -n -s\n", nil)
+	if got, want := strings.TrimSpace(out), "enable -n exit"; got != want {
+		t.Errorf("listed %q, want %q", got, want)
+	}
+}
+
+// `source` is the other spelling of `.` and is special with it. POSIX does
+// not name it because POSIX has no `source`; the two shells that have it both
+// treat it as special everywhere the rule applies, and a table holding one
+// spelling and not the other would answer two ways about one builtin
+// depending on which name a script used.
+func TestSourceIsSpecialWithItsOtherSpelling(t *testing.T) {
+	for _, name := range []string{".", "source"} {
+		if !IsSpecialBuiltin(name) {
+			t.Errorf("%q is not marked special", name)
+		}
+	}
 }

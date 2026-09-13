@@ -8461,8 +8461,8 @@ echo "st=$?"`,
 	},
 	{
 		ID: "assoc/a-keyed-literal-appending-unkeyed-words", Category: "expansion",
-		Snippet: `typeset -A m=([x]=1); m+=(a b); typeset -p m; echo after`,
-		Why:     "the append spelling of the row above, and it is the one that says the demotion belongs to replacement rather than to the words: the same table and the same words are refused here in the shell that took them with `=`. The two rows together are what keep a fix for either from being written as a rule about unkeyed words alone",
+		Snippet: `typeset -A m=([x]=1); m+=(a b); printf "[%s][%s][%s]" "$?" "${m[x]}" "${m[a]}"; echo after`,
+		Why:     "the append spelling of the row above, and it is the one that says the demotion belongs to replacement rather than to the words: the same table and the same words are refused here in the shell that took them with `=`. The two rows together are what keep a fix for either from being written as a rule about unkeyed words alone. Read element by element rather than with a listing, because two keys are in the table afterwards and no shell promises which order it prints them in",
 	},
 	{
 		ID: "assoc/a-keyed-literal-of-keyed-elements", Category: "expansion",

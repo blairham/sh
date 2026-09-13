@@ -182,6 +182,23 @@ func TestTheFlipVerdictsAreOnTheAxesTheyAnswer(t *testing.T) {
 		"PromptAsksAgainAfterARefusedToken":       "zsh",
 		"PromptCommentsNeedTheOption":             "zsh",
 		"LoginProfileWhenNonInteractive":          "bash",
+		// The startup family (#2059). Three of these are an absence — the
+		// empty string means the shell has no such name — and the sweep's
+		// only other value for a string axis is a word it invented, so the
+		// flip is unobservable by construction. The other four are the
+		// administrator's copies, which live where a corpus row must not
+		// write. The names a shell does hold are pinned by the `startup/…`
+		// rows Case.Files made writable.
+		"StartupDirectoryVariable":          "bash",
+		"UnconditionalStartupFile":          "bash",
+		"LateLoginStartupFile":              "bash",
+		"NonInteractiveStartupVariable":     "zsh",
+		"StartupFileOptions.SuppressAll":    "bash",
+		"StartupFileOptions.SuppressSystem": "bash",
+		"SystemStartupFiles.Unconditional":  "bash",
+		"SystemStartupFiles.Login":          "bash",
+		"SystemStartupFiles.Interactive":    "bash",
+		"SystemStartupFiles.LateLogin":      "bash",
 	} {
 		if verdict(notes[field], dialect) == "" {
 			t.Errorf("%s: nothing says why no corpus row objects in %s", field, dialect)

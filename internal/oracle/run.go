@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -16,6 +17,12 @@ import (
 	"syscall"
 	"time"
 )
+
+// scriptName is the file the script route writes the snippet to. One
+// constant, because three places name it: the writer, the normalizer that
+// turns its path into `<script>`, and the check that stops a fixture file
+// from taking the same name.
+const scriptName = "case.sh"
 
 // RunTimeout bounds a single snippet. A shell that waits on stdin would
 // otherwise hang the whole run, so stdin is closed unless the case supplies
@@ -169,6 +176,10 @@ func Exec(ctx context.Context, sh Found, c Case) Result {
 	// leaked temp dir rather than a wrong measurement; nothing here can act
 	// on it usefully.
 	defer func() { _ = os.RemoveAll(dir) }()
+
+	if err := writeFiles(dir, c); err != nil {
+		return harnessError(err)
+	}
 
 	cmd := command(ctx, sh, c, dir)
 	cmd.Dir = dir
@@ -341,6 +352,11 @@ func (c Case) validate() error {
 		return errors.New("Case.StdinClosed and Case.Stdin are exclusive: " +
 			"a closed standard input is not an empty one")
 	}
+	for _, f := range c.Files {
+		if err := f.check(); err != nil {
+			return err
+		}
+	}
 	if len(c.Args) == 0 {
 		return nil
 	}
@@ -364,13 +380,58 @@ func (c Case) validate() error {
 // command builds the invocation: the shell's own flags first — which is where
 // the binary under test is told which dialect to be — and then either the
 // case's own argv or the harness's default `-c` and snippet.
+// check refuses a fixture name that could reach outside the scratch
+// directory, or that collides with the file the script route owns.
+//
+// Refused rather than sanitized, because a corpus is source: a name that
+// means something other than what it says is a case that measures something
+// other than what it reads as. The scratch directory is made by
+// os.MkdirTemp, so nothing here is defending a real home — what it defends
+// is the machine running the panel, which a `..` in a committed row would
+// otherwise write to seven times per regeneration.
+func (f File) check() error {
+	switch {
+	case f.Name == "":
+		return errors.New("Case.Files has an entry with no name")
+	case filepath.IsAbs(f.Name):
+		return fmt.Errorf("Case.Files %q is absolute; names are relative to the scratch directory", f.Name)
+	case f.Name == scriptName:
+		return fmt.Errorf("Case.Files %q is the name the script route writes; pick another", f.Name)
+	}
+	for _, part := range strings.Split(filepath.ToSlash(f.Name), "/") {
+		if part == ".." {
+			return fmt.Errorf("Case.Files %q climbs out of the scratch directory", f.Name)
+		}
+	}
+	return nil
+}
+
+// writeFiles puts a case's fixture files in the scratch directory, which is
+// the shell's $HOME and its working directory.
+//
+// Before the script file rather than after, and before the shell either way:
+// a startup file has to be there when the shell looks, which is the first
+// thing it does.
+func writeFiles(dir string, c Case) error {
+	for _, f := range c.Files {
+		at := filepath.Join(dir, filepath.FromSlash(f.Name))
+		if err := os.MkdirAll(filepath.Dir(at), 0o700); err != nil {
+			return err
+		}
+		if err := os.WriteFile(at, []byte(f.Contents), 0o600); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func command(ctx context.Context, sh Found, c Case, dir string) *exec.Cmd {
 	// Written to a file and run as an argument, because a few behaviors
 	// differ between a script and -c: a readonly reassignment is fatal in one
 	// and not the other, which is how the contaminated-probe trap in
 	// oracle.md was found.
 	script := func() string {
-		path := filepath.Join(dir, "case.sh")
+		path := filepath.Join(dir, scriptName)
 		_ = os.WriteFile(path, []byte(c.Snippet+"\n"), 0o600)
 		return path
 	}
@@ -511,7 +572,7 @@ func closedDescriptor() *os.File {
 // record where it was generated and drift for everyone else.
 func normalize(s string, sh Found, dir string) string {
 	rep := strings.NewReplacer(
-		dir+"/case.sh", "<script>",
+		dir+"/"+scriptName, "<script>",
 		dir, "<tmp>",
 		sh.Path, "<shell>",
 	)

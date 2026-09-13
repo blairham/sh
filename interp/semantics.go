@@ -7845,6 +7845,16 @@ type Semantics struct {
 	// with the standard's own posix option, and nothing when invoked as `sh` —
 	// the two spellings of the same mode. So the absence in the `sh` column is
 	// the mode again rather than a second fact about a second name.
+	//
+	// unpinned zsh: reached, and the flip is unobservable by construction. The empty
+	// string means this shell has no such name, and the only other value the
+	// sweep has for a string axis is a word it invented — `axis-sweep-probe`. A
+	// row could only object by using that exact word, which would be a corpus
+	// case written against the instrument's internal probe rather than against a
+	// shell. That is the flip in the other direction being the one worth having,
+	// and where a shell does hold a name, it is a row: see the
+	// `startup/…` family, which pins every non-empty name in this group
+	// (#2059).
 	NonInteractiveStartupVariable string
 
 	// StartupDirectoryVariable names a variable whose value replaces the home
@@ -7862,6 +7872,16 @@ type Semantics struct {
 	// A variable name rather than a path, for the reason
 	// NonInteractiveStartupVariable is one: what the shell calls the thing is
 	// the dialect's, and the value is the person's.
+	//
+	// unpinned bash: reached, and the flip is unobservable by construction.
+	// The empty string means this shell has no such name, and the only other value the
+	// sweep has for a string axis is a word it invented — `axis-sweep-probe`. A
+	// row could only object by using that exact word, which would be a corpus
+	// case written against the instrument's internal probe rather than against a
+	// shell. That is the flip in the other direction being the one worth having,
+	// and where a shell does hold a name, it is a row: see the
+	// `startup/…` family, which pins every non-empty name in this group
+	// (#2059).
 	StartupDirectoryVariable string
 
 	// UnconditionalStartupFile names a file read on *every* invocation —
@@ -7874,6 +7894,16 @@ type Semantics struct {
 	//
 	// First of the files, before the profile: measured, `zsh -l -i` reads
 	// `.zshenv`, `.zprofile`, `.zshrc` and `.zlogin`, in that order.
+	//
+	// unpinned bash: reached, and the flip is unobservable by construction.
+	// The empty string means this shell has no such name, and the only other value the
+	// sweep has for a string axis is a word it invented — `axis-sweep-probe`. A
+	// row could only object by using that exact word, which would be a corpus
+	// case written against the instrument's internal probe rather than against a
+	// shell. That is the flip in the other direction being the one worth having,
+	// and where a shell does hold a name, it is a row: see the
+	// `startup/…` family, which pins every non-empty name in this group
+	// (#2059).
 	UnconditionalStartupFile string
 
 	// LoginStartupFiles names the profile a login shell reads, most preferred
@@ -7910,6 +7940,16 @@ type Semantics struct {
 	// then `.zshrc`, then `.zlogin`, so a person's `.zlogin` sees what their
 	// `.zshrc` did. It is read for a non-interactive login shell too, in the
 	// dialects that read a profile there at all.
+	//
+	// unpinned bash: reached, and the flip is unobservable by construction.
+	// The empty string means this shell has no such name, and the only other value the
+	// sweep has for a string axis is a word it invented — `axis-sweep-probe`. A
+	// row could only object by using that exact word, which would be a corpus
+	// case written against the instrument's internal probe rather than against a
+	// shell. That is the flip in the other direction being the one worth having,
+	// and where a shell does hold a name, it is a row: see the
+	// `startup/…` family, which pins every non-empty name in this group
+	// (#2059).
 	LateLoginStartupFile string
 
 	// InteractiveStartupFile names the file read when the shell is
@@ -10179,6 +10219,20 @@ type SystemStartupFiles struct {
 	// The "cannot be overridden" half is deliberately *not* modeled — see
 	// StartupFileOptions.SuppressSystem — because SuppressAll suppressing
 	// everything is measured and this exception is not.
+	//
+	// unpinned: reached, and no corpus row can be written for it. These files
+	// live in a directory the machine's administrator owns, and the harness gives
+	// each case a scratch directory it made — a row that created `/etc/profile`
+	// to observe it being read would be editing the machine that is measuring the
+	// panel, once per shell per regeneration. Case.Files refuses any name that
+	// climbs out of the scratch directory for exactly that reason.
+	//
+	// The home-directory half of the same question *is* pinned, by the
+	// `startup/…` rows: which profile a login shell reads, in what order, and
+	// which option skips it. What stays here is the administrator's copy alone,
+	// and driver/rcfiles_test.go is where it is asserted instead — a test can
+	// point the whole search at a directory it made, which a corpus row invoking
+	// a real shell cannot (#2059).
 	Unconditional string
 
 	// Login is the system-wide profile, read before the first of
@@ -10190,6 +10244,20 @@ type SystemStartupFiles struct {
 	// nor `~/.bash_profile`, which is LoginProfileWhenNonInteractive
 	// answering for both files at once. `--noprofile` suppresses both, also
 	// measured.
+	//
+	// unpinned: reached, and no corpus row can be written for it. These files
+	// live in a directory the machine's administrator owns, and the harness gives
+	// each case a scratch directory it made — a row that created `/etc/profile`
+	// to observe it being read would be editing the machine that is measuring the
+	// panel, once per shell per regeneration. Case.Files refuses any name that
+	// climbs out of the scratch directory for exactly that reason.
+	//
+	// The home-directory half of the same question *is* pinned, by the
+	// `startup/…` rows: which profile a login shell reads, in what order, and
+	// which option skips it. What stays here is the administrator's copy alone,
+	// and driver/rcfiles_test.go is where it is asserted instead — a test can
+	// point the whole search at a directory it made, which a corpus row invoking
+	// a real shell cannot (#2059).
 	Login string
 
 	// Interactive is the system-wide counterpart of InteractiveStartupFile,
@@ -10203,6 +10271,20 @@ type SystemStartupFiles struct {
 	// answers `off` in bash 3.2 — so bash reached `/etc/bashrc` only
 	// through `/etc/profile`, which sources it by hand for a login shell.
 	// A shell that read it here would read it twice.
+	//
+	// unpinned: reached, and no corpus row can be written for it. These files
+	// live in a directory the machine's administrator owns, and the harness gives
+	// each case a scratch directory it made — a row that created `/etc/profile`
+	// to observe it being read would be editing the machine that is measuring the
+	// panel, once per shell per regeneration. Case.Files refuses any name that
+	// climbs out of the scratch directory for exactly that reason.
+	//
+	// The home-directory half of the same question *is* pinned, by the
+	// `startup/…` rows: which profile a login shell reads, in what order, and
+	// which option skips it. What stays here is the administrator's copy alone,
+	// and driver/rcfiles_test.go is where it is asserted instead — a test can
+	// point the whole search at a directory it made, which a corpus row invoking
+	// a real shell cannot (#2059).
 	Interactive string
 
 	// LateLogin is the system-wide counterpart of LateLoginStartupFile.
@@ -10212,6 +10294,20 @@ type SystemStartupFiles struct {
 	// on this machine. The slot itself is measured — the two system files
 	// that do exist each come first in their own slot — so what is taken on
 	// the manual's word is the name and not the position.
+	//
+	// unpinned: reached, and no corpus row can be written for it. These files
+	// live in a directory the machine's administrator owns, and the harness gives
+	// each case a scratch directory it made — a row that created `/etc/profile`
+	// to observe it being read would be editing the machine that is measuring the
+	// panel, once per shell per regeneration. Case.Files refuses any name that
+	// climbs out of the scratch directory for exactly that reason.
+	//
+	// The home-directory half of the same question *is* pinned, by the
+	// `startup/…` rows: which profile a login shell reads, in what order, and
+	// which option skips it. What stays here is the administrator's copy alone,
+	// and driver/rcfiles_test.go is where it is asserted instead — a test can
+	// point the whole search at a directory it made, which a corpus row invoking
+	// a real shell cannot (#2059).
 	LateLogin string
 }
 
@@ -10243,6 +10339,16 @@ type StartupFileOptions struct {
 	// letter this meaning instead — measured, `zsh -f -c 'echo /etc/pas*'`
 	// still expands the pattern — which is why the letter is a per-dialect
 	// spelling here rather than a set option every shell shares.
+	//
+	// unpinned bash: reached, and the flip is unobservable by construction. The
+	// empty string means this shell has no such option, and the only other value
+	// the sweep has for a string axis is a word it invented —
+	// `axis-sweep-probe`. A row could only object by passing that exact word,
+	// which would be a corpus case written against the instrument's internal
+	// probe rather than against a shell. The options this shell *does* have are
+	// pinned by rows: `startup/an-option-skips-the-profile`,
+	// `startup/an-option-skips-the-interactive-file` and
+	// `startup/an-option-names-the-interactive-file` (#2059).
 	SuppressAll string
 
 	// Login names the options that make this a login shell whatever argv[0]
@@ -10277,6 +10383,16 @@ type StartupFileOptions struct {
 	// bash's `--noprofile` is *not* this. Measured, it suppresses
 	// `/etc/profile` and `~/.bash_profile` together, so it is SuppressLogin
 	// answering for both files in that slot rather than a second option.
+	//
+	// unpinned bash: reached, and the flip is unobservable by construction. The
+	// empty string means this shell has no such option, and the only other value
+	// the sweep has for a string axis is a word it invented —
+	// `axis-sweep-probe`. A row could only object by passing that exact word,
+	// which would be a corpus case written against the instrument's internal
+	// probe rather than against a shell. The options this shell *does* have are
+	// pinned by rows: `startup/an-option-skips-the-profile`,
+	// `startup/an-option-skips-the-interactive-file` and
+	// `startup/an-option-names-the-interactive-file` (#2059).
 	SuppressSystem string
 
 	// SuppressLogin names the options that suppress the login profile and

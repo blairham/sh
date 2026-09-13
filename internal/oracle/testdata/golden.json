@@ -174036,6 +174036,57 @@
         "TimedOut": false
       }
     },
+    "startup/a-login-shell-reads-a-profile": {
+      "ash": {
+        "Stdout": ".profile~main",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": ".bash_profile~main",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": ".profile~main",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": ".bash_profile~main",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": ".profile~main",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": ".profile~main",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": ".zshenv~.zprofile~.zlogin~main",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "startup/a-return-in-a-startup-file-stops-it": {
       "ash": {
         "Stdout": "BEFORE~MAIN\u003c3\u003e",
@@ -174234,6 +174285,312 @@
       },
       "zsh": {
         "Stdout": "BEFORE~MAIN\u003c3\u003e",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "startup/an-option-names-the-interactive-file": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: bad option '--rcfile'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "named-rc-file~main",
+        "Stderr": "\u003cshell\u003e: cannot set terminal process group (N): Inappropriate ioctl for device~\u003cshell\u003e: no job control in this shell",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "main",
+        "Stderr": "\u003cshell\u003e: cannot set terminal process group (N): Inappropriate ioctl for device~\u003cshell\u003e: no job control in this shell",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "named-rc-file~main",
+        "Stderr": "\u003cshell\u003e: no job control in this shell",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 0: Illegal option --",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: rcfile: bad option(s)~Usage: \u003cshell\u003e [ options ] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: no such option: rcfile",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "startup/an-option-skips-the-interactive-file": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: bad option '--norc'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "main",
+        "Stderr": "\u003cshell\u003e: cannot set terminal process group (N): Inappropriate ioctl for device~\u003cshell\u003e: no job control in this shell",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "main",
+        "Stderr": "\u003cshell\u003e: cannot set terminal process group (N): Inappropriate ioctl for device~\u003cshell\u003e: no job control in this shell",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "main",
+        "Stderr": "\u003cshell\u003e: no job control in this shell",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 0: Illegal option --",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "main",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: no such option: norc",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "startup/an-option-skips-the-profile": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: bad option '--noprofile'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "main",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "main",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "main",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 0: Illegal option --",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: noprofile: bad option(s)~Usage: \u003cshell\u003e [ options ] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: no such option: noprofile",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "startup/the-interactive-file-is-read-at-a-prompt-by-name": {
+      "ash": {
+        "Stdout": "main",
+        "Stderr": "\u003cshell\u003e: can't access tty; job control turned off",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": ".bashrc~main",
+        "Stderr": "\u003cshell\u003e: cannot set terminal process group (N): Inappropriate ioctl for device~\u003cshell\u003e: no job control in this shell",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "main",
+        "Stderr": "\u003cshell\u003e: cannot set terminal process group (N): Inappropriate ioctl for device~\u003cshell\u003e: no job control in this shell",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": ".bashrc~main",
+        "Stderr": "\u003cshell\u003e: no job control in this shell",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "main",
+        "Stderr": "\u003cshell\u003e: 0: can't access tty; job control turned off",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "main",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": ".zshrc~main",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "startup/the-profile-falls-back-to-the-last-name": {
+      "ash": {
+        "Stdout": ".profile~main",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": ".profile~main",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": ".profile~main",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": ".profile~main",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": ".profile~main",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": ".profile~main",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "main",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "startup/the-profile-falls-back-to-the-next-name": {
+      "ash": {
+        "Stdout": ".profile~main",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": ".bash_login~main",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": ".profile~main",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": ".bash_login~main",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": ".profile~main",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": ".profile~main",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": ".zprofile~main",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

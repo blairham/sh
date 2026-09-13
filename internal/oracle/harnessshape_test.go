@@ -188,9 +188,15 @@ func TestNoTwoCasesAskTheSameQuestion(t *testing.T) {
 	seen := map[string]string{}
 	for _, c := range Corpus {
 		cmd := command(t.Context(), sh, c, dir)
-		key := fmt.Sprintf("%q|%q|%q|%v|%q|%q", cmd.Args[1:], c.Snippet,
+		// The fixture is part of the question, and this is the second time
+		// that has had to be said: a key blind to it called the three
+		// `startup/…` chain rows one measurement, when what they differ in
+		// is precisely which profile is on disk — the whole of what a
+		// preference order can be observed with. Same shape as StdinClosed,
+		// which this test also failed the moment it existed (#1038, #2059).
+		key := fmt.Sprintf("%q|%q|%q|%v|%q|%q|%v", cmd.Args[1:], c.Snippet,
 			strings.ReplaceAll(c.Stdin, ArgSnippet, c.Snippet), c.StdinClosed,
-			c.Argv0, c.Env)
+			c.Argv0, c.Env, c.Files)
 		first, dup := seen[key]
 		switch {
 		case !dup:

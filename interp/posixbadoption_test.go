@@ -10,8 +10,9 @@ import (
 	. "github.com/blairham/sh/interp"
 )
 
-// POSIX mode swaps five axes, and four of them it writes the standard's own
-// answer into. This one it takes from the vector, because the shells disagree
+// POSIX mode swaps several axes on the vector, and all but this one it writes
+// the standard's own answer into. This one it takes from the vector, because
+// the shells disagree
 // about what their own POSIX mode makes of it — see
 // Semantics.BadOptionToSpecialBuiltinFatalInPosixMode.
 //
@@ -53,10 +54,10 @@ func TestPosixModeTakesTheBadOptionAxisFromTheVector(t *testing.T) {
 	}
 }
 
-// The four other axes the mode moves are not touched by the value this one
-// carries, which is the property that makes it a per-axis answer rather than a
-// per-shell one: a vector may decline the bad-option move and still take the
-// redirection move, and one shell in the panel does exactly that.
+// The other axes the mode moves are not touched by the value this one carries,
+// which is the property that makes it a per-axis answer rather than a per-shell
+// one: a vector may decline the bad-option move and still take the redirection
+// move, and one shell in the panel does exactly that.
 func TestPosixModeStillMovesTheOtherAxesWhenThisOneDeclines(t *testing.T) {
 	s := permissive()
 	s.RedirectErrorOnSpecialBuiltinFatal = No

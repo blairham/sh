@@ -2236,6 +2236,13 @@ type Semantics struct {
 	// Read rather than `ask`ed, as DefaultOptionLetters is: reporting an
 	// option is not the place to refuse a script over a disagreement, and a
 	// dialect that answers nothing gets the majority's no.
+	//
+	// unpinned: never reached from the corpus. The mode is chosen when a line
+	// editor starts and no row has one — `-i -c` runs a command string without
+	// ever reading a line — so the axis is not consulted at all, measured
+	// 2026-09-13 in bash and zsh. interp/editingmodedefault_test.go pins both
+	// answers and the third state (TestNoEditingModeIsSelectedUntilOneIs,
+	// TestTheModeABindingBuiltinReadsFollowsIt) (#2058).
 	InteractiveSelectsEmacs Answer
 
 	// SetFTurnsOffGlobbing makes `set -f` the short spelling of `set -o
@@ -2384,6 +2391,15 @@ type Semantics struct {
 	// refusing a whole `$-` expansion over an unanswered field would break
 	// `case $- in *e*)` in every script running under a preset that has not
 	// chosen.
+	//
+	// unpinned: reached, and no row can tell the two answers apart. `$-` is
+	// readable from a case, and `-i -c` is spellable, but what an interactive
+	// shell *starts* with is only the starting point — the letters a row
+	// observes are the live option state by the time it looks. Measured
+	// 2026-09-13 in bash and zsh. interp/specialvars_test.go pins the mechanism
+	// with made-up letters (TestDollarDashTakesTheInteractiveLettersInsteadOfTheDefaultOnes,
+	// TestTheInteractiveLettersAreStillOnlyTheStartingPoint) and each dialect's
+	// real value is asserted in its own package (#2058).
 	InteractiveOptionLetters string
 
 	// CommandStringShowsCInDollarDash puts `c` in `$-` when the program came
@@ -2777,6 +2793,20 @@ type Semantics struct {
 	// zsh; dash says nothing at all.
 	//
 	// Only ever at a prompt: no shell announces one to a script.
+	//
+	// unpinned: never reached from the corpus, and it cannot be. Every case
+	// runs under `-c` or from a script with no controlling terminal, `TERM=dumb`
+	// and a scratch `$HOME`, so no row is ever the interactive shell that has
+	// somebody to tell. Measured 2026-09-13 in bash and in zsh: moving the axis
+	// to the unanswered constant — which refuses wherever it is consulted —
+	// changes no row at all, which is the sweep's own way of saying the corpus
+	// never asks. It is pinned instead by driver/interactivejobs_test.go, which
+	// drives a real pseudo-terminal and asserts all three answers
+	// (TestAnInteractiveScriptAnnouncesItsJobs,
+	// TestAnInteractiveScriptMayAnnounceOnlyTheEnd,
+	// TestAnInteractiveScriptMayAnnounceNothing), and below the front end by
+	// interp/jobnotice_test.go (TestABackgroundedJobIsAnnounced). What each
+	// dialect answers is pinned in its own vector table (#2058).
 	AnnouncesBackgroundJob Answer
 
 	// AnnouncesBackgroundJobWithoutTheMonitor keeps that announcement when
@@ -2802,6 +2832,13 @@ type Semantics struct {
 	// FinishedJobNotices simply stays quiet. dash's late report of a finished
 	// job with an empty command is its own oddity, measured and not
 	// reproduced (#1738).
+	//
+	// unpinned: never reached from the corpus. The monitor is off in every row
+	// and there is nobody to tell either way, so no case can separate the two
+	// answers — measured 2026-09-13 in bash and zsh alike.
+	// interp/monitoroff_test.go builds exactly the shape the corpus cannot, a
+	// shell that announces with the monitor deliberately off, and moves the axis
+	// both ways (TestTheStartNoticeUnderAMonitorThatIsOff) (#2058).
 	AnnouncesBackgroundJobWithoutTheMonitor Answer
 
 	// NextJobNumberRefillsAHole puts the next job in the lowest slot nobody
@@ -6011,11 +6048,26 @@ type Semantics struct {
 	// than as 80. zsh says yes — with no terminal to ask it puts forty items
 	// on one line — and bash says no. It does not arise for a menu that is
 	// always vertical, which is why ksh93 leaves it unanswered.
+	//
+	// unpinned: reached, and the corpus cannot discriminate. It decides how a
+	// `select` menu is laid out when `COLUMNS` is unset, and the layout is only
+	// visible where the menu is drawn — which needs a terminal on standard
+	// error, since neither shell draws the menu without one. Measured
+	// 2026-09-13 in bash and zsh. interp/selectclause_test.go pins both answers
+	// (TestSelectAssumesUnboundedWidthIsAnAxis) and each dialect's value is in
+	// its own vector table (#2058).
 	SelectAssumesUnboundedWidth Answer
 	// SelectEofEndsPromptLine writes a newline to standard error when the
 	// input runs out, closing the line the prompt left open. zsh alone does;
 	// bash closes the line on standard *output* instead, which is a different
 	// question and the field below.
+	//
+	// unpinned: reached, and the corpus cannot discriminate — the newline it is
+	// about is written to the terminal the prompt was drawn on, and a case has
+	// none. Measured 2026-09-13 in bash and zsh. interp/selectclause_test.go and
+	// interp/terminalinput_test.go pin it against a real character device
+	// (TestAPromptIsStillPrintedForARealTerminal), and each dialect's value is
+	// in its own vector table (#2058).
 	SelectEofEndsPromptLine Answer
 	// SelectEofPrintsNewline writes a newline to standard *output* when the
 	// input runs out — the one thing this loop prints that does not go to
@@ -6106,6 +6158,14 @@ type Semantics struct {
 	// The cost of answering yes where the shell answers no is a command
 	// disappearing: the next line typed is read as part of the construct
 	// already refused, so `echo three` above never runs (#1893).
+	//
+	// unpinned zsh: reached, and the corpus cannot discriminate: it is about
+	// what the *prompt* does after a parse failure, and no row draws a second
+	// prompt to be asked again at. Measured 2026-09-13; the bash pair is pinned.
+	// driver/promptrefuse_test.go carries it to the front end
+	// (TestTheFrontEndCarriesWhetherAPromptAsksAgain), repl/repl.go's own tests
+	// drive the retry, and dialect/zsh/promptrefuse_test.go pins this shell's
+	// answer (TestAPromptKeepsAskingAfterARefusedToken) (#2058).
 	PromptAsksAgainAfterARefusedToken bool
 
 	// PromptCommentsNeedTheOption names the option a `#` typed at this
@@ -6145,6 +6205,15 @@ type Semantics struct {
 	// the option and gets the honest answer still tokenizes the line with
 	// the shell's own splitter, and the two then disagree about where the
 	// words are (#2537).
+	//
+	// unpinned zsh: reached, and the corpus cannot discriminate. A `#` is a
+	// comment in every row already, because the question is what an *interactive
+	// line* does with one and no row is typed at a prompt. Measured 2026-09-13.
+	// repl/promptcomments_test.go drives a session and pins both answers
+	// (TestAHashAtThePromptFollowsTheNamedOption,
+	// TestTheCommentOptionIsReReadForEveryLine), and
+	// driver/promptrefuse_test.go pins that the name reaches the prompt
+	// (TestTheFrontEndCarriesWhichOptionAHashWaitsOn) (#2058).
 	PromptCommentsNeedTheOption string
 
 	// CompoundPipelineStatusRecord is what a compound command does to the
@@ -7390,6 +7459,12 @@ type Semantics struct {
 	// An axis rather than a bash-shaped default with a zsh exception,
 	// because the two answers are a conflict and not a subset: there is no
 	// ordering of the shells in which one derives the other's silence.
+	//
+	// unpinned: never reached from the corpus. `autocd` is an interactive
+	// option, no row turns it on, and with it off there is no substitution to
+	// announce — measured 2026-09-13 in bash and zsh. interp/autocd_test.go
+	// turns the option on and asserts both answers
+	// (TestABareDirectoryNameMayBeReadAsACd) (#2058).
 	AutoCdAnnouncesTheSubstitution Answer
 
 	// FcEmptyHistoryIsAnError has `fc` report the event it cannot find —
@@ -7729,6 +7804,16 @@ type Semantics struct {
 	// makes bash read its profile with a script to run, so the option
 	// overrides this rather than setting the same bit. See
 	// StartupFileOptions.Login.
+	//
+	// unpinned: reached, and no row can be a login shell. The harness invokes
+	// every case under the shell's own name and puts no profile in the scratch
+	// `$HOME`, so login-ness inferred from argv[0] never happens and there is no
+	// file to read if it did. Measured 2026-09-13 in bash and zsh.
+	// driver/loginprofile_test.go and driver/rcfiles_test.go invoke `-testsh`
+	// with a home full of marker files and assert which are read
+	// (TestALoginShellReadsTheProfileWithAScriptToRun,
+	// TestTheLoginProfileIsAChainAndOneLinkRuns); each dialect's value is
+	// asserted in its own package (#2058, #2059).
 	LoginProfileWhenNonInteractive bool
 
 	// NonInteractiveStartupVariable names a variable whose value is expanded
@@ -7860,6 +7945,14 @@ type Semantics struct {
 	// interactive file is `$ENV` reads it in both cases — measured, `-sh -i`
 	// reads `.profile` and then `$ENV` in dash, ksh93 and bash-as-`sh` alike —
 	// so there is nothing here to answer.
+	//
+	// unpinned: never reached from the corpus. It is asked only of an
+	// interactive *login* shell that has an interactive file to read, and no row
+	// is one — the harness passes neither `--login` nor an argv[0] beginning
+	// with a dash, and it puts no dotfile in the scratch `$HOME` for a shell to
+	// find. Measured 2026-09-13 in bash and zsh. driver/rcfiles_test.go builds
+	// both shapes with a home directory full of marker files and asserts which
+	// names are read (TestTheInteractiveStartupFileIsRead) (#2058, #2059).
 	InteractiveStartupFileWhenLogin Answer
 
 	// SystemStartupFiles names the files this shell reads from a directory
@@ -8374,6 +8467,13 @@ type Semantics struct {
 	// puts `m` in `$-` and announces its jobs while its own `set -o` still
 	// lists `monitor off` — it disagrees with itself, and what is recorded
 	// here is the state the other two readers report.
+	//
+	// unpinned zsh: never reached from the corpus, which gives no case a
+	// controlling terminal — so "would a terminal have turned the monitor on"
+	// has the same answer in every row. Measured 2026-09-13; the bash pair is
+	// pinned. driver/interactivemonitor_test.go supplies a real terminal and
+	// pins both answers (TestAnInteractiveShellWithATerminalRunsTheMonitor,
+	// TestWithNoTerminalTheMonitorIsTheDialectsAnswer) (#2058).
 	InteractiveMonitorNeedsATerminal Answer
 
 	// InteractiveScriptAnnouncesJobs gives an interactive shell running a
@@ -8430,6 +8530,13 @@ type Semantics struct {
 	// that route bash, ksh93 and zsh announce and dash does not, which is a
 	// different split and therefore a different axis; `docs/spec/invocation.md`
 	// has the grid. See InteractiveCommandStringAnnouncesJobs.
+	//
+	// unpinned: never reached from the corpus — no case is ever an interactive
+	// shell running a *named script*, which is the one route this axis is about.
+	// Measured 2026-09-13 in bash and zsh. driver/interactivejobs_test.go pins
+	// it through a pseudo-terminal on that exact route
+	// (TestAnInteractiveScriptAnnouncesItsJobs and
+	// TestAnInteractiveScriptMayAnnounceNothing) (#2058).
 	InteractiveScriptAnnouncesJobs Answer
 
 	// InteractiveCommandStringAnnouncesJobs is the same question on the other
@@ -8467,6 +8574,13 @@ type Semantics struct {
 	// The preset says no, on the same two grounds: XCU has nothing to say
 	// about a notice on this route, and a core made of what the panel agrees
 	// on is the quiet one.
+	//
+	// unpinned: never reached from the corpus. A row can spell `-i -c`, but the
+	// notice needs a job *and* a terminal, and the harness gives no case either
+	// — measured 2026-09-13 in bash and zsh.
+	// driver/interactivejobs_test.go supplies both and is also what keeps this
+	// axis separate from the script one above
+	// (TestACommandStringReadsItsOwnAxisAndNotTheScriptOne) (#2058).
 	InteractiveCommandStringAnnouncesJobs Answer
 
 	// FinishedJobNoticeNeedsAPrompt holds back the `Done` row until there is a
@@ -8495,6 +8609,14 @@ type Semantics struct {
 	// The preset says yes, which is the answer that claims less: a shell that
 	// has not been asked for a job report does not write one where nobody is
 	// waiting at a prompt to read it.
+	//
+	// unpinned zsh: never reached from the corpus, which draws no prompt in any
+	// row — so there is no moment for the notice to be waiting for. Measured
+	// 2026-09-13. driver/interactivejobs_test.go pins it on both routes through
+	// a pseudo-terminal (TestAFinishedJobNoticeMayWaitForAPromptThatNeverComes,
+	// TestAScriptRouteObeysTheSameFinishedNoticeAxis), and
+	// repl/jobnotice_test.go pins the prompt it waits for
+	// (TestANoticeWaitsForAPromptThatIsNotAContinuation) (#2058).
 	FinishedJobNoticeNeedsAPrompt Answer
 
 	// PunctuatedFunctionNameIsRefused stops the script when a function

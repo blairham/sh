@@ -160,6 +160,28 @@ func TestTheFlipVerdictsAreOnTheAxesTheyAnswer(t *testing.T) {
 		"PrintfEmptyIsNotANumber":                "zsh",
 		"SetBTurnsOffBraceExpansion":             "zsh",
 		"ValuelessDeclarationHidesTheOuterValue": "zsh",
+		// The terminal family (#2058). Every one of these is a fact about a
+		// shell somebody is *watching* — a job announced, an editing mode
+		// chosen, a menu laid out, a prompt asked again, a profile read —
+		// and the corpus runs every case under `-c` or a script with no
+		// controlling terminal, `TERM=dumb` and an empty scratch `$HOME`.
+		// Re-measured 2026-09-13; the pairs that had been pinned since the
+		// first run are deliberately not listed here.
+		"AnnouncesBackgroundJob":                  "bash",
+		"AnnouncesBackgroundJobWithoutTheMonitor": "zsh",
+		"AutoCdAnnouncesTheSubstitution":          "zsh",
+		"InteractiveScriptAnnouncesJobs":          "bash",
+		"InteractiveCommandStringAnnouncesJobs":   "zsh",
+		"InteractiveSelectsEmacs":                 "bash",
+		"InteractiveMonitorNeedsATerminal":        "zsh",
+		"FinishedJobNoticeNeedsAPrompt":           "zsh",
+		"InteractiveStartupFileWhenLogin":         "bash",
+		"InteractiveOptionLetters":                "zsh",
+		"SelectAssumesUnboundedWidth":             "bash",
+		"SelectEofEndsPromptLine":                 "zsh",
+		"PromptAsksAgainAfterARefusedToken":       "zsh",
+		"PromptCommentsNeedTheOption":             "zsh",
+		"LoginProfileWhenNonInteractive":          "bash",
 	} {
 		if verdict(notes[field], dialect) == "" {
 			t.Errorf("%s: nothing says why no corpus row objects in %s", field, dialect)

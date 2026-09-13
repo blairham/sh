@@ -994,6 +994,50 @@ type Dialect struct {
 	// admits the words a pattern can hold and nothing else.
 	CasePatternListSpansBlanks bool
 
+	// CasePatternRunsOutAsANewline reads the end of the input at a `case`
+	// arm's pattern as the **newline** that would have ended the line, rather
+	// than as the input running out inside an unfinished `case`.
+	//
+	// It decides only the wording of a failure, and the failure is the same
+	// one either way: a pattern was begun and its `)` never arrived. What
+	// differs is whether the shell blames the construct that never closed or
+	// the token that stood where the `)` belonged.
+	//
+	// bash alone, and the way to see that it is bash's own reading rather
+	// than an accident of where the text stopped is to write the same script
+	// twice, once with a trailing newline and once without. Measured
+	// 2026-09-13, `env -i PATH=/usr/bin:/bin` with a scratch HOME, over `-c`,
+	// on `case x in x) :;; zzz` — the pattern of a second arm, begun and
+	// unfinished:
+	//
+	//	shell        without a trailing newline              with one
+	//	bash 5.3     `newline' unexpected, line 1            the same, line 1
+	//	bash 3.2     the same                                the same
+	//	bash as sh   the same                                the same
+	//	dash         end of file unexpected (expecting ")")  newline unexpected …
+	//	ash          unexpected end of file (expecting ")")  unexpected newline …
+	//	ksh93        `case' unmatched                        `newline' unexpected
+	//	zsh          parse error near `zzz'                  parse error near `\n'
+	//
+	// Five of the six columns answer differently in the two spellings, which
+	// is what says they read the end of the input as the end of the input.
+	// bash gives one answer to both, echoes the same source line for both,
+	// and numbers both at the line the pattern is on rather than at the line
+	// after — so to bash the run-out *is* the newline.
+	//
+	// This shell already agrees with bash where the newline is really there:
+	// the token stands, the pattern position refuses it, and the bytes match.
+	// So the flag is not a second wording but the same one reached from the
+	// other spelling, which is why it is a token substitution rather than a
+	// message.
+	//
+	// **It is the pattern position and nothing wider.** `for i in a b`, `if
+	// true`, `while true`, `{ echo a`, `select i in a` and an arm's *body*
+	// running out are all the unterminated shape in bash too, measured in the
+	// same run. A flag that made the end of input a newline generally would
+	// encode a rule bash does not have.
+	CasePatternRunsOutAsANewline bool
+
 	// FuncDefAtParen commits to a function definition as soon as a name is
 	// followed by `(`, rather than requiring the `()` pair.
 	//

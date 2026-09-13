@@ -2696,6 +2696,21 @@ echo "reached-after st=$?"`,
 		Why:     "the two rules meeting: an empty arm holds a `;` the dialect steps over and then the terminator, and ksh93 names the `;` rather than the `;;` — so #1207's step-over outranks the terminator where both could apply. The same text with a newline after the `;` goes back to naming the `;;`, which is why the pair could not be read as one rule from two probes (#2233)",
 	},
 	{
+		ID: "unterminated/a-case-arms-pattern-that-ran-out", Category: "syntax errors", SyntaxError: true,
+		Snippet: "case x in x) : ;; zzz",
+		Why:     "an arm's pattern begun and never closed, with the input ending on it. Five columns say the input ran out — dash and ash `(expecting \")\")`, ksh93 `` `case' unmatched ``, zsh naming the word — and bash alone names the **newline** and echoes the source line, at the line the pattern is on rather than the line after. Pairs with the row below, which is what says bash is *reading* the run-out as a newline rather than happening to word it that way (#2251)",
+	},
+	{
+		ID: "unterminated/the-same-pattern-with-its-newline-written", Category: "syntax errors", SyntaxError: true,
+		Snippet: "case x in x) : ;; zzz\n",
+		Why:     "the discriminator for the row above: the identical script with the trailing newline actually present. Every other column changes its answer — dash to `newline unexpected`, ash to `unexpected newline`, ksh93 to `` `newline' unexpected `` a line further on, zsh to `\\n` — and bash gives the same sentence, the same echoed line and the same line number as without it. One column answering both spellings alike is what puts the rule in the grammar rather than in the wording, and it is why the flag substitutes a token instead of adding a message",
+	},
+	{
+		ID: "unterminated/an-arms-open-paren-with-nothing-behind-it", Category: "syntax errors", SyntaxError: true,
+		Snippet: "case x in (",
+		Why:     "the same position reached with no pattern word read at all, which says the reading is the *position* and not the word: bash names the newline here too, where `case x in` — one character less, and the arm never begun — is the unterminated `case` in bash as well. So the substitution starts at the arm's paren rather than at the first pattern token",
+	},
+	{
 		ID: "core/a-separator-where-a-loop-variable-belongs", Category: "command language", SyntaxError: true,
 		Snippet: `for ; in a b`,
 		Why:     "a token that is present and could never be a name, which separates the two questions the bare `for` runs together: there is no end of input here, so a shell answering it as an unfinished construct would be wrong. Three of the four name the `;` exactly as they name it anywhere else and dash gives the same bad-loop-variable sentence it gives `for` itself, which is what says the classification is the dialect's and not the token's",

@@ -228,6 +228,21 @@ type Parser struct {
 	// where one dialect refuses the `;` it steps over elsewhere. Set by
 	// parseCondition and cleared by the parseList that reads it.
 	inCondition bool
+
+	// inCasePattern says the token about to be refused stands where a `case`
+	// arm's pattern belongs — after the arm's optional `(` and before the
+	// `)` that closes the list. One dialect reads the end of the input there
+	// as the newline that would have ended the line, and this is the only
+	// position it does that in. See Dialect.CasePatternRunsOutAsANewline,
+	// where the six columns are, and failUnexpectedAt, which is the one
+	// place that reads this.
+	//
+	// A field rather than a test at each refusing site because there are
+	// three of them — the list that never reached a `)`, the alternative
+	// after a `|` that never arrived, and the `(` with nothing behind it —
+	// and a rule written out at some of them is the shape of defect this
+	// tree keeps producing.
+	inCasePattern bool
 }
 
 // maxParamDepth is how far `${x:-${y:-…}}` may nest before the parser stops.
@@ -712,9 +727,18 @@ func (p *Parser) failUnexpectedAt(tok Token, expected string, plain bool) {
 		return
 	}
 	if tok.Kind == TokEOF {
-		p.ranOut()
-		p.err = p.unterminated(expected)
-		return
+		if !p.inCasePattern || !p.dialect.CasePatternRunsOutAsANewline {
+			p.ranOut()
+			p.err = p.unterminated(expected)
+			return
+		}
+		// The dialect reads the run-out here as the newline that would have
+		// ended the line, and the newline standing there for real already
+		// produces the right bytes through this same path — so the reading
+		// is a token substitution and not a second wording. Kept at the same
+		// position, which is what numbers the line the pattern is on rather
+		// than the line after it.
+		tok = Token{Kind: TokNewline, Pos: tok.Pos, End: tok.End, Text: "\n"}
 	}
 	literal, text := tokenLiteral(tok), tokenText(tok)
 	source := tokenSource(tok)
@@ -4802,6 +4826,11 @@ func (p *Parser) parseCase() Command {
 		saved := p.lex.inArgument
 		savedList := p.lex.inCaseParenList
 		p.lex.inArgument = true
+		// From here to the `)` is the pattern position, which one dialect
+		// reads the end of the input in as a newline. Cleared on every way
+		// out below, the arm's *body* being ordinary commands where the end
+		// of the input is the end of the input again.
+		p.inCasePattern = true
 		parenthesized := false
 		if p.at(TokLeftParen) {
 			if p.emptyParensStartAt(p.tok) {
@@ -4812,6 +4841,7 @@ func (p *Parser) parseCase() Command {
 				// pattern list and parses, which is what says the refusal
 				// is the token's and not the emptiness's (#1111).
 				p.lex.inArgument, p.lex.inCaseParenList = saved, savedList
+				p.inCasePattern = false
 				p.failUnexpected("")
 				return c
 			}
@@ -4827,14 +4857,17 @@ func (p *Parser) parseCase() Command {
 		}
 		if !p.casePatterns(it, parenthesized) {
 			p.lex.inArgument, p.lex.inCaseParenList = saved, savedList
+			p.inCasePattern = false
 			return c
 		}
 		p.lex.inArgument = saved
 		if !p.at(TokRightParen) {
 			p.lex.inCaseParenList = savedList
 			p.failUnexpectedOperand(")")
+			p.inCasePattern = false
 			return c
 		}
+		p.inCasePattern = false
 		// Cleared before the read that follows, which is the arm's *body* —
 		// ordinary commands, where a newline is a statement separator again.
 		p.lex.inCaseParenList = savedList

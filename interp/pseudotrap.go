@@ -123,7 +123,15 @@ func (r *Runner) runPseudoTrapBody(ctx context.Context, name, body string, sees 
 	r.status = sees
 	r.ctl = controlNone
 	outer := r.inCommandTrap
-	r.inCommandTrap = name == "DEBUG" || name == "ERR"
+	// DEBUG, ERR and RETURN all fire *at a command*, and the one dialect
+	// that tells the two questions apart numbers all three from where they
+	// fired. RETURN was written down as going with the signals, from a probe
+	// that could not tell the readings apart: the function in it opened its
+	// body on line 1, where "the body's own first line" and "where it fired"
+	// are the same number. Re-measured 2026-09-13 with the body opening on
+	// line 5 and the `return` on line 7, bash 5.3.15 numbers a two-line
+	// RETURN body 7 and 8.
+	r.inCommandTrap = name == "DEBUG" || name == "ERR" || name == "RETURN"
 	r.runTrapBody(ctx, body)
 	r.inCommandTrap = outer
 	if r.ctl == controlNone {

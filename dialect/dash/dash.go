@@ -423,6 +423,11 @@ func Semantics() interp.Semantics {
 	// script — the status is 1 and the next command runs.
 	s.TrapHasErrCondition = interp.No
 	s.TrapHasDebugCondition = interp.No
+	// No DEBUG condition, so no head to fire one at. Not an unanswered
+	// axis — DebugTrapHeads has no unspecified value, because a head
+	// either fires or does not and there is no third thing for a
+	// dialect to be silent about.
+	s.DebugTrapCompoundHeads = interp.DebugTrapHeadsNone
 	s.TrapHasReturnCondition = interp.No
 	// A subshell's listing shows only what survived the entry — the ignored
 	// signals — in every boundary measured: `(trap)`, `$(trap)`, a pipeline

@@ -1605,6 +1605,10 @@ func Semantics() interp.Semantics {
 	s.ErrTrapRunsInSubshells = interp.Yes
 	s.DebugTrapRunsInsideCalls = interp.Yes
 	s.DebugTrapRefiresOnEnteringAFunction = interp.No
+	// Every compound head, once each — `if`, `while`, a group, a subshell,
+	// `repeat` and a function *definition* among them — and a loop's passes
+	// are inside that once rather than beside it.
+	s.DebugTrapCompoundHeads = interp.DebugTrapHeadsEveryCompound
 	s.DebugTrapRunsInSubshells = interp.Yes
 	// The listing least is kept of: `(trap)` and `$(trap)` show nothing the
 	// parent had — not even an ignored signal, though it stays ignored in

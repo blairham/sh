@@ -103,6 +103,16 @@ func (r *Runner) selectClause(ctx context.Context, c *syntax.SelectClause) error
 				show = true
 				continue
 			}
+			// The head, for the one reading that repeats a menu loop's head
+			// with its replies rather than writing it once for the
+			// construct. Here rather than at the top of the loop, because
+			// the reply that ends the loop is not a pass: measured, a
+			// two-reply `select` writes two heads there and no third one
+			// when the input runs out.
+			r.debugSelectPass(ctx, c.Pos())
+			if r.ctl != controlNone {
+				return nil
+			}
 			// REPLY is the line as typed and the name is the item it chose,
 			// which are different questions: a reply out of range leaves the
 			// name empty and REPLY holding what was typed, and the body still

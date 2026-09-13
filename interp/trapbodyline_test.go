@@ -136,3 +136,72 @@ func TestATrapTheFunctionSetItselfFiresInsideTheDebugBody(t *testing.T) {
 		t.Errorf("a trap the function set itself printed %q, want RETURN in it", out)
 	}
 }
+
+// Where a RETURN counts as having *fired*, which became a question the day
+// the condition joined DEBUG and ERR in being numbered from there — see
+// Semantics.CommandTrapBodyLine. Before that every RETURN body reported 1
+// and 2 whatever the script looked like, so nothing here could be wrong.
+//
+// Measured 2026-09-13 on bash 5.3.15 and bash 3.2, which are the only columns
+// with the condition at all. Three arrangements and two answers:
+//
+//	a `return` on line 7 of a body opening on line 5   7 and 8
+//	a body opening on line 5 that falls off its end    5 and 6
+//	a one-line file sourced by a `.` on line 4         4 and 5
+//
+// So it is the `return`'s own line wherever in the body it stands, the line
+// the *body opened* on when the call fell off the end, and the line of the
+// `.` for a sourced file. Not the body's last command in any of the three,
+// which is where the line record happens to be sitting and is the answer this
+// engine would have given for free.
+func returnLineSem(s *Semantics) {
+	s.TrapHasReturnCondition = Yes
+	s.CommandTrapBodyLine = TrapBodyLineOffsetFromWhereItFired
+	// The carriage, so a trap set at the top level reaches a call whose body
+	// did not set one. bash's letters, which is the dialect this was
+	// measured on.
+	s.SetHasTraceLetters = Yes
+}
+
+func returnLines(t *testing.T, src string) string {
+	t.Helper()
+	out, errs, _ := trapRun(t, src, returnLineSem, Diagnostics{Location: LocationLineWord})
+	if errs != "" {
+		t.Fatalf("ran %q: stderr %q", src, errs)
+	}
+	return out
+}
+
+// The body opens on line 5 and the `return` is on line 7.
+const returnFromLineSeven = "set -T\n" +
+	"trap 'echo at=$LINENO\necho at=$LINENO' RETURN\n" +
+	"f()\n" +
+	"{\n" +
+	"  echo in\n" +
+	"  return\n" +
+	"}\n" +
+	"f\n"
+
+// The same shape with no `return` in it, so the call falls off the end. The
+// body still opens on line 5 and its last command is on line 6, which is what
+// makes the two answers tell each other apart.
+const returnByFallingOffTheEnd = "set -T\n" +
+	"trap 'echo at=$LINENO\necho at=$LINENO' RETURN\n" +
+	"f()\n" +
+	"{\n" +
+	"  echo in\n" +
+	"  echo last\n" +
+	"}\n" +
+	"f\n"
+
+func TestAnExplicitReturnFiresAtItsOwnLine(t *testing.T) {
+	if got, want := returnLines(t, returnFromLineSeven), "in\nat=7\nat=8\n"; got != want {
+		t.Errorf("a `return` on line 7: %q, want %q", got, want)
+	}
+}
+
+func TestFallingOffTheEndFiresAtTheLineTheBodyOpenedOn(t *testing.T) {
+	if got, want := returnLines(t, returnByFallingOffTheEnd), "in\nlast\nat=5\nat=6\n"; got != want {
+		t.Errorf("a body that fell off its end at line 6: %q, want %q", got, want)
+	}
+}

@@ -57,7 +57,7 @@ func (r *Runner) commandSubst(ctx context.Context, span syntax.Span) string {
 	// Parsed whole rather than a line at a time, which is measured — an
 	// alias defined on a substitution's first line does not reach its
 	// second in dash, ksh93 or zsh.
-	p := r.ParseWithAliases(src, r.dialect())
+	p := r.ParseWithAliases(src, r.bodyDialect(span))
 	// Where the body sits in the script, so that what it reports is reported
 	// where a reader can find it. The span's own line is the body's first,
 	// because a span starts at its opening delimiter — and it accumulates,
@@ -176,6 +176,21 @@ func (r *Runner) currentShellSubst(ctx context.Context, f *syntax.File, span syn
 	}
 	r.Stdout, r.lineBase = savedOut, savedBase
 	return strings.TrimRight(out.String(), "\n")
+}
+
+// bodyDialect is the dialect a substitution's body is read again with: this
+// runner's, plus the comment rule the text was *first* read under.
+//
+// The body is kept as text and parsed a second time when it runs, so the two
+// reads have to agree about what a `#` is. Only the front end can know —
+// syntax.Dialect.Comments is a statement about a line somebody typed — which
+// is why the answer travels on the span rather than living on the runner:
+// `eval` and `.` take a *value* and read a `#` the ordinary way in the shell
+// this is about, measured, and both of those go through this runner too.
+func (r *Runner) bodyDialect(span syntax.Span) syntax.Dialect {
+	d := r.dialect()
+	d.Comments = span.Comments
+	return d
 }
 
 // dialect is the dialect this runner parses nested input with. It is a method

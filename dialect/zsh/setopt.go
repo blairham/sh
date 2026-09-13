@@ -67,21 +67,26 @@ import (
 //     so an interactive shell answered `m` in `$-` and `off` in
 //     `${options[monitor]}` at the same moment (#1720);
 //   - backed by the store a recorded name uses, and read by the front end
-//     rather than by anything in this package: `histignorespace` alone, whose
-//     state the line editor asks for through this namespace before it records
-//     a line. Written `storeBacked(…)`;
+//     rather than by anything in this package: `histignorespace`, whose state
+//     the line editor asks for through this namespace before it records a
+//     line; `interactivecomments`, which it asks for before it *parses* one;
+//     and `promptsp` and `promptcr`, which it asks for before it draws a
+//     prompt. Written `storeBacked(…)`;
 //   - **recorded**: a name this shell recognizes and remembers and does not
 //     act on. `setopt auto_cd` succeeds, `setopt` then reports `autocd`, and
 //     typing a directory name still does not change directory. 140 of the 185
 //     are this, and they are marked `recorded(…)` below so the distinction can
 //     be read off the table rather than taken on trust.
 //
-// Three names have moved out of "recorded". Two went when the front end
-// learned to read them:
-// `histignorespace` above, and `histignoredups`, which was already a `set -o`
-// backed switch whose state nothing consulted. Both now decide what a session
-// writes to its history file, so both are implemented rather than remembered.
-// The third is `extendedglob`, which now moves the pattern matcher's
+// Names have moved out of "recorded" as this shell learned to read them.
+// `histignorespace` above and `histignoredups`, which was already a `set -o`
+// backed switch whose state nothing consulted, were the first two: both now
+// decide what a session writes to its history file, so both are implemented
+// rather than remembered. `interactivecomments` is the most recent and is read
+// earlier in the same loop — before the line is parsed rather than after it is
+// run — and it decides whether a `#` typed at the prompt opens a comment or is
+// a character of the word it stands in (#2537).
+// Then `extendedglob`, which now moves the pattern matcher's
 // [interp.ExtendedPatternOperators] — the closures, the exclusion, the
 // negation and the `(#…)` flag groups all read a pattern differently while
 // it is on, and reading it the same way either way was #1244.
@@ -396,17 +401,22 @@ var zshOptions = []zshOption{
 	// `interactivecomments   off`, and a bare `unsetopt` names it. So the
 	// default the listings compare against is off.
 	//
-	// The old value was this shell's own state rather than zsh's — comments
-	// are honored wherever they are written, and go on being — and that is
-	// not what a recorded default is for. The name is `recorded`: recognized,
-	// remembered, and acted on by nothing, exactly like the 140 others, so
-	// what a `#` does here is unchanged and is not this entry's to say.
+	// The old value was this shell's own state rather than zsh's — the `#`
+	// was honored wherever it was written — and that is not what a recorded
+	// default is for.
 	//
 	// Claiming otherwise was not cosmetic. A syntax highlighter reads this
 	// option to pick a tokenizer; told it is on, it splits the line
 	// comment-aware and classifies a bare `ls` as a comment, so every command
 	// typed came out in the comment style (#2516).
-	recorded("interactivecomments", false),
+	//
+	// The state is now *read* as well as remembered, which is what took this
+	// out of `recorded` and into `storeBacked` beside `histignorespace`: the
+	// line editor asks for it before each line it has been typed and reads a
+	// `#` as an ordinary character while it is off, which is zsh's own answer
+	// and was #2537. The store is still where the state lives — nothing in
+	// this package acts on it — and the front end is what acts.
+	storeBacked("interactivecomments", false),
 	{
 		base: "ksharrays", def: false,
 		// Read off the base, which is the axis the name is about; the four

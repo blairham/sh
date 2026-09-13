@@ -4646,9 +4646,9 @@ first is unanimous across the table.** Every name is one of five kinds:
 | substrate-backed | 15 | moves a real `set -o` switch: `setopt err_exit` **is** `set -e`, and `setopt vi` **is** `set -o vi`. `ignorebraces` is the inverted one: it is `set +o braceexpand`, zsh naming the state that *stops* the expansion where the substrate names the expansion |
 | axis- or matcher-backed | 12 | moves a semantics axis (`shwordsplit`, `nomatch`, `ksharrays`, `localtraps`, `multios`, `globsubst`, `typesetsilent`) or a pattern-matcher option (`nullglob`, `globdots`, `caseglob`, `extendedglob`, `bareglobqual`). `ksharrays` is one name over **five** axes — see below |
 | fixed | 4 | refuses to move, in zsh's own words: `can't change option: NAME`, status 1. Asking for the state it already holds is granted, and one of the four is taken at the *invocation* — see `singlecommand` below |
-| store-backed, read by the front end | 6 | `histignorespace`, read by the line editor before it records a line; `promptsp` and `promptcr`, read by the same editor before it draws a prompt; `checkrunningjobs`, read by `checkjobs` when it recomputes what the exit is held for; and `cshnullcmd` and `shnullcmd`, read together when either moves so that the first can win while it is on. All six are kept where a recorded name is kept, because the substrate has no `set -o` name for any of them |
+| store-backed, read by the front end | 7 | `histignorespace`, read by the line editor before it records a line; `interactivecomments`, read by the same editor before it *parses* one; `promptsp` and `promptcr`, read by it before it draws a prompt; `checkrunningjobs`, read by `checkjobs` when it recomputes what the exit is held for; and `cshnullcmd` and `shnullcmd`, read together when either moves so that the first can win while it is on. All seven are kept where a recorded name is kept, because the substrate has no `set -o` name for any of them |
 | switch-backed | 3 | `aliases`, `autocd` and `checkjobs`: each moves a capability the substrate holds under no option name of its own — alias expansion really does stop, a bare directory name really is read as a `cd`, and a job still running really does hold the exit |
-| **recorded** | 145 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
+| **recorded** | 144 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
 
 **Two names moved out of "recorded" when the history knobs were built**
 (#571). `histignorespace` is the fifth row above: its state has nowhere
@@ -4739,8 +4739,8 @@ before **every prompt** of a real interactive session (#2033). That is the
 shape of the recorded bargain failing: the complaint it was meant to stop came
 back as output instead.
 
-`promptsp` and `promptcr` are the most recent to leave, and they are the one
-pair that left for a reason **outside** themselves. Both were read by the line
+`promptsp` and `promptcr` left next, and they are the one pair that left for a
+reason **outside** themselves. Both were read by the line
 editor all along — `repl.EditorStyle` names them and asks this namespace for
 their state before every prompt — and both were nevertheless left marked
 `recorded` in #2502, because `emulate` reset every name outside the recorded
@@ -4752,7 +4752,20 @@ lesson is worth keeping — **a wrong rule elsewhere in the file was distorting
 a correct classification here**, and it did so silently, as a reason not to
 make a change rather than as a failure.
 
-So 145 of 185 are recorded, the count above is the one produced by counting
+`interactivecomments` is the latest to leave, and it left in two steps, which
+is worth reading as one story. Its *default* was wrong first — recorded as on
+where zsh has it off — and a syntax highlighter that asks the option which
+tokenizer to use was told to split the line comment-aware, so a bare `ls`
+typed at the prompt was classified as a comment and drawn in the comment
+style (#2516). Correcting the default left a name that answered honestly and
+was still read by nothing, and the behavior it names is the one the *front
+end* performs: with the option off, a `#` typed at this shell's prompt is a
+character of the word it stands in and not the start of a comment. The line
+editor now asks for it before each line it parses (#2537), which is the
+`histignorespace` bargain exactly — the state has nowhere better to live, and
+something reads it every time a line is accepted.
+
+So 144 of 185 are recorded, the count above is the one produced by counting
 the constructors in `dialect/zsh/setopt.go`, and **the fixed set is now
 exactly the set real zsh refuses**: `interactive`, `shinstdin`,
 `singlecommand` and `zle`. `monitor` left it in #1720 because zsh grants it

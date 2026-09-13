@@ -5727,6 +5727,45 @@ type Semantics struct {
 	// already refused, so `echo three` above never runs (#1893).
 	PromptAsksAgainAfterARefusedToken bool
 
+	// PromptCommentsNeedTheOption names the option a `#` typed at this
+	// shell's prompt has to have on before it opens a comment. Empty is
+	// "nothing has to be on", which is what three of the four say.
+	//
+	// Read by the front end rather than by the interpreter, for the reason
+	// the field above it is: it is about what a prompt does with a line. A
+	// *name* rather than a bool because the state moves while the session
+	// runs — the option is one a person can type — so the answer has to be
+	// asked for per line through [Runner.DialectOption] rather than settled
+	// once at startup.
+	//
+	// Measured 2026-09-12, `printf 'echo a #b\n'` into each shell under
+	// `-i` on a pipe with a scratch HOME, no startup files:
+	//
+	//	dash            a        `#` opens a comment, with no option for it
+	//	ksh93u+         a        the same
+	//	bash 5.3.15     a        `shopt interactive_comments`, on by default
+	//	bash 3.2.57     a        the same
+	//	bash-as-`sh`    a        the same
+	//	zsh 5.9.2       a #b     `interactivecomments`, **off** by default
+	//
+	// So the panel splits on the default and not on the mechanism: bash
+	// under `shopt -u interactive_comments` answers `a #b` too, and zsh
+	// under `setopt interactivecomments` answers `a`. One shell starts on
+	// the other side of the same switch, which is what makes this an axis
+	// rather than a correction.
+	//
+	// It is the *prompt* and not the shell's interactivity: measured the
+	// same day, `zsh -f -i -c 'echo a #b'` answers `a`, and so do `eval`
+	// and `.` on a file typed at that shell's own prompt. See
+	// syntax.Dialect.Comments, which is the half of this the lexer reads.
+	//
+	// The cost of reading it the common way is quiet and it is not only the
+	// argument that goes missing: a highlighter that asks this shell for
+	// the option and gets the honest answer still tokenizes the line with
+	// the shell's own splitter, and the two then disagree about where the
+	// words are (#2537).
+	PromptCommentsNeedTheOption string
+
 	// CompoundPipelineStatusRecord is what a compound command does to the
 	// pipeline-status record — see CompoundPipelineStatusPolicy, whose two
 	// answers are two *mechanisms* rather than two values for one rule.

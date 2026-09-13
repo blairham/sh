@@ -363,6 +363,13 @@ func (sh Shell) frontEnd(r *interp.Runner, name string, dg interp.Diagnostics) r
 		// decided here: the prompt is where the difference shows and the
 		// dialect is where the answer lives.
 		AskAgainAfterARefusedToken: sh.Semantics.PromptAsksAgainAfterARefusedToken,
+		// And whether a `#` typed here opens a comment at all, which one of
+		// the four leaves to an option that is off until somebody sets it.
+		// Carried as the option's *name* for the reason the name is what the
+		// dialect holds: the state moves while the session runs, so the
+		// session asks the shell per line rather than being told once here.
+		// See Semantics.PromptCommentsNeedTheOption.
+		CommentsNeedTheOption: sh.Semantics.PromptCommentsNeedTheOption,
 		// And whether the line a diagnostic names is counted from the start
 		// of the *session* rather than from the start of the construct being
 		// typed, which is the one dialect that names a line at a prompt at

@@ -114,6 +114,24 @@ type Shell struct {
 	// merely not finished.
 	AskAgainAfterARefusedToken bool
 
+	// CommentsNeedTheOption names the option a `#` typed here has to have on
+	// before it opens a comment. Empty is "nothing has to be on", which is
+	// what a caller without a dialect gets and what three of the four panel
+	// shells say. See interp.Semantics.PromptCommentsNeedTheOption for the
+	// measurement and for which shell is the fourth.
+	//
+	// Asked per accepted line rather than once, for the reason the history
+	// rules are read per line: the option is one a person can type, and
+	// `setopt interactivecomments` that only took hold in the next session
+	// is one they would believe was broken.
+	//
+	// A name rather than a bool because the state is the *shell's* and not
+	// this session's. Answering it here would be a second shell disagreeing
+	// with the first about what it was told — the same reason the history
+	// rules go through [interp.Runner.DialectOption] rather than reading a
+	// variable of their own.
+	CommentsNeedTheOption string
+
 	// CountSessionLines numbers each line by how many the session has read,
 	// rather than starting every construct's text at line 1.
 	//
@@ -1044,7 +1062,7 @@ func (s Shell) accept(pending *strings.Builder, remember func(string), line stri
 	pending.WriteString("\n")
 	text := pending.String()
 
-	p := syntax.NewParserAt(text, s.Dialect, first)
+	p := syntax.NewParserAt(text, s.parseDialect(), first)
 	// The hook goes on unconditionally, unlike the script path: every shell
 	// in the panel expands aliases at a prompt, and the dialect's answer is
 	// only about a *non-interactive* one. This is the place that knows there
@@ -1139,7 +1157,7 @@ func (s Shell) endOfInput(pending *strings.Builder) ([]*syntax.File, string, err
 	if strings.TrimSpace(text) == "" {
 		return nil, "", nil
 	}
-	p := syntax.NewParserAt(text, s.Dialect, s.pendingLine())
+	p := syntax.NewParserAt(text, s.parseDialect(), s.pendingLine())
 	// The same alias table the accepted lines were parsed with: a construct
 	// half of which was typed through an alias must not finish differently
 	// for having been finished here.
@@ -1670,6 +1688,26 @@ func (s Shell) dialectOption(name string) bool {
 		return false
 	}
 	return optionOn(s.Runner.DialectOption, name)
+}
+
+// parseDialect is the grammar the line just typed is read with: this
+// session's, plus what the *shell* says about reading a `#` right now.
+//
+// Built per parse rather than held, because the second half moves while the
+// session runs: `setopt interactivecomments` typed at the prompt is a person
+// saying what the next line means. The dialect is a value, so a copy with one
+// field written is the whole of it and nothing here is shared.
+//
+// It has to be settled before the parser is built and not after. The parser
+// reads its first token in its constructor, and the first token of a typed
+// line is exactly where this shows: a line that *is* a `#` has no other
+// token, and one set afterwards would have skipped it already.
+func (s Shell) parseDialect() syntax.Dialect {
+	d := s.Dialect
+	if s.CommentsNeedTheOption != "" && !s.dialectOption(s.CommentsNeedTheOption) {
+		d.Comments = syntax.CommentsOrdinaryText
+	}
+	return d
 }
 
 // markIfAsked is what to write where unfinished output stopped, and empty

@@ -12,6 +12,10 @@ type ShellSplit struct {
 	// ordinary one. A caller wanting no comment rule at all — which is what
 	// the flag this serves does with neither of its comment letters written
 	// — has to say CommentsOrdinaryText.
+	//
+	// It is this and not [Dialect.Comments] that decides, whichever the
+	// dialect carries: a value being re-read is not the line somebody typed,
+	// and the flag's letters say what the caller wants of it outright.
 	Comments CommentMode
 
 	// NewlineIsBlank makes an unquoted newline ordinary whitespace. Without

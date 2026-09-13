@@ -329,7 +329,7 @@ func (r *Runner) patternSpan(s syntax.Span) (text string, live bool) {
 		// one inside a `${…}` operand, so in the other dialects a span of
 		// this kind can only have come from a `case` arm or a condition,
 		// where bash and zsh both perform it.
-		path, ok := r.procSub(r.ctx, s.Kind, s.Value)
+		path, ok := r.procSub(r.ctx, s)
 		if !ok {
 			return "", false
 		}

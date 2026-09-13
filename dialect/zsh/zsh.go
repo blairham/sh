@@ -421,6 +421,18 @@ func Dialect() syntax.Dialect {
 	// shell has — the trims, the substring, the replacement, the four
 	// conditionals and the element exclusion — measured 2026-09-06.
 	d.ParamLengthTakesAnOperator = true
+	// A `"` written inside a `${ }` operand opens a run whose escaping starts
+	// over, so the brace that would close the expansion is not escapable in
+	// it. This shell alone: measured 2026-09-10 with `u` unset,
+	// `printf '[%s]' "${u-"A\}B"}"` is `[A\}B]` here and `[A}B]` in dash,
+	// bash 5.3.15, that build as `sh`, bash 3.2.57, ksh93u+ and BusyBox ash —
+	// six columns saying the whole body of the expansion is the escaping
+	// context and this one saying the context resets at the quote.
+	//
+	// The engine gave this reading in every dialect before the flag existed,
+	// arrived at without anyone choosing it, so what changed for the other
+	// four is the answer and not the construct (#2001).
+	d.NestedQuoteResetsOperandEscapes = true
 	// `${name::=word}`, the assignment that runs every time. Measured
 	// 2026-09-07 on zsh 5.9.2 against the rest of the panel: bash 5.3, bash
 	// 3.2 and bash as `sh` read the same text as a substring and answer

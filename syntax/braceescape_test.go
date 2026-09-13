@@ -3,7 +3,10 @@
 
 package syntax
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // A backslash before the `}` that would close a `${ }` escapes it and is
 // removed, and the operand's text is what carries the freed brace (#1966).
@@ -48,15 +51,91 @@ func TestABackslashEscapesTheBraceThatWouldCloseAQuotedOperand(t *testing.T) {
 	}
 }
 
-// A `"` written inside the operand opens a run of its own, and the brace is
-// not escapable in one. That is zsh's answer and the other five shells escape
-// it there too, which is a split with no axis for it yet (#2001) — this row
-// pins what the parser does today rather than endorsing it.
-func TestTheBraceIsNotEscapableInsideANestedQuotedRun(t *testing.T) {
+// A `"` written inside the operand opens a run of its own, and whether the
+// brace is still escapable in it is the one corner of this the panel splits
+// on — Dialect.NestedQuoteResetsOperandEscapes.
+//
+// Measured 2026-09-10 with `u` unset: `printf '[%s]' "${u-"A\}B"}"` is
+// `[A}B]` in dash, bash 5.3.15, that build as `sh`, bash 3.2.57, ksh93u+ and
+// BusyBox ash, and `[A\}B]` in zsh 5.9.2 alone. So the core takes the
+// majority and the flag is the odd reading, which is a change of answer: this
+// parser gave zsh's in every dialect, arrived at because a `"` inside an
+// operand called the plain double-quote scanner and that scanner's escape set
+// has never had the brace in it (#2001).
+func TestANestedQuotedRunMayOrMayNotResetTheOperandEscapes(t *testing.T) {
 	const src = `printf "%s" "${u-"A\}B"}"`
-	if got, want := operandLiteral(t, src), `A\}B`; got != want {
-		t.Errorf("%s: operand text = %q, want %q", src, got, want)
+	for _, tc := range []struct {
+		name  string
+		reset bool
+		want  string
+	}{
+		{"the whole body is the escaping context", false, "A}B"},
+		{"the context resets at the quote", true, `A\}B`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			d := Core()
+			d.NestedQuoteResetsOperandEscapes = tc.reset
+			if got := operandLiteralIn(t, src, d); got != tc.want {
+				t.Errorf("%s: operand text = %q, want %q", src, got, tc.want)
+			}
+		})
 	}
+}
+
+// The nested run is the only thing the flag reaches. A substitution written
+// inside an operand starts its quoting over in *both* readings, which is
+// measured rather than assumed: 2026-09-12, `"${u-$(printf %s "A\}B")}"` and
+// the backtick spelling of it are `A\}B` in bash 5.3.15 and zsh 5.9.2 alike,
+// so the two columns that disagree about the plain nested run agree here.
+func TestASubstitutionInsideAnOperandStartsItsQuotingOver(t *testing.T) {
+	for _, reset := range []bool{false, true} {
+		d := Core()
+		d.NestedQuoteResetsOperandEscapes = reset
+		const src = `printf "%s" "${u-$(printf %s "A\}B")}"`
+		f, err := Parse(src, d)
+		if err != nil {
+			t.Fatalf("parse %q with reset=%v: %v", src, reset, err)
+		}
+		sc := f.Stmts[0].Expr.(*Pipeline).Cmds[0].(*SimpleCmd)
+		w := sc.Args[len(sc.Args)-1]
+		var operand *Word
+		for _, sp := range w.Spans {
+			if sp.Kind == ParamExp && sp.Param != nil {
+				operand = sp.Param.Arg
+			}
+		}
+		if operand == nil {
+			t.Fatalf("reset=%v: no operand in %q", reset, src)
+		}
+		// The backslash is still in the substitution's own text: nothing in
+		// the operand's widened set reached inside it.
+		var sub string
+		for _, sp := range operand.Spans {
+			if sp.Kind == CommandSubst {
+				sub = sp.Value
+			}
+		}
+		if !strings.Contains(sub, `A\}B`) {
+			t.Errorf("reset=%v: substitution text = %q, want the backslash kept", reset, sub)
+		}
+	}
+}
+
+// operandLiteralIn is operandLiteral under a chosen dialect.
+func operandLiteralIn(t *testing.T, src string, d Dialect) string {
+	t.Helper()
+	f, err := Parse(src, d)
+	if err != nil {
+		t.Fatalf("parse %q: %v", src, err)
+	}
+	sc := f.Stmts[0].Expr.(*Pipeline).Cmds[0].(*SimpleCmd)
+	w := sc.Args[len(sc.Args)-1]
+	for _, s := range w.Spans {
+		if s.Kind == ParamExp && s.Param != nil && s.Param.Arg != nil {
+			return wordText(s.Param.Arg)
+		}
+	}
+	return wordText(w)
 }
 
 // The same escape in both halves of a substitution, which is the route

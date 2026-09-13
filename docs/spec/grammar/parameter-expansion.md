@@ -225,9 +225,31 @@ and with `w='a}b'`, `"${w/a\}b/Z}"` matches and is `Z`.
 
 Where it *stops* is a `"` written inside the operand, which opens a run
 of its own — and that is the one corner of this the panel splits on.
-`"${u-"A\}B"}"` is `A\}B` in zsh and `A}B` in the other five, so the
-brace is escapable inside a nested run for everyone but zsh. Not modeled
-yet; see #2001.
+`"${u-"A\}B"}"` is `A\}B` in zsh and `A}B` in the other six, BusyBox ash
+included, so the brace is escapable inside a nested run for everyone but
+zsh. Note that bash 3.2 joins the majority *here*, which is the reverse
+of its position on the bare-operand row above: the two rows are
+independent.
+
+That is `Dialect.NestedQuoteResetsOperandEscapes`, and zsh alone sets
+it. The five that escape the brace there are saying the **whole** body
+of the expansion is the escaping context, nested quotes included; zsh is
+saying the context resets at each quote. There is no subset relationship
+between the two, which is why it is a switch — and it is on the grammar
+vector rather than the semantics one because it decides what text the
+operand *is*, at the stage that reads it, and because the lexer is the
+only thing that knows a `"` was written inside an operand at all.
+
+Before the flag existed this engine gave zsh's reading in every dialect,
+arrived at without anyone choosing it: a `"` inside an operand called the
+plain double-quote scanner, and that scanner's escape set has never had
+the brace in it (#2001).
+
+A **substitution** written inside the operand is not this and starts its
+quoting over in both readings, which is measured rather than assumed:
+`"${u-$(printf %s "A\}B")}"` and the backtick spelling of it are `A\}B`
+in bash 5.3.15 and zsh 5.9.2 alike, so the two columns that disagree
+about the plain nested run agree here.
 
 The rule matters because text is built this way and read back. The
 `${(e)}` pattern powerlevel10k assembles is a run of `${NAME-<sep>\}`

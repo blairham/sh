@@ -1682,8 +1682,26 @@ var Corpus = []Case{
 			"answers `A\\}B` and the other five answer `A}B`, so the brace is " +
 			"escapable there for everyone but zsh. Single quotes are not a run " +
 			"at all in a quoted operand, so the second field is `A'}'B` in five " +
-			"and `A'\\}'B` only in bash 3.2. Recorded as the measurement behind " +
-			"the split; ours gives zsh's answer in every dialect (#2001)",
+			"and `A'\\}'B` only in bash 3.2. The measurement behind " +
+			"Dialect.NestedQuoteResetsOperandEscapes, which zsh alone sets: " +
+			"before it existed this engine gave zsh's answer in every dialect, " +
+			"arrived at because a `\"` inside an operand called the plain " +
+			"double-quote scanner and that scanner's escape set has never had " +
+			"the brace in it (#2001)",
+	},
+	{
+		ID: "core/a-substitution-inside-a-quoted-operand-starts-over", Category: "quoting",
+		Snippet: "unset u; printf '[%s]' \"${u-$(printf %s \"A\\}B\")}\"" +
+			" \"${u-`printf %s \"A\\}B\"`}\"; echo",
+		Why: "the control for the row above, and the one that says the operand's " +
+			"widened escape set stops at a *substitution* rather than only at a " +
+			"quote. Both spellings answer `A\\}B` in every column, zsh and bash " +
+			"alike — the two that disagree about the plain nested run agree here — " +
+			"so a `\"` inside `$( )` or backticks is an ordinary double-quoted run " +
+			"and the brace is not escapable in it. Without this row the split the " +
+			"row above records could be read as being about quotes at large, and a " +
+			"flag written that way would take the backslash out of every " +
+			"substitution written in an operand (#2001)",
 	},
 	{
 		ID: "param/bare-brace-in-an-unquoted-operand", Category: "expansion",

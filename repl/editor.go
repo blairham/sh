@@ -211,7 +211,9 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 	// prompt that takes typing.
 	e.viCommand = false
 	e.find = viFind{}
-	e.write(prompt.text)
+	// The leading rows first and once — every redraw after this rewrites only
+	// the last row. See drawnPrompt.
+	e.write(prompt.lead + prompt.text)
 
 	var buf [1]byte
 	for {

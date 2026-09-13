@@ -254,7 +254,13 @@ var zshOptions = []zshOption{
 	recorded("braceccl", false),
 	recorded("bsdecho", false),
 	matchBacked("caseglob", true, interp.GlobFoldsCase, true),
-	recorded("casematch", true),
+	// `casematch` is the `=~` operator's and **nothing else**, which is the
+	// whole reason it is not the same wire as bash's option of the same
+	// name. Measured on zsh 5.9.2, 2026-09-13, with `setopt nocasematch`:
+	// `[[ ABC =~ ^abc$ ]]` matches, while `[[ ABC == abc ]]`, `case A in a)`
+	// and `v=ABC; ${v//b/X}` are every one of them unmoved. bash's
+	// `nocasematch` moves all four (#2622).
+	matchBacked("casematch", true, interp.RegexFoldsCase, true),
 	recorded("casepaths", false),
 	recorded("cbases", false),
 	recorded("cdablevars", false),

@@ -3543,6 +3543,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `setopt/the-no-prefix-reaches-a-compat-spelling` | **2>** `<shell>: 1: setopt: not found~<shell>: 1: setopt: not found` *(status 127)* | **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: setopt: command not found` *(status 127)* | **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: setopt: command not found` *(status 127)* | **2>** `<shell>: setopt: command not found~<shell>: setopt: command not found` *(status 127)* | **2>** `<shell>: setopt: not found~<shell>: setopt: not found` *(status 127)* | `nohashdirs~histnofunctions` | **2>** `<shell>: setopt: not found~<shell>: setopt: not found` *(status 127)* |
 | `setopt/nullglob-wins-over-nomatch` | `[ zz* ]~st=0` **2>** `<shell>: 1: setopt: not found` | `[ zz* ]~st=0` **2>** `<shell>: line 1: setopt: command not found` | `[ zz* ]~st=0` **2>** `<shell>: line 1: setopt: command not found` | `[ zz* ]~st=0` **2>** `<shell>: setopt: command not found` | `[ zz* ]~st=0` **2>** `<shell>: setopt: not found` | `[ ]~st=0` | `[ zz* ]~st=0` **2>** `<shell>: setopt: not found` |
 | `setopt/caseglob-is-the-globs-alone` | `d/b*~no` **2>** `<shell>: 1: unsetopt: not found` | `d/b*~no` **2>** `<shell>: line 1: unsetopt: command not found` | `d/b*~no` **2>** `<shell>: line 1: unsetopt: command not found` | `d/b*~no` **2>** `<shell>: unsetopt: command not found` | `d/b*~no` **2>** `<shell>: unsetopt: not found` | `d/B.txt~no` | `d/b*~no` **2>** `<shell>: unsetopt: not found` |
+| `setopt/nocasematch-is-the-regex-operator-alone` | `re-exact~pat-exact` **2>** `<shell>: 1: [[: not found~<shell>: 1: [[: not found` | `re-exact~pat-exact` | `re-exact~pat-exact` | `re-exact~pat-exact` | `re-exact~pat-exact` | `re-fold~pat-exact` | `re-exact~pat-exact` |
 | `setopt/globdots-brings-back-the-hidden-names` | `d/a` **2>** `<shell>: 1: setopt: not found` | `d/a` **2>** `<shell>: line 1: setopt: command not found` | `d/a` **2>** `<shell>: line 1: setopt: command not found` | `d/a` **2>** `<shell>: setopt: command not found` | `d/a` **2>** `<shell>: setopt: not found` | `d/.h d/a` | `d/a` **2>** `<shell>: setopt: not found` |
 | `setopt/an-interactive-only-option-will-not-move` | `st=127~st=127` **2>** `<shell>: 1: setopt: not found~<shell>: 1: unsetopt: not found` | `st=127~st=127` **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: unsetopt: command not found` | `st=127~st=127` **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: unsetopt: command not found` | `st=127~st=127` **2>** `<shell>: setopt: command not found~<shell>: unsetopt: command not found` | `st=127~st=127` **2>** `<shell>: setopt: not found~<shell>: unsetopt: not found` | `st=1~st=0` **2>** `<shell>:setopt:1: can't change option: zle` | `st=127~st=127` **2>** `<shell>: setopt: not found~<shell>: unsetopt: not found` |
 | `setopt/a-recorded-name-answers-the-condition-too` | `a=127~b=127~c=127` **2>** `<shell>: 1: [[: not found~<shell>: 1: setopt: not found~<shell>: 1: [[: not found~<shell>: 1: [[: not found` | `a=1~b=1~c=1` **2>** `<shell>: line 1: setopt: command not found` | `a=1~b=1~c=1` **2>** `<shell>: line 1: setopt: command not found` | `a=1~b=1~c=1` **2>** `<shell>: setopt: command not found` | `a=1~b=1~c=1` **2>** `<shell>: setopt: not found` | `a=1~b=0~c=1` | `a=2~b=2~c=2` **2>** `<shell>: auto_cd: unknown operand~<shell>: setopt: not found~<shell>: auto_cd: unknown operand~<shell>: no_auto_cd: unknown operand` |
@@ -5248,6 +5249,10 @@ grades it and nothing drift-checks it either, for the same reason.
 - `setopt/caseglob-is-the-globs-alone` — zsh's caseglob governs pathname expansion and nothing else — the glob folds case and the case statement still does not — which is what says it is not the same switch as bash's nocasematch
   ```sh
   mkdir d; : > d/B.txt; unsetopt caseglob; echo d/b*; case AB in ab) echo yes;; *) echo no;; esac
+  ```
+- `setopt/nocasematch-is-the-regex-operator-alone` — one name, two shells, two features. zsh's `nocasematch` folds `=~` and leaves `==` exact; bash's folds both, and `case` and the substitution operators of `${ }` with them — see the shopt rows under shell options. So the row is `re-fold pat-exact` in zsh and `re-exact pat-exact` everywhere else, the last because no other column has `setopt` at all. Reading the shared spelling as one switch would have folded three surfaces here that this shell leaves alone, silently and in the permissive direction (#2622)
+  ```sh
+  setopt nocasematch 2>/dev/null; [[ ABC =~ ^abc$ ]] && echo re-fold || echo re-exact; [[ ABC == abc ]] && echo pat-fold || echo pat-exact
   ```
 - `setopt/globdots-brings-back-the-hidden-names` — the leading period stops being special, and only that: `.h` joins the expansion where `.` and `..` still do not
   ```sh
@@ -11324,6 +11329,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `shopt/nocasematch-folds-case` | `exact` | `hit` | `hit` | `hit` | `exact` | `exact` | `exact` |
 | `shopt/nocasematch-folds-a-substitution` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[AXC]` | `[AXC]` | `[ABC]` | `[ABC]` | `[ABC]` | `[ABC]` |
 | `shopt/nocasematch-leaves-a-trim-exact` | `[ABC]` | `[ABC]` | `[ABC]` | `[ABC]` | `[ABC]` | `[ABC]` | `[ABC]` |
+| `shopt/nocasematch-folds-the-regex-operator` | `exact` **2>** `<shell>: 1: [[: not found` | `fold` | `fold` | `fold` | `exact` | `exact` | `exact` |
+| `shopt/nocasematch-folds-a-regex-character-class` | `exact` **2>** `<shell>: 1: [[: not found` | `fold` | `fold` | `fold` | `exact` | `exact` | `exact` |
+| `shopt/nocasematch-folds-a-regex-before-it-negates` | `no-match` **2>** `<shell>: 1: [[: not found` | `no-match` | `no-match` | `no-match` | `match` | `match` | `match` |
 | `shopt/query-answers-by-status` | `q=127~q=127` | `q=1~q=0` | `q=1~q=0` | `q=1~q=0` | `q=127~q=127` | `q=127~q=127` | `q=127~q=127` |
 | `shopt/expand-aliases-is-a-live-switch` | `hit~hit~st=0` | `hit~st=127` **2>** `<script>: line 5: a: command not found` | `hit~st=127` **2>** `<script>: line 5: a: command not found` | `hit~st=127` **2>** `<script>: line 5: a: command not found` | `hit~hit~st=0` | `hit~hit~st=0` | `hit~hit~st=0` |
 | `shopt/expand-aliases-is-off-until-it-is-asked-for` | `hit~st=0` | `st=127` **2>** `<script>: line 2: a: command not found` | `hit~st=0` | `st=127` **2>** `<script>: line 2: a: command not found` | `hit~st=0` | `hit~st=0` | `hit~st=0` |
@@ -11720,6 +11728,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `shopt/nocasematch-leaves-a-trim-exact` — the other half: a trim in the same `${ }` stays exact with the option on, in the one shell that has the option and in the ones that do not. It is the measurement the comment on this implementation's fold was written from, and on its own it says nothing about the substitution next door — which is how the fold came to be documented as reaching no parameter expansion at all
   ```sh
   shopt -s nocasematch 2>/dev/null; v=ABC; echo "[${v#a}]"
+  ```
+- `shopt/nocasematch-folds-the-regex-operator` — the *other* operator the option reaches, which the `case` row above cannot say: `==` and `=~` are different matchers — one a glob, one a regular expression — and a shell can fold either without folding the other. All three bash columns fold, which is what makes this a correction and not an axis; zsh and ksh93 leave it exact because the builtin that would have changed it was never theirs, and dash has no `[[ ]]` to ask with. We folded the glob half and left this one exact, so `shopt -s nocasematch; [[ $reply =~ ^y ]]` took the other branch with nothing written to standard error (#2622)
+  ```sh
+  shopt -s nocasematch 2>/dev/null; [[ ABC =~ ^abc$ ]] && echo fold || echo exact
+  ```
+- `shopt/nocasematch-folds-a-regex-character-class` — how far into the expression the fold reaches, and it is the whole of it: a character class folds along with the literal letters, so a fold applied to the pattern's text would answer `fold` on the row above and `exact` here. The two rows together are what say the fold belongs to the compiled expression rather than to a pass over its characters
+  ```sh
+  shopt -s nocasematch 2>/dev/null; [[ ABC =~ ^[[:lower:]]+$ ]] && echo fold || echo exact
+  ```
+- `shopt/nocasematch-folds-a-regex-before-it-negates` — the order of the two operations, which is the one cell a fold bolted on after the match cannot get right: bash folds first and complements second, so `[^a]` excludes `A` as well and the subject fails. zsh and ksh93 match, having no option set. dash agrees with bash by accident — its `[[: not found` is a failure and the `||` arm runs — which is why the diagnostic beside the word is part of the cell
+  ```sh
+  shopt -s nocasematch 2>/dev/null; [[ A =~ ^[^a]$ ]] && echo match || echo no-match
   ```
 - `shopt/query-answers-by-status` — -q answers by status alone — 1 while the option is off and 0 once -s has set it; the shells without the builtin answer 127 twice, which records what a probing script would see there
   ```sh

@@ -59,7 +59,50 @@ const (
 	// for two releases: `${x#a}` cannot tell a trim from a substitution, and
 	// the two do not agree (#1969). A probe that cannot separate the
 	// hypotheses is not evidence for either.
+	//
+	// It reaches the *pattern* operators of `[[ ]]` and not the regular
+	// expression one: `=~` has RegexFoldsCase, because the panel keeps the
+	// two apart under one name — see there.
 	MatchFoldsCase
+
+	// RegexFoldsCase makes the `=~` operator compare letters without case,
+	// which is a different mechanism from MatchFoldsCase and not a second
+	// name for it: `=~` is a regular expression, so the fold is a property
+	// of the compiled expression rather than a comparison the matcher makes
+	// a character at a time.
+	//
+	// It is separate because **the two shells that have the option bundle it
+	// differently, under the same spelling.** Measured 2026-09-13 on bash
+	// 5.3.15, bash-as-`sh`, bash 3.2.57 and zsh 5.9.2, with each shell's own
+	// `nocasematch` turned on:
+	//
+	//	                       bash    zsh
+	//	[[ ABC =~ ^abc$ ]]     yes     yes
+	//	[[ ABC == abc ]]       yes     no
+	//	case A in a)           hit     exact
+	//	v=ABC; ${v//b/X}       AXC     ABC
+	//
+	// So bash's name turns both of these on and zsh's turns only this one
+	// on, which is the trap a shared spelling sets: the name is the same and
+	// the feature behind it is not. `nocaseglob`/`caseglob` is a third
+	// thing again and reaches neither — it is GlobFoldsCase, pathname
+	// expansion alone.
+	//
+	// ksh93, dash and BusyBox ash have no option of the kind at all: dash
+	// and ash have neither `[[ ]]` nor `=~`, and ksh93 has `=~` and refuses
+	// both `set -o nocasematch` and `shopt`. Its `~(i)` pattern flag is an
+	// inline spelling rather than a switch, the way zsh's `(#i)` is. So the
+	// panel does not split on the cell this governs — every member that can
+	// ask the question answers it the same way — and it is a correction
+	// rather than an axis.
+	//
+	// The fold reaches the whole expression and not only its literals, which
+	// is measured rather than assumed and is what makes `(?i)` the right
+	// mechanism: with bash's `nocasematch` on, `[[ ABC =~ ^[[:lower:]]+$ ]]`
+	// and `[[ abc =~ ^[[:upper:]]+$ ]]` and `[[ ABC =~ ^[a-c]+$ ]]` all
+	// match, and the negation folds with them — `[[ A =~ ^[^a]$ ]]` does
+	// *not* match, so the fold happens before the class is complemented.
+	RegexFoldsCase
 
 	// StarStarCrossesDirectories reads `**` standing alone as a pattern
 	// component as the directory itself and everything beneath it, however

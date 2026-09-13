@@ -4684,6 +4684,38 @@ echo "reached-after st=$?"`,
 			"no parameter expansion at all",
 	},
 	{
+		ID: "shopt/nocasematch-folds-the-regex-operator", Category: "shell options",
+		Snippet: `shopt -s nocasematch 2>/dev/null; [[ ABC =~ ^abc$ ]] && echo fold || echo exact`,
+		Why: "the *other* operator the option reaches, which the `case` row above " +
+			"cannot say: `==` and `=~` are different matchers — one a glob, one a " +
+			"regular expression — and a shell can fold either without folding the " +
+			"other. All three bash columns fold, which is what makes this a " +
+			"correction and not an axis; zsh and ksh93 leave it exact because the " +
+			"builtin that would have changed it was never theirs, and dash has no " +
+			"`[[ ]]` to ask with. We folded the glob half and left this one exact, " +
+			"so `shopt -s nocasematch; [[ $reply =~ ^y ]]` took the other branch " +
+			"with nothing written to standard error (#2622)",
+	},
+	{
+		ID: "shopt/nocasematch-folds-a-regex-character-class", Category: "shell options",
+		Snippet: `shopt -s nocasematch 2>/dev/null; [[ ABC =~ ^[[:lower:]]+$ ]] && echo fold || echo exact`,
+		Why: "how far into the expression the fold reaches, and it is the whole of " +
+			"it: a character class folds along with the literal letters, so a fold " +
+			"applied to the pattern's text would answer `fold` on the row above and " +
+			"`exact` here. The two rows together are what say the fold belongs to " +
+			"the compiled expression rather than to a pass over its characters",
+	},
+	{
+		ID: "shopt/nocasematch-folds-a-regex-before-it-negates", Category: "shell options",
+		Snippet: `shopt -s nocasematch 2>/dev/null; [[ A =~ ^[^a]$ ]] && echo match || echo no-match`,
+		Why: "the order of the two operations, which is the one cell a fold bolted " +
+			"on after the match cannot get right: bash folds first and complements " +
+			"second, so `[^a]` excludes `A` as well and the subject fails. zsh and " +
+			"ksh93 match, having no option set. dash agrees with bash by accident — " +
+			"its `[[: not found` is a failure and the `||` arm runs — which is why " +
+			"the diagnostic beside the word is part of the cell",
+	},
+	{
 		ID: "shopt/query-answers-by-status", Category: "shell options",
 		Snippet: `shopt -q nullglob 2>/dev/null; echo q=$?; ` +
 			`shopt -s nullglob 2>/dev/null; shopt -q nullglob 2>/dev/null; echo q=$?`,
@@ -18800,6 +18832,18 @@ echo "read=[$l]"`,
 		ID: "setopt/caseglob-is-the-globs-alone", Category: "builtins",
 		Snippet: `mkdir d; : > d/B.txt; unsetopt caseglob; echo d/b*; case AB in ab) echo yes;; *) echo no;; esac`,
 		Why:     "zsh's caseglob governs pathname expansion and nothing else — the glob folds case and the case statement still does not — which is what says it is not the same switch as bash's nocasematch",
+	},
+	{
+		ID: "setopt/nocasematch-is-the-regex-operator-alone", Category: "builtins",
+		Snippet: `setopt nocasematch 2>/dev/null; [[ ABC =~ ^abc$ ]] && echo re-fold || echo re-exact; [[ ABC == abc ]] && echo pat-fold || echo pat-exact`,
+		Why: "one name, two shells, two features. zsh's `nocasematch` folds `=~` " +
+			"and leaves `==` exact; bash's folds both, and `case` and the " +
+			"substitution operators of `${ }` with them — see the shopt rows under " +
+			"shell options. So the row is `re-fold pat-exact` in zsh and " +
+			"`re-exact pat-exact` everywhere else, the last because no other " +
+			"column has `setopt` at all. Reading the shared spelling as one switch " +
+			"would have folded three surfaces here that this shell leaves alone, " +
+			"silently and in the permissive direction (#2622)",
 	},
 	{
 		ID: "setopt/globdots-brings-back-the-hidden-names", Category: "builtins",

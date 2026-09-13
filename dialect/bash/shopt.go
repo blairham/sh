@@ -24,13 +24,21 @@ import (
 // changes.
 
 // shoptModes are the names wired to real behavior.
-var shoptModes = map[string]interp.MatchOption{
-	"nullglob":    interp.UnmatchedPatternIsEmpty,
-	"dotglob":     interp.PatternsMatchHidden,
-	"nocaseglob":  interp.GlobFoldsCase,
-	"nocasematch": interp.MatchFoldsCase,
-	"globstar":    interp.StarStarCrossesDirectories,
-	"extglob":     interp.QuantifiedGroupsEverywhere,
+//
+// A name carries a *list* of core options rather than one, because this
+// dialect's spelling is not always one behavior: `nocasematch` folds the
+// pattern operators of `[[ ]]` and `case` **and** the regular expression one,
+// which the core keeps apart because zsh's option of the same name turns only
+// the second on. Measured 2026-09-13 — see interp.RegexFoldsCase for the
+// grid. The first entry is the one the listing reads, which is exact while
+// this builtin is the only thing that moves either bit.
+var shoptModes = map[string][]interp.MatchOption{
+	"nullglob":    {interp.UnmatchedPatternIsEmpty},
+	"dotglob":     {interp.PatternsMatchHidden},
+	"nocaseglob":  {interp.GlobFoldsCase},
+	"nocasematch": {interp.MatchFoldsCase, interp.RegexFoldsCase},
+	"globstar":    {interp.StarStarCrossesDirectories},
+	"extglob":     {interp.QuantifiedGroupsEverywhere},
 	// The one name in this table that is **on** with nothing said, which is
 	// why Configure sets it and the rest do not: an `&` in a
 	// `${v/pat/rep}` replacement is the text the pattern matched here, and
@@ -38,7 +46,7 @@ var shoptModes = map[string]interp.MatchOption{
 	// shoptStates reporting off until the reading existed to gate — #1712
 	// left it there deliberately rather than flip a flag over behavior
 	// nothing provided, and this is the other half of that (#1862).
-	"patsub_replacement": interp.ReplacementAmpersandIsTheMatch,
+	"patsub_replacement": {interp.ReplacementAmpersandIsTheMatch},
 }
 
 // shoptSwitches are the names wired to a switch the core holds rather than to
@@ -496,8 +504,8 @@ const (
 
 // shoptState answers whether a name is on, and whether it is a name at all.
 func shoptState(r *interp.Runner, name string) (on, known bool) {
-	if mode, ok := shoptModes[name]; ok {
-		return r.MatchOption(mode), true
+	if modes, ok := shoptModes[name]; ok {
+		return r.MatchOption(modes[0]), true
 	}
 	if sw, ok := shoptSwitches[name]; ok {
 		return sw.get(r), true
@@ -704,8 +712,10 @@ func biShopt(r *interp.Runner, ctx context.Context, args []string) int {
 func shoptApply(r *interp.Runner, names []string, on bool) int {
 	status := 0
 	for _, name := range names {
-		if mode, ok := shoptModes[name]; ok {
-			r.SetMatchOption(mode, on)
+		if modes, ok := shoptModes[name]; ok {
+			for _, mode := range modes {
+				r.SetMatchOption(mode, on)
+			}
 			continue
 		}
 		if sw, ok := shoptSwitches[name]; ok {

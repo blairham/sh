@@ -297,8 +297,10 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 			"an empty =~ right operand being an error") {
 			return false, arithError{msg: "invalid regular expression: empty (sub)expression"}
 		}
-		re, err := regexp.Compile(pat)
+		re, err := regexp.Compile(r.regexFold() + pat)
 		if err != nil {
+			// The pattern as the script wrote it, never the folded spelling:
+			// a script that never asked for `(?i)` must not read about one.
 			return false, arithError{msg: "invalid regular expression: " + pat}
 		}
 		// The captures are the point of matching, not a by-product: element 0

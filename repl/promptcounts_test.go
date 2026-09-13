@@ -10,7 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/blairham/sh/internal/pty"
 	"github.com/blairham/sh/syntax"
 )
 
@@ -289,14 +288,7 @@ func TestLookingUpTheTerminalByItsDeviceNumber(t *testing.T) {
 // platform has none.
 func terminalFile(t *testing.T) *os.File {
 	t.Helper()
-	control, tty, err := pty.Open()
-	if err != nil {
-		t.Skipf("no pseudo-terminal: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = tty.Close()
-		_ = control.Close()
-	})
+	_, tty := openTerminal(t)
 	return tty
 }
 

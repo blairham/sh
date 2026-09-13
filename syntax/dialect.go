@@ -1761,6 +1761,47 @@ type Dialect struct {
 	// core's behavior and lives in alias.go.
 	ExpandAliasesInProgramText ProgramRoutes
 
+	// AliasesExpandReservedWords lets an alias whose *name* is one of the
+	// words this grammar reserves stand in for it, so `alias for=echo` on
+	// one line turns `for x in 1` on the next into a command rather than
+	// into a loop. Where it is off the name is still stored and still
+	// listed — only the substitution is declined, and the word goes on
+	// meaning what the grammar says it means.
+	//
+	// The standard puts the name out of bounds and two shells take it
+	// anyway. Measured 2026-09-13 from a script file, the alias defined on a
+	// line of its own and used on the next, with the option turned on where
+	// the shell has it off:
+	//
+	//	shell         for  if  while  case  {  !  select  function  time
+	//	bash 5.3      yes yes  yes    yes  yes yes  yes     yes      yes
+	//	bash 3.2      yes yes  yes    yes  yes yes  yes     yes      yes
+	//	zsh 5.9       yes yes  yes    yes  yes yes  yes     yes      yes
+	//	bash as sh     no  no   no     no   no  no   no      no       no
+	//	dash           no  no   no     no   no  no  yes     yes      yes
+	//	ksh93          no  no   no     no   —   no   no      no       no
+	//	ash            no  no   no     no   no  no  yes      no      yes
+	//
+	// Two rows are what make this one field and not a table of names. The
+	// protected set is **the words that dialect reserves** and nothing else:
+	// dash has no `select`, no `function` keyword and no `time` keyword, so
+	// an alias takes all three; BusyBox ash has `function` and neither of
+	// the others, and protects exactly `function`. ksh93 has all three and
+	// protects all three. So the question is per dialect and the set is
+	// read off the grammar — see [Parser.reservedInDialect] — rather than
+	// written down a second time here. (ksh93's cell for `{` is a dash
+	// because it refuses the alias *name*, which is a different axis.)
+	//
+	// Both shells with a POSIX mode move it, in both directions, and
+	// interp.Runner.SetPosixMode is what moves it: `set -o posix` protects
+	// the words in bash 5.3 and in the 3.2 macOS ships, and `set +o posix`
+	// hands them back — measured with `shopt -s expand_aliases` re-issued
+	// after leaving, since leaving the mode turns that switch off on its own.
+	// Invoking either bash or zsh as `sh` protects them for the whole run.
+	//
+	// Off in the core, which refuses what the panel disagrees about.
+	AliasesExpandReservedWords bool
+
 	// AliasBodyCountsLines counts the newlines inside a substituted alias
 	// body as lines of the input, so that every later line shifts by one per
 	// newline and a command written on the body's second line is reported

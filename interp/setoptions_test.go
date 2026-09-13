@@ -208,7 +208,7 @@ func TestARefusedNameIsWordedByTheDialect(t *testing.T) {
 	}{
 		{
 			"a shell with its own words and status",
-			Diagnostics{SetInvalidOptionName: "set: no such option: %[1]s", SetInvalidOptionStatus: 1},
+			Diagnostics{SetInvalidOptionName: "set: no such option: %[1]s", SetInvalidOptionNameStatus: 1},
 			[]string{"no such option: bogus", "st=1"},
 			"invalid option name",
 		},
@@ -247,8 +247,10 @@ func runWorded(t *testing.T, src string, dg Diagnostics) string {
 	t.Helper()
 	var buf strings.Builder
 	sem := PosixSemantics()
-	// Not fatal here, so that what `set` reported can still be printed.
+	// Neither spelling fatal here, so that what `set` reported can still be
+	// printed. Both, because these rows drive the letter and the name alike.
 	sem.BadSetOptionNameFatal = No
+	sem.BadSetOptionLetterFatal = No
 	r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "sh"})
 	f, err := syntax.Parse(src, syntax.Core())
 	if err != nil {
@@ -377,7 +379,10 @@ func TestMonitorWithoutATerminalIsAnAxis(t *testing.T) {
 	refuses := func(r *Runner) {
 		sem := CoreSemantics()
 		sem.MonitorNeedsATerminal = Yes
+		// Both, because a denied `set -m` is the one refusal that arrives
+		// under either spelling and asks the axis for the one that did.
 		sem.BadSetOptionNameFatal = No
+		sem.BadSetOptionLetterFatal = No
 		r.Semantics = &sem
 		r.Diagnostics = &Diagnostics{MonitorDenied: "can't change option: %[1]s", MonitorDeniedStatus: 1}
 	}
@@ -392,6 +397,7 @@ func TestMonitorWithoutATerminalIsAnAxis(t *testing.T) {
 		refuses(r)
 		sem := *r.Semantics
 		sem.BadSetOptionNameFatal = Yes
+		sem.BadSetOptionLetterFatal = Yes
 		sem.FatalErrorStatusIsOne = Yes
 		r.Semantics = &sem
 	}
@@ -506,22 +512,46 @@ func TestPipefailIsListedWhereDeclared(t *testing.T) {
 // that the value travels.
 func TestARefusedLetterReportsTheDialectsStatus(t *testing.T) {
 	for _, c := range []struct {
-		name string
-		dg   Diagnostics
-		want string
+		name           string
+		dg             Diagnostics
+		letter, nameSt string
 	}{
-		{"a shell with a status of its own", Diagnostics{SetInvalidOptionStatus: 1}, "st=1"},
-		{"and the default", Diagnostics{}, "st=2"},
+		{"a shell with a status of its own", Diagnostics{SetInvalidOptionNameStatus: 1, SetInvalidOptionLetterStatus: 1}, "st=1", "st=1"},
+		{"and the default", Diagnostics{}, "st=2", "st=2"},
+		// The row #2629 added, and the one that would pass under either
+		// reading if the two above stood alone: a dialect that answers the
+		// two spellings differently has to produce both answers from one
+		// run. BusyBox ash is that shell.
+		{"a shell that splits them", Diagnostics{SetInvalidOptionNameStatus: 1, SetInvalidOptionLetterStatus: 2}, "st=2", "st=1"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			// The same value read through both spellings, in one run, so
-			// that a change teaching one of them and not the other fails.
+			// Both spellings in one run, so that a change teaching one of
+			// them and not the other fails — and in a fixed order, so that
+			// which answer landed where is part of the assertion.
 			out := runWorded(t, "set -q\necho \"st=$?\"\nset -o bogus\necho \"st=$?\"\n", c.dg)
-			if got := strings.Count(out, c.want); got != 2 {
-				t.Errorf("said %q, want %q twice — the letter and the name report the same status, got it %d time(s)", out, c.want, got)
+			var got []string
+			for _, line := range strings.Split(out, "\n") {
+				if strings.HasPrefix(line, "st=") {
+					got = append(got, line)
+				}
+			}
+			want := []string{c.letter, c.nameSt}
+			if len(got) != 2 || got[0] != want[0] || got[1] != want[1] {
+				t.Errorf("said %q, want the letter to report %q and the name %q", out, c.letter, c.nameSt)
 			}
 		})
 	}
+}
+
+// opposite is the other Answer, for a test that wants one axis answered one
+// way and the axis beside it the other — so that a reading through the wrong
+// field of the pair produces the wrong output rather than the right one by
+// coincidence.
+func opposite(a Answer) Answer {
+	if a == Yes {
+		return No
+	}
+	return Yes
 }
 
 // TestARefusedLetterEndsTheScriptWhereTheDialectSaysSo: the other half of
@@ -541,7 +571,12 @@ func TestARefusedLetterEndsTheScriptWhereTheDialectSaysSo(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			var buf strings.Builder
 			sem := PosixSemantics()
-			sem.BadSetOptionNameFatal = c.fatal
+			// The letter's axis, because `set -q` is a letter. The name's is
+			// answered the other way round on purpose: a run that took the
+			// name's answer here would print the opposite of what is wanted,
+			// which is what makes this test read the field it names.
+			sem.BadSetOptionLetterFatal = c.fatal
+			sem.BadSetOptionNameFatal = opposite(c.fatal)
 			dg := Diagnostics{}
 			r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &strings.Builder{}, Semantics: &sem, Diagnostics: &dg, Name: "sh"})
 			f, err := syntax.Parse("set -q\necho after\n", syntax.Core())
@@ -564,8 +599,12 @@ func TestARefusedLetterEndsTheScriptWhereTheDialectSaysSo(t *testing.T) {
 func TestSetOptionLettersReportsAStatus(t *testing.T) {
 	newRunner := func(status int) *Runner {
 		sem := PosixSemantics()
-		sem.BadSetOptionNameFatal = No
-		dg := Diagnostics{SetInvalidOptionStatus: status}
+		sem.BadSetOptionLetterFatal = No
+		// The letter's status alone, and the name's deliberately left at the
+		// default: these are letters, and a front end reading the name's
+		// field for them would answer 2 whatever the dialect said — which is
+		// the #483 bug in the shape #2629 could have reintroduced.
+		dg := Diagnostics{SetInvalidOptionLetterStatus: status}
 		return newTestRunner(t, &Runner{Stdout: &strings.Builder{}, Stderr: &strings.Builder{}, Semantics: &sem, Diagnostics: &dg, Name: "sh"})
 	}
 	if got := newRunner(0).SetOptionLetters("e", true); got != 0 {
@@ -697,6 +736,7 @@ func TestAnOptionRefusedAtAnInvocationDoesNotNameTheBuiltin(t *testing.T) {
 		var errs strings.Builder
 		sem := PosixSemantics()
 		sem.BadSetOptionNameFatal = No
+		sem.BadSetOptionLetterFatal = No
 		return newTestRunner(t, &Runner{
 			Stdout: &strings.Builder{}, Stderr: &errs,
 			Semantics: &sem, Diagnostics: &dg, Name: "/opt/x/mysh",
@@ -887,6 +927,7 @@ func TestARefusalThroughTheDialectsSeamDoesNotEndTheScript(t *testing.T) {
 		sem := CoreSemantics()
 		sem.MonitorNeedsATerminal = Yes
 		sem.BadSetOptionNameFatal = Yes
+		sem.BadSetOptionLetterFatal = Yes
 		sem.FatalErrorStatusIsOne = Yes
 		r.Semantics = &sem
 		r.Diagnostics = &Diagnostics{MonitorDenied: "can't change option: %[1]s", MonitorDeniedStatus: 1}

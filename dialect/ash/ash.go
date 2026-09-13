@@ -322,7 +322,20 @@ func Semantics() interp.Semantics {
 	// empty and neither question is ever reached. Measured 2026-09-12:
 	// `alias 'a b'=echo` is accepted in silence here and the name is listed
 	// back, where the two shells that check refuse it (#2413).
-	s.BadSetOptionNameFatal = interp.Yes
+	// The two spellings part company here, and this shell is the only one
+	// in the panel where they do. Measured 2026-09-13, BusyBox v1.37.0:
+	// `set -o zzznosuch; echo one; set -Z; echo two` writes a complaint,
+	// prints `one`, writes a second complaint and stops at 2 — so the
+	// unknown *name* is survivable and the unknown *letter* is not.
+	//
+	// This said Yes for both from the day the dialect was written, sitting
+	// among the assignments that record a special builtin's failure being
+	// fatal, and with no comment of its own. It was inherited from the
+	// six-column measurement in #483, taken before this column existed
+	// (#2272), and it made `set -o posix` — a name this shell has not —
+	// end scripts that really carry on (#2629).
+	s.BadSetOptionNameFatal = interp.No
+	s.BadSetOptionLetterFatal = interp.Yes
 	// `read` is not one of the three: `printf 'x\n' | read 1bad` reports at 1
 	// — not dash's 2 — and the script carries on.
 	s.BadNameToReadFatal = interp.No
@@ -569,6 +582,9 @@ func Semantics() interp.Semantics {
 	// `wait -n` is 127 rather than a wait, so the letter is not an option
 	// here.
 	s.WaitNWaitsForTheNextJob = interp.No
+	// Nor `-p`: `wait: illegal option -p`, BusyBox v1.37.0 in the pinned
+	// image. Measured 2026-09-13.
+	s.WaitPNamesTheFinishedJob = interp.No
 	s.WaitForAJobFailsWhenInterrupted = interp.No
 
 	// ---- control flow and redirection ----
@@ -999,11 +1015,20 @@ func Diagnostics() interp.Diagnostics {
 		// The option refusals: lower case, and the letter alone.
 		SetInvalidOptionName:   "illegal option -o %[1]s",
 		SetInvalidOptionLetter: "illegal option -%[2]s",
-		BuiltinBadOption:       "illegal option %[2]s",
-		OptionNeedsArgument:    "%[1]s: No arg for -%[2]s option",
-		UlimitBadOption:        "unrecognized option: %[1]s",
-		UmaskBadOption:         "illegal option %[1]s",
-		PrintfBadOption:        "illegal option %[1]s",
+		// The split this pair of fields exists for. Measured 2026-09-13,
+		// BusyBox v1.37.0: `set -o zzznosuch; echo "st=$?"` writes the
+		// complaint, then `st=1`, and the script carries on; `set -Z` writes
+		// its complaint and ends the script at 2. One shell, two spellings,
+		// two answers — and the fatality splits with it, which
+		// Semantics.BadSetOptionNameFatal and BadSetOptionLetterFatal hold
+		// (#2629).
+		SetInvalidOptionNameStatus:   1,
+		SetInvalidOptionLetterStatus: 2,
+		BuiltinBadOption:             "illegal option %[2]s",
+		OptionNeedsArgument:          "%[1]s: No arg for -%[2]s option",
+		UlimitBadOption:              "unrecognized option: %[1]s",
+		UmaskBadOption:               "illegal option %[1]s",
+		PrintfBadOption:              "illegal option %[1]s",
 
 		// Numbers. The capital is this shell's, on a message it otherwise
 		// words like the lower-case ones around it.

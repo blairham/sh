@@ -459,6 +459,17 @@ func runPromptOnce(s Subject, rcDir string) (time.Duration, error) {
 	if err != nil {
 		return 0, err
 	}
+	// With a size, because a pair is born zero by zero and that is a terminal
+	// nobody has. This measures what a person waits for after pressing return
+	// on a new terminal, and a person's terminal has a width; a shell asking
+	// an unsized one gets 0, which is the ioctl saying it does not know, and
+	// every shell in the comparison does something different with that. Not
+	// hypothetical — measured 2026-09-13 over BenchmarkFirstPromptWithRichRC,
+	// 15 iterations twice: bash goes from 48 ms to 54 ms once the terminal
+	// will say how wide it is, while zsh and both of ours stay inside the
+	// noise. So the panel was being timed against a terminal that made one
+	// column of it cheaper than it is (#2627).
+	_ = pty.SetSize(terminal, 24, 80)
 
 	cmd := exec.Command(s.Path, args...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = terminal, terminal, terminal

@@ -32,6 +32,8 @@ func setArrayRun(t *testing.T, src string, set func(*Semantics), dg Diagnostics)
 	// leaves the shell running to be asked what happened. The axes
 	// themselves are asked by their own tests.
 	sem.BadSetOptionNameFatal = No
+	// And the letter's, which `set -A` with no name asks: `-A` is a letter.
+	sem.BadSetOptionLetterFatal = No
 	if set != nil {
 		set(&sem)
 	}
@@ -347,8 +349,8 @@ func TestWithoutTheLetterTheWordIsAnInvalidOption(t *testing.T) {
 	_, errs, st := setArrayRun(t, `set -A a x`, func(s *Semantics) {
 		s.SetArrayLetter = Unspecified
 	}, Diagnostics{
-		SetInvalidOptionLetter: "set: %[1]s: invalid option",
-		SetInvalidOptionStatus: 2,
+		SetInvalidOptionLetter:     "set: %[1]s: invalid option",
+		SetInvalidOptionNameStatus: 2,
 	})
 	want := "testsh: set: -A: invalid option\n"
 	if errs != want || st != 2 {

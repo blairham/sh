@@ -63,8 +63,25 @@ func (tokenColors) Highlight(line string) []Highlight {
 	return runs
 }
 
+// styledLine is the line as the highlighter would have it drawn, which is what
+// a blank screen has to be fed to say what the screen should look like.
+//
+// The editor's own [editor.styled], rather than a second application of the
+// runs: a copy of that loop here would be a second thing to keep right, and it
+// would agree with the editor by construction rather than by test.
+func styledLine(hl Highlighter, line string) string {
+	e := &editor{highlighter: hl, line: []rune(line)}
+	return e.styled()
+}
+
 // checkEdits drives one editor through the edits and checks the screen after
 // each of them.
+//
+// The screen *with its colors*. What a terminal is showing includes which
+// cells are red, and a comparison that dropped the attributes first would pass
+// for a redraw that put the right characters in the right cells under the
+// wrong style — which is the shape of #2627 and is what this file's own quote
+// test was green over.
 func checkEdits(t *testing.T, cols int, prompt string, hl Highlighter, steps []edit) {
 	t.Helper()
 	var out strings.Builder
@@ -78,10 +95,10 @@ func checkEdits(t *testing.T, cols int, prompt string, hl Highlighter, steps []e
 		live.feed(out.String())
 
 		want := newScreen(cols)
-		want.feed(p.text + step.line)
-		if got := live.text(); got != want.text() {
+		want.feed(p.text + styledLine(hl, step.line))
+		if got := live.styledText(); got != want.styledText() {
 			t.Fatalf("step %d (%q at %d): screen is\n%q\nwant\n%q\n(last write %q)",
-				i, step.line, step.pos, got, want.text(), out.String())
+				i, step.line, step.pos, got, want.styledText(), out.String())
 		}
 		wantRow, wantCol, _, _ := place(p.cells, e.line, e.pos, cols)
 		wantRow, wantCol = pastEdge(wantRow, wantCol, cols)

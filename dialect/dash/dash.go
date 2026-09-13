@@ -493,6 +493,8 @@ func Semantics() interp.Semantics {
 	s.JobSpecsByName = interp.No
 	s.WaitReportsAMissingJob = interp.Yes
 	s.WaitNWaitsForTheNextJob = interp.No
+	// Nor `-p`: `wait: Illegal option -p`. Measured 2026-09-13.
+	s.WaitPNamesTheFinishedJob = interp.No
 	// A trapped signal cuts a `wait` short with 128 plus the signal, and the
 	// form that names a job answers the same as the bare one.
 	s.WaitForAJobFailsWhenInterrupted = interp.No
@@ -628,6 +630,8 @@ func Semantics() interp.Semantics {
 	s.CdHasSymlinkFreeOption = interp.No
 	s.CdLastPathOptionWins = interp.Yes
 	s.BadSetOptionNameFatal = interp.Yes
+	// And the letter too: `set -Z; echo one` prints nothing and exits 2.
+	s.BadSetOptionLetterFatal = interp.Yes
 	// dash has no `[[ ]]` to ask it in; answered so that a shell built from
 	// this preset with the construct turned back on is not left refusing.
 	s.UnknownConditionOptionIsAStatus = interp.No
@@ -748,6 +752,10 @@ func Diagnostics() interp.Diagnostics {
 		// this shell writes `-q` for `set +q` as well as for `set -q`, so
 		// the wording takes the bare letter and spells the dash itself.
 		SetInvalidOptionLetter: "set: Illegal option -%[2]s",
+		// Both 2, and both written down: see bash's pair for why a shell
+		// that answers the two spellings alike still says so (#2629).
+		SetInvalidOptionNameStatus:   2,
+		SetInvalidOptionLetterStatus: 2,
 		UnimplementedOptionLetters: map[string]string{
 			// `set` letters dash has and this shell does not: -b job
 			// notices, -i interactive, -s reading standard input, and the

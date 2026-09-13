@@ -3386,6 +3386,12 @@ func (r *Runner) emptyPatternFires(value string) bool {
 // MatchFoldsCase on at all, so no second dialect can disagree about where its
 // answer reaches; a Semantics field here would have exactly one shell able to
 // answer it.
+//
+// zsh has an option *spelled* `nocasematch` and it is not this one: there the
+// name reaches `=~` alone, so it wires RegexFoldsCase and deliberately never
+// arrives here. Measured 2026-09-13 — `setopt nocasematch; v=ABC;
+// ${v//b/X}` is `ABC` in real zsh (#2622). The shared spelling is why that
+// belongs in a comment rather than in a reader's memory.
 func (r *Runner) replacementPatternOpts(pattern string, subjects ...string) patternOpts {
 	o := r.patternOpts(pattern, subjects...)
 	o.fold = r.MatchOption(MatchFoldsCase)

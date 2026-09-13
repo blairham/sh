@@ -45,6 +45,11 @@ func prompted(t *testing.T, a answers, hook string) string {
 	if a.clears {
 		e.clearBefore = clearing
 	}
+	// No columns is an editor with nothing to ask, which is the only way a
+	// width of zero still reaches the arithmetic: a session asks
+	// terminalWidth, and that answers eighty for a terminal that will not say
+	// rather than passing the refusal on.
+	e.width = nil
 	if a.cols > 0 {
 		e.width = func() int { return a.cols }
 	}
@@ -102,10 +107,15 @@ func TestWhatIsWrittenBeforeAPrompt(t *testing.T) {
 			"",
 		},
 		{
-			// Without a width the row cannot be filled, so the terminal will
-			// not wrap and a mark would be painted over by the prompt rather
-			// than marking anything. The return and the erase still happen.
-			"no width, no mark",
+			// With nothing to ask about the width the row cannot be filled,
+			// so the terminal will not wrap and a mark would be painted over
+			// by the prompt rather than marking anything. The return and the
+			// erase still happen.
+			//
+			// An editor with no width function at all, which is not a session
+			// on a terminal that would not say its size — that one is drawn
+			// for at eighty and does get the mark. See terminalWidth.
+			"nothing to ask, no mark",
 			answers{inverse, true, true, 0},
 			"\r" + clearing,
 		},

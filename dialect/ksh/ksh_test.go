@@ -149,6 +149,7 @@ func TestSemantics(t *testing.T) {
 		{"CdHasSymlinkFreeOption", s.CdHasSymlinkFreeOption, interp.No},
 		{"CdLastPathOptionWins", s.CdLastPathOptionWins, interp.Yes},
 		{"BadSetOptionNameFatal", s.BadSetOptionNameFatal, interp.Yes},
+		{"BadSetOptionLetterFatal", s.BadSetOptionLetterFatal, interp.Yes},
 		// The two questions come apart here: `set -o nosuchoption` ends the
 		// script and `[[ -o nosuchoption ]]` is a quiet false.
 		{"UnknownConditionOptionIsAStatus", s.UnknownConditionOptionIsAStatus, interp.No},

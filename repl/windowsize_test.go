@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/blairham/sh/internal/pty"
+	"github.com/blairham/sh/internal/tty"
 	"github.com/blairham/sh/interp"
 )
 
@@ -23,17 +24,7 @@ import (
 // a corpus row and why #1429 refused the name from a `-c` probe that showed
 // bash and this shell both reporting the variables unset.
 func TestWindowSizeTrackingSetsLinesAndColumns(t *testing.T) {
-	control, terminal, err := pty.Open()
-	if err != nil {
-		t.Skipf("no pseudo-terminal: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = terminal.Close()
-		_ = control.Close()
-	})
-	if err := pty.SetSize(terminal, 24, 80); err != nil {
-		t.Skipf("no resize: %v", err)
-	}
+	_, terminal := openTerminalAt(t, 24, 80)
 	r := &interp.Runner{}
 	s := Shell{Runner: r, In: terminal}
 
@@ -111,14 +102,7 @@ func (readerOnly) Read([]byte) (int, error) { return 0, nil }
 // The two are not one rule with two spellings: interp.Runner.windowSizeValue
 // is the other one, and it falls back where this declines to.
 func TestAnUnsizedTerminalWritesNothingToTheVariables(t *testing.T) {
-	control, terminal, err := pty.Open()
-	if err != nil {
-		t.Skipf("no pseudo-terminal: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = terminal.Close()
-		_ = control.Close()
-	})
+	_, terminal := openTerminalAt(t, 0, 0)
 	r := &interp.Runner{}
 	r.SetTracksWindowSize(true)
 	s := Shell{Runner: r, In: terminal}
@@ -128,5 +112,38 @@ func TestAnUnsizedTerminalWritesNothingToTheVariables(t *testing.T) {
 	}
 	if v, ok := r.GetVar("LINES"); ok {
 		t.Errorf("LINES = %q, want unset", v)
+	}
+}
+
+// And the width the editor draws against is eighty there, which is the other
+// half of the same terminal and the opposite answer.
+//
+// The row above is the *parameter*, which is bash's and writes nothing. This
+// is the *drawing*, which has nowhere to decline to: there is a screen and
+// something has to go on it, so a guess beats a refusal and eighty is the
+// guess zsh makes. Taking the ioctl's zero literally is what switched off
+// every piece of wrapping arithmetic the editor has, and it is why every pty
+// fixture in this package was grading the wrong redraw (#2627).
+//
+// Zero by zero rather than a pipe, because a pipe would prove the wrong thing.
+// The fallback is a statement about an unhelpful terminal and not about the
+// absence of one — see internal/tty, where the constants and the measurement
+// behind them live.
+func TestATerminalThatWillNotSayItsWidthIsDrawnForAtEighty(t *testing.T) {
+	_, terminal := openTerminalAt(t, 0, 0)
+	if rows, cols := terminalSize(terminal); rows != 0 || cols != 0 {
+		t.Fatalf("the terminal reported %dx%d; this test needs one that will not say", rows, cols)
+	}
+	if got := terminalWidth(terminal); got != tty.FallbackCols {
+		t.Errorf("terminalWidth = %d for a terminal that will not say, want the %d fallback", got, tty.FallbackCols)
+	}
+}
+
+// Nothing to ask is not the same as a terminal that will not answer: the
+// fallback is for a terminal, and a session whose input is not one has no
+// screen to guess the width of.
+func TestSomethingThatIsNotATerminalHasNoWidthAtAll(t *testing.T) {
+	if got := terminalWidth(nil); got != 0 {
+		t.Errorf("terminalWidth(nil) = %d, want 0 — there is no terminal to fall back for", got)
 	}
 }

@@ -136,6 +136,7 @@ func TestSemantics(t *testing.T) {
 		{"CdHasSymlinkFreeOption", s.CdHasSymlinkFreeOption, interp.No},
 		{"CdLastPathOptionWins", s.CdLastPathOptionWins, interp.Yes},
 		{"BadSetOptionNameFatal", s.BadSetOptionNameFatal, interp.No},
+		{"BadSetOptionLetterFatal", s.BadSetOptionLetterFatal, interp.No},
 		// A `[[ -o ]]` name this shell does not have is a quiet false, which
 		// is not what the same name does to `set -o` one line above.
 		{"UnknownConditionOptionIsAStatus", s.UnknownConditionOptionIsAStatus, interp.No},

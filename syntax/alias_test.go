@@ -60,6 +60,30 @@ func TestAliasExpansion(t *testing.T) {
 			table("a", "b x", "b", "a y"), "a", "a y x",
 		},
 		{
+			// A body may hold a separator, so it may hold more than one
+			// command — and the name is spent for every one of them. The set
+			// being the *command's* alone made this expand forever, which is
+			// a shell that hangs on a line every member of the panel answers
+			// `took` and then `a: not found` to (#2299).
+			"a self-reference past a separator does not loop",
+			table("a", "echo took;a"), "a", "echo took; a",
+		},
+		{
+			// The same fact through two names, which is what says the spent
+			// set is the *chain* still open around the word rather than the
+			// one body it came out of.
+			"mutual recursion past a separator stops too",
+			table("a", "echo A;b", "b", "echo B;a"), "a", "echo A; echo B; a",
+		},
+		{
+			// And the other side of it, unanimous too: a name the body
+			// expanded and finished with is spendable again in the body's
+			// next command. Keeping the set for the whole body would answer
+			// `X` and then `e: not found`.
+			"a name the body has finished with expands again",
+			table("e", "echo", "a", "e X; e Y"), "a", "echo X; echo Y",
+		},
+		{
 			// Only the command word: the second `p` is an argument.
 			"only the command word expands",
 			table("p", "echo p", "q", "p p"), "q", "echo p p",

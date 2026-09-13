@@ -46,6 +46,12 @@ func Dialect() syntax.Dialect {
 	// And a body's newlines are lines of the program, as they are in the two
 	// that expand by every route.
 	d.AliasBodyCountsLines = true
+	// A reserved word may be aliased and the alias wins, as in bash: `alias
+	// for=echo` on one line makes `for x in 1` on the next a command.
+	// Measured 2026-09-13, zsh 5.9.2 from a script file. Invoking this shell
+	// as `sh` takes it back, which is interp.Runner.SetPosixMode's half and
+	// is why the value here is the shell's own and not the mode's.
+	d.AliasesExpandReservedWords = true
 	// zsh has all five, like bash.
 	d.DeclarationUtilities = map[string]bool{
 		"declare": true, "typeset": true, "local": true,
@@ -904,6 +910,9 @@ func Semantics() interp.Semantics {
 	s.AmbiguousJobNameIsRefused = interp.No
 	s.WaitReportsAMissingJob = interp.Yes
 	s.WaitNWaitsForTheNextJob = interp.No
+	// Nor `-p`: the word is a job spec there too, and `wait -p` is `job
+	// not found: -p` at 127. Measured 2026-09-13.
+	s.WaitPNamesTheFinishedJob = interp.No
 	// A trapped signal cuts a `wait` short with 128 plus the signal, and the
 	// form that names a job answers the same as the bare one.
 	s.WaitForAJobFailsWhenInterrupted = interp.No
@@ -1383,6 +1392,10 @@ func Semantics() interp.Semantics {
 	// never reaches `two`. Note it is `[[ ]]` alone: the same expression
 	// in `(( ))` complains and the shell goes on.
 	s.ConditionArithmeticErrorIsFatal = interp.Yes
+	// And a C-style `for` header. Not `(( ))`, which zsh reports and carries
+	// on from — the two are a field apart for exactly that reason. Measured
+	// 2026-09-13; see [interp.Semantics.ForHeaderArithmeticErrorIsFatal].
+	s.ForHeaderArithmeticErrorIsFatal = interp.Yes
 	// The arithmetic reader stops at a byte it refuses and what it had by
 	// then stands, which `let` then reads for truth: `let '1 @'` is 0 here
 	// and 1 in the other three. Only that failure — `let '1+'` is 1 here too.
@@ -2002,6 +2015,9 @@ func Semantics() interp.Semantics {
 	s.ExitHook = "zshexit"
 	s.CdLastPathOptionWins = interp.No
 	s.BadSetOptionNameFatal = interp.Yes
+	// And the letter too, at zsh's own 1: `set -Z; echo one` prints
+	// nothing and exits 1.
+	s.BadSetOptionLetterFatal = interp.Yes
 	s.UnknownConditionOptionIsAStatus = interp.Yes
 	s.ReturnOutsideAFunctionIsRefused = interp.No
 	// And `break` with no loop around it stops the script here, which is the
@@ -2438,7 +2454,10 @@ func Diagnostics() interp.Diagnostics {
 		// echoes `-q` for `set +q` as dash does, rather than the sign it was
 		// asked with. `set` is named in the location, not in the sentence.
 		SetInvalidOptionLetter: "bad option: -%[2]s",
-		SetInvalidOptionStatus: 1,
+		// The one shell that answers 1 for both, which is what separates it
+		// from the two that answer 1 for one spelling and 2 for the other.
+		SetInvalidOptionNameStatus:   1,
+		SetInvalidOptionLetterStatus: 1,
 		// A denied `set -m` echoes the spelling it was asked with — `-m` or
 		// `monitor` — and fails at 1, fatally like every `set` failure here.
 		MonitorDenied:       "can't change option: %[1]s",

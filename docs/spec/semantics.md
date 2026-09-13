@@ -4749,11 +4749,11 @@ first is unanimous across the table.** Every name is one of five kinds:
 | kind | how many | what `setopt NAME` does |
 | --- | --- | --- |
 | substrate-backed | 15 | moves a real `set -o` switch: `setopt err_exit` **is** `set -e`, and `setopt vi` **is** `set -o vi`. `ignorebraces` is the inverted one: it is `set +o braceexpand`, zsh naming the state that *stops* the expansion where the substrate names the expansion |
-| axis- or matcher-backed | 13 | moves a semantics axis (`shwordsplit`, `nomatch`, `ksharrays`, `localtraps`, `multios`, `globsubst`, `typesetsilent`, `posixbuiltins`) or a pattern-matcher option (`nullglob`, `globdots`, `caseglob`, `extendedglob`, `bareglobqual`). `ksharrays` is one name over **five** axes — see below |
+| axis- or matcher-backed | 14 | moves a semantics axis (`shwordsplit`, `nomatch`, `ksharrays`, `localtraps`, `multios`, `globsubst`, `typesetsilent`, `posixbuiltins`) or a pattern-matcher option (`nullglob`, `globdots`, `caseglob`, `casematch`, `extendedglob`, `bareglobqual`). `ksharrays` is one name over **five** axes — see below; `casematch` is the one whose *spelling* bash shares and whose meaning it does not — see below |
 | fixed | 4 | refuses to move, in zsh's own words: `can't change option: NAME`, status 1. Asking for the state it already holds is granted, and one of the four is taken at the *invocation* — see `singlecommand` below |
 | store-backed, read by the front end | 7 | `histignorespace`, read by the line editor before it records a line; `interactivecomments`, read by the same editor before it *parses* one; `promptsp` and `promptcr`, read by it before it draws a prompt; `checkrunningjobs`, read by `checkjobs` when it recomputes what the exit is held for; and `cshnullcmd` and `shnullcmd`, read together when either moves so that the first can win while it is on. All seven are kept where a recorded name is kept, because the substrate has no `set -o` name for any of them |
 | switch-backed | 3 | `aliases`, `autocd` and `checkjobs`: each moves a capability the substrate holds under no option name of its own — alias expansion really does stop, a bare directory name really is read as a `cd`, and a job still running really does hold the exit |
-| **recorded** | 143 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
+| **recorded** | 142 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
 
 **Two names moved out of "recorded" when the history knobs were built**
 (#571). `histignorespace` is the fifth row above: its state has nowhere
@@ -4880,7 +4880,16 @@ shell's name silently did nothing here. The axis is
 option on where `emulate csh` and `emulate zsh` leave it off — measured all
 four ways, which is what makes it the fifth axis an emulation carries.
 
-So 143 of 185 are recorded, the count above is the one produced by counting
+`casematch` left it in #2622, and left it for a reason worth the sentence:
+the name is *bash's* name too, and there it means something else. bash's
+`nocasematch` folds `[[ == ]]`, `case` and the substitution operators of
+parameter expansion **and** the `=~` operator; zsh's folds `=~` and nothing
+else — measured 2026-09-13 on zsh 5.9.2 and bash 5.3.15, with each shell's
+own option on. So the core keeps two switches, `interp.MatchFoldsCase` and
+`interp.RegexFoldsCase`, and each dialect wires the name it spells: this one
+reaches the second alone.
+
+So 142 of 185 are recorded, the count above is the one produced by counting
 the constructors in `dialect/zsh/setopt.go`, and **the fixed set is now
 exactly the set real zsh refuses**: `interactive`, `shinstdin`,
 `singlecommand` and `zle`. `monitor` left it in #1720 because zsh grants it
@@ -12094,16 +12103,66 @@ rather than instead of it.
 
 ### `$_`, `$-` and the option letters
 
-**`BadSetOptionNameFatal`** — bash no · dash yes · ksh93 yes · zsh yes
+**`BadSetOptionNameFatal`** — bash no · dash yes · ksh93 yes · zsh yes · ash **no**
 
-Ends the script when `set -o` is given a name this shell does not have.
-True in dash, ksh93 and zsh.
+**`BadSetOptionLetterFatal`** — bash no · dash yes · ksh93 yes · zsh yes · ash **yes**
+
+Ends the script when `set` is given an option this shell does not have —
+a long `-o` name for the first, an option letter for the second.
 
 Not the same question as BadOptionToSpecialBuiltinFatal, and measured
 rather than assumed to be: a bad option *letter* to the same builtin is
 fatal in only two of them, and zsh does not so much as complain about
 `set -Q`. So one shell treats an unknown name as worse than an unknown
 letter, which is why this is a field of its own.
+
+And the two spellings are not one question either, which took a seventh
+column to see. Measured 2026-09-13 with `set -o zzznosuch; echo one;
+set -Z; echo two`, and again with the two halves swapped so that a column
+which stops at the first refusal is still asked about the second:
+
+| | name | letter |
+| --- | --- | --- |
+| bash 5.3 | carries on | carries on |
+| bash-as-`sh` | **stops** | **stops** |
+| bash 3.2 | carries on | carries on |
+| dash | **stops** | **stops** |
+| ksh93 | **stops** | **stops** |
+| zsh | **stops** | **stops** |
+| BusyBox ash | carries on | **stops** |
+
+One field answered both until #2629, because #483 measured it across the
+six columns above BusyBox ash and they all agree. That is not a wrong
+measurement; it is a measurement taken when the panel was smaller, and the
+seventh column split a question that genuinely looked like one. ash was
+added later (#2272) and took `Yes` for both with no comment of its own,
+which made `set -o nosuchname` — and `set -o posix`, a name BusyBox does
+not have — end scripts that really carry on.
+
+**The seam is the spelling that was refused, not the route it arrived by**,
+and the attached form is the probe that separates the two readings. In ash,
+`set -o zzznosuch` and `set +o zzznosuch` both report 1 and carry on, while
+`set -ozzznosuch` stops the script at 2 — BusyBox reads that word as a bare
+`-o`, which prints the option listing, followed by the letters of
+`zzznosuch`, and refuses the `z`. An `-o` is present in all three spellings,
+so "the `-o` route is the gentle one" predicts 1 for the third and is
+falsified. (Where our own parse lands for that word is a separate
+divergence, #2640.)
+
+**The status splits in a different column from the fatality**, which is why
+`Diagnostics.SetInvalidOptionNameStatus` and `SetInvalidOptionLetterStatus`
+are a second pair rather than a consequence of this one. bash 3.2 reports
+**1** for the name and **2** for the letter while ending the script for
+neither — a bash three versions back, not a BusyBox quirk. A single "the
+letter is harsher" axis would have been right about ash and wrong about
+bash 3.2.
+
+**Neither axis is moved by POSIX mode**, and bash moves both when its mode
+is entered: `set -o posix; set -o zzznosuch; echo after` stops in bash 5.3
+and prints `after` here, and `set +o posix` puts it back. That is #2641,
+left out of the split deliberately — bash is the only panel column with a
+POSIX mode to measure, so the `…InPosixMode` pair it wants would have four
+presets holding a value no shell was ever asked for.
 
 **It is `set`'s fatality and not the option's**, which a dialect with a
 second option builtin makes visible. Measured on a pipe in zsh 5.9.2,
@@ -16666,6 +16725,108 @@ The corpus row's `Why` is the other half of the lesson. It described the
 rule — "evaluation order is part of the specification" — rather than a
 disagreement, so it read as a case pinning something unanimous. A row
 recording a divergence has to say which column moves.
+
+## A `for (( ))` header that will not evaluate
+
+A C-style `for` header holds three expressions, and any of the three may
+fail to evaluate. Five of the panel's seven columns have the construct at
+all, and those five split two ways: the three bash columns complain, end
+the loop, leave 1 behind and read the next line; ksh93 and zsh complain
+and **give up the input**.
+
+Measured 2026-09-13, `env -i` with a real `PATH`, against bash 5.3.15,
+bash 3.2.57, bash as `sh`, ksh93u+ 2012-08-01, zsh 5.9.2, dash and
+BusyBox v1.37.0 through the container route the oracle reaches it by.
+Every probe below ends `; echo "after st=$?"`, and the cell says what the
+shell did with that last line:
+
+| probe | dash | bash 5.3 | bash-as-`sh` | bash 3.2 | ksh93 | zsh | ash |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `for ((i=0; i<1/0; i++))` — the condition | *no construct* | `after st=1` | `after st=1` | `after st=1` | **gone, 1** | **gone, 1** | *no construct* |
+| `for ((i=1/0; i<3; i++))` — the initializer | *no construct* | `after st=1` | `after st=1` | `after st=1` | **gone, 1** | **gone, 1** | *no construct* |
+| `for ((i=0; i<3; i=1/0))` — the step | *no construct* | `body`, `after st=1` | `body`, `after st=1` | `body`, `after st=1` | `body`, **gone, 1** | `body`, **gone, 1** | *no construct* |
+| `for ((i=0; 1+; i++))` — will not parse | *no construct* | `after st=1` | `after st=1` | `after st=1` | **gone, 1** | **gone, 1** | *no construct* |
+| `for ((i=0; i<3zz; i++))` — a bad number | *no construct* | `after st=1` | `after st=1` | `after st=1` | **gone, 1** | **gone, 1** | *no construct* |
+| `for ((i=0; i<3; i++))` with a `break` | *no construct* | `after st=0` | `after st=0` | `after st=0` | `after st=0` | `after st=0` | *no construct* |
+
+### dash and ash are a refusal and not an agreement
+
+Neither has a C-style `for` at all. Both answer every row above with a
+syntax error about the *loop variable* — `Bad for loop variable` at 2 in
+dash, `bad for loop variable` at 2 in BusyBox — raised before any
+expression is evaluated, so nothing in those two columns is a reading of
+what a failing header does. Counting them with the bash columns because
+neither printed `after` would make this five against two rather than three
+against two, and would record an agreement that was never measured. The
+probe that grades this axis therefore reads a *second* row first — a
+header that evaluates cleanly — and answers "no evidence" for a column
+that cannot run one.
+
+### All three parts, and every way a part can fail
+
+There is no finer rule inside the construct than the table shows. The
+initializer, the condition and the step are fatal alike in the two columns
+that give up, and a division by zero, an expression that never reaches the
+evaluator (`1+`), a bad number (`3zz`, `10#9z`) and a header built from an
+expansion (`x="echo hi"; for (( $x ;;))`) are fatal alike too. One axis
+answers for all of it.
+
+The step is the part a probe is easiest to write wrongly: it runs at the
+loop's **back edge**, so a body holding a `break` never reaches it and a
+row written with one measures nothing at all. The row above lets the body
+run and print once, which is what makes the `body` cell evidence that the
+step was reached.
+
+`set -u` against a name the header reads is **not** this rule. `set -u;
+for ((i=0; i<nosuchvar; i++))` ends *every* one of the five columns,
+bash included, which is the unset-parameter rule arriving before this
+question is asked.
+
+### It is not the question `(( ))` asks
+
+The two constructs do not cut the panel the same way, which is the whole
+reason this is a field of its own rather than a second reading of
+`ArithCommandErrorIsFatal`. Measured the same day:
+
+| probe | bash 5.3 | ksh93 | zsh |
+| --- | --- | --- | --- |
+| `for ((i=0; i<1/0; i++))` | carries on | **gives up** | **gives up** |
+| `(( 1/0 ))` | carries on | **gives up** | carries on |
+| `if (( 1/0 )); then :; fi` | carries on | **gives up** | carries on |
+| `while (( 1/0 )); do break; done` | carries on | **gives up** | carries on |
+| `let "1/0"` | carries on | carries on | carries on |
+
+ksh93's rule is the broad one — an arithmetic *command* or *condition*
+that will not evaluate ends it wherever it stands, and only `let` escapes
+— and zsh's is narrow: the header alone. The two coincide on exactly one
+construct. Folding them into one field would have bought this row by
+making zsh's `(( ))` fatal, which is the shape
+`ConditionArithmeticErrorIsFatal` was already split out for.
+
+`x=$((1/0))` is a third thing again and is on no axis: the **expansion**
+ends every column measured, bash included, so a fix that made all
+arithmetic failure fatal would pass this row and break that one.
+
+### Interactive changes the answer, for all of it
+
+None of this is fatal to a shell with a terminal on it. Driven over a
+pseudo-terminal on 2026-09-13 — typing the construct, then a line whose
+*output* differs from its text, so that the terminal's echo of a keystroke
+cannot be mistaken for a shell that is still running — ksh93 and zsh both
+survive a failing `for` header, both survive `(( 1/0 ))`, and both survive
+`x=$((1/0))`, which is fatal to them in a script. The give-up is a
+non-interactive rule.
+
+### How far the give-up reaches
+
+It is the ordinary reach of a fatal error and nothing this construct
+chose, which is worth stating because it bounds the fix. Measured:
+
+- a **subshell** confines it — `( for ((i=0; i<1/0; i++)); do :; done ); echo after` prints `after` in both columns;
+- a **command substitution** confines it the same way;
+- a **function** does not — `f() { … }; f; echo after` loses the `after`;
+- `||` does not — the loop is not a command whose failure the operator can catch;
+- a **sourced file** catches it: the rest of that file is abandoned and the caller's next line runs, exactly as it does for `(( ))`.
 
 ## An axis nothing objects to is not a measurement
 

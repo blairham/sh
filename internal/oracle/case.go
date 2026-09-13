@@ -3852,6 +3852,16 @@ echo "reached-after st=$?"`,
 		Why:     "three expressions in one header, so a complaint with no expression in it cannot say which of them failed: bash and ksh93 name `i<1/0`. The loop body must not run either, which is the half a diagnostic alone would not show",
 	},
 	{
+		ID: "arith/a-for-header-part-that-will-not-parse", Category: "arithmetic",
+		Snippet: `for (( i=0; 1+; i++ )); do echo body; done; echo "st=$?"`,
+		Why:     "the other way a header part can fail, and it is recorded beside the evaluation one because the two shells that give up the input give it up for both — `1+` never reaches the evaluator and `1/0` does, and neither prints the `st=`. The three bash columns report and carry on in both, so the pairing is what says one axis answers for the two branches rather than two axes with one measurement each (#2617)",
+	},
+	{
+		ID: "arith/a-for-header-step-that-will-not-evaluate", Category: "arithmetic",
+		Snippet: `for (( i=0; i<3; i=1/0 )); do echo body; done; echo "st=$?"`,
+		Why:     "the third part, and the one a probe is easiest to write wrongly: the step runs at the loop's *back edge*, so a body holding a `break` never reaches it and the row measures nothing — this one lets the body run and print once. ksh93 and zsh give up the input after the first pass; the bash columns report the step and go on to the `st=`",
+	},
+	{
 		ID: "arith/a-for-header-part-is-blamed-as-it-was-written", Category: "arithmetic",
 		Snippet: `x="echo hi"; for (( $x ;;)); do :; done; echo "st=$?"`,
 		// The blanks in the header are the case, and the printer's zero
@@ -4672,6 +4682,38 @@ echo "reached-after st=$?"`,
 			"written from, and on its own it says nothing about the substitution " +
 			"next door — which is how the fold came to be documented as reaching " +
 			"no parameter expansion at all",
+	},
+	{
+		ID: "shopt/nocasematch-folds-the-regex-operator", Category: "shell options",
+		Snippet: `shopt -s nocasematch 2>/dev/null; [[ ABC =~ ^abc$ ]] && echo fold || echo exact`,
+		Why: "the *other* operator the option reaches, which the `case` row above " +
+			"cannot say: `==` and `=~` are different matchers — one a glob, one a " +
+			"regular expression — and a shell can fold either without folding the " +
+			"other. All three bash columns fold, which is what makes this a " +
+			"correction and not an axis; zsh and ksh93 leave it exact because the " +
+			"builtin that would have changed it was never theirs, and dash has no " +
+			"`[[ ]]` to ask with. We folded the glob half and left this one exact, " +
+			"so `shopt -s nocasematch; [[ $reply =~ ^y ]]` took the other branch " +
+			"with nothing written to standard error (#2622)",
+	},
+	{
+		ID: "shopt/nocasematch-folds-a-regex-character-class", Category: "shell options",
+		Snippet: `shopt -s nocasematch 2>/dev/null; [[ ABC =~ ^[[:lower:]]+$ ]] && echo fold || echo exact`,
+		Why: "how far into the expression the fold reaches, and it is the whole of " +
+			"it: a character class folds along with the literal letters, so a fold " +
+			"applied to the pattern's text would answer `fold` on the row above and " +
+			"`exact` here. The two rows together are what say the fold belongs to " +
+			"the compiled expression rather than to a pass over its characters",
+	},
+	{
+		ID: "shopt/nocasematch-folds-a-regex-before-it-negates", Category: "shell options",
+		Snippet: `shopt -s nocasematch 2>/dev/null; [[ A =~ ^[^a]$ ]] && echo match || echo no-match`,
+		Why: "the order of the two operations, which is the one cell a fold bolted " +
+			"on after the match cannot get right: bash folds first and complements " +
+			"second, so `[^a]` excludes `A` as well and the subject fails. zsh and " +
+			"ksh93 match, having no option set. dash agrees with bash by accident — " +
+			"its `[[: not found` is a failure and the `||` arm runs — which is why " +
+			"the diagnostic beside the word is part of the cell",
 	},
 	{
 		ID: "shopt/query-answers-by-status", Category: "shell options",
@@ -16587,12 +16629,12 @@ echo "st=$? alive"`,
 	{
 		ID: "opt/an-unknown-long-name-is-refused", Category: "shell options",
 		Snippet: `set -o zzznosuch; echo "on=$?"; set +o zzznosuch; echo "off=$?"`,
-		Why:     "a name outside the shell's table is refused in both directions, with four different wordings and two different statuses — the boundary the accept-off policy stops at, since a name that does not exist is not a state anything is already in",
+		Why:     "a name outside the shell's table is refused in both directions, with four different wordings and two different statuses — the boundary the accept-off policy stops at, since a name that does not exist is not a state anything is already in. The row the `BadSetOptionNameFatal` probe reads, and `zzznosuch` rather than a name some shell owns is what makes it readable: a column that *has* the name answers 0 in silence and says nothing about what a refusal would do, which is the shape `opt/set-o-takes-a-name-only-this-shell-has` has for zsh",
 	},
 	{
 		ID: "opt/an-unknown-letter-is-refused", Category: "shell options",
 		Snippet: `set -q; echo "st=$?"; echo alive`,
-		Why:     "the letter half of the question the long name asks, and the panel answers the two identically — `-q`, `-j`, `-z` and `-A` are the letters all seven refuse, and each shell reports for `set -q` exactly what it reports for `set -o zzznosuch` and ends the script or does not in the same way. bash alone carries on, at 2; dash, ksh93 and ash stop at 2 and zsh at 1. The letter had no dialect answer at all until #483: it reported 2 everywhere and never stopped a script, so the same shell answered its own two spellings differently",
+		Why:     "the letter half of the question the long name asks, and **not** the same answer — which is what this row said for a year and what #2629 measured out of it. `-q`, `-j`, `-z` and `-A` are letters all seven refuse, and comparing them against each other is what the #483 measurement did; comparing one of them against a refused *name* in the same shell is what it never did. bash 5.3 and bash 3.2 carry on at 2 where their names are 2 and **1**; bash-as-`sh`, dash, ksh93 and BusyBox ash stop at 2 and zsh at 1, and ash's name is 1 and survivable. So the letter is the harsher spelling in two columns and the same in five. The letter had no dialect answer at all until #483 — it reported 2 everywhere and never stopped a script — and it had the *name's* answer until #2629",
 	},
 	{
 		ID: "opt/a-refused-letter-echoes-the-sign", Category: "shell options",
@@ -17729,6 +17771,34 @@ echo hi`,
 		Why: "an alias is not expanded twice in one command, which is what stops `alias echo='echo x'` from recurring forever — the second `echo` is an ordinary word and runs the builtin",
 	},
 	{
+		ID: "alias/a-self-reference-past-a-separator-does-not-loop", Category: "alias",
+		Script: true,
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias a='echo took;a'
+a
+echo "st=$?"`,
+		Why: "a body may hold a separator, so it may hold more than one command — and the name is spent for every one of them. Unanimous across all seven columns: `took`, then the shell's own words for `a: not found`, at 127. We expanded it again in the second command and did that forever, which is a shell that hangs on a line every member of the panel answers (#2299)",
+	},
+	{
+		ID: "alias/a-self-reference-two-names-away-past-a-separator", Category: "alias",
+		Script: true,
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias a='echo A;b'
+alias b='echo B;a'
+a
+echo "st=$?"`,
+		Why: "the same fact through two names, which is what says the spent set is the *chain* of expansions still open around the word rather than the one body it came out of: `A`, `B`, and then the first name as an ordinary word nobody has",
+	},
+	{
+		ID: "alias/a-name-the-body-has-finished-with-expands-again", Category: "alias",
+		Script: true,
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias e=echo
+alias a='e X; e Y'
+a`,
+		Why: "the other side of the row above, and the control that stops a fix from over-reaching: a name the body expanded and *finished with* is spendable again in the body's next command, so this is `X` and `Y` rather than `X` and a command not found. Keeping the spent set for the whole body would pass the two rows above and fail this one",
+	},
+	{
 		ID: "alias/not-on-the-line-that-defines-it", Category: "alias",
 		Snippet: `alias a='echo hit'; a
 echo "st=$?"`,
@@ -18055,6 +18125,128 @@ echo end`,
 		ID: "alias/the-name-of-a-bare-lookup", Category: "alias",
 		Snippet: `alias 'a$b'; echo "st=$?"; echo two`,
 		Why:     "whether the name check reaches a *lookup* as well as a definition — Semantics.AliasNameCheckReachesALookup (#2413). ksh93u+ refuses the word and ends the script; bash 5.3 looks it up like any other and answers `not found`, which is the same thing it says for a name nobody ever mentioned. dash says its own not-found and zsh says nothing at all, both at 1, which is what they already do for any absent name — so for the three that check no name this row is the control rather than the question",
+	},
+	{
+		ID: "alias/a-reserved-word-is-read-the-way-the-grammar-reads-it", Category: "alias",
+		Script: true,
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias for='echo took;for'
+for x in a
+do echo "[$x]"
+done`,
+		Why: "whether an alias may stand in for a word the grammar reserves — syntax.Dialect.AliasesExpandReservedWords. The body ends in the word it shadows so that both readings run and the difference is one line of output rather than a parse error: `took` means the alias won, its absence means the loop did. bash 5.3, bash 3.2 and zsh take the alias; dash, ksh93, BusyBox ash and bash called `sh` read the word the grammar's way. From a file because zsh expands no alias under -c",
+	},
+	{
+		ID: "alias/a-reserved-word-after-an-alias-ending-in-a-blank", Category: "alias",
+		Script: true,
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias sp=' '
+alias '!'='echo took;'
+sp ! true
+echo "st=$?"`,
+		Why: "the same question one position further in: a value ending in a space makes the next word eligible — the rule `alias/a-trailing-space-carries-on` pins on an ordinary name — and the word made eligible that way is judged by the same reservation. Same split as the row above and on two visible things at once: `took` and status 0 where the alias won, silence and 1 where `! true` stayed a negation. `!` rather than `for` because every corpus snippet has to be a program on its own, and `!` is the one reserved word that is an ordinary argument in this position: `sp for x in a` followed by `do` does not parse until the substitution has already happened, so a row spelled that way would be asking the parser a question only the answer can pose",
+	},
+	{
+		ID: "alias/a-reserved-word-alias-in-posix-mode", Category: "alias",
+		Script: true,
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias for='echo took;for'
+set -o posix
+for x in a
+do echo "[$x]"
+done`,
+		Why: "the mode moves it: the two bash builds print only the loop here where they print `took` above. The other four have no `posix` option at all and say so in three different ways — an illegal option, bad option(s) with the usage line, and no such option — which is the same taxonomy this corpus records everywhere the name is bash's. dash and ksh93 end the script over it and BusyBox ash reports it and carries on, which is why ash still reaches the loop and prints `[a]`",
+	},
+	{
+		ID: "alias/leaving-posix-mode-hands-the-reserved-word-back", Category: "alias",
+		Script: true,
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias for='echo took;for'
+set -o posix
+set +o posix
+shopt -s expand_aliases 2>/dev/null
+for x in a
+do echo "[$x]"
+done`,
+		Why: "the other direction, which is what makes it a mode rather than a build: `took` is back in both bash builds and in the same build called `sh`. The second `shopt` is not decoration — leaving the mode turns alias expansion off on its own, measured, so without it this row would be measuring that instead",
+	},
+	{
+		ID: "alias/a-word-the-grammar-does-not-reserve-expands-in-posix-mode", Category: "alias",
+		Script: true,
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+set -o posix
+alias hi='echo took'
+hi there`,
+		Why: "the control that says the mode takes away one name and not the feature: an ordinary alias still stands in for its word with the mode on. Without it a shell that stopped expanding aliases altogether in POSIX mode would pass the three rows above",
+	},
+	{
+		ID:       "invoke/posix-mode-from-the-invocation-reaches-the-first-line",
+		Category: "invocation",
+		Args:     []string{"-o", "posix", ArgScript},
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias for='echo took;for'
+for x in a
+do echo "[$x]"
+done`,
+		Why: "the mode asked for on the command line, which is the same axis as the `set -o posix` row and a different route to it. It is a row of its own because the routes are not the same code: the mode is entered before a line of the program has been read, and a front end that seeded its watch with what the runner already held would hand the parser the mode for every *later* line and not for the program's own. Both bash builds print only the loop; the other four have no such option, and refuse the invocation rather than the line — nothing runs at all in those columns, which is the difference between an option refused at startup and one refused by `set`",
+	},
+	{
+		ID:       "invoke/called-sh-protects-a-reserved-word-alias",
+		Category: "invocation",
+		Argv0:    "sh",
+		Script:   true,
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias for='echo took;for'
+for x in a
+do echo "[$x]"
+done`,
+		Why: "the third door into the same axis, and the one a shebang takes: the name alone. bash and zsh both stop taking the alias under it, which is what puts this axis with the seven the mode answers the standard's way rather than with the one it asks the dialect about. dash, ksh93 and BusyBox ash never took it, so they are the control that the name changed nothing for them",
+	},
+	{
+		ID: "jobs/wait-n-waits-for-the-job-it-was-given", Category: "builtins",
+		Script: true,
+		Snippet: `{ sleep 0.2; exit 4; } &
+{ sleep 0.6; exit 5; } &
+wait -n %2
+echo "st=$?"
+wait`,
+		Why: "`wait -n` with operands waits for the first of *those* jobs, not for the first of all of them: 5 rather than 4, and the shorter job goes on being a job. BusyBox ash has the letter too and answers the same here, which is worth the row on its own — the other three refuse it, one of them by reading `-n` as a job spec that names nothing",
+	},
+	{
+		ID: "jobs/wait-n-with-nothing-after-it-takes-the-first", Category: "builtins",
+		Script: true,
+		Snippet: `{ sleep 0.2; exit 4; } &
+{ sleep 0.6; exit 5; } &
+wait -n
+echo "st=$?"
+wait`,
+		Why: "the control for the row above, and the pair is the whole of the rule: the same two jobs with no operands give 4 in both bash 5 columns, the job the narrowed form deliberately steps over. The two rows differ by two words and by which job is reported. BusyBox ash has the letter and answers 129 here against 5 above, so it narrows too and reports a bare `-n` its own way",
+	},
+	{
+		ID: "jobs/wait-p-names-the-job-the-status-came-from", Category: "builtins",
+		Script: true,
+		Snippet: `{ sleep 0.2; exit 4; } & b1=$!
+wait -p V %1
+echo "st=$? named=$([ "$V" = "$b1" ] && echo yes || echo no)"`,
+		Why: "`wait -p var` stores the finished job's process id. Compared rather than printed, because the number is the machine's. bash 5's letter alone: the 3.2 build macOS ships calls it an invalid option beside its one-line usage, and ksh93, dash, BusyBox ash and zsh each refuse it their own way",
+	},
+	{
+		ID: "jobs/wait-p-with-no-job-to-name-empties-the-variable", Category: "builtins",
+		Script: true,
+		Snippet: `V=preset
+{ sleep 0.2; } &
+wait -p V
+echo "st=$? V=[$V]"`,
+		Why: "the control: a bare `wait` names no single job, and the letter still writes — V is empty afterwards rather than holding what it held. That is the half a store written only on success would get wrong, and the shells that refuse the letter leave `preset` where it was, which is the same fact from the other side",
+	},
+	{
+		ID: "jobs/wait-p-writes-through-an-array-element", Category: "builtins",
+		Script: true,
+		Snippet: `k=key
+{ sleep 0.2; exit 4; } & b1=$!
+wait -p "A[$k]" %1
+echo "st=$? named=$([ "${A[$k]}" = "$b1" ] && echo yes || echo no)"`,
+		Why: "the name is stored through the same route an assignment takes, so a subscripted one reaches an element — which is the spelling a real suite uses and the reason this builtin now evaluates arithmetic. The two shells with no arrays refuse the substitution as well as the letter, which the row records rather than avoids",
 	},
 	{
 		ID: "select/an-unterminated-final-reply", Category: "select",
@@ -18661,6 +18853,12 @@ echo "read=[$l]"`,
 		Why:     "a bare setopt lists what differs from zsh's defaults, canonically spelled and ordered by the base name — noclobber prints between allexport's place and errexit — with nohashdirs as the -c baseline's one line",
 	},
 	{
+		ID: "setopt/the-interactive-listing-drops-nohashdirs", Category: "builtins",
+		Args:    []string{"-f", "-i", "-c", ArgSnippet},
+		Snippet: `setopt; echo "st=$?"`,
+		Why:     "the same bare listing on the route nothing swept, which is where the two shells parted. `hashdirs` is on by default in zsh and off in a `-c` shell, so `nohashdirs` is the baseline's one line — and an *interactive* shell has it on, so the name is absent altogether and `interactive` and `zle` are what the listing carries. `-f` is here so the row is about the invocation rather than about whatever rc file the machine has. The other six columns have no `setopt` and say so, most of them after a line or two about the terminal an interactive shell was asked for and not given (#2351)",
+	},
+	{
 		ID: "setopt/shwordsplit-is-an-option", Category: "builtins",
 		Snippet: `x="a b"; setopt shwordsplit; set -- $x; echo "n=$#"`,
 		Why:     "zsh's no-splitting is an option, not a law: shwordsplit turns the sh behavior on. The name is zsh's own for a semantics axis, which is what makes it a one-line dialect answer",
@@ -18699,6 +18897,18 @@ echo "read=[$l]"`,
 		ID: "setopt/caseglob-is-the-globs-alone", Category: "builtins",
 		Snippet: `mkdir d; : > d/B.txt; unsetopt caseglob; echo d/b*; case AB in ab) echo yes;; *) echo no;; esac`,
 		Why:     "zsh's caseglob governs pathname expansion and nothing else — the glob folds case and the case statement still does not — which is what says it is not the same switch as bash's nocasematch",
+	},
+	{
+		ID: "setopt/nocasematch-is-the-regex-operator-alone", Category: "builtins",
+		Snippet: `setopt nocasematch 2>/dev/null; [[ ABC =~ ^abc$ ]] && echo re-fold || echo re-exact; [[ ABC == abc ]] && echo pat-fold || echo pat-exact`,
+		Why: "one name, two shells, two features. zsh's `nocasematch` folds `=~` " +
+			"and leaves `==` exact; bash's folds both, and `case` and the " +
+			"substitution operators of `${ }` with them — see the shopt rows under " +
+			"shell options. So the row is `re-fold pat-exact` in zsh and " +
+			"`re-exact pat-exact` everywhere else, the last because no other " +
+			"column has `setopt` at all. Reading the shared spelling as one switch " +
+			"would have folded three surfaces here that this shell leaves alone, " +
+			"silently and in the permissive direction (#2622)",
 	},
 	{
 		ID: "setopt/globdots-brings-back-the-hidden-names", Category: "builtins",

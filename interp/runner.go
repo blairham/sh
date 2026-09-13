@@ -1339,6 +1339,15 @@ type Runner struct {
 	posixSavedExportListing   DeclarationListingForm
 	posixSavedReadonlyListing DeclarationListingForm
 	posixSavedBareListing     DeclarationListingForm
+	// And the one axis the mode moves that is not on the semantics vector at
+	// all: whether an alias may stand in for a word the grammar reserves is
+	// a question about how a line is *read*, so it lives on the dialect and
+	// the mode reaches it the way SetMatchOption reaches the grammar — by
+	// replacing the Dialect rather than writing through it. Saved here for
+	// the reason the others are: bash takes the alias and zsh takes it too,
+	// so leaving the mode has to put the shell's own answer back rather than
+	// assert the standard's opposite.
+	posixSavedAliasReserved bool
 
 	// fds are the descriptors beyond the three named streams — what
 	// `exec 6>&1` saves and `>&6` finds again. Values are the io.Reader or
@@ -1522,6 +1531,11 @@ type Runner struct {
 	// call of the builtin.
 	setRefusalOwed bool
 	setUsageOwed   bool
+	// setRefusalSpelling is which of `set`'s two refusals owes the fatality
+	// above — the long `-o` name or the option letter — because the two have
+	// their own status and their own axis and one dialect answers them
+	// differently. Recorded at the *first* refusal; see setRefusalStatus.
+	setRefusalSpelling setRefusalSpelling
 	// atInvocation marks a `set` option applied by the front end from the
 	// words the shell was started with, rather than by the builtin from a
 	// line of script. The panel words the two refusals differently — nobody

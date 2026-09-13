@@ -334,7 +334,90 @@ func Probes() []Probe {
 				return "", "the row printed neither pair, so the expression never reached an assignment"
 			},
 		},
+		{
+			Field: "ForHeaderArithmeticErrorIsFatal",
+			// Two rows, because one cannot tell the two silences apart. A
+			// shell that gave up the input prints no `st=`, and so does one
+			// that never had a C-style `for` to give up — dash and ash answer
+			// the failing row with a syntax error about the loop variable,
+			// which is a refusal of the grammar and not a reading of the
+			// header. The clean row is what separates them.
+			Cases:   []string{"core/c-style-for", "arith/a-for-header-part-that-will-not-evaluate"},
+			Reading: "`for (( i=0; i<1/0; i++ )); do echo body; done; echo \"st=$?\"` prints `st=` in a shell that ends the loop and reads the next line, and nothing at all in one that gives up the input — read only where the clean C-style `for` row shows the shell has the construct",
+			Read: func(cells map[string]oracle.Result) (string, string) {
+				// Whether the construct exists at all, asked first: the
+				// failing row's silence means nothing until this says the
+				// shell can run a header that works.
+				if clean := cells["core/c-style-for"]; clean.Status != 0 ||
+					strings.TrimSpace(clean.Stdout) != "012" {
+					return "", "this shell has no C-style `for` — it refuses a header that evaluates cleanly, so the failing row is a syntax error rather than an answer about the failure"
+				}
+				r := cells["arith/a-for-header-part-that-will-not-evaluate"]
+				// The body must not have run under either reading, so `body`
+				// in the output means the row measured something other than
+				// the header failing.
+				if strings.Contains(r.Stdout, "body") {
+					return "", "the loop body ran, so the header did not fail and the row says nothing about what a failure does"
+				}
+				if strings.Contains(r.Stdout, "st=") {
+					return "No", ""
+				}
+				return "Yes", ""
+			},
+		},
+		{
+			Field: "BadSetOptionNameFatal",
+			Cases: []string{"opt/an-unknown-long-name-is-refused"},
+			// `zzznosuch` deliberately, and not the `autocd` row beside it
+			// in the corpus. A shell that *has* the name answers with a
+			// silent 0 and says nothing about what a refusal would do, and
+			// the panel has such a shell — zsh owns `autocd`. Reading that
+			// row would score zsh's cell as "carried on, so not fatal",
+			// which is the no-evidence-as-agreement shape this file exists
+			// to refuse. A name nobody owns makes all seven columns speak;
+			// the empty-stderr guard below is what keeps that a check rather
+			// than a claim about the snippet.
+			Reading: "`set -o zzznosuch; echo \"on=$?\"` reaches its `echo` in a shell a refused `set -o` name does not end, and prints nothing at all in one it does",
+			Read: func(cells map[string]oracle.Result) (string, string) {
+				return refusedSetOptionFatal(cells["opt/an-unknown-long-name-is-refused"], "on=")
+			},
+		},
+		{
+			Field: "BadSetOptionLetterFatal",
+			Cases: []string{"opt/an-unknown-letter-is-refused"},
+			// The mirror, and the reason the two are separate axes at all:
+			// BusyBox ash answers `No` above and `Yes` here. The row is a
+			// letter no panel member has, for the same reason the row above
+			// is a name none of them has.
+			Reading: "`set -q; echo \"st=$?\"; echo alive` reaches its `echo`s in a shell a refused option letter does not end, and prints nothing at all in one it does",
+			Read: func(cells map[string]oracle.Result) (string, string) {
+				return refusedSetOptionFatal(cells["opt/an-unknown-letter-is-refused"], "st=")
+			},
+		},
 	}
+}
+
+// refusedSetOptionFatal is the reading both `set` refusal axes take, given
+// the cell and the word its row prints after the refusal.
+//
+// Folded rather than written twice, because the two differ in nothing but
+// which row they read and a fix landing in one of a pair is this tree's
+// recurring failure. The guard is the load-bearing part: a cell with nothing
+// on standard error is a shell that **accepted** the option, and a shell that
+// accepted it has not been asked the question. Without that, "carried on
+// because there was no refusal" and "carried on past a refusal" are one
+// reading, and the first is scored as agreement.
+func refusedSetOptionFatal(r oracle.Result, printed string) (string, string) {
+	if strings.TrimSpace(r.Stderr) == "" {
+		return "", "this shell accepted the option — the recorded cell holds no refusal at all, so the row says nothing about what a refusal would do"
+	}
+	switch {
+	case strings.Contains(r.Stdout, printed):
+		return "No", ""
+	case r.Status != 0:
+		return "Yes", ""
+	}
+	return "", "the script neither reached the `echo` after the refusal nor failed, so the row says nothing about fatality"
 }
 
 // survivesQuit is the reading of the plain SIGQUIT row, shared because a

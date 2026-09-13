@@ -71,7 +71,24 @@ func runFile(ctx context.Context, shell, dir, name string, env []string, timeout
 	cmd.Stdout, cmd.Stderr = &buf, &buf
 	// A backstop only. The group kill below is what actually ends a run; this
 	// bounds the wait if a process escaped the group.
-	cmd.WaitDelay = 2 * time.Second
+	//
+	// Generous, for the reason the timeout above is generous and with a
+	// sharper edge. A suite file *deliberately* leaves background jobs
+	// running when it ends — that is a thing about shells worth testing —
+	// and every one of them holds the output pipe the harness is reading. A
+	// short delay does not measure a shell that leaks: it measures how long
+	// the file's own `sleep` was against a bound nobody chose on purpose,
+	// and what it writes down is a -1, which reads as a run that died on a
+	// signal.
+	//
+	// Measured 2026-09-13 on the file that drove this: it backgrounds jobs
+	// of one, two and four seconds and ends once the two-second one is
+	// waited out, so the orphan outlives the shell by two seconds. At two
+	// this bound landed on the same edge for the reference as for us and
+	// the file came back *unstable* — the oracle disagreeing with itself
+	// between runs — which costs the file entirely. At fifteen both shells
+	// finish and the file is evidence again.
+	cmd.WaitDelay = 15 * time.Second
 	setProcessGroup(cmd)
 
 	if err := cmd.Start(); err != nil {

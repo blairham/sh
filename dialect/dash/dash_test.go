@@ -151,6 +151,7 @@ func TestSemantics(t *testing.T) {
 		{"CdHasSymlinkFreeOption", s.CdHasSymlinkFreeOption, interp.No},
 		{"CdLastPathOptionWins", s.CdLastPathOptionWins, interp.Yes},
 		{"BadSetOptionNameFatal", s.BadSetOptionNameFatal, interp.Yes},
+		{"BadSetOptionLetterFatal", s.BadSetOptionLetterFatal, interp.Yes},
 		// Answered although this shell has no `[[ ]]` to ask it in, so a
 		// grammar built from this preset with the construct turned on is
 		// not left refusing.

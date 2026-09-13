@@ -1913,10 +1913,12 @@ type Diagnostics struct {
 	// `monitor`, `shinstdin`, `singlecommand` and `zle` — measured in a
 	// non-interactive `-c` run, and about nothing else in the other 180.
 	//
-	// Its status and whether it ends the script are SetInvalidOptionStatus
+	// Its status and whether it ends the script are SetInvalidOptionNameStatus
 	// and Semantics.BadSetOptionNameFatal, the same two the invalid name
 	// uses: measured, zsh answers `set -o onecmd` and `set -o zzznosuch`
-	// with the same 1 and stops the script at both.
+	// with the same 1 and stops the script at both. The *name* pair and not
+	// the letter one, because this is a name — the letter half of the same
+	// refusal is ImmovableOptionLetters, which reads the letter pair.
 	SetImmovableOptionName string
 
 	// ImmovableOptionLetters are, per builtin, the option letters this shell
@@ -1951,7 +1953,13 @@ type Diagnostics struct {
 	// which those two say by writing the `-` into the wording and taking the
 	// bare letter. Measured 2026-09-05 on `-q`, `-j`, `-z` and `-A`, the
 	// letters all six of bash 5.3, bash 3.2, bash-as-`sh`, dash, ksh93 and
-	// zsh refuse. zsh's `set:` comes from the location, as everywhere else.
+	// zsh refuse — and BusyBox ash, the seventh, refuses them too and echoes
+	// the sign it was asked with. zsh's `set:` comes from the location, as
+	// everywhere else.
+	//
+	// Four letters, which is worth naming because a measurement of letters
+	// alone is what let the *status* stay one field for both spellings until
+	// #2629: nothing in it put a letter beside a name in the same shell.
 	//
 	// A letter the dialect *has* and this shell has not implemented is a
 	// different answer and belongs in UnimplementedOptionLetters under
@@ -1968,20 +1976,51 @@ type Diagnostics struct {
 	// where the dialect has one, and this says whether the name does too.
 	SetInvalidOptionNameUsage bool
 
-	// SetInvalidOptionStatus is what a refused `set` option reports —
-	// either spelling. Zero means 2, which is three of the four; zsh
-	// answers 1.
+	// SetInvalidOptionNameStatus is what a refused `set -o` **name**
+	// reports. Zero means 2, which is bash, dash and ksh93; zsh and
+	// BusyBox ash answer 1.
 	//
-	// One value for the letter and the name because the panel answers them
-	// identically, measured 2026-09-05 on `-q`, `-j`, `-z` and `-A`, which
-	// are the letters all six of bash 5.3, bash 3.2, bash-as-`sh`, dash,
-	// ksh93 and zsh refuse: `set -q` reports exactly what
-	// `set -o nosuchoption` reports in every one of them, and so does the
-	// same letter given to the invocation. Two fields would be two names for
-	// one measurement, and the one that was not being read would be the one
-	// that drifted — which is what this replaced: the letter never asked at
-	// all and the front end exited 2 for everybody (#483).
-	SetInvalidOptionStatus int
+	// SetInvalidOptionLetterStatus is the same question about a refused
+	// option **letter**, and the two are separate fields because two of the
+	// seven columns answer them differently. Measured 2026-09-13 with
+	// `set -o zzznosuch` against `set -Z`, a name and a letter no panel
+	// member has:
+	//
+	//	bash 5.3      2   2
+	//	bash-as-sh    2   2
+	//	bash 3.2      1   2
+	//	dash          2   2
+	//	ksh93         2   2
+	//	zsh           1   1
+	//	BusyBox ash   1   2
+	//
+	// This was one field until #2629, on the reading recorded here that "the
+	// panel answers them identically, measured 2026-09-05 on `-q`, `-j`,
+	// `-z` and `-A`". That measurement was of **letters only** — all four of
+	// those words are letters — so it never compared a letter against a
+	// name in the same shell, and two columns had been disagreeing the whole
+	// time. bash 3.2 is the one the ash work did not expect: it is not a
+	// BusyBox quirk but a bash that predates the change, and it splits the
+	// status without splitting the fatality, which is what makes the status
+	// and Semantics.BadSetOptionLetterFatal two questions rather than one.
+	//
+	// Every preset answers both explicitly, including the five columns where
+	// the two agree. A zero there would be the sameness assumed again; a
+	// written 2 is the sameness measured.
+	//
+	// The invocation takes the same two answers, since `sh -o zzznosuch` and
+	// `sh -Z` are the same two refusals arriving by the other route. Not
+	// quite unanimously: BusyBox ash writes the complaint for a refused
+	// *name* at an invocation and then exits **0** — see the corpus row
+	// `invoke/a-long-option-name-that-is-not-one`, and #2639, which is where
+	// that third answer will go if it earns a field.
+	SetInvalidOptionNameStatus int
+
+	// SetInvalidOptionLetterStatus is what a refused `set` option **letter**
+	// reports. Zero means 2, which is every column but zsh; see
+	// SetInvalidOptionNameStatus for the measurement and for why the letter
+	// and the name are two fields.
+	SetInvalidOptionLetterStatus int
 
 	// MonitorDenied is `set -m` asked for by a shell the dialect says needs
 	// a terminal for it (Semantics.MonitorNeedsATerminal), in the dialect's

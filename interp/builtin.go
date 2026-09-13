@@ -28,7 +28,6 @@ var builtins = map[string]Builtin{
 	"false":    biFalse,
 	"echo":     biEcho,
 	"pwd":      biPwd,
-	"wait":     biWait,
 	"trap":     biTrap,
 	"break":    biBreak,
 	"continue": biContinue,
@@ -62,6 +61,12 @@ var builtins = map[string]Builtin{
 // shell. It was in the literal above while it could only move the runner and
 // print.
 //
+// `wait` joined them for exactly `read`'s reason, one letter later: `wait -p
+// A[$key]` stores the finished job's process id through the same element
+// route an assignment takes, and that route evaluates the subscript — so a
+// command substitution written inside one reaches the dispatcher. Before the
+// letter there was nothing of `wait`'s that could reach anything.
+//
 // `set` is the newest and reaches the dispatcher two constructs further out:
 // `set -A a …` stores an array, a name carrying the integer attribute folds
 // every element through the arithmetic, and a subscript with a flag group in
@@ -74,6 +79,7 @@ func init() {
 	builtins["exit"] = biExit
 	builtins["return"] = biReturn
 	builtins["read"] = biRead
+	builtins["wait"] = biWait
 	builtins["cd"] = biCd
 }
 
@@ -761,15 +767,17 @@ func (r *Runner) setLetters(letters string, on bool) bool {
 // answer 2.
 // badSetOptionLetter reports an option letter this shell does not have.
 //
-// The letter and the name are one question with one answer, which is why this
-// reads the same dialect status badSetOptionName reads and asks the same
-// dialect whether a refusal ends the script. Measured 2026-09-05 on `-q`,
-// `-j`, `-z` and `-A` — the letters all six of bash 5.3, bash 3.2,
-// bash-as-`sh`, dash, ksh93 and zsh refuse: `set -q` reports exactly what
-// `set -o nosuchoption` reports in each of them, and dies or does not in the
-// same way. The letter asked neither question before: it reported 2 for
-// everybody and never ended a script, so `zsh -q` exited 2 where zsh exits 1
-// and `set -q` in a dash script carried on where dash stops (#483).
+// The letter is its own question, with its own status and its own fatality:
+// Diagnostics.SetInvalidOptionLetterStatus and
+// Semantics.BadSetOptionLetterFatal, beside the name's two. It read the
+// name's pair until #2629 on the strength of a #483 measurement of `-q`,
+// `-j`, `-z` and `-A` — four letters, so nothing in it compared a letter
+// against a name — and two of the seven columns had been disagreeing all
+// along: BusyBox ash ends the script for the letter and not the name, and
+// bash 3.2 reports 1 for the name and 2 for the letter. The letter asked
+// neither question before that: it reported 2 for everybody and never ended
+// a script, so `zsh -q` exited 2 where zsh exits 1 and `set -q` in a dash
+// script carried on where dash stops (#483).
 //
 // The words are the dialect's, in Diagnostics.SetInvalidOptionLetter, because
 // the panel spells this four ways — `-q: invalid option`, `Illegal option -q`,
@@ -798,7 +806,8 @@ func (r *Runner) badSetOptionLetter(opt rune, on bool) bool {
 		// spelling, because that is what the shell echoes back.
 		r.saySetRefusal(Wording(d.SetImmovableOptionName, "set: %[1]s: not implemented", spelled),
 			d.SetInvalidOptionNameUsage, true)
-		return r.setRefusalStatus("a `set` option letter this shell will not move ending the script")
+		return r.setRefusalStatus(refusedOptionLetter,
+			"a `set` option letter this shell will not move ending the script")
 	}
 	msg := Wording(d.SetInvalidOptionLetter, "set: %[1]s: invalid option", spelled, bare)
 	usage := true
@@ -806,14 +815,14 @@ func (r *Runner) badSetOptionLetter(opt rune, on bool) bool {
 		msg, usage = "set: "+spelled+" is not implemented yet", false
 	}
 	r.saySetRefusal(msg, usage, false)
-	return r.setRefusalStatus("a refused `set` option letter ending the script")
+	return r.setRefusalStatus(refusedOptionLetter, "a refused `set` option letter ending the script")
 }
 
 func (r *Runner) badSetOptionName(name string) bool {
 	d := r.diag()
 	msg := Wording(d.SetInvalidOptionName, "set: %[1]s: invalid option name", name)
 	r.saySetRefusal(msg, d.SetInvalidOptionNameUsage, true)
-	return r.setRefusalStatus("an unknown `set -o` name ending the script")
+	return r.setRefusalStatus(refusedOptionName, "an unknown `set -o` name ending the script")
 }
 
 // saySetRefusal writes one refused `set` option, and takes the whole of the
@@ -887,23 +896,67 @@ func (r *Runner) sayBuiltinUsage(usage string) {
 	}
 }
 
+// setRefusalSpelling is which of `set`'s two refusals is speaking: a long
+// `-o` name, or an option letter.
+//
+// One place for both used to be enough, because the panel answered them
+// identically — measured in #483, across the six columns there were then.
+// BusyBox ash arrived later and does not: an unknown name reports 1 and the
+// script carries on, and an unknown letter ends it at 2. bash 3.2 splits the
+// status the same way without splitting the fatality. So the spelling is
+// carried to the two places that read a dialect's answer rather than being
+// dropped at the door, and every caller has to say which one it is.
+//
+// See Semantics.BadSetOptionNameFatal for the measurement and for the probe
+// that shows the seam is the spelling and not the `-o` route.
+type setRefusalSpelling int
+
+const (
+	refusedOptionName setRefusalSpelling = iota
+	refusedOptionLetter
+)
+
+// status is what a refusal of this spelling reports in this dialect.
+func (sp setRefusalSpelling) status(d Diagnostics) int {
+	if sp == refusedOptionLetter {
+		return orDefault(d.SetInvalidOptionLetterStatus, 2)
+	}
+	return orDefault(d.SetInvalidOptionNameStatus, 2)
+}
+
+// fatal is the axis saying whether a refusal of this spelling ends the script.
+func (sp setRefusalSpelling) fatal(s *Semantics) Answer {
+	if sp == refusedOptionLetter {
+		return s.BadSetOptionLetterFatal
+	}
+	return s.BadSetOptionNameFatal
+}
+
 // setRefusalStatus records what a refused `set` option reports and ends the
-// script where the dialect says such a refusal is fatal. One place for both
-// spellings, because the panel answers them identically (#483).
+// script where the dialect says such a refusal is fatal.
 //
 // It returns whether the option loop should carry on. Only one dialect says
 // yes, and there the fatality is owed rather than applied: it has to end the
 // script *after* every bad word has been reported rather than instead of the
 // ones behind the first. See Semantics.SetReportsEveryBadOption, and
 // finishSetRefusals, which pays both debts.
-func (r *Runner) setRefusalStatus(why string) bool {
-	status := orDefault(r.diag().SetInvalidOptionStatus, 2)
+func (r *Runner) setRefusalStatus(sp setRefusalSpelling, why string) bool {
+	status := sp.status(r.diag())
 	r.setOptionStatus = status
 	if r.reportsEveryBadSetOption() {
+		if !r.setRefusalOwed {
+			// The first refusal's spelling, because that is the word every
+			// other dialect stops at: what this one owes is the fatality it
+			// deferred, not a fresh one for the last word it read. ksh93 is
+			// the only dialect that gets here and it answers the two
+			// spellings alike, so the choice is unmeasurable today — which
+			// is why it is written down.
+			r.setRefusalSpelling = sp
+		}
 		r.setRefusalOwed = true
 		return true
 	}
-	r.endOnSetRefusal(status, why)
+	r.endOnSetRefusal(status, sp, why)
 	return false
 }
 
@@ -920,11 +973,11 @@ func (r *Runner) setRefusalStatus(why string) bool {
 // special ones the standard makes fatal on error while a dialect's own option
 // builtin is an ordinary one. The environment's list is the third route and
 // is not `set` either; it says so already, in ApplyInheritedShellOptions.
-func (r *Runner) endOnSetRefusal(status int, why string) {
+func (r *Runner) endOnSetRefusal(status int, sp setRefusalSpelling, why string) {
 	if r.outsideSetBuiltin {
 		return
 	}
-	if r.ask(r.sem().BadSetOptionNameFatal, why) {
+	if r.ask(sp.fatal(r.sem()), why) {
 		r.status = status
 		r.fatalQuiet()
 	}
@@ -956,8 +1009,9 @@ func (r *Runner) finishSetRefusals() int {
 	if usage {
 		r.sayBuiltinUsage(r.diag().BuiltinUsage["set"])
 	}
-	status := orDefault(r.diag().SetInvalidOptionStatus, 2)
-	if r.ask(r.sem().BadSetOptionNameFatal,
+	sp := r.setRefusalSpelling
+	status := sp.status(r.diag())
+	if r.ask(sp.fatal(r.sem()),
 		"a refused `set` option ending the script after every bad word is reported") {
 		r.status = status
 		r.fatalQuiet()

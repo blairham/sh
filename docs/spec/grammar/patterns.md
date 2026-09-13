@@ -1572,7 +1572,7 @@ nothing beside it:
 | `nullglob` | a pattern matching no file expands to **nothing**: `echo zz*zz` prints an empty line, and a command whose every word vanishes runs nothing with status 0 |
 | `dotglob` | metacharacters match a leading period; `.` and `..` are still never produced |
 | `nocaseglob` | pathname expansion folds case — `a*` finds `Apple` — and `case`/`[[ ]]` stay exact |
-| `nocasematch` | `case`, `[[ ]]` and the **substitution** operators of parameter expansion fold case — `case A in a)` matches and `v=ABC; ${v//b/X}` is `AXC` — while pathname expansion, the trims `${x#pat}` and `${x%pat}`, and the case-change operator `${x^^pat}` stay exact |
+| `nocasematch` | `case`, both `[[ ]]` operators — the glob `==` and the regexp `=~` — and the **substitution** operators of parameter expansion fold case: `case A in a)` matches, `[[ ABC =~ ^abc$ ]]` matches and `v=ABC; ${v//b/X}` is `AXC`, while pathname expansion, the trims `${x#pat}` and `${x%pat}`, and the case-change operator `${x^^pat}` stay exact |
 | `globstar` | `**` standing alone as a component matches zero or more directory levels: `**/f` finds `f`, `d/f` and `d/e/f`; a trailing `d/**` lists `d/` itself and then everything beneath it; hidden entries are neither listed nor descended into without `dotglob`; a symbolic link is listed and never followed; `a**` and a quoted `**` are ordinary patterns |
 | `extglob` | the quantified groups above are read **everywhere**, and read at parse time |
 
@@ -1594,6 +1594,58 @@ on bash 5.3.15 with `v=ABC` and the option on —
 
 — so a probe that used only a trim cannot tell "parameter expansion is
 exempt" from "the trims are exempt", and those are different rules.
+
+`=~` is the other surface the option reaches, and it is a different
+mechanism rather than one more place the same comparison happens: the right operand is a regular
+expression, so what folds is the compiled expression and not a letter at
+a time. The fold therefore reaches **the whole of it**, which a fold over
+the pattern's literal characters would not. Measured 2026-09-13 on bash
+5.3.15, and the same answers on bash-as-`sh` and bash 3.2.57, with the
+option on —
+
+| written | answer |
+| --- | --- |
+| `[[ ABC =~ ^abc$ ]]` | matches |
+| `[[ abc =~ ^ABC$ ]]` | matches |
+| `[[ ABC =~ ^[a-c]+$ ]]` | matches — a range folds |
+| `[[ ABC =~ ^[[:lower:]]+$ ]]` | matches — so does a class |
+| `[[ abc =~ ^[[:upper:]]+$ ]]` | matches |
+| `[[ A =~ ^[^a]$ ]]` | does **not** — the fold precedes the negation |
+| `[[ ABC =~ ^(a)(B)c$ ]]` | matches, and `BASH_REMATCH` is `ABC A B` |
+
+The last two are the rows a fold bolted on around the match cannot
+reproduce: `[^a]` has to exclude `A` as well, which needs the fold to
+happen before the class is complemented, and the captures have to be
+spans of the subject as the script wrote it rather than of a folded copy
+of it. Which is why this implementation sets the engine's own case flag
+on the expression instead (#2622).
+
+**The name is bash's, and zsh's `nocasematch` is not the same feature.**
+Measured 2026-09-13 on zsh 5.9.2, with `setopt nocasematch`:
+
+| written | zsh | bash |
+| --- | --- | --- |
+| `[[ ABC =~ ^abc$ ]]` | matches | matches |
+| `[[ ABC == abc ]]` | does not | matches |
+| `case A in a)` | no | yes |
+| `v=ABC; ${v//b/X}` | `ABC` | `AXC` |
+
+So the shared spelling covers one surface there and every one of them
+here, and the core keeps two switches — `MatchFoldsCase` and `RegexFoldsCase` — with
+each dialect wiring the name it spells. `nocaseglob`/`caseglob` is a
+third thing again and reaches none of these five: it is pathname
+expansion alone. ksh93 has `=~` and no option of the kind at all — its
+`~(i)` is an inline flag, the way zsh's `(#i)` is — and dash and BusyBox
+ash have neither `[[ ]]` nor `=~`.
+
+One cell is measured and not yet answered here: **an explicit `C` or
+`POSIX` locale narrows the fold to ASCII**, so `LC_ALL=C` makes
+`[[ ÉTÉ =~ ^été$ ]]` fail in bash 5.3.15 and in zsh 5.9.2 where the same
+line under a UTF-8 locale matches. The engine's case flag has no locale
+to be told about, so ours folds it either way. The glob half of `[[ ]]`
+has the same gap pointing the other way — its fold is a byte-wise ASCII
+one, so `[[ ÉTÉ == été ]]` is exact here under every locale and matches
+in bash under a UTF-8 one. Both are #2644.
 
 Three details of the fold, each measured rather than assumed. It is
 **symmetric and inside the matcher**: with `v=abc`, `${v//B/X}`,

@@ -1972,14 +1972,14 @@ func Semantics() interp.Semantics {
 	// 2026-09-10, `local -z`, `integer -z`, `float -z`, `export -z` and
 	// `readonly -z` are each `bad option: -z` in zsh 5.9.2, so the letter
 	// belongs to this table and to none of the other four (#1576).
-	s.DeclareOptions = "aAfFgHhilmpruUTxz"
+	s.DeclareOptions = "aAfFgHhiLlmpRruUTxZz"
 	// `export` is this word's declaration under another name, and it takes
 	// the same letters bar six. Measured 2026-09-12, a letter at a time
 	// against `export -X q=4`: `-A`, `-g`, `-m`, `-x` and `-z` are
 	// `bad option` and `-f` is `invalid option(s)`, and every other letter
 	// above is read. See Semantics.ExportOptions for why the refused six are
 	// the six they are.
-	s.ExportOptions = "aFHhilpruUT"
+	s.ExportOptions = "aFHhiLlpRruUTZ"
 	// `-z` and `+z` are taken and do nothing here, which is measured on both
 	// signs and on both sides of the builtin: `typeset -z p q` leaves `p`
 	// alone and declares an empty `q` exactly as a bare `typeset q` would,
@@ -2041,7 +2041,12 @@ func Semantics() interp.Semantics {
 	// listing, and it answers 0 with not one byte from a shell that has no
 	// floats — as does `declare -F f` over a function, which declares a
 	// float called `f` here and says nothing.
-	s.DeclareOptionsTakingANumber = "F"
+	// And the three width letters take one the same way: `-L`, `-R` and `-Z`
+	// each name how many characters the value is presented in, under the
+	// detached spelling and the attached one alike — `typeset -L 5 a=ab` and
+	// `typeset -L5 a=ab` are both `[ab   ]`. See interp/fieldwidth.go for
+	// the rule and for why ksh93 does not have them here (#1461).
+	s.DeclareOptionsTakingANumber = "FLRZ"
 	// `functions` takes none of the letters this engine acts on. Its own
 	// set — -c -k -m -s -t -u -x -z -M -T -U -W, measured 2026-09-08 by
 	// sweeping the alphabet in both cases — is autoloading, tracing, the
@@ -2091,7 +2096,7 @@ func Semantics() interp.Semantics {
 	// them and this shell has not built them, `typeset -E` being `-E is not
 	// implemented yet` in the same run. Claiming them here would move the
 	// refusal from the letter to nowhere at all.
-	s.LocalOptions = "aAFHhilpruUTx"
+	s.LocalOptions = "aAFHhiLlpRruUTxZ"
 	// A bad `typeset` option is reported and the script goes on.
 	s.TypesetBadOptionFatal = interp.No
 	// `integer` here is `typeset` with the letter prepended rather than a
@@ -2465,7 +2470,10 @@ func Diagnostics() interp.Diagnostics {
 			// rest. The same set under both names, and for `local` too.
 			// `-H`, `-U`, `-T`, `-h` and `-m` have left this list — they are
 			// implemented, in DeclareOptions above.
-			"typeset": "bcEkLnRtZ",
+			// `L`, `R` and `Z` have left this list: they are the width
+			// attributes and are implemented, in DeclareOptions and
+			// DeclareOptionsTakingANumber above.
+			"typeset": "bcEknt",
 			// `w` has left this list and joined TypeOptions above, in the same
 			// change: a letter in both is refused as missing while it works,
 			// and a letter in neither is `bad option` for something this
@@ -2476,7 +2484,7 @@ func Diagnostics() interp.Diagnostics {
 			// job was started in, and -z and -Z are about the process
 			// title rather than about the job table.
 			"jobs":    "dzZ",
-			"declare": "bcEkLnRtZ",
+			"declare": "bcEknt",
 			// The same list as `typeset` and `declare`, which is the point:
 			// `-F` is one attribute and the three names declare it alike.
 			// It was here and in neither of theirs, which is the same split
@@ -2488,7 +2496,7 @@ func Diagnostics() interp.Diagnostics {
 			// unimplemented told a script the letter was on its way when
 			// nothing was coming. `L`, `R` and `Z` are the padding letters
 			// `local` really does spell and this engine does not.
-			"local": "bcEkLnRtZ",
+			"local": "bcEknt",
 			// `integer`'s own short list, and it is not typeset's: the
 			// letters typeset is missing that `integer` refuses outright —
 			// b, c, E and m — are bad options under this name and belong in

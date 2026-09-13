@@ -1924,6 +1924,11 @@ type Runner struct {
 	// default both shells with the attribute print, rather than no places at
 	// all. Measured 2026-09-07: `typeset -F x=1.5` is `1.5000000000`.
 	floatPrecision map[string]int
+	// fieldWidth is the width attribute a name carries — `typeset -L 5 s`
+	// and its two neighbors. Presence is the attribute, the way it is for
+	// floatPrecision; see fieldwidth.go, which holds the measurements and
+	// the rule.
+	fieldWidth map[string]fieldWidth
 	// lowered and uppered are the case attributes — `declare -l` and `-u` —
 	// which fold what is assigned to the name, the same shape integer has:
 	// a property of the name that changes what a later assignment means.
@@ -4370,10 +4375,18 @@ func (r *Runner) environ() []string {
 			// makes the shell itself read it as empty.
 			continue
 		}
-		// A child is told the folded value, not the text the assignment
+		// A child is told the case-folded value, not the text the assignment
 		// carried: measured, `typeset -l v=AB; export v` puts `v=ab` in the
-		// environment in every shell with the letter. So the environment is
-		// a read like any other.
+		// environment in every shell with the letter.
+		//
+		// The environment is **not** a read like any other, though, and the
+		// width attribute is where the two part: measured 2026-09-12 on zsh
+		// 5.9.2, `typeset -L 5 b=xy; export b` puts `b=xy` in the
+		// environment — the raw text, five characters short of what `$b`
+		// answers in the shell itself — while `typeset -u a=ab` in the same
+		// run puts `a=AB` there. So the padding is a presentation of the
+		// parameter and the fold is a property of the value, which is why
+		// this calls the case one by name rather than the pair.
 		out = append(out, k+"="+r.readCaseFolded(k, v))
 	}
 	// A **table** keeps no scalar view, so the loop above never sees one and
@@ -5172,8 +5185,20 @@ func (r *Runner) attributeFolded(name, value string) (string, bool) {
 	// decided, so the attribute cannot drift from the operator again — and
 	// caseFolded is the one place the *letters* are read, so the two sites
 	// cannot drift from each other either.
+	// And the width the name carries learns itself from the first value,
+	// whichever way the shell folds: the width becomes part of the
+	// declaration — `typeset -L f=xy` lists back as `typeset -L2 f=xy` — so
+	// it is settled where the value arrives and not where one is printed.
+	r.widthLearned(name, value)
 	if !r.caseFoldsOnRead() {
 		value = r.caseFolded(name, value)
+		// Under the same answer, for the same reason: a shell that folds on
+		// the way in has no way back to the text the assignment carried, and
+		// the two families were measured to split the same way. Only zsh has
+		// the width letters today and zsh folds on the read, so this arm is
+		// ready for the preset rather than exercised by one — see
+		// fieldwidth.go.
+		value = r.widthPadded(name, value)
 	}
 	return value, true
 }
@@ -5215,10 +5240,28 @@ func (r *Runner) caseFoldsOnRead() bool {
 	return r.sem().CaseAttributeFoldsWhenRead == Yes
 }
 
-// readCaseFolded is a scalar on its way out of the store, folded where this
-// shell folds on the read. The guard is the attribute rather than the axis,
-// so the ordinary name — which is nearly every name — costs one map lookup
-// that every read already makes.
+// readAttributeFolded is a scalar on its way out of the store, presented as
+// the attributes that act on the read say. The guard is the attribute rather
+// than the axis, so the ordinary name — which is nearly every name — costs
+// the map lookups every read already makes.
+//
+// Two families arrive here and they compose in this order, measured:
+// `typeset -lL 4 d=ABCD` reads `abcd`, so the case fold runs and the width is
+// applied to what it left. The width letters are fieldwidth.go's.
+func (r *Runner) readAttributeFolded(name, value string) string {
+	value = r.readCaseFolded(name, value)
+	if !r.caseFoldsOnRead() {
+		return value
+	}
+	if _, ok := r.fieldWidth[name]; ok {
+		value = r.widthPadded(name, value)
+	}
+	return value
+}
+
+// readCaseFolded is the case half of readAttributeFolded on its own, for the
+// one read that takes it without the other: what a child is told. See the
+// environment loop, where the measurement is.
 func (r *Runner) readCaseFolded(name, value string) string {
 	if !r.lowered[name] && !r.uppered[name] {
 		return value
@@ -5643,7 +5686,7 @@ func (r *Runner) varValue(name string, folded bool) (string, bool) {
 		if !folded {
 			return v, true
 		}
-		return r.readCaseFolded(name, v), true
+		return r.readAttributeFolded(name, v), true
 	}
 	if r.removed[name] {
 		// `unset` took it away, and neither the environment nor a dynamic
@@ -5655,7 +5698,7 @@ func (r *Runner) varValue(name string, folded bool) (string, bool) {
 	if !folded {
 		return v, ok
 	}
-	return r.readCaseFolded(name, v), ok
+	return r.readAttributeFolded(name, v), ok
 }
 
 // assignOperands applies the array assignments a declaration utility was given
@@ -5672,9 +5715,11 @@ func (r *Runner) assignOperands(c *syntax.SimpleCmd) {
 // rather than replacing its elements, having asked the dialect.
 //
 // Asked only where the answer could be seen: the name has to be carrying one
-// of the attributes there is something to lose, and the literal has to be the
-// plain assignment spelling rather than a declaration's own operand. Each of
-// those was measured — see the fields.
+// of the attributes there is something to lose — nameCarriesATypeAttribute,
+// which is the same list clearTypeAttributes takes off, so the question and
+// the answer cannot come apart — and the literal has to be the plain
+// assignment spelling rather than a declaration's own operand. Each of those
+// was measured — see the fields.
 //
 // **Three questions, not one**, and the panel answers them differently:
 //
@@ -5693,7 +5738,7 @@ func (r *Runner) arrayLiteralStartsTheNameOver(a *syntax.Assign) bool {
 	if a.Operand {
 		return false
 	}
-	if !r.integer[a.Name] && !r.lowered[a.Name] && !r.uppered[a.Name] {
+	if !r.nameCarriesATypeAttribute(a.Name) {
 		return false
 	}
 	if !r.nameIsAnArray(a.Name) {
@@ -5751,16 +5796,43 @@ func (r *Runner) nameIsAnArray(name string) bool {
 }
 
 // clearTypeAttributes takes off the letters that say what a name's values
-// *are* — the integer letter and the two case letters.
+// *are* — the integer letter, the two case letters, the float precision and
+// the width attribute.
 //
 // Narrower than clearAttributes, which `unset` uses: this is not the name
 // going away, so what is measured to go is measured to go, and nothing else
 // is guessed at. The listing after a re-creating assignment keeps the array
-// letter and loses these three, which is what the field records.
+// letter and loses these, which is what the field records.
+//
+// Measured 2026-09-12, zsh 5.9.2: `typeset -L 3 c; c=(a bb); typeset -p c`
+// writes `typeset -a c=( a bb )` — no `L`, no width — and `typeset -F 3 b;
+// b=(1 2)` writes `typeset -a b=( 1 2 )` the same way, beside the `-i`, `-l`
+// and `-u` rows that were already here. The width has to go from the store
+// and not only from the listing: the name can be assigned a scalar again
+// afterwards, and `d=zz` then reads back `zz` rather than `zz ` (#1461).
+// nameCarriesATypeAttribute reports whether clearTypeAttributes would take
+// anything off the name. It is the guard on asking the re-creation question
+// at all, and it is here rather than beside that question so the two lists
+// are one list: an attribute added to the clearing and not to the guard is an
+// attribute the question is never asked about, which is how the float
+// precision and the width both survived a `c=(a bb)` that zsh drops them on.
+func (r *Runner) nameCarriesATypeAttribute(name string) bool {
+	if r.integer[name] || r.lowered[name] || r.uppered[name] {
+		return true
+	}
+	if _, ok := r.floatPrecision[name]; ok {
+		return true
+	}
+	_, ok := r.fieldWidth[name]
+	return ok
+}
+
 func (r *Runner) clearTypeAttributes(name string) {
 	delete(r.integer, name)
 	delete(r.lowered, name)
 	delete(r.uppered, name)
+	delete(r.floatPrecision, name)
+	delete(r.fieldWidth, name)
 }
 
 // assignAll performs a bare assignment list, tracing it as it goes.

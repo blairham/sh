@@ -60,10 +60,14 @@ type nameAttributes struct {
 	// table *is* the attribute; the value is the places it renders in.
 	precision int
 	isFloat   bool
-	lower     bool
-	upper     bool
-	unique    bool
-	hidden    bool
+	// width and hasWidth are the width attribute, the same shape: absent as
+	// often as present, and the letter travels with the number.
+	width    fieldWidth
+	hasWidth bool
+	lower    bool
+	upper    bool
+	unique   bool
+	hidden   bool
 }
 
 // captureAttributes reads what the tables hold for a name, so a scope can put
@@ -78,6 +82,7 @@ func (r *Runner) captureAttributes(name string) nameAttributes {
 	}
 	a.base, a.baseSet = r.integerBase[name]
 	a.precision, a.isFloat = r.floatPrecision[name]
+	a.width, a.hasWidth = r.fieldWidth[name]
 	return a
 }
 
@@ -98,6 +103,7 @@ func (r *Runner) dropNameAttributes(name string) {
 	delete(r.integer, name)
 	delete(r.integerBase, name)
 	delete(r.floatPrecision, name)
+	delete(r.fieldWidth, name)
 	delete(r.lowered, name)
 	delete(r.uppered, name)
 	delete(r.unique, name)
@@ -117,6 +123,14 @@ func (r *Runner) restoreAttributes(name string, a nameAttributes) {
 	setBool(&r.hidden, name, a.hidden)
 	setInt(&r.integerBase, name, a.base, a.baseSet)
 	setInt(&r.floatPrecision, name, a.precision, a.isFloat)
+	if !a.hasWidth {
+		delete(r.fieldWidth, name)
+	} else {
+		if r.fieldWidth == nil {
+			r.fieldWidth = map[string]fieldWidth{}
+		}
+		r.fieldWidth[name] = a.width
+	}
 }
 
 // setBool writes a name into a boolean attribute table, or takes it out.

@@ -46,11 +46,15 @@ func TestLocalTakesTheFloatAttribute(t *testing.T) {
 // honest — and they fail for two different reasons.
 //
 // `-f` and `-g` are refused because a local cannot be a function or a global;
-// zsh refuses them here too, in the same words. `-E`, `-L`, `-R` and `-t` are
-// letters zsh *does* take on `local` and this shell has not built the
-// attribute for — `typeset -E` is `-E is not implemented yet` in the same run
-// — so they are refused by name rather than claimed. Claiming them would move
-// the refusal from the letter to nowhere at all.
+// zsh refuses them here too, in the same words. `-E` and `-t` are letters zsh
+// *does* take on `local` and this shell has not built the attribute for —
+// `typeset -E` is `-E is not implemented yet` in the same run — so they are
+// refused by name rather than claimed. Claiming them would move the refusal
+// from the letter to nowhere at all.
+//
+// `-L` and `-R` have left this list, with `-Z`: they are the width attributes
+// and are built now (#1461). `-E` stays because it is a *format* rather than
+// a width and the two shells that spell it do not share one.
 func TestLocalStillRefusesTheLettersItHasNoAttributeFor(t *testing.T) {
 	if s := zsh.Semantics(); strings.ContainsAny(s.LocalOptions, "fg") {
 		t.Errorf("LocalOptions %q claims -f or -g, which a local cannot be", s.LocalOptions)
@@ -64,7 +68,7 @@ func TestLocalStillRefusesTheLettersItHasNoAttributeFor(t *testing.T) {
 	}
 	// Built under the other word is the test for `F`; not built at all is the
 	// test for these, and the refusal names the letter.
-	for _, letter := range []string{"E", "L", "R", "t"} {
+	for _, letter := range []string{"E", "t"} {
 		out, _ := runZsh(t, dir, `typeset -`+letter+` x=1`)
 		if !strings.Contains(out, "-"+letter+" is not implemented yet") {
 			t.Errorf("typeset -%s = %q, want it still refused by name", letter, out)

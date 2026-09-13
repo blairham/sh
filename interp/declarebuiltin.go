@@ -45,14 +45,22 @@ type declareFlags struct {
 	float          bool
 	precision      int
 	precisionNamed bool
-	readonly       bool
-	export         bool
-	assoc          bool
-	array          bool
-	lower          bool
-	upper          bool
-	global         bool
-	hidden         bool
+	// widthLetter is `L`, `R` or `Z` where the dialect gives those letters a
+	// width, and width/widthNamed are its number under the same split
+	// precision and precisionNamed are under. The letter is kept rather than
+	// three bools because a name carries one of the three and the listing
+	// has to write back which — see fieldwidth.go.
+	widthLetter byte
+	width       int
+	widthNamed  bool
+	readonly    bool
+	export      bool
+	assoc       bool
+	array       bool
+	lower       bool
+	upper       bool
+	global      bool
+	hidden      bool
 	// hide is the sign of the last `h` letter written and hideNamed says one
 	// was written at all — the hide-in-scope attribute, which is a tri-state
 	// and not a bool: `-h` sets it, `+h` takes it off, and a declaration with
@@ -432,6 +440,21 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 				}
 				f.funcNames = true
 				f.funcNamesOff = f.remove
+			case 'L', 'R', 'Z':
+				if !r.declareOptionTakesANumber(byte(c)) {
+					// The dialect spells the letter but not as a width, so
+					// it is whatever else it is there — today, nothing this
+					// engine models, which DeclareOptions and
+					// UnimplementedOptionLetters have already settled
+					// between them before the loop reached here.
+					break
+				}
+				if f.widthLetter == 0 {
+					// The earlier letter of the three wins, measured:
+					// `typeset -RZ 5 l=7` is `    7` and lists as
+					// `typeset -R5`, where `typeset -LZ 5 m=7` is `7    `.
+					f.widthLetter = byte(c)
+				}
 			case 'p':
 				// Print rather than declare. `+p` prints too — measured in
 				// both shells that spell the option at all.
@@ -1496,6 +1519,37 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 			}
 		}
 	}
+	if f.widthLetter != 0 {
+		if f.remove {
+			// `typeset +L e` takes the attribute off and reveals the text
+			// the name was holding all along — measured, `typeset -L 3
+			// e=abcd; typeset +L e` reads `abcd` and lists as a plain
+			// `typeset e=abcd`. Nothing is written back, exactly as `+F`
+			// and `+i` write nothing back, because this shell never stored
+			// the padded text in the first place.
+			delete(r.fieldWidth, name)
+		} else {
+			if r.fieldWidth == nil {
+				r.fieldWidth = map[string]fieldWidth{}
+			}
+			w := fieldWidth{letter: f.widthLetter, width: r.fieldWidth[name].width}
+			if f.widthNamed {
+				// A number written down replaces whatever the name had,
+				// including a width it had learned: measured, `typeset -L 3
+				// f=abcd; typeset -R 4 f` lists as `typeset -R4 f=abcd`. A
+				// written zero names no width and leaves the learning to
+				// the value, which is the branch widthLearned takes.
+				w.width = f.width
+			}
+			r.fieldWidth[name] = w
+			// The three letters and the float one are not exclusive in the
+			// panel — `typeset -lL 4 d=ABCD` is `abcd`, both letters acting
+			// — so nothing is taken off here. The integer letter is the one
+			// that swallows the number instead of sharing it, and the parse
+			// has already settled that: `typeset -iL 3 k=12345` reads the 3
+			// as a *base* in zsh and lists `typeset -i3`.
+		}
+	}
 	if f.float {
 		if f.remove {
 			// `typeset +F x` takes the attribute off and leaves the text the
@@ -1813,6 +1867,7 @@ func (r *Runner) declarationListing(f declareFlags) (int, bool) {
 func withoutListingLetters(f declareFlags) declareFlags {
 	f.integer, f.integerOff, f.base, f.baseNamed = false, false, 0, false
 	f.float, f.precision, f.precisionNamed = false, 0, false
+	f.widthLetter, f.width, f.widthNamed = 0, 0, false
 	f.readonly, f.readonlyOff = false, false
 	f.export, f.assoc, f.array = false, false, false
 	f.lower, f.upper, f.unique, f.hidden = false, false, false, false

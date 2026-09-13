@@ -162,6 +162,15 @@ type declaration struct {
 	// still knowing the name: nothing is written and the status is 0, which
 	// is neither a row nor a refusal. See ProducedDeclaration.Silent.
 	silent bool
+	// width is the width attribute — `typeset -L 5 s` and its two
+	// neighbors — carrying which of the three letters was written and how
+	// wide. hasWidth says the name carries one at all. Unlike the float
+	// precision, the number *is* written back here: measured 2026-09-12, zsh
+	// lists `typeset -L 5 a=ab` as `typeset -L5 a=ab`, and the value it
+	// writes is the raw text rather than the padded one, because that shell
+	// pads on the read. See fieldwidth.go.
+	width    fieldWidth
+	hasWidth bool
 	// inAFunction and localHere are not attributes of the name at all: they
 	// are where the listing is being written *from*, and a form that claims
 	// to be re-executable needs them. Inside a function, a declaration lands
@@ -196,9 +205,10 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 		localHere:   r.localInTheInnermostScope(name),
 	}
 	_, d.float = r.floatPrecision[name]
+	d.width, d.hasWidth = r.fieldWidth[name]
 	d.tied, d.hasTie = r.tieOf(name)
 	attributed := d.integer || d.float || d.readonly || d.exported || d.lower ||
-		d.upper || d.hidden || d.unique
+		d.upper || d.hidden || d.unique || d.hasWidth
 	if pd, ok := r.producedDeclaration(name); ok {
 		// A produced parameter the dialect has said how to list. Its letters
 		// are stated rather than read off an attribute table, because there
@@ -328,6 +338,9 @@ func (r *Runner) declarableNames() []string {
 		seen[name] = true
 	}
 	for name := range r.floatPrecision {
+		seen[name] = true
+	}
+	for name := range r.fieldWidth {
 		seen[name] = true
 	}
 	for name := range r.lowered {
@@ -621,6 +634,27 @@ func (r *Runner) clusteredKey(k string) string {
 	return doubleQuoted(k)
 }
 
+// numberedLetterEndsTheWord breaks a cluster after the letter carrying a
+// number, because that is how the shell that writes numbers this way reads
+// them back.
+//
+// A number-taking letter ends its option word in that shell — the rule
+// Semantics.DeclareOptionsTakingANumber is about — so a cluster with the rest
+// of the letters trailing the digits is not the declaration it claims to be:
+// `-i16r` re-read gives the base `16r`, not a frozen name in base 16.
+// Measured 2026-09-12 on zsh 5.9.2, `typeset -ri 16 v=255` lists as
+// `typeset -i16 -r v=255` and `typeset -rL 3 a=abcd` as `typeset -L3 -r
+// a=abcd`; this engine wrote `typeset -i16r v=255` (#1461).
+//
+// at is one past the last digit, and zero means no letter carried a number —
+// which is every listing in every other dialect and nearly every one in this.
+func numberedLetterEndsTheWord(flags string, at int) string {
+	if at <= 0 || at >= len(flags) {
+		return flags
+	}
+	return flags[:at] + " -" + flags[at:]
+}
+
 // exportSpelledDeclaration is DeclareListingExportSpelled — see the constant.
 func (r *Runner) exportSpelledDeclaration(d declaration) string {
 	word := "typeset"
@@ -632,12 +666,28 @@ func (r *Runner) exportSpelledDeclaration(d declaration) string {
 	// `F` sits where `i` does, which the two attributes being exclusive
 	// makes unambiguous, and before the letters measured after it: zsh lists
 	// `typeset -Fr x=1.500`, `typeset -FU x=1.500` and `export -F x=1.500`.
-	flags := d.letters("aAiFlurxUT")
+	// `L`, `R` and `Z` sit where `i` and `F` do — measured, `typeset -aL 3 c`
+	// lists as `typeset -aL3 c=(  )`, so the container letters come first —
+	// and the letters measured after them follow: `typeset -rL 3 a=abcd` is
+	// `typeset -L3 -r a=abcd` and `typeset -lL 4 d=ABCD` is
+	// `typeset -L4 -l d=ABCD`. A name carries one of the three, so their
+	// order among themselves decides nothing.
+	flags := d.letters("aAiFLRZlurxUT")
+	numbered := 0
 	if d.base != 0 {
 		// The base rides on the letter here — `typeset -i16 h=255` — where
 		// the other listed form writes it as a word of its own. Measured in
 		// the one shell with this arrangement.
 		flags = strings.Replace(flags, "i", "i"+itoa(d.base), 1)
+		numbered = strings.Index(flags, "i") + 1 + len(itoa(d.base))
+	}
+	if d.hasWidth && d.width.width != 0 {
+		// The same arrangement, and the number is always written: a width
+		// learned from the first value is written back exactly as one the
+		// letter named — `typeset -L f=xy` lists as `typeset -L2 f=xy`.
+		l := string(d.width.letter)
+		flags = strings.Replace(flags, l, l+itoa(d.width.width), 1)
+		numbered = strings.Index(flags, l) + 1 + len(itoa(d.width.width))
 	}
 	// Where the declaration would *land* is part of this form, because the
 	// form's promise is that the text recreates the state it describes.
@@ -692,7 +742,7 @@ func (r *Runner) exportSpelledDeclaration(d declaration) string {
 	}
 	head := word
 	if flags != "" {
-		head += " -" + flags
+		head += " -" + numberedLetterEndsTheWord(flags, numbered)
 	}
 	head += " " + d.name
 	if d.hasTie {
@@ -880,6 +930,8 @@ func (d declaration) letters(order string) string {
 			on = d.integer
 		case 'F':
 			on = d.float
+		case 'L', 'R', 'Z':
+			on = d.hasWidth && d.width.letter == byte(c)
 		case 'r':
 			on = d.readonly
 		case 'x':

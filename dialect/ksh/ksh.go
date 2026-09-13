@@ -1664,6 +1664,11 @@ func Diagnostics() interp.Diagnostics {
 		EvalNaming:             interp.SourceBeforeLocation,
 		SourceFileNaming:       interp.SourceBeforeLocation,
 		SourceFileIsTheBuiltin: true,
+		// And the whole chain of them in front of that name, which is this
+		// column alone: `./n.sh[2]: .[2]: .: line 3:` where every other
+		// shell in the panel names one borrowed text or none. See
+		// interp.Diagnostics.LocationRendersTheBorrowedStack (#2417).
+		LocationRendersTheBorrowedStack: true,
 		// A failing offset is blamed together with what follows it in the
 		// range: `${x:1+:2}` names `1+:2`. A failing length has nothing after
 		// it and is named on its own.

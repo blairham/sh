@@ -2164,6 +2164,24 @@ type Diagnostics struct {
 	// Zero means the substrate's own, which is 1.
 	DotCannotOpenStatus int
 
+	// LocationRendersTheBorrowedStack puts every active `.` and `eval` in
+	// front of a diagnostic as a chain of frames, rather than naming only the
+	// innermost text or none of them.
+	//
+	// ksh93's, and no other member of the panel's: measured 2026-09-12, a
+	// failure inside a file sourced by a file is `./n.sh[2]: .[2]: .: line 3:`
+	// there, `./inner.sh: line 3:` in both bashes, `./inner.sh:3:` in zsh and
+	// `./n.sh: 3: ./inner.sh:` in dash. So the panel splits four ways over
+	// where a borrowed text is named and this is the only column that names
+	// more than one of them at a time.
+	//
+	// A boolean beside [SourceNaming] rather than a fourth value of it,
+	// because the two answer different questions and this dialect needs both:
+	// SourceBeforeLocation is still where the innermost name goes, and this
+	// says how much stands in front of it. See [Runner.borrowedFrameChain]
+	// for the rendering and the measurements it was read off (#2417).
+	LocationRendersTheBorrowedStack bool
+
 	// ParseFailureNamesItsOwnLine says the parse-failure wording already
 	// carries the line, so the location must not carry it as well. ksh93
 	// writes `syntax error at line 3` and would otherwise be prefixed into
@@ -4875,6 +4893,35 @@ func (d Diagnostics) prefixWithoutLine(name, builtin string) string {
 		return ""
 	}
 	return name + ": "
+}
+
+// prefixAfterTheFirstFrame is prefix for a location that is not the first
+// thing the shell wrote: a frame a dialect entered after the one carrying its
+// own name, and the innermost text at the end of such a chain.
+//
+// The only difference is the suppression that leaves line 1 unwritten.
+// [LocationLineWordAfterFirst] and [LocationBracketLineAfterFirst] are about
+// the first line of what the shell was *given* — `ksh -c 'nosuchcmd'` names no
+// line — and a frame entered later names its line however small it is:
+// `/bin/ksh: eval[1]: eval: line 1:` says `1` twice from a shell whose own
+// name carried none. Measured with the rest of the chain in
+// [Runner.borrowedFrameChain].
+func (d Diagnostics) prefixAfterTheFirstFrame(name, builtin string, byBuiltin bool, line int) string {
+	d.Location = namesEveryLine(d.Location)
+	d.BuiltinLocation = namesEveryLine(d.BuiltinLocation)
+	return d.prefix(name, builtin, byBuiltin, line)
+}
+
+// namesEveryLine is style with its "leave line 1 unwritten" answer taken out,
+// and every other style unchanged.
+func namesEveryLine(style LocationStyle) LocationStyle {
+	switch style {
+	case LocationLineWordAfterFirst:
+		return LocationLineWord
+	case LocationBracketLineAfterFirst:
+		return LocationBracketLine
+	}
+	return style
 }
 
 func (d Diagnostics) prefix(name, builtin string, byBuiltin bool, line int) string {

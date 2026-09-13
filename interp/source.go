@@ -222,6 +222,25 @@ func (r *Runner) reportBorrowedParseFailure(err error, s sourced, src string) {
 		line = own
 	}
 	d := r.diag()
+	if _, runtime := d.runtimeRefusal(err); d.ParseFailureNamesItsOwnLine && !runtime {
+		// The wording says where it was, so the location says only who —
+		// the same rule [Diagnostics.ParseDiagnostic] applies on the front
+		// end's path, and for the same reason: `.: syntax error at line 3:`
+		// rather than `.: line 3: syntax error at line 3:`. It reaches here
+		// too because `eval` and `.` report the failures the front end
+		// reports and must say the same thing about them.
+		d.Location = LocationNone
+	}
+	if chain, inner, ok := r.borrowedFrameChain(d); ok {
+		// The dialect that renders a stack renders it here as well. Its own
+		// name is already the head of the chain, so SourceReport's shape —
+		// shell, then the source's name — is what the chain replaces.
+		r.errf("%s\n", chain+d.prefixAfterTheFirstFrame(inner, "", false, line)+d.ParseFailure(err))
+		if own > 0 {
+			r.errf("%s", d.SourceEcho(s.naming(d), r.name(), s.sourceName(d), own, err, src))
+		}
+		return
+	}
 	r.errf("%s\n", d.SourceReport(s.naming(d), r.name(), s.sourceName(d),
 		line, d.ParseFailure(err)))
 	// And the offending line quoted back, for the dialect that writes
@@ -247,7 +266,9 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 	defer func() { r.indirection-- }()
 	// What this text is called, for a run-time diagnostic raised inside it:
 	// the value that knows is here and the diagnostic is written far away.
-	r.borrowed = append(r.borrowed, borrowedText{sourced: s})
+	// With the line the `.` or the `eval` is written on, read here because
+	// this is the last moment it is the caller's — see borrowedText.callerLine.
+	r.borrowed = append(r.borrowed, borrowedText{sourced: s, callerLine: r.line})
 	defer func() { r.borrowed = r.borrowed[:len(r.borrowed)-1] }()
 	if !s.eval {
 		// Inside a *file*, which stops a prompt's wording from reaching the

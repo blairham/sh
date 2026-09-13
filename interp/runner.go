@@ -2346,6 +2346,18 @@ func (r *Runner) locationNameAndLine(functionCounts bool) (name string, line int
 // with the builtin that is speaking where this dialect puts one.
 func (r *Runner) locationPrefix() string {
 	d := r.diag()
+	if chain, inner, ok := r.borrowedFrameChain(d); ok {
+		// The whole location is the chain, so neither the function rule nor
+		// the current-file rule is consulted: the dialect that renders a
+		// stack names the borrowed text at the end of it and nothing else,
+		// which is measured — a function called from inside an `eval` is
+		// located as the `eval`.
+		line := r.line
+		if r.speaker != "" {
+			line = r.speakerLine
+		}
+		return chain + d.prefixAfterTheFirstFrame(inner, r.speaking(), r.builtinIsSpeaking(), line)
+	}
 	name, line, inBody := r.locationNameAndLine(r.speaker == "")
 	if inBody {
 		if line > 0 {
@@ -2364,12 +2376,25 @@ func (r *Runner) locationPrefix() string {
 	return d.prefix(name, r.speaking(), r.builtinIsSpeaking(), line) + r.borrowedName(d)
 }
 
-// borrowedText is one level of Runner.borrowed: what the text is called.
+// borrowedText is one level of Runner.borrowed: what the text is called, and
+// the line the shell was on when it borrowed it.
 //
 // A named type over `sourced` rather than `sourced` itself, so that the stack
-// says what it is a stack *of* — and so that the shape has somewhere to grow
-// when the dialect that renders the whole chain arrives (#2461).
-type borrowedText struct{ sourced }
+// says what it is a stack *of* — and so the caller's line has somewhere to
+// live, which is the half a chain needs and a name does not.
+type borrowedText struct {
+	sourced
+
+	// callerLine is the line, in whatever the shell was reading when this
+	// text was borrowed, that the `.` or the `eval` was written on.
+	//
+	// Read at the push, because that is the one moment the answer is still
+	// the caller's: every line after it belongs to the borrowed text. It is
+	// the number the dialect that renders a frame chain puts in the brackets
+	// — `./n.sh[2]: .[2]: .: line 3:` is n.sh entering a file at its line 2
+	// and that file entering another at *its* line 2.
+	callerLine int
+}
 
 // borrowedAtLocation is the text a diagnostic's line was read from, when that
 // is text the shell borrowed rather than the file it was handed.
@@ -2397,6 +2422,60 @@ func (r *Runner) borrowedAtLocation() (borrowedText, bool) {
 		return borrowedText{}, false
 	}
 	return r.borrowed[len(r.borrowed)-1], true
+}
+
+// borrowedFrameChain is every borrowed text the shell is inside, rendered as
+// the chain of frames one dialect writes in front of a diagnostic, together
+// with the name the innermost one is to be located under.
+//
+// ksh93 is that dialect, and the rule is one sentence with two halves.
+// **Every frame but the innermost is written the way this dialect writes a
+// builtin's location** — `name[line]: `, where the line is the one *in that
+// frame* that entered the frame above it. **The innermost is located the way
+// an ordinary diagnostic is**, so a shell error there is `.: line 3: ` and a
+// builtin's complaint is `.[3]: `, which is the same split
+// [Diagnostics.BuiltinLocation] already selects.
+//
+// Measured 2026-09-12, ksh93u+ 2012-08-01, `env -i PATH=/usr/bin:/bin`:
+//
+//	a script sourcing a file, failing in it     ./outer1.sh[2]: .: line 1:
+//	a script sourcing a file that sources one   ./outer2.sh[2]: .[2]: .: line 1:
+//	a script whose sourced file runs `cd /nope` ./bi_outer.sh[2]: .[2]: cd:
+//	`eval` inside a sourced file                ./e.sh[2]: .[2]: eval: line 1:
+//	`-c` whose `eval` is on its first line      /bin/ksh: eval: line 1:
+//	`-c` whose `eval` is on its second          /bin/ksh[2]: eval: line 1:
+//
+// The last two rows are why the suppression that leaves line 1 unwritten —
+// [LocationLineWordAfterFirst] and [LocationBracketLineAfterFirst] — applies
+// to the **first** component alone: the shell's own name carries it, and
+// every frame entered after that names its line however small it is. The
+// fifth row would otherwise read `/bin/ksh: eval: ` and the nested `eval` of
+// `/bin/ksh: eval[1]: eval: line 1:` would lose its bracket.
+//
+// A *function* adds nothing to the chain, and that is measured rather than
+// assumed: text `eval` is running that defines a function and calls it
+// reports `./f.sh[2]: eval: line 1:`, naming the borrowed text and not the
+// function. Which is the same rule [Runner.borrowedAtLocation] already
+// records — the innermost text still being read answers, with no test that
+// the failing line came from it.
+func (r *Runner) borrowedFrameChain(d Diagnostics) (chain, innermost string, ok bool) {
+	if !d.LocationRendersTheBorrowedStack || len(r.borrowed) == 0 {
+		return "", "", false
+	}
+	var b strings.Builder
+	name := r.name()
+	for i, t := range r.borrowed {
+		// No builtin name in a frame, and byBuiltin so the bracket style is
+		// the one that answers: a frame is spelled `name[line]` whether or
+		// not a builtin is speaking at the far end of the chain.
+		if i == 0 {
+			b.WriteString(d.prefix(name, "", true, t.callerLine))
+		} else {
+			b.WriteString(d.prefixAfterTheFirstFrame(name, "", true, t.callerLine))
+		}
+		name = t.sourceName(d)
+	}
+	return b.String(), name, true
 }
 
 // borrowedName is the borrowed text's name where this dialect writes one

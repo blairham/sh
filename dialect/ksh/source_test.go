@@ -538,6 +538,11 @@ const abandonFile = "echo IN-BEFORE\nset -u\necho X${NOPE}\necho IN-AFTER\n"
 // sourced file stops at the failure, `.` reports 1 — not the 3 a syntax error
 // in a sourced file carries — and the sourcing file runs the command after it,
 // on the same line.
+//
+// The location names the `.` the failure is inside, which is the frame chain
+// this shell renders — see interp.Diagnostics.LocationRendersTheBorrowedStack.
+// The `.` is on the first line of what the shell was given, so its own frame
+// writes no bracket; the file's frame names its line however small it is.
 func TestAnErrorInASourcedFileEndsThatFileAlone(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "p.sh"), []byte(abandonFile), 0o600); err != nil {
@@ -545,7 +550,7 @@ func TestAnErrorInASourcedFileEndsThatFileAlone(t *testing.T) {
 	}
 	out, st := runKsh(t, dir, ". ./p.sh\necho \"OUT-AFTER st=$?\"\n")
 	const want = "IN-BEFORE\n" +
-		"ksh: line 3: NOPE: parameter not set\n" +
+		"ksh: .: line 3: NOPE: parameter not set\n" +
 		"OUT-AFTER st=1\n"
 	if out != want {
 		t.Errorf("output = %q, want %q", out, want)
@@ -567,7 +572,7 @@ func TestTheErrorOperatorIsAnOrdinaryErrorHere(t *testing.T) {
 	}
 	out, st := runKsh(t, dir, ". ./p.sh\necho \"OUT-AFTER st=$?\"\n")
 	const want = "IN-BEFORE\n" +
-		"ksh: line 2: NOPE: msg\n" +
+		"ksh: .: line 2: NOPE: msg\n" +
 		"OUT-AFTER st=1\n"
 	if out != want {
 		t.Errorf("output = %q, want %q", out, want)

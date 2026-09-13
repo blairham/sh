@@ -9,8 +9,8 @@
 # so a file that uses them unadorned is a file only ksh93 answers.
 #
 # `~(…)` — ksh93's pattern-modifier prefix, which is how it spells an ERE and
-# a case-insensitive match — is deliberately absent: this shell refuses it at
-# parse time, and the issue filed with this file carries the measurement.
+# a case-insensitive match — is at the foot of this file. It was left out when
+# the file was written because this shell refused it at parse time (#2621).
 
 # The five, in a case where no option was set to reach them.
 for w in abc xyz abcabc ac ad abbbc nomatch; do
@@ -57,3 +57,46 @@ printf '%s\n' "${path#*/}"
 printf '%s\n' "${path##*/}"
 printf '%s\n' "${path%/*}"
 printf '%s\n' "${path%%/*}"
+
+# `~(…)`, the pattern-modifier prefix, and this shell's only spelling for a
+# regular expression: bash and zsh have `=~` and ksh93 has this. The letters
+# below are the ones measured to change an answer — see #2621 for the whole
+# sweep and for the ones deliberately left out.
+
+# `E` is an extended regular expression, and it matches a *substring* where
+# every glob in this file matches the whole word.
+[[ foo123 == ~(E)^foo[0-9]+$ ]] && printf '%s\n' 'E: an anchored ERE'
+[[ xabcx == ~(E)a.c ]] && printf '%s\n' 'E: matches inside the subject'
+[[ xabcx == a?c ]] || printf '%s\n' 'a glob does not'
+
+# `l` and `r` anchor that search to the ends of the subject.
+[[ abcx == ~(El)a.c ]] && printf '%s\n' 'El: anchored left'
+[[ xabc == ~(Er)a.c ]] && printf '%s\n' 'Er: anchored right'
+[[ xabcx == ~(Elr)a.c ]] || printf '%s\n' 'Elr: both, so neither end may spare a character'
+
+# `i` folds case, and it reaches a bracket and a character class as well as a
+# literal.
+[[ FOO == ~(i)foo ]] && printf '%s\n' 'i: a literal folds'
+[[ ABC == ~(i)[abc][abc][abc] ]] && printf '%s\n' 'i: a bracket folds'
+[[ ABC == ~(i)[[:lower:]][[:lower:]][[:lower:]] ]] && printf '%s\n' 'i: a class folds'
+[[ ABC == ~(-i)abc ]] || printf '%s\n' '-i: and the toggle turns it back off'
+
+# `F` and `L` are the literal flavors: nothing in the pattern is a
+# metacharacter.
+[[ 'a.c' == ~(F)a.c ]] && printf '%s\n' 'F: the three characters'
+[[ abc == ~(F)a.c ]] || printf '%s\n' 'F: and not a pattern'
+
+# `K` is the ksh glob, which is what a pattern with no prefix already is, and
+# an empty group says nothing at all.
+[[ abc == ~(K)a?c ]] && printf '%s\n' 'K: the glob, said explicitly'
+[[ abc == ~()abc ]] && printf '%s\n' '(): a group that says nothing'
+
+# The group reaches every surface a pattern does.
+case abc in ~(E)^a.c$) printf '%s\n' 'case: an ERE arm' ;; esac
+s=aXbXc
+printf '%s\n' "${s//~(E)X/-}"
+printf '%s\n' "${s//~(i)x/-}"
+
+# And a word that is not being matched keeps the characters: the prefix
+# belongs to the word, and only a pattern reads it.
+printf '%s\n' ~(E)a.c

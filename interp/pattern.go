@@ -533,7 +533,21 @@ func (r *Runner) patternMetaSet() string {
 // Runner and should not need one. It grew from a single bool the moment a
 // second axis reached the same code.
 type patternOpts struct {
-	caret   bool
+	caret bool
+	// tilde reads a `~(…)` prefix on the pattern, which is one dialect's
+	// pattern-modifier group — see interp/tildemodifier.go. A grammar
+	// answer, because the lexer has to have let the `(` into the word
+	// before anything here can see it.
+	tilde bool
+	// whole says the caller is asking whether the pattern matches a whole
+	// subject, rather than choosing how much of one a match takes.
+	//
+	// Nothing but the `~(…)` flavors reads it, and they have to: ksh93's
+	// regular expressions match a *substring* where its globs match the
+	// whole string, so the same pattern answers a condition and a
+	// substitution's span differently. Every other question in this matcher
+	// is about the piece it was handed and cannot tell the two apart.
+	whole   bool
 	bracket BracketPolicy
 	// unknownClass is what a `[:name:]` the shell has never heard of does to
 	// the bracket around it — see Semantics.UnknownCharacterClass. Read only
@@ -698,6 +712,10 @@ func swapCase(c byte) byte {
 }
 
 func matchPattern(pattern, s string, o patternOpts) bool {
+	// The whole-subject entry point by definition: every caller here asks
+	// whether the pattern describes the string, and none of them is choosing
+	// a span. See patternOpts.whole.
+	o.whole = true
 	ok, _ := matchPatternIn(pattern, s, s, 0, o)
 	return ok
 }
@@ -738,6 +756,16 @@ func matchPattern(pattern, s string, o patternOpts) bool {
 // all of them, and for one that did not match — measured, a failed `(#b)`
 // leaves `$match` exactly as it was.
 func matchPatternIn(pattern, piece, subject string, base int, o patternOpts) (bool, matchReport) {
+	if o.tilde {
+		if body, rest, ok := splitTildeModifier(pattern); ok {
+			// Read once and not again: the prefix is off the pattern now, so
+			// a `~(K)` that falls back to this matcher cannot loop on its
+			// own group.
+			o.tilde = false
+			m, _ := readTildeModifier(body)
+			return matchTilde(m, rest, piece, subject, base, o)
+		}
+	}
 	w := o.where
 	if w == nil {
 		// A caller that built its options by hand rather than through
@@ -2015,7 +2043,7 @@ func (r *Runner) patternOpts(pattern string, subjects ...string) patternOpts {
 	// Every surface that reaches here — pathname expansion, the pattern
 	// operators of parameter expansion, and the builtins that take one —
 	// exits 1 where the shell rejects a pattern. Measured on all three.
-	return r.extendedPatternOpts(patternOpts{
+	return r.tildeModifierOpts(r.extendedPatternOpts(patternOpts{
 		caret:        r.caretNegates(pattern),
 		bracket:      BracketLiteral,
 		unknownClass: r.unknownClassPolicy(pattern),
@@ -2026,7 +2054,7 @@ func (r *Runner) patternOpts(pattern string, subjects ...string) patternOpts {
 		numericRange: r.dialect().NumericRangePattern,
 		escapes:      r.sem().PatternEscapeReaches,
 		classes:      r.patternClasses(pattern),
-	}, pattern, 1)
+	}, pattern, 1), pattern)
 }
 
 // readsQuantifiedGroups reports whether `@(a|b)` is a group where this pattern

@@ -203,6 +203,10 @@ func Dialect() syntax.Dialect {
 	// spelled and how a compound variable's member is addressed. One rule
 	// covering both — see syntax.Dialect.DottedName for the probes (#2620).
 	d.DottedName = true
+	// `~(E)pat` and its family: a `(` after a `~` belongs to the word here,
+	// which is what makes this shell's only spelling for a regular
+	// expression writable. See syntax.Dialect.TildeGroup (#2621).
+	d.TildeGroup = true
 	// `${ cmd;}`, a command substitution that runs in the current shell
 	// so that what it assigns survives. The space after the brace is the
 	// whole of the grammar: `${x}` is a parameter and `${ x}` is not.

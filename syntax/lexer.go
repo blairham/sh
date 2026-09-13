@@ -1222,7 +1222,7 @@ func (l *Lexer) endsWord(c byte) bool {
 	if isBlank(c) && l.blankIsText() {
 		return false
 	}
-	return c != '(' || (!l.opensPatternGroup() && !l.opensSubscriptFlags())
+	return c != '(' || (!l.opensPatternGroup() && !l.opensSubscriptFlags() && !l.opensTildeGroup())
 }
 
 // insideOpenSubscript reports whether the cursor stands inside a subscript
@@ -1536,6 +1536,19 @@ func (l *Lexer) opensSubscriptFlags() bool {
 	}
 	_, _, ok := scanSubscriptFlags(l.src[l.off:])
 	return ok
+}
+
+// opensTildeGroup reports whether the `(` at the cursor is the one a `~(…)`
+// prefix opens.
+//
+// The tilde in front of it is the whole of the context, the same way the `[`
+// is for opensSubscriptFlags: the group is only ever written straight after
+// one, so the character before says which position this is without a counter.
+// A `~` that has been quoted never reaches here — the scanner routes a quoted
+// run elsewhere — which is measured to be right: `[[ abc == "~(E)"a.c ]]`
+// does not match on ksh93 where the unquoted spelling does.
+func (l *Lexer) opensTildeGroup() bool {
+	return l.dialect.TildeGroup && l.off > 0 && l.src[l.off-1] == '~'
 }
 
 func (l *Lexer) opensPatternGroup() bool {
@@ -2082,6 +2095,16 @@ func (l *Lexer) scanWord(start Pos) Token {
 			// only by accident where the dialect also had bare pattern
 			// groups, which is a different flag answering a question that is
 			// not its.
+			lit.WriteString(l.scanPatternGroup())
+
+		case c == '(' && l.opensTildeGroup():
+			// A `(` straight after a `~` belongs to the word in the one
+			// grammar that has `~(…)`, whatever that grammar says about
+			// pattern groups — the prefix is written where no group would
+			// be read, in an ordinary argument and in an assignment's
+			// value, and it has to survive the lexer there too because the
+			// shell keeps it as literal text. See
+			// [Dialect.TildeGroup] for the rows.
 			lit.WriteString(l.scanPatternGroup())
 
 		case c == '(' && l.opensPatternGroup():

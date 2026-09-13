@@ -784,6 +784,36 @@ type Dialect struct {
 	// disagree with.
 	DottedName bool
 
+	// TildeGroup makes a `(` that stands immediately after a `~` part of the
+	// word rather than the operator it otherwise is, which is what lets
+	// ksh93's `~(…)` pattern-modifier prefix be written at all.
+	//
+	// **ksh93 alone**, and it is a rule about the *lexer* rather than about
+	// patterns: the group belongs to the word wherever the word stands, and
+	// only a word being matched as a pattern then reads the letters.
+	// Measured on ksh93u+ 2012-08-01, 2026-09-13, `-c`:
+	//
+	//	echo ~(E)abc                 ~(E)abc     an ordinary word, literal
+	//	x=~(Z)abc; echo "$x"         ~(Z)abc     and so is a value
+	//	echo a~(x)b                  a~(x)b      mid-word too
+	//	[[ abc == ~(E)a.c ]]         matches     a pattern reads them
+	//	[[ abc == a~(E)b.? ]]        matches     mid-pattern as well
+	//	case abc in ~(E)^a.c$)       matches
+	//	s=aXbXc; ${s//~(E)X/-}       a-b-c
+	//
+	// Without it the `(` ends the word and the shell reports a syntax error
+	// at the paren — which is what the other five columns do, unanimously
+	// and at parse time: bash 5.3.15, that binary as `sh`, bash 3.2.57, dash
+	// and BusyBox ash all refuse the file. zsh is the one that neither
+	// refuses nor honors: there `~` is the exclusion operator and `~(E)abc`
+	// is a pattern that reads and does not match, which is a reading of its
+	// own and not this construct.
+	//
+	// So a grammar flag, and gated: a `cmd/bash` that took the `(` would
+	// accept what real bash refuses. See interp's tildeModifier for which
+	// letters are honored once the group has been read (#2621).
+	TildeGroup bool
+
 	// CurrentShellSubstitution reads `${ cmd;}` as a command substitution
 	// that runs in the current shell. bash 5.3 and ksh93 have it; dash and
 	// zsh call it a bad substitution.

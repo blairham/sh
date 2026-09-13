@@ -98,6 +98,7 @@ func (c *Runner) ownTables(r *Runner) {
 	c.lowered = maps.Clone(r.lowered)
 	c.uppered = maps.Clone(r.uppered)
 	c.hidden = maps.Clone(r.hidden)
+	c.localMarked = maps.Clone(r.localMarked)
 	c.unique = maps.Clone(r.unique)
 	c.hideInScope = maps.Clone(r.hideInScope)
 	c.tied = maps.Clone(r.tied)

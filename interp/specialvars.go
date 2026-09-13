@@ -568,11 +568,31 @@ func (r *Runner) SetDynamicArrayWriter(name string, write func(r *Runner, values
 // after the thing it belonged to had finished. `$WIDGET` in dialect/zsh is the
 // case: read-only while a widget runs — measured, real zsh answers
 // `read-only variable: WIDGET` — and an ordinary variable outside one.
+//
+// **It takes away a produced array as well, which it did not.** SetDynamic and
+// SetDynamicArray are two tables and this reached only the first, so a caller
+// ending an array's life called this, nothing happened, and the parameter
+// outlived the call it belonged to. The keyed tables go the same way and for
+// the same reason rather than because a caller has needed it: the rule is
+// which name is being taken away, and a third shape nobody had registered yet
+// is exactly how this one arrived. Driving zsh 5.9.2 and this shell through a
+// pseudo-terminal, running a widget and asking at the next prompt:
+// `${+region_highlight}` is 0 in zsh and was 1 here, where the scalars beside
+// it were 0 in both — so the one caller that registered an array was the one
+// caller whose close did nothing, and the tests could not see it because they
+// asked the question of a shell that had never run a widget. The name is what
+// this takes away, not the shape it was registered under.
 func (r *Runner) UnsetDynamic(name string) {
 	delete(r.Dynamic, name)
 	delete(r.dynamicWriters, name)
+	delete(r.DynamicArrays, name)
+	delete(r.dynamicArrayWriters, name)
+	delete(r.DynamicAssocs, name)
+	delete(r.dynamicAssocElements, name)
+	delete(r.dynamicAssocWriters, name)
 	delete(r.assigned, name)
 	delete(r.readonly, name)
+	delete(r.localMarked, name)
 }
 
 // SetSpecial gives a parameter a fixed value unless a script has already set

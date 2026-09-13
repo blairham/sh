@@ -1034,6 +1034,36 @@ func openWidgetParameters(r *interp.Runner, completion bool) {
 			r.MarkReadonly(name)
 		}
 	}
+	// Every one of them belongs to this call, and zsh says so in the word a
+	// plugin reads: `${(t)BUFFER}` inside a `zle -N` widget is
+	// `scalar-local-special` there and was `scalar-special` here, with
+	// `region_highlight` missing the same word out of `array-local-special`
+	// and `WIDGET` out of `scalar-local-readonly-special`.
+	//
+	// Measured on zsh 5.9.2 by driving it through a pseudo-terminal and
+	// pressing a key bound to a widget, 2026-09-13 — a widget cannot be run
+	// any other way, and the `local` half is exactly what a `-c` shell has no
+	// route to:
+	//
+	//	${(t)BUFFER}            scalar-local-special
+	//	${(t)LBUFFER}           scalar-local-special
+	//	${(t)RBUFFER}           scalar-local-special
+	//	${(t)WIDGET}            scalar-local-readonly-special
+	//	${(t)region_highlight}  array-local-special
+	//
+	// It is only what the shell *says*: the parameters were already opened
+	// for the length of the call and closed on the way out. But `${(t)…}` is
+	// how a plugin asks, and a highlighter that tests for `local` before it
+	// trusts the parameter decides it is not running under a real line editor
+	// (#2493).
+	//
+	// The list is zleParameters and region_highlight, which is the same pair
+	// closeWidgetParameters takes away — the mark is lifted with the
+	// parameter, so nothing outside a widget calls itself local.
+	for _, name := range zleParameters {
+		r.MarkLocal(name)
+	}
+	r.MarkLocal(regionHighlightName)
 }
 
 // closeWidgetParameters takes them away again, so a script that is not running

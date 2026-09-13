@@ -270,3 +270,25 @@ func (r *Runner) MarkHidden(name string) {
 	}
 	r.hidden[name] = true
 }
+
+// MarkLocal says that a produced parameter belongs to the *call* that
+// registered it, which is what makes a shell describe it as local.
+//
+// [Runner.ParameterAttributes] otherwise reads locality off the scope stack,
+// and a parameter a call opens has no scope to be found in: SetDynamic and
+// UnsetDynamic are how it arrives and leaves, and neither of them enters a
+// function. So the fact is true of the parameter and invisible to the only
+// thing that could have derived it, and a dialect that knows it has to say
+// it. The line parameters a line editor's widget reads are the case this was
+// added for: `${(t)BUFFER}` inside a widget is `scalar-local-special` in the
+// shell being modeled, and every one of them was missing the middle word.
+//
+// It travels with the parameter rather than outliving it: UnsetDynamic lifts
+// it, for the same reason it lifts the readonly mark, so a script that is not
+// running a widget does not find an ordinary variable calling itself local.
+func (r *Runner) MarkLocal(name string) {
+	if r.localMarked == nil {
+		r.localMarked = map[string]bool{}
+	}
+	r.localMarked[name] = true
+}

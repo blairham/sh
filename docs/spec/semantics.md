@@ -15925,14 +15925,21 @@ of the *operator* is what made this shell answer `file number expected` for a
 line real zsh runs (#2494), and it is also why `exec 6>&5-` is a file called
 `5-` there rather than a refusal.
 
-**And the numbered form is not `&>`.** It is `N> word 2>&N`: the file lands on
-the descriptor the script named and standard error is pointed at it as well,
-so `1>&qq` puts both streams in the file while `3>&qq` and `0>&qq` put only
-`E` there and leave `O` on the terminal. `2>&qq` writes `E` *twice*, which
-falls out of `RedirectsUseEveryTarget` rather than being arranged — the second
-target standard error is given is the descriptor the first one just opened, so
-the shell that writes to every target of a stream writes to this one twice.
-`unsetopt multios` leaves one copy.
+**A written `1` is not a number here**, and this is the bound on the rule
+above. `1>&qq` is the bare `>&qq` in bash 5.3, bash-as-`sh`, bash 3.2, ash and
+zsh — both streams into the file at status 0 — where `2>&qq` is refused in
+three of them. The question is *which* descriptor was named and not whether
+one was written, and reading `rd.N != nil` as the whole of it refuses a
+spelling five columns run.
+
+**And a number that is not 1 is not `&>`.** It is `N> word 2>&N`: the file
+lands on the descriptor the script named and standard error is pointed at it
+as well, so `3>&qq` and `0>&qq` put only `E` in the file and leave `O` on the
+terminal, where `1>&qq` and the bare spelling take both. `2>&qq` writes `E`
+*twice*, which falls out of `RedirectsUseEveryTarget` rather than being
+arranged — the second target standard error is given is the descriptor the
+first one just opened, so the shell that writes to every target of a stream
+writes to this one twice. `unsetopt multios` leaves one copy.
 
 **`FdMove`** — bash *duplicates then closes* · dash **no such operator** · ksh93 *relocates* · zsh **no such operator**
 

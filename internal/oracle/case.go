@@ -12922,6 +12922,11 @@ printf 'TWO=still-running\n'`,
 		Why:     "the leading descriptor number after `>&`, which splits the two columns that read a bare `>&word` as a filename. bash 5.3, bash-as-sh and bash 3.2 answer `qq: ambiguous redirect` at 1, ksh93 `bad file unit number` at 1, ash `redir error` at 2 and dash `Syntax error: Bad fd number` at 2 with the script over in both, all leaving no file; zsh opens it. So the number is part of the question and not the whole of it, and reading bash's refusal as the operator's own rule made our zsh refuse a line real zsh runs (#2494)",
 	},
 	{
+		ID: "redirect/a-written-one-is-not-a-numbered-csh-redirect", Category: "redirection",
+		Snippet: `{ printf "E\n" >&2; printf "O\n"; } 1>&qq; echo "st=$?"; echo --; cat qq 2>/dev/null; echo --`,
+		Why:     "the control the row above is read against, and the one that bounds its rule: `1>&qq` is the *bare* `>&qq` in bash 5.3, bash-as-sh, bash 3.2, ash and zsh — both streams into the file at status 0 — where `2>&qq` is refused in three of them. So the question is which descriptor was named and not whether one was written, and an implementation reading `rd.N != nil` as the whole of it refuses a spelling five columns run",
+	},
+	{
 		ID: "redirect/a-numbered-csh-redirect-is-not-both-streams", Category: "redirection",
 		Snippet: `{ printf "E\n" >&2; printf "O\n"; } 3>&qq; echo "st=$?"; echo --; cat qq 2>/dev/null; echo --`,
 		Why:     "and what the one column that opens the file actually does with it, which is not `&>`: the file lands on the descriptor the script named and standard error is pointed at it too, so `O` stays on standard output where `>&qq` would have taken it. A descriptor nothing writes to is what makes the second half visible — the file holds `E` and nothing put it there but the duplication",

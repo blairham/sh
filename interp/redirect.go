@@ -293,9 +293,9 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 		// one dialect allows and which changes what the spelling means: see
 		// cshOnANumber, read below where the descriptor is settled.
 		numbered := false
-		if r.greatAmpNamesAFile(rd, name) {
+		if r.greatAmpNamesAFile(rd, fd, fdVar, name) {
 			op = syntax.TokAmpGreat
-			numbered = rd.N != nil && fdVar == ""
+			numbered = rd.N != nil && fdVar == "" && fd != 1
 		} else if r.unspecified {
 			r.redirErr = true
 			return closers, nil
@@ -689,13 +689,14 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 				}
 			}
 			if numbered {
-				// The numbered csh form is `N> word 2>&N` and not the
-				// both-streams `&> word`: the file lands on the descriptor
-				// the script named, and standard error is pointed at it as
-				// well. Measured on zsh 5.9.2, 2026-09-13, with a command
-				// writing `O` to stdout and `E` to stderr in an empty
-				// directory: `1>&qq` puts both in the file, `3>&qq` and
-				// `0>&qq` put `E` there and leave `O` on the terminal.
+				// The csh form on a descriptor that is not standard output
+				// is `N> word 2>&N` and not the both-streams `&> word`: the
+				// file lands on the number the script named, and standard
+				// error is pointed at it as well. Measured on zsh 5.9.2,
+				// 2026-09-13, with a command writing `O` to stdout and `E`
+				// to stderr in an empty directory: `3>&qq` and `0>&qq` put
+				// `E` in the file and leave `O` on the terminal, where
+				// `1>&qq` and the bare `>&qq` take both.
 				//
 				// `2>&qq` writes `E` *twice*, and that falls out rather than
 				// being arranged: the second target for standard error is
@@ -1837,13 +1838,19 @@ func isDescriptorSpec(word string) bool {
 // GreatAmpTargetNamesAnyFile. This used to be written down as an invariant of
 // the operator, which made zsh answer `file number expected` for a line real
 // zsh runs (#2494).
-func (r *Runner) greatAmpNamesAFile(rd *syntax.Redirect, target string) bool {
+//
+// **A written `1` is not a number here.** `1>&qq` is the bare `>&qq` in bash
+// and in ash — both streams into the file, at status 0 — measured the same
+// day, and only a *different* number is refused. Reading "a descriptor was
+// written" as the question refuses a spelling three of the columns run, which
+// is the same over-generalization one step along.
+func (r *Runner) greatAmpNamesAFile(rd *syntax.Redirect, fd int, fdVar, target string) bool {
 	if rd.Op != syntax.TokGreatAmp || isDescriptorSpec(target) {
 		return false
 	}
 	switch r.greatAmpTarget() {
 	case GreatAmpTargetNamesAFile:
-		return rd.N == nil && target != ""
+		return (rd.N == nil || (fdVar == "" && fd == 1)) && target != ""
 	case GreatAmpTargetNamesAnyFile:
 		return true
 	}

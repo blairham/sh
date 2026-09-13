@@ -124,6 +124,20 @@ func TestTheNumberedGreatAmpSplitsTheTwoFileForms(t *testing.T) {
 			t.Errorf("qq = %q, want no file made by a refusal", got)
 		}
 	})
+	t.Run("and a written 1 is not a number", func(t *testing.T) {
+		// `1>&qq` is the bare `>&qq` in bash and in ash — both streams into
+		// the file at status 0 — so the question is which descriptor was
+		// named and not whether one was.
+		dir := t.TempDir()
+		out, st := run(t, `{ echo out; echo err >&2; } 1>&qq; printf "[%s]" "$?"`,
+			cshRedir(dir, GreatAmpTargetNamesAFile, dg))
+		if out != "[0]" || st != 0 {
+			t.Errorf("out = %q status %d, want nothing reaching the caller at 0", out, st)
+		}
+		if got := readFile(t, dir, "qq"); got != "out\nerr\n" {
+			t.Errorf("qq = %q, want both streams in it", got)
+		}
+	})
 	t.Run("a file where any word is a name", func(t *testing.T) {
 		dir := t.TempDir()
 		out, _ := run(t, `echo hi 2>&qq; printf "[%s]" "$?"`,
@@ -148,7 +162,7 @@ func TestTheNumberedGreatAmpAlsoTakesStandardError(t *testing.T) {
 		everyTarget                  Answer
 	}{
 		{"the named stream keeps the file", `2>&qq`, "O\n", "E\n", No},
-		{"and standard output goes there with it", `1>&qq`, "", "E\nO\n", No},
+		{"standard output written out is still both streams", `1>&qq`, "", "E\nO\n", No},
 		{"a descriptor of its own leaves standard output alone", `3>&qq`, "O\n", "E\n", No},
 		// `2>&qq` is the one spelling where the two targets standard error
 		// is given are the same descriptor, so the shell that writes to

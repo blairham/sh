@@ -74,7 +74,7 @@ func main() {
 				fmt.Fprintln(os.Stderr, "axissweep:", err)
 				os.Exit(2)
 			}
-			fmt.Fprintf(os.Stderr, "wrote %d probed pairs to %s\n", len(g.Judgements), path)
+			fmt.Fprintf(os.Stderr, "wrote %d probed pairs to %s\n", len(g.Judgments), path)
 		}
 		fmt.Print(g.Report())
 		// Nonzero on a preset that contradicts a measured cell, and on a

@@ -114,8 +114,8 @@ const (
 	Unanswered Verdict = "unanswered"
 )
 
-// Judgement is one dialect, one axis, and what came of comparing them.
-type Judgement struct {
+// Judgment is one dialect, one axis, and what came of comparing them.
+type Judgment struct {
 	Dialect string  `json:"dialect"`
 	Against string  `json:"against"`
 	Field   string  `json:"field"`
@@ -133,7 +133,7 @@ type Judgement struct {
 
 // GradeResult is the whole comparison.
 type GradeResult struct {
-	Judgements []Judgement `json:"judgements"`
+	Judgments []Judgment `json:"judgments"`
 	// Axes is every field of the vector and Probed the ones a probe reads,
 	// so the two numbers together are the size of the blind spot.
 	Axes   int `json:"axes"`
@@ -226,28 +226,28 @@ func Grade(cases []oracle.Case, golden *oracle.Run) (*GradeResult, error) {
 				out.Faults = append(out.Faults, fault)
 				continue
 			}
-			out.Judgements = append(out.Judgements, j)
+			out.Judgments = append(out.Judgments, j)
 		}
 	}
 	out.Probed = len(probed)
-	out.Unprobed = out.Pairs - len(out.Judgements) - len(out.Faults)
-	sort.Slice(out.Judgements, func(i, j int) bool {
-		if out.Judgements[i].Dialect != out.Judgements[j].Dialect {
-			return out.Judgements[i].Dialect < out.Judgements[j].Dialect
+	out.Unprobed = out.Pairs - len(out.Judgments) - len(out.Faults)
+	sort.Slice(out.Judgments, func(i, j int) bool {
+		if out.Judgments[i].Dialect != out.Judgments[j].Dialect {
+			return out.Judgments[i].Dialect < out.Judgments[j].Dialect
 		}
-		return out.Judgements[i].Field < out.Judgements[j].Field
+		return out.Judgments[i].Field < out.Judgments[j].Field
 	})
 	sort.Strings(out.Faults)
 	return out, nil
 }
 
 // judge grades one preset against one probe.
-func judge(p Probe, f Field, pr Preset, golden *oracle.Run, consts map[string][]Value) (Judgement, string) {
+func judge(p Probe, f Field, pr Preset, golden *oracle.Run, consts map[string][]Value) (Judgment, string) {
 	cur, err := At(reflect.ValueOf(pr.Semantics), f.Path)
 	if err != nil {
-		return Judgement{}, fmt.Sprintf("%s: %v", f.Path, err)
+		return Judgment{}, fmt.Sprintf("%s: %v", f.Path, err)
 	}
-	j := Judgement{
+	j := Judgment{
 		Dialect: pr.Name, Against: pr.Against, Field: f.Path,
 		Held: heldName(f, cur), By: p.Cases,
 	}
@@ -272,17 +272,17 @@ func judge(p Probe, f Field, pr Preset, golden *oracle.Run, consts map[string][]
 	value, silent := p.Read(cells)
 	switch {
 	case value != "" && silent != "":
-		return Judgement{}, fmt.Sprintf("%s: the %s reading answers both %q and %q; a probe says one or the other",
+		return Judgment{}, fmt.Sprintf("%s: the %s reading answers both %q and %q; a probe says one or the other",
 			f.Path, pr.Name, value, silent)
 	case value == "" && silent == "":
-		return Judgement{}, fmt.Sprintf("%s: the %s reading answers nothing at all; a probe says a value or why it cannot",
+		return Judgment{}, fmt.Sprintf("%s: the %s reading answers nothing at all; a probe says a value or why it cannot",
 			f.Path, pr.Name)
 	case silent != "":
 		j.Outcome, j.Why = NoEvidence, silent
 		return j, ""
 	}
 	if !declares(consts, f, value) {
-		return Judgement{}, fmt.Sprintf("%s: the %s reading answers %q, which %s does not declare",
+		return Judgment{}, fmt.Sprintf("%s: the %s reading answers %q, which %s does not declare",
 			f.Path, pr.Name, value, f.Type)
 	}
 	j.Recorded, j.Why = value, p.Reading
@@ -310,10 +310,10 @@ func declares(consts map[string][]Value, f Field, name string) bool {
 	return f.Kind == reflect.Bool && (name == "true" || name == "false")
 }
 
-// Count is how many judgements came to one outcome.
+// Count is how many judgments came to one outcome.
 func (g *GradeResult) Count(o Verdict) int {
 	n := 0
-	for _, j := range g.Judgements {
+	for _, j := range g.Judgments {
 		if j.Outcome == o {
 			n++
 		}
@@ -323,9 +323,9 @@ func (g *GradeResult) Count(o Verdict) int {
 
 // Disagreements are the pairs where a preset contradicts the record. This is
 // what fails.
-func (g *GradeResult) Disagreements() []Judgement {
-	var out []Judgement
-	for _, j := range g.Judgements {
+func (g *GradeResult) Disagreements() []Judgment {
+	var out []Judgment
+	for _, j := range g.Judgments {
 		if j.Outcome == Disagrees {
 			out = append(out, j)
 		}
@@ -338,7 +338,7 @@ func (g *GradeResult) Disagreements() []Judgement {
 // the instrument exists, and nothing it holds has been compared with anything.
 func (g *GradeResult) Ungraded() []string {
 	graded := map[string]bool{}
-	for _, j := range g.Judgements {
+	for _, j := range g.Judgments {
 		if j.Outcome == Agrees || j.Outcome == Disagrees {
 			graded[j.Dialect] = true
 		}
@@ -363,7 +363,7 @@ func (g *GradeResult) Report() string {
 		g.Probed, g.Axes, g.Unprobed, g.Pairs)
 	fmt.Fprintf(&b, "  of the %d pairs a probe does reach, %d have no evidence in the record\n"+
 		"  and %d sit on an axis the dialect does not answer.\n\n",
-		len(g.Judgements), g.Count(NoEvidence), g.Count(Unanswered))
+		len(g.Judgments), g.Count(NoEvidence), g.Count(Unanswered))
 
 	if len(g.Faults) > 0 {
 		fmt.Fprintf(&b, "the instrument itself is broken in %d place(s):\n", len(g.Faults))
@@ -385,7 +385,7 @@ func (g *GradeResult) Report() string {
 		fmt.Fprintf(&b, "%d dialect(s) no probe could grade at all: %s\n\n", len(u), strings.Join(u, ", "))
 	}
 	b.WriteString("every probed pair:\n")
-	for _, j := range g.Judgements {
+	for _, j := range g.Judgments {
 		switch j.Outcome {
 		case Agrees, Disagrees:
 			fmt.Fprintf(&b, "  %-6s %-44s %-11s %s\n", j.Dialect, j.Field, j.Outcome, j.Recorded)
@@ -430,7 +430,7 @@ func gradedLedgerFile() string {
 func (g *GradeResult) Ledger() string {
 	var b strings.Builder
 	b.WriteString(gradedLedgerHeader)
-	for _, j := range g.Judgements {
+	for _, j := range g.Judgments {
 		value := j.Recorded
 		if value == "" {
 			value = "-"

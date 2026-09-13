@@ -1317,6 +1317,10 @@ func (p *Parser) parseStmt() *Stmt {
 		return nil
 	}
 	st := &Stmt{Expr: expr, Semi: p.bodyTookTerm}
+	// Where the statement's terminator ends, for keepFunctionSource below.
+	// Invalid until a terminator is read, which is the "nothing followed it"
+	// case that method is written for.
+	var term Pos
 	switch p.tok.Kind {
 	case TokPipeAmp:
 		// Only where the dialect reads the operator as a coprocess. Where it
@@ -1362,11 +1366,47 @@ func (p *Parser) parseStmt() *Stmt {
 		p.next()
 	case TokSemi:
 		st.Semi = p.tok.Pos
+		term = p.tok.End
 		p.next()
 	case TokNewline:
 		st.Semi = p.tok.Pos
+		term = p.tok.End
 	}
+	p.keepFunctionSource(expr, term)
 	return st
+}
+
+// keepFunctionSource records a definition's own source text on it, for the
+// dialect that says a function back as it was written rather than as a tree.
+// See [Dialect.FunctionDefinitionIsSourceText] and [FuncDecl.SourceText].
+//
+// It happens here and not where the declaration is parsed because the span
+// runs **through the terminator**, which the declaration never holds: ksh93
+// writes `f() { :; };` for a definition followed by a `;` and `f() { :; }`
+// plus the newline for one written in a file. A definition with nothing after
+// it — the last thing an `eval` string holds — ends at its body, which is the
+// invalid `term` this is called with everywhere else.
+//
+// Only a statement that is nothing *but* one definition is recorded. `f() {
+// :; } && echo ok` is a binary expression whose terminator belongs to the
+// whole of it, and a pipeline of several commands has no one declaration to
+// carry the text.
+func (p *Parser) keepFunctionSource(expr Expr, term Pos) {
+	if !p.dialect.FunctionDefinitionIsSourceText {
+		return
+	}
+	pl, ok := expr.(*Pipeline)
+	if !ok || pl.Negated || len(pl.Cmds) != 1 {
+		return
+	}
+	fn, ok := pl.Cmds[0].(*FuncDecl)
+	if !ok || fn.Body == nil {
+		return
+	}
+	if !term.IsValid() {
+		term = fn.End()
+	}
+	fn.SourceText = p.rawBetween(fn.Pos(), term)
 }
 
 // refusedFuncName is the word a definition's complaint names, for the dialects
@@ -1418,11 +1458,18 @@ func offsetBy(pos Pos, n int) Pos {
 }
 
 func (p *Parser) textBetween(from, to Pos) string {
+	return strings.TrimSpace(p.rawBetween(from, to))
+}
+
+// rawBetween is the same span untrimmed, for the one caller that wants the
+// characters exactly as they were written — see [FuncDecl.SourceText], where
+// the blanks before a terminator are part of what the shell says back.
+func (p *Parser) rawBetween(from, to Pos) string {
 	src := p.lex.src
 	if from.Offset < 0 || int(to.Offset) > len(src) || from.Offset >= to.Offset {
 		return ""
 	}
-	return strings.TrimSpace(src[from.Offset:to.Offset])
+	return src[from.Offset:to.Offset]
 }
 
 // parseAndOr reads pipelines joined by && and ||.

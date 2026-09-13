@@ -769,6 +769,23 @@ type FuncDecl struct {
 	Keyword bool
 	Body    Command
 	Start   Pos
+
+	// SourceText is the definition as it was **written** — from the name
+	// through the character that ended the statement — and is recorded only
+	// where [Dialect.FunctionDefinitionIsSourceText] says the dialect writes
+	// one back that way.
+	//
+	// Only there for the same reason [Stmt.Text] is only on a background
+	// statement: every other node can be re-read from the input it came
+	// from, and one shell's `typeset -f` is the one place a definition has
+	// to be shown back long after the source was let go of. ksh93 reproduces
+	// the characters, comments and odd spacing and all; the other five print
+	// the tree through their own function layout and leave this empty.
+	//
+	// Empty is also what a hand-built tree has, and what a definition the
+	// parser refused has, so a listing that reads it must fall back to the
+	// layout rather than write nothing.
+	SourceText string
 }
 
 // FuncName is one name in a definition's name list, read the way a first name

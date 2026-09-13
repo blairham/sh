@@ -992,7 +992,10 @@ func Semantics() interp.Semantics {
 	// two characters it was written as: `$'\xzz'` is `\xzz` here.
 	s.DollarSingleHexReadsEveryDigit = interp.No
 	s.DollarSingleDigitlessEscapeIsAZeroByte = interp.No
-	s.DollarSingleCaretMeta = interp.No
+	// And neither `\C` nor `\M` is an escape here: `$'\C-A'` and `$'\M-x'`
+	// are kept as written, where zsh reads them as one byte apiece and ksh93
+	// reads a different escape out of the same spelling (#2345).
+	s.DollarSingleCaretMeta = interp.DollarSingleCaretMetaAbsent
 	s.GetoptsAssignmentRestartsWord = interp.Yes
 	s.GetoptsClearsOptarg = interp.No
 	// A `local OPTIND` gives the call the whole cursor and gives the caller

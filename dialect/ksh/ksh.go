@@ -151,6 +151,14 @@ func Dialect() syntax.Dialect {
 	// stops the script. interp.Semantics.FunctionNameWhenTheDefinitionRuns is
 	// what happens then (#1296).
 	d.FunctionNameCheckedWhenTheDefinitionRuns = true
+	// And a definition keeps the characters it was written with, because this
+	// shell's `typeset -f` says them back rather than laying the tree out:
+	// `f(){    echo     a   ;   }` lists with every one of those blanks, a
+	// comment inside the body survives, and the listing ends with the `;`
+	// that ended the statement. See syntax.FuncDecl.SourceText for the
+	// measurement and Diagnostics.FunctionListingIsSourceText for the half
+	// that writes it (#2610).
+	d.FunctionDefinitionIsSourceText = true
 	// A colon written before a trim is ignored here: `${v:#hel*}` is
 	// `${v#hel*}` and comes to `lo`, where zsh reads the same six characters
 	// as an element exclusion and bash refuses them as arithmetic. All four
@@ -1056,6 +1064,15 @@ func Semantics() interp.Semantics {
 	// The same `\c` as the printf format, and the arithmetic is bit 6
 	// toggled rather than bash's five-bit mask: `$'\c1'` is `q`, not 0x11.
 	s.DollarSingleBackslashC = interp.DollarSingleControlToggled
+	// `\C` is the same arithmetic under a second spelling, and it takes **no
+	// dash**: `$'\CA'` is 01, `$'\Ca'` is 01 too, and `$'\C-A'` is the
+	// escape applied to `-` — `m` — followed by a literal `A`. zsh writes
+	// those same five characters and means 01 by them, so a yes/no field
+	// could not hold both and this shell sat unanswered instead. `\M` is not
+	// an escape by itself and `\M-` is the escape byte, taking nothing after
+	// it: `$'\M-x'` is 1b then `x`. Measured 2026-09-13 through `od -c`
+	// (#2345).
+	s.DollarSingleCaretMeta = interp.DollarSingleCaretMetaFoldedWithNoDash
 	s.DollarSingleUnknownEscape = interp.DollarSingleUnknownDropsBackslash
 	s.DollarSingleNul = interp.DollarSingleNulEndsTheSpan
 	// `\x` here takes every hexadecimal digit that follows and a run past
@@ -1241,6 +1258,17 @@ func Semantics() interp.Semantics {
 	// table letter carries them across (#2287).
 	s.TableUnderAnArrayLiteralDeclaration = interp.CompoundKindChangeEmptiesTheName
 	s.ArrayUnderATableLiteralDeclaration = interp.CompoundKindChangeEmptiesTheName
+	// A literal of **bare words** on a table is a third question again, and
+	// the one this shell answers alone: it reads the parentheses as an index
+	// array's value and will not put one in a table. Measured 2026-09-13,
+	// `typeset -A m=(alpha one)` is `cannot append index array to associative
+	// array m` and **the input ends**, where bash and zsh both pair the words
+	// off and list `[alpha]=one`. The same for `m=(alpha one)` on a name
+	// already *declared and empty* and for the `+=` spelling; a literal with
+	// no element written in it — `typeset -A m=()` — is taken, and a
+	// replacing literal onto a table that **has** an element converts the
+	// name instead of complaining. The axis carries those rows (#2611).
+	s.BareElementsInATableLiteralEndTheScript = true
 	// `a[@]=Z` is refused for either kind of name, in a sentence about the
 	// *subscript* rather than about the name, and the input ends under both
 	// separators. The only column that answers the two questions alike.
@@ -1461,15 +1489,15 @@ func Semantics() interp.Semantics {
 	// The letters `typeset` reads here. `-g` it simply does not have, and
 	// there is no `local` (see Register), so LocalOptions stays empty.
 	//
-	// `-f` is here now (#1494). The real shell prints a function back
-	// *verbatim* — it keeps the source text and this engine keeps a tree —
-	// so the listing is a layout that reproduces that text for a definition
-	// written the way anybody writes one; see FunctionLayout for what that
-	// does and does not promise. What the listing must get right is not the
-	// spacing: it is the `function` keyword, because `typeset` declares a
-	// local in a keyword body here and the global in the other, so a
-	// listing that dropped the word would hand back a program whose
-	// variables leak.
+	// `-f` is here now (#1494), and it says the function back *verbatim*:
+	// the parser keeps the definition's own characters and the listing
+	// writes them, terminator and all — see
+	// syntax.Dialect.FunctionDefinitionIsSourceText and FunctionLayout for
+	// what is left of the layout (#2610). What the listing must get right
+	// beyond the spacing is the `function` keyword, because `typeset`
+	// declares a local in a keyword body here and the global in the other,
+	// so a listing that dropped the word would hand back a program whose
+	// variables leak — and the source text keeps it because it was written.
 	s.DeclareOptions = "aAfilmMprux"
 	// `-m` is here now, and it is not the letter zsh spells the same way:
 	// it *moves* a parameter — `typeset -m new=old` — where the other
@@ -1477,6 +1505,18 @@ func Semantics() interp.Semantics {
 	// interp/declaremove.go holds the whole measurement and
 	// interp.DeclareMatchingLetterPolicy is the axis.
 	s.DeclareMatchingLetter = interp.DeclareMatchingLetterMoves
+	// A bare `typeset` is a listing here, and a third one: not every
+	// parameter and not the running scope's, but every name that carries an
+	// **attribute**, in this shell's own vocabulary and with no value on the
+	// line — `export ex`, `integer n`, `toupper up`, and nothing at all for
+	// a name that was only assigned. Measured 2026-09-13 on ksh93u+ with
+	// `env -i`; interp.BareLocalListsAttributedNames holds the measurement
+	// and Runner.attributePhraseHead the words (#2345).
+	//
+	// There is no `local` here to give the other half of the pair to, which
+	// is why only this field moves: `local` is not a builtin in this shell
+	// and the word is a command that was not found.
+	s.BareTypesetListing = interp.BareLocalListsAttributedNames
 	// `-M` is here too, and it is the same shape: the letter names a
 	// *character mapping* — `typeset -M tolower v`, which lists back as
 	// `typeset -l v` — where zsh's `functions -M` registers a math function.
@@ -1660,6 +1700,10 @@ func Diagnostics() interp.Diagnostics {
 		// The subscript is the verb, not the name — see
 		// Semantics.WholeArraySubscriptAssigningAnArray.
 		InvalidSubscriptInAssignment: "%s: invalid subscript in assignment",
+		// `append` even for a plain `=`: the sentence is about the two kinds
+		// and not about the operator — see
+		// Semantics.BareElementsInATableLiteralEndTheScript.
+		IndexArrayIntoATable: "cannot append index array to associative array %[1]s",
 		// The same sentence from `unset`, with the builtin named in front of
 		// it as this shell names it in front of the arithmetic one below.
 		UnsetSubscriptBeforeTheFirstElement: "unset: %[1]s: subscript out of range",
@@ -2085,6 +2129,14 @@ func Diagnostics() interp.Diagnostics {
 		// give back the one it was handed (#1494, #1406).
 		FunctionListingHeader:        "%[1]s()%[2]s",
 		FunctionListingKeywordHeader: "function %[1]s %[2]s",
+		// Both headers are the fallback rather than the ordinary path now:
+		// what this shell really writes is the definition's own source text,
+		// terminator and all, and the parser keeps it — see
+		// syntax.Dialect.FunctionDefinitionIsSourceText. The headers still
+		// answer for a function whose declaration carries no text: one built
+		// by an embedder, and one this shell is still waiting to read a body
+		// for (#2610).
+		FunctionListingIsSourceText: true,
 		// And the names-only listing keeps the same distinction with
 		// punctuation instead of a word: measured, `f() { :; }; function g
 		// { :; }; typeset +f` writes `f()` and then `g`.

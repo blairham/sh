@@ -18,15 +18,15 @@ import "github.com/blairham/sh/syntax"
 //	function g { typeset x=1; }  function g { typeset x=1; }\n
 //	f(){ :; }; g(){ :; }       f(){ :; }\ng(){ :; }\n   (a bare `functions`)
 //
-// **What that shell really does is print the source text back verbatim**,
-// terminator and all: `f(){    echo     a   ;   }` lists with every one of
-// those spaces, and the same definition written on a `-c` line ends with the
-// `;` that followed it rather than with a newline. This engine does not keep
-// the source of a function — the tree is what it has — so what is written
-// here is a *layout* that reproduces that text for a definition written the
-// way anybody writes one, and normalizes the spacing of one that is not.
-// That divergence is deliberate and is the one thing this listing does not
-// promise; see docs/spec/semantics.md.
+// **This is the fallback and not the ordinary path.** What that shell really
+// does is print the source text back verbatim, terminator and all, and this
+// one does too: the parser keeps the definition's characters — see
+// syntax.Dialect.FunctionDefinitionIsSourceText — and
+// Diagnostics.FunctionListingIsSourceText is what writes them. This layout
+// answers for a declaration that carries no text, which is one built by an
+// embedder and one this shell is still waiting to read a body for, and it is
+// written to be the arrangement a definition written the way anybody writes
+// one comes back as (#2610).
 //
 // The zero Layout is already this arrangement, and saying it out loud is the
 // point: a listing shape that is a default rather than a decision is one

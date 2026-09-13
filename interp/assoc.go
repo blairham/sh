@@ -439,7 +439,81 @@ func (r *Runner) assignAssocLiteral(name string, elems []*syntax.Word, appendTo 
 		// the whole indexed array — see literalElems.
 		return
 	}
+	if r.indexArrayIntoATable(name, parsed, appendTo) {
+		return
+	}
 	r.assignAssocElems(name, parsed, appendTo)
+}
+
+// indexArrayIntoATable is the refusing answer to a literal of **bare words**
+// landing on a table, and reports whether it fired.
+//
+// See Semantics.BareElementsInATableLiteralEndTheScript for the panel: two
+// columns pair the words off as key, value, key, value and one reads the
+// parentheses as an *index array* and will not put one in a table.
+//
+// An element **written** without a `[key]=` head is what decides it, and not
+// the fields it came to — which is why it reads literalElem.subscripted
+// rather than counting words. Measured: `e=; typeset -A m=($e)` is refused
+// there although the element expands to nothing, and only a literal with no
+// element written in it at all — `typeset -A m=()` — is accepted.
+//
+// After the expansion rather than before, for the same measured reason:
+// `typeset -A m=($(echo SIDE >&2))` writes `SIDE` and then complains, so the
+// elements are expanded and then judged. Nothing has been stored by then —
+// assignAssocElems is what stores — so the refusal costs the whole literal.
+func (r *Runner) indexArrayIntoATable(name string, parsed []literalElem, appendTo bool) bool {
+	if !r.sem().BareElementsInATableLiteralEndTheScript {
+		return false
+	}
+	bare := false
+	for _, e := range parsed {
+		if !e.subscripted {
+			bare = true
+			break
+		}
+	}
+	if !bare {
+		return false
+	}
+	if r.tableBecomesAnIndexArray(name, appendTo) {
+		r.compoundKindEmptied(name, false)
+		if a, ok := r.literalInto(name, Array{}, 0, parsed); ok {
+			r.storeArray(name, a)
+		}
+		return true
+	}
+	r.fatal("%s\n", Wording(r.diag().IndexArrayIntoATable,
+		"cannot append index array to associative array %[1]s", name))
+	return true
+}
+
+// tableBecomesAnIndexArray is the *other* answer the refusing column gives to
+// the same literal: the name stops being a table and holds the words as an
+// index array, with nothing said about it.
+//
+// Which of the two happens turns on three measured things, and the surprise
+// is the third. Measured 2026-09-13 on ksh93u+ 2012-08-01:
+//
+//	typeset -A m=([a]=1); m=(x y)        typeset -a m=(x y)
+//	typeset -A m=([a]=1); typeset m=(x y)    typeset -a m=(x y)
+//	typeset -A m=([a]=1); typeset -A m=(x y) cannot append index array …
+//	typeset -A m=([a]=1); m+=(x y)           cannot append index array …
+//	typeset -A m;         m=(x y)            cannot append index array …
+//	typeset -A m=();      m=(x y)            cannot append index array …
+//
+// So an **append** never converts — the sentence's verb is the honest one
+// there, since there is no index array to append to a table — and the table
+// **letter written on the same command** holds the name to its kind, which is
+// what Runner.tableLetterHere records. The third is that an **empty** table
+// refuses where a table with an element in it converts, which is that shell's
+// own and is reproduced rather than explained: a replacing assignment is
+// replacing nothing when the name holds no element, and there it complains.
+func (r *Runner) tableBecomesAnIndexArray(name string, appendTo bool) bool {
+	if appendTo || r.tableLetterHere[name] {
+		return false
+	}
+	return len(r.AssocArrays[name]) > 0
 }
 
 // assignAssocElems places an already-expanded literal into the keyed table.

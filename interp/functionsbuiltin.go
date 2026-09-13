@@ -189,7 +189,7 @@ func (r *Runner) functionsMatching(patterns []string, namesOnly bool) int {
 				r.printf("%s\n", r.listedFunctionNameOnly(name, r.funcs[name]))
 				continue
 			}
-			r.printf("%s\n", r.listedFunction(name, r.funcs[name]))
+			r.printf("%s", r.listedFunctionLine(name, r.funcs[name]))
 		}
 	}
 	return 0

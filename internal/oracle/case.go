@@ -14545,7 +14545,34 @@ printf 'TWO=still-running\n'`,
 	{
 		ID: "declare/f-says-a-named-function-back", Category: "declarations",
 		Snippet: `f() { if true; then echo one; fi; }; typeset -f f; echo "st=$?"`,
-		Why:     "three engines, three renderings of identical state: one gives the brace a line of its own and terminates with `;`, one keeps the brace on the header and terminates with nothing, and one prints the source text verbatim — which this engine does not keep, so the third is refused as unimplemented rather than approximated",
+		Why:     "three engines, three renderings of identical state: one gives the brace a line of its own and terminates with `;`, one keeps the brace on the header and terminates with nothing, and one says the **source text** back — so the third column is not an arrangement at all and is reproduced by keeping the characters rather than by a layout, see syntax.FuncDecl.SourceText (#2610)",
+	},
+	// The verbatim column, asked four ways (#2610). Two engines lay a tree
+	// out and ksh93 reproduces the characters the definition was written
+	// with, which is a different kind of answer rather than a third
+	// arrangement — so these rows ask about things a tree has already
+	// forgotten by the time a listing is wanted. Nothing here discriminates
+	// between the two printing engines; that is what the `#2427` block below
+	// is for.
+	{
+		ID: "declare/f-says-the-blanks-it-was-written-with", Category: "declarations",
+		Snippet: `f(){    echo     a   ;   }; typeset -f f`,
+		Why:     "spacing no tree holds. The two printing engines answer with their usual arrangement whatever was typed — four spaces become one, the `;` becomes a line break — and ksh93 gives every blank back, including the run between the `;` and the `}`. The listing there is the source text and not a layout, which is why a definition's characters are kept on the declaration rather than re-derived (#2610)",
+	},
+	{
+		ID: "declare/f-says-a-comment-in-the-body-back", Category: "declarations",
+		Snippet: "f() { # note\n :; }; typeset -f f",
+		Why:     "the row that cannot be passed by a layout however good: a comment is in no tree at all, so an engine that prints from one has nothing to write and ksh93 writes it back. It is the same fact `autoload`'s `# undefined` marker rests on from the other side — a body listing that reproduced comments would make that marker indistinguishable from a line somebody typed (#2610)",
+	},
+	{
+		ID: "declare/f-says-two-functions-back-with-nothing-between", Category: "declarations",
+		Snippet: `f() { :; }; g() { :; }; typeset -f`,
+		Why:     "what separates two listings, which is nothing in the column that says the source back: each definition carries the `;` that ended it and the shell writes no newline of its own, so ksh93 answers `f() { :; };g() { :; };` on one line where the other two write a block each. It is the control for the terminator being part of the listing rather than a line ending the shell adds (#2610)",
+	},
+	{
+		ID: "declare/f-says-a-definition-nothing-terminated-back", Category: "declarations",
+		Snippet: `eval "f() { :; }"; typeset -f f`,
+		Why:     "the other half of the row above, and the one that says the terminator is *read* rather than appended: text ending on the `}` has no terminator, so ksh93's listing has none either and the whole answer is `f() { :; }` with no trailing newline anywhere. The two printing engines write their usual block, so the row also says an `eval`-defined function is an ordinary one to all three (#2610)",
 	},
 	// The shape of a listed body, past where its lines break (#2427). Every
 	// row below is one question with two answers among the engines that
@@ -14592,7 +14619,7 @@ printf 'TWO=still-running\n'`,
 	{
 		ID: "declare/f-says-a-nested-keyword-declaration-back", Category: "declarations",
 		Snippet: `f() { function inner { echo i; }; }; typeset -f f`,
-		Why:     "the same nested declaration written the other way. Both engines answer exactly as they answer the row above, which is what says they respell rather than preserve — and it is the reason a listing may not simply drop the keyword everywhere: ksh93 scopes a `typeset` by the word, and its column keeps it",
+		Why:     "the same nested declaration written the other way. Both engines answer exactly as they answer the row above, which is what says they respell rather than preserve — and it is the reason a listing may not simply drop the keyword everywhere: ksh93 scopes a `typeset` by the word, and its column keeps it. The ksh93 column of this row and the one above is a **fault of that shell** and is recorded rather than reproduced: the outer definition's end is taken from the inner one's, so the listing stops at the inner `}` and the outer body is truncated (#2610)",
 	},
 	{
 		ID: "declare/f-says-a-background-statement-back", Category: "declarations",
@@ -22434,6 +22461,16 @@ echo "st=$?"`,
 		ID: "decl/an-array-literal-over-the-other-kind-of-array", Category: "declarations",
 		Snippet: "typeset -A h 2>/dev/null; h[k]=v\ntypeset -a h=(x) 2>&1; echo \"st=$?\"; typeset -p h 2>&1\ntypeset -a c=(x y) 2>/dev/null\ntypeset -A c=([k]=v) 2>&1; echo \"st=$?\"; typeset -p c 2>&1",
 		Why:     "a declaration carrying its own **array literal** over a name already holding the *other* kind of compound, in both directions. Not the same question as the valueless `typeset -a h`, and ksh93 is what says so: it ends the script over the valueless array letter and converts this one without a word. zsh converts too and both of them keep the literal's element and drop what was there -- the literal is an assignment and it replaces what it lands on -- where bash refuses at 1 and leaves the name as it was. Two further things the columns disagree about are in the fields deliberately: bash's sentence carries **no builtin name**, which is what says the complaint comes from the assignment rather than from the utility, and the `st=` reads 1 rather than nothing because the four commands are separated by **newlines**. Under `;` bash prints nothing after the complaint by either invocation route and all of it under newlines by either, so what the refusal costs is the command list and not the input -- #1182's square, and #2287 was filed on the other cell of it. This shell kept the table and stored the literal's word as a key, silently, at 0. See Semantics.TableUnderAnArrayLiteralDeclaration and ArrayUnderATableLiteralDeclaration (#2287)",
+	},
+	{
+		ID: "decl/an-index-array-literal-on-a-table", Category: "declarations",
+		Snippet: "typeset -A e=() 2>&1; echo \"st=$?\"\ntypeset -A k=([a]=1) 2>&1; echo \"k=[${k[a]}]\"\ntypeset -A m=(alpha one); echo \"st=$?\"; typeset -p m 2>&1\necho tail",
+		Why:     "a compound literal written with **bare words** landing on a table, which is not a kind change -- the name is already the kind being declared -- and which the panel splits two ways. bash and zsh pair the words off as key, value, key, value and list `[alpha]=one`; ksh93 reads the parentheses as an *index array*'s value, will not put one in a table, and **the input ends**: `cannot append index array to associative array m`, with `tail` never printed. The two rows in front of the split are the control, and they are what a shell that simply refused every table literal would fail: an empty literal is taken by every column with tables, and a keyed one is taken and readable. Its `append` verb for a plain `=` is measured and not a slip -- the sentence is about the two kinds rather than about the operator. The complaint is left on **stderr** rather than folded in with `2>&1` like the two rows above it: ksh93 writes it past a redirection on the declaration itself, which is a fact about where that shell reports from and not about this row. See Semantics.BareElementsInATableLiteralEndTheScript (#2611)",
+	},
+	{
+		ID: "decl/an-index-array-literal-replacing-a-table", Category: "declarations",
+		Snippet: "typeset -A m=([a]=1) 2>/dev/null\nm=(x y) 2>&1; echo \"st=$? [${m[0]}][${m[a]}]\"; typeset -p m 2>&1\ntypeset -A n=([a]=1) 2>/dev/null\nn+=(p q) 2>&1; echo \"st=$?\"; typeset -p n 2>&1\necho tail",
+		Why:     "the other half of the row above, and the reason the refusing column's answer cannot be read as \"a table refuses bare words\": a **replacing** literal onto a table that already holds an element *converts* the name there, silently -- `typeset -a m=(x y)` -- where an **append** onto the same table is refused and ends the input. So the verb in that sentence is doing real work. The pairing columns answer both rows alike, storing `[x]=y` and then adding `[p]=q`, which is what makes the row discriminate three readings rather than two. An empty table refuses the replacing form there too, which is that shell's own and is pinned in dialect/ksh rather than here, the input ending before anything could show it (#2611)",
 	},
 	{
 		ID: "arrays/a-whole-array-subscript-on-the-left", Category: "arrays",

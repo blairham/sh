@@ -16959,6 +16959,12 @@ grades it and nothing drift-checks it either, for the same reason.
 | `test/a-comparison-operands-leading-zeros` | `dec=0~hex=2~name=2~inner=2` **2>** `<shell>: 1: [: Illegal number: 0x10~<shell>: 1: [: Illegal number: 0x10~<shell>: 1: [: Illegal number: 1+0x10` | `dec=0~hex=2~name=2~inner=2` **2>** `<shell>: line 1: [: 0x10: integer expected~<shell>: line 1: [: 0x10: integer expected~<shell>: line 1: [: 1+0x10: integer expected` | `dec=0~hex=2~name=2~inner=2` **2>** `<shell>: line 1: [: 0x10: integer expected~<shell>: line 1: [: 0x10: integer expected~<shell>: line 1: [: 1+0x10: integer expected` | `dec=0~hex=2~name=2~inner=2` **2>** `<shell>: line 0: [: 0x10: integer expression expected~<shell>: line 0: [: 0x10: integer expression expected~<shell>: line 0: [: 1+0x10: integer expression expected` | `dec=0~hex=1~name=0~inner=0` | `dec=0~hex=2~name=2~inner=2` **2>** `<shell>:[:1: integer expression expected: 0x10~<shell>:[:1: integer expression expected: 0x10~<shell>:[:1: integer expression expected: 1+0x10` | `dec=0~hex=2~name=2~inner=2` **2>** `<shell>: 0x10: bad number~<shell>: 0x10: bad number~<shell>: 1+0x10: bad number` |
 | `test/a-terminal-test-descriptor-too-wide` | `m1=1~m2=1~wrap=1~zero=1~max=1` | `m1=1~m2=1~wrap=1~zero=1~max=1` | `m1=1~m2=1~wrap=1~zero=1~max=1` | `m1=1~m2=1~wrap=1~zero=1~max=1` | `m1=0~m2=1~wrap=0~zero=1~max=0` | `m1=1~m2=1~wrap=1~zero=1~max=1` | `m1=1~m2=1~wrap=1~zero=1~max=1` |
 | `test/a-terminal-test-descriptor-past-the-integer` | `big=2~wide=2` **2>** `<shell>: 1: [: Illegal number: 9223372036854775808~<shell>: 1: [: Illegal number: 99999999999999999999` | `big=2~wide=2` **2>** `<shell>: line 1: [: 9223372036854775808: integer expected~<shell>: line 1: [: 99999999999999999999: integer expected` | `big=2~wide=2` **2>** `<shell>: line 1: [: 9223372036854775808: integer expected~<shell>: line 1: [: 99999999999999999999: integer expected` | `big=1~wide=1` | `big=0~wide=0` | `big=1~wide=1` **2>** `<shell>:1: number truncated after 18 digits: 9223372036854775808~<shell>:1: number truncated after 19 digits: 99999999999999999999` | `big=2~wide=2` **2>** `<shell>: 9223372036854775808: out of range~<shell>: 99999999999999999999: out of range` |
+| `test/unary-dash-a-is-a-file-test` | `have=2~miss=2~conn=0` **2>** `<shell>: 1: test: -a: unexpected operator~<shell>: 1: test: -a: unexpected operator` | `have=0~miss=1~conn=0` | `have=0~miss=1~conn=0` | `have=0~miss=1~conn=0` | `have=0~miss=1~conn=0` | `have=2~miss=2~conn=0` **2>** `<shell>:test:1: too many arguments~<shell>:test:1: too many arguments` | `have=2~miss=2~conn=0` **2>** `<shell>: f: unknown operand~<shell>: nosuch: unknown operand` |
+| `test/unary-dash-a-refused-names-the-word-or-the-count` | `st=2~q=2` **2>** `<shell>: 1: test: -a: unexpected operator~<shell>: 1: test: -Q: unexpected operator` | `st=1~q=2` **2>** `<shell>: line 1: test: -Q: unary operator expected` | `st=1~q=2` **2>** `<shell>: line 1: test: -Q: unary operator expected` | `st=1~q=2` **2>** `<shell>: line 0: test: -Q: unary operator expected` | `st=1~q=2` **2>** `<shell>: test: -Q: unknown operator` | `st=2~q=2` **2>** `<shell>:test:1: too many arguments~<shell>:test:1: unknown condition: -Q` | `st=2~q=2` **2>** `<shell>: f: unknown operand~<shell>: f: unknown operand` |
+| `test/dash-o-asks-whether-an-option-is-set` | `off=2` **2>** `<shell>: 1: test: -o: unexpected operator~<shell>: 1: test: -o: unexpected operator` *(status 2)* | `off=1~on=0~nosuch=1` | `off=1~on=0~nosuch=1` | `off=1~on=0~nosuch=1` | `off=1~on=0~nosuch=1` | `off=2` **2>** `<shell>:test:1: too many arguments~<shell>:test:1: too many arguments` *(status 2)* | `off=2` **2>** `<shell>: errexit: unknown operand~<shell>: errexit: unknown operand` *(status 2)* |
+| `test/string-order-operators` | `lt=0~gt=1~ge=0~case=0` | `lt=0~gt=1~ge=0~case=0` | `lt=0~gt=1~ge=0~case=0` | `lt=0~gt=1~ge=0~case=0` | `lt=2~gt=2~ge=0~case=2` **2>** `<shell>: test: <: unknown operator~<shell>: test: <: unknown operator~<shell>: test: <: unknown operator` | `lt=2~gt=2~ge=2~case=2` **2>** `<shell>:1: condition expected: <~<shell>:1: condition expected: <~<shell>:1: condition expected: >~<shell>:1: condition expected: <` | `lt=0~gt=1~ge=0~case=0` |
+| `test/a-missing-order-operator-is-named` | `st=0` | `st=0` | `st=0` | `st=0` | `st=2` **2>** `<shell>: test: <: unknown operator` | `st=2` **2>** `<shell>:1: condition expected: <` | `st=0` |
+| `test/dash-N-is-present-or-absent` | `LACKS` | `HAS` | `HAS` | `HAS` | `HAS` | `HAS` | `LACKS` |
 
 - `test/argument-count-decides` — POSIX defines `test` by argument count before grammar, which is why `test -f` alone is *true*: one argument is a string, and `-f` is a non-empty one. Two arguments make the same word an operator
   ```sh
@@ -17071,6 +17077,30 @@ grades it and nothing drift-checks it either, for the same reason.
 - `test/a-terminal-test-descriptor-past-the-integer` — an operand too wide for the shell's own integer, which is where the narrowing above becomes visible in a run with no terminal in it. bash and dash convert first and refuse what will not fit, at 2 with their integer wordings; ksh93 saturates and narrows to -1, which is true; bash 3.2 and zsh answer a quiet false. Ours owes zsh a warning here — that shell truncates *any* number past nineteen digits and says so, in arithmetic and `printf` as much as in `test`, which is a reader of its own and not this operand's question. Kept as a row because it is the only place a run without a terminal can tell a narrowed descriptor from a refused one (#2000)
   ```sh
   [ -t 9223372036854775808 ]; echo "big=$?"; [ -t 99999999999999999999 ]; echo "wide=$?"
+  ```
+- `test/unary-dash-a-is-a-file-test` — the TestHasTheFileExistsLetter axis: with two arguments `-a` is `-e`'s question in bash and ksh93 and an operator dash, zsh and ash refuse — and with three it is the connective in all six, which is the third field. The argument count is the whole of what decides, so the two readings are one letter and not a conflict
+  ```sh
+  : > f; test -a f; echo "have=$?"; test -a nosuch; echo "miss=$?"; test -f f -a -f f; echo "conn=$?"
+  ```
+- `test/unary-dash-a-refused-names-the-word-or-the-count` — which complaint the shells without the file test give, and the pair is the discriminator: zsh answers `too many arguments` for `-a` and `unknown condition: -Q` for a letter nothing has, so `-a` is a word it knows — as the connective — and `-Q` is not. dash and ash make no such distinction. See Diagnostics.TestConnectiveIsALeftoverWord
+  ```sh
+  test -a f; echo "st=$?"; test -Q f; echo "q=$?"
+  ```
+- `test/dash-o-asks-whether-an-option-is-set` — the TestHasTheShellOptionOperator axis: bash and ksh93 read a `set -o` name as an expression, and an option name the shell has never heard of is false rather than an error in both — which is what says the operator answers a question rather than validating one. The other four refuse the letter
+  ```sh
+  test -o errexit; echo "off=$?"; set -e; test -o errexit; echo "on=$?"; set +e; test -o nosuchopt; echo "nosuch=$?"
+  ```
+- `test/string-order-operators` — the TestStringOrder axis, and the reason it is an enum over the pair rather than one flag: ksh93 has `>` and refuses `<` with `test: <: unknown operator`, so a single ordering question would be wrong about one of its two operators. bash, dash and ash have both, zsh has neither. Where it exists the comparison is byte order, which the fourth field pins
+  ```sh
+  test a "<" b; echo "lt=$?"; test b "<" a; echo "gt=$?"; test b ">" a; echo "ge=$?"; test A "<" a; echo "case=$?"
+  ```
+- `test/a-missing-order-operator-is-named` — the same operator past the three-word rules, where a shell that lacks it has to name the one token that was wrong rather than count the words. ksh93 says `<: unknown operator` and zsh `condition expected: <`; neither reports an argument count, which is what a bare-string reading of the left operand would have produced
+  ```sh
+  test -n x -a a "<" b; echo "st=$?"
+  ```
+- `test/dash-N-is-present-or-absent` — the operator's *presence*, deliberately, and not its answer. `-N` asks whether a file was written since it was read, so measuring it is itself a read, and the panel does not even agree on a file nothing has touched: bash 5.3 and ksh93 answer false where bash 3.2 and zsh answer true. Folding 0 and 1 together is what makes this a row that does not move on its own
+  ```sh
+  : > f; test -N f >/dev/null 2>&1; case $? in (0|1) echo HAS;; (*) echo LACKS;; esac
   ```
 
 ## times

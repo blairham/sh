@@ -12300,6 +12300,36 @@ printf 'TWO=still-running\n'`,
 		Snippet: `[ -t 9223372036854775808 ]; echo "big=$?"; [ -t 99999999999999999999 ]; echo "wide=$?"`,
 		Why:     "an operand too wide for the shell's own integer, which is where the narrowing above becomes visible in a run with no terminal in it. bash and dash convert first and refuse what will not fit, at 2 with their integer wordings; ksh93 saturates and narrows to -1, which is true; bash 3.2 and zsh answer a quiet false. Ours owes zsh a warning here — that shell truncates *any* number past nineteen digits and says so, in arithmetic and `printf` as much as in `test`, which is a reader of its own and not this operand's question. Kept as a row because it is the only place a run without a terminal can tell a narrowed descriptor from a refused one (#2000)",
 	},
+	{
+		ID: "test/unary-dash-a-is-a-file-test", Category: "test",
+		Snippet: `: > f; test -a f; echo "have=$?"; test -a nosuch; echo "miss=$?"; test -f f -a -f f; echo "conn=$?"`,
+		Why:     "the TestHasTheFileExistsLetter axis: with two arguments `-a` is `-e`'s question in bash and ksh93 and an operator dash, zsh and ash refuse — and with three it is the connective in all six, which is the third field. The argument count is the whole of what decides, so the two readings are one letter and not a conflict",
+	},
+	{
+		ID: "test/unary-dash-a-refused-names-the-word-or-the-count", Category: "test",
+		Snippet: `test -a f; echo "st=$?"; test -Q f; echo "q=$?"`,
+		Why:     "which complaint the shells without the file test give, and the pair is the discriminator: zsh answers `too many arguments` for `-a` and `unknown condition: -Q` for a letter nothing has, so `-a` is a word it knows — as the connective — and `-Q` is not. dash and ash make no such distinction. See Diagnostics.TestConnectiveIsALeftoverWord",
+	},
+	{
+		ID: "test/dash-o-asks-whether-an-option-is-set", Category: "test",
+		Snippet: `test -o errexit; echo "off=$?"; set -e; test -o errexit; echo "on=$?"; set +e; test -o nosuchopt; echo "nosuch=$?"`,
+		Why:     "the TestHasTheShellOptionOperator axis: bash and ksh93 read a `set -o` name as an expression, and an option name the shell has never heard of is false rather than an error in both — which is what says the operator answers a question rather than validating one. The other four refuse the letter",
+	},
+	{
+		ID: "test/string-order-operators", Category: "test",
+		Snippet: `test a "<" b; echo "lt=$?"; test b "<" a; echo "gt=$?"; test b ">" a; echo "ge=$?"; test A "<" a; echo "case=$?"`,
+		Why:     "the TestStringOrder axis, and the reason it is an enum over the pair rather than one flag: ksh93 has `>` and refuses `<` with `test: <: unknown operator`, so a single ordering question would be wrong about one of its two operators. bash, dash and ash have both, zsh has neither. Where it exists the comparison is byte order, which the fourth field pins",
+	},
+	{
+		ID: "test/a-missing-order-operator-is-named", Category: "test",
+		Snippet: `test -n x -a a "<" b; echo "st=$?"`,
+		Why:     "the same operator past the three-word rules, where a shell that lacks it has to name the one token that was wrong rather than count the words. ksh93 says `<: unknown operator` and zsh `condition expected: <`; neither reports an argument count, which is what a bare-string reading of the left operand would have produced",
+	},
+	{
+		ID: "test/dash-N-is-present-or-absent", Category: "test",
+		Snippet: `: > f; test -N f >/dev/null 2>&1; case $? in (0|1) echo HAS;; (*) echo LACKS;; esac`,
+		Why:     "the operator's *presence*, deliberately, and not its answer. `-N` asks whether a file was written since it was read, so measuring it is itself a read, and the panel does not even agree on a file nothing has touched: bash 5.3 and ksh93 answer false where bash 3.2 and zsh answer true. Folding 0 and 1 together is what makes this a row that does not move on its own",
+	},
 
 	// --- times: the last special builtin, and the most divergent for its size
 	//

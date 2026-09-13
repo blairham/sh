@@ -173014,6 +173014,57 @@
         "TimedOut": false
       }
     },
+    "test/a-missing-order-operator-is-named": {
+      "ash": {
+        "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: test: \u003c: unknown operator",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e:1: condition expected: \u003c",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "test/a-non-number-where-one-belongs": {
       "ash": {
         "Stdout": "st=2",
@@ -173728,6 +173779,108 @@
         "TimedOut": false
       }
     },
+    "test/dash-N-is-present-or-absent": {
+      "ash": {
+        "Stdout": "LACKS",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "HAS",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "HAS",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "HAS",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "LACKS",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "HAS",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "HAS",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "test/dash-o-asks-whether-an-option-is-set": {
+      "ash": {
+        "Stdout": "off=2",
+        "Stderr": "\u003cshell\u003e: errexit: unknown operand~\u003cshell\u003e: errexit: unknown operand",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "off=1~on=0~nosuch=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "off=1~on=0~nosuch=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "off=1~on=0~nosuch=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "off=2",
+        "Stderr": "\u003cshell\u003e: 1: test: -o: unexpected operator~\u003cshell\u003e: 1: test: -o: unexpected operator",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "off=1~on=0~nosuch=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "off=2",
+        "Stderr": "\u003cshell\u003e:test:1: too many arguments~\u003cshell\u003e:test:1: too many arguments",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "test/double-equal-is-equal": {
       "ash": {
         "Stdout": "st=0",
@@ -174187,6 +174340,57 @@
         "TimedOut": false
       }
     },
+    "test/string-order-operators": {
+      "ash": {
+        "Stdout": "lt=0~gt=1~ge=0~case=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "lt=0~gt=1~ge=0~case=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "lt=0~gt=1~ge=0~case=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "lt=0~gt=1~ge=0~case=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "lt=0~gt=1~ge=0~case=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "lt=2~gt=2~ge=0~case=2",
+        "Stderr": "\u003cshell\u003e: test: \u003c: unknown operator~\u003cshell\u003e: test: \u003c: unknown operator~\u003cshell\u003e: test: \u003c: unknown operator",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "lt=2~gt=2~ge=2~case=2",
+        "Stderr": "\u003cshell\u003e:1: condition expected: \u003c~\u003cshell\u003e:1: condition expected: \u003c~\u003cshell\u003e:1: condition expected: \u003e~\u003cshell\u003e:1: condition expected: \u003c",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "test/terminal-test-non-number-diverges": {
       "ash": {
         "Stdout": "st=2~closed=1",
@@ -174437,6 +174641,108 @@
       "zsh": {
         "Stdout": "st=2",
         "Stderr": "\u003cshell\u003e:1: parse error: condition expected: a",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "test/unary-dash-a-is-a-file-test": {
+      "ash": {
+        "Stdout": "have=2~miss=2~conn=0",
+        "Stderr": "\u003cshell\u003e: f: unknown operand~\u003cshell\u003e: nosuch: unknown operand",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "have=0~miss=1~conn=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "have=0~miss=1~conn=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "have=0~miss=1~conn=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "have=2~miss=2~conn=0",
+        "Stderr": "\u003cshell\u003e: 1: test: -a: unexpected operator~\u003cshell\u003e: 1: test: -a: unexpected operator",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "have=0~miss=1~conn=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "have=2~miss=2~conn=0",
+        "Stderr": "\u003cshell\u003e:test:1: too many arguments~\u003cshell\u003e:test:1: too many arguments",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "test/unary-dash-a-refused-names-the-word-or-the-count": {
+      "ash": {
+        "Stdout": "st=2~q=2",
+        "Stderr": "\u003cshell\u003e: f: unknown operand~\u003cshell\u003e: f: unknown operand",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "st=1~q=2",
+        "Stderr": "\u003cshell\u003e: line 1: test: -Q: unary operator expected",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1~q=2",
+        "Stderr": "\u003cshell\u003e: line 1: test: -Q: unary operator expected",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1~q=2",
+        "Stderr": "\u003cshell\u003e: line 0: test: -Q: unary operator expected",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2~q=2",
+        "Stderr": "\u003cshell\u003e: 1: test: -a: unexpected operator~\u003cshell\u003e: 1: test: -Q: unexpected operator",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1~q=2",
+        "Stderr": "\u003cshell\u003e: test: -Q: unknown operator",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=2~q=2",
+        "Stderr": "\u003cshell\u003e:test:1: too many arguments~\u003cshell\u003e:test:1: unknown condition: -Q",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

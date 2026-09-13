@@ -446,6 +446,10 @@ func Semantics() interp.Semantics {
 	// form that names a job answers the same as the bare one.
 	s.WaitForAJobFailsWhenInterrupted = interp.No
 	s.CommandRejectsUnknownOption = interp.Yes
+	// Both string-ordering operators, which this shell has and the three
+	// unary additions past the three-word rules it does not: `test -a f`,
+	// `test -o errexit` and `test -N f` are all `unexpected operator` here.
+	s.TestStringOrder = interp.TestStringOrderBoth
 	s.GetoptsRejectsUnknownOption = interp.No
 	s.ShiftCountIsArithmetic = interp.No
 	s.TrapBodyRunsWhatParsed = interp.Yes

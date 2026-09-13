@@ -891,6 +891,13 @@ func Semantics() interp.Semantics {
 	s.ExecFailureRunsExitTrap = interp.No
 	s.ExecTakesOptions = interp.Yes
 	s.TestAcceptsDoubleEqual = interp.Yes
+	// The same three unary operators bash has past the three-word rules.
+	s.TestHasTheFileExistsLetter = interp.Yes
+	s.TestHasTheShellOptionOperator = interp.Yes
+	s.TestHasTheModifiedSinceReadOperator = interp.Yes
+	// And `>` alone: `test b '<' a` here is `test: <: unknown operator` at 2
+	// while `test b '>' a` is 0, which is the split the enum exists for.
+	s.TestStringOrder = interp.TestStringOrderGreaterOnly
 	s.SignalDeathStatusIsTwoFiftySix = interp.Yes
 	s.PipefailOption = interp.Yes
 	// And the one place ksh93's 256-plus-the-signal convention stops: an

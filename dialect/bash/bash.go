@@ -798,6 +798,16 @@ func Semantics() interp.Semantics {
 	s.ExecFailureRunsExitTrap = interp.Yes
 	s.ExecTakesOptions = interp.Yes
 	s.TestAcceptsDoubleEqual = interp.Yes
+	// The operators past the three-word rules. `test -a f` is `-e`'s question
+	// where two words say the letter is an operator rather than the
+	// connective, `test -o errexit` asks whether a `set -o` name is on, and
+	// `test -N f` asks whether the file was written since it was read.
+	s.TestHasTheFileExistsLetter = interp.Yes
+	s.TestHasTheShellOptionOperator = interp.Yes
+	s.TestHasTheModifiedSinceReadOperator = interp.Yes
+	// And both ordering operators, which is the answer POSIX's XSI option
+	// gives — where ksh93 has only the greater one.
+	s.TestStringOrder = interp.TestStringOrderBoth
 	// `f -nt missing` holds when f exists, in `test` and `[[ ]]` alike.
 	s.MissingFileIsOlder = interp.Yes
 	s.UmaskPrintsFourDigits = interp.Yes

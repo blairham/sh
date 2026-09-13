@@ -1391,6 +1391,10 @@ func Semantics() interp.Semantics {
 	s.ExecFailureRunsExitTrap = interp.No
 	s.ExecTakesOptions = interp.Yes
 	s.TestAcceptsDoubleEqual = interp.Yes
+	// Of the operators past the three-word rules this shell has only `-N`:
+	// `test -a f` and `test -o errexit` are `too many arguments` here, and
+	// `<` and `>` are `condition expected`.
+	s.TestHasTheModifiedSinceReadOperator = interp.Yes
 	// `-nt` and `-ot` want both files to exist, and `-t x` is a plain
 	// false rather than an integer complaint.
 	s.MissingFileIsOlder = interp.No
@@ -2892,10 +2896,16 @@ func Diagnostics() interp.Diagnostics {
 		// The whole substitution as it was written, not its inside.
 		ProcessSubstitutionNotInCondition: "process substitution %[1]s cannot be used here",
 		TestTooManyArguments:              "too many arguments",
-		TestOperandExpected:               "argument expected",
-		TestMissingBracket:                "']' expected",
-		TimesDecimals:                     2,
-		TimesArguments:                    "times: too many arguments",
+		// `-a` and `-o` are words this shell knows — as the connectives —
+		// so one standing where a unary operator belongs is a string with a
+		// word left over rather than an operator it has never heard of.
+		// Measured: `test -a f` is `too many arguments` and `test -Q f` is
+		// `unknown condition: -Q`.
+		TestConnectiveIsALeftoverWord: true,
+		TestOperandExpected:           "argument expected",
+		TestMissingBracket:            "']' expected",
+		TimesDecimals:                 2,
+		TimesArguments:                "times: too many arguments",
 		// The `time` keyword reports one line per pipeline element that
 		// forked, labeled with the element as written, and nothing for one
 		// that did not — `time true` prints nothing at all here. A bare

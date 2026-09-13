@@ -317,6 +317,11 @@ func Semantics() interp.Semantics {
 	s.PrintfBStopIsPadded = interp.No
 	// `[ a == a ]` is 0, so `test` takes the doubled operator beside `=`.
 	s.TestAcceptsDoubleEqual = interp.Yes
+	// Both string-ordering operators, and none of the three unary additions
+	// bash and ksh93 have past the three-word rules — measured through the
+	// container, where `test -a f` is `unknown operand` at 2. On this
+	// question BusyBox sides with dash rather than with bash.
+	s.TestStringOrder = interp.TestStringOrderBoth
 	// `set -o` lists `pipefail`, which dash's does not have.
 	s.PipefailOption = interp.Yes
 	// A frozen name in a command prefix is refused before anything else

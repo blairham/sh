@@ -11499,6 +11499,73 @@ value rather than a rule about negative descriptors — and a second
 question beside the narrowing above, since every saturating conversion
 lands here.
 
+#### The operators past the three-word rules
+
+Four more, each a split rather than a correction, and each measured one
+operator at a time — the panel answers them in three different groupings,
+which is what says they are four questions and not one.
+
+**`TestHasTheFileExistsLetter`** — bash yes · ksh93 yes · dash no · zsh no ·
+ash no
+
+Gives `test` a *unary* `-a`, asking what `-e` asks. The letter is the
+connective at three arguments and the file test at two, and the argument
+count is the whole of what decides: `[ "$a" -a "$b" ]` is the both-set
+guard in every column, `test -a f` is a file test in two of them and an
+operator the other three refuse.
+
+**`TestHasTheShellOptionOperator`** — the same five answers, for a unary
+`-o`: `test -o errexit` is true when the switch is on. An option name the
+shell has never heard of is **false rather than an error**, measured in
+both shells that have it, which is what says the operator answers a
+question rather than validating one. Written as a second axis and not as a
+reading of the first because a shell could have either without the other.
+
+**`TestHasTheModifiedSinceReadOperator`** — bash yes · ksh93 yes · zsh yes ·
+dash no · ash no
+
+Gives `test` a unary `-N`: the file has been written since it was last
+read. This pins the operator's *presence* and deliberately not its answer.
+Reading a file to ask the question is itself a read, and the panel does not
+even agree on a file nothing has touched — bash 5.3 and ksh93 answer false
+where bash 3.2 and zsh answer true, in the same run. What every column that
+has the operator does agree on is the comparison, which is what this shell
+implements: the modification time against the access time, to the
+nanosecond. The corpus row folds 0 and 1 together for the same reason, so
+it grades presence and cannot move on its own.
+
+**`TestStringOrder`** — bash both · dash both · ash both · ksh93 `>` alone ·
+zsh neither
+
+An enum over `<` and `>` rather than one flag, and ksh93 is why: `test b
+'<' a` there is `test: <: unknown operator` at 2 while `test b '>' a` is 0,
+so a single "does this shell order strings" question would be wrong about
+one of its two operators. Where the operators exist the comparison is byte
+order and a string one — `test 10 '<' 9` is true.
+
+A shell that lacks one has to **name it**, past three words as well as at
+three. `<` is not spelled like a unary operator, so without a reader for it
+the left operand becomes a bare string, the expression parses, and the
+count is reported instead of the token that was wrong: measured, `test -n x
+-a a '<' b` is `<: unknown operator` in ksh93 and `condition expected: <` in
+zsh, and neither says how many arguments there were. That is the #1290
+shape arriving by a second door.
+
+The refusal the first two letters leave behind splits once more, and it is
+a wording rather than an axis —
+**`Diagnostics.TestConnectiveIsALeftoverWord`**. In zsh `test -a f` is `too
+many arguments` while `test -Q f` is `unknown condition: -Q`, so `-a` is a
+word that shell knows — as the connective — and `-Q` is not. dash and ash
+have the same connectives and draw no such distinction.
+
+**What is not modeled**: at exactly three words the panel disagrees about
+whether `!` binds tighter than the connective. `test ! -a f` is 0 in bash
+and zsh, which read `-a` as the connective between two non-empty strings; 1
+in ksh93, which reads it as `!` negating a file test; and `-a: unexpected
+operator` in dash, which reads the `!` first and then has no unary `-a` to
+apply. This shell gives bash's answer, which is what it gave before these
+four axes and is unchanged by them.
+
 
 ### the names a builtin will and will not take
 

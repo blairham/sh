@@ -29,8 +29,9 @@ func shell() driver.Shell {
 		// The protocol server, which driver's `--acp` reaches. It is here
 		// rather than in driver because internal/acp takes a Shell, so
 		// driver cannot import it back — see driver/acp.go.
-		ServeACP: acpboot.ServeAs("zsh"),
-		Version:  version,
+		ServeACP:   acpboot.ServeAs("zsh"),
+		ConnectACP: acpboot.ConnectAs("zsh", "--"),
+		Version:    version,
 		// Where this machine keeps the administrator's startup files. It
 		// is the install's answer rather than the dialect's, which is why
 		// it is named here; see driver.Shell.SystemStartupDirectory.

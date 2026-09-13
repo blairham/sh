@@ -265,6 +265,17 @@ type Shell struct {
 	// one, and `--acp` says so rather than accepting the word silently.
 	ServeACP func(Shell) int
 
+	// ConnectACP is the other direction: this shell drives an agent rather
+	// than being one, and `--acp-connect` reaches it. Nil for the same reason
+	// ServeACP is, and refused the same way.
+	//
+	// The claim on this side is the stronger one — a policy on the shell
+	// reaches the agent it is running, because the file the agent reads is a
+	// file we open and the command it runs is a command we start — which is
+	// exactly why a dialect binary that could not do it was a gap worth
+	// closing rather than a convenience.
+	ConnectACP func(sh Shell, allow bool, authMethod string, argv []string) int
+
 	// Version is what this binary tells a protocol client it is, stamped over
 	// by the release build with `-X main.version=`. Empty is a build from a
 	// checkout, which says so rather than inventing a number that will be
@@ -454,6 +465,9 @@ func MainArgs(sh Shell, argv []string) int {
 		// Before the prompt and before any route: the invocation asked the
 		// shell to name itself and there is nothing to run.
 		return sh.announceVersion()
+	}
+	if in.acpConnect {
+		return sh.runConnectACP(in)
 	}
 	if in.acp {
 		// Before the prompt and before any route, for the reason above and one
@@ -646,6 +660,12 @@ type source struct {
 	// travels here, beside version, because both end the invocation: there is
 	// nothing to parse and nothing to run.
 	acp bool
+	// acpConnect and its three companions are the client direction, carried
+	// the same way and for the same reason.
+	acpConnect bool
+	acpArgv    []string
+	acpAllow   bool
+	acpAuth    string
 	// input is the front end's label for the origin — "-c", and empty for a
 	// file or for standard input. One dialect names it in a parse failure's
 	// location and nowhere else, which is why it travels beside the name
@@ -842,6 +862,14 @@ type invocation struct {
 	// because the boundary the same line may have asked for has to be
 	// installed first — a policy governs every session the client opens.
 	acp bool
+	// acpConnect is `--acp-connect`, and acpArgv is the command that starts
+	// the agent: every word after the flag, which is why the flag ends option
+	// reading. acpAllow and acpAuth are `--acp-allow` and `--acp-auth`, and
+	// so must be written before it.
+	acpConnect bool
+	acpArgv    []string
+	acpAllow   bool
+	acpAuth    string
 	// plusC is that letter written with a plus — `+c`, `+ce`. Both signs
 	// select the command string, which is unanimous and is what sawC
 	// records; the sign is kept because one shell then names the operands
@@ -956,6 +984,16 @@ func (sh Shell) input(argv []string) (Shell, source, io.Closer, error) {
 	sh, closer, err := sh.installSandbox(inv)
 	if err != nil {
 		return sh, source{}, nil, err
+	}
+	if inv.acpConnect {
+		// The words after the flag are the agent's command, not a shell
+		// invocation, so nothing here reads them as operands. The gate is
+		// already installed, which is the point: a policy governs what the
+		// agent asks this shell to do exactly as it governs a script.
+		return sh, source{
+			acpConnect: true, acpArgv: inv.acpArgv,
+			acpAllow: inv.acpAllow, acpAuth: inv.acpAuth,
+		}, closer, nil
 	}
 	if inv.acp {
 		// After the gate and before the operands, which is the whole of why
@@ -1073,6 +1111,9 @@ func (sh Shell) optionWord(a string, args []string, inv *invocation) (rest []str
 			return rest, err
 		}
 		if rest, matched, err = acpOption(a, args, inv); matched {
+			return rest, err
+		}
+		if rest, matched, err = connectOption(a, args, inv); matched {
 			return rest, err
 		}
 		return nil, fmt.Errorf("unknown option %q", a)

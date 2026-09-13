@@ -3,7 +3,10 @@
 
 package driver
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // `--acp`: the Agent Client Protocol, on every binary this front end makes.
 //
@@ -92,4 +95,51 @@ func (sh Shell) runACP() int {
 		return usageStatus
 	}
 	return sh.ServeACP(sh)
+}
+
+// connectOption reads `--acp-connect`, `--acp-auth` and `--acp-allow`.
+//
+// `--acp-connect` ends option reading: every word after it is the command that
+// starts the agent, and a shell that kept reading them as its own flags would
+// claim the agent's. That is why the other two have to be written before it —
+// the same ordering `cmd/sh` has always had for its single-dash spellings.
+func connectOption(word string, args []string, inv *invocation) (rest []string, matched bool, err error) {
+	name, val, hasVal := strings.Cut(word, "=")
+	switch name {
+	case "--acp-connect":
+		if hasVal {
+			return nil, true, fmt.Errorf("--acp-connect takes no value")
+		}
+		if len(args) == 0 {
+			return nil, true, fmt.Errorf("--acp-connect needs the command that starts an agent")
+		}
+		inv.acpConnect, inv.acpArgv = true, args
+		// Nothing left for the option loop: what remains belongs to the agent.
+		return nil, true, nil
+	case "--acp-allow":
+		if hasVal {
+			return nil, true, fmt.Errorf("--acp-allow takes no value")
+		}
+		inv.acpAllow = true
+		return args, true, nil
+	case "--acp-auth":
+		if !hasVal {
+			if len(args) < 1 {
+				return nil, true, fmt.Errorf("--acp-auth requires a method")
+			}
+			val, args = args[0], args[1:]
+		}
+		inv.acpAuth = val
+		return args, true, nil
+	}
+	return args, false, nil
+}
+
+// runConnectACP hands the process to the client the binary supplied.
+func (sh Shell) runConnectACP(in source) int {
+	if sh.ConnectACP == nil {
+		sh.errf("%s: --acp-connect: this binary does not drive an Agent Client Protocol agent\n", sh.Name)
+		return usageStatus
+	}
+	return sh.ConnectACP(sh, in.acpAllow, in.acpAuth, in.acpArgv)
 }

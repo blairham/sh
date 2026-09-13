@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/blairham/sh/driver"
+	"github.com/blairham/sh/internal/acpboot"
 	"github.com/blairham/sh/syntax"
 )
 
@@ -314,7 +315,7 @@ func TestACPConnectNeedsACommand(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if code := connectACP(sh, false, "", nil); code == 0 {
+	if code := acpboot.ConnectAs("sh", "-")(sh, false, "", nil); code == 0 {
 		t.Error("connecting to nothing reported success")
 	}
 }

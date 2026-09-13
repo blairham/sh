@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Blair Hamilton
 // SPDX-License-Identifier: Apache-2.0
 
-package main
+package acpboot
 
 import (
 	"bufio"
@@ -62,10 +62,10 @@ import (
 // terminal refuses everything, because nobody to ask is a denial.
 
 // connectACP drives an agent and returns the status to exit with.
-func connectACP(sh driver.Shell, allow bool, authMethod string, argv []string) int {
+func connectACP(self, dash string, sh driver.Shell, allow bool, authMethod string, argv []string) int {
 	if len(argv) == 0 {
-		fmt.Fprintln(os.Stderr, "sh: -acp-connect needs the command that starts an agent")
-		return exitFailure
+		fmt.Fprintf(os.Stderr, "%s: %sacp-connect needs the command that starts an agent\n", self, dash)
+		return serveFailure
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -73,18 +73,18 @@ func connectACP(sh driver.Shell, allow bool, authMethod string, argv []string) i
 	agent := exec.CommandContext(ctx, argv[0], argv[1:]...)
 	toAgent, err := agent.StdinPipe()
 	if err != nil {
-		return fail1("agent input: %v", err)
+		return fail1(self, "agent input: %v", err)
 	}
 	fromAgent, err := agent.StdoutPipe()
 	if err != nil {
-		return fail1("agent output: %v", err)
+		return fail1(self, "agent output: %v", err)
 	}
 	logs, err := agent.StderrPipe()
 	if err != nil {
-		return fail1("agent diagnostics: %v", err)
+		return fail1(self, "agent diagnostics: %v", err)
 	}
 	if err := agent.Start(); err != nil {
-		return fail1("%s: %v", argv[0], err)
+		return fail1(self, "%s: %v", argv[0], err)
 	}
 	// Forwarded rather than ignored. An agent that will not start says why
 	// there — measured, an agent that cannot authenticate writes its reason
@@ -99,7 +99,7 @@ func connectACP(sh driver.Shell, allow bool, authMethod string, argv []string) i
 	tty := repl.IsTerminal(os.Stdin) && repl.IsTerminal(os.Stderr)
 
 	client := &acp.Client{
-		Info: acp.Implementation{Name: "sh", Title: "sh", Version: version},
+		Info: acp.Implementation{Name: self, Title: self, Version: reported(sh.Version)},
 		// The point of the exercise: the agent's file access is ours to
 		// gate, and only if we offer to do it for them.
 		Files: true,
@@ -115,25 +115,25 @@ func connectACP(sh driver.Shell, allow bool, authMethod string, argv []string) i
 		// named, so without one every record of what the agent was allowed
 		// would belong to no run.
 		Boundary: boundary.Boundary{Gate: sh.Gate, Events: sh.Events, Session: runID(sh)},
-		Update:   renderUpdate,
+		Update:   func(n acp.SessionNotification) { renderUpdate(self, n) },
 		// The person is at this end of the connection, and this is the one
 		// reader they answer on — the prompt loop's own, shared rather than
 		// duplicated. See answerer for why that is safe.
-		Answer: answerer(allow, tty, in),
-		Elicit: form(tty, in),
+		Answer: answerer(self, allow, tty, in),
+		Elicit: form(self, tty, in),
 		// Nil where this process has no terminal, which is also what withholds
 		// the capability: an agent is told we can run a terminal login only
 		// where we can.
-		Relaunch: terminalAuth(argv, os.Stdin, os.Stdout),
+		Relaunch: terminalAuth(self, argv, os.Stdin, os.Stdout),
 		// A command line the agent sends is run by this shell rather than
 		// exec'd as a filename, which is what makes the gate above reach the
 		// commands *inside* it. See interpreter.
-		Interpret: interpreter(sh),
+		Interpret: Interpreter(sh),
 	}
 	client.Connect(fromAgent, toAgent)
 	go func() { _ = client.Serve(ctx) }()
 
-	status := talk(ctx, client, authMethod, in)
+	status := talk(self, dash, ctx, client, authMethod, in)
 	_ = toAgent.Close()
 	_ = agent.Wait()
 	return status
@@ -157,7 +157,7 @@ func connectACP(sh driver.Shell, allow bool, authMethod string, argv []string) i
 // handing it to a command an agent asked for would let that command eat the
 // answers. A terminal the protocol describes has no input anyway: there is no
 // method for writing to one.
-func interpreter(sh driver.Shell) func(context.Context, acp.TerminalCommand, io.Writer) int {
+func Interpreter(sh driver.Shell) func(context.Context, acp.TerminalCommand, io.Writer) int {
 	return func(ctx context.Context, cmd acp.TerminalCommand, out io.Writer) int {
 		run := sh
 		run.Context = ctx
@@ -208,7 +208,14 @@ func runID(sh driver.Shell) string {
 // this one exists because the two functions below take the stream, so that
 // what a person is told about an agent that will not open a session is
 // something a test can read.
-func sayf(w io.Writer, format string, args ...any) {
+// sayf writes one of this shell's own lines, named by the shell.
+//
+// The name is a separate argument rather than part of the format so that the
+// format stays a constant the vet printf check can read. Folding it in with
+// concatenation is what broke that, and a printf check that has been switched
+// off by accident is worth more than the line it saved.
+func sayf(w io.Writer, self, format string, args ...any) {
+	_, _ = io.WriteString(w, self+": ")
 	_, _ = fmt.Fprintf(w, format, args...)
 }
 
@@ -226,20 +233,20 @@ func sayf(w io.Writer, format string, args ...any) {
 // first id in both cases hands somebody back the method they just used and
 // reads as a loop with no way out of it — which is what this printed against
 // Gemini CLI before the release bar in #493 was measured rather than asserted.
-func listAuth(w io.Writer, methods []acp.AuthMethod, tried string) {
+func listAuth(self, dash string, w io.Writer, methods []acp.AuthMethod, tried string) {
 	if len(methods) == 0 {
-		sayf(w, "sh:   it advertised no authentication methods\n")
+		sayf(w, self, "  it advertised no authentication methods\n")
 		return
 	}
 	for _, m := range methods {
 		mark := ""
 		if m.ID == tried {
-			mark = "   <- the one -acp-auth named"
+			mark = "   <- the one " + dash + "acp-auth named"
 		}
-		sayf(w, "sh:   %s [%s] (%s): %s%s\n", m.ID, m.Kind(), m.Name, m.Description, mark)
+		sayf(w, self, "  %s [%s] (%s): %s%s\n", m.ID, m.Kind(), m.Name, m.Description, mark)
 	}
 	if next, ok := otherThan(methods, tried); ok {
-		sayf(w, "sh: choose one with -acp-auth %s\n", next)
+		sayf(w, self, "choose one with %sacp-auth %s\n", dash, next)
 	}
 }
 
@@ -268,23 +275,22 @@ func otherThan(methods []acp.AuthMethod, tried string) (string, bool) {
 // method rather than the choice of method. That distinction is the difference
 // between a person knowing to go and get an API key and a person retrying the
 // same flag.
-func refusedASession(w io.Writer, name, tried string, methods []acp.AuthMethod, err error) {
+func refusedASession(self, dash string, w io.Writer, name, tried string, methods []acp.AuthMethod, err error) {
 	if tried == "" {
-		sayf(w, "sh: %s needs authenticating first: %v\n", name, err)
-		listAuth(w, methods, "")
+		sayf(w, self+": %s needs authenticating first: %v\n", name, err)
+		listAuth(self, dash, w, methods, "")
 		return
 	}
-	sayf(w, "sh: %s accepted -acp-auth %s and still refuses a session: %v\n",
-		name, tried, err)
-	sayf(w,
-		"sh: the method was settled, so what is missing is the credential behind it\n"+
-			"sh: rather than the choice of method — supply it outside this shell.\n")
-	listAuth(w, methods, tried)
+	sayf(w, self, "%s accepted %sacp-auth %s and still refuses a session: %v\n",
+		name, dash, tried, err)
+	sayf(w, self, "the method was settled, so what is missing is the credential behind it\n")
+	sayf(w, self, "rather than the choice of method — supply it outside this shell.\n")
+	listAuth(self, dash, w, methods, tried)
 }
 
-func fail1(format string, args ...any) int {
-	fmt.Fprintf(os.Stderr, "sh: acp: "+format+"\n", args...)
-	return exitFailure
+func fail1(self, format string, args ...any) int {
+	fmt.Fprintf(os.Stderr, self+": acp: "+format+"\n", args...)
+	return serveFailure
 }
 
 // terminalAuth reproduces the agent's own invocation for a terminal login.
@@ -298,7 +304,7 @@ func fail1(format string, args ...any) int {
 // Both streams are checked rather than one. A login TUI reads keystrokes *and*
 // draws, and a `sh -acp-connect … < script` has a terminal on exactly one of
 // the two.
-func terminalAuth(argv []string, in, out *os.File) func(context.Context, []string, map[string]string) error {
+func terminalAuth(self string, argv []string, in, out *os.File) func(context.Context, []string, map[string]string) error {
 	if !repl.IsTerminal(in) || !repl.IsTerminal(out) {
 		return nil
 	}
@@ -307,7 +313,7 @@ func terminalAuth(argv []string, in, out *os.File) func(context.Context, []strin
 		// The person's own terminal, which is the point: a login TUI wants
 		// keystrokes and this is the process holding them.
 		login.Stdin, login.Stdout, login.Stderr = in, out, os.Stderr
-		fmt.Fprintf(os.Stderr, "sh: starting %s to log in\n", strings.Join(login.Args, " "))
+		fmt.Fprintf(os.Stderr, self+": starting %s to log in\n", strings.Join(login.Args, " "))
 		// A zero exit status signals success and any other termination signals
 		// failure, which is exactly what a non-nil error from Run is.
 		return login.Run()
@@ -337,28 +343,28 @@ func loginCommand(ctx context.Context, argv, args []string, env map[string]strin
 
 // talk does the handshake, authenticates if asked to, and then relays prompts
 // until the input ends.
-func talk(ctx context.Context, client *acp.Client, authMethod string, in *bufio.Scanner) int {
+func talk(self, dash string, ctx context.Context, client *acp.Client, authMethod string, in *bufio.Scanner) int {
 	info, err := client.Initialize(ctx)
 	if err != nil {
-		return fail1("initialize: %v", err)
+		return fail1(self, "initialize: %v", err)
 	}
 	name := "the agent"
 	if info.AgentInfo != nil {
 		name = info.AgentInfo.Name + " " + info.AgentInfo.Version
 	}
-	fmt.Fprintf(os.Stderr, "sh: connected to %s, protocol %d\n", name, info.ProtocolVersion)
+	fmt.Fprintf(os.Stderr, self+": connected to %s, protocol %d\n", name, info.ProtocolVersion)
 
 	if authMethod != "" {
 		if err := client.Authenticate(ctx, authMethod); err != nil {
-			fmt.Fprintf(os.Stderr, "sh: %s did not authenticate: %v\n", name, err)
-			listAuth(os.Stderr, info.AuthMethods, authMethod)
-			return exitFailure
+			fmt.Fprintf(os.Stderr, self+": %s did not authenticate: %v\n", name, err)
+			listAuth(self, dash, os.Stderr, info.AuthMethods, authMethod)
+			return serveFailure
 		}
 	}
 
 	wd, err := os.Getwd()
 	if err != nil {
-		return fail1("where are we: %v", err)
+		return fail1(self, "where are we: %v", err)
 	}
 	session, err := client.NewSession(ctx, wd)
 	if err != nil {
@@ -369,26 +375,26 @@ func talk(ctx context.Context, client *acp.Client, authMethod string, in *bufio.
 			// the useful half, since which one applies decides what a person
 			// has to do about it — and whether one was already accepted
 			// decides what they have to do *next*.
-			refusedASession(os.Stderr, name, authMethod, info.AuthMethods, err)
-			return exitFailure
+			refusedASession(self, dash, os.Stderr, name, authMethod, info.AuthMethods, err)
+			return serveFailure
 		}
-		return fail1("session/new: %v", err)
+		return fail1(self, "session/new: %v", err)
 	}
 
 	for in.Scan() {
 		askedBefore, saidBefore := client.Commands()
 		stop, err := client.Prompt(ctx, session, in.Text())
 		if err != nil {
-			return fail1("session/prompt: %v", err)
+			return fail1(self, "session/prompt: %v", err)
 		}
 		if stop != acp.StopEndTurn {
-			fmt.Fprintf(os.Stderr, "sh: turn ended: %s\n", stop)
+			fmt.Fprintf(os.Stderr, self+": turn ended: %s\n", stop)
 		}
 		asked, said := client.Commands()
-		fmt.Fprint(os.Stderr, commandCoverage(asked-askedBefore, said-saidBefore))
+		fmt.Fprint(os.Stderr, commandCoverage(self, asked-askedBefore, said-saidBefore))
 	}
 	if err := in.Err(); err != nil && err != io.EOF {
-		return fail1("reading a prompt: %v", err)
+		return fail1(self, "reading a prompt: %v", err)
 	}
 	return 0
 }
@@ -421,21 +427,21 @@ func talk(ctx context.Context, client *acp.Client, authMethod string, in *bufio.
 // and the reader draws the conclusion. Silence where the agent asked for at
 // least as many as it reported: there is nothing to warn about, and a notice
 // that fires on a clean run is a notice people learn to skip.
-func commandCoverage(asked, announced int) string {
+func commandCoverage(self string, asked, announced int) string {
 	if announced <= asked {
 		return ""
 	}
 	if asked == 0 {
 		return fmt.Sprintf(
-			"sh: the agent reported %d command(s) this turn and asked this shell to run none.\n"+
-				"sh: a command an agent runs in its own process passes no gate — nor do the\n"+
-				"sh: files that command reads and writes. The policy covered what it asked for.\n",
+			self+": the agent reported %d command(s) this turn and asked this shell to run none.\n"+
+				self+": a command an agent runs in its own process passes no gate — nor do the\n"+
+				self+": files that command reads and writes. The policy covered what it asked for.\n",
 			announced)
 	}
 	return fmt.Sprintf(
-		"sh: the agent reported %d command(s) this turn and asked this shell to run %d.\n"+
-			"sh: a command an agent runs in its own process passes no gate — nor do the\n"+
-			"sh: files that command reads and writes.\n", announced, asked)
+		self+": the agent reported %d command(s) this turn and asked this shell to run %d.\n"+
+			self+": a command an agent runs in its own process passes no gate — nor do the\n"+
+			self+": files that command reads and writes.\n", announced, asked)
 }
 
 // fixedAnswer settles every permission request the same way.
@@ -445,7 +451,7 @@ func commandCoverage(asked, announced int) string {
 // refusal the default. What it is not is a *silent* default — the question and
 // the answer both go to standard error, so a session run this way still leaves
 // the record that a person would have been shown.
-func fixedAnswer(allow bool) func(context.Context, acp.RequestPermissionRequest) (acp.PermissionOutcome, error) {
+func fixedAnswer(self string, allow bool) func(context.Context, acp.RequestPermissionRequest) (acp.PermissionOutcome, error) {
 	kind := acp.KindRejectOnce
 	if allow {
 		kind = acp.KindAllowOnce
@@ -454,7 +460,7 @@ func fixedAnswer(allow bool) func(context.Context, acp.RequestPermissionRequest)
 		// By kind, out of the options this agent offered — never a constant.
 		// The id is the agent's to choose and it is not ours to guess.
 		out := acp.Select(req.Options, kind)
-		fmt.Fprintf(os.Stderr, "sh: agent asks: %s -> %s\n", callName(req.ToolCall), answered(out, kind))
+		fmt.Fprintf(os.Stderr, self+": agent asks: %s -> %s\n", callName(req.ToolCall), answered(out, kind))
 		return out, nil
 	}
 }
@@ -485,7 +491,7 @@ func callName(c acp.ToolCall) string {
 // does not know is *shown* rather than dropped, which is the same rule the
 // audit schema states for a name a consumer has not seen: the useful default
 // is to record it and carry on.
-func renderUpdate(n acp.SessionNotification) {
+func renderUpdate(self string, n acp.SessionNotification) {
 	raw, ok := n.Update.(json.RawMessage)
 	if !ok {
 		return
@@ -510,9 +516,9 @@ func renderUpdate(n acp.SessionNotification) {
 		if name == "" {
 			name = u.ToolCallID
 		}
-		fmt.Fprintf(os.Stderr, "sh: agent %s: %s\n", u.Status, name)
+		fmt.Fprintf(os.Stderr, self+": agent %s: %s\n", u.Status, name)
 	default:
-		fmt.Fprintf(os.Stderr, "sh: agent %s\n", u.SessionUpdate)
+		fmt.Fprintf(os.Stderr, self+": agent %s\n", u.SessionUpdate)
 	}
 }
 
@@ -542,16 +548,16 @@ func renderUpdate(n acp.SessionNotification) {
 // for a one-word answer, in the middle of a turn whose output is still
 // arriving on the same screen, would be the worse answer rather than the
 // better one.
-func answerer(allow, tty bool, in *bufio.Scanner) func(context.Context, acp.RequestPermissionRequest) (acp.PermissionOutcome, error) {
+func answerer(self string, allow, tty bool, in *bufio.Scanner) func(context.Context, acp.RequestPermissionRequest) (acp.PermissionOutcome, error) {
 	if allow || !tty {
-		return fixedAnswer(allow)
+		return fixedAnswer(self, allow)
 	}
 	return func(_ context.Context, req acp.RequestPermissionRequest) (acp.PermissionOutcome, error) {
 		fmt.Fprintf(os.Stderr, "\nsh: the agent asks to: %s\n", callName(req.ToolCall))
 		for _, o := range req.Options {
-			fmt.Fprintf(os.Stderr, "sh:   %s  %s\n", letter(o.Kind), o.Name)
+			fmt.Fprintf(os.Stderr, self+":   %s  %s\n", letter(o.Kind), o.Name)
 		}
-		fmt.Fprint(os.Stderr, "sh: your answer, or nothing to refuse: ")
+		fmt.Fprint(os.Stderr, self+": your answer, or nothing to refuse: ")
 		if !in.Scan() {
 			// The input ended with the question outstanding, which is not an
 			// answer. Everything that is not an explicit allow is a denial.
@@ -560,7 +566,7 @@ func answerer(allow, tty bool, in *bufio.Scanner) func(context.Context, acp.Requ
 		}
 		id, ok := chosen(strings.TrimSpace(in.Text()), req.Options)
 		if !ok {
-			fmt.Fprintln(os.Stderr, "sh: not one of the options — refused")
+			fmt.Fprintln(os.Stderr, self+": not one of the options — refused")
 			return refusal(req.Options), nil
 		}
 		return acp.PermissionOutcome{Outcome: acp.OutcomeSelected, OptionID: id}, nil
@@ -625,7 +631,7 @@ func refusal(options []acp.PermissionOption) acp.PermissionOutcome {
 // Nil where there is no terminal, and that nil is what withholds the
 // capability: an agent is told this client can collect a form only where it
 // can. The same rule the terminal login and the file methods are held to.
-func form(tty bool, in *bufio.Scanner) func(context.Context, acp.CreateElicitationRequest) (acp.CreateElicitationResponse, error) {
+func form(self string, tty bool, in *bufio.Scanner) func(context.Context, acp.CreateElicitationRequest) (acp.CreateElicitationResponse, error) {
 	if !tty {
 		return nil
 	}
@@ -636,13 +642,13 @@ func form(tty bool, in *bufio.Scanner) func(context.Context, acp.CreateElicitati
 			return acp.CreateElicitationResponse{Action: acp.ElicitAccept}, nil
 		}
 		for name, p := range req.RequestedSchema.Properties {
-			value, ok := field(in, name, p)
+			value, ok := field(self, in, name, p)
 			if !ok {
 				// A field the person would not or could not fill in. Whether
 				// that ends the form depends on whether the agent said it had
 				// to be there.
 				if required(req.RequestedSchema, name) {
-					fmt.Fprintln(os.Stderr, "sh: declined")
+					fmt.Fprintln(os.Stderr, self+": declined")
 					return acp.CreateElicitationResponse{Action: acp.ElicitDecline}, nil
 				}
 				continue
@@ -665,13 +671,13 @@ func required(schema *acp.ElicitationSchema, name string) bool {
 // a decline would answer the agent something the person did not mean. An empty
 // line, or the end of input, is the decision — and it is the only one that
 // leaves the field unset.
-func field(in *bufio.Scanner, name string, p acp.ElicitationProperty) (any, bool) {
+func field(self string, in *bufio.Scanner, name string, p acp.ElicitationProperty) (any, bool) {
 	label := name
 	if p.Title != "" {
 		label = p.Title
 	}
 	for {
-		fmt.Fprintf(os.Stderr, "sh:   %s%s: ", label, hint(p))
+		fmt.Fprintf(os.Stderr, self+":   %s%s: ", label, hint(p))
 		if !in.Scan() {
 			fmt.Fprintln(os.Stderr)
 			return nil, false
@@ -684,7 +690,7 @@ func field(in *bufio.Scanner, name string, p acp.ElicitationProperty) (any, bool
 		if err == nil {
 			return value, true
 		}
-		fmt.Fprintf(os.Stderr, "sh:   %v\n", err)
+		fmt.Fprintf(os.Stderr, self+":   %v\n", err)
 	}
 }
 
@@ -740,4 +746,26 @@ func coerce(typed string, p acp.ElicitationProperty) (any, error) {
 	// unknown type is best treated as: a client that refused a type it had not
 	// seen would fail on a schema that grows.
 	return typed, nil
+}
+
+// ConnectAs builds driver.Shell.ConnectACP for a binary that announces itself
+// by the given name.
+//
+// The name is a parameter for the reason ServeAs's is, and this direction had
+// the same defect twice over: the client announced a hardcoded "sh" to the
+// agent it was driving, and all twenty-eight of its diagnostics said `sh:`
+// whichever binary printed them. A zsh that says `sh:` when it refuses
+// something is a shell misnaming itself, which every other diagnostic in this
+// front end takes care not to do.
+//
+// dash is how this binary spells these flags — "-" for the multi-call sh and
+// "--" for a dialect binary, which cannot take the short form because real
+// bash reads `-acp` as the `-a -c -p` bundle. It is threaded rather than
+// assumed because four of the diagnostics *name a flag back to the reader*,
+// and telling somebody running zsh to type `-acp-auth` is telling them to
+// type something that shell will refuse.
+func ConnectAs(self, dash string) func(driver.Shell, bool, string, []string) int {
+	return func(sh driver.Shell, allow bool, authMethod string, argv []string) int {
+		return connectACP(self, dash, sh, allow, authMethod, argv)
+	}
 }

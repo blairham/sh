@@ -32,7 +32,7 @@ const specialParameterNames = "?*@#!-$0"
 // shell judges: `export 1x=v` complains about the name in all four, and the
 // two that quote the whole word back are quoting what they were given rather
 // than what they rejected.
-func (r *Runner) isBuiltinName(name string, takes NameOperands) bool {
+func (r *Runner) isBuiltinName(builtin, name string, takes NameOperands) bool {
 	if takes == AnythingIsAName {
 		return true
 	}
@@ -40,6 +40,9 @@ func (r *Runner) isBuiltinName(name string, takes NameOperands) bool {
 		return false
 	}
 	if isPlainName(name) {
+		return true
+	}
+	if r.dottedBuiltinName(builtin, name) {
 		return true
 	}
 	switch takes {
@@ -72,6 +75,52 @@ func isPlainName(s string) bool {
 	for i := 0; i < len(s); i++ {
 		c := s[i]
 		if c == '_' || isLetter(c) || (i > 0 && isDigit(c)) {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+// dottedNameRefusers are the builtins that will not take a name with a `.` in
+// it even in the grammar where a dot is a name character.
+//
+// One entry, and it is measured rather than reasoned — the split is inside
+// the declarations, which is where a single "what may stand where a name is
+// wanted" answer cannot reach. Measured on ksh93u+ 2012-08-01, 2026-09-13,
+// `-c`:
+//
+//	.foo=1; export .foo      export: .foo: is not an identifier   1
+//	export .foo=1            .foo=1: is not an identifier         1
+//	.foo=1; readonly .foo    accepted                             0
+//	typeset .x=3             accepted, and ${.x} is 3             0
+//	.foo=1; unset .foo       accepted, and ${.foo} is empty       0
+//	echo x | read .y         accepted, and ${.y} is x             0
+//
+// So `export` alone refuses, and it refuses the *name* rather than the
+// namespace: `.sh.version` is not special here either way. That is why this
+// is a set of builtins and not a value of [Semantics.DeclarationNameOperands]
+// — the axis is shared by `export` and `readonly`, which disagree.
+var dottedNameRefusers = map[string]bool{"export": true}
+
+// dottedBuiltinName reports whether a name with a `.` in it may stand where
+// this builtin wants one.
+//
+// The grammar flag is what asks, because the dot is a name character or it is
+// not — see [syntax.Dialect.DottedName]. Nothing outside ksh93 reaches this
+// with a dotted name at all: the other four dialects never read one as a name
+// in the first place, so a `.` in an operand there is a bad name exactly as it
+// was.
+func (r *Runner) dottedBuiltinName(builtin, name string) bool {
+	if !r.dialect().DottedName || dottedNameRefusers[builtin] {
+		return false
+	}
+	if !strings.Contains(name, ".") {
+		return false
+	}
+	for i := 0; i < len(name); i++ {
+		c := name[i]
+		if c == '.' || c == '_' || isLetter(c) || (i > 0 && isDigit(c)) {
 			continue
 		}
 		return false
@@ -197,7 +246,7 @@ func (r *Runner) builtinNames(builtin string, args []string, explicitVariable bo
 				return r.namesAfterARefusal(builtin, rest, args[i+1:], takes), status, true
 			}
 			continue
-		} else if r.isBuiltinName(name, takes) {
+		} else if r.isBuiltinName(builtin, name, takes) {
 			rest = append(rest, a)
 			continue
 		}
@@ -263,7 +312,7 @@ func (r *Runner) namesAfterARefusal(builtin string, kept, remaining []string, ta
 			}
 			continue
 		}
-		if r.isBuiltinName(name, takes) {
+		if r.isBuiltinName(builtin, name, takes) {
 			kept = append(kept, a)
 		}
 	}
@@ -394,7 +443,7 @@ func (r *Runner) isReadName(name string) bool {
 	if base, _, subscripted := r.subscriptOperand(name); subscripted && isPlainName(base) {
 		return true
 	}
-	return r.isBuiltinName(name, r.sem().ReadNameOperands)
+	return r.isBuiltinName("read", name, r.sem().ReadNameOperands)
 }
 
 // badReadName reports it, through the same wording table and the same

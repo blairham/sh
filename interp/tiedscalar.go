@@ -173,7 +173,7 @@ func (r *Runner) declareTie(builtin string, args []string, f declareFlags) int {
 	// honest answer to a spelling this engine cannot see in order.
 	fatal, takes := r.nameRules(builtin)
 	for _, n := range []string{scalar, array} {
-		if r.isBuiltinName(n, takes) {
+		if r.isBuiltinName(builtin, n, takes) {
 			continue
 		}
 		if r.unspecified {

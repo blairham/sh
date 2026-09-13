@@ -69,3 +69,36 @@ printf '%s\n' "u is $u"
 e=
 printf '[%s]\n' "${e-kept}"
 printf '[%s]\n' "${e:-substituted}"
+
+# A `.` is a name character here, which is how this shell spells its own
+# namespace and how a compound variable's member is addressed. No other shell
+# on the panel reads one: all five call `${.sh.version}` a bad substitution
+# (#2620).
+
+# `${.sh.version}` is the shell's own identity, and the shape is asserted
+# rather than the text — every build writes a different sentence.
+case "${.sh.version}" in
+  Version\ *) printf '%s\n' '.sh.version: a version sentence' ;;
+  *)          printf '%s\n' '.sh.version: unexpected' ;;
+esac
+
+# The dot is a rule about *names* and not about the namespace: a dotted name
+# nobody set is the empty string at status 0, exactly as a plain one is.
+printf '[%s]\n' "${.nosuchname}"
+printf '[%s]\n' "${.}"
+
+# And it reads in the positions that are not an expansion — an assignment, a
+# declaration, a loop variable, and the builtins that take a name.
+.dotted=one
+printf '%s\n' "${.dotted}"
+typeset .declared=two
+printf '%s\n' "${.declared}"
+for .each in a b; do printf '%s\n' "${.each}"; done
+printf '%s\n' "${#.dotted}"
+unset .dotted
+printf '[%s]\n' "${.dotted}"
+
+# A `$` in front of a bare dotted name is not an expansion, which is what says
+# the rule belongs to names rather than to what may follow a dollar.
+.again=three
+printf '%s\n' '$.again'

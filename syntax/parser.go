@@ -2140,7 +2140,7 @@ func (p *Parser) isAssign(t Token) (assignHead, bool) {
 		name = name[:len(name)-1]
 		h.append = true
 	}
-	if !isName(name) {
+	if !isNameIn(name, p.dialect.DottedName) {
 		// A run of digits names a positional parameter where the dialect has
 		// the construct. Behind isName rather than inside it, because every
 		// other caller of that function is asking about an identifier — a
@@ -2187,7 +2187,7 @@ func (p *Parser) subscriptedAssign(t Token, open int) (assignHead, bool) {
 		return h, false
 	}
 	name := t.Spans[0].Value[:open]
-	if !isName(name) {
+	if !isNameIn(name, p.dialect.DottedName) {
 		return h, false
 	}
 	for i, s := range t.Spans {
@@ -2446,15 +2446,19 @@ func isFuncName(s string, punctuation bool) bool {
 	return true
 }
 
-func isName(s string) bool {
+func isName(s string) bool { return isNameIn(s, false) }
+
+// isNameIn is isName with [Dialect.DottedName]'s answer carried in, for the
+// positions that read a name the interpreter will then look up. The callers
+// that ask about something else — a function's name, a `function` keyword's
+// reference list — keep the strict spelling, because a dot is not measured
+// there.
+func isNameIn(s string, dot bool) bool {
 	if s == "" {
 		return false
 	}
 	for i := 0; i < len(s); i++ {
-		c := s[i]
-		ok := c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-			(i > 0 && c >= '0' && c <= '9')
-		if !ok {
+		if !nameByte(s[i], i, dot) {
 			return false
 		}
 	}
@@ -4669,7 +4673,7 @@ func (p *Parser) forNameIsUsable() bool {
 		// says so for both spellings at once.
 		return false
 	}
-	return isName(p.tok.Literal())
+	return isNameIn(p.tok.Literal(), p.dialect.DottedName)
 }
 
 // forNameAsWritten is the word's source text, which is what a diagnostic

@@ -777,6 +777,53 @@ refused by five and *assigns* in zsh. This implementation lets all three
 through silently, which predates the nameless form and is #1541; the
 empty name goes through the same door `${::=w}` uses and is refused.
 
+### A dot is a name character in one dialect
+
+ksh93 lets a `.` stand anywhere in a name, including at the front of one.
+That is how the shell's own namespace is spelled — `${.sh.version}` — and
+how a compound variable's member is addressed — `${c.a}`. It is **one
+lexical rule and not two**, which is the question #2620 asked and what
+these probes answer. Measured on ksh93u+ 2012-08-01, 2026-09-13, `env -i`
+with a scratch `HOME`, `-c`:
+
+| written | ksh93 | reading |
+| --- | --- | --- |
+| `${.sh.version}` | `Version AJM 93u+ 2012-08-01` | the namespace |
+| `${.sh.pid}` and nine more | `` at status 0 | a member with nothing in it |
+| `${.foo}` | `` at status 0 | no `.sh` about it |
+| `${.}` | `` at status 0 | the dot alone is a name |
+| `x=1; ${x.y}` | `` at status 0 | and so is a dotted one nobody set |
+| `.foo=1; ${.foo}` | `1` | an assignment, and it reads back |
+| `typeset .x=3; ${.x}` | `3` | a declaration takes one |
+| `for .x in 1 2` | runs twice | so does a loop variable |
+| `.foo=1; echo $.foo` | `$.foo` | **not** an expansion |
+
+The last row is the discriminating one: the dot is a rule about *names*
+and not about what may follow a `$`. So the `.sh` namespace and a compound
+variable's member are one grammar reached twice, and what tells them apart
+is only what the interpreter has stored under the name.
+
+The other five columns call `${.sh.version}` a bad substitution at the
+**run** — bash 5.3.15, that binary as `sh`, bash 3.2.57, zsh 5.9.2 and
+BusyBox ash each execute the command in front of it and then complain — so
+this is `syntax.Dialect.DottedName`, a grammar flag one dialect holds, and
+not an axis.
+
+**A dot in an operand splits by builtin.** Measured: `export .foo` is
+`export: .foo: is not an identifier` at 1, where `readonly .foo`,
+`typeset .x=3`, `unset .foo` and `read .y` all take one. `export` and
+`readonly` share one answer to "what may stand where a name is wanted",
+so this is a set of builtins rather than a value of that axis.
+
+**What this implementation does not have is the value model.** A compound
+variable stores members there — `c=(a=1 b=2)` makes `${c.a}` answer `1`,
+`typeset -p c` write `typeset -C c=(a=1;b=2)`, and `${!c.@}` list
+`c.a c.b` — and here that literal is an indexed array of the two strings
+`a=1` and `b=2`. The name grammar above is what makes `${c.a}` *parse*;
+storing what it names is #2620's second half. `.sh.lineno` and
+`.sh.subshell` are dynamic there and are left unset here for the same
+reason a number pinned into them would be wrong on the second line.
+
 ## Extensions
 
 None of these are POSIX, and they do not all arrive together.

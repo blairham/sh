@@ -746,7 +746,7 @@ scan:
 	}
 
 	if e.Inner == nil {
-		e.Name, s = scanParamName(s)
+		e.Name, s = scanParamName(s, p.dialect.DottedName)
 	}
 
 	// A length over `$!` is a shape one dialect will not have, even though
@@ -1330,7 +1330,7 @@ func setTestNameStarts(s string) bool {
 	return s != "" && (isNameStart(s[0]) || (s[0] >= '0' && s[0] <= '9'))
 }
 
-func scanParamName(s string) (name, rest string) {
+func scanParamName(s string, dot bool) (name, rest string) {
 	if s == "" {
 		return "", ""
 	}
@@ -1346,7 +1346,7 @@ func scanParamName(s string) (name, rest string) {
 		return s[:1], s[1:]
 	}
 	i := 0
-	for i < len(s) && isNameByte(s[i], i) {
+	for i < len(s) && nameByte(s[i], i, dot) {
 		i++
 	}
 	return s[:i], s[i:]
@@ -1383,6 +1383,20 @@ func isNameStart(c byte) bool {
 }
 
 func isNameByte(c byte, i int) bool {
+	return nameByte(c, i, false)
+}
+
+// nameByte is isNameByte with [Dialect.DottedName]'s answer carried in.
+//
+// The dot is a name byte at every index rather than only after the first,
+// which is measured: `${.sh.version}` and `${.}` both read, so a name may
+// *begin* with one. That is the whole of the lexical rule, and it is what
+// makes the `.sh` namespace and a compound variable's member one grammar —
+// see [Dialect.DottedName].
+func nameByte(c byte, i int, dot bool) bool {
+	if dot && c == '.' {
+		return true
+	}
 	return isNameStart(c) || (i > 0 && c >= '0' && c <= '9')
 }
 

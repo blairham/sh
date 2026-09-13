@@ -13668,11 +13668,15 @@ func (r *Runner) matchPatternR(pattern, s string, condition bool) bool {
 	if condition {
 		badStatus = 2
 	}
-	o = r.extendedPatternOpts(o, pattern, badStatus)
+	o = r.tildeModifierOpts(r.extendedPatternOpts(o, pattern, badStatus), pattern)
 	var bad bool
 	if hasUnterminatedBracket(pattern) {
 		o.bracket, o.bad = r.bracketPolicy(), &bad
 	}
+	// The whole-subject question, like matchPattern's: a condition, a `case`
+	// arm and an element filter each ask whether the pattern describes the
+	// string, and none of them is choosing how much of it a match takes.
+	o.whole = true
 	matched, report := matchPatternIn(pattern, s, s, 0, o)
 	if bad {
 		// zsh abandons the script rather than failing the match.

@@ -1,0 +1,82 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Variables, declarations and scope — #2316. Assignment, unset, export,
+# readonly, the prefix assignment on a command, and what a function's
+# assignment reaches.
+#
+# core/params.tests asks what an expansion *operator* does with a value. This
+# file asks the other half: how the value got there, whether a child sees it,
+# and what happens to it when a function ends.
+#
+# Held out and named: assigning to a readonly, which zsh ends the script over
+# where the other three carry on; and the default value of IFS, which is
+# space-tab-newline in three shells and space-tab-newline-NUL in zsh. Both are
+# zsh answers and belong in zsh/.
+
+v=plain; printf '[%s]\n' "$v"
+v=; printf 'empty [%s]\n' "$v"
+unset v; printf 'unset [%s] set? [%s]\n' "$v" "${v+yes}"
+
+# More than one assignment in a command, a value with a space in it, and a
+# value from a substitution.
+v=1 w=2; printf '%s %s\n' "$v" "$w"
+v='a b'; printf '[%s]\n' "$v"
+v="$(printf 'x')"; printf '[%s]\n' "$v"
+
+# Braces separate the name from what follows it.
+printf 'braces [%s]\n' "${v}"
+abc=1; printf 'adjacent [%s]\n' "${abc}def"
+
+# A name is letters, digits and underscore, and may not start with a digit.
+_under=1; printf 'underscore [%s]\n' "$_under"
+A1=1; printf 'digit in name [%s]\n' "$A1"
+
+# export is what a child sees. A plain assignment is not in the environment;
+# exporting the name afterwards puts it there.
+export EV=exported
+printf 'env sees [%s]\n' "$(env | grep '^EV=' | head -1)"
+NV=notexported
+printf 'env unseen [%s]\n' "$(env | grep '^NV=' | head -1)"
+export NV
+printf 'env now [%s]\n' "$(env | grep '^NV=' | head -1)"
+export -p > /dev/null 2>&1; printf 'export -p -> %s\n' "$?"
+
+# An assignment written in front of a command is in that command's
+# environment and nowhere else — it does not survive into the shell.
+PV=prefixed env | grep '^PV=' | head -1
+printf 'after prefix [%s]\n' "${PV-unset}"
+
+# readonly fixes a value.
+readonly RO=fixed
+printf 'readonly value [%s]\n' "$RO"
+
+# A function's assignment is the shell's: there is no scope in POSIX, so a
+# name set in a function is set afterwards, and one unset in a function is
+# gone afterwards.
+f() { gv=set-in-func; }
+f; printf 'global from func [%s]\n' "$gv"
+v2=outer
+g() { v2=inner; printf 'in g [%s]\n' "$v2"; }
+g; printf 'after g [%s]\n' "$v2"
+hv=before
+h() { unset hv; }
+h; printf 'unset in func [%s]\n' "${hv-gone}"
+
+# unset of a name that is not set is not an error.
+unset NOPE; printf 'unset absent -> %s\n' "$?"
+
+# The two expansions that tell an unset name from an empty one, and the one
+# that sets it on the way past.
+printf 'default [%s]\n' "${NOPE-fallback}"
+printf 'assign default [%s]\n' "${NOPE=assigned}"
+printf 'now [%s]\n' "$NOPE"
+
+# The shell sets some of these itself.
+printf 'PWD is set: %s\n' "${PWD:+yes}"
+
+# Arithmetic writes back through an ordinary assignment.
+i=0; i=$((i+1)); printf 'i=%s\n' "$i"
+
+# A child that is not this shell sees the exported name and not the other.
+env -i PATH=/bin sh -c 'printf "child sees NOPE [%s]\n" "${NOPE-unset}"' 2>/dev/null

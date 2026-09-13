@@ -1599,6 +1599,7 @@ func Semantics() interp.Semantics {
 	s.ErrTrapRunsInsideFunctions = interp.Yes
 	s.ErrTrapRunsInSubshells = interp.Yes
 	s.DebugTrapRunsInsideCalls = interp.Yes
+	s.DebugTrapRefiresOnEnteringAFunction = interp.No
 	s.DebugTrapRunsInSubshells = interp.Yes
 	// The listing least is kept of: `(trap)` and `$(trap)` show nothing the
 	// parent had — not even an ignored signal, though it stays ignored in
@@ -1619,6 +1620,11 @@ func Semantics() interp.Semantics {
 	// `alias` is no more special here than POSIX makes it: the complaint is
 	// said and the next command runs. Measured with `alias -g x`.
 	s.AliasBadOptionFatal = interp.No
+	// unanswered AliasNameCheckReachesALookup, AliasInvalidNameFatal: this
+	// shell checks no alias name at all, so AliasNameRefusedCharacters is
+	// empty and neither question is ever reached. Measured 2026-09-12:
+	// `alias 'a b'=echo` is accepted in silence here and the name is listed
+	// back, where the two shells that check refuse it (#2413).
 	s.EarlierDeclarationLetterBlocksALaterPlus = interp.No
 	// Nor does a redirection that cannot be made end anything: the message
 	// is printed and the script runs on. The starting value only — `emulate

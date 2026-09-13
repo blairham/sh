@@ -315,6 +315,25 @@ type Error struct {
 	// Set for a word token and empty for everything else, whose source and
 	// whose spelling are the same characters.
 	TokenSource string
+	// AliasSource is the alias body the failure was inside, where an alias
+	// put the offending token there, and empty otherwise.
+	//
+	// It exists because the shell that echoes the offending line back echoes
+	// **the alias's text and not the line the script wrote**. Measured on
+	// bash 5.3.15, 2026-09-12, with `alias f='a= (x y)'` and three different
+	// lines using it:
+	//
+	//	echo hi; f; echo bye    `a= (x y)'
+	//	f arg1 arg2             `a= (x y)'
+	//	f; g                    `a= (x y)'
+	//
+	// So it is the borrowed text alone rather than the line reconstructed
+	// with the expansion in it — nothing the script wrote around the alias
+	// word appears. Slicing the source for the failure's line cannot produce
+	// that, and a spliced token carries the position of the *word it
+	// replaced*, so the slice gives the line holding the alias word back
+	// (#2413).
+	AliasSource string
 	// TokenHoldsExpansion says the unexpected word carried an expansion —
 	// `$x`, `${x}`, `$(…)`, `` `…` `` or `$((…))`. One dialect reads it as
 	// the question of which of the two spellings above to write.

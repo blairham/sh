@@ -3882,6 +3882,31 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 				undo = append(undo, r.saveVar(a.Name))
 			}
 			r.setVar(a.Name, v)
+			if kind.throughCommand {
+				// `command` is a precommand word rather than a command, so
+				// the prefix in front of it belongs to whatever it goes on
+				// to run — and when that is an external, belonging to it
+				// means being in its environment. Setting the name is not
+				// enough for that: a child is handed the *exported* names,
+				// so `v=1; v=9 command env` showed the child nothing where
+				// bash 5.3, ksh93, zsh and dash all show it `v=9` (#2408).
+				// Unanimous, so it is done here and not asked.
+				//
+				// Only through `command`. A prefix before a builtin that
+				// runs text of its own is where the panel splits — bash
+				// shows the child `v=9` for `v=9 eval env` and the other
+				// three show it nothing — so exporting for every builtin
+				// would take three columns with it to answer one.
+				//
+				// The attribute is put back by restoreVars along with the
+				// value: savedVar records the export tri-state precisely so
+				// a name that was never exported goes back to unspoken
+				// rather than to a recorded `false`.
+				if r.exported == nil {
+					r.exported = map[string]bool{}
+				}
+				r.exported[a.Name] = true
+			}
 		}
 		defer r.restoreVars(undo)
 		// The builtin is on the record for the duration, so a dialect that

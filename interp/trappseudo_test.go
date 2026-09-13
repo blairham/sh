@@ -34,6 +34,10 @@ func pseudoSem() Semantics {
 	s.DebugTrapRunsInsideCalls = No
 	s.ErrTrapRunsInSubshells = No
 	s.DebugTrapRunsInSubshells = No
+	// And the trap fires once per command, which is the answer three of the
+	// four columns give — the fourth is TestTheDebugTrapRefiringOnAFunctionCall
+	// below, and it sets its own.
+	s.DebugTrapRefiresOnEnteringAFunction = No
 	return s
 }
 
@@ -290,5 +294,79 @@ func TestPseudoTrapsAreListedAfterTheSignals(t *testing.T) {
 	})
 	if out != "done\n" {
 		t.Errorf("single-word reset: got %q, want the trap gone", out)
+	}
+}
+
+// TestTheDebugTrapRefiringOnAFunctionCall: one dialect fires the trap a
+// second time once the call's frame has been entered, with the call word
+// still the current command, so a tracing script sees an extra line for each
+// call rather than a wrong one.
+//
+// The probes reach the question by letting the trap into the call in the
+// first place — with it bounded there is no second firing to have.
+func TestTheDebugTrapRefiringOnAFunctionCall(t *testing.T) {
+	const src = `trap 'echo D' DEBUG; f() { echo in; }; f; echo out`
+	sem := pseudoSem()
+	sem.DebugTrapRunsInsideCalls = Yes
+	sem.DebugTrapRefiresOnEnteringAFunction = No
+	if got, _ := run(t, src, withSem(sem)); got != "D\nD\nin\nD\nout\n" {
+		t.Errorf("firing once: got %q, want one D for the call and one for the body", got)
+	}
+	sem.DebugTrapRefiresOnEnteringAFunction = Yes
+	if got, _ := run(t, src, withSem(sem)); got != "D\nD\nD\nin\nD\nout\n" {
+		t.Errorf("refiring: got %q, want a third D for entering the frame", got)
+	}
+}
+
+// Once per frame entered rather than once per call written, which a single
+// call cannot tell apart: two nested functions give five firings for three
+// commands under the refiring answer and three under the other.
+func TestTheRefiringIsPerFrameEntered(t *testing.T) {
+	const src = `trap 'echo D' DEBUG; g() { echo g; }; f() { g; }; f`
+	sem := pseudoSem()
+	sem.DebugTrapRunsInsideCalls = Yes
+	sem.DebugTrapRefiresOnEnteringAFunction = No
+	if got, _ := run(t, src, withSem(sem)); got != "D\nD\nD\ng\n" {
+		t.Errorf("firing once: got %q, want three D lines for three commands", got)
+	}
+	sem.DebugTrapRefiresOnEnteringAFunction = Yes
+	if got, _ := run(t, src, withSem(sem)); got != "D\nD\nD\nD\nD\ng\n" {
+		t.Errorf("refiring: got %q, want a D for each of the two frames entered", got)
+	}
+}
+
+// And the extra firing is located at the line the function's **body** begins
+// on — not the caller's line, and not the line the name was written on. The
+// three are only distinct with the definition spread over two lines, which is
+// why the probe is written that way.
+func TestTheRefiringIsLocatedAtTheBody(t *testing.T) {
+	const src = "f()\n{\n  echo in-f\n}\ntrap 'echo D=$LINENO' DEBUG\nf\n"
+	sem := pseudoSem()
+	sem.DebugTrapRunsInsideCalls = Yes
+	sem.DebugTrapRefiresOnEnteringAFunction = Yes
+	sem.LinenoCountsFromTheFunction = No
+	// The body has to read the line it fired on rather than its own first,
+	// or every row here is 1 and the probe decides nothing.
+	sem.CommandTrapBodyLine = TrapBodyLineOffsetFromWhereItFired
+	if got, _ := run(t, src, withSem(sem)); got != "D=6\nD=2\nD=3\nin-f\n" {
+		t.Errorf("got %q, want the call at 6, the entry at the body's 2 and the command at 3", got)
+	}
+}
+
+// A **sourced** file is not the same boundary: it fires once for the `.` and
+// once per line inside, with no doubling, under either answer. That is what
+// keeps this axis about function frames rather than about borrowed text.
+func TestTheRefiringDoesNotReachASourcedFile(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "lib.sh"), []byte("echo one\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	sem := pseudoSem()
+	sem.DebugTrapRunsInsideCalls = Yes
+	for _, a := range []Answer{No, Yes} {
+		sem.DebugTrapRefiresOnEnteringAFunction = a
+		if got, _ := pseudoRun(t, dir, `trap 'echo D' DEBUG; . ./lib.sh`, sem); got != "D\nD\none\n" {
+			t.Errorf("refires=%v: got %q, want one D for the `.` and one for the line inside", a, got)
+		}
 	}
 }

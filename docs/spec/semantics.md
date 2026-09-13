@@ -10686,6 +10686,77 @@ anywhere else.
 
 ### the ERR, DEBUG, RETURN and EXIT conditions
 
+**`AliasNameRefusedCharacters`** — bash `` \t \n space " $ & ' ( ) / ; < > \ ` | `` · ksh93 those plus `* ? [ { }` · dash, zsh, ash empty
+
+The characters an alias **name** may not hold, in the shells that check
+one. Swept over every printable ASCII character on 2026-09-12 by
+defining `alias '<name>'=echo` for each in turn: zsh 5.9.2, dash 0.5.12
+and BusyBox ash accept every name and list it back, bash 5.3 refuses
+whitespace and the shell's own metacharacters plus `/`, and ksh93u+
+refuses the pattern characters `* ? [ { }` beside them.
+
+A **set** rather than an axis, because the two shells that check do not
+agree on what is in it — an axis would have to answer "checked" for both
+and then hide the difference somewhere else. `]` is in neither set,
+which is what says ksh93's extra five are the pattern characters and not
+a bracket rule. An empty set is the whole of "this shell does not
+check", and it is why the two axes below are never reached in three of
+the five.
+
+`=` cannot be in any set: the first `=` separates the name from the
+value, so a name that reaches the check never holds one. Measured rather
+than reasoned — `alias 'a=b'=echo` is accepted everywhere and defines an
+alias called `a` whose body is `b=echo`.
+
+**`AliasNameCheckReachesALookup`** — bash no · dash unspecified · ksh93 yes · zsh unspecified
+
+Checks the name of a bare `alias name` as well as the name of a
+definition. ksh93 does: `alias 'a$b'` is `invalid alias name` there,
+where bash 5.3 looks the word up like any other and answers `not
+found` — the same thing it says for a name nobody ever mentioned.
+Asked only where a name was going to be refused, so the three shells
+with an empty set never reach it.
+
+**`AliasInvalidNameFatal`** — bash no · dash unspecified · ksh93 yes · zsh unspecified
+
+Ends the script over a name an alias may not carry. ksh93 alone, and it
+is not `AliasBadOptionFatal` reaching further: that axis is about an
+option letter, and a name ksh93 will not take is a different complaint
+with a wording of its own.
+
+**The builtin's own status is 1 in both, so only the line after can tell
+them apart.** Measured over a script file on 2026-09-12: with `alias
+'a$b'=echo` on line 2 of three, bash writes the complaint, runs line 3
+and exits 0, where ksh93u+ writes its own and exits 1 with line 3 unrun.
+An issue reporting this said the status was 0 in every shell that checks;
+it is 1 in bash and the shell simply carries on.
+
+**`DebugTrapRefiresOnEnteringAFunction`** — bash yes · dash unspecified · ksh93 no · zsh no
+
+Fires the DEBUG trap a *second* time for a function call: once where the
+call was written, and again once the frame has been entered, with the
+call word still the current command. bash alone, and only where the trap
+runs inside the call at all — so in practice only under `functrace`,
+which is what lets it in there. ksh93 and zsh run the trap inside calls
+with nothing asked and still fire it once.
+
+Measured on bash 5.3.15, 2026-09-12, with the action printing
+`$BASH_COMMAND`: `set -T; g(){ echo g; }; f(){ g; }; trap "echo
+D:$BASH_COMMAND" DEBUG; f` writes five lines for three commands —
+`D:f`, `D:f`, `D:g`, `D:g`, `D:echo g`. A **sourced** file does not
+double: `. ./lib.sh` writes one D for the `.` and one per line inside it,
+so this is the function boundary and not every borrowed text.
+
+The second firing's `$LINENO` is the line the function's **body** begins
+on rather than the caller's or the one the name was written on, which
+takes a definition spread over two lines to see: with `f()` on line 1,
+`{` on line 2 and the call on line 7, bash writes `D=7`, `D=2`, `D=3`.
+
+Three rows of `dialect/bash`'s own functrace test pinned two D lines for
+a traced call — our answer, written down as bash's — until this axis was
+measured. A test that passes is not evidence that what it pins was ever
+read off the shell it names.
+
 **`DebugTrapRunsInSubshells`** — bash no · dash unspecified · ksh93 yes · zsh yes
 
 Fires the DEBUG trap inside a subshell or a command substitution. ksh93

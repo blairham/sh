@@ -291,9 +291,23 @@ func biAlias(r *Runner, _ context.Context, args []string) int {
 	if patterns {
 		return r.aliasPatternListing(args, form)
 	}
-	missing := 0
+	missing, refused := 0, false
 	for _, a := range args {
 		name, value, isDefinition := strings.Cut(a, "=")
+		if r.aliasNameIsRefused(name) {
+			// Checked ahead of everything the operand could otherwise do,
+			// which is what the two shells that check both show: nothing is
+			// defined and no lookup is attempted for a name they will not
+			// take.
+			taken, stop := r.reportAliasName(name, a, isDefinition)
+			if stop {
+				return 1
+			}
+			if taken {
+				refused = true
+				continue
+			}
+		}
 		if isDefinition {
 			r.defineAlias(name, value, form.kind)
 			continue
@@ -311,6 +325,12 @@ func biAlias(r *Runner, _ context.Context, args []string) int {
 		if listed {
 			r.printf("%s\n", r.aliasLine(name, form))
 		}
+	}
+	if refused {
+		// 1 however many names were refused and however many of the rest
+		// were fine, which is measured: `alias 'a$b'=echo x=1 'a b'=echo`
+		// defines `x`, complains twice and reports 1.
+		return 1
 	}
 	if missing == 0 {
 		return 0
@@ -802,4 +822,46 @@ func (r *Runner) AliasExpansionBase() bool { return r.aliasExpansionBase }
 func (r *Runner) SetAliasExpansionBase(on bool) {
 	r.aliasExpansionBase = on
 	r.aliasExpansion = on || r.posixMode
+}
+
+// aliasNameIsRefused reports whether a name holds a character an alias may
+// not carry here.
+//
+// The set is the dialect's — see Semantics.AliasNameRefusedCharacters — and
+// an empty one is a shell that takes any name at all, which is three of the
+// five. Not an axis with a set beside it: the two shells that check do not
+// agree on what is in the set, so the set *is* the answer and an empty one
+// is the whole of "this shell does not check".
+func (r *Runner) aliasNameIsRefused(name string) bool {
+	set := r.sem().AliasNameRefusedCharacters
+	return set != "" && strings.ContainsAny(name, set)
+}
+
+// reportAliasName complains about a name an alias may not carry.
+//
+// taken says the name was refused and the operand is finished with; stop says
+// the script ends here. A shell that checks only a definition answers false
+// to both for a bare lookup, which then goes on to be looked up and reported
+// as not found — measured, that is exactly what bash says for `alias 'a$b'`.
+func (r *Runner) reportAliasName(name, operand string, isDefinition bool) (taken, stop bool) {
+	if !isDefinition {
+		if !r.ask(r.sem().AliasNameCheckReachesALookup,
+			"`alias` checking the name of a lookup as well as of a definition") {
+			return r.unspecified, false
+		}
+	}
+	d := r.diag()
+	line := Wording(d.AliasInvalidName, "alias: %[2]s: invalid alias name",
+		"alias", name, operand)
+	if d.AliasInvalidNameUnprefixed {
+		r.errf("%s\n", line)
+	} else {
+		r.diagf("%s\n", line)
+	}
+	if r.ask(r.sem().AliasInvalidNameFatal, "a name an alias may not carry ending the script") {
+		r.status = 1
+		r.fatalQuiet()
+		return true, true
+	}
+	return true, false
 }

@@ -295,6 +295,11 @@ func Semantics() interp.Semantics {
 	// `alias` is no more special here than POSIX makes it: the complaint is
 	// said and the next command runs. Measured with `alias -g x`.
 	s.AliasBadOptionFatal = interp.No
+	// unanswered AliasNameCheckReachesALookup, AliasInvalidNameFatal: this
+	// shell checks no alias name at all, so AliasNameRefusedCharacters is
+	// empty and neither question is ever reached. Measured 2026-09-12:
+	// `alias 'a b'=echo` is accepted in silence here and the name is listed
+	// back, where the two shells that check refuse it (#2413).
 	s.BadSetOptionNameFatal = interp.Yes
 	// `read` is not one of the three: `printf 'x\n' | read 1bad` reports at 1
 	// — not dash's 2 — and the script carries on.

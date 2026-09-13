@@ -267,6 +267,42 @@ func Probes() []Probe {
 			},
 		},
 		{
+			Field:   "DebugTrapRefiresOnEnteringAFunction",
+			Cases:   []string{"opt/a-debug-trap-fires-twice-for-a-function-call"},
+			Reading: "the row runs three commands with the DEBUG trap let into the calls, so it writes three `D` lines where the trap fires once per command and five where a call fires it again on the way in",
+			Read: func(cells map[string]oracle.Result) (string, string) {
+				r := cells["opt/a-debug-trap-fires-twice-for-a-function-call"]
+				switch strings.Count(r.Stdout, "D") {
+				case 0:
+					return "", "no D was written at all, so this shell has no DEBUG condition and the row asks it nothing"
+				case 1:
+					return "", "one D and no more: the trap never reached inside a call here, so the row cannot say what entering one does"
+				case 3:
+					return "No", ""
+				case 5:
+					return "Yes", ""
+				}
+				return "", "the row wrote a count that is neither one per command nor two per call, so the reading does not fit it"
+			},
+		},
+		{
+			Field:   "AliasInvalidNameFatal",
+			Cases:   []string{"alias/a-name-holding-a-character-it-may-not-carry"},
+			Reading: "the row defines an alias under a name two of the panel will not take, then prints `st=`; a shell that refuses the name and reaches that line is not ended by the refusal, and one that refuses it and never reaches the line is",
+			Read: func(cells map[string]oracle.Result) (string, string) {
+				r := cells["alias/a-name-holding-a-character-it-may-not-carry"]
+				switch {
+				case strings.TrimSpace(r.Stderr) == "":
+					return "", "the name was taken without complaint, so this shell checks no alias name and there is no refusal for the axis to be about"
+				case strings.Contains(r.Stdout, "st="):
+					return "No", ""
+				case strings.Contains(r.Stdout, "one"):
+					return "Yes", ""
+				}
+				return "", "the row did not reach the definition at all, so nothing here is about the refusal"
+			},
+		},
+		{
 			Field:   "PrefixToAFunctionIsExported",
 			Cases:   []string{"axis/whether-a-prefix-to-a-function-is-exported"},
 			Reading: "the function asks `export -p` about the name its own prefix set, and answers YES where the prefix carried the export attribute in",

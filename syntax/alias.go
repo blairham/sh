@@ -241,6 +241,10 @@ func (p *Parser) spliceAlias(value string) {
 		p.next()
 		return
 	}
+	// The body itself, for the diagnostic that echoes the borrowed text
+	// rather than the line the alias word was written on. Cleared by next()
+	// once the last of these tokens has been handed out.
+	p.aliasSource = value
 	p.pending = append(toks[1:], p.pending...)
 	p.pendingTouches = append(touches[1:], p.pendingTouches...)
 	p.aliasSpliced = len(toks)

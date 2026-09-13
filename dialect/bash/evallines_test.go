@@ -67,3 +67,28 @@ func TestAFailureInsideEvalTextIsLocatedByTheContinuedLine(t *testing.T) {
 		t.Errorf("got %q, want a line naming %q — the eval is on line 4 and the failure is the text's line 3", out, want)
 	}
 }
+
+// The arrangement the axis above was deliberately not measured with, pinned
+// here because it is the one people write and the one #2431 reported: an
+// `eval` whose text is spread over several physical lines.
+//
+// It cannot *decide* the axis — with the text laid out this way, "the
+// physical line the failing text sits on" and "the caller's line plus the
+// text's, less one" are the same number, which is why the probes above hold
+// the whole `eval` on one line. What it can do is show that both readings of
+// the number arrive at the arrangement a script actually has, over both
+// `$LINENO` and a diagnostic at once.
+//
+// Measured on bash 5.3.15, 2026-09-12. bash 3.2 answers 5, 6 and line 7 here
+// — a third rule again, offsetting from the line the `eval` command *ends*
+// on — and nothing in this tree models that column.
+func TestAMultiLineEvalIsNumberedTheSameWay(t *testing.T) {
+	dir := t.TempDir()
+	src := "echo one\necho two\neval 'echo E1=$LINENO\necho E2=$LINENO\nnosuchcmd'\n"
+	out, _ := runBash(t, dir, src)
+	for _, want := range []string{"E1=3\n", "E2=4\n", "line 5: nosuchcmd"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("got %q, want it to contain %q", out, want)
+		}
+	}
+}

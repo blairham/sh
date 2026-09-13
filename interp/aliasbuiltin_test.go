@@ -315,3 +315,111 @@ func aliasRunWithValue(t *testing.T, style ListingQuotingStyle, value string) (s
 		`alias a="$1"; alias a`, value)
 	return strings.TrimRight(out, "\n"), st
 }
+
+// What characters an alias name may hold, and what happens to one that holds
+// something else. Three shells take any name at all; the two that check do
+// not agree on the set, do not agree on whether a bare lookup is checked, and
+// do not agree on whether the script survives — so the set is a value and the
+// other two are axes. See Semantics.AliasNameRefusedCharacters.
+
+// aliasNameSem answers the neighbors, so each case here reaches its own
+// question rather than an unanswered one beside it.
+func aliasNameSem(set string) func(*Semantics) {
+	return func(s *Semantics) {
+		s.AliasNameRefusedCharacters = set
+		s.AliasNameCheckReachesALookup = No
+		s.AliasInvalidNameFatal = No
+	}
+}
+
+func TestAnAliasNameIsCheckedAgainstTheDialectsSet(t *testing.T) {
+	// Not checked at all: an empty set takes every name, and the alias is
+	// then there to be listed back.
+	out, st := aliasRun(t, aliasNameSem(""), Diagnostics{}, `alias 'a$b'=echo; alias`)
+	if st != 0 || out != "a$b='echo'\n" {
+		t.Errorf("empty set: got %q status %d, want the name taken", out, st)
+	}
+	// Checked: refused, nothing defined, and the builtin reports 1 while the
+	// script carries on.
+	out, st = aliasRun(t, aliasNameSem("$"), Diagnostics{}, `alias 'a$b'=echo; echo "st=$?"; alias`)
+	if st != 0 || out != "testsh: alias: a$b: invalid alias name\nst=1\n" {
+		t.Errorf("checked: got %q status %d, want a refusal and no definition", out, st)
+	}
+	// The set is the whole of what is refused: a character not in it is
+	// taken, which is what makes two shells with different sets expressible.
+	out, st = aliasRun(t, aliasNameSem("$"), Diagnostics{}, `alias 'a*b'=echo; alias`)
+	if st != 0 || out != "a*b='echo'\n" {
+		t.Errorf("outside the set: got %q status %d, want the name taken", out, st)
+	}
+	out, _ = aliasRun(t, aliasNameSem("$*"), Diagnostics{}, `alias 'a*b'=echo; alias`)
+	if out != "testsh: alias: a*b: invalid alias name\n" {
+		t.Errorf("inside a wider set: got %q, want the same name refused", out)
+	}
+}
+
+// A refusal costs the operand and not the ones beside it, and the status is 1
+// however many of each there were.
+func TestARefusedAliasNameLeavesTheOtherOperandsAlone(t *testing.T) {
+	out, _ := aliasRun(t, aliasNameSem("$ "), Diagnostics{},
+		`alias 'a$b'=echo x=1 'a b'=echo; echo "st=$?"; alias`)
+	want := "testsh: alias: a$b: invalid alias name\n" +
+		"testsh: alias: a b: invalid alias name\n" +
+		"st=1\nx='1'\n"
+	if out != want {
+		t.Errorf("got %q, want both refused, x defined and status 1", out)
+	}
+}
+
+// Whether the check reaches a bare lookup is its own axis. Under No the name
+// goes on to be looked up and reported the way any absent name is; under Yes
+// the lookup never happens.
+func TestWhetherTheAliasNameCheckReachesALookupIsAnAxis(t *testing.T) {
+	out, _ := aliasRun(t, aliasNameSem("$"), Diagnostics{}, `alias 'a$b'; echo "st=$?"`)
+	if out != "testsh: alias: a$b: not found\nst=1\n" {
+		t.Errorf("lookup unchecked: got %q, want the not-found answer", out)
+	}
+	out, _ = aliasRun(t, func(s *Semantics) {
+		aliasNameSem("$")(s)
+		s.AliasNameCheckReachesALookup = Yes
+	}, Diagnostics{}, `alias 'a$b'; echo "st=$?"`)
+	if out != "testsh: alias: a$b: invalid alias name\nst=1\n" {
+		t.Errorf("lookup checked: got %q, want the invalid-name answer", out)
+	}
+}
+
+// And whether the script survives it is another. Under Yes nothing after the
+// refusal runs, which is the half a status cannot show: the builtin answers 1
+// either way.
+func TestWhetherARefusedAliasNameEndsTheScriptIsAnAxis(t *testing.T) {
+	const src = `echo one; alias 'a$b'=echo; echo two`
+	out, _ := aliasRun(t, aliasNameSem("$"), Diagnostics{}, src)
+	if out != "one\ntestsh: alias: a$b: invalid alias name\ntwo\n" {
+		t.Errorf("not fatal: got %q, want the line after it run", out)
+	}
+	out, st := aliasRun(t, func(s *Semantics) {
+		aliasNameSem("$")(s)
+		s.AliasInvalidNameFatal = Yes
+	}, Diagnostics{}, src)
+	if st != 1 || out != "one\ntestsh: alias: a$b: invalid alias name\n" {
+		t.Errorf("fatal: got %q status %d, want the script ended", out, st)
+	}
+}
+
+// The wording carries three verbs — the builtin, the name, and the whole
+// operand — because the two shells that check name different ones: one quotes
+// the name and the other prints the operand it was handed, value and all.
+func TestTheInvalidAliasNameWordingCanNameTheWholeOperand(t *testing.T) {
+	dg := Diagnostics{
+		AliasInvalidName:           "%[1]s: %[3]s: invalid alias name",
+		AliasInvalidNameUnprefixed: true,
+	}
+	out, _ := aliasRun(t, aliasNameSem("$"), dg, `alias 'a$b'=echo`)
+	if out != "alias: a$b=echo: invalid alias name\n" {
+		t.Errorf("got %q, want the operand named and no shell in front", out)
+	}
+	dg.AliasInvalidNameUnprefixed = false
+	out, _ = aliasRun(t, aliasNameSem("$"), dg, `alias 'a$b'=echo`)
+	if out != "testsh: alias: a$b=echo: invalid alias name\n" {
+		t.Errorf("got %q, want the shell in front of the same wording", out)
+	}
+}

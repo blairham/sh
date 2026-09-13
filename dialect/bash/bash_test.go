@@ -182,6 +182,11 @@ func TestSemantics(t *testing.T) {
 		{"ErrTrapRunsInsideFunctions", s.ErrTrapRunsInsideFunctions, interp.No},
 		{"ErrTrapRunsInSubshells", s.ErrTrapRunsInSubshells, interp.No},
 		{"DebugTrapRunsInsideCalls", s.DebugTrapRunsInsideCalls, interp.No},
+		// The one column that fires the trap a *second* time once a
+		// call's frame is entered — five D lines for three commands in
+		// the nested snippet under `set -T`, measured on bash 5.3.15,
+		// 2026-09-12 (#2437).
+		{"DebugTrapRefiresOnEnteringAFunction", s.DebugTrapRefiresOnEnteringAFunction, interp.Yes},
 		{"DebugTrapRunsInSubshells", s.DebugTrapRunsInSubshells, interp.No},
 		// The parent's trap listing survives every boundary but a process
 		// substitution, EXIT trap included, and an inherited ignore is

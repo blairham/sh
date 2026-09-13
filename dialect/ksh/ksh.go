@@ -787,6 +787,18 @@ func Semantics() interp.Semantics {
 	// `alias` and `unalias` end the script over an option they do not have,
 	// the way a special builtin does, though POSIX marks neither.
 	s.AliasBadOptionFatal = interp.Yes
+	// The same set bash refuses plus the pattern characters `* ? [ { }`,
+	// swept over every printable ASCII character on 2026-09-12. `]` is in
+	// neither set, which is what says the extra five are the pattern
+	// characters rather than a bracket rule (#2413).
+	s.AliasNameRefusedCharacters = "\t\n \"$&'()*/;<>?[\\`{|}"
+	// And the check reaches a bare lookup too: `alias 'a$b'` is `invalid
+	// alias name` here where bash answers `not found`.
+	s.AliasNameCheckReachesALookup = interp.Yes
+	// The script ends over it, as it does over an option this builtin does
+	// not have — a separate axis, because that one is about a letter and
+	// this is a different complaint with a wording of its own.
+	s.AliasInvalidNameFatal = interp.Yes
 	s.EarlierDeclarationLetterBlocksALaterPlus = interp.Yes
 	s.HeredocExpandsInTheCommandsProcess = interp.Yes
 	s.RedirectTargetExpandsInTheCommandsProcess = interp.Yes
@@ -1055,6 +1067,7 @@ func Semantics() interp.Semantics {
 	s.ErrTrapRunsInsideFunctions = interp.Yes
 	s.ErrTrapRunsInSubshells = interp.No
 	s.DebugTrapRunsInsideCalls = interp.Yes
+	s.DebugTrapRefiresOnEnteringAFunction = interp.No
 	s.DebugTrapRunsInSubshells = interp.Yes
 	// `(trap)` and `$(trap)` still list the parent's traps, EXIT included —
 	// measured, and the working state is still reset: `trap 'echo x' USR1;
@@ -1825,23 +1838,25 @@ func Diagnostics() interp.Diagnostics {
 		UmaskBadMask:              "umask: %[1]s: bad number",
 		// The name leads and the builtin follows it, which is the reverse of
 		// everyone else — and unprefixed.
-		AliasNotFound:             "%[2]s: %[1]s not found",
-		AliasNotFoundUnprefixed:   true,
-		UnaliasUsage:              "Usage: unalias [-a] name...",
-		UnaliasUsageUnprefixed:    true,
-		UmaskBadSymbolicMode:      "umask: %[1]s: bad format",
-		UmaskBadOption:            "umask: %[1]s: unknown option",
-		UmaskUsage:                "Usage: umask [-S] [mask]",
-		UmaskUsageUnprefixed:      true,
-		LetNoExpression:           "Usage: let [ options ] [expr ...]",
-		LetNoExpressionStatus:     2,
-		LetNoExpressionUnprefixed: true,
-		UlimitBadOption:           "not supported",
-		UlimitBadNumber:           "ulimit: %[1]s: parameter not set",
-		BuiltinBadOption:          "%[1]s: %[2]s: unknown option",
-		BadOptionNaming:           interp.BadOptionWholeWord,
-		WaitBadJob:                "wait: %[1]s: Arguments must be %%job, process ids, or job pool names",
-		WaitBadJobStatus:          1,
+		AliasNotFound:              "%[2]s: %[1]s not found",
+		AliasNotFoundUnprefixed:    true,
+		AliasInvalidName:           "%[1]s: %[3]s: invalid alias name",
+		AliasInvalidNameUnprefixed: true,
+		UnaliasUsage:               "Usage: unalias [-a] name...",
+		UnaliasUsageUnprefixed:     true,
+		UmaskBadSymbolicMode:       "umask: %[1]s: bad format",
+		UmaskBadOption:             "umask: %[1]s: unknown option",
+		UmaskUsage:                 "Usage: umask [-S] [mask]",
+		UmaskUsageUnprefixed:       true,
+		LetNoExpression:            "Usage: let [ options ] [expr ...]",
+		LetNoExpressionStatus:      2,
+		LetNoExpressionUnprefixed:  true,
+		UlimitBadOption:            "not supported",
+		UlimitBadNumber:            "ulimit: %[1]s: parameter not set",
+		BuiltinBadOption:           "%[1]s: %[2]s: unknown option",
+		BadOptionNaming:            interp.BadOptionWholeWord,
+		WaitBadJob:                 "wait: %[1]s: Arguments must be %%job, process ids, or job pool names",
+		WaitBadJobStatus:           1,
 		// ksh93 has `--version` here, which this shell does not.
 		UnimplementedOptionLetters: map[string]string{
 			// `set` letters ksh93 has and this shell does not: -b job

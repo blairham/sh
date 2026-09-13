@@ -4413,6 +4413,11 @@ echo "st=$?"`,
 		Why:     "the other boundary the same option crosses, and the half a function-only implementation passes the row above without: a subshell group fires nothing of its own — with the trap set and the option off the bash columns write `s` and then a single D for the command after — and with the option on a D arrives ahead of the `echo s` inside. dash and ksh93 stop on the `set` and zsh refuses the name",
 	},
 	{
+		ID: "opt/a-debug-trap-fires-twice-for-a-function-call", Category: "shell options",
+		Snippet: `shopt -s extdebug 2>/dev/null; g() { echo g; }; f() { g; }; trap "echo D" DEBUG; f`,
+		Why:     "how many times the trap fires for a *call*, once the option has let it into one at all — Semantics.DebugTrapRefiresOnEnteringAFunction (#2437). bash 5.3 writes **five** D lines for three commands: one where each call was written and one more once each frame has been entered, with the call word still the current command. ksh93 and zsh run the trap inside calls with nothing asked and write three; bash 3.2 has no `extdebug` to link to `functrace`, so its trap stays outside the calls and it writes one; dash and BusyBox ash have no DEBUG condition and write none. `shopt` rather than `set -o functrace` or `set -T` is what makes one snippet reach every column: the two shells without it answer `command not found` and carry on, where the `set` spellings end ksh93 outright and would leave that column measuring the death rather than the question. Three rows of the bash dialect's own functrace test pinned two D lines for a traced call — our answer written down as bash's — until this was measured",
+	},
+	{
 		ID: "opt/an-err-trap-and-a-function-with-nothing-asked", Category: "shell options",
 		Snippet: `trap 'echo E' ERR; f() { false; }; f; echo done`,
 		Why:     "the control for the row below and for `opt/set-e-carries-the-err-trap`: one E, for the failing call, because bash does not carry the ERR trap into a function it was not set in. ksh93 counts the failure inside the body as well, and zsh — which does carry it in — still writes one here, so the axis is not read off this row alone. ash has the ERR condition where dash refuses the name outright, so the two smallest shells in the panel are not one answer",
@@ -14177,6 +14182,11 @@ printf 'TWO=still-running\n'`,
 		ID: "set/bare-set-lists-the-variables", Category: "builtins",
 		Snippet: `v1=plain; v2='has space'; v3="quo'te"; set | grep "^v[123]"; echo "st=$?"`,
 		Why:     "one listing, three spellings of the same three values: bare-until-needed with `'\\''` for the embedded quote, always-single-quoted with the quote doubled out, and `$'...'` — filtered to the script's own names because the rest of the listing is the machine's",
+	},
+	{
+		ID: "prefix/through-command-reaches-the-child", Category: "commands",
+		Snippet: `v=1; v=9 command env | grep "^v="; echo "after=[$v]"`,
+		Why:     "`command` is a precommand word rather than a command, so the prefix in front of it belongs to whatever it goes on to run — and when that is an external, belonging to it means being in its environment. Unanimous: every column shows the child `v=9` and leaves the shell's own `v` at `1`. Setting the name in the shell is not enough for the first half, because a child is handed the *exported* names, and this shell set it and stopped there: the child saw nothing at all, in all five dialects (#2408). The `after=` half is the other end of the same rule and is what a fix that simply exported the name for good would fail",
 	},
 	{
 		ID: "prefix/append-joins-the-value-that-is-there", Category: "commands",

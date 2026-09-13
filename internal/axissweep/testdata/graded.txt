@@ -19,6 +19,7 @@
 
 ash    ArrayBaseIsZero                                      -
 ash    AssignmentPrefixPersistsAfterAFunction               No
+ash    DebugTrapRefiresOnEnteringAFunction                  -
 ash    DollarZeroNamesTheInnermostCall                      No
 ash    EchoInterpretsEscapes                                No
 ash    ExitTrapRunsOnSignalDeath                            No
@@ -35,6 +36,7 @@ ash    ReadonlyReassignmentFatal                            Yes
 ash    ShiftPastEndFatal                                    No
 bash   ArrayBaseIsZero                                      Yes
 bash   AssignmentPrefixPersistsAfterAFunction               No
+bash   DebugTrapRefiresOnEnteringAFunction                  Yes
 bash   DollarZeroNamesTheInnermostCall                      No
 bash   EchoInterpretsEscapes                                No
 bash   ExitTrapRunsOnSignalDeath                            Yes
@@ -51,6 +53,7 @@ bash   ReadonlyReassignmentFatal                            No
 bash   ShiftPastEndFatal                                    No
 dash   ArrayBaseIsZero                                      -
 dash   AssignmentPrefixPersistsAfterAFunction               No
+dash   DebugTrapRefiresOnEnteringAFunction                  -
 dash   DollarZeroNamesTheInnermostCall                      No
 dash   EchoInterpretsEscapes                                Yes
 dash   ExitTrapRunsOnSignalDeath                            No
@@ -67,6 +70,7 @@ dash   ReadonlyReassignmentFatal                            Yes
 dash   ShiftPastEndFatal                                    Yes
 ksh    ArrayBaseIsZero                                      Yes
 ksh    AssignmentPrefixPersistsAfterAFunction               Yes
+ksh    DebugTrapRefiresOnEnteringAFunction                  No
 ksh    DollarZeroNamesTheInnermostCall                      No
 ksh    EchoInterpretsEscapes                                No
 ksh    ExitTrapRunsOnSignalDeath                            Yes
@@ -83,6 +87,7 @@ ksh    ReadonlyReassignmentFatal                            Yes
 ksh    ShiftPastEndFatal                                    Yes
 zsh    ArrayBaseIsZero                                      No
 zsh    AssignmentPrefixPersistsAfterAFunction               No
+zsh    DebugTrapRefiresOnEnteringAFunction                  No
 zsh    DollarZeroNamesTheInnermostCall                      Yes
 zsh    EchoInterpretsEscapes                                Yes
 zsh    ExitTrapRunsOnSignalDeath                            No

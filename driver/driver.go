@@ -1559,6 +1559,45 @@ func (sh Shell) newRunner(name string, params []string, dg interp.Diagnostics, r
 		// shell in the panel prints nothing. See fatalsignal.go.
 		watchFatalSignals(r)
 	}
+	// The part of composing a shell that is not a field, applied here and
+	// *remembered*, because interp has one shell of its own to build: the
+	// fresh one a file the kernel would not start is run in, which is not a
+	// subshell and so cannot be a clone. See interp.Runner.SetUp.
+	r.SetUp = sh.setUpFreshShell
+	sh.setUpRunner(r)
+	return r
+}
+
+// setUpFreshShell makes a Runner nobody else has touched into a shell of this
+// front end's kind — everything this package does to one on the way up,
+// including the prelude, which is the dialect written as shell.
+//
+// It is what interp calls for the one shell it has to build itself: the fresh
+// one a file the kernel would not start is run in. That shell is not a
+// subshell, so it cannot be a clone, and built from the exported fields alone
+// it was fresh in a sense no real shell is — no `$BASH_VERSION`, none of the
+// functions the prelude defines, none of the builtins a dialect registers,
+// where an execve of this same binary would have run every one of those on
+// the way up.
+//
+// The prelude is here and not in setUpRunner because the ordinary route
+// sources it later, at its own point in runInput and after the parser's alias
+// tables are wired; calling it from both would source it twice.
+func (sh Shell) setUpFreshShell(r *interp.Runner) {
+	sh.setUpRunner(r)
+	if sh.Prelude != "" {
+		// A prelude that fails is the dialect being broken, which `source`
+		// already reports plainly. The status is dropped rather than carried:
+		// the shell it belongs to is the script's, and a script that ran is
+		// answered by the script.
+		_ = sh.source(r, sh.Name)
+	}
+}
+
+// setUpRunner is everything a Runner this front end built needs past its
+// fields, in one function so that the shell interp builds for itself gets the
+// same two steps in the same order rather than a second copy of them.
+func (sh Shell) setUpRunner(r *interp.Runner) {
 	if sh.Register != nil {
 		// The dialect's own adjustment: what it adds to or removes from the
 		// substrate's builtins, which is neither grammar nor semantics.
@@ -1569,7 +1608,6 @@ func (sh Shell) newRunner(name string, params []string, dg interp.Diagnostics, r
 	// than anything about the language. After Register, which is where a
 	// dialect installs the tie the value has to reach. See functiondirs.go.
 	sh.seedFunctionSearch(r)
-	return r
 }
 
 // run parses and executes one whole invocation, guarding it against an

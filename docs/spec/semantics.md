@@ -9626,6 +9626,16 @@ the environment the command would have been given**, with `$0` set and
 the rest of the words as the positional parameters. The descriptors past
 the three named streams cross too — see the last subsection.
 
+It is a shell of this front end's kind and not a bare interpreter, which
+took a second pass to get right. Built from the exported fields alone it
+was fresh in a sense no real shell is: an `execve` of the same binary runs
+the dialect's registrations and its prelude on the way up, and this ran
+neither, so a shebang-less script found `$RANDOM`, `$SECONDS` and the
+version parameter empty and had none of the builtins its dialect adds.
+`Runner.SetUp` is the seam that closes it — the front end hands over the
+part of composing a shell that is not a field — and it is carried on, so a
+script reached this way that reaches another one gets the same shell again.
+
 What deliberately does **not** cross is the hooks that change *this*
 process, because the process a real shell gives the script is its own and
 nothing it does there comes back. An `exec` in the script must not replace

@@ -6,6 +6,7 @@ package interp_test
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -405,5 +406,46 @@ func TestAUmaskTheScriptSetsReachesTheProcessWhileItRuns(t *testing.T) {
 	}
 	if !strings.Contains(buf.String(), "077") {
 		t.Errorf("the script's own reading of the mask it set: got %q", buf.String())
+	}
+}
+
+// The fresh shell is a shell of the front end's kind, not a bare Runner.
+//
+// Built from the exported fields alone it was fresh in a sense no real shell
+// is: an execve of the same binary runs the dialect's registrations and its
+// prelude on the way up, and this ran neither — so a shebang-less script found
+// `$RANDOM` empty and none of the builtins its dialect adds. Runner.SetUp is
+// the seam that closes it, and it is carried on so a script that runs another
+// such file gets the same shell again.
+func TestTheFreshShellIsSetUpTheWayTheFrontEndSetsOneUp(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	writeImage(t, dir, "outer.scr", []byte("only-in-a-composed-shell outer\n./inner.scr\n"), 0o755)
+	writeImage(t, dir, "inner.scr", []byte("only-in-a-composed-shell inner\n"), 0o755)
+	var buf bytes.Buffer
+	sem := imageSemantics()
+	setUp := func(r *Runner) {
+		r.Register("only-in-a-composed-shell", func(r *Runner, _ context.Context, args []string) int {
+			fmt.Fprintf(r.Out(), "registered:%s\n", strings.Join(args, ","))
+			return 0
+		})
+	}
+	r := newTestRunner(t, &Runner{
+		Stdout: &buf, Stderr: &buf,
+		Semantics: &sem, Diagnostics: &Diagnostics{},
+		Dir: dir, Name: "testsh", SetUp: setUp,
+	})
+	setUp(r)
+	r.Vars = map[string]string{"PATH": dir}
+	f, err := syntax.Parse(`./outer.scr; echo "st=$?"`, syntax.Core())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, rerr := r.Run(context.Background(), f); rerr != nil {
+		t.Fatalf("run: %v", rerr)
+	}
+	want := "registered:outer\nregistered:inner\nst=0\n"
+	if buf.String() != want {
+		t.Errorf("the dialect's own builtins, one level down and two:\n got %q\nwant %q", buf.String(), want)
 	}
 }

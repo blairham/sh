@@ -418,6 +418,28 @@ type Runner struct {
 	// SetMarkedFunctions.
 	markedFunctions func(r *Runner, letters string) []string
 
+	// SetUp is what a front end does to a Runner beyond filling in its
+	// exported fields — a dialect's own adjustment to the builtins, the ties
+	// it installs, the prompt table — so that a shell *this* package has to
+	// build for itself is built the same way.
+	//
+	// There is one such shell and it is not a subshell: the fresh one a file
+	// the kernel would not start is run in, which must not inherit the
+	// caller's functions or unexported variables and so cannot be a clone.
+	// See noexecscript.go. Building it from the exported fields alone got
+	// everything a field carries and nothing else, so a shebang-less script
+	// found `$RANDOM`, `$SECONDS` and `$BASH_VERSION` empty and had none of
+	// the builtins a dialect registers — a fresh shell in a sense no real
+	// shell is fresh, since an execve of the same binary would have run all
+	// of that on the way up.
+	//
+	// A field rather than a call, for the reason ReplaceProcess and
+	// InheritedFiles are fields: composing a shell is the front end's job,
+	// and interp may not reach for a dialect package — the import runs the
+	// other way. Nil is a Runner nobody composed, which is every embedder
+	// that builds one by hand and is the behavior this had before.
+	SetUp func(*Runner)
+
 	// InheritedFiles are the descriptors this shell was *started* with beyond
 	// the three named streams — what `sh 3<&0 script` puts on 3 — laid out
 	// the way childFiles hands them back: entry i is descriptor 3+i, and a

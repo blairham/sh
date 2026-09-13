@@ -345,6 +345,14 @@ func (r *Runner) runImageAsScript(ctx context.Context, name, path string, argv, 
 			}
 		}()
 	}
+	// Everything the front end does to a Runner past its fields — the
+	// dialect's builtins, its ties, its prompt table. Carried on as well as
+	// applied, so that a shebang-less script which itself runs one gets the
+	// same shell the first did. See Runner.SetUp.
+	child.SetUp = r.SetUp
+	if r.SetUp != nil {
+		r.SetUp(child)
+	}
 	// The file the shell was given, which is the name it answers with rather
 	// than the path it opened: a diagnostic raised inside the script names it
 	// the way `$0` does, which on the PATH route is the resolved path in six

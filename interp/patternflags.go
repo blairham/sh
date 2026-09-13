@@ -453,8 +453,7 @@ func matchRepeat(item string, ip, lo, hi int, after string, ap int, s string, at
 func repeatFrom(item string, ip, k, lo, hi int, after string, ap int, s string, at int, o patternOpts) bool {
 	if hi == unboundedRepeat || k < hi {
 		ceiling := splitCeiling(item, s, ip, &o)
-		for i := 0; i < ceiling; {
-			i += o.unitWidth(s[i:])
+		for i := ceiling; i > 0; i = o.unitBefore(s, i) {
 			mark := o.where.caps.mark()
 			if !matchHere(item, s[:i], ip, at, o) {
 				o.where.caps.rollback(mark)

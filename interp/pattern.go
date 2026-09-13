@@ -631,6 +631,24 @@ func (o *patternOpts) unitWidth(s string) int {
 	return characterWidth(s)
 }
 
+// unitBefore is the start of the unit ending at i — unitWidth walked
+// backwards. A unit here is a rune rather than a grapheme cluster, so the
+// boundary is findable by stepping back over UTF-8 continuation bytes and
+// needs no table of its own.
+func (o *patternOpts) unitBefore(s string, i int) int {
+	if i <= 0 {
+		return 0
+	}
+	if !o.chars {
+		return i - 1
+	}
+	j := i - 1
+	for j > 0 && s[j]&0xC0 == 0x80 {
+		j--
+	}
+	return j
+}
+
 // eqByte compares two bytes, without case when fold says so. ASCII only: the
 // folding a shell does inside a pattern is `nocasematch` and its kin, which
 // this implementation has never taken past ASCII, and which is its own

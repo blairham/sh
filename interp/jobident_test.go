@@ -4,6 +4,7 @@
 package interp_test
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -81,7 +82,12 @@ grep -q "no such job" byspec.txt; echo "spec=$?"
 : > p
 wait
 `
-	out, errOut := runJobScript(t, src, nil)
+	out, errOut := runGatedJobScript(t, src, nil, GateFunc(func(_ context.Context, a Action) Decision {
+		if a.Kind == ActionSignal {
+			return Deny
+		}
+		return Allow
+	}))
 	// The two complaints differ only in how the script spelled the operand,
 	// and the kind is the load-bearing half: a number handed to the kernel
 	// instead comes back as a *process* that is not there, which is a

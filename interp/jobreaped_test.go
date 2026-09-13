@@ -23,6 +23,22 @@ import (
 // tests are about.
 func runJobScript(t *testing.T, src string, set func(*Semantics)) (out, errOut string) {
 	t.Helper()
+	return runGatedJobScript(t, src, set, nil)
+}
+
+// runGatedJobScript is the same with a gate, for the one test that runs a
+// `kill`.
+//
+// The gate is there for what a **mutant** would do rather than for what this
+// shell does. `kill "$!"` on a job with no process of its own reaches no
+// signal at all here: the number is read back as the job, and a job with
+// nothing to signal is reported rather than aimed at. Undo that and the
+// number is 0 again — which POSIX gives `kill` as *every process in the
+// sender's group*, so the mutant terminates the test binary running it. It
+// did, the first time it was tried. A gate that answers no to every signal
+// changes nothing about the passing path and turns that into a refusal.
+func runGatedJobScript(t *testing.T, src string, set func(*Semantics), gate Gate) (out, errOut string) {
+	t.Helper()
 	f, err := syntax.Parse(src, syntax.Core())
 	if err != nil {
 		t.Fatalf("parse: %v", err)
@@ -33,7 +49,7 @@ func runJobScript(t *testing.T, src string, set func(*Semantics)) (out, errOut s
 	}
 	var o, e bytes.Buffer
 	r := newTestRunner(t, &Runner{
-		Stdout: &o, Stderr: &e, Semantics: &sem, Name: "testsh", Env: testPATH(),
+		Stdout: &o, Stderr: &e, Semantics: &sem, Name: "testsh", Env: testPATH(), Gate: gate,
 	})
 	if _, rerr := r.Run(context.Background(), f); rerr != nil {
 		t.Fatalf("run: %v", rerr)
@@ -131,7 +147,8 @@ func TestAReportedJobIsOutOfTheTable(t *testing.T) {
 	const src = `/bin/sh -c 'exit 7' & p=$!
 wait "$p"
 jobs > listing.txt
-echo "rows=$(grep -c . listing.txt)"
+grep -c . listing.txt > rows.txt
+read rows < rows.txt; echo "rows=$rows"
 wait %1 >/dev/null 2>&1; echo "spec=$?"
 `
 	out, errOut := runJobScript(t, src, func(s *Semantics) {

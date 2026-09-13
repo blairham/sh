@@ -126,6 +126,12 @@ type Report struct {
 	ReferenceVersion string
 	Ours             string
 	Helpers          []string
+	// Route is how the column was reached, and it is empty for a binary on
+	// this machine. A column measured inside a container is a weaker and a
+	// differently-scoped claim than one measured here — it pins the behavior
+	// of an image rather than of this machine — so the report says so
+	// instead of letting the two look alike.
+	Route string
 
 	Files  int
 	Parsed int

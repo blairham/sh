@@ -1,0 +1,94 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# `function name { ... }` — the ksh spelling of a function definition. dash
+# refuses it; the ksh family and zsh accept it, so it is ext/.
+#
+# Only the reserved-word spelling with no parentheses is asked. `function
+# name() { ... }`, the two spellings run together, is accepted by bash and zsh
+# and refused by AT&T ksh93, so it is a per-dialect answer and lives with the
+# dialect that gives it — the matrix has both rows measured side by side.
+
+function plain {
+  printf 'plain function ran\n'
+}
+plain
+
+function witharg {
+  printf 'argument: %s of %s\n' "$1" "$#"
+}
+witharg alpha beta
+
+# The POSIX spelling defines the same kind of thing, and one may redefine the
+# other.
+posix() { printf 'posix spelling\n'; }
+posix
+function posix { printf 'redefined by the reserved word\n'; }
+posix
+posix() { printf 'redefined back\n'; }
+posix
+
+# A body may be any compound command, not only a brace group.
+function grouped
+{
+  printf 'brace on its own line\n'
+}
+grouped
+
+# A parenthesised body after the reserved word is not asked: bash takes it as
+# a subshell function, ksh93 calls it a syntax error and zsh reads the
+# parenthesis as something else again. Three answers is a per-dialect answer.
+
+# return ends the function and sets its status.
+function returns {
+  if [ "$1" = fail ]; then
+    return 3
+  fi
+  printf 'reached the end\n'
+  return 0
+}
+returns ok
+printf 'status after ok: %s\n' "$?"
+returns fail
+printf 'status after fail: %s\n' "$?"
+
+# The status of a function with no return is the status of its last command.
+function last { [ x = y ]; }
+last
+printf 'status from the last command: %s\n' "$?"
+
+# The positional parameters inside are the call's, and the caller's are
+# restored afterwards.
+set -- outer1 outer2
+function shows { printf 'inside: %s [%s]\n' "$#" "$*"; }
+shows inner1 inner2 inner3
+printf 'outside: %s [%s]\n' "$#" "$*"
+
+# Recursion, which is the shortest proof that each call has its own arguments.
+function countdown {
+  if [ "$1" -le 0 ]; then
+    printf 'liftoff\n'
+    return 0
+  fi
+  printf '%s...\n' "$1"
+  countdown $(($1 - 1))
+}
+countdown 3
+
+# A function is looked up before a builtin-shaped name in a pipeline and takes
+# its input like any other command.
+function upper { while read -r l; do printf 'got [%s]\n' "$l"; done; }
+printf 'one\ntwo\n' | upper
+
+# A redirection on the definition applies to every call.
+function logged { printf 'this went to the file\n'; } > logfile
+logged
+printf 'the file holds: '
+cat logfile
+rm -f logfile
+
+# unset -f removes it, and the name is then not a command.
+function goes { printf 'here\n'; }
+goes
+unset -f goes
+if type goes > /dev/null 2>&1; then printf 'still defined\n'; else printf 'gone\n'; fi

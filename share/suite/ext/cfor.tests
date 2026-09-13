@@ -1,0 +1,89 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# The C-style for, and the (( )) arithmetic command it is built out of. dash
+# has neither; the ksh family and zsh have both, so this is ext/.
+#
+# (( )) is a command rather than an expansion, so the thing to ask about it is
+# its exit status — zero for a non-zero value and one for zero, which is the
+# reverse of how the value reads and is the most common error in scripts that
+# use it.
+
+for ((i = 0; i < 3; i++)); do
+  printf 'i=%s\n' "$i"
+done
+printf 'after the loop i=%s\n' "$i"
+
+# Counting down, and by more than one.
+for ((i = 6; i > 0; i -= 2)); do
+  printf 'down %s\n' "$i"
+done
+
+# Any of the three clauses may be empty. An empty condition is true.
+n=0
+for ((; n < 2; )); do
+  n=$((n + 1))
+  printf 'empty clauses %s\n' "$n"
+done
+
+# A loop that never runs is not an error, and leaves the status of the
+# compound at zero.
+for ((k = 5; k < 5; k++)); do
+  printf 'never\n'
+done
+printf 'never-run loop status: %s\n' "$?"
+
+# break and continue work the way they do in every other loop.
+out=
+for ((i = 0; i < 6; i++)); do
+  if ((i == 2)); then continue; fi
+  if ((i == 4)); then break; fi
+  out="$out$i"
+done
+printf 'break and continue: %s\n' "$out"
+
+# Comma in the initialiser and in the increment, and more than one variable.
+for ((i = 0, j = 5; i < j; i++, j--)); do
+  printf 'converging %s %s\n' "$i" "$j"
+done
+
+# (( )) as a command: the status is the reverse of the value's truthiness.
+((1))
+printf 'status of ((1)): %s\n' "$?"
+((0))
+printf 'status of ((0)): %s\n' "$?"
+((3 > 2))
+printf 'status of a true comparison: %s\n' "$?"
+((3 < 2))
+printf 'status of a false comparison: %s\n' "$?"
+
+# So it reads as a condition.
+x=4
+if ((x % 2 == 0)); then printf '%s is even\n' "$x"; fi
+while ((x > 0)); do x=$((x - 2)); done
+printf 'counted down to %s\n' "$x"
+
+# Assignment inside (( )) is an assignment, and the status follows the value
+# assigned.
+((y = 7))
+printf 'y=%s status=%s\n' "$y" "$?"
+((z = 0))
+printf 'z=%s status=%s\n' "$z" "$?"
+
+# Increment and decrement, prefix and postfix, and compound assignment.
+c=1
+((c++)); printf 'postfix increment: %s\n' "$c"
+((++c)); printf 'prefix increment:  %s\n' "$c"
+((c--)); printf 'postfix decrement: %s\n' "$c"
+((c += 10)); printf 'compound add: %s\n' "$c"
+((c *= 2)); printf 'compound multiply: %s\n' "$c"
+
+# A nested loop, which is where an implementation that shares one counter
+# falls over.
+grid=
+for ((r = 0; r < 2; r++)); do
+  for ((col = 0; col < 3; col++)); do
+    grid="$grid($r,$col)"
+  done
+done
+printf 'grid: %s\n' "$grid"

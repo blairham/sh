@@ -1,0 +1,57 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# $'...' — the quoting form that expands backslash escapes and nothing else.
+# dash has none of it; the ksh family and zsh all do, so it is ext/.
+#
+# The escapes are asked one at a time and rendered through `printf %s`, so
+# what is being compared is the bytes the quoting produced rather than
+# anything printf decided afterwards.
+
+printf '%s\n' $'plain'
+printf '[%s]\n' $'tab\there'
+printf '[%s]\n' $'line\nbreak'
+printf '[%s]\n' $'back\\slash'
+printf '[%s]\n' $'single \' quote'
+printf '[%s]\n' $'double " quote'
+
+# The control escapes, as bytes rather than as whatever a terminal would do
+# with them. One dump for all of them: what is being asked is which byte each
+# escape produced, and a byte is only visible through something that names it.
+printf '%s' $'\a|\b|\f|\r|\v|\t' | od -An -c | sed 's/  */ /g'
+
+# Numeric escapes: octal, hex, and the two Unicode widths.
+printf '%s\n' $'\101\102\103'
+printf '%s\n' $'\x41\x42\x43'
+printf '%s\n' $'Aé'
+printf '%s\n' $'\U00000041'
+
+# An undefined escape is not here, and the omission is a measurement: bash
+# keeps both the backslash and the letter for $'\d', while ksh93 and zsh keep
+# only the letter. What a shell does with an escape nobody defined is a
+# per-dialect answer.
+
+# The length is of the produced bytes, not of the spelling.
+v=$'ab\tcd'
+printf 'length: %s\n' "${#v}"
+
+# $'...' is a word like any other: it concatenates, it is not re-expanded,
+# and a dollar inside it is data.
+printf '[%s]\n' pre$'\tmid'post
+novar=set
+printf '[%s]\n' $'$novar ${novar} $(echo no) `echo no`'
+
+# It is a word, so it does not split even though it holds a space and a tab.
+set -- $'one two' $'three\tfour'
+printf 'words: %s\n' "$#"
+printf '  [%s]\n' "$@"
+
+# And it is usable where any word is: a case pattern, an array element, the
+# right of an assignment, and an operand of [[ ]].
+case $'a\tb' in
+  $'a\tb') printf 'case matched the escaped word\n' ;;
+  *) printf 'case did not match\n' ;;
+esac
+arr=($'x\ty' plain)
+printf 'array element length: %s\n' "${#arr[@]}"
+[[ $'a\nb' == $'a\nb' ]] && printf 'compared equal inside [[ ]]\n'

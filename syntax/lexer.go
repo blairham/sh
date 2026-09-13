@@ -85,6 +85,20 @@ type Lexer struct {
 	// Exactly the shape inPattern has, for exactly the same reason.
 	inArgument bool
 
+	// inArrayLiteral is set while the token being read stands where an
+	// *element* of a compound array literal does — between the parentheses
+	// of `a=( … )` — and it exists for one question: an element that opens
+	// with `[` carries its subscript through the blanks inside it, so
+	// `a=( [two words]=2 )` is one element keyed `two words` rather than the
+	// two fields a blank would otherwise make of it.
+	//
+	// The parser sets it for the same reason it sets inArgument beside it:
+	// the position is the parser's to know and the word boundary is the
+	// lexer's, and the two meet nowhere else. See
+	// [Dialect.SubscriptSpansSeparators], where the measurement is, and
+	// opensArrayElementSubscript for what the flag decides.
+	inArrayLiteral bool
+
 	// noAssignment is set while the token being read stands where no
 	// *assignment* may be written, in the two positions the flags above do
 	// not already cover: a `case` subject and a redirection's target. Both
@@ -1233,6 +1247,12 @@ func (l *Lexer) subscriptHasMatchingClose() bool {
 	}
 	probe := NewLexer(l.src[l.wordStart.Offset:], l.dialect)
 	probe.assumeSubscriptCloses = true
+	// The probe is the same scanner over the same bytes, so it has to stand
+	// where this one stands: an element's bracket opens a subscript only
+	// between an array literal's parentheses, and a probe that did not know
+	// that would count no brackets, end at depth zero and answer "closes"
+	// for a bracket that never does.
+	probe.inArgument, probe.inArrayLiteral = l.inArgument, l.inArrayLiteral
 	closes := probe.Next().Kind == TokWord && probe.err == nil &&
 		probe.subscriptDepth == 0
 	if closes {
@@ -1255,6 +1275,33 @@ func (l *Lexer) subscriptHasMatchingClose() bool {
 func (l *Lexer) opensCommandWordSubscript(name string, started bool) bool {
 	return l.dialect.SubscriptSpansSeparators && !started && isName(name) &&
 		l.atCommandWord()
+}
+
+// opensArrayElementSubscript reports whether the `[` at the cursor opens the
+// subscript of a compound array literal's element, so that the blanks inside
+// it are characters rather than the end of the element.
+//
+// The *front of the element* and nothing else, which is where it parts from
+// opensCommandWordSubscript: that one wants a name in front of the bracket
+// and this one wants nothing in front of it at all. Measured 2026-09-13 on
+// bash 5.3.15 and on that same bash called `sh`, with an associative array so
+// the key is visible rather than evaluated:
+//
+//	m=( [two words]=2 )     one element, keyed `two words`
+//	a=( pre[1 2]=x )        two fields — a name in front does not span
+//	a=( "[1 2]"=x )         one field, and no subscript: the quote is text
+//	a=( x[1 2] )            two fields — a value is not a subscript
+//
+// ksh93 spans in this position too and reaches further than bash does, taking
+// `pre[1 2]=x` as a subscripted element where bash makes two fields of it;
+// that extra reach is recorded and not implemented, because the flag says
+// where a subscript *may* stand and this is the shape all of the panel that
+// spans here agrees on. bash 3.2.57 spans at command position and not here,
+// and zsh globs the bracket instead — so the flag stays off for zsh, which is
+// where it already was.
+func (l *Lexer) opensArrayElementSubscript(name string, started bool) bool {
+	return l.dialect.SubscriptSpansSeparators && l.inArrayLiteral &&
+		!started && name == ""
 }
 
 // newlineIsText reports whether a newline here is an ordinary character of
@@ -2073,7 +2120,8 @@ func (l *Lexer) scanWord(start Pos) Token {
 				// protects is a character, and one an expansion produces was
 				// never written at all.
 				if l.subscriptDepth > 0 ||
-					l.opensCommandWordSubscript(lit.String(), len(spans) > 0) {
+					l.opensCommandWordSubscript(lit.String(), len(spans) > 0) ||
+					l.opensArrayElementSubscript(lit.String(), len(spans) > 0) {
 					l.subscriptDepth++
 				}
 			case ']':

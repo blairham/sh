@@ -228,6 +228,65 @@ func TestARefusedReturnOperandEndsTheScriptOnlyWhereAFailedSpecialBuiltinDoes(t 
 	}
 }
 
+// A refused `exit` operand is not a reason to leave, and whether the shell
+// goes is the same axis `return`'s refusal asks (#2299).
+//
+// This is the half that was missing. `exit` ended the script whatever the
+// dialect said, on the reading that ending the script is what `exit` is for —
+// and that is wrong for the two shells that refuse an operand *and* carry on:
+// measured 2026-09-13, `exit status` at the top of a script leaves 2 in `$?`
+// and runs the next command under bash 5.3.15, while dash and that same bash
+// called `sh` end the script there. Three of the four callers of this axis
+// had it already; `exit` was the fourth.
+func TestARefusedExitOperandEndsTheScriptOnlyWhereAFailedSpecialBuiltinDoes(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		fatal Answer
+		alive bool
+		want  int
+	}{
+		{"fatal, and the script ends there", Yes, false, 2},
+		{"reported, and the script carries on", No, true, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := permissive()
+			s.StatusArgument = StatusArgStrict
+			s.BadOptionToSpecialBuiltinFatal = tc.fatal
+			out, st := run(t, "exit abc\necho \"st=$?\"\necho alive\n", withSem(s))
+			if got := strings.Contains(out, "alive"); got != tc.alive {
+				t.Errorf("said %q, want alive=%v", out, tc.alive)
+			}
+			if tc.alive && !strings.Contains(out, "st=2") {
+				t.Errorf("said %q, want st=2 left behind by the refusal", out)
+			}
+			if !strings.Contains(out, "invalid number") &&
+				!strings.Contains(out, "exit") {
+				t.Errorf("said %q, want the refusal reported", out)
+			}
+			if st != tc.want {
+				t.Errorf("status = %d, want %d", st, tc.want)
+			}
+		})
+	}
+}
+
+// A good operand still leaves, whatever the axis says — the control that
+// keeps the row above from reading as "`exit` no longer exits".
+func TestAGoodExitOperandStillEndsTheScript(t *testing.T) {
+	for _, fatal := range []Answer{Yes, No} {
+		s := permissive()
+		s.StatusArgument = StatusArgStrict
+		s.BadOptionToSpecialBuiltinFatal = fatal
+		out, st := run(t, "exit 3\necho alive\n", withSem(s))
+		if strings.Contains(out, "alive") {
+			t.Errorf("fatal=%v: said %q, want the script to have ended", fatal, out)
+		}
+		if st != 3 {
+			t.Errorf("fatal=%v: status = %d, want 3", fatal, st)
+		}
+	}
+}
+
 // With no answer recorded the operand is refused rather than guessed, and the
 // complaint names `return` — not `exit`, which shares the axis and would send
 // a reader to the wrong line.

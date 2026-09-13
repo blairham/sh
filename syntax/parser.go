@@ -2540,6 +2540,13 @@ func (p *Parser) parseAssign(h assignHead) *Assign {
 		// is what ends argument position for the command.
 		saved := p.lex.inArgument
 		p.lex.inArgument = true
+		// And where an *element* stands, which is a second question the
+		// lexer cannot ask for itself: an element opening with `[` runs to
+		// its matching `]` through the blanks inside it, so
+		// `m=( [two words]=2 )` is one element rather than two fields. See
+		// [syntax.Dialect.SubscriptSpansSeparators].
+		savedArray := p.lex.inArrayLiteral
+		p.lex.inArrayLiteral = true
 		p.next()
 		p.skipArrayElementSeparators(false)
 		for p.tok.Kind == TokWord && p.err == nil {
@@ -2549,9 +2556,11 @@ func (p *Parser) parseAssign(h assignHead) *Assign {
 			}
 		}
 		if !p.at(TokRightParen) && p.giveUpOnTheArray(saved) {
+			p.lex.inArrayLiteral = savedArray
 			return a
 		}
 		p.lex.inArgument = saved
+		p.lex.inArrayLiteral = savedArray
 		if !p.at(TokRightParen) {
 			// Named rather than described: bash answers
 			// `syntax error near unexpected token `;'` and the `)` this used

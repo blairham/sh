@@ -4529,14 +4529,31 @@ func sortedKeys(m map[string]string) []string {
 // status: bash exits 1 for a fatal error and 2 for this. A usage error is its
 // own thing, which is why it is written here rather than routed through fatal.
 //
+// **A refused operand is not a reason to leave.** `exit` is the one builtin
+// whose whole job is to end the script, which is why this door used to end it
+// unconditionally — and that is the wrong reading, measured 2026-09-13 with
+// `exit status; echo "after=$?"` at the top of a script. bash 5.3.15 reports
+// the complaint, leaves 2 behind and runs the next command; so do ksh93 and
+// zsh, which never refuse a word at all. dash ends the script at 2, and so
+// does that same bash called as `sh`, which is its posix mode reaching the
+// POSIX rule that a special builtin's usage error is fatal. Whether the shell
+// goes is therefore BadOptionToSpecialBuiltinFatal and not this builtin's
+// name — the same door `return`, `shift` and `unalias` already came through,
+// and `exit` was the one caller of the four that never asked.
+//
 // `return` refuses the same words in the same shells and words the complaint
-// from the same template, but what the refusal costs is different enough to
-// be its own door — the shell is not leaving, so see refusedReturnOperand.
+// from the same template; what differs is only what it sets on the way out,
+// so see refusedReturnOperand rather than folding the two.
 func (r *Runner) badStatusArg(builtin, arg string) int {
 	r.diagf("%s\n", Wording(r.diag().NumericArgument, "%[1]s: invalid number: %[2]s", builtin, arg))
-	r.status = 2
-	r.stopTheShell()
-	return r.status
+	if r.ask(r.sem().BadOptionToSpecialBuiltinFatal, "a special builtin's bad operand ending the script") {
+		r.status = 2
+		r.fatalQuiet()
+		return r.status
+	}
+	// Reported and not obeyed: no control flow is set, so the next statement
+	// runs and the 2 below is what it finds in `$?`.
+	return 2
 }
 
 // nameIsSet reports whether the shell has heard of a parameter at all, which

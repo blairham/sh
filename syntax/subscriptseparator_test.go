@@ -295,3 +295,193 @@ func TestTheRestOfTheLineGetsItsSeparatorsBack(t *testing.T) {
 			len(cmd.Assigns), len(cmd.Args))
 	}
 }
+
+// The same flag, the other position: an element of a compound array literal
+// that *opens* with `[` carries its subscript through the blanks inside it
+// (#2299).
+//
+// `m=( [two words]=2 )` stored the key `[two` with the value `words]=2`,
+// which is two fields joined back into one element rather than a refusal —
+// so nothing failed and the array simply held something nobody wrote. It is
+// the sibling of the command-position bug above and not a second one: the
+// depth counter, the fallback and the probe are all the same, and only the
+// question "may a bracket open a subscript here" is new.
+//
+// Measured 2026-09-13 on bash 5.3.15, that build invoked as `sh`, and
+// ksh93u+, each read back through the keys: the element runs to the matching
+// `]`. bash 3.2.57 does *not* span in this position although it spans at
+// command position, and zsh 5.9.2 globs the bracket instead — which is why
+// the rows below name the flag and the dialect packages carry the binaries.
+
+// arrayLiteralElems parses one compound assignment and hands back its
+// elements, printed. Written once because every row below wants the same
+// three sentences of unwrapping.
+func arrayLiteralElems(t *testing.T, src string, d syntax.Dialect) []string {
+	t.Helper()
+	f, err := syntax.Parse(src, d)
+	if err != nil {
+		t.Fatalf("parse %q: %v", src, err)
+	}
+	cmd := onlySimple(t, f)
+	if len(cmd.Assigns) != 1 {
+		t.Fatalf("%q: %d assignments, want 1", src, len(cmd.Assigns))
+	}
+	a := cmd.Assigns[0]
+	if !a.IsArray {
+		t.Fatalf("%q: not read as an array literal", src)
+	}
+	out := make([]string, 0, len(a.Elems))
+	for _, e := range a.Elems {
+		out = append(out, syntax.PrintWord(e))
+	}
+	return out
+}
+
+func TestAnArrayLiteralElementHoldsItsSubscriptsSeparators(t *testing.T) {
+	d := subscriptSeparatorGrammar()
+	d.ArrayLiteral = true
+	for _, c := range []struct {
+		name, src string
+		want      []string
+	}{
+		{
+			// The issue's own shape.
+			name: "a blank", src: "m=( [two words]=2 )",
+			want: []string{`[two\ words]=2`},
+		},
+		{
+			// A run is not collapsed, the same way it is not at command
+			// position: the subscript is the text between the brackets.
+			name: "a run of blanks", src: "m=( [two  words]=2 )",
+			want: []string{`[two\ \ words]=2`},
+		},
+		{
+			name: "a tab", src: "m=( [two\twords]=2 )",
+			want: []string{"[two\\\twords]=2"},
+		},
+		{
+			// Beside an ordinary element, so the span ends where the
+			// bracket does rather than eating the rest of the literal.
+			name: "beside a plain element", src: "m=( [one]=1 [two words]=2 )",
+			want: []string{"[one]=1", `[two\ words]=2`},
+		},
+		{
+			// The value after the subscript is still cut at the blank —
+			// only the bracketed text spans.
+			name: "the value is not spanned", src: "m=( [two words]=a b )",
+			want: []string{`[two\ words]=a`, "b"},
+		},
+		{
+			name: "the append spelling", src: `m=( [two words]+=2 )`,
+			want: []string{`[two\ words]+=2`},
+		},
+		{
+			name: "a nested bracket", src: "m=( [a [b] c]=v )",
+			want: []string{`[a\ [b]\ c]=v`},
+		},
+		{
+			// A newline between the brackets is a character of the key, and
+			// the element spans the line.
+			name: "a newline", src: "m=( [a\nb]=v )",
+			want: []string{"[a'\n'b]=v"},
+		},
+		{
+			// A `]` a quote or a backslash protects closes nothing, which is
+			// what says the depth is counted over unquoted literal text.
+			name: "a quoted close bracket", src: `m=( ['a]b' c]=v )`,
+			want: []string{`['a]b'\ c]=v`},
+		},
+		{
+			name: "an escaped close bracket", src: `m=( [a\] b]=v )`,
+			want: []string{`[a\]\ b]=v`},
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			got := arrayLiteralElems(t, c.src, d)
+			if len(got) != len(c.want) {
+				t.Fatalf("%d elements %q, want %d %q",
+					len(got), got, len(c.want), c.want)
+			}
+			for i := range got {
+				if got[i] != c.want[i] {
+					t.Errorf("element %d = %q, want %q", i, got[i], c.want[i])
+				}
+			}
+		})
+	}
+}
+
+// The bracket has to be the *front* of the element, and that is measured
+// rather than assumed: bash 5.3.15 makes two fields of `a=( pre[1 2]=x )`
+// and of `a=( x[1 2] )`, and one field with no subscript at all of
+// `a=( "[1 2]"=x )`. Without these rows the flag would read as "a bracket
+// inside a literal spans", which is a larger claim than the shell makes.
+func TestOnlyAnElementsOwnFrontOpensASpanningSubscript(t *testing.T) {
+	d := subscriptSeparatorGrammar()
+	d.ArrayLiteral = true
+	for _, c := range []struct {
+		src  string
+		want []string
+	}{
+		{"a=( pre[1 2]=x )", []string{"pre[1", "2]=x"}},
+		{"a=( x[1 2] )", []string{"x[1", "2]"}},
+		{`a=( "[1 2]"=x )`, []string{`"[1 2]"=x`}},
+		{`a=( \[1 2]=x )`, []string{`\[1`, "2]=x"}},
+	} {
+		got := arrayLiteralElems(t, c.src, d)
+		if len(got) != len(c.want) {
+			t.Errorf("%q: %d elements %q, want %d %q",
+				c.src, len(got), got, len(c.want), c.want)
+			continue
+		}
+		for i := range got {
+			if got[i] != c.want[i] {
+				t.Errorf("%q: element %d = %q, want %q", c.src, i, got[i], c.want[i])
+			}
+		}
+	}
+}
+
+// Without the flag the blank still ends the element, which is what zsh makes
+// of the same text and what this grammar answers by default. The row is here
+// so the flag cannot be deleted and leave the tests green.
+func TestWithoutTheFlagAnElementEndsAtTheBlank(t *testing.T) {
+	d := syntax.Core()
+	d.ArrayLiteral = true
+	got := arrayLiteralElems(t, "m=( [two words]=2 )", d)
+	want := []string{"[two", "words]=2"}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Errorf("elements = %q, want %q", got, want)
+	}
+}
+
+// A bracket with no matching `]` falls back to the ordinary reading here too,
+// for the reason the command-position row gives: bash refuses the text and
+// ksh93 does something else again, so there is nothing common to implement
+// and falling back keeps the flag additive.
+func TestAnUnmatchedBracketInALiteralFallsBackToo(t *testing.T) {
+	d := subscriptSeparatorGrammar()
+	d.ArrayLiteral = true
+	got := arrayLiteralElems(t, "a=( [1 2 )", d)
+	want := []string{"[1", "2"}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Errorf("elements = %q, want %q", got, want)
+	}
+}
+
+// The words after the literal get their separators back: the counter is
+// cleared at the start of every word, so a subscript in an element cannot
+// reach the command that follows.
+func TestTheLineAfterTheLiteralGetsItsSeparatorsBack(t *testing.T) {
+	d := subscriptSeparatorGrammar()
+	d.ArrayLiteral = true
+	f, err := syntax.Parse("m=( [two words]=2 ) printf one two", d)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	cmd := onlySimple(t, f)
+	if len(cmd.Assigns) != 1 || len(cmd.Args) != 3 {
+		t.Fatalf("%d assignments and %d words, want 1 and 3",
+			len(cmd.Assigns), len(cmd.Args))
+	}
+}

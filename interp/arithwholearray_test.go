@@ -21,6 +21,12 @@ func arithSlice(a Answer) func(*Runner) {
 			s = *r.Semantics
 		}
 		s.ArithWholeArraySubscriptIsTheSlice = a
+		// The *left* of an assignment is a different question with its own
+		// pair of fields, and one setup line here writes `m[*]=4` to make a
+		// key for the expression to read. Answered the way the column that
+		// stores a key does, so this suite is about the expression and not
+		// about the store — see Semantics.WholeArraySubscriptAssigningATable.
+		s.WholeArraySubscriptAssigningATable = WholeArraySubscriptIsAnOrdinaryKey
 		r.Semantics = &s
 	}
 }

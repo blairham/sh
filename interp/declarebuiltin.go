@@ -1124,14 +1124,23 @@ func (r *Runner) markDeclaredCompound(name string, fresh bool, f declareFlags, h
 // go on — see Semantics.TableUnderAnArrayDeclaration and
 // ArrayUnderATableDeclaration, where the four answers and the panel are.
 //
-// **Only a declaration carrying no value of its own.** That is the shape the
-// three columns disagree about, and a declaration with a value is a second
-// question the panel splits differently again: measured 2026-09-12 with a
-// declared table holding `k`, `typeset -a h=(x)` ends the script in bash —
-// from the *assignment*, which is why the sentence has no builtin in front of
-// it — where ksh93 converts and zsh converts, both leaving the one element.
-// So the value form is left exactly as it was rather than given this axis's
-// answer, and it is recorded rather than guessed at.
+// **Three shapes and two of them are asked here.** A declaration carrying no
+// value of its own is what TableUnderAnArrayDeclaration and
+// ArrayUnderATableDeclaration answer; a declaration carrying an **array
+// literal** is a second question the panel splits differently, and it is
+// TableUnderAnArrayLiteralDeclaration and ArrayUnderATableLiteralDeclaration's
+// — ksh93 ends the script over the valueless array letter and converts the
+// literal without a word, so no one field could hold both of its answers.
+// bash's sentence for the literal form names no builtin, which is the tell
+// that the complaint comes from the assignment rather than from the utility,
+// and its refusal gives up the rest of the command list where the valueless
+// one runs the next command on it (#2287).
+//
+// The third shape is a declaration carrying a **scalar** value — `typeset -a
+// h=x` over a table — and it is deliberately left where it was: the columns
+// move again under it (zsh calls it an inconsistent type, ksh93 ends the
+// script, bash refuses under the builtin's name), so it is a third field's
+// question and not this one's.
 //
 // A name that is neither compound, or is already the kind being declared,
 // asks nothing: `typeset -A m; typeset -A m` is a redeclaration in every
@@ -1141,7 +1150,10 @@ func (r *Runner) compoundKindChanged(name string, f declareFlags, hasValue bool)
 	// not a `name=value` word: `typeset -a h=(x)` reaches the loop as the
 	// bare name with the parentheses held aside, so the string would say the
 	// operand carried nothing.
-	if hasValue || r.literalOperands[name] {
+	if r.literalOperands[name] {
+		return r.compoundKindChangedByALiteral(name, f)
+	}
+	if hasValue {
 		return true
 	}
 	switch {
@@ -1161,6 +1173,55 @@ func (r *Runner) compoundKindChanged(name string, f declareFlags, hasValue bool)
 	return true
 }
 
+// compoundKindChangedByALiteral is compoundKindChanged for the shape whose
+// value is a declaration's own array literal, which the panel answers
+// differently — see TableUnderAnArrayLiteralDeclaration for the rows.
+//
+// The converting answer **empties** the name in both directions and does not
+// carry the old elements across the way the valueless table letter does in one
+// column: the literal is an assignment and it replaces what it lands on.
+// Measured 2026-09-12, `typeset -a a=(x y); typeset -A a=([k]=v)` lists
+// `typeset -A a=([k]=v)` in ksh93 and zsh alike, where the valueless `typeset
+// -A a` lists `typeset -A a=([0]=x [1]=y)` in ksh93.
+//
+// The conversion happens here and the literal is stored by the branch below,
+// so this only has to take the old kind away: leaving the table standing is
+// what made `typeset -A h; typeset -a h=(x)` store the literal's *word* as a
+// key and report success, which is nobody's answer.
+func (r *Runner) compoundKindChangedByALiteral(name string, f declareFlags) bool {
+	switch {
+	case f.array && r.assocDeclared(name):
+		return r.changeCompoundKind(name, r.sem().TableUnderAnArrayLiteralDeclaration,
+			"an array literal declaration over a name already declared a table",
+			r.diag().CannotConvertTableToArrayAtTheAssignment,
+			"%[1]s: cannot convert associative to indexed array",
+			func() { r.compoundKindEmptied(name, false) })
+	case f.assoc && r.arrayDeclared(name):
+		return r.changeCompoundKind(name, r.sem().ArrayUnderATableLiteralDeclaration,
+			"a table literal declaration over a name already holding an array",
+			r.diag().CannotConvertArrayToTableAtTheAssignment,
+			"%[1]s: cannot convert indexed to associative array",
+			func() { r.compoundKindEmptied(name, true) })
+	}
+	return true
+}
+
+// compoundKindEmptied takes the compound a name is holding away and marks it
+// the other kind, with nothing under it for the literal to land beside.
+//
+// One function for both directions, unlike tableBecomesAnArray and
+// arrayBecomesATable, because the literal form has no elements question to
+// part them: neither converting column keeps anything.
+func (r *Runner) compoundKindEmptied(name string, toTable bool) {
+	delete(r.Arrays, name)
+	delete(r.AssocArrays, name)
+	if toTable {
+		r.markAssoc(name)
+		return
+	}
+	r.markIndexed(name)
+}
+
 // changeCompoundKind resolves one of the two axes and does what it says,
 // reporting whether the declaration survives it.
 func (r *Runner) changeCompoundKind(name string, p CompoundKindChangePolicy,
@@ -1176,6 +1237,17 @@ func (r *Runner) changeCompoundKind(name string, p CompoundKindChangePolicy,
 		return false
 	case CompoundKindChangeEndsTheScript:
 		r.fatal("%s\n", Wording(wording, fallback, name, r.inBuiltin))
+		return false
+	case CompoundKindChangeAbandonsTheLine:
+		// The refusal costs the operand, the status and the rest of the
+		// command list — and not the input. Measured 2026-09-12, the same
+		// four commands after this one print nothing when they are separated
+		// by `;` and all of it when they are separated by newlines, by both
+		// invocation routes; see CompoundKindChangeAbandonsTheLine, and
+		// refuseReadonly, which reaches controlAbandon for the same reading.
+		r.diagf("%s\n", Wording(wording, fallback, name, r.inBuiltin))
+		r.status, r.assignFailed = 1, true
+		r.ctl, r.abandonLine = controlAbandon, r.line
 		return false
 	case CompoundKindChangeKeepsTheElements, CompoundKindChangeEmptiesTheName:
 		convert()

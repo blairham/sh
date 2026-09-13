@@ -268,6 +268,18 @@ func Semantics() interp.Semantics {
 	// Measured 2026-09-12, `typeset -lu z=Ab` is `typeset: not found` and
 	// leaves `z` unset — the same wall the other declaration axes meet, and
 	// there is no second word here that reads a case letter (#2541).
+	// unanswered TableUnderAnArrayLiteralDeclaration and
+	// unanswered ArrayUnderATableLiteralDeclaration: there is neither kind of
+	// array to convert between nor a literal to carry a value in. Measured
+	// 2026-09-12, `typeset -A h` is `typeset: not found` and `h=(x)` is
+	// `Syntax error: "(" unexpected`, so the question is refused twice over
+	// before there is a compound to change the kind of (#2287).
+	// unanswered WholeArraySubscriptAssigningAnArray and
+	// unanswered WholeArraySubscriptAssigningATable: there are no arrays, so
+	// a subscript on the left of an assignment is not a subscript. Measured
+	// 2026-09-12, `x=(p q)` is `Syntax error: "(" unexpected` and `x[@]=Z`
+	// on its own is `x[@]=Z: not found` — the word is a command name here,
+	// which is a third thing again and not an answer to either field (#2285).
 	// unanswered EarlierDeclarationLetterBlocksALaterPlus: there is no
 	// declaration command to write the letter on. `typeset` is not a
 	// builtin here and `integer` is not a word, so neither sign of `-i`

@@ -1034,6 +1034,9 @@ func Semantics() interp.Semantics {
 	s.ReadNoFieldsIsOneEmptyElement = interp.No
 	s.BadNameDeclaresTheOperandsAfterIt = interp.No
 	s.SubscriptedOperandTakesTheIntegerAttribute = interp.Yes
+	// And the container letter, which this shell takes: `typeset -A m[k]=v`
+	// puts `v` under the key `k` and `typeset -a n[2]=v` puts it at index 2.
+	s.SubscriptedOperandTakesTheContainerAttribute = interp.Yes
 	s.SubscriptedOperandTakesALocalDeclaration = interp.Yes
 	// A single subscript on a name that is no array is refused rather than
 	// ignored: `a=v; unset "a[1]"` says `a: not an array variable` and fails,

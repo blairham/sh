@@ -18,6 +18,7 @@ func declareElementSemantics() Semantics {
 	s.TypesetTakesASubscript = Yes
 	s.DeclarationTakesASubscript = Yes
 	s.SubscriptedOperandTakesTheIntegerAttribute = Yes
+	s.SubscriptedOperandTakesTheContainerAttribute = Yes
 	s.SubscriptedOperandTakesALocalDeclaration = Yes
 	s.ReadonlyElement = ReadonlyElementWritten
 	// Not what these tests are about: a declaration with no value, and which
@@ -197,6 +198,99 @@ func TestARefusedReadonlyElementIsRefusedWithoutAValueToo(t *testing.T) {
 		if want := "sh: a[1]: cannot declare an array element\n"; out != want || status == 0 {
 			t.Errorf("%s = %q (status %d), want %q and a failure", src, out, status, want)
 		}
+	}
+}
+
+// A container letter beside a subscripted operand is a question of its own,
+// and one column refuses it — in the same words a whole-name kind change
+// gets, and whatever the letter would actually change.
+func TestAContainerLetterOnASubscriptedOperandCanBeRefused(t *testing.T) {
+	for _, src := range []string{
+		`typeset -A m[k]=v; echo after`,
+		`typeset -a n[2]=v; echo after`,
+		// Over a name already a table of the very kind the letter names, so
+		// nothing about the name changes: the refusal is about the letter
+		// standing beside a subscript and not about a conversion.
+		`typeset -A o; typeset -A o[k]=v; echo after`,
+	} {
+		out, status := runDeclareElement(t, src, func(s *Semantics) {
+			s.SubscriptedOperandTakesTheContainerAttribute = No
+		})
+		if status == 0 || !strings.Contains(out, "cannot declare an array element") {
+			t.Errorf("%s = %q (status %d), want the operand refused", src, out, status)
+		}
+	}
+}
+
+// And it is refused *ahead* of the readonly one, which is measured rather
+// than arbitrary — but only while the container letter survives the numeric
+// one. Where a numeric letter absorbs it there is no container left to
+// refuse and the integer refusal is what speaks, which is what keeps the
+// three from ordering into a cycle.
+func TestTheContainerRefusalStandsInFrontOfTheReadonlyOne(t *testing.T) {
+	// Three wordings that differ, because the default is one sentence for
+	// all three refusals and could not say which of them spoke.
+	d := Diagnostics{
+		ContainerElementRefusal: "%[1]s[%[2]s]: CONTAINER",
+		IntegerElementRefusal:   "%[1]s[%[2]s]: INTEGER",
+		ReadonlyElementRefusal:  "%[1]s[%[2]s]: READONLY",
+	}
+	for _, tc := range []struct{ src, want string }{
+		{`typeset -rA m[k]=v`, "sh: m[k]: CONTAINER\n"},
+		{`typeset -iA m[k]=v`, "sh: m[k]: INTEGER\n"},
+		// The control that says readonly is not simply last: with no
+		// container letter in the word it beats the integer one.
+		{`typeset -ri m[1]=v`, "sh: m[1]: READONLY\n"},
+	} {
+		out, _ := run(t, tc.src, func(r *Runner) {
+			s := declareElementSemantics()
+			s.SubscriptedOperandTakesTheContainerAttribute = No
+			s.SubscriptedOperandTakesTheIntegerAttribute = No
+			s.ReadonlyElement = ReadonlyElementRefused
+			s.NumericAttributeReplacesTheArrayAttribute = Yes
+			r.Semantics, r.Diagnostics = &s, &d
+		})
+		if out != tc.want {
+			t.Errorf("%s = %q, want %q", tc.src, out, tc.want)
+		}
+	}
+}
+
+// An operand ending in `]` is not thereby a subscripted one: the brackets
+// have to balance, and the first `[` has to close at the end of the word.
+//
+// Measured 2026-09-12, the three shells that reach the question all call it a
+// bad name — `not a valid identifier` in bash 5.3, `invalid variable name` in
+// ksh93u+, `not an identifier` in zsh 5.9.2. Taking the text between the
+// first `[` and the last `]` as the subscript placed a key literally spelled
+// `a]b` instead, at status 0 and in every dialect: a script reading
+// `${m[a]}` back found nothing (#1380).
+func TestADeclarationOperandsSubscriptHasToCloseAtTheEnd(t *testing.T) {
+	for _, tc := range []struct{ src, name string }{
+		{`typeset -A m; typeset "m[a]b]"=v; echo "[${m[a]}]"`, "m[a]b]"},
+		{`typeset -A m; typeset "m[x[y]"=v; echo "[${m[x]}]"`, "m[x[y]"},
+		{`typeset a[1][2]=v; echo "[${a[1]}]"`, "a[1][2]"},
+	} {
+		out, status := runDeclareElement(t, tc.src, nil)
+		want := "sh: typeset: `" + tc.name + "': not a valid identifier\n"
+		if out != want || status == 0 {
+			t.Errorf("%s = %q (status %d), want %q and a failure", tc.src, out, status, want)
+		}
+	}
+}
+
+// And the brackets are *counted*, which is what tells a second subscript from
+// a subscript that legally reads another element: `a[b[0]]` and `a[1][2]`
+// both hold a `[` inside and both end in `]`, so neither a search for the
+// last `]` nor one for a second `[` can separate them.
+//
+// Measured, `b=(3 4); typeset "a[b[0]]"=v` writes element 3 in bash 5.3 and
+// ksh93u+ alike.
+func TestASubscriptMayHoldABracketOfItsOwn(t *testing.T) {
+	out, status := runDeclareElement(t,
+		`b=(3 4); typeset "a[b[0]]"=v; echo "[${a[3]}]"`, nil)
+	if want := "[v]\n"; out != want || status != 0 {
+		t.Errorf(`typeset "a[b[0]]"=v = %q (status %d), want %q at 0`, out, status, want)
 	}
 }
 

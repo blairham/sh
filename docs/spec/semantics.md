@@ -13314,6 +13314,33 @@ Asked only where there is a scope to take, so a declaration at the top
 level never reaches it. Folding the two fields into one would have given
 zsh's refusal to whichever of the two the other shell was measured for.
 
+**`SubscriptedOperandTakesTheContainerAttribute`** — bash yes · dash absent · ksh93 yes · zsh no
+
+Whether `-a` or `-A` may stand beside a subscripted operand —
+`typeset -A m[k]=v`. bash and ksh93 take it; zsh refuses the operand and
+ends the script, `m[k]: inconsistent type for assignment`, and refuses
+`-a` in the same words.
+
+The refusal is about the **letter beside a subscript** rather than about
+any kind change it would cause: `typeset -A o; typeset -A o[k]=v` is
+refused too, over a name that is already a table of the very kind the
+letter names, so nothing about the name would change.
+
+Asked only while the container letter is still in effect once
+`NumericAttributeReplacesTheArrayAttribute` has had its say, and the
+narrowing is measured rather than tidy. Without it the four element
+refusals order into a cycle: readonly beats integer (`typeset -ri a[1]=v`
+is `can't create readonly array elements`), the integer one appears to
+beat the container (`typeset -iA m[k]=v` is `inconsistent array element or
+slice assignment`), and the container beats readonly (`typeset -rA m[k]=v`
+is `inconsistent type for assignment`). The middle cell is not an ordering
+at all: `-i` absorbs the `-A` in that shell — `typeset -iA m` really does
+list back as `typeset -i m=0` — so there is no container letter left to
+refuse. `-l` and `-u`, which absorb nothing, leave the container refusal
+standing.
+
+Pinned by `declare/a-container-letter-a-subscripted-operand-may-refuse`.
+
 **`TableLetterReachesItsOwnOperandsSubscript`** — bash yes · dash absent · ksh93 no · zsh refuses the shape
 
 Reads a subscripted operand's subscript as a **key** when the table

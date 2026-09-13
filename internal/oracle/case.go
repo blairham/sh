@@ -12523,6 +12523,18 @@ printf 'TWO=still-running\n'`,
 		Why:     "the control for the row above, and what keeps it an axis about the *letter* rather than about tables: a table declared on an earlier command takes the key in bash and ksh93 alike, so the two readings part only over the letter written beside the operand it would decide",
 	},
 	{
+		ID: "declare/a-container-letter-a-subscripted-operand-may-refuse", Category: "declarations",
+		Snippet: "typeset -A o; typeset -A o[k]=v; echo \"st=$? [${o[k]}]\"\n" +
+			"typeset -a n[2]=v; echo \"st=$? [${n[2]}]\"",
+		Why: "the fourth of the questions a declaration of one element runs into, beside the readonly, integer and local ones — and the row is built so the shape that says what the refusal is *about* comes first, because the shell that refuses stops there. The name is already a table of the very kind `-A` names, so nothing about it would change; zsh refuses anyway, `o[k]: inconsistent type for assignment`, which puts the refusal on the letter standing beside a subscript rather than on any conversion. bash and ksh93 take both lines. The second is the array letter getting the same answer in the one shell that reaches it, and the control that this is not about tables",
+	},
+	{
+		ID: "declare/a-declaration-operands-subscript-has-to-close-at-the-end", Category: "declarations",
+		Snippet: "typeset -A m; typeset 'm[a]b]'=v; echo \"st=$?\"; typeset -p m 2>&1\n" +
+			"typeset -A n; typeset 'n[x[y]'=v; echo \"st=$?\"; typeset -p n 2>&1",
+		Why: "an operand that ends in `]` is not thereby a subscripted one, and the three shells that reach the question agree it is a bad *name*: `not a valid identifier` in bash 5.3, `invalid variable name` in ksh93 and `not an identifier` in zsh, each naming the operand as written and leaving the table empty. Taking the text between the first `[` and the last `]` as the subscript instead placed a key literally spelled `a]b`, at status 0 and in every dialect, which is the quiet kind of wrong — a script reading `${m[a]}` back finds nothing there. The second line is the other way the brackets fail to close and needs the same answer for a different reason: counting them is what tells `n[x[y]` from a subscript that legally reads another element. Quoted so the shell that would glob an unquoted bracket answers the name question rather than the pathname one (#1380)",
+	},
+	{
 		ID: "declare/an-exported-subscripted-operand", Category: "declarations",
 		Snippet: `export a[1]=v; echo "st=$? [${a[1]}]"`,
 		Why:     "the export attribute is the one of the four that no shell refuses on an element: ksh93 and zsh both write it and report success, and bash and dash refuse the operand as a bad name long before. It is the control for the three rows above — without it, `typeset -x` and `export` would look like they were refused for the same reason the others are",

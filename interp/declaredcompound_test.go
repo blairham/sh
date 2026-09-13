@@ -38,6 +38,7 @@ func withArrayLetters(empty Answer) func(*Semantics) {
 		s.TypesetLocalNeedsKeywordFunction = No
 		s.TypesetTakesASubscript = Yes
 		s.DeclarationTakesASubscript = Yes
+		s.SubscriptedOperandTakesTheContainerAttribute = Yes
 		s.SubscriptedOperandTakesALocalDeclaration = Yes
 		s.ArraysAreSparse = No
 		s.DeclarePrintReportsAMissingName = Yes

@@ -25,24 +25,34 @@ func typedAtWith(t *testing.T, cols int, prompt, keys string) string {
 	return out.String()
 }
 
-// A line wider than the terminal occupies more than one screen row, and the
-// redraw has to come back up to the prompt before it can draw over what is
-// there.
+// A line wider than the terminal occupies more than one screen row, and a
+// redraw has to reach every row of it.
 //
 // `\r` returns to the start of the row the cursor is on, not to the start of
 // the line, and `\x1b[K` clears that row and no other. Together they were the
-// whole of the old redraw, which is right up to the moment a line wraps and
+// whole of the oldest redraw, which is right up to the moment a line wraps and
 // wrong for every keystroke after it: the earlier rows keep whatever was on
 // them.
-func TestARedrawComesBackUpToThePrompt(t *testing.T) {
+//
+// Asserted on the screen rather than on the escape sequence that gets there.
+// A redraw that writes only the difference goes back up a row when the change
+// is on the row above and does not when it is not, so looking for the move
+// itself would be looking for one of several right answers — see
+// screenmodel_test.go.
+func TestAWrappedLineIsRightOnEveryRow(t *testing.T) {
 	// Ten columns, so "$ " and eight characters fill the first row exactly
-	// and the ninth is on the second.
-	out := typedAt(t, 10, "123456789\r")
-	if !strings.Contains(out, "\x1b[1A") {
-		t.Errorf("no move back up to the prompt row in %q", out)
+	// and the ninth is on the second. The insertion is at the *start*, which
+	// shifts every character on both rows.
+	s := drawnScreen(t, 10, "$ ", []edit{
+		{"123456789", 9},
+		{"123456789", 0},
+		{"x123456789", 1},
+	})
+	if got, want := s.text(), "$ x1234567\n89"; got != want {
+		t.Errorf("screen is\n%q\nwant\n%q", got, want)
 	}
-	if !strings.Contains(out, "\x1b[J") {
-		t.Errorf("no erase to the end of the screen in %q", out)
+	if row, col := s.at(); row != 0 || col != 3 {
+		t.Errorf("cursor at row %d column %d, want row 0 column 3", row, col)
 	}
 }
 
@@ -78,15 +88,17 @@ func TestALineEndingAtTheEdgeIsWrapped(t *testing.T) {
 	// the one that forces the wrap. With "$ " it would be found in the prompt
 	// itself and the test would pass whether the code did this or not.
 	const prompt = "#"
-	// One column of prompt and nine characters is exactly ten columns.
-	out := typedAtWith(t, 10, prompt, "123456789\r")
-	if !strings.Contains(out, "123456789 \r") {
-		t.Errorf("want the wrap forced past the last character, got %q", out)
+	// One column of prompt and nine characters is exactly ten columns, so the
+	// cursor belongs at the start of the row below rather than on the row it
+	// filled.
+	full := drawnScreen(t, 10, prompt, []edit{{"12345678", 8}, {"123456789", 9}})
+	if row, col := full.at(); row != 1 || col != 0 {
+		t.Errorf("cursor at row %d column %d, want row 1 column 0", row, col)
 	}
-	// And a line one short of the edge does not force it.
-	short := typedAtWith(t, 10, prompt, "12345678\r")
-	if strings.Contains(short, "12345678 \r") {
-		t.Errorf("forced a wrap that was not needed: %q", short)
+	// And a line one short of the edge stays on the row.
+	short := drawnScreen(t, 10, prompt, []edit{{"1234567", 7}, {"12345678", 8}})
+	if row, col := short.at(); row != 0 || col != 9 {
+		t.Errorf("cursor at row %d column %d, want row 0 column 9", row, col)
 	}
 }
 
@@ -98,9 +110,9 @@ func TestALineEndingAtTheEdgeIsWrapped(t *testing.T) {
 // A count that left the prompt out would put the cursor on top of it, and
 // every key typed after that would insert in the wrong place.
 func TestTheCursorIsPlacedPastThePrompt(t *testing.T) {
-	out := typedAtWith(t, 20, "ab> ", "xyz\x01\r")
-	if !strings.Contains(out, "\r\x1b[4C") {
-		t.Errorf("want the cursor moved back to column 4, past the prompt, got %q", out)
+	s := drawnScreen(t, 20, "ab> ", []edit{{"xyz", 3}, {"xyz", 0}})
+	if row, col := s.at(); row != 0 || col != 4 {
+		t.Errorf("cursor at row %d column %d, want row 0 column 4, past the prompt", row, col)
 	}
 }
 

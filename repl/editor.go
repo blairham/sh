@@ -209,6 +209,11 @@ type editor struct {
 	// prompt starts in — 0 until the line is long enough to wrap.
 	width func() int
 	row   int
+
+	// drawn is what the last redraw put on the screen, and is what lets the
+	// next one write only the difference. See repaint.go — including why
+	// nothing has to remember to invalidate it.
+	drawn drawnLine
 }
 
 // readLine reads one line, drawing it as it is typed.
@@ -239,6 +244,7 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 	// The leading rows first and once — every redraw after this rewrites only
 	// the last row. See drawnPrompt.
 	e.write(prompt.lead + prompt.text)
+	e.promptDrawn(prompt)
 
 	var buf [1]byte
 	for {
@@ -652,12 +658,12 @@ func (e *editor) moveTo(pos int, prompt drawnPrompt) {
 	e.redraw(prompt)
 }
 
-// redraw puts the whole line back on the screen.
+// redraw puts the line back on the screen.
 //
-// The whole line each time rather than the difference. A shell that tracked
-// what changed would be faster and would be wrong the first time a character
-// is wider than one cell or the line wraps; and at typing speed there is
-// nothing to gain.
+// Only the part of it that changed, where the editor can account for what is
+// on the screen already — see repaint.go, which is that and the measurements
+// behind it. The whole line otherwise, which is what this always used to do
+// and is what every case below falls back to.
 func (e *editor) redraw(prompt drawnPrompt) {
 	e.pendingDraw = false
 	cols := e.cols()
@@ -682,6 +688,10 @@ func (e *editor) redraw(prompt drawnPrompt) {
 		return
 	}
 
+	if e.repaint(prompt, cols) {
+		return
+	}
+
 	// A line wider than the terminal occupies several screen rows, and the
 	// cursor is somewhere among them. `\r` returns to the start of the row it
 	// is on and not to the start of the line, so getting back to the prompt
@@ -698,7 +708,8 @@ func (e *editor) redraw(prompt drawnPrompt) {
 	// first leaves the rest of the old line below the new one.
 	b.WriteString("\x1b[J")
 	b.WriteString(prompt.text)
-	b.WriteString(e.styled())
+	styled := e.styled()
+	b.WriteString(styled)
 
 	curRow, curCol, endRow, endCol := place(prompt.cells, e.line, e.pos, cols)
 	if endCol == cols {
@@ -708,7 +719,7 @@ func (e *editor) redraw(prompt drawnPrompt) {
 		// one row out. A space makes it wrap, and the carriage return undoes
 		// the space.
 		b.WriteString(" \r")
-		endRow++
+		endRow, endCol = endRow+1, 0
 	}
 	if curCol == cols {
 		// The cursor is at the edge with more line after it, so the terminal
@@ -728,6 +739,15 @@ func (e *editor) redraw(prompt drawnPrompt) {
 	}
 	e.row = curRow
 	e.write(b.String())
+	e.drawn = drawnLine{
+		valid:  true,
+		styled: styled,
+		prompt: prompt.text,
+		cells:  prompt.cells,
+		cols:   cols,
+		row:    curRow, col: curCol,
+		endRow: endRow, endCol: endCol,
+	}
 }
 
 // cols is the terminal's width, or 0 when there is nothing to ask.
@@ -942,7 +962,17 @@ func columns(matches []string, width int) []string {
 	return out
 }
 
-func (e *editor) write(s string) { _, _ = io.WriteString(e.out, s) }
+// write puts bytes on the terminal, and is the one place that does.
+//
+// It forgets what the last redraw drew, which is what makes the incremental
+// redraw safe: a completion listing, a search line, a fresh prompt and a
+// cleared screen all move the screen out from under the line, and all of them
+// arrive here. A redraw records the screen again immediately after its own
+// call. See repaint.go.
+func (e *editor) write(s string) {
+	e.drawn.valid = false
+	_, _ = io.WriteString(e.out, s)
+}
 
 // itoa without importing strconv for one call on the keystroke path.
 func itoa(n int) string {

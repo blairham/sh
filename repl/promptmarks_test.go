@@ -124,9 +124,12 @@ func TestAColoredPromptWrapsWhereThePlainOneDoes(t *testing.T) {
 				t.Errorf("drew\n%q\nwant the plain prompt's drawing\n%q", got, plain)
 			}
 			// And the drawing is one that wrapped, or the two agreeing says
-			// nothing.
-			if !strings.Contains(plain, "\x1b[1A") {
-				t.Fatal("the line did not wrap, so this test proves nothing")
+			// nothing. Counted on the screen rather than looked for as a
+			// cursor movement: an incremental redraw moves back up a row only
+			// when the change is on the row above.
+			typing := strings.TrimSuffix(plain, "\r\n")
+			if rows := len(shownBy(cols, typing).rows); rows < 2 {
+				t.Fatalf("the line took %d row(s), so this test proves nothing", rows)
 			}
 		})
 	}

@@ -25,9 +25,11 @@ builds:
   goarch: [amd64, arm64]
   ldflags:
   - -s -w
-  # Only this binary has a `version` to stamp: it is what `-acp` reports to a
-  # client. The dialect binaries tell a client nothing, so there is nothing to
-  # write into them.
+  # Every binary has a `version` to stamp, and this comment used to say the
+  # opposite: "only this binary ... the dialect binaries tell a client nothing".
+  # That was true while `-acp` lived on cmd/sh alone. Since #2585 every shipped
+  # binary serves the protocol, so every one of them tells a client what it is,
+  # and one left unstamped would announce 0.0.0-dev out of a tagged release.
   - -X main.version={{.Version}}
 
 - id: bash
@@ -36,7 +38,9 @@ builds:
   env: [CGO_ENABLED=0]
   goos: [linux, darwin]
   goarch: [amd64, arm64]
-  ldflags: [-s -w]
+  ldflags:
+  - -s -w
+  - -X main.version={{.Version}}
 
 - id: zsh
   binary: zsh
@@ -44,7 +48,9 @@ builds:
   env: [CGO_ENABLED=0]
   goos: [linux, darwin]
   goarch: [amd64, arm64]
-  ldflags: [-s -w]
+  ldflags:
+  - -s -w
+  - -X main.version={{.Version}}
 
 - id: ksh
   binary: ksh
@@ -52,7 +58,9 @@ builds:
   env: [CGO_ENABLED=0]
   goos: [linux, darwin]
   goarch: [amd64, arm64]
-  ldflags: [-s -w]
+  ldflags:
+  - -s -w
+  - -X main.version={{.Version}}
 
 - id: dash
   binary: dash
@@ -60,7 +68,9 @@ builds:
   env: [CGO_ENABLED=0]
   goos: [linux, darwin]
   goarch: [amd64, arm64]
-  ldflags: [-s -w]
+  ldflags:
+  - -s -w
+  - -X main.version={{.Version}}
 
 - id: ash
   binary: ash
@@ -68,7 +78,9 @@ builds:
   env: [CGO_ENABLED=0]
   goos: [linux, darwin]
   goarch: [amd64, arm64]
-  ldflags: [-s -w]
+  ldflags:
+  - -s -w
+  - -X main.version={{.Version}}
 
 # No windows target. Every route into this program is a POSIX one — process
 # groups, a controlling terminal, signals, `syscall.Exec` — and shipping a

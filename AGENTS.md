@@ -301,9 +301,12 @@ GoReleaser on a `v*` tag, per the parent tree: green CI on `main` → tag →
 archive per platform carrying all six binaries, Linux and macOS only —
 every route into this program is a POSIX one. The first tag is `v0.0.0`.
 
-`cmd/sh`'s `version` is a var rather than a const so the tag can be
-stamped over it with `-X main.version=`; it is what `-acp` reports to a
-client, and a checkout says `0.0.0-dev`.
+Every binary's `version` is a var rather than a const so the tag can be
+stamped over it with `-X main.version=`; it is what `--acp` reports to a
+client, and a checkout says `0.0.0-dev`. It was `cmd/sh`'s alone until
+#2585, on the reasoning that "the dialect binaries tell a client nothing" —
+true while only that binary served the protocol, and false the moment they
+all did. One left unstamped announces `0.0.0-dev` out of a tagged release.
 
 ### What v0.0.0 waits for, and how to count it
 
@@ -837,11 +840,32 @@ instrument's own machinery — the wait discipline, the scratch home, the
 grading — and the session it drives is a target you run.
 
 `make acp` drives the Agent Client Protocol front end the way an editor
-does — `build/sh -acp` as a subprocess, JSON-RPC on a pipe — and prints
-three things: every property `docs/design/acp.md` claims, graded; what a
-turn costs against the process-per-command arrangement it replaces; and
-what an ordinary pipe would have seen of the same script. `internal/acpcheck`
-holds it and `internal/cmd/acpcheck` prints the tables.
+does — as a subprocess, JSON-RPC on a pipe — and prints three things: every
+property `docs/design/acp.md` claims, graded; what a turn costs against the
+process-per-command arrangement it replaces; and what an ordinary pipe would
+have seen of the same script. `internal/acpcheck` holds it and
+`internal/cmd/acpcheck` prints the tables.
+
+**Two tables, because there are two routes to the same protocol**, exactly as
+for `make sandbox`. The first is `sh -dialect X -acp`, the substrate's own
+driver. The second is `zsh --acp` on each dialect binary, which grades whether
+the *flag reaches* the binary a shebang, `chsh`, `login` and an editor's shell
+setting actually name. Only the first existed until #2585, and the dialect
+binaries had no flag at all while it was green throughout — the same blind spot
+as the `-c` drift that had `make conformance-dialects` grading the drivers
+rather than the dialects. Deleting the flag reading today takes the second
+table to 1 of 18 and leaves the first at 18 of 18, which is that blind spot in
+one picture.
+
+A row that will not go green on the second route is worth checking twice before
+it is called a shell bug: `-deny`, `-trace-events` and `-dialect` are `cmd/sh`'s
+own, and a dialect binary passed one exits before the protocol starts, so the
+row reads as an agent that would not answer. The harness writes the equivalent
+`--policy` rule instead — and that rule needs `version 1`, needs `default
+allow` (a file holding nothing but a deny walls off everything, so the row would
+pass because nothing could write at all), and needs `path` as its selector,
+because `-deny` means every action at or under a path and a bare path is not a
+rule the grammar takes.
 
 It exists because **a protocol tested only from inside is not tested.**
 `internal/acp`'s own tests stand an agent up in the test process and speak

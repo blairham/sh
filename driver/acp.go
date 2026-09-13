@@ -20,11 +20,27 @@ import (
 //
 // # The long form only, and that is measured
 //
-// driver/sandbox.go records the measurement this rests on: real bash *accepts*
-// `-acp` as `-a -c -p` and sets allexport, so a single-dash spelling here
-// would shadow working behavior rather than add a flag. `cmd/sh` keeps its own
-// single-dash `-acp`, exactly as it keeps `-policy`: that binary is not a
+// driver/sandbox.go records half of the measurement this rests on: real bash
+// *accepts* `-acp` as `-a -c -p` and sets allexport, so a single-dash spelling
+// here would shadow working behavior rather than add a flag. `cmd/sh` keeps its
+// own single-dash `-acp`, exactly as it keeps `-policy`: that binary is not a
 // shell anyone's shebang names, so it has no bundle to collide with.
+//
+// The other half is that the long form shadows nothing, which is what makes
+// adding an option no shell has safe at all. Measured 2026-09-13 on macOS 25.5,
+// invoked `<shell> --acp -c 'echo RAN'` and again for `--acp-connect`,
+// `--acp-auth` and `--acp-allow`. No shell ran the command:
+//
+//	bash 5.3.15   `--acp: invalid option`       status 2
+//	bash 3.2.57   `--acp: invalid option`       status 2
+//	zsh 5.9.2     `no such option: acp`         status 1
+//	ksh93u+       `acp: bad option(s)`          status 2
+//	dash          `Illegal option --`           status 2
+//
+// zsh folds the dashes out of the name it reports, so `--acp-connect` comes
+// back as `no such option: acp_connect`. That is zsh naming the option it
+// looked for rather than the word it was given, and it is why the refusal is
+// read from the *status* here rather than from the text.
 //
 // # Why it is a hook and not a call
 //

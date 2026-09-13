@@ -2182,19 +2182,36 @@ statements to the entry point for a *script's own top level* — so there was
 nothing to return from, and the refusal that belongs to the third row fired in
 the first. `interp.Runner.RunStartupFile` is the entry point that does not.
 
-## The two options no shell has: `--policy` and `--audit`
+## The options no shell has: `--policy`, `--audit` and the `--acp` four
 
-**The rule.** The shared front end reads two long options that belong to
-this implementation rather than to any shell it models: `--policy FILE`
-installs a policy as the gate, and `--audit FILE` writes the event stream.
-Both take their value attached with `=` or as the next word, both are
-refused when they name no path, and both are read on **every** binary
-built on `driver` — `sh`, `bash`, `zsh`, `ksh` and `dash`.
+**The rule.** The shared front end reads a set of long options that belong
+to this implementation rather than to any shell it models. `--policy FILE`
+installs a policy as the gate and `--audit FILE` writes the event stream;
+both take their value attached with `=` or as the next word and both are
+refused when they name no path. `--acp` serves the Agent Client Protocol on
+standard input and output, and `--acp-connect CMD ...` drives an agent,
+with `--acp-auth ID` and `--acp-allow` settling how it answers. All of them
+are read on **every** binary built on `driver` — `sh`, `bash`, `zsh`, `ksh`,
+`dash` and `ash`.
+
+`--acp-connect` **ends option reading**: every word after it is the command
+that starts the agent, so `--acp-auth` and `--acp-allow` have to be written
+before it. A shell that kept reading those words as its own flags would be
+claiming the agent's.
 
 Long form only. The substrate driver `sh` additionally keeps its own
-single-dash spellings — `-policy`, `-audit`, `-deny`, `-trace-events` —
-because its whole flag namespace is already its own; the dialect binaries
-get `--policy` and `--audit` and nothing else.
+single-dash spellings — `-policy`, `-audit`, `-deny`, `-trace-events`,
+`-acp`, `-acp-connect` — because its whole flag namespace is already its
+own; the dialect binaries get the long forms and nothing else.
+
+The `--acp` four were added last, in #2585, and the gap they closed is worth
+naming: the protocol was reachable only through `cmd/sh`, so the binaries a
+shebang, `chsh`, `login` and an editor's shell setting actually name could
+not serve it at all. That is the same drift `--policy` itself had before
+#1826, and in both cases the instrument was grading the route that worked.
+
+A binary whose `driver.Shell` supplies no hook **refuses** `--acp` rather
+than accepting the word and doing nothing; see driver/acp.go.
 
 They are installed **before the operands are read**, because a script
 operand is opened through the gate: `bash --policy p script.sh` is a
@@ -2231,6 +2248,29 @@ spelling could change.
 bash *accepts* `-acp` as the bundle `-a -c -p` and sets `allexport`, so a
 one-dash word here would shadow working behavior rather than add a flag.
 That is why the dialect binaries take the long form only.
+
+**The four `--acp` spellings were measured the same way**, on the same
+panel, on macOS 25.5 — measured 2026-09-13, invoked
+`<shell> --acp -c 'echo RAN'` and again for `--acp-connect`, `--acp-auth`
+and `--acp-allow`:
+
+| shell | what it said for `--acp` | status | ran the command |
+| --- | --- | --- | --- |
+| bash 5.3.15 | `--acp: invalid option` + usage | 2 | no |
+| bash 3.2.57 | `--acp: invalid option` + usage | 2 | no |
+| zsh 5.9.2 | `no such option: acp` | 1 | no |
+| ksh93u+ | `acp: bad option(s)` + usage | 2 | no |
+| dash | `Illegal option --` | 2 | no |
+
+All four spellings are refused by all five shells and none of them ran the
+command, so the same argument that makes `--policy` safe makes these safe.
+
+One detail is worth recording because it would otherwise look like a
+discrepancy. **zsh folds the dashes out of the name it reports**, so
+`--acp-connect` comes back as `no such option: acp_connect` rather than
+naming the word it was given. That is zsh naming the option it looked for,
+not a different refusal, which is why the check here is the exit status and
+whether the command ran rather than the text.
 
 The decision and the rest of its reasoning are in
 `docs/design/sandboxing.md` under *The flags live in `driver`, so every

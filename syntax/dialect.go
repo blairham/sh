@@ -761,6 +761,41 @@ type Dialect struct {
 	// grammar: `${x}` is a parameter and `${ x}` is a command.
 	CurrentShellSubstitution bool
 
+	// CurrentShellSubstitutionTakesAParen adds `(` to the characters that
+	// open the substitution above, so `${(echo hi)}` is a command list whose
+	// first command is a subshell rather than a parameter expansion.
+	//
+	// One column. Measured 2026-09-13 on ksh93u+ 2012-08-01 against bash
+	// 5.3.15, bash 3.2.57, bash as `sh`, zsh 5.9.2, dash and BusyBox ash —
+	// `echo ${(echo hi)}` prints `hi` in ksh93 and is a bad substitution or a
+	// flag error in all six others. bash *has* `${ cmd;}` and still refuses
+	// the paren, which is what makes this an extension of the opener rather
+	// than part of the construct.
+	//
+	// **It is the same substitution and not a second one**, and the
+	// discriminator is whether the body shares the caller's state:
+	//
+	//	v=1; echo ${ v=2; echo x;}; echo "v=$v"    x then v=2 — shared
+	//	v=1; echo ${(v=2; echo x)}; echo "v=$v"    x then v=1 — not
+	//	echo ${(cd /tmp; pwd)}; pwd                /tmp, and the cwd is where it was
+	//
+	// The paren spelling isolates because the *subshell* isolates, so the
+	// span is still a current-shell substitution and the list inside it does
+	// the rest. A reading that made it an ordinary `$( )` would agree with
+	// all three lines above and disagree on `${(v=2); echo "v=$v"}`-shaped
+	// nesting for the wrong reason.
+	//
+	// A blank and a `(` are the whole of the opener: `${echo hi;}` is still
+	// a syntax error in ksh93, which is what says the flag adds one
+	// character and does not make `${` guess.
+	//
+	// It is **off in the corpus grammar**, and that is the one place in this
+	// file where the widest-reading argument does not apply. `${(U)a}` and
+	// the rest of zsh's expansion flags are recorded cases, and the two
+	// readings of `${(` are mutually exclusive — turning this on there would
+	// take every one of them as a subshell. See internal/oracle/dialect.go.
+	CurrentShellSubstitutionTakesAParen bool
+
 	// CasePatternAcceptsOperator lets an operator stand where a case pattern
 	// belongs, which produces an arm with no patterns at all.
 	//

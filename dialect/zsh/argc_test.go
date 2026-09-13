@@ -80,3 +80,71 @@ func TestARGCIsZeroWithNoParameters(t *testing.T) {
 		t.Errorf("got %q status %d, want %q at 0", out, st, "[0]\n")
 	}
 }
+
+// And silent to the `-p` listings while the bare ones still write it.
+//
+// Measured 2026-09-12, zsh 5.9.2, `env -i PATH=/usr/bin:/bin` with a scratch
+// HOME. Six forms, one run, one name:
+//
+//	typeset -p ARGC   nothing, status 0
+//	typeset -p        no row
+//	readonly -p       no row
+//	typeset -r        ARGC=0
+//	readonly          ARGC=0
+//	typeset           integer 10 readonly ARGC=0
+//
+// So the silence belongs to the **`-p` word** and not to the name, which is
+// why it is asked of the word rather than of the shape that came back: two
+// dialects give the bare and the `-p` listing one shape, and gating on the
+// shape would have taken the name out of the bare one here.
+//
+// The readonly mark above is what put the name into any of these: a produced
+// parameter is in none of the tables a listing walks and reaches one only
+// through an attribute. So this is the second half of that mark rather than a
+// rule of its own, and this shell wrote `typeset -r ARGC=0` for all six
+// before it (#2518).
+//
+// The three forms are asserted in one run on purpose. A mark that suppressed
+// the name everywhere passes the first three and loses the last three, and a
+// name suppressed nowhere is the state this fixes — only both halves together
+// say which.
+func TestARGCIsSilentToDashPAndPresentToTheBareListings(t *testing.T) {
+	t.Run("every -p form writes no row and reports 0", func(t *testing.T) {
+		out, st := runZsh(t, t.TempDir(), `typeset -p ARGC
+print -r -- "named=$?"
+typeset -p
+print -r -- "wholep=$?"
+readonly -p
+print -r -- "readonlyp=$?"`)
+		if st != 0 {
+			t.Errorf("status %d, want 0", st)
+		}
+		for _, mark := range []string{"named=0\n", "wholep=0\n", "readonlyp=0\n"} {
+			if !strings.Contains(out, mark) {
+				t.Errorf("got %q, want %q", out, mark)
+			}
+		}
+		// `ARGC=0` rather than the bare name: the scratch directory this
+		// test runs in is named after the test, so `PWD` and `OLDPWD` carry
+		// the four letters and a search for them finds the harness.
+		if strings.Contains(out, "ARGC=0") {
+			t.Errorf("got %q, want the name absent from all three", out)
+		}
+	})
+	// The half a gate on the listing's *shape* would lose. A bare `readonly`
+	// and `readonly -p` come back in two different shapes in most dialects
+	// and in one shape here, so only the word tells them apart — and this is
+	// the form zsh writes the name in.
+	for _, word := range []string{"readonly", "typeset -r"} {
+		t.Run("the bare `"+word+"` writes it", func(t *testing.T) {
+			out, st := runZsh(t, t.TempDir(), word)
+			if st != 0 {
+				t.Errorf("status %d, want 0", st)
+			}
+			if !strings.Contains(out, "ARGC=0\n") {
+				t.Errorf("got %q, want `ARGC=0` — the silence is the `-p` "+
+					"word's and must not reach a bare listing", out)
+			}
+		})
+	}
+}

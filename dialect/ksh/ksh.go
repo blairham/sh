@@ -727,6 +727,14 @@ func Semantics() interp.Semantics {
 	s.ReadOptions = "rspAd:n:N:t:u:"
 	// ksh93 takes `-n` and refuses `-m`, with its own usage line after it.
 	s.UnsetOptions = "vfn"
+	// `readonly` keeps POSIX's single letter, and this shell says so
+	// itself: measured 2026-09-12, `readonly -a zz` is `readonly: -a:
+	// unknown option` followed by `Usage: readonly [-p] [name[=value]...]`.
+	// `-A`, `-f` and `-n` are refused the same way. It is the reason
+	// ReadonlyRecordsTheCompoundAttribute is not answered here — the letter
+	// that raises the question does not exist, so the axis cannot be
+	// reached rather than being left undecided (#2277).
+	s.ReadonlyOptions = "p"
 	// Measured 2026-09-12: `x=1; unset -n x` leaves `x` gone at 0, which is
 	// what `unset x` does — the letter changes nothing for a name that is not
 	// a reference, where bash removes nothing at all (#932).
@@ -1009,7 +1017,7 @@ func Semantics() interp.Semantics {
 	// toggled rather than bash's five-bit mask: `$'\c1'` is `q`, not 0x11.
 	s.DollarSingleBackslashC = interp.DollarSingleControlToggled
 	s.DollarSingleUnknownEscape = interp.DollarSingleUnknownDropsBackslash
-	s.DollarSingleNulTruncates = interp.Yes
+	s.DollarSingleNul = interp.DollarSingleNulEndsTheSpan
 	// `\x` here takes every hexadecimal digit that follows and a run past
 	// two is a code point, so `$'\x00b'` is the one byte 0x0b where the
 	// other shells read `\x00` and truncate. A run with no digit at all is

@@ -2410,6 +2410,13 @@ func (r *Runner) locationPrefix() string {
 		// shell's own name would have left it out.
 		return chain + d.prefixAfterTheFirstFrame(innermost, r.speaking(), r.builtinIsSpeaking(), line)
 	}
+	if source, ok := r.borrowedNameBefore(d); ok {
+		// The fourth arrangement of the same three fields: the name goes
+		// between the shell's and the location rather than after it, which
+		// is a prefix of its own rather than something to append. See
+		// Runner.borrowedNameBefore.
+		return d.forBorrowed().borrowedPrefix(name, source, line)
+	}
 	return d.prefix(name, r.speaking(), r.builtinIsSpeaking(), line) + r.borrowedName(d)
 }
 
@@ -2527,9 +2534,9 @@ func (r *Runner) borrowedAtLocation() (borrowedText, bool) {
 // values adds anything: SourceReplacesShell is already what
 // LocationNamesTheEvalText and LocationNamesTheCurrentFile do, from
 // locationNameAndLine above, so reaching for the name again would write it
-// twice; SourceBeforeLocation is ksh93's, and that shell also renders the
-// *caller's* line into the prefix (`./s.sh[2]: .: line 3:`), which is a stack
-// rather than a name and which nothing here models yet — see #2461.
+// twice; SourceBeforeLocation is BusyBox ash's and ksh93's, and it goes in
+// front of the location rather than after it, which is
+// [Runner.borrowedNameBefore] and not this.
 //
 // Measured 2026-09-12, dash 0.5.12, `env -i` over a script file: a failure on
 // line 3 of a file sourced from `./s.sh` is `./s.sh: 3: ./p.sh: NOPE:
@@ -2545,6 +2552,44 @@ func (r *Runner) borrowedName(d Diagnostics) string {
 		return ""
 	}
 	return b.sourceName(d) + ": "
+}
+
+// borrowedNameBefore is borrowedName's other placement: the name of the
+// borrowed text for a dialect that writes it between the shell's own name and
+// the location, `ash: ./p.sh: line 2: NOPE: parameter not set`.
+//
+// It is the fourth arrangement of [Diagnostics.BorrowedTextIsNamedAtRunTime]
+// and [SourceNaming] rather than a mechanism of its own, and the four are
+// worth reading together: dash names the text after the location, bash and
+// zsh put it where the shell's name goes and so need no second name here,
+// ksh93 renders the whole chain, and BusyBox ash writes one name in front of
+// the location.
+//
+// The rule for *which* text is named is the same one dash uses — the
+// innermost borrowed text still being read, with no test that the failing
+// line came from it — and that is measured rather than inherited. BusyBox
+// v1.37.0, 2026-09-12, over a script file, the same four arrangements
+// [Runner.borrowedAtLocation] records for dash:
+//
+//	a file sourced by the script, failing in the file      names the file
+//	a file sourced by the script, failing in a function
+//	  the file called, whose body is in the outer script    names the file
+//	text `eval` is running, failing in a function it called names `eval`
+//	a function *defined* in a sourced file and called
+//	  after the source returned                             names nothing
+//
+// The last row is the one that keeps this honest: `./s.sh: line 1: NOPE:
+// parameter not set` with no name, where the frame is a function and the
+// source has returned.
+func (r *Runner) borrowedNameBefore(d Diagnostics) (string, bool) {
+	if !d.BorrowedTextIsNamedAtRunTime {
+		return "", false
+	}
+	b, ok := r.borrowedAtLocation()
+	if !ok || b.naming(d) != SourceBeforeLocation {
+		return "", false
+	}
+	return b.sourceName(d), true
 }
 
 // fatalExpansion ends the script because a parameter could not be expanded —

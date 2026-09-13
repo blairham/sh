@@ -21,8 +21,11 @@ diff is the lists a new binary has to appear in — `Makefile`'s `SHELLS`,
 `cmd/sh`'s `-dialect`, `cmd/shfmt`'s `-dialect`, `.goreleaser.yaml`, and
 two counts in prose.
 
-That is not a claim that every measured behavior fits. Three do not, and
-they are listed under *What could not be said* below. It is a claim about
+That is not a claim that every measured behavior fits. Four do not, and
+they are listed under *What could not be said* below. Two more used to be
+there and have gone, one each way: #2276 widened an axis so a reading
+that had no value could have one, and #2277 moved a refusal from an axis
+to the option that raises it. It is a claim about
 the shape of the work: every answer this shell needed was a **value on an
 existing axis**, and no axis anywhere acquired a branch on a shell's name.
 
@@ -208,11 +211,12 @@ refusing at run time with the test suite green.
 An axis this dialect genuinely cannot answer is recorded where the
 omission is, as a line in `ash.go`:
 
-    // unanswered DollarSingleNulTruncates: a *third* reading (#2276). …
+    // unanswered ReadonlyRecordsTheCompoundAttribute: this shell has no
+    // letter to ask it with … (#2277)
 
 which the coverage report prints under the entry it answers. So the check
 states what is unmeasured rather than being switched off — and, the other
-way round, a value quietly appearing for one of the three items under
+way round, a value quietly appearing for one of the items under
 *What could not be said* now **fails** the check while its note still
 stands, which is exactly the "copied from a neighboring dialect to make
 the message go away" move this file forbids.
@@ -254,9 +258,72 @@ was an axis added elsewhere with no ash value; the shipped binary stopped
 taking a flag it used to take; and `go test ./...` was green throughout,
 because nothing graded ash.
 
+## Borrowed text is named in front of the location
+
+A failure *while* text this shell borrowed is running names the text, and
+the name goes between the shell's own and the line:
+
+    ash: ./p.sh: line 2: NOPE: parameter not set
+    ./s.sh: eval: line 11: NOPE: parameter not set
+
+That is the **fourth** arrangement of three fields the panel already
+shares, and the four are worth reading together, because the shape is one
+question with four answers rather than four mechanisms:
+
+| shell | a run-time failure inside a sourced file |
+| --- | --- |
+| bash, zsh | the file's path where the shell's own name goes |
+| dash | the name **after** the location — `dash: 2: ./p.sh:` |
+| ksh93 | the whole chain of borrowed texts — `./n.sh[2]: .[2]: .:` |
+| BusyBox ash | one name **before** the location — `ash: ./p.sh: line 2:` |
+
+`Diagnostics.BorrowedTextIsNamedAtRunTime` turns the name on and
+`SourceFileNaming`/`EvalNaming` say where it goes; nothing new was needed
+beyond a second placement (#2520).
+
+The **line** beside it did need a field. This shell's own text carries a
+line only from a script file — `Location` is bare and `ScriptLocation` says
+`line N` — while text it borrowed carries one on **every** route,
+`-c` and standard input included, and for a parse failure as much as for a
+run-time one. `Diagnostics.BorrowedLocation` is that second answer. Reading
+it off `ScriptLocation` would have given the same string here and would
+have been an inference no measurement supports.
+
+Two rows keep the rule from being too wide, and both are in the corpus. A
+function frame standing above the borrowed text does not end it — a `.`
+inside a function still names the file — while the source **returning**
+does: a function defined in a sourced file and called afterwards is
+`./s.sh: line 1:` with no name at all. So the rule is over the innermost
+borrowed text still being read, which is dash's rule with this shell's
+placement.
+
+## The two hexadecimal-escape axes, and the probe that cannot decide them
+
+`$'\x…'` splits the panel twice and this shell answers bash's way both
+times. Measured 2026-09-12 in the pinned image:
+
+    printf '[%s]' $'\x414'   [A4]      two digits, and the rest is text
+    printf '[%s]' $'\xzz'    [\xzz]    a digitless escape is kept as written
+    printf '[%s]' $'\x'      [\x]
+    printf '[%s]' $'\uZ'     [\uZ]
+
+where ksh93 takes every digit and reads a code point (`$'\x414'` is
+U+0414) and zsh reads a zero byte from a digitless escape.
+
+**The obvious probe cannot decide the first one here**, and that is worth
+keeping written down because it is specific to this column: `$'a\x00b'`
+is length 2 under *both* readings, since a three-digit run read short
+gives a NUL — which this shell **drops** — and read long gives U+000B,
+one byte either way. Only a run whose long reading is a *different*
+character separates them, which is what `\x414` is for.
+
+Both were left unanswered while there was no binary to ask. The three
+corpus rows that reach them already carry an ash column, so the values
+are graded by rows that existed before them (#554).
+
 ## What could not be said
 
-Six measured behaviors have no value on any existing axis. They are
+Four measured behaviors have no value on any existing axis. They are
 recorded here rather than approximated in code, because an invented
 answer is indistinguishable from a measured one in a file that holds both.
 
@@ -278,7 +345,7 @@ rides on the shell's name", and it is a `bool` whose one true value joins
 them *tight* — zsh's `zsh:shift:1:`. ash wants the same thing spaced.
 Closing it means widening that bool into a three-valued enum
 (absent / tight / spaced), which is 31 references across 14 files. It is
-the one of the three that costs real corpus rows, and it is now
+the one of them that costs real corpus rows, and it is now
 measurable: the ash column is what the widening would be graded against.
 It is deliberately not part of #2263 — a 14-file substrate edit folded
 into the change that builds the instrument would be graded by the same
@@ -289,27 +356,21 @@ numbers a builtin's line from zero — `ash -c 'unset "a[0]"'` is `line 0`
 and a second line is `line 1` — while a script file and standard input
 both number from one. No axis carries a per-route line origin.
 
+It reaches further than a builtin's own message. `eval`'s text continues
+the caller's lines here, so the origin is added to every line inside it:
+`ash -c 'eval nosuchcmd'` is `eval: line 0` where the same line in a script
+is `line 1`. That is why the corpus row for the naming above
+(`eval/the-borrowed-text-in-the-prefix`) runs from a **script** — over
+`-c` the digit would differ from every other column for a reason that has
+nothing to do with naming, exactly as it would have in
+`eval/where-the-texts-lines-are` (#2462).
+
 **3. `divide by zero`.** The reason word for a division by zero is the
 substrate's own string (`division by zero`); this shell writes `divide by
 zero`. There is no `Diagnostics` field for it, and adding one for a
 single word was not worth a substrate edit.
 
-**4. A NUL inside `$'…'`.** `x=$'a\0b'` leaves `ab` at length 2 — the
-byte is neither the end of the span (bash and ksh93, length 1) nor a
-character of it (zsh, length 3) but **dropped**, and the octal and hex
-spellings agree. `Semantics.DollarSingleNulTruncates` is an `Answer` and
-has no room for a third reading, so the axis is left unanswered here
-rather than set to one of the two wrong values. #2276.
-
-**5. `readonly -a`.** `readonly: illegal option -a`, and there is no
-`typeset` at all. Our binary accepts the letter because `readonly`'s
-option set is fixed in the interpreter rather than taken from the vector
-the way `ReadOptions` and `EchoOptions` are, and then walks into
-`ReadonlyRecordsTheCompoundAttribute`, which this shell cannot answer
-because it cannot be asked. ksh93 has the same hole today and for the
-same reason. #2277.
-
-**6. `ulimit -a`.** Measured in full — fifteen rows, `core file size
+**4. `ulimit -a`.** Measured in full — fifteen rows, `core file size
 (blocks)         (-c) unlimited` and its fellows, the letter in its own
 parenthesis at the end. Five of them (`-e`, `-i`, `-q`, `-r`, `-x`) name
 resources no `interp.Resource` constant does, and they were measured on

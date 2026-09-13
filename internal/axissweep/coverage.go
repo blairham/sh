@@ -52,9 +52,8 @@ import (
 // Not in the ledger. A reason belongs where the omission is, which is the
 // dialect's own source, as a line in a comment:
 //
-//	// unanswered DollarSingleNulTruncates: BusyBox drops the NUL — `x=$'a\0b'`
-//	// is `ab` at length 2 — which is neither of the two readings Answer has
-//	// room for (#2276).
+//	// unanswered BraceRescanEntersFailedGroup: this shell has no brace
+//	// expansion, so nothing ever resumes a scan — `@{x}{a,b}@` is one word.
 //
 // read back by DialectNotes and printed under the entry it answers. That is
 // the same discipline the unpinned and unexhibited lists already use, and for

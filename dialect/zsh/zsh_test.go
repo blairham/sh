@@ -839,8 +839,8 @@ func TestDollarSingleAnswers(t *testing.T) {
 	if got, want := s.DollarSingleUnknownEscape, interp.DollarSingleUnknownDropsBackslash; got != want {
 		t.Errorf("DollarSingleUnknownEscape = %v, want %v", got, want)
 	}
-	if got, want := s.DollarSingleNulTruncates, interp.No; got != want {
-		t.Errorf("DollarSingleNulTruncates = %v, want %v", got, want)
+	if got, want := s.DollarSingleNul, interp.DollarSingleNulIsAByte; got != want {
+		t.Errorf("DollarSingleNul = %v, want %v", got, want)
 	}
 }
 

@@ -15,11 +15,11 @@ import (
 // PosixSemantics is the base rather than CoreSemantics because the snippets
 // below use `printf`, and a test about a quoting rule should not be deciding
 // anything about a builtin's options.
-func dollarSingleSem(c DollarSingleControlPolicy, u DollarSingleUnknownPolicy, nul Answer) Semantics {
+func dollarSingleSem(c DollarSingleControlPolicy, u DollarSingleUnknownPolicy, nul DollarSingleNulPolicy) Semantics {
 	s := PosixSemantics()
 	s.DollarSingleBackslashC = c
 	s.DollarSingleUnknownEscape = u
-	s.DollarSingleNulTruncates = nul
+	s.DollarSingleNul = nul
 	// And the two the hexadecimal escape asks, answered the majority way so
 	// that a row about the NUL is about the NUL: `$'a\x00b'` has three
 	// digits after the `\x` and so reaches the first of them. The tests
@@ -32,7 +32,7 @@ func dollarSingleSem(c DollarSingleControlPolicy, u DollarSingleUnknownPolicy, n
 // caretMetaSem is the fourth axis on its own, with the other three answered
 // so that nothing else in a snippet asks a question.
 func caretMetaSem(a Answer) Semantics {
-	s := dollarSingleSem(DollarSingleControlAbsent, DollarSingleUnknownDropsBackslash, No)
+	s := dollarSingleSem(DollarSingleControlAbsent, DollarSingleUnknownDropsBackslash, DollarSingleNulIsAByte)
 	s.DollarSingleCaretMeta = a
 	return s
 }
@@ -134,11 +134,11 @@ func TestDollarSingleControlCharacter(t *testing.T) {
 		{"a question mark", `printf '%s' $'\c?'`, "\x7f", "\x7f"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			sem := dollarSingleSem(DollarSingleControlMasked, DollarSingleUnknownKeepsBackslash, Yes)
+			sem := dollarSingleSem(DollarSingleControlMasked, DollarSingleUnknownKeepsBackslash, DollarSingleNulEndsTheSpan)
 			if got, _ := run(t, tc.src, withSem(sem)); got != tc.masked {
 				t.Errorf("masked: got %q, want %q", got, tc.masked)
 			}
-			sem = dollarSingleSem(DollarSingleControlToggled, DollarSingleUnknownDropsBackslash, Yes)
+			sem = dollarSingleSem(DollarSingleControlToggled, DollarSingleUnknownDropsBackslash, DollarSingleNulEndsTheSpan)
 			if got, _ := run(t, tc.src, withSem(sem)); got != tc.tggl {
 				t.Errorf("toggled: got %q, want %q", got, tc.tggl)
 			}
@@ -150,11 +150,11 @@ func TestDollarSingleControlCharacter(t *testing.T) {
 // nothing claims and the unknown-escape axis decides it — which is the whole
 // reason the two axes are separate.
 func TestDollarSingleControlAbsentFallsToTheUnknownRule(t *testing.T) {
-	sem := dollarSingleSem(DollarSingleControlAbsent, DollarSingleUnknownDropsBackslash, No)
+	sem := dollarSingleSem(DollarSingleControlAbsent, DollarSingleUnknownDropsBackslash, DollarSingleNulIsAByte)
 	if got, _ := run(t, `printf '%s' $'X\cAY'`, withSem(sem)); got != "XcAY" {
 		t.Errorf("dropping: got %q, want %q", got, "XcAY")
 	}
-	sem = dollarSingleSem(DollarSingleControlAbsent, DollarSingleUnknownKeepsBackslash, No)
+	sem = dollarSingleSem(DollarSingleControlAbsent, DollarSingleUnknownKeepsBackslash, DollarSingleNulIsAByte)
 	if got, _ := run(t, `printf '%s' $'X\cAY'`, withSem(sem)); got != `X\cAY` {
 		t.Errorf("keeping: got %q, want %q", got, `X\cAY`)
 	}
@@ -163,11 +163,11 @@ func TestDollarSingleControlAbsentFallsToTheUnknownRule(t *testing.T) {
 // An escape with no meaning either keeps both characters or drops the
 // backslash, and nothing agrees on which.
 func TestDollarSingleUnknownEscape(t *testing.T) {
-	sem := dollarSingleSem(DollarSingleControlMasked, DollarSingleUnknownKeepsBackslash, Yes)
+	sem := dollarSingleSem(DollarSingleControlMasked, DollarSingleUnknownKeepsBackslash, DollarSingleNulEndsTheSpan)
 	if got, _ := run(t, `printf '%s' $'no\qescape'`, withSem(sem)); got != `no\qescape` {
 		t.Errorf("keeping: got %q, want %q", got, `no\qescape`)
 	}
-	sem = dollarSingleSem(DollarSingleControlMasked, DollarSingleUnknownDropsBackslash, Yes)
+	sem = dollarSingleSem(DollarSingleControlMasked, DollarSingleUnknownDropsBackslash, DollarSingleNulEndsTheSpan)
 	if got, _ := run(t, `printf '%s' $'no\qescape'`, withSem(sem)); got != "noqescape" {
 		t.Errorf("dropping: got %q, want %q", got, "noqescape")
 	}
@@ -192,11 +192,11 @@ func TestDollarSingleNulTruncation(t *testing.T) {
 		{"the length of what was assigned", `x=$'a\0b'; printf '[%s]' "${#x}"`, "[1]", "[3]"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			sem := dollarSingleSem(DollarSingleControlMasked, DollarSingleUnknownKeepsBackslash, Yes)
+			sem := dollarSingleSem(DollarSingleControlMasked, DollarSingleUnknownKeepsBackslash, DollarSingleNulEndsTheSpan)
 			if got, _ := run(t, tc.src, withSem(sem)); got != tc.truncated {
 				t.Errorf("truncating: got %q, want %q", got, tc.truncated)
 			}
-			sem = dollarSingleSem(DollarSingleControlMasked, DollarSingleUnknownKeepsBackslash, No)
+			sem = dollarSingleSem(DollarSingleControlMasked, DollarSingleUnknownKeepsBackslash, DollarSingleNulIsAByte)
 			if got, _ := run(t, tc.src, withSem(sem)); got != tc.whole {
 				t.Errorf("keeping: got %q, want %q", got, tc.whole)
 			}
@@ -244,7 +244,7 @@ func TestDollarSingleAxesAreAskedOnlyWhereTheyDecide(t *testing.T) {
 // can differ — three digits or more — and the empty run only where there are
 // none, so an ordinary `$'\x41'` puts neither question to the dialect.
 func TestDollarSingleHexDigitRun(t *testing.T) {
-	hexSem := func(every, digitless, nul Answer) Semantics {
+	hexSem := func(every, digitless Answer, nul DollarSingleNulPolicy) Semantics {
 		s := dollarSingleSem(DollarSingleControlMasked, DollarSingleUnknownKeepsBackslash, nul)
 		s.DollarSingleHexReadsEveryDigit = every
 		s.DollarSingleDigitlessEscapeIsAZeroByte = digitless
@@ -288,10 +288,10 @@ func TestDollarSingleHexDigitRun(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got, _ := run(t, tc.src, withSem(hexSem(Yes, No, Yes))); got != tc.every {
+			if got, _ := run(t, tc.src, withSem(hexSem(Yes, No, DollarSingleNulEndsTheSpan))); got != tc.every {
 				t.Errorf("every digit: got %q, want %q", got, tc.every)
 			}
-			if got, _ := run(t, tc.src, withSem(hexSem(No, No, Yes))); got != tc.stopAtTwo {
+			if got, _ := run(t, tc.src, withSem(hexSem(No, No, DollarSingleNulEndsTheSpan))); got != tc.stopAtTwo {
 				t.Errorf("two digits: got %q, want %q", got, tc.stopAtTwo)
 			}
 		})
@@ -309,7 +309,7 @@ func TestDollarSingleEscapeWithNoDigits(t *testing.T) {
 		{"a code point escape", `printf '[%s]' $'\uZ'`, "[\x00Z]", `[\uZ]`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			sem := dollarSingleSem(DollarSingleControlMasked, DollarSingleUnknownKeepsBackslash, No)
+			sem := dollarSingleSem(DollarSingleControlMasked, DollarSingleUnknownKeepsBackslash, DollarSingleNulIsAByte)
 			sem.DollarSingleDigitlessEscapeIsAZeroByte = Yes
 			if got, _ := run(t, tc.src, withSem(sem)); got != tc.zero {
 				t.Errorf("a zero byte: got %q, want %q", got, tc.zero)
@@ -320,7 +320,7 @@ func TestDollarSingleEscapeWithNoDigits(t *testing.T) {
 			}
 			// And the zero is the ordinary road to a NUL, so a dialect that
 			// ends the span at one ends it here.
-			sem = dollarSingleSem(DollarSingleControlMasked, DollarSingleUnknownKeepsBackslash, Yes)
+			sem = dollarSingleSem(DollarSingleControlMasked, DollarSingleUnknownKeepsBackslash, DollarSingleNulEndsTheSpan)
 			sem.DollarSingleDigitlessEscapeIsAZeroByte = Yes
 			if got, _ := run(t, tc.src, withSem(sem)); got != "[]" {
 				t.Errorf("truncating: got %q, want %q", got, "[]")

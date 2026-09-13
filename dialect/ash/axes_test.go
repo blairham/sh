@@ -79,6 +79,23 @@ func TestNoAnsweredAxisRefusesAtRunTime(t *testing.T) {
 			"EchoLastEscapeFlagWins",
 		},
 		{
+			"a NUL inside $'…'",
+			`x=$'a\0b'; echo ${#x}`,
+			"DollarSingleNul — the third reading, which had no value to be " +
+				"written as until #2276 widened the axis from an Answer to a policy",
+		},
+		{
+			"how far a hexadecimal escape's digits reach",
+			`printf '[%s]' $'\x414'`,
+			"DollarSingleHexReadsEveryDigit — measured with a three-digit run, " +
+				"which is the only length the two readings answer differently",
+		},
+		{
+			"a hexadecimal escape with no digits after it",
+			`printf '[%s]' $'\xzz' $'\x' $'\uZ'`,
+			"DollarSingleDigitlessEscapeIsAZeroByte",
+		},
+		{
 			"errexit and a failure only pipefail saw",
 			"set -eo pipefail\nfalse | true\necho reached\n",
 			"ErrexitSeesPipefailFailure",
@@ -153,28 +170,38 @@ func TestNoAnsweredAxisRefusesAtRunTime(t *testing.T) {
 	}
 }
 
-// TestTheThreeAxesLeftUnansweredStillRefuse is the other half, and it is not
-// redundant: the three this dialect cannot answer are recorded as open
-// questions, and a value quietly appearing for one of them — copied from a
-// neighboring dialect to make the message go away — is exactly what
-// docs/spec/ash.md forbids. When one is closed properly, its issue moves the
-// row from here to the table above.
-func TestTheThreeAxesLeftUnansweredStillRefuse(t *testing.T) {
-	for _, tc := range []struct{ name, src, issue string }{
-		{"a NUL inside $'…'", `x=$'a\0b'; echo ${#x}`, "#2276"},
-		{"the array letter on readonly", `f() { readonly -a a; }; f`, "#2277"},
-	} {
-		out, _ := runIn(t, tc.src)
-		if !strings.Contains(out, "no dialect was chosen") {
-			t.Errorf("%s (%s): %q answered rather than refusing.\n\n"+
-				"If it was measured and closed, move the row into "+
-				"TestNoAnsweredAxisRefusesAtRunTime and close the issue. If the "+
-				"value was copied from another dialect to quiet the message, it is "+
-				"a guess in a dialect nothing grades, which reads exactly like a "+
-				"measurement — revert it.", tc.name, tc.issue, strings.TrimSpace(out))
-		}
+// TestWhatThisDialectStillCannotSay is the other half of the table above, and
+// it is not redundant: what this dialect cannot answer is recorded as an open
+// question, and a value quietly appearing for one of them — copied from a
+// neighboring dialect to make the refusal go away — is exactly what
+// docs/spec/ash.md forbids.
+//
+// It held two run-time rows until today and holds none, and the two left by
+// different doors, which is the part worth keeping written down because only
+// one of them was a reading waiting for somewhere to go.
+//
+// A NUL inside `$'…'` was measured from the first day and had no *value* it
+// could be written as: `Answer` had room for "the NUL ends the span" and "the
+// NUL is a byte" and this shell does neither. #2276 widened the axis to a
+// three-valued policy and the reading went in.
+//
+// `readonly -a` was never unanswered at all. The letter does not exist in this
+// shell — `readonly: illegal option -a` — so the axis behind it could not be
+// put to it, and the refusal a script saw was about a disagreement between
+// other shells. #2277 took the option set from the vector, and the refusal is
+// now the one the shell itself gives. **Widen the axis when the reading is
+// real; refuse the option when the question cannot be put** — the two look
+// alike from inside our binary and are opposite mistakes.
+func TestWhatThisDialectStillCannotSay(t *testing.T) {
+	// The letter, asserted here rather than in the table above because what
+	// is being pinned is a refusal that is *not* an unanswered axis.
+	if out, _ := runIn(t, `f() { readonly -a a; }; f`); !strings.Contains(out, "-a") ||
+		strings.Contains(out, "no dialect was chosen") {
+		t.Errorf("`readonly -a` wrote %q, want the option refused: an axis a "+
+			"shell cannot be asked must be closed at the option and not by "+
+			"choosing one of the answers for it (#2277)", strings.TrimSpace(out))
 	}
-	// The third is asked of the vector rather than of a run, because the
+	// The remaining one is asked of the vector rather than of a run, because the
 	// test harness gives the runner no resource limits at all and `ulimit
 	// -a` stops on *that* first — a refusal that would pass this test while
 	// saying nothing about the table.

@@ -176,8 +176,9 @@ func TestAnUnansweredMarkerIsReadBack(t *testing.T) {
 		t.Fatal(err)
 	}
 	for axis, issue := range map[string]string{
-		"DollarSingleNulTruncates":            "#2276",
-		"ReadonlyRecordsTheCompoundAttribute": "#2277",
+		"BraceRescanEntersFailedGroup":             "no brace expansion",
+		"ReadonlyRecordsTheCompoundAttribute":      "#2277",
+		"EarlierDeclarationLetterBlocksALaterPlus": "#2345",
 	} {
 		why, ok := notes[axis]
 		if !ok {

@@ -238,6 +238,13 @@ func Semantics() interp.Semantics {
 	// status left behind for a following operand to overwrite or keep
 	// (#2373).
 	s.UnsetOptions = "vf"
+	// `readonly` keeps POSIX's single letter. Measured 2026-09-12,
+	// BusyBox v1.37.0: `readonly -a zz` is `readonly: line 0: illegal
+	// option -a`, and so are `-A` and `-f`. There is no `typeset` here at
+	// all, so even the listing that would show the attribute is missing —
+	// which is why ReadonlyRecordsTheCompoundAttribute is unreachable in
+	// this column rather than unanswered (#2277).
+	s.ReadonlyOptions = "p"
 	// `export -n` is accepted and reports 0, which dash refuses outright.
 	s.ExportTakesTheAttributeOff = interp.Yes
 	// `export -f` is `illegal option -f`, so a function does not travel.
@@ -702,21 +709,47 @@ func Semantics() interp.Semantics {
 	// list.
 	s.PidListingFinishesWithAJob = interp.No
 
-	// And two more this file leaves unanswered for want of a binary rather
-	// than for want of room in the vector: `DollarSingleHexReadsEveryDigit`
-	// and `DollarSingleDigitlessEscapeIsAZeroByte` (#554). The panel splits
-	// three ways on `$'\x00b'` and `$'\xzz'` — bash stops at two digits and
-	// keeps a digitless escape as written, zsh stops at two and reads a zero
-	// byte, ksh93 takes every digit — and this shell's answer was not
-	// measured, so nothing is written down for it. `$'\x41'` and every other
-	// two-digit spelling reaches neither, which is the shape a script writes.
+	// The NUL an escape produced is dropped: `x=$'a\0b'` leaves `ab` at
+	// length 2, so the byte is neither the end of the span (bash and ksh93,
+	// length 1) nor a character of it (zsh, length 3). The octal and hex
+	// spellings agree — `$'a\000b'` and `$'a\x00b'` are 2 as well — and the
+	// rest of the span still follows, `printf '[%s]' $'a\0b'ccc` being
+	// `[abccc]`. Measured 2026-09-12 in the pinned alpine image.
 	//
-	// Three the sweep reached and this file deliberately leaves unanswered,
+	// This is the value that had nowhere to go while the axis was an
+	// `Answer`, which is what #2276 widened. It is worth reading as a
+	// warning about axis *types* rather than about this shell: two columns
+	// were measured, "does the NUL truncate" looked like the question, and
+	// the third column could then only be recorded by being wrong.
+	s.DollarSingleNul = interp.DollarSingleNulIsDropped
+
+	// The two hexadecimal-escape axes, measured 2026-09-12 in the pinned
+	// alpine image and with probes chosen so the readings cannot agree.
+	// They were left unanswered for want of a binary — the note that said
+	// so is gone with them — and the probe that reads like the obvious one
+	// is the one to avoid: `$'a\x00b'` is length 2 under **both** readings
+	// here, because a run of three digits read short gives a NUL this shell
+	// drops and read long gives U+000B, one byte either way.
+	//
+	//	printf '[%s]' $'\x414'   [A4]      two digits and the rest is text
+	//	printf '[%s]' $'\xzz'    [\xzz]    kept as it was written
+	//	printf '[%s]' $'\x'      [\x]
+	//	printf '[%s]' $'\uZ'     [\uZ]
+	//
+	// So both are bash's answer and neither is ksh93's, which takes every
+	// digit and reads a code point, or zsh's, which reads a zero byte from
+	// a digitless escape. The three corpus rows that reach them already
+	// record this column, so the values are graded by rows that exist
+	// (#554).
+	s.DollarSingleHexReadsEveryDigit = interp.No
+	s.DollarSingleDigitlessEscapeIsAZeroByte = interp.No
+
+	// The ones the sweep reached and this file deliberately leaves unanswered,
 	// each with what BusyBox answered and what stands in the way of writing
 	// it down. None is a guess deferred; each is a measurement the vector
 	// cannot yet hold.
 	//
-	// The first two are written as `unanswered <axis>:` lines, which is the
+	// Each is written as an `unanswered <axis>:` line, which is the
 	// spelling internal/axissweep reads back (#2340). The coverage check
 	// prints them under the entry they answer, so what this dialect has not
 	// measured is stated by the instrument rather than only here — and a
@@ -727,12 +760,6 @@ func Semantics() interp.Semantics {
 	// expansion either, so nothing ever resumes a scan — `@{x}{a,b}@` is
 	// one word, and the four `BraceRange…` axes are unanswered beside it
 	// for the same reason.
-	//
-	// unanswered DollarSingleNulTruncates: a *third* reading (#2276).
-	// `x=$'a\0b'` leaves `ab` at length 2: the NUL is neither kept (zsh,
-	// length 3) nor the end of the span (bash and ksh93, length 1) but
-	// dropped, and the octal and hex spellings agree. `Answer` has no room
-	// for it, so a value here would have to be one of the two wrong ones.
 	//
 	// unanswered ArrayLiteralOperandRetypesAFrozenScalar: no declaration
 	// utility and no array literal here either. Measured 2026-09-12 on
@@ -746,19 +773,20 @@ func Semantics() interp.Semantics {
 	// unanswered TwoCaseLettersOnOneDeclarationCancel: no declaration
 	// command here either. Measured 2026-09-12 on BusyBox in a container,
 	// `typeset -lu z=Ab` is `typeset: not found` (#2541).
+	//
 	// unanswered EarlierDeclarationLetterBlocksALaterPlus: there is no
 	// declaration command to write the letter on. `typeset` is not a
 	// builtin here and `integer` is not a word, so neither sign of `-i`
 	// can be put to this shell at all (#2345).
 	// unanswered ReadonlyRecordsTheCompoundAttribute: this shell has no
-	// letter to ask it with (#2277). `readonly -a a` is `readonly: illegal
-	// option -a` and there is no `typeset` at all. The refusal our binary
-	// reaches is `readonly`'s option set being fixed in the interpreter
-	// rather than the dialect's, which is a gap ksh93 has today for the same
-	// reason — it refuses the same corpus row, on `main`, for want of the
-	// same letter.
+	// letter to ask it with, which is a different thing from having no
+	// answer and is the whole of #2277. `readonly -a a` is `readonly:
+	// illegal option -a` and there is no `typeset` at all, so the question
+	// cannot be put here rather than being left open. Semantics.
+	// ReadonlyOptions is `p` in this dialect now, so the refusal a script
+	// meets is the option's and not an axis's.
 	//
-	// The third is not an axis of the semantics vector at all, so it carries
+	// The last is not an axis of the semantics vector at all, so it carries
 	// no marker: Diagnostics.UlimitListing — measured in full (#2278:
 	// fifteen rows, `core file size (blocks)         (-c) unlimited` and its
 	// fellows), and five of them — `-e`, `-i`, `-q`, `-r`, `-x` — name
@@ -794,6 +822,30 @@ func Diagnostics() interp.Diagnostics {
 		// line 0: nosuchcmd: not found`.
 		SourceFileNaming: interp.SourceBeforeLocation,
 		EvalNaming:       interp.SourceBeforeLocation,
+		// And the name is written while the text is *running* and not only
+		// when it fails to parse, which is the fourth arrangement of these
+		// fields: dash names the text after the location, bash and zsh put
+		// it where the shell's own name goes, ksh93 renders the whole chain,
+		// and this shell writes one name in front of the location. Measured
+		// 2026-09-12, BusyBox v1.37.0, `p.sh` holding `echo one` and
+		// `echo $NOPE`:
+		//
+		//	ash -c 'set -u; . ./p.sh'    ash: ./p.sh: line 2: NOPE: …
+		//	the same from a script       ./s.sh: ./p.sh: line 2: NOPE: …
+		//	the dot inside a function    ./s.sh: ./p.sh: line 2: NOPE: …
+		//	an eval from a script        ./s.sh: eval: line 11: NOPE: …
+		//	a function defined in a
+		//	  sourced file, called after ./s.sh: line 1: NOPE: …
+		//
+		// The last row is why this is the innermost text still being read
+		// rather than a rule about function frames — see
+		// interp.Runner.borrowedNameBefore, which is dash's rule with this
+		// shell's placement.
+		BorrowedTextIsNamedAtRunTime: true,
+		// The line beside that name is written on every route, where the
+		// shell's own text carries one only from a file. See
+		// interp.Diagnostics.BorrowedLocation for the five rows.
+		BorrowedLocation: interp.LocationLineWord,
 
 		// The parse failures, in this shell's own order: the complaint first
 		// and the token after it, all lower case.

@@ -499,6 +499,14 @@ func Semantics() interp.Semantics {
 	// `unset -n x` is an invalid option there and under `--posix` — so
 	// this is 5.3's set, which is the binary the panel measures.
 	s.UnsetOptions = "vfn"
+	// `readonly` takes the kind letters and the function letter as well as
+	// POSIX's `-p`. Measured 2026-09-12: `readonly -f zz` is `zz: not a
+	// function` at 1, so the letter is read; `-i`, `-x`, `-r`, `-g`, `-l`,
+	// `-u` and `-t` are all `invalid option` at 2. bash 3.2 has no `-A` —
+	// its usage line is `readonly [-af]` — which is a change within bash
+	// rather than a difference between shells, and this is 5.3's set,
+	// the binary the panel measures.
+	s.ReadonlyOptions = "paAf"
 	// Measured 2026-09-12: `x=1; unset -n x` leaves `x` at 1 and reports 0,
 	// where ksh93 removes it. `-n` names the reference and this shell reads a
 	// name that is not one as naming nothing at all — far enough that
@@ -936,7 +944,7 @@ func Semantics() interp.Semantics {
 	// masked to five bits, with `\c?` reading as DEL since 5.x.
 	s.DollarSingleBackslashC = interp.DollarSingleControlMasked
 	s.DollarSingleUnknownEscape = interp.DollarSingleUnknownKeepsBackslash
-	s.DollarSingleNulTruncates = interp.Yes
+	s.DollarSingleNul = interp.DollarSingleNulEndsTheSpan
 	// Two digits after `\x`, and an escape with no digit at all stays the
 	// two characters it was written as: `$'\xzz'` is `\xzz` here.
 	s.DollarSingleHexReadsEveryDigit = interp.No

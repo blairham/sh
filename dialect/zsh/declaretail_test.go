@@ -454,6 +454,12 @@ func TestBareLocalListsEveryParameterWithItsAttributes(t *testing.T) {
 // assignment into a stored table that then stands in front of the view. It
 // lists as `typeset -Ar parameters` there too.
 //
+// `reswords` joins for the third time on the same argument (#2517): it is a
+// produced readonly array, and without the attribute an assignment would
+// leave a stored table standing in front of the view. Measured in zsh 5.9.2 —
+// a bare `readonly` there writes `reswords` as a bare name too, between
+// `parameters` and `sysparams` exactly as here.
+//
 // `OLDPWD` is on both listings because this shell exports it from the first
 // command, which is InheritedOldpwdIgnored's other half: measured 2026-09-12,
 // `env -i zsh -c "export V='a b'; export -p"` writes `export OLDPWD=$PWD`
@@ -466,7 +472,7 @@ func TestBareExportAndReadonlyAreAssignmentsAlone(t *testing.T) {
 		`export V='a b'; readonly R=2; export; readonly; export -p; readonly -p`)
 	want := "OLDPWD=" + dir + "\nV='a b'\nARGC=0\nEPOCHREALTIME\nEPOCHSECONDS\nR=2\n" +
 		"builtins\ndis_functions_source\ndis_patchars\ndis_reswords\nepochtime\n" +
-		"errnos\nkeymaps\nlanginfo\nparameters\nsysparams\ntermcap\nterminfo\n" +
+		"errnos\nkeymaps\nlanginfo\nparameters\nreswords\nsysparams\ntermcap\nterminfo\n" +
 		"widgets\nzsh_scheduled_events\n" +
 		"export OLDPWD=" + dir + "\nexport V='a b'\n" +
 		// The kind letters beside the readonly one, measured: real zsh's
@@ -477,7 +483,8 @@ func TestBareExportAndReadonlyAreAssignmentsAlone(t *testing.T) {
 		"typeset -Ar builtins\ntypeset -Ar dis_functions_source\n" +
 		"typeset -ar dis_patchars\ntypeset -ar dis_reswords\ntypeset -ar epochtime\n" +
 		"typeset -ar errnos\ntypeset -ar keymaps\ntypeset -Ar langinfo\n" +
-		"typeset -Ar parameters\ntypeset -Ar sysparams\ntypeset -Ar termcap\n" +
+		"typeset -Ar parameters\ntypeset -ar reswords\ntypeset -Ar sysparams\n" +
+		"typeset -Ar termcap\n" +
 		"typeset -Ar terminfo\ntypeset -Ar widgets\n" +
 		"typeset -ar zsh_scheduled_events\n"
 	if st != 0 || out != want {

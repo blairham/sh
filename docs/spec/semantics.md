@@ -4644,11 +4644,11 @@ first is unanimous across the table.** Every name is one of five kinds:
 | kind | how many | what `setopt NAME` does |
 | --- | --- | --- |
 | substrate-backed | 15 | moves a real `set -o` switch: `setopt err_exit` **is** `set -e`, and `setopt vi` **is** `set -o vi`. `ignorebraces` is the inverted one: it is `set +o braceexpand`, zsh naming the state that *stops* the expansion where the substrate names the expansion |
-| axis- or matcher-backed | 12 | moves a semantics axis (`shwordsplit`, `nomatch`, `ksharrays`, `localtraps`, `multios`, `globsubst`, `typesetsilent`) or a pattern-matcher option (`nullglob`, `globdots`, `caseglob`, `extendedglob`, `bareglobqual`). `ksharrays` is one name over **five** axes — see below |
+| axis- or matcher-backed | 13 | moves a semantics axis (`shwordsplit`, `nomatch`, `ksharrays`, `localtraps`, `multios`, `globsubst`, `typesetsilent`, `posixbuiltins`) or a pattern-matcher option (`nullglob`, `globdots`, `caseglob`, `extendedglob`, `bareglobqual`). `ksharrays` is one name over **five** axes — see below |
 | fixed | 4 | refuses to move, in zsh's own words: `can't change option: NAME`, status 1. Asking for the state it already holds is granted, and one of the four is taken at the *invocation* — see `singlecommand` below |
 | store-backed, read by the front end | 7 | `histignorespace`, read by the line editor before it records a line; `interactivecomments`, read by the same editor before it *parses* one; `promptsp` and `promptcr`, read by it before it draws a prompt; `checkrunningjobs`, read by `checkjobs` when it recomputes what the exit is held for; and `cshnullcmd` and `shnullcmd`, read together when either moves so that the first can win while it is on. All seven are kept where a recorded name is kept, because the substrate has no `set -o` name for any of them |
 | switch-backed | 3 | `aliases`, `autocd` and `checkjobs`: each moves a capability the substrate holds under no option name of its own — alias expansion really does stop, a bare directory name really is read as a `cd`, and a job still running really does hold the exit |
-| **recorded** | 144 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
+| **recorded** | 143 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
 
 **Two names moved out of "recorded" when the history knobs were built**
 (#571). `histignorespace` is the fifth row above: its state has nowhere
@@ -4765,7 +4765,18 @@ editor now asks for it before each line it parses (#2537), which is the
 `histignorespace` bargain exactly — the state has nowhere better to live, and
 something reads it every time a line is accepted.
 
-So 144 of 185 are recorded, the count above is the one produced by counting
+`posixbuiltins` left "recorded" the same way (#2390): with it off — a plain
+zsh — `command name` asks for an *external* program of that name and nothing
+else, so `command set -o globstar` is `command not found: set` at 127 and the
+option is never set. `command` in front of a special builtin is the survivable
+spelling in the other four dialects, so a line written to work under either
+shell's name silently did nothing here. The axis is
+`Semantics.CommandReachesABuiltin`, and `emulate sh` and `emulate ksh` turn the
+option on where `emulate csh` and `emulate zsh` leave it off — measured all
+four ways, which is what makes it the fifth axis an emulation carries.
+
+So 143 of 185 are recorded, the count above is the one produced by counting
+
 the constructors in `dialect/zsh/setopt.go`, and **the fixed set is now
 exactly the set real zsh refuses**: `interactive`, `shinstdin`,
 `singlecommand` and `zle`. `monitor` left it in #1720 because zsh grants it

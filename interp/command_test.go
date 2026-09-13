@@ -235,3 +235,59 @@ func TestCommandCapitalVSaysItAsASentence(t *testing.T) {
 		t.Errorf("stderr = %q, want the -V complaint", errs)
 	}
 }
+
+// TestCommandReachesABuiltinOrOnlyAnExternal is the axis: `command name` runs
+// the builtin of that name in four dialects, and in one it asks for an
+// external program alone — so a builtin nothing on PATH shares a name with is
+// `command not found` there.
+//
+// The status is what makes it worth an axis rather than a wording. `command`
+// in front of a *special* builtin is the survivable spelling everywhere else,
+// and where the word cannot reach a builtin it is 127 and the builtin never
+// ran at all.
+func TestCommandReachesABuiltinOrOnlyAnExternal(t *testing.T) {
+	answer := func(a Answer) func(*Runner) {
+		return func(r *Runner) {
+			s := *r.Semantics
+			s.CommandReachesABuiltin = a
+			r.Semantics = &s
+		}
+	}
+
+	// `eval` rather than `echo`, so that the PATH search really has nothing
+	// to find: a builtin with an external twin cannot tell "the builtin ran"
+	// from "the program of that name ran", and every machine this runs on
+	// has /bin/echo.
+	out, status := run(t, `command eval 'printf reached'`, answer(Yes))
+	if !strings.Contains(out, "reached") || status != 0 {
+		t.Errorf("Yes: got %q status %d, want the builtin run", out, status)
+	}
+
+	// And the other half, which is the whole point: the lookup is skipped
+	// rather than tried and discarded, so the PATH search is what answers.
+	out, status = run(t, `command eval 'printf reached'`, answer(No))
+	if strings.Contains(out, "reached") {
+		t.Errorf("No: got %q, want the builtin not run", out)
+	}
+	if !strings.Contains(out, "eval: not found") || status != 127 {
+		t.Errorf("No: got %q status %d, want the PATH search to have answered", out, status)
+	}
+
+	// A function is bypassed either way — that is what `command` is for, and
+	// it is not the question this axis asks.
+	for _, a := range []Answer{Yes, No} {
+		out, _ = run(t, `echo() { printf FUNCTION; }; command echo reached`, answer(a))
+		if strings.Contains(out, "FUNCTION") {
+			t.Errorf("%v: got %q, want the function bypassed", a, out)
+		}
+	}
+
+	// `command -v` is not the axis either: it reports what a *name* is, and
+	// a builtin is one whether or not the word could run it.
+	for _, a := range []Answer{Yes, No} {
+		out, _ = run(t, `command -v echo`, answer(a))
+		if !strings.Contains(out, "echo") {
+			t.Errorf("%v: got %q, want -v to have named the builtin", a, out)
+		}
+	}
+}

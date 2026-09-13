@@ -312,3 +312,33 @@ func TestEmulateDashLLastsAsLongAsTheFunction(t *testing.T) {
 		t.Errorf("out %q status %d, want the option left on at the top level", out, st)
 	}
 }
+
+// The fifth axis, and the only one an emulation carries that a script can
+// also ask for by its own name: `posixbuiltins` decides whether `command`
+// reaches a builtin, and `emulate sh` and `emulate ksh` turn it on where
+// `emulate csh` and `emulate zsh` leave it off.
+//
+// `set -f` is the probe because nothing on any PATH is called `set`, so
+// reading `$-` afterwards tells the two answers apart without depending on
+// what the machine happens to have installed.
+func TestEmulateTurnsPosixBuiltinsOnForTheShFamily(t *testing.T) {
+	const probe = `command set -f; echo "st=$?"; case $- in (*f*) echo SET;; (*) echo UNSET;; esac`
+	for _, mode := range []string{"sh", "ksh"} {
+		out, st := runZsh(t, t.TempDir(), `emulate `+mode+`; `+probe)
+		if st != 0 || out != "st=0\nSET\n" {
+			t.Errorf("emulate %s: out %q status %d, want the builtin reached", mode, out, st)
+		}
+	}
+	for _, mode := range []string{"csh", "zsh"} {
+		out, _ := runZsh(t, t.TempDir(), `emulate `+mode+`; `+probe)
+		if !strings.Contains(out, "st=127") || !strings.Contains(out, "UNSET") {
+			t.Errorf("emulate %s: out %q, want the word to have asked for an external", mode, out)
+		}
+	}
+	// And it is the option that carries it, not the mode: turning the option
+	// off again after the emulation puts zsh's own answer back.
+	out, _ := runZsh(t, t.TempDir(), `emulate sh; unsetopt posixbuiltins; `+probe)
+	if !strings.Contains(out, "st=127") || !strings.Contains(out, "UNSET") {
+		t.Errorf("out %q, want the option to have decided it", out)
+	}
+}

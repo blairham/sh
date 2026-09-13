@@ -17155,6 +17155,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `cmd/command-v-on-nothing` | `st=127` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` | `st=127` |
 | `cmd/command-v-names-a-function` | `f` | `f` | `f` | `f` | `f` | `f` | `f` |
 | `cmd/command-bypasses-a-function` | `hi` | `hi` | `hi` | `hi` | `hi` | `hi` | `hi` |
+| `cmd/command-in-front-of-a-builtin` | `st=0~SET` | `st=0~SET` | `st=0~SET` | `st=0~SET` | `st=0~SET` | `st=127~UNSET` **2>** `<shell>:1: command not found: set` | `st=0~SET` |
+| `cmd/posixbuiltins-lets-command-reach-a-builtin` | `st=0~SET` | `st=0~SET` | `st=0~SET` | `st=0~SET` | `st=0~SET` | `st=0~SET` | `st=0~SET` |
+| `cmd/an-sh-emulation-lets-command-reach-a-builtin` | `st=0~SET` | `st=0~SET` | `st=0~SET` | `st=0~SET` | `st=0~SET` | `st=0~SET` | `st=0~SET` |
 | `cmd/command-with-an-option-nobody-has` | `st=2` **2>** `<shell>: 1: command: Illegal option -q` | `st=2` **2>** `<shell>: line 1: command: -q: invalid option~command: usage: command [-pVv] command [arg ...]` | `st=2` **2>** `<shell>: line 1: command: -q: invalid option~command: usage: command [-pVv] command [arg ...]` | `st=2` **2>** `<shell>: line 0: command: -q: invalid option~command: usage: command [-pVv] command [arg ...]` | `st=2` **2>** `<shell>: command: -q: unknown option~Usage: command [-pvxV] [command [arg ...]]` | `st=127` **2>** `<shell>:1: command not found: -q` | `st=2` **2>** `<shell>: command: line 0: illegal option -q` |
 | `cmd/command-v-names-a-reserved-word` | `if` | `if` | `if` | `if` | `if` | `if` | `if` |
 
@@ -17221,6 +17224,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `cmd/command-bypasses-a-function` — the whole reason `command` exists: a function may wrap the thing it is named after without calling itself
   ```sh
   echo() { echo overridden; }; command echo hi
+  ```
+- `cmd/command-in-front-of-a-builtin` — the CommandReachesABuiltin axis: four dialects run the builtin, and zsh asks for an external program alone and answers `command not found: set` at 127. `set` is the probe because no PATH anywhere has a program of that name, and `$-` afterwards says whether the builtin ran rather than merely what it reported. The divergence is not the status: `command` in front of a *special* builtin is the survivable spelling everywhere else, so a line written to work under either shell's name does nothing at all there
+  ```sh
+  command set -f; echo "st=$?"; case $- in (*f*) echo SET;; (*) echo UNSET;; esac
+  ```
+- `cmd/posixbuiltins-lets-command-reach-a-builtin` — zsh's own name for the POSIX behavior, and the reason the axis is not a constant there: with the option on, `command` reaches the builtin and the row reads as the other four already do. The other six have no `setopt`, whose failure is silenced so the rest of the line still runs
+  ```sh
+  setopt posixbuiltins 2>/dev/null; command set -f; echo "st=$?"; case $- in (*f*) echo SET;; (*) echo UNSET;; esac
+  ```
+- `cmd/an-sh-emulation-lets-command-reach-a-builtin` — the option is what an sh-family emulation turns on, which is the fifth axis `emulate` carries — so a zsh script that opened with `emulate sh` was already getting the POSIX answer, and the divergence only ever showed in a plain zsh
+  ```sh
+  emulate sh 2>/dev/null; command set -f; echo "st=$?"; case $- in (*f*) echo SET;; (*) echo UNSET;; esac
   ```
 - `cmd/command-with-an-option-nobody-has` — the CommandRejectsUnknownOption axis: bash, dash and ksh93 refuse an option command does not have, at 2; zsh stops reading options and looks up -q as the command, at 127. Probed with a letter no panel shell owns — -x is a real ksh93 option, and a probe written with -x read ksh93 as tolerant off ksh93's own feature
   ```sh

@@ -5530,6 +5530,25 @@ type Semantics struct {
 	// ksh93 as tolerant off ksh93's own feature.
 	CommandRejectsUnknownOption Answer
 
+	// CommandReachesABuiltin lets `command name` run the builtin of that
+	// name. Where it does not, the word is a request for an *external*
+	// program alone, and a builtin nothing on PATH shares a name with is
+	// `command not found`.
+	//
+	// POSIX is unambiguous — `command` exists so that a special builtin's
+	// failure is survivable and so a function can wrap the builtin it is
+	// named after — and four of the five dialects answer Yes. zsh alone
+	// answers No, and it is not an oversight there: the shell has an option
+	// for the POSIX behavior (`posixbuiltins`), and its two sh-family
+	// emulations turn that option on.
+	//
+	// The divergence is not the status. `command set -o …` in front of a
+	// *special* builtin is the survivable spelling everywhere else, and in
+	// zsh it is 127 and the option is never set — so a line written to work
+	// under either shell's name silently does nothing there. Recorded as
+	// `cmd/command-in-front-of-a-builtin`.
+	CommandReachesABuiltin Answer
+
 	// GetoptsRejectsUnknownOption is the same question for `getopts`, which
 	// has no options at all here — so any leading `-` word is the one being
 	// asked about, and it would otherwise be the optstring.
@@ -10091,6 +10110,9 @@ func PosixSemantics() Semantics {
 		// the second.
 		CommandRejectsUnknownOption: Yes,
 		GetoptsRejectsUnknownOption: No,
+		// And POSIX gives `command` a builtin to run: bypassing the function
+		// table is what the utility is for, not bypassing the builtins too.
+		CommandReachesABuiltin: Yes,
 		// POSIX gives `umask` chmod's symbolic mode: a who list, then one
 		// or more actions, each an operator and its permissions. So several
 		// operators in a clause are allowed, an omitted who means all three,

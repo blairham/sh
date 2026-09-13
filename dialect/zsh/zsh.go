@@ -892,6 +892,13 @@ func Semantics() interp.Semantics {
 	s.WaitForAJobFailsWhenInterrupted = interp.No
 	s.DisownRemovesTheJob = interp.Yes
 	s.CommandRejectsUnknownOption = interp.No
+	// `command` here means an *external* program of that name and nothing
+	// else: `command set -o …` is `command not found: set` at 127, not the
+	// survivable spelling of a special builtin it is in the other four. The
+	// state is not fixed — `posixbuiltins` moves it, and `emulate sh` and
+	// `emulate ksh` turn that option on — so setopt.go reads and writes this
+	// axis and the preset only says where a plain zsh starts.
+	s.CommandReachesABuiltin = interp.No
 	s.GetoptsRejectsUnknownOption = interp.No
 	s.ShiftCountIsArithmetic = interp.Yes
 	// No by construction rather than by measurement: zsh has already parsed

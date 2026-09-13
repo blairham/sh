@@ -877,6 +877,9 @@ func Semantics() interp.Semantics {
 	// condition axis could not carry: zsh abandons the condition and stays
 	// for `(( ))`, so the two constructs do not group.
 	s.ArithCommandErrorIsFatal = interp.Yes
+	// And a C-style `for` header, which zsh gives up too where it stays for
+	// `(( ))` — see [interp.Semantics.ForHeaderArithmeticErrorIsFatal].
+	s.ForHeaderArithmeticErrorIsFatal = interp.Yes
 	s.UnterminatedBracket = interp.BracketLiteral
 	s.UnknownCharacterClass = interp.UnknownClassEmptiesTheBracket
 	// A value's backslash is **data**, and the metacharacter behind it stays

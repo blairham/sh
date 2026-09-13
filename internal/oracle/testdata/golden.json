@@ -5589,6 +5589,57 @@
         "TimedOut": false
       }
     },
+    "arith/a-for-header-part-that-will-not-parse": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: bad for loop variable",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e: line 1: ((: 1+: arithmetic syntax error: operand expected (error token is \"+\")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e: line 1: ((: 1+: arithmetic syntax error: operand expected (error token is \"+\")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e: ((: 1+: syntax error: operand expected (error token is \"+\")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: Bad for loop variable",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:  1+: more tokens expected",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: bad math expression: operand expected at end of string",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "arith/a-for-header-part-with-blanks-that-will-not-evaluate": {
       "ash": {
         "Stdout": "",
@@ -5634,6 +5685,57 @@
       },
       "zsh": {
         "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: division by zero",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/a-for-header-step-that-will-not-evaluate": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: bad for loop variable",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "body~st=1",
+        "Stderr": "\u003cshell\u003e: line 1: ((: i=1/0 : division by 0 (error token is \"0 \")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "body~st=1",
+        "Stderr": "\u003cshell\u003e: line 1: ((: i=1/0 : division by 0 (error token is \"0 \")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "body~st=1",
+        "Stderr": "\u003cshell\u003e: ((: i=1/0 : division by 0 (error token is \" \")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: Bad for loop variable",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "body",
+        "Stderr": "\u003cshell\u003e: i=1/0 : divide by zero",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "body",
         "Stderr": "\u003cshell\u003e:1: division by zero",
         "Status": 1,
         "Signal": 0,

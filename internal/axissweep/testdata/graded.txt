@@ -27,6 +27,7 @@ ash    EchoInterpretsEscapes                                No
 ash    ExitTrapRunsOnSignalDeath                            No
 ash    FailedExpansionAbandonsTheLine                       No
 ash    FatalErrorStatusIsOne                                No
+ash    ForHeaderArithmeticErrorIsFatal                      -
 ash    HangupIsAnOrderlyExit                                No
 ash    LastPipelineElementInCurrentShell                    No
 ash    LocalOutsideAFunctionIsAnError                       Yes
@@ -46,6 +47,7 @@ bash   EchoInterpretsEscapes                                No
 bash   ExitTrapRunsOnSignalDeath                            Yes
 bash   FailedExpansionAbandonsTheLine                       Yes
 bash   FatalErrorStatusIsOne                                Yes
+bash   ForHeaderArithmeticErrorIsFatal                      No
 bash   HangupIsAnOrderlyExit                                No
 bash   LastPipelineElementInCurrentShell                    No
 bash   LocalOutsideAFunctionIsAnError                       Yes
@@ -65,6 +67,7 @@ dash   EchoInterpretsEscapes                                Yes
 dash   ExitTrapRunsOnSignalDeath                            No
 dash   FailedExpansionAbandonsTheLine                       No
 dash   FatalErrorStatusIsOne                                No
+dash   ForHeaderArithmeticErrorIsFatal                      -
 dash   HangupIsAnOrderlyExit                                No
 dash   LastPipelineElementInCurrentShell                    No
 dash   LocalOutsideAFunctionIsAnError                       Yes
@@ -84,6 +87,7 @@ ksh    EchoInterpretsEscapes                                No
 ksh    ExitTrapRunsOnSignalDeath                            Yes
 ksh    FailedExpansionAbandonsTheLine                       No
 ksh    FatalErrorStatusIsOne                                Yes
+ksh    ForHeaderArithmeticErrorIsFatal                      Yes
 ksh    HangupIsAnOrderlyExit                                No
 ksh    LastPipelineElementInCurrentShell                    Yes
 ksh    LocalOutsideAFunctionIsAnError                       -
@@ -103,6 +107,7 @@ zsh    EchoInterpretsEscapes                                Yes
 zsh    ExitTrapRunsOnSignalDeath                            No
 zsh    FailedExpansionAbandonsTheLine                       No
 zsh    FatalErrorStatusIsOne                                Yes
+zsh    ForHeaderArithmeticErrorIsFatal                      Yes
 zsh    HangupIsAnOrderlyExit                                Yes
 zsh    LastPipelineElementInCurrentShell                    Yes
 zsh    LocalOutsideAFunctionIsAnError                       No

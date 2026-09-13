@@ -334,6 +334,37 @@ func Probes() []Probe {
 				return "", "the row printed neither pair, so the expression never reached an assignment"
 			},
 		},
+		{
+			Field: "ForHeaderArithmeticErrorIsFatal",
+			// Two rows, because one cannot tell the two silences apart. A
+			// shell that gave up the input prints no `st=`, and so does one
+			// that never had a C-style `for` to give up — dash and ash answer
+			// the failing row with a syntax error about the loop variable,
+			// which is a refusal of the grammar and not a reading of the
+			// header. The clean row is what separates them.
+			Cases:   []string{"core/c-style-for", "arith/a-for-header-part-that-will-not-evaluate"},
+			Reading: "`for (( i=0; i<1/0; i++ )); do echo body; done; echo \"st=$?\"` prints `st=` in a shell that ends the loop and reads the next line, and nothing at all in one that gives up the input — read only where the clean C-style `for` row shows the shell has the construct",
+			Read: func(cells map[string]oracle.Result) (string, string) {
+				// Whether the construct exists at all, asked first: the
+				// failing row's silence means nothing until this says the
+				// shell can run a header that works.
+				if clean := cells["core/c-style-for"]; clean.Status != 0 ||
+					strings.TrimSpace(clean.Stdout) != "012" {
+					return "", "this shell has no C-style `for` — it refuses a header that evaluates cleanly, so the failing row is a syntax error rather than an answer about the failure"
+				}
+				r := cells["arith/a-for-header-part-that-will-not-evaluate"]
+				// The body must not have run under either reading, so `body`
+				// in the output means the row measured something other than
+				// the header failing.
+				if strings.Contains(r.Stdout, "body") {
+					return "", "the loop body ran, so the header did not fail and the row says nothing about what a failure does"
+				}
+				if strings.Contains(r.Stdout, "st=") {
+					return "No", ""
+				}
+				return "Yes", ""
+			},
+		},
 	}
 }
 

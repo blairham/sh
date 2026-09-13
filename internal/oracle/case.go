@@ -3852,6 +3852,16 @@ echo "reached-after st=$?"`,
 		Why:     "three expressions in one header, so a complaint with no expression in it cannot say which of them failed: bash and ksh93 name `i<1/0`. The loop body must not run either, which is the half a diagnostic alone would not show",
 	},
 	{
+		ID: "arith/a-for-header-part-that-will-not-parse", Category: "arithmetic",
+		Snippet: `for (( i=0; 1+; i++ )); do echo body; done; echo "st=$?"`,
+		Why:     "the other way a header part can fail, and it is recorded beside the evaluation one because the two shells that give up the input give it up for both — `1+` never reaches the evaluator and `1/0` does, and neither prints the `st=`. The three bash columns report and carry on in both, so the pairing is what says one axis answers for the two branches rather than two axes with one measurement each (#2617)",
+	},
+	{
+		ID: "arith/a-for-header-step-that-will-not-evaluate", Category: "arithmetic",
+		Snippet: `for (( i=0; i<3; i=1/0 )); do echo body; done; echo "st=$?"`,
+		Why:     "the third part, and the one a probe is easiest to write wrongly: the step runs at the loop's *back edge*, so a body holding a `break` never reaches it and the row measures nothing — this one lets the body run and print once. ksh93 and zsh give up the input after the first pass; the bash columns report the step and go on to the `st=`",
+	},
+	{
 		ID: "arith/a-for-header-part-is-blamed-as-it-was-written", Category: "arithmetic",
 		Snippet: `x="echo hi"; for (( $x ;;)); do :; done; echo "st=$?"`,
 		// The blanks in the header are the case, and the printer's zero

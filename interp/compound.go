@@ -474,7 +474,7 @@ func (r *Runner) forArithPart(tree syntax.ArithExpr, text string) (int, bool) {
 	}
 	if perr != nil {
 		r.diagf("%s\n", r.diag().arithConstructFailure("((", r.diag().ParseFailure(perr)))
-		r.status = 1
+		r.forHeaderArithFailed()
 		return 0, false
 	}
 	v, err := r.evalArith(resolved)
@@ -483,10 +483,33 @@ func (r *Runner) forArithPart(tree syntax.ArithExpr, text string) (int, bool) {
 		// `((: i<1/0: division by 0` and not a bare `division by 0`, which
 		// said nothing about which of the three parts had failed (#1985).
 		r.diagf("%s\n", r.diag().arithConstructFailure("((", r.arithFailure(expanded, err)))
-		r.status = 1
+		r.forHeaderArithFailed()
 		return 0, false
 	}
 	return v, true
+}
+
+// forHeaderArithFailed is what a C-style `for` header leaves behind once it
+// has said which of its three expressions would not evaluate.
+//
+// The status is 1 in every column that has the construct, so only the reach is
+// a question — and it is asked here rather than folded into arithCmdFailed
+// because the two constructs do not cut the panel the same way: zsh stays for
+// `(( 1/0 ))` and gives up the header. See
+// [Semantics.ForHeaderArithmeticErrorIsFatal], where both are measured.
+//
+// One place for both ways the expression can fail, because both shells that
+// give up do so for both — a parse that never reached the evaluator and an
+// evaluation that did.
+func (r *Runner) forHeaderArithFailed() {
+	r.status = 1
+	if r.ask(r.sem().ForHeaderArithmeticErrorIsFatal,
+		"a `for (( ))` header that could not be evaluated abandoning the input") {
+		// The same door `(( ))` uses, and for the same reason: the status is
+		// already decided and what the dialect adds is that there is no next
+		// line to read it.
+		r.abandonOverArithmetic()
+	}
 }
 
 // loopControl consumes a break or continue aimed at this loop, reporting

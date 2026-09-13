@@ -229,6 +229,14 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			continue
 		}
 
+		// A write into the ends a coprocess published under a name is where
+		// this shell notices the coprocess has ended, and it is asked before
+		// the target is expanded so that the expansion is the one the notice
+		// leaves behind: with the array taken back, `>&${CP[1]}` has no word
+		// for a target and is the ambiguous redirect bash reports. See
+		// Runner.coprocNoticedByAWrite.
+		r.coprocNoticedByAWrite(rd, fd, fdVar)
+
 		// The target is expanded where the command runs, which decides what
 		// becomes of a write inside it and of a failure — and, whoever runs
 		// the command, an expansion that failed is not a name and is not

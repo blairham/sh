@@ -9235,16 +9235,97 @@ are controls for exactly that, and a build with the retirement moved to
 the statement boundary fails all six while passing every row that
 measures the fix.
 
-The second is the residue: a long loop of builtins is a shape bash
-*does* answer deterministically and this shell does not follow it there.
-`coproc CP { exit 0; }; for ((i=0;i<500;i++)); do :; done; echo x
->&${CP[1]}` is an ambiguous redirect at 1 in bash and is still SIGPIPE
-here, and it is why the one `-1 / 0` file in `make bash-suite` — the
-file this issue was derived from, confirmed to be the coprocess one and
-confirmed to die on SIGPIPE — is unchanged by the fix. Following bash
-there means a notice on a loop's back edge, which would answer 0 for the
-five-iteration loop bash answers 2 for; that is a trade to measure
-rather than to assume, and it is #2468.
+The second is where the reaping is not the whole of it: a write aimed at
+the ends the shell published itself is a fifth place the notice lands,
+and it is the subject of the next section.
+
+### A write into a coprocess's own ends delivers the notice
+
+The four places above are all a child being reaped. One shape is not,
+and this shell has to answer it anyway, because losing the race there is
+**fatal** rather than merely late (#2582, #2468):
+
+    coproc { echo hello; }
+    read -r out <&${COPROC[0]}
+    echo foo >&${COPROC[1]}
+
+bash reports 0 and carries on, 100 runs of 100. The obvious reading —
+that bash keeps a read end of the shell→coprocess pipe itself, so the
+write lands in a buffer — is wrong, and three measurements on bash
+5.3.15, 2026-09-13, say so. `lsof` on the shell while the coprocess runs
+lists the two published descriptors and nothing else. A 200KB write
+through the array, which is more than the pipe will hold and so blocks
+until the child is gone, is SIGPIPE at 141. And a *duplicate* taken
+while the coprocess ran — `exec 3>&${COPROC[1]}` — written after a
+second read has proved the child closed its output, is 141 three times
+in three.
+
+So the pipe has no reader once the child is gone, and bash's 0 is the
+child not having finished dying. **The race has both edges.** With a
+hundred `:` between the read and the write, one run in twenty is 141 in
+bash itself; with five hundred, the notice has landed and it is
+`${CP[1]}: ambiguous redirect` at 1. bash therefore has exactly two
+answers it gives whenever it is asked twice, and neither is a death: the
+ambiguous redirect where the array published the end, and `Bad file
+descriptor` where a script saved the number out of the array first.
+
+A coprocess here is a goroutine rather than a child, so its ends close
+the instant its body returns and this shell is never anywhere but the
+middle of that race — 141 every time, where bash is 141 almost never.
+Reproducing the window would be reproducing a race. Taking the notice
+this shell already holds is deterministic and lands on the answer bash
+gives twice, so a redirection that aims a coprocess's published end at
+one of the command's own streams delivers the notice before the target
+is expanded, and the expansion that follows finds the array gone.
+
+**Three conditions, each measured rather than convenient.**
+
+*Only a write.* `read -r a <&${CP[0]}` on a coprocess that has ended
+still answers the line it wrote with the array still at 2 — the read end
+has something in it, the write end has nobody at the other side. A build
+that delivered the notice for `<&` too fails that row and the
+end-of-file one beside it.
+
+*Only onto a stream the command itself writes.* `exec 3>&${CP[1]}` parks
+a **copy** on a number of the script's own, and that shape bash answers
+deterministically: the duplicate outlives the reaping and still ends the
+shell on SIGPIPE when it is written — `n=0` printed first and then 141,
+30 runs of 30 in bash and here alike. A notice delivered at the copy
+would turn a measured death into a refusal. So `{v}>&…` and any number
+above two are left alone, and only 0, 1 and 2 deliver it.
+
+*Only through the published name.* `coproc CP { echo hi; }; echo x >&2;
+echo "n=${#CP[@]}"` is `n=2` in bash, 30 runs of 30, so an ordinary
+`>&2` does not deliver the notice and a rule keyed on the operator alone
+would answer 0 there — on more lines of more scripts than anything else
+it could have been keyed on. The name is looked for in the redirection's
+text, which is a guard rather than a reading of the word: a target is
+expanded from its text and there is no parsed form to ask, and a word
+that mentions the name and does not expand to the ends costs nothing but
+an earlier notice.
+
+**And only where the ends were published under a name at all.** zsh
+reaches its coprocess by a letter and has no array, and a `print -p` to
+one that has ended is a SIGPIPE death at 141 — the opposite answer. The
+name is empty for that spelling and for ksh93's `|&`, so neither is
+touched, and ksh93 is the row that says so: `true |&`, an `echo x >&2`,
+then `print -p hi` is still 0 there.
+
+This is also the whole of the `-1 / 0` file in `make bash-suite`, whose
+residue was #2468: `coproc CP { exit 0; }; for ((i=0;i<500;i++)); do :;
+done; echo x >&${CP[1]}` is now the ambiguous redirect at 1 that bash
+gives, without a notice on any loop's back edge — which would have
+answered 0 for the five-iteration loop bash answers 2 for.
+
+The corpus row for it spends its wait inside **one builtin** rather than
+in a loop: `read -t 0.5` on a fifo opened for reading and writing, so
+nothing is reaped along the way and half a second is far more room for
+SIGCHLD than the five hundred iterations #2468 measured — which is the
+shape #2506 showed goes the other way under load.
+
+**Nothing about SIGPIPE changes**, and that is the control the change
+had to keep. `exec 3> >(exit 0)`, a wait, and `echo foo >&3` is 141 in
+bash 5.3, bash as `sh`, bash 3.2, zsh and here.
 
 **A read that finds end-of-file is a different rule and is shared.**
 Both shells with the coprocess letters forget the *whole* coprocess
@@ -9256,8 +9337,8 @@ never reaches it, spelling `-p` as a prompt, and two reads that both find
 end-of-file leave `${#CP[@]}` at 2. So it lives in the read path rather
 than being a fourth value of the axis.
 
-Twelve corpus rows, under `commands/` and `redirection/`; six of them are
-the controls named above. The zsh column of
+Fifteen corpus rows, under `commands/` and `redirection/`; eight of them
+are the controls named above. The zsh column of
 `commands/writing-by-a-letter-to-a-coprocess-that-has-ended` is red until
 #770: a builtin's broken-pipe write is answered here with a status rather
 than with the signal, so this shell reports the refusal where zsh reports

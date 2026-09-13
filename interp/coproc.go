@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/blairham/sh/syntax"
 )
@@ -418,4 +419,103 @@ func (c *coprocReader) Read(p []byte) (int, error) {
 		c.r.coprocReadEnded()
 	}
 	return n, err
+}
+
+// coprocNoticedByAWrite delivers the reaping notice where this shell is about
+// to *write* into the ends a coprocess published under a name.
+//
+// It is the fifth place the notice lands, and the only one that is not a
+// child being reaped. The four in retireCoproc match every shape bash answers
+// the same way twice; this one covers the shape bash answers by **winning a
+// race**, which is the whole of #2582 and measured 2026-09-13 on bash 5.3.15:
+//
+//	coproc { echo hello; }
+//	read -r out <&${COPROC[0]}
+//	echo foo >&${COPROC[1]}      st=0, the shell carries on, 100 runs of 100
+//
+// The issue read that status as bash keeping a read end of the shell→
+// coprocess pipe itself. It does not, and three measurements say so. `lsof`
+// on the shell while the coprocess runs lists the two published descriptors
+// and nothing else. A write of 200KB through the array — more than the pipe
+// will hold, so it blocks until the child is gone — is SIGPIPE at 141. And a
+// *duplicate* taken while the coprocess ran, written after a second read has
+// proved the child closed its output, is 141 three times in three. The pipe
+// has no reader once the child is gone; the small write above succeeds
+// because the child has not finished dying yet.
+//
+// That race has both edges. With a hundred `:` between the read and the
+// write, one run in twenty is 141 in bash itself; with five hundred, the
+// notice has landed and it is `${CP[1]}: ambiguous redirect` at 1 (#2468).
+// So bash has exactly two *deterministic* answers for a write aimed at a
+// coprocess that has ended, and neither is a death: the ambiguous redirect
+// where the array published the end, and `Bad file descriptor` where a script
+// saved the number out of the array first.
+//
+// A coprocess here is a goroutine rather than a child, so its ends close the
+// instant its body returns and this shell is never anywhere but the middle of
+// that race — 141 every time, where bash is 141 almost never. Reproducing
+// bash's window would be reproducing a race; taking the notice we already
+// hold is deterministic and lands on the answer bash gives whenever it is
+// asked twice.
+//
+// **A broken pipe is still a death**, and that is the control the fix must
+// keep: `exec 3> >(exit 0); sleep 0.3; echo foo >&3` is 141 in bash, bash as
+// `sh`, bash 3.2, zsh and here, and a duplicate of a coprocess's write end
+// taken before the reaping is 141 after it — 30 runs of 30 in bash and here
+// alike. Nothing about SIGPIPE changes; what changes is that the shell stops
+// arriving at a broken pipe through a name it published itself.
+//
+// Three conditions, and each is measured rather than convenient:
+//
+//   - **Only a write.** `read -r a <&${CP[0]}` on a coprocess that has ended
+//     still answers the line it wrote, with the array still at 2. The read
+//     end has something in it; the write end has nobody at the other side.
+//   - **Only onto a stream the command itself writes.** `exec 3>&${CP[1]}`
+//     parks a *copy* on a number of the script's own, and that one bash
+//     answers deterministically: the duplicate outlives the reaping and still
+//     ends the shell on SIGPIPE when it is written, 30 runs of 30 in bash and
+//     here alike. A notice delivered at the copy would turn a measured death
+//     into a refusal, and would make it depend on whether a goroutine had got
+//     round to finishing. So `{v}>&…` and any number above two are left
+//     alone, and only 0, 1 and 2 — what the command in front of the
+//     redirection goes on to write — deliver it.
+//   - **Only through the published name.** `coproc CP { echo hi; }; echo x
+//     >&2; echo "n=${#CP[@]}"` is `n=2` in bash, 30 runs of 30 — so an
+//     ordinary `>&2` after a coprocess has ended does not deliver the notice,
+//     and a rule keyed on the operator alone would answer 0 there.
+//   - **Only where the ends were published under a name at all.** zsh has no
+//     array and reaches its coprocess by a letter, and a `print -p` to one
+//     that has ended is a SIGPIPE death at 141 — measured, and the opposite
+//     answer. c.name is empty for that spelling and for ksh93's `|&`, so
+//     neither is touched.
+//
+// The name is looked for in the redirection's text rather than in a parsed
+// word, because a target is expanded from its text and there is no parsed
+// form to ask. That is a guard and not a reading: its whole job is to keep
+// `>&2` from delivering the notice, and a word that mentions the name and
+// does not expand to the ends costs nothing but an earlier notice.
+func (r *Runner) coprocNoticedByAWrite(rd *syntax.Redirect, fd int, fdVar string) {
+	c := r.coproc
+	// A coprocess whose ends were never published under a name is reached by
+	// a letter rather than by a redirection, and the shells with the letters
+	// answer this the other way.
+	if c == nil || c.owner != r || c.retired || c.name == "" {
+		return
+	}
+	if rd.Op != syntax.TokGreatAmp {
+		return
+	}
+	// A name the shell picks is a number of the script's own, and the loop
+	// has not picked it yet — fd is still the default 1 for `{v}>&…`, which
+	// is why the name is asked about rather than only the number.
+	if fdVar != "" || fd > 2 {
+		return
+	}
+	if !strings.Contains(rd.Text, c.name) {
+		return
+	}
+	// Still running is not ended: retireCoproc asks Job.Finished and does
+	// nothing for a coprocess that is still there, which is what keeps
+	// `coproc cat; echo hi >&"${COPROC[1]}"` working.
+	r.retireCoproc()
 }

@@ -890,9 +890,17 @@ func matchBranch(p, s string, pp, at int, o patternOpts) bool {
 		}
 		switch p[0] {
 		case '*':
-			// Collapse a run of stars, then try every split point. The
-			// shortest-first order does not matter: this answers whether a
-			// match exists, not where it ends.
+			// Collapse a run of stars, then try every split point.
+			//
+			// **Longest first, and the order is the behavior.** A `*` is
+			// greedy: it takes as much as it can and leaves the rest to what
+			// follows. Which end it claims does not change whether a match
+			// exists — so this read "the order does not matter" for as long
+			// as the answer was a bool — but it decides what a `(#b)` group
+			// after it receives, and that is written into `$match` for a
+			// script to read. Measured against zsh 5.9.2: `*(*)` over
+			// `abc93` leaves the group **empty**, because the star took the
+			// lot. Shortest first gives the group the whole subject. #2513.
 			for len(p) > 0 && p[0] == '*' {
 				p, pp = p[1:], pp+1
 			}
@@ -903,16 +911,41 @@ func matchBranch(p, s string, pp, at int, o patternOpts) bool {
 			// that stopped inside a character would hand the rest of the
 			// pattern a subject beginning with a continuation byte, which a
 			// following `?` would then take for a character of its own.
+			//
+			// Walked backwards from the end, which one-byte units can do
+			// arithmetically and characters cannot — a width is only
+			// readable forwards. So the character case collects the
+			// boundaries it passes and then reads them in reverse, and the
+			// byte case, which is every subject under `nomultibyte` and
+			// every ASCII one, allocates nothing.
+			if !o.chars {
+				for i := len(s); ; i-- {
+					mark := o.where.caps.mark()
+					if matchHere(p, s[i:], pp, at+i, o) {
+						return true
+					}
+					o.where.caps.rollback(mark)
+					if i == 0 {
+						return false
+					}
+				}
+			}
+			bounds := make([]int, 0, len(s)+1)
 			for i := 0; ; i += o.unitWidth(s[i:]) {
+				bounds = append(bounds, i)
+				if i == len(s) {
+					break
+				}
+			}
+			for j := len(bounds) - 1; j >= 0; j-- {
+				i := bounds[j]
 				mark := o.where.caps.mark()
 				if matchHere(p, s[i:], pp, at+i, o) {
 					return true
 				}
 				o.where.caps.rollback(mark)
-				if i == len(s) {
-					return false
-				}
 			}
+			return false
 
 		case '?':
 			if s == "" {

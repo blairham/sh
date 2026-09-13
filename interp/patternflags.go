@@ -439,28 +439,38 @@ func matchRepeat(item string, ip, lo, hi int, after string, ap int, s string, at
 	return repeatFrom(item, ip, 0, lo, hi, after, ap, s, at, o)
 }
 
+// **One more repetition is tried before stopping, and that order is the
+// behavior rather than an implementation detail.** A closure is greedy: it
+// takes as many repetitions as it can and leaves the rest to what follows.
+// Stopping first would answer the same question for a plain `[[ ]]` — a match
+// either exists or it does not, whichever end of the subject the run claims —
+// and a different one for `(#b)`, where what the run left behind is written
+// into `$match` for a script to read. Measured against zsh 5.9.2: `x#(*)`
+// over `xx93` reports `93`, so the closure took both `x`s; stopping first
+// reports the whole `xx93` and the capture is wrong while the match is right.
+// #2513 is what that cost — a theme file parsed into values that each kept a
+// leading blank.
 func repeatFrom(item string, ip, k, lo, hi int, after string, ap int, s string, at int, o patternOpts) bool {
+	if hi == unboundedRepeat || k < hi {
+		ceiling := splitCeiling(item, s, ip, &o)
+		for i := 0; i < ceiling; {
+			i += o.unitWidth(s[i:])
+			mark := o.where.caps.mark()
+			if !matchHere(item, s[:i], ip, at, o) {
+				o.where.caps.rollback(mark)
+				continue
+			}
+			if repeatFrom(item, ip, k+1, lo, hi, after, ap, s[i:], at+i, o) {
+				return true
+			}
+			o.where.caps.rollback(mark)
+		}
+	}
 	mark := o.where.caps.mark()
 	if k >= lo && matchHere(after, s, ap, at, o) {
 		return true
 	}
 	o.where.caps.rollback(mark)
-	if hi != unboundedRepeat && k >= hi {
-		return false
-	}
-	ceiling := splitCeiling(item, s, ip, &o)
-	for i := 0; i < ceiling; {
-		i += o.unitWidth(s[i:])
-		mark := o.where.caps.mark()
-		if !matchHere(item, s[:i], ip, at, o) {
-			o.where.caps.rollback(mark)
-			continue
-		}
-		if repeatFrom(item, ip, k+1, lo, hi, after, ap, s[i:], at+i, o) {
-			return true
-		}
-		o.where.caps.rollback(mark)
-	}
 	return false
 }
 

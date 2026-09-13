@@ -1703,11 +1703,29 @@ func (s Shell) dialectOption(name string) bool {
 // line is exactly where this shows: a line that *is* a `#` has no other
 // token, and one set afterwards would have skipped it already.
 func (s Shell) parseDialect() syntax.Dialect {
-	d := s.Dialect
-	if s.CommentsNeedTheOption != "" && !s.dialectOption(s.CommentsNeedTheOption) {
+	if s.commentsAreOff() {
+		d := s.Dialect
 		d.Comments = syntax.CommentsOrdinaryText
+		return d
 	}
-	return d
+	return s.Dialect
+}
+
+// commentsAreOff reports whether the named option is one this shell has and is
+// not on, which is the only state that changes how a line is read.
+//
+// A name the shell has never heard of is **not** a name that is off, and the
+// difference is the one [interp.Runner.DialectOption]'s second result exists
+// for. Reading an unknown name as off would let a dialect naming an option it
+// never installed silently change the grammar of every line typed into it —
+// the failure would be a `#` that stopped working, in a shell whose option
+// table has nothing to say about `#` at all.
+func (s Shell) commentsAreOff() bool {
+	if s.CommentsNeedTheOption == "" || s.Runner == nil {
+		return false
+	}
+	on, known := s.Runner.DialectOption(s.CommentsNeedTheOption)
+	return known && !on
 }
 
 // markIfAsked is what to write where unfinished output stopped, and empty

@@ -1480,6 +1480,13 @@ func Semantics() interp.Semantics {
 	// an option *name* rather than reading it as a letter. Its own usage
 	// line spells the form, `[-o[option]]`.
 	s.SetOLetterAttachesItsName = interp.Yes
+	// The other column that reads every letter before applying one:
+	// `command set -e -Z` leaves errexit off, and `set -o -Z` — where a bare
+	// `-o` takes no next word — lists nothing at all. Its pass reaches the
+	// `-o` names too, which bash's does not; that is measured in the axis and
+	// not modeled, because a wider reach in one dialect would be a second
+	// axis wearing the first one's name.
+	s.SetValidatesOptionLettersFirst = interp.Yes
 	s.BadSetOptionNameAtInvocationExitsZero = interp.No
 	s.UnknownConditionOptionIsAStatus = interp.No
 	s.ReturnOutsideAFunctionIsRefused = interp.No

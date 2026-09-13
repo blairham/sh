@@ -1466,6 +1466,13 @@ func Semantics() interp.Semantics {
 	// `bash -oerrexit -c cmd` refuses `-c` the same way. With no word behind
 	// it, `set -oe` writes the option table and then turns errexit on.
 	s.SetOLetterAttachesItsName = interp.No
+	// And every option word's letters are read before any of them is
+	// applied: `command set -e -Z` here leaves errexit **off**, where dash
+	// and BusyBox ash leave it on. The pass that does it knows letters only —
+	// `command set -e -o zzznosuch` is errexit on — and a letter welded
+	// behind an `-o` is past it, which is why `set -ozzznosuch` reports 1 and
+	// carries on where `set -Z` is 2 and ends an `sh` script.
+	s.SetValidatesOptionLettersFirst = interp.Yes
 	s.BadSetOptionNameAtInvocationExitsZero = interp.No
 	s.UnknownConditionOptionIsAStatus = interp.No
 	s.ReturnOutsideAFunctionIsRefused = interp.Yes

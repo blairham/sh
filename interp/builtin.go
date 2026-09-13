@@ -447,6 +447,9 @@ func (r *Runner) setOptionsAndOperands(_ context.Context, args []string) int {
 	if len(args) == 0 {
 		return r.setListing()
 	}
+	if st, done := r.refuseBeforeApplyingSetOptions(args); done {
+		return st
+	}
 	// Options come before `--`, and each is a letter that may be turned on
 	// with `-` or off with `+`. Only the ones with implemented behavior are
 	// accepted; the rest are refused rather than silently ignored, which
@@ -514,7 +517,7 @@ func (r *Runner) setOptionsAndOperands(_ context.Context, args []string) int {
 				// And in the shells that do not weld, what follows the `o`
 				// is more option letters, read after the listing rather than
 				// instead of it.
-				if !r.setLetters(after, on) {
+				if !r.setWeldedLetters(after, on) {
 					return r.setOptionFailure()
 				}
 				continue
@@ -529,7 +532,7 @@ func (r *Runner) setOptionsAndOperands(_ context.Context, args []string) int {
 			// *after* the name the next word gave: measured, `set -oe x` in
 			// bash, dash and ash refuses `x` as the name and never turns
 			// errexit on.
-			if after != "" && !r.setLetters(after, on) {
+			if after != "" && !r.setWeldedLetters(after, on) {
 				return r.setOptionFailure()
 			}
 			continue
@@ -589,6 +592,164 @@ func (r *Runner) setOptionsAndOperands(_ context.Context, args []string) int {
 		r.Params = append([]string(nil), args[i:]...)
 	}
 	return 0
+}
+
+// refuseBeforeApplyingSetOptions is the pass bash and ksh93 make over every
+// option word before either of them applies one, and is the whole of where
+// that reading is decided.
+//
+// A dialect that applies as it goes needs nothing here: the loop below is
+// already that reading. What this adds is the other one, where a single bad
+// letter anywhere in the word list leaves the shell exactly as it was — so
+// `set -e -Q` in bash is errexit **off**, where `set -Q -e` is off in every
+// column and tells the two readings apart from nothing.
+//
+// See Semantics.SetValidatesOptionLettersFirst for the measurement and for
+// why the invocation and the environment are not this question.
+func (r *Runner) refuseBeforeApplyingSetOptions(args []string) (int, bool) {
+	if r.atInvocation || r.fromEnvironment {
+		// The front end's own parse is position-sensitive where this one is
+		// not, measured; one pass cannot be both, and guessing that they are
+		// one would put the builtin's answer on a route that contradicts it.
+		return 0, false
+	}
+	_, _, preceded, found := r.unknownSetLetter(args, false)
+	if !found || !preceded {
+		// Either every letter is one this dialect has, or the bad one is the
+		// first thing in the word list — where applying as you go has
+		// applied nothing either, so the two readings cannot be told apart
+		// and neither is worth asking about.
+		return 0, false
+	}
+	if !r.ask(r.sem().SetValidatesOptionLettersFirst,
+		"`set` reading every option word's letters before it applies any of them") {
+		if r.unspecified {
+			return r.status, true
+		}
+		return 0, false
+	}
+	// Said the same way the applying loop says it, and by the same call, so
+	// that the dialect which reports every bad word still reports every bad
+	// word — with nothing applied, nothing listed and no parameters replaced.
+	r.unknownSetLetter(args, true)
+	if r.setRefusalOwed {
+		// Paid by biSet, which is the one door out of the builtin.
+		return r.status, true
+	}
+	return r.setOptionFailure(), true
+}
+
+// unknownSetLetter walks `set`'s option words without applying anything, and
+// finds the first letter this dialect has not got.
+//
+// The word shapes are the applying loop's on purpose: a pass that cut the
+// words differently would validate letters the other one never reads. The one
+// place the two must part is the `o` — the characters behind it are what the
+// `-o` takes under either reading, so this pass never reads them as letters,
+// and that is the whole of why a refusal can survive into the applying pass
+// at all. `set -A name` is where it stops rather than guesses: what follows
+// that name is another dialect's answer, and this pass may not ask one.
+//
+// With report false nothing is written and nothing is said. The third result
+// is whether anything stood in front of the bad letter, which is the only
+// place the two readings disagree. With report true each bad letter is
+// refused by the same call the applying loop refuses one with, so the
+// wording, the status, the usage debt and the fatality are all decided in one
+// place rather than two.
+func (r *Runner) unknownSetLetter(args []string, report bool) (bad rune, on, preceded, found bool) {
+	seen := false
+	refuse := func(opt rune, sign bool) bool {
+		if !found {
+			bad, on, preceded, found = opt, sign, seen, true
+		}
+		if !report {
+			return false
+		}
+		return r.badSetOptionLetter(opt, sign)
+	}
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		if a == "--" || len(a) < 2 || (a[0] != '-' && a[0] != '+') {
+			return
+		}
+		sign := a[0] == '-'
+		letters, stop := a[1:], false
+		if before, after, ok := strings.Cut(letters, "o"); ok {
+			letters, seen = before, true
+			if after == "" && i+1 < len(args) {
+				i++
+			}
+		} else if cut, ok := strings.CutSuffix(letters, "A"); ok && r.setArrayLetter() {
+			letters, stop = cut, true
+		}
+		for _, opt := range letters {
+			if !r.hasSetLetter(opt) {
+				if !refuse(opt, sign) {
+					return
+				}
+				continue
+			}
+			seen = true
+		}
+		if stop {
+			return
+		}
+	}
+	return
+}
+
+// hasSetLetter reports whether an option letter is one this dialect has at
+// all, which is the question the pass above asks and the one the applying
+// switch below answers by falling through to badSetOptionLetter.
+//
+// One home for it rather than two: a second table would be a copy of a
+// decision, and a copy is what makes removing either one change nothing.
+// It reads the axes rather than asking them, because a pass that applies
+// nothing must not be the one that reports a missing dialect — the applying
+// switch does that, from the same fields, a moment later.
+//
+// It is allowed to be too generous and never too strict. A letter it calls
+// this dialect's that the switch then refuses — `set -p` in a shell with the
+// letter and no privileged mode to give it, or an immovable `-t` asked to
+// move — costs only that the validating pass misses it and the applying pass
+// answers as it did before. A letter it called foreign that the switch would
+// have taken would be a refusal no shell makes.
+func (r *Runner) hasSetLetter(opt rune) bool {
+	if _, ok := setLetterNames[opt]; ok {
+		return true
+	}
+	switch opt {
+	case 'h':
+		return r.sem().SetHasTheHLetter != No
+	case 'E', 'T':
+		return r.sem().SetHasTraceLetters != No
+	case 't':
+		return r.sem().SetHasTheTLetter != No ||
+			strings.ContainsRune(r.diag().ImmovableOptionLetters["set"], opt)
+	case 'p':
+		return r.sem().SetHasThePrivilegedLetter != No
+	case 'f':
+		// Accepted by every dialect: either it turns globbing off, or it
+		// writes the name the dialect gives it, or it is inert.
+		return true
+	case 'B':
+		return r.sem().SetBTurnsOffBraceExpansion != No
+	}
+	return false
+}
+
+// setWeldedLetters reads the characters behind an `-o` as more option
+// letters, which is what the five columns that do not weld do with them.
+//
+// They are the letters Semantics.SetValidatesOptionLettersFirst cannot see,
+// so a refusal here is the *applying* pass speaking in a dialect that has
+// two, and it answers differently for it. The flag rather than an argument
+// because the refusal happens two calls down, past a bool that says only
+// whether it worked.
+func (r *Runner) setWeldedLetters(letters string, on bool) bool {
+	r.setLettersWelded = true
+	defer func() { r.setLettersWelded = false }()
+	return r.setLetters(letters, on)
 }
 
 // setLetterNames maps the letters every shell in the panel spells the same
@@ -989,6 +1150,25 @@ func (sp setRefusalSpelling) fatal(s *Semantics) Answer {
 // ones behind the first. See Semantics.SetReportsEveryBadOption, and
 // finishSetRefusals, which pays both debts.
 func (r *Runner) setRefusalStatus(sp setRefusalSpelling, why string) bool {
+	if sp == refusedOptionLetter && r.setLettersWelded && !r.atInvocation {
+		// A letter the validating pass never read, because it was welded
+		// behind an `-o` and is the `-o`'s operand to that pass. What refuses
+		// it is the applying pass, and there it is an ordinary failure rather
+		// than the usage error the first pass reports: 1, with the usage
+		// block the wording already wrote, and it does not end the script.
+		// Measured in all three bash columns — `set -ozzznosuch` lists the
+		// options, says `-z: invalid option` and carries on at 1, where the
+		// same shell's `set -Z` is 2 and ends an `sh` script (#2660).
+		if r.ask(r.sem().SetValidatesOptionLettersFirst,
+			"a `set` option letter welded behind an `-o` being refused by the applying pass") {
+			r.setOptionStatus = 1
+			return false
+		}
+		if r.unspecified {
+			r.setOptionStatus = r.status
+			return false
+		}
+	}
 	status := sp.status(r.diag())
 	r.setOptionStatus = status
 	if r.reportsEveryBadSetOption() {

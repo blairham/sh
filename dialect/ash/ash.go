@@ -342,6 +342,10 @@ func Semantics() interp.Semantics {
 	// also the probe that showed the seam above is the *spelling* refused
 	// rather than the `-o` route (#2629).
 	s.SetOLetterAttachesItsName = interp.No
+	// And as in dash it applies as it goes: `command set -e -Z` leaves
+	// errexit on, and the unguarded form ends the script for that reason
+	// rather than because the refusal is fatal on its own.
+	s.SetValidatesOptionLettersFirst = interp.No
 	// And the refusal of a `set -o` name is not a failure when it arrives on
 	// the command line: `ash -o zzznosuch -c "echo after"` writes the
 	// complaint, runs nothing, and exits 0 — where the same name inside a

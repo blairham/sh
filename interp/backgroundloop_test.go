@@ -4,6 +4,7 @@
 package interp_test
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 
@@ -104,15 +105,24 @@ func TestABackgroundJobStillReportsTheProcessItStarts(t *testing.T) {
 
 // And the answer it does cost, stated rather than left to be discovered: a
 // bounded computation written as an unbounded loop settles at its first back
-// edge, so `$!` is 0 where it was the sleep's process.
+// edge, so `$!` is the job's invented id where it was the sleep's process.
 //
 // The trade #1283 weighed, paid on the rarer shape. A hang has no status to
 // check and no diagnostic to read; a job reported as having no process of its
 // own is the answer this shell already gives for every background builtin.
+//
+// What that answer *is* changed with #2650 and the trade did not: the job
+// still settles here without a process, and the number it reports is one this
+// shell invented rather than the zero that used to stand for none. The check
+// is the same question either way — the sleep's pid is a real process id and
+// so is below every invented one — and the case above is the control that
+// keeps this from passing for a shell that settled everything early.
 func TestAConditionalLoopSettlesTheJobEvenWhenItWouldHaveEnded(t *testing.T) {
 	const src = `{ i=0; while [ $i -lt 1 ]; do i=1; done; sleep 0.1; } & echo "$!"`
 	out, st := runBoundedScript(t, src, nil, nil)
-	if got := strings.TrimSpace(out); got != "0" {
-		t.Errorf("$! = %q status %d, want 0: the job settled at the loop's back edge", got, st)
+	got := strings.TrimSpace(out)
+	id, err := strconv.Atoi(got)
+	if err != nil || id < 1<<30 {
+		t.Errorf("$! = %q status %d, want the job settled at the loop's back edge with no process", got, st)
 	}
 }

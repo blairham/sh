@@ -117,6 +117,14 @@ const (
 // answer is read only when the parent had a job to disagree about, which
 // keeps a script that never backgrounded anything off the axis entirely.
 func (r *Runner) inheritJobs(kind jobBoundary) {
+	// The memory of the jobs this shell has already waited out is never
+	// inherited, whatever the table does. It is not the table — nothing lists
+	// it and no `%` spec reaches it — and it answers one question only: a
+	// second `wait` for an id *this* shell reaped. A body a real shell would
+	// have forked reaped none of them, so it goes before the axis below is
+	// even reached, and a shell that never backgrounded anything stays off
+	// that axis exactly as it did. See Runner.reaped.
+	r.reaped = nil
 	if len(r.jobs) == 0 {
 		return
 	}

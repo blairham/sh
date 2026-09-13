@@ -909,6 +909,9 @@ func Semantics() interp.Semantics {
 	s.JobSpecsByName = interp.Yes
 	s.AmbiguousJobNameIsRefused = interp.No
 	s.WaitReportsAMissingJob = interp.Yes
+	// And a job it has already reported stays waitable by its process id:
+	// `wait %1; wait "$p"` answers the job's status in 5.9.2.
+	s.WaitRemembersAReapedJob = interp.Yes
 	s.WaitNWaitsForTheNextJob = interp.No
 	// Nor `-p`: the word is a job spec there too, and `wait -p` is `job
 	// not found: -p` at 127. Measured 2026-09-13.

@@ -371,17 +371,40 @@ func (r *Runner) killTarget(t string) (targets []jobProcess, bad int) {
 		if err != nil {
 			return nil, killTargetNotAPid
 		}
+		if j := r.jobByIdent(n); j != nil {
+			// A number this shell invented for a job that has no process of
+			// its own — what `$!` gives for `( : ) &` — so it is read as the
+			// job it names rather than handed to the kernel. Without this
+			// the number would reach `kill` as a process id, which is the
+			// whole reason it is out above every id the kernel can issue:
+			// it would find nothing. Reading it here is what makes
+			// `p=$!; kill "$p"` mean the job the script started. See
+			// jobident.go.
+			return r.jobProcesses(j)
+		}
 		return []jobProcess{{pid: n}}, jobFound
 	}
 	j, code := r.findJobQuietly(t)
 	if code != jobFound {
 		return nil, code
 	}
-	// A group only where the process leads one. Started with the monitor off
-	// it runs in this shell's group, so naming the group would name the shell
-	// — and every other job it started, and on a terminal the whole foreground
-	// group. The process is what `%1` means there (#1738). Job.processes
-	// carries that answer per process.
+	return r.jobProcesses(j)
+}
+
+// jobProcesses is what signaling a job aims at, whether the script named the
+// job by a `%` spec or by the number `$!` gave for it.
+//
+// A group only where the process leads one. Started with the monitor off it
+// runs in this shell's group, so naming the group would name the shell — and
+// every other job it started, and on a terminal the whole foreground group.
+// The process is what `%1` means there (#1738). Job.processes carries that
+// answer per process.
+//
+// One function rather than the same three lines in two places, because the two
+// routes are one decision: the number `$!` reports for a job with no process
+// is read back as that job, so `kill "$!"` and `kill %1` must reach the same
+// thing or the shell has two answers for one question.
+func (r *Runner) jobProcesses(j *Job) (targets []jobProcess, bad int) {
 	targets = j.processes()
 	if len(targets) == 0 {
 		// A job with no process of its own — nothing to signal, reported as

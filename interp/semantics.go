@@ -5765,6 +5765,45 @@ type Semantics struct {
 	// complaint — see Diagnostics.WaitNoSuchJob — and a failing status.
 	// ksh93 says nothing at all and reports 0.
 	WaitReportsAMissingJob Answer
+
+	// WaitRemembersAReapedJob keeps a job that `wait` has already reported
+	// the status of answerable by its process id, after it has left the job
+	// table. True everywhere but ksh93.
+	//
+	// The *leaving* is not the axis and is unanimous — a reaped job's number
+	// goes back, and the next job takes it in all seven columns; see
+	// Runner.reap for that measurement. This is the second half of it: the
+	// number is free, so where does the status live.
+	//
+	// Measured 2026-09-13 on
+	//
+	//	/bin/sh -c 'exit 7' & p=$!
+	//	wait %1
+	//	wait "$p"
+	//
+	// bash 5.3.15, that bash invoked as `sh`, bash 3.2.57, zsh 5.9.2, dash
+	// and BusyBox ash 1.37.0 all answer 7 on the second line. ksh93u+
+	// 2012-08-01 answers 127 — it keeps nothing once the job is reported.
+	//
+	// **A narrower reading two columns hold is not modeled.** Written the
+	// other way round — `wait "$p"` twice, so the *first* wait is the one
+	// that reaps — bash 5.3.15, bash 3.2.57, dash and ash still answer 7,
+	// while bash-as-`sh` and zsh answer 127 with `pid N is not a child of
+	// this shell`. So in those two the memory survives a reap by name and
+	// not a reap by id, which is a second axis rather than a third value of
+	// this one, and no preset here would hold it: the vector is asked at the
+	// disagreement it can express, and this note is where the rest is
+	// recorded. A bare `wait` splits a third way again — bash forgets and
+	// zsh, ksh93, dash and ash remember — and is left where it was, clearing
+	// the table without filling this memory.
+	//
+	// The preset remembers. Six of the seven columns do, and it is the
+	// answer that loses less: a script that reads `$!`, waits for it, and
+	// waits for it again in a cleanup path gets its status rather than a
+	// complaint about a child that was its own a moment ago.
+	//
+	// Bounded rather than kept forever — see reapedJobsKept.
+	WaitRemembersAReapedJob Answer
 	// WaitNWaitsForTheNextJob gives `wait` a `-n`: block until whichever
 	// job finishes first and report its status, 127 with no jobs at all.
 	// bash's letter alone; the other three refuse or misread it.

@@ -103,21 +103,28 @@ func TestABackgroundJobsPidSurvivesARedirectionThatCannotBlock(t *testing.T) {
 	}
 }
 
-// A job stopped where it stands has no process, and says so.
+// A job stopped where it stands has no process, and answers with a number of
+// this shell's own instead.
 //
 // The other half of the trade: a job settled at a blocking open is settled
 // *without* a pid, because nothing has started and while the job stands there
-// nothing will. Zero is what this shell reports for a job it has no process
-// for, which is stated on Job.PID rather than papered over — and it is what
-// keeps the pid's one write on the near side of the channel that publishes it,
-// so a process starting later cannot move it behind the shell's back.
+// nothing will. What it reports is the id this shell invented for it — above
+// every process id a kernel can issue, distinct per job, and read back through
+// the job table by `wait` and `kill`. See interp/jobident.go for why that is
+// the answer rather than the zero this used to give, which POSIX spends as
+// every process in the shell's own group (#2650).
+//
+// The pid the job would have had is what must *not* come back, and the case
+// above is what says so: an ordinary `&` job still reports its process. This
+// one only asks that the answer is not a process id, which the range does.
 func TestABackgroundJobBlockedBeforeAnyProcessReportsNoPid(t *testing.T) {
 	fifo := blockingFifo(t)
 	var got string
 	deadline(t, "starting a job whose first act blocks", func() {
 		got, _ = runLeavingJobsRunning(t, `/bin/cat < `+fifo+` & printf "[%s]" "$!"`, nil)
 	})
-	if got != "[0]" {
-		t.Errorf(`$! = %s, want [0] — a job with no process of its own reports zero`, got)
+	id, err := strconv.Atoi(strings.Trim(got, "[]"))
+	if err != nil || id < 1<<30 {
+		t.Errorf(`$! = %s, want a number this shell invented for a job with no process of its own`, got)
 	}
 }

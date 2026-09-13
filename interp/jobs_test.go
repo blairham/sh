@@ -38,9 +38,14 @@ func TestDollarBangIsAnswerableImmediately(t *testing.T) {
 	if err != nil || pid <= 0 {
 		t.Fatalf(`$! = %q, want a pid`, got)
 	}
-	// A job with no process of its own reports zero rather than a stale pid.
-	if got, _ := run(t, `{ :; } & printf "%s" "$!"`, nil); got != "0" {
-		t.Errorf(`$! for a compound job = %q, want 0`, got)
+	// A job with no process of its own answers with a number this shell
+	// invented for it rather than a stale pid — and rather than the zero it
+	// used to give, which `kill` spends as the whole process group (#2650).
+	// See interp/jobident.go.
+	got, _ = run(t, `{ :; } & printf "%s" "$!"`, nil)
+	id, err := strconv.Atoi(strings.TrimSpace(got))
+	if err != nil || id < 1<<30 {
+		t.Errorf(`$! for a compound job = %q, want an id of this shell's own`, got)
 	}
 }
 

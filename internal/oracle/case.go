@@ -11887,7 +11887,7 @@ echo unreachable`,
 		Why:     "pathname expansion never touches the subject either — a value of * stays the character even in a directory it would match — and an unset subject is the empty string rather than no subject",
 	},
 	{
-		ID: "pat/extended-patterns-are-not-core", SyntaxError: true, Category: "pattern matching",
+		ID: "pat/extended-patterns-are-not-core", Category: "pattern matching",
 		Snippet: `case abc in @(abc|xyz)) echo at;; esac`,
 		Why:     "ksh93 alone accepts them as written; dash and bash report a syntax error and zsh parses but does not match — three behaviors, so not core",
 	},
@@ -15646,12 +15646,12 @@ printf 'TWO=still-running\n'`,
 		Why:     "the same value stored rather than printed, since an assignment writes the number by the same route an expansion does",
 	},
 	{
-		ID: "pat/extended-pattern-quantifiers", Category: "pattern matching", SyntaxError: true,
+		ID: "pat/extended-pattern-quantifiers", Category: "pattern matching",
 		Snippet: `case abc in ?(abc)) echo q;; esac; case aaa in +(a)) echo plus;; esac; case b in !(a)) echo bang;; esac`,
 		Why:     "the rest of the family, which only ksh93 has in a `case` pattern — zsh reads each `?`, `+` and `!` as an ordinary character in front of a group of its own, so none of them match",
 	},
 	{
-		ID: "pat/an-extended-pattern-reaches-the-filesystem", Category: "pattern matching", SyntaxError: true,
+		ID: "pat/an-extended-pattern-reaches-the-filesystem", Category: "pattern matching",
 		Snippet: `shopt -s extglob 2>/dev/null
 mkdir -p xd; : > xd/a; : > xd/b; cd xd
 printf "[%s]" @(a|b); echo
@@ -15662,7 +15662,17 @@ printf "[%s]" @a; echo`,
 		Why:    "a quantified group as a *word*, where every other extended-pattern row asks about one as an operand. ksh93 and both bashes list the files; dash has no such pattern and zsh reads the `@` as an ordinary character in front of a group of its own, so its group matches nothing and the miss is fatal there. The last probe is the row that keeps the fix from being `an @ is a metacharacter`: `@a` is a file name and not a pattern in every column. Written over two lines so bash reaches the option — `extglob` is not in force until the line after the one that sets it (#1042)",
 	},
 	{
-		ID: "pat/a-quantifier-does-not-suspend-the-leading-period", Category: "pattern matching", SyntaxError: true,
+		ID: "pat/a-group-arriving-from-a-value", Category: "pattern matching",
+		Snippet: `shopt -s extglob 2>/dev/null
+mkdir -p gd; : > gd/ice.zsh; : > gd/other.zsh; cd gd
+M='ice*'; printf "meta[%s]" $M; echo
+L='ice|other'; printf "grp[%s]" @($L).zsh; echo
+W='@(ice|other)'; printf "whole[%s]" $W.zsh; echo`,
+		Script: true,
+		Why:    "which parts of a pattern a *value* may supply, against the filesystem, in the three shapes that come apart. `$M` is the settled half — a metacharacter out of a value globs wherever globbing a result happens at all — and it is here as the control, because a shell failing all three has a different bug from one failing the last two. `$L` fills the branches of a group whose parentheses are in the source, and `$W` carries the whole group in the value. bash 5.3 reads both of the last two; ksh93u+ globs the result and still refuses to let it build a group, which is the split `Semantics.ExpansionResultSuppliesGroupSyntax` records. The corpus had the axis and no row until #2474 — the note claiming this could not be recorded turned out to be wrong about its own evidence",
+	},
+	{
+		ID: "pat/a-quantifier-does-not-suspend-the-leading-period", Category: "pattern matching",
 		Snippet: `shopt -s extglob 2>/dev/null
 mkdir -p pd; : > pd/a; : > pd/.hid; cd pd
 printf "[%s]" @(.hid); echo
@@ -15682,7 +15692,7 @@ printf "[%s]" .@(hid); echo`,
 		Why:     "zsh takes a group with no quantifier in front of it, which the other three refuse; it is the feature that makes `@(abc|xyz)` a literal `@` and a group there rather than an extended pattern",
 	},
 	{
-		ID: "pat/a-literal-at-before-a-bare-group", Category: "pattern matching", SyntaxError: true,
+		ID: "pat/a-literal-at-before-a-bare-group", Category: "pattern matching",
 		Snippet: `case @abc in @(abc|xyz)) echo yes;; *) echo no;; esac`,
 		Why:     "the other half of that reading: the subject that zsh matches and the extended-pattern shells do not, which is what proves the two are reading the same text by different rules",
 	},
@@ -15692,12 +15702,12 @@ printf "[%s]" .@(hid); echo`,
 		Why:     "one repetition of an arm that matches no text is no text, so a group with such an arm stands for nothing — however it is quantified and including not at all. Unanimous in the shells that read the construct here, and this answered the opposite way in every dialect: the matcher tried the group against one character of the subject and upward, so a zero-length arm could never be reached. Asked as \"can an arm match nothing\" and not \"is an arm empty\", which is what the `@(*)b` line is for — a rule written the second way answers it wrong. Written in a condition rather than in a `case` so that bash reaches it without `extglob`, which is not in force until the line after the one that sets it",
 	},
 	{
-		ID: "pat/the-shortest-match-of-a-group-may-be-nothing", Category: "pattern matching", SyntaxError: true,
+		ID: "pat/the-shortest-match-of-a-group-may-be-nothing", Category: "pattern matching",
 		Snippet: "shopt -s extglob 2>/dev/null\nv=abc; echo \"[${v#@(|a)}][${v##@(|a)}]\"\ncase b in @(|a)b) echo m;; *) echo no;; esac",
 		Why:     "the same rule reaching the trim operators, where it is the whole difference between the two of them: `#` takes the shortest match an alternative offers and the empty one is the shortest there is, so it trims nothing, while `##` takes the longest and trims the `a`. This trimmed the `a` for both — a wrong *value* rather than a match not made, which is the failure mode a status can never show. `shopt` is on a line of its own because the option is not in force until the next line is parsed, and silenced because two panel shells have no such builtin and one of those reads the group natively anyway",
 	},
 	{
-		ID: "pat/a-bracket-expression-inside-a-quantified-group", Category: "pattern matching", SyntaxError: true,
+		ID: "pat/a-bracket-expression-inside-a-quantified-group", Category: "pattern matching",
 		Snippet: "shopt -s extglob 2>/dev/null\ncase \"x;y\" in x@([;])y) echo semi;; *) echo no-semi;; esac\ncase \"x<y\" in x@([<])y) echo lt;; *) echo no-lt;; esac\ncase \"x&y\" in x@([&])y) echo amp;; *) echo no-amp;; esac",
 		Why:     "a group's brackets hold its own text, operators included, which is what says the four word-ending characters are read by the group rather than by the word around it. bash with the option on and ksh93 match all three. The row below is what keeps this from being read as \"brackets protect\": the identical brackets outside a group are a syntax error in every column, so it is the group doing the protecting",
 	},
@@ -15707,17 +15717,17 @@ printf "[%s]" .@(hid); echo`,
 		Why:     "the control for the row above, and the reason the reading is scoped to the group: a `;` inside brackets and outside a group ends the word where it stands, so the whole line is refused — unanimously, and with no option involved",
 	},
 	{
-		ID: "pat/an-empty-quantified-group", Category: "pattern matching", SyntaxError: true,
+		ID: "pat/an-empty-quantified-group", Category: "pattern matching",
 		Snippet: "shopt -s extglob 2>/dev/null\ncase z in +()z) echo hit;; *) echo miss;; esac\ncase \"\" in @()) echo empty;; *) echo no;; esac\n[[ pqr == *()pqr ]] && echo star || echo no-star",
 		Why:     "a quantified group with nothing in it, which is the one shape of group this parser refused outright at its `(`. A group standing for no arms stands for nothing, so quantifying it changes nothing either — `+()z` matches `z` and `@()` matches the empty subject. The guard that refused it was the one that keeps `f() { … }` from being read as a bare group, and it had no business here: a quantifier in front of the parenthesis is what opens the group, so there is no name for a definition to be made of. Refusing it forfeited two whole files of a third-party corpus sweep (#2296). `shopt` is on a line of its own because the option is not in force until the next line is parsed, and silenced because two panel shells have no such builtin",
 	},
 	{
-		ID: "pat/an-empty-quantified-group-is-not-a-function-definition", Category: "pattern matching",
+		ID: "pat/an-empty-quantified-group-is-not-a-function-definition", Category: "pattern matching", SyntaxError: true,
 		Snippet: "shopt -s extglob 2>/dev/null\na+() { echo fn; }\na+\necho after",
 		Why:     "the other side of the same reading, and the row that says the group wins rather than merely being allowed: with the quantified groups in force `a+(` opens one, which leaves the name `a` standing alone in front of a brace group and makes the whole line a syntax error. bash and ksh93 both refuse it and both take it without the option, so this is the option changing what a *definition* means and not only what a pattern means. Written with a following `echo` so that a shell which accepts the definition is visibly a different answer from one that stops",
 	},
 	{
-		ID: "pat/a-nested-group-needs-no-quantifier", Category: "pattern matching", SyntaxError: true,
+		ID: "pat/a-nested-group-needs-no-quantifier", Category: "pattern matching",
 		Snippet: `case b in @(a|(b))) echo y;; *) echo n;; esac`,
 		Why:     "ksh93 needs a quantifier at the top level and not inside a group, so `@(a|(b))` matches b there — the lexer is what refuses the bare one, and by the time the matcher sees text it came from somewhere the dialect allows",
 	},
@@ -15827,7 +15837,7 @@ printf "[%s]" .@(hid); echo`,
 		Why:     "where a substituted word is matched against the filesystem and where it is not, unanimous in all five: the value an assignment stores is the pattern as written, and the same word standing as an argument is the two files. One row rather than two because either half alone reads as a rule about `:-` — it is the *position* that decides, and only the pair says so. This answered the listing on both sides until #995, the assignment's value having been built through the entry point that promises no matching while the substituted word inside it went through the one that does",
 	},
 	{
-		ID: "pat/a-trailing-group-is-a-list-of-qualifiers", Category: "pattern matching", SyntaxError: true,
+		ID: "pat/a-trailing-group-is-a-list-of-qualifiers", Category: "pattern matching",
 		Snippet: `mkdir -p qd/d1; : > qd/f1; : > qd/f2; ln -s f1 qd/l1; cd qd; printf "[%s]" *(.); printf "[%s]" *(/); printf "[%s]" *(@); printf "[%s]" *(^.); echo`,
 		Why:     "one shell reads the parentheses at the end of a pattern as a list of qualifiers narrowing what it matched, and the other four read `*(` as a syntax error. Four probes rather than one because a single type test cannot show that the list is a *filter*: the regular files, the directories, the symbolic links — `l1` points at a regular file and is still a link, so the test does not follow it — and then `^`, which turns the sense of what follows and answers with everything the first probe left out",
 	},
@@ -15853,32 +15863,32 @@ printf "[%s]" .@(hid); echo`,
 		Why:     "the disambiguation is exactly one character, and the row is four readings of the same three-character shape. A group with no `|` is a list — so `f1(.)` sends a literal name to the filesystem, a name being no pattern on its own. A group *with* one is the alternation that shell already had, and `f(1|2)` matches two files where `1` alone would be an unknown attribute. `N` makes a miss no error and deletes the word, which is why `printf` still writes its format once. And a character no qualifier claims is named and fatal, so `after` is not reached",
 	},
 	{
-		ID: "pat/a-qualifier-list-reads-the-permission-bits", Category: "pattern matching", SyntaxError: true,
+		ID: "pat/a-qualifier-list-reads-the-permission-bits", Category: "pattern matching",
 		Snippet: `mkdir -p pq; : > pq/plain; : > pq/prog; chmod 644 pq/plain; chmod 755 pq/prog; cd pq; printf "[%s]" *(x); echo; printf "[%s]" *(^x); echo; printf "[%s]" *(w); echo; printf "[%s]" *(W); echo after`,
 		Why:     "the nine permission letters, and the row is written to separate the three triples rather than to show one of them working. `x` is owner-execute, so 0755 passes and 0644 does not, and `^x` answers with the other file. `w` is owner-write and holds of both; `W` is *world*-write and holds of neither, which is the only difference between the two triples the fixture can show — and it makes the miss fatal, so `after` is not reached in the shell that has qualifiers either. The other four refuse `*(` while parsing (#1053)",
 	},
 	{
-		ID: "pat/a-qualifier-list-reads-the-access-rights", Category: "pattern matching", SyntaxError: true,
+		ID: "pat/a-qualifier-list-reads-the-access-rights", Category: "pattern matching",
 		Snippet: `mkdir -p fq; : > fq/rw; : > fq/gw; chmod 644 fq/rw; chmod 664 fq/gw; cd fq; printf "[%s]" *(f:g+w:); echo; printf "[%s]" *(f644); echo; printf "[%s]" *(f+020); echo; printf "[%s]" *(f); echo after`,
 		Why:     "`f` is the access-rights qualifier and it has two spellings that share an evaluator: the chmod-style clause the completion system writes — `compaudit` line 123 is `(N-f:g+w:,-f:o+w:,…)` — and the octal number. Four probes because the number's *width* is part of its meaning and a single row cannot say so: `f644` is an exact comparison over three digits, `f+020` is every bit of that number rather than any of them, and the clause reads the group triple by name. The fourth is the refusal, which is a sentence of its own — `invalid mode specification`, naming nothing — and it is fatal, so `after` is not reached. The other five refuse `*(` while parsing (#1671)",
 	},
 	{
-		ID: "pat/a-qualifier-list-reads-the-owner", Category: "pattern matching", SyntaxError: true,
+		ID: "pat/a-qualifier-list-reads-the-owner", Category: "pattern matching",
 		Snippet: `mkdir -p uq; : > uq/f1; cd uq; me=$(id -u); printf "[%s]" *(u$me); echo; printf "[%s]" *(U); echo; printf "[%s]" *(u:no-such-user-here:); echo after`,
 		Why:     "`u` is ownership, and the uid is taken from `id -u` rather than written down so the row means the same thing for a laptop, a runner and a container running as root — `u0` would be every file in the third and none in the first. `U` is the same question with the effective user filled in and needs no argument at all. The third probe is the other half of the argument's grammar: a delimited argument is a *name* and never a number, so a name nobody has is `unknown username` and fatal, and `after` is not reached (#1671)",
 	},
 	{
-		ID: "pat/a-qualifier-list-reads-the-link-count", Category: "pattern matching", SyntaxError: true,
+		ID: "pat/a-qualifier-list-reads-the-link-count", Category: "pattern matching",
 		Snippet: `mkdir -p nq/dir2/sub nq/dir1; : > nq/f1; ln nq/f1 nq/f1b; : > nq/g1; cd nq; printf "[%s]" *(l1); echo; printf "[%s]" *(l+1); echo; printf "[%s]" *(l-3); echo; printf "[%s]" *(lx); echo after`,
 		Why:     "`l` is a file's link count and the first qualifier here whose argument is a *number* — the shape `L`, `a`, `m` and `c` share. zsh answers `[g1]`, `[dir1][dir2][f1][f1b]` and `[dir1][f1][f1b][g1]` to the three comparisons, so `+` is more and `-` is fewer and neither takes the number itself. The fourth probe is the one way to write it wrong: `number expected`, which is a different sentence from `unknown file attribute` and says the letter was recognized and its argument was not — and it is fatal, so `after` is not reached. This shell answered `unknown file attribute: l` to all four, the letter being in neither the accepted table nor the refused-by-name one (#1700). The other five columns have no qualifier language at all and refuse `*(` while parsing, which is what SyntaxError records. The counts are built rather than written down: a hard link gives `f1` and `f1b` two names each, and a subdirectory gives `dir2` a third link where `dir1` has two",
 	},
 	{
-		ID: "pat/a-qualifier-list-may-follow-a-link", Category: "pattern matching", SyntaxError: true,
+		ID: "pat/a-qualifier-list-may-follow-a-link", Category: "pattern matching",
 		Snippet: `mkdir -p lq; : > lq/f1; ln -s f1 lq/la; ln -s nowhere lq/dangle; cd lq; printf "[%s]" *(N.); echo; printf "[%s]" *(N-.); echo; printf "[%s]" *(N-@); echo; printf "[%s]" *(N--.); echo after`,
 		Why:     "`-` is the qualifier that is not an attribute: it toggles whether what follows asks about a symbolic link or about what the link points at. Four probes because no single one shows a toggle. `.` is the regular file, `-.` is that file *and* the link to it, and `--.` is the first answer again — which is what says a second `-` turns it back off rather than setting a flag twice. `-@` is the dangling link alone: following it fails, and a link whose target cannot be stat'd is treated as a file in its own right. Read as an attribute name it was `unknown file attribute: -`, fifteen times per startup (#1671)",
 	},
 	{
-		ID: "pat/a-qualifier-list-may-end-in-modifiers", Category: "pattern matching", SyntaxError: true,
+		ID: "pat/a-qualifier-list-may-end-in-modifiers", Category: "pattern matching",
 		Snippet: `mkdir -p mq/sub; : > mq/sub/x.txt; : > mq/sub/y.md; cd mq; printf "[%s]" */*(N:t); echo; printf "[%s]" */*(N:e); echo; printf "[%s]" */*(N:t:r); echo; printf "[%s]" */*(N:z); echo after`,
 		Why:     "a qualifier list may end in the history-style modifiers `${x:t}` takes, and they apply to every name the pattern reported. The second probe is why this is a row rather than a line of prose: `:e` answers `[md][txt]` for names that arrived as `x.txt y.md`, so the sort is taken *after* the modifiers rather than carried through them. The fourth is the surface's own rule — an unrecognized modifier stops the chain and says nothing, where `${x:z}` is refused by name — so `after` is reached and the names are unchanged. This is the spelling zi autoloads a plugin's functions with, `(D-.N:t)` (#1671)",
 	},
@@ -16066,7 +16076,7 @@ printf "[%s]" .@(hid); echo`,
 		Why:     "the precedence, which cannot be seen from either operator alone: if the `|` bound tighter the exclusion would be `a*` minus `(*b*|zz)` and `zz` would be taken out, so hit is what says the `~` groups first",
 	},
 	{
-		ID: "pat/an-exclusion-against-the-filesystem", Category: "pattern matching", SyntaxError: true,
+		ID: "pat/an-exclusion-against-the-filesystem", Category: "pattern matching",
 		Snippet: "setopt extendedglob 2>/dev/null\nmkdir -p d\ntouch d/p_git d/p_git.zwc 'd/p_hg~' d/other\nset -- d/p_*~*(~|.zwc)\necho \"n=$#\"\nfor f; do case $f in *.zwc) echo zwc;; *p_git) echo git;; *other) echo other;; *) echo backup;; esac; done\n",
 		Script:  true,
 		Why:     "the shape every real call site writes, since a script searching a path list has a directory to search in — `vcs_info` sweeps `$fpath` with exactly this. The fixture discriminates on purpose: `p_git` matches the left side alone, `p_git.zwc` and `p_hg~` match both sides and `other` matches neither, so a walk that dropped the exclusion, ran it against a file's name alone, or refused the pattern gives three different wrong answers. The shell with the operator answers n=1 and git; the rest have no bare group and refuse the parenthesis. Nothing prints a path, because a `~` in recorded output is how the record spells a newline",

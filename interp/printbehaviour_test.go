@@ -128,6 +128,7 @@ func corpusGrammar() syntax.Dialect {
 	d.CurrentShellSubstitution = true
 	d.DollarDoubleQuote = true
 	d.ExtendedPatternInCondition = true
+	d.ExtendedPattern = true
 	d.FdVariableSubscript = true
 	d.FuncDefAtParen = true
 	d.FunctionKeywordParens = true

@@ -5996,7 +5996,7 @@ echo "st=$?"`,
 	{
 		ID: "subst/a-brace-body-opens-on-a-blank-or-a-paren-and-nothing-else", Category: "commands",
 		Snippet: `echo ${echo hi;}`,
-		Why:     "the control, and the reason the opener is two characters rather than a guess: with neither a blank nor a `(` after the brace ksh93 refuses the line, blaming the blank inside it, so `${` does not fall back to reading a body when the name turns out not to be one. The two bash columns and ash call it a bad substitution, zsh blames the brace, and dash takes the whole thing as a parameter named `echo` with a `hi;` operand",
+		Why:     "the control, and the reason the opener is two characters rather than a guess: with neither a blank nor a `(` after the brace ksh93 refuses the line while reading it, blaming the blank inside, so `${` does not fall back to a body when the name turns out not to be one. It is the only column that answers at parse time — the other six all defer to the run and call it a bad substitution, in four wordings and at four statuses, which is the ordinary split for an expansion nobody can read",
 	},
 	{
 		ID: "subst/a-comment-in-a-current-shell-body", Category: "commands",

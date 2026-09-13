@@ -195,13 +195,6 @@ func Dialect() syntax.Dialect {
 	// so that what it assigns survives. The space after the brace is the
 	// whole of the grammar: `${x}` is a parameter and `${ x}` is not.
 	d.CurrentShellSubstitution = true
-	// And ksh93 alone opens it on a `(` as well as on a blank, so
-	// `${(echo hi)}` is a list whose first command is a subshell. bash has
-	// the construct and refuses the paren; see
-	// [syntax.Dialect.CurrentShellSubstitutionTakesAParen] for the panel and
-	// for the shared-state probe that says it is this construct and not
-	// another one.
-	d.CurrentShellSubstitutionTakesAParen = true
 	// A here-document inside parentheses that hold a program ends at the
 	// closing one: `v=$(cat <<EOF` / `a` / `EOF)` is accepted and `v` is `a`.
 	// dash and zsh read the body from the whole input instead, so the `)`

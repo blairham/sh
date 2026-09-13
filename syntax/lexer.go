@@ -3165,8 +3165,7 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 	// 5.3 and ksh93, the two panel members that have the construct, while
 	// `${x#a}` strips a prefix in all six. Same hole as #1397's, one scanner
 	// over, and the same fix.
-	brace := l.dialect.CurrentShellSubstitution && start < len(l.src) &&
-		l.isBraceCommandStart(l.src[start])
+	brace := l.dialect.CurrentShellSubstitution && start < len(l.src) && isBraceCommandStart(l.src[start])
 	depth := 1
 	// Where the body of each open nesting level began. Only the innermost
 	// level's operand decides what a quote written there does — measured, and
@@ -3353,18 +3352,21 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 }
 
 // isBraceCommandStart reports whether what follows `${` makes it a command
-// rather than a parameter.
+// rather than a parameter. A space, a tab and a newline do.
 //
-// A space, a tab and a newline always do. This used to say "and nothing else
-// can — a parameter name may not begin with any of them", which had the right
-// premise and the wrong conclusion: a `(` cannot begin a parameter name
-// either, and one shell takes it as the front of the list. See
-// [Dialect.CurrentShellSubstitutionTakesAParen], which is where that is
-// measured and why it is one column's and not the construct's.
-func (l *Lexer) isBraceCommandStart(c byte) bool {
-	if c == '(' {
-		return l.dialect.CurrentShellSubstitutionTakesAParen
-	}
+// This used to add "and nothing else can — a parameter name may not begin
+// with any of them", which had the right premise and the wrong conclusion: a
+// `(` cannot begin a name either, and ksh93 takes it, so `echo ${(echo hi)}`
+// prints `hi` there and is a bad substitution in every other column. That is
+// #2615, and it is **deliberately not implemented here** — see the issue for
+// the measured price. ksh93 does not extract a body at the matching `}` the
+// way this scanner does; it lexes the list inline from the outer input, which
+// is why `echo "AA${(U)a}BB"` blames the word `a}BB`. Opening on the paren
+// without that second half routes every `${(flags)…}` case through a body
+// that stops at the first `}`, which loses the diagnostic #2374 spells for
+// them: measured 2026-09-13, 109 corpus rows in the ksh column regress and
+// none improves.
+func isBraceCommandStart(c byte) bool {
 	return c == ' ' || c == '\t' || c == '\n'
 }
 

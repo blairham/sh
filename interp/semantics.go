@@ -5845,6 +5845,67 @@ type Semantics struct {
 	// than guessed at here.
 	SetOLetterAttachesItsName Answer
 
+	// SetODeclinesADashWord makes a bare `-o` refuse a next word that begins
+	// with `-` or `+` as its long option name. The `-o` is then a bare one —
+	// it lists the options — and the word is read as option letters of its
+	// own.
+	//
+	// Yes in the three bash columns and ksh93; No in dash, BusyBox ash and
+	// zsh. Measured 2026-09-13 across all seven, at the builtin:
+	//
+	//	set -o -e   bash x3, ksh93  the listing, errexit **on**, 0
+	//	            dash            `Illegal option -o -e`, 2
+	//	            ash             `illegal option -o -e`, 1
+	//	            zsh             `no such option: -e`, 1
+	//	set -o --   bash x3, ksh93  the listing, 0
+	//	            the other three the same three refusals, of `--`
+	//	set -o -Z   bash x3         `-Z: invalid option`, 2, **no listing**
+	//	            ksh93           `-Z: unknown option`, 2
+	//
+	// The **empty** word goes with the dash words rather than behind an axis
+	// of its own, because the panel splits over it in the same place:
+	// `set -o ""` lists in the three bash columns and in ksh93, and is
+	// refused as a name in dash, BusyBox ash and zsh — `Illegal option -o `
+	// and `no such option: ` with nothing after the space. Two fields could
+	// only ever have agreed.
+	//
+	// The third row is this axis meeting SetValidatesOptionLettersFirst:
+	// with the word declined it is an option letter, so bash's validating
+	// pass sees it and applies nothing — the listing included. Read from the
+	// other side, `set -o zzznosuch -Z` in bash is `-Z: invalid option` with
+	// `zzznosuch` never complained about, which is the same rule seen
+	// backwards: the name *was* taken there, because it does not begin with
+	// a dash.
+	//
+	// Asked only of the builtin, and only where a bare `-o` has a next word
+	// that this same loop would read as options. **The invocation route
+	// answers differently in bash** and is not this field: `bash -o -e -c
+	// 'echo hi'` is `-e: invalid option name`, where `ksh93 -o -e -c 'echo
+	// hi'` prints `hi` with errexit on. The front end's parse is a second
+	// mechanism — refuseBeforeApplyingSetOptions says why one pass cannot be
+	// both — so it takes the word there as it always did.
+	//
+	// Two corners this deliberately does not reach, both measured:
+	//
+	//   - A bare `-` or `+` behind the `-o`. bash declines both; ksh93
+	//     declines `-` and takes `+` as the name. Neither is read here,
+	//     because a one-character `-` is not an option word to this loop at
+	//     all — `set - a b` leaves three positional parameters where bash
+	//     and ksh93 leave two, and `set -x -` leaves xtrace on where both
+	//     turn it off. That is a divergence of its own and not one this axis
+	//     should paper over; the predicate is the loop's own reading of a
+	//     word, so the day that one is fixed this follows it.
+	//   - ksh93's listing. It defers to the end of the option parse and
+	//     prints once, in a form the last `-o`/`+o` decides: `set -o -e` is
+	//     the `+o` re-input form, `set -o -e -o` and `set +o -o` are the
+	//     two-column one and only once, and `set -o -` is a third form
+	//     nothing here writes. Ours lists where it stands, in the sign's own
+	//     form, which is exactly bash's reading — `set -o -o` there is two
+	//     listings and `set +o -o` is one of each. So ksh93 answers this
+	//     axis, because it does decline the word; what it still owes is a
+	//     listing mechanism, which is a different question.
+	SetODeclinesADashWord Answer
+
 	// SetValidatesOptionLettersFirst makes the `set` builtin read the option
 	// letters of every word it was given before it applies any of them, so
 	// that one bad letter anywhere leaves the shell exactly as it was.

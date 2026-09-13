@@ -1482,6 +1482,13 @@ func Semantics() interp.Semantics {
 	// `bash -oerrexit -c cmd` refuses `-c` the same way. With no word behind
 	// it, `set -oe` writes the option table and then turns errexit on.
 	s.SetOLetterAttachesItsName = interp.No
+	// And the next word is only taken when it does not look like options
+	// itself: `set -o -e` here writes the option table and turns errexit
+	// **on**, where the name that would have been refused is `-e`. Only at
+	// the builtin — `bash -o -e -c cmd` on the command line that starts the
+	// shell is `-e: invalid option name`, which is the front end's own
+	// position-sensitive parse and not this axis.
+	s.SetODeclinesADashWord = interp.Yes
 	// And every option word's letters are read before any of them is
 	// applied: `command set -e -Z` here leaves errexit **off**, where dash
 	// and BusyBox ash leave it on. The pass that does it knows letters only —

@@ -2061,6 +2061,10 @@ func Semantics() interp.Semantics {
 	// behavior: `set -oerrexit zzznosuch` is errexit with `zzznosuch` as $1,
 	// and `set -oe` is `no such option: e`.
 	s.SetOLetterAttachesItsName = interp.Yes
+	// Where the `-o` does stand alone it takes the next word regardless of
+	// how it is spelled, which is the half of the panel ksh93 leaves it on
+	// here: `set -o -e` is `no such option: -e` at 1.
+	s.SetODeclinesADashWord = interp.No
 	// And it applies as it goes, asked with an action rather than a state
 	// because its refusal ends a `-c` script whatever stands around it:
 	// `set -e -Z -o` writes the whole option table with `errexit on` in it,

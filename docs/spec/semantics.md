@@ -12653,6 +12653,62 @@ request arriving through Runner.ApplyNamedOption — the seam a dialect's
 own option builtin uses, and the one the environment's option list uses —
 never ends the script whatever this says.
 
+**`SetODeclinesADashWord`** — bash **yes** · dash no · ksh93 **yes** · zsh
+no · ash no
+
+Makes a bare `set -o` refuse a next word that begins with `-` or `+` as its
+long option name. The `-o` is then a bare one — it writes the option table —
+and the word is read as option letters of its own.
+
+Measured 2026-09-13 across all seven columns, at the builtin:
+
+| written | bash 5.3, bash-as-`sh`, bash 3.2 | ksh93 | dash | BusyBox ash | zsh |
+| --- | --- | --- | --- | --- | --- |
+| `set -o -e` | the listing, errexit **on**, 0 | the listing, errexit on, 0 | `Illegal option -o -e`, 2 | `illegal option -o -e`, 1 | `no such option: -e`, 1 |
+| `set -o --` | the listing, 0 | the listing, 0 | `Illegal option -o --`, 2 | `illegal option -o --`, 1 | `no such option: --`, 1 |
+| `set -o -Z` | `-Z: invalid option`, 2, **no listing** | `-Z: unknown option`, 2 | `Illegal option -o -Z`, 2 | `illegal option -o -Z`, 1 | `no such option: -Z`, 1 |
+
+The third row is this axis meeting `SetValidatesOptionLettersFirst`: with the
+word declined it is an option letter, so bash's validating pass reaches it
+before anything is applied and the listing never happens. Read from the other
+side, `set -o zzznosuch -Z` in bash is `-Z: invalid option` with `zzznosuch`
+never complained about — the same rule backwards, since that name *was* taken
+because it does not begin with a dash.
+
+**The empty word rides with the dash words** rather than behind an axis of its
+own, because the panel splits over it in the same place: `set -o ""` lists in
+the three bash columns and in ksh93, and is refused as a name — `Illegal
+option -o `, `no such option: ` — in dash, BusyBox ash and zsh. Two fields
+could only ever have agreed.
+
+**The invocation is not this axis**, and bash is why: `bash -o -e -c 'echo
+hi'` is `-e: invalid option name`, where `ksh93 -o -e -c 'echo hi'` prints
+`hi` with errexit on. The same column answers one way at the builtin and the
+other on the command line that started the shell, so one field cannot hold
+both — the front end's parse is position-sensitive where the builtin's is
+not, which is the wrinkle `SetValidatesOptionLettersFirst` records above.
+
+Two corners are deliberately outside it, both measured:
+
+- **A bare `-` or `+`.** bash declines both; ksh93 declines `-` and takes `+`
+  as the name. Neither is read here, because a one-character `-` is not an
+  option word to this loop at all: `set - a b` leaves three positional
+  parameters here where bash and ksh93 leave two, and `set -x -` leaves
+  xtrace on where both turn it off. That is a divergence of its own, and the
+  predicate is the loop's own reading of a word, so the day it is fixed this
+  follows it.
+- **ksh93's listing.** It defers to the end of the option parse and prints
+  once, in a form the last `-o`/`+o` decides: `set -o -e` is the `+o`
+  re-input form, `set -o -e -o` and `set +o -o` are the two-column one and
+  only once, and `set -o -` is a third form nothing here writes. Ours lists
+  where it stands, in the sign's own form, which is exactly bash's reading —
+  `set -o -o` there is two listings and `set +o -o` is one of each. So ksh93
+  answers this axis, because it does decline the word; what it still owes is
+  a listing mechanism, which is a different question.
+
+Ours took the next word in every dialect, so `set -o -e` refused `-e` as a
+name and left errexit off where bash and ksh93 turn it on (#2671).
+
 **`DefaultOptionLetters`** — bash hB · dash  · ksh93 hB · zsh 569X
 
 Is what `$-` starts with before the script has set anything: the single-

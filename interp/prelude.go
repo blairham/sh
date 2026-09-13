@@ -127,6 +127,55 @@ func (r *Runner) scriptFuncNames() []string {
 	return names
 }
 
+// preludePrivatePrefix is how the dialect's own text says a function is
+// machinery rather than a name the shell has.
+//
+// A prelude is sourced, so everything in it is a function — including the
+// helpers the presented ones are built out of. `pushd` is a name real bash
+// has and `__dirs_rotate` is not, so a script asking about the second is
+// asking about nothing, and answering `__dirs_rotate is a function` reports a
+// name no shell in the panel has ever had (#2464).
+//
+// The mark is the name itself rather than a second table of prelude-ness, and
+// that is the same call [Runner.scriptFuncNames] makes for the same reason
+// (#1035, #603): a parallel record would have to be cleared on every route a
+// redefinition can arrive by, and this package does not see those from one
+// place. A name carries its own mark wherever it goes, so there is nothing to
+// keep in step.
+//
+// It reaches the *prelude's* declarations only. A script's own `__helper` is
+// the script's, is visible, and shadowing a private helper by writing one
+// makes the name the script's by the rule that already moves the diagnostic's
+// voice — [Runner.speaksForTheShell] is what both ask.
+const preludePrivatePrefix = "__"
+
+// hiddenPreludeFunc reports whether name is one the prelude uses rather than
+// one it presents.
+func (r *Runner) hiddenPreludeFunc(name string, fn *syntax.FuncDecl) bool {
+	return r.speaksForTheShell(fn) && strings.HasPrefix(name, preludePrivatePrefix)
+}
+
+// reportedFunc is the function table as a question *about a name* sees it:
+// the private prelude helpers are not there.
+//
+// Every builtin that answers "what is this name" goes through it — `type`,
+// `command -v`, `whence`, and a named `declare -f` — so the shell gives one
+// answer to whether a name exists rather than one per builtin, which is the
+// split #2464 reports: `compgen -A function __dirs_rotate` was already right
+// while `type __dirs_rotate` was not, from two lookups of one table.
+//
+// Calling is deliberately untouched. A private helper is machinery the
+// presented functions run, and hiding it from a *report* is not the same as
+// taking it away — `pushd +9` still reaches `__dirs_rotate`, which is what
+// makes the name worth having at all.
+func (r *Runner) reportedFunc(name string) (*syntax.FuncDecl, bool) {
+	fn, ok := r.funcs[name]
+	if !ok || r.hiddenPreludeFunc(name, fn) {
+		return nil, false
+	}
+	return fn, true
+}
+
 // speaking is the name a diagnostic belongs to: the prelude function the
 // script called where there is one, and the builtin that is running
 // otherwise.

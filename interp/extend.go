@@ -446,7 +446,7 @@ func (k NameKind) String() string {
 // reserved word, then PATH — which is the order `type` and `command -v`
 // already answer in, from the same lookup rather than from a copy of it.
 func (r *Runner) ResolveName(name string) (NameKind, string) {
-	if _, ok := r.funcs[name]; ok {
+	if _, ok := r.reportedFunc(name); ok {
 		return NameFunction, ""
 	}
 	if _, ok := r.lookupBuiltin(name); ok {

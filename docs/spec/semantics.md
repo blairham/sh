@@ -8315,6 +8315,27 @@ The rule is the one above, asked by name instead of by declaration:
   taken knowingly: the alternative makes the prelude's implementation
   unreachable by name and gives the shell two answers to whether
   `pushd` is a function. One notion of prelude-ness, one answer.
+- **A name the prelude never presented is not answered** (#2464). The
+  exception the paragraph above has to carry, and it is not a second
+  notion of prelude-ness but a narrower reading of the same one: `pushd`
+  is a name real bash has and `__dirs_rotate` is not. Measured
+  2026-09-12 over `-c` with a scratch `HOME`, real bash says
+  `type: __dirs_rotate: not found` at 1, and real zsh says
+  `__dirs_rotate: none` to `whence -w` and `__dirs_rotate not found` to
+  `which`. This shell said `is a function` to all of them, from a name
+  that exists only because the directory stack is written as shell —
+  and `compgen -A function __dirs_rotate` was already right, so one
+  table was giving two answers.
+
+  The mark is the name: a prelude declaration whose name begins with
+  `__` is machinery rather than something the shell has. That keeps the
+  "no second record" rule intact — a name carries its own mark wherever
+  it goes, so there is nothing to clear when a script redefines one, and
+  a script's own `__helper` is the script's and is answered for. `type`,
+  `command -v`, `whence`, `which` and a *named* `declare -f` all ask
+  through one lookup, so the shell has one answer to whether a name
+  exists. Calling is untouched: `pushd +2` still turns the stack through
+  the helper, which is the only reason the helper has a name at all.
 
 **Whose function a removal is asking about** (#1082). The third caller,
 and the one that lost something: `unset -f pushd` deleted the

@@ -4808,6 +4808,11 @@ echo "st=$?"`,
 		Why:     "the name is not only an indicator: in bash 5.3 — under either argv[0] — it turns both trap-carriage options on with it, so this traces the dotted file exactly as `set -o functrace` does above. bash 3.2 moves the indicator alone and traces nothing inside the file, which is a change within bash rather than a difference between shells and the reason the `bash32` column is one D short here on purpose. The other three have no `shopt` at all, and two of them run the DEBUG trap inside a sourced file with nothing asked",
 	},
 	{
+		ID: "shopt/extdebug-locates-a-function-definition", Category: "shell options",
+		Snippet: "printf 'g() { :; }\n' > lib.sh; . ./lib.sh; declare -F g; shopt -s extdebug; declare -F g; shopt -u extdebug; declare -F g",
+		Why:     "the third thing extended debugging carries, and the only one of the three that is not a `set` option under another name: with it on, a names-only listing writes the line the definition begins on and the file it was read from after the name. all three bash columns answer `g`, then `g 1 ./lib.sh`, then `g` again, so the option is read at the listing rather than at the definition — and unlike the tracing row above, bash 3.2 agrees, which is what says this half of the option is older than the indicator split. It is what a shell-level debugger needs to put a breakpoint anywhere, and it was missing here (#2476)",
+	},
+	{
 		ID: "readonly/reassignment-by-a-declaration", Category: "builtins",
 		Snippet: "readonly x=1; export x=2; echo after",
 		Why:     "the same refusal reached through a declaration utility rather than by an assignment standing alone, and a different set of shells stops for it — three here, where a plain assignment stops all four. So which of the two ways the name was set decides, and one shell answers the two oppositely: it stops for the plain form given as an argument and never stops for this one",
@@ -9161,6 +9166,11 @@ echo "st=$?"`,
 		Why:     "the same refusal on a command that runs *in* the shell, which is where zsh alone stops: nothing after it runs. The external command in the row above survives it there, so the boundary is the command and not the redirection",
 	},
 	{
+		ID: "redir/an-amp-target-that-came-to-nothing-on-an-external-command", Category: "redirection",
+		Snippet: `echo A; /bin/echo B <&qq; echo reached`,
+		Why:     "and the same refusal on a command that runs *outside* the shell, which is what separates the two shells that always stop from the one that stops on a builtin. bash 5.3, bash-as-sh, bash 3.2, ksh93 and zsh all print `A`, complain, and reach the end; dash and ash print `A` and are over, at 2. So zsh's boundary is the command and dash's and ash's is the redirection — three answers, which is why this is a form and not a flag. `A` first is the other half: both word it as a syntax error and neither is one",
+	},
+	{
 		ID: "redir/noclobber-refuses-both-streams-to-one-file", Category: "redirection",
 		Snippet: `set -C; : > qq; true &>qq; echo "st=$?"`,
 		Why:     "`set -C` refuses this truncation exactly as it refuses a plain `>`, unanimously and each in its own words. The override, where there is one, is spelled after the whole operator rather than inside it — `>|&` is a syntax error in all six, but `&>|` and `&>!` are not, and one column reads both, which is redir/both-streams-clobber-override-bang. A command with no output on purpose: the two shells that have no `&>` read the line as a background `true` and a bare `>qq`, and anything the job printed would arrive against the clock",
@@ -12915,6 +12925,21 @@ printf 'TWO=still-running\n'`,
 		ID: "redirect/a-word-that-is-no-descriptor-after-a-duplication", Category: "redirection",
 		Snippet: `exec 6<&qq; echo "st=$?"; echo reached`,
 		Why:     "the fourth control, and the one that says what a shell without the move operator is really doing with `5-`: it is refusing a word that names no descriptor, in the same words and at the same status it refuses any other. Four wordings and three statuses — bash's `ambiguous redirect` carrying on at 1, the same sentence ending the shell under argv[0] of `sh`, ksh93's `bad file unit number`, zsh's `file number expected`, dash's `Syntax error: Bad fd number` at 2 — so the move rows above are read against this and not against nothing",
+	},
+	{
+		ID: "redirect/a-numbered-csh-redirect-names-a-file", Category: "redirection",
+		Snippet: `{ printf "E\n" >&2; printf "O\n"; } 2>&qq; echo "st=$?"; echo --; cat qq 2>/dev/null; echo --`,
+		Why:     "the leading descriptor number after `>&`, which splits the two columns that read a bare `>&word` as a filename. bash 5.3, bash-as-sh and bash 3.2 answer `qq: ambiguous redirect` at 1, ksh93 `bad file unit number` at 1, ash `redir error` at 2 and dash `Syntax error: Bad fd number` at 2 with the script over in both, all leaving no file; zsh opens it. So the number is part of the question and not the whole of it, and reading bash's refusal as the operator's own rule made our zsh refuse a line real zsh runs (#2494)",
+	},
+	{
+		ID: "redirect/a-written-one-is-not-a-numbered-csh-redirect", Category: "redirection",
+		Snippet: `{ printf "E\n" >&2; printf "O\n"; } 1>&qq; echo "st=$?"; echo --; cat qq 2>/dev/null; echo --`,
+		Why:     "the control the row above is read against, and the one that bounds its rule: `1>&qq` is the *bare* `>&qq` in bash 5.3, bash-as-sh, bash 3.2, ash and zsh — both streams into the file at status 0 — where `2>&qq` is refused in three of them. So the question is which descriptor was named and not whether one was written, and an implementation reading `rd.N != nil` as the whole of it refuses a spelling five columns run",
+	},
+	{
+		ID: "redirect/a-numbered-csh-redirect-is-not-both-streams", Category: "redirection",
+		Snippet: `{ printf "E\n" >&2; printf "O\n"; } 3>&qq; echo "st=$?"; echo --; cat qq 2>/dev/null; echo --`,
+		Why:     "and what the one column that opens the file actually does with it, which is not `&>`: the file lands on the descriptor the script named and standard error is pointed at it too, so `O` stays on standard output where `>&qq` would have taken it. A descriptor nothing writes to is what makes the second half visible — the file holds `E` and nothing put it there but the duplication",
 	},
 	{
 		ID: "redirect/an-empty-target-is-not-the-working-directory", Category: "redirection",
@@ -20829,6 +20854,37 @@ echo "st=$?"`,
 		ID: "env/the-option-list-is-readonly", Category: "invocation",
 		Snippet: `SHELLOPTS=whatever; echo after`,
 		Why:     "a name whose value is produced cannot be assigned to meaningfully, and the shell that has it refuses rather than accepting quietly. The refusal is its ordinary readonly one — wording, status and whether the script survives are all the dialect's — and the other three take the assignment as the ordinary variable it is for them",
+	},
+	// --- and the second option namespace, which one shell has and the rest
+	// have no builtin for at all (#2475). The two bash columns disagree, so
+	// every row here says which of them is being copied.
+	{
+		ID: "env/the-shopt-option-list-follows-the-shopt-builtin", Category: "invocation",
+		Snippet: `shopt -s cdspell 2>/dev/null; case ":$BASHOPTS:" in *:cdspell:*) echo listed ;; *) echo not-listed ;; esac`,
+		Why:     "`$BASHOPTS` is to `shopt` what `$SHELLOPTS` is to `set -o`, and the same binding: produced when it is read, so a name turned on after startup is in it. bash 5.3 answers `listed`; bash 3.2 has no such variable at all and answers `not-listed` even though its `shopt -s` worked, which is why this is bash 5's answer and not bash's. The three shells with no `shopt` are the control, and the redirection is what keeps their command-not-found off the comparison",
+	},
+	{
+		ID: "env/the-shopt-option-list-drops-an-option-turned-off", Category: "invocation",
+		Snippet: `shopt -u patsub_replacement 2>/dev/null; case ":$BASHOPTS:" in *:patsub_replacement:*) echo listed ;; *) echo gone ;; esac; ` +
+			`case ":$BASHOPTS:" in *:promptvars:*) echo other-listed ;; *) echo other-gone ;; esac`,
+		Why: "the other half of that binding, on a name bash has *on* with nothing said: turning it off takes it back out of the value, which a copy taken at startup would not do. The second question is what keeps the row from being unanimous — a shell with no such variable answers `gone` to the first for the wrong reason, and only `other-listed` says the value is really there. Read as membership rather than as a whole string, for the reason the `$SHELLOPTS` rows are: what a shell has on by default is its own business",
+	},
+	{
+		ID: "env/an-inherited-shopt-option-list-turns-an-option-on", Category: "invocation",
+		Env:     []string{"BASHOPTS=cdspell"},
+		Snippet: `shopt -p cdspell`,
+		Why:     "the write direction, and the half a capture harness needs: the name is read out of the environment before the first line runs. bash 5.3 answers `shopt -s cdspell`; bash 3.2 answers `shopt -u cdspell`, so it neither writes the variable nor reads one",
+	},
+	{
+		ID: "env/an-unknown-name-in-an-inherited-shopt-option-list", Category: "invocation",
+		Env:     []string{"BASHOPTS=nosuchopt:cdspell"},
+		Snippet: `shopt -p cdspell; echo "st=$?"`,
+		Why:     "and this namespace is silent about a name it does not know, which is the opposite of what the `set -o` list does with one: no complaint, status 0, and the good name in the same value still applied. A leading or trailing colon is ignored the same way, where the other list calls the empty piece a bad name",
+	},
+	{
+		ID: "env/the-shopt-option-list-is-readonly", Category: "invocation",
+		Snippet: `BASHOPTS=whatever; echo after`,
+		Why:     "a produced value cannot be assigned to meaningfully, and the shell that has it refuses rather than accepting quietly — the same refusal `$SHELLOPTS` gets, from the same rule. bash 3.2 has no such name and takes the assignment as the ordinary variable it is for it, alongside the three shells with no `shopt`",
 	},
 	{
 		ID: "env/a-file-named-for-a-non-interactive-shell-is-sourced", Category: "invocation",

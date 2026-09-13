@@ -1025,6 +1025,9 @@ type Runner struct {
 
 	// inFunc is the name of the function being run, for `$0`.
 	inFunc string
+	// locatesFunctions is whether a names-only function listing says where
+	// each function was defined — see Runner.LocatesFunctions.
+	locatesFunctions bool
 	// funcLine is the line the function being run was written on, which one
 	// dialect counts a message's line from instead of from the top of the
 	// file.
@@ -1942,9 +1945,14 @@ type Runner struct {
 	// asks — see regexmatch.go.
 	regexCaptureReport bool
 	// shellOptsName is what the dialect calls the variable holding the long
-	// names of the options that are on. With no name there is no such
-	// variable and nothing is seeded from the environment — see shellopts.go.
+	// names of the `set -o` options that are on. With no name there is no
+	// such variable and nothing is seeded from the environment — see
+	// shellopts.go.
 	shellOptsName string
+	// optionLists are every produced, readonly variable bound to an option
+	// namespace, the core's included. A dialect may have a second table the
+	// core knows nothing about; see Runner.SetOptionList.
+	optionLists []optionList
 	// readonly names refuse assignment.
 	readonly map[string]bool
 	// freezing is the names the declaration now running is assigning to as
@@ -3822,9 +3830,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		// measurement puts a function on the fatal side.
 		_, isBuiltin := r.lookupBuiltin(argv[0])
 		_, isFunc := r.funcs[argv[0]]
-		if r.badDupTarget && !isFunc && isBuiltin &&
-			r.ask(r.sem().DuplicationTargetErrorOnABuiltinIsFatal,
-				"a duplication target that is not a descriptor ending the script on a builtin") {
+		if r.badDupTarget && !isFunc && isBuiltin {
 			r.fatalQuiet()
 		}
 		return nil
@@ -4540,8 +4546,8 @@ func (r *Runner) environ() []string {
 			// the *first* of the two, and execve leaves it that way.
 			continue
 		}
-		if k == r.shellOptsName && k != "" {
-			// The option record is produced, so what a child must be handed
+		if live, bound := r.producedOptionList(k); bound {
+			// An option record is produced, so what a child must be handed
 			// is this shell's options *now* and not the string this shell was
 			// launched with. Nothing else in Vars can supersede it — it is
 			// readonly and never stored — so this entry is the only place the
@@ -4549,7 +4555,11 @@ func (r *Runner) environ() []string {
 			// a shell handed `xtrace` that then ran `set +x` would still have
 			// been turning tracing on in everything it started. Measured, the
 			// shell that has this variable hands the recomputed value down.
-			out = append(out, k+"="+r.shellOptions())
+			//
+			// Asked of every bound namespace rather than of the core's alone,
+			// which is what stops a dialect's second one (`$BASHOPTS`) being
+			// the copy that keeps its startup string.
+			out = append(out, k+"="+live)
 			continue
 		}
 		out = append(out, kv)

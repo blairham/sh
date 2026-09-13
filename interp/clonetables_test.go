@@ -39,6 +39,7 @@ var sharedStacks = map[string]string{
 	"ProcessAnchor":  "the placeholder command the front end handed in, never appended to at all",
 	"trapSnapshot":   "only ever replaced wholesale or set to nil, and inheritTraps rebuilds a subshell's traps from scratch",
 	"pipeStatus":     "rebuilt with append([]int(nil), …) on every pipeline, so a write never lands in an array anyone else holds",
+	"optionLists":    "the option namespaces a dialect bound in Apply, appended to at setup and never again",
 }
 
 // seedStacks gives every slice on a Runner an element and spare capacity.
@@ -92,6 +93,7 @@ func seedStacks(r *Runner) {
 	r.freezeAfter = append(make([]string, 0, 4), "seed")
 	r.mathOrder = append(make([]string, 0, 4), "seed")
 	r.cmdHashOrder = append(make([]string, 0, 4), "seed")
+	r.optionLists = append(make([]optionList, 0, 4), optionList{})
 }
 
 // TestACloneOwnsEveryStack is TestACloneOwnsEveryTable for the slices, and it

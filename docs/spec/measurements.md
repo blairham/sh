@@ -11290,6 +11290,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `opt/set-o-errtrace-carries-the-err-trap-into-a-subshell` | **2>** `<shell>: 1: set: Illegal option -o errtrace` *(status 2)* | `E~E~done` | `E~E~done` | `E~done` | **2>** `<shell>: set: errtrace: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>:set:1: no such option: errtrace` *(status 1)* | `E~done` |
 | `shopt/extdebug-is-taken-and-reads-back` | `st=127` **2>** `<shell>: 1: shopt: not found~<shell>: 1: shopt: not found~<shell>: 1: shopt: not found~<shell>: 1: shopt: not found` *(status 127)* | `st=0~shopt -s extdebug~shopt -u extdebug` *(status 1)* | `st=0~shopt -s extdebug~shopt -u extdebug` *(status 1)* | `st=0~shopt -s extdebug~shopt -u extdebug` *(status 1)* | `st=127` **2>** `<shell>: shopt: not found~<shell>: shopt: not found~<shell>: shopt: not found~<shell>: shopt: not found` *(status 127)* | `st=127` **2>** `<shell>:1: command not found: shopt~<shell>:1: command not found: shopt~<shell>:1: command not found: shopt~<shell>:1: command not found: shopt` *(status 127)* | `st=127` **2>** `<shell>: shopt: not found~<shell>: shopt: not found~<shell>: shopt: not found~<shell>: shopt: not found` *(status 127)* |
 | `shopt/extdebug-turns-on-function-tracing` | `S1~after` **2>** `<shell>: 2: shopt: not found~trap: DEBUG: bad trap` | `D~D~S1~D~after` | `D~D~S1~D~after` | `D~S1~D~after` | `D~D~S1~D~after` **2>** `<shell>: line 2: shopt: not found` | `D~D~S1~D~after` **2>** `<shell>:2: command not found: shopt` | `S1~after` **2>** `<shell>: shopt: not found~<shell>: trap: line 1: DEBUG: invalid signal specification` |
+| `shopt/extdebug-locates-a-function-definition` | **2>** `<shell>: 2: declare: not found~<shell>: 2: shopt: not found~<shell>: 2: declare: not found~<shell>: 2: shopt: not found~<shell>: 2: declare: not found` *(status 127)* | `g~g 1 ./lib.sh~g` | `g~g 1 ./lib.sh~g` | `g~g 1 ./lib.sh~g` | **2>** `<shell>: line 2: declare: not found~<shell>: line 2: shopt: not found~<shell>: line 2: declare: not found~<shell>: line 2: shopt: not found~<shell>: line 2: declare: not found` *(status 127)* | **2>** `<shell>:2: command not found: shopt~<shell>:2: command not found: shopt` | **2>** `<shell>: declare: not found~<shell>: shopt: not found~<shell>: declare: not found~<shell>: shopt: not found~<shell>: declare: not found` *(status 127)* |
 | `nounset/defaults-are-exempt` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` |
 | `nounset/empty-is-not-unset` | `[]~after` | `[]~after` | `[]~after` | `[]~after` | `[]~after` | `[]~after` | `[]~after` |
 | `nounset/no-parameters-is-not-unset` | `[][]~after` | `[][]~after` | `[][]~after` | `[][]~after` | `[][]~after` | `[][]~after` | `[][]~after` |
@@ -11771,6 +11772,11 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   printf 'echo S1
   ' > lib.sh; shopt -s extdebug; trap 'echo D' DEBUG; . ./lib.sh; echo after
+  ```
+- `shopt/extdebug-locates-a-function-definition` — the third thing extended debugging carries, and the only one of the three that is not a `set` option under another name: with it on, a names-only listing writes the line the definition begins on and the file it was read from after the name. all three bash columns answer `g`, then `g 1 ./lib.sh`, then `g` again, so the option is read at the listing rather than at the definition — and unlike the tracing row above, bash 3.2 agrees, which is what says this half of the option is older than the indicator split. It is what a shell-level debugger needs to put a breakpoint anywhere, and it was missing here (#2476)
+  ```sh
+  printf 'g() { :; }
+  ' > lib.sh; . ./lib.sh; declare -F g; shopt -s extdebug; declare -F g; shopt -u extdebug; declare -F g
   ```
 - `nounset/defaults-are-exempt` — a form that supplies a value, or asks whether one is set, is not a use of an unset one
   ```sh
@@ -13809,6 +13815,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `redir/less-amp-is-never-a-file` | **2>** `<shell>: 1: Syntax error: Bad fd number` *(status 2)* | `st=1` **2>** `<shell>: line 1: qq: ambiguous redirect` | `st=1` **2>** `<shell>: line 1: qq: ambiguous redirect` | `st=1` **2>** `<shell>: qq: ambiguous redirect` | `st=1` **2>** `<shell>: qq: bad file unit number` | `st=1` **2>** `<shell>:1: file number expected` | **2>** `<shell>: redir error` *(status 2)* |
 | `redir/an-amp-target-that-came-to-nothing` | **2>** `<shell>: 1: Syntax error: Bad fd number` *(status 2)* | `st=1` **2>** `<shell>: line 1: "": Bad file descriptor~<shell>: line 1: "": Bad file descriptor` | `st=1` **2>** `<shell>: line 1: "": Bad file descriptor~<shell>: line 1: "": Bad file descriptor` | `st=1` **2>** `<shell>: 1: Bad file descriptor~<shell>: 0: Bad file descriptor` | `st=1` **2>** `<shell>: : cannot open~<shell>: : cannot open` | `st=1` **2>** `<shell>:1: no such file or directory: ~<shell>:1: file number expected` | **2>** `<shell>: syntax error: bad fd number` *(status 2)* |
 | `redir/an-amp-target-that-came-to-nothing-on-a-builtin` | **2>** `<shell>: 1: Syntax error: Bad fd number` *(status 2)* | `after st=1` **2>** `<shell>: line 1: "": Bad file descriptor` | `after st=1` **2>** `<shell>: line 1: "": Bad file descriptor` | `after st=1` **2>** `<shell>: 0: Bad file descriptor` | `after st=1` **2>** `<shell>: : cannot open` | **2>** `<shell>:1: file number expected` *(status 1)* | **2>** `<shell>: syntax error: bad fd number` *(status 2)* |
+| `redir/an-amp-target-that-came-to-nothing-on-an-external-command` | `A` **2>** `<shell>: 1: Syntax error: Bad fd number` *(status 2)* | `A~reached` **2>** `<shell>: line 1: qq: ambiguous redirect` | `A~reached` **2>** `<shell>: line 1: qq: ambiguous redirect` | `A~reached` **2>** `<shell>: qq: ambiguous redirect` | `A~reached` **2>** `<shell>: qq: bad file unit number` | `A~reached` **2>** `<shell>:1: file number expected` | `A` **2>** `<shell>: redir error` *(status 2)* |
 | `redir/noclobber-refuses-both-streams-to-one-file` | `st=2` **2>** `<shell>: 1: cannot create qq: File exists` | `st=1` **2>** `<shell>: line 1: qq: cannot overwrite existing file` | `st=1` **2>** `<shell>: line 1: qq: cannot overwrite existing file` | `st=1` **2>** `<shell>: qq: cannot overwrite existing file` | `st=1` **2>** `<shell>: qq: file already exists [File exists]` | `st=1` **2>** `<shell>:1: file exists: qq` | `st=1` **2>** `<shell>: can't create qq: File exists` |
 | `redir/merge-then-file` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` |
 | `redir/file-then-merge` | `err~[out]` | `err~[out]` | `err~[out]` | `err~[out]` | `err~[out]` | `err~[out]` | `err~[out]` |
@@ -13842,6 +13849,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `redirect/a-duplication-without-the-suffix-leaves-both-open` | `body\|~r5=0` | `body\|~r5=0` | `body\|~r5=0` | `body\|~r5=0` | `body\|~r5=0` | `body\|~r5=0` | `body\|~r5=0` |
 | `redirect/a-dash-after-a-filename-is-part-of-the-name` | `hi~hi~st=0` | `hi~hi~st=0` | `hi~hi~st=0` | `hi~hi~st=0` | `hi~hi~st=0` | `hi~hi~st=0` | `hi~hi~st=0` |
 | `redirect/a-word-that-is-no-descriptor-after-a-duplication` | **2>** `<shell>: 1: Syntax error: Bad fd number` *(status 2)* | `st=1~reached` **2>** `<shell>: line 1: qq: ambiguous redirect` | **2>** `<shell>: line 1: qq: ambiguous redirect` *(status 1)* | `st=1~reached` **2>** `<shell>: qq: ambiguous redirect` | **2>** `<shell>: qq: bad file unit number` *(status 1)* | **2>** `<shell>:1: file number expected` *(status 1)* | **2>** `<shell>: redir error` *(status 2)* |
+| `redirect/a-numbered-csh-redirect-names-a-file` | **2>** `<shell>: 1: Syntax error: Bad fd number` *(status 2)* | `st=1~--~--` **2>** `<shell>: line 1: qq: ambiguous redirect` | `st=1~--~--` **2>** `<shell>: line 1: qq: ambiguous redirect` | `st=1~--~--` **2>** `<shell>: qq: ambiguous redirect` | `st=1~--~--` **2>** `<shell>: qq: bad file unit number` | `O~st=0~--~E~E~--` | **2>** `<shell>: redir error` *(status 2)* |
+| `redirect/a-written-one-is-not-a-numbered-csh-redirect` | **2>** `<shell>: 1: Syntax error: Bad fd number` *(status 2)* | `st=0~--~E~O~--` | `st=0~--~E~O~--` | `st=0~--~E~O~--` | `st=1~--~--` **2>** `<shell>: qq: bad file unit number` | `st=0~--~E~O~--` | `st=0~--~E~O~--` |
+| `redirect/a-numbered-csh-redirect-is-not-both-streams` | **2>** `<shell>: 1: Syntax error: Bad fd number` *(status 2)* | `st=1~--~--` **2>** `<shell>: line 1: qq: ambiguous redirect` | `st=1~--~--` **2>** `<shell>: line 1: qq: ambiguous redirect` | `st=1~--~--` **2>** `<shell>: qq: ambiguous redirect` | `st=1~--~--` **2>** `<shell>: qq: bad file unit number` | `O~st=0~--~E~--` | **2>** `<shell>: redir error` *(status 2)* |
 | `redirect/an-empty-target-is-not-the-working-directory` | `r=2~w=2` **2>** `<shell>: 1: cannot open : No such file~<shell>: 1: cannot create : Directory nonexistent` | `r=1~w=1` **2>** `<shell>: line 1: : No such file or directory~<shell>: line 1: : No such file or directory` | `r=1~w=1` **2>** `<shell>: line 1: : No such file or directory~<shell>: line 1: : No such file or directory` | `r=1~w=1` **2>** `<shell>: : No such file or directory~<shell>: : No such file or directory` | `r=1~w=1` **2>** `<shell>: : cannot open~<shell>: : cannot open` | `r=1~w=1` **2>** `<shell>:1: no such file or directory: ~<shell>:1: no such file or directory: ` | `r=1~w=1` **2>** `<shell>: can't open : no such file~<shell>: can't create : nonexistent directory` |
 | `heredoc/a-side-effect-in-a-body-fed-to-a-program` | `u=zz` | `u=UNSET` | `u=UNSET` | `u=UNSET` | `u=UNSET` | `u=UNSET` | `u=zz` |
 | `heredoc/a-side-effect-in-a-body-fed-to-a-builtin` | `u=zz` | `u=zz` | `u=zz` | `u=zz` | `u=zz` | `u=zz` | `u=zz` |
@@ -14505,6 +14515,10 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   read -r l <&""; echo "after st=$?"
   ```
+- `redir/an-amp-target-that-came-to-nothing-on-an-external-command` — and the same refusal on a command that runs *outside* the shell, which is what separates the two shells that always stop from the one that stops on a builtin. bash 5.3, bash-as-sh, bash 3.2, ksh93 and zsh all print `A`, complain, and reach the end; dash and ash print `A` and are over, at 2. So zsh's boundary is the command and dash's and ash's is the redirection — three answers, which is why this is a form and not a flag. `A` first is the other half: both word it as a syntax error and neither is one
+  ```sh
+  echo A; /bin/echo B <&qq; echo reached
+  ```
 - `redir/noclobber-refuses-both-streams-to-one-file` — `set -C` refuses this truncation exactly as it refuses a plain `>`, unanimously and each in its own words. The override, where there is one, is spelled after the whole operator rather than inside it — `>|&` is a syntax error in all six, but `&>|` and `&>!` are not, and one column reads both, which is redir/both-streams-clobber-override-bang. A command with no output on purpose: the two shells that have no `&>` read the line as a background `true` and a bare `>qq`, and anything the job printed would arrive against the clock
   ```sh
   set -C; : > qq; true &>qq; echo "st=$?"
@@ -14636,6 +14650,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `redirect/a-word-that-is-no-descriptor-after-a-duplication` — the fourth control, and the one that says what a shell without the move operator is really doing with `5-`: it is refusing a word that names no descriptor, in the same words and at the same status it refuses any other. Four wordings and three statuses — bash's `ambiguous redirect` carrying on at 1, the same sentence ending the shell under argv[0] of `sh`, ksh93's `bad file unit number`, zsh's `file number expected`, dash's `Syntax error: Bad fd number` at 2 — so the move rows above are read against this and not against nothing
   ```sh
   exec 6<&qq; echo "st=$?"; echo reached
+  ```
+- `redirect/a-numbered-csh-redirect-names-a-file` — the leading descriptor number after `>&`, which splits the two columns that read a bare `>&word` as a filename. bash 5.3, bash-as-sh and bash 3.2 answer `qq: ambiguous redirect` at 1, ksh93 `bad file unit number` at 1, ash `redir error` at 2 and dash `Syntax error: Bad fd number` at 2 with the script over in both, all leaving no file; zsh opens it. So the number is part of the question and not the whole of it, and reading bash's refusal as the operator's own rule made our zsh refuse a line real zsh runs (#2494)
+  ```sh
+  { printf "E\n" >&2; printf "O\n"; } 2>&qq; echo "st=$?"; echo --; cat qq 2>/dev/null; echo --
+  ```
+- `redirect/a-written-one-is-not-a-numbered-csh-redirect` — the control the row above is read against, and the one that bounds its rule: `1>&qq` is the *bare* `>&qq` in bash 5.3, bash-as-sh, bash 3.2, ash and zsh — both streams into the file at status 0 — where `2>&qq` is refused in three of them. So the question is which descriptor was named and not whether one was written, and an implementation reading `rd.N != nil` as the whole of it refuses a spelling five columns run
+  ```sh
+  { printf "E\n" >&2; printf "O\n"; } 1>&qq; echo "st=$?"; echo --; cat qq 2>/dev/null; echo --
+  ```
+- `redirect/a-numbered-csh-redirect-is-not-both-streams` — and what the one column that opens the file actually does with it, which is not `&>`: the file lands on the descriptor the script named and standard error is pointed at it too, so `O` stays on standard output where `>&qq` would have taken it. A descriptor nothing writes to is what makes the second half visible — the file holds `E` and nothing put it there but the duplication
+  ```sh
+  { printf "E\n" >&2; printf "O\n"; } 3>&qq; echo "st=$?"; echo --; cat qq 2>/dev/null; echo --
   ```
 - `redirect/an-empty-target-is-not-the-working-directory` — an empty target names no file, and the same rule the file tests need: joining it onto the working directory opens the *directory*, so the read succeeds and the complaint arrives from the command as `Is a directory` rather than from the shell. Every shell in the panel refuses to open the name — with four wordings and two statuses, so the case pins the wording too
   ```sh
@@ -20937,6 +20963,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | `env/the-option-list-drops-an-option-turned-off` | `not-listed` | `not-listed` | `not-listed` | `not-listed` | `not-listed` | `not-listed` | `not-listed` |
 | `env/the-option-list-uses-long-names` | `neither` | `long` | `long` | `long` | `neither` | `neither` | `neither` |
 | `env/the-option-list-is-readonly` | `after` | **2>** `<shell>: line 1: SHELLOPTS: readonly variable` *(status 1)* | **2>** `<shell>: line 1: SHELLOPTS: readonly variable` *(status 127)* | **2>** `<shell>: SHELLOPTS: readonly variable` *(status 1)* | `after` | `after` | `after` |
+| `env/the-shopt-option-list-follows-the-shopt-builtin` | `not-listed` | `listed` | `listed` | `not-listed` | `not-listed` | `not-listed` | `not-listed` |
+| `env/the-shopt-option-list-drops-an-option-turned-off` | `gone~other-gone` | `gone~other-listed` | `gone~other-listed` | `gone~other-gone` | `gone~other-gone` | `gone~other-gone` | `gone~other-gone` |
+| `env/an-inherited-shopt-option-list-turns-an-option-on` | **2>** `<shell>: 1: shopt: not found` *(status 127)* | `shopt -s cdspell` | `shopt -s cdspell` | `shopt -u cdspell` *(status 1)* | **2>** `<shell>: shopt: not found` *(status 127)* | **2>** `<shell>:1: command not found: shopt` *(status 127)* | **2>** `<shell>: shopt: not found` *(status 127)* |
+| `env/an-unknown-name-in-an-inherited-shopt-option-list` | `st=127` **2>** `<shell>: 1: shopt: not found` | `shopt -s cdspell~st=0` | `shopt -s cdspell~st=0` | `shopt -u cdspell~st=1` | `st=127` **2>** `<shell>: shopt: not found` | `st=127` **2>** `<shell>:1: command not found: shopt` | `st=127` **2>** `<shell>: shopt: not found` |
+| `env/the-shopt-option-list-is-readonly` | `after` | **2>** `<shell>: line 1: BASHOPTS: readonly variable` *(status 1)* | **2>** `<shell>: line 1: BASHOPTS: readonly variable` *(status 127)* | `after` | `after` | `after` | `after` |
 | `env/a-file-named-for-a-non-interactive-shell-is-sourced` | `main` | `sourced~main` | `main` | `sourced~main` | `main` | `main` | `main` |
 | `env/that-file-sees-the-invocations-parameters` | `main` | `[name] n=1 [A]~main` | `main` | `[<shell>] n=0 []~main` | `main` | `main` | `main` |
 | `env/that-file-can-end-the-shell` | `main` | `in-file` *(status 3)* | `main` | `in-file` *(status 3)* | `main` | `main` | `main` |
@@ -21283,6 +21314,26 @@ grades it and nothing drift-checks it either, for the same reason.
 - `env/the-option-list-is-readonly` — a name whose value is produced cannot be assigned to meaningfully, and the shell that has it refuses rather than accepting quietly. The refusal is its ordinary readonly one — wording, status and whether the script survives are all the dialect's — and the other three take the assignment as the ordinary variable it is for them
   ```sh
   SHELLOPTS=whatever; echo after
+  ```
+- `env/the-shopt-option-list-follows-the-shopt-builtin` — `$BASHOPTS` is to `shopt` what `$SHELLOPTS` is to `set -o`, and the same binding: produced when it is read, so a name turned on after startup is in it. bash 5.3 answers `listed`; bash 3.2 has no such variable at all and answers `not-listed` even though its `shopt -s` worked, which is why this is bash 5's answer and not bash's. The three shells with no `shopt` are the control, and the redirection is what keeps their command-not-found off the comparison
+  ```sh
+  shopt -s cdspell 2>/dev/null; case ":$BASHOPTS:" in *:cdspell:*) echo listed ;; *) echo not-listed ;; esac
+  ```
+- `env/the-shopt-option-list-drops-an-option-turned-off` — the other half of that binding, on a name bash has *on* with nothing said: turning it off takes it back out of the value, which a copy taken at startup would not do. The second question is what keeps the row from being unanimous — a shell with no such variable answers `gone` to the first for the wrong reason, and only `other-listed` says the value is really there. Read as membership rather than as a whole string, for the reason the `$SHELLOPTS` rows are: what a shell has on by default is its own business
+  ```sh
+  shopt -u patsub_replacement 2>/dev/null; case ":$BASHOPTS:" in *:patsub_replacement:*) echo listed ;; *) echo gone ;; esac; case ":$BASHOPTS:" in *:promptvars:*) echo other-listed ;; *) echo other-gone ;; esac
+  ```
+- `env/an-inherited-shopt-option-list-turns-an-option-on` — the write direction, and the half a capture harness needs: the name is read out of the environment before the first line runs. bash 5.3 answers `shopt -s cdspell`; bash 3.2 answers `shopt -u cdspell`, so it neither writes the variable nor reads one
+  ```sh
+  shopt -p cdspell
+  ```
+- `env/an-unknown-name-in-an-inherited-shopt-option-list` — and this namespace is silent about a name it does not know, which is the opposite of what the `set -o` list does with one: no complaint, status 0, and the good name in the same value still applied. A leading or trailing colon is ignored the same way, where the other list calls the empty piece a bad name
+  ```sh
+  shopt -p cdspell; echo "st=$?"
+  ```
+- `env/the-shopt-option-list-is-readonly` — a produced value cannot be assigned to meaningfully, and the shell that has it refuses rather than accepting quietly — the same refusal `$SHELLOPTS` gets, from the same rule. bash 3.2 has no such name and takes the assignment as the ordinary variable it is for it, alongside the three shells with no `shopt`
+  ```sh
+  BASHOPTS=whatever; echo after
   ```
 - `env/a-file-named-for-a-non-interactive-shell-is-sourced` — the non-interactive counterpart of `$ENV`, and one shell's alone: bash sources the file before the command string and the other three do nothing with the name. The snippet is the *file*, which is why the argv runs something else
   ```sh

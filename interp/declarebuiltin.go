@@ -832,7 +832,12 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 				}
 			}
 		}
-		return r.declareFunctions(args, narrowed, namesOnly, f.funcNames)
+		// `-p` alongside asks for the reissuable shape, so it is also where
+		// extended debugging's location does *not* go: measured on bash
+		// 5.3.15, `shopt -s extdebug; declare -F g` is `g 1 ./lib2.sh` and
+		// `declare -Fp g` is `declare -f g` with no location in it at all.
+		return r.declareFunctions(args, narrowed, namesOnly, f.funcNames,
+			r.LocatesFunctions() && !f.print)
 	}
 
 	if len(args) == 0 && !f.tie {
@@ -2271,7 +2276,12 @@ func withoutListingLetters(f declareFlags) declareFlags {
 // narrowed says the caller has already chosen the population — a listing
 // filtered by the marks its letters named — so an empty slice is an empty
 // listing rather than a request for the whole table.
-func (r *Runner) declareFunctions(names []string, narrowed, namesOnly, asDeclarations bool) int {
+//
+// locates is extended debugging asking for the line and the file after the
+// name, and it is the caller's to decide rather than read here because the
+// same option is off for the shape `-p` asks for — see LocatesFunctions and
+// the call in declareBuiltin.
+func (r *Runner) declareFunctions(names []string, narrowed, namesOnly, asDeclarations, locates bool) int {
 	named := len(names) > 0 || narrowed
 	if !named {
 		// The script's own and not the prelude's: this listing is what a
@@ -2292,6 +2302,13 @@ func (r *Runner) declareFunctions(names []string, narrowed, namesOnly, asDeclara
 		switch {
 		case !namesOnly:
 			r.printf("%s\n", r.listedFunction(name, fn))
+		case named && asDeclarations && locates:
+			// Extended debugging: the name, the line the definition begins
+			// on and the file it was read from. See LocatesFunctions — it is
+			// what a shell-level debugger needs to put a breakpoint
+			// anywhere, and this shell already kept both halves.
+			r.printf("%s %d %s\n", name, r.functionDefinitionLine(name, fn),
+				r.functionDefinitionFile(name))
 		case named || !asDeclarations:
 			r.printf("%s\n", r.listedFunctionNameOnly(name, fn))
 		default:
@@ -3693,4 +3710,48 @@ func (r *Runner) expandAssignName(w *syntax.Word) string {
 // — so this is that condition given a name rather than a new rule.
 func (r *Runner) declarationCarriesAnArrayLiteral(name string) bool {
 	return r.literalOperands[name]
+}
+
+// functionDefinitionLine is the line a function's definition begins on, for
+// the listing that reports where a function came from.
+//
+// The tree already carries it, so this is a reading rather than a record: a
+// definition the parser read knows its own position, and one a builtin made
+// from text was parsed too. Measured on bash 5.3.15, 2026-09-13, with a blank
+// first line in the file: `g` defined on line 2 answers 2, so it is the
+// definition's own line and not the line the file was sourced from.
+func (r *Runner) functionDefinitionLine(name string, fn *syntax.FuncDecl) int {
+	if fn == nil {
+		return 0
+	}
+	if text, ok := r.undefinedFunction(name); ok && text != "" {
+		// A body that has not been read yet has no position worth naming;
+		// the placeholder is the shell's own text. One is what a listing
+		// under this option is least likely to be asked about, and zero is
+		// what the shell that has the option writes for a function it has
+		// no line for.
+		return 0
+	}
+	return int(fn.Pos().Line)
+}
+
+// functionDefinitionFile is the file a function was defined in, for the same
+// listing.
+//
+// Runner.funcFiles is the record and it is already kept for every route that
+// defines one. The fallback is the shell's own name, which is measured rather
+// than chosen: a function defined in a `-c` string or on standard input is
+// reported by bash 5.3.15 against the shell's own path, and a function from a
+// script names that script exactly as the invocation spelled it — `./s.sh`
+// and `s.sh` are two answers to the same question there.
+//
+// Not Runner.functionOrigin, which answers the neighboring question for a
+// different shell and has a different answer for standard input: that one
+// reports *no* origin there, because the sentence it feeds leaves the clause
+// off entirely. Folding the two would make one of them wrong.
+func (r *Runner) functionDefinitionFile(name string) string {
+	if file := r.funcFiles[name]; file != "" {
+		return file
+	}
+	return r.name()
 }

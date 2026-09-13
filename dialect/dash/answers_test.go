@@ -95,7 +95,6 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"AssignThroughExpansionMayNameAPositional", s.AssignThroughExpansionMayNameAPositional, interp.No},
 		{"ShiftPastEndFatal", s.ShiftPastEndFatal, interp.Yes},
 		{"RedirectErrorOnSpecialBuiltinFatal", s.RedirectErrorOnSpecialBuiltinFatal, interp.Yes},
-		{"DuplicationTargetErrorOnABuiltinIsFatal", s.DuplicationTargetErrorOnABuiltinIsFatal, interp.No},
 		{"InteractiveMonitorNeedsATerminal", s.InteractiveMonitorNeedsATerminal, interp.Yes},
 		{"InteractiveScriptAnnouncesJobs", s.InteractiveScriptAnnouncesJobs, interp.Yes},
 		{"InteractiveCommandStringAnnouncesJobs", s.InteractiveCommandStringAnnouncesJobs, interp.No},
@@ -317,5 +316,13 @@ func TestAnAssignmentThroughAnExpansionCannotNameAListOrAPositional(t *testing.T
 	out, st := answersRun(t, `set -- p; printf "<%s>" ${@:=abc}`)
 	if out != "<p>" || st != 0 {
 		t.Errorf("a parameter that is there = %q (status %d), want <p> at 0", out, st)
+	}
+}
+
+// The three-way axis is a form rather than an Answer, so it is pinned here
+// beside the table rather than in it.
+func TestTheDuplicationTargetErrorForm(t *testing.T) {
+	if got := preset.Semantics().DuplicationTargetError; got != interp.DuplicationTargetErrorEndsTheShell {
+		t.Errorf("DuplicationTargetError = %v, want %v", got, interp.DuplicationTargetErrorEndsTheShell)
 	}
 }

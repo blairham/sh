@@ -11549,13 +11549,28 @@ options where they were — a change within bash rather than a difference
 between shells, so the corpus's `bash32` column disagrees with the other
 two on purpose (`shopt/extdebug-turns-on-function-tracing`).
 
-What bash's extended debugging *also* names is not provided here:
-`declare -F` reporting a definition's file and line, a DEBUG action's
-status skipping the next command or simulating a `return`, and the
-BASH_ARGC/BASH_ARGV record. The name is taken for what it moves rather
-than refused for what it does not, which is the same partial honesty
-`set -o posix` keeps — and the remainder is itemized and measured in
-#2476 rather than left as this paragraph, so it is countable.
+**The third state it carries is not a `set` option under another name.**
+With extended debugging on, a *names-only* function listing writes the
+line the definition begins on and the file it was read from after the
+name: `shopt -s extdebug; declare -F g` is `g 1 ./lib.sh` where the same
+listing without it is `g`. All three bash columns agree here, which
+parts it from the tracing above — this half of the option is older than
+the indicator split. The listing reads the option rather than the
+definition, so the same function answers differently before and after
+`shopt -u extdebug`, and `-p` alongside asks for the reissuable shape
+and gets no location at all. A function with no file behind it — one
+defined in a `-c` string or on standard input — is named against the
+shell itself. `interp.Runner.LocatesFunctions` is the capability, a
+switch over the core's listing rather than anything in the dialect, for
+the reason the two tracing bits are.
+
+What bash's extended debugging *also* names is still not provided here:
+a DEBUG action's status skipping the next command or simulating a
+`return`, and the BASH_ARGC/BASH_ARGV record. The name is taken for what
+it moves rather than refused for what it does not, which is the same
+partial honesty `set -o posix` keeps — and the remainder is itemized and
+measured in #2476 rather than left as this paragraph, so it is
+countable.
 
 **`ExitTrapFiresPastTheEnd`** — bash unspecified · dash unspecified · ksh93 no · zsh yes
 
@@ -15896,6 +15911,51 @@ parse has already succeeded, and reproducing it would mean keeping a lexer
 position that an evaluated tree does not have. Single-line programs — every
 corpus case here — agree.
 
+**`GreatAmpTarget`** — bash *names a file* · dash **descriptor only** · ksh93 **descriptor only** · zsh *names any file*
+
+`>&word` where the word is neither a run of digits nor `-`. Five of the seven
+columns read it as csh's spelling of `&>word` and open the word as a file;
+ksh93 refuses it as a bad file unit number and dash refuses it while parsing.
+`<&word` is a duplication everywhere and never asks this.
+
+**A leading descriptor number is part of the question and not the whole of
+it**, and it is what separates the two file-opening answers. Measured
+2026-09-13 with `{ printf "E\n" >&2; printf "O\n"; } 2>&qq` in an empty
+directory:
+
+| column | answer |
+| --- | --- |
+| bash 5.3 | `qq: ambiguous redirect`, status 1, no file |
+| bash-as-`sh` | the same |
+| bash 3.2 | the same |
+| ksh93 | `qq: bad file unit number`, status 1, no file |
+| dash | `Syntax error: Bad fd number`, status 2, script over |
+| ash | `redir error`, status 2, script over |
+| zsh | opens `qq` at status 0 |
+
+So `GreatAmpTargetNamesAFile` refuses a numbered `>&word` and
+`GreatAmpTargetNamesAnyFile` opens it — the same pair that already splits over
+a word that expanded to nothing. Writing bash's refusal down as an invariant
+of the *operator* is what made this shell answer `file number expected` for a
+line real zsh runs (#2494), and it is also why `exec 6>&5-` is a file called
+`5-` there rather than a refusal.
+
+**A written `1` is not a number here**, and this is the bound on the rule
+above. `1>&qq` is the bare `>&qq` in bash 5.3, bash-as-`sh`, bash 3.2, ash and
+zsh — both streams into the file at status 0 — where `2>&qq` is refused in
+three of them. The question is *which* descriptor was named and not whether
+one was written, and reading `rd.N != nil` as the whole of it refuses a
+spelling five columns run.
+
+**And a number that is not 1 is not `&>`.** It is `N> word 2>&N`: the file
+lands on the descriptor the script named and standard error is pointed at it
+as well, so `3>&qq` and `0>&qq` put only `E` in the file and leave `O` on the
+terminal, where `1>&qq` and the bare spelling take both. `2>&qq` writes `E`
+*twice*, which falls out of `RedirectsUseEveryTarget` rather than being
+arranged — the second target standard error is given is the descriptor the
+first one just opened, so the shell that writes to every target of a stream
+writes to this one twice. `unsetopt multios` leaves one copy.
+
 **`FdMove`** — bash *duplicates then closes* · dash **no such operator** · ksh93 *relocates* · zsh **no such operator**
 
 `6<&5-` and `6>&5-`: make 6 a copy of 5 and close 5, as one operator. It is
@@ -15973,6 +16033,47 @@ The core leaves this unanswered and refuses, the way it does every axis where
 the panel splits over whether a construct exists at all. `PosixSemantics`
 answers `FdMoveIsNotAnOperator`: XCU gives `[n]<&word` a number or `-` and has
 no third reading.
+
+**`DuplicationTargetError`** — bash *carries on* · dash **ends the shell** · ksh93 *carries on* · zsh **ends it on a builtin**
+
+What becomes of the shell when `<&word` or `>&word` names something that is
+not a descriptor. Every column refuses the word; what they do next splits them
+three ways. Measured 2026-09-12 and 2026-09-13 with `exec 6<&qq; echo "st=$?";
+echo reached` in an empty directory:
+
+| column | answer |
+| --- | --- |
+| bash 5.3 | `qq: ambiguous redirect`, status 1, on it goes |
+| bash-as-`sh` | the same |
+| bash 3.2 | the same |
+| ksh93 | `qq: bad file unit number`, status 1, on it goes |
+| zsh | `file number expected`, status 1, and the shell ends — on a builtin |
+| dash | `Syntax error: Bad fd number`, status 2, over |
+| ash | `redir error`, status 2, over |
+
+**A form rather than a flag, because one of the three is conditional on the
+command.** Two independent flags would admit a shell that is fatal on a
+builtin *and* fatal everywhere, which is a reading nothing exhibits — the
+shape #2029 is about. zsh's boundary is the command: `cat <&""` and `/bin/echo
+hi <&""` complain and carry on there, while `read x <&""`, `echo hi <&""`,
+`true <&""` and `: <&""` end it. dash's and ash's boundary is the redirection,
+so an external command stops them too.
+
+**Neither of the two that always stop is a parse refusal**, though both are
+worded as one. `if false; then exec 6<&qq; fi; echo reached` prints `reached`
+and exits 0 in both, and `echo A; echo hi >&qq` prints `A` before complaining
+— the same probe, and the same conclusion, as
+`MultiDigitDuplicationTargetIsAnError`. The status is
+`FatalErrorStatusIsOne`'s, which is why both reach 2 without this carrying a
+number of its own, and a subshell that stops takes only itself.
+
+**The wording is the dialect's and ash has two of it.** A word that came to
+something is `redir error`; a word that came to nothing is `syntax error: bad
+fd number`, which is the split bash and ksh93 also make and ash makes the
+other way round. That is `Diagnostics.DuplicationTargetIsNotADescriptor` and
+`EmptyDuplicationTarget`. Until #2495 dash and ash had neither, so both
+answered in bash's words, at bash's status, and let the script keep going with
+the wrong streams.
 
 **`RedirectErrorOnSpecialBuiltinFatal`** — bash no · dash yes · ksh93 yes · zsh no
 

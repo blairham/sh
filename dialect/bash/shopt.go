@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/blairham/sh/interp"
 )
@@ -226,8 +227,10 @@ var shoptSwitches = map[string]struct {
 	// corpus's `bash32` column disagrees with the other two on purpose and
 	// this is 5.3's answer.
 	//
-	// What bash's extended debugging *also* does is not here: `declare -F`
-	// reporting a definition's file and line, a DEBUG action's status
+	// `declare -F` reporting a definition's line and file joined the two in
+	// #2476, and it is the one of the three that is not a `set` option under
+	// another name — see interp.Runner.LocatesFunctions. What bash's extended
+	// debugging *also* does is still not here: a DEBUG action's status
 	// skipping the next command or simulating a `return`, and the
 	// BASH_ARGC/BASH_ARGV record — measured and itemized in #2476, so the
 	// remainder is a count rather than a paragraph. The entry keeps the same
@@ -241,6 +244,7 @@ var shoptSwitches = map[string]struct {
 			shoptSetStored(r, "extdebug", on, false)
 			r.SetErrorTracing(on)
 			r.SetFunctionTracing(on)
+			r.SetLocatesFunctions(on)
 		},
 	},
 	// The one name in this table that moves a *semantics axis* rather than a
@@ -506,6 +510,68 @@ func shoptState(r *interp.Runner, name string) (on, known bool) {
 	}
 	on, known = shoptStates[name]
 	return on, known
+}
+
+// bashOptions is `$BASHOPTS`: every `shopt` name this shell has on, sorted
+// and colon-separated.
+//
+// The same design as `$SHELLOPTS` one namespace along — produced rather than
+// stored, so `shopt -s cdspell; echo $BASHOPTS` says what is true now, and
+// readonly, so no assignment can make it lie. The two are half of how a shell
+// hands its option state to a child, and a harness that read this one back
+// used to see a shell with nothing set at all (#2475).
+//
+// The names are this shell's own state and not a claim about bash's. Several
+// that bash lists on by default are recorded here as off because nothing
+// implements them, and reporting them the other way round to match a listing
+// would be exactly the lie the produced value exists to prevent.
+//
+// bash 3.2 has no such variable — a `-c` there writes nothing for it, and an
+// inherited value turns nothing on — so this is bash 5's answer and the corpus
+// row says which is being copied.
+func bashOptions(r *interp.Runner) string {
+	names := shoptNames()
+	on := make([]string, 0, len(names))
+	for _, n := range names {
+		if state, known := shoptState(r, n); known && state {
+			on = append(on, n)
+		}
+	}
+	// shoptNames is already sorted, so this is a re-assertion rather than
+	// work — kept because the ordering is the contract and a later change to
+	// how the names are gathered must not quietly drop it.
+	sort.Strings(on)
+	return strings.Join(on, ":")
+}
+
+// applyInheritedBashOptions is the write direction: every name in the value
+// this shell inherited is turned on.
+//
+// **A name it does not know is skipped in silence**, which is measured and is
+// the opposite of what `$SHELLOPTS` does with one: `BASHOPTS=nosuchopt:cdspell
+// bash -c 'shopt -p cdspell'` answers `shopt -s cdspell` at status 0 with
+// nothing on standard error, and so does a value with a leading or trailing
+// colon. A `set -o` name in it is ignored the same way — the two namespaces
+// are separate here as they are everywhere else in this builtin.
+//
+// Nothing is turned off. The value says what is on, and a shell whose defaults
+// differ from what it was handed does not lose them: a value naming only
+// `cdspell` leaves `sourcepath` on in bash, measured.
+//
+// The names it does know go through shoptApply, which is the same door
+// `shopt -s` uses. So a name this shell cannot honor draws that builtin's own
+// sentence rather than a second one written for startup, and `$BASHOPTS`
+// afterwards still reports only what is really on.
+func applyInheritedBashOptions(r *interp.Runner, value string) {
+	var known []string
+	for _, name := range strings.Split(value, ":") {
+		if _, ok := shoptState(r, name); ok {
+			known = append(known, name)
+		}
+	}
+	if len(known) > 0 {
+		shoptApply(r, known, true)
+	}
 }
 
 // shoptNames is every name, sorted, for the listings.

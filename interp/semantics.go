@@ -9464,22 +9464,14 @@ type Semantics struct {
 	// which every shell in the panel has.
 	FdMove FdMoveForm
 
-	// DuplicationTargetErrorOnABuiltinIsFatal ends a non-interactive shell
-	// when `<&word` names something that is not a descriptor and the command
-	// it is written on runs *in* the shell.
+	// DuplicationTargetError is what becomes of the shell when `<&word` or
+	// `>&word` names something that is not a descriptor. A form rather than
+	// a flag because the panel gives three answers and one of them is
+	// conditional on the command; see DuplicationTargetErrorForm.
 	//
-	// zsh alone, and the boundary is the command rather than the redirection.
-	// Measured 2026-09-06: `cat <&""` and `/bin/echo hi <&""` complain and
-	// carry on, while `read x <&""`, `echo hi <&""`, `true <&""` and `: <&""`
-	// end the shell — the same word, the same complaint, and a builtin on the
-	// left.
-	//
-	// Not RedirectErrorOnSpecialBuiltinFatal, which zsh answers No and which
-	// would not reach `read` or `echo` in any case. Nor is it redirection
-	// failure in general: an ordinary one on a zsh builtin — `read x
-	// 3>/nope/x`, `read x <&9` — complains and carries on there too. It is
-	// this refusal, on a builtin.
-	DuplicationTargetErrorOnABuiltinIsFatal Answer
+	// Asked wherever such a word is refused, which is the only place it
+	// decides anything: `<&2` is nobody's question.
+	DuplicationTargetError DuplicationTargetErrorForm
 
 	// RedirectErrorOnSpecialBuiltinFatal ends a non-interactive shell when a
 	// redirection written on a *special* builtin cannot be made — a file that
@@ -11103,8 +11095,11 @@ func PosixSemantics() Semantics {
 		// leaves this unanswered instead, for the reason on FdMoveForm — half
 		// the panel has the operator and half does not, which is a
 		// disagreement rather than an absence.
-		FdMove:                                  FdMoveIsNotAnOperator,
-		DuplicationTargetErrorOnABuiltinIsFatal: No,
+		FdMove: FdMoveIsNotAnOperator,
+		// XCU makes a redirection error fatal for a *special* builtin and
+		// leaves every other command's to the shell, so the standard has no
+		// third reading and the preset takes the one that carries on.
+		DuplicationTargetError: DuplicationTargetErrorCarriesOn,
 		// A bad name is a special builtin's failure too, and the standard
 		// makes no exception for `unset`.
 		BadNameToDeclarationFatal: Yes,

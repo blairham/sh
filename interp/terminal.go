@@ -189,12 +189,22 @@ func (r *Runner) terminalTest(operand string) (answer, isNumber bool) {
 // Runner an embedder builds, which is a process-wide reach this package does
 // not make. See TestTheTerminalIsRememberedOnceItHasBeenSeen, which asserts
 // the claim and records the limit.
-func (r *Runner) terminalSize() (rows, cols int) {
+// **Whether there was a terminal to ask is the third result**, and it is not
+// something a caller can put back together from the first two. Zeroes mean two
+// different things and the difference is measured: a shell on a pipe has no
+// terminal and zsh reports `0`, while a shell holding a terminal that will not
+// say its size — a pseudo-terminal created without one — has a terminal and
+// zsh reports the classic 80x24. Folding the two into one pair of zeroes is
+// what made this shell take the 0 literally (#2489). Returned rather than
+// reconstructed by a second IsTerminal call, which could answer differently a
+// moment later.
+func (r *Runner) terminalSize() (rows, cols int, held bool) {
 	f, held := r.terminal()
 	if !held {
-		return 0, 0
+		return 0, 0, false
 	}
-	return tty.Size(f)
+	rows, cols = tty.Size(f)
+	return rows, cols, true
 }
 
 // terminal is the terminal this shell holds, and false where it holds none.

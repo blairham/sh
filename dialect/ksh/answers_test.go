@@ -98,7 +98,6 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"WholeSubscriptOnAScalarSlicesIt", s.WholeSubscriptOnAScalarSlicesIt, interp.No},
 		{"FatalErrorStatusIsOne", s.FatalErrorStatusIsOne, interp.Yes},
 		{"RedirectErrorOnSpecialBuiltinFatal", s.RedirectErrorOnSpecialBuiltinFatal, interp.Yes},
-		{"DuplicationTargetErrorOnABuiltinIsFatal", s.DuplicationTargetErrorOnABuiltinIsFatal, interp.No},
 		{"InteractiveMonitorNeedsATerminal", s.InteractiveMonitorNeedsATerminal, interp.No},
 		{"InteractiveScriptAnnouncesJobs", s.InteractiveScriptAnnouncesJobs, interp.Yes},
 		{"InteractiveCommandStringAnnouncesJobs", s.InteractiveCommandStringAnnouncesJobs, interp.Yes},
@@ -377,5 +376,13 @@ func TestAnEmptyParameterSubscriptIsTheEmptyExpression(t *testing.T) {
 		if strings.TrimSpace(out) != tc.want || st != 0 {
 			t.Errorf("%s = %q (status %d), want %s at 0", tc.src, out, st, tc.want)
 		}
+	}
+}
+
+// The three-way axis is a form rather than an Answer, so it is pinned here
+// beside the table rather than in it.
+func TestTheDuplicationTargetErrorForm(t *testing.T) {
+	if got := preset.Semantics().DuplicationTargetError; got != interp.DuplicationTargetErrorCarriesOn {
+		t.Errorf("DuplicationTargetError = %v, want %v", got, interp.DuplicationTargetErrorCarriesOn)
 	}
 }

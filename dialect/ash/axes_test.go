@@ -9,6 +9,7 @@ import (
 
 	"github.com/blairham/sh/dialect/ash"
 	"github.com/blairham/sh/internal/dialecttest"
+	"github.com/blairham/sh/interp"
 )
 
 // The regression guard for #2272, and the shape it guards against is worth
@@ -217,5 +218,18 @@ func TestWhatThisDialectStillCannotSay(t *testing.T) {
 			"empty on purpose: five of BusyBox's fifteen rows name resources no "+
 			"interp.Resource constant does, and they were measured on Linux, "+
 			"where those limits exist.", len(rows))
+	}
+}
+
+// The three-way axis behind a `<&word` that names no descriptor. ash refuses
+// the word and the shell is over at 2, whatever the command was, in its own
+// three words — measured 2026-09-13 against BusyBox v1.37.0.
+func TestABadDuplicationTargetEndsThisShell(t *testing.T) {
+	if got := preset.Semantics().DuplicationTargetError; got != interp.DuplicationTargetErrorEndsTheShell {
+		t.Errorf("DuplicationTargetError = %v, want DuplicationTargetErrorEndsTheShell", got)
+	}
+	out, st := runIn(t, `echo A; /bin/echo B <&qq; echo reached`)
+	if out != "A\nash: redir error\n" || st != 2 {
+		t.Errorf("out = %q status %d, want the shell over at 2 after `A`", out, st)
 	}
 }

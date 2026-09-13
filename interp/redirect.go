@@ -289,8 +289,13 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 		// Rebinding the operator rather than copying the open is the whole of
 		// it — a second copy is a second place to forget noclobber.
 		op := rd.Op
-		if r.greatAmpNamesAFile(rd, name) {
+		// And whether the redirection wrote a descriptor of its own, which
+		// one dialect allows and which changes what the spelling means: see
+		// cshOnANumber, read below where the descriptor is settled.
+		numbered := false
+		if r.greatAmpNamesAFile(rd, fd, fdVar, name) {
 			op = syntax.TokAmpGreat
+			numbered = rd.N != nil && fdVar == "" && fd != 1
 		} else if r.unspecified {
 			r.redirErr = true
 			return closers, nil
@@ -483,7 +488,9 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 				// beside this one.
 				flags |= os.O_EXCL
 			}
-			fd = -1
+			if !numbered {
+				fd = -1
+			}
 		default:
 			return closers, fmt.Errorf("not implemented yet: the %s redirection", rd.Op)
 		}
@@ -680,6 +687,24 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 				if fdVar != "" {
 					r.setFdVar(fdVar, itoa(fd))
 				}
+			}
+			if numbered {
+				// The csh form on a descriptor that is not standard output
+				// is `N> word 2>&N` and not the both-streams `&> word`: the
+				// file lands on the number the script named, and standard
+				// error is pointed at it as well. Measured on zsh 5.9.2,
+				// 2026-09-13, with a command writing `O` to stdout and `E`
+				// to stderr in an empty directory: `3>&qq` and `0>&qq` put
+				// `E` in the file and leave `O` on the terminal, where
+				// `1>&qq` and the bare `>&qq` take both.
+				//
+				// `2>&qq` writes `E` *twice*, and that falls out rather than
+				// being arranged: the second target for standard error is
+				// the descriptor the first one just opened, so the shell
+				// that writes to every target of a stream writes to this one
+				// twice. `unsetopt multios` leaves one copy, which is the
+				// same axis answering the other way.
+				r.Stderr = r.eachTarget(2, f, opened)
 			}
 		}
 	}
@@ -1738,6 +1763,91 @@ func (f FdMoveForm) String() string {
 	return "FdMoveUnspecified"
 }
 
+// DuplicationTargetErrorForm is what becomes of the shell when `<&word` or
+// `>&word` names something that is not a descriptor.
+//
+// Every shell in the panel refuses the word. What they do next splits them
+// three ways, and one of the three is conditional on the *command* the
+// redirection was written on, which is why this cannot be a flag: two
+// independent flags would admit a shell that is fatal on a builtin and fatal
+// everywhere at once, which is a reading nothing exhibits.
+//
+// Measured 2026-09-12 and 2026-09-13 with `exec 6<&qq; echo "st=$?"; echo
+// reached` in an empty directory:
+//
+//	bash 5.3, bash-as-sh, bash 3.2  `qq: ambiguous redirect`, status 1, on it goes
+//	ksh93                           `qq: bad file unit number`, status 1, on it goes
+//	zsh                             `file number expected`, status 1, and the
+//	                                shell ends — but only on a builtin
+//	dash                            `Syntax error: Bad fd number`, status 2, over
+//	ash                             `redir error`, status 2, over
+//
+// **Neither of the last two is a parse refusal**, though both are worded as
+// one: `if false; then exec 6<&qq; fi; echo reached` prints `reached` and
+// exits 0 in both, and `echo A; echo hi >&qq` prints `A` first. So the
+// grammar takes the text everywhere and the answer is the vector's — the same
+// reasoning, and the same probe, as MultiDigitDuplicationTargetIsAnError.
+//
+// The status of a shell that stops is FatalErrorStatusIsOne's, which is why
+// dash and ash exit 2 without this needing a status of its own; and a
+// subshell that stops takes only itself, which is what `( exec 6<&qq ); echo
+// reached` shows in both.
+type DuplicationTargetErrorForm int
+
+const (
+	// DuplicationTargetErrorUnspecified is no answer, and is refused like
+	// any other.
+	DuplicationTargetErrorUnspecified DuplicationTargetErrorForm = iota
+	// DuplicationTargetErrorCarriesOn reports the word at status 1 and runs
+	// the next command. bash and ksh93, and the standard's reading: XCU
+	// makes a redirection error fatal for a special builtin alone, which
+	// RedirectErrorOnSpecialBuiltinFatal already answers.
+	DuplicationTargetErrorCarriesOn
+	// DuplicationTargetErrorEndsTheShellOnABuiltin reports it at status 1
+	// and ends a non-interactive shell, but only where the command it is
+	// written on runs *in* the shell. zsh alone, and the boundary is the
+	// command rather than the redirection: measured 2026-09-06, `cat <&""`
+	// and `/bin/echo hi <&""` complain and carry on, while `read x <&""`,
+	// `echo hi <&""`, `true <&""` and `: <&""` end it — the same word, the
+	// same complaint, and a builtin on the left.
+	//
+	// Not RedirectErrorOnSpecialBuiltinFatal, which zsh answers No and which
+	// would not reach `read` or `echo` in any case. Nor is it redirection
+	// failure in general: an ordinary one on a zsh builtin — `read x
+	// 3>/nope/x`, `read x <&9` — complains and carries on there too.
+	DuplicationTargetErrorEndsTheShellOnABuiltin
+	// DuplicationTargetErrorEndsTheShell reports it and ends the shell
+	// whatever the command was — a builtin, a function or `/bin/echo` — at
+	// the fatal status. dash and ash.
+	DuplicationTargetErrorEndsTheShell
+)
+
+func (f DuplicationTargetErrorForm) String() string {
+	switch f {
+	case DuplicationTargetErrorCarriesOn:
+		return "DuplicationTargetErrorCarriesOn"
+	case DuplicationTargetErrorEndsTheShellOnABuiltin:
+		return "DuplicationTargetErrorEndsTheShellOnABuiltin"
+	case DuplicationTargetErrorEndsTheShell:
+		return "DuplicationTargetErrorEndsTheShell"
+	}
+	return "DuplicationTargetErrorUnspecified"
+}
+
+// duplicationTargetError resolves the axis, and only where a word after `<&`
+// or `>&` really has been refused. `<&2` is nobody's question, so a dialect
+// that has not answered this still duplicates.
+func (r *Runner) duplicationTargetError() DuplicationTargetErrorForm {
+	f := r.sem().DuplicationTargetError
+	if f == DuplicationTargetErrorUnspecified {
+		r.errf("%s\n", r.diag().Report(r.name(), r.line,
+			r.unanswered("a duplication target that is not a descriptor")))
+		r.status = 2
+		r.unspecified = true
+	}
+	return f
+}
+
 // fdMoveSource splits `5-` into the descriptor it names and the fact that a
 // move was written. It answers only for a run of digits followed by the
 // suffix, which is what keeps the axis from being asked about `-` on its own
@@ -1801,17 +1911,31 @@ func isDescriptorSpec(word string) bool {
 // greatAmpNamesAFile answers whether this `>&word` is the csh spelling of
 // `&>word` — see GreatAmpTargetForm.
 //
-// Only where the redirection names no descriptor of its own. `2>&qq` is a
-// duplication in every shell that has the form at all: bash calls it an
-// ambiguous redirect where the bare spelling writes a file, which is what
-// makes the leading number the whole of the question.
-func (r *Runner) greatAmpNamesAFile(rd *syntax.Redirect, target string) bool {
-	if rd.Op != syntax.TokGreatAmp || rd.N != nil || isDescriptorSpec(target) {
+// The leading descriptor number is part of the question rather than the whole
+// of it, and the two forms split on it. Measured 2026-09-13 with `echo hi
+// 2>&qq` in an empty directory: bash 5.3.15, bash 3.2.57 and bash-as-sh
+// answer `qq: ambiguous redirect`, BusyBox ash answers `redir error` and
+// ksh93 `qq: bad file unit number`, all with no file left behind — where the
+// bare `>&qq` writes one in every column but ksh93's. zsh 5.9.2 creates the
+// file for both spellings.
+//
+// So a number refuses under GreatAmpTargetNamesAFile and opens under
+// GreatAmpTargetNamesAnyFile. This used to be written down as an invariant of
+// the operator, which made zsh answer `file number expected` for a line real
+// zsh runs (#2494).
+//
+// **A written `1` is not a number here.** `1>&qq` is the bare `>&qq` in bash
+// and in ash — both streams into the file, at status 0 — measured the same
+// day, and only a *different* number is refused. Reading "a descriptor was
+// written" as the question refuses a spelling three of the columns run, which
+// is the same over-generalization one step along.
+func (r *Runner) greatAmpNamesAFile(rd *syntax.Redirect, fd int, fdVar, target string) bool {
+	if rd.Op != syntax.TokGreatAmp || isDescriptorSpec(target) {
 		return false
 	}
 	switch r.greatAmpTarget() {
 	case GreatAmpTargetNamesAFile:
-		return target != ""
+		return (rd.N == nil || (fdVar == "" && fd == 1)) && target != ""
 	case GreatAmpTargetNamesAnyFile:
 		return true
 	}
@@ -1855,11 +1979,18 @@ func (r *Runner) refuseDupTarget(rd *syntax.Redirect, target string) {
 	r.diagf("%s\n", general)
 	r.status = 1
 	r.redirErr = true
-	// One dialect ends the shell over this, and only when the command it is
-	// written on runs *in* the shell — see
-	// DuplicationTargetErrorOnABuiltinIsFatal. The command is not known here,
-	// so the fact travels to where it is.
-	r.badDupTarget = true
+	switch r.duplicationTargetError() {
+	case DuplicationTargetErrorEndsTheShell:
+		// Two dialects end the shell over this whatever the command was, and
+		// they are the two that word it as a syntax error without it being
+		// one. The status is the fatal one the vector already carries, so
+		// both reach 2 without a number of their own.
+		r.fatalQuiet()
+	case DuplicationTargetErrorEndsTheShellOnABuiltin:
+		// And one ends it only when the command runs *in* the shell. The
+		// command is not known here, so the fact travels to where it is.
+		r.badDupTarget = true
+	}
 }
 
 // fdAliased reports whether anything else this shell still holds open refers

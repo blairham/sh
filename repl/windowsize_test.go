@@ -97,3 +97,36 @@ func TestWindowSizeTrackingWritesNothingWithoutATerminal(t *testing.T) {
 type readerOnly struct{}
 
 func (readerOnly) Read([]byte) (int, error) { return 0, nil }
+
+// A terminal that will not say how big it is writes nothing here, and that is
+// the measured answer rather than an omission.
+//
+// A pseudo-terminal created without a window size answers `TIOCGWINSZ` with
+// 0x0 — what `pty.fork()` produces, and what sits in the window between
+// `forkpty` and the parent's `TIOCSWINSZ`. On exactly that terminal, bash 5.3
+// under `-i` leaves `$COLUMNS` and `$LINES` **unset**, measured 2026-09-13,
+// where zsh reports the classic 80 and 24 in the parameters it provides
+// itself (#2489). This half is bash's, so it writes nothing.
+//
+// The two are not one rule with two spellings: interp.Runner.windowSizeValue
+// is the other one, and it falls back where this declines to.
+func TestAnUnsizedTerminalWritesNothingToTheVariables(t *testing.T) {
+	control, terminal, err := pty.Open()
+	if err != nil {
+		t.Skipf("no pseudo-terminal: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = terminal.Close()
+		_ = control.Close()
+	})
+	r := &interp.Runner{}
+	r.SetTracksWindowSize(true)
+	s := Shell{Runner: r, In: terminal}
+	s.trackWindowSize()
+	if v, ok := r.GetVar("COLUMNS"); ok {
+		t.Errorf("COLUMNS = %q, want unset — this half is bash's and bash writes nothing", v)
+	}
+	if v, ok := r.GetVar("LINES"); ok {
+		t.Errorf("LINES = %q, want unset", v)
+	}
+}

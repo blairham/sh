@@ -23,7 +23,8 @@ func cshRedir(dir string, form GreatAmpTargetForm, dg Diagnostics) func(*Runner)
 		sem.RedirectTargetIsAnOrdinaryWord = No
 		sem.MultiDigitDuplicationTargetIsAnError = No
 		sem.RedirectErrorOnSpecialBuiltinFatal = No
-		sem.DuplicationTargetErrorOnABuiltinIsFatal = No
+		sem.DuplicationTargetError = DuplicationTargetErrorCarriesOn
+		sem.RedirectsUseEveryTarget = No
 		sem.GreatAmpTarget = form
 		r.Semantics, r.Diagnostics, r.Dir = &sem, &dg, dir
 	}
@@ -103,17 +104,89 @@ func TestAnEmptyGreatAmpTargetSplitsTheTwoFileForms(t *testing.T) {
 	}
 }
 
-// The leading number is the whole of the question: `2>&word` is a duplication
-// in every form, including the ones that open a file for the bare spelling.
-func TestANumberedGreatAmpIsNeverAFile(t *testing.T) {
-	dir := t.TempDir()
+// The leading number is part of the question and not the whole of it, and the
+// two file-opening forms split on it: one refuses `2>&word` where it opens a
+// file for the bare spelling, and the other opens a file for both.
+//
+// This was written down as an invariant of the operator once — "a numbered
+// `>&` is never a file" — which is bash's answer read as everybody's, and it
+// made our zsh refuse a line real zsh runs (#2494).
+func TestTheNumberedGreatAmpSplitsTheTwoFileForms(t *testing.T) {
 	dg := Diagnostics{DuplicationTargetIsNotADescriptor: "%[2]s: ambiguous redirect"}
-	out, _ := run(t, `echo hi 2>&qq; printf "[%s]" "$?"`, cshRedir(dir, GreatAmpTargetNamesAFile, dg))
-	if out != "sh: qq: ambiguous redirect\n[1]" {
-		t.Errorf("out = %q, want the numbered form refused, no file opened and the command not run", out)
-	}
-	if got := readFile(t, dir, "qq"); got != "" {
-		t.Errorf("qq = %q, want no file made by a refusal", got)
+	t.Run("refused where only the bare spelling opens a file", func(t *testing.T) {
+		dir := t.TempDir()
+		out, _ := run(t, `echo hi 2>&qq; printf "[%s]" "$?"`,
+			cshRedir(dir, GreatAmpTargetNamesAFile, dg))
+		if out != "sh: qq: ambiguous redirect\n[1]" {
+			t.Errorf("out = %q, want the numbered form refused, no file opened and the command not run", out)
+		}
+		if got := readFile(t, dir, "qq"); got != "" {
+			t.Errorf("qq = %q, want no file made by a refusal", got)
+		}
+	})
+	t.Run("and a written 1 is not a number", func(t *testing.T) {
+		// `1>&qq` is the bare `>&qq` in bash and in ash — both streams into
+		// the file at status 0 — so the question is which descriptor was
+		// named and not whether one was.
+		dir := t.TempDir()
+		out, st := run(t, `{ echo out; echo err >&2; } 1>&qq; printf "[%s]" "$?"`,
+			cshRedir(dir, GreatAmpTargetNamesAFile, dg))
+		if out != "[0]" || st != 0 {
+			t.Errorf("out = %q status %d, want nothing reaching the caller at 0", out, st)
+		}
+		if got := readFile(t, dir, "qq"); got != "out\nerr\n" {
+			t.Errorf("qq = %q, want both streams in it", got)
+		}
+	})
+	t.Run("a file where any word is a name", func(t *testing.T) {
+		dir := t.TempDir()
+		out, _ := run(t, `echo hi 2>&qq; printf "[%s]" "$?"`,
+			cshRedir(dir, GreatAmpTargetNamesAnyFile, dg))
+		if out != "hi\n[0]" {
+			t.Errorf("out = %q, want the command run and standard output untouched", out)
+		}
+		if got := readFile(t, dir, "qq"); got != "" {
+			t.Errorf("qq = %q, want the file made and empty: stderr had nothing to put in it", got)
+		}
+	})
+}
+
+// And the numbered form is `N> word 2>&N` rather than the both-streams
+// `&> word`: the file lands on the descriptor the script named, and standard
+// error is pointed at it as well. Measured on zsh 5.9.2, 2026-09-13, in an
+// empty directory with a command writing `O` to standard output and `E` to
+// standard error.
+func TestTheNumberedGreatAmpAlsoTakesStandardError(t *testing.T) {
+	for _, tc := range []struct {
+		name, src, wantOut, wantFile string
+		everyTarget                  Answer
+	}{
+		{"the named stream keeps the file", `2>&qq`, "O\n", "E\n", No},
+		{"standard output written out is still both streams", `1>&qq`, "", "E\nO\n", No},
+		{"a descriptor of its own leaves standard output alone", `3>&qq`, "O\n", "E\n", No},
+		// `2>&qq` is the one spelling where the two targets standard error
+		// is given are the same descriptor, so the shell that writes to
+		// every target of a stream writes to this one twice. It falls out
+		// of the axis rather than being arranged, which is why it is graded
+		// here beside the answer that leaves one copy.
+		{"and twice over where a stream uses every target", `2>&qq`, "O\n", "E\nE\n", Yes},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			src := `{ printf "E\n" >&2; printf "O\n"; } ` + tc.src
+			out, st := run(t, src, func(r *Runner) {
+				cshRedir(dir, GreatAmpTargetNamesAnyFile, Diagnostics{})(r)
+				sem := *r.Semantics
+				sem.RedirectsUseEveryTarget = tc.everyTarget
+				r.Semantics = &sem
+			})
+			if out != tc.wantOut || st != 0 {
+				t.Errorf("out = %q status %d, want %q at 0", out, st, tc.wantOut)
+			}
+			if got := readFile(t, dir, "qq"); got != tc.wantFile {
+				t.Errorf("qq = %q, want %q", got, tc.wantFile)
+			}
+		})
 	}
 }
 
@@ -144,6 +217,7 @@ func TestTheGreatAmpFormIsAskedAboutOnlyWhenItMatters(t *testing.T) {
 		{"a descriptor number", `echo hi >&2`, false},
 		{"a close", `exec 3>&-`, false},
 		{"a name", `echo hi >&qq`, true},
+		{"and a name after a number, which the forms disagree about", `echo hi 2>&qq`, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
@@ -156,10 +230,10 @@ func TestTheGreatAmpFormIsAskedAboutOnlyWhenItMatters(t *testing.T) {
 	}
 }
 
-// DuplicationTargetErrorOnABuiltinIsFatal ends the shell over a `<&word` that
-// named no descriptor — and only where the command runs *in* the shell. An
-// external command takes the same refusal and the script carries on, which is
-// what makes the boundary the command rather than the redirection.
+// DuplicationTargetErrorEndsTheShellOnABuiltin ends the shell over a `<&word`
+// that named no descriptor — and only where the command runs *in* the shell.
+// An external command takes the same refusal and the script carries on, which
+// is what makes the boundary the command rather than the redirection.
 func TestABadDuplicationTargetEndsTheShellOnlyOnABuiltin(t *testing.T) {
 	for _, tc := range []struct {
 		name, src string
@@ -175,7 +249,7 @@ func TestABadDuplicationTargetEndsTheShellOnlyOnABuiltin(t *testing.T) {
 				cshRedir(dir, GreatAmpTargetNamesAFile,
 					Diagnostics{DuplicationTargetIsNotADescriptor: "file number expected"})(r)
 				sem := *r.Semantics
-				sem.DuplicationTargetErrorOnABuiltinIsFatal = Yes
+				sem.DuplicationTargetError = DuplicationTargetErrorEndsTheShellOnABuiltin
 				sem.FatalErrorStatusIsOne = Yes
 				r.Semantics = &sem
 			})
@@ -204,6 +278,37 @@ func TestNoclobberRefusesBothStreamsToOneFile(t *testing.T) {
 				cshRedir(dir, GreatAmpTargetNamesAFile, dg))
 			if out != "sh: qq: cannot overwrite existing file\n[1]" {
 				t.Errorf("out = %q, want the refusal and a status of 1", out)
+			}
+		})
+	}
+}
+
+// DuplicationTargetErrorEndsTheShell ends it whatever the command was, which
+// is the answer dash and BusyBox ash give — and it is not a parse refusal in
+// either, though both word it as one.
+func TestABadDuplicationTargetCanEndTheShellOnAnyCommand(t *testing.T) {
+	for _, tc := range []struct {
+		name, src, want string
+		wantStatus      int
+	}{
+		{"a builtin", `true <&qq; echo after`, "sh: bad fd number\n", 2},
+		{"an external command", `/bin/cat <&qq; echo after`, "sh: bad fd number\n", 2},
+		{"an earlier command still runs", `echo before; true <&qq; echo after`, "before\nsh: bad fd number\n", 2},
+		{"and a branch nobody takes asks nothing", `if false; then true <&qq; fi; echo after`, "after\n", 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			touch(t, dir, "qq")
+			out, st := run(t, tc.src, func(r *Runner) {
+				cshRedir(dir, GreatAmpTargetNamesAFile,
+					Diagnostics{DuplicationTargetIsNotADescriptor: "bad fd number"})(r)
+				sem := *r.Semantics
+				sem.DuplicationTargetError = DuplicationTargetErrorEndsTheShell
+				sem.FatalErrorStatusIsOne = No
+				r.Semantics = &sem
+			})
+			if out != tc.want || st != tc.wantStatus {
+				t.Errorf("out = %q status %d, want %q at %d", out, st, tc.want, tc.wantStatus)
 			}
 		})
 	}

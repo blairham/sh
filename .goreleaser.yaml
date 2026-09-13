@@ -4,10 +4,10 @@ version: 2
 # See: https://goreleaser.com
 #
 # A release ships six binaries rather than one, because there are six shells:
-# the substrate driver `sh` plus the four dialect binaries. They go into one
+# the substrate driver `sh` plus the five dialect binaries. They go into one
 # archive per platform — a person installing this wants all of them, and the
 # dialects are the same core with a different vector, so splitting them into
-# five downloads would be five copies of one program.
+# six downloads would be six copies of one program.
 project_name: sh
 
 builds:
@@ -155,10 +155,14 @@ brews:
     token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
   directory: Formula
   homepage: https://github.com/blairham/sh
-  description: A shell parser and interpreter in Go, with bash, zsh, ksh and dash dialects
+  description: A shell parser and interpreter in Go, with bash, zsh, ksh, dash and ash dialects
   license: Apache-2.0
   install: |
-    libexec.install "sh", "bash", "zsh", "ksh", "dash"
+    # Every binary in the archive, `ash` included. An explicit list is what
+    # dropped it once already: the archive carries all six, and
+    # `libexec.install` silently skips the name it was not given, so the keg
+    # came out missing a shell the caveats below promise by name.
+    libexec.install "sh", "bash", "zsh", "ksh", "dash", "ash"
     # Not into libexec beside the binaries. The function search is
     # `<prefix>/share/sh/site-functions` then `<prefix>/share/sh/functions`,
     # and the prefix a binary in the keg's libexec derives is the keg — so
@@ -176,14 +180,21 @@ brews:
 
       #{opt_libexec}/bash -i
 
-    To use one as your login shell, add its full path to /etc/shells and then
-    chsh to it. Read this first — an interactive session does not yet read
-    ~/.bashrc or ~/.zshrc:
+    A session reads what a real shell of the same name reads, in the same order:
+    the profile, the run-commands file, and the machine's own file in front of
+    each. To use one as your login shell, add its full path to /etc/shells and
+    then chsh to it — read this first, and keep the terminal you ran chsh in
+    open until a new window works:
 
       https://github.com/blairham/sh/blob/main/docs/install.md
   test: |
-    assert_equal "hi", shell_output("#{libexec}/bash -c 'echo hi'").chomp
-    assert_equal "hi", shell_output("#{libexec}/sh -c 'echo hi'").chomp
+    # One row per shipped binary. The list in `install:` above is explicit, so
+    # a new dialect is installed only if somebody remembers to add it — these
+    # rows are what turns forgetting into a failed release instead of a keg
+    # that is quietly missing a shell.
+    %w[sh bash zsh ksh dash ash].each do |shell|
+      assert_equal "hi", shell_output("#{libexec}/#{shell} -c 'echo hi'").chomp
+    end
     # The shipped functions are reachable from the default search, which is
     # the half a missing `files:` entry above would break silently: the shell
     # still starts, and every `autoload` in a real startup file fails at the

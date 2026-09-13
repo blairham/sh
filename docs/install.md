@@ -1,12 +1,14 @@
 # Installing, and running this as a login shell
 
-Five binaries come out of a build — the substrate driver `sh`, and the
+Six binaries come out of a build — the substrate driver `sh`, and the
 dialect binaries `bash`, `zsh`, `ksh`, `dash` and `ash`. This file is how they
 get out of the build directory, and what it takes to make one of them the
 shell a terminal starts.
 
-Read the last two sections before you `chsh`. An interactive session does
-not read `~/.bashrc` or `~/.zshrc` yet.
+Read the last two sections before you `chsh`. A session reads everything a
+real shell of the same name reads, in the same order — "What a session
+reads" below is the measured grid — and the two differences worth knowing
+first are at the end of it.
 
 ## Where they go, and why that is not a `bin` directory
 
@@ -260,11 +262,17 @@ the same field.
 ### What a login shell is, here
 
 Login-ness is `argv[0]` beginning with a dash — the convention `login`
-and every terminal emulator use — and that is the whole of it. There is
-**no `-l` or `--login` flag yet**, so a login shell started by hand needs
-the same trick the system uses:
+and every terminal emulator use — or `-l`/`--login`, the same as bash.
+Either reaches the profile, so a login shell started by hand can use the
+flag rather than the trick the system uses:
 
+    /usr/local/libexec/sh/bash --login
     exec -a -bash /usr/local/libexec/sh/bash     # from bash or zsh
+
+Measured against bash 5.3.15 on macOS, 2026-09-12: `--login -c cmd` reads
+`~/.bash_profile` in both, and `argv[0]` of `-bash` with `-c cmd` reads it
+in **neither** — so the flag is the route that works for a one-shot
+command, and the dash is the route the system takes for a session.
 
 ## What a session reads
 
@@ -298,9 +306,9 @@ alone in `zsh`. `dash` and `ksh` have none, which is what those shells do.
 
 Two smaller differences worth knowing before you live in it:
 
-- The default prompt is the shell's name and version, and a login shell
-  currently shows the leading dash — `-bash-5.3$` where bash itself would
-  print `bash-5.3$`.
+- The default prompt is the shell's name and version, leading dash and
+  all — `-bash-5.3$` for a login shell. That is what bash prints too;
+  measured side by side under `--noprofile --norc`, the two agree.
 - `$SHELL` is inherited from the environment, so it says what your login
   shell is, not which binary is running. `$0` is the one that answers
   that.

@@ -60,8 +60,8 @@ type drawnLine struct {
 	// prefix ending inside a highlighted run therefore names a screen
 	// position where the terminal is already back at its default, and the
 	// bytes after it were written expecting the run to be in force. See
-	// outsideARun, which is where the resume point is walked back to somewhere
-	// the two agree (#2627).
+	// styleInForce, which is where the run is said again before the resume
+	// (#2627).
 	styled string
 
 	// prompt and cells are the prompt this was drawn under. A prompt whose
@@ -99,7 +99,6 @@ func (e *editor) repaint(prompt drawnPrompt, cols int) bool {
 
 	styled := e.styled()
 	at, resume := sharedPrefix(d.styled, styled)
-	at, resume = outsideARun(styled, at, resume)
 	if resume > len(e.line) {
 		// The highlighter emitted more characters than the line has, which
 		// styled does not do. Rather than reason about a screen this cannot
@@ -119,6 +118,11 @@ func (e *editor) repaint(prompt drawnPrompt, cols int) bool {
 	row, col := d.row, d.col
 	if tail := styled[at:]; tail != "" {
 		moveCursor(&b, row, col, resRow, resCol)
+		// The colour the tail was written expecting, said again. See
+		// styleInForce: the shared prefix names a cell, not a state, and the
+		// state the terminal is actually in is the one the last whole draw
+		// left.
+		b.WriteString(styleInForce(styled, at))
 		b.WriteString(tail)
 		row, col = endRow, endCol
 		if endCol == cols {
@@ -241,53 +245,63 @@ func sharedPrefix(old, cur string) (bytes, chars int) {
 	return i, n
 }
 
-// outsideARun walks a resume point back to where the terminal's style is
-// known, and recounts the characters before it.
+// styleInForce is the attributes a redraw has to re-state before it may resume
+// writing at at: everything [editor.styled] switched on before that byte and
+// has not switched off again, or nothing where no run is open there.
 //
-// [sharedPrefix] answers where two draws stop agreeing, which is a cell the
-// cursor can be moved to. It is not necessarily a cell the terminal's *colour*
-// can be reasoned about: the previous draw wrote the whole line and then moved
-// the cursor back over it, so the attributes in force are the ones its last
-// byte left — the default, because [editor.styled] closes every run it opens —
-// and not the ones the shared prefix implies.
+// [sharedPrefix] answers where two draws stop agreeing, which is a *cell* the
+// cursor can be moved to. It is not a *state* the terminal is in. The previous
+// draw wrote the whole line and then walked the cursor back over it, and a
+// cursor move carries no attributes — so what is in force is whatever its last
+// byte left, which is the terminal's default, because styled closes every run
+// it opens. A shared prefix ending inside a coloured run therefore names a
+// position where the run is over as far as the terminal is concerned, and the
+// bytes after it were written expecting it to be in force.
 //
-// Resuming one byte inside `\e[31m"` therefore writes the rest of the red word
-// with red already off. Measured 2026-09-13 through a pseudo-terminal at 80
-// columns, typing `cho "one two` under UnclosedQuote: the keystroke that typed
-// the quotation wrote `\e[31m"\e[0m` and the keystroke after it wrote `o\e[0m`
-// — an `o` belonging to the red run, drawn plain. On screen the quotation mark
-// was red and the word after it was not, where the whole unclosed word should
-// be red, in every real session: driver/interactive.go installs a highlighter
-// for every interactive shell and a real terminal always has a width, so this
-// path is the one a person is on (#2627).
+// Measured 2026-09-13 through a pseudo-terminal at 80 columns, typing
+// `echo "one two` into the built shell under `-highlight`, which is the
+// UnclosedQuote every interactive session gets:
 //
-// So the resume point moves back to the last place no run was open — the byte
-// after a reset, or a byte of plain text, or the start of the line — and the
-// tail from there re-states the style it needs. The cost is redrawing from the
-// start of the run being typed in, which is a word rather than a line, and
-// nothing at all for a line with no highlighting in it.
-func outsideARun(cur string, at, chars int) (int, int) {
-	safe, safeChars, open := 0, 0, false
-	i, n := 0, 0
-	for i < at {
+//	before   echo \e[31m"\e[0m o\e[0m n\e[0m e\e[0m …
+//	after    echo \e[31m"\e[0m \e[31mo\e[0m \e[31mn\e[0m \e[31me\e[0m …
+//
+// Read as writes: the keystroke that typed the quotation wrote `\e[31m"\e[0m`,
+// and the keystroke after it wrote `o\e[0m` — an `o` belonging to the red run,
+// drawn with the terminal already back at its default. On screen the quotation
+// mark was red and the whole unclosed word after it was plain. Not a corner:
+// driver/interactive.go installs a highlighter for every interactive shell and
+// a real terminal always has a width, so this is the path a person is on, and
+// with a highlighter that colours words it was every word — only the first
+// character of each kept its colour (#2627).
+//
+// **Re-stating the style rather than redrawing the run.** The other repair is
+// to walk the resume point back to where no run is open and write the run
+// again from its opening sequence. That is correct too, and it costs the run:
+// measured the same way, typing the eight characters of `"one two` wrote 130
+// bytes that way against 80 for this, and the eighth keystroke on its own was
+// 21 bytes against 10 — a gap that grows with the word, where this one does
+// not. Re-stating is also the smaller change: the resume point does not move,
+// so nothing counted against it has to be recounted.
+//
+// The scan is token by token for the reason sharedPrefix's is: a cut inside an
+// escape sequence would name a state that does not exist. Everything since the
+// last reset is kept rather than only the last sequence, because a terminal
+// composes them — a highlighter emitting a colour and then a weight has both
+// in force, and re-stating only the weight would resume in the wrong colour.
+func styleInForce(cur string, at int) string {
+	var open []string
+	for i := 0; i < at; {
 		escape, size := nextToken(cur, i)
 		if escape {
-			// A run is open from its style sequence until this package's own
-			// reset closes it. Nothing else in a drawn line opens one: styled
-			// writes the caller's escape, the run, and highlightReset.
-			open = cur[i:i+size] != highlightReset
-		} else {
-			n++
+			if tok := cur[i : i+size]; tok == highlightReset {
+				open = open[:0]
+			} else {
+				open = append(open, tok)
+			}
 		}
 		i += size
-		if !open {
-			safe, safeChars = i, n
-		}
 	}
-	if !open {
-		return at, chars
-	}
-	return safe, safeChars
+	return strings.Join(open, "")
 }
 
 // nextToken is the length of the thing at s[i] — one escape sequence, or one

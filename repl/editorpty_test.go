@@ -284,3 +284,42 @@ func TestTheLastArgumentAndUndoThroughATerminal(t *testing.T) {
 	waitFor(t, s.ran, "restored-line", "the line ^U took away")
 	s.end()
 }
+
+// A session on a real terminal takes the minimal redraw, and the fixture's
+// terminal is really the size the fixture says it is.
+//
+// This is the instrument's own check and it is here because the instrument was
+// the defect. Every fixture in this package ran at width 0 (#2627), which is
+// the redraw's "nothing known about the terminal" branch: the whole line, the
+// prompt with it, once per keystroke. Everything these tests reported green
+// was about that branch, and the branch a person is on — the O(change) repaint
+// — was exercised by no session at all. Nothing said so, because a terminal
+// that will not give its size is a case the editor handles rather than an
+// error it reports.
+//
+// The prompt is what tells the two apart, and it is the right marker rather
+// than a convenient one: not rewriting the prompt for a keystroke is most of
+// why the minimal redraw is cheaper, and it is what zsh does. A prompt drawn
+// once for the line is the repaint path; a prompt per character is the other
+// one.
+func TestASessionThroughATerminalRedrawsOnlyWhatChanged(t *testing.T) {
+	s := newSession(t)
+	if rows, cols := terminalSize(s.tty); rows != fixtureRows || cols != fixtureCols {
+		t.Fatalf("the fixture's terminal is %dx%d, want %dx%d — a session drawing for a terminal "+
+			"nobody has is not the session anybody runs", rows, cols, fixtureRows, fixtureCols)
+	}
+
+	const keys = "echo one two three"
+	s.typeLine(keys)
+	if got, want := s.row(0), "[1]"+keys; got != want {
+		t.Errorf("the screen shows %q, want %q", got, want)
+	}
+	if n := strings.Count(s.screen.String(), "[1]"); n != 1 {
+		t.Errorf("the prompt was written %d times for %d keystrokes, want once: a keystroke that "+
+			"rewrites the prompt is the whole-line draw, which is the width-0 path", n, len(keys))
+	}
+
+	s.typeKeys("\n")
+	waitFor(t, s.ran, "one two three", "the command's output")
+	s.end()
+}

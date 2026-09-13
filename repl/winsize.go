@@ -27,7 +27,29 @@ func terminalSize(f *os.File) (rows, cols int) { return tty.Size(f) }
 
 // terminalWidth is the column half, for the editor, which draws in columns and
 // has nothing to do with rows.
+//
+// A terminal that will not say how wide it is is drawn for at
+// [tty.FallbackCols], where the measurement and the reasons live. Zero is not
+// a width — it is the ioctl saying it does not know — and taking it literally
+// puts the editor on its "nothing known about the terminal" path, where a line
+// is assumed to fit on one row and every piece of wrapping arithmetic is
+// switched off. That is what every pseudo-terminal fixture in this package was
+// grading (#2627).
+//
+// **The fallback is the drawing's and not the parameter's**, which is the
+// split internal/tty declines to make for its callers. There is a screen and
+// something has to go on it, so here a guess beats a refusal; `$COLUMNS` has
+// somewhere to decline to, and trackWindowSize does decline, because bash on
+// exactly this terminal leaves both names unset.
+//
+// Asked of a terminal rather than of a descriptor. A zero from something that
+// is not a terminal at all means there is no screen to guess the width of —
+// the distinction internal/tty draws between an unhelpful terminal and the
+// absence of one — and the editor is not built for one of those anyway.
 func terminalWidth(f *os.File) int {
 	_, cols := terminalSize(f)
+	if cols <= 0 && tty.IsTerminal(f) {
+		return tty.FallbackCols
+	}
 	return cols
 }

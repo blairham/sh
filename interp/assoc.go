@@ -231,7 +231,7 @@ func (r *Runner) reportEmptyAssocKeyRead(e *syntax.ParamExpr, key string) bool {
 //
 // The subject is the subscript **as it was written**, brackets included and
 // with no name in front of it, which is neither of the two subjects the
-// neighbouring shapes use. IndexText is the text between the brackets, so the
+// neighboring shapes use. IndexText is the text between the brackets, so the
 // brackets are in the wording — see Diagnostics.EmptyAssociativeKeyLength.
 //
 // A name the declaration's letters merely brought into being is not this, and

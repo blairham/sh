@@ -9608,7 +9608,7 @@ type Semantics struct {
 	//
 	// **The subject is the subscript as it was written, brackets and all, and
 	// without the name.** `[$w]`, not `m:` and not `m[$w]:` — which is
-	// neither of the two subjects the neighbouring shapes use, the plain read
+	// neither of the two subjects the neighboring shapes use, the plain read
 	// naming the bare name and the refused *store* naming `m[""]`. Measured
 	// verbatim: `${#m["$w"]}` says `["$w"]` and `${#m[${w}]}` says `[${w}]`,
 	// so it is the source text rather than anything the expansion produced.

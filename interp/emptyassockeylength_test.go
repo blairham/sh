@@ -68,7 +68,7 @@ func TestTheLengthOfAnEmptyKeyMayBeRefused(t *testing.T) {
 }
 
 // The subject is the subscript **as written, brackets and all, with no name**
-// — which is neither of the two subjects the neighbouring shapes use.
+// — which is neither of the two subjects the neighboring shapes use.
 func TestTheRefusedLengthNamesTheSubscriptAsWritten(t *testing.T) {
 	for _, tc := range []struct{ src, want string }{
 		{`typeset -A m; m[k]=v; w=; echo "${#m[$w]}"`, `[$w]: bad array subscript`},
@@ -115,7 +115,7 @@ func TestTheEmptyKeyLengthAxisIsAskedOnlyWhereItWasMeasured(t *testing.T) {
 		// A name the declaration's letters merely brought into being is
 		// silent — measured, and the pair declaredOnlyCompound keeps.
 		{"a table the letters only declared", `typeset -A m; w=; echo "${#m[$w]}"`, false},
-		// The plain read is the neighbouring axis and not this one.
+		// The plain read is the neighboring axis and not this one.
 		{"the plain read of the same element", `typeset -A m; m[k]=v; w=; echo "${m[$w]}"`, false},
 		// A blank key is a key: emptiness and not whitespace.
 		{"a blank key", `typeset -A m; m[k]=v; echo "${#m[ ]}"`, false},

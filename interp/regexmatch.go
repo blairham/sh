@@ -24,6 +24,52 @@ package interp
 // `=~` fills it again — there is no producer to outlive the unset.
 func (r *Runner) SetRegexMatch(name string) { r.regexMatchName = name }
 
+// regexFold is the prefix that turns a `=~` expression case-insensitive, and
+// the empty string where the option asking for that is off.
+//
+// A **prefix on the expression** rather than a fold applied at comparison
+// time, because a regular expression is not a glob: what has to fold is the
+// whole compiled thing — literals, bracket expressions, character classes,
+// and the complement of a negated class — and only the engine knows which
+// bytes of the text are which. Folding the subject and the pattern before
+// compiling would fold `[^a]` the wrong way round and would turn `\.` into a
+// pattern about the letter it is not.
+//
+// The prefix is exactly what the option means and no more: `(?i)` sets the
+// engine's initial case flag, so an expression that turns it off again for
+// part of itself still does. Measured to agree with bash 5.3.15 on every
+// cell that distinguishes the readings, with `shopt -s nocasematch` on:
+//
+//	[[ ABC =~ ^abc$ ]]              yes — a literal folds
+//	[[ abc =~ ^ABC$ ]]              yes — and in the other direction
+//	[[ ABC =~ ^[a-c]+$ ]]           yes — a range folds
+//	[[ ABC =~ ^[[:lower:]]+$ ]]     yes — so does a character class
+//	[[ abc =~ ^[[:upper:]]+$ ]]     yes — and that one too
+//	[[ A   =~ ^[^a]$ ]]             no  — the fold precedes the negation
+//	[[ ABC =~ ^(a)(B)c$ ]]          yes, and captures ABC, A, B
+//
+// The last is what says the fold must not touch the captures: they are spans
+// of the **subject** as the script wrote it, so `BASH_REMATCH` holds `A` and
+// not `a`.
+//
+// Locale is the one cell this does not yet answer. An explicit C or POSIX
+// locale narrows the fold to ASCII in the panel — measured, `LC_ALL=C` makes
+// `[[ ÉTÉ =~ ^été$ ]]` fail in bash 5.3.15 and in zsh 5.9.2 where the same
+// line under a UTF-8 locale matches — and `(?i)` has no locale to be told
+// about, so ours folds it either way. The narrowing is the policy
+// Runner.caseMapper holds for the sites that convert a whole value; this one
+// hands the question to an engine that cannot take it. #2622 records the
+// measurement rather than leaving it unwritten, and the glob side of `[[ ]]`
+// has the same gap pointing the other way: its fold is a byte-wise ASCII one,
+// so `[[ ÉTÉ == été ]]` fails here under every locale and matches in bash
+// under a UTF-8 one.
+func (r *Runner) regexFold() string {
+	if r.MatchOption(RegexFoldsCase) {
+		return "(?i)"
+	}
+	return ""
+}
+
 // recordRegexMatch stores what a `=~` evaluation captured.
 //
 // Called for every evaluation, not only matching ones: a failed match stores

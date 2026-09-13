@@ -62,7 +62,7 @@ func (r *Runner) SetRegexMatch(name string) { r.regexMatchName = name }
 // measurement rather than leaving it unwritten, and the glob side of `[[ ]]`
 // has the same gap pointing the other way: its fold is a byte-wise ASCII one,
 // so `[[ ÉTÉ == été ]]` fails here under every locale and matches in bash
-// under a UTF-8 one.
+// under a UTF-8 one. #2644 is the pair.
 func (r *Runner) regexFold() string {
 	if r.MatchOption(RegexFoldsCase) {
 		return "(?i)"

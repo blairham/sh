@@ -1645,7 +1645,7 @@ line under a UTF-8 locale matches. The engine's case flag has no locale
 to be told about, so ours folds it either way. The glob half of `[[ ]]`
 has the same gap pointing the other way — its fold is a byte-wise ASCII
 one, so `[[ ÉTÉ == été ]]` is exact here under every locale and matches
-in bash under a UTF-8 one.
+in bash under a UTF-8 one. Both are #2644.
 
 Three details of the fold, each measured rather than assumed. It is
 **symmetric and inside the matcher**: with `v=abc`, `${v//B/X}`,

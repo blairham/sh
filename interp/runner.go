@@ -1270,15 +1270,26 @@ type Runner struct {
 	// posix mode is on is not part of the mode and must survive leaving it.
 	//
 	// One per axis, and they cannot be collapsed into one: the dialects do
-	// not agree on the two, so a single remembered answer would put the wrong
-	// one back for whichever shell disagrees with the other axis. zsh carries
+	// not agree across them, so a single remembered answer would put the
+	// wrong one back for whichever shell disagrees with the rest. zsh carries
 	// on past a failed redirection on a special builtin and stops on `unset`
-	// of a readonly name; ksh93 is the reverse.
+	// of a readonly name; ksh93 is the reverse. The listings below make the
+	// same point in the other direction — zsh writes `export V='a b'` for
+	// one and `typeset -r R=2` for the next.
 	posixMode               bool
 	posixSaved              Answer
 	posixSavedUnsetReadonly Answer
 	posixSavedForName       ForNameRunForm
 	posixSavedFuncName      FuncNameRunForm
+	// The three listing axes the mode moves, saved for the same reason and
+	// separately for the same reason: no shell in the panel answers all
+	// three alike, so one remembered form could not put three back. The
+	// fourth listing axis, DeclareListing, is deliberately absent — `declare
+	// -p` does not move, which is what makes this three fields and not a
+	// single "listings" one.
+	posixSavedExportListing   DeclarationListingForm
+	posixSavedReadonlyListing DeclarationListingForm
+	posixSavedBareListing     DeclarationListingForm
 
 	// fds are the descriptors beyond the three named streams — what
 	// `exec 6>&1` saves and `>&6` finds again. Values are the io.Reader or

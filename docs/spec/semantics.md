@@ -15981,8 +15981,17 @@ say:
   `declare -x V="1"`.** `export -p`, `readonly -p` and both bare forms
   move; `declare -p` does not. It is the mode and not the build — `set
   +o posix` puts the clustered form back on 5.3.15 and 3.2.57 alike — so
-  three more axes belong in `SetPosixMode`, which moves four today and
-  none of these. Filed as #2154.
+  three more axes belong in `SetPosixMode`, which moved four. #2154 put
+  them there: `ExportListing`, `ReadonlyListing` and
+  `BareDeclarationListing` swap to `DeclareListingCommandWord` on the
+  way in and are restored from a saved answer each on the way out, and
+  `DeclareListing` is deliberately left alone. Three saved fields rather
+  than one, for the reason the four before them are separate: zsh writes
+  `export V='a b'` for the first and `typeset -r R=2` for the second, so
+  one remembered form would hand an axis another's answer. The quoting
+  does not move either — `export V="a b"` keeps the double quotes the
+  clustered form uses — so `DeclareValueQuoting` stays where the dialect
+  put it.
 - **`read ?` was a contaminated probe, and this document's field comment
   cited it.** A leading `?` argument is a *prompt* in zsh, so the value
   lands in `REPLY` and the word never stood where a name belongs. Worse,

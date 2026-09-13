@@ -17897,6 +17897,31 @@ echo "read=[$l]"`,
 		Why:     "the round trip, which is what makes it a mode rather than a one-way door: bash goes back to printing `after` at 0. Turning it off is also the direction a shell without a posix mode can honestly grant, and the thirteenth line of Homebrew's own script",
 	},
 	{
+		ID: "set/posix-mode-writes-the-export-listing-with-the-command-word", Category: "invocation",
+		Snippet: `zqv="a b"; export zqv; set -o posix; export -p | grep zqv`,
+		Why:     "the listing axes the mode moves, which no preset can show: both bash builds write the clustered `declare -x zqv=\"a b\"` under their own name and repeat the command word — `export zqv=\"a b\"` — the moment `set -o posix` is on, keeping the double quotes the clustered form uses. The other three refuse the `set` and list in their own shape. Semantics.ExportListing, reached through Runner.SetPosixMode rather than through a vector (#2154)",
+	},
+	{
+		ID: "set/posix-mode-writes-the-readonly-listing-with-the-command-word", Category: "invocation",
+		Snippet: `zqr=2; readonly zqr; set -o posix; readonly -p | grep zqr`,
+		Why:     "the second of the three, and a separate field because the panel splits them: zsh writes `export zqv='a b'` for the first and `typeset -r zqr=2` for this one. bash moves both together — `readonly zqr=\"2\"` under the mode — which is what says one mode moves two axes rather than one axis serving two builtins. Semantics.ReadonlyListing (#2154)",
+	},
+	{
+		ID: "set/posix-mode-moves-the-bare-declaration-listing-too", Category: "invocation",
+		Snippet: `zqv="a b"; export zqv; set -o posix; export | grep zqv`,
+		Why:     "the third, asked without `-p` because the bare form is its own axis: ksh93 and zsh drop the command word there and write a plain `zqv='a b'` where their `-p` keeps it. bash's bare form follows its `-p` in both modes, so the mode moves this one too. Semantics.BareDeclarationListing (#2154)",
+	},
+	{
+		ID: "set/posix-mode-leaves-the-declare-listing-alone", Category: "invocation",
+		Snippet: `zqv="a b"; export zqv; set -o posix; declare -p zqv`,
+		Why:     "the control that makes the mode three axes and not one. `declare -p` writes `declare -x zqv=\"a b\"` in both modes on both bash builds, so Semantics.DeclareListing is the listing axis POSIX mode does *not* move — a row that would have caught a fix reaching for one field to cover all four (#2154)",
+	},
+	{
+		ID: "set/leaving-posix-mode-restores-the-clustered-listing", Category: "invocation",
+		Snippet: `zqv="a b"; export zqv; set -o posix; set +o posix; export -p | grep zqv`,
+		Why:     "the round trip for the listing axes, which is what says it is a mode the shell enters and leaves rather than the build or the invocation: bash goes back to `declare -x zqv=\"a b\"`. It is also the row that requires the dialect's own answer to be *saved*, since a shell that asserted the clustered form on the way out would hand zsh bash's shape (#2154)",
+	},
+	{
 		ID: "shift/an-operand-that-was-never-given", Category: "builtins",
 		Snippet: `shift; echo "st=$?"`,
 		Why:     "past the end with no count written down, ksh93 reports `(null)` — the operand it did not get — where its complaint about `shift 99` names the 99; dash keeps one sentence for both and bash and zsh keep their usual answers",

@@ -4741,9 +4741,9 @@ type Semantics struct {
 	// holds it, for ksh93 and zsh, which drop the command word for the
 	// bare form alone. Note what is *not* a fifth reading: bash in POSIX
 	// mode writes `export V="a b"`, which is DeclareListingCommandWord — a
-	// value this axis already carries, reached by a mode no preset holds
-	// and [Runner.SetPosixMode] does not move. Measured 2026-09-12 on both
-	// bash builds and filed as #2154 (#2060).
+	// value this axis already carries, reached by a mode no preset holds.
+	// Measured 2026-09-12 on both bash builds, and moved by
+	// [Runner.SetPosixMode] since #2154 (#2060).
 	ExportListing DeclarationListingForm
 	// ReadonlyListing is the same question from `readonly -p`, where zsh
 	// parts ways with its own export listing and writes `typeset -r R=2`.
@@ -4755,7 +4755,7 @@ type Semantics struct {
 	// unexhibited DeclareListingPlainAssignment: BareDeclarationListing
 	// holds it, for ksh93 and zsh. bash in POSIX mode writes `readonly
 	// R="2"` here, which is DeclareListingCommandWord and already carried;
-	// see #2154 (#2060).
+	// [Runner.SetPosixMode] moves this axis there and back (#2154, #2060).
 	ReadonlyListing DeclarationListingForm
 
 	// CoprocEndsInAnArray publishes a started coprocess's near ends as the
@@ -4861,7 +4861,8 @@ type Semantics struct {
 	// name: the bare `export` writes `V='a b'` in ksh93u+ and zsh 5.9.2,
 	// `export V='a b'` in dash, and `declare -x V="a b"` in both bash
 	// builds — and `export V="a b"` in bash under `set -o posix`, which is
-	// DeclareListingCommandWord and filed as #2154 (#2060).
+	// DeclareListingCommandWord and is where [Runner.SetPosixMode] puts
+	// this axis (#2154, #2060).
 	BareDeclarationListing DeclarationListingForm
 
 	// DeclarationListingFilter is how a `declare` or `typeset` with attribute

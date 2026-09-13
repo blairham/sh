@@ -103,6 +103,11 @@ var (
 	// in bash 5.3, zsh 5.9.2, ksh93u+ and dash: all four print the
 	// diagnostic and draw the next prompt (#1124).
 	survivedProbe = probe{"echo survived-$((6 * 7))", "survived-42"}
+	// The line typed after one the parser refused. Its own probe rather than
+	// survivedProbe's, because Screen.Seek advances past a mark it has found
+	// and two rows sharing one mark would leave the second waiting on text
+	// the first consumed — or worse, finding the first row's.
+	refusedProbe = probe{"echo refused-$((6 * 7))-ok", "refused-42-ok"}
 	// The foreground job the suspend rows use; see tickerText.
 	tickProbe = probe{"./" + tickerName, "tick-42"}
 	// Typed in three pieces with a Tab in the middle, so the line here is
@@ -498,6 +503,39 @@ func checks() []check {
 					return Fail, "the session did not survive a fatal expansion: " + err.Error()
 				}
 				return Pass, "the prompt came back and the next line ran"
+			},
+		},
+		{
+			name:   "a refused line costs the line and not the next one",
+			proves: "a syntax error at a prompt does not swallow what is typed after it",
+			run: func(_ context.Context, s *session, _ *state) (Outcome, string) {
+				// The row above is a *run-time* failure and this one is a
+				// parse failure, which is a different path through the
+				// session: the line never reaches the runner at all, and
+				// what has to survive is the reader rather than the shell.
+				//
+				// `;;` rather than an unfinished construct, because every
+				// shell in the panel refuses it where it stands. `if; then`
+				// draws a continuation prompt in one of them and would leave
+				// the next line inside a construct already refused, which is
+				// a different finding — see
+				// interp.Semantics.PromptAsksAgainAfterARefusedToken (#1893).
+				//
+				// It has to be asked at a terminal and it cannot be asked
+				// anywhere else. Every case in the corpus runs through `-c`
+				// or a file, and the one shell that behaves differently here
+				// behaves differently *because* of the pipe: fed `-i` on a
+				// pipe, dash discards the input it had already buffered when
+				// it refuses a line, so a short script looks abandoned. Given
+				// a terminal there is nothing buffered to discard and it
+				// carries on like the rest (#2234).
+				if err := s.typeLine(`;;`); err != nil {
+					return Fail, err.Error()
+				}
+				if err := s.runProbe(refusedProbe); err != nil {
+					return Fail, "the line after a refused one did not run: " + err.Error()
+				}
+				return Pass, "the prompt came back and the line after the refused one ran"
 			},
 		},
 		{

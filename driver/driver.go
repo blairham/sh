@@ -255,6 +255,22 @@ type Shell struct {
 	// leaves them alone.
 	Stdout, Stderr io.Writer
 
+	// ServeACP serves the Agent Client Protocol on this shell's own streams,
+	// and is what `--acp` reaches. Nil in a library and filled in by a binary,
+	// exactly as interp's ReplaceProcess and DieBySignal are — and for a
+	// sharper reason than those two, which is the import graph: internal/acp
+	// takes a Shell, so driver cannot import it back. See driver/acp.go.
+	//
+	// Nil is not "no protocol by default"; it is a binary that cannot serve
+	// one, and `--acp` says so rather than accepting the word silently.
+	ServeACP func(Shell) int
+
+	// Version is what this binary tells a protocol client it is, stamped over
+	// by the release build with `-X main.version=`. Empty is a build from a
+	// checkout, which says so rather than inventing a number that will be
+	// wrong.
+	Version string
+
 	// Dir is where the shell starts, and empty means where the process is.
 	//
 	// A binary leaves it alone: a shell invoked from a command line begins in
@@ -439,6 +455,12 @@ func MainArgs(sh Shell, argv []string) int {
 		// shell to name itself and there is nothing to run.
 		return sh.announceVersion()
 	}
+	if in.acp {
+		// Before the prompt and before any route, for the reason above and one
+		// more: standard input is the protocol's, so a shell that decided to
+		// prompt on it would be reading the client's messages as keystrokes.
+		return sh.runACP()
+	}
 	if in.prompt {
 		// A prompt rather than a script, and reached from here so that every
 		// binary built on this front end has one. It was in a single binary's
@@ -620,6 +642,10 @@ const commandStringLabel = "-c"
 type source struct {
 	src  string
 	name string
+	// acp is the invocation asking for the protocol rather than a script. It
+	// travels here, beside version, because both end the invocation: there is
+	// nothing to parse and nothing to run.
+	acp bool
 	// input is the front end's label for the origin — "-c", and empty for a
 	// file or for standard input. One dialect names it in a parse failure's
 	// location and nowhere else, which is why it travels beside the name
@@ -811,6 +837,11 @@ type invocation struct {
 	// all four shells keep reading options after the `c` and take the
 	// command string from the first operand, whichever sign the word had.
 	sawC bool
+	// acp is `--acp`: hand the process to the protocol server rather than
+	// running anything. Recorded here rather than acted on immediately
+	// because the boundary the same line may have asked for has to be
+	// installed first — a policy governs every session the client opens.
+	acp bool
 	// plusC is that letter written with a plus — `+c`, `+ce`. Both signs
 	// select the command string, which is unanimous and is what sawC
 	// records; the sign is kept because one shell then names the operands
@@ -926,6 +957,21 @@ func (sh Shell) input(argv []string) (Shell, source, io.Closer, error) {
 	if err != nil {
 		return sh, source{}, nil, err
 	}
+	if inv.acp {
+		// After the gate and before the operands, which is the whole of why
+		// it is here: a policy on the same line governs every session the
+		// client opens. There are no operands to read — a session's directory
+		// and its program both arrive as messages — so any word left over is
+		// somebody expecting something to run, and is refused rather than
+		// dropped.
+		if len(rest) > 0 {
+			if closer != nil {
+				_ = closer.Close()
+			}
+			return sh, source{}, nil, fmt.Errorf("--acp takes no operands: %v", rest)
+		}
+		return sh, source{acp: true}, closer, nil
+	}
 	in, err := sh.operands(rest, inv)
 	if err != nil {
 		if closer != nil {
@@ -1024,6 +1070,9 @@ func (sh Shell) optionWord(a string, args []string, inv *invocation) (rest []str
 		// it — none does — and before the refusal, because the whole point
 		// of them being here is that they reach every binary.
 		if rest, matched, err = sandboxOption(a, args, inv); matched {
+			return rest, err
+		}
+		if rest, matched, err = acpOption(a, args, inv); matched {
 			return rest, err
 		}
 		return nil, fmt.Errorf("unknown option %q", a)

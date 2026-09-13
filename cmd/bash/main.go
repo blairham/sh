@@ -19,6 +19,7 @@ import (
 
 	"github.com/blairham/sh/dialect/bash"
 	"github.com/blairham/sh/driver"
+	"github.com/blairham/sh/internal/acpboot"
 )
 
 // shell is the whole of "which shell am I", as data.
@@ -29,6 +30,11 @@ import (
 func shell() driver.Shell {
 	return driver.Shell{
 		Name: "bash",
+		// The protocol server, which driver's `--acp` reaches. It is here
+		// rather than in driver because internal/acp takes a Shell, so
+		// driver cannot import it back — see driver/acp.go.
+		ServeACP: acpboot.ServeAs("bash"),
+		Version:  version,
 		// Where this machine keeps the administrator's startup files. It
 		// is the install's answer rather than the dialect's, which is why
 		// it is named here; see driver.Shell.SystemStartupDirectory.
@@ -49,3 +55,9 @@ func shell() driver.Shell {
 }
 
 func main() { os.Exit(driver.Main(shell())) }
+
+// version is what this binary tells a protocol client it is. A var and
+// not a const so the release build can stamp the tag over it with
+// `-X main.version=`, which can only write to a variable; a checkout says
+// so rather than inventing a number that will be wrong.
+var version = "0.0.0-dev"

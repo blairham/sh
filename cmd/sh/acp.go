@@ -4,13 +4,12 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"os"
 
 	"github.com/blairham/sh/driver"
-	"github.com/blairham/sh/internal/acp"
+	"github.com/blairham/sh/internal/acpboot"
 )
 
 // `sh -acp`: the Agent Client Protocol, served on standard input and output.
@@ -54,23 +53,12 @@ func serveACP(sh driver.Shell, rest []string, in io.Reader, out io.Writer) int {
 		fmt.Fprintf(os.Stderr, "sh: -acp takes no operands: %v\n", rest)
 		return exitFailure
 	}
-	agent := acp.NewAgent(sh, acp.Implementation{
-		Name:    "sh",
-		Title:   "sh",
-		Version: version,
-	})
-	ctx := context.Background()
-	// Standard output is the protocol's and nothing else may be written
-	// there — the shell's own output goes back as session updates, on writers
-	// each session gives its runner. Standard error stays ours: the protocol
-	// says an agent may log there and that a client may ignore it.
-	err := agent.Serve(ctx, in, out)
-	// Every session's EXIT trap fires once, as the end of a script does,
-	// before this process goes.
-	agent.Close(ctx)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "sh: acp: %v\n", err)
-		return exitFailure
-	}
-	return 0
+	// The streams are this route's, not the Shell's: `-acp` is read by this
+	// binary's own flag pass rather than by the front end, and a test is the
+	// client on a pipe it made. Everything after that is the one
+	// implementation both routes share — see internal/acpboot, and #2585 for
+	// why a second copy here is the thing to avoid.
+	sh.Stdin, sh.Stdout = in, out
+	sh.Version = version
+	return acpboot.ServeAs("sh")(sh)
 }

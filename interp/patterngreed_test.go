@@ -67,6 +67,22 @@ func TestARepetitionTakesAsMuchAsItCan(t *testing.T) {
 			"[command][93]",
 		},
 		{
+			// The row that discriminates the *item* order, which is a
+			// separate question from the count order every row above asks.
+			// #2513 reversed the loop choosing how many repetitions to take;
+			// the loop inside it, choosing how much one repetition takes, was
+			// left ascending and answers on its own.
+			//
+			// It takes an alternation whose arms differ in length to see it:
+			// with equal-length arms, or a single-unit item, both readings
+			// agree. Read shortest-first the closure claims `a`, cannot then
+			// reach the `b` with any number of further repetitions, stops at
+			// one, and `(*)` swallows `babX`. #2531.
+			"a repetition takes the longer arm it can, not the shorter",
+			`[[ ababX == (#b)(ab|a)#(*) ]] && echo "[${match[1]}][${match[2]}]"`,
+			"[ab][X]",
+		},
+		{
 			"the bounds follow the text the group was given",
 			`[[ xx93 == (#b)x#(*) ]] && echo "[${mbegin[1]}][${mend[1]}]"`,
 			"[3][4]",
@@ -102,6 +118,14 @@ func TestGreedDoesNotDecideWhetherAPatternMatches(t *testing.T) {
 		{`[[ abab == ab# ]] && echo hit || echo miss`, "miss"},
 		{`[[ a == ab## ]] && echo hit || echo miss`, "miss"},
 		{`[[ aaaa == a(#c2,3) ]] && echo hit || echo miss`, "miss"},
+		// An alternation closure that has to take the *shorter* arm for the
+		// tail to match at all. These do not discriminate the item order --
+		// both readings answer them the same -- and they are here for the
+		// opposite reason: to catch a greedier read that reached a different
+		// verdict rather than a different split. #2531.
+		{`[[ aab == (ab|a)#b ]] && echo hit || echo miss`, "hit"},
+		{`[[ aba == (ab|a)# ]] && echo hit || echo miss`, "hit"},
+		{`[[ abX == (ab|a)# ]] && echo hit || echo miss`, "miss"},
 	} {
 		out, _ := runExtendedOperators(t, tc.src, true, nil)
 		if got := strings.TrimSpace(out); got != tc.want {
@@ -138,6 +162,23 @@ func runGreedInCharacters(t *testing.T, src string) (string, int) {
 // One row, because one is enough to reach the branch and the question it asks
 // is the same one the ASCII rows ask. `éé9` is three characters in six bytes:
 // read greedily the star takes all three and the group is handed nothing.
+// An alternation closure over characters takes the longer arm too, and this
+// is the row that reaches the character branch of the backwards walk.
+//
+// It needs to exist for the reason the helper above records: reversing the
+// character walk alone broke nothing, because every multibyte row in this
+// file asks about a star rather than about which arm a repetition claims.
+// `ééX` is two characters then an `X`; read greedily the closure takes `éé`
+// in one repetition, read shortest-first it takes `é` twice and reports the
+// last one. Both match, and only the capture tells them apart. #2531.
+func TestAnAlternationOverCharactersTakesTheLongerArm(t *testing.T) {
+	const src = `[[ 'ééX' == (#b)(éé|é)#(*) ]] && echo "[${match[1]}][${match[2]}]"`
+	out, _ := runGreedInCharacters(t, src)
+	if got := strings.TrimSpace(out); got != "[éé][X]" {
+		t.Errorf("%s = %q, want %q", src, got, "[éé][X]")
+	}
+}
+
 func TestAStarOverCharactersTakesAsMuchAsItCan(t *testing.T) {
 	const src = `[[ 'éé9' == (#b)*(*) ]] && echo "[${match[1]}]"`
 	out, _ := runGreedInCharacters(t, src)

@@ -2027,6 +2027,21 @@ followed by something that can take the rest:
     [[ xxy == (#b)(x)#(*) ]]        match=(x y)
     [[ xxxxy == (#b)x(#c2,4)(*) ]]  match=(y)      — a counted closure counts up
 
+**And the item is greedy separately from the count.** How many repetitions a
+closure takes and how much *one* repetition takes are two orders with two
+answers, and the rows above fix only the first: each has a single-unit item,
+where the two readings cannot disagree. It takes an alternation whose arms
+differ in length to separate them — with equal-length arms both readings claim
+the same text:
+
+    [[ ababX == (#b)(ab|a)#(*) ]]   match=(ab X)   — the longer arm, not `a` then a stop
+    [[ ééX == (#b)(éé|é)#(*) ]]     match=(éé X)   — and over characters, not bytes
+
+Read greedy on the count but shortest on the item, the first repetition claims
+`a`, no further repetition can reach the `b` from there, the closure stops at
+one and `(*)` is handed `babX`. Both divisions match, so only what is reported
+tells them apart. This tree read the item shortest-first until #2531.
+
 Read shortest first, every left-hand column above matches nothing and the
 right-hand one takes the whole subject, which is a correct *match* and a wrong
 *report*. It cost a real configuration: `key = value` lines parsed with

@@ -207,3 +207,64 @@ func TestTheEightBashNamesAreStillAccepted(t *testing.T) {
 		})
 	}
 }
+
+// TestInteractiveCommentsDefaultsOffLikeZsh pins the one default #2516
+// corrected, in the four places a wrong one is visible.
+//
+// Measured 2026-09-12 on zsh 5.9.2 with an empty HOME, which is the shape the
+// table's defaults were all taken in:
+//
+//	zsh -f -c '[[ -o interactivecomments ]]'   1
+//	zsh -f -c 'set -o'      interactivecomments   off
+//	zsh -f -c 'unsetopt'    interactivecomments
+//	zsh -f -c 'setopt'      nohashdirs, norcs — and nothing about this name
+//
+// The last row is the one a default-only change can still get wrong, and the
+// reason the printed spelling is worth a test of its own: it is derived from
+// the recorded default, so a table that records `on` writes the row as
+// `nointeractivecomments` in all three listings and a `strings.Contains` for
+// the base name passes on every one of them.
+//
+// It matters beyond the listing because a syntax highlighter reads the option
+// to choose a tokenizer, and one told the option is on splits the line
+// comment-aware and classifies a bare `ls` as a comment.
+func TestInteractiveCommentsDefaultsOffLikeZsh(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `[[ -o interactivecomments ]]; echo "c=$?"`)
+	if !strings.Contains(out, "c=1\n") || st != 0 {
+		t.Errorf("out %q status %d, want `[[ -o interactivecomments ]]` to answer 1", out, st)
+	}
+
+	// The printed spelling, in the listing that carries the state column.
+	out, st = runZsh(t, t.TempDir(), "set -o")
+	if !strings.Contains(out, "interactivecomments   off\n") || st != 0 {
+		t.Errorf("out %q status %d, want the padded `interactivecomments ... off` row", out, st)
+	}
+	if strings.Contains(out, "nointeractivecomments") {
+		t.Error("`set -o` writes the `no` spelling — that is the row a recorded default of `on` produces")
+	}
+
+	// A bare `unsetopt` is the names currently off; a bare `setopt` is the
+	// deviations, and this name is not one in a shell that has not moved it.
+	out, st = runZsh(t, t.TempDir(), "unsetopt")
+	if !strings.Contains(out, "interactivecomments\n") || strings.Contains(out, "nointeractivecomments") || st != 0 {
+		t.Errorf("out %q status %d, want `interactivecomments` among the names that are off", out, st)
+	}
+	out, st = runZsh(t, t.TempDir(), "setopt")
+	if strings.Contains(out, "interactivecomments") || st != 0 {
+		t.Errorf("out %q status %d, want a bare `setopt` silent about a name at its default", out, st)
+	}
+
+	// And it still moves in both directions, which is what says the default
+	// was corrected rather than the name wired off. `setopt` names it once it
+	// deviates, in the canonical spelling and not the `no` one.
+	out, st = runZsh(t, t.TempDir(),
+		`setopt interactivecomments; [[ -o interactivecomments ]]; echo "on=$?"; setopt`)
+	if !strings.Contains(out, "on=0\n") || !strings.Contains(out, "interactivecomments\n") || st != 0 {
+		t.Errorf("out %q status %d, want it on and named by a bare `setopt`", out, st)
+	}
+	out, st = runZsh(t, t.TempDir(),
+		`setopt interactivecomments; unsetopt interactivecomments; [[ -o interactivecomments ]]; echo "off=$?"; setopt`)
+	if !strings.Contains(out, "off=1\n") || strings.Contains(out, "interactivecomments") || st != 0 {
+		t.Errorf("out %q status %d, want it back off and back out of the deviations", out, st)
+	}
+}

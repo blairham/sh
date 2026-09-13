@@ -16195,6 +16195,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `dot/empty-file-clears-the-status` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
 | `dot/return-ends-the-source` | `one~st=5` | `one~st=5` | `one~st=5` | `one~st=5` | `one~st=5` | `one~st=5` | `one~st=5` |
 | `dot/searches-path-and-path-wins` | `from-path` | `from-path` | `from-path` | `from-path` | `from-path` | `from-path` | `from-path` |
+| `dot/source-is-not-always-the-same-builtin` | `source=127~from-path~dot=0` **2>** `<shell>: 1: source: not found` | `from-path~source=0~from-path~dot=0` | `from-path~source=0~from-path~dot=0` | `from-path~source=0~from-path~dot=0` | `from-path~source=0~from-path~dot=0` | `from-cwd~source=0~from-path~dot=0` | `from-path~source=0~from-path~dot=0` |
 | `dot/arguments-diverge` | `got=OUTER~after=OUTER` | `got=INNER~after=OUTER` | `got=INNER~after=OUTER` | `got=INNER~after=OUTER` | `got=INNER~after=OUTER` | `got=INNER~after=OUTER` | `got=INNER~after=OUTER` |
 | `dot/missing-file-diverges` | **2>** `<shell>: 1: .: cannot open ./nonexistent-xyz.sh: No such file` *(status 2)* | `REACHED st=1` **2>** `<shell>: line 1: ./nonexistent-xyz.sh: No such file or directory` | **2>** `<shell>: line 1: ./nonexistent-xyz.sh: No such file or directory` *(status 1)* | `REACHED st=1` **2>** `<shell>: ./nonexistent-xyz.sh: No such file or directory` | **2>** `<shell>: .: ./nonexistent-xyz.sh: cannot open [No such file or directory]` *(status 1)* | `REACHED st=127` **2>** `<shell>:.:1: no such file or directory: ./nonexistent-xyz.sh` | **2>** `<shell>: .: line 0: can't open './nonexistent-xyz.sh': No such file or directory` *(status 2)* |
 | `dot/a-directory-operand-diverges` | `REACHED st=0` | `REACHED st=1` **2>** `<shell>: line 1: .: ./: is a directory` | `REACHED st=1` **2>** `<shell>: line 1: .: ./: is a directory` | `REACHED st=1` **2>** `<shell>: line 0: .: ./: is a directory` | **2>** `<shell>: .: ./: cannot open [Is a directory]` *(status 1)* | `REACHED st=0` | `REACHED st=0` |
@@ -16296,6 +16297,10 @@ grades it and nothing drift-checks it either, for the same reason.
 - `dot/searches-path-and-path-wins` — an operand with no slash is a PATH lookup and PATH beats an identically named file next to you, which surprises everyone and is unanimous
   ```sh
   mkdir -p d; echo "echo from-path" > d/amb.sh; echo "echo from-cwd" > amb.sh; PATH=$PWD/d:$PATH; . amb.sh
+  ```
+- `dot/source-is-not-always-the-same-builtin` — the row above says PATH beats a file next to you, and one shell's *second* name for the builtin is the exception: zsh's `source` looks in the current directory before `$path` and its `.` never looks there at all, so the same operand reads two different files in one shell. bash's two names agree with each other and with PATH, ksh93 has the second name and answers `.` for both — including in the diagnostic, which names `.` whichever was written — and dash has no such builtin. Written as one snippet asking both names because that is the whole of the finding: either line alone is a shell searching the current directory or not, and only the pair says the two builtins disagree. Which file each read is printed rather than only the status, since a `from-path` that should have been `from-cwd` is success either way (#2459)
+  ```sh
+  mkdir -p d; echo "echo from-path" > d/amb.sh; echo "echo from-cwd" > amb.sh; PATH=$PWD/d:$PATH; source amb.sh; echo "source=$?"; . amb.sh; echo "dot=$?"
   ```
 - `dot/arguments-diverge` — bash, ksh93 and zsh give a sourced file its own positional parameters and restore the caller's afterwards; dash ignores the words entirely, so the file still sees OUTER
   ```sh

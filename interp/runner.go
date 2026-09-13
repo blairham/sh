@@ -845,6 +845,11 @@ type Runner struct {
 	// deliberately cleared by `.` and `eval` while they run borrowed text:
 	// what a sourced script reports is the script's, not the builtin's.
 	inBuiltin string
+	// dotCurrentDirectoryFirst makes the next `.` resolve a bare operand
+	// against the current directory before PATH. Set by
+	// DotLooksInCurrentDirectoryFirst for the length of one call, and taken
+	// by that call rather than left standing — see source.go.
+	dotCurrentDirectoryFirst bool
 	// speaker is the prelude function the script called, whose name and
 	// whose caller's line every diagnostic raised inside it carries. Empty
 	// while a script's own text runs, which is every other moment. See

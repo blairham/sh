@@ -11575,6 +11575,11 @@ echo unreachable`,
 		Why:     "an operand with no slash is a PATH lookup and PATH beats an identically named file next to you, which surprises everyone and is unanimous",
 	},
 	{
+		ID: "dot/source-is-not-always-the-same-builtin", Category: "eval and dot",
+		Snippet: `mkdir -p d; echo "echo from-path" > d/amb.sh; echo "echo from-cwd" > amb.sh; PATH=$PWD/d:$PATH; source amb.sh; echo "source=$?"; . amb.sh; echo "dot=$?"`,
+		Why:     "the row above says PATH beats a file next to you, and one shell's *second* name for the builtin is the exception: zsh's `source` looks in the current directory before `$path` and its `.` never looks there at all, so the same operand reads two different files in one shell. bash's two names agree with each other and with PATH, ksh93 has the second name and answers `.` for both — including in the diagnostic, which names `.` whichever was written — and dash has no such builtin. Written as one snippet asking both names because that is the whole of the finding: either line alone is a shell searching the current directory or not, and only the pair says the two builtins disagree. Which file each read is printed rather than only the status, since a `from-path` that should have been `from-cwd` is success either way (#2459)",
+	},
+	{
 		ID: "dot/arguments-diverge", Category: "eval and dot",
 		Snippet: `echo 'echo got=$1' > p.sh; set -- OUTER; . ./p.sh INNER; echo after=$1`,
 		Why:     "bash, ksh93 and zsh give a sourced file its own positional parameters and restore the caller's afterwards; dash ignores the words entirely, so the file still sees OUTER",

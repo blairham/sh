@@ -672,6 +672,31 @@ type Diagnostics struct {
 	// front of it — see RemarkNamesItsOwnLine.
 	BackquoteObsolete string
 
+	// OperatorsNotSeparated is what a shell says about two operators written
+	// with no blank between them — `a&;b`, `(:);(:)`, `if |; then :; fi`. It
+	// takes the line, the first operator and the second. Empty means nothing
+	// is said, which is five of the six columns.
+	//
+	// Measured 2026-09-12 from a script file: ksh93u+ writes `warning: line
+	// 1: use space or tab to separate operators & and ;` and dash, bash 5.3,
+	// bash-as-sh, bash 3.2 and zsh 5.9.2 read the same text without a word.
+	//
+	// It is advice about *layout* and not about the construct: `a |; b`
+	// draws nothing and is refused exactly as `a|;b` is, and half the shapes
+	// that draw it — `(:);(:)`, `echo a&;b` — parse and run. So it
+	// accompanies a refusal on some inputs and stands alone at status 0 on
+	// others, which is what makes it a remark rather than a fact on the
+	// error.
+	//
+	// **Only where the shell is not going to run the program**, the same as
+	// BackquoteObsolete and measured the same way: `ksh -n s.sh` writes it
+	// and `ksh s.sh`, `ksh -c` and `ksh < s.sh` write nothing at all on the
+	// same text. See RemarkOnlyWhenNotRunning.
+	//
+	// The line rides inside the sentence rather than in the location in
+	// front of it — see RemarkNamesItsOwnLine.
+	OperatorsNotSeparated string
+
 	// RemarkNamesItsOwnLine has a remark's wording carry the line it is
 	// about, so the location in front of it says only who is speaking.
 	//
@@ -4455,6 +4480,8 @@ func (d Diagnostics) Remark(r syntax.Remark) string {
 		return Wording(d.HereDocumentAtEOF, "", r.At.Line, r.Token)
 	case syntax.RemarkBackquoteSubstitution:
 		return Wording(d.BackquoteObsolete, "", r.Pos.Line)
+	case syntax.RemarkOperatorsNotSeparated:
+		return Wording(d.OperatorsNotSeparated, "", r.Pos.Line, r.Token, r.Next)
 	}
 	return ""
 }
@@ -4465,11 +4492,15 @@ func (d Diagnostics) Remark(r syntax.Remark) string {
 // A property of the *remark* rather than of a dialect, which is what the
 // measurement says: the one shell that remarks on a backquote writes it under
 // `-n` and never otherwise, on the same file, and no shell in the panel has a
-// second answer to compare. A here-document that ran to the end of the input
-// is the other way and is said either way, which is why this is a question at
-// all and not a rule about remarks.
+// second answer to compare. The same shell answers the same way about two
+// operators run together, which is what makes `-n` a **lint mode with rules**
+// there rather than a parse check that happens to warn — so this is a set and
+// not a special case. A here-document that ran to the end of the input is the
+// other way and is said either way, which is why this is a question at all
+// and not a rule about remarks.
 func RemarkOnlyWhenNotRunning(k syntax.RemarkKind) bool {
-	return k == syntax.RemarkBackquoteSubstitution
+	return k == syntax.RemarkBackquoteSubstitution ||
+		k == syntax.RemarkOperatorsNotSeparated
 }
 
 // ForScript returns the diagnostics a script read from a file should use.

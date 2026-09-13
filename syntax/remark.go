@@ -33,8 +33,16 @@ type Remark struct {
 	Pos Pos
 	// At is where the construct it is about began.
 	At Pos
-	// Token is what was being waited for — the here-document's delimiter.
+	// Token is what the remark is about: the here-document's delimiter that
+	// was waited for, or the first of two operators written with no blank
+	// between them.
 	Token string
+	// Next is the second of two operators written with no blank between
+	// them, and is empty for every other kind. Two spellings are needed
+	// because the one shell that says this names both of them in the
+	// sentence, and neither can be derived from the other — the pair is
+	// exactly what the remark is about.
+	Next string
 }
 
 // RemarkKind is which remark this is.
@@ -54,6 +62,15 @@ const (
 	// backquote that opened the substitution, which is both where the
 	// remark is located and what it is about.
 	RemarkBackquoteSubstitution
+	// RemarkOperatorsNotSeparated is two operators written with no blank
+	// between them — `a&;b`, `(:);(:)`, `if |; then :; fi`. The text lexes
+	// and means what it says; one shell remarks on the layout on the way
+	// past and the others read it without a word.
+	//
+	// Token is the first operator and Next is the second. Its two positions
+	// are the same one: the first operator, which is both where the remark
+	// is located and what it is about.
+	RemarkOperatorsNotSeparated
 )
 
 func (k RemarkKind) String() string {
@@ -62,6 +79,8 @@ func (k RemarkKind) String() string {
 		return "RemarkHeredocAtEOF"
 	case RemarkBackquoteSubstitution:
 		return "RemarkBackquoteSubstitution"
+	case RemarkOperatorsNotSeparated:
+		return "RemarkOperatorsNotSeparated"
 	}
 	return "RemarkNone"
 }

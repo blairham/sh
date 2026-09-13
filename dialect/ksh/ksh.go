@@ -1465,6 +1465,16 @@ func Diagnostics() interp.Diagnostics {
 		// writes nothing, measured 2026-09-12 on 93u+ 2012-08-01 over the
 		// same file. It accompanies a refusal too, warning first.
 		BackquoteObsolete: "warning: line %[1]d: `...` obsolete, use $(...)",
+		// `-n` is a **lint mode with rules** in this shell rather than a
+		// parse check, and this is the second of them: two operators written
+		// with no blank between them draw a line about the layout, on the
+		// same route and under the same restriction. `(:);(:)` and
+		// `echo a&;b` draw it and then run at status 0; `if |; then :; fi`
+		// draws it and is then refused, warning first. Writing the operators
+		// apart silences it and changes nothing else. Measured 2026-09-12 on
+		// 93u+ 2012-08-01.
+		OperatorsNotSeparated: "warning: line %[1]d: use space or tab to " +
+			"separate operators %[2]s and %[3]s",
 		// And the line is inside that sentence rather than in the location,
 		// which is the same shape this shell's syntax errors take.
 		RemarkNamesItsOwnLine: true,

@@ -584,6 +584,7 @@ func (l *Lexer) next() Token {
 		for range s {
 			l.advance()
 		}
+		l.remarkOnOperatorsRunTogether(start, s)
 		return Token{Kind: k, Pos: start, End: l.pos(), Text: s}
 	}
 
@@ -1042,6 +1043,56 @@ func (l *Lexer) matchOperator() (Kind, bool) {
 		}
 	}
 	return 0, false
+}
+
+// remarkOnOperatorsRunTogether records two operators written with no blank
+// between them, which one shell in the panel remarks on and the rest read
+// without a word.
+//
+// The rule is about the *layout* rather than about the construct: writing the
+// same two operators apart removes the remark and leaves whatever the parse
+// was going to do alone, so `a |; b` is silent where `a |; b` written as
+// `a|;b` is not, and both are refused identically. Half the shapes it fires
+// on parse and run — `(:);(:)` and `echo a&;b` are ordinary programs — which
+// is why this is a remark and not a fact hung off an error.
+//
+// Two halves of the condition, and each was measured rather than reasoned:
+//
+//   - The operator just lexed is exactly one character and is one of `;`,
+//     `|` or `&`. Length is the whole of it: `&&(` is silent where `|(`
+//     remarks, and `;;`, `;&`, `|&`, `&&` and `||` never start one because
+//     the two bytes are one operator. Asking the *operator table* rather than
+//     a list of pairs is what keeps that true per dialect — a dialect that
+//     lexes `&|` as one token cannot remark on it, which is the answer the
+//     shell that has that operator gives.
+//   - The byte immediately after it begins another operator: `;`, `|`, `&`,
+//     `(`, `<` or `>`. It is the byte and not the next token, which is what
+//     `$(` settles — `:;$(:)` is silent where `:;(:)` remarks — and it is a
+//     byte rather than a spelling, since `:;>>f` names `>` and not `>>`.
+//     `)`, `{`, `!` and `[[` are not in the set, and neither is a word.
+//
+// Measured on ksh93u+ over a script file with `-n`, 2026-09-12. Recorded for
+// every dialect and worded by one; see interp.Diagnostics.OperatorsNotSeparated
+// and interp.RemarkOnlyWhenNotRunning, which is what holds it back on the
+// routes that are going to run the program.
+func (l *Lexer) remarkOnOperatorsRunTogether(start Pos, op string) {
+	switch op {
+	case ";", "|", "&":
+	default:
+		return
+	}
+	switch l.peek() {
+	case ';', '|', '&', '(', '<', '>':
+	default:
+		return
+	}
+	l.remarks = append(l.remarks, Remark{
+		Kind:  RemarkOperatorsNotSeparated,
+		Pos:   start,
+		At:    start,
+		Token: op,
+		Next:  string(l.peek()),
+	})
 }
 
 // isWordEnd reports whether c ends an unquoted word.

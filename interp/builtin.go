@@ -1561,6 +1561,12 @@ func (r *Runner) unsetOneName(name string) {
 	}
 	delete(r.Arrays, name)
 	delete(r.AssocArrays, name)
+	// The table is gone, so the note about how it came to be is meaningless
+	// and a later declaration of the name starts the record over. Measured:
+	// `declare -A m=([a]=b); unset m; declare -A m` lists `declare -A m`, the
+	// declared-only shape, and not the emptied one. See
+	// compounddeclaredonly.go.
+	delete(r.declaredOnlyCompound, name)
 	r.clearAttributes(name)
 	// Recorded as well as deleted: a name that came from the environment is
 	// not in Vars to begin with, and deleting nothing left it visible to

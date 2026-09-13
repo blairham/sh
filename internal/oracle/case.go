@@ -21078,6 +21078,21 @@ echo "st=$?"`,
 		Why:     "the bases at the two ends of ksh93's alphabet, which zsh reaches none of — it refuses everything outside 2 to 36 by name, and bash has no base on `-i` at all. A base **past** the end is kept and rendered in ten *with the mark on*: `typeset -i65 d=100` reads `10#100` and lists as `typeset -i 65 d=10#100`, so the 65 is stored and only the spelling gives way. A base **below** two records nothing, so `typeset -i1 b=5` lists with no base word. And 1 and 0 are not one rule — over a name that already has a base, 1 takes it off the way `-i10` and a bare `-i` do, and 0 leaves it exactly where it is, which is the last two fields. The bash 3.2 column differs from the bash one on the usage string and the line number of an invalid option, which is that build's own and older than any of this (#1308)",
 	},
 	{
+		ID: "declare/an-empty-table-declared-against-one-assigned", Category: "declarations",
+		Snippet: `typeset -A d; typeset -p d; typeset -A a=(); typeset -p a; typeset -A e=([k]=v); unset "e[k]"; typeset -p e`,
+		Why:     "whether a listing tells a table the letters *declared* from one that has been written to and is empty now. bash 5.3 does: `declare -A d` for the first and `declare -A a=()` for the other two, and it is the assignment rather than the emptiness that moves the name — a `typeset -A d; d[k]=v; unset \"d[k]\"` lists with the parentheses too. ksh93 writes `typeset -A m=()` for all three and zsh `typeset -A m=( )` for all three, so neither has the distinction and only one column is asked. It reaches a script through the read-back: `declare -A m` re-declares where `declare -A m=()` empties, which differ when the name already holds something. Two columns have no `-A` at all and one has no `typeset` (#2558)",
+	},
+	{
+		ID: "declare/an-empty-array-declared-against-one-assigned", Category: "declarations",
+		Snippet: `typeset -a d; typeset -p d; typeset -a a=(); typeset -p a; q=(x); unset "q[0]"; typeset -p q`,
+		Why:     "the indexed half of `declare/an-empty-table-declared-against-one-assigned`, and it splits the panel further: bash draws the same line it draws for a table, `declare -a d` against `declare -a a=()`; ksh93 writes `typeset -a q` for an empty indexed array however it got there, which is the opposite of what it does with an empty *table*; and zsh writes `typeset -a q=(  )` for all three. So an engine with one answer for both kinds is wrong in two columns, whichever answer it picks. This shell listed every empty indexed array with the parentheses and every empty table without them, which was each column's answer applied to the wrong kind (#2558)",
+	},
+	{
+		ID: "declare/a-frozen-element-declaration-still-makes-the-cell", Category: "declarations",
+		Snippet: `typeset -r a[1]=v 2>&1; echo "st=$?"; typeset -p a 2>&1; typeset -a b; typeset -r b[1]=v 2>&1; typeset -p b 2>&1`,
+		Why:     "what a declaration that freezes the array before writing the element leaves behind, which is the discriminating half of the two rows above: in bash the *fresh* name lists `declare -ar a=()` even though the element never lands, while the same line over a name already declared an array lists `declare -ar b` with no parentheses. So the cell is made by the declaration bringing the name into being with a value, not by the write succeeding — a reading of `assigned` taken from whether the store ran gets the first of these wrong. The other columns refuse or have no such spelling (#2558)",
+	},
+	{
 		ID: "declare/listing-a-control-byte", Category: "declarations",
 		Snippet: "v=$'a\001b'; typeset -p v; echo \"st=$?\"",
 		Why:     "how a listing spells a byte below 0x20 inside `$'...'`: an octal escape, a hex one, and a caret pair are three answers from three columns that otherwise quote alike, which is why the control escape is a field of its own rather than part of the quoting style. The fourth has no such builtin (#2057)",

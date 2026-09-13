@@ -44,7 +44,12 @@ f() { local -a a; echo "in n=${#a[@]} [${a[*]}]"; typeset -p a; }
 f
 echo "after n=${#a[@]} [${a[*]}]"`
 	out, errs, st := declRun(t, src, withFreshCells(Yes, No), Diagnostics{})
-	const want = "in n=0 []\ndeclare -a a=()\nafter n=2 [x y]\n"
+	// The listing carries no `=()`: the local was declared an array and
+	// nothing has written to it. Measured 2026-09-12 on bash 5.3.15, which
+	// answers this shape — `a=(x y); f() { local -a a; declare -p a; }; f`
+	// writes `declare -a a`. The row wanted `=()` until #2558, which was this
+	// engine's own answer wearing a measurement's clothes.
+	const want = "in n=0 []\ndeclare -a a\nafter n=2 [x y]\n"
 	if out != want || errs != "" || st != 0 {
 		t.Errorf("= %q (stderr %q, status %d), want %q", out, errs, st, want)
 	}

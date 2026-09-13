@@ -83,6 +83,9 @@ func (r *Runner) markAssoc(name string) {
 		return
 	}
 	r.AssocArrays[name] = AssocArray{}
+	// Declared and not assigned, which is the state one listing writes
+	// without the `=()` — see compounddeclaredonly.go.
+	r.compoundDeclaredOnly(name)
 	// A name is one kind of array at a time. Two of the three shells with
 	// the attribute let `-A` take over a name that held an indexed array
 	// (the third refuses); what none of them does is keep both readings
@@ -131,6 +134,9 @@ func (r *Runner) setAssocElem(name, key, value string) {
 		}
 	}
 	a[key] = value
+	// Written to, so the name leaves the declared-only set — see
+	// compounddeclaredonly.go.
+	r.compoundWasAssigned(name)
 	// See nameIsBack: a keyed table is the one store that does not keep a
 	// scalar view, so it is the one that has to lift the mark itself. An
 	// indexed array keeps `$a` answering through setVar and lifts it there.
@@ -395,6 +401,11 @@ func (r *Runner) assignAssocElems(name string, parsed []literalElem, appendTo bo
 		r.diagf("%s: assigning to the whole of a produced association is not implemented yet\n", name)
 		return
 	}
+	// Written to, so the name leaves the declared-only set. Here rather than
+	// only in setAssocElem below, because an empty literal — `m=()`, the very
+	// case the listing tells apart — writes no element and would otherwise
+	// still read as declared-only. See compounddeclaredonly.go.
+	r.compoundWasAssigned(name)
 	// Read before the clear below, because that is what one of the two
 	// answers to KeyedLiteralAppendJoinsTheReplacedValue needs and the clear
 	// is about to destroy it.

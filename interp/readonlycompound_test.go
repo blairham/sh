@@ -29,7 +29,11 @@ func readonlyCompoundRun(t *testing.T, src string, a Answer) (string, string, in
 func TestReadonlyRecordingTheCompoundIsAnAxis(t *testing.T) {
 	const src = `f() { readonly -a a; typeset -p a; }; f`
 	out, errs, st := readonlyCompoundRun(t, src, Yes)
-	if want := "declare -ar a=()\n"; out != want || st != 0 || errs != "" {
+	// The kind and no value, which is the shape the keyed half below has
+	// always had: a declaration that writes nothing lists without the `=()`.
+	// This row wanted `declare -ar a=()` until #2558, so the pair disagreed
+	// with itself about the same state.
+	if want := "declare -ar a\n"; out != want || st != 0 || errs != "" {
 		t.Errorf("yes: got %q/%d stderr %q, want %q", out, st, errs, want)
 	}
 	out, errs, st = readonlyCompoundRun(t, src, No)

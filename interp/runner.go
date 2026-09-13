@@ -741,6 +741,12 @@ type Runner struct {
 	// through one of those two.
 	declaredEmpty map[string]bool
 
+	// declaredOnlyCompound are names whose array or table came from a
+	// declaration's letters alone, with nothing yet written to them. See
+	// compounddeclaredonly.go for the measurement and for why the set kept is
+	// this one rather than its complement.
+	declaredOnlyCompound map[string]bool
+
 	// aliases is the table `alias` and `unalias` keep. Substitution happens
 	// when a line is parsed, which is the other half of the feature and lives
 	// in the parser rather than here; the two meet at [Runner.ExpandingAlias].
@@ -4684,6 +4690,12 @@ type scope struct {
 	// an environment value the script had taken away — or forgetting one it
 	// had not.
 	removedBefore map[string]bool
+	// declaredOnlyBefore is whether the name's compound value had come from a
+	// declaration alone when it was shadowed, so a `local -A m` that empties
+	// nothing does not leave the caller's table reading as though a
+	// declaration had just made it. Saved beside the two compound tables and
+	// put back with them. See compounddeclaredonly.go.
+	declaredOnlyBefore map[string]bool
 	// savedAssoc shadows the associative table the same way, attribute and
 	// all: what comes back on exit is whether the name was associative as
 	// much as what it held.

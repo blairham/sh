@@ -65,23 +65,24 @@ func seedStacks(r *Runner) {
 	r.jobs = append(make([]*Job, 0, 4), nil)
 	r.jobOrder = append(make([]*Job, 0, 4), nil)
 	r.scopes = append(make([]*scope, 0, 4), &scope{
-		saved:            map[string]string{"seed": "v"},
-		existed:          map[string]bool{"seed": true},
-		savedArrays:      map[string]Array{"seed": {0: "v"}},
-		arrayExisted:     map[string]bool{"seed": true},
-		removedBefore:    map[string]bool{"seed": true},
-		savedAssoc:       map[string]AssocArray{"seed": {"k": "v"}},
-		assocExisted:     map[string]bool{"seed": true},
-		savedReadonly:    map[string]bool{"seed": true},
-		savedHideInScope: map[string]bool{"seed": true},
-		savedAttrs:       map[string]nameAttributes{"seed": {}},
-		savedAssigned:    map[string]string{"seed": "v"},
-		assignedSpoken:   map[string]bool{"seed": true},
-		savedExported:    map[string]bool{"seed": true},
-		exportedSpoken:   map[string]bool{"seed": true},
-		exportedShadow:   map[string]string{"seed": "v"},
-		savedTraps:       map[string]savedTrapState{"seed": {}},
-		onReturn:         append(make([]func(), 0, 4), func() {}),
+		saved:              map[string]string{"seed": "v"},
+		existed:            map[string]bool{"seed": true},
+		savedArrays:        map[string]Array{"seed": {0: "v"}},
+		arrayExisted:       map[string]bool{"seed": true},
+		removedBefore:      map[string]bool{"seed": true},
+		declaredOnlyBefore: map[string]bool{"seed": true},
+		savedAssoc:         map[string]AssocArray{"seed": {"k": "v"}},
+		assocExisted:       map[string]bool{"seed": true},
+		savedReadonly:      map[string]bool{"seed": true},
+		savedHideInScope:   map[string]bool{"seed": true},
+		savedAttrs:         map[string]nameAttributes{"seed": {}},
+		savedAssigned:      map[string]string{"seed": "v"},
+		assignedSpoken:     map[string]bool{"seed": true},
+		savedExported:      map[string]bool{"seed": true},
+		exportedSpoken:     map[string]bool{"seed": true},
+		exportedShadow:     map[string]string{"seed": "v"},
+		savedTraps:         map[string]savedTrapState{"seed": {}},
+		onReturn:           append(make([]func(), 0, 4), func() {}),
 	})
 	r.aroundFunctionCalls = append(make([]func(*Runner) func(), 0, 4), nil)
 	r.selfPending = append(make([]string, 0, 4), "seed")
@@ -246,6 +247,7 @@ func seedTables(r *Runner) {
 	r.completions = map[string]completionSpec{"seed": {options: []string{"nospace"}, words: []string{"-F", "f"}}}
 	r.custom = map[string]Builtin{"seed": func(*Runner, context.Context, []string) int { return 0 }}
 	r.declaredEmpty = map[string]bool{"seed": true}
+	r.declaredOnlyCompound = map[string]bool{"seed": true}
 	r.declaring = map[string]bool{"seed": true}
 	r.disabledBuiltins = map[string]bool{"seed": true}
 	r.withdrawnBuiltins = map[string]bool{"seed": true}

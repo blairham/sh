@@ -151,6 +151,10 @@ func (r *Runner) storeArray(name string, a Array) {
 		return
 	}
 	r.Arrays[name] = a
+	// Written to, so the name leaves the declared-only set whatever it was
+	// holding before. The one chokepoint every indexed write reaches, which
+	// is what this note relies on — see compounddeclaredonly.go.
+	r.compoundWasAssigned(name)
 	// A plain `$a` has to keep working. The first element is stored rather
 	// than the scalar view, because *which* view it is depends on a dialect
 	// and building an array must not need one: getVar asks, and only when
@@ -256,6 +260,8 @@ func (r *Runner) markIndexed(name string) {
 		r.Arrays = map[string]Array{}
 	}
 	r.Arrays[name] = Array{}
+	// Declared and not assigned — see compounddeclaredonly.go.
+	r.compoundDeclaredOnly(name)
 }
 
 // setArrayElem assigns one element. Any subscript at or above the base is

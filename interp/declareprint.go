@@ -185,6 +185,11 @@ type declaration struct {
 	// `g(){ typeset -p L }; f(){ local L=1; g }; f` writes `typeset -g L=1`.
 	inAFunction bool
 	localHere   bool
+	// declaredOnly says an empty array or table came from a declaration's
+	// letters with nothing written to it, which one listing tells apart from
+	// an emptied one and the others do not. Meaningless where the value has
+	// elements. See compounddeclaredonly.go.
+	declaredOnly bool
 }
 
 // declarationOf gathers what the runner knows about a name. The second result
@@ -203,6 +208,8 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 		base:        r.integerBase[name],
 		inAFunction: len(r.scopes) > 0,
 		localHere:   r.localInTheInnermostScope(name),
+
+		declaredOnly: r.declaredOnlyCompound[name],
 	}
 	_, d.float = r.floatPrecision[name]
 	d.width, d.hasWidth = r.fieldWidth[name]
@@ -571,9 +578,14 @@ func (r *Runner) clusteredDeclaration(d declaration) string {
 		// branches because it is those the name is typed as.
 		return head
 	case d.isAssoc:
-		if len(d.assoc) == 0 {
-			// The attribute is the whole of what an empty table has to say,
-			// and this engine says it with no value at all.
+		if len(d.assoc) == 0 && d.declaredOnly {
+			// A table the letters declared and nothing has written to, which
+			// this engine writes with no value at all. An *emptied* one is
+			// `=()` and falls through — the distinction is the assignment
+			// rather than the emptiness, and the two spellings are not
+			// interchangeable when they are read back: `declare -A m`
+			// re-declares where `declare -A m=()` empties. See
+			// compounddeclaredonly.go.
 			return head
 		}
 		var b strings.Builder
@@ -588,6 +600,12 @@ func (r *Runner) clusteredDeclaration(d declaration) string {
 		b.WriteString(")")
 		return b.String()
 	case d.isArr:
+		if len(d.arr) == 0 && d.declaredOnly {
+			// The indexed half of the same distinction, and it moves the
+			// other way: `declare -a q` was listing as `declare -a q=()`
+			// here. See the association above.
+			return head
+		}
 		elems := make([]string, 0, len(d.arr))
 		for _, i := range d.arr.subscripts() {
 			elems = append(elems, fmt.Sprintf("[%d]=%s", i, r.declareQuoted(d.arr[i])))

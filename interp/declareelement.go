@@ -79,7 +79,7 @@ func (r *Runner) declareElement(base, sub, value string, f declareFlags, shadows
 	// value does to a name already the *other* kind of compound is a
 	// question of its own that the panel splits differently — see
 	// compoundKindChanged.
-	r.markDeclaredCompound(base, fresh, f, true)
+	r.markCompoundForAnElementDeclaration(base, fresh, f)
 	if r.refuseReadonly(base, assignedByDeclaration) {
 		// A name already frozen refuses the element as it refuses the
 		// variable, and by the base's name: `readonly a; typeset a[1]=v`
@@ -249,7 +249,7 @@ func (r *Runner) freezeBeforeTheElementWrite(base string, f declareFlags) {
 		f.array = true
 	}
 	r.applyAttributes(base, f)
-	r.markDeclaredCompound(base, false, f, true)
+	r.markCompoundForAnElementDeclaration(base, false, f)
 	if r.unspecified {
 		return
 	}

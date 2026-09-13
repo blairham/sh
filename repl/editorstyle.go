@@ -96,14 +96,26 @@ type EditorStyle struct {
 	// something the substrate should be choosing.
 	UnfinishedOutputMark string
 
-	// ClearsBelowThePrompt erases from the cursor to the end of the screen
-	// before the prompt is drawn.
+	// ClearBeforeThePrompt is written last of all, on the row the prompt is
+	// about to be drawn on.
 	//
 	// A third answer and not part of either option, which is measured: with
-	// **both** turned off zsh still writes `\e[J` and bash still writes
-	// nothing. So it is what this editor does about the rows below a prompt
-	// rather than something a person asked for, and it moves on its own.
-	ClearsBelowThePrompt bool
+	// **both** turned off the shell that marks still writes this and the
+	// other still writes nothing. So it is what the editor does about the
+	// ground under a prompt rather than something a person asked for, and it
+	// moves on its own.
+	//
+	// Measured 2026-09-12, the whole of it is
+	// `\e[0m\e[27m\e[24m\e[J` — the three attributes a run of output is
+	// most likely to have left on, and then an erase to the end of the
+	// screen. The erase is what keeps a shorter prompt from leaving the tail
+	// of a longer one behind it; the resets are what keep output that ended
+	// mid-escape from drawing the prompt bold.
+	//
+	// Text rather than a flag, for the reason Interrupt and
+	// UnfinishedOutputMark are: what a shell puts on the screen is not
+	// something the substrate should be choosing. Empty writes nothing.
+	ClearBeforeThePrompt string
 
 	// ListQueryAcceptsOnlyYesOrNo keeps asking until one of them arrives,
 	// ringing the bell at anything else. bash does. zsh takes the first key

@@ -487,6 +487,13 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	record := s.recording(ed, &added)
 	var pending strings.Builder
 	for {
+		if pending.Len() == 0 {
+			// The last thing done about the previous command's output, and
+			// done before the prompt hooks rather than after them — measured;
+			// see markUnfinished. A continuation prompt marks nothing: the
+			// newline the terminal echoed already ended the row.
+			ed.markUnfinished()
+		}
 		drawn := s.beforeReading(ctx, state, &pending)
 		if s.Runner.Exited() {
 			// A prompt hook called `exit`. Measured, zsh's session ends
@@ -1621,6 +1628,17 @@ func (s Shell) recalled(ctx context.Context, hist historyFile) []string {
 // next line on, and a setting that only takes hold in the next session is one
 // they will believe is broken. Two variable lookups and a split is nothing
 // beside running the command that was typed.
+func (s Shell) historyRules() historyRules {
+	if s.Runner == nil {
+		return historyRules{}
+	}
+	// Three seams into the same shell, because the settings live in three
+	// places: a variable, an option, and the pattern rules a `case` uses. A
+	// session that answered any of them itself would be a second shell
+	// disagreeing with the first about what it was told.
+	return historyRulesFrom(s.History, s.Runner.GetVar, s.Runner.DialectOption, s.Runner.MatchPattern)
+}
+
 // dialectOption answers whether a named option is on in this session, and
 // false for a dialect that named none. See optionOn, which is the same
 // question asked for the history rules.
@@ -1643,17 +1661,6 @@ func (s Shell) markIfAsked() string {
 		return ""
 	}
 	return s.Editor.UnfinishedOutputMark
-}
-
-func (s Shell) historyRules() historyRules {
-	if s.Runner == nil {
-		return historyRules{}
-	}
-	// Three seams into the same shell, because the settings live in three
-	// places: a variable, an option, and the pattern rules a `case` uses. A
-	// session that answered any of them itself would be a second shell
-	// disagreeing with the first about what it was told.
-	return historyRulesFrom(s.History, s.Runner.GetVar, s.Runner.DialectOption, s.Runner.MatchPattern)
 }
 
 // newEditor is the line editor this shell types into.
@@ -1688,7 +1695,7 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		// dialect whose person cleared it gets neither. See freshRow.
 		unfinishedMark:  s.markIfAsked(),
 		returnsFirst:    s.dialectOption(s.Editor.ReturnBeforeThePromptOption),
-		clearsBelow:     s.Editor.ClearsBelowThePrompt,
+		clearBefore:     s.Editor.ClearBeforeThePrompt,
 		listQueryStrict: s.Editor.ListQueryAcceptsOnlyYesOrNo,
 		// What this dialect calls a word, and what its kills do with one.
 		wordChars:                  s.Editor.WordCharacters,

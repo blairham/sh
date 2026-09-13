@@ -18082,6 +18082,57 @@ echo "st=$?"`,
 		Why: "the same question one position further in: a value ending in a space makes the next word eligible — the rule `alias/a-trailing-space-carries-on` pins on an ordinary name — and the word made eligible that way is judged by the same reservation. Same split as the row above and on two visible things at once: `took` and status 0 where the alias won, silence and 1 where `! true` stayed a negation. `!` rather than `for` because every corpus snippet has to be a program on its own, and `!` is the one reserved word that is an ordinary argument in this position: `sp for x in a` followed by `do` does not parse until the substitution has already happened, so a row spelled that way would be asking the parser a question only the answer can pose",
 	},
 	{
+		ID:       "alias/a-reserved-word-alias-at-the-head-of-a-pipeline",
+		Category: "alias",
+		Script:   true,
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias '!'='echo took'
+! true
+echo "st=$?"`,
+		Why: "the one position the reserved-word flag did not reach (#2638). `!` is read as a pipeline's negation one level out from a command, before the alias table is consulted at all, so the substitution never happened here however the dialect was set. The split is exactly the one the row above draws — bash 5.3, bash 3.2 and zsh print `took true` and answer 0; dash, ksh93, BusyBox ash and bash called `sh` print nothing and answer 1, because `! true` stayed a negation — which is what says this is that field reaching further and not an axis of its own. `alias/a-reserved-word-after-an-alias-ending-in-a-blank` is the control: it asks the same word in the one position that already worked, so a change that breaks the flag itself is visible in both rows and a change that breaks only the reach is visible in this one",
+	},
+	{
+		ID:       "alias/an-ordinary-alias-at-the-head-of-a-pipeline",
+		Category: "alias",
+		Script:   true,
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias e=echo
+! e hi
+echo "st=$?"`,
+		Why: "the control for the row above, and the reason the reach is guarded by the *word* rather than applied to every head: a name the grammar does not reserve is expanded behind the negation exactly as it is anywhere a command word stands, and all seven columns agree — `hi`, then 1, the negation of a success. A fix that asked the reserved-word question about every word a pipeline begins with would take this row's `e` away in the four columns that protect, which nothing else in the corpus would notice",
+	},
+	{
+		ID:       "alias/a-pipeline-head-alias-whose-body-begins-with-a-bang",
+		Category: "alias",
+		Script:   true,
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias '!'='! x'
+! true
+echo "st=$?"`,
+		Why: "the negation is read off the word the substitution *left*, not the word that was written. The body opens with the name it was reached by, so the inner `!` is inside the chain that name opened and is not expanded again — `alias/a-body-that-names-itself-past-a-separator` is the general form — and what stands there is the reserved word doing its reserved job: the three that expand report `x: command not found` and answer 0, the negation of a 127. The four that protect never substitute at all and answer 1. It is also the row that says the word *behind* the negation is still an ordinary command word: `x` is looked up rather than swallowed",
+	},
+	{
+		ID:       "alias/a-pipeline-head-value-ending-in-a-blank",
+		Category: "alias",
+		Script:   true,
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias '!'='echo '
+alias hi='echo HI'
+! hi
+echo "st=$?"`,
+		Why: "the trailing-blank rule reaches the head of a pipeline too, which is the half of #2638 a fix can silently drop: the word after a value ending in a blank is eligible in turn, so the three that expand run `echo` with the *expansion of* `hi` behind it and print `echo HI` at 0. The four that protect keep the negation, run the ordinary alias behind it and print `HI` at 1 — so the two readings differ in both the output and the status, and neither cell can be reached by accident",
+	},
+	{
+		ID:       "alias/a-time-alias-in-front-of-a-pipeline",
+		Category: "alias",
+		Script:   true,
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias time='echo took;'
+time true
+echo "st=$?"`,
+		Why: "the second word a pipeline reads before a command exists, and the same gap: `time` binds the whole pipeline and is read one level out, so nothing asked the table for it either. bash 5.3, bash 3.2 and zsh take the alias and print `took`; ksh93 and bash called `sh` keep the keyword and report on the pipeline instead. dash and BusyBox ash take it as well — not because they expand a reserved word but because neither has the keyword to protect, which is the same thing `alias/a-reserved-word-is-read-the-way-the-grammar-reads-it` says about `select` and `function` and is what makes the protected set the grammar's own. The body ends in `;` so that the timing report and the alias are two different lines rather than two readings of one",
+	},
+	{
 		ID: "alias/a-reserved-word-alias-in-posix-mode", Category: "alias",
 		Script: true,
 		Snippet: `shopt -s expand_aliases 2>/dev/null

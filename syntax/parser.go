@@ -111,6 +111,21 @@ type Parser struct {
 	// global-alias hook. See primeAliases.
 	aliasPrimed bool
 
+	// aliasHeadHandled says the *current* token has already been offered to
+	// the alias table as a command word, by parsePipeline rather than by
+	// parseCommand. It is about that one token and nothing else, which is
+	// why next clears it.
+	//
+	// Two words are read one level out from a command — a pipeline's
+	// leading `!` and the `time` in front of it — so the table has to be
+	// consulted before either is answered. parseCommand would otherwise
+	// offer the same word a second time, and a second offer is not
+	// harmless: it begins a fresh set of spent names and clears the
+	// trailing-blank flag the first one set, which is what makes
+	// `alias '!'='echo '` leave the word after it eligible. See
+	// [Parser.expandPipelineHead].
+	aliasHeadHandled bool
+
 	err        error
 	incomplete bool
 
@@ -376,6 +391,13 @@ func (p *Parser) next() {
 	if p.tok.Kind != TokEOF && p.tok.Text != "" {
 		p.lastText = p.tok.Text
 	}
+	// Whatever parsePipeline offered to the alias table, it offered the
+	// token that is about to stop being current. Cleared here rather than
+	// where it is read, so that the flag cannot outlive the word it
+	// describes: `alias '!'='! x'` expands at the head, the `!` the body
+	// begins with is then read as the negation, and `x` behind it is a
+	// command word that has never been offered to anything.
+	p.aliasHeadHandled = false
 	if p.aliasSpliced > 0 {
 		p.aliasSpliced--
 		if p.aliasSpliced == 0 {
@@ -1536,6 +1558,10 @@ func (p *Parser) parseAndOr() Expr {
 // binds: the whole pipeline, on either side of the `!` — `time ! true` and
 // `! time true` both parse, and both report.
 func (p *Parser) parsePipeline() Expr {
+	// The two words below are read before a command is parsed at all, so
+	// the alias table has to be consulted here or never. Every other
+	// reserved word is reached through parseCommand, which asks first.
+	p.expandPipelineHead()
 	if p.dialect.TimeKeyword && p.atWord("time") {
 		return p.parseTime(false, Pos{})
 	}
@@ -1670,10 +1696,12 @@ func (p *Parser) parseCommand() Command {
 	// Before the keyword dispatch below, because an alias may hold one:
 	// `alias iff='if true; then'` has to produce the `if` the grammar reads.
 	// The set is fresh per command, so `e yes; e two` expands `e` twice.
-	if p.Aliases != nil || p.SuffixAliases != nil {
-		p.aliasNextWord = false
-		p.aliasDone = map[string]bool{}
-		p.expandCommandWord(p.aliasDone)
+	//
+	// Unless parsePipeline has already offered this very word — it reads two
+	// words of its own in front of a command and so has to ask first. See
+	// Parser.aliasHeadHandled.
+	if !p.aliasHeadHandled {
+		p.expandCommandStart()
 	}
 	switch {
 	case p.at(TokEOF), p.at(TokNewline), p.atStopWord():

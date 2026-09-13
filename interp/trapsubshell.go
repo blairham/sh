@@ -303,4 +303,9 @@ func (r *Runner) endSubshell(ctx context.Context) {
 	if exited {
 		r.fireExitHook(ctx)
 	}
+	// A subshell is a shell ending, so its own held pipes are joined here for
+	// the reason Finish joins the outer shell's: `( exec > >(cat); printf hi )`
+	// is a process that exits in every shell of the panel, and the body's
+	// bytes land because the exit closed the write end. See endHeldProcSubs.
+	r.endHeldProcSubs()
 }

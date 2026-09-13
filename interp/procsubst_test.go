@@ -627,3 +627,60 @@ func TestThePipeDirectoryCarriesTheMarkerTheGuardLooksFor(t *testing.T) {
 			base, childguard.PipeMarker)
 	}
 }
+
+// `exec > >(cmd)` puts a pipe's writing end on the shell's own standard
+// output, and the body's bytes have to reach the caller's stream anyway.
+//
+// This is the one shape removeProcSubs cannot finish with, because the only
+// holder of the end the body is reading until is the shell itself: waiting
+// there would be waiting for itself. Every other shell in the panel gets the
+// close for free, from the process exiting — so this shell does it at the end
+// of the shell instead, which is Runner.endHeldProcSubs (#2198).
+//
+// Measured 2026-09-12: every want below is bash 5.3's and bash 3.2's, and the
+// first two are zsh 5.9.2's as well. Before the join this shell answered the
+// empty string — **not every time**, which is the part that makes a
+// hand-run probe worthless here: the body is a goroutine racing the process
+// exit, so it won `hi` in roughly one run in eight. A test that watched for
+// the loss with a `sleep` would be a window rather than a question. What
+// makes these deterministic is the join, and each of them was watched failing
+// with it taken out.
+func TestAWritingSubstitutionOnTheShellsOwnOutputIsJoinedAtItsEnd(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"the shell's output", `exec > >(cat); printf hi`, "hi"},
+		// A subshell is a shell ending too, and its exit is the close in
+		// every shell of the panel.
+		{"inside a subshell", `( exec > >(cat); printf hi )`, "hi"},
+		// A command substitution collects what the body wrote, because the
+		// body's stream is the buffer the substitution is reading — so the
+		// join has to happen before the collection and not after it.
+		{"collected by a command substitution", `v=$( exec > >(cat); printf hi ); printf "[%s]" "$v"`, "[hi]"},
+		// A numbered descriptor is the same question with the pipe off the
+		// three named streams, which is where the *first* version of the
+		// held-descriptor clause looked and the only place it looked.
+		{"a numbered descriptor", `exec 3> >(cat); printf hi >&3`, "hi"},
+		// Two at once: every end is closed before any body is waited for, so
+		// the first body is not waited for while the second's end is open.
+		// Closing and waiting in step deadlocks this row and no other.
+		{"two of them", `exec 3> >(cat) 4> >(cat); printf a >&3; printf b >&4`, "ab"},
+		// A close the script writes for itself has to be a close: `>&-` took
+		// the reference away and left the file open, so the body read on
+		// forever and the join at the end never came back. That is a hang
+		// rather than a loss, and it is the row that fails by timing out.
+		{"closed by the script", `exec > >(cat); printf hi; exec >&-`, "hi"},
+		{"a numbered one closed by the script", `exec 3> >(cat); printf hi >&3; exec 3>&-`, "hi"},
+		// The control: a shell that closed its end and never opened one has
+		// nothing to wait for, and must not wait anyway.
+		{"nothing written into it", `exec 3> >(cat); exec 3>&-; printf done`, "done"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := run(t, tc.src, nil)
+			if st != 0 {
+				t.Errorf("status %d, want 0", st)
+			}
+			if out != tc.want {
+				t.Errorf("out = %q, want %q", out, tc.want)
+			}
+		})
+	}
+}

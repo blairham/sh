@@ -762,6 +762,13 @@ func (r *Runner) removeProcSubs(pipes []procSubPipe) {
 			_ = p.hold.Close()
 		}
 		if r.holdsDescriptorOnto(p.path) {
+			// Kept rather than dropped. The clause above says the *name*
+			// stays while this shell holds the pipe; what it left out is
+			// that the body and the pipe are then nobody's to finish, so
+			// both were forgotten here and `exec > >(cat)` lost its output.
+			// The descriptor's lifetime is the shell's, so the join is too —
+			// see endHeldProcSubs.
+			r.heldProcSubs = append(r.heldProcSubs, p)
 			continue
 		}
 		if p.body != nil {
@@ -771,6 +778,117 @@ func (r *Runner) removeProcSubs(pipes []procSubPipe) {
 			<-p.body
 		}
 		_ = os.Remove(p.path)
+	}
+}
+
+// endHeldProcSubs closes this shell's own ends of the pipes it was still
+// holding, waits for their bodies, and takes the names away.
+//
+// This is the end of the shell standing in for a process exiting, which is
+// what every other shell in the panel gets for free. `exec > >(cat)` puts a
+// pipe's writing end on the shell's own standard output: the body reads until
+// that end closes, and only the shell can close it — so removeProcSubs cannot
+// wait there without waiting for itself, which is the clause it keeps. A real
+// shell needs no clause, because its exit closes the descriptor and the body
+// is a process that outlives it. Here the body is a goroutine, and the
+// process exiting takes it with it before it has written anything.
+//
+// Measured 2026-09-12: `exec > >(cat); printf hi` is `hi` in bash 5.3, bash
+// 3.2 and zsh 5.9.2, and this shell answered the empty string — **not every
+// time, which is the part worth writing down**. It is a race between the
+// body's goroutine and the process exit, so it wrote `hi` in roughly one run
+// in eight, and the same snippet with a second `printf` after it fell the
+// other way. A probe run once reports whichever way it fell, and a test with
+// a `sleep` in it would be a window rather than a question; the join is what
+// makes the answer the same every time. Five shapes were losing it: the plain
+// `exec >`, the same inside `( )`, `exec 3> >(cmd)`, a command substitution
+// around either, and an `exec >&-` that closed the descriptor by hand — that
+// last because the entry had already been dropped here and there was nothing
+// left to wait for however the end was closed (#2198).
+//
+// Every end is closed before any body is waited for, in two loops rather than
+// one. A body reads until *its* pipe closes, and one command can name more
+// than one substitution — `exec 3> >(cat) 4> >(cat)` — so closing and waiting
+// in step would wait for the first body while the second's end is still open.
+func (r *Runner) endHeldProcSubs() {
+	held := r.heldProcSubs
+	r.heldProcSubs = nil
+	for _, p := range held {
+		r.closeDescriptorsOnto(p.path)
+	}
+	for _, p := range held {
+		if p.body != nil {
+			<-p.body
+		}
+		_ = os.Remove(p.path)
+	}
+}
+
+// closeDescriptorsOnto closes every descriptor of this shell's own that is
+// open on path, and forgets it.
+//
+// The mirror of holdsDescriptorOnto, and it asks the same three named streams
+// beside the table for the same reason: `exec > >(cat)` puts the pipe on a
+// *field* rather than on a numbered entry, which is exactly the half that was
+// missed before. Written next to it so the pair cannot drift — a stream one
+// of them asks about and the other does not is a pipe reported held and never
+// closed, which is a shell that waits forever.
+func (r *Runner) closeDescriptorsOnto(path string) {
+	closed := func(v any) bool {
+		f, ok := v.(*os.File)
+		if !ok || f.Name() != path {
+			return false
+		}
+		_ = f.Close()
+		return true
+	}
+	for fd, v := range r.fds {
+		if closed(v) {
+			delete(r.fds, fd)
+		}
+	}
+	// The field is left holding the closed file rather than set to nil: a
+	// write to it answers an error, where a nil stream is a different shape
+	// this package's readers would have to learn. Nothing writes after this
+	// in any case — the EXIT trap has run and the shell is on its way out.
+	closed(r.Stdin)
+	closed(r.Stdout)
+	closed(r.Stderr)
+}
+
+// closeOwnPipe closes a stream a script is dropping, where the file behind it
+// is a process substitution's pipe **this shell made**.
+//
+// `>&-` otherwise takes the reference away and leaves the file open, which
+// costs nothing while nobody is waiting on it and is a hang the moment
+// somebody is: the body of a `>(cmd)` reads until the writing end closes, and
+// after `exec > >(cat); exec >&-` the only holder of that end is a shell that
+// has forgotten it. Measured 2026-09-12, `exec > >(cat); printf hi; exec >&-`
+// is `hi` at status 0 in bash 5.3 and bash 3.2, where the close is a close.
+//
+// **A pipe this shell made and no other file**, which is the whole of the
+// rule and is why it lives here rather than in redirect.go: a script may aim
+// a descriptor at a file the *caller* opened and handed to the Runner, and
+// closing one of those is closing something that is not ours — the same line
+// InheritedFiles draws. The shell's own pipes are the ones it can name, so
+// naming them is the test.
+func (r *Runner) closeOwnPipe(v any) {
+	f, ok := v.(*os.File)
+	if !ok {
+		return
+	}
+	name := f.Name()
+	for _, p := range r.procSubs {
+		if p.path == name {
+			_ = f.Close()
+			return
+		}
+	}
+	for _, p := range r.heldProcSubs {
+		if p.path == name {
+			_ = f.Close()
+			return
+		}
 	}
 }
 

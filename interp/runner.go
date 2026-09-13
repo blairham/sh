@@ -339,8 +339,13 @@ type Runner struct {
 
 	// procSubs are the named pipes this command's process substitutions made,
 	// waiting to be removed once it is done with them.
-	procSubs    []procSubPipe
-	procSubHome *procSubDirs
+	procSubs []procSubPipe
+	// heldProcSubs are the ones removeProcSubs could not finish with, because
+	// one of this shell's *own* descriptors was still open on the pipe —
+	// `exec > >(cmd)` is the shape. They keep until the shell itself ends,
+	// which is the descriptor's real lifetime; see endHeldProcSubs.
+	heldProcSubs []procSubPipe
+	procSubHome  *procSubDirs
 	// pipeEnd is set on the runner that is a process substitution's *body*,
 	// and is the end of that substitution's pipe the shell holds. It is
 	// there so a job the body backgrounds can keep the pipe open past the
@@ -2113,6 +2118,12 @@ func (r *Runner) clone() *Runner {
 	// `cat <(echo one) <(echo two)` reported a bad file descriptor for the
 	// half it had already opened.
 	c.procSubs = nil
+	// And the same for the ones the shell is still holding a descriptor onto.
+	// They belong to whichever shell opened them: a subshell must not close
+	// its parent's pipe on the way out, nor wait for a body the parent is
+	// going to wait for itself. `( exec > >(cat) )` gets its own entry here
+	// and joins it at its own end — see endHeldProcSubs.
+	c.heldProcSubs = nil
 	// Every table the clone must own rather than share. One list, in one
 	// place, with a test that fails when a new one is added — see
 	// clonetables.go for why that is a check rather than a convention.
@@ -2758,6 +2769,10 @@ func (r *Runner) Finish(ctx context.Context) int {
 	// is what shipped: CleanUp existed, was tested, and was called by nothing
 	// outside interp's own suite, so every invocation of every dialect binary
 	// that used `<(…)` left its directory in /tmp. See #1284.
+	// Before the directory goes, and after the EXIT trap has had its say —
+	// the trap writes to the shell's standard output, which for the shape
+	// this is about *is* the pipe a body is reading. See endHeldProcSubs.
+	r.endHeldProcSubs()
 	r.cleanUpAtEnd()
 	if r.killedBy != "" && r.DieBySignal != nil {
 		// Last, because a shell that is dying still runs its EXIT trap first

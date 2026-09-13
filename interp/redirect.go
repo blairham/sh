@@ -1137,10 +1137,13 @@ func (r *Runner) dupFd(fd int, target, written string, opened map[int]io.Writer)
 		delete(opened, fd)
 		switch fd {
 		case 0:
+			r.closeOwnPipe(r.Stdin)
 			r.Stdin = closedFd{}
 		case 2:
+			r.closeOwnPipe(r.Stderr)
 			r.Stderr = closedFd{}
 		case 1:
+			r.closeOwnPipe(r.Stdout)
 			r.Stdout = closedFd{}
 			// Recorded, because one dialect stays quiet about a failed write
 			// exactly when the command that wrote closed the stream itself.
@@ -1149,6 +1152,7 @@ func (r *Runner) dupFd(fd int, target, written string, opened map[int]io.Writer)
 		default:
 			// Closing a descriptor that was never open is not an error in
 			// any shell measured, so neither is deleting a missing entry.
+			r.closeOwnPipe(r.fds[fd])
 			delete(r.fds, fd)
 		}
 		return nil

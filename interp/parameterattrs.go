@@ -94,8 +94,12 @@ func (r *Runner) ParameterAttributes(name string) (ParameterAttributes, bool) {
 		return ParameterAttributes{}, false
 	}
 	a := ParameterAttributes{
-		Kind:  r.parameterKind(name),
-		Local: r.localCell(name),
+		Kind: r.parameterKind(name),
+		// Either a declaration in the current scope shadowed the name, or a
+		// call opened it and said so — see Runner.MarkLocal. The scope stack
+		// cannot answer for the second, because a produced parameter arrives
+		// and leaves without one being entered.
+		Local: r.localCell(name) || r.localMarked[name],
 		// isExported rather than the table, because the table is a
 		// tri-state and a name the *environment* supplied is spoken for by
 		// neither entry: reading it directly reported `$PATH` as an ordinary

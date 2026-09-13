@@ -2096,6 +2096,13 @@ type Runner struct {
 	// the same letter for a different attribute that does *not* hide, which
 	// is why the dialect decides who may set it — see Semantics.DeclareOptions.
 	hidden map[string]bool
+	// localMarked names a parameter a *call* opened, which the shell reports
+	// as local without there being a function scope holding it. It is what
+	// localCell cannot see: a produced parameter is registered and taken away
+	// again by the code running the call rather than by entering and leaving
+	// a scope, so the fact the shell states about it has to be stated too.
+	// See Runner.MarkLocal.
+	localMarked map[string]bool
 	// unique names keep only the first occurrence of each element —
 	// `typeset -U`. A property of the name like the others, consulted by
 	// every write rather than by the one declaration that set it, which is

@@ -44,6 +44,15 @@ func Dialect() syntax.Dialect {
 	d.BareNegationReach = syntax.BareNegationAtEitherPlace
 	// And a second `!` inverts the first, as in bash: `! ! true` answers 0.
 	d.RepeatedNegationToggles = true
+	// A process substitution stands only where a command takes a word — an
+	// argument, or a file redirection's target. In a `[[ ]]` operand, a
+	// `case` subject or pattern, a loop header's list, an array literal or a
+	// here-string it is `` `<(' unexpected `` while reading, before anything
+	// in the input has run. See
+	// syntax.Dialect.ProcessSubstitutionOnlyWhereACommandTakesAWord for the
+	// rows, and for why this is a grammar flag and not the condition axis
+	// that answers zsh (#930).
+	d.ProcessSubstitutionOnlyWhereACommandTakesAWord = true
 	d.ParamIndirection = true
 	// A C-style `for` header may hold more than the two separators its three
 	// expressions need, as in zsh: the leftover text belongs to the third

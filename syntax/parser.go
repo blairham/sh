@@ -1946,6 +1946,13 @@ func (p *Parser) parseRedirect() *Redirect {
 	// rebuilt from the spans: `$e` and `${e}` are the same word and not the
 	// same text, and it is the text that goes in the message.
 	r.Text = p.textBetween(p.tok.Pos, p.tok.End)
+	if r.Op == TokTLess && p.refuseProcSubstOutOfPlace(r.Word) {
+		// A here-string's operand is text to be fed in rather than a file to
+		// be opened, and the dialect that admits `cat < <(:)` refuses
+		// `cat <<< <(:)` while reading. The operator is what separates them,
+		// so it is tested here rather than in the helper (#930).
+		return nil
+	}
 	if r.Op.IsHeredoc() {
 		// Any quoting *anywhere* in the delimiter makes the whole body
 		// literal, and a backslash counts. Both are detected the same way:
@@ -2594,7 +2601,13 @@ func (p *Parser) parseAssign(h assignHead) *Assign {
 		p.next()
 		p.skipArrayElementSeparators(false)
 		for p.tok.Kind == TokWord && p.err == nil {
-			a.Elems = append(a.Elems, p.word())
+			el := p.word()
+			// An element is not a word a command takes, and one dialect
+			// refuses a process substitution there while reading (#930).
+			if p.refuseProcSubstOutOfPlace(el) {
+				break
+			}
+			a.Elems = append(a.Elems, el)
 			if p.skipArrayElementSeparators(true) {
 				break
 			}
@@ -3137,6 +3150,68 @@ func (p *Parser) failGroupOpeningAPatternOperand(pos Pos) {
 		Pos: pos, Kind: ErrUnexpected,
 		Token: "(", Class: ClassOperator,
 		Msg: "`(' unexpected",
+	}
+}
+
+// refuseProcSubstOutOfPlace refuses a process substitution carried by a word
+// that does not stand where a command takes one, and reports whether it did.
+//
+// One helper called from the five positions the panel measures rather than a
+// test written out at each: see
+// [Dialect.ProcessSubstitutionOnlyWhereACommandTakesAWord], where the rows
+// are. The five are a `[[ ]]` operand, a `case` subject, a `case` arm's
+// pattern, a loop header's word list and an array literal's element, plus a
+// here-string's operand — which is a redirection whose target is *text* to be
+// fed in rather than a file to be opened, and is refused where `< <(:)` is
+// taken.
+//
+// The word is scanned rather than its first span tested, because the opener
+// need not begin it: `[[ x == a<(:) ]]` carries the substitution behind a
+// literal and ksh93 refuses it there too.
+func (p *Parser) refuseProcSubstOutOfPlace(w *Word) bool {
+	if w == nil || !p.dialect.ProcessSubstitutionOnlyWhereACommandTakesAWord {
+		return false
+	}
+	for _, s := range w.Spans {
+		opener, ok := procSubstOpener(s.Kind)
+		if !ok {
+			continue
+		}
+		p.failProcSubstOutOfPlace(s.Pos, opener)
+		return true
+	}
+	return false
+}
+
+// procSubstOpener is the two characters a process substitution is refused by
+// name as, and whether the span is one at all.
+func procSubstOpener(k SpanKind) (string, bool) {
+	switch k {
+	case ProcSubstIn:
+		return "<(", true
+	case ProcSubstOut:
+		return ">(", true
+	case ProcSubstFile:
+		return "=(", true
+	}
+	return "", false
+}
+
+// failProcSubstOutOfPlace records a process substitution's opener standing
+// where the dialect has no word for it.
+//
+// Its own recorder rather than the token path's, and for the same reason
+// failGroupOpeningAPatternOperand has one: there is no token. The opener was
+// folded into a word by the lexer, and what is refused is the two characters
+// the fold began at.
+func (p *Parser) failProcSubstOutOfPlace(pos Pos, opener string) {
+	if p.err != nil {
+		return
+	}
+	p.err = &Error{
+		Pos: pos, Kind: ErrUnexpected,
+		Token: opener, Class: ClassOperator,
+		Msg: "`" + opener + "' unexpected",
 	}
 }
 
@@ -4345,7 +4420,15 @@ func (p *Parser) itemList(items *[]*Word, end Pos) Pos {
 	p.lex.inArgument = true
 	p.next()
 	for p.tok.Kind == TokWord && p.err == nil {
-		*items = append(*items, p.word())
+		w := p.word()
+		// Nor is a loop header's word, in the same dialect and for the same
+		// reason: `for i in <(:)` and `select i in <(:)` are refused while
+		// reading where `for i in a; do echo <(:); done` — the body, which
+		// is commands — is not (#930).
+		if p.refuseProcSubstOutOfPlace(w) {
+			break
+		}
+		*items = append(*items, w)
 	}
 	p.lex.inArgument = saved
 	if n := len(*items); n > 0 {
@@ -4761,6 +4844,11 @@ func (p *Parser) parseCase() Command {
 		p.fail("expected a word after `case`")
 		return c
 	}
+	// The subject stands where no command takes a word, so one dialect
+	// refuses a process substitution in it while reading (#930).
+	if p.refuseProcSubstOutOfPlace(c.Word) {
+		return c
+	}
 	p.skipNewlines()
 	inEnd := p.tok.End
 	// An arm begins where no command may, so `((` there is the arm's own
@@ -4980,6 +5068,10 @@ func (p *Parser) casePatterns(it *CaseItem, parenthesized bool) bool {
 			w := p.word()
 			if w == nil {
 				p.failUnexpected("")
+				return false
+			}
+			// And neither does an arm's pattern (#930).
+			if p.refuseProcSubstOutOfPlace(w) {
 				return false
 			}
 			it.Patterns = append(it.Patterns, w)

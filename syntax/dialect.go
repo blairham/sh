@@ -3600,6 +3600,71 @@ type Dialect struct {
 	// in the panel does, and answered with the subject quietly trimmed.
 	ProcessSubstitutionInParamOperand bool
 
+	// ProcessSubstitutionOnlyWhereACommandTakesAWord refuses `<(cmd)` and
+	// `>(cmd)` **while reading** anywhere but the two places a command takes
+	// a word: an argument of a simple command, and the target of a file
+	// redirection. The refusal names the opener — `` `<(' unexpected `` — and
+	// abandons the input, the way any other token in the wrong place does.
+	//
+	// ksh93 alone, of the three panel members that have the construct.
+	// Measured 2026-09-13, `env -i PATH=/usr/bin:/bin` with a scratch HOME,
+	// ksh93u+ 2012-08-01 over `-c`, stdin on the null device:
+	//
+	//	[[ x == <(:) ]]                   `<(' unexpected, status 3
+	//	[[ -f <(:) ]]                     the same
+	//	[[ <(:) ]]                        the same
+	//	case <(:) in *) :;; esac          the same
+	//	case x in <(:)) :;; esac          the same
+	//	for i in <(:); do :; done         the same
+	//	select i in <(:); do break; done  the same
+	//	a=( <(:) )                        the same
+	//	cat <<< <(:)                      the same
+	//	[[ x == >(:) ]]                   `>(' unexpected, status 3
+	//
+	//	echo <(:)                         /dev/fd/3
+	//	cat <(:)                          runs
+	//	: <(:)                            runs
+	//	set -- <(:)                       /dev/fd/3
+	//	cat < <(:)                        runs — a redirection target
+	//	for i in a; do echo <(:); done    /dev/fd/3 — the body is commands
+	//
+	// **The refusal is at the parse and not at the run**, which the last row
+	// of the first block is not enough to show. `false && [[ x == <(:) ]];
+	// echo reached` prints nothing and exits 3: the condition is in a branch
+	// never taken, so a shell refusing it at the run would have printed
+	// `reached`.
+	//
+	// **This is why the flag is not named for the condition.** #930 was filed
+	// from the `[[ ]]` row alone, and a flag spelled "a condition's operand
+	// may carry one" would have made this shell accept the other eight —
+	// encoding a rule ksh93 does not have. The measured rule is about where a
+	// *word* stands, and the condition is one of five positions that are not
+	// it.
+	//
+	// It is a grammar flag rather than the
+	// interp.Semantics.ProcessSubstitutionInCondition axis because an axis
+	// cannot carry a moment. That axis says whether the substitution may
+	// stand as a condition's operand and is still the right question for zsh,
+	// which reads the word and then refuses it at the run, in a sentence of
+	// its own and at status 2. Both shells say no; only this one says it
+	// before anything has run.
+	//
+	// Two boundaries the measurement draws that this flag deliberately does
+	// not reach, each recorded so that a later reading does not mistake them
+	// for oversights:
+	//
+	//   - At the *start* of a command ksh93 never lexes the opener at all,
+	//     `<` being a redirection operator there: `if <(:); then :; fi`,
+	//     `echo | <(:)` and `! <(:)` are `` `)' unexpected ``, naming the
+	//     paren rather than the pair. That is the lexer's rule about `<` and
+	//     not the grammar's about `<(`, and this shell reads the opener there
+	//     as a word.
+	//   - The opener also *ends the word before it* in ksh93 — `echo a<(:)b`
+	//     writes three fields, `a`, the path and `b` — where this shell keeps
+	//     one. A separate fact about word boundaries, measured here so it is
+	//     not rediscovered as this rule.
+	ProcessSubstitutionOnlyWhereACommandTakesAWord bool
+
 	// FdVariableRedirections is `{name}>file` and its family: the shell
 	// picks the descriptor and the variable receives its number. Consumed
 	// by the lexer, because the adjacency to the operator is the whole

@@ -5022,6 +5022,41 @@ echo "st=$?"`,
 		Why:     "a condition is not a place a substitution may stand, even at the front of a word where one would otherwise open: the shell with the construct names it and abandons the rest of the input, so neither `miss` nor `after` is printed. Its status is 1 where the same refusal for `<(x)` is 2, which is the only thing that distinguishes the two — the sentence is identical",
 	},
 	{
+		ID: "procsub/a-condition-operand", Category: "redirection",
+		Snippet: `[[ x == <(:) ]] && echo hit || echo miss; echo after`,
+		Why:     "the pipe spelling of the row above, and the position #930 was filed from. Three columns say no and each says it differently: bash performs the substitution and matches against a path, so it prints `miss` and then `after`; zsh reads the word and refuses it at the run, at status 2; ksh93 refuses the opener **while reading**, at status 3, and never runs a line of the input. Neither `hit`, `miss` nor `after` is printed in the two that refuse",
+	},
+	{
+		ID: "procsub/a-condition-in-a-branch-never-taken", Category: "redirection",
+		Snippet: `false && [[ x == <(:) ]]; echo reached`,
+		Why:     "the discriminator that separates the two refusals in the row above, and the reason this shell's ksh answer was in the wrong place rather than merely worded wrong. The condition is in a branch that never runs, so a shell refusing it at the run prints `reached` and a shell refusing it at the parse prints nothing: zsh prints it and ksh93 exits 3 with the input abandoned. A corpus that only held the row above would grade both readings the same",
+	},
+	{
+		ID: "procsub/a-case-arms-pattern", Category: "redirection",
+		Snippet: `case x in <(:)) echo hit;; *) echo star;; esac; echo after`,
+		Why:     "the second of the five positions ksh93 refuses the opener in, and the one that says the rule is not about conditions. bash and zsh take the arm — the pattern is a path, which `x` does not match, so both print `star` — and ksh93 is `` `<(' unexpected `` at status 3 with nothing run. Filed as a fact about a condition's operand; a flag written to that description would have accepted this line",
+	},
+	{
+		ID: "procsub/a-loop-headers-word-list", Category: "redirection",
+		Snippet: `for i in <(:); do echo "[${i%%/*}]"; done; echo after`,
+		Why:     "the third position, and the one that shows the refusal is the *header's* and not the loop's: bash and zsh iterate once over a path, and `for i in a; do echo <(:) >/dev/null; done` — the same construct in the body, where commands stand — runs in ksh93 too. The subject is trimmed to its first path component so the record holds no descriptor number",
+	},
+	{
+		ID: "procsub/an-array-literals-element", Category: "redirection",
+		Snippet: `a=( <(:) ); echo "[${#a[@]}]"; echo after`,
+		Why:     "the fourth. bash and zsh build a one-element array holding a path and ksh93 refuses the opener while reading. A count rather than the element, because the element is a descriptor path and no record can hold one",
+	},
+	{
+		ID: "procsub/a-here-strings-operand", Category: "redirection",
+		Snippet: `cat <<< <(:) > /dev/null; echo "st=$?"; echo after`,
+		Why:     "the fifth, and the one that draws the boundary the flag needs: a here-string's operand is text to be fed in rather than a file to be opened, and ksh93 refuses it there while taking `cat < <(:)`, which is a redirection *target*. So the allowance is not \"a redirection's operand\" — the operator decides, and a rule written from the `<` row alone would have accepted this one",
+	},
+	{
+		ID: "procsub/a-redirection-target-is-taken", Category: "redirection",
+		Snippet: `cat < <(echo hi); echo "st=$?"`,
+		Why:     "the control for the six rows above: the position ksh93 does take, so the refusals are a rule about where a word stands rather than the construct being unreachable outside an argument. Every column with the construct prints `hi` and `st=0`",
+	},
+	{
 		ID: "procsub/an-unterminated-file-substitution", Category: "redirection", SyntaxError: true,
 		Snippet: `cat =(echo hi`,
 		Why:     "the input running out inside one, which every column refuses and none of them refuses in the same words. It is here because the *shape* of getting it wrong is silent: an opener with no wording of its own falls through to the sentence for an unmatched quote, and this reported `unmatched =(` — a complaint about a quote, for a line with none — while `<(` and `$(` beside it were already right. A second construct reaching a shared table through a case nobody added is the defect this repository has now hit five times",

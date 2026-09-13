@@ -59,14 +59,25 @@ import (
 //
 //	core/    every column, every reference. What a script may assume anywhere.
 //	ext/     the substrate's core language beyond POSIX — arrays, [[ ]],
-//	         $'…', +=, substrings, C-style for. Every column but dash and
+//	         $'…', +=, substrings, pattern substitution, C-style for,
+//	         `function`, select and herestrings. Every column but dash and
 //	         ash, which are the measured holdouts.
 //	<shell>/ the answer only that shell has.
 //
-// Only core/ is written today, and [Tiers] and each column's Dirs say so
-// rather than claiming the other two and finding them empty. An empty tier
-// would report a column that ran and agreed, which is the failure this
-// instrument is arranged to make impossible.
+// core/ and ext/ are written; the per-dialect directories are not, and
+// [Tiers] and each column's Dirs say exactly that rather than claiming a
+// directory and finding it empty. An empty tier would report a column that
+// ran and agreed, which is the failure this instrument is arranged to make
+// impossible.
+//
+// ext/ is the second half of docs/spec/shell-matrix.md's decision made
+// executable. That file measured dash as the sole holdout on 13 of 21 rows
+// and chose to exclude it from the core, which is the reason this project
+// exists in the shape it does; core/ proves the first half — that what is
+// left really is common — and ext/ proves the second, that the ksh-family
+// constructs the substrate adopted are common across the shells that have
+// them. dash and ash do not run ext/, and that is the measurement rather than
+// an exemption: they are the shells the boundary was drawn around.
 //
 // [CrossCheck] runs a tier through the *reference shells alone* and asks
 // whether they all wrote the same bytes. That is the half no fetched suite
@@ -96,7 +107,7 @@ var Ours = []Suite{
 		Name:    "bash",
 		Dialect: "bash",
 		Ours:    true,
-		Dirs:    []string{"core"},
+		Dirs:    []string{"core", "ext"},
 		Ext:     OurExt,
 		Lookup:  []string{"/opt/homebrew/bin/bash", "/usr/local/bin/bash", "/bin/bash", "/usr/bin/bash"},
 	},
@@ -104,7 +115,7 @@ var Ours = []Suite{
 		Name:    "zsh",
 		Dialect: "zsh",
 		Ours:    true,
-		Dirs:    []string{"core"},
+		Dirs:    []string{"core", "ext"},
 		Ext:     OurExt,
 		Lookup:  []string{"/opt/homebrew/bin/zsh", "/usr/local/bin/zsh", "/bin/zsh", "/usr/bin/zsh"},
 	},
@@ -112,13 +123,18 @@ var Ours = []Suite{
 		Name:    "ksh93",
 		Dialect: "ksh",
 		Ours:    true,
-		Dirs:    []string{"core"},
+		Dirs:    []string{"core", "ext"},
 		Ext:     OurExt,
 		Lookup:  []string{"/bin/ksh", "/usr/bin/ksh", "/opt/homebrew/bin/ksh93"},
 	},
 	{
 		// The column the fetched panel can never have: dash ships no suite,
 		// so the only questions anyone will ever ask dash about are ours.
+		//
+		// core/ and no ext/, which is the matrix's finding rather than a
+		// gap: dash is the holdout on arrays, [[ ]], $'…', += and the rest,
+		// and running those files here would grade dash on constructs it
+		// has never claimed to have.
 		Name:    "dash",
 		Dialect: "dash",
 		Ours:    true,
@@ -127,15 +143,31 @@ var Ours = []Suite{
 		Lookup:  []string{"/bin/dash", "/usr/bin/dash", "/opt/homebrew/bin/dash"},
 	},
 	{
-		Name:    "ash",
-		Dialect: "ash",
-		Ours:    true,
-		Dirs:    []string{"core"},
-		Ext:     OurExt,
-		Lookup:  []string{"/bin/busybox", "/usr/bin/busybox", "/opt/homebrew/bin/busybox"},
-		NotYet: "there is no BusyBox on a stock macOS machine, so cmd/ash has no reference " +
-			"to be graded against — writing the cases changes nothing until one exists, " +
-			"in a container or on a Linux runner",
+		// The column that was a row until now. There is no BusyBox on a
+		// stock macOS machine and no way to get one, so this said so and
+		// printed itself as unrun — which was honest and still left the
+		// fifth dialect graded by nothing.
+		//
+		// It is reached the way the corpus reaches it: #2263 made the route
+		// a value on the oracle's panel, and [RunContained] reads that same
+		// entry rather than writing a second account of how to get to
+		// BusyBox. The whole sweep runs inside the image, both shells on one
+		// copy of the files, because a BusyBox run in Alpine graded against
+		// a cmd/ash run on macOS would score two operating systems as two
+		// shells.
+		//
+		// Lookup is read inside the image, which is the same field doing the
+		// same job through a different route, and MustReport is what keeps
+		// /bin/ash from being some other shell's symlink in some other
+		// image.
+		Name:       "ash",
+		Dialect:    "ash",
+		Ours:       true,
+		Dirs:       []string{"core"},
+		Ext:        OurExt,
+		Lookup:     []string{"/bin/ash", "/bin/busybox"},
+		Container:  "ash",
+		MustReport: "busybox",
 	},
 }
 
@@ -157,13 +189,13 @@ func FindOurs(dialect string) (Suite, bool) {
 // Each is cross-checked against the references that are supposed to agree
 // about it: every column for core/, everything but dash and ash for ext/.
 //
-// Only core/ is written today. ext/ and the per-dialect directories are the
-// rest of the campaign and arrive with cases rather than with an empty
-// directory — a directory with no files in it would report a column that ran
-// and agreed, which is the mistake this whole instrument is arranged to
-// avoid. [Suite.Missing] is what makes the omission structural: a column may
-// not claim a directory that is not there.
-var Tiers = []string{"core"}
+// core/ and ext/ are written. The per-dialect directories are the rest of the
+// campaign and will arrive with cases rather than as empty directories — a
+// directory with no files in it would report a column that ran and agreed,
+// which is the mistake this whole instrument is arranged to avoid.
+// [Suite.Missing] is what makes the omission structural: a column may not
+// claim a directory that is not there.
+var Tiers = []string{"core", "ext"}
 
 // tier is the suite a cross-check run uses.
 //

@@ -6,10 +6,13 @@ package suite
 import (
 	"bytes"
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -151,12 +154,51 @@ func environ(s Suite, dir, shell string) []string {
 
 // runVersion asks a shell for its build string, bounded like everything else
 // here: a shell that will not answer this is not one to run a suite under.
+//
+// Two spellings, in order, because one shell on the panel answers neither of
+// the usual ones. `--version` covers bash and zsh; BusyBox refuses it and
+// prints its build on the first line of `--help`, which is the only place the
+// string "BusyBox" appears at all. ksh and dash answer nothing here and stay
+// unknown, which is what their rows have always said.
+//
+// The output is combined for the second probe: BusyBox writes its usage to
+// standard error, and a version taken from an empty stream would make
+// [Suite.Believable] refuse a shell that had in fact identified itself.
 func runVersion(ctx context.Context, shell string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, shell, "--version")
-	out, err := cmd.Output()
-	return string(out), err
+	if out, err := exec.CommandContext(ctx, shell, "--version").Output(); err == nil {
+		return string(out), nil
+	}
+	out, err := exec.CommandContext(ctx, shell, "--help").CombinedOutput()
+	if len(bytes.TrimSpace(out)) == 0 {
+		if err == nil {
+			err = errors.New("the shell answered neither --version nor --help")
+		}
+		return "", err
+	}
+	return string(out), nil
+}
+
+// Believable applies [Suite.MustReport]: the path exists and answered, but is
+// it this shell?
+//
+// The same question [oracle.Shell] asks of a panel member, and for the same
+// recorded reason: /bin/sh is BusyBox on Alpine and dash on Debian, so a
+// column that trusted a path recorded the wrong shell and nothing looked
+// wrong. A column reached inside an image is where this matters most, since
+// nobody is going to notice by eye what that path resolved to.
+func (s Suite) Believable(version string) error {
+	if s.MustReport == "" || strings.Contains(strings.ToLower(version), s.MustReport) {
+		return nil
+	}
+	return fmt.Errorf("found, but it reports %q rather than %q, so it is not the shell this column names",
+		firstLine(version), s.MustReport)
+}
+
+func firstLine(s string) string {
+	line, _, _ := strings.Cut(s, "\n")
+	return strings.TrimSpace(line)
 }
 
 // staticParse asks a shell to read a file without running any of it — the

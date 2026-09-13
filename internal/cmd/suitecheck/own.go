@@ -54,10 +54,36 @@ func runOwn(ctx context.Context, root string, bins binSet, timeout time.Duration
 	var refs []suite.Reference
 	var reports []suite.Report
 	var skipped []string
+	var contained []string
 
 	for _, s := range suite.OurColumns() {
 		if s.NotYet != "" {
 			skipped = append(skipped, fmt.Sprintf("%s — %s", s.Name, s.NotYet))
+			continue
+		}
+		if missing := s.Missing(root); len(missing) > 0 {
+			fmt.Fprintf(os.Stderr, "suitecheck: %s claims %s under %s and they are not there\n",
+				s.Name, strings.Join(missing, ", "), root)
+			code = 1
+			continue
+		}
+		if s.Container != "" {
+			// The reference exists nowhere on this machine, so the whole
+			// sweep goes into the image: see suite.RunContained. The binary
+			// is cross-compiled there rather than taken from -own-bin,
+			// because the one `make suite` built here is for this machine
+			// and the image is Linux.
+			rep, err := suite.RunContained(ctx, s, root, "./cmd/"+s.Dialect, opts)
+			if err != nil {
+				// Loud, and a column rather than a silence. This is the one
+				// column a developer's machine can legitimately fail to
+				// reach, and `ash: not run (no container runtime here)` has
+				// to be impossible to mistake for `ash: agrees`.
+				skipped = append(skipped, fmt.Sprintf("%s — %s", s.Name, err.Error()))
+				continue
+			}
+			reports = append(reports, rep)
+			contained = append(contained, s.Name)
 			continue
 		}
 		reference, found := suite.Locate(s.Lookup)
@@ -83,12 +109,6 @@ func runOwn(ctx context.Context, root string, bins binSet, timeout time.Duration
 			code = 1
 			continue
 		}
-		if missing := s.Missing(root); len(missing) > 0 {
-			fmt.Fprintf(os.Stderr, "suitecheck: %s claims %s under %s and they are not there\n",
-				s.Name, strings.Join(missing, ", "), root)
-			code = 1
-			continue
-		}
 		refs = append(refs, suite.Reference{Name: s.Name, Path: reference})
 		rep, err := suite.Sweep(ctx, s, root, bin, reference, opts)
 		if err != nil {
@@ -111,11 +131,15 @@ func runOwn(ctx context.Context, root string, bins binSet, timeout time.Duration
 	fmt.Println("  the references agreeing proves the construct common — the claim")
 	fmt.Println("  docs/spec/shell-matrix.md makes in prose and nothing until now measured.")
 	fmt.Println()
-	fmt.Println("  core/ is the only tier written so far, and the count above is the whole of")
-	fmt.Println("  what this instrument asks. ext/ — the substrate's core language beyond")
-	fmt.Println("  POSIX — and the per-dialect directories are the rest of #2291, and they")
-	fmt.Println("  arrive as cases rather than as empty directories: a directory with no files")
-	fmt.Println("  in it would report a column that ran and agreed.")
+	fmt.Println("  ext/ is the same claim one step out: the ksh-family constructs the")
+	fmt.Println("  substrate adopted when docs/spec/shell-matrix.md measured dash as the sole")
+	fmt.Println("  holdout on 13 of 21 rows and excluded it. dash and ash do not run ext/, and")
+	fmt.Println("  that absence is the measurement rather than an exemption — they are the")
+	fmt.Println("  shells the boundary was drawn around.")
+	fmt.Println()
+	fmt.Println("  The per-dialect directories are the rest of #2291, and they will arrive as")
+	fmt.Println("  cases rather than as empty directories: a directory with no files in it")
+	fmt.Println("  would report a column that ran and agreed.")
 	fmt.Println()
 
 	for _, name := range suite.Tiers {
@@ -127,6 +151,7 @@ func runOwn(ctx context.Context, root string, bins binSet, timeout time.Duration
 		}
 		printCross(cross)
 	}
+	printCrossOmission(contained)
 
 	if len(skipped) > 0 {
 		fmt.Println("  columns not run")
@@ -150,6 +175,12 @@ func printOwnColumn(rep suite.Report) {
 	fmt.Printf("%s — %d files (%s)\n", s.Name, rep.Files, strings.Join(s.Dirs, "/, ")+"/")
 	fmt.Printf("  reference  %s — %s\n", rep.Reference, rep.ReferenceVersion)
 	fmt.Printf("  ours       %s\n", rep.Ours)
+	if rep.Route != "" {
+		// Said on every run of this column, because the claim is narrower
+		// than the other four make: both shells ran inside an image, so this
+		// pins the behavior of that image rather than of this machine.
+		fmt.Printf("  reached    %s — both shells ran in there, on one copy of the files\n", rep.Route)
+	}
 	fmt.Printf("  parsed     %-9s %5.1f%%   our parser read the whole file\n",
 		fmt.Sprintf("%d/%d", rep.Parsed, rep.Files), 100*rep.ParseRate())
 	fmt.Printf("  strict     %-9s %5.1f%%   every byte and the status identical\n",
@@ -214,6 +245,28 @@ func printOwnTable(reports []suite.Report) {
 			fmt.Sprintf("%d/%d", rep.Strict, rep.Scored),
 			100*rep.LineRate())
 	}
+	fmt.Println()
+}
+
+// printCrossOmission says which columns the cross-check could not include,
+// and why it is a limit of the machine rather than a judgement about them.
+//
+// A column reached inside a container has a reference on a different
+// operating system from the others. Comparing its bytes against theirs would
+// fold a libc diagnostic and a coreutil into the answer and call the result a
+// disagreement between shells, which is the confound the contained sweep was
+// arranged to avoid one level down. So it is left out — and saying so is the
+// point: a cross-check that listed four shells where five columns ran, with
+// nothing explaining the difference, reads as a shell that agreed.
+func printCrossOmission(contained []string) {
+	if len(contained) == 0 {
+		return
+	}
+	fmt.Printf("  not in the cross-check: %s\n", strings.Join(contained, ", "))
+	fmt.Println("    reached inside a container, so its reference is on another operating")
+	fmt.Println("    system. Comparing those bytes against the references here would score a")
+	fmt.Println("    libc diagnostic as a disagreement between two shells. The column is")
+	fmt.Println("    graded against its own reference in there, where both sides match.")
 	fmt.Println()
 }
 

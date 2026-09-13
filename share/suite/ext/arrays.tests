@@ -1,0 +1,74 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Indexed arrays. dash has none at all, which is the row that decided the core
+# boundary, so this file is ext/ rather than core/.
+#
+# No numeric subscript appears anywhere in it, and that is deliberate rather
+# than shy: arrays are ext, array *base* is not. zsh counts from one and the
+# ksh family from zero, so a subscript is a semantics conflict and belongs in
+# the per-dialect directories with the answer each shell actually gives.
+# What is common is construction, length, iteration, the two joins and
+# appending.
+
+a=(one two three)
+printf '%s\n' "count: ${#a[@]}"
+printf '[%s]\n' "${a[@]}"
+
+# Unquoted [@] splits on IFS after expansion; quoted [@] is one word per
+# element however the elements are spelled.
+b=("has space" "two words" plain)
+printf 'quoted:\n'
+printf '  [%s]\n' "${b[@]}"
+printf 'count still: %s\n' "${#b[@]}"
+
+# [*] joins on the first character of IFS inside quotes, and splits like any
+# other word outside them.
+printf '%s\n' "star: ${a[*]}"
+IFS=:
+printf '%s\n' "star with IFS=: ${a[*]}"
+IFS=' '
+
+# The length of one element, addressed by nothing positional.
+first=${a[@]:0:1}
+printf 'length of the first element: %s\n' "${#first}"
+
+# Appending with += extends rather than replaces.
+c=(x)
+c+=(y z)
+printf 'appended: %s elements, [%s]\n' "${#c[@]}" "${c[*]}"
+
+# An array in a for loop, which is the thing the construct is for.
+total=
+for word in "${b[@]}"; do
+  total="$total<$word>"
+done
+printf 'iterated: %s\n' "$total"
+
+# Positional parameters are the array every shell has agreed about since
+# POSIX, and an array sets them.
+set -- "${b[@]}"
+printf 'positional: %s\n' "$#"
+printf '  [%s]\n' "$@"
+
+# An array built out of the positional parameters, and back again. Round
+# tripping is the only assertion here that both halves of the construct are
+# the same list.
+#
+# Two nearby spellings are deliberately absent, and each absence is a
+# measurement rather than caution. `empty=()` makes AT&T ksh93 from 2012
+# report one element, so an empty array literal is a per-dialect answer. And
+# `e=($unquoted)` builds three elements in the ksh family and one in zsh,
+# because zsh does not split an unquoted expansion — that is the word
+# splitting axis, not the array construct, and it belongs where the axis is.
+set -- alpha beta gamma
+e=("$@")
+printf 'round trip: %s elements, [%s]\n' "${#e[@]}" "${e[*]}"
+
+# An element holding an empty string still counts.
+d=("" "")
+printf 'two empties: %s\n' "${#d[@]}"
+
+# unset removes the whole array.
+unset a
+printf 'after unset: %s\n' "${#a[@]}"

@@ -139,6 +139,44 @@ type ContainerReach struct {
 
 func (c *ContainerReach) ref() string { return c.Image + "@" + c.Digest }
 
+// Ref is the image this route runs, repository and digest, for an instrument
+// that has to reach the same shell and must not write down a second pin.
+//
+// The digest is the whole provenance argument above, and it survives only
+// while there is one of it. `make suite`'s ash column reaches BusyBox by this
+// same route and reads this same value: two digests for one shell would drift
+// apart and each would look authoritative, which is the failure this
+// repository has made with a second helper more than once.
+func (c *ContainerReach) Ref() string { return c.ref() }
+
+// Route is the exported name of this route, for a report that has to say how
+// a column was reached.
+func (c *ContainerReach) Route() string { return c.route() }
+
+// Client picks the container command, or says why this machine has none. The
+// error is written for a person: it is the reason a column is absent.
+func (c *ContainerReach) Client(ctx context.Context) (string, error) { return c.client(ctx) }
+
+// Have makes sure the pinned image is on this machine, pulling it if not.
+func (c *ContainerReach) Have(ctx context.Context, cli string) error { return c.have(ctx, cli) }
+
+// Container is the container route a panel member takes, or false if it is an
+// ordinary binary on this machine.
+//
+// It exists so that a second instrument asks the panel how ash is reached
+// rather than answering that question again itself. #2263 made the route a
+// value precisely so there would be one of it.
+func Container(name string) (*ContainerReach, bool) {
+	for _, s := range Panel {
+		if s.Name != name {
+			continue
+		}
+		c, ok := s.Via.(*ContainerReach)
+		return c, ok
+	}
+	return nil, false
+}
+
 func (c *ContainerReach) route() string { return "a container of " + c.ref() }
 
 func (c *ContainerReach) open(ctx context.Context, s Shell) (Found, error) {
@@ -499,26 +537,42 @@ func buildRunner(ctx context.Context) (string, error) {
 }
 
 func compileRunner(ctx context.Context) (string, error) {
-	root, err := moduleRoot()
-	if err != nil {
-		return "", err
-	}
 	dir, err := os.MkdirTemp("", "oracle-runner-")
 	if err != nil {
 		return "", err
 	}
 	bin := filepath.Join(dir, "oraclerunner")
-	build, cancel := context.WithTimeout(ctx, 5*time.Minute)
-	defer cancel()
-	cmd := exec.CommandContext(build, "go", "build", "-o", bin, "./internal/cmd/oraclerunner")
-	cmd.Dir = root
-	// The container is Linux on whatever this machine is, and static: an
-	// image with no libc at all still has to be able to run it.
-	cmd.Env = append(os.Environ(), "GOOS=linux", "GOARCH="+runtime.GOARCH, "CGO_ENABLED=0")
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return "", fmt.Errorf("cross-compiling the container runner: %s", strings.TrimSpace(string(out)))
+	if err := BuildForContainer(ctx, "./internal/cmd/oraclerunner", bin); err != nil {
+		return "", err
 	}
 	return bin, nil
+}
+
+// BuildForContainer cross-compiles a package of this tree for the platform
+// inside the container, and writes it to bin.
+//
+// Exported because the oracle is no longer the only instrument that has to
+// put a piece of this tree inside the image: `make suite`'s ash column runs
+// the suite's own sweep in there. Folding that into this rather than writing
+// a second cross-compile is the rule this repository keeps relearning — a
+// second helper is where the fix that the first one carries goes missing.
+//
+// The build is always Linux, always this machine's architecture, and always
+// static: an image with no libc at all still has to be able to run it.
+func BuildForContainer(ctx context.Context, pkg, bin string) error {
+	root, err := moduleRoot()
+	if err != nil {
+		return err
+	}
+	build, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(build, "go", "build", "-o", bin, pkg)
+	cmd.Dir = root
+	cmd.Env = append(os.Environ(), "GOOS=linux", "GOARCH="+runtime.GOARCH, "CGO_ENABLED=0")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("cross-compiling %s for the container: %s", pkg, strings.TrimSpace(string(out)))
+	}
+	return nil
 }
 
 // moduleRoot walks up for the go.mod this package belongs to.

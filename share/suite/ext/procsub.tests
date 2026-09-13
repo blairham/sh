@@ -1,0 +1,60 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# <(...) — process substitution. dash has none, and bash 3.2 loses it when it
+# is invoked as sh, which is the clearest evidence in the matrix that a
+# dialect is a runtime switch rather than a build. It is ext/.
+#
+# Only the reading form is asked, and only where the result is ordered. >(...)
+# is a write into a process this shell does not wait for, so what reaches the
+# output and in which order is a scheduling question — the harness's repeat
+# check would refuse such a file as unstable, correctly, and an unstable case
+# says nothing about either shell.
+#
+# The name a <(...) expands to is a device path and the number in it is the
+# shell's business, so nothing here prints the word itself. What is asked is
+# what reading it produces.
+
+cat <(printf 'from the substitution\n')
+
+# It is a word, so it stands where a filename stands: as an operand, after a
+# redirection, and more than once in one command.
+cat < <(printf 'redirected in\n')
+cat <(printf 'first\n') <(printf 'second\n')
+
+# The process runs concurrently with the reader, and its output arrives in
+# the order it wrote it.
+cat <(printf 'a\nb\nc\n')
+
+# Reading one line at a time from it, which is the use that avoids the
+# subshell a pipeline would put the loop in — so what the loop assigns is
+# still there afterwards.
+n=0
+while read -r line; do
+  n=$((n + 1))
+done < <(printf 'one\ntwo\nthree\n')
+printf 'the loop saw %s lines and kept the count\n' "$n"
+
+# Nested inside a command substitution, which is where two different
+# mechanisms for the same idea get confused with each other.
+printf 'nested: %s\n' "$(cat <(printf 'inner'))"
+
+# It composes with an ordinary pipeline.
+cat <(printf 'x\ny\n') | while read -r l; do printf 'piped [%s]\n' "$l"; done
+
+# The substituted process sees the shell's variables, because it is a
+# subshell of it rather than an unrelated command.
+v=inherited
+cat <(printf '%s\n' "$v")
+
+# A function may be the process.
+emit() { printf 'from a function\n'; }
+cat <(emit)
+
+# What it produces is readable by an ordinary command that reads to the end.
+wc -l < <(printf 'l1\nl2\nl3\n')
+
+# An empty producer gives an empty read rather than an error.
+printf 'empty produces: ['
+cat <(true)
+printf ']\n'

@@ -1,0 +1,80 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# The [[ ]] conditional command. dash is the holdout, so this is ext/.
+#
+# What makes [[ ]] a construct rather than a spelling of `test` is that it is
+# parsed by the shell: the words inside are not expanded and split the way an
+# ordinary command's are, so an empty variable is still one operand and a
+# pattern on the right of == is a pattern rather than a string.
+
+say() {
+  if "$@"; then printf 'true   %s\n' "$*"; else printf 'false  %s\n' "$*"; fi
+}
+
+# Equality, and the same test spelled with one = rather than two.
+[[ abc == abc ]] && printf 'equal\n'
+[[ abc = abc ]] && printf 'equal, one sign\n'
+[[ abc != abd ]] && printf 'unequal\n'
+
+# The right-hand side is a pattern unless it is quoted, which is the
+# difference from `test`.
+[[ abc == a* ]] && printf 'pattern matched\n'
+[[ abc == "a*" ]] || printf 'quoted pattern did not match a literal\n'
+[[ 'a*' == "a*" ]] && printf 'quoted pattern matched the literal star\n'
+[[ abc != b* ]] && printf 'pattern did not match, negated\n'
+[[ abc == ?b? ]] && printf 'single-character class\n'
+[[ abc == [ab]bc ]] && printf 'bracket expression\n'
+
+# An unquoted empty expansion is still one operand here. In `test` it
+# disappears and leaves a one-argument command.
+empty=
+[[ -z $empty ]] && printf 'empty is empty, unquoted and still one word\n'
+[[ -n "$empty" ]] || printf 'and is not non-empty\n'
+spaced="two words"
+[[ $spaced == "two words" ]] && printf 'unquoted operand did not split\n'
+
+# String ordering, which is the collation of LC_ALL=C the harness sets.
+[[ a < b ]] && printf 'a sorts before b\n'
+[[ B < a ]] && printf 'uppercase sorts first in C\n'
+[[ b > a ]] && printf 'and the other way round\n'
+
+# The arithmetic comparisons, which take the same names as test's.
+[[ 3 -lt 10 ]] && printf 'numeric less-than is numeric\n'
+[[ 3 > 10 ]] && printf 'string greater-than is textual\n'
+
+# && and || inside the brackets are the conditional's own operators, not the
+# shell's list operators, and ! negates.
+[[ -n x && -z "" ]] && printf 'both\n'
+[[ -z x || -n y ]] && printf 'either\n'
+[[ ! -z x ]] && printf 'negated\n'
+[[ ( -n x || -n y ) && ! -n "" ]] && printf 'grouped\n'
+
+# A file test on something the run made itself, so the answer does not depend
+# on what the machine has.
+printf 'contents\n' > afile
+[[ -e afile ]] && printf 'exists\n'
+[[ -f afile ]] && printf 'is a regular file\n'
+[[ -d afile ]] || printf 'is not a directory\n'
+[[ -s afile ]] && printf 'is not empty\n'
+[[ -r afile ]] && printf 'is readable\n'
+[[ -e nosuchfile ]] || printf 'and a name nobody made does not exist\n'
+rm -f afile
+
+# The exit status of the command itself, which is what makes it usable in a
+# list rather than only in an if.
+[[ x == x ]]
+printf 'status when true: %s\n' "$?"
+[[ x == y ]]
+printf 'status when false: %s\n' "$?"
+
+# In a while, and in a function's return value.
+n=0
+while [[ $n -lt 3 ]]; do
+  n=$((n + 1))
+done
+printf 'counted to %s\n' "$n"
+
+isname() { [[ $1 == [a-z]* ]]; }
+say isname alpha
+say isname 9lives

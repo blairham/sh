@@ -316,15 +316,20 @@ dash-suite: ## dash has no suite of its own; prints why
 # the reference shell on the machine is the expectation, exactly as it is for
 # the corpus, and a .right file of ours would let us record our own bug as
 # correct.
+# ash is absent from the loop and from the flags on purpose. Its reference is
+# BusyBox, which exists nowhere on a macOS machine, so that column is reached
+# through the oracle's own container route (#2263) and cross-compiles its own
+# binary for the image — a Mach-O built here would not start in there. With no
+# container runtime the column is printed as unrun, loudly, and the target
+# still exits 0: this is a report, not a gate.
 suite: ## Run our own conformance suite in every dialect and report the per-dialect baseline
 	@mkdir -p $(BINDIR)
-	@for s in bash zsh ksh dash ash; do go build -o $(BINDIR)/own-$$s ./cmd/$$s || exit 1; done
+	@for s in bash zsh ksh dash; do go build -o $(BINDIR)/own-$$s ./cmd/$$s || exit 1; done
 	@go run ./internal/cmd/suitecheck -own -timeout 30s \
 		-own-bin bash=$(BINDIR)/own-bash \
 		-own-bin zsh=$(BINDIR)/own-zsh \
 		-own-bin ksh=$(BINDIR)/own-ksh \
-		-own-bin dash=$(BINDIR)/own-dash \
-		-own-bin ash=$(BINDIR)/own-ash $(ARGS)
+		-own-bin dash=$(BINDIR)/own-dash $(ARGS)
 
 conformance-dialects: ## Grade each dialect binary against the shell it claims to be
 	@mkdir -p $(BINDIR)

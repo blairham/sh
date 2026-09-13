@@ -1,0 +1,77 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# += — appending to a variable rather than replacing it. dash is the holdout,
+# so it is ext/.
+#
+# The operator means two different things depending on what it is applied to,
+# and both are asked here: on an ordinary variable it concatenates text, and
+# inside an arithmetic context it adds. A shell that implemented one and let
+# the other fall through to the wrong one would still pass half of this.
+
+v=abc
+v+=def
+printf '%s\n' "concatenated: $v"
+
+# On an unset variable it is the same as an assignment.
+unset u
+u+=start
+printf '%s\n' "from unset: $u"
+
+# On an empty one too.
+e=
+e+=x
+printf '%s\n' "from empty: [$e]"
+
+# The right-hand side is an ordinary word: it is expanded, it may be quoted,
+# and it may hold separators without splitting.
+tail=TAIL
+v+="$tail"
+printf '%s\n' "expanded: $v"
+v+=' and a space'
+printf '%s\n' "with a space: [$v]"
+v+=$'\ttab'
+printf '%s\n' "with an escape: [$v]"
+
+# Repeated appends build up in order.
+b=
+for w in one two three; do
+  b+="[$w]"
+done
+printf '%s\n' "built: $b"
+
+# It is an assignment, so it can prefix a command and it can be the whole of
+# one, and the status is an assignment's.
+p=pre
+p+=fix
+printf 'status: %s value: %s\n' "$?" "$p"
+
+# Numbers appended to a plain variable concatenate rather than add. This is
+# the case that separates the two meanings.
+n=1
+n+=2
+printf 'plain variable: %s\n' "$n"
+
+# Inside (( )) the same spelling adds, because that is an arithmetic context.
+m=1
+((m += 2))
+printf 'arithmetic: %s\n' "$m"
+((m += m))
+printf 'arithmetic with itself: %s\n' "$m"
+
+# And inside $(( )) as well.
+k=10
+printf 'expansion: %s\n' "$((k += 5))"
+printf 'and it stuck: %s\n' "$k"
+
+# The other compound arithmetic assignments, for the same reason the plain one
+# is here: they share the parser's path.
+((k -= 3)); printf 'minus: %s\n' "$k"
+((k *= 2)); printf 'times: %s\n' "$k"
+((k /= 4)); printf 'divide: %s\n' "$k"
+((k %= 5)); printf 'modulo: %s\n' "$k"
+
+# Appending to an array adds elements rather than characters.
+a=(one)
+a+=(two three)
+printf 'array: %s elements, [%s]\n' "${#a[@]}" "${a[*]}"

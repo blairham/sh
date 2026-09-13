@@ -1,0 +1,69 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# ${v/pat/rep} — pattern substitution. dash is the holdout; the ksh family
+# and zsh all have it, so it is ext/.
+#
+# The pattern is a shell pattern and not a regular expression, and the
+# replacement is a word rather than a template: that pair is what most of the
+# cases below are about, because it is what a script gets wrong.
+
+v=banana
+printf '%s\n' "first:     ${v/a/X}"
+printf '%s\n' "every:     ${v//a/X}"
+printf '%s\n' "anchored at the front: ${v/#b/X}"
+printf '%s\n' "not at the front:      ${v/#a/X}"
+printf '%s\n' "anchored at the end:   ${v/%a/X}"
+printf '%s\n' "not at the end:        ${v/%b/X}"
+
+# An empty replacement deletes, and so does omitting it entirely.
+printf '%s\n' "deleted one:  ${v/a/}"
+printf '%s\n' "deleted all:  ${v//a}"
+printf '%s\n' "deleted none: ${v//z}"
+
+# The pattern is a pattern: classes, the star, the question mark, and the
+# longest match the star can make.
+printf '%s\n' "class:    ${v//[an]/.}"
+printf '%s\n' "question: ${v/?/X}"
+printf '%s\n' "star is greedy: ${v/a*a/-}"
+
+# An ampersand in the replacement is not asked here, and the omission is a
+# measurement: ksh93 and zsh expand it to the text that matched, the way sed
+# does, and bash leaves it as an ampersand. That is a per-dialect answer.
+
+# A slash in the pattern has to be escaped or quoted, because the slash is
+# the operator's own separator.
+path=/usr/local/bin
+printf '%s\n' "first slash:  ${path/\//|}"
+printf '%s\n' "every slash:  ${path//\//|}"
+printf '%s\n' "a whole component: ${path/local\//}"
+
+# The replacement is a word: it is expanded, and a pattern character in it is
+# data rather than a pattern.
+rep=REP
+printf '%s\n' "expanded:  ${v/an/$rep}"
+printf '%s\n' "literal star in the replacement: ${v/an/*}"
+printf '%s\n' "quoted:    ${v/an/"$rep"}"
+
+# Both sides are expanded before the match, so the pattern can be a variable.
+pat=na
+printf '%s\n' "pattern from a variable: ${v//$pat/-}"
+
+# On an empty and on an unset variable the result is empty rather than an
+# error.
+e=
+unset u
+printf '[%s]\n' "${e//a/X}"
+printf '[%s]\n' "${u//a/X}"
+
+# On the positional parameters it applies to each one.
+set -- alpha beta gamma
+printf '[%s]\n' "${@//a/-}"
+printf '%s\n' "joined: ${*//a/-}"
+
+# And it composes with the POSIX prefix and suffix operators, which are the
+# neighbours a reader will reach for next.
+f=archive.tar.gz
+printf '%s\n' "shortest suffix: ${f%.*}"
+printf '%s\n' "longest suffix:  ${f%%.*}"
+printf '%s\n' "substituted:     ${f/.tar.gz/.zip}"

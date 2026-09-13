@@ -1,0 +1,66 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# ${v:offset:length} and ${v:offset} — the substring expansion. dash refuses
+# it, the ksh family and zsh have it, so it is ext/.
+#
+# Offsets here count from zero in every column, which is worth saying next to
+# arrays.tests: the array *base* is a conflict between the ksh family and zsh
+# and a subscript therefore appears nowhere in that file, while a substring
+# offset is not. Both claims are measured by these files rather than recalled.
+
+v=abcdefgh
+printf '%s\n' "whole:      ${v}"
+printf '%s\n' "from 0:     ${v:0}"
+printf '%s\n' "from 3:     ${v:3}"
+printf '%s\n' "from 0 len 3: ${v:0:3}"
+printf '%s\n' "from 3 len 2: ${v:3:2}"
+printf '%s\n' "len 0:      [${v:2:0}]"
+printf '%s\n' "past the end: [${v:20}]"
+printf '%s\n' "len past the end: ${v:6:99}"
+
+# A negative offset counts from the right. The space before the minus is
+# required: ${v:-x} is the default-value operator and means something else
+# entirely, which is the point of asking both on adjacent lines.
+printf '%s\n' "last three: ${v: -3}"
+printf '%s\n' "negative with a length: ${v: -4:2}"
+unset u
+printf '%s\n' "default value, not an offset: ${u:-fallback}"
+
+# The offset and the length are arithmetic, so they take an expression.
+#
+# Spelled with a $ on the name. A bare name inside the offset is an
+# arithmetic context in the ksh family and a history modifier in zsh, which
+# refuses the line — so `${v:n+1:n}` is a per-dialect answer and this asks the
+# spelling all three agree on.
+n=2
+printf '%s\n' "arithmetic: ${v:$n+1:$n}"
+printf '%s\n' "one character in: ${v:$n:1}"
+
+# Substrings of the positional parameters count from one, because $0 is not
+# in the list being sliced. [*] rather than [@] so the slice is one word and
+# what is printed is the slice rather than printf's repetition of its format.
+set -- one two three four
+printf '%s\n' "positional from 1: ${*:1:2}"
+printf '%s\n' "positional from 2: ${*:2}"
+printf 'positional count: %s\n' "$#"
+
+# The length operator is the neighbour of this one and is POSIX, but the
+# combination is what a script actually writes.
+printf 'length: %s\n' "${#v}"
+printf '%s\n' "all but the last: ${v:0:${#v}-1}"
+
+# A substring of an empty and of an unset variable is empty rather than an
+# error, when the shell is not being strict about unset.
+e=
+printf '[%s]\n' "${e:0:3}"
+printf '[%s]\n' "${u:0:3}"
+
+# Quoted, the result is one word however many separators it holds. The
+# unquoted half of that pair is not asked here: an unquoted expansion splits
+# in the ksh family and does not in zsh, which is the word splitting axis
+# rather than anything about substrings.
+s='a b c d e'
+set -- "${s:2}"
+printf 'quoted stayed %s\n' "$#"
+printf '  [%s]\n' "$1"

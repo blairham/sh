@@ -145,6 +145,20 @@ type Suite struct {
 	// NotYet, when set, is why this column is a row rather than a run. It is
 	// printed.
 	NotYet string
+	// Container, when set, is the name of the oracle panel member whose
+	// container route this column's reference is reached by. Empty is a
+	// binary on the machine running the harness, which is every column but
+	// ash.
+	//
+	// A name rather than an image and a digest, so that the pin lives in one
+	// place: see [RunContained]. A second digest for one shell would drift
+	// from the first and both would look authoritative.
+	Container string
+	// MustReport is a lowercase fragment the reference's own version string
+	// must contain for this column to be believed. /bin/sh is BusyBox on
+	// Alpine and dash on Debian, so a column reached by a path alone can
+	// record the wrong shell and look entirely healthy.
+	MustReport string
 
 	// Ours says the suite is this repository's own, committed and readable,
 	// rather than another project's fetched at test time. It is what scopes

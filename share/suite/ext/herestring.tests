@@ -1,0 +1,65 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# <<< — the herestring. dash has no such redirection; the ksh family and zsh
+# do, so it is ext/.
+#
+# It is a redirection rather than an expansion, which is what the cases below
+# are arranged around: it takes one word, it adds a newline, and it composes
+# with the rest of a command's redirections in the ordinary order.
+
+cat <<< 'a plain word'
+cat <<< "a quoted word may hold a newline,
+and both lines arrive"
+
+v=value
+cat <<< "expanded: $v"
+cat <<< 'unexpanded: $v'
+cat <<< $v
+cat <<< $'escaped:\ttab'
+
+# A herestring always ends in exactly one newline, whatever the word did.
+printf 'byte count of a three-character word: '
+cat <<< abc | wc -c
+
+# The empty word is still a line.
+printf 'byte count of the empty word: '
+cat <<< '' | wc -c
+
+# read takes its line from one, which is the commonest use.
+read -r line <<< 'one two three'
+printf 'read the whole line: [%s]\n' "$line"
+read -r a b <<< 'one two three'
+printf 'read two fields: [%s] [%s]\n' "$a" "$b"
+
+# A loop fed by one runs in this shell rather than in a subshell, so what it
+# assigns survives.
+count=0
+while read -r word; do
+  count=$((count + 1))
+done <<< 'only one line'
+printf 'the loop ran %s time and its variable survived\n' "$count"
+
+# It is a redirection on the command, so it stands beside the others and the
+# ordinary left-to-right rules apply.
+cat <<< 'to a file' > out.txt
+printf 'went to the file: '
+cat out.txt
+rm -f out.txt
+
+# On a compound command as well as on a simple one.
+{
+  read -r first
+  printf 'inside the group: %s\n' "$first"
+} <<< 'grouped input'
+
+while read -r x; do printf 'from the while: %s\n' "$x"; done <<< 'looped'
+
+# And a function reads from it like anything else.
+takes() { read -r got; printf 'the function saw: %s\n' "$got"; }
+takes <<< 'passed in'
+
+# Several words are one word only if they were quoted; unquoted they are
+# several arguments to the redirection, which is a syntax error rather than a
+# concatenation, so the portable spelling is the quoted one.
+cat <<< "$(printf 'a b c')"

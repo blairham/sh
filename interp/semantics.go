@@ -6291,6 +6291,41 @@ type Semantics struct {
 	// than false.
 	ArrayLiteralSubscriptIsAKey Answer
 
+	// KeyedLiteralAppendJoinsTheReplacedValue makes a `[k]+=value` element of
+	// a *replacing* keyed literal join the value the name held before the
+	// literal, rather than the value the literal has put there itself.
+	//
+	// `m=(…)` empties the table before it fills it, and the two readings part
+	// over which table the append reads. Measured 2026-09-12 with
+	// `typeset -A m; m[k]=v; m=([k]+=x); typeset -p m`:
+	//
+	//	bash 5.3.15         declare -A m=([k]="vx" )
+	//	bash 5.3.15 as sh   declare -A m=([k]="vx" )
+	//	ksh93               typeset -A m=([k]=x)
+	//	zsh 5.9.2           typeset -A m=( [k]=x )
+	//
+	// — bash builds the replacement beside the old table and asks the *name*
+	// for what to join, so the value it joins is one it is in the middle of
+	// throwing away; ksh93 and zsh join what the literal has built. The
+	// duplicate-key spelling says the same thing twice over:
+	// `typeset -A m; m[k]=v; m=([k]+=x [k]+=y)` is `vy` in bash, where each
+	// element joins that same discarded `v`, and `xy` in the other two, where
+	// the second element joins the first.
+	//
+	// Keyed only, and that is the measurement rather than a narrowing for
+	// convenience: the indexed form is unanimous. `a=(p q r); a=([1]+=Z)` is
+	// one element holding `Z` in all three — the replaced array is gone by
+	// the time the append looks — and `a=([1]=A [1]+=B)` is `AB` everywhere.
+	// bash splits its own two array kinds here and no other column does.
+	//
+	// The *appending* spellings ask nothing. `m+=([k]+=x)` keeps the table,
+	// so the value held before the literal and the value built so far are one
+	// value, and all three shells join it.
+	//
+	// dash and BusyBox ash have no arrays of either kind, so the axis is
+	// absent there rather than false.
+	KeyedLiteralAppendJoinsTheReplacedValue Answer
+
 	// DollarZeroNamesTheInnermostCall makes `$0` the innermost thing the
 	// shell has been called into rather than the shell's own name: the
 	// function being run, or the file being sourced.

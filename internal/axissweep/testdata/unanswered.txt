@@ -95,6 +95,7 @@ ash   IntegerPlusFormTakesAttributesOff
 ash   InteractiveStartupFileWhenLogin
 ash   JobsStateFiltersAccumulate
 ash   KeptTrapListingIncludesExit
+ash   KeyedLiteralAppendJoinsTheReplacedValue
 ash   KeyedTableScalarIsTheFirstValue
 ash   LongestMatchTakesTheWrittenArm
 ash   NegatedTestRecordsThePostNegationStatus
@@ -240,6 +241,7 @@ dash  IntegerPlusFormTakesAttributesOff
 dash  InteractiveStartupFileWhenLogin
 dash  JobsStateFiltersAccumulate
 dash  KeptTrapListingIncludesExit
+dash  KeyedLiteralAppendJoinsTheReplacedValue
 dash  KeyedTableScalarIsTheFirstValue
 dash  LongestMatchTakesTheWrittenArm
 dash  NegatedTestRecordsThePostNegationStatus

@@ -57,14 +57,24 @@ func (r *Runner) expandWordEscaped(w *syntax.Word) []string {
 	// Reading it first is also what keeps a turned-off expansion silent —
 	// an unanswered range axis inside a brace nobody is going to expand is
 	// not a disagreement worth refusing a script over.
-	if words := r.braceExpand(w); !r.noBraceExpand &&
-		(len(words) > 1 || len(words) == 1 && words[0] != w) &&
-		r.ask(r.sem().BraceExpansion, "brace expansion") {
-		var out []string
-		for _, bw := range words {
-			out = append(out, r.expandOneWordFields(bw)...)
+	// A word with no `{` in it anywhere is asked nothing and expanded by
+	// nobody: the scan finds no brace, so braceExpand returns the word it was
+	// given, in a slice built to hold exactly that one word, and every test
+	// below is false. Skipping it is behavior-preserving rather than a
+	// shortcut past the axis — a scan that finds no brace also asks no
+	// question, so there is no answer being stepped over — and it is worth
+	// doing because the slice was a fifth of the allocations in the gate's
+	// workload (#1403), which has no brace in it.
+	if _, hasBrace := findBraceFrom(w.Spans, cursor{0, 0}, '{'); hasBrace {
+		if words := r.braceExpand(w); !r.noBraceExpand &&
+			(len(words) > 1 || len(words) == 1 && words[0] != w) &&
+			r.ask(r.sem().BraceExpansion, "brace expansion") {
+			var out []string
+			for _, bw := range words {
+				out = append(out, r.expandOneWordFields(bw)...)
+			}
+			return out
 		}
-		return out
 	}
 	return r.expandOneWordFields(w)
 }

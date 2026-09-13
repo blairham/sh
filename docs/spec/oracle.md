@@ -367,7 +367,11 @@ disposition of *ignored* survives `exec` — that is the whole of what
 `nohup` does — so a harness launched with SIGHUP ignored hands every
 shell it measures a SIGHUP that is already ignored. bash reports
 `trap -- '' SIGHUP`, and `kill -HUP $$` leaves the shell alive to print
-what came after it. Five of the six panel columns change.
+what came after it. Five of the six panel columns change — measured before
+the panel had a seventh, and **not re-measured since `ash` arrived**
+(#2263). The number is left as the measurement it was rather than scaled,
+because a disposition is a fact about a launch and not something the golden
+record can be re-read for.
 
 That made the headline instrument a function of how the harness was
 launched. Measured against the same binary and the same corpus, a

@@ -1170,12 +1170,12 @@ var Corpus = []Case{
 	{
 		ID: "axis/failed-expansion-abandons-the-line-from-c", Category: "semantics axes",
 		Snippet: "echo pre\necho $((1/0))\necho after\n",
-		Why:     "the same three lines through `-c` rather than a script file, and it is a row about the *absence* of a route rule: the answer is byte-identical to the script one in all six columns. That is worth pinning because the neighboring readonly axis has a route field derived from comparing `-c` with a `;` against a file with newlines, which varied two things at once, and this pair is the shape that keeps the same mistake from being made here (#1171, #1182)",
+		Why:     "the same three lines through `-c` rather than a script file, and it is a row about the *absence* of a route rule: the answer is byte-identical to the script one in four of the seven columns, and the three that differ do so for reasons that are not the axis: bash-as-`sh` exits 127 here and 1 from a file, bash 3.2 numbers the line 1 rather than 2, and ash omits the line prefix. None of the three changes whether the line is abandoned, which is the thing this row is about — and the first two of them were already true when this sentence said `all six` (#2331). That is worth pinning because the neighboring readonly axis has a route field derived from comparing `-c` with a `;` against a file with newlines, which varied two things at once, and this pair is the shape that keeps the same mistake from being made here (#1171, #1182)",
 	},
 	{
 		ID: "axis/a-failed-for-word-list-from-c", Category: "semantics axes",
 		Snippet: "echo pre\nfor i in a $((1/0)) b; do echo \"A$i\"; done\necho after\n",
-		Why:     "the same three lines through `-c` rather than a script file, and its answer is byte-identical to the script row in all six columns — which is the point. A fatality axis measured on the *diagonal* of route-by-separator is confirmatory for both \"the route decides\" and \"the separator decides\", and that is how a route field came to exist for a rule that has none (#1182). The same-program pair is what makes the absence of a route rule a measurement rather than an omission (#1215)",
+		Why:     "the same three lines through `-c` rather than a script file, and its answer is byte-identical to the script row in four of the seven columns, and differs in the same three ways as the row above — a status, a line number and a prefix, none of them the axis — which is the point. A fatality axis measured on the *diagonal* of route-by-separator is confirmatory for both \"the route decides\" and \"the separator decides\", and that is how a route field came to exist for a rule that has none (#1182). The same-program pair is what makes the absence of a route rule a measurement rather than an omission (#1215)",
 	},
 	{
 		ID: "axis/a-failed-case-subject-from-c", Category: "semantics axes",
@@ -4234,7 +4234,7 @@ echo "reached-after st=$?"`,
 		ID: "xtrace/pipeline-order-diverges", Category: "shell options",
 		Snippet:        `set -x; echo a | cat`,
 		ReferenceRaces: true,
-		Why:            "ksh93 usually prints the last element first, which follows from its running that one in the current shell — but only usually: its two processes race to their trace points, 41 runs in 400 come out the other way. Nor is that ksh93's alone, which is what the row looked like until every column was counted rather than the loudest one: bash 5 reorders 5 times in 200, bash 3.2 once in 400 and zsh once in 200, so four of the six columns were seen to answer both ways and only dash held still. A pipeline's elements are separate processes and nothing sequences their trace points, so the order is the scheduler's and not the shell's — a fact about how the trace is emitted rather than about anything measured against it",
+		Why:            "ksh93 usually prints the last element first, which follows from its running that one in the current shell — but only usually: its two processes race to their trace points, 41 runs in 400 come out the other way. Nor is that ksh93's alone, which is what the row looked like until every column was counted rather than the loudest one: bash 5 reorders 5 times in 200, bash 3.2 once in 400 and zsh once in 200, so four of the six columns then in the panel were seen to answer both ways and only dash held still. ash has not been put through the repeat runs — its single recorded cell has the majority order — so it is neither in that four nor beside dash. A pipeline's elements are separate processes and nothing sequences their trace points, so the order is the scheduler's and not the shell's — a fact about how the trace is emitted rather than about anything measured against it",
 	},
 	{
 		ID: "nounset/unset-variable-is-an-error", Category: "shell options",
@@ -9210,7 +9210,7 @@ echo "st=$?"`,
 	{
 		ID: "cmd/function-keyword-with-a-quoted-ordinary-name", Category: "command language",
 		Snippet: `function 'f' { echo p; }; f; echo st=$?`,
-		Why:     "the sharpest control in this group, and the row that says what the quoting is doing. The name is `f` — a name nobody could object to — and the *quotes* are all that is unusual. zsh and ksh93 remove them before reading the name and define `f`; bash 5.3, bash 3.2 and bash-as-sh take the whole word including the quotes and answer `` `'f'': not a valid identifier ``, so the name they refused was never a punctuated one at all. That splits the panel two against three where the punctuated rows split it one against four, which is what says the two questions are different — and it says the quoted-name rows measure the quoting rather than a wider set of name characters, since no set of characters can contain `f`. This implementation reads the name as source text in the bash dialect and as the word's text everywhere else, so all six columns answer as they are measured here (#1566). The flag is syntax.Dialect.FunctionNameIsSourceText",
+		Why:     "the sharpest control in this group, and the row that says what the quoting is doing. The name is `f` — a name nobody could object to — and the *quotes* are all that is unusual. zsh and ksh93 remove them before reading the name and define `f`; bash 5.3, bash 3.2 and bash-as-sh take the whole word including the quotes and answer `` `'f'': not a valid identifier ``, so the name they refused was never a punctuated one at all. That splits the panel two against three where the punctuated rows split it one against four, which is what says the two questions are different — and it says the quoted-name rows measure the quoting rather than a wider set of name characters, since no set of characters can contain `f`. This implementation reads the name as source text in the bash dialect and as the word's text everywhere else, which answered all six columns as they were measured (#1566) and does **not** answer the seventh: ash reads the definition without a word and defines nothing, where ours defines `f` — one of five function-name rows the ash dialect misses the same way (#2590). The flag is syntax.Dialect.FunctionNameIsSourceText",
 	},
 	{
 		ID: "cmd/function-keyword-with-a-quoted-pattern-in-the-name", Category: "command language",
@@ -11958,7 +11958,7 @@ echo unreachable`,
 	{
 		ID: "test/connective-precedence", Category: "conditions",
 		Snippet: `test x -o "" -a ""; echo "l=$?"; test x -a "" -o x; echo "r=$?"; test ! x -a y; echo "n=$?"`,
-		Why:     "the same two words past three, where they are the grammar's connectives and `-a` binds tighter than `-o`. The first is the discriminating one: read with precedence it is `x || (\"\" && \"\")` and true, read left to right it is `(x || \"\") && \"\"` and false. The negation in front of three words negates all three — six columns answer 0 to the third and ksh93 alone answers 1, which is recorded rather than followed",
+		Why:     "the same two words past three, where they are the grammar's connectives and `-a` binds tighter than `-o`. The first is the discriminating one: read with precedence it is `x || (\"\" && \"\")` and true, read left to right it is `(x || \"\") && \"\"` and false. The negation in front of three words negates all three — all seven answer 1 to the third, `x -a y` being true and the negation taking the whole of it. This sentence recorded a ksh93 divergence the golden record does not hold, in either direction; found while re-deriving the panel tallies for #2331, and what is pinned is the unanimity",
 	},
 	{
 		ID: "test/ownership-operators", Category: "conditions",
@@ -18857,7 +18857,7 @@ echo "st=$?"`,
 	//
 	// **A lock cannot be graded in one process and these rows do not try.**
 	// Two shells cannot be started from inside one snippet in a way that is
-	// the same act in all six columns, so what is here is everything a single
+	// the same act in all seven columns, so what is here is everything a single
 	// shell can be held to — the vocabulary, the refusals, the descriptor —
 	// and the exclusion itself is proved against a second process in
 	// dialect/zsh/systemlock_test.go, which is where it belongs because it
@@ -20301,7 +20301,7 @@ echo "st=$?"`,
 	// reads as accepted whether or not the shell would have accepted it.
 	//
 	// `Argv0: "sh"` because that is the one name every column reads `$ENV`
-	// under, which is what makes this the same question in all six.
+	// under, which is what makes this the same question in all seven.
 	{
 		ID: "startup/a-return-in-a-startup-file-stops-it", Category: "invocation",
 		Argv0:   "sh",
@@ -21216,8 +21216,8 @@ echo "st=$?"`,
 	// of these functions is an expectation somebody typed; a row runs the
 	// snippet through real zsh and through this shell and compares what came
 	// back, so the library is graded against the shell it models on the same
-	// footing as the language is. Four of the six columns have no such name,
-	// and they do not all fail the same way: three report the call not found
+	// footing as the language is. Six of the seven columns have no such name,
+	// and they do not all fail the same way: five report the call not found
 	// and carry on, and ksh93 stops at the `autoload -Uz` itself, where
 	// `autoload` is `typeset -fu` and those are not its letters. That is the
 	// fact worth having beside the other two — these functions are zsh's,

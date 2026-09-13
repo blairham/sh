@@ -247,6 +247,12 @@ func Semantics() interp.Semantics {
 	// substitution` at 2 — no subscript reaches a parameter expansion here
 	// at all, so the question is refused one construct earlier than this
 	// axis (#2286).
+	// unanswered AttributeOverAFrozenNameIsRefused: the axis is about a type
+	// **letter** meeting a frozen name, and dash has no letters to bring.
+	// Measured 2026-09-13, `typeset -i q=1` is `typeset: not found` at 127,
+	// so the declaration the axis asks about never happens. `export` over a
+	// `readonly` name — the only attribute this shell has — is taken at 0,
+	// which is a different question and not this one (#2561).
 	// unanswered DeclareMatchingLetter: there is no declaration utility to
 	// spell the letter on. Measured 2026-09-13, `declare -m q=1` and
 	// `typeset -m q=1` are both `not found` at 127, so neither reading of

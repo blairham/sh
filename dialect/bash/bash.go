@@ -768,6 +768,11 @@ func Semantics() interp.Semantics {
 	// expression the parser refused.
 	s.FailedExpansionAbandonsTheLine = interp.Yes
 	s.ReadonlyReassignmentByDeclarationFatal = interp.No
+	// A frozen name refuses a declaration's array literal here as much as it
+	// refuses anything else: measured in 5.3 and in 3.2, `readonly q=1;
+	// declare -g q=(b)` is `q: readonly variable` and the name is untouched,
+	// where zsh retypes it. Both builds, so it is not a version's answer.
+	s.ArrayLiteralOperandRetypesAFrozenScalar = interp.No
 	s.BuiltinSyntaxErrorFatal = interp.No
 	// An error inside a file `.` read ends the shell here, not just the file:
 	// measured, a sourced file whose third line is `echo X${NOPE}` under

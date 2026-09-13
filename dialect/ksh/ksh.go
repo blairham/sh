@@ -618,6 +618,11 @@ func Semantics() interp.Semantics {
 	s.ValuelessDeclarationOfAHeldNameListsIt = interp.No
 	// And a plain word over a name holding an array is taken.
 	s.ScalarOverACompoundIsAnInconsistentType = interp.No
+	// A frozen name refuses a declaration's array literal here, which is the
+	// answer every column but one gives: measured 2026-09-12, `readonly q=1;
+	// typeset -g q=(b)` is `q: is read only` at 1, where zsh replaces the
+	// scalar with an array and carries on.
+	s.ArrayLiteralOperandRetypesAFrozenScalar = interp.No
 	// An exported name whose declaration named a numeric type reaches a
 	// child as `0`, even though the shell itself reads the name as unset:
 	// `typeset -ix Z; env` hands over `Z=0` where `${Z+set}` is empty.

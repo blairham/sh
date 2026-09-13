@@ -1657,6 +1657,12 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 		func(d declaration) bool { return d.exported }); answered {
 		return code
 	}
+	if code, took := r.exportAsADeclaration(args, letters); took {
+		return code
+	}
+	if r.unspecified {
+		return r.status
+	}
 	args, opts, code := r.builtinOptions("export", args, letters)
 	if code != 0 {
 		return code
@@ -4113,8 +4119,10 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 			// always makes one. Adding a guard would change what the axes
 			// this builtin has always reached do, which is not this change's
 			// business, and nothing could exercise it either way.
-			r.declareEmpty(name, fresh, f.export || f.readonly,
-				withoutMatching(f) != (declareFlags{}))
+			if !r.declarationCarriesAnArrayLiteral(name) {
+				r.declareEmpty(name, fresh, f.export || f.readonly,
+					withoutMatching(f) != (declareFlags{}))
+			}
 		}
 		if f.readonly && !f.readonlyOff {
 			r.markReadonly(name)
@@ -4535,4 +4543,76 @@ func (r *Runner) carryUnsetStatus(status, code int) int {
 		return code
 	}
 	return status
+}
+
+// exportAsADeclaration is `export` reading the declaration letters, in the
+// dialect whose `export` is `typeset -gx` under another word — see
+// Semantics.ExportOptions. The second result is whether it took the line.
+//
+// It takes only a line that *wrote* one of those letters. A plain `export
+// A=1`, a bare `export` and `export -p` are the same three commands they were
+// before this existed and go on down the loop below, which is deliberate: the
+// listing has a shape of its own that no declaration writes, and the common
+// path must not be re-routed to reach a letter it never carried.
+//
+// Where it does take the line the whole declaration is Runner.declareNames,
+// which is the same choice `integer` made and for the same reason: the
+// attribute, the arithmetic a later assignment means, the readonly refusal
+// and every letter's meaning come from the one place. A second implementation
+// of `-i` under `export` is the thing that would drift the first time either
+// was measured again.
+//
+// The two attributes the *word* decides are set here rather than read off the
+// letters, because the letters that spell them are the two this dialect
+// refuses: `export -x` and `export -g` are bad options, since the word
+// already says both.
+func (r *Runner) exportAsADeclaration(args []string, letters string) (int, bool) {
+	extra := r.sem().ExportOptions
+	if extra == "" || !hasAnyOption(args, extra) {
+		return 0, false
+	}
+	name := r.inBuiltin
+	if name == "" {
+		name = "export"
+	}
+	rest, f, code := r.parseDeclareFlags(name, args, letters+extra)
+	if code != 0 {
+		return code, true
+	}
+	if f.print || len(rest) == 0 {
+		// A listing after all — `export -p` and `export -i` with no names —
+		// and the listing is the loop's below, not a declaration's.
+		return 0, false
+	}
+	f.export = true
+	// And the *word* asked for it, so a plus word carrying some other letter
+	// may not take it back off: `export +i q=4` is still an export. See
+	// declareFlags.exportForced.
+	f.exportForced = true
+	// No scope is ever taken by this word, which is what the loop below says
+	// too: `export` inside a function attributes the global.
+	f.global = true
+	return r.declareNames(name, rest, f), true
+}
+
+// hasAnyOption reports whether any leading option word of args carries one of
+// these letters, under either sign.
+//
+// The leading words only, and it stops at the first operand: a `-i` inside a
+// *value* — `export t=-i` — is not an option and must not put the line on a
+// route it never asked for. `--` ends them, as it does for every other reader
+// of an option word here.
+func hasAnyOption(args []string, letters string) bool {
+	for _, a := range args {
+		if a == "--" {
+			return false
+		}
+		if len(a) < 2 || (a[0] != '-' && a[0] != '+') {
+			return false
+		}
+		if strings.ContainsAny(a[1:], letters) {
+			return true
+		}
+	}
+	return false
 }

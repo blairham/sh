@@ -33,6 +33,7 @@ ash   ArithSubscriptSkippedWhenNameUnset
 ash   ArithWholeArraySubscriptIsReportedAsBad
 ash   ArithWholeArraySubscriptIsTheSlice
 ash   ArrayLiteralAssignmentStartsTheNameOver
+ash   ArrayLiteralOperandRetypesAFrozenScalar
 ash   ArrayLiteralOverANameNotDeclaredAnArrayStartsItOver
 ash   ArrayLiteralSubscriptIsAKey
 ash   ArrayNameWithoutSubscriptIsTheList
@@ -174,6 +175,7 @@ dash  ArithSubscriptSkippedWhenNameUnset
 dash  ArithWholeArraySubscriptIsReportedAsBad
 dash  ArithWholeArraySubscriptIsTheSlice
 dash  ArrayLiteralAssignmentStartsTheNameOver
+dash  ArrayLiteralOperandRetypesAFrozenScalar
 dash  ArrayLiteralOverANameNotDeclaredAnArrayStartsItOver
 dash  ArrayLiteralSubscriptIsAKey
 dash  ArrayNameWithoutSubscriptIsTheList

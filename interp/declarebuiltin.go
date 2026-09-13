@@ -99,6 +99,15 @@ type declareFlags struct {
 	// carries the type itself — see Semantics.IntegerNameForcesTheAttribute,
 	// which is where the other reading lives.
 	integerForced bool
+	// exportForced records that the *name* the command was called by is what
+	// asked for the export attribute, so a plus word on the same line cannot
+	// take it off again. It is `export` in the dialect whose `export` reads
+	// the declaration letters — the word carries the attribute itself, the
+	// way `integer` carries the type — and the letter that spells it is one
+	// that dialect refuses outright, so nothing else could have written it.
+	// See Semantics.ExportOptions and integerForced just above, which is the
+	// same reading for the same reason.
+	exportForced bool
 	// readonlyOff records the sign of the *last* `r` letter the command
 	// wrote, rather than the sign of its last option word, because those are
 	// not the same question and the letter is the one that decides.
@@ -936,8 +945,10 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 			// reaches the operands after it, and
 			// TestAnUnansweredInheritedTypeAxisRefusesTheNamesAfterItToo
 			// pins that rather than the guard that appeared to do it.
-			r.declareEmpty(name, fresh, df.export || df.readonly,
-				withoutMatching(df) != (declareFlags{}))
+			if !r.declarationCarriesAnArrayLiteral(name) {
+				r.declareEmpty(name, fresh, df.export || df.readonly,
+					withoutMatching(df) != (declareFlags{}))
+			}
 		}
 		if df.readonly && !df.readonlyOff {
 			r.markReadonly(name)
@@ -1530,7 +1541,13 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 		if r.exported == nil {
 			r.exported = map[string]bool{}
 		}
-		r.exported[name] = !f.remove
+		// A plus word takes the attribute off — unless the *name the command
+		// was called by* is what asked for it, which no plus on some other
+		// letter may cancel. The same reading `integer` takes for its own
+		// type letter: measured 2026-09-12, `export +i q=4` still exports in
+		// the shell whose `export` reads the declaration letters, and lists
+		// as `export q=4`. See exportForced.
+		r.exported[name] = !f.remove || f.exportForced
 	}
 	// The case attributes fold at assignment here, which is what bash and
 	// ksh93 do. zsh stores the raw text and folds on *expansion* — every
@@ -3215,4 +3232,24 @@ func (r *Runner) expandAssignArg(w *syntax.Word) string {
 // no mutation could kill.
 func (r *Runner) expandAssignName(w *syntax.Word) string {
 	return r.expandAssignValue(w)
+}
+
+// declarationCarriesAnArrayLiteral reports whether this operand's value is an
+// array literal the command machinery is holding aside — `typeset a=(x y)`,
+// where the parser hands the builtin the bare name and lands the parentheses
+// through Runner.assignOperands.
+//
+// The declaration is *not* valueless, which is the whole of what this is for.
+// The loop reads `hasValue` off a `name=value` word, so an array literal reads
+// as nothing there and the name went to declareEmpty — a store of the empty
+// string, to a name the very next step assigns an array to. Harmless while
+// nothing refused it, and two sentences the moment something did:
+// `readonly q; typeset -g q=(b)` wrote `read-only variable: q` once for the
+// empty this branch stored and once for the array the operand landed (#2250).
+//
+// Every other reader of the same fact already spells it this way beside
+// hasValue — see compoundKindChanged and typeLetterOverAnArrayLiteralRefused
+// — so this is that condition given a name rather than a new rule.
+func (r *Runner) declarationCarriesAnArrayLiteral(name string) bool {
+	return r.literalOperands[name]
 }

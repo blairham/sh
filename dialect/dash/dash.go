@@ -251,6 +251,12 @@ func Semantics() interp.Semantics {
 	// table and no literal to write one with. Measured 2026-09-12,
 	// `m=([k]+=x)` is `Syntax error: "(" unexpected` before any element is
 	// looked at, so no value is ever joined to anything (#2405).
+	// unanswered ArrayLiteralOperandRetypesAFrozenScalar: there is no
+	// declaration utility and no array literal to be one's operand. Measured
+	// 2026-09-12, `readonly q=1; typeset -g q=(b)` is `Syntax error: "("
+	// unexpected` at 2 — the parenthesis is refused before anything has a
+	// frozen name to think about, so neither half of the question can be put
+	// to this shell (#2250).
 	// unanswered EarlierDeclarationLetterBlocksALaterPlus: there is no
 	// declaration command to write the letter on. `typeset` is not a
 	// builtin here and `integer` is not a word, so neither sign of `-i`

@@ -20872,4 +20872,14 @@ echo "st=$?"`,
 		Snippet: `set -- -x; getopts "a:" o; echo "o=[$o] optarg=[${OPTARG-UNSET}]"`,
 		Why:     "what `getopts` leaves in OPTARG when it reports an option the string does not have. One column empties it and the other three leave it unset, which a script reading `${OPTARG-}` can tell apart -- and the `o=[?]` half says the two are agreeing about everything else (#2057)",
 	},
+	{
+		ID: "decl/an-array-literal-operand-over-a-frozen-scalar", Category: "declarations",
+		Snippet: `readonly q=1; typeset -g q=(b) 2>&1; echo "st=$?"; typeset -p q 2>&1; readonly w=(a); typeset -g w=(b) 2>&1; echo "st=$?"; echo tail`,
+		Why:     "a declaration utility's own `name=(...)` operand over a **frozen** name, which one column takes and the rest refuse. zsh replaces a frozen *scalar* with an array and leaves the freeze on -- `typeset -ar q=( b )`, status 0, and the script carries on -- where bash refuses in both builds and dash has no such operand. The second half is the discriminator that makes it a retype rather than a free hand: a frozen name already **holding** an array refuses the identical line in zsh too, so what the exemption is about is the name leaving the scalar kind. The `tail` says whether the refusal ended the script, which is the third thing the columns disagree about. Filed as a valueless `readonly` freezing here and not in zsh, on a control that measures the other way round -- `readonly q=1; typeset -g q=(b)` prints `tail` at 0 in zsh, and a valueless `readonly` freezes there as everywhere else. See Semantics.ArrayLiteralOperandRetypesAFrozenScalar (#2250)",
+	},
+	{
+		ID: "decl/export-reading-the-declaration-letters", Category: "declarations",
+		Snippet: `typeset -gx -i xi=7 2>/dev/null; typeset -p xi 2>&1; export -i q=4 2>&1; echo "st=$? q=[${q-UNSET}]"; export -r r=1 2>&1; echo "st=$?"; export -A m=(k v) 2>&1; echo "st=$?"`,
+		Why:     "whether `export` reads the same type letters `typeset` does, which is the round trip a state dump depends on: the shell that writes an exported integer as `export -i xi=7` has to read that line back. zsh does -- its `export` is `typeset -gx` under another word and takes every declaration letter but `-A`, `-g`, `-m`, `-x`, `-f` and `-z` -- and bash, ksh93 and dash refuse `-i` outright, which is why the first field is printed as well as the letters: a column with no `typeset -p` has nothing to round-trip and its refusal is about the word rather than the letter. The `-A` field is the near miss, and it is a refusal in every column including the one that takes the rest, so the row says the accepted set is a set. This shell wrote the `export -i` line and then refused to read it, leaving the name simply unset while the script carried on. See Semantics.ExportOptions (#2175)",
+	},
 }

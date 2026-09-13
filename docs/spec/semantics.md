@@ -4723,8 +4723,8 @@ the bare `setopt` listing rather than remove them, because this shell's state
 genuinely differs from zsh's. It was a trade rather than a fix.
 
 **`interactivecomments` is corrected and `banghist` and `hashcmds` are not**
-(#2516). The two are not one situation, and the kind is what tells them
-apart. A `recorded` name has no state behind it to diverge: its reader is the
+(#2516). The three were never one situation, and the *kind* is what tells
+them apart. A `recorded` name has no state behind it to diverge: its reader is the
 recorded default XOR a stored deviation, so a fresh shell reads back whatever
 the table says and deviates from nothing. Correcting such a default adds no
 row to the bare `setopt` listing — measured, that listing is byte-identical
@@ -4733,9 +4733,11 @@ and the correction is free. `hashcmds` is the one it does apply to: it is
 backed by the substrate's `hashall`, which is off because nothing is hashed
 here (interp/shellopts.go records that as a deliberate refusal to report a
 state the shell is not in), so its default and its state are two facts and
-not one. `banghist` is recorded and so is the corrected name, but it has not
-been measured for its own consequences and is left alone here rather than
-swept in alongside.
+not one, and correcting the first alone would print `nohashcmds` as a
+deviation where real zsh prints nothing — a row moved rather than removed.
+`banghist` is the same `recorded` kind as the name corrected here and so is
+correctable the same way, but it has not been measured for its own
+consequences and is left flagged rather than swept in alongside.
 
 What the correction cost to leave undone is worth recording, because it is
 what found it. F-Sy-H reads `interactivecomments` to choose a tokenizer; told

@@ -52,6 +52,12 @@ func TestTheWidthAttributePresentsTheValue(t *testing.T) {
 		// A local takes the letter too, and it is a local.
 		{`f(){ typeset -L 5 a=ab; print -r -- "[$a]"; }; f; print -r -- "[$a]"`, "[ab   ]\n[]\n"},
 		{`f(){ local -R 4 a=ab; print -r -- "[$a]"; }; f`, "[  ab]\n"},
+		// And `export`, which is this word's declaration under another name
+		// and takes the same letters bar six — these three are not among the
+		// six. Its listing carries the letter, the width and the export at
+		// once, so it is the row that says both halves landed.
+		{`export -L 5 a=ab; print -r -- "[$a]"; typeset -p a`, "[ab   ]\nexport -L5 a=ab\n"},
+		{`export -Z 4 c=7; typeset -p c`, "export -Z4 c=7\n"},
 	} {
 		t.Run(tc.src, func(t *testing.T) {
 			out, st := runZsh(t, dir, tc.src)

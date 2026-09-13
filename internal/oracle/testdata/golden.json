@@ -61946,6 +61946,57 @@
         "TimedOut": false
       }
     },
+    "declare/export-spells-the-width-letters-too": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: export: line 0: illegal option -L",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "1[]~2[]~3[]",
+        "Stderr": "\u003cshell\u003e: line 1: export: -L: invalid option~export: usage: export [-fn] [name[=value] ...] or export -p [-f]~\u003cshell\u003e: line 1: typeset: a: not found~\u003cshell\u003e: line 2: export: -R: invalid option~export: usage: export [-fn] [name[=value] ...] or export -p [-f]~\u003cshell\u003e: line 2: typeset: b: not found~\u003cshell\u003e: line 3: export: -Z: invalid option~export: usage: export [-fn] [name[=value] ...] or export -p [-f]~\u003cshell\u003e: line 3: typeset: c: not found",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: export: -L: invalid option~export: usage: export [-fn] [name[=value] ...] or export -p [-f]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "1[]~2[]~3[]",
+        "Stderr": "\u003cshell\u003e: line 0: export: -L: invalid option~export: usage: export [-nf] [name[=value] ...] or export -p~\u003cshell\u003e: line 0: typeset: a: not found~\u003cshell\u003e: line 1: export: -R: invalid option~export: usage: export [-nf] [name[=value] ...] or export -p~\u003cshell\u003e: line 1: typeset: b: not found~\u003cshell\u003e: line 2: export: -Z: invalid option~export: usage: export [-nf] [name[=value] ...] or export -p~\u003cshell\u003e: line 2: typeset: c: not found",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: export: Illegal option -L",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: export: -L: unknown option~Usage: export [-p] [name[=value]...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "1[ab   ]~export -L5 a=ab~2[  ab]~export -R4 b=ab~3[0007]~export -Z4 c=7",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "declare/f-says-a-background-statement-back": {
       "ash": {
         "Stdout": "",

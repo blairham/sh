@@ -177261,6 +177261,261 @@
         "TimedOut": false
       }
     },
+    "type/the-word-letter-names-a-builtin": {
+      "ash": {
+        "Stdout": "st=127",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: line 1: type: -w: invalid option~type: usage: type [-afptP] name [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: line 1: type: -w: invalid option~type: usage: type [-afptP] name [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: line 0: type: -w: invalid option~type: usage: type [-afptP] name [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "-w: not found~print: not found~st=127",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: whence: -w: unknown option~Usage: whence [-afpqv] name  ...",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "print: builtin~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "type/the-word-letter-names-a-file-command": {
+      "ash": {
+        "Stdout": "/bin/sh",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: type: -w: invalid option~type: usage: type [-afptP] name [name ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: type: -w: invalid option~type: usage: type [-afptP] name [name ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 0: type: -w: invalid option~type: usage: type [-afptP] name [name ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "-w: not found~sh is /bin/sh",
+        "Stderr": "",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: whence: -w: unknown option~Usage: whence [-afpqv] name  ...",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "sh: command",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "type/the-word-letter-names-a-reserved-word": {
+      "ash": {
+        "Stdout": "if",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: type: -w: invalid option~type: usage: type [-afptP] name [name ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: type: -w: invalid option~type: usage: type [-afptP] name [name ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 0: type: -w: invalid option~type: usage: type [-afptP] name [name ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "-w: not found~if is a shell keyword",
+        "Stderr": "",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: whence: -w: unknown option~Usage: whence [-afpqv] name  ...",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "if: reserved",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "type/the-word-letter-names-nothing": {
+      "ash": {
+        "Stdout": "st=127",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: line 1: type: -w: invalid option~type: usage: type [-afptP] name [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: line 1: type: -w: invalid option~type: usage: type [-afptP] name [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: line 0: type: -w: invalid option~type: usage: type [-afptP] name [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "-w: not found~nosuchcommandzz: not found~st=127",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: whence: -w: unknown option~Usage: whence [-afpqv] name  ...",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "nosuchcommandzz: none~st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "type/the-word-letter-takes-an-alias-first": {
+      "ash": {
+        "Stdout": "alias pz='print'",
+        "Stderr": "",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: type: -w: invalid option~type: usage: type [-afptP] name [name ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: type: -w: invalid option~type: usage: type [-afptP] name [name ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 0: type: -w: invalid option~type: usage: type [-afptP] name [name ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "-w: not found~pz is an alias for print~print: not found",
+        "Stderr": "",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: whence: -w: unknown option~Usage: whence [-afpqv] name  ...",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "pz: alias~print: builtin",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "type/what-a-name-would-run": {
       "ash": {
         "Stdout": "cd is a shell builtin~if is a shell keyword~ls is /bin/ls",

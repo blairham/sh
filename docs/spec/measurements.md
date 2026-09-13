@@ -3222,6 +3222,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | `cd/a-letter-no-shell-in-the-panel-has` | `st=2~stayed` **2>** `<shell>: 2: cd: Illegal option -Z` | `st=2~stayed` **2>** `<shell>: line 2: cd: -Z: invalid option~cd: usage: cd [-L\|[-P [-e]]] [-@] [dir]` | `st=2~stayed` **2>** `<shell>: line 2: cd: -Z: invalid option~cd: usage: cd [-L\|[-P [-e]]] [-@] [dir]` | `st=1~stayed` **2>** `<shell>: line 1: cd: -Z: invalid option~cd: usage: cd [-L\|-P] [dir]` | `st=2~stayed` **2>** `<shell>[2]: cd: -Z: unknown option~Usage: cd [-LP] [directory]~   Or: cd [ options ] old new` | `st=1~stayed` **2>** `<shell>:cd:2: string not in pwd: -Z` | `st=2~stayed` **2>** `<shell>: cd: line 1: illegal option -Z` |
 | `cd/a-directory-whose-name-begins-with-a-dash` | `st=0~moved~st=2~stayed` **2>** `<shell>: 6: cd: Illegal option -d` | `st=0~moved~st=2~stayed` **2>** `<shell>: line 6: cd: -d: invalid option~cd: usage: cd [-L\|[-P [-e]]] [-@] [dir]` | `st=0~moved~st=2~stayed` **2>** `<shell>: line 6: cd: -d: invalid option~cd: usage: cd [-L\|[-P [-e]]] [-@] [dir]` | `st=0~moved~st=1~stayed` **2>** `<shell>: line 5: cd: -d: invalid option~cd: usage: cd [-L\|-P] [dir]` | `st=0~moved~st=2~stayed` **2>** `<shell>[6]: cd: -d: unknown option~<shell>[6]: cd: -a: unknown option~<shell>[6]: cd: -s: unknown option~<shell>[6]: cd: -h: unknown option~<shell>[6]: cd: -d: unknown option~<shell>[6]: cd: -i: unknown option~<shell>[6]: cd: -r: unknown option~Usage: cd [-LP] [directory]~   Or: cd [ options ] old new` | `st=0~moved~st=0~moved` | `st=0~moved~st=2~stayed` **2>** `<shell>: cd: line 5: illegal option -d` |
 | `cd/pwd-p-resolves-symlinks` | `1~1` | `1~1` | `1~1` | `1~1` | `1~1` | `1~1` | `1~1` |
+| `type/the-word-letter-names-a-builtin` | `-w: not found~print: not found~st=127` | `st=2` **2>** `<shell>: line 1: type: -w: invalid option~type: usage: type [-afptP] name [name ...]` | `st=2` **2>** `<shell>: line 1: type: -w: invalid option~type: usage: type [-afptP] name [name ...]` | `st=2` **2>** `<shell>: line 0: type: -w: invalid option~type: usage: type [-afptP] name [name ...]` | `st=2` **2>** `<shell>: whence: -w: unknown option~Usage: whence [-afpqv] name  ...` | `print: builtin~st=0` | `st=127` |
+| `type/the-word-letter-names-a-reserved-word` | `-w: not found~if is a shell keyword` *(status 127)* | **2>** `<shell>: line 1: type: -w: invalid option~type: usage: type [-afptP] name [name ...]` *(status 2)* | **2>** `<shell>: line 1: type: -w: invalid option~type: usage: type [-afptP] name [name ...]` *(status 2)* | **2>** `<shell>: line 0: type: -w: invalid option~type: usage: type [-afptP] name [name ...]` *(status 2)* | **2>** `<shell>: whence: -w: unknown option~Usage: whence [-afpqv] name  ...` *(status 2)* | `if: reserved` | `if` |
+| `type/the-word-letter-names-a-file-command` | `-w: not found~sh is /bin/sh` *(status 127)* | **2>** `<shell>: line 1: type: -w: invalid option~type: usage: type [-afptP] name [name ...]` *(status 2)* | **2>** `<shell>: line 1: type: -w: invalid option~type: usage: type [-afptP] name [name ...]` *(status 2)* | **2>** `<shell>: line 0: type: -w: invalid option~type: usage: type [-afptP] name [name ...]` *(status 2)* | **2>** `<shell>: whence: -w: unknown option~Usage: whence [-afpqv] name  ...` *(status 2)* | `sh: command` | `/bin/sh` |
+| `type/the-word-letter-names-nothing` | `-w: not found~nosuchcommandzz: not found~st=127` | `st=2` **2>** `<shell>: line 1: type: -w: invalid option~type: usage: type [-afptP] name [name ...]` | `st=2` **2>** `<shell>: line 1: type: -w: invalid option~type: usage: type [-afptP] name [name ...]` | `st=2` **2>** `<shell>: line 0: type: -w: invalid option~type: usage: type [-afptP] name [name ...]` | `st=2` **2>** `<shell>: whence: -w: unknown option~Usage: whence [-afpqv] name  ...` | `nosuchcommandzz: none~st=1` | `st=127` |
+| `type/the-word-letter-takes-an-alias-first` | `-w: not found~pz is an alias for print~print: not found` *(status 127)* | **2>** `<shell>: line 1: type: -w: invalid option~type: usage: type [-afptP] name [name ...]` *(status 2)* | **2>** `<shell>: line 1: type: -w: invalid option~type: usage: type [-afptP] name [name ...]` *(status 2)* | **2>** `<shell>: line 0: type: -w: invalid option~type: usage: type [-afptP] name [name ...]` *(status 2)* | **2>** `<shell>: whence: -w: unknown option~Usage: whence [-afpqv] name  ...` *(status 2)* | `pz: alias~print: builtin` | `alias pz='print'` *(status 127)* |
 | `type/a-function-and-its-body` | `f is a shell function` | `f is a function~f () ~{ ~    echo hi~}` | `f is a function~f () ~{ ~    echo hi~}` | `f is a function~f () ~{ ~    echo hi~}` | `f is a function` | `f is a shell function from zsh` | `f is a function` |
 | `type/a-body-with-a-construct-in-it` | `f is a shell function` | `f is a function~f () ~{ ~    if true; then~        echo y;~    fi~}` | `f is a function~f () ~{ ~    if true; then~        echo y;~    fi~}` | `f is a function~f () ~{ ~    if true; then~        echo y;~    fi~}` | `f is a function` | `f is a shell function from zsh` | `f is a function` |
 | `type/a-body-with-a-here-document-in-it` | `f is a shell function` | `f is a function~f () ~{ ~    cat <<E~body~E~~    echo after~}` | `f is a function~f () ~{ ~    cat <<E~body~E~~    echo after~}` | `f is a function~f () ~{ ~    cat  <<E~body~E~~    echo after~}` | `f is a function` | `f is a shell function from <script>` | `f is a function` |
@@ -4298,6 +4303,26 @@ grades it and nothing drift-checks it either, for the same reason.
 - `cd/pwd-p-resolves-symlinks` — `pwd -P` reports where the directory is with symlinks resolved, and a plain `pwd` keeps the name it was reached by — both unanimous, and `pwd -L -P` (not shown) lets the last option win in all four as well
   ```sh
   mkdir -p a/b; ln -s a/b l; cd l; pwd -P | grep -c "/a/b$"; pwd | grep -c "/l$"
+  ```
+- `type/the-word-letter-names-a-builtin` — one dialect's `-w` names what a word is as `NAME: kind`, which is how a syntax highlighter classifies every word before it picks a color. The others have no such letter and each refuses it its own way
+  ```sh
+  type -w print; echo "st=$?"
+  ```
+- `type/the-word-letter-names-a-reserved-word` — `reserved` here, where the dialect with `-t` calls the same thing `keyword` — two of the five words differ between the two letters and this is one of them
+  ```sh
+  type -w if
+  ```
+- `type/the-word-letter-names-a-file-command` — `command` for something found on PATH, where `-t` says `file`. The other of the two words the letters disagree about
+  ```sh
+  type -w sh
+  ```
+- `type/the-word-letter-names-nothing` — `none` and a status of 1, where `-t` prints nothing at all and leaves the status to say it. A highlighter reads this line for every word typed, so silence would be indistinguishable from never having asked
+  ```sh
+  type -w nosuchcommandzz; echo "st=$?"
+  ```
+- `type/the-word-letter-takes-an-alias-first` — an alias is named before anything else and a line comes back per operand in the order given, which is the resolution's own order rather than the letter's
+  ```sh
+  alias pz=print; type -w pz print
   ```
 - `type/a-function-and-its-body` — one shell follows the sentence with the function itself, laid out its own way, and the other three stop at the sentence. What is printed is not what was typed — the shell has a tree by then — so this is the one place a shell has to say a command back
   ```sh

@@ -154,7 +154,7 @@ does.
 | code | draws | measured |
 | --- | --- | --- |
 | `%n` | user name, from the password database — **nothing** where the uid has no entry | `bhamilton`; empty at uid 99999 in a container, where bash's `\u` draws `I have no name!` |
-| `%m` `%M` | host to the first dot, and all of it — and `%m` **counts**, see below | as bash's `\h` `\H` |
+| `%m` `%M` | host to the first dot, and all of it — and `%m` **counts**, see below. Both read **`$HOST`**, see below | as bash's `\h` `\H` |
 | `%~` | directory, `$HOME` written `~` | `~`, `~/sub`, `/` |
 | `%d` `%/` | directory, untouched | `/private/tmp/p808/home` |
 | `%c` `%.` | `%~` with the count defaulting to **one** | `~` at `$HOME`, `sub` below it, `/tmp` in `/tmp` |
@@ -223,6 +223,33 @@ enough", since a two-component name answers both readings alike:
 | `%-2m` `%-3m` | `c.d`, `b.c.d` | |
 | `%4m` `%5m` `%-4m` | `a.b.c.d` | at or past the count is the whole name |
 | `%M` `%0M` `%2M` `%-2M` | `a.b.c.d` | **`%M` takes no count at all** |
+
+Both host codes read the parameter **`$HOST`** rather than asking the system
+each time, and that is what makes the table above a thing a test can write
+down. Measured on zsh 5.9.2, 2026-09-13 under `env -i PATH=/usr/bin:/bin`:
+
+| written | drawn | |
+| --- | --- | --- |
+| `printf '%s' "$HOST"` | `Blairs-MacBook-Pro-5.local` | set at startup to the machine's name |
+| `HOST=a.b.c.d; print -rP '%m'` | `a` | an assignment moves the code |
+| `unset HOST; print -rP '[%m]'` | `[]` at status 0 | no parameter, no host — and no complaint |
+| `env HOST=injected.example` | `injected.example` | an inherited one wins, and is exported |
+
+The two facts are separable and both are load-bearing. A shell that set `$HOST`
+and still asked the system in the prompt would answer the machine's own name to
+every row of the count table, which is what this one did until #2576; a real
+`.zshrc` that branches on `[[ $HOST == … ]]` reads the parameter and silently
+takes the wrong arm when it is empty.
+
+It is an **ordinary scalar**, which is measured rather than assumed: `${(t)HOST}`
+is a bare `scalar` where `$UID` is `integer-special` and `$IFS` is
+`scalar-special`, `typeset -p HOST` writes `typeset HOST=…` — `export HOST=…`
+where it was inherited — and `unset HOST` removes it outright rather than
+restoring a default. It is also the opposite answer from the identity parameters
+beside it: `$UID` ignores `env UID=999`, and `%n` ignores `$USER`, `$LOGNAME` and
+`$USERNAME` however they are set. bash has no such parameter at all — `HOSTNAME`
+is bash's own and a different question, and bash's `\h` draws the system's name
+with `HOSTNAME=elsewhere` injected and assigned alike.
 
 A host name reads most-specific first where a path reads it last, which is what
 the reversal is: `%2m` and `%2~` both keep the two components nearest the thing

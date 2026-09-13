@@ -416,3 +416,65 @@ func TestAHostCountSplitsOnDotsAndNothingElse(t *testing.T) {
 		}
 	}
 }
+
+// A dialect can say the machine's name is a *parameter*, and then the escapes
+// read it on every draw.
+//
+// The whole point of a second hook rather than a cleverer SetPromptHostFunc:
+// that one is sync.OnceValue, so its answer is kept from the first draw, which
+// is right for a fact about the process and wrong for a name a script assigns.
+// zsh's `$HOST` is the assignable kind — measured 2026-09-13 on 5.9.2,
+// `HOST=a.b.c.d; print -rP '%m|%2m|%M'` writes `a|a.b|a.b.c.d` — so the two
+// draws below are asked of one runner, with an assignment between them, and a
+// cached answer fails on the second.
+func TestAPromptHostParameterIsReadOnEveryDraw(t *testing.T) {
+	const src = `HOST=first.example; echo "[${(%):-%m}][${(%):-%M}]"; HOST=a.b.c.d; echo "[${(%):-%m}][${(%):-%2m}][${(%):-%M}]"`
+	out, st := runGrammar(t, src, promptFlagged, func(r *Runner) {
+		r.SetPromptStyle(promptHostTable())
+		r.SetPromptHostParameter("HOST")
+	})
+	want := "[first][first.example]\n[a][a.b][a.b.c.d]\n"
+	if out != want || st != 0 {
+		t.Errorf("got %q (status %d), want %q at 0", out, st, want)
+	}
+}
+
+// And it wins over a carried-in answer rather than falling back to one.
+//
+// Named as its own test because a fallback is the shape this would naturally
+// have been given, and it is wrong in a way only an *empty* parameter shows:
+// the escape would quietly draw the build machine's name at the moment a
+// script had said it meant something else.
+func TestAPromptHostParameterBeatsACarriedInHostName(t *testing.T) {
+	out, st := runGrammar(t, `HOST=named.example; echo "[${(%):-%M}]"`, promptFlagged, func(r *Runner) {
+		r.SetPromptStyle(promptHostTable())
+		r.SetPromptHost("carried.in.example")
+		r.SetPromptHostParameter("HOST")
+	})
+	if want := "[named.example]\n"; out != want || st != 0 {
+		t.Errorf("got %q (status %d), want %q at 0", out, st, want)
+	}
+}
+
+// An empty parameter is an empty host and not a refusal, which is where the
+// parameter form parts company with the carried-in one.
+//
+// Both halves in one test, because what is being claimed is the *line* between
+// them: told-where-to-look-and-it-is-empty draws nothing at 0, and never-told
+// still names the escape as missing. Measured, `unset HOST; print -rP "[%m]"`
+// in zsh 5.9.2 writes `[]` and reports 0.
+func TestAnEmptyPromptHostParameterDrawsNothingAndDoesNotRefuse(t *testing.T) {
+	out, st := runGrammar(t, `echo "[${(%):-%m}][${(%):-%M}]"`, promptFlagged, func(r *Runner) {
+		r.SetPromptStyle(promptHostTable())
+		r.SetPromptHostParameter("HOST")
+	})
+	if want := "[][]\n"; out != want || st != 0 {
+		t.Errorf("empty parameter: got %q (status %d), want %q at 0", out, st, want)
+	}
+	out, st = runGrammar(t, `echo "[${(%):-%m}]"`, promptFlagged, func(r *Runner) {
+		r.SetPromptStyle(promptHostTable())
+	})
+	if want := "sh: ${(%):-%m}: the %m prompt escape is not implemented\n"; out != want || st == 0 {
+		t.Errorf("no parameter and nobody told: got %q (status %d), want %q at a failure", out, st, want)
+	}
+}

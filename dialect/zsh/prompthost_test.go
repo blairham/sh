@@ -22,7 +22,11 @@ import (
 // own has two components, where the two readings agree.
 func TestTheShortHostCodeCountsAndTheLongOneDoesNot(t *testing.T) {
 	r := zshRunnerForTest(t)
-	r.SetPromptHost("a.b.c.d")
+	// Through the parameter, because that is where this shell's `%m` reads
+	// from since #2576 — `SetPromptHost` is not consulted at all here, and a
+	// test that still used it would draw the *build machine's* name and fail
+	// differently on every runner.
+	r.SetVar("HOST", "a.b.c.d")
 	for _, tc := range []struct {
 		field interp.PromptField
 		code  string

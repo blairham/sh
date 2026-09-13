@@ -1450,6 +1450,24 @@ func (r *Runner) askPromptHost() string {
 	return r.promptHost()
 }
 
+// promptHostName is what `%m` and `%M` report the machine to be, and whether
+// this runner has any idea at all.
+//
+// Two sources and not one, because the dialects measure differently. bash
+// carries the answer in — `\h` is the system's name however `$HOSTNAME` is
+// set — and a Runner nobody carried one into refuses the escape by name. zsh
+// reads a *parameter*, so the answer is looked up on every draw and an empty
+// one is a real answer rather than a gap: measured 2026-09-13 on zsh 5.9.2,
+// `unset HOST; print -rP "[%m]"` writes `[]` and reports 0, where a Runner
+// with no host at all says the escape is not implemented.
+func (r *Runner) promptHostName() (string, bool) {
+	if r.promptHostParam != "" {
+		return r.promptVar(r.promptHostParam), true
+	}
+	full := r.askPromptHost()
+	return full, full != ""
+}
+
 // arg is the braces after the code, for the Formats entries.
 func (r *Runner) promptField(f PromptField, arg string, braced bool) (string, bool) {
 	st := r.promptStyle
@@ -1475,13 +1493,13 @@ func (r *Runner) promptField(f PromptField, arg string, braced bool) (string, bo
 		}
 		return name, true
 	case FieldHost:
-		full := r.askPromptHost()
-		return countedHostComponents(full, arg), full != ""
+		full, told := r.promptHostName()
+		return countedHostComponents(full, arg), told
 	case FieldHostFull:
 		// No count: `%1M`, `%2M` and `%-1M` are all the whole name, measured
 		// in the same run as the FieldHost table. arg is dropped on purpose.
-		full := r.askPromptHost()
-		return full, full != ""
+		full, told := r.promptHostName()
+		return full, told
 	case FieldCwd:
 		return countedComponents(abbreviateHome(r.promptVar("PWD"), r.promptVar("HOME")), arg, 0), true
 	case FieldCwdFull:

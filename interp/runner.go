@@ -1626,6 +1626,16 @@ type Runner struct {
 	// escapes are refused rather than guessed at. Installed through
 	// SetPromptHost or SetPromptHostFunc.
 	promptHost func() string
+	// promptHostParam is the parameter those same two escapes read instead,
+	// where the dialect says the machine's name is a variable a script can
+	// assign. Empty in a dialect that has no such parameter, which is bash:
+	// measured, `\h` draws the system's name however `$HOSTNAME` is set.
+	//
+	// It wins over promptHost outright rather than serving as a fallback for
+	// it. zsh's `$HOST` is assignable and `%m` follows the assignment on the
+	// same line, so an answer kept from the first draw would be the one thing
+	// this must not do. Installed through SetPromptHostParameter.
+	promptHostParam string
 	// promptStyle is the prompt-escape table this shell's dialect supplies —
 	// the same table the prompt drawer reads, which is the whole of #1090.
 	// The zero value has no escape character and so no escape language, which

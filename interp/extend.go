@@ -1100,6 +1100,38 @@ func (r *Runner) SetPromptHost(name string) { r.promptHost = func() string { ret
 // kind of asymmetry a later reader has to re-derive.
 func (r *Runner) SetPromptHostFunc(ask func() string) { r.promptHost = sync.OnceValue(ask) }
 
+// SetPromptHostParameter names the *parameter* `%m` and `%M` read, for a
+// dialect where the machine's name is a variable a script can assign.
+//
+// It replaces SetPromptHost and SetPromptHostFunc rather than sitting beside
+// them: where a name is given here, both escapes read that parameter on every
+// draw and the carried-in answer is not consulted at all. That is the point —
+// a cached answer is precisely what an assignable name must not have.
+//
+// zsh is the dialect that wants it, measured 2026-09-13 on 5.9.2 under
+// `env -i PATH=/usr/bin:/bin`:
+//
+//	HOST=a.b.c.d; print -rP '%m|%2m|%M'   a|a.b|a.b.c.d
+//
+// so the escapes follow the parameter rather than asking the system each
+// time. The two facts are separable, which is why this exists as its own
+// hook: a shell could set `$HOST` at startup and still ask the system in the
+// prompt, and it would answer the machine's own name to all three fields
+// above. bash is the other side of the measurement and keeps the carried-in
+// answer — `\h` draws the system's name with `HOSTNAME=elsewhere` injected
+// and assigned alike, so bash has no parameter to name here.
+//
+// The dialect is what puts the machine's name in that parameter to begin
+// with, through SetSpecial, and this package still does not go asking.
+//
+// **An empty parameter is an empty host and not a refusal**, which is where
+// this parts company with the carried-in form above. A Runner nobody told has
+// no idea what machine it is on and refuses `%m` by name; a Runner told to
+// read `$HOST` has been told, and `unset HOST` is a script's own answer to
+// the question. Measured, zsh draws nothing for `%m` after `unset HOST` and
+// reports 0.
+func (r *Runner) SetPromptHostParameter(name string) { r.promptHostParam = name }
+
 // SetPromptStyle installs the prompt-escape table this dialect spells.
 //
 // The same value the prompt drawer is given — `repl.PromptStyle` is an alias

@@ -1990,12 +1990,84 @@ func flagGroupClose(src string) int {
 	return -1
 }
 
+// flagGroupTailExpandable are the characters that make the shell reading this
+// tail keep the word as written rather than flatten it: the two that begin an
+// expansion, the four that make it a pattern, and the one that begins a brace
+// range. See Error.FlagGroupWordTail.
+const flagGroupTailExpandable = "$`*?[(){"
+
+// flagGroupTailEnd is how far into a refused flag group's word tail the
+// quoted-back text reaches. The tail is the rest of the *word*, but the
+// shell reading it stops at an operator character even inside quotes, and at
+// a `(` that stands where a function definition's would.
+//
+// Measured on ksh93u+ 2012-08-01, 2026-09-12, `env -i` with a scratch HOME,
+// `-c`:
+//
+//	echo "${(U)a|b}"      a       and the same for & ; < > and a blank
+//	echo "${(U)a)b}"      a       a `)` with no `(` of its own
+//	echo "${(U)a(b}"      a       a `(` after a name character
+//	echo "${(U)a-(b)c}"   a-(b)c}""  one that is not, and its `)`
+//	echo "${(U)a@(b)c}"   a@(b)c}""  the pattern spellings likewise
+//
+// Row four is the discriminating one: `(` alone would have cut `a-(b)c` at
+// the paren, and "balanced parens are fine" would have kept `a(b)c`.
+//
+// None of it reaches inside a substitution the tail carries. `${(@f)"$(printf
+// "a b")"}` quotes the whole tail back, blank and all, and so does
+// `${(U)`printf a b`}` — which is why the scan tracks a paren depth and a
+// backtick rather than stopping at the first operator character it sees.
+func flagGroupTailEnd(src string) int {
+	depth, tick := 0, false
+	for i := 0; i < len(src); i++ {
+		switch c := src[i]; c {
+		case '\\':
+			i++
+		case '`':
+			tick = !tick
+		case '|', '&', ';', '<', '>', ' ', '\t', '\n':
+			if depth == 0 && !tick {
+				return i
+			}
+		case '(':
+			if depth > 0 || tick {
+				depth++
+				continue
+			}
+			// The same name test the rest of this file reads, with the
+			// index given as an interior one: a digit counts here, since
+			// what is being asked is whether the character before the `(`
+			// could have ended a function's name.
+			if i > 0 && isNameByte(src[i-1], 1) {
+				return i
+			}
+			depth++
+		case ')':
+			if depth == 0 {
+				if tick {
+					continue
+				}
+				return i
+			}
+			depth--
+		}
+	}
+	return len(src)
+}
+
 // flagGroupTail is the text a refused flag group's word tail is quoted back
-// as. See Error.FlagGroupWordTail for the measurement, and for the two
-// shapes this does not reproduce.
+// as. See Error.FlagGroupWordTail for the measurement, and for the shapes
+// this does not reproduce.
 func flagGroupTail(src string) string {
-	if strings.ContainsAny(src, "$`") {
-		// An expansion in the tail and the quotes stay as written.
+	src = src[:flagGroupTailEnd(src)]
+	if strings.ContainsAny(src, flagGroupTailExpandable) {
+		// Something in the tail keeps the word from being flattened, so the
+		// quotes stay as written — and where the tail holds an *unmatched*
+		// one, which is what a group written inside a quoted word leaves
+		// behind, the shell writes that closing quote a second time.
+		if strings.Count(src, `"`)%2 == 1 {
+			return src + `"`
+		}
 		return src
 	}
 	return strings.Map(func(r rune) rune {

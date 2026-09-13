@@ -48,7 +48,7 @@ func (r *Runner) coprocClause(ctx context.Context, c *syntax.CoprocClause) error
 	if r.ask(r.sem().CoprocEndsInAnArray, "a coprocess putting its ends in an array") {
 		r.setArrayElem(name, 0, "0", itoa(r.coproc.read))
 		r.setArrayElem(name, 1, "1", itoa(r.coproc.write))
-		r.setVar(name+"_PID", itoa(job.PID))
+		r.setVar(name+"_PID", itoa(job.Ident()))
 		// Kept so that the reaping can take back exactly what was published.
 		// See Semantics.ReapedCoprocessEnds and forgetCoprocNames.
 		r.coproc.name = name
@@ -124,6 +124,9 @@ func (r *Runner) startCoproc(ctx context.Context, name string, run func(*Runner)
 		ready:    make(chan struct{}),
 		started:  make(chan struct{}),
 		stopNote: make(chan struct{}),
+		// And the number a script names it by where the body never reaches a
+		// program, which `NAME_PID` reads as `$!` does. See jobident.go.
+		ident: r.inventJobIdent(),
 		// The body itself, released when its pid settles either way — the
 		// same count `&` keeps, for the same reason. See Job.expectPart.
 		parts:   1,

@@ -225,16 +225,15 @@ func (r *Runner) printJobs(jobs []*Job, form jobsForm, wanted jobState, explicit
 		}
 		switch form {
 		case jobsPidsAlone:
-			if row.job.PID == 0 {
-				// A job with no process of its own — a builtin or a
-				// compound command on a cloned runner, where a real shell
-				// would have forked and had an id to print. Left out
-				// rather than printed as 0, because this listing is
-				// written to be *used*: `kill $(jobs -p)` with a 0 in it
-				// signals the whole process group.
-				continue
-			}
-			r.printf("%d\n", row.job.PID)
+			// Job.Ident rather than Job.PID, which is what makes this row
+			// printable at all for a job with no process of its own. It used
+			// to be left out: a real shell forks and has an id to print, and
+			// this shell had 0 — a number `kill $(jobs -p)` spends as *every
+			// process in the shell's group*. The invented number is out above
+			// every id a kernel can issue and is read back here as the job it
+			// names, so the listing can say what it always said. See
+			// jobident.go.
+			r.printf("%d\n", row.job.Ident())
 		case jobsLongRow:
 			r.printf("%s\n", r.jobLineLong(row.n, row.job, showBg))
 		default:
@@ -392,7 +391,7 @@ func (r *Runner) jobLine(i int, j *Job, showBg bool) string {
 func (r *Runner) jobLineLong(i int, j *Job, showBg bool) string {
 	dg := r.diag()
 	return Wording(dg.JobLineLong, "[%[1]d]%[2]s %[3]d %-24[4]s%[5]s",
-		i, r.jobMarker(j), j.PID, r.jobState(j, false), r.jobCommand(j, showBg))
+		i, r.jobMarker(j), j.Ident(), r.jobState(j, false), r.jobCommand(j, showBg))
 }
 
 func (r *Runner) jobLineAs(i int, j *Job, showBg, noticing bool) string {

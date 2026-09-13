@@ -593,6 +593,8 @@ func Semantics() interp.Semantics {
 	s.JobSpecsByName = interp.No
 	s.WaitReadsOptions = interp.Yes
 	s.WaitReportsAMissingJob = interp.Yes
+	// And a job it has already reported stays waitable by its process id.
+	s.WaitRemembersAReapedJob = interp.Yes
 	// `wait -n` is 127 rather than a wait, so the letter is not an option
 	// here.
 	s.WaitNWaitsForTheNextJob = interp.No

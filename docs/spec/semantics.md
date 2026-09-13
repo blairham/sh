@@ -9820,6 +9820,107 @@ all five, so `cmd/dash` and `cmd/ash` answer `before` where the shells
 they stand for answer 0 — the one cell of the grid that is still wrong,
 and it is this question rather than the allocation one.
 
+### A job a `wait` has reported gives its number back
+
+`%1` is a slot in the table the shell holds *now*, not the first job it
+ever started. Measured 2026-09-13 across the whole panel:
+
+    /bin/sh -c 'exit 7' & p=$!
+    wait "$p"
+    /bin/sh -c 'exit 4' &
+    wait %1; echo "one=$?"
+    wait %2; echo "two=$?"
+
+| shell | `one` | `two` |
+| --- | --- | --- |
+| bash 5.3.15 · 3.2.57 · as `sh` | **4** | 127 |
+| zsh 5.9.2 | **4** | 127 |
+| ksh93u+ | **4** | 0 |
+| dash | **4** | 2 |
+| ash 1.37.0 | **4** | 2 |
+
+Unanimous on the number: the second job took the one the first gave back,
+and there is no `%2` for it to have taken instead. `two` splits only over
+what each shell says about a job spec that names nothing, which is
+`WaitReportsAMissingJob` and was already recorded.
+
+This shell answered `one=7` — the *first* job's status, from a job it had
+already collected — because waiting by **process id** left the finished job
+sitting in the table forever. Waiting by `%` spec dropped it, so the same
+script written `wait %1` throughout was right and the ordinary spelling was
+wrong (#2651). Both routes now end at `Runner.reap`.
+
+**The reaping is what makes this discriminating.** A shell that renumbers
+and a shell that leaves the number where it was answer alike on any script
+that never reaps anything, so a probe without a completed job in it cannot
+tell them apart — which is the same trap the `before` column above exists
+to close.
+
+### Where the status of a reaped job lives
+
+`Semantics.WaitRemembersAReapedJob`. The number is free; the status may or
+may not still be reachable by the id it was reported under. Measured
+2026-09-13 on `/bin/sh -c 'exit 7' & p=$!; wait %1; wait "$p"`:
+
+| shell | second `wait` |
+| --- | --- |
+| bash 5.3.15 · 3.2.57 · as `sh` | 7 |
+| zsh 5.9.2 | 7 |
+| dash · ash 1.37.0 | 7 |
+| ksh93u+ | **127** |
+
+Six to one, and the preset remembers: a script that reads `$!`, waits for
+it, and waits for it again in a cleanup path gets its status rather than a
+complaint about a child that was its own a moment ago. The memory is
+bounded here (`reapedJobsKept`) where bash's is not — measured, bash still
+answers 7 after five thousand further jobs have been started and reaped —
+because a session that starts a job a second would otherwise grow a list
+for as long as it runs.
+
+**Two narrower readings are recorded here rather than in the vector**, both
+of them second axes rather than third values of this one:
+
+- Written the other way round, so that the *first* wait is the one that
+  reaps — `wait "$p"` twice — bash 5.3.15, bash 3.2.57, dash and ash still
+  answer 7, while bash invoked as `sh` and zsh answer 127 with `pid N is
+  not a child of this shell`. In those two the memory survives a reap by
+  name and not a reap by id.
+- A **bare** `wait` splits a third way again: afterwards `wait "$p"` is 127
+  in every bash and 7 in zsh, ksh93u+, dash and ash. That route is left
+  where it was, clearing the table without filling the memory.
+
+No preset here holds either reading, so neither goes into the vector.
+
+### `$!` for a job with no process of its own
+
+Every shell in the panel forks before a background job's body runs, so `$!`
+is a process id whatever the job was made of. Measured 2026-09-13 on
+`( exit 5 ) &`, `true &`, `{ :; } &` and `/bin/sleep 0 &`: all seven
+columns report a positive id for all four, and all four ids differ.
+
+A background job here is a goroutine, and one made only of builtins never
+reaches an external program, so there is no id to report. This shell
+reported **0**, and 0 is the one number that must not be given: POSIX gives
+it to `kill` as *every process in the sender's process group*, so
+`p=$!; kill "$p"` — the line a script writes to stop one job — was a line
+aimed at the shell and everything it had started. The two jobs were not
+distinguishable from each other either, so `wait` on the older of two
+answered the newer one's status (#2650).
+
+Such a job is now given a number this shell invents, above every process id
+any Unix can issue — Linux caps `pid_max` at 4194304 and macOS and the BSDs
+at 99999 — so that it names nothing outside this process. Inside it, `wait`
+and `kill` look the number up in the job table before going near the
+kernel, so `wait "$!"` reports the job's status and `kill "$!"` reaches the
+job's processes, which for a job of builtins is none and is reported as the
+job with nothing to signal that `kill %1` already reports.
+
+**The deviation is recorded rather than papered over**: a real shell's `$!`
+names a process that exists and can be found in `ps`, and this one cannot.
+What it buys is that the three things a script does with the value — test
+it, wait for it, signal the job with it — all answer about the job the
+script started. See `interp/jobident.go`.
+
 ## A `wait` a trapped signal cuts short
 
 Oracle runs, 2026-09-04, on macOS: bash 5.3, bash 3.2, dash, ksh93u+,

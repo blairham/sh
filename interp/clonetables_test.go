@@ -65,6 +65,7 @@ func seedStacks(r *Runner) {
 	r.redirFds = append(make([]int, 0, 4), 0)
 	r.jobs = append(make([]*Job, 0, 4), nil)
 	r.jobOrder = append(make([]*Job, 0, 4), nil)
+	r.reaped = append(make([]*Job, 0, 4), nil)
 	r.scopes = append(make([]*scope, 0, 4), &scope{
 		saved:              map[string]string{"seed": "v"},
 		existed:            map[string]bool{"seed": true},

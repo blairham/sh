@@ -1426,6 +1426,21 @@ type Runner struct {
 	// not at all, which no reading of the table's order produces. See
 	// markedJobs.
 	jobOrder []*Job
+	// jobIdents hands out the numbers a job with no process of its own
+	// answers to — see Runner.inventJobIdent, which is where the whole of it
+	// is. A pointer because it is shared down the clone chain rather than
+	// copied with the struct: a subshell must not invent a number one of the
+	// jobs it inherited already holds.
+	jobIdents *atomic.Uint32
+	// reaped are the jobs a `wait` has already reported the status of, newest
+	// last and bounded by reapedJobsKept.
+	//
+	// They are out of the table: nothing lists them, `%1` does not name them,
+	// and the number they held is free for the next job — which is the whole
+	// of #2651. They are kept only so that a `wait` naming the same process id
+	// a second time can still answer, which six of the seven measured columns
+	// do. See Runner.reap and Semantics.WaitRemembersAReapedJob.
+	reaped []*Job
 	// lastJobPID is `$!`, which is a *value* and not a reference to a job.
 	//
 	// Separate from jobOrder because the two stop being the same thing the

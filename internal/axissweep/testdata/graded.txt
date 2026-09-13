@@ -41,6 +41,7 @@ ash    QuitResetRestoresTheDefault                          No
 ash    ReadonlyReassignmentFatal                            Yes
 ash    SetOLetterAttachesItsName                            No
 ash    ShiftPastEndFatal                                    No
+ash    WaitRemembersAReapedJob                              Yes
 bash   AliasInvalidNameFatal                                No
 bash   ArithShortCircuitEvaluatesTheRightOperand            No
 bash   ArrayBaseIsZero                                      Yes
@@ -65,6 +66,7 @@ bash   QuitResetRestoresTheDefault                          No
 bash   ReadonlyReassignmentFatal                            No
 bash   SetOLetterAttachesItsName                            No
 bash   ShiftPastEndFatal                                    No
+bash   WaitRemembersAReapedJob                              Yes
 dash   AliasInvalidNameFatal                                -
 dash   ArithShortCircuitEvaluatesTheRightOperand            No
 dash   ArrayBaseIsZero                                      -
@@ -89,6 +91,7 @@ dash   QuitResetRestoresTheDefault                          -
 dash   ReadonlyReassignmentFatal                            Yes
 dash   SetOLetterAttachesItsName                            No
 dash   ShiftPastEndFatal                                    Yes
+dash   WaitRemembersAReapedJob                              Yes
 ksh    AliasInvalidNameFatal                                Yes
 ksh    ArithShortCircuitEvaluatesTheRightOperand            No
 ksh    ArrayBaseIsZero                                      Yes
@@ -113,6 +116,7 @@ ksh    QuitResetRestoresTheDefault                          -
 ksh    ReadonlyReassignmentFatal                            Yes
 ksh    SetOLetterAttachesItsName                            Yes
 ksh    ShiftPastEndFatal                                    Yes
+ksh    WaitRemembersAReapedJob                              No
 zsh    AliasInvalidNameFatal                                -
 zsh    ArithShortCircuitEvaluatesTheRightOperand            No
 zsh    ArrayBaseIsZero                                      No
@@ -137,3 +141,4 @@ zsh    QuitResetRestoresTheDefault                          Yes
 zsh    ReadonlyReassignmentFatal                            Yes
 zsh    SetOLetterAttachesItsName                            Yes
 zsh    ShiftPastEndFatal                                    No
+zsh    WaitRemembersAReapedJob                              Yes

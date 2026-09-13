@@ -448,6 +448,30 @@ func Probes() []Probe {
 				return refusedSetOptionFatal(cells["opt/an-unknown-letter-is-refused"], "st=")
 			},
 		},
+		{
+			Field: "WaitRemembersAReapedJob",
+			Cases: []string{"axis/wait-remembers-a-reaped-job"},
+			// The first status is the control and is why this row cannot be
+			// read from the second line alone. A column that could not
+			// resolve `%1` never reaped anything, so its second `wait` is
+			// about a job the shell still holds rather than about a memory of
+			// one — and scoring that as `No` would count a shell that never
+			// reached the question as one that answered it.
+			Reading: "the row waits for a job by name and then for the same job by process id: `again=7` is a shell that still has the status of a job it has reported, and anything else is one that has let it go",
+			Read: func(cells map[string]oracle.Result) (string, string) {
+				out := cells["axis/wait-remembers-a-reaped-job"].Stdout
+				if !strings.Contains(out, "first=7") {
+					return "", "the wait by name did not report the job's own status, so this shell never reaped a job here and the second wait is not about a memory of one"
+				}
+				switch {
+				case strings.Contains(out, "again=7"):
+					return "Yes", ""
+				case strings.Contains(out, "again="):
+					return "No", ""
+				}
+				return "", "the row did not reach its second wait at all"
+			},
+		},
 	}
 }
 

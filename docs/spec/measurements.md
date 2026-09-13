@@ -10478,9 +10478,14 @@ grades it and nothing drift-checks it either, for the same reason.
 | `shopt/lastpipe-reaches-only-the-last-element` | `[]` | `[]` | `[]` | `[]` | `[]` | `[]` | `[]` |
 | `shopt/lastpipe-lets-an-exit-end-the-shell` | `after=3` | *(no output, status 3)* | *(no output, status 3)* | `after=3` | *(no output, status 3)* | *(no output, status 3)* | `after=3` |
 | `shopt/lastpipe-keeps-a-read-loops-count` | `n=[]` | `n=[3]` | `n=[3]` | `n=[]` | `n=[3]` | `n=[3]` | `n=[]` |
+| `opt/a-debug-trap-and-a-dotted-file-with-nothing-asked` | `S1~after` **2>** `trap: DEBUG: bad trap` | `D~S1~D~after` | `D~S1~D~after` | `D~S1~D~after` | `D~D~S1~D~after` | `D~D~S1~D~after` | `S1~after` **2>** `<shell>: trap: line 1: DEBUG: invalid signal specification` |
 | `opt/set-o-functrace-carries-the-debug-trap-into-a-call` | **2>** `<shell>: 2: set: Illegal option -o functrace` *(status 2)* | `D~D~S1~D~after` | `D~D~S1~D~after` | `D~D~S1~D~after` | **2>** `<shell>[2]: set: functrace: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>:set:2: no such option: functrace` *(status 1)* | `S1~after` **2>** `<shell>: set: line 1: illegal option -o functrace~<shell>: trap: line 1: DEBUG: invalid signal specification` |
+| `opt/a-debug-trap-and-a-subshell-with-nothing-asked` | `s~after` **2>** `trap: DEBUG: bad trap` | `s~D~after` | `s~D~after` | `s~D~after` | `D~s~D~after` | `D~D~s~D~after` | `s~after` **2>** `<shell>: trap: line 0: DEBUG: invalid signal specification` |
 | `opt/set-o-functrace-carries-the-debug-trap-into-a-subshell` | **2>** `<shell>: 1: set: Illegal option -o functrace` *(status 2)* | `D~s~D~after` | `D~s~D~after` | `D~s~D~after` | **2>** `<shell>: set: functrace: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>:set:1: no such option: functrace` *(status 1)* | `s~after` **2>** `<shell>: set: line 0: illegal option -o functrace~<shell>: trap: line 0: DEBUG: invalid signal specification` |
+| `opt/an-err-trap-and-a-function-with-nothing-asked` | `done` **2>** `trap: ERR: bad trap` | `E~done` | `E~done` | `E~done` | `E~E~done` | `E~done` | `E~done` |
+| `opt/an-err-trap-and-a-subshell-with-nothing-asked` | `done` **2>** `trap: ERR: bad trap` | `E~done` | `E~done` | `done` | `E~done` | `E~E~done` | `E~done` |
 | `opt/set-o-errtrace-carries-the-err-trap-into-a-function` | **2>** `<shell>: 1: set: Illegal option -o errtrace` *(status 2)* | `E~E~done` | `E~E~done` | `E~E~done` | **2>** `<shell>: set: errtrace: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>:set:1: no such option: errtrace` *(status 1)* | `E~E~done` |
+| `opt/set-o-errtrace-carries-the-err-trap-into-a-subshell` | **2>** `<shell>: 1: set: Illegal option -o errtrace` *(status 2)* | `E~E~done` | `E~E~done` | `E~done` | **2>** `<shell>: set: errtrace: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>:set:1: no such option: errtrace` *(status 1)* | `E~done` |
 | `shopt/extdebug-is-taken-and-reads-back` | `st=127` **2>** `<shell>: 1: shopt: not found~<shell>: 1: shopt: not found~<shell>: 1: shopt: not found~<shell>: 1: shopt: not found` *(status 127)* | `st=0~shopt -s extdebug~shopt -u extdebug` *(status 1)* | `st=0~shopt -s extdebug~shopt -u extdebug` *(status 1)* | `st=0~shopt -s extdebug~shopt -u extdebug` *(status 1)* | `st=127` **2>** `<shell>: shopt: not found~<shell>: shopt: not found~<shell>: shopt: not found~<shell>: shopt: not found` *(status 127)* | `st=127` **2>** `<shell>:1: command not found: shopt~<shell>:1: command not found: shopt~<shell>:1: command not found: shopt~<shell>:1: command not found: shopt` *(status 127)* | `st=127` **2>** `<shell>: shopt: not found~<shell>: shopt: not found~<shell>: shopt: not found~<shell>: shopt: not found` *(status 127)* |
 | `shopt/extdebug-turns-on-function-tracing` | `S1~after` **2>** `<shell>: 2: shopt: not found~trap: DEBUG: bad trap` | `D~D~S1~D~after` | `D~D~S1~D~after` | `D~S1~D~after` | `D~D~S1~D~after` **2>** `<shell>: line 2: shopt: not found` | `D~D~S1~D~after` **2>** `<shell>:2: command not found: shopt` | `S1~after` **2>** `<shell>: shopt: not found~<shell>: trap: line 1: DEBUG: invalid signal specification` |
 | `nounset/defaults-are-exempt` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` |
@@ -10889,18 +10894,39 @@ grades it and nothing drift-checks it either, for the same reason.
   printf "a\nb\nc\n" | while read l; do n=$((n+1)); done
   echo "n=[$n]"
   ```
+- `opt/a-debug-trap-and-a-dotted-file-with-nothing-asked` — the control for the row below, and the axis standing on its own: the same snippet with no option set, so what the next row measures is the option rather than the trap. bash writes a D for the `.` and a D for the command after it and nothing for the line inside the file; ksh93 and zsh trace the file's commands with nothing asked, which is the answer `set -o functrace` moves bash to rather than a new one. dash and ash have no DEBUG condition at all and say so
+  ```sh
+  printf 'echo S1
+  ' > lib.sh; trap 'echo D' DEBUG; . ./lib.sh; echo after
+  ```
 - `opt/set-o-functrace-carries-the-debug-trap-into-a-call` — what the option is *for*, asked through the trap rather than through a status: without it a DEBUG trap sees the `.` and nothing the dotted file does, so a tracing or debugging script watches its own call and none of the work. The three bash columns take the name at 0 and write a D for the source, one for each line inside it and one for the command after; dash and ksh93 have no such name and each ends the shell on the `set`, and zsh refuses it with `no such option` and carries on. Ours refused the name as `not implemented`, left the option off and traced nothing inside the file (#2426)
   ```sh
   printf 'echo S1
   ' > lib.sh; set -o functrace; trap 'echo D' DEBUG; . ./lib.sh; echo after
   ```
+- `opt/a-debug-trap-and-a-subshell-with-nothing-asked` — the control for the row below: a subshell group fires nothing of its own in bash, so the single D belongs to the `echo after` and arrives behind the `s`. ksh93 and zsh carry the trap into the child
+  ```sh
+  trap 'echo D' DEBUG; (echo s); echo after
+  ```
 - `opt/set-o-functrace-carries-the-debug-trap-into-a-subshell` — the other boundary the same option crosses, and the half a function-only implementation passes the row above without: a subshell group fires nothing of its own — with the trap set and the option off the bash columns write `s` and then a single D for the command after — and with the option on a D arrives ahead of the `echo s` inside. dash and ksh93 stop on the `set` and zsh refuses the name
   ```sh
   set -o functrace; trap 'echo D' DEBUG; (echo s); echo after
   ```
+- `opt/an-err-trap-and-a-function-with-nothing-asked` — the control for the row below and for `opt/set-e-carries-the-err-trap`: one E, for the failing call, because bash does not carry the ERR trap into a function it was not set in. ksh93 counts the failure inside the body as well, and zsh — which does carry it in — still writes one here, so the axis is not read off this row alone. ash has the ERR condition where dash refuses the name outright, so the two smallest shells in the panel are not one answer
+  ```sh
+  trap 'echo E' ERR; f() { false; }; f; echo done
+  ```
+- `opt/an-err-trap-and-a-subshell-with-nothing-asked` — the other boundary's control, and the one that turned up a difference within bash rather than between shells: 5.3 judges the failing subshell command in the parent and writes one E where 3.2 writes none. zsh fires inside the child as well as for the group, and ash answers as 5.3 does
+  ```sh
+  trap 'echo E' ERR; (false); echo done
+  ```
 - `opt/set-o-errtrace-carries-the-err-trap-into-a-function` — the ERR half of the same pair, and it is a pair rather than one option with two names: this one says nothing about DEBUG and moves a trap the bash columns otherwise bound to the frame that set it. With it on the failure inside `f` and the failing call itself each fire, so two E lines arrive where the option off gives one. The refusals are the same three: dash and ksh93 end the shell on the `set`, zsh says `no such option`
   ```sh
   set -o errtrace; trap 'echo E' ERR; f() { false; }; f; echo done
+  ```
+- `opt/set-o-errtrace-carries-the-err-trap-into-a-subshell` — the fourth boundary, and the one that completes the pair of pairs: the option carries the ERR trap into the child as well as into a function, so the failure inside the group and the failing group itself each fire and 5.3 writes two E lines where its control writes one. bash 3.2 is the column to read here — its control writes none at all, and with the name taken it writes one — so the two bash versions arrive at different counts from different starting points and only their movement agrees
+  ```sh
+  set -o errtrace; trap 'echo E' ERR; (false); echo done
   ```
 - `shopt/extdebug-is-taken-and-reads-back` — the name a debugger's preamble sets, and it has to survive the round trip a capture depends on: all three bash columns take it at 0, write `shopt -s extdebug` back, take the unset and write `shopt -u extdebug` — the closing query answering 1 because the name is off, which is what makes the status a reading rather than a formality. Ours said `not implemented` at 1 and omitted the name from what it wrote back
   ```sh

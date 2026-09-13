@@ -100,6 +100,7 @@ func TestErrtraceCarriesTheErrTrapIntoACall(t *testing.T) {
 		{"by name", `set -o errtrace; trap 'echo E' ERR; f() { false; }; f; echo done`, "E\nE\ndone\n"},
 		{"a subshell, off", `trap 'echo E' ERR; (false); echo done`, "E\ndone\n"},
 		{"a subshell, on", `set -E; trap 'echo E' ERR; (false); echo done`, "E\nE\ndone\n"},
+		{"a subshell, on by name", `set -o errtrace; trap 'echo E' ERR; (false); echo done`, "E\nE\ndone\n"},
 		// And the listing follows the firing here too: a modification drops
 		// the inherited snapshot the trap would otherwise be listed from,
 		// and the option keeps it listed because it keeps it firing.
@@ -108,6 +109,32 @@ func TestErrtraceCarriesTheErrTrapIntoACall(t *testing.T) {
 		// functrace is not errtrace: the DEBUG option leaves the ERR trap
 		// where the dialect bounds it.
 		{"functrace does not move it", `set -o functrace; trap 'echo E' ERR; f() { false; }; f; echo done`, "E\ndone\n"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, errs, code := runTraced(t, c.src)
+			if out != c.want || errs != "" || code != 0 {
+				t.Errorf("ran %q: out %q errs %q status %d, want %q and nothing said",
+					c.src, out, errs, code, c.want)
+			}
+		})
+	}
+}
+
+// TestFunctraceCarriesTheReturnTrapIntoACall is the third trap the same
+// option moves, and the one the letter already reached before #2426: a
+// RETURN trap set outside a function fires for that function only with
+// functrace on. The rows below are the long spellings, which are the ones
+// the issue's script uses and the ones that were refused.
+func TestFunctraceCarriesTheReturnTrapIntoACall(t *testing.T) {
+	for _, c := range []struct {
+		name, src, want string
+	}{
+		{"off", `trap 'echo R' RETURN; f() { echo body; }; f; echo done`, "body\ndone\n"},
+		{"by name", `set -o functrace; trap 'echo R' RETURN; f() { echo body; }; f; echo done`, "body\nR\ndone\n"},
+		{"by extdebug", `shopt -s extdebug; trap 'echo R' RETURN; f() { echo body; }; f; echo done`, "body\nR\ndone\n"},
+		// errtrace is the ERR trap's alone: it says nothing about RETURN,
+		// which is what keeps the pair a pair.
+		{"errtrace does not move it", `set -o errtrace; trap 'echo R' RETURN; f() { echo body; }; f; echo done`, "body\ndone\n"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			out, errs, code := runTraced(t, c.src)

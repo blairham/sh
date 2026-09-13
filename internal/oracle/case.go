@@ -4300,9 +4300,19 @@ echo "st=$?"`,
 		Why: "the shape people meet the problem in rather than the minimal one: `cmd | while read; do …; done` losing the body's assignments at the pipe is the most cited surprise in shell scripting, and it is the same axis as the `read` above rather than anything about loops. bash 5.3 and bash-as-sh count 3 with the option, zsh and ksh93 count 3 without one, and bash 3.2, dash and ash count nothing",
 	},
 	{
+		ID: "opt/a-debug-trap-and-a-dotted-file-with-nothing-asked", Category: "shell options",
+		Snippet: "printf 'echo S1\n' > lib.sh; trap 'echo D' DEBUG; . ./lib.sh; echo after",
+		Why:     "the control for the row below, and the axis standing on its own: the same snippet with no option set, so what the next row measures is the option rather than the trap. bash writes a D for the `.` and a D for the command after it and nothing for the line inside the file; ksh93 and zsh trace the file's commands with nothing asked, which is the answer `set -o functrace` moves bash to rather than a new one. dash and ash have no DEBUG condition at all and say so",
+	},
+	{
 		ID: "opt/set-o-functrace-carries-the-debug-trap-into-a-call", Category: "shell options",
 		Snippet: "printf 'echo S1\n' > lib.sh; set -o functrace; trap 'echo D' DEBUG; . ./lib.sh; echo after",
 		Why:     "what the option is *for*, asked through the trap rather than through a status: without it a DEBUG trap sees the `.` and nothing the dotted file does, so a tracing or debugging script watches its own call and none of the work. The three bash columns take the name at 0 and write a D for the source, one for each line inside it and one for the command after; dash and ksh93 have no such name and each ends the shell on the `set`, and zsh refuses it with `no such option` and carries on. Ours refused the name as `not implemented`, left the option off and traced nothing inside the file (#2426)",
+	},
+	{
+		ID: "opt/a-debug-trap-and-a-subshell-with-nothing-asked", Category: "shell options",
+		Snippet: `trap 'echo D' DEBUG; (echo s); echo after`,
+		Why:     "the control for the row below: a subshell group fires nothing of its own in bash, so the single D belongs to the `echo after` and arrives behind the `s`. ksh93 and zsh carry the trap into the child",
 	},
 	{
 		ID: "opt/set-o-functrace-carries-the-debug-trap-into-a-subshell", Category: "shell options",
@@ -4310,9 +4320,24 @@ echo "st=$?"`,
 		Why:     "the other boundary the same option crosses, and the half a function-only implementation passes the row above without: a subshell group fires nothing of its own — with the trap set and the option off the bash columns write `s` and then a single D for the command after — and with the option on a D arrives ahead of the `echo s` inside. dash and ksh93 stop on the `set` and zsh refuses the name",
 	},
 	{
+		ID: "opt/an-err-trap-and-a-function-with-nothing-asked", Category: "shell options",
+		Snippet: `trap 'echo E' ERR; f() { false; }; f; echo done`,
+		Why:     "the control for the row below and for `opt/set-e-carries-the-err-trap`: one E, for the failing call, because bash does not carry the ERR trap into a function it was not set in. ksh93 counts the failure inside the body as well, and zsh — which does carry it in — still writes one here, so the axis is not read off this row alone. ash has the ERR condition where dash refuses the name outright, so the two smallest shells in the panel are not one answer",
+	},
+	{
+		ID: "opt/an-err-trap-and-a-subshell-with-nothing-asked", Category: "shell options",
+		Snippet: `trap 'echo E' ERR; (false); echo done`,
+		Why:     "the other boundary's control, and the one that turned up a difference within bash rather than between shells: 5.3 judges the failing subshell command in the parent and writes one E where 3.2 writes none. zsh fires inside the child as well as for the group, and ash answers as 5.3 does",
+	},
+	{
 		ID: "opt/set-o-errtrace-carries-the-err-trap-into-a-function", Category: "shell options",
 		Snippet: `set -o errtrace; trap 'echo E' ERR; f() { false; }; f; echo done`,
 		Why:     "the ERR half of the same pair, and it is a pair rather than one option with two names: this one says nothing about DEBUG and moves a trap the bash columns otherwise bound to the frame that set it. With it on the failure inside `f` and the failing call itself each fire, so two E lines arrive where the option off gives one. The refusals are the same three: dash and ksh93 end the shell on the `set`, zsh says `no such option`",
+	},
+	{
+		ID: "opt/set-o-errtrace-carries-the-err-trap-into-a-subshell", Category: "shell options",
+		Snippet: `set -o errtrace; trap 'echo E' ERR; (false); echo done`,
+		Why:     "the fourth boundary, and the one that completes the pair of pairs: the option carries the ERR trap into the child as well as into a function, so the failure inside the group and the failing group itself each fire and 5.3 writes two E lines where its control writes one. bash 3.2 is the column to read here — its control writes none at all, and with the name taken it writes one — so the two bash versions arrive at different counts from different starting points and only their movement agrees",
 	},
 	{
 		ID: "shopt/extdebug-is-taken-and-reads-back", Category: "shell options",

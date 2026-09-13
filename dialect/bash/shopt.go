@@ -218,11 +218,12 @@ var shoptSwitches = map[string]struct {
 	// What bash's extended debugging *also* does is not here: `declare -F`
 	// reporting a definition's file and line, a DEBUG action's status
 	// skipping the next command or simulating a `return`, and the
-	// BASH_ARGC/BASH_ARGV record. The entry keeps the same partial honesty
-	// `set -o posix` does — it moves what was measured to move with it and
-	// promises nothing else — rather than refusing the name outright, which
-	// is what left a debugging script with the option off, `$?` at 1 and a
-	// trap that saw only the call (#2426).
+	// BASH_ARGC/BASH_ARGV record — measured and itemized in #2476, so the
+	// remainder is a count rather than a paragraph. The entry keeps the same
+	// partial honesty `set -o posix` does — it moves what was measured to
+	// move with it and promises nothing else — rather than refusing the name
+	// outright, which is what left a debugging script with the option off,
+	// `$?` at 1 and a trap that saw only the call (#2426).
 	"extdebug": {
 		get: func(r *interp.Runner) bool { return shoptStoredState(r, "extdebug", false) },
 		set: func(r *interp.Runner, on bool) {

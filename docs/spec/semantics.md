@@ -10107,6 +10107,12 @@ for it to override. Measured on bash 5.3.15, 2026-09-12:
 | `trap 'echo D' DEBUG; . ./lib.sh` (one line inside) | one `D`, for the `.` | two |
 | `trap 'echo D' DEBUG; (echo s); echo x` | one `D`, after `s` | two, one before it |
 
+Each of those four is a pair of corpus rows rather than one — the
+`…-with-nothing-asked` row is the control, and it is the control for the
+axis as much as for the option: it is where ksh93 and zsh are seen tracing
+a call with nothing asked, and where bash 3.2 is seen not judging a failing
+subshell that 5.3 judges.
+
 A **function** call is the one shape where the count is not simply
 doubled at the boundary: bash fires the trap twice for the call itself
 once `functrace` has it running inside, so
@@ -10143,7 +10149,8 @@ What bash's extended debugging *also* names is not provided here:
 status skipping the next command or simulating a `return`, and the
 BASH_ARGC/BASH_ARGV record. The name is taken for what it moves rather
 than refused for what it does not, which is the same partial honesty
-`set -o posix` keeps.
+`set -o posix` keeps — and the remainder is itemized and measured in
+#2476 rather than left as this paragraph, so it is countable.
 
 **`ExitTrapFiresPastTheEnd`** — bash unspecified · dash unspecified · ksh93 no · zsh yes
 

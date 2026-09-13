@@ -1053,7 +1053,7 @@ type Runner struct {
 	// completions are the specs `complete` registered, kept verbatim so a
 	// bash_completion.d file run in a non-interactive shell registers, lists
 	// and removes them the way it would in bash — nothing here completes.
-	completions map[string]string
+	completions map[string]completionSpec
 
 	// verbose is `set -v`: each line is written back as it is read, which
 	// the front end does — it is the one holding the raw text.

@@ -671,6 +671,30 @@ func (r *Runner) setLetters(letters string, on bool) bool {
 				continue
 			}
 			r.onecmd = on
+		case 'p':
+			// The short spelling of `privileged`. bash, ksh93 and zsh have
+			// the letter and all three mean privileged mode by it; dash and
+			// ash refuse it, so it is asked rather than assumed.
+			//
+			// Written through the long name rather than into a field of its
+			// own, which is what keeps `set +p` and `set +o privileged` one
+			// request: all three shells that have the letter also list the
+			// name, measured. This shell has no privileged mode, so the name
+			// is one of the entries whose whole answer is "already off" —
+			// turning it off is granted and turning it on is refused, which
+			// is setoptions.go's bargain and not a special case here.
+			if !r.ask(r.sem().SetHasThePrivilegedLetter, "`set -p` being an option letter at all") {
+				if r.unspecified {
+					return false
+				}
+				if !r.badSetOptionLetter(opt, on) {
+					return false
+				}
+				continue
+			}
+			if !r.setNamedOption("privileged", on) {
+				return false
+			}
 		case 'f':
 			// Not universal: one shell spells this option the long way only
 			// and uses `-f` for something else, which does not touch

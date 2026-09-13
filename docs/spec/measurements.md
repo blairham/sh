@@ -3376,6 +3376,15 @@ grades it and nothing drift-checks it either, for the same reason.
 | `compgen/a-prefix-only-the-shells-own-names-have` | `st=127` **2>** `<shell>: 1: compgen: not found` | `st=1` | `st=1` | `st=1` | `st=127` **2>** `<shell>: compgen: not found` | `st=127` **2>** `<shell>:1: command not found: compgen` | `st=127` **2>** `<shell>: compgen: not found` |
 | `compgen/a-prefix-the-person-defined-over-the-shells-name` | `st=127` **2>** `<shell>: 1: compgen: not found` | `pushd~st=0` | `pushd~st=0` | `pushd~st=0` | `st=127` **2>** `<shell>: compgen: not found` | `st=127` **2>** `<shell>:1: command not found: compgen` | `st=127` **2>** `<shell>: compgen: not found` |
 | `compgen/an-action-this-shell-does-not-generate` | `st=127` **2>** `<shell>: 1: compgen: not found` | `st=1` | `st=1` | `st=1` | `st=127` **2>** `<shell>: compgen: not found` | `st=127` **2>** `<shell>:1: command not found: compgen` | `st=127` **2>** `<shell>: compgen: not found` |
+| `complete/an-option-and-its-argument` | `st=127~n=127` **2>** `<shell>: 1: complete: not found~<shell>: 1: complete: not found~<shell>: 1: complete: not found` | `complete -o nospace -F _f foo~st=0~n=1` **2>** `<shell>: line 1: complete: nospace: no completion specification` | `complete -o nospace -F _f foo~st=0~n=1` **2>** `<shell>: line 1: complete: nospace: no completion specification` | `complete -o nospace -F _f foo~st=0~n=1` **2>** `<shell>: line 0: complete: nospace: no completion specification` | `st=127~n=127` **2>** `<shell>: complete: not found~<shell>: complete: not found~<shell>: complete: not found` | `st=127~n=127` **2>** `<shell>:1: command not found: complete~<shell>:1: command not found: complete~<shell>:1: command not found: complete` | `st=127~n=127` **2>** `<shell>: complete: not found~<shell>: complete: not found~<shell>: complete: not found` |
+| `complete/the-options-print-back-first-and-sorted` | **2>** `<shell>: 1: complete: not found~<shell>: 1: complete: not found` *(status 127)* | `complete -o dirnames -o nospace -F _f foo` | `complete -o dirnames -o nospace -F _f foo` | `complete -o dirnames -o nospace -F _f foo` | **2>** `<shell>: complete: not found~<shell>: complete: not found` *(status 127)* | **2>** `<shell>:1: command not found: complete~<shell>:1: command not found: complete` *(status 127)* | **2>** `<shell>: complete: not found~<shell>: complete: not found` *(status 127)* |
+| `complete/an-option-name-that-is-not-one` | `st=127~p=127` **2>** `<shell>: 1: complete: not found~<shell>: 1: complete: not found` | `st=2~p=1` **2>** `<shell>: line 1: complete: nosuchopt: invalid option name~<shell>: line 1: complete: foo: no completion specification` | `st=2~p=1` **2>** `<shell>: line 1: complete: nosuchopt: invalid option name~<shell>: line 1: complete: foo: no completion specification` | `st=2~p=1` **2>** `<shell>: line 0: complete: nosuchopt: invalid option name~<shell>: line 0: complete: foo: no completion specification` | `st=127~p=127` **2>** `<shell>: complete: not found~<shell>: complete: not found` | `st=127~p=127` **2>** `<shell>:1: command not found: complete~<shell>:1: command not found: complete` | `st=127~p=127` **2>** `<shell>: complete: not found~<shell>: complete: not found` |
+| `compopt/moves-the-options-of-a-registered-spec` | `st=127` **2>** `<shell>: 1: complete: not found~<shell>: 1: compopt: not found~<shell>: 1: complete: not found~<shell>: 1: compopt: not found~<shell>: 1: complete: not found` *(status 127)* | `st=0~complete -o nospace -F _f foo~complete -F _f foo` | `st=0~complete -o nospace -F _f foo~complete -F _f foo` | `st=127~complete -F _f foo~complete -F _f foo` **2>** `<shell>: compopt: command not found~<shell>: compopt: command not found` | `st=127` **2>** `<shell>: complete: not found~<shell>: compopt: not found~<shell>: complete: not found~<shell>: compopt: not found~<shell>: complete: not found` *(status 127)* | `st=127` **2>** `<shell>:1: command not found: complete~<shell>:1: command not found: compopt~<shell>:1: command not found: complete~<shell>:1: command not found: compopt~<shell>:1: command not found: complete` *(status 127)* | `st=127` **2>** `<shell>: complete: not found~<shell>: compopt: not found~<shell>: complete: not found~<shell>: compopt: not found~<shell>: complete: not found` *(status 127)* |
+| `compopt/lists-every-options-state` | **2>** `<shell>: 1: complete: not found~<shell>: 1: compopt: not found` *(status 127)* | `compopt +o bashdefault +o default +o dirnames +o filenames +o fullquote +o noquote +o nosort +o nospace +o plusdirs foo` | `compopt +o bashdefault +o default +o dirnames +o filenames +o fullquote +o noquote +o nosort +o nospace +o plusdirs foo` | **2>** `<shell>: compopt: command not found` *(status 127)* | **2>** `<shell>: complete: not found~<shell>: compopt: not found` *(status 127)* | **2>** `<shell>:1: command not found: complete~<shell>:1: command not found: compopt` *(status 127)* | **2>** `<shell>: complete: not found~<shell>: compopt: not found` *(status 127)* |
+| `compopt/a-name-with-no-specification` | `st=127~d=127` **2>** `<shell>: 1: compopt: not found~<shell>: 1: compopt: not found` | `st=1~d=1` **2>** `<shell>: line 1: compopt: true: no completion specification~<shell>: line 1: compopt: _DefaultCmD_: no completion specification` | `st=1~d=1` **2>** `<shell>: line 1: compopt: true: no completion specification~<shell>: line 1: compopt: _DefaultCmD_: no completion specification` | `st=127~d=127` **2>** `<shell>: compopt: command not found~<shell>: compopt: command not found` | `st=127~d=127` **2>** `<shell>: compopt: not found~<shell>: compopt: not found` | `st=127~d=127` **2>** `<shell>:1: command not found: compopt~<shell>:1: command not found: compopt` | `st=127~d=127` **2>** `<shell>: compopt: not found~<shell>: compopt: not found` |
+| `compopt/with-no-name-at-all` | `st=127` **2>** `<shell>: 1: complete: not found~<shell>: 1: compopt: not found` | `st=1` **2>** `<shell>: line 1: compopt: not currently executing completion function` | `st=1` **2>** `<shell>: line 1: compopt: not currently executing completion function` | `st=127` **2>** `<shell>: compopt: command not found` | `st=127` **2>** `<shell>: complete: not found~<shell>: compopt: not found` | `st=127` **2>** `<shell>:1: command not found: complete~<shell>:1: command not found: compopt` | `st=127` **2>** `<shell>: complete: not found~<shell>: compopt: not found` |
+| `umask/prints-a-reusable-line` | `st=2~set=2~0022` **2>** `<shell>: 1: umask: Illegal option -p~<shell>: 1: umask: Illegal option -p~<shell>: 1: umask: Illegal option -p` | `umask 0022~st=0~umask -S u=rwx,g=rx,o=rx~set=0~0077` | `umask 0022~st=0~umask -S u=rwx,g=rx,o=rx~set=0~0077` | `umask 0022~st=0~umask -S u=rwx,g=rx,o=rx~set=0~0077` | `st=2~set=2~0022` **2>** `<shell>: umask: -p: unknown option~Usage: umask [-S] [mask]~<shell>: umask: -p: unknown option~Usage: umask [-S] [mask]~<shell>: umask: -p: unknown option~Usage: umask [-S] [mask]` | `st=1~set=1~022` **2>** `<shell>:umask:1: bad option: -p~<shell>:umask:1: bad option: -p~<shell>:umask:1: bad option: -p` | `st=2~set=2~0022` **2>** `<shell>: umask: line 0: illegal option -p~<shell>: umask: line 0: illegal option -p~<shell>: umask: line 0: illegal option -p` |
+| `opt/set-plus-p-is-privileged-under-a-letter` | **2>** `<shell>: 1: set: Illegal option -p` *(status 2)* | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | **2>** `<shell>: set: line 0: illegal option +p` *(status 2)* |
 | `shift/an-operand-that-was-never-given` | **2>** `<shell>: 1: shift: can't shift that many` *(status 2)* | `st=1` | `st=1` **2>** `<shell>: line 1: shift: shift count out of range` | `st=1` | **2>** `<shell>: shift: (null): bad number` *(status 1)* | `st=1` **2>** `<shell>:shift:1: shift count must be <= $#` | `st=1` |
 | `setopt/normalizes-zsh-spellings` | `st=127~x*` **2>** `<shell>: 1: setopt: not found` | `st=127~x*` **2>** `<shell>: line 1: setopt: command not found` | `st=127~x*` **2>** `<shell>: line 1: setopt: command not found` | `st=127~x*` **2>** `<shell>: setopt: command not found` | `st=127~x*` **2>** `<shell>: setopt: not found` | `st=0~x*` | `st=127~x*` **2>** `<shell>: setopt: not found` |
 | `setopt/acts-past-a-bad-name` | `st=127~x*` **2>** `<shell>: 1: setopt: not found` | `st=127~x*` **2>** `<shell>: line 1: setopt: command not found` | `st=127~x*` **2>** `<shell>: line 1: setopt: command not found` | `st=127~x*` **2>** `<shell>: setopt: command not found` | `st=127~x*` **2>** `<shell>: setopt: not found` | `st=1~x*` **2>** `<shell>:setopt:1: no such option: zzqq` | `st=127~x*` **2>** `<shell>: setopt: not found` |
@@ -4899,6 +4908,42 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   compgen -A alias zzzznosuch; echo "st=$?"
   ```
+- `complete/an-option-and-its-argument` — `-o` takes the next word, which this shell did not read until #2412 — so `complete -o nospace -F _f foo` registered a spec for a command called `nospace` as well as for `foo`, and printed `foo`'s back with the option missing. The second half of the row is the part that catches it: `complete -p nospace` must be a miss
+  ```sh
+  complete -o nospace -F _f foo; complete -p foo; echo "st=$?"; complete -p nospace; echo "n=$?"
+  ```
+- `complete/the-options-print-back-first-and-sorted` — bash renders the `-o` options ahead of the rest of the spec, sorted and deduplicated, whatever order they were written in — so a spec is printed back canonically rather than verbatim, and the two spellings of one spec list identically
+  ```sh
+  complete -F _f -o nospace -o dirnames foo; complete -p foo
+  ```
+- `complete/an-option-name-that-is-not-one` — the nine option names are validated before the table is touched: nothing is registered, which is what the second lookup shows
+  ```sh
+  complete -o nosuchopt foo; echo "st=$?"; complete -p foo; echo "p=$?"
+  ```
+- `compopt/moves-the-options-of-a-registered-spec` — the whole of what `compopt` can be observed doing without a terminal: a change to a registered spec, in both directions, showing where `complete -p` prints it. The other four dialects have neither builtin
+  ```sh
+  complete -F _f foo; compopt -o nospace foo; echo "st=$?"; complete -p foo; compopt +o nospace foo; complete -p foo
+  ```
+- `compopt/lists-every-options-state` — with no -o or +o it writes all nine options in bash's own order with the sign saying whether the spec holds each — which is also where the nine names came from
+  ```sh
+  complete -F _f foo; compopt foo
+  ```
+- `compopt/a-name-with-no-specification` — the refusal a script reaches, and the second field is the one worth keeping: `-D` names the *default* compspec, which bash keeps in the same table under a name no command can have and says out loud — `_DefaultCmD_`
+  ```sh
+  compopt -o default true; echo "st=$?"; compopt -D; echo "d=$?"
+  ```
+- `compopt/with-no-name-at-all` — bash means `compopt` for use from *inside* a completion function, where a call with no name changes the completion in progress; outside one it is `not currently executing completion function` at 1, which is the only answer a shell with no line editor can give
+  ```sh
+  complete -F _f foo; compopt -o nospace; echo "st=$?"
+  ```
+- `umask/prints-a-reusable-line` — bash alone has `-p`, which writes the mask as the command that would set it again — the half of `saved=$(umask -p); …; eval "$saved"` that makes the idiom work. Only the *report* takes the prefix: setting with -p is silent, measured. The other four refuse the letter, each in its own words
+  ```sh
+  umask 022; umask -p; echo "st=$?"; umask -p -S; umask -p 077; echo "set=$?"; umask
+  ```
+- `opt/set-plus-p-is-privileged-under-a-letter` — `-p` is the short spelling of `privileged` in bash, ksh93 and zsh and an illegal option in dash and ash. Asking to turn *off* a mode the shell is not in is granted in all three that have it, which is the direction a script writes — and the direction this shell can honestly answer, having no privileged mode to turn on
+  ```sh
+  set +p; echo "st=$?"
+  ```
 - `shift/an-operand-that-was-never-given` — past the end with no count written down, ksh93 reports `(null)` — the operand it did not get — where its complaint about `shift 99` names the 99; dash keeps one sentence for both and bash and zsh keep their usual answers
   ```sh
   shift; echo "st=$?"
@@ -6412,6 +6457,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `unset/the-n-letter-still-refuses-a-readonly` | **2>** `<shell>: 1: unset: Illegal option -n` *(status 2)* | `st=1 [1]` **2>** `<shell>: line 1: unset: r: cannot unset: readonly variable` | **2>** `<shell>: line 1: unset: r: cannot unset: readonly variable` *(status 1)* | `st=2 [1]` **2>** `<shell>: line 0: unset: -n: invalid option~unset: usage: unset [-f] [-v] [name ...]` | `st=1 [1]` **2>** `<shell>: unset: warning: r: is read only` | `st=1 [1]` **2>** `<shell>:unset:1: bad option: -n` | **2>** `<shell>: unset: line 0: illegal option -n` *(status 2)* |
 | `special/lineno-in-a-function-diverges` | `2` | `2` | `2` | `2` | `2` | `1` | `2` |
 | `special/lineno-in-a-file-a-function-sourced` | `a=0~b=1` | `a=1~b=2` | `a=1~b=2` | `a=1~b=2` | `a=1~b=2` | `a=1~b=2` | `a=1~b=2` |
+| `var/bash-aliases-is-the-alias-table` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[echo] n=1 k=q` | `[echo] n=1 k=q` | `[] n=0 k=` | `[] n=0 k=` | **2>** `<shell>:1: bad substitution` *(status 1)* | **2>** `<shell>: syntax error: bad substitution` *(status 2)* |
+| `var/bash-aliases-lists-and-is-written` | **2>** `<shell>: 1: declare: not found~<shell>: 1: BASH_ALIASES[w]=date: not found~alias: w not found` *(status 1)* | `declare -A BASH_ALIASES=([q]="echo" )~alias w='date'` | `declare -A BASH_ALIASES=([q]="echo" )~w='date'` | **2>** `<shell>: line 0: declare: BASH_ALIASES: not found~<shell>: line 0: alias: w: not found` *(status 1)* | **2>** `<shell>: declare: not found~w: alias not found` *(status 1)* | **2>** `<shell>:declare:1: no such variable: BASH_ALIASES~<shell>:1: BASH_ALIASES: assignment to invalid subscript range` *(status 1)* | **2>** `<shell>: declare: not found~<shell>: BASH_ALIASES[w]=date: not found~alias: w not found` *(status 1)* |
 | `param/an-unbraced-flag-sigil-before-a-name` | `[$+v]~[$=v]~[$~v]~[0v]` | `[$+v]~[$=v]~[$~v]~[0v]` | `[$+v]~[$=v]~[$~v]~[0v]` | `[$+v]~[$=v]~[$~v]~[0v]` | `[$+v]~[$=v]~[$~v]~[0v]` | `[1]~[hello]~[hello]~[5]` | `[$+v]~[$=v]~[$~v]~[0v]` |
 | `param/the-existence-sigil-needs-a-name-or-a-digit` | `[$+1]~[$+@]~[$++v]~[$+]` | `[$+1]~[$+@]~[$++v]~[$+]` | `[$+1]~[$+@]~[$++v]~[$+]` | `[$+1]~[$+@]~[$++v]~[$+]` | `[$+1]~[$+@]~[$++v]~[$+]` | `[1]~[$+@]~[$++v]~[$+]` | `[$+1]~[$+@]~[$++v]~[$+]` |
 | `core/a-bare-brace-inside-a-quoted-expansion` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[{y][xr}]` | `[{y][xr}]` | `[{y][xr}]` | `[{y}; printf [%s] x; echo]` | `[{y][xr}]` | `[{y][xr}]` |
@@ -6619,6 +6666,14 @@ grades it and nothing drift-checks it either, for the same reason.
   . ./inc.sh
   }
   f
+  ```
+- `var/bash-aliases-is-the-alias-table` — bash presents the alias table as an association, and it is a view rather than a copy — the read follows the table as it is now. zsh and ksh93 have the subscript syntax and no such name, so both answer empty; dash has neither
+  ```sh
+  alias q=echo; echo "[${BASH_ALIASES[q]}] n=${#BASH_ALIASES[@]} k=${!BASH_ALIASES[@]}"
+  ```
+- `var/bash-aliases-lists-and-is-written` — the two halves a produced association needs: it lists back as one, and an assignment to an element *defines an alias*, which is what makes the writer required rather than optional — without one the write would land in a stored table and the view would silently become a snapshot
+  ```sh
+  alias q=echo; declare -p BASH_ALIASES; BASH_ALIASES[w]=date; alias w
   ```
 - `param/an-unbraced-flag-sigil-before-a-name` — one column reads a flag character between the `$` and the name and the other five read text. `$+v` is `1` there and the literal `$+v` everywhere else, and `$=v` and `$~v` are `hello` against themselves — while `$#v` is `5` in the one and `0v` in the rest — the length sigil, which is a *different* flag (BareSubscript) and is here as the control that says this column had one such form already. A grammar question rather than a semantic one: the word boundary moves, and once the spans are cut nothing downstream can tell the two readings apart
   ```sh

@@ -4776,7 +4776,6 @@ option on where `emulate csh` and `emulate zsh` leave it off — measured all
 four ways, which is what makes it the fifth axis an emulation carries.
 
 So 143 of 185 are recorded, the count above is the one produced by counting
-
 the constructors in `dialect/zsh/setopt.go`, and **the fixed set is now
 exactly the set real zsh refuses**: `interactive`, `shinstdin`,
 `singlecommand` and `zle`. `monitor` left it in #1720 because zsh grants it
@@ -7070,6 +7069,61 @@ action we cannot generate is a promise we cannot keep:
   the reason `compgen` is the interesting third of it: `compgen` answers
   a question, where the other two register and adjust completion
   specifications for an interactive line editor this core does not own.
+  Both are implemented as far as a script without a terminal can see —
+  see below.
+
+### `complete` and `compopt`: the options, and the three specs that are not commands
+
+Neither builtin completes anything here, and neither is meant to. What
+they have to do is survive: every `bash_completion.d` file registers
+specs in a non-interactive shell and exits 0, and dying at 127 on the
+first `complete` is what broke carapace's setup. So the spec is kept and
+printed back, and everything a script can observe about it is measured.
+
+Two gaps closed in #2412, both found by measurement rather than by
+reading the code.
+
+**`-o` takes the next word.** It did not, so `complete -o nospace -F _foo
+foo` registered a specification for a command called `nospace` as well as
+for `foo`, and printed `foo`'s back with the option's name missing. Both
+halves are silent: a plausible listing, and a spec for a command nobody
+named. The nine option names are `bashdefault`, `default`, `dirnames`,
+`filenames`, `fullquote`, `noquote`, `nosort`, `nospace` and `plusdirs`
+— read off `compopt name`, which lists every one — and a word that is not
+one of them is `invalid option name` at 2 before the table is touched.
+
+**The options print back first, sorted and deduplicated**, whatever order
+they were written in: `complete -F f -o nospace x` and `complete -o
+nospace -F f x` both list as `complete -o nospace -F f x`. So a spec is
+printed back canonically rather than verbatim, which is the one place
+this shell does not keep what it was given.
+
+**`compopt`** changes those options on a spec that is already registered,
+which is the whole of what it can be observed doing here. Measured
+against bash 5.3.15:
+
+- `compopt -o nospace name` and `compopt +o name` move one option, and
+  `complete -p name` is where the change shows;
+- `compopt name` with neither writes all nine in bash's own order, each
+  with the sign saying whether the spec holds it;
+- a name nothing registered is `compopt: name: no completion
+  specification` at 1, and the other names in the same call are still
+  changed;
+- `compopt` with **no name at all** is `not currently executing
+  completion function` at 1. bash means that literally — the no-name form
+  operates on the completion in progress — and there is never one here,
+  so it is the only answer this shell can give and it is bash's answer
+  for every route a script can reach.
+
+`-D`, `-E` and `-I` name the default, empty-line and initial-word
+specifications, which bash keeps in the same table under names no command
+can have and says out loud: `compopt -D` with none registered is
+`compopt: _DefaultCmD_: no completion specification`. Printed back as the
+letter, in the slot a command's name would take — `complete -D -F f`
+lists as `complete -F f -D`.
+
+bash 3.2 has no `compopt` at all, which is a version fact rather than an
+axis: this dialect models 5.3.
 
 ## `mapfile`, and a delimiter that is not a character
 
@@ -10349,6 +10403,20 @@ contaminated probe, macOS ships /usr/bin/cd. Recorded as
 
 ### `umask`, and the symbolic form
 
+**`UmaskHasTheReusableLetter`** — bash yes · dash no · ksh93 no · zsh no ·
+ash no
+
+Gives `umask` a `-p`, which writes the mask as the command that would set
+it again: `umask 0022` rather than `0022`, and `umask -S u=rwx,g=rx,o=rx`
+with `-S` beside it. It is the half of `saved=$(umask -p); …; eval
+"$saved"` that makes the idiom work, and bash alone has it — the other
+four refuse it as an option `umask` has not got, each in its own words.
+
+Only the *report* takes the prefix. `umask -p 077` sets the mask and says
+nothing, and `umask -p -S 077` prints the bare symbolic form the `-S`
+echo already prints; both measured. The letter bundles either way round,
+`-pS` and `-Sp` alike.
+
 **An omitted who before `=` is not an axis.** `umask -- =w` means all
 three groups in every column of the panel, and `SymbolicMaskSetsWithoutAWho`
 recorded a disagreement that is not there. See *A probe that measured the
@@ -11367,6 +11435,27 @@ with RETURN) into functions and subshells the dialect otherwise bounds
 them out of. bash alone: dash and ksh93 refuse the letters, and zsh
 spells different options with them, so only a refusal is honest
 elsewhere. Recorded as `opt/set-e-carries-the-err-trap`.
+
+**`SetHasThePrivilegedLetter`** — bash yes · ksh93 yes · zsh yes · dash no ·
+ash no
+
+Makes `set -p` the short spelling of `set -o privileged`. Three of the
+panel have the letter and all three mean privileged mode by it; dash and
+ash refuse it as an illegal option.
+
+Routed through the long name rather than into a field of its own, so the
+letter and the name are one question with one answer — the rule `set -t`
+and `onecmd` already follow, and all three shells that have the letter
+also list the name. This shell has no privileged mode, so `privileged` is
+one of the `set -o` entries whose whole answer is "already off": `set +p`
+is **granted**, because turning off something the shell was never doing
+leaves it exactly where it was asked to be, and `set -p` is refused out
+loud, because turning it on would be a promise the shell cannot keep.
+That is setoptions.go's bargain and not a rule about this letter, and the
+divergence it leaves — real bash answers `set -p` with 0 — is the same
+one `set -o privileged` already had. Recorded as
+`opt/set-plus-p-is-privileged-under-a-letter`, which is the direction a
+script writes.
 
 **`UnderscoreTracksTheLastArgument`** — bash yes · dash no · ksh93 no · zsh yes
 

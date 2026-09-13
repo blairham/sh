@@ -996,6 +996,7 @@ func Apply(r *interp.Runner) {
 	r.Unregister("builtin")
 	// No `compgen` here; it is bash's alone.
 	r.Unregister("compgen")
+	r.Unregister("compopt")
 	// fc really is an external here: `command -v fc` answers /usr/bin/fc.
 	r.Unregister("fc")
 	r.Unregister("complete")

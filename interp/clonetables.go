@@ -124,7 +124,19 @@ func (c *Runner) ownTables(r *Runner) {
 	// cloexec` must not decide what the parent hands to a child.
 	c.cloexecFds = maps.Clone(r.cloexecFds)
 
-	c.completions = maps.Clone(r.completions)
+	// Deep, unlike the maps above: a spec holds two slices, and a subshell's
+	// `compopt -o nospace f` writing into a backing array the parent still
+	// points at would change the parent's spec from inside a subshell — the
+	// one thing a subshell may never do.
+	if r.completions != nil {
+		c.completions = make(map[string]completionSpec, len(r.completions))
+		for name, spec := range r.completions {
+			c.completions[name] = completionSpec{
+				options: slices.Clone(spec.options),
+				words:   slices.Clone(spec.words),
+			}
+		}
+	}
 
 	// The tables that say what a command *name* means, on the same terms as
 	// the variable tables above: a subshell inherits them and owns what it

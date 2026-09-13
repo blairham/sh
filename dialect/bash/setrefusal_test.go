@@ -102,11 +102,18 @@ func TestBashRefusesAnInvocationOptionWithItsOwnUsageBlock(t *testing.T) {
 // the pairing that broke in #1709 — listed by one and refused by the other.
 // `-B` left for the same reason in #1856: brace expansion really switches off
 // now, so the letter is accepted and its old line here would be dead data.
+//
+// `-p` left in #2412 and is the third shape: the letter is the short spelling
+// of `privileged`, which this shell answers through the `set -o` table like
+// any other name it does not implement — `set +p` is granted because the
+// shell is already in the state it asks for, and `set -p` is refused by the
+// name rather than by the letter. A letter routed to a name must not also be
+// listed here, or the two would give different sentences for one question.
 func TestBashKeepsTheSetLettersItHasAndThisShellDoesNot(t *testing.T) {
-	if got, want := bash.Diagnostics().UnimplementedOptionLetters["set"], "bkprHP"; got != want {
+	if got, want := bash.Diagnostics().UnimplementedOptionLetters["set"], "bkrHP"; got != want {
 		t.Errorf("UnimplementedOptionLetters[set] = %q, want %q", got, want)
 	}
-	for _, l := range "bkprHP" {
+	for _, l := range "bkrHP" {
 		src := "set -" + string(l) + "\n"
 		if got := refuseInScript(t, src); !strings.Contains(got, "is not implemented yet") {
 			t.Errorf("%q said %q, want it called missing rather than invalid", src, got)

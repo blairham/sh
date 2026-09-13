@@ -5530,6 +5530,28 @@ type Semantics struct {
 	// ksh93 as tolerant off ksh93's own feature.
 	CommandRejectsUnknownOption Answer
 
+	// UmaskHasTheReusableLetter gives `umask` a `-p`, which prints the mask
+	// as a command that would set it again: `umask 0022` rather than `0022`,
+	// and `umask -S u=rwx,g=rx,o=rx` with `-S` beside it.
+	//
+	// It is what `saved=$(umask -p)` is for — save the mask, change it, and
+	// `eval "$saved"` to put it back — and bash alone has the letter. The
+	// other four refuse it as an option `umask` does not have.
+	//
+	// Only the *report* takes the prefix. `umask -p 077` sets the mask and
+	// says nothing, and `umask -p -S 077` prints the bare symbolic form the
+	// `-S` echo already prints, measured both ways.
+	UmaskHasTheReusableLetter Answer
+
+	// SetHasThePrivilegedLetter makes `set -p` the short spelling of
+	// `set -o privileged`.
+	//
+	// bash, ksh93 and zsh have the letter and all three mean privileged mode
+	// by it; dash and ash refuse it. The long name is what carries the state
+	// wherever it is answered, so the letter and the name cannot come to
+	// disagree — the rule `set -t` and `onecmd` already follow.
+	SetHasThePrivilegedLetter Answer
+
 	// TestHasTheFileExistsLetter gives `test` a *unary* `-a`, which asks the
 	// question `-e` asks: `test -a f` is true when f exists.
 	//
@@ -10155,6 +10177,9 @@ func PosixSemantics() Semantics {
 		// And POSIX gives `command` a builtin to run: bypassing the function
 		// table is what the utility is for, not bypassing the builtins too.
 		CommandReachesABuiltin: Yes,
+		// POSIX gives `umask` `-S` and no more, and `set` no `-p`.
+		UmaskHasTheReusableLetter: No,
+		SetHasThePrivilegedLetter: No,
 		// POSIX gives `test` neither a unary `-a`, a `-o`, a `-N`, nor `<`
 		// and `>`: its `-a` and `-o` are the connectives alone, and the
 		// string comparisons it has are `=` and `!=`. So the core has none

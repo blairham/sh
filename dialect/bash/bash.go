@@ -802,6 +802,10 @@ func Semantics() interp.Semantics {
 	// where two words say the letter is an operator rather than the
 	// connective, `test -o errexit` asks whether a `set -o` name is on, and
 	// `test -N f` asks whether the file was written since it was read.
+	// `umask -p` prints the mask as a command that would set it again, and
+	// `set -p` is the short spelling of `set -o privileged`.
+	s.UmaskHasTheReusableLetter = interp.Yes
+	s.SetHasThePrivilegedLetter = interp.Yes
 	s.TestHasTheFileExistsLetter = interp.Yes
 	s.TestHasTheShellOptionOperator = interp.Yes
 	s.TestHasTheModifiedSinceReadOperator = interp.Yes
@@ -1856,7 +1860,7 @@ func Diagnostics() interp.Diagnostics {
 			// the same request, so a letter listed here while the name is
 			// wired would refuse what the name grants — see
 			// Semantics.SetHasTheTLetter.
-			"set": "bkprHP",
+			"set": "bkrHP",
 			// Options these builtins have here and this shell does not.
 			"wait": "fp",
 			// disown's sweepers: -a for every job, -h for HUP shielding
@@ -2136,6 +2140,8 @@ func Apply(r *interp.Runner) {
 	// because it is not the `zsh/datetime` registration under another name —
 	// see epoch.go for the row-by-row measurement (#1158).
 	registerEpochClock(r)
+	// The alias table written as an association, readable and writable.
+	registerBashAliases(r)
 	if dot, ok := r.Builtin("."); ok {
 		r.Register("source", dot)
 	}

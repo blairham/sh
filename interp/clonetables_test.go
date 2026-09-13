@@ -242,7 +242,7 @@ func seedTables(r *Runner) {
 	r.aliases = map[string]aliasDef{"seed": {value: "v"}}
 	r.suffixAliases = map[string]string{"seed": "v"}
 	r.assigned = map[string]string{"seed": "v"}
-	r.completions = map[string]string{"seed": "v"}
+	r.completions = map[string]completionSpec{"seed": {options: []string{"nospace"}, words: []string{"-F", "f"}}}
 	r.custom = map[string]Builtin{"seed": func(*Runner, context.Context, []string) int { return 0 }}
 	r.declaredEmpty = map[string]bool{"seed": true}
 	r.declaring = map[string]bool{"seed": true}

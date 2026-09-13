@@ -976,6 +976,7 @@ func Apply(r *interp.Runner) {
 	r.Unregister("mapfile")
 	r.Unregister("readarray")
 	r.Unregister("compgen")
+	r.Unregister("compopt")
 	r.Unregister("complete")
 	r.Unregister("builtin")
 	r.Unregister("enable")

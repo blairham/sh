@@ -78,7 +78,11 @@ func TestZshKeepsTheSetLettersItHasAndThisShellDoesNot(t *testing.T) {
 	// letter and refuses to *move* it, which is a different sentence from one
 	// we have not built — see Diagnostics.ImmovableOptionLetters and
 	// TestZshRefusesTheOneCommandLetterInItsOwnWords.
-	const missing = "dgiklprswyBDEFGHIJKLMNOPQRSTUVWXYZ"
+	// `-p` is not in it either, and for a third reason: it is the short
+	// spelling of `privileged`, a name this shell's own option table records,
+	// so both directions of the letter are granted at 0 — which is what real
+	// zsh answers. See Semantics.SetHasThePrivilegedLetter (#2412).
+	const missing = "dgiklrswyBDEFGHIJKLMNOPQRSTUVWXYZ"
 	if got := zsh.Diagnostics().UnimplementedOptionLetters["set"]; got != missing {
 		t.Errorf("UnimplementedOptionLetters[set] = %q, want %q", got, missing)
 	}

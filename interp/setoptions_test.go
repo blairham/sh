@@ -903,3 +903,48 @@ func TestARefusalThroughTheDialectsSeamDoesNotEndTheScript(t *testing.T) {
 		t.Errorf("through `set`: out %q status %d, want %q at 1", out, st, want)
 	}
 }
+
+// `set -p` is the short spelling of `set -o privileged`, and the letter is
+// asked of the dialect: bash, ksh93 and zsh have it and all three mean
+// privileged mode by it, where dash and ash refuse it.
+//
+// Routed through the long name rather than into a field of its own, which is
+// what makes the two spellings one question. This shell has no privileged
+// mode, so `privileged` is one of the `set -o` entries whose whole answer is
+// "already off" — turning it off is granted and turning it on is refused,
+// which is setoptions.go's bargain and not a rule about this letter.
+func TestThePrivilegedLetter(t *testing.T) {
+	has := func(a Answer) func(*Runner) {
+		return func(r *Runner) {
+			s := *r.Semantics
+			s.SetHasThePrivilegedLetter = a
+			r.Semantics = &s
+			r.AddSetOptions("privileged")
+			dg := Diagnostics{}
+			r.Diagnostics = &dg
+		}
+	}
+
+	// The state the shell is already in, asked for by the letter: granted.
+	out, st := run(t, `set +p; echo "st=$?"`, has(Yes))
+	if !strings.Contains(out, "st=0") {
+		t.Errorf("out = %q status %d, want the letter granted", out, st)
+	}
+	// And by the name, which must give the same answer.
+	out, _ = run(t, `set +o privileged; echo "st=$?"`, has(Yes))
+	if !strings.Contains(out, "st=0") {
+		t.Errorf("out = %q, want the name granted too", out)
+	}
+	// The move this shell cannot make is refused, and refused by the *name*
+	// — the letter is not a second complaint about the same request.
+	out, _ = run(t, `set -p; echo "st=$?"`, has(Yes))
+	if !strings.Contains(out, "privileged") || !strings.Contains(out, "st=2") {
+		t.Errorf("out = %q, want the name refused at 2", out)
+	}
+	// Where the dialect has not got the letter at all, both directions are a
+	// bad option rather than a granted no-op.
+	out, _ = run(t, `set +p; echo "st=$?"`, has(No))
+	if strings.Contains(out, "st=0") {
+		t.Errorf("out = %q, want the letter refused where the shell has not got it", out)
+	}
+}

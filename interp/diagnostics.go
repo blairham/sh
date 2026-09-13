@@ -411,8 +411,14 @@ type Diagnostics struct {
 	HashNotFound string
 
 	// CompleteNoSpec is `complete -p` or `-r` on a name nothing was
-	// registered for. One verb: the name.
+	// registered for — and `compopt` on one, which is why the builtin's own
+	// name is `%[2]s` rather than written into the sentence: the two say the
+	// same thing about the same table and each blames itself.
 	CompleteNoSpec string
+
+	// CompoptNoCompletion is `compopt` with no name outside a completion
+	// function. No verbs.
+	CompoptNoCompletion string
 
 	// FunctionNameInvalid refuses to define a function whose name carries
 	// punctuation, in the dialect that refuses one. One verb: the name.

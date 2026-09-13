@@ -178,3 +178,44 @@ func quoteArg(s string) string {
 	}
 	return `"` + s + `"`
 }
+
+// `umask -p` prints the mask as a command that would set it again, which is
+// what `saved=$(umask -p)` and `eval "$saved"` are for. bash alone has the
+// letter; the other four refuse it as an option `umask` does not have.
+func TestUmaskPrintsAReusableLine(t *testing.T) {
+	has := func(s *Semantics) { s.UmaskHasTheReusableLetter = Yes }
+	for _, tc := range []struct{ name, src, want string }{
+		{"the octal form", `umask -p`, "umask 0022\n"},
+		{"the symbolic form", `umask -p -S`, "umask -S u=rwx,g=rx,o=rx\n"},
+		// A bundle, because bash reads one, and in either order.
+		{"bundled", `umask -pS`, "umask -S u=rwx,g=rx,o=rx\n"},
+		{"bundled the other way", `umask -Sp`, "umask -S u=rwx,g=rx,o=rx\n"},
+		// Only the report takes the prefix: setting is silent with `-p`,
+		// which is measured.
+		{"setting is silent", `umask -p 077; umask`, "0077\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st, _ := umaskRun(t, 0o022, has, tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("out = %q status %d, want %q", out, st, tc.want)
+			}
+		})
+	}
+
+	// The `-S` echo of a mask it just set is bare, which is the other half
+	// of "only the report takes the prefix" and needs the echo turned on.
+	out, st, _ := umaskRun(t, 0o022, func(s *Semantics) {
+		s.UmaskHasTheReusableLetter = Yes
+		s.UmaskSetWithSPrints = Yes
+	}, `umask -p -S 077`)
+	if out != "u=rwx,g=,o=\n" || st != 0 {
+		t.Errorf("out = %q status %d, want the bare symbolic form", out, st)
+	}
+
+	// And where the shell has not got the letter it is an option refused,
+	// not a prefix quietly left off.
+	out, st, _ = umaskRun(t, 0o022, func(s *Semantics) { s.UmaskHasTheReusableLetter = No }, `umask -p`)
+	if !strings.Contains(out, "-p: invalid option") || st != 2 {
+		t.Errorf("out = %q status %d, want the letter refused", out, st)
+	}
+}

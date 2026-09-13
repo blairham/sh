@@ -1395,6 +1395,8 @@ func Semantics() interp.Semantics {
 	// `test -a f` and `test -o errexit` are `too many arguments` here, and
 	// `<` and `>` are `condition expected`.
 	s.TestHasTheModifiedSinceReadOperator = interp.Yes
+	// `set -p` is the short spelling of `privileged` here too.
+	s.SetHasThePrivilegedLetter = interp.Yes
 	// `-nt` and `-ot` want both files to exist, and `-t x` is a plain
 	// false rather than an integer complaint.
 	s.MissingFileIsOlder = interp.No
@@ -2471,7 +2473,7 @@ func Diagnostics() interp.Diagnostics {
 			// point of the pair: this shell will not move that option at
 			// all, which is a different sentence from a letter we have not
 			// built — see ImmovableOptionLetters below.
-			"set": "dgiklprswyBDEFGHIJKLMNOPQRSTUVWXYZ",
+			"set": "dgiklrswyBDEFGHIJKLMNOPQRSTUVWXYZ",
 			// read's letters about a terminal or the line editor — -q's one
 			// keystroke, -e/-E echoing, -z and the zle pair -c/-l. The -p
 			// coprocess is implemented as its measured refusal — see
@@ -3144,6 +3146,7 @@ func Apply(r *interp.Runner) {
 	r.SetExpansionEscapes(expandExpansionFlagEscapes)
 	// No `compgen` here; it is bash's alone.
 	r.Unregister("compgen")
+	r.Unregister("compopt")
 	r.Unregister("complete")
 	// And neither `mapfile` nor its other name; both are bash's alone.
 	r.Unregister("mapfile")

@@ -16517,6 +16517,61 @@ echo after`,
 		Why:     "bash generates it and answers 1 for no match; this shell refuses it as not implemented at 2, and the divergence is recorded here deliberately — an action generated from a guess would be a promise the shell cannot keep, and the honest refusal is the answer docs/spec/semantics.md scopes",
 	},
 	{
+		ID: "complete/an-option-and-its-argument", Category: "builtins",
+		Snippet: `complete -o nospace -F _f foo; complete -p foo; echo "st=$?"; complete -p nospace; echo "n=$?"`,
+		Why:     "`-o` takes the next word, which this shell did not read until #2412 — so `complete -o nospace -F _f foo` registered a spec for a command called `nospace` as well as for `foo`, and printed `foo`'s back with the option missing. The second half of the row is the part that catches it: `complete -p nospace` must be a miss",
+	},
+	{
+		ID: "complete/the-options-print-back-first-and-sorted", Category: "builtins",
+		Snippet: `complete -F _f -o nospace -o dirnames foo; complete -p foo`,
+		Why:     "bash renders the `-o` options ahead of the rest of the spec, sorted and deduplicated, whatever order they were written in — so a spec is printed back canonically rather than verbatim, and the two spellings of one spec list identically",
+	},
+	{
+		ID: "complete/an-option-name-that-is-not-one", Category: "builtins",
+		Snippet: `complete -o nosuchopt foo; echo "st=$?"; complete -p foo; echo "p=$?"`,
+		Why:     "the nine option names are validated before the table is touched: nothing is registered, which is what the second lookup shows",
+	},
+	{
+		ID: "compopt/moves-the-options-of-a-registered-spec", Category: "builtins",
+		Snippet: `complete -F _f foo; compopt -o nospace foo; echo "st=$?"; complete -p foo; compopt +o nospace foo; complete -p foo`,
+		Why:     "the whole of what `compopt` can be observed doing without a terminal: a change to a registered spec, in both directions, showing where `complete -p` prints it. The other four dialects have neither builtin",
+	},
+	{
+		ID: "compopt/lists-every-options-state", Category: "builtins",
+		Snippet: `complete -F _f foo; compopt foo`,
+		Why:     "with no -o or +o it writes all nine options in bash's own order with the sign saying whether the spec holds each — which is also where the nine names came from",
+	},
+	{
+		ID: "compopt/a-name-with-no-specification", Category: "builtins",
+		Snippet: `compopt -o default true; echo "st=$?"; compopt -D; echo "d=$?"`,
+		Why:     "the refusal a script reaches, and the second field is the one worth keeping: `-D` names the *default* compspec, which bash keeps in the same table under a name no command can have and says out loud — `_DefaultCmD_`",
+	},
+	{
+		ID: "compopt/with-no-name-at-all", Category: "builtins",
+		Snippet: `complete -F _f foo; compopt -o nospace; echo "st=$?"`,
+		Why:     "bash means `compopt` for use from *inside* a completion function, where a call with no name changes the completion in progress; outside one it is `not currently executing completion function` at 1, which is the only answer a shell with no line editor can give",
+	},
+	{
+		ID: "umask/prints-a-reusable-line", Category: "builtins",
+		Snippet: `umask 022; umask -p; echo "st=$?"; umask -p -S; umask -p 077; echo "set=$?"; umask`,
+		Why:     "bash alone has `-p`, which writes the mask as the command that would set it again — the half of `saved=$(umask -p); …; eval \"$saved\"` that makes the idiom work. Only the *report* takes the prefix: setting with -p is silent, measured. The other four refuse the letter, each in its own words",
+	},
+	{
+		ID: "opt/set-plus-p-is-privileged-under-a-letter", Category: "builtins",
+		Snippet: `set +p; echo "st=$?"`,
+		Why:     "`-p` is the short spelling of `privileged` in bash, ksh93 and zsh and an illegal option in dash and ash. Asking to turn *off* a mode the shell is not in is granted in all three that have it, which is the direction a script writes — and the direction this shell can honestly answer, having no privileged mode to turn on",
+	},
+	{
+		ID: "var/bash-aliases-is-the-alias-table", Category: "parameters",
+		Snippet: `alias q=echo; echo "[${BASH_ALIASES[q]}] n=${#BASH_ALIASES[@]} k=${!BASH_ALIASES[@]}"`,
+		Why:     "bash presents the alias table as an association, and it is a view rather than a copy — the read follows the table as it is now. zsh and ksh93 have the subscript syntax and no such name, so both answer empty; dash has neither",
+	},
+	{
+		ID: "var/bash-aliases-lists-and-is-written", Category: "parameters",
+		Snippet: `alias q=echo; declare -p BASH_ALIASES; BASH_ALIASES[w]=date; alias w`,
+		Why:     "the two halves a produced association needs: it lists back as one, and an assignment to an element *defines an alias*, which is what makes the writer required rather than optional — without one the write would land in a stored table and the view would silently become a snapshot",
+	},
+	{
 		ID: "glob/matches-are-in-order", Category: "expansion",
 		Script:  true,
 		Snippet: "mkdir -p g && cd g && : > Apple && : > banana && : > Cherry && : > _under && : > 1digit && echo *",

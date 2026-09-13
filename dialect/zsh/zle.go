@@ -1125,9 +1125,26 @@ const zleStoreStride = 3
 
 // widgetDefinitionOf is what a widget name resolves to, and whether the name
 // is a widget at all.
+// widgetDefinitionOf is one name, looked up without building the table.
+//
+// A scan of the flat store rather than `readWidgets(r)[name]`, which is what
+// it used to be. The table is a map built fresh on every call — four hundred
+// entries in a session with a plugin manager — and **this is now asked on
+// every printable keystroke**, because a printable key has to find out whether
+// something has redefined `self-insert` before it inserts anything (#2485).
+// Building a map per character is the shape #1742 is about.
+//
+// The scan allocates nothing and compares a string per stride. Callers that
+// genuinely want the whole table — the two listings, the alias — still use
+// readWidgets.
 func widgetDefinitionOf(r *interp.Runner, name string) (widgetDefinition, bool) {
-	def, ok := readWidgets(r)[name]
-	return def, ok
+	flat, _ := r.GetArray(zleStore)
+	for i := 0; i+zleStoreStride <= len(flat); i += zleStoreStride {
+		if flat[i] == name {
+			return widgetDefinition{function: flat[i+1], completer: flat[i+2]}, true
+		}
+	}
+	return widgetDefinition{}, false
 }
 
 // writeWidget stores a definition, replacing any earlier one for the same

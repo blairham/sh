@@ -20,6 +20,10 @@ func EditorStyle() repl.EditorStyle {
 		// no second asking.
 		ListQuery:             "zsh: do you wish to see all %[1]d possibilities (%[2]d lines)? ",
 		ListQueryEchoesTheKey: true,
+		// What this shell calls typing, so a widget put in front of it actually
+		// intercepts a printable key. See repl's EditorStyle.SelfInsertWidget
+		// and #2485.
+		SelfInsertWidget: "self-insert",
 		// Output that never ended its line. Measured 2026-09-12 through a
 		// pseudo-terminal with an rc file ending `printf 'LEFTOVER'`: this
 		// shell writes a bold, inverse `%` where the output stopped, pads to

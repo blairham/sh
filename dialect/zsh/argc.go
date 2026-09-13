@@ -64,4 +64,16 @@ func registerARGC(r *interp.Runner) {
 		return strconv.Itoa(len(rr.Params))
 	})
 	r.MarkReadonly("ARGC")
+	// And silent to a `typeset -p`, which is this shell's third answer for a
+	// produced parameter — see interp.ProducedDeclaration.Silent, where
+	// `LINENO` is the other name that has it. Measured 2026-09-12, zsh
+	// 5.9.2: `typeset -p ARGC` writes nothing at all and reports 0, and the
+	// name is absent from a bare `typeset -p` too, while `typeset -r` writes
+	// `ARGC=0` in the same run. So the silence belongs to the `-p` form and
+	// not to the name, which is why it goes here rather than on the mark.
+	//
+	// Without it the readonly mark above put the name into both listings by
+	// the route an ordinary attributed name takes, and this shell wrote
+	// `typeset -r ARGC=0` where zsh writes nothing.
+	r.SetDynamicDeclaration("ARGC", interp.ProducedDeclaration{Silent: true})
 }

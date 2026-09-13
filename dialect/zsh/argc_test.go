@@ -80,3 +80,38 @@ func TestARGCIsZeroWithNoParameters(t *testing.T) {
 		t.Errorf("got %q status %d, want %q at 0", out, st, "[0]\n")
 	}
 }
+
+// And silent to `typeset -p`, in both its forms, while `typeset -r` still
+// writes it.
+//
+// Measured 2026-09-12, zsh 5.9.2, `env -i PATH=/usr/bin:/bin` with a scratch
+// HOME: `typeset -p ARGC` writes nothing and reports 0, a bare `typeset -p`
+// has no ARGC row in it, and a bare `typeset -r` in the same run writes
+// `ARGC=0`. The silence is the `-p` form's and not the name's, which is why
+// the three forms have to be asserted together — a mark that suppressed the
+// name everywhere would pass the first two and lose the third.
+//
+// The readonly mark above is what put the name into a listing at all: a
+// produced parameter is in none of the tables a listing walks and reaches one
+// only through an attribute, so this is the second half of that mark rather
+// than a rule of its own (#2518).
+func TestARGCIsSilentToDashPAndPresentToDashR(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `typeset -p ARGC
+print -r -- "named=$?"
+typeset -p
+print -r -- "whole=$?"
+typeset -r`)
+	if st != 0 {
+		t.Errorf("status %d, want 0", st)
+	}
+	if strings.Contains(out, "typeset -r ARGC") || strings.Contains(out, "typeset -- ARGC") {
+		t.Errorf("got %q, want no ARGC row from either `typeset -p`", out)
+	}
+	if !strings.Contains(out, "named=0\n") || !strings.Contains(out, "whole=0\n") {
+		t.Errorf("got %q, want both -p forms to report 0", out)
+	}
+	if !strings.Contains(out, "ARGC=0") {
+		t.Errorf("got %q, want `typeset -r` to write ARGC=0 — the silence is the "+
+			"`-p` form's and must not reach the readonly listing", out)
+	}
+}

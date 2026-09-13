@@ -37,7 +37,7 @@ func registerBashAliases(r *interp.Runner) {
 		table := make(interp.AssocArray, len(names))
 		for _, name := range names {
 			value, _ := rr.LookupAlias(name)
-			table[name] = value
+			table[name] = interp.Scalar(value)
 		}
 		return table
 	})

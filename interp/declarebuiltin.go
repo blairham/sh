@@ -1234,7 +1234,7 @@ func (r *Runner) markDeclaredCompound(name string, fresh bool, f declareFlags, h
 		switch p {
 		case ScalarUnderACompoundBecomesTheFirstElement:
 			r.markIndexed(name)
-			r.storeArray(name, Array{0: v})
+			r.storeArray(name, Array{0: Scalar(v)})
 		case ScalarUnderACompoundDiscardsIt:
 			r.markIndexed(name)
 		case ScalarUnderACompoundStaysAScalar:
@@ -1447,7 +1447,7 @@ func (r *Runner) arrayBecomesATable(name string) {
 		return
 	}
 	for idx, v := range held {
-		r.setAssocElem(name, itoa(idx), v)
+		r.setAssocElem(name, itoa(idx), v.scalar())
 	}
 }
 
@@ -3164,13 +3164,13 @@ func (r *Runner) compoundMeetingAnAttribute(name string) (startedOver bool) {
 // compoundMeetingAnAttribute gives: that path asks the write question.
 func (r *Runner) foldAssocElems(name string, a AssocArray) {
 	for k, v := range a {
-		folded, ok := r.attributeFolded(name, v)
+		folded, ok := r.attributeFolded(name, v.scalar())
 		if !ok {
 			// The evaluation failed and has said so; the table is left as it
 			// stands rather than half rewritten.
 			return
 		}
-		a[k] = folded
+		a[k] = Scalar(folded)
 	}
 }
 
@@ -3608,11 +3608,7 @@ func (r *Runner) shadow(name string) (fresh bool) {
 		// would save a reference to the very table the function is about to
 		// write into, and putting it back would put back the changes.
 		if existed {
-			kept := make(Array, len(old))
-			for k, v := range old {
-				kept[k] = v
-			}
-			old = kept
+			old = old.clone()
 		}
 		sc.savedArrays[name] = old
 		sc.arrayExisted[name] = existed
@@ -3628,11 +3624,7 @@ func (r *Runner) shadow(name string) (fresh bool) {
 			sc.assocExisted = map[string]bool{}
 		}
 		if existed {
-			kept := make(AssocArray, len(old))
-			for k, v := range old {
-				kept[k] = v
-			}
-			old = kept
+			old = old.clone()
 		}
 		sc.savedAssoc[name] = old
 		sc.assocExisted[name] = existed

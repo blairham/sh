@@ -153,7 +153,7 @@ func mapfileView(r *interp.Runner) interp.AssocArray {
 	}
 	out := make(interp.AssocArray, len(names))
 	for _, name := range names {
-		out[name] = ""
+		out[name] = interp.Scalar("")
 	}
 	return out
 }

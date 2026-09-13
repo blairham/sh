@@ -1549,7 +1549,7 @@ func (r *Runner) fdVarValue(ref string) (string, bool) {
 	}
 	if r.assocDeclared(base) {
 		v, held := r.AssocArrays[base][sub]
-		return v, held
+		return v.scalar(), held
 	}
 	idx, err := r.subscriptValue(sub)
 	if err != nil {

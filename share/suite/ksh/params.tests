@@ -126,3 +126,55 @@ printf '[%s]\n' "${.dotted}"
 # the rule belongs to names rather than to what may follow a dollar.
 .again=three
 printf '%s\n' '$.again'
+
+# An array literal standing where one element's value goes makes that element
+# an array of its own here, and the array around it keeps its length. bash
+# refuses the line and ends the script, zsh splices the words in and the array
+# grows; this is the third answer (#2620).
+c=(x y)
+c[1]=(p q)
+printf '[%s]' "${c[@]}"
+printf ' n=%s\n' "${#c[@]}"
+typeset -p c
+
+# An empty literal is still an element rather than a removal, and it reads back
+# as a value rather than as the empty string.
+d=(x y z)
+d[1]=()
+printf 'n=%s\n' "${#d[@]}"
+typeset -p d
+
+# `+=` replaces an element holding a string and appends to one already holding
+# an array — the two halves do not follow from each other.
+e=(x y)
+e[1]+=(p)
+typeset -p e
+e[1]+=(r)
+typeset -p e
+
+# A plain assignment through the subscript reaches the nested array's own first
+# element instead of flattening it away.
+f=(x y)
+f[1]=(p q)
+f[1]=z
+typeset -p f
+
+# A name holding a string is promoted rather than refused: the string becomes
+# element zero and the literal nests beside it.
+g=abc
+g[1]=(p q)
+typeset -p g
+
+# A comma in a subscript is the arithmetic operator here and not the separator
+# of a range, so the literal lands at the right operand and nowhere else.
+h=(1 2 3)
+h[2,3]=(x y)
+printf '[%s]' "${h[@]}"
+printf ' n=%s\n' "${#h[@]}"
+
+# And a keyed table takes the same value under a key.
+typeset -A t
+t[k]=v
+t[a,b]=(x y)
+printf 'n=%s\n' "${#t[@]}"
+typeset -p t

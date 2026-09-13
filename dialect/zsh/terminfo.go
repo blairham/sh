@@ -133,7 +133,7 @@ func (c *capabilityTables) load(r *interp.Runner) (
 	byTerminfo := make(interp.AssocArray, len(caps))
 	byTermcap := make(interp.AssocArray, len(caps))
 	for _, entry := range caps {
-		byTerminfo[entry.Terminfo] = entry.Value
+		byTerminfo[entry.Terminfo] = interp.Scalar(entry.Value)
 		kinds[entry.Terminfo] = entry.Kind
 		// Skipped rather than keyed by the empty string: an extended
 		// capability is a name the description carries itself and predates no
@@ -146,7 +146,7 @@ func (c *capabilityTables) load(r *interp.Runner) (
 		// `$termcap[MT]` with the boolean, which is the one its search
 		// reaches first because booleans come before strings.
 		if _, taken := byTermcap[entry.Termcap]; entry.Termcap != "" && !taken {
-			byTermcap[entry.Termcap] = entry.Value
+			byTermcap[entry.Termcap] = interp.Scalar(entry.Value)
 		}
 	}
 	c.from, c.terminfo, c.termcap, c.kinds = key, byTerminfo, byTermcap, kinds
@@ -192,7 +192,7 @@ func registerCapabilityParameter(r *interp.Runner, name string, view func(*inter
 	// table.
 	r.SetDynamicAssocElement(name, func(r *interp.Runner, key string) (string, bool) {
 		value, ok := view(r)[key]
-		return value, ok
+		return value.Str, ok
 	})
 	// Readonly rather than given a writer, which is zsh's own answer and the
 	// same call `builtins` makes in parameter.go. A produced association with

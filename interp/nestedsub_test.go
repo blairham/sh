@@ -292,7 +292,7 @@ func TestTheOtherLettersBesideAReferenceTransformTheName(t *testing.T) {
 func TestAParameterReferenceSubscriptReadsAKey(t *testing.T) {
 	out, st := runGrammar(t, `h=m; printf "[%s][%s]" "${${(P)h}[k]}" "${${(P)h}[nosuch]-none}"`,
 		nestedSubscriptGrammar, func(r *Runner) {
-			r.AssocArrays = map[string]AssocArray{"m": {"k": "v"}}
+			r.AssocArrays = map[string]AssocArray{"m": {"k": Scalar("v")}}
 		})
 	if out != "[v][none]" || st != 0 {
 		t.Errorf("got %q (status %d), want [v][none] at 0", out, st)
@@ -301,7 +301,7 @@ func TestAParameterReferenceSubscriptReadsAKey(t *testing.T) {
 	// which is what the subscript then counts through, so a one-key table
 	// has no second element where its one value has a second character.
 	out, st = runGrammar(t, `printf "[%s]" ${${m}[2]}`, nestedSubscriptGrammar, func(r *Runner) {
-		r.AssocArrays = map[string]AssocArray{"m": {"k": "abc"}}
+		r.AssocArrays = map[string]AssocArray{"m": {"k": Scalar("abc")}}
 	})
 	if out != "[]" || st != 0 {
 		t.Errorf("as a value: got %q (status %d), want [] at 0", out, st)

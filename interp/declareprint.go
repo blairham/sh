@@ -271,7 +271,7 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 		elems := produce(r)
 		a := make(Array, len(elems))
 		for i, v := range elems {
-			a[i] = v
+			a[i] = Scalar(v)
 		}
 		d.arr, d.isArr = a, true
 		return d, true
@@ -611,7 +611,7 @@ func (r *Runner) clusteredDeclaration(d declaration) string {
 			// Sorted keys are this implementation's choice: the shells
 			// promise no order at all, and a deterministic listing is worth
 			// having. See AssocArray.keys.
-			b.WriteString("[" + r.clusteredKey(k) + "]=" + r.declareQuoted(d.assoc[k]) + " ")
+			b.WriteString("[" + r.clusteredKey(k) + "]=" + r.listedElement(d.assoc[k]) + " ")
 		}
 		b.WriteString(")")
 		return b.String()
@@ -624,7 +624,7 @@ func (r *Runner) clusteredDeclaration(d declaration) string {
 		}
 		elems := make([]string, 0, len(d.arr))
 		for _, i := range d.arr.subscripts() {
-			elems = append(elems, fmt.Sprintf("[%d]=%s", i, r.declareQuoted(d.arr[i])))
+			elems = append(elems, fmt.Sprintf("[%d]=%s", i, r.listedElement(d.arr[i])))
 		}
 		return head + "=(" + strings.Join(elems, " ") + ")"
 	case d.hasValue:
@@ -814,7 +814,7 @@ func (r *Runner) exportSpelledDeclaration(d declaration) string {
 			// do, which is the trap listing's style rather than the alias
 			// one — measured, not assumed.
 			key := r.quoteListedValue(ListingQuoteWhenNeededPlain, "`typeset -p`", k)
-			pairs = append(pairs, "["+key+"]="+r.declareQuoted(d.assoc[k]))
+			pairs = append(pairs, "["+key+"]="+r.listedElement(d.assoc[k]))
 		}
 		return head + "=( " + strings.Join(pairs, " ") + " )"
 	case d.isArr:
@@ -850,9 +850,9 @@ func (r *Runner) bareAssignmentValue(d declaration) (string, bool) {
 		pairs := make([]string, 0, len(d.assoc))
 		for _, k := range d.assoc.keys() {
 			// Keys quote the way values do here, `$'...'` included.
-			pairs = append(pairs, "["+r.declareQuoted(k)+"]="+r.declareQuoted(d.assoc[k]))
+			pairs = append(pairs, "["+r.declareQuoted(k)+"]="+r.listedElement(d.assoc[k]))
 		}
-		return "(" + strings.Join(pairs, " ") + ")", true
+		return "(" + strings.Join(pairs, " ") + nestTrailingSpace(d.assoc.lastElement()) + ")", true
 	case d.isArr:
 		subs := d.arr.subscripts()
 		elems := make([]string, 0, len(subs))
@@ -865,12 +865,12 @@ func (r *Runner) bareAssignmentValue(d declaration) (string, bool) {
 			// That is a fact about its type system, not about `-p`, and it
 			// is deliberately not followed — an empty array keeps `-a` here.
 			if r.arrayHasGaps(d.arr) {
-				elems = append(elems, fmt.Sprintf("[%d]=%s", i, r.declareQuoted(d.arr[i])))
+				elems = append(elems, fmt.Sprintf("[%d]=%s", i, r.listedElement(d.arr[i])))
 			} else {
-				elems = append(elems, r.declareQuoted(d.arr[i]))
+				elems = append(elems, r.listedElement(d.arr[i]))
 			}
 		}
-		return "(" + strings.Join(elems, " ") + ")", true
+		return "(" + strings.Join(elems, " ") + nestTrailingSpace(d.arr.lastElement()) + ")", true
 	case d.hasValue && d.base != 0:
 		// A based number lists bare here, where an ordinary value carrying a
 		// `#` is quoted: measured, `typeset -i 16 a=16#ff` against

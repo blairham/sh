@@ -19,7 +19,7 @@ import (
 func TestAWithdrawnParameterReadsAsAnUnsetName(t *testing.T) {
 	install := func(r *Runner) {
 		r.SetDynamicAssoc("zzview", func(*Runner) AssocArray {
-			return AssocArray{"k": "v"}
+			return AssocArray{"k": Scalar("v")}
 		})
 		r.SetDynamicAssocElement("zzview", func(_ *Runner, key string) (string, bool) {
 			return "v", key == "k"
@@ -65,7 +65,7 @@ func TestAWithdrawnParameterReadsAsAnUnsetName(t *testing.T) {
 // have. The mark comes back with the producer.
 func TestAWithdrawnParameterCanBeAssignedAndGetsItsMarkBack(t *testing.T) {
 	install := func(r *Runner) {
-		r.SetDynamicAssoc("zzview", func(*Runner) AssocArray { return AssocArray{"k": "v"} })
+		r.SetDynamicAssoc("zzview", func(*Runner) AssocArray { return AssocArray{"k": Scalar("v")} })
 		r.MarkReadonly("zzview")
 		r.MarkHidden("zzview")
 	}
@@ -92,7 +92,7 @@ func TestAWithdrawnParameterCanBeAssignedAndGetsItsMarkBack(t *testing.T) {
 // put the parameter down.
 func TestAWithdrawnParameterIsNotAnAbsentOne(t *testing.T) {
 	out, st := run(t, `echo "n=${#zzview[@]}"`, func(r *Runner) {
-		r.SetDynamicAssoc("zzview", func(*Runner) AssocArray { return AssocArray{"k": "v"} })
+		r.SetDynamicAssoc("zzview", func(*Runner) AssocArray { return AssocArray{"k": Scalar("v")} })
 		r.SetAbsentParameter("zzother", "parameter not implemented yet")
 		r.SetParameterWithdrawn("zzview", true)
 	})
@@ -133,13 +133,13 @@ func TestWithdrawingAnAbsentParameterSilencesItAndPuttingItBackSpeaksAgain(t *te
 // names out of, so a withdrawal made inside one does not reach back out.
 func TestAParameterWithdrawalDoesNotEscapeASubshell(t *testing.T) {
 	out, _ := run(t, `( echo "in=${#zzview[@]}" ); echo "out=${#zzview[@]}"`, func(r *Runner) {
-		r.SetDynamicAssoc("zzview", func(*Runner) AssocArray { return AssocArray{"k": "v"} })
+		r.SetDynamicAssoc("zzview", func(*Runner) AssocArray { return AssocArray{"k": Scalar("v")} })
 	})
 	if want := "in=1\nout=1\n"; out != want {
 		t.Fatalf("baseline: got %q, want %q", out, want)
 	}
 	out, _ = run(t, `( echo "in=${#zzview[@]}" ); echo "out=${#zzview[@]}"`, func(r *Runner) {
-		r.SetDynamicAssoc("zzview", func(*Runner) AssocArray { return AssocArray{"k": "v"} })
+		r.SetDynamicAssoc("zzview", func(*Runner) AssocArray { return AssocArray{"k": Scalar("v")} })
 		r.SetParameterWithdrawn("zzview", true)
 	})
 	if want := "in=0\nout=0\n"; out != want {

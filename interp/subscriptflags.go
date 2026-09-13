@@ -520,7 +520,7 @@ func (r *Runner) searchAssoc(e *syntax.ParamExpr, a AssocArray, g *syntax.Subscr
 	every := search == 'I' || search == 'R'
 	found := make([]string, 0, len(a))
 	for _, k := range a.keys() {
-		subject := a[k]
+		subject := a[k].scalar()
 		if byKey {
 			subject = k
 		}
@@ -583,11 +583,11 @@ func assocSearchWords(e *syntax.ParamExpr, a AssocArray, keys []string, byKey bo
 	for _, k := range keys {
 		switch {
 		case hasK && hasV:
-			out = append(out, k, a[k])
+			out = append(out, k, a[k].scalar())
 		case hasK:
 			out = append(out, k)
 		case hasV || !byKey:
-			out = append(out, a[k])
+			out = append(out, a[k].scalar())
 		default:
 			out = append(out, k)
 		}

@@ -127,7 +127,7 @@ func cloneArrays(in map[string]Array) map[string]Array {
 	}
 	out := make(map[string]Array, len(in))
 	for k, v := range in {
-		out[k] = maps.Clone(v)
+		out[k] = v.clone()
 	}
 	return out
 }
@@ -138,7 +138,7 @@ func cloneAssoc(in map[string]AssocArray) map[string]AssocArray {
 	}
 	out := make(map[string]AssocArray, len(in))
 	for k, v := range in {
-		out[k] = maps.Clone(v)
+		out[k] = v.clone()
 	}
 	return out
 }
@@ -148,7 +148,7 @@ func arraysEqual(a, b map[string]Array) bool {
 		return false
 	}
 	for k, v := range a {
-		if w, ok := b[k]; !ok || !maps.Equal(v, w) {
+		if w, ok := b[k]; !ok || !v.equal(w) {
 			return false
 		}
 	}
@@ -160,7 +160,7 @@ func assocEqual(a, b map[string]AssocArray) bool {
 		return false
 	}
 	for k, v := range a {
-		if w, ok := b[k]; !ok || !maps.Equal(v, w) {
+		if w, ok := b[k]; !ok || !v.equal(w) {
 			return false
 		}
 	}

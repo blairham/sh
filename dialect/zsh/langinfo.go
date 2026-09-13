@@ -190,7 +190,7 @@ const (
 // langInfoView is `$langinfo`, produced at every read because the locale is a
 // variable and variables move.
 func langInfoView(r *interp.Runner) interp.AssocArray {
-	out := interp.AssocArray{langInfoCodesetKey: langInfoCodeset(r)}
+	out := interp.AssocArray{langInfoCodesetKey: interp.Scalar(langInfoCodeset(r))}
 	for _, cat := range langInfoCategories {
 		if !langInfoLocaleIsC(r.LocaleFor(cat.variable)) {
 			// Not this shell's locale to speak for. Every key the category
@@ -198,7 +198,7 @@ func langInfoView(r *interp.Runner) interp.AssocArray {
 			continue
 		}
 		for key, value := range cat.items {
-			out[key] = value
+			out[key] = interp.Scalar(value)
 		}
 	}
 	return out

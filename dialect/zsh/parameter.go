@@ -382,14 +382,14 @@ func zshFunctionsView(r *interp.Runner) interp.AssocArray {
 			// A name still waiting to be defined holds a third text, which
 			// is neither its listing nor the tree printed back — see
 			// autoloadBodyValue for the measurement.
-			out[name] = body
+			out[name] = interp.Scalar(body)
 			continue
 		}
 		body, ok := r.FunctionBodyText(name)
 		if !ok {
 			continue
 		}
-		out[name] = body
+		out[name] = interp.Scalar(body)
 	}
 	return out
 }
@@ -467,11 +467,11 @@ func writeZshFunction(r *interp.Runner, name, body string, set bool) {
 func zshOptionsView(r *interp.Runner) interp.AssocArray {
 	out := make(interp.AssocArray, len(zshOptions)+len(zshOptionAliases))
 	for _, o := range zshOptions {
-		out[o.base] = onOrOff(o.get(r))
+		out[o.base] = interp.Scalar(onOrOff(o.get(r)))
 	}
 	for name, alias := range zshOptionAliases {
 		if i, ok := zshOptionIndex[alias.base]; ok {
-			out[name] = onOrOff(zshOptions[i].get(r) != alias.inv)
+			out[name] = interp.Scalar(onOrOff(zshOptions[i].get(r) != alias.inv))
 		}
 	}
 	return out
@@ -558,7 +558,7 @@ func zshCommandsView(r *interp.Runner) interp.AssocArray {
 	found := r.CommandsOnPath()
 	out := make(interp.AssocArray, len(found))
 	for name, path := range found {
-		out[name] = path
+		out[name] = interp.Scalar(path)
 	}
 	return out
 }
@@ -623,7 +623,7 @@ func zshBuiltinsView(r *interp.Runner) interp.AssocArray {
 	names := r.BuiltinNames()
 	out := make(interp.AssocArray, len(names))
 	for _, name := range names {
-		out[name] = "defined"
+		out[name] = interp.Scalar("defined")
 	}
 	return out
 }
@@ -689,7 +689,7 @@ func writeZshSuffixAlias(r *interp.Runner, name, text string, set bool) {
 func aliasAssoc(table map[string]string) interp.AssocArray {
 	out := make(interp.AssocArray, len(table))
 	for name, text := range table {
-		out[name] = text
+		out[name] = interp.Scalar(text)
 	}
 	return out
 }

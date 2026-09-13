@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"maps"
 	"os"
 	"os/exec"
 	"sort"
@@ -5293,8 +5292,8 @@ func (r *Runner) saveVar(name string) savedVar {
 	exported, exportSpoken := r.exported[name]
 	return savedVar{
 		name: name, value: old, present: present, removed: r.removed[name],
-		array: maps.Clone(a), inArray: inArray,
-		table: maps.Clone(m), inTable: inTable,
+		array: a.clone(), inArray: inArray,
+		table: m.clone(), inTable: inTable,
 		exported: exported, exportSpoken: exportSpoken,
 	}
 }
@@ -5400,11 +5399,11 @@ func (r *Runner) matchesSavedVar(u savedVar) bool {
 		return false
 	}
 	a, inArray := r.Arrays[u.name]
-	if inArray != u.inArray || !maps.Equal(a, u.array) {
+	if inArray != u.inArray || !a.equal(u.array) {
 		return false
 	}
 	m, inTable := r.AssocArrays[u.name]
-	return inTable == u.inTable && maps.Equal(m, u.table)
+	return inTable == u.inTable && m.equal(u.table)
 }
 
 // assignForm says how an assignment was written, which one dialect answers a
@@ -6456,7 +6455,7 @@ func (r *Runner) assign(a *syntax.Assign) {
 			// name already holding a compound is one question for an array
 			// and a table alike, and it is asked at the store instead — see
 			// scalarOverCompound.
-			v, ok := r.appendedValue(a.Name, r.AssocArrays[a.Name]["0"], value)
+			v, ok := r.appendedValue(a.Name, r.AssocArrays[a.Name]["0"].scalar(), value)
 			if !ok {
 				return
 			}

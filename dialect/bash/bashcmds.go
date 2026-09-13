@@ -33,7 +33,7 @@ func registerBashCmds(r *interp.Runner) {
 		table := make(interp.AssocArray, len(names))
 		for _, name := range names {
 			path, _ := rr.HashedCommandPath(name)
-			table[name] = path
+			table[name] = interp.Scalar(path)
 		}
 		return table
 	})

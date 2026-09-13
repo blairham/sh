@@ -70,11 +70,11 @@ func seedStacks(r *Runner) {
 	r.scopes = append(make([]*scope, 0, 4), &scope{
 		saved:              map[string]string{"seed": "v"},
 		existed:            map[string]bool{"seed": true},
-		savedArrays:        map[string]Array{"seed": {0: "v"}},
+		savedArrays:        map[string]Array{"seed": {0: {Str: "v"}}},
 		arrayExisted:       map[string]bool{"seed": true},
 		removedBefore:      map[string]bool{"seed": true},
 		declaredOnlyBefore: map[string]bool{"seed": true},
-		savedAssoc:         map[string]AssocArray{"seed": {"k": "v"}},
+		savedAssoc:         map[string]AssocArray{"seed": {"k": {Str: "v"}}},
 		assocExisted:       map[string]bool{"seed": true},
 		savedReadonly:      map[string]bool{"seed": true},
 		savedHideInScope:   map[string]bool{"seed": true},
@@ -229,8 +229,8 @@ func TestACloneOwnsEveryScopeTable(t *testing.T) {
 // whether it belongs in ownTables or in sharedTables.
 func seedTables(r *Runner) {
 	r.Vars = map[string]string{"seed": "v"}
-	r.Arrays = map[string]Array{"seed": {0: "v"}}
-	r.AssocArrays = map[string]AssocArray{"seed": {"k": "v"}}
+	r.Arrays = map[string]Array{"seed": {0: {Str: "v"}}}
+	r.AssocArrays = map[string]AssocArray{"seed": {"k": {Str: "v"}}}
 	r.Dynamic = map[string]func(*Runner) string{"seed": func(*Runner) string { return "" }}
 	r.DynamicArrays = map[string]func(*Runner) []string{"seed": func(*Runner) []string { return nil }}
 	r.DynamicAssocs = map[string]func(*Runner) AssocArray{"seed": func(*Runner) AssocArray { return nil }}

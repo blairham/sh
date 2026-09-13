@@ -1348,7 +1348,7 @@ func (r *Runner) SetAssoc(name string, values map[string]string) {
 	r.markAssoc(name)
 	table := make(AssocArray, len(values))
 	for k, v := range values {
-		table[k] = v
+		table[k] = Scalar(v)
 	}
 	r.AssocArrays[name] = table
 }
@@ -1365,7 +1365,7 @@ func (r *Runner) GetAssoc(name string) (map[string]string, bool) {
 	}
 	out := make(map[string]string, len(a))
 	for k, v := range a {
-		out[k] = v
+		out[k] = v.scalar()
 	}
 	return out, true
 }
@@ -1383,7 +1383,7 @@ func (r *Runner) AssocElement(name, key string) (string, bool) {
 		return "", false
 	}
 	v, ok := a[key]
-	return v, ok
+	return v.scalar(), ok
 }
 
 // SetAssocElement puts one element into a stored associative array, creating

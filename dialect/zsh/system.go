@@ -173,12 +173,12 @@ func registerSystemModule(r *interp.Runner) {
 // [subshellPid] below.
 func sysparamsView(r *interp.Runner) interp.AssocArray {
 	return interp.AssocArray{
-		"pid":  subshellPid(r),
-		"ppid": strconv.Itoa(os.Getppid()),
+		"pid":  interp.Scalar(subshellPid(r)),
+		"ppid": interp.Scalar(strconv.Itoa(os.Getppid())),
 		// Present and empty. See the note above: there is no process, 0 is
 		// the answer that gets a caller's own process group killed, and a
 		// refusal takes down the line that asked.
-		"procsubstpid": "",
+		"procsubstpid": interp.Scalar(""),
 	}
 }
 

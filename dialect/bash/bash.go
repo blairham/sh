@@ -951,6 +951,10 @@ func Semantics() interp.Semantics {
 	s.PrintfAbsentNumberIsAnEmptyOne = interp.No
 	s.PrintfStarWithoutOperandIsRefused = interp.No
 	s.PrintfStarComplaintCostsTheStatus = interp.Yes
+	// The `'` flag, among the flags and nowhere else: `%'d` groups and
+	// `%15'd` is `` `'': invalid format character ``.
+	s.PrintfGroupingFlag = interp.Yes
+	s.PrintfGroupingFlagAfterTheWidth = interp.No
 	s.PrintfReportsBadNumber = interp.Yes
 	s.PrintfBackslashC = interp.PrintfBackslashCLiteral
 	// A format that ends inside a conversion is an error here, with a

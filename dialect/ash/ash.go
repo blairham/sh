@@ -405,6 +405,9 @@ func Semantics() interp.Semantics {
 	s.PrintfAbsentNumberIsAnEmptyOne = interp.Yes
 	s.PrintfStarWithoutOperandIsRefused = interp.No
 	s.PrintfStarComplaintCostsTheStatus = interp.No
+	// No `'` flag, as dash has none: `%'d` is `invalid format` at 1.
+	s.PrintfGroupingFlag = interp.No
+	s.PrintfGroupingFlagAfterTheWidth = interp.No
 	s.PrintfReportsBadNumber = interp.Yes
 	s.PrintfUnfinishedConversionIsAPercent = interp.No
 	// `printf -v x '%s' hi` assigns nothing: `-v` is read as the format.

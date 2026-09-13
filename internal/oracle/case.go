@@ -6065,6 +6065,21 @@ echo "st=$?"`,
 		Why:     "a third spelling of command substitution, and the only one that does not run in a subshell — so what it assigns survives, which is the whole reason it exists. Two of the panel have it, one of them only since 5.3, and the other two call it a bad substitution. The `x=0` before it and the `[$x]` after are what tell it from `$( … )`, which would leave the nought",
 	},
 	{
+		ID: "subst/a-paren-opens-a-current-shell-body-too", Category: "commands",
+		Snippet: `echo "A${(echo hi)}B"`,
+		Why:     "the opener is a blank in the two columns that have the construct and a blank **or a `(`** in one of them: ksh93 reads `${(` as the front of the body's command list, so this is `AhiB`. bash 5.3 has `${ cmd;}` and still calls this a bad substitution, which is what says the paren belongs to one shell rather than to the construct; bash 3.2, dash and ash have neither, and zsh reads `(` as its expansion flags and complains about them. Written inside a word so the answer is the whole substitution and not only its output (#2615)",
+	},
+	{
+		ID: "subst/a-paren-body-does-not-share-what-it-assigns", Category: "commands",
+		Snippet: `v=1; echo ${(v=2; echo x)}; echo "v=$v"`,
+		Why:     "the row that says which construct it is, and it is the one that looks like it says the opposite. The blank spelling shares the caller's state — that is the whole point of it, and `subst/a-body-that-runs-in-the-current-shell` records it — while this one leaves `v` at 1 in ksh93. It is still the same substitution: the *subshell* is what isolates, so the body is a list run in the current shell whose first command happens to fork. A reading that took the paren for `$( )` instead would answer this row identically and be wrong about the construct",
+	},
+	{
+		ID: "subst/a-brace-body-opens-on-a-blank-or-a-paren-and-nothing-else", Category: "commands",
+		Snippet: `echo ${echo hi;}`,
+		Why:     "the control, and the reason the opener is two characters rather than a guess: with neither a blank nor a `(` after the brace ksh93 refuses the line while reading it, blaming the blank inside, so `${` does not fall back to a body when the name turns out not to be one. It is the only column that answers at parse time — the other six all defer to the run and call it a bad substitution, in four wordings and at four statuses, which is the ordinary split for an expansion nobody can read",
+	},
+	{
 		ID: "subst/a-comment-in-a-current-shell-body", Category: "commands",
 		Script:  true,
 		Snippet: "a=${\n\t# it's a comment\n\techo hi\n}\nprintf \"[%s]\\n\" \"$a\"\n",

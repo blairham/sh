@@ -103,3 +103,43 @@ func TestNoLineOffsetReachesASourcedFile(t *testing.T) {
 		t.Errorf("got %q, want it to contain %q", out, want)
 	}
 }
+
+// And a function *defined* in the text keeps the text's offset, which is the
+// other side of the test above and does not follow from it: the body is read
+// while the offset is in force and called after the text has been left, so
+// the offset has to be remembered on the definition rather than read off the
+// run. Measured 2026-09-12, over a script file whose line 2 is
+// `eval 'f() { nosuchcmd-xyz; }; f'` — bash 5.3 reports `line 2` and this
+// engine reported `line 1`, because the call reset the offset to nothing
+// (#2565).
+//
+// The body is on the text's *second* line so that all three readings part:
+// the `eval` word is physically on line 3, the text's own numbering says 2,
+// and continuing the caller's lines says 4. And it is called twice — once
+// from inside the text and once from the line after it — because a body that
+// borrowed the offset from whatever was in force at the *call* would answer
+// the first correctly and the second at the file's own numbering.
+func TestAFunctionDefinedInEvalsTextKeepsTheOffset(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		a    Answer
+		want string
+	}{
+		{"continued", Yes, "L=4"},
+		{"from one", No, "L=2"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			src := evalOnOneLine +
+				`eval "echo x${nl}g() { echo L=\$LINENO; }${nl}g"` + "\ng\n"
+			out, _ := run(t, src, func(r *Runner) {
+				s := *r.Semantics
+				s.EvalTextContinuesTheCallersLines = tc.a
+				r.Semantics = &s
+			})
+			want := "x\n" + tc.want + "\n" + tc.want
+			if got := strings.TrimSpace(out); got != want {
+				t.Errorf("%v: got %q, want %q", tc.a, got, want)
+			}
+		})
+	}
+}

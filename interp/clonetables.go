@@ -158,7 +158,7 @@ func (c *Runner) ownTables(r *Runner) {
 	// subshell cannot shorten the parent's.
 	c.mathFuncs = maps.Clone(r.mathFuncs)
 	c.mathOrder = append([]string(nil), r.mathOrder...)
-	c.funcFiles = maps.Clone(r.funcFiles)
+	c.funcOrigins = maps.Clone(r.funcOrigins)
 	c.exportedFuncs = maps.Clone(r.exportedFuncs)
 	c.aliases = maps.Clone(r.aliases)
 	c.suffixAliases = maps.Clone(r.suffixAliases)

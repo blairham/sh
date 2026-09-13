@@ -3775,7 +3775,7 @@ func (r *Runner) functionDefinitionLine(name string, fn *syntax.FuncDecl) int {
 // functionDefinitionFile is the file a function was defined in, for the same
 // listing.
 //
-// Runner.funcFiles is the record and it is already kept for every route that
+// Runner.funcOrigins is the record and it is already kept for every route that
 // defines one. The fallback is the shell's own name, which is measured rather
 // than chosen: a function defined in a `-c` string or on standard input is
 // reported by bash 5.3.15 against the shell's own path, and a function from a
@@ -3787,7 +3787,7 @@ func (r *Runner) functionDefinitionLine(name string, fn *syntax.FuncDecl) int {
 // reports *no* origin there, because the sentence it feeds leaves the clause
 // off entirely. Folding the two would make one of them wrong.
 func (r *Runner) functionDefinitionFile(name string) string {
-	if file := r.funcFiles[name]; file != "" {
+	if file := r.functionFile(name); file != "" {
 		return file
 	}
 	return r.name()

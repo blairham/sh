@@ -390,9 +390,10 @@ type Runner struct {
 	// script's behalf failed with. See interp/errno.go.
 	lastErrno int
 
-	// funcFiles is where each function was defined, because that is the file
-	// its frame reports rather than the one that called it.
-	funcFiles map[string]string
+	// funcOrigins is where each function's body came from. Two facts, in one
+	// table because they are recorded at one moment and a route that wrote
+	// half of one would be a route with no origin at all.
+	funcOrigins map[string]funcOrigin
 	// exportedFuncs are the functions written into a command's environment,
 	// and funcExportPrefix/Suffix are what the entry is called. Only one
 	// dialect carries functions that way, so the naming comes from it.

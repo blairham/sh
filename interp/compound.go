@@ -832,8 +832,10 @@ func (r *Runner) funcDecl(c *syntax.FuncDecl) error {
 	r.preludeDefined(c.Name, c)
 	// Where it was defined, which is the file its frame reports — a function
 	// declared in a sourced library and called from the script names the
-	// library, not the script.
-	r.recordFunctionFile(c.Name, r.currentFile())
+	// library, not the script — and the line offset the text it was read
+	// from was running at, which its body goes on being numbered from when
+	// it is called later. See funcOrigin.
+	r.recordFunctionOrigin(c.Name, r.currentFile(), r.lineBase)
 	r.status = 0
 	return nil
 }
@@ -873,7 +875,7 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	// pushFrame, and Runner.LocatedAtTheCall for what reads it back. A push
 	// after the two assignments below would record the callee as its own
 	// caller.
-	r.pushFrame(Frame{File: r.funcFiles[fn.Name], Name: name})
+	r.pushFrame(Frame{File: r.functionFile(fn.Name), Name: name})
 	defer r.popFrame()
 	r.Params, r.inFunc = args, fn.Name
 	// Where the loops were when the call was made, for the dialects that do
@@ -900,8 +902,19 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	// 2026-09-12, `f() { echo $LINENO; }` called as `x=$(f)` on line 4 read
 	// 4 here where bash and zsh both say 1. The frame already carries the
 	// same idea for the file a body came out of; this is its line half.
+	//
+	// The body's own offset is not nothing, though, and reading it off the
+	// origin rather than writing a zero here is the other half of the same
+	// rule. A body read out of `eval`'s text in a dialect that numbers that
+	// text on from the caller's lines was numbered at that offset when it
+	// was read, and is called after the text has been left — so measured
+	// 2026-09-12 over a script file whose line 2 is
+	// `eval 'f() { nosuchcmd-xyz; }; f'`, bash 5.3 reports `line 2` where
+	// this engine reported `line 1` (#2565). Where the dialect numbers
+	// `eval`'s text from one there was no offset in force to record, so the
+	// origin holds nothing and this is the zero it always was.
 	savedBase := r.lineBase
-	r.lineBase = 0
+	r.lineBase = r.funcOrigins[fn.Name].lineBase
 	defer func() { r.lineBase = savedBase }()
 	// This call's own serial, because the RETURN trap fires for the one
 	// function whose body set it and for nobody else — not a caller, and

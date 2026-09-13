@@ -603,7 +603,13 @@ func (r *Runner) defineFromText(name, body string, aliases syntax.Aliases) bool 
 	// is the whole reason this seam exists — was the one that named nothing
 	// (#1706). A caller that knows a better file than the current one says
 	// so with [Runner.SetFunctionFile] straight after.
-	r.recordFunctionFile(name, r.currentFile())
+	//
+	// The line offset is nothing, and that is a statement rather than a
+	// default: this seam is handed *text*, which is parsed from its own
+	// first line whatever the shell was in the middle of when the builtin
+	// that read it ran. Only a definition the parser read out of borrowed
+	// text carries an offset — see funcOrigin.lineBase.
+	r.recordFunctionOrigin(name, r.currentFile(), 0)
 	return true
 }
 
@@ -611,24 +617,14 @@ func (r *Runner) defineFromText(name, body string, aliases syntax.Aliases) bool 
 // that read the body out of one.
 //
 // The definition seams above cannot know it: they are handed text, and the
-// file it came from is the caller's fact. An empty path clears the entry
+// file it came from is the caller's fact. An empty path clears the file
 // rather than storing one, so a caller with nothing to say leaves the name
 // where the definition put it.
+//
+// It writes the file half of the origin and leaves the line half where the
+// definition put it — see funcOrigin.
 func (r *Runner) SetFunctionFile(name, file string) {
-	r.recordFunctionFile(name, file)
-}
-
-// recordFunctionFile is the one write to the table, so that a new way of
-// defining a function cannot quietly skip it.
-func (r *Runner) recordFunctionFile(name, file string) {
-	if file == "" {
-		delete(r.funcFiles, name)
-		return
-	}
-	if r.funcFiles == nil {
-		r.funcFiles = map[string]string{}
-	}
-	r.funcFiles[name] = file
+	r.recordFunctionOrigin(name, file, r.funcOrigins[name].lineBase)
 }
 
 // FunctionText is a function's definition written back the way this shell

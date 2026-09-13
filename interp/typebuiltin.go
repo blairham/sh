@@ -288,7 +288,7 @@ func (r *Runner) typeFunctionLine(dg Diagnostics, name string) string {
 // functionOrigin is where a function was defined, for the dialect whose
 // sentence names it.
 //
-// [Runner.funcFiles] already held the answer for a definition the parser read
+// [Runner.funcOrigins] already held the answer for a definition the parser read
 // — it is what a frame reports and what a function's own trace is built from
 // — and holds it for one a builtin defined from text as well, which is what
 // makes an autoloaded function name its file rather than the shell.
@@ -302,7 +302,7 @@ func (r *Runner) typeFunctionLine(dg Diagnostics, name string) string {
 // it. Reported as false rather than as an empty string, so the caller writes
 // the other sentence instead of a clause naming nothing.
 func (r *Runner) functionOrigin(name string) (string, bool) {
-	if file := r.funcFiles[name]; file != "" {
+	if file := r.functionFile(name); file != "" {
 		return file, true
 	}
 	if r.Route == RouteStandardInput {

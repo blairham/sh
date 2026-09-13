@@ -1162,7 +1162,7 @@ func (r *Runner) unsetFunction(name string) int {
 // two.
 func (r *Runner) removeFunction(name string) {
 	delete(r.funcs, name)
-	delete(r.funcFiles, name)
+	delete(r.funcOrigins, name)
 	delete(r.exportedFuncs, name)
 	if prelude := r.preludeFuncs[name]; prelude != nil {
 		r.funcs[name] = prelude

@@ -55979,6 +55979,57 @@
         "TimedOut": false
       }
     },
+    "decl/an-array-literal-over-the-other-kind-of-array": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: h[k]=v: not found~\u003cshell\u003e: syntax error: unexpected \"(\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 2: h: cannot convert associative to indexed array~\u003cshell\u003e: line 4: c: cannot convert indexed to associative array",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 2: h: cannot convert associative to indexed array~\u003cshell\u003e: line 4: c: cannot convert indexed to associative array",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0~declare -a h='([0]=\"x\")'~\u003cshell\u003e: line 3: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~st=2~declare -a c='([0]=\"v\")'",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: h[k]=v: not found~\u003cshell\u003e: 2: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0~typeset -a h=(x)~st=0~typeset -A c=([k]=v)",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0~typeset -a h=( x )~st=0~typeset -A c=( [k]=v )",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "decl/an-exported-array-in-a-child-environment": {
       "ash": {
         "Stdout": "",

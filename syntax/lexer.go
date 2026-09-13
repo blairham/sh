@@ -3702,7 +3702,7 @@ const (
 	// began at the start of a physical line all the same.
 	heredocJoinedFromTheStart
 	// heredocJoinedAfterText is a line that continued after text, so the
-	// delimiter would have to be recognised in the middle of what was
+	// delimiter would have to be recognized in the middle of what was
 	// written as a line.
 	heredocJoinedAfterText
 )

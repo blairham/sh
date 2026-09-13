@@ -98623,6 +98623,108 @@
         "TimedOut": false
       }
     },
+    "location/a-builtins-complaint-at-the-top-of-a-script": {
+      "ash": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cscript\u003e: cd: line 1: can't cd to /nonexistent-xyz: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cscript\u003e: line 1: cd: /nonexistent-xyz: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cscript\u003e: line 1: cd: /nonexistent-xyz: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cscript\u003e: line 1: cd: /nonexistent-xyz: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cscript\u003e: 1: cd: can't cd to /nonexistent-xyz",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cscript\u003e[1]: cd: /nonexistent-xyz: [No such file or directory]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cscript\u003e:cd:1: no such file or directory: /nonexistent-xyz",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "location/a-builtins-complaint-from-inside-a-sourced-file": {
+      "ash": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cscript\u003e: cd: line 1: can't cd to /nonexistent-xyz: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "st=1",
+        "Stderr": "./inc.sh: line 1: cd: /nonexistent-xyz: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1",
+        "Stderr": "./inc.sh: line 1: cd: /nonexistent-xyz: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1",
+        "Stderr": "./inc.sh: line 1: cd: /nonexistent-xyz: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cscript\u003e: 1: cd: can't cd to /nonexistent-xyz",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cscript\u003e[2]: .[1]: cd: /nonexistent-xyz: [No such file or directory]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1",
+        "Stderr": "./inc.sh:cd:1: no such file or directory: /nonexistent-xyz",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "location/a-message-from-a-file-a-function-sourced": {
       "ash": {
         "Stdout": "st=127",
@@ -98776,6 +98878,108 @@
         "TimedOut": false
       }
     },
+    "location/a-message-from-a-function-an-eval-defined": {
+      "ash": {
+        "Stdout": "pad~st=127",
+        "Stderr": "\u003cscript\u003e: eval: line 2: nosuchcmd-xyz: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "pad~st=127",
+        "Stderr": "\u003cscript\u003e: line 2: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "pad~st=127",
+        "Stderr": "\u003cscript\u003e: line 2: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "pad~st=127",
+        "Stderr": "\u003cscript\u003e: line 2: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "pad~st=127",
+        "Stderr": "\u003cscript\u003e: 1: eval: nosuchcmd-xyz: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "pad~st=127",
+        "Stderr": "\u003cscript\u003e[2]: eval: line 1: nosuchcmd-xyz: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "pad~st=127",
+        "Stderr": "f: command not found: nosuchcmd-xyz",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "location/a-message-from-an-eval-inside-a-sourced-file": {
+      "ash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cscript\u003e: eval: line 1: nosuchcmd-xyz: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "st=127",
+        "Stderr": "./inc.sh: line 1: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127",
+        "Stderr": "./inc.sh: line 1: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127",
+        "Stderr": "./inc.sh: line 1: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cscript\u003e: 1: eval: nosuchcmd-xyz: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cscript\u003e[2]: .[1]: eval: line 1: nosuchcmd-xyz: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=127",
+        "Stderr": "(eval):1: command not found: nosuchcmd-xyz",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "location/a-message-from-inside-a-function": {
       "ash": {
         "Stdout": "",
@@ -98873,6 +99077,261 @@
       "zsh": {
         "Stdout": "st=127",
         "Stderr": "./inc.sh:1: command not found: nosuchcmd-xyz",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "location/a-message-from-inside-an-eval": {
+      "ash": {
+        "Stdout": "pad~st=127",
+        "Stderr": "\u003cscript\u003e: eval: line 2: nosuchcmd-xyz: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "pad~st=127",
+        "Stderr": "\u003cscript\u003e: line 2: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "pad~st=127",
+        "Stderr": "\u003cscript\u003e: line 2: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "pad~st=127",
+        "Stderr": "\u003cscript\u003e: line 2: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "pad~st=127",
+        "Stderr": "\u003cscript\u003e: 1: eval: nosuchcmd-xyz: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "pad~st=127",
+        "Stderr": "\u003cscript\u003e[2]: eval: line 1: nosuchcmd-xyz: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "pad~st=127",
+        "Stderr": "(eval):1: command not found: nosuchcmd-xyz",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "location/a-message-from-the-top-level-of-a-script": {
+      "ash": {
+        "Stdout": "pad~st=127",
+        "Stderr": "\u003cscript\u003e: line 2: nosuchcmd-xyz: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "pad~st=127",
+        "Stderr": "\u003cscript\u003e: line 2: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "pad~st=127",
+        "Stderr": "\u003cscript\u003e: line 2: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "pad~st=127",
+        "Stderr": "\u003cscript\u003e: line 2: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "pad~st=127",
+        "Stderr": "\u003cscript\u003e: 2: nosuchcmd-xyz: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "pad~st=127",
+        "Stderr": "\u003cscript\u003e: line 2: nosuchcmd-xyz: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "pad~st=127",
+        "Stderr": "\u003cscript\u003e:2: command not found: nosuchcmd-xyz",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "location/a-parse-failure-in-a-file-a-sourced-file-sourced": {
+      "ash": {
+        "Stdout": "a",
+        "Stderr": "\u003cscript\u003e: ./inner.sh: line 3: syntax error: unexpected end of file (expecting \"then\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "a~st=2",
+        "Stderr": "./inner.sh: line 3: syntax error: unexpected end of file from `if' command on line 2",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "a~st=2",
+        "Stderr": "./inner.sh: line 3: syntax error: unexpected end of file from `if' command on line 2",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "a~st=1",
+        "Stderr": "./inner.sh: line 3: syntax error: unexpected end of file",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "a",
+        "Stderr": "\u003cscript\u003e: 3: ./inner.sh: Syntax error: end of file unexpected (expecting \"then\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=3",
+        "Stderr": "\u003cscript\u003e[3]: .[1]: .: syntax error at line 3: `if' unmatched",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "a~st=126",
+        "Stderr": "./inner.sh:3: parse error near `\\n'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "location/an-eval-inside-an-eval": {
+      "ash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: eval: line 0: nosuchcmd-xyz: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: eval: nosuchcmd-xyz: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: eval[1]: eval: line 1: nosuchcmd-xyz: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=127",
+        "Stderr": "(eval):1: command not found: nosuchcmd-xyz",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "location/an-eval-on-the-first-line-of-a-command-string": {
+      "ash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: eval: line 0: nosuchcmd-xyz: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: eval: nosuchcmd-xyz: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: eval: line 1: nosuchcmd-xyz: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=127",
+        "Stderr": "(eval):1: command not found: nosuchcmd-xyz",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

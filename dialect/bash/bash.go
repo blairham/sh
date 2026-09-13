@@ -1876,11 +1876,6 @@ func Diagnostics() interp.Diagnostics {
 			"declare": "Int",
 			"typeset": "Int",
 			"local":   "fFInt",
-			// The callbacks: -C runs a command every -c elements, which is
-			// about progress display and is deferred rather than parsed and
-			// ignored — under either of the command's two names.
-			"mapfile":   "Cc",
-			"readarray": "Cc",
 		},
 		// bash's own words for the two -u failures it can meet here; the
 		// non-number wordings per letter are not modeled yet, so those fall

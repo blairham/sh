@@ -172,19 +172,161 @@ func TestMapfileRefusesWhatItCannotUse(t *testing.T) {
 	}
 }
 
-// The callbacks are deferred, and a dialect whose letter table says so gets
-// them named as missing rather than unknown — the difference between a shell
-// that lacks something and a typo.
-func TestMapfileSaysWhenACallbackIsMerelyMissing(t *testing.T) {
-	out, st := mapfileRun(t, `mapfile -C cb arr`, func(r *Runner) {
-		dg := Diagnostics{UnimplementedOptionLetters: map[string]string{"mapfile": "Cc"}}
-		r.Diagnostics = &dg
-	})
-	if !strings.Contains(out, "mapfile: -C is not implemented yet") {
-		t.Errorf("said %q, want the letter named as missing", out)
+// -C names a command run every -c elements as the array fills, and -c is how
+// many that is. The schedule is the part worth pinning: the call comes *before*
+// the element is assigned, and only on a multiple of the quantum, so a -C with
+// the default quantum of 5000 calls nothing at all on a short list.
+func TestMapfileCallsBackAsTheArrayFills(t *testing.T) {
+	for _, c := range []struct {
+		name, src, want string
+		status          int
+	}{
+		{
+			// Every element, and the subscript it is about to get.
+			"-c 1 calls for each element",
+			`printf 'a\nb\n' | { mapfile -t -C "echo cb" -c 1 arr; echo "n=${#arr[@]}"; }`,
+			"cb 0 a\ncb 1 b\nn=2\n", 0,
+		},
+		{
+			// Not every element: the second and the fourth, which are the
+			// multiples of two, and the fifth line never reaches one.
+			"-c 2 calls on the multiples",
+			`printf '1\n2\n3\n4\n5\n' | { mapfile -t -C "echo cb" -c 2 arr; echo "n=${#arr[@]}"; }`,
+			"cb 1 2\ncb 3 4\nn=5\n", 0,
+		},
+		{
+			"the default quantum is 5000, so a short list calls nothing",
+			`printf 'a\nb\nc\n' | { mapfile -t -C "echo cb" arr; echo "n=${#arr[@]}"; }`,
+			"n=3\n", 0,
+		},
+		{
+			// -O moves the subscript the callback is handed with it.
+			"-O moves the subscript",
+			`printf 'a\nb\n' | { mapfile -t -O 5 -C "echo cb" -c 1 arr; }`,
+			"cb 5 a\ncb 6 b\n", 0,
+		},
+		{
+			// -s does not: a skipped line is never an element, so it is
+			// neither counted toward the quantum nor given a subscript.
+			"-s does not",
+			`printf '1\n2\n3\n4\n' | { mapfile -t -s 2 -C "echo cb" -c 1 arr; }`,
+			"cb 0 3\ncb 1 4\n", 0,
+		},
+		{
+			// The element arrives without its delimiter only where -t asked
+			// for that; the callback is handed exactly what is stored.
+			"the element is what will be stored",
+			`printf 'a\n' | { mapfile -C "printf [%s]" -c 1 arr; }`,
+			"[0][a\n]", 0,
+		},
+		{
+			// The callback runs before the assignment, and the replacing
+			// form has already emptied the array by the time of the first
+			// call: it sees neither the element being read nor the three
+			// that were there.
+			"the array is empty at the first call",
+			`cb() { echo "at:${#arr[@]}"; }; arr=(x y z)
+printf '1\n2\n' | { mapfile -t -C cb -c 1 arr; echo "n=${#arr[@]}"; }`,
+			"at:0\nat:1\nn=2\n", 0,
+		},
+		{
+			// With -O the array is not emptied, so the callback sees what
+			// was there.
+			"-O leaves the array for the callback to see",
+			`cb() { echo "at:${#arr[@]}"; }; arr=(x y z)
+printf '1\n' | { mapfile -t -O 1 -C cb -c 1 arr; }`,
+			"at:3\n", 0,
+		},
+		{
+			// It runs in the calling shell, which is what makes a progress
+			// counter possible at all.
+			"the callback runs in the calling shell",
+			`n=0; cb() { n=$((n+1)); }; printf 'a\nb\nc\n' | { mapfile -t -C cb -c 1 arr; echo "n=$n"; }`,
+			"n=3\n", 0,
+		},
+		{
+			// And a callback that fails is not the builtin's failure.
+			"a failing callback is not a failing mapfile",
+			`printf 'a\n' | { mapfile -t -C false -c 1 arr; echo "st=$? n=${#arr[@]}"; }`,
+			"st=0 n=1\n", 0,
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, st := mapfileRun(t, c.src, nil)
+			if out != c.want {
+				t.Errorf("said %q, want %q", out, c.want)
+			}
+			if st != c.status {
+				t.Errorf("status = %d, want %d (%q)", st, c.status, out)
+			}
+		})
 	}
-	if st != 2 {
-		t.Errorf("status = %d, want 2", st)
+}
+
+// The callback is source text with the two arguments appended to it, not a
+// command with two arguments handed to it — measured three ways in bash, and
+// the third is the decisive one because nothing but a parse can fail on it.
+//
+// The consequence is that the element has to be quoted on the way in. A line
+// holding a semicolon is data; joined raw it would be program.
+func TestMapfileCallbackIsSourceTextWithTheArgumentsAppended(t *testing.T) {
+	for _, c := range []struct {
+		name, src, want string
+	}{
+		{
+			// The arguments land on the *last* command in the string.
+			"the arguments reach the last command",
+			`printf 'a\n' | { mapfile -t -C "echo one; echo two" -c 1 arr; }`,
+			"one\ntwo 0 a\n",
+		},
+		{
+			// And the decisive one, because nothing but a parse can fail on
+			// it: an unterminated quote in the callback is a syntax error,
+			// which a command with two words appended could not have. The
+			// label is `stdin`, measured, where `eval` says `eval`.
+			//
+			// Nothing follows it here because what a syntax error inside an
+			// eval does to the rest of the script is a question this runner
+			// already answers, and the substrate's answer is to abandon it.
+			// In the one dialect that has the command the script runs on.
+			"an unterminated quote in the string is a syntax error",
+			`printf 'a\n' | { mapfile -t -C 'echo "' -c 1 arr; }`,
+			"sh: stdin: unterminated double quote\n",
+		},
+		{
+			// And the element is one word however it is spelled: two spaces
+			// survive, a semicolon does not start a command, and a star is
+			// not a pattern.
+			"the element is one word",
+			`cb() { echo "n=$# [$2]"; }; printf 'a b; echo NO\nx  y\n*\n' | { mapfile -t -C cb -c 1 arr; }`,
+			"n=2 [a b; echo NO]\nn=2 [x  y]\nn=2 [*]\n",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, st := mapfileRun(t, c.src, nil)
+			if out != c.want {
+				t.Errorf("said %q, want %q", out, c.want)
+			}
+			if st != 0 {
+				t.Errorf("status = %d, want 0 (%q)", st, out)
+			}
+		})
+	}
+}
+
+// Zero means no cap to -n and is a refusal to -c, and the refusal stands with
+// no -C to call: writing the letter at all is what asks for it to be read.
+// The whole read is lost with it, which is the part a script notices.
+func TestMapfileRefusesAnInvalidCallbackQuantum(t *testing.T) {
+	for _, src := range []string{
+		`printf 'a\n' | { mapfile -t -C cb -c 0 arr; echo "st=$? n=${#arr[@]}"; }`,
+		`printf 'a\n' | { mapfile -t -c 0 arr; echo "st=$? n=${#arr[@]}"; }`,
+		`printf 'a\n' | { mapfile -t -c x arr; echo "st=$? n=${#arr[@]}"; }`,
+	} {
+		out, _ := mapfileRun(t, src, nil)
+		if !strings.Contains(out, "invalid callback quantum") || !strings.Contains(out, "st=1 n=0") {
+			t.Errorf("%s said %q, want the refusal and an untouched array", src, out)
+		}
 	}
 }
 

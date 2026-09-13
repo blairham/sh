@@ -12570,6 +12570,26 @@ printf 'TWO=still-running\n'`,
 		Why:     "a delimiter is normally kept on the element unless -t asks for it to go — and NUL is the exception, dropped either way, because the value could not carry it",
 	},
 	{
+		ID: "mapfile/a-callback-runs-as-the-array-fills", Category: "builtins",
+		Snippet: `printf '1\n2\n3\n4\n' | { mapfile -t -C "echo cb" -c 2 arr; echo "n=${#arr[@]}"; }`,
+		Why:     "-C names a command run every -c elements with the subscript and the element appended, so the row pins both the firing schedule and the arguments; the default quantum is 5000, which is why a -C with no -c calls nothing on a short list",
+	},
+	{
+		ID: "mapfile/a-callback-sees-a-partly-filled-array", Category: "builtins",
+		Snippet: `arr=(x y z); printf '1\n2\n' | { mapfile -t -C 'echo "at:${#arr[@]}"' -c 1 arr; echo "n=${#arr[@]}"; }`,
+		Why:     "the callback runs before the element is assigned and after the replacing form has already emptied what the array held, so the first call sees nothing at all rather than the three elements that were there",
+	},
+	{
+		ID: "mapfile/a-callback-element-is-one-word", Category: "builtins",
+		Snippet: `cb() { echo "n=$# at=$1 [$2]"; }; printf 'a b; echo NO\nx  y\n*\n' | { mapfile -t -C cb -c 1 arr; echo "n=${#arr[@]}"; }`,
+		Why:     "the callback is source text the two arguments are appended to, so the element has to arrive quoted: a line holding a semicolon or two spaces is data and must not become program",
+	},
+	{
+		ID: "mapfile/an-invalid-callback-quantum", Category: "builtins",
+		Snippet: `printf 'a\n' | { mapfile -t -c 0 arr; echo "st=$? n=${#arr[@]}"; }`,
+		Why:     "zero is refused for -c where it means no cap for -n, and the refusal stands without a -C to call — the whole read is lost with it",
+	},
+	{
 		ID: "mapfile/reads-a-descriptor", Category: "builtins",
 		Snippet: `printf 'x\ny\n' > f; exec 3<f; mapfile -u 3 -t arr; printf "[%s]" "${arr[@]}"; echo " n=${#arr[@]}"`,
 		Why:     "-u reads the shell's own descriptor table rather than standard input, which is how the command is used without a pipe putting it in a subshell — the whole reason to prefer it to a while-read loop",

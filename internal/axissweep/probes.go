@@ -272,14 +272,14 @@ func Probes() []Probe {
 			Reading: "the row runs three commands with the DEBUG trap let into the calls, so it writes three `D` lines where the trap fires once per command and five where a call fires it again on the way in",
 			Read: func(cells map[string]oracle.Result) (string, string) {
 				r := cells["opt/a-debug-trap-fires-twice-for-a-function-call"]
-				switch fired := strings.Count(r.Stdout, "D"); {
-				case fired == 0:
+				switch strings.Count(r.Stdout, "D") {
+				case 0:
 					return "", "no D was written at all, so this shell has no DEBUG condition and the row asks it nothing"
-				case fired == 1:
+				case 1:
 					return "", "one D and no more: the trap never reached inside a call here, so the row cannot say what entering one does"
-				case fired == 3:
+				case 3:
 					return "No", ""
-				case fired == 5:
+				case 5:
 					return "Yes", ""
 				}
 				return "", "the row wrote a count that is neither one per command nor two per call, so the reading does not fit it"

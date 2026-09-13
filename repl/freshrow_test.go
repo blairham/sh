@@ -114,7 +114,7 @@ func TestWhatIsWrittenBeforeAPrompt(t *testing.T) {
 			//
 			// An editor with no width function at all, which is not a session
 			// on a terminal that would not say its size — that one is drawn
-			// for at eighty and does get the mark. See fallbackWidth.
+			// for at eighty and does get the mark. See terminalWidth.
 			"nothing to ask, no mark",
 			answers{inverse, true, true, 0},
 			"\r" + clearing,

@@ -199,6 +199,10 @@ func Dialect() syntax.Dialect {
 	// ksh93 alone refuses an unrecognized ${...} operator while reading the
 	// script; the other three wait until the expansion is reached.
 	d.BadSubstitutionAtParseTime = true
+	// A `.` is a name character here, which is how `${.sh.version}` is
+	// spelled and how a compound variable's member is addressed. One rule
+	// covering both — see syntax.Dialect.DottedName for the probes (#2620).
+	d.DottedName = true
 	// `${ cmd;}`, a command substitution that runs in the current shell
 	// so that what it assigns survives. The space after the brace is the
 	// whole of the grammar: `${x}` is a parameter and `${ x}` is not.
@@ -2529,6 +2533,24 @@ func Apply(r *interp.Runner) {
 	r.Unregister("readarray")
 	// This shell has no `enable`.
 	r.Unregister("enable")
+	// `${.sh.version}` is `$KSH_VERSION` under the name this shell's own
+	// namespace gives it — measured on ksh93u+ 2012-08-01, 2026-09-13, the
+	// two are the same sentence there. Produced rather than stored, because
+	// a stored one would be listed: real ksh93 answers `set | grep '^\.sh'`
+	// with nothing at all, where every ordinary dotted name it holds *is*
+	// listed (`.foo=1; set` shows `.foo=1`). A producer is how this shell
+	// already keeps `LINENO` and `RANDOM` out of that listing.
+	//
+	// The rest of the `.sh` namespace is deliberately absent. Measured on
+	// the same build with `-c`, every one of `.sh.name`, `.sh.subscript`,
+	// `.sh.value`, `.sh.match`, `.sh.pid`, `.sh.file`, `.sh.fun`,
+	// `.sh.command`, `.sh.edchar`, `.sh.level` and `.sh.sig` expands to the
+	// empty string at status 0 — which is what an unset dotted name already
+	// does here, so naming them would add a claim without adding an answer.
+	// `.sh.lineno` and `.sh.subshell` answer `0` there and are genuinely
+	// dynamic; they are left unset rather than pinned to a number that
+	// would be wrong as soon as a script had two lines.
+	r.SetDynamic(".sh.version", func(*interp.Runner) string { return kshVersion })
 	r.SetDynamic("RANDOM", func(*interp.Runner) string { return interp.Randoms() })
 	// `typeset -i RANDOM=7000`, measured — where this shell answered
 	// `RANDOM: not found` from a name it had just expanded a number for

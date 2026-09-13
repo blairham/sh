@@ -688,7 +688,7 @@ func (l *Lexer) atAssignValue() bool {
 		}
 		head = head[:i]
 	}
-	return isName(head)
+	return isNameIn(head, l.dialect.DottedName)
 }
 
 // startsNumericRange reports whether the cursor is on a numeric range
@@ -1963,7 +1963,7 @@ func (l *Lexer) inAssignmentValue() bool {
 		}
 		head = head[:i]
 	}
-	return isName(head)
+	return isNameIn(head, l.dialect.DottedName)
 }
 
 // scanWord reads a word as a sequence of spans, one per run of uniform

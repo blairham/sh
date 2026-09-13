@@ -753,6 +753,37 @@ type Dialect struct {
 	// 1=username/reponame` lines and never reached a prompt (#1438).
 	PositionalAssignment bool
 
+	// DottedName makes `.` a name character, so `${.sh.version}` reads and
+	// `.foo=1` is an assignment rather than a command name.
+	//
+	// **ksh93 alone.** It is one lexical rule and not two, which is the
+	// question #2620 asked and the probes answered. Measured on ksh93u+
+	// 2012-08-01, 2026-09-13, `-c`:
+	//
+	//	${.sh.version}   Version AJM 93u+ 2012-08-01
+	//	${.foo}          empty, status 0 — no `.sh` about it
+	//	${.}             empty, status 0 — the dot alone is a name
+	//	${x.y}           empty, status 0, with `x=1` set
+	//	.foo=1; ${.foo}  1 — an assignment, and it reads back
+	//	typeset .x=3     accepted, and `${.x}` is 3
+	//	for .x in 1 2    accepted, and the body sees `${.x}`
+	//	$.foo            the four characters, with `.foo` set — *not* an
+	//	                 expansion, so the dot is a rule about names and
+	//	                 not about what follows a `$`
+	//
+	// So a dot is an ordinary name byte wherever a name is read, it may
+	// *begin* one, and the `.sh` namespace and a compound variable's member
+	// are the same grammar reached twice rather than two constructs. What
+	// distinguishes them is only what the interpreter has stored under the
+	// name.
+	//
+	// The other five columns call `${.sh.version}` a bad substitution at
+	// *run* time — bash 5.3.15, that binary as `sh`, bash 3.2.57, zsh 5.9.2
+	// and BusyBox ash all run the command before it — so this is a grammar
+	// flag and not an axis: nobody else has a reading of the construct to
+	// disagree with.
+	DottedName bool
+
 	// CurrentShellSubstitution reads `${ cmd;}` as a command substitution
 	// that runs in the current shell. bash 5.3 and ksh93 have it; dash and
 	// zsh call it a bad substitution.

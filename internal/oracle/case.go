@@ -13404,6 +13404,11 @@ printf 'TWO=still-running\n'`,
 		Why:     "a subshell that is *not* the body: bash leaves it inline as `( exit 1 )` and zsh gives it the shape it gives a brace group, three lines and an indent. The neighbor of the body row and a different question — that one is about a node being added, this one about how an existing node is laid out",
 	},
 	{
+		ID: "declare/f-says-an-assignment-only-statement-back", Category: "declarations",
+		Snippet: `f() { x=1; typeset -g w=2; y=3 echo hi; }; typeset -f f`,
+		Why:     "the one part of a listed body this engine does not reproduce, recorded rather than left to be rediscovered: zsh writes a **trailing blank** after every word it read as an assignment, so `x=1 ` and `typeset -g w=2 ` end their lines with a space and `y=3 echo hi` does not — the blank is the assignment's, not a separator. bash writes none anywhere. It is not an arrangement: `typeset -g w=2` is a command with an argument to this parser and a command with an *assignment* to zsh's, so no layout field can put the blank back. Open on #2427",
+	},
+	{
 		ID: "declare/capital-f-names-a-function", Category: "declarations",
 		Snippet: `f() { echo hi; }; declare -F f; echo "st=$?"; declare -F nosuch; echo "st2=$?"`,
 		Why:     "only one shell has `-F` as a function listing — a named operand answers with the bare name, a missing one with silence and 1 — while another spells a *float's precision* with the same letter and answers 0 to both, and two have no `declare` at all",

@@ -61538,6 +61538,57 @@
         "TimedOut": false
       }
     },
+    "declare/f-says-an-assignment-only-statement-back": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: typeset: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "f () ~{ ~    x=1;~    typeset -g w=2;~    y=3 echo hi~}",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "f () ~{ ~    x=1;~    typeset -g w=2;~    y=3 echo hi~}",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "f () ~{ ~    x=1;~    typeset -g w=2;~    y=3 echo hi~}",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "f() { x=1; typeset -g w=2; y=3 echo hi; };",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "f () {~\tx=1 ~\ttypeset -g w=2 ~\ty=3 echo hi~}",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "declare/f-says-an-elif-back": {
       "ash": {
         "Stdout": "",

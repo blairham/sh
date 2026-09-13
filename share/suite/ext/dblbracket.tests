@@ -78,3 +78,29 @@ printf 'counted to %s\n' "$n"
 isname() { [[ $1 == [a-z]* ]]; }
 say isname alpha
 say isname 9lives
+
+# -L and -h are the same operator under two names, and they are the only file
+# tests that do not follow the link: a symbolic link is what they answer
+# about, so one pointing at nothing is -L and is not -e.
+#
+# core/test.tests asks `test -L`, which is a different question and does not
+# reach this one. There the word is an argument to a utility; here it is an
+# operator the shell parses, and the two were the last condition operators no
+# case anywhere in the tree mentioned (#2293).
+printf 'target\n' > pointee
+ln -s pointee alive
+ln -s nobody-made-this dead
+[[ -L alive ]] && printf 'a link is -L\n'
+[[ -h alive ]] && printf 'and -h says the same\n'
+[[ -L pointee ]] || printf 'the file it points at is not\n'
+[[ -h pointee ]] || printf 'under either name\n'
+[[ -e alive ]] && printf 'a live link exists, because -e follows it\n'
+[[ -f alive ]] && printf 'and is a regular file, for the same reason\n'
+[[ -L dead ]] && printf 'a dangling link is still -L\n'
+[[ -e dead ]] || printf 'and does not exist\n'
+[[ -L nosuchname ]] || printf 'a name nobody made is not a link either\n'
+[[ -L alive ]]
+printf 'status when a link: %s\n' "$?"
+[[ -L pointee ]]
+printf 'status when not: %s\n' "$?"
+rm -f alive dead pointee

@@ -1,0 +1,75 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# The `&>` family, which is where the last three redirection operators no
+# case anywhere in the tree mentioned were living (#2293).
+
+# `&>>|` is the first thing this file runs on purpose. It is a syntax error
+# in bash, ksh93 and dash, so what those three write for this file is a parse
+# diagnostic rather than an answer, and the file is zsh's alone from its
+# first line.
+setopt noclobber
+printf 'kept\n' > f
+{ printf 'out\n'; printf 'err\n' >&2; } &>>| f
+printf 'append both, clobbering:\n'
+cat f
+
+# `&>|` is the same override without the append: one stream file, truncated,
+# in a shell that has been told not to truncate.
+printf 'gone\n' > g
+{ printf 'out\n'; printf 'err\n' >&2; } &>| g
+printf 'truncate both, clobbering:\n'
+cat g
+
+# `!` is the other spelling of the same override, and zsh takes it in both
+# positions.
+printf 'gone\n' > h
+{ printf 'out\n'; printf 'err\n' >&2; } &>! h
+printf 'bang, truncating:\n'
+cat h
+printf 'kept\n' > i
+{ printf 'out\n'; printf 'err\n' >&2; } &>>! i
+printf 'bang, appending:\n'
+cat i
+
+# Without an override, noclobber refuses the truncating form and lets the
+# appending one through.
+printf 'kept\n' > j
+( { printf 'out\n'; } &> j ) 2> /dev/null
+printf 'refused -> %s\n' "$?"
+cat j
+{ printf 'out\n'; printf 'err\n' >&2; } &>> j
+printf 'appended:\n'
+cat j
+unsetopt noclobber
+
+# `&>` and `&>>` themselves are shared with bash and with nothing else on
+# this panel, which is the measurement that keeps them out of ext/: ksh93 and
+# dash read `&>` as "run it in the background, then redirect", so the group
+# runs detached and the file is left alone.
+printf 'first\n' > k
+{ printf 'out\n'; printf 'err\n' >&2; } &> k
+printf 'both, truncating:\n'
+cat k
+{ printf 'more\n'; printf 'still\n' >&2; } &>> k
+printf 'both, appending:\n'
+cat k
+
+# The order the two streams arrive in is the order the commands ran, because
+# one descriptor is carrying both.
+{ printf '1\n'; printf '2\n' >&2; printf '3\n'; printf '4\n' >&2; } &> m
+printf 'interleaved:\n'
+cat m
+
+# And the descriptor really is shared rather than duplicated twice: a write
+# through 2 lands after a write through 1 that came first.
+{ printf 'a' ; printf 'b' >&2; printf 'c'; } &> n
+printf 'shared: [%s]\n' "$(cat n)"
+
+# MULTIOS is the option underneath all of it, and it is zsh's alone: a second
+# redirection of one descriptor adds a target rather than replacing it, so a
+# word written once is written twice.
+printf 'teed\n' > p > q
+printf 'multios p=[%s] q=[%s]\n' "$(cat p)" "$(cat q)"
+( unsetopt multios; printf 'once\n' > p > q )
+printf 'without multios p=[%s] q=[%s]\n' "$(cat p)" "$(cat q)"

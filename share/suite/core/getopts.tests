@@ -1,0 +1,65 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# getopts — #2321. The one option parser POSIX XCU gives a shell, and the
+# only builtin here whose whole behaviour is a state machine carried between
+# calls in OPTIND and OPTARG.
+#
+# Every loop below resets OPTIND itself. A shell that carried it in from the
+# call before would answer differently on the second call than on the first,
+# and a file whose cases depended on their order would be measuring the file.
+#
+# The diagnostics of the *non*-silent form are held out: each shell writes its
+# own sentence for an unknown letter and they do not agree, which is a case
+# for the dialect tiers rather than for this one. What is asked here is the
+# silent form — a leading colon in the option string — where the shell says
+# nothing and the answer arrives in `$opt` and `$OPTARG`.
+
+f() {
+  OPTIND=1
+  while getopts 'ab:c' opt; do
+    case $opt in
+      a) printf 'a\n' ;;
+      b) printf 'b=%s\n' "$OPTARG" ;;
+      c) printf 'c\n' ;;
+      '?') printf 'bad\n' ;;
+    esac
+  done
+  printf 'OPTIND=%s\n' "$OPTIND"
+  shift $((OPTIND - 1))
+  printf 'rest=[%s]\n' "$*"
+}
+
+# One flag, and a flag whose argument is the next word or the rest of this one.
+f -a
+f -b val
+f -bval
+
+# Flags run together in one word, and flags mixed with operands.
+f -ac
+f -a -b v -c rest1 rest2
+
+# `--` ends the options, and so does the first word that is not one.
+f -a -- -b
+f rest
+f
+
+# The silent form: a leading colon in the option string. An unknown letter
+# arrives as `?` in the variable with the letter in OPTARG, and a missing
+# argument arrives as `:` with the letter it belonged to.
+g() {
+  OPTIND=1
+  while getopts ':ab:' opt; do
+    case $opt in
+      a) printf 'A\n' ;;
+      b) printf 'B=%s\n' "$OPTARG" ;;
+      ':') printf 'missing arg for %s\n' "$OPTARG" ;;
+      '?') printf 'unknown %s\n' "$OPTARG" ;;
+    esac
+  done
+  printf 'OPTIND=%s\n' "$OPTIND"
+}
+g -a -z
+g -b
+g -ab
+g -- -a

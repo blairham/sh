@@ -1,0 +1,148 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# `test` and `[` — the POSIX XCU utility, asked as a utility.
+#
+# `[[ ]]` is a different thing with a different grammar and it is asked in
+# ext/dblbracket.tests. This file is the one every shell in the panel has,
+# dash and ash included: a command whose operands are words, so the shell's
+# expansions have already run by the time the operators are read.
+#
+# The files are made here rather than assumed. A test of the filesystem that
+# leans on what happens to be on the machine measures the machine.
+#
+# What is held out, and why:
+#   `test '(' ')'`      the panel splits three ways on an unbalanced group
+#   `test a '<' b`      bash and dash answer it, zsh and ksh93 call it 2
+#   `test x -nt y`      two files made in the same instant, so the answer is
+#                       the filesystem's timestamp granularity
+#   `test -g`           setgid needs a chmod macOS refuses to an ordinary user
+#   `test -G`           the primary group of a new file is the machine's
+
+mkdir -p d
+: > f
+: > empty
+printf 'x' > nonempty
+ln -s f link
+ln -s nowhere dangling
+mkfifo fifo
+: > setuid
+chmod 700 f
+chmod 4700 setuid
+mkdir -p sticky
+chmod 1700 sticky
+
+# Every answer below is a status, so it is printed rather than acted on. The
+# name is echoed with it, because a column of bare numbers says nothing about
+# which operator moved.
+chk() { if "$@"; then printf '%s -> 0\n' "$*"; else printf '%s -> %s\n' "$*" "$?"; fi; }
+
+# Existence and type.
+chk test -e f
+chk test -e nosuch
+chk test -f f
+chk test -f d
+chk test -d d
+chk test -d f
+chk test -c /dev/null
+chk test -b /dev/null
+chk test -p fifo
+chk test -p f
+chk test -S f
+
+# Size, permission bits and ownership.
+chk test -s nonempty
+chk test -s empty
+chk test -r f
+chk test -w f
+chk test -x f
+chk test -u setuid
+chk test -u f
+chk test -k sticky
+chk test -k f
+chk test -O f
+chk test -e /dev/null
+chk test -w /dev/null
+chk test -r /
+chk test -x /
+
+# -L and -h are the same operator under two names, and they are the only ones
+# that do not follow the link. -e does follow it, so a link to nothing is a
+# link that exists and a file that does not.
+chk test -L link
+chk test -h link
+chk test -L f
+chk test -h f
+chk test -L dangling
+chk test -e dangling
+chk test -e link
+
+# The string tests.
+chk test -z ''
+chk test -z x
+chk test -n x
+chk test -n ''
+chk test x = x
+chk test x = y
+chk test x != y
+chk test 'a b' = 'a b'
+chk test ab = 'a b'
+
+# The arithmetic comparisons, which are the only place test reads an operand
+# as a number.
+chk test 1 -eq 1
+chk test 1 -ne 2
+chk test 1 -lt 2
+chk test 2 -le 2
+chk test 3 -gt 2
+chk test 3 -ge 3
+chk test -1 -lt 0
+chk test 0 -eq -0
+chk test 010 -eq 10
+chk test 100000000000 -gt 99999999999
+
+# -t asks whether a descriptor is a terminal. A suite file is run with its
+# output on a pipe and nothing on its input, so both answers are false and
+# both are the same every run — which is why this is askable at all.
+chk test -t 0
+chk test -t 1
+
+# Negation, and the one- and two-operand rules POSIX XCU 4.63 gives: with one
+# operand the answer is whether it is non-empty, so a word that spells an
+# operator is a word.
+chk test
+chk test x
+chk test ''
+chk test !
+chk test -n
+chk test -z
+chk test =
+chk test --
+chk test ! ''
+chk test ! x
+chk test ! -e nosuch
+chk test ! ! ''
+
+# -a and -o join two tests, and parentheses group them.
+chk test x = x -a y = y
+chk test x = x -o y = z
+chk test x -a ''
+chk test '' -o x
+chk test '(' x = x ')'
+
+# -ef is the same file, by device and inode rather than by name.
+chk test f -ef f
+chk test f -ef link
+chk test f -ef nosuch
+
+# `[` is the same utility and its last operand must be `]`.
+[ x = x ]; printf 'bracket equal -> %s\n' "$?"
+[ -f f ]; printf 'bracket file -> %s\n' "$?"
+[ ! -f d ]; printf 'bracket negated -> %s\n' "$?"
+[ -n "$(printf 'v')" ]; printf 'bracket substitution -> %s\n' "$?"
+
+# It is a command, so it stands where a command stands.
+if [ -d d ]; then printf 'if took it\n'; fi
+while [ -f nosuch ]; do printf 'not reached\n'; done
+[ -f f ] && printf 'and ran\n'
+[ -f nosuch ] || printf 'or ran\n'

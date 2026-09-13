@@ -1,0 +1,42 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# `-prefix` and `-suffix` — the completion conditions, which only zsh has and
+# which only zsh can even parse.
+#
+# They are a pair of conditional unary operators that are valid *nowhere* a
+# suite file can put them: they may be used inside a completion function and
+# reaching one anywhere else is a refusal rather than an answer — and a fatal
+# one, so each is run in a subshell here and the file continues.
+#
+# This is the sharpest form the dialect tier's claim takes. bash, ksh93 and
+# dash do not merely answer differently, they cannot read the line: `[[
+# -suffix x ]]` is a syntax error in bash and ksh93 and `[[` is not a thing
+# at all in dash. A suite file is graded whole, so what those three write for
+# this file is a parse diagnostic — which is the measurement.
+#
+# `-prefix` and `-suffix` were two of the seventeen surface elements #2293
+# reported that no case anywhere in the tree mentioned.
+
+( [[ -suffix x ]]; printf 'suffix ran\n' ) 2> /dev/null
+printf 'suffix -> %s\n' "$?"
+( [[ -prefix x ]]; printf 'prefix ran\n' ) 2> /dev/null
+printf 'prefix -> %s\n' "$?"
+
+# Nothing about the operand decides it: a colon, a quoted word and a pattern
+# all reach the same refusal.
+( [[ -prefix : ]] ) 2> /dev/null
+printf 'prefix colon -> %s\n' "$?"
+( [[ -suffix 'ab' ]] ) 2> /dev/null
+printf 'suffix quoted -> %s\n' "$?"
+
+# It is fatal rather than false: the command after it in the same subshell
+# does not run.
+( [[ -prefix x ]]; printf 'after prefix\n' ) 2> /dev/null
+printf 'nothing after -> %s\n' "$?"
+
+# And the diagnostic goes to stderr, with nothing on stdout.
+out=$( ( [[ -suffix x ]] ) 2> /dev/null )
+err=$( ( [[ -suffix x ]] ) 2>&1 > /dev/null )
+if [ -n "$err" ]; then printf 'stderr yes\n'; else printf 'stderr no\n'; fi
+if [ -n "$out" ]; then printf 'stdout yes\n'; else printf 'stdout no\n'; fi

@@ -18,8 +18,13 @@ import (
 // one.
 //
 // Named for the flag rather than for the shell that sets it. The value is what
-// carries the bar: the written spelling is a parse error in every shell
-// measured, so this is a rule about a pattern a live expansion supplied.
+// carries the bar, and that is the rule rather than an accident of what can be
+// written: a bar *written* in a `${…}` operand is not a parse error — the
+// braces keep it out of the command grammar — and zsh reads it as an ordinary
+// character there. This file used to say the written spelling was a parse
+// error in every shell measured, which is true of a condition and of a `case`
+// arm and false of the one place the question can be asked (#2168). See
+// TestAWrittenBarIsNotAnAlternation below.
 
 // topLevelMatch runs a `case` whose arm is an expansion of `value`, under a
 // grammar with the flag set or not, and answers whether the arm was taken.
@@ -122,6 +127,64 @@ func TestAQuotedBarIsNotAnAlternation(t *testing.T) {
 			}
 			if got := strings.TrimSpace(out.String()); got != tc.want {
 				t.Errorf("%s = %s, want %s", tc.src, got, tc.want)
+			}
+		})
+	}
+}
+
+// A written bar is an ordinary character even where a live one splits, which
+// is the other half of the same rule and the half nothing checked. Measured on
+// zsh 5.9.2, 2026-09-12, with `v=abc` — and the whole point is that both
+// spellings of the pattern are the same three characters:
+//
+//	${v#a|ab}                     abc, so the bar matched nothing
+//	L='a|ab'; ${v#${~L}}          bc, so the same bar from a value split
+//	setopt globsubst; ${v#a|ab}   abc, so the option does not reach it
+//	w='a|b'; ${w#a|b}             empty, so the written bar matched itself
+//
+// Through the trim operator rather than through a `case`, because a `case`
+// arm's bar is the grammar's separator and never reaches the matcher at all.
+func TestAWrittenBarIsNotAnAlternation(t *testing.T) {
+	d := syntax.Core()
+	d.PatternAlternation, d.PatternTopLevelAlternation = true, true
+	sem := permissive()
+	sem.GlobExpansionResults = Yes
+	for _, tc := range []struct{ name, src, want string }{
+		{"a written bar trims nothing", `v=abc; printf "%s" "${v#a|ab}"`, "abc"},
+		{"and matches itself", `w='a|b'; printf "%s" "${w#a|b}"`, ""},
+		{"a bar from a value still splits", `v=abc; L='a|ab'; printf "%s" "${v#$L}"`, "bc"},
+		{"a written group still splits", `v=abc; printf "%s" "${v#(a|ab)}"`, "bc"},
+		{
+			// The written bar stays ordinary even with a live expansion on
+			// either side of it, so the rule is about the character's own
+			// source and not about whether the pattern holds a value.
+			"a written bar between two values", `v=abc; e=a; f=ab; printf "%s" "${v#$e|$f}"`, "abc",
+		},
+		{
+			// A live bar's arms take in the written text beside them rather
+			// than stopping at the value's edges, which is measured: with
+			// `I='ab|x'`, `${v#${~I}z}` is `c` in zsh, so the arms are `ab`
+			// and `xz`. Read as concatenation it would be `abc`.
+			"a live bar splits the whole pattern", `v=abc; i='ab|x'; printf "%s" "${v#${i}z}"`, "c",
+		},
+		{
+			// And from the other side: a written `a` in front of `x|abc`
+			// joins the first arm, so the second matches the whole subject.
+			"written text joins the first arm", `v=abc; n='x|abc'; printf "%s" "${v#a$n}"`, "",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f, err := syntax.Parse(tc.src, d)
+			if err != nil {
+				t.Fatalf("parse: %v", err)
+			}
+			var out bytes.Buffer
+			r := newTestRunner(t, &Runner{Stdout: &out, Stderr: &out, Dialect: &d, Semantics: &sem, Env: testPATH()})
+			if _, err := r.Run(context.Background(), f); err != nil {
+				t.Fatal(err)
+			}
+			if got := out.String(); got != tc.want {
+				t.Errorf("%s = %q, want %q", tc.src, got, tc.want)
 			}
 		})
 	}

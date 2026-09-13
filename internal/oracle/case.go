@@ -7922,6 +7922,16 @@ echo "st=$?"`,
 		Why:     "the pattern language's own answer, asked the only way it can be: quote removal spends an escape written in the source before the matcher sees it, so a `case` pattern spelled `bet\\a` is `beta` in all six and says nothing. A *substituted* pattern asks it — five shells match the result of an expansion as a pattern, and the sixth does under the option this line sets. A backslash before a character that needed no escaping is spent in five and kept in zsh, where the pattern is five characters",
 	},
 	{
+		ID: "pattern/a-written-bar-is-an-ordinary-character", Category: "patterns",
+		Snippet: `setopt globsubst 2>/dev/null; v=abc; L='a|ab'; printf "[written=%s]" "${v#a|ab}"; printf "[value=%s]" "${v#$L}"; printf "[group=%s]" "${v#(a|ab)}"; echo`,
+		Why:     "where a bar came from is the whole of what decides it, and the braces are what let the question be asked: a `|` is a parse error in a condition and a grammar separator in a `case`, so a parameter expansion's operand is the one place a *written* bar reaches the matcher. zsh reads a top-level bar as an alternation of the whole pattern only when it arrived in a value — so the middle column trims under the option this line sets and the first does not, even though the two patterns are the same three characters. The third is the control that says the reading itself is still there: a written *group* splits in zsh and is two ordinary parentheses everywhere else. This implementation gave the written bar the live reading and answered `bc` to the first column (#2168)",
+	},
+	{
+		ID: "pattern/a-live-bar-splits-the-whole-pattern", Category: "patterns",
+		Snippet: `setopt globsubst 2>/dev/null; v=abc; I='ab|x'; N='x|abc'; printf "[tail=%s]" "${v#${I}z}"; printf "[head=%s]" "${v#a$N}"; echo`,
+		Why:     "the arms of a live bar are not confined to the value it arrived in — the written text on either side joins the arm beside it. `ab|x` followed by a written `z` is `ab` or `xz` rather than `(ab|x)z`, so the first column trims `ab`; a written `a` in front of `x|abc` is `ax` or `abc` rather than `a(x|abc)`, so the second matches the whole subject and comes back empty. Read as concatenation both would answer `abc`, which is what the five shells without the reading answer",
+	},
+	{
 		ID: "subst/a-case-inside-a-substitution", Category: "expansion",
 		Snippet: `x=$(case a in a) echo yes;; esac); echo "[$x]"`,
 		Why:     "where a substitution ends is a question about the grammar and not about how many parentheses have been counted: an arm's `)` closes nothing, so counting stops early and takes half the arm with it. Unanimous, and the shape that made two installed scripts parse into a tree nobody wrote",

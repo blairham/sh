@@ -134733,6 +134733,57 @@
         "TimedOut": false
       }
     },
+    "pat/a-group-arriving-from-a-value": {
+      "ash": {
+        "Stdout": "meta[ice.zsh]",
+        "Stderr": "\u003cscript\u003e: line 4: syntax error: unexpected \"(\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "meta[ice.zsh]~grp[ice.zsh]grp[other.zsh]~whole[ice.zsh]whole[other.zsh]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "meta[ice.zsh]~grp[ice.zsh]grp[other.zsh]~whole[ice.zsh]whole[other.zsh]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "meta[ice.zsh]~grp[ice.zsh]grp[other.zsh]~whole[ice.zsh]whole[other.zsh]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "meta[ice.zsh]",
+        "Stderr": "\u003cscript\u003e: 4: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "meta[ice.zsh]~grp[@(ice|other).zsh]~whole[@(ice|other).zsh]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "meta[ice*]",
+        "Stderr": "\u003cscript\u003e:4: no matches found: @(ice|other).zsh",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "pat/a-group-from-an-expansion": {
       "ash": {
         "Stdout": "n",

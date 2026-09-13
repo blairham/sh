@@ -122,21 +122,23 @@ func Dialect() syntax.Dialect {
 	// `[[ x == @(a|b) ]]` — extended patterns where a condition reads them.
 	//
 	// `d.ExtendedPattern` — the same construct in *argument* position — is
-	// deliberately off, and this is the one place the rule above does not
-	// hold: the grammar that has to read every case cannot take this one,
-	// because taking it stops another case being read at all. Tried
-	// 2026-09-12 for #1499, whose subject is a group in argument position:
-	// with the flag on, `pat/an-empty-quantified-group-is-not-a-function-
-	// definition` no longer parses — `a+() { echo fn; }` becomes a quantified
-	// group where the case exists to record that it is a function
-	// definition, and the printer's round trip fails on it in both
-	// arrangements. Two constructs, one spelling, and the corpus already has
-	// a row for the other one.
+	// **on**, and the note that used to stand here explaining why it could
+	// not be was wrong about its own evidence (#2474).
 	//
-	// So #1499's filesystem rows are pinned by dialect/ksh's own test rather
-	// than by a corpus case. If this is retried, the case above is what has
-	// to be answered first.
+	// It said the flag stopped `pat/an-empty-quantified-group-is-not-a-
+	// function-definition` parsing, "where the case exists to record that it
+	// is a function definition". That case records the opposite: its `Why`
+	// says `a+(` opens a group, leaves `a` standing in front of a brace
+	// group, and makes the whole line a syntax error that bash and ksh93
+	// both refuse. So the flag did not break the case — it made this grammar
+	// start agreeing with the two shells the case measures, and what was
+	// missing was the one field that says so.
+	//
+	// A note asserting a blocker is worse than no note, because it is cited
+	// rather than rechecked: this one was quoted into #2466's commit message
+	// and kept the axis without a corpus row for as long as it stood.
 	d.ExtendedPatternInCondition = true
+	d.ExtendedPattern = true
 	// FuncBodyMustBeCompound is deliberately **off**, where it was on to let
 	// `f() echo hi` be recorded as a syntax error. It stopped being a
 	// narrowing of one production when the keyword form began reading it too

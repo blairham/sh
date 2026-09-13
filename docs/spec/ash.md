@@ -366,6 +366,48 @@ column moved. Both are fixed here, and the pairing is the lesson: **the
 corpus records, the suite reports.** A divergence can be measured, written
 to disk and shipped without anything saying it out loud.
 
+## The refusal that is harsher for a letter than for a name
+
+`set -o nosuchname` reports **1** here and the script carries on;
+`set -Z` writes its complaint and ends the script at **2**. No other panel
+column does that, and two of the substrate's fields said it could not
+happen: `Semantics.BadSetOptionNameFatal` and
+`Diagnostics.SetInvalidOptionStatus` each answered both spellings with one
+value, because #483 measured them across the six columns that existed
+before this one and all six agree.
+
+So this is not a wrong measurement being corrected. It is a measurement
+taken when the panel was smaller, and a seventh column splitting a question
+that genuinely looked like one — which is the second time this dialect has
+done that, the first being the short circuit above. #2629 split both fields
+in two.
+
+The value that shipped was `Yes` for both, written among the assignments
+recording that a special builtin's failure is fatal here and with no
+comment of its own. That is the #2272 shape again in a quieter form: not an
+axis with *no* ash answer, but an ash answer inherited from an older
+measurement of a smaller panel. It cost three corpus rows, and only one of
+them was about `set` — the other two reach it because `set -o posix` is a
+name BusyBox does not have, so a test of where a `${ }` ends was ending the
+script instead.
+
+**What now catches it** is a probe rather than a number.
+`internal/axissweep`'s grade reads both axes off the recorded cells of
+`opt/an-unknown-long-name-is-refused` and `opt/an-unknown-letter-is-refused`
+and compares them with what each preset holds, so a future value copied
+from a neighboring dialect disagrees with BusyBox's own row in `make
+check`, with no shell run. Reading a row a shell *owns* would not do it:
+`opt/set-o-takes-a-name-only-this-shell-has` uses `autocd`, which zsh has,
+so zsh's cell is a silent 0 that says nothing about a refusal — the probes
+use a name and a letter no panel member owns, and refuse to read a cell
+with an empty standard error at all.
+
+Two things measured alongside it are deliberately **not** folded in: this
+shell's `set: line 0:` prefix, which is item 1 under *What could not be
+said* below and accounts for a large share of this column's wording-only
+mismatches, and a refused `-o` **name at an invocation**, which writes the
+complaint, declines to run the command string, and exits **0** (#2639).
+
 ## What could not be said
 
 Four measured behaviors have no value on any existing axis. They are

@@ -1831,18 +1831,33 @@ four letters every one of the six refuses, which is what makes them the
 probe; a letter one shell happens to have — zsh answers to `-Q` — measures
 nothing.
 
-| | bash 5.3 | bash 3.2 | bash-as-`sh` | dash | ksh93 | zsh |
-| --- | --- | --- | --- | --- | --- | --- |
-| `sh -q …` | 2 | 2 | 2 | 2 | 2 | **1** |
-| `sh -o nosuchoption …` | 2 | 2 | 2 | 2 | 2 | **1** |
-| `set -q` in a script | 2, carries on | 2, carries on | 2, stops | 2, stops | 2, stops | **1**, stops |
-| `set -o nosuchoption` | 2, carries on | 2, carries on | 2, stops | 2, stops | 2, stops | **1**, stops |
+| | bash 5.3 | bash 3.2 | bash-as-`sh` | dash | ksh93 | zsh | ash |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `sh -q …` | 2 | 2 | 2 | 2 | 2 | **1** | 2 |
+| `sh -o nosuchoption …` | 2 | 2 | 2 | 2 | 2 | **1** | **0** |
+| `set -q` in a script | 2, carries on | 2, carries on | 2, stops | 2, stops | 2, stops | **1**, stops | 2, **stops** |
+| `set -o nosuchoption` | 2, carries on | **1**, carries on | 2, stops | 2, stops | 2, stops | **1**, stops | **1**, carries on |
 
-**The letter and the name are one question.** Every shell reports the same
-status for both and ends the script or does not in the same way, on both
-routes, so one dialect value answers both: `Diagnostics.SetInvalidOptionStatus`,
-zero meaning the 2 that five of the six report, with
-`Semantics.BadSetOptionNameFatal` deciding whether the script survives.
+**The letter and the name are two questions**, which the bottom two rows
+show and the top two nearly hide. Five of the seven columns answer them
+identically; bash 3.2 reports 1 for the name and 2 for the letter, and
+BusyBox ash does the same *and* ends the script for the letter only. So
+there are four dialect values and not two:
+`Diagnostics.SetInvalidOptionNameStatus` and `SetInvalidOptionLetterStatus`
+for the status — zero meaning the 2 that most of the panel reports — with
+`Semantics.BadSetOptionNameFatal` and `BadSetOptionLetterFatal` deciding
+whether the script survives.
+
+This was one value for each question until #2629. The #483 measurement
+behind it compared `-q`, `-j`, `-z` and `-A` — four *letters* — so it never
+put a letter beside a name in the same shell, and it predates the ash
+column entirely. See `docs/spec/semantics.md` for the fatality table and
+for the probe showing the seam is the spelling and not the `-o` route.
+
+The one cell above that no field holds is ash's **0** for a name at an
+invocation: BusyBox writes the complaint, declines to run the command
+string, and exits 0. `invoke/a-long-option-name-that-is-not-one` records it
+and is graded on the refusal for that reason; #2639 is where it goes.
 
 The letter asked neither question until #483. It reported the front end's own
 2 for everybody, so `zsh -q` exited 2 where zsh exits 1 — while

@@ -1419,6 +1419,8 @@ func Semantics() interp.Semantics {
 	s.CdHasSymlinkFreeOption = interp.No
 	s.CdLastPathOptionWins = interp.Yes
 	s.BadSetOptionNameFatal = interp.Yes
+	// And the letter too: `set -Z; echo one` prints nothing and exits 2.
+	s.BadSetOptionLetterFatal = interp.Yes
 	s.UnknownConditionOptionIsAStatus = interp.No
 	s.ReturnOutsideAFunctionIsRefused = interp.No
 	// And a `break` with no loop around it is ignored, silently: measured on
@@ -1669,6 +1671,10 @@ func Diagnostics() interp.Diagnostics {
 		// The letter as the script spelled it: `set +q` is refused as `+q`
 		// here, as it is in bash.
 		SetInvalidOptionLetter: "set: %[1]s: unknown option",
+		// Both 2, and both written down: see bash's pair for why a shell
+		// that answers the two spellings alike still says so (#2629).
+		SetInvalidOptionNameStatus:   2,
+		SetInvalidOptionLetterStatus: 2,
 		// The one shell in the panel that repeats `set`'s usage line under
 		// a bad option *name* as well as under a bad letter.
 		SetInvalidOptionNameUsage: true,

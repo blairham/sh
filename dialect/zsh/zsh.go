@@ -2007,6 +2007,9 @@ func Semantics() interp.Semantics {
 	s.ExitHook = "zshexit"
 	s.CdLastPathOptionWins = interp.No
 	s.BadSetOptionNameFatal = interp.Yes
+	// And the letter too, at zsh's own 1: `set -Z; echo one` prints
+	// nothing and exits 1.
+	s.BadSetOptionLetterFatal = interp.Yes
 	s.UnknownConditionOptionIsAStatus = interp.Yes
 	s.ReturnOutsideAFunctionIsRefused = interp.No
 	// And `break` with no loop around it stops the script here, which is the
@@ -2443,7 +2446,10 @@ func Diagnostics() interp.Diagnostics {
 		// echoes `-q` for `set +q` as dash does, rather than the sign it was
 		// asked with. `set` is named in the location, not in the sentence.
 		SetInvalidOptionLetter: "bad option: -%[2]s",
-		SetInvalidOptionStatus: 1,
+		// The one shell that answers 1 for both, which is what separates it
+		// from the two that answer 1 for one spelling and 2 for the other.
+		SetInvalidOptionNameStatus:   1,
+		SetInvalidOptionLetterStatus: 1,
 		// A denied `set -m` echoes the spelling it was asked with — `-m` or
 		// `monitor` — and fails at 1, fatally like every `set` failure here.
 		MonitorDenied:       "can't change option: %[1]s",

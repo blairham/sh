@@ -612,9 +612,16 @@ measured 2026-09-11 with `zsh -fc $'printf A\nif; then'`, which prints no
 `A` at all — so the `alias` on line 1 has not run when line 2 is parsed and
 nothing on the string can expand. This front end parses a command string a
 line at a time, so the route set is what stands in for the reading strategy.
-The `ash` column holds the same value and #2338 is the doubt about it: the
-probe it was recorded from was a one-liner, which the paragraph above
-explains dash answers identically while expanding on every route.
+
+zsh's is the **only** cell, and that is a measurement rather than a
+simplification. The `ash` column held the same value until #2338, and the
+probe behind it was a one-liner — which, as the paragraph above explains, is
+a probe that cannot tell the two answers apart, since dash answers it
+identically while expanding on every route. Asked with two lines in the
+pinned alpine image, BusyBox v1.37.0 prints `hi` for
+`ash -c $'alias foo=echo\nfoo hi'`, so ash sits with dash and the reading
+strategy the route set stands in for belongs to exactly one shell in the
+panel.
 
 It is no longer the only question of that shape. `CloseQuotesAtEOF` is a
 set of the same routes, and the parser does read that one: ksh93 ends an

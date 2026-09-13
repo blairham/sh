@@ -94,14 +94,18 @@ func Dialect() syntax.Dialect {
 	// on one line and `foo` on the next expands in a file and on standard
 	// input, and there is no option to turn on.
 	d.AliasesExpandUnlessTold = true
-	// The route set is kept exactly as it was recorded, and **it is in
-	// doubt** — see #2338. The probe it came from was `ash -c 'alias
-	// foo=echo; foo'`, one line, and an alias never expands on the line that
-	// defines it, so dash answers that probe the same way while expanding on
-	// every route. The two-line probe is the one that would settle it, and
-	// there is no BusyBox here to run it. Left as measured rather than
-	// changed on a guess.
-	d.ExpandAliasesInProgramText = syntax.RouteFromScriptFile | syntax.RouteOnStandardInput
+	// And they expand on every route, `-c` included, which is dash's answer
+	// and not zsh's. Measured 2026-09-13 in the pinned image, BusyBox
+	// v1.37.0: `ash -c $'alias foo=echo\nfoo hi'` prints `hi`.
+	//
+	// This value was `RouteFromScriptFile | RouteOnStandardInput` until
+	// #2338, and the probe that put it there could not have found anything
+	// else. It was `ash -c 'alias foo=echo; foo'` — **one line** — and an
+	// alias never expands on the line that defines it, so every shell in the
+	// panel answers `not found`, dash included, and dash expands on every
+	// route. The one-liner was measuring the same-line rule and reading it as
+	// a route rule. Two lines, or nothing is being measured.
+	d.ExpandAliasesInProgramText = syntax.RouteOnEveryRoute
 	// And a body's newlines are input lines, the answer three of the four
 	// existing dialects give.
 	d.AliasBodyCountsLines = true

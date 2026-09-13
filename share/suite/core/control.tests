@@ -1,0 +1,79 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Compound commands and the exit status each produces: POSIX XCU 2.9.
+
+if true; then printf '%s\n' "if: taken"; fi
+if false; then printf '%s\n' "not reached"; else printf '%s\n' "else: taken"; fi
+if false; then printf '%s\n' "no"; elif true; then printf '%s\n' "elif: taken"; fi
+if false; then :; fi
+printf '%s\n' "empty if status=$?"
+
+for w in alpha beta gamma; do printf 'for %s\n' "$w"; done
+printf '%s\n' "for status=$?"
+for w in; do printf '%s\n' "not reached"; done
+printf '%s\n' "empty for status=$?"
+set -- x y
+for w do printf 'implicit %s\n' "$w"; done
+
+i=0
+while [ "$i" -lt 3 ]; do i=$((i + 1)); printf 'while %s\n' "$i"; done
+printf '%s\n' "while status=$?"
+
+i=0
+until [ "$i" -ge 2 ]; do i=$((i + 1)); printf 'until %s\n' "$i"; done
+
+# break and continue, including the levelled forms.
+for a in 1 2 3; do
+	for b in 1 2 3; do
+		if [ "$b" = 2 ]; then continue; fi
+		if [ "$a" = 3 ]; then break 2; fi
+		printf 'nested %s%s\n' "$a" "$b"
+	done
+done
+
+case abc in
+a*) printf '%s\n' "case: prefix" ;;
+esac
+case abc in
+xyz) printf '%s\n' "no" ;;
+*) printf '%s\n' "case: default" ;;
+esac
+case b in
+a | b | c) printf '%s\n' "case: alternation" ;;
+esac
+case '' in
+?) printf '%s\n' "no" ;;
+"") printf '%s\n' "case: empty matches empty" ;;
+esac
+case xyz in
+esac
+printf '%s\n' "case with no match status=$?"
+
+# && and || bind left to right with equal precedence, and ! inverts.
+true && printf '%s\n' "andand: ran"
+false || printf '%s\n' "oror: ran"
+false && printf '%s\n' "no" || printf '%s\n' "chain: fell through"
+if ! false; then printf '%s\n' "bang: inverted"; fi
+! true
+printf '%s\n' "bang status=$?"
+
+# A grouping runs in this shell; a subshell does not.
+v=before
+{ v=grouped; }
+printf '%s\n' "brace group: $v"
+( v=subshell )
+printf '%s\n' "subshell left it: $v"
+( exit 3 )
+printf '%s\n' "subshell status=$?"
+
+# Pipeline status is the last command's.
+true | false
+printf '%s\n' "pipeline status=$?"
+false | true
+printf '%s\n' "pipeline status=$?"
+printf 'a\nb\nc\n' | { read -r line; printf '%s\n' "piped read=$line"; }
+
+# A list separated by semicolons and newlines is the same list.
+printf '%s\n' one; printf '%s\n' two
+printf '%s\n' three

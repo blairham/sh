@@ -176,7 +176,7 @@ func TestTheDocumentationDiscountIsPrintedWhereItWasAsked(t *testing.T) {
 //
 // The runtime half of a disagreement was a table of exit statuses and nothing
 // else, on the reasoning that a diagnostic of ours quotes the file back. That
-// is true of a whole line and false of the catalogue it is built from, and
+// is true of a whole line and false of the catalog it is built from, and
 // the difference is the one the static read's causes have always been printed
 // under.
 func TestOurOwnDiagnosticsAreRankedWithoutQuotingTheFile(t *testing.T) {

@@ -373,7 +373,7 @@ func printRefused(o out, rep suite.Report) {
 // The line below the status table has been true for as long as it has been
 // there: a whole diagnostic of ours names the command, the word or the option
 // that provoked it, and those come from a file nobody here may read. Our own
-// *catalogue* carries none of that, so counting how many unmatched lines
+// *catalog* carries none of that, so counting how many unmatched lines
 // carry each phrase says what this shell refused without printing anything of
 // the file — the same standard the static read's causes already meet.
 func printExcuses(o out, rep suite.Report) {
@@ -381,7 +381,7 @@ func printExcuses(o out, rep suite.Report) {
 		return
 	}
 	o.println("  what we said and the reference did not, by lines")
-	o.println("  (our own catalogue only — a whole diagnostic names the word that provoked")
+	o.println("  (our own catalog only — a whole diagnostic names the word that provoked")
 	o.println("   it and that word is the file's; these phrases are ours)")
 	for _, e := range rep.Excuses {
 		o.printf("    %4d  %s\n", e.Lines, e.Phrase)

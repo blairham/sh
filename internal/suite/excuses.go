@@ -15,7 +15,7 @@ import (
 // printed here because they would quote the file back, and that is true of a
 // whole line: a diagnostic names the command, the word or the option that
 // provoked it, and those come from a file nobody here may read. It is not
-// true of our *catalogue*. "not implemented yet" is our sentence about our
+// true of our *catalog*. "not implemented yet" is our sentence about our
 // own shell and carries nothing of the file, and counting how many of our
 // unmatched lines carry it ranks what this shell refused without reading
 // anything.
@@ -32,7 +32,7 @@ type Excuse struct {
 	Lines  int
 }
 
-// Catalogue is the phrases, lowercase, and every one of them is ours.
+// Catalog is the phrases, lowercase, and every one of them is ours.
 //
 // Deliberately a fixed list rather than a shape. A rule like "a line with two
 // colons in it" would sweep up whatever a file printed and call it our
@@ -40,7 +40,7 @@ type Excuse struct {
 // when it carries a phrase this project wrote.
 //
 // Ordered by nothing — the report ranks by count.
-var Catalogue = []string{
+var Catalog = []string{
 	"not implemented yet",
 	"not implemented",
 	"command not found",
@@ -71,7 +71,7 @@ var Catalogue = []string{
 }
 
 // excuses counts, among the lines we printed that the reference never asked
-// for, how many carry each phrase of the catalogue.
+// for, how many carry each phrase of the catalog.
 //
 // The unmatched side is a multiset difference for the reason [Doc.Attribute]
 // gives one step over: a line the reference also printed is not a line it
@@ -80,7 +80,7 @@ var Catalogue = []string{
 // A line carrying two phrases counts once, under the first that matches, so
 // the column sums to lines rather than to mentions.
 func excuses(mine, theirs []string) []int {
-	counts := make([]int, len(Catalogue))
+	counts := make([]int, len(Catalog))
 	want := map[string]int{}
 	for _, line := range theirs {
 		want[strings.TrimSpace(line)]++
@@ -92,7 +92,7 @@ func excuses(mine, theirs []string) []int {
 			continue
 		}
 		lower := strings.ToLower(trimmed)
-		for i, phrase := range Catalogue {
+		for i, phrase := range Catalog {
 			if strings.Contains(lower, phrase) {
 				counts[i]++
 				break
@@ -102,12 +102,12 @@ func excuses(mine, theirs []string) []int {
 	return counts
 }
 
-// RankExcuses is the catalogue with the empty rows dropped, commonest first.
+// RankExcuses is the catalog with the empty rows dropped, commonest first.
 func RankExcuses(counts []int) []Excuse {
 	var out []Excuse
 	for i, n := range counts {
 		if n > 0 {
-			out = append(out, Excuse{Phrase: Catalogue[i], Lines: n})
+			out = append(out, Excuse{Phrase: Catalog[i], Lines: n})
 		}
 	}
 	sort.Slice(out, func(i, j int) bool {

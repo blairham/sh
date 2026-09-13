@@ -83,8 +83,8 @@ type Result struct {
 	// count is driven by our own excess, which is a different kind of work
 	// from a missing answer and used to be invisible.
 	OurLines, RefLines int
-	// Excuses counts our own catalogue phrases in the lines we printed that
-	// the reference never asked for, parallel to [Catalogue]. It is what
+	// Excuses counts our own catalog phrases in the lines we printed that
+	// the reference never asked for, parallel to [Catalog]. It is what
 	// ranks the runtime half of a disagreement, which up to now was a table
 	// of exit statuses and nothing else.
 	Excuses []int
@@ -261,8 +261,8 @@ type Options struct {
 	// Extra is environment added to *both* runs, and it is the attribution
 	// instrument: naming a startup file that defines a builtin away, in both
 	// columns at once, turns "how much of this file is that builtin" from a
-	// suspicion into a line count. Both columns, because a neutralisation
-	// applied to one of them measures the neutralisation.
+	// suspicion into a line count. Both columns, because a neutralization
+	// applied to one of them measures the neutralization.
 	//
 	// It reads nothing and prints nothing — the file it names is ours, and
 	// what comes back is the same differing-line count as any other run.
@@ -319,7 +319,7 @@ func Sweep(ctx context.Context, s Suite, dir, ours, reference string, opts Optio
 
 	causes := map[string]int{}
 	shared := map[string]int{}
-	excused := make([]int, len(Catalogue))
+	excused := make([]int, len(Catalog))
 	statuses := map[[2]int]int{}
 	var meanSum float64
 	for i, res := range results {

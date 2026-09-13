@@ -337,3 +337,73 @@ func TestADescriptorParkedByExecReachesAFileRunAsAScript(t *testing.T) {
 		}
 	}
 }
+
+// The umask is the one process-wide hook the script is given, and it is taken
+// back when the script ends — which is what the fork a real shell does would
+// have arranged for free. Without the hook a `umask 077` in such a script
+// would do nothing and the file it then writes would be world-readable; with
+// it left standing, the caller keeps a mask it never set.
+func TestAUmaskTheScriptSetsDoesNotOutliveIt(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	writeImage(t, dir, "u.scr", []byte("umask 077\n"), 0o755)
+	mask := 0o022
+	var buf bytes.Buffer
+	sem := imageSemantics()
+	r := newTestRunner(t, &Runner{
+		Stdout: &buf, Stderr: &buf,
+		Semantics: &sem, Diagnostics: &Diagnostics{},
+		Dir: dir, Name: "testsh",
+		SetUmask: func(m int) (int, error) {
+			old := mask
+			mask = m
+			return old, nil
+		},
+	})
+	r.Vars = map[string]string{"PATH": dir}
+	f, err := syntax.Parse(`./u.scr; echo "st=$?"`, syntax.Core())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, rerr := r.Run(context.Background(), f); rerr != nil {
+		t.Fatalf("run: %v", rerr)
+	}
+	if buf.String() != "st=0\n" {
+		t.Errorf("the script: got %q, want %q", buf.String(), "st=0\n")
+	}
+	if mask != 0o022 {
+		t.Errorf("the caller's umask after the script: got %#o, want %#o", mask, 0o022)
+	}
+}
+
+// And it really does reach the process while the script is running, which is
+// the half the restore must not undo too early.
+func TestAUmaskTheScriptSetsReachesTheProcessWhileItRuns(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	writeImage(t, dir, "u.scr", []byte("umask 077\numask\n"), 0o755)
+	mask := 0o022
+	var buf bytes.Buffer
+	sem := imageSemantics()
+	r := newTestRunner(t, &Runner{
+		Stdout: &buf, Stderr: &buf,
+		Semantics: &sem, Diagnostics: &Diagnostics{},
+		Dir: dir, Name: "testsh",
+		SetUmask: func(m int) (int, error) {
+			old := mask
+			mask = m
+			return old, nil
+		},
+	})
+	r.Vars = map[string]string{"PATH": dir}
+	f, err := syntax.Parse(`./u.scr`, syntax.Core())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, rerr := r.Run(context.Background(), f); rerr != nil {
+		t.Fatalf("run: %v", rerr)
+	}
+	if !strings.Contains(buf.String(), "077") {
+		t.Errorf("the script's own reading of the mask it set: got %q", buf.String())
+	}
+}

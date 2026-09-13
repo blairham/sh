@@ -290,19 +290,60 @@ func (r *Runner) runImageAsScript(ctx context.Context, name, path string, argv, 
 		// dialect withholding `exec`'s descriptors from a command does not
 		// withhold them from this.
 		InheritedFiles: r.imageFiles(),
-		// The hooks that are facts about this process rather than about the
-		// language. A shell started by an execve would have inherited every
-		// one of them.
-		ReplaceProcess: r.ReplaceProcess,
-		DieBySignal:    r.DieBySignal,
-		SetUmask:       r.SetUmask,
+		// The hooks about starting, waiting for and signaling *other*
+		// processes. A shell started by an execve would have inherited every
+		// one of these, and they are what a script needs to run commands of
+		// its own and have its jobs behave.
 		WaitForCommand: r.WaitForCommand,
 		PollCommand:    r.PollCommand,
 		Foreground:     r.Foreground,
 		SignalGroup:    r.SignalGroup,
+		TakeInterrupt:  r.TakeInterrupt,
 		GetRlimit:      r.GetRlimit,
-		SetRlimit:      r.SetRlimit,
 		ProcessAnchor:  r.ProcessAnchor,
+		// And deliberately **not** the hooks that change *this* process.
+		//
+		// A real shell gives the script a process of its own, so nothing it
+		// does to that process comes back; this one is running inside the
+		// shell that started it, and every one of them would come back:
+		//
+		//	ReplaceProcess  an `exec` in the script would replace the shell
+		//	                that is still waiting for it. The `exec` still
+		//	                works — execbuiltin falls back to the child route
+		//	                it already uses whenever a replacement is not
+		//	                available — and what it loses is being the same
+		//	                process, which it was never going to be here.
+		//	DieBySignal     a script killed by a signal would take the whole
+		//	                shell with it, where its caller is supposed to
+		//	                report the death and carry on.
+		//	SetRlimit       a limit the script lowered would stay lowered for
+		//	                the shell afterwards, and a lowered hard limit
+		//	                cannot be raised again by anybody.
+		//
+		// `umask` is the fourth of that shape and is the one exception,
+		// below: it has to reach the process, because the files the script
+		// creates really are created by it.
+		SetUmask: nil,
+	}
+	// The umask the script sets, applied to this process and taken back when
+	// the script ends — which is what the fork would have done for free.
+	// Without it a `umask 077` in such a script does nothing at all, and a
+	// file it then writes is world-readable; with it left standing, every
+	// later command in the *caller* inherits a mask the caller never set.
+	if r.SetUmask != nil {
+		moved, first := false, 0
+		child.SetUmask = func(mask int) (int, error) {
+			old, err := r.SetUmask(mask)
+			if err == nil && !moved {
+				moved, first = true, old
+			}
+			return old, err
+		}
+		defer func() {
+			if moved {
+				_, _ = r.SetUmask(first)
+			}
+		}()
 	}
 	// The file the shell was given, which is the name it answers with rather
 	// than the path it opened: a diagnostic raised inside the script names it

@@ -30,6 +30,13 @@ func Dialect() syntax.Dialect {
 	// bash, against zsh 5.9.2, which refuses the text. See
 	// [syntax.Dialect.SubscriptSpansSeparators].
 	d.SubscriptSpansSeparators = true
+	// And in a redirection's target, where the panel splits three-to-one
+	// against it: `> m[foo bar] echo hi` writes one file here and two words
+	// in every bash. Measured 2026-09-13 on 93u+; see
+	// [syntax.Dialect.SubscriptSpansSeparatorsInRedirect] for the positions
+	// it does and does not reach — `echo hi > m[foo bar]` splits, because an
+	// argument stood in front of the redirection.
+	d.SubscriptSpansSeparatorsInRedirect = true
 	// ksh93 has neither `local` nor `declare`, so `local a=(x)` is the same
 	// syntax error there that `echo a=(x)` is — the rule follows the name
 	// into the shell that has it.

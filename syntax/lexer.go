@@ -119,6 +119,22 @@ type Lexer struct {
 	// green with this flag removed.
 	noAssignment bool
 
+	// inRedirectTarget is set while the token being read is a redirection's
+	// *target*, and it exists for one question the two flags above cannot
+	// answer between them: a subscript in that position runs to its matching
+	// `]` in one dialect. noAssignment is already true there and is true for
+	// a `case` subject too, and the subject is measured **not** to span — so
+	// reusing it would have spanned in a position no shell spans in. See
+	// [Dialect.SubscriptSpansSeparatorsInRedirect], where the rows are.
+	//
+	// The flag says only *that* the token is a target. Whether the target
+	// stands where a command may begin is inArgument's to say, and the two
+	// are read together: a redirection written in front of a command word,
+	// or after a compound one, has inArgument false, while a redirection
+	// following a simple command's word has it true — which is exactly the
+	// split ksh93 makes.
+	inRedirectTarget bool
+
 	// inRawBody is set while the text being read is a *body* rather than a
 	// word: a here-document's, or a value being read again by the flag that
 	// re-evaluates one. Both go through heredocSpans, which marks every span
@@ -1253,6 +1269,10 @@ func (l *Lexer) subscriptHasMatchingClose() bool {
 	// that would count no brackets, end at depth zero and answer "closes"
 	// for a bracket that never does.
 	probe.inArgument, probe.inArrayLiteral = l.inArgument, l.inArrayLiteral
+	// And where a redirection's target stands, for the same reason: a target
+	// spans in one dialect, so a probe that did not know it was in one would
+	// answer for a different position than the scan it is deciding for.
+	probe.inRedirectTarget = l.inRedirectTarget
 	closes := probe.Next().Kind == TokWord && probe.err == nil &&
 		probe.subscriptDepth == 0
 	if closes {
@@ -1274,7 +1294,23 @@ func (l *Lexer) subscriptHasMatchingClose() bool {
 // construct.
 func (l *Lexer) opensCommandWordSubscript(name string, started bool) bool {
 	return l.dialect.SubscriptSpansSeparators && !started && isName(name) &&
-		l.atCommandWord()
+		(l.atCommandWord() || l.atSpanningRedirectTarget())
+}
+
+// atSpanningRedirectTarget reports whether the cursor stands in a redirection
+// target that reads a subscript the way a command word does.
+//
+// A second position rather than a second rule: the name-in-front condition is
+// opensCommandWordSubscript's and is asked once, above. What is asked here is
+// only where the word stands — a redirection's target (inRedirectTarget) that
+// is not itself an argument (inArgument), which is a prefix or a compound
+// command's trailing redirection and not the `> f` after `echo hi`. See
+// [Dialect.SubscriptSpansSeparatorsInRedirect] for the measurement, and note
+// that atCommandWord is false in this position by construction: a target sets
+// noAssignment, which that predicate reads.
+func (l *Lexer) atSpanningRedirectTarget() bool {
+	return l.dialect.SubscriptSpansSeparatorsInRedirect &&
+		l.inRedirectTarget && !l.inArgument
 }
 
 // opensArrayElementSubscript reports whether the `[` at the cursor opens the

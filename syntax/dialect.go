@@ -3281,6 +3281,55 @@ type Dialect struct {
 	// differently tomorrow.
 	SubscriptSpansSeparators bool
 
+	// SubscriptSpansSeparatorsInRedirect extends the reading above to a
+	// redirection's target, so `> m[foo bar] echo hi` writes one file named
+	// `m[foo bar]` where a grammar without the flag writes `m[foo` and then
+	// runs `bar]`.
+	//
+	// Separate from SubscriptSpansSeparators because the panel splits them.
+	// Measured 2026-09-13 on ksh93u+ 2012-08-01 against bash 5.3.15, bash
+	// 3.2.57 and bash as `sh`, each run in an empty directory and read back
+	// with `ls`:
+	//
+	//	> m[foo bar] echo hi      ksh93 `m[foo bar]`; every bash `m[foo`
+	//
+	// So the four columns that span at command position are three-to-one
+	// against spanning here, and this is one shell's answer rather than the
+	// common rule — which is why #2410 followed bash and stopped, and why
+	// this is a flag of its own rather than a widening of that one.
+	//
+	// **The position is "a redirection whose target stands where a command
+	// may begin", not "a redirection".** Measured the same day, and this is
+	// the half that is easy to get wrong:
+	//
+	//	> m[foo bar] echo hi      spans — the redirection is a prefix
+	//	2> m[foo bar] echo hi     spans — an IO number changes nothing
+	//	{ :; } > m[foo bar]       spans — a compound command's redirection
+	//	for i in x; do :; done > m[a b]   spans, the same way
+	//	echo hi > m[foo bar]      **splits** — an argument stood first
+	//	echo hi 3> m[foo bar]     splits, the same way
+	//
+	// The condition in front of the bracket is the one
+	// SubscriptSpansSeparators already carries and is not restated: a name
+	// and nothing else, so `> 1m[foo bar]`, `> m-n[foo bar]` and
+	// `> [foo bar]` all still end at the blank in ksh93. Text *after* the
+	// matching `]` stays part of the word — `> pre[1 2]post` names one file
+	// — because the bracket ends the subscript and not the word.
+	//
+	// A `case` subject is the near miss and it is why the lexer has a flag
+	// of its own for this position: it is read where a command may begin and
+	// takes no assignment, exactly as a redirection prefix does, and ksh93
+	// **splits** there — `case m[foo bar] in *) ;; esac` is
+	// the message `bar]' unexpected.
+	//
+	// Additive on the same terms as SubscriptSpansSeparators: with no
+	// matching `]` the word is left exactly as a grammar without the flag
+	// reads it. ksh93 swallows the rest of the input there
+	// (`> m[foo bar echo hi` writes a file called `m[foo bar echo hi[`) and
+	// bash refuses, so there is no common answer to reach for and nothing
+	// that parses today parses differently with the flag on.
+	SubscriptSpansSeparatorsInRedirect bool
+
 	// SpecialParamSubscript lets a parameter that is *not* a name carry a
 	// subscript: `${@[1]}` and `${*[2]}` name one of the positional
 	// parameters, and `${1[2]}`, `${0[1]}`, `${?[1]}`, `${-[1]}` and

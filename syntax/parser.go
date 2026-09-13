@@ -1915,10 +1915,14 @@ func (p *Parser) parseRedirect() *Redirect {
 	// argument position. Set before the `p.next()` that reads the target,
 	// because that is the token the flag has to reach; see
 	// Lexer.noAssignment.
-	savedNoAssign := p.lex.noAssignment
-	p.lex.noAssignment = true
+	//
+	// inRedirectTarget goes with it and says only *that* this is a target;
+	// whether a subscript in it spans separators is decided beside
+	// inArgument, in the lexer. See atSpanningRedirectTarget.
+	savedNoAssign, savedInRedirect := p.lex.noAssignment, p.lex.inRedirectTarget
+	p.lex.noAssignment, p.lex.inRedirectTarget = true, true
 	p.next()
-	p.lex.noAssignment = savedNoAssign
+	p.lex.noAssignment, p.lex.inRedirectTarget = savedNoAssign, savedInRedirect
 	if p.tok.Kind != TokWord {
 		// The token that is there, not the one that is missing. `cat <(x)` in
 		// a dialect without process substitution is `"(" unexpected` in dash,

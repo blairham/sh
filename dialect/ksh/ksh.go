@@ -1179,6 +1179,23 @@ func Semantics() interp.Semantics {
 	// with `${a[0]}` reading `x` afterwards (#1375).
 	s.TableUnderAnArrayDeclaration = interp.CompoundKindChangeEndsTheScript
 	s.ArrayUnderATableDeclaration = interp.CompoundKindChangeKeepsTheElements
+	// And the literal form converts in both directions without a word, which
+	// is what makes it a second pair of fields rather than a widening of the
+	// first: this shell ends the script over the valueless array letter and
+	// takes the identical letter carrying a literal. Measured 2026-09-12,
+	// `typeset -A h; h[k]=v; typeset -a h=(x)` lists `typeset -a h=(x)` at 0
+	// and `typeset -a a=(x y); typeset -A a=([k]=v)` lists `typeset -A
+	// a=([k]=v)` at 0 -- the old elements gone in both, where the valueless
+	// table letter carries them across (#2287).
+	s.TableUnderAnArrayLiteralDeclaration = interp.CompoundKindChangeEmptiesTheName
+	s.ArrayUnderATableLiteralDeclaration = interp.CompoundKindChangeEmptiesTheName
+	// `a[@]=Z` is refused for either kind of name, in a sentence about the
+	// *subscript* rather than about the name, and the input ends under both
+	// separators. The only column that answers the two questions alike.
+	// Measured 2026-09-12, `x=(p q); x[@]=Z` and `typeset -A m; m[k]=v;
+	// m[@]=Z` are both `@: invalid subscript in assignment` (#2285).
+	s.WholeArraySubscriptAssigningAnArray = interp.WholeArraySubscriptIsInvalidInAnAssignment
+	s.WholeArraySubscriptAssigningATable = interp.WholeArraySubscriptIsInvalidInAnAssignment
 	// And reading one says nothing either: measured 2026-09-12, `typeset -A
 	// m; m[k]=v; w=; ${m[$w]}` is the empty string at status 0 with no
 	// diagnostic, where bash names the table (#1972).
@@ -1571,6 +1588,9 @@ func Diagnostics() interp.Diagnostics {
 		// The array alone is named, not the subscript that was written.
 		BadArraySubscript:         "%[1]s: subscript out of range",
 		CannotConvertTableToArray: "%[2]s: cannot change associative array %[1]s to index array",
+		// The subscript is the verb, not the name — see
+		// Semantics.WholeArraySubscriptAssigningAnArray.
+		InvalidSubscriptInAssignment: "%s: invalid subscript in assignment",
 		// The same sentence from `unset`, with the builtin named in front of
 		// it as this shell names it in front of the arithmetic one below.
 		UnsetSubscriptBeforeTheFirstElement: "unset: %[1]s: subscript out of range",

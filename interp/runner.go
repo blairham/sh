@@ -6065,6 +6065,15 @@ func (r *Runner) assign(a *syntax.Assign) {
 			return
 		}
 		r.assignArrayLiteral(a.Name, a.Elems, a.Append)
+	case a.Index != nil && a.IndexFlags == nil && wholeArraySubscript(a.IndexText):
+		// `a[@]=Z` and `a[*]=Z`, the whole-array spelling on the *left*.
+		// Ahead of both the keyed branch and the arithmetic one because each
+		// of them would answer it: the table reading takes `@` for a key —
+		// which two of the four columns do not — and the arithmetic reading
+		// meets a character it has no operand for and complains about the
+		// expression, which is nobody's answer at all. See
+		// Runner.assignWholeArraySubscript.
+		r.assignWholeArraySubscript(a)
 	case a.Index != nil && a.IndexFlags != nil && r.assocDeclared(a.Name):
 		// A group over a *table* is refused by name rather than stored under
 		// the text it was written with. Ahead of the ordinary keyed branch

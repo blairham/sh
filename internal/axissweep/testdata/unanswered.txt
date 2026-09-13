@@ -39,6 +39,7 @@ ash   ArrayLiteralSubscriptIsAKey
 ash   ArrayNameWithoutSubscriptIsTheList
 ash   ArrayScalarIsTheWholeArray
 ash   ArrayUnderATableDeclaration
+ash   ArrayUnderATableLiteralDeclaration
 ash   ArraysAreSparse
 ash   AssignmentUpdatesPipelineStatus
 ash   AttributeRereadsTheValueItFinds
@@ -139,6 +140,7 @@ ash   SubscriptedOperandTakesTheContainerAttribute
 ash   SubscriptedOperandTakesTheIntegerAttribute
 ash   TableLetterReachesItsOwnOperandsSubscript
 ash   TableUnderAnArrayDeclaration
+ash   TableUnderAnArrayLiteralDeclaration
 ash   TestAndArithmeticUpdatePipelineStatus
 ash   TransformLetterCheckedOnlyWhenValued
 ash   TwoCaseLettersOnOneDeclarationCancel
@@ -154,6 +156,8 @@ ash   UnsetReferenceLetterRemovesANonReference
 ash   UnsetStatusIsTheLastSubscripts
 ash   UnsetSubscriptSkippedWhenNameUnset
 ash   UpperCaseLetterBesideANumericTypeLetterRecordsNothing
+ash   WholeArraySubscriptAssigningATable
+ash   WholeArraySubscriptAssigningAnArray
 bash  ArithIntegerOperatorRefusesFloat
 bash  ArithSubscriptSkippedWhenNameUnset
 bash  BareSubscriptIsASubscript
@@ -179,6 +183,7 @@ dash  ArrayLiteralSubscriptIsAKey
 dash  ArrayNameWithoutSubscriptIsTheList
 dash  ArrayScalarIsTheWholeArray
 dash  ArrayUnderATableDeclaration
+dash  ArrayUnderATableLiteralDeclaration
 dash  ArraysAreSparse
 dash  AssignmentUpdatesPipelineStatus
 dash  AttributeRereadsTheValueItFinds
@@ -293,6 +298,7 @@ dash  SubscriptedOperandTakesTheContainerAttribute
 dash  SubscriptedOperandTakesTheIntegerAttribute
 dash  TableLetterReachesItsOwnOperandsSubscript
 dash  TableUnderAnArrayDeclaration
+dash  TableUnderAnArrayLiteralDeclaration
 dash  TestAndArithmeticUpdatePipelineStatus
 dash  TransformLetterCheckedOnlyWhenValued
 dash  TwoCaseLettersOnOneDeclarationCancel
@@ -309,6 +315,8 @@ dash  UnsetStatusIsTheLastSubscripts
 dash  UnsetSubscriptSkippedWhenNameUnset
 dash  UpperCaseLetterBesideANumericTypeLetterRecordsNothing
 dash  ValuelessDeclarationOfAHeldNameListsIt
+dash  WholeArraySubscriptAssigningATable
+dash  WholeArraySubscriptAssigningAnArray
 ksh   ArithSubscriptSkippedWhenNameUnset
 ksh   AssignmentUpdatesPipelineStatus
 ksh   AutoCdAnnouncesTheSubstitution

@@ -773,6 +773,16 @@ func Semantics() interp.Semantics {
 	// unanswered TwoCaseLettersOnOneDeclarationCancel: no declaration
 	// command here either. Measured 2026-09-12 on BusyBox in a container,
 	// `typeset -lu z=Ab` is `typeset: not found` (#2541).
+	// unanswered TableUnderAnArrayLiteralDeclaration and
+	// unanswered ArrayUnderATableLiteralDeclaration: no arrays and no
+	// declaration word here either, so neither half of the question can be
+	// put. Measured 2026-09-12 on BusyBox, `typeset -A h` is `typeset: not
+	// found` and `h=(x)` is `syntax error: unexpected "("` (#2287).
+	// unanswered WholeArraySubscriptAssigningAnArray and
+	// unanswered WholeArraySubscriptAssigningATable: no arrays here either,
+	// so the same wall. Measured 2026-09-12 on BusyBox, `x=(p q)` is `syntax
+	// error: unexpected "("` and `x[@]=Z` alone is `x[@]=Z: not found`
+	// (#2285).
 	//
 	// unanswered EarlierDeclarationLetterBlocksALaterPlus: there is no
 	// declaration command to write the letter on. `typeset` is not a

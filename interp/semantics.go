@@ -5710,7 +5710,7 @@ type Semantics struct {
 	// and BusyBox ash 1.37.0 all answer 7 on the second line. ksh93u+
 	// 2012-08-01 answers 127 — it keeps nothing once the job is reported.
 	//
-	// **A narrower reading two columns hold is not modelled.** Written the
+	// **A narrower reading two columns hold is not modeled.** Written the
 	// other way round — `wait "$p"` twice, so the *first* wait is the one
 	// that reaps — bash 5.3.15, bash 3.2.57, dash and ash still answer 7,
 	// while bash-as-`sh` and zsh answer 127 with `pid N is not a child of

@@ -1804,7 +1804,7 @@ func (r *Runner) Jobs() []*Job { return slices.Clone(r.jobs) }
 // name is still waitable by id in six of those seven columns — measured on
 // `/bin/sh -c 'exit 7' & p=$!; wait %1; wait "$p"`, which answers 7 everywhere
 // but ksh93u+, where it is 127. See Semantics.WaitRemembersAReapedJob, and the
-// narrower reading two columns hold that is not modelled here.
+// narrower reading two columns hold that is not modeled here.
 func (r *Runner) reap(j *Job) {
 	r.Forget(j)
 	if slices.Contains(r.reaped, j) {

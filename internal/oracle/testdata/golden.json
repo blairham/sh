@@ -100657,57 +100657,6 @@
         "TimedOut": false
       }
     },
-    "invoke/a-name-that-is-not-sh-leaves-an-assignment-prefix-transient": {
-      "ash": {
-        "Stdout": "",
-        "Stderr": "\u003cshell\u003e: applet not found",
-        "Status": 127,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash": {
-        "Stdout": "[1]",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash-as-sh": {
-        "Stdout": "[1]",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash32": {
-        "Stdout": "[1]",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "dash": {
-        "Stdout": "[2]",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "ksh93": {
-        "Stdout": "[2]",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "zsh": {
-        "Stdout": "[1]",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      }
-    },
     "invoke/a-program-on-a-standard-input-that-is-closed": {
       "ash": {
         "Stdout": "",

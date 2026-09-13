@@ -194,16 +194,18 @@ func TestAFlagGroupReachesTheAssigningOperator(t *testing.T) {
 // some other way, and none of them is an element this implementation could
 // name honestly:
 //
-//   - a search over a table means something else, and the shell says
-//     `attempt to set slice of associative array`;
 //   - `(R)` and `(I)` missing are not the same answer as each other in the
 //     shell — the first is `assignment to invalid subscript range` and the
 //     second puts the value at the front — and neither is the index one
 //     before the first, which is what a read answers and what a write cannot
 //     use.
+//
+// A search over a *table* used to be a third row here and is not one any
+// more: what the shell refuses there is the **construct** and not the letter,
+// and it says so in a sentence of its own — see
+// TestASearchWritingATableIsRefusedAsASlice below (#2288).
 func TestAnUnwritableFlagGroupIsRefusedByName(t *testing.T) {
 	for _, tc := range []struct{ name, src, mentions string }{
-		{"a search over a table", `typeset -A m; m[k]=v; m[(r)v]=Z; printf "[%s]" "${m[k]}"`, "associative array"},
 		{"a reverse search that matched nothing", `b=(x y z); b[(R)nomatch]=Q; printf "%d" "${#b[@]}"`, "nothing matched"},
 		{"a reverse index search that matched nothing", `b=(x y z); b[(I)nomatch]=W; printf "%d" "${#b[@]}"`, "nothing matched"},
 	} {
@@ -216,6 +218,71 @@ func TestAnUnwritableFlagGroupIsRefusedByName(t *testing.T) {
 				t.Errorf("got %q, want the refusal to say the flag is not carried", out)
 			}
 		})
+	}
+}
+
+// A search naming a place to write in a table is refused as the *construct*
+// it is, and a group that selects nothing leaves an ordinary key behind it.
+//
+// Measured 2026-09-12 on zsh 5.9.2, the one shell with the construct, with
+// `typeset -A m; m=(aa 1)`: `m[(r)1]=Z`, `m[(k)aa]=Z`, `m[(K)a*]=Z`,
+// `m[(R)1]=Z`, `m[(i)aa]=Z` and `m[(r)1]+=Z` are all `m: attempt to set slice
+// of associative array` at 1 with the input ending, and `m[(e)aa]=Z` stores
+// under the key `aa`.
+//
+// Both halves were wrong here and in opposite directions: the refusal said
+// the *letter* was not carried where the shell says the construct is not
+// there, and the selecting-nothing case dropped the store outright — a silent
+// no-op at status 0 beside a read of the same text that found the key (#2288).
+func TestASearchWritingATableIsRefusedAsASlice(t *testing.T) {
+	for _, letters := range []string{"(r)v", "(R)v", "(k)k", "(K)k", "(i)k", "(I)k"} {
+		// The value is read back from an EXIT trap, because the refusal ends
+		// the input and a `printf` after it would never run — a refusal that
+		// still wrote somewhere is exactly what this has to rule out.
+		src := `typeset -A m; m[k]=v; trap 'printf "[%s]" "${m[k]}"' EXIT; m[` + letters + `]=Z`
+		out, st := lhsRunFatal(t, src)
+		if !strings.Contains(out, "m: attempt to set slice of associative array") {
+			t.Errorf("%s = %q, want the construct refused rather than the letter", src, out)
+		}
+		if strings.Contains(out, "not implemented") {
+			t.Errorf("%s = %q, want no not-implemented wording: the letters are carried", src, out)
+		}
+		if !strings.Contains(out, "[v]") || st != 1 {
+			t.Errorf("%s = %q (status %d), want the table untouched and the refusal at 1", src, out, st)
+		}
+	}
+}
+
+// lhsRun with the two answers a *fatal* refusal needs: what status one leaves,
+// and whether a trap body runs the part of it that parsed. Neither is this
+// construct's question and both are on the path to reading the table back.
+func lhsRunFatal(t *testing.T, src string) (string, int) {
+	t.Helper()
+	return runGrammar(t, src, lhsGrammar, func(r *interp.Runner) {
+		sem := interp.CoreSemantics()
+		sem.ArrayBaseIsZero = interp.No
+		sem.ArrayScalarIsTheWholeArray = interp.Yes
+		sem.SplitParamExpansion = interp.No
+		sem.GlobExpansionResults = interp.No
+		sem.FatalErrorStatusIsOne = interp.Yes
+		sem.TrapBodyRunsWhatParsed = interp.Yes
+		r.Semantics = &sem
+		d := interp.CoreDiagnostics()
+		d.SliceOfAnAssociativeArray = "%[1]s: attempt to set slice of associative array"
+		r.Diagnostics = &d
+	})
+}
+
+func TestAFlagGroupSelectingNothingIsAnOrdinaryKey(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`typeset -A m; m[aa]=1; m[(e)aa]=Z; printf "[%s]%d" "${m[aa]}" "${#m[@]}"`, "[Z]1"},
+		{`typeset -A m; m[aa]=1; m[(e)zz]=Z; printf "[%s]%d" "${m[zz]}" "${#m[@]}"`, "[Z]2"},
+		{`typeset -A m; m[aa]=1; m[(e)aa]+=Z; printf "[%s]%d" "${m[aa]}" "${#m[@]}"`, "[1Z]1"},
+	} {
+		out, st := lhsRun(t, tc.src)
+		if out != tc.want || st != 0 {
+			t.Errorf("%s = %q (status %d), want %q at 0", tc.src, out, st, tc.want)
+		}
 	}
 }
 

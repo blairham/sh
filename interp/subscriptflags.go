@@ -967,3 +967,83 @@ func (r *Runner) endSubscriptValue(w *syntax.Word) (int, bool) {
 	}
 	return n, true
 }
+
+// assignAssocElement stores through `m[k]=v` on a name whose attribute makes
+// the subscript a key.
+//
+// Reached by two roads and written once: the ordinary keyed assignment, and a
+// keyed assignment whose subscript opened with a flag group that selects
+// nothing. The subscript comes off Assign.Subscript rather than off Index, so
+// the group is not part of the key — the same accessor the read side uses,
+// which is what keeps `m[(e)k]=Z` and `${m[(e)k]}` naming one element.
+func (r *Runner) assignAssocElement(a *syntax.Assign) {
+	key, ok := r.assocAssignKey(a.Name, a.Subscript())
+	if !ok {
+		return
+	}
+	value := r.assignValue(a)
+	if a.Append {
+		// `m[k]+=v` joins the element it names, the same operation the
+		// indexed form performs on a subscript — an unset key leaves
+		// nothing in front of the value. Joined through appendedValue
+		// because the name's attribute decides what "joins" means:
+		// `typeset -iA m; m[k]=1; m[k]+=2` is `3` in bash and ksh93.
+		v, ok := r.appendedValue(a.Name, r.assocElemCurrent(a.Name, key), value)
+		if !ok {
+			return
+		}
+		value = v
+	}
+	r.setAssocElem(a.Name, key, value)
+}
+
+// assignFlaggedTableElement is a flag group on the left of `=` over a name the
+// attribute makes a table, and the letters decide which of two things it is.
+//
+// Measured 2026-09-12 on zsh 5.9.2, the one shell with the construct, with
+// `typeset -A m; m=(aa 1)`:
+//
+//	m[(r)1]=Z     `m: attempt to set slice of associative array`, 1, input ends
+//	m[(k)aa]=Z    the same sentence, and so do (K), (R), (i) and (I)
+//	m[(e)aa]=Z    the key `aa`, so the table holds `Z` and still one element
+//	m[(e)zz]=Z    the key `zz`, so the table holds two
+//	m[(r)1]+=Z    the same refusal the plain form gets
+//
+// So a group *selecting* over a table names several elements and no place to
+// write, and the shell says so; a group selecting nothing leaves the operand
+// behind it as an ordinary key. Both halves were wrong here, in opposite
+// directions and both quietly: the first said the letter was not implemented
+// where the shell says the **construct** is not there — the letters are
+// carried, and what a table has no reading for is a search naming a place to
+// write — and the second dropped the store outright, leaving `m[(e)aa]=Z` a
+// silent no-op at status 0 while `${m[(e)aa]}` beside it read the key (#2288).
+func (r *Runner) assignFlaggedTableElement(a *syntax.Assign) {
+	e := &syntax.ParamExpr{Name: a.Name, Index: a.IndexFlags.Arg, IndexFlags: a.IndexFlags}
+	search, ok := r.subscriptSearch(e)
+	if !ok {
+		// A letter this does not carry, refused by name already — the read
+		// side's answer for the same letter, and the documented partial
+		// rather than a reading of the shell's.
+		r.fatalQuiet()
+		return
+	}
+	if search != 0 {
+		r.refuseTableSliceWrite(a.Name)
+		return
+	}
+	r.assignAssocElement(a)
+}
+
+// refuseTableSliceWrite is what a search naming a place to write in a table
+// draws, and it is the *construct* that is refused rather than the letter.
+//
+// The same sentence a whole-array subscript on the left of a table's
+// assignment draws — see Diagnostics.SliceOfAnAssociativeArray and
+// Runner.assignWholeArraySubscript — because the shell gives one sentence to
+// both and for one reason: a subscript over a table names a key, so a
+// subscript naming several elements names no place at all. One field for the
+// two, rather than a second with the same words in it.
+func (r *Runner) refuseTableSliceWrite(name string) {
+	r.fatal("%s\n", Wording(r.diag().SliceOfAnAssociativeArray,
+		"%[1]s: attempt to set slice of associative array", name))
+}

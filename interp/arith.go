@@ -804,6 +804,46 @@ func (r *Runner) writePlace(p arithPlace, v arithNum, from syntax.ArithExpr) err
 		r.setVar(p.name, text)
 		return nil
 	}
+	if p.flags != nil && r.assocDeclared(p.name) {
+		// The group is read before the association, exactly as arithElement
+		// reads it before the association on the way in: a table consulted
+		// first takes the group's own letters for part of the key, which is
+		// what this shell did — `(( m[(r)1] = 5 ))` left a table holding a
+		// key literally named `(r)1`, silently, at status 0.
+		//
+		// Measured 2026-09-12 on zsh 5.9.2, the one shell with the construct,
+		// with `typeset -A m; m=(aa 1)`:
+		//
+		//	(( m[(r)1] = 5 ))     nothing written, nothing said, status 0
+		//	(( m[(k)aa] = 5 ))    the same, and the key it matched is untouched
+		//	(( m[(k)aa]++ ))      the same again, so it is the store and not
+		//	                      the operator
+		//	x=$(( m[(k)aa] = 5 )) x is 5 and the table is unchanged, so the
+		//	                      expression has its value and only the store
+		//	                      is dropped
+		//	(( m[(e)aa] = 5 ))    the key `aa`, so a group selecting nothing
+		//	                      leaves an ordinary key behind it
+		//
+		// A search naming a place to *write* in a table is refused by name on
+		// the left of `=` — see assignFlaggedTableElement — and dropped in
+		// silence here, which is one shell giving two answers to what looks
+		// like one question. The reading is not this engine's to reconcile:
+		// the store is the same store, and only the route to it differs.
+		search, ok := r.subscriptSearch(&syntax.ParamExpr{
+			Name: p.name, Index: p.flags.Arg, IndexFlags: p.flags,
+		})
+		if !ok || search != 0 {
+			// Either a letter this does not carry, refused by name already,
+			// or a search over a table — which writes nowhere and says
+			// nothing, and is why this returns no error: the expression keeps
+			// its value and `(( ))` still ends at the value's own status.
+			return nil
+		}
+		// The group selects nothing, so the operand behind it is the key —
+		// the same rewrite arithElement makes on the way in, and through the
+		// same accessor, so the two spellings cannot name different keys.
+		p.sub, p.flags = r.joinWord(p.flags.Arg), nil
+	}
 	if r.assocDeclared(p.name) {
 		r.setAssocElem(p.name, p.sub, text)
 		return nil

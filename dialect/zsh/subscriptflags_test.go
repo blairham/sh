@@ -145,16 +145,31 @@ func TestASearchOnTheLeftOfAnAssignmentNamesACharacter(t *testing.T) {
 // told it had succeeded (#1536). The value is read back from an EXIT trap,
 // because a `printf` after the refusal never runs.
 func TestARefusedSubscriptFlagOnTheLeftEndsTheLine(t *testing.T) {
-	for _, src := range []string{
-		`b=(x y); trap 'printf "[%s]" "${b[*]}"' EXIT; b[(w)x]=Q`,
-		`typeset -A h; h[k]=v; trap 'printf "[%s]" "${h[k]}"' EXIT; h[(r)v]=Q`,
+	for _, tc := range []struct{ src, says, kept string }{
+		// A letter this dialect does not carry: the documented partial, in
+		// this shell's own words about it.
+		{
+			`b=(x y); trap 'printf "[%s]" "${b[*]}"' EXIT; b[(w)x]=Q`,
+			"subscript flag is not implemented", "[x y]",
+		},
+		// A search naming a place to write in a *table* is the shell's own
+		// refusal and not ours: measured 2026-09-12 on zsh 5.9.2,
+		// `typeset -A m; m=(aa 1 bb 2); m[(r)1]=Z` is `m: attempt to set
+		// slice of associative array` at 1 with the input ending — the
+		// construct and not the letter, which the letters being carried is
+		// exactly why. This row said `not implemented` and so pinned our own
+		// answer under this shell's name (#2288).
+		{
+			`typeset -A h; h[k]=v; trap 'printf "[%s]" "${h[k]}"' EXIT; h[(r)v]=Q`,
+			"h: attempt to set slice of associative array", "[v]",
+		},
 	} {
-		out, st := runZsh(t, t.TempDir(), src)
-		if !strings.Contains(out, "subscript flag is not implemented") || st != 1 {
-			t.Errorf("%s = %q (status %d), want the refusal at 1", src, out, st)
+		out, st := runZsh(t, t.TempDir(), tc.src)
+		if !strings.Contains(out, tc.says) || st != 1 {
+			t.Errorf("%s = %q (status %d), want %q at 1", tc.src, out, st, tc.says)
 		}
-		if !strings.Contains(out, "[x y]") && !strings.Contains(out, "[v]") {
-			t.Errorf("%s = %q, want the value kept", src, out)
+		if !strings.Contains(out, tc.kept) {
+			t.Errorf("%s = %q, want the value kept", tc.src, out)
 		}
 	}
 }

@@ -8119,6 +8119,24 @@ echo "st=$?"`,
 		Why:     "the flag group a *read* takes, on the other side of the `=`: the search names an index and the assignment writes there, so the element whose value is `y` is replaced. zsh alone has the construct; the other five read the whole subscript as arithmetic and fail on the parenthesis, at three wordings and two statuses",
 	},
 	{
+		ID: "subscript/a-flag-group-searching-a-table-on-the-left", Category: "expansion",
+		Snippet: "typeset -A m 2>/dev/null || { echo no-attribute; exit 0; }\n" +
+			`m[aa]=1; m[bb]=2; m[(r)1]=Z; echo after`,
+		Why: "the same flag group over a **table** on the left of `=`, which is where the letters stop meaning what they mean on the right. zsh carries `(r)`, `(R)`, `(k)`, `(K)`, `(i)` and `(I)` on the read side of a table and refuses every one of them here as `m: attempt to set slice of associative array` at 1, ending the input — so it is the *construct* it names and not the letter, a search naming several elements naming no place to write. The `after` field is what shows the input ending. This shell said the flag was not implemented, which is the one thing that is not wrong with it. The same sentence a whole-array subscript on the left of a table's assignment draws, which is one wording for one reason and why there is one Diagnostics field for both. The other five read the whole subscript as arithmetic and fail on the parenthesis (#2288)",
+	},
+	{
+		ID: "subscript/a-flag-group-selecting-nothing-is-a-tables-key", Category: "expansion",
+		Snippet: "typeset -A m 2>/dev/null || { echo no-attribute; exit 0; }\n" +
+			`m[aa]=1; m[(e)aa]=Z; m[(e)zz]=Y; printf '[%s][%s]%d' "${m[aa]}" "${m[zz]}" "${#m[@]}"; echo`,
+		Why: "the control for the row above, and the half that was wrong in the other direction. `(e)` is exact matching rather than a search, so the operand behind it is an ordinary key: zsh stores `Z` under `aa` and makes a `zz` for the `Y`, at status 0. This shell dropped both stores in silence — a no-op at 0 beside a read of the identical text that found the key, which is the quiet kind of wrong. Two fields rather than one because the key that exists and the key that does not take different roads to the same store (#2288)",
+	},
+	{
+		ID: "arithmetic/a-flag-group-searching-a-table-on-the-left", Category: "expansion",
+		Snippet: "typeset -A m 2>/dev/null || { echo no-attribute; exit 0; }\n" +
+			`m[aa]=1; (( m[(r)1] = 5 )); x=$(( m[(k)aa] = 7 )); (( m[(e)aa] = 9 )); printf '%d[%s][%s]' "${#m[@]}" "${m[aa]}" "$x"; echo`,
+		Why: "the same question inside an expression, where the one shell with the construct gives a **different** answer from the one it gives on the left of a plain `=`: a search naming a place to write in a table writes nothing and says nothing at status 0, where the assignment spelling refuses it by name and ends the input. The third field is what makes it a dropped store rather than a dropped expression -- `x` is the 7 the assignment evaluated to while the table still holds its 1 -- and the `(e)` write is the control that says the silence belongs to the search and not to the group, since that one lands and leaves `9`. This shell consulted the association before the group and made the whole subscript text a key, so the table came out holding keys literally named `(r)1` and `(k)aa`: a plausible table at status 0 with elements nobody wrote (#2288)",
+	},
+	{
 		ID: "subscript/a-flag-group-that-matched-nothing-appends", Category: "expansion",
 		Snippet: `b=(x y z); b[(i)nomatch]=W; b[(r)alsono]=Q; printf '%d' "${#b[@]}"; printf '[%s]' "${b[@]}"; echo`,
 		Why:     "the row that makes this more than a lookup: `(i)` missing answers one past the last element and `(r)` missing does too, so both write where an append writes. The semantics need nothing new for it — the group names an index, and the index after the last is the one an append uses — which is why the count is printed with the elements",

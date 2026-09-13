@@ -76,6 +76,22 @@ func (p *ParamExpr) Subscript() *Word {
 	return p.Index
 }
 
+// Subscript is the same accessor for an assignment's subscript: the operand
+// behind a flag group where there is one, and the whole subscript where there
+// is not.
+//
+// The pair rather than one of them, because the two sides of `=` have to read
+// a subscript by the same rule or the same text names one element on the way
+// in and another on the way out — `m[(e)k]=Z` stored under the three
+// characters `(e)k` while `${m[(e)k]}` read the key `k`, which is a wrong
+// answer at status 0.
+func (a *Assign) Subscript() *Word {
+	if a.IndexFlags != nil {
+		return a.IndexFlags.Arg
+	}
+	return a.Index
+}
+
 // scanSubscriptFlags reads the flag group text opens with, returning it and
 // the subscript that follows.
 //

@@ -448,9 +448,12 @@ func TestASubscriptSearchOverATargetThisDoesNotCarryIsRefused(t *testing.T) {
 			"not implemented where nothing matched", "[x y]",
 		},
 		{
+			// The construct rather than the letter: the letters are carried
+			// and what a table has no reading for is a search naming a place
+			// to write, which is the sentence the shell gives it (#2288).
 			"an association assigned through one",
 			`typeset -A h; h[k1]=v1; trap 'printf "[%s]" "${h[k1]}"' EXIT; h[(r)v1]=Q`,
-			"not implemented for an associative array", "[v1]",
+			"attempt to set slice of associative array", "[v1]",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

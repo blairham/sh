@@ -73,6 +73,7 @@ ash   EarlierDeclarationLetterBlocksALaterPlus
 ash   EmptyArithSubscript
 ash   EmptyAssociativeKeyIsAnError
 ash   EmptyAssociativeKeyIsReportedWhenRead
+ash   EmptyAssociativeKeyRefusesTheLength
 ash   EmptyParamSubscriptIsAnError
 ash   EmptySubscriptTextIsAMathError
 ash   ErrTrapRunsInSubshells
@@ -229,6 +230,7 @@ dash  EchoLastEscapeFlagWins
 dash  EmptyArithSubscript
 dash  EmptyAssociativeKeyIsAnError
 dash  EmptyAssociativeKeyIsReportedWhenRead
+dash  EmptyAssociativeKeyRefusesTheLength
 dash  EmptyParamSubscriptIsAnError
 dash  EmptyReplacementPattern
 dash  EmptySubscriptTextIsAMathError

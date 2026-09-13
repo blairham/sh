@@ -6125,35 +6125,18 @@ func (r *Runner) assign(a *syntax.Assign) {
 		// Runner.assignWholeArraySubscript.
 		r.assignWholeArraySubscript(a)
 	case a.Index != nil && a.IndexFlags != nil && r.assocDeclared(a.Name):
-		// A group over a *table* is refused by name rather than stored under
-		// the text it was written with. Ahead of the ordinary keyed branch
-		// because that one would take `(r)v` for a key, which is a plausible
-		// wrong element and exactly what this construct must not produce; the
-		// shell with it refuses the line as `attempt to set slice`.
-		r.flaggedAssignIndex(a)
+		// A group over a *table* is answered by the letters it holds rather
+		// than stored under the text it was written with. Ahead of the
+		// ordinary keyed branch because that one would take `(r)v` for a key,
+		// which is a plausible wrong element and exactly what this construct
+		// must not produce. See Runner.assignFlaggedTableElement.
+		r.assignFlaggedTableElement(a)
 	case a.Index != nil && r.assocDeclared(a.Name):
 		// A declared name takes its subscript as a string, expanded and
 		// never evaluated: `m[1+1]=x` stores under the three characters.
 		// This is the switch the attribute exists to throw — the same text
 		// on an undeclared name falls through to the arithmetic reading.
-		key, ok := r.assocAssignKey(a.Name, a.Index)
-		if !ok {
-			return
-		}
-		value := r.assignValue(a)
-		if a.Append {
-			// `m[k]+=v` joins the element it names, the same operation the
-			// indexed form performs on a subscript — an unset key leaves
-			// nothing in front of the value. Joined through appendedValue
-			// because the name's attribute decides what "joins" means:
-			// `typeset -iA m; m[k]=1; m[k]+=2` is `3` in bash and ksh93.
-			v, ok := r.appendedValue(a.Name, r.assocElemCurrent(a.Name, key), value)
-			if !ok {
-				return
-			}
-			value = v
-		}
-		r.setAssocElem(a.Name, key, value)
+		r.assignAssocElement(a)
 	case a.Index != nil && a.IndexFlags != nil:
 		// A flag group names the element instead of an expression naming it:
 		// `a[(r)y]=Q` replaces the element whose value is `y`, and

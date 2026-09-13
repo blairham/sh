@@ -281,22 +281,38 @@ func TestAnExpiredKeyReadDoesNotSwallowTheNextKey(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = control.Close(); _ = terminal.Close() })
 
-	// Written after the first read has certainly given up, from a goroutine
-	// because the second read blocks until it arrives.
-	go func() {
-		time.Sleep(200 * time.Millisecond)
-		_, _ = control.WriteString("X")
-	}()
-
+	// The key is written only once the first read has *demonstrably* given
+	// up, which is what the shell saying `a=[]` means. Sleeping instead was
+	// #2382: the writer raced the shell's startup rather than the timeout, so
+	// under load on a busy runner the key arrived before the first read had
+	// begun, that read consumed it, and the second one blocked forever on
+	// input that had already been delivered. The ten-second failure was the
+	// symptom; the swallowed key was the cause, and it is exactly the
+	// swallowing this test exists to catch — so the flake looked like the bug.
+	var out syncBuffer
 	done := make(chan string, 1)
 	go func() {
-		var out strings.Builder
 		run(t, `read -k -t 0.05 a; echo "a=[$a]"; read -k b; echo "b=[$b]"`,
 			func(r *Runner) {
 				readsKeys(r)
 				r.Stdin, r.Stdout, r.Stderr = terminal, &out, &out
 			})
 		done <- out.String()
+	}()
+
+	go func() {
+		// Bounded so a shell that never reaches the first read cannot leave
+		// this goroutine running past the test. It must not take from `done`
+		// to learn that: the wait below is the only reader, and a second one
+		// would steal the result and turn a clean failure into a hang.
+		deadline := time.Now().Add(9 * time.Second)
+		for !strings.Contains(out.String(), "a=[") {
+			if time.Now().After(deadline) {
+				return
+			}
+			time.Sleep(time.Millisecond)
+		}
+		_, _ = control.WriteString("X")
 	}()
 
 	select {

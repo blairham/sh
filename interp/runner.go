@@ -1166,6 +1166,20 @@ type Runner struct {
 	// (#1951).
 	tracksCommands      bool
 	tracksCommandsMoved bool
+	// stdinOptionMoved and stdinOption are `set -o stdin`, one dialect's name
+	// for the route the program arrived by. The route is a fact the front
+	// end carried in, so the option *reads* it until a script writes it —
+	// which that shell allows, measured: `set +o stdin` on the standard-input
+	// route takes the `s` out of `$-`, and `set -o stdin` under `-c` puts one
+	// there. Two fields rather than one because "not moved" and "moved to
+	// off" are different answers and the route decides only the first.
+	stdinOptionMoved bool
+	stdinOption      bool
+	// debugOption is the same dialect's `debug`, which its own shipped build
+	// acts on no more than this one does: the name is listed, remembered and
+	// reported, and it earns no letter in `$-`. Measured — `set -o debug`
+	// there is `debug on` in the listing and an unchanged `$-`.
+	debugOption bool
 	// histIgnoreDups is zsh's histignoredups, which its `set -h`
 	// abbreviates. A script cannot see what it does, because a script has no
 	// history — but an interactive session does: repl reads it through the

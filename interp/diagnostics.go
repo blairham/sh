@@ -3415,6 +3415,16 @@ type Diagnostics struct {
 	// OptionListingHeader opens `set -o`'s table where the dialect has one:
 	// dash and ksh93 write "Current option settings" first.
 	OptionListingHeader string
+	// OptionListingOrder is the order `set -o` and `set +o` write their rows
+	// in, where the dialect publishes one that is not a sort. Empty means
+	// sorted, which is what bash and ksh93 do.
+	//
+	// dash is the one that needs it: its listing is its own option table's
+	// order — `errexit`, `noglob`, `ignoreeof`, `interactive` — and nothing
+	// derives that from the names. A name this does not mention keeps its
+	// sorted place after the ones it does, so the field is a measurement of
+	// what was seen rather than a claim to be exhaustive.
+	OptionListingOrder []string
 	// OptionListingWidth pads the name column: bash 15, dash 16, ksh93 25,
 	// zsh 22. Zero means bash's.
 	OptionListingWidth int

@@ -4,6 +4,7 @@
 package interp
 
 import (
+	"slices"
 	"sort"
 	"strings"
 	"syscall"
@@ -316,6 +317,41 @@ var extraSetOptions = map[string]setOption{
 	},
 	"physical":   {},
 	"privileged": {},
+
+	// The three names one shell in the panel has and the rest do not, and
+	// all three describe **how the shell was started** rather than a
+	// behavior a script chose. That is what makes them worth having: a
+	// script reads `set -o` to find out which of them it is under, and the
+	// listing was three rows short of being able to say (#2624).
+	//
+	// Measured on dash, 2026-09-13. Each is settable in both directions at
+	// 0, and the first two carry the `$-` letter that names the same fact:
+	//
+	//	set -o interactive; echo $-             i
+	//	set -o interactive; set +o interactive  the letter goes again
+	//	set -o stdin; echo $-                   s      (under -c)
+	//	set +o stdin; echo $-                   empty  (on the stdin route)
+	//	set -o debug; echo $-                   empty, and `debug on` listed
+	//
+	// So two of them are a second spelling of a state this shell already
+	// holds and the third is a recorded name. `interactive` writes the field
+	// the front end filled in, which is the same state `$-`'s `i` and the
+	// prompt decision read — one fact with two spellings, which is the rule
+	// `hashall` and `set -h` already follow.
+	"interactive": {
+		apply: func(r *Runner, on bool) { r.Interactive = on },
+		get:   func(r *Runner) bool { return r.Interactive },
+	},
+	"stdin": {
+		apply: func(r *Runner, on bool) { r.stdinOptionMoved, r.stdinOption = true, on },
+		get:   (*Runner).showsS,
+	},
+	// Listed, remembered, and acted on by nothing — which is what the shell
+	// that has the name does with it in the build it ships.
+	"debug": {
+		apply: func(r *Runner, on bool) { r.debugOption = on },
+		get:   func(r *Runner) bool { return r.debugOption },
+	},
 }
 
 // SetPosixMode enters or leaves POSIX mode, which is what the `posix` entry
@@ -936,7 +972,20 @@ func (r *Runner) listedOptions() []ListedOption {
 	return rows
 }
 
-// listedOptionNames is every name this shell answers `set -o` with, sorted.
+// listedOptionNames is every name this shell answers `set -o` with, in the
+// order the dialect publishes them — sorted where it publishes none.
+//
+// Sorting is the majority and not the rule: bash and ksh93 sort, and dash
+// writes its own table's order, which is neither sorted nor the order a
+// script set anything in. Measured 2026-09-13 — dash opens `errexit`,
+// `noglob`, `ignoreeof` where a sort would open `allexport`, `debug`,
+// `emacs` — so `set -o | head` in a dash script reads a different line, and
+// a listing is a table with an order rather than a set (#2624).
+//
+// A name the order does not mention keeps its sorted place after the ones it
+// does, which is the same rule orderedOptionLetters follows next door and for
+// the same reason: the order is a measurement of the names that were there
+// when somebody looked, and a name added later must still come out somewhere.
 func (r *Runner) listedOptionNames() []string {
 	names := make([]string, 0, len(commonSetOptions)+len(r.extraOptions))
 	for n := range commonSetOptions {
@@ -946,7 +995,24 @@ func (r *Runner) listedOptionNames() []string {
 		names = append(names, n)
 	}
 	sort.Strings(names)
-	return names
+	order := r.diag().OptionListingOrder
+	if len(order) == 0 {
+		return names
+	}
+	out := make([]string, 0, len(names))
+	placed := make(map[string]bool, len(order))
+	for _, n := range order {
+		if slices.Contains(names, n) {
+			out = append(out, n)
+			placed[n] = true
+		}
+	}
+	for _, n := range names {
+		if !placed[n] {
+			out = append(out, n)
+		}
+	}
+	return out
 }
 
 // listOptions is `set -o` with nothing after it: every option and its state,

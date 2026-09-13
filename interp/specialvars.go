@@ -397,7 +397,17 @@ func (r *Runner) dialectOptionLetters() string {
 // `-s` was written. Recorded in docs/spec/invocation.md, not modeled.
 //
 // The third way is the split: ksh93 alone shows `s` under `-c` as well.
+//
+// And the fourth is a script asking for it. One shell in the panel gives the
+// route an option name — `stdin` — and lets a script move it, so the letter
+// follows the option rather than the route once it has been written. Measured
+// on dash: `set -o stdin; echo $-` under `-c` is `s`, and `set +o stdin` on
+// the standard-input route leaves `$-` empty. The other three have no such
+// name, so nothing there can reach this branch.
 func (r *Runner) showsS() bool {
+	if r.stdinOptionMoved {
+		return r.stdinOption
+	}
 	if r.Route == RouteStandardInput || r.StandardInputOption {
 		return true
 	}

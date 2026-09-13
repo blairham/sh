@@ -1104,7 +1104,7 @@ type Semantics struct {
 	// paragraph is the note a dialect for it would start from, rather than a
 	// value no preset holds.
 	//
-	// Neighbours measured with it, because a one-column divergence about
+	// Neighbors measured with it, because a one-column divergence about
 	// evaluation order could easily have been a rule about arithmetic:
 	//
 	//	`||` moves with `&&`             `y=0; $((1 || (y=8)))` is 8 there

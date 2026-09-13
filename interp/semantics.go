@@ -8760,6 +8760,88 @@ type Semantics struct {
 	// all: ksh93; bash and zsh count the negative length from the end.
 	SubstringNegativeLengthIsEmpty Answer
 
+	// ArithSubscriptRereadsItsExpandedText hands what a subscript's
+	// expansion produced back to the bracket scanner, so a key holding `]`
+	// or `[` is read as syntax rather than as the string a key is: zsh.
+	//
+	// An arithmetic expression is expanded before it is parsed in every
+	// shell in the panel — `$(( $x$y ))` with `1+` and `2` is 3 in all of
+	// them — and the columns part over whether that also applies to the
+	// text between a subscript's brackets. Measured 2026-09-13 with
+	// `key='x],b['; m[$key]=1; (( m[$key]++ ))`:
+	//
+	//	bash 5.3.15        status 0, the element is 2
+	//	bash 5.3.15 as sh  the same
+	//	ksh93u+            the same
+	//	zsh 5.9.2          `not an identifier: b[]`, status 2, element 1
+	//
+	// zsh's own diagnostic is what identifies the mechanism: `b[` is the
+	// tail of the *key*, and it is being named as a second array with an
+	// empty subscript. bash 3.2 has no associative arrays to ask, and dash
+	// and ash have no arrays at all.
+	//
+	// The read and write sides are not this axis and are unanimous:
+	// `m[$key]=1` stores under the key and `${m[$key]}` reads it back in
+	// every column, zsh included. It is the arithmetic route alone.
+	//
+	// Asked only where a subscript's expansion really produced a bracket,
+	// so the ordinary `$(( a[$i] ))` needs no answer from anyone — and only
+	// where the *source* closed the bracket it opened, since a script that
+	// left one open has no bracket of its own for a value's to be
+	// distinguished from and bash reads the value's as the closer there
+	// (#2581).
+	ArithSubscriptRereadsItsExpandedText Answer
+
+	// SubstringRangeQuotesPatternCharacters protects the pattern
+	// metacharacters in a substring's offset and length before the range is
+	// read as arithmetic, which turns every one of them into an arithmetic
+	// syntax error: ksh93.
+	//
+	// The construct behind the issue is `${s:(-2)}`, and the parentheses are
+	// not what it is about. Measured 2026-09-13 against ksh93u+ 2012-08-01
+	// with `s=hello`, every one of `${s:(2)}`, `${s:1+(1)}`, `${s:1|2}`,
+	// `${s:1&3}`, `${s:1*2}` and `${s:1?2:3}` is `arithmetic syntax error`
+	// while `${s:1<2}`, `${s:1%2}`, `${s:1^2}`, `${s:1,2}` and `${s:1/1}`
+	// are all taken — so it is a *character* set and not a sign, an
+	// operator or a grouping. The blamed text names the offending
+	// characters escaped, `\(-2\)`, which is the same protection showing
+	// through.
+	//
+	// The set is that shell's pattern alphabet: measured a character at a
+	// time through a value, `( ) | & * ? [ ] }` and the backslash itself are
+	// protected and nothing else is. `{`, `!`, `~`, `;`, `#`, `$`, a quote,
+	// a backtick, a space and `@` all reach the evaluator as they were
+	// written.
+	//
+	// It is the *range* and nothing else: with the same value, `$(( 9(9 ))`,
+	// `${a[9(9]}` and `(( x = 9(9 ))` all blame `9(9` unescaped in the same
+	// shell, so this cannot be folded into a rule about that shell's
+	// arithmetic (#2618).
+	//
+	// bash, bash 3.2, bash-as-`sh` and zsh all take the parenthesized offset
+	// and evaluate the grouping; dash and ash have no substring at all.
+	SubstringRangeQuotesPatternCharacters Answer
+
+	// NamePrefixListingExcludesTheExactName leaves the name that *is* the
+	// prefix out of `${!prefix@}` and `${!prefix*}`, so the operator lists
+	// the names extending the prefix rather than the names beginning with
+	// it.
+	//
+	// Measured 2026-09-13 with `ab=1; abc=2; abd=3`: ksh93u+ 2012-08-01
+	// answers both spellings with `abc` and `abd` and never with `ab`,
+	// while bash 5.3.15 answers with all three. With only `ab` set the same
+	// shell answers with nothing at all, at status 0 — so it is the exact
+	// match being dropped and not a rule about how many names matched.
+	//
+	// zsh has no such operator — `${!ab@}` there is `bad substitution` —
+	// and neither dash nor ash has one, so the panel splits two ways over
+	// the two columns that answer at all.
+	//
+	// The `${!v}` indirection this shares an operator with is not this axis
+	// and does not follow it: all three spellings are separate rules, and
+	// getting one right says nothing about the others (#2619).
+	NamePrefixListingExcludesTheExactName Answer
+
 	// ListSliceNegativeLengthIsAnError refuses `${a[@]:1:-1}` and
 	// `${@:1:-1}` outright, where the *string* spelling of the same length
 	// is accepted and counts from the end. bash alone: `-1: substring
@@ -11835,6 +11917,18 @@ func PosixSemantics() Semantics {
 		WholeSubscriptOnAScalarSlicesIt: Yes,
 		UnsetNameAtIsOneEmptyField:      No,
 		SubstringNegativeLengthIsEmpty:  No,
+		// The standard has no arrays, so this follows the two columns with
+		// associative arrays that keep a key a string. zsh is the column
+		// that overrides it.
+		ArithSubscriptRereadsItsExpandedText: No,
+		// The standard has no substrings, so this follows the three columns
+		// that have one and evaluate the range they were given. ksh93 is the
+		// column that overrides it.
+		SubstringRangeQuotesPatternCharacters: No,
+		// The standard has no such operator, so this follows the one column
+		// that has it and takes it as a plain prefix match. ksh93 is the
+		// column that overrides it.
+		NamePrefixListingExcludesTheExactName: No,
 		// POSIX has neither substrings nor arrays, so there is no list here
 		// to slice and no text to read. The base takes the reading two of
 		// the three shells with the construct share — a negative length is

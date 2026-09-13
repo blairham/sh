@@ -28,6 +28,12 @@ func sliceOnAScalarRun(t *testing.T, src string, answer Answer) (string, int) {
 		sem.ArrayScalarIsTheWholeArray = No
 		sem.SplitParamExpansion = No
 		sem.SubstringNegativeLengthIsEmpty = No
+		// `${h[@]:(-2)}` below writes parentheses into the range, which is
+		// a place the panel splits: one column protects a range's pattern
+		// characters and refuses it. This is not that question, so the
+		// vector holds the answer the other three give and the rows stay
+		// about the slice.
+		sem.SubstringRangeQuotesPatternCharacters = No
 		sem.WholeSubscriptOnAScalarSlicesIt = answer
 		r.Semantics = &sem
 	})

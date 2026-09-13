@@ -2152,5 +2152,101 @@ func (r *Runner) expandArithText(text string) string {
 	if !strings.ContainsAny(text, "$`") {
 		return text
 	}
-	return r.expandRawText(text)
+	// The bytes a value puts *inside brackets the source wrote* are marked,
+	// so the bracket scanner cannot read them back as subscript syntax. The
+	// depth is counted over the literal spans alone, which is the whole of
+	// the distinction: `m[$key]` has a source bracket around the expansion
+	// and `v=a[1]; $(( $v ))` has none, and the two are measured to part —
+	// bash reads the second back as a subscript and answers the element,
+	// and does not read the first back. See syntax.ArithValueMark.
+	depth, balanced := 0, true
+	// The axis is asked at most once and only where a subscript's expansion
+	// really produced a bracket: under either answer `$(( a[$i] ))` is the
+	// same expression, so a dialect that has not chosen has nothing to be
+	// refused over.
+	asked, protect := false, false
+	out, _, _ := r.expandRawSpansWith(text, func(literal bool, part string) string {
+		if literal {
+			depth += bracketDepth(part)
+			if depth < 0 {
+				balanced = false
+			}
+			return part
+		}
+		if depth <= 0 || !strings.ContainsAny(part, arithValueMarked) {
+			return part
+		}
+		if !asked {
+			asked = true
+			protect = !r.ask(r.sem().ArithSubscriptRereadsItsExpandedText,
+				"a subscript's expanded text being read again as subscript syntax")
+		}
+		if !protect {
+			return part
+		}
+		return markArithValue(part)
+	})
+	if depth != 0 || !balanced {
+		// The source never closed the bracket it opened, so there is no
+		// bracket of the script's for a value's to be distinguished from —
+		// and the shell that draws the distinction stops drawing it here
+		// too. Measured 2026-09-13: `a=(9 8 7); k='1]'; $(( a[$k ))` is 8 in
+		// bash 5.3.15, the value's `]` closing a subscript the script left
+		// open. Stripped rather than never applied, because whether the
+		// brackets balance is only known once the whole text exists.
+		return stripArithValueMarks(out)
+	}
+	return out
+}
+
+// bracketDepth is what a literal run of the expression's text does to the
+// bracket nesting: one for each `[` and minus one for each `]`.
+//
+// A quote is an ordinary character inside an arithmetic expression in every
+// shell in the panel, so there is no quoting for this to see through.
+func bracketDepth(part string) int {
+	d := 0
+	for i := 0; i < len(part); i++ {
+		switch part[i] {
+		case '[':
+			d++
+		case ']':
+			d--
+		}
+	}
+	return d
+}
+
+// markArithValue puts a mark in front of each byte of an expansion's result
+// that the bracket scanner would otherwise read as syntax.
+//
+// The brackets, and the mark itself so that a NUL a value really carried is
+// still one byte of data when the marks come off.
+func markArithValue(part string) string {
+	var b strings.Builder
+	for i := 0; i < len(part); i++ {
+		if c := part[i]; c == '[' || c == ']' || c == syntax.ArithValueMark {
+			b.WriteByte(syntax.ArithValueMark)
+		}
+		b.WriteByte(part[i])
+	}
+	return b.String()
+}
+
+// arithValueMarked is the alphabet the marking covers: the brackets a scanner
+// would read as syntax, and the mark itself so that a NUL a value really
+// carried is still one byte of data when the marks come off.
+const arithValueMarked = "[]\x00"
+
+// stripArithValueMarks takes the marks off text that is about to be *shown*.
+//
+// A diagnostic names the expression a script wrote, and a mark is this
+// implementation's bookkeeping rather than anything the script contains: a
+// refusal carrying one would print a stray NUL into a log. The subscript
+// scanner takes its own off, so this is for the text that never became one.
+func stripArithValueMarks(text string) string {
+	if strings.IndexByte(text, syntax.ArithValueMark) < 0 {
+		return text
+	}
+	return syntax.UnmarkArithValue(text)
 }

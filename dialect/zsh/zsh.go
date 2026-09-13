@@ -1265,6 +1265,14 @@ func Semantics() interp.Semantics {
 	// rather than as an arithmetic offset — so `${x:i:2}` is refused where
 	// the other three take a substring. Measured against zsh 5.9.2.
 	s.SubstringRangeReadsModifiers = interp.Yes
+	// A subscript's expanded text is handed back to the bracket scanner
+	// here, so a key holding `]` or `[` is read as syntax rather than as
+	// the string a key is: with `key='x],b['` already stored, `(( m[$key]++
+	// ))` is `not an identifier: b[]` at status 2 and the element is left
+	// where it was, where bash and ksh93 both increment it. The `b[` in
+	// that sentence is the tail of the key being named as a second array.
+	// Measured 2026-09-13 against zsh 5.9.2 (#2581).
+	s.ArithSubscriptRereadsItsExpandedText = interp.Yes
 	s.EchoInterpretsEscapes = interp.Yes
 	// echo reads -n, -e and -E, and -e wins over -E whatever the order.
 	s.EchoOptions = "neE"

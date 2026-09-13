@@ -109,7 +109,14 @@ func TestOnlyATrimSwallowsTheColon(t *testing.T) {
 		{`v=hello; printf "[%s]" "${v:^^}"`, "^^"},
 		// A space between the colon and the `#` is not the form: the
 		// disambiguation is the character immediately after the colon.
-		{`v=hello; printf "[%s]" "${v: #hel*}"`, "#hel*"},
+		//
+		// The `*` is named back *escaped*, which is the range protection
+		// this shell applies to its pattern characters before reading them
+		// and not a wording choice — measured 2026-09-13, ksh93u+ blames
+		// ` #hel\*` here. The expectation used to be the unescaped
+		// spelling, which was this implementation's own answer written
+		// down as that shell's (#2618).
+		{`v=hello; printf "[%s]" "${v: #hel*}"`, `#hel\*`},
 	} {
 		out, st := kshOut(t, c.src)
 		if st == 0 {

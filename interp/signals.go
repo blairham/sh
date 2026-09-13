@@ -107,6 +107,11 @@ type signalState struct {
 	// between the two matters for the one signal a shell may have been born
 	// ignoring — see Semantics.QuitResetRestoresTheDefault.
 	defaultRestored map[string]bool
+	// borrowed records, for each signal whose *process* disposition this
+	// shell has changed, whether the process was ignoring it beforehand. It
+	// is what restoreDispositions puts back; see trapSignal for why the
+	// snapshot is taken at the first change and never overwritten.
+	borrowed map[syscall.Signal]bool
 }
 
 // sigs returns the shared state, creating it on first use.
@@ -269,6 +274,12 @@ func (r *Runner) trapSignal(name string, sig syscall.Signal, body *string) {
 	s := r.sigs()
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// Every one of the three branches below changes a disposition that
+	// belongs to the *process*, so the shell borrows it rather than owning
+	// it. Noted before the change, and only the first time, so what goes
+	// back is the state this shell was handed and not the state some earlier
+	// line of the same script left. See restoreDispositions.
+	s.borrow(sig)
 	switch {
 	case body == nil:
 		delete(s.traps, name)
@@ -285,6 +296,20 @@ func (r *Runner) trapSignal(name string, sig syscall.Signal, body *string) {
 		s.traps[name] = *body
 		delete(s.defaultRestored, name)
 		signal.Notify(s.ch, sig)
+	}
+}
+
+// borrow records the disposition a signal had before this shell changed it.
+//
+// Called with the lock held, once per signal: a script that ignores SIGINT,
+// traps it and resets it again has borrowed one thing, and what it owes back
+// is what the process had before the first of those.
+func (s *signalState) borrow(sig syscall.Signal) {
+	if s.borrowed == nil {
+		s.borrowed = map[syscall.Signal]bool{}
+	}
+	if _, ok := s.borrowed[sig]; !ok {
+		s.borrowed[sig] = signal.Ignored(sig)
 	}
 }
 
@@ -680,4 +705,108 @@ func (r *Runner) stopSignals() {
 	// it is what releases the handlers, and an unsubscribed channel simply
 	// never fires again.
 	signal.Stop(s.ch)
+}
+
+// stopSignalsAndRestore is the pair of things a shell that has finished owes
+// the process: its handler subscriptions released, and every disposition it
+// borrowed put back. Written as one call because forgetting the second is
+// exactly what #2446 was.
+func (r *Runner) stopSignalsAndRestore() {
+	r.stopSignals()
+	r.restoreDispositions()
+}
+
+// dispositionSink receives the signals taken over to undo an ignore the
+// script asked for, and nothing ever reads it.
+//
+// The same device internal/oracle uses for the same reason, and for the same
+// measured reason it is a drain rather than a handler: os/signal never blocks
+// on delivery, so a full channel means the signal is dropped.
+var dispositionSink = make(chan os.Signal, 1)
+
+// restoreDispositions hands back the signal dispositions the shell borrowed
+// from the process it is running in.
+//
+// A `trap` is the one thing a shell does that reaches outside its own tables.
+// Everything else a script can change process-wide is already the Runner's
+// own — the working directory is Dir and `cd` declines to call os.Chdir, the
+// environment is Env and nothing calls os.Setenv, and `umask` and `ulimit`
+// reach the process only through the SetUmask and SetRlimit hooks an embedder
+// has to supply. Dispositions were the exception: `trap ” INT` called
+// signal.Ignore for the whole process and nothing ever put it back.
+//
+// For a shell that *is* the process that costs nothing, which is why it went
+// unnoticed: the process exits a moment later. It costs a great deal for a
+// shell that is not. One test binary runs every corpus snippet in its own
+// process — interp's printed-source round-trip — so a case whose program
+// ignores a signal at the top level left it ignored for every test after it
+// and for every child those tests exec'd, since an ignore survives exec and
+// that is the whole of what `nohup` does. The failures landed in unrelated
+// tests long afterwards and read as a load-dependent flake (#2446).
+//
+// Fixed here rather than in the test that noticed, because that test is not
+// the only in-process embedder and a scrub around one loop leaves the next
+// one to find this the same way.
+//
+// # How a disposition is put back, which is not how it looks
+//
+// signal.Reset is the obvious undo and it does not undo an ignore. Measured
+// 2026-09-12 against a child that raises the signal at itself: after
+// signal.Ignore the child survives, and after signal.Reset it still survives
+// — Reset restores the handler that was in place before the Go runtime's,
+// which is the SIG_IGN just installed. signal.Notify is what clears it, since
+// exec resets a *handled* signal to its default in the child. So the two
+// directions are asymmetric: an ignore that has to go back is signal.Ignore,
+// and an ignore that has to come off is signal.Notify onto a drain.
+//
+// That is the same mechanism and the same measurement as
+// internal/oracle.scrubSignalDispositions, and the ineffective
+// `t.Cleanup(signal.Reset(…))` this replaces in interp's own tests had been
+// standing in for it.
+//
+// What the process keeps is a *handled* signal rather than a defaulted one,
+// which Go offers no way back from once SIG_IGN has been installed. It is the
+// difference that matters: children see the default, and the process drops a
+// signal it would otherwise have been ignoring anyway.
+//
+// # What is not touched
+//
+// A signal found exactly as it was left alone, so a script that only
+// *handled* a signal does not go near os/signal here — signal.Stop in
+// stopSignals already released that subscription, and, measured in the same
+// run, Notify followed by Stop leaves a child seeing the default. That is
+// what keeps this from taking an embedder's own signal.Notify away with it.
+func (r *Runner) restoreDispositions() {
+	if r.inSubshell {
+		// A subshell shares this state with the shell it was cloned from and
+		// has changed none of it — trapSignal returns before the os/signal
+		// call for a clone — so putting anything back here would be a child
+		// tidying up after its parent, mid-script.
+		return
+	}
+	s := r.signals
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for sig, wasIgnored := range s.borrowed {
+		if sig == r.killedBySig {
+			// The shell is about to die of this one and DieBySignal has not
+			// run yet. Putting an inherited ignore back would mean the raise
+			// does nothing and a shell that reported a signal death does not
+			// take one — so the signal the script asked to be killed by keeps
+			// the disposition the script gave it.
+			continue
+		}
+		if signal.Ignored(sig) == wasIgnored {
+			continue
+		}
+		if wasIgnored {
+			signal.Ignore(sig)
+		} else {
+			signal.Notify(dispositionSink, sig)
+		}
+	}
+	clear(s.borrowed)
 }

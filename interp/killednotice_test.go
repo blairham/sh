@@ -39,6 +39,16 @@ func killedRun(t *testing.T, src string, dg Diagnostics, answer Answer) (string,
 	var errs strings.Builder
 	sem := PosixSemantics()
 	sem.ReportsACommandKilledBySignal = answer
+	// The subject here is the notice, so the one other axis a killed child
+	// can reach is answered rather than left to refuse. It is answered at all
+	// because of #2446: `TestTheTwoOrdinaryDeathsAreNotReported/an interrupt`
+	// passed in a whole-package run and failed on its own, because an earlier
+	// test's `trap '' INT` had left SIGINT ignored for the binary and its
+	// child could not die of it. With the disposition put back, the child
+	// dies, the shell asks whether that ends the script, and PosixSemantics
+	// has no answer — so the test was green on a run where the signal it is
+	// about was never delivered.
+	sem.ChildInterruptEndsTheScript = No
 	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Diagnostics: &dg, Name: "sh",
 		Stdout: &strings.Builder{}, Stderr: &errs,

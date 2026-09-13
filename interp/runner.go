@@ -2648,7 +2648,7 @@ func (r *Runner) Finish(ctx context.Context) int {
 	r.runExitTrap(ctx)
 	r.runExitHook(ctx)
 	if !r.inSubshell {
-		r.stopSignals()
+		r.stopSignalsAndRestore()
 	}
 	// After the EXIT trap and before the death below, which is the only
 	// window that covers both: the trap body can run a process substitution

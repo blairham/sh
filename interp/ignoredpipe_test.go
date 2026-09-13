@@ -7,7 +7,6 @@ import (
 	"bytes"
 	"context"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -42,9 +41,10 @@ func pipeRun(t *testing.T, src string) (errOut string, status int) {
 	t.Helper()
 	// A trap set at the top level is the *process's* disposition, because
 	// that is what a shell at the top level is — and one test process runs
-	// every test in the package. An arrangement left behind here is inherited
-	// by every child a later test starts.
-	t.Cleanup(func() { signal.Reset(syscall.SIGPIPE) })
+	// every test in the package, so an arrangement left behind here would be
+	// inherited by every child a later test starts. Handing it back is the
+	// shell's own job now (#2446): a `signal.Reset` in a t.Cleanup stood here
+	// and, measured, does not undo an Ignore at all.
 	f, err := syntax.Parse(src, syntax.Core())
 	if err != nil {
 		t.Fatalf("parse %q: %v", src, err)

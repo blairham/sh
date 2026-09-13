@@ -58631,6 +58631,57 @@
         "TimedOut": false
       }
     },
+    "declare/a-local-over-a-produced-readonly-parameter": {
+      "ash": {
+        "Stdout": "g=[]f=[5] tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "g=[]f=[5] tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "g=[]f=[5] tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "g=[]f=[5] tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "g=[]f=[5] tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "g=[]f=[] tail",
+        "Stderr": "\u003cshell\u003e: local: not found~\u003cshell\u003e: local: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "g=[0]",
+        "Stderr": "f: read-only variable: ARGC",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "declare/a-local-that-drops-the-export-attribute": {
       "ash": {
         "Stdout": "",
@@ -59441,6 +59492,57 @@
       },
       "zsh": {
         "Stdout": "typeset -i z=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/a-numeric-letter-taking-a-number-beside-a-case-letter": {
+      "ash": {
+        "Stdout": "\u003cshell\u003e: typeset: not found~\u003cshell\u003e: typeset: not found",
+        "Stderr": "",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "declare -il w=\"255\"~\u003cshell\u003e: line 1: typeset: y: not found",
+        "Stderr": "",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "declare -il w=\"255\"~\u003cshell\u003e: line 1: typeset: y: not found",
+        "Stderr": "",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "\u003cshell\u003e: line 0: typeset: w: not found~\u003cshell\u003e: line 0: typeset: y: not found",
+        "Stderr": "",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found",
+        "Stderr": "",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "typeset -l -i 16 w=16#ff~typeset -l -F 3 y=1.500",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "typeset -i16 -l w=255~typeset -Fl y=1.500",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -123658,6 +123760,57 @@
       },
       "zsh": {
         "Stdout": "[a][b]\u003ca\u003e\u003c#\u003e\u003ch\u003e\u003cb\u003e{a}{#}{h}{;}{b}",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "param/the-type-of-a-produced-parameter": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: ${(t)RANDOM}: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: ${(t)RANDOM}: bad substitution",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: ${(t)RANDOM}: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `RANDOM}' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[integer-special][integer-special][integer-readonly-special][integer-readonly-special]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

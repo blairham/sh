@@ -45,19 +45,19 @@ func newScreen(cols int) *screen { return &screen{cols: cols} }
 // feed plays the bytes a terminal was sent.
 func (s *screen) feed(out string) {
 	for i := 0; i < len(out); {
-		switch {
-		case out[i] == '\r':
+		switch out[i] {
+		case '\r':
 			s.col, s.pending = 0, false
 			i++
-		case out[i] == '\n':
+		case '\n':
 			s.row, s.pending = s.row+1, false
 			i++
-		case out[i] == '\a':
+		case '\a':
 			i++
-		case out[i] == '\b':
+		case '\b':
 			s.col, s.pending = max(0, s.col-1), false
 			i++
-		case out[i] == esc:
+		case esc:
 			i += s.control(out[i:])
 		default:
 			r, n := utf8.DecodeRuneInString(out[i:])

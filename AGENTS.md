@@ -88,6 +88,10 @@ refuses what every real shell accepts is a core nobody can write against.
       wild            parses the shell scripts installed on this machine
       oraclerunner    the oracle, inside a container: the far half of the
                       ash column, and oracle.Exec rather than a lookalike
+      suiteinside     our own suite, inside the same container: the far half
+                      of the suite's ash column, and suite.Sweep itself —
+                      both shells run in there, so a BusyBox reference is
+                      never graded against a run on this machine
       corpusguard     fails when the corpus has lost a case
       suiteguard      fails when share/suite has lost a file or shortened
                       one — the same hazard, a different tree
@@ -104,7 +108,8 @@ refuses what every real shell accepts is a core nobody can write against.
                       own tests/. Committed, Apache-2.0 and readable,
                       which is the whole difference between it and
                       anything fetched. `make suite` grades every dialect
-                      over it at once.
+                      over it at once — core/ in every column, ext/ in the
+                      three that have the constructs dash does not.
 
 **The core does not know its successors.** `syntax` and `interp` define the
 questions — a grammar flag, a semantics axis, a diagnostic value — and each
@@ -1195,8 +1200,9 @@ exited quietly would be worse, because zero files compared and zero
 disagreements look identical in a log.
 
 `make suite` is the same instrument over **our own** cases. The files live in
-`share/suite/core/*.tests`, committed and Apache-2.0, and every dialect
-binary is graded over all of them at once against the shell it claims to be.
+`share/suite/<tier>/*.tests`, committed and Apache-2.0, and every dialect
+binary is graded over the tiers it claims at once against the shell it says it
+is.
 
 It exists because the fetched panel can never be more than one column. zsh's
 suite is `.ztst`, ksh93's maintained suite is a different lineage from the
@@ -1204,6 +1210,24 @@ binary on a Mac, dash ships none, and there is no BusyBox ash here — **four of
 five dialects can never get a column from somebody else's work**, and three of
 those four blockers are about the provenance of the *files* rather than about
 grading the dialect. Our own files have no format, license or lineage problem.
+
+**The fifth blocker was a missing binary, and it is reached rather than
+worked around.** `oracle.Container` hands back the *same* `ContainerReach`
+the corpus runs ash through — the same repository, the same pinned digest,
+the same runtime probe — so nothing about reaching BusyBox is written down
+twice. What goes into the image is the whole sweep and not only the
+reference: a suite file calls programs, so grading BusyBox-in-Alpine against
+`cmd/ash`-on-macOS would score two operating systems as two shells. Both run
+in there, on one copy of the files, graded by `suite.Sweep` cross-compiled
+from this tree. For the same reason the contained column is **left out of the
+tier cross-check** and the report says so — a cross-check listing four shells
+where five columns ran, with nothing explaining the difference, reads as a
+shell that agreed.
+
+With no container runtime the column prints `ash — no container runtime here
+(docker is not on PATH)` under *columns not run* and the target still exits 0.
+That is the same rule the unbuilt fetched columns follow: a column that is not
+run is printed rather than dropped.
 
 **It is not a second grader.** A native column is a `suite.Suite` with `Ours`
 set and its files on disk instead of in an archive; `suite.Sweep` grades it
@@ -1245,12 +1269,31 @@ from it — a hang is something a shell did, a failure to start is something the
 harness did before a shell was reached.
 
 **A tier is a claim, and an empty one would report a column that agreed.**
-Only `core/` is written today, so `Tiers` and every column's `Dirs` name only
-`core/`; `ext/` and the per-dialect directories arrive with cases in them
-rather than as placeholders, and `Suite.Missing` makes a column unable to
-claim a directory that is not there. The baseline over the ten core files —
-bash, zsh, ksh93 and dash each 10/10 parsed, 9/10 strict — is #2291's burndown
-number, and the single disagreement is the same file in all four columns.
+`core/` is what a script may assume in any of these shells; `ext/` is the
+ksh-family constructs `docs/spec/shell-matrix.md` adopted when it measured
+dash as the sole holdout on 13 of 21 rows — arrays, `[[ ]]`, `$'…'`, `+=`,
+substrings, pattern substitution, C-style `for`, `function`, `select`,
+herestrings and process substitution. **dash and ash do not run `ext/`, and
+that absence is the measurement rather than an exemption**: they are the
+shells the boundary was drawn around. The per-dialect directories are not
+written, so `Tiers` and every column's `Dirs` do not name them — they arrive
+with cases in them rather than as placeholders, and `Suite.Missing` makes a
+column unable to claim a directory that is not there.
+
+**A case earns its tier by being measured into it.** Every `ext/` case was run
+under bash 5.3, zsh 5.9 and ksh93 before it was kept, and eight spellings that
+split are named in the files as absences with the measurement beside them —
+`empty=()`, an unquoted `$list` in an array literal, `${v:(-3)}`, a bare name
+inside a substring offset, `$'\d'`, `&` in a substitution's replacement, a
+parenthesized `function` body, and a `select` loop with no `break`. An
+omission nobody wrote down is indistinguishable from one nobody thought of.
+
+Measured 2026-09-13: bash, zsh and ksh93 each 21/21 parsed and 21/21 strict
+over `core/` and `ext/`; dash 10/10 and 10/10 over `core/`; ash 10/10 parsed
+and **9/10** strict. The cross-checks are `core/` 10/10 across four references
+and `ext/` 11/11 across three. **The ash column found a real divergence on its
+first run** — BusyBox performs the assignment inside a short-circuited `&&` or
+`||` in arithmetic and the other five shells do not (#2605).
 
 `make suite-guard` fails when **our own suite** has lost a file, or shortened
 one. It runs in `make check` and as a step of the same required

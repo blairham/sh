@@ -1,0 +1,99 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# select — the menu loop. dash has none; the ksh family and zsh do, so it is
+# ext/.
+#
+# Every select here sends its standard error to /dev/null, and that is the
+# measurement rather than tidiness: the menu and the PS3 prompt go there, and
+# the three shells render them three ways. bash prints one item per line and
+# writes the prompt; zsh lays the items out in columns; AT&T ksh93 prints one
+# per line and writes no prompt at all when the input is not a terminal. So
+# the *rendering* is a per-dialect answer and belongs in the per-dialect
+# directories, while what the loop does — which item a reply selects, what
+# REPLY holds, what an out-of-range reply gives, and that an empty line
+# re-prompts rather than running the body — is common, and is what this asks.
+#
+# The loop's own exit status is left out for the same reason: at end of input
+# bash and ksh93 leave 1 and zsh leaves 0.
+#
+# The input is a herestring in every case, so nothing here waits for a person.
+
+PS3='pick> '
+
+select choice in red green blue; do
+  printf 'chose [%s] for reply [%s]\n' "$choice" "$REPLY"
+  break
+done <<< '2' 2> /dev/null
+
+# The first and the last item, because an off-by-one in either direction
+# still answers something for the middle one.
+select choice in red green blue; do
+  printf 'first is [%s]\n' "$choice"
+  break
+done <<< '1' 2> /dev/null
+select choice in red green blue; do
+  printf 'last is [%s]\n' "$choice"
+  break
+done <<< '3' 2> /dev/null
+
+# A reply naming no item leaves the variable empty, and REPLY still holds
+# what was read.
+select choice in red green blue; do
+  printf 'out of range gives [%s] for reply [%s]\n' "$choice" "$REPLY"
+  break
+done <<< '9' 2> /dev/null
+select choice in red green blue; do
+  printf 'a word gives [%s] for reply [%s]\n' "$choice" "$REPLY"
+  break
+done <<< 'green' 2> /dev/null
+select choice in red green blue; do
+  printf 'zero gives [%s] for reply [%s]\n' "$choice" "$REPLY"
+  break
+done <<< '0' 2> /dev/null
+
+# An empty line re-prints the menu rather than running the body, so a body
+# that runs at all ran for the line after it.
+select choice in red green; do
+  printf 'after a blank line: [%s]\n' "$choice"
+  break
+done <<< '
+1' 2> /dev/null
+
+# The list is an ordinary word list: it expands, and quoting decides how many
+# items there are.
+set -- "two words" single
+select choice in "$@"; do
+  printf 'from the positional list: [%s]\n' "$choice"
+  break
+done <<< '1' 2> /dev/null
+
+# With no list at all it iterates the positional parameters, exactly as a
+# plain for does.
+select choice; do
+  printf 'implicit list: [%s]\n' "$choice"
+  break
+done <<< '2' 2> /dev/null
+
+# A loop with no break, read to the end of its input, is not asked: bash and
+# ksh93 run the body once per line and zsh runs it for neither and writes a
+# newline of its own. That is a third answer rather than a shortfall in two,
+# so it is a per-dialect case.
+
+# continue re-prompts, which is how a menu rejects an answer it does not
+# like.
+tries=
+select choice in red green blue; do
+  tries="$tries($REPLY)"
+  if [ -z "$choice" ]; then continue; fi
+  break
+done <<< '7
+2' 2> /dev/null
+printf 'tried: %s ending on [%s]\n' "$tries" "$choice"
+
+# An empty list runs the body not at all.
+set --
+select choice in "$@"; do
+  printf 'never\n'
+done <<< '1' 2> /dev/null
+printf 'an empty list ran the body no times\n'

@@ -178,7 +178,7 @@ func printOwnColumn(rep suite.Report) {
 	if rep.Route != "" {
 		// Said on every run of this column, because the claim is narrower
 		// than the other four make: both shells ran inside an image, so this
-		// pins the behaviour of that image rather than of this machine.
+		// pins the behavior of that image rather than of this machine.
 		fmt.Printf("  reached    %s — both shells ran in there, on one copy of the files\n", rep.Route)
 	}
 	fmt.Printf("  parsed     %-9s %5.1f%%   our parser read the whole file\n",

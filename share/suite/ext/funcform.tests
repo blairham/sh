@@ -35,7 +35,7 @@ function grouped
 }
 grouped
 
-# A parenthesised body after the reserved word is not asked: bash takes it as
+# A parenthesized body after the reserved word is not asked: bash takes it as
 # a subshell function, ksh93 calls it a syntax error and zsh reads the
 # parenthesis as something else again. Three answers is a per-dialect answer.
 

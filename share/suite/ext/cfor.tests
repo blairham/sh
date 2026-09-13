@@ -42,7 +42,7 @@ for ((i = 0; i < 6; i++)); do
 done
 printf 'break and continue: %s\n' "$out"
 
-# Comma in the initialiser and in the increment, and more than one variable.
+# Comma in the initializer and in the increment, and more than one variable.
 for ((i = 0, j = 5; i < j; i++, j--)); do
   printf 'converging %s %s\n' "$i" "$j"
 done

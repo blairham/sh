@@ -6921,6 +6921,21 @@ echo "st=$?"`,
 		Why:     "the boundary of that reading, measured three ways: an underscore is not a letter, a leading space puts the letter second, and a parenthesis does the same — so all three are ranges rather than modifiers, and the shell that has modifiers answers them exactly as bash does. It says the rule is about the first byte and not about the segment containing a name. ksh93 is the odd column and for an unrelated reason: it refuses a parenthesized offset outright, naming it with the parentheses backslashed",
 	},
 	{
+		ID: "param/a-substring-range-and-the-characters-one-column-protects", Category: "parameter expansion",
+		Snippet: `x=abcdef; echo "[${x:1|2}]"; echo after`,
+		Why:     "not a parenthesis, and that is the finding: ksh93 protects a range's *pattern characters* before reading it, so a bitwise or is `1\\|2: arithmetic syntax error` there and 3 — `def` — in every other column with substrings. Written with an operator rather than with a grouping because the parenthesized offset one row up reads as a rule about grouping, and this one cannot (#2618)",
+	},
+	{
+		ID: "param/a-substring-range-keeps-the-characters-nothing-protects", Category: "parameter expansion",
+		Snippet: `x=abcdef; echo "[${x:1<2}] [${x:1%2}] [${x:1,2}]"; echo after`,
+		Why:     "the other side of that set, and what makes it a set rather than \"punctuation in a range is refused\": a comparison, a remainder and a comma sequence all evaluate in the shell that refuses `|`, `&` and `*` in the same position. Three operators in one line on purpose — a single one could be a case the protection happens to miss, and the row would then pass against a protection covering every character",
+	},
+	{
+		ID: "param/a-substring-length-with-a-protected-character", Category: "parameter expansion",
+		Snippet: `x=abcdef; echo "[${x:1:(2)}]"; echo after`,
+		Why:     "the length half of the same protection, and it is blamed alone: the offset in front of it evaluated and is not named, where the same shell naming an *offset* names the whole range behind it. So the two halves are protected separately and then joined, rather than the range being protected as one string",
+	},
+	{
 		ID: "param/a-substring-length-that-names-a-variable", Category: "parameter expansion",
 		Snippet: `x=abcdef; i=2; echo "[${x:2:i}]"; echo after`,
 		Why:     "the length is the same question as the offset, and the shell with modifiers reads it the same way — the segment begins with a letter, so it is a modifier and not a count. Pinned separately because the offset and the length are evaluated by different call sites and a fix that caught one silently left the other",
@@ -16897,6 +16912,16 @@ echo "st=$? alive"`,
 		ID: "param/the-names-with-a-prefix-are-sorted", Category: "parameter expansion",
 		Snippet: `ZQ_b=2; ZQ_a=1; echo ${!ZQ_@}`,
 		Why:     "set in the other order and returned in the same one, so the order is the names' rather than the order they happened to be created in — a map has none to inherit",
+	},
+	{
+		ID: "param/the-names-with-a-prefix-and-the-name-that-is-the-prefix", Category: "parameter expansion",
+		Snippet: `ZQ=0; ZQ_a=1; ZQ_b=2; printf "[%s]" "${!ZQ@}"; echo`,
+		Why:     "the name that matches the prefix *exactly*, with two names extending it beside it. The two columns with the operator part here: bash lists all three, so the operator is a plain prefix match there, and ksh93 lists only `ZQ_a` and `ZQ_b` — the names extending the prefix rather than the names beginning with it. The prefix is set and readable in both, so this is the operator's rule and not a name that could not be seen (#2619)",
+	},
+	{
+		ID: "param/the-only-name-with-a-prefix-is-the-prefix", Category: "parameter expansion",
+		Snippet: `ZQ=0; printf "[%s]" "${!ZQ@}"; echo "st=$?"`,
+		Why:     "the control the row above needs: with nothing extending it, the shell that leaves the exact name out answers with nothing at all and still exits 0, so the exclusion is on that one name and not a refusal or a count. Without this pair a filter that dropped the *last* match would record the same answer as one that drops the exact one",
 	},
 	{
 		ID: "exit/from-inside-a-while-loop", Category: "traps and exit",

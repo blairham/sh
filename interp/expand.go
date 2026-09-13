@@ -949,6 +949,10 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 	// prefix, and the two spellings differ exactly as `$@` and `$*` do.
 	if e.Prefix != 0 {
 		names := r.namesWithPrefix(e.Name)
+		if r.ask(r.sem().NamePrefixListingExcludesTheExactName,
+			"a prefix listing leaving out the name that is the prefix") {
+			names = withoutTheExactName(names, e.Name)
+		}
 		ifs, set := r.ifs()
 		if e.Prefix == '*' {
 			joined := strings.Join(names, ifsFirst(ifs, set))
@@ -3104,7 +3108,7 @@ func (r *Runner) numOf(w *syntax.Word, e *syntax.ParamExpr, tail *syntax.Word) i
 	// parentheses are the expression's grouping rather than a pattern group
 	// that the dialect with glob qualifiers would read as a list.
 	restore := r.withoutGlobbing()
-	text := strings.TrimSpace(r.joinWord(w))
+	text := r.rangeSegmentText(w)
 	restore()
 	// The range's own reader, not the subscript's: an offset that expanded
 	// to nothing is zero in every column, where the same emptiness in a
@@ -3118,7 +3122,13 @@ func (r *Runner) numOf(w *syntax.Word, e *syntax.ParamExpr, tail *syntax.Word) i
 		// and then that `1+` would not, where the shell reports the one.
 		blame := text
 		if tail != nil && r.diag().SubstringErrorNamesTheWholeRange {
-			blame += ":" + strings.TrimSpace(r.joinWord(tail))
+			// The tail through the same reader, because the protection is
+			// applied to each half and the halves are then joined: measured,
+			// `${s:1+:(2)}` blames `1+:\(2\)` rather than leaving the half
+			// that was not evaluated as it was written.
+			restore := r.withoutGlobbing()
+			blame += ":" + r.rangeSegmentText(tail)
+			restore()
 		}
 		r.diagf("%s\n", Wording(r.diag().SubstringRangeError, "%[2]s",
 			r.paramSubject(e), r.subscriptFailure(blame, err)))
@@ -3126,6 +3136,49 @@ func (r *Runner) numOf(w *syntax.Word, e *syntax.ParamExpr, tail *syntax.Word) i
 		return 0
 	}
 	return n
+}
+
+// rangeSegmentText is one half of a substring range as the evaluator receives
+// it: the word expanded, trimmed, and — where the dialect protects them — its
+// pattern characters escaped.
+//
+// The escaping is not a diagnostic's doing even though a diagnostic is where
+// it shows. It happens to the text before anything reads it, so the shell that
+// does it cannot evaluate a range holding one of those characters at all; the
+// backslashes in `\(-2\): arithmetic syntax error` are the protected text
+// being blamed rather than a sentence formatted with escapes. See
+// Semantics.SubstringRangeQuotesPatternCharacters.
+func (r *Runner) rangeSegmentText(w *syntax.Word) string {
+	text := strings.TrimSpace(r.joinWord(w))
+	if !strings.ContainsAny(text, rangePatternCharacters) {
+		// Asked only where there is something to protect, which is the rule
+		// the modifier reading beside it follows: under either answer
+		// `${x:1:2}` is the same range, so a dialect that has not chosen has
+		// nothing to be refused over.
+		return text
+	}
+	if !r.ask(r.sem().SubstringRangeQuotesPatternCharacters,
+		"a substring range having its pattern characters protected before it is read") {
+		return text
+	}
+	return escapeRangePatternCharacters(text)
+}
+
+// rangePatternCharacters is the alphabet the protection covers, measured a
+// character at a time rather than assumed from any pattern set this
+// implementation already has: a set written twice is a set that comes apart.
+const rangePatternCharacters = `()|&*?[]}\`
+
+// escapeRangePatternCharacters puts a backslash in front of each of them.
+func escapeRangePatternCharacters(text string) string {
+	var b strings.Builder
+	for i := 0; i < len(text); i++ {
+		if strings.IndexByte(rangePatternCharacters, text[i]) >= 0 {
+			b.WriteByte('\\')
+		}
+		b.WriteByte(text[i])
+	}
+	return b.String()
 }
 
 // paramSubject is the parameter as a diagnostic names it: the name, and the
@@ -5198,6 +5251,23 @@ func (r *Runner) namesWithPrefix(prefix string) []string {
 		add(k)
 	}
 	sort.Strings(out)
+	return out
+}
+
+// withoutTheExactName drops the name that *is* the prefix, leaving the names
+// that extend it.
+//
+// A filter over the finished list rather than a condition inside
+// namesWithPrefix, because the two readings differ only in this one name and
+// the sources, the skips and the ordering are the same question under both.
+func withoutTheExactName(names []string, prefix string) []string {
+	out := names[:0:0]
+	for _, name := range names {
+		if name == prefix {
+			continue
+		}
+		out = append(out, name)
+	}
 	return out
 }
 

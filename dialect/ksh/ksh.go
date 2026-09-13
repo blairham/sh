@@ -532,6 +532,17 @@ func Semantics() interp.Semantics {
 	// 2012-08-01. The yes here gave every `f "${a[@]}"` on a name nothing
 	// had filled yet one spurious empty argument.
 	s.SubstringNegativeLengthIsEmpty = interp.Yes
+	// `${!ab@}` and `${!ab*}` list the names *extending* the prefix here:
+	// with `ab=1; abc=2; abd=3` the answer is `abc abd`, and `ab` — which
+	// is set, and which every other column with the operator lists — is
+	// left out. Measured 2026-09-13 against 93u+ 2012-08-01 (#2619).
+	// A substring's offset and length have their pattern characters
+	// protected before the range is read, so every one of them is an
+	// arithmetic syntax error here: `${s:(-2)}` is `\(-2\): arithmetic
+	// syntax error` where bash and zsh both slice the last two characters.
+	// Measured 2026-09-13 against 93u+ 2012-08-01 (#2618).
+	s.SubstringRangeQuotesPatternCharacters = interp.Yes
+	s.NamePrefixListingExcludesTheExactName = interp.Yes
 	// `${s[@]:off:len}` on a name holding one string slices a *list of one*
 	// here, alone in the panel: measured 2026-09-11 against 93u+
 	// 2012-08-01, `h="a b"; ${h[@]:0:1}` is `a b` and `${h[@]:1}` is

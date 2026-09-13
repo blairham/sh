@@ -42,10 +42,7 @@ L=MiXeD
 printf '%s\n' "$L"
 
 # An offset may be a bare arithmetic expression, and a name in it is read as
-# a variable rather than as anything else. (The parenthesized spelling
-# `${s:(-2)}` is deliberately not here: ksh93 93u+ refuses it as an
-# arithmetic syntax error where bash takes it, and this shell takes it — see
-# the issue filed with this file.)
+# a variable rather than as anything else.
 s=hello
 printf '%s\n' "${s: -2}"
 printf '%s\n' "${s:1:3}"
@@ -60,6 +57,33 @@ printf '%s\n' "${s: -4:2}"
 # `${#name}` counts characters, and on an array it is the element count.
 printf '%s\n' "${#s}"
 printf '%s\n' "${#arr[@]}"
+
+# A range's pattern characters are protected before it is read, so every one
+# of them is an arithmetic syntax error here where bash and zsh evaluate the
+# expression. `${s:(-2)}` is the spelling the issue was filed about and the
+# parentheses are not what it is about: a bitwise or is refused in the same
+# position and a comparison is not. Each one is in a subshell because the
+# refusal ends the shell it happens in, and the rest of this file has to run.
+( printf '%s\n' "${s:(-2)}" )
+printf 'st=%s\n' "$?"
+( printf '%s\n' "${s:1|2}" )
+printf 'st=%s\n' "$?"
+( printf '%s\n' "${s:1:(2)}" )
+printf 'st=%s\n' "$?"
+printf '%s\n' "${s:1<2}"
+printf '%s\n' "${s:1%2}"
+
+# `${!prefix@}` and `${!prefix*}` list the names *extending* the prefix. The
+# name that matches it exactly is set and readable and is still left out,
+# which is where this parts from bash's plain prefix match.
+zqp=0
+zqp_a=1
+zqp_b=2
+printf '[%s]' "${!zqp@}"
+printf '\n'
+printf '[%s]' "${!zqp*}"
+printf '\n'
+printf '[%s]\n' "${!zqnosuch@}"
 
 # Assignment forms set the variable as well as expanding, and the unset test
 # and the null test differ by the colon.

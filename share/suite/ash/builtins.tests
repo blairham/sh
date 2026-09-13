@@ -1,0 +1,72 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# BusyBox ash's own answers among the builtins every shell has.
+#
+# The one a portable script meets first is `echo`: dash processes the escape
+# sequences with no option at all, and ash does not — it wants `-e`, the way
+# bash does. Two shells that sit on the same side of the ext/ boundary and
+# give opposite answers about the most-used builtin there is.
+
+# echo leaves the escapes alone.
+echo 'plain: a\tb'
+echo 'plain: a\nb'
+
+# -e turns them on, -E turns them back off, and -n drops the newline.
+echo -e 'with -e: a\tb'
+echo -E 'with -E: a\tb'
+echo -n 'with -n, no newline follows'
+echo ''
+echo -e -n 'both: a\tb'
+echo ''
+
+# printf is the portable spelling and behaves the same way it does
+# everywhere, including %b for the processing echo will not do unasked.
+printf '%b\n' 'via %%b: a\tb'
+printf '%s|%d|%c\n' str 42 xyz
+printf '%5.2f\n' 3.14159
+
+# `local` is here, as it is in dash and not in ksh93. A valueless name is
+# unset rather than empty, which is the half the panel disagrees about.
+outer=kept
+f() {
+  local outer=inner
+  local u
+  outer=changed
+  printf 'inside: %s\n' "$outer"
+  printf 'valueless: [%s]\n' "${u-unset}"
+}
+f
+printf 'outside: %s\n' "$outer"
+
+# Several names in one local, and they are names rather than declarations.
+g() {
+  local a=1 b
+  b=2
+  printf '%s%s\n' "$a" "$b"
+}
+g
+printf 'nothing escaped: [%s][%s]\n' "${a-unset}" "${b-unset}"
+
+# type and command -V, in BusyBox's wording.
+type echo
+type f
+type nosuchcommandanywhere
+printf 'type on nothing: %s\n' "$?"
+command -V echo
+command -v f
+command -v nosuchcommandanywhere
+printf 'command -v on nothing: %s\n' "$?"
+
+# The expansion operators ash has and dash has not, on the builtins' own
+# ground: a substring and a substitution used to build a word.
+p=/one/two/three.txt
+printf '%s\n' "${p##*/}"
+printf '%s\n' "${p%/*}"
+printf '%s\n' "${p/.txt/.md}"
+printf '%s\n' "${p:5}"
+printf '%s\n' "${#p}"
+
+# read takes a line, and -r is what keeps a backslash.
+printf 'a\\tb\n' | { read -r line; printf '%s\n' "$line"; }
+printf 'a\\tb\n' | { read line; printf '%s\n' "$line"; }

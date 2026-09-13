@@ -1,0 +1,94 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Matching, the answer only bash gives.
+#
+# bash's regular-expression operator fills BASH_REMATCH, and the pattern
+# options it has are `shopt` names rather than `setopt` names or nothing at
+# all. The sub-patterns themselves are ext/ — every shell in the ksh family
+# has them — but reaching them through `shopt -s extglob` is bash's alone.
+#
+# This is the one file in the suite that `parsed` scores against, and the
+# reason is in internal/suite/score.go rather than in this shell: an option
+# set at run time decides what a later line means, so `shopt -s extglob`
+# followed by `@(a|b)` cannot be read by any static pass. bash's own `bash -n`
+# refuses this file too. The column reports 23/24 parsed and 24/24 strict, and
+# that gap is the measurement working rather than a defect to chase.
+#
+# Every fixture here is made by the file and named in lower case on purpose:
+# a glob's matches are sorted, bash sorts them by the locale's collation and
+# this shell sorts them by byte (#1675), so a case-mixed directory would
+# measure that open divergence rather than what these lines are about.
+
+# =~ matches an extended regular expression and leaves the whole match in
+# BASH_REMATCH[0] with the groups after it.
+if [[ abc123 =~ ^([a-z]+)([0-9]+)$ ]]; then
+  printf 'whole: %s\n' "${BASH_REMATCH[0]}"
+  printf 'one:   %s\n' "${BASH_REMATCH[1]}"
+  printf 'two:   %s\n' "${BASH_REMATCH[2]}"
+  printf 'groups: %s\n' "${#BASH_REMATCH[@]}"
+fi
+
+# A failed match leaves a status and no capture.
+[[ abc =~ ^[0-9]+$ ]]
+printf 'no match: %s\n' "$?"
+
+# A quoted right-hand side is a literal string rather than a pattern, which
+# is the rule that makes a regexp in a variable work and a quoted one not.
+re='^a.c$'
+[[ abc =~ $re ]] && printf 'unquoted variable is a pattern\n'
+[[ abc =~ "$re" ]] || printf 'quoted variable is a literal\n'
+
+# nocasematch takes the case out of a pattern match, and only while it is
+# set. (bash applies it to `=~` as well; this shell applies it to `==` only,
+# and the issue filed with this file carries the two-line measurement. The
+# `=~` line is left out rather than left failing, so that this file says what
+# was measured and the issue says what is wrong.)
+shopt -s nocasematch
+[[ ABC == abc ]] && printf 'nocasematch: == ignores case\n'
+shopt -u nocasematch
+[[ ABC == abc ]] || printf 'and it is off again\n'
+
+# extglob is what turns the five sub-patterns on. They stay on for the rest
+# of the file: turning the option off while a later line still spells one
+# would be a parse error rather than a non-match.
+shopt -s extglob
+case abc in
+  @(abc|xyz)) printf 'extglob: @()\n' ;;
+esac
+[[ abcabc == +(abc) ]] && printf 'extglob: +()\n'
+[[ ac == a?(b)c ]] && printf 'extglob: ?()\n'
+[[ axd == a!(b)d ]] && printf 'extglob: !()\n'
+[[ ac == a*(b)c ]] && printf 'extglob: *()\n'
+
+# The glob options, measured on fixtures this file makes.
+mkdir -p g/one/two
+: > g/one/a.txt
+: > g/one/two/b.txt
+
+# globstar makes ** cross directories, and without it ** is one *.
+shopt -s globstar
+printf '%s\n' g/**/*.txt
+shopt -u globstar
+printf '%s\n' g/**/*.txt
+
+# nullglob removes a pattern that matched nothing; without it the pattern is
+# the word.
+shopt -s nullglob
+printf 'nullglob: [%s]\n' g/nosuch*
+shopt -u nullglob
+printf 'without it: [%s]\n' g/nosuch*
+
+# dotglob brings the leading-dot names into an ordinary pattern.
+: > g/.hidden
+printf 'plain: [%s]\n' g/*
+shopt -s dotglob
+printf 'dotglob: [%s]\n' g/*
+shopt -u dotglob
+
+# nocaseglob matches a name whose case does not agree.
+shopt -s nocaseglob
+printf 'nocaseglob: %s\n' g/ONE
+shopt -u nocaseglob
+
+rm -rf g

@@ -1,0 +1,77 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Arithmetic, the answer only ksh93 gives.
+#
+# ext/ already proves what the ksh family shares. This file is the rest: the
+# arithmetic ksh93 has and the others either lack or answer differently.
+# Every line here was measured against AT&T ksh93 93u+ 2012-08-01 on this
+# machine, and each is one the other references part company with — bash has
+# no floating point in `$(( ))` at all and refuses `2**-1`, dash refuses a
+# based literal, and zsh has floats and prints them to a different width.
+
+# A float operand makes the whole expression float, and an all-integer
+# expression stays integer. That pair is the rule; neither half is
+# interesting without the other.
+printf '%s\n' "$(( 3/2 ))"
+printf '%s\n' "$(( 3.0/2 ))"
+printf '%s\n' "$(( 1.0/2 ))"
+
+# How a float prints is a dialect answer rather than a shared one. ksh93
+# writes fifteen significant digits and no trailing point; zsh writes
+# seventeen and keeps the point on a whole number. Both are defensible and
+# they are not the same bytes, which is what puts this line here.
+printf '%s\n' "$(( 1.0/3 ))"
+printf '%s\n' "$(( 10.0/4 ))"
+printf '%s\n' "$(( 1e3 ))"
+printf '%s\n' "$(( 2.5 + 2.5 ))"
+
+# `**` takes a negative exponent because the result is a float. bash refuses
+# this outright.
+printf '%s\n' "$(( 2**10 ))"
+printf '%s\n' "$(( 2**-1 ))"
+
+# Integer division truncates toward zero, and the remainder takes the sign of
+# the left operand.
+printf '%s\n' "$(( -7/2 ))"
+printf '%s\n' "$(( -7%2 ))"
+
+# base#number, including base ten spelled out — which is the way to read a
+# digit string with a leading zero as decimal rather than octal.
+printf '%s\n' "$(( 10#09 + 1 ))"
+printf '%s\n' "$(( 2#1011 ))"
+printf '%s\n' "$(( 8#17 ))"
+printf '%s\n' "$(( 16#ff ))"
+
+# `integer` is ksh's own spelling of typeset -i, and an integer variable
+# evaluates its assignment as arithmetic rather than storing the text.
+integer n=7
+printf '%s\n' "$(( n/2 ))"
+n=n+1
+printf '%s\n' "$n"
+integer m=3*4
+printf '%s\n' "$m"
+
+# typeset -i<base> is an output base: the value is stored as a number and
+# written back in that base, with the base still on it. ksh93 writes the hex
+# digits in lower case where zsh writes them in upper.
+typeset -i8 oct=64
+printf '%s\n' "$oct"
+typeset -i16 hex=255
+printf '%s\n' "$hex"
+typeset -i2 bin=5
+printf '%s\n' "$bin"
+
+# The base survives further arithmetic on the variable.
+oct=oct+1
+printf '%s\n' "$oct"
+
+# (( )) is a command whose status is the truth of the value, so a zero value
+# is a false command — the one place in the shell where zero is false.
+if (( 1 + 1 == 2 )); then printf '%s\n' 'true arithmetic succeeds'; fi
+if (( 0 )); then printf '%s\n' 'unreachable'; else printf '%s\n' 'zero is a failure'; fi
+
+# let takes its arguments as arithmetic and reports the last one the same way.
+let 'a = 3 + 4'
+printf '%s\n' "$a"
+let "a == 7" && printf '%s\n' 'let reports the truth of its last expression'

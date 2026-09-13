@@ -137,9 +137,12 @@ func runOwn(ctx context.Context, root string, bins binSet, timeout time.Duration
 	fmt.Println("  that absence is the measurement rather than an exemption — they are the")
 	fmt.Println("  shells the boundary was drawn around.")
 	fmt.Println()
-	fmt.Println("  The per-dialect directories are the rest of #2291, and they will arrive as")
-	fmt.Println("  cases rather than as empty directories: a directory with no files in it")
-	fmt.Println("  would report a column that ran and agreed.")
+	fmt.Println("  A per-dialect tier carries the opposite claim, and it is measured the")
+	fmt.Println("  opposite way: core/ says every reference agrees, ksh/ says this is the")
+	fmt.Println("  answer only ksh93 has. So its files are run under every reference here and")
+	fmt.Println("  that column's own must be alone in what it wrote. A dialect file another")
+	fmt.Println("  shell answers byte for byte is a core or an ext case filed in the wrong")
+	fmt.Println("  directory, where it is graded against one shell instead of four.")
 	fmt.Println()
 
 	for _, name := range suite.Tiers {
@@ -151,7 +154,20 @@ func runOwn(ctx context.Context, root string, bins binSet, timeout time.Duration
 		}
 		printCross(cross)
 	}
+	for _, col := range suite.OurColumns() {
+		if col.DialectTier() == "" || col.Container != "" {
+			continue
+		}
+		own, err := suite.OnlyHere(ctx, root, col, refs, opts)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "suitecheck: the %s/ only-here check: %v\n", col.DialectTier(), err)
+			code = 1
+			continue
+		}
+		printOwn(own)
+	}
 	printCrossOmission(contained)
+	printOwnOmission(contained)
 
 	if len(skipped) > 0 {
 		fmt.Println("  columns not run")
@@ -289,4 +305,41 @@ func printCross(cross suite.Cross) {
 		fmt.Printf("    %-28s a reference would not repeat it, so it says nothing either way\n", name)
 	}
 	fmt.Println()
+}
+
+// printOwn is one dialect tier's claim, measured.
+func printOwn(own suite.Own) {
+	if own.Files == 0 || len(own.Others) == 0 {
+		return
+	}
+	fmt.Printf("  %s/ only-here  %d/%d   %s answered differently from every other reference\n",
+		own.Tier, own.Alone, own.Files, own.Shell)
+	fmt.Printf("                  held against %s\n", strings.Join(own.Others, ", "))
+	for _, share := range own.Shared {
+		fmt.Printf("    %-28s not only %s: %s wrote the same bytes\n",
+			share.Name, own.Shell, strings.Join(share.With, ", "))
+	}
+	for _, name := range own.Unstable {
+		fmt.Printf("    %-28s a reference would not repeat it, so it says nothing either way\n", name)
+	}
+	fmt.Println()
+}
+
+// printOwnOmission says why a contained column's own tier is not checked this
+// way, for printCrossOmission's reason one step over: the references here are
+// on a different operating system from the one its reference runs on, so
+// "alone" would be measuring two machines.
+func printOwnOmission(contained []string) {
+	for _, name := range contained {
+		col, ok := suite.FindOurs(name)
+		if !ok || col.DialectTier() == "" {
+			continue
+		}
+		fmt.Printf("  %s/ has no only-here check: %s's reference is inside a container, so\n",
+			col.DialectTier(), name)
+		fmt.Println("    holding it against the references on this machine would score an")
+		fmt.Println("    operating system as a shell. The tier is still graded in there against")
+		fmt.Println("    its own reference, which is the half that does not need a comparison.")
+		fmt.Println()
+	}
 }

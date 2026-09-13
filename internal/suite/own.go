@@ -64,11 +64,18 @@ import (
 //	         ash, which are the measured holdouts.
 //	<shell>/ the answer only that shell has.
 //
-// core/ and ext/ are written; the per-dialect directories are not, and
-// [Tiers] and each column's Dirs say exactly that rather than claiming a
-// directory and finding it empty. An empty tier would report a column that
-// ran and agreed, which is the failure this instrument is arranged to make
-// impossible.
+// core/ and ext/ are written, and the per-dialect directories have begun: a
+// column claims its own by naming it in Dirs like any other tier, so a tier
+// nobody has written is absent rather than present and empty. An empty tier
+// would report a column that ran and agreed, which is the failure this
+// instrument is arranged to make impossible.
+//
+// A dialect tier carries a claim of its own and [OnlyHere] is what measures
+// it. core/ says every reference agrees; `ksh/` says the opposite — that this
+// is the answer only ksh93 has — so the file is run under every reference on
+// the machine and ksh93 must be alone in what it wrote. The same instrument
+// pointed the other way is what keeps a dialect directory from becoming
+// somewhere to put a case rather than a claim about one.
 //
 // ext/ is the second half of docs/spec/shell-matrix.md's decision made
 // executable. That file measured dash as the sole holdout on 13 of 21 rows
@@ -107,7 +114,7 @@ var Ours = []Suite{
 		Name:    "bash",
 		Dialect: "bash",
 		Ours:    true,
-		Dirs:    []string{"core", "ext"},
+		Dirs:    []string{"core", "ext", "bash"},
 		Ext:     OurExt,
 		Lookup:  []string{"/opt/homebrew/bin/bash", "/usr/local/bin/bash", "/bin/bash", "/usr/bin/bash"},
 	},
@@ -115,7 +122,7 @@ var Ours = []Suite{
 		Name:    "zsh",
 		Dialect: "zsh",
 		Ours:    true,
-		Dirs:    []string{"core", "ext"},
+		Dirs:    []string{"core", "ext", "zsh"},
 		Ext:     OurExt,
 		Lookup:  []string{"/opt/homebrew/bin/zsh", "/usr/local/bin/zsh", "/bin/zsh", "/usr/bin/zsh"},
 	},
@@ -123,7 +130,7 @@ var Ours = []Suite{
 		Name:    "ksh93",
 		Dialect: "ksh",
 		Ours:    true,
-		Dirs:    []string{"core", "ext"},
+		Dirs:    []string{"core", "ext", "ksh"},
 		Ext:     OurExt,
 		Lookup:  []string{"/bin/ksh", "/usr/bin/ksh", "/opt/homebrew/bin/ksh93"},
 	},
@@ -138,7 +145,7 @@ var Ours = []Suite{
 		Name:    "dash",
 		Dialect: "dash",
 		Ours:    true,
-		Dirs:    []string{"core"},
+		Dirs:    []string{"core", "dash"},
 		Ext:     OurExt,
 		Lookup:  []string{"/bin/dash", "/usr/bin/dash", "/opt/homebrew/bin/dash"},
 	},
@@ -163,7 +170,7 @@ var Ours = []Suite{
 		Name:       "ash",
 		Dialect:    "ash",
 		Ours:       true,
-		Dirs:       []string{"core"},
+		Dirs:       []string{"core", "ash"},
 		Ext:        OurExt,
 		Lookup:     []string{"/bin/ash", "/bin/busybox"},
 		Container:  "ash",
@@ -189,12 +196,13 @@ func FindOurs(dialect string) (Suite, bool) {
 // Each is cross-checked against the references that are supposed to agree
 // about it: every column for core/, everything but dash and ash for ext/.
 //
-// core/ and ext/ are written. The per-dialect directories are the rest of the
-// campaign and will arrive with cases rather than as empty directories — a
-// directory with no files in it would report a column that ran and agreed,
-// which is the mistake this whole instrument is arranged to avoid.
-// [Suite.Missing] is what makes the omission structural: a column may not
-// claim a directory that is not there.
+// The per-dialect directories are not in here, and that is the shape rather
+// than an omission: a tier in this list is one several references are held
+// against, and a dialect tier is answered by one shell by construction. Its
+// claim is measured by [OnlyHere] instead, which asks the inverse question.
+//
+// [Suite.Missing] is what makes an unwritten tier structural either way: a
+// column may not claim a directory that is not there.
 var Tiers = []string{"core", "ext"}
 
 // tier is the suite a cross-check run uses.
@@ -413,4 +421,134 @@ func keep(names []string, only map[string]bool) []string {
 	}
 	sort.Strings(kept)
 	return kept
+}
+
+// DialectTier is the directory holding a column's own answers, which is the
+// dialect's own name — `ksh/` for the ksh93 column, `bash/` for bash.
+//
+// Empty when the column has not got one. A column claims its tier by naming
+// it in Dirs like any other, so a tier that is not written is absent from the
+// report rather than present and empty, for [Tiers]'s reason.
+func (s Suite) DialectTier() string {
+	for _, d := range s.Dirs {
+		if d == s.Dialect {
+			return d
+		}
+	}
+	return ""
+}
+
+// OwnShare is one dialect file another reference answered identically, and
+// which ones.
+//
+// It is the finding this check exists for: a file under `ksh/` that bash also
+// answers byte for byte is not ksh's own answer, it is a core or an ext case
+// filed in the wrong directory — and filed there it is graded against one
+// shell where it could have been graded against four.
+type OwnShare struct {
+	Name string
+	With []string
+}
+
+// Own is one dialect tier's claim, measured.
+//
+// core/ claims every reference agrees and [CrossCheck] asks whether they do.
+// A dialect tier claims the opposite — "the answer only that shell has" — and
+// this is that claim put the same way round: run the file under every
+// reference on the machine and the column's own reference must be alone in
+// what it wrote.
+//
+// The two are the same instrument pointed in opposite directions, and having
+// both is what keeps a tier from becoming a place to put a case rather than a
+// claim about one. Without it, `ksh/` is a directory; with it, `ksh/` is an
+// assertion that four shells were asked and three of them said something
+// else.
+//
+// # What it cannot prove
+//
+// A reference that refuses the file lands in a group of its own, so a file no
+// other shell can even parse passes this check on a syntax error rather than
+// on a difference of meaning. That is a floor rather than a proof, and it is
+// the honest one available: the alternative is to rule that a dialect case
+// may not use dialect syntax, which would empty the tier of everything it is
+// for. What the floor does catch is the case that every shell answers alike,
+// which is the misfiling that actually happens.
+type Own struct {
+	// Tier is the directory, Shell the column's own reference.
+	Tier, Shell string
+	// Others are the references it was held against, by name.
+	Others []string
+	// Files is how many were asked, Alone how many the column's own
+	// reference answered differently from all of them.
+	Files, Alone int
+	// Shared are the rest, by name, with the references that matched.
+	Shared []OwnShare
+	// Unstable is a file a reference would not reproduce, which says nothing
+	// either way.
+	Unstable []string
+}
+
+// OnlyHere runs a column's own tier under every reference and reports the
+// files its reference did not answer alone. See [Own].
+//
+// refs is every reference the run has, the column's own included; a run with
+// fewer than two of them has nothing to compare and reports no files.
+func OnlyHere(ctx context.Context, root string, s Suite, refs []Reference, opts Options) (Own, error) {
+	own := Own{Tier: s.DialectTier(), Shell: s.Name}
+	if own.Tier == "" {
+		return own, nil
+	}
+	var mine Reference
+	for _, r := range refs {
+		if r.Name == s.Name {
+			mine = r
+			continue
+		}
+		own.Others = append(own.Others, r.Name)
+	}
+	if mine.Path == "" || len(own.Others) == 0 {
+		return own, nil
+	}
+	dir := filepath.Join(root, own.Tier)
+	names, err := Files(dir, OurExt)
+	if err != nil {
+		return own, err
+	}
+	if opts.Only != nil {
+		names = keep(names, opts.Only)
+	}
+	own.Files = len(names)
+	suite := tier(own.Tier)
+	for _, name := range names {
+		split, unstable := crossOne(ctx, suite, dir, name, refs, opts.timeout())
+		switch {
+		case unstable:
+			own.Unstable = append(own.Unstable, name)
+		default:
+			with := others(split, s.Name)
+			if len(with) == 0 {
+				own.Alone++
+				continue
+			}
+			own.Shared = append(own.Shared, OwnShare{Name: name, With: with})
+		}
+	}
+	return own, nil
+}
+
+// others is the references that landed in the same group as shell.
+func others(split CrossSplit, shell string) []string {
+	for _, group := range split.Groups {
+		if !contains(group, shell) {
+			continue
+		}
+		var with []string
+		for _, name := range group {
+			if name != shell {
+				with = append(with, name)
+			}
+		}
+		return with
+	}
+	return nil
 }

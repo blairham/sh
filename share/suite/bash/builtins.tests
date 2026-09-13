@@ -1,0 +1,75 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# The builtins bash has that the rest of the panel has not, and the spellings
+# bash gives the ones it shares.
+#
+# `shopt`, `mapfile`/`readarray`, `type -t` and `declare -p`'s exact output
+# are bash's own: zsh has `setopt` and a different `typeset -p`, ksh93 has
+# neither shopt nor mapfile, and dash has none of it.
+
+# readarray reads lines into an array; -t strips the newline and -n bounds
+# how many are read.
+readarray -t lines < <(printf 'a\nb\nc\n')
+printf 'count: %s\n' "${#lines[@]}"
+printf '[%s]\n' "${lines[@]}"
+mapfile -t -n 2 two < <(printf '1\n2\n3\n')
+printf '-n 2 gave: %s\n' "${#two[@]}"
+printf '[%s]\n' "${two[@]}"
+
+# declare -p writes a declaration that would rebuild the name, attributes and
+# all, in bash's exact spelling.
+declare -p lines
+v=plain
+declare -p v
+declare -r frozen=x
+declare -p frozen
+declare -i counter=1
+counter+=2
+printf 'integer += is arithmetic: %s\n' "$counter"
+declare -p counter
+
+# declare -A and -a are the two array kinds, and -p tells them apart.
+declare -a indexed=(one two)
+declare -A assoc=([k]=v)
+declare -p indexed
+declare -p assoc
+
+# local takes the same attribute letters inside a function, and the
+# attribute is local with the name.
+f() {
+  local -i i=2
+  local -r fixed=y
+  printf '%s\n' "$((i*3))"
+  printf '%s\n' "$fixed"
+}
+f
+printf 'nothing escaped: [%s][%s]\n' "${i-unset}" "${fixed-unset}"
+
+# type -t is the kind of thing a word is, as one word.
+printf '%s\n' "$(type -t f)"
+printf '%s\n' "$(type -t printf)"
+printf '%s\n' "$(type -t if)"
+type -t nosuchthing
+printf 'type -t on nothing: %s\n' "$?"
+
+# FUNCNAME is a stack, and it exists only inside a function.
+g() { printf '%s\n' "${FUNCNAME[0]}"; }
+g
+printf 'outside: [%s]\n' "${FUNCNAME[0]-unset}"
+
+# shopt is bash's second option table, separate from set -o, and -p writes
+# the command that would restore what it found.
+shopt -s extglob
+printf '%s\n' "$(shopt -p extglob)"
+shopt -q extglob
+printf 'shopt -q on: %s\n' "$?"
+shopt -u nocasematch
+shopt -q nocasematch
+printf 'shopt -q off: %s\n' "$?"
+
+# An option name set through `shopt -o` is a set -o option, which is how the
+# two tables meet.
+shopt -o -s noglob
+printf '%s\n' "$(shopt -o -p noglob)"
+shopt -o -u noglob

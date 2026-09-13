@@ -209,3 +209,63 @@ func TestTheCrossCheckAsksOnlyTheShellsThatClaimTheTier(t *testing.T) {
 		t.Errorf("a tier no column claims was cross-checked against %d references", len(got))
 	}
 }
+
+// TestEveryDirectoryUnderTheSuiteIsClaimed is the other half of
+// TestOurColumnsClaimOnlyDirectoriesThatExist, and the half that catches the
+// opposite mistake.
+//
+// That test asks whether a claimed directory exists. This one asks whether an
+// existing directory is claimed, because a tier nobody runs is worse than a
+// tier that is missing: internal/suiteguard walks the tree and would go on
+// reporting the files as present and guarded, while no column ever grades
+// them. A suite of cases that are never asked is the one shape this
+// instrument must not be able to take.
+func TestEveryDirectoryUnderTheSuiteIsClaimed(t *testing.T) {
+	root := filepath.Join("..", "..", OurRoot)
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		t.Fatalf("reading %s: %v", OurRoot, err)
+	}
+	claimed := map[string]bool{}
+	for _, tier := range Tiers {
+		claimed[tier] = true
+	}
+	for _, s := range Ours {
+		for _, dir := range s.Dirs {
+			claimed[dir] = true
+		}
+	}
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		if !claimed[e.Name()] {
+			t.Errorf("%s/%s is in the tree and no column runs it, so its cases are guarded and never asked",
+				OurRoot, e.Name())
+		}
+	}
+}
+
+// TestOnlyHereReadsTheGroupTheColumnLandedIn is the grading rule of
+// [OnlyHere] on its own, without four shells and a filesystem.
+//
+// The rule is one line and the line is easy to get backwards: the finding is
+// the *other* names in the column's own group, and a column alone in its
+// group is the passing case. Written the other way round — every name not in
+// the group — a dialect file would be reported as shared with the shells that
+// disagreed with it, which reads as a failure on exactly the files that pass.
+func TestOnlyHereReadsTheGroupTheColumnLandedIn(t *testing.T) {
+	alone := CrossSplit{Groups: [][]string{{"ksh93"}, {"bash", "zsh"}, {"dash"}}}
+	if with := others(alone, "ksh93"); len(with) != 0 {
+		t.Errorf("a column alone in its group was reported as sharing with %v", with)
+	}
+	shared := CrossSplit{Groups: [][]string{{"bash", "ksh93"}, {"zsh"}, {"dash"}}}
+	with := others(shared, "ksh93")
+	if len(with) != 1 || with[0] != "bash" {
+		t.Errorf("others = %v, want the one other name in ksh93's own group", with)
+	}
+	absent := CrossSplit{Groups: [][]string{{"bash"}, {"zsh"}}}
+	if with := others(absent, "ksh93"); len(with) != 0 {
+		t.Errorf("a column that is not in any group reported %v", with)
+	}
+}

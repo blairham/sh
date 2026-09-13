@@ -1,0 +1,69 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Command shapes only zsh has.
+#
+# core/control.tests is the grammar POSIX defines and every shell in the
+# panel reads. zsh reads a second grammar on top of it — loop forms with the
+# `do`/`done` left out, a function with no name, `repeat`, `foreach`, and a
+# cleanup block that runs whatever the body did. None of it parses anywhere
+# else in the panel, which is why it is here and not one directory up.
+
+# A for loop with its list in parentheses and no do/done. The body is one
+# command.
+for x (a b c) printf '%s\n' "$x"
+
+# The in-list form with a semicolon where `do` would be.
+for x in a b; printf 'semicolon instead of do: %s\n' "$x"
+
+# foreach/end, which is the same loop again under the names csh gave it.
+foreach y (1 2)
+printf 'foreach: %s\n' "$y"
+end
+
+# repeat takes a count and a command.
+repeat 3 printf 'repeated\n'
+
+# An anonymous function: a body with no name runs immediately, and the words
+# after it are its arguments.
+() { printf 'anonymous got %s\n' "$1" } arg
+
+# A function body may end without a separator before the closing brace, which
+# every other shell in the panel refuses.
+f() { print -l "$@" }
+f p q
+
+# always: the second block runs whether the first succeeded or not, and the
+# status that survives is the body's.
+{ printf 'body ran\n' } always { printf 'always ran\n' }
+{ false } always { printf 'always ran after a failure\n' }
+printf 'status kept from the body: %s\n' "$?"
+
+# while with do and done spelled out still works, so the short forms are an
+# addition rather than a replacement.
+i=0
+while (( i < 2 )) do
+  printf 'while: %s\n' "$i"
+  (( i++ ))
+done
+
+# until, and the short form of it.
+j=0
+until (( j >= 2 )) do
+  printf 'until: %s\n' "$j"
+  (( j++ ))
+done
+
+# A case that falls through to the next branch. The ksh family spells this
+# the same way, but nothing else in this file parses under those shells, so
+# the file as a whole is still zsh's answer.
+case abc in
+  ab*) printf 'matched\n' ;&
+  *) printf 'and fell through\n' ;;
+esac
+
+# select is in ext/, but zsh's loop body may be a single command there too.
+# This is the closing brace rule again in the place it is easiest to get
+# wrong: a subshell whose last command has no separator before the paren.
+( printf 'subshell\n' )
+printf 'back in the parent\n'

@@ -1,0 +1,77 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# The ext/ boundary, measured from dash's side.
+#
+# docs/spec/shell-matrix.md measured dash as the sole holdout on 13 of 21
+# rows and drew the core there. ext/ proves the other three shells agree
+# about those rows; nothing until now asked what dash *does* when it meets
+# one, and "dash does not run ext/" was an exemption written in a Dirs list
+# rather than a measurement.
+#
+# This is that measurement. Every construct ext/ has a file for is put to
+# dash here and the refusal is recorded — which error, at which status. An
+# exemption cannot regress; a recorded refusal can, and that is the whole
+# difference.
+#
+# Each is inside `( eval … )`: a parse error in dash is fatal to the shell it
+# is in, so the subshell is what lets the file reach its second line, and
+# eval is what keeps the refusal at run time instead of taking the whole file
+# out before anything runs.
+
+# Arrays. ext/arrays.tests.
+( eval 'a=(one two)' ) 2>&1
+printf 'array: %s\n' "$?"
+
+# The condition command. ext/dblbracket.tests.
+( eval '[[ a == a ]]' ) 2>&1
+printf 'double bracket: %s\n' "$?"
+
+# Exponentiation, which is the arithmetic row dash is the holdout on.
+( eval 'echo $((2**3))' ) 2>&1
+printf 'power: %s\n' "$?"
+
+# Pattern substitution. ext/patsub.tests.
+( eval 'v=x; echo ${v/x/y}' ) 2>&1
+printf 'pattern substitution: %s\n' "$?"
+
+# Substrings. ext/substrings.tests.
+( eval 'v=abc; echo ${v:1:1}' ) 2>&1
+printf 'substring: %s\n' "$?"
+
+# The `function` keyword. ext/funcform.tests.
+( eval 'function f { echo hi; }' ) 2>&1
+printf 'function keyword: %s\n' "$?"
+
+# The C-style for loop. ext/cfor.tests.
+( eval 'for ((i=0;i<1;i++)); do echo c; done' ) 2>&1
+printf 'C-style for: %s\n' "$?"
+
+# Here strings. ext/herestring.tests.
+( eval 'cat <<< word' ) 2>&1
+printf 'here string: %s\n' "$?"
+
+# select. ext/select.tests.
+( eval 'select x in a; do break; done < /dev/null' ) 2>&1
+printf 'select: %s\n' "$?"
+
+# Process substitution. ext/procsub.tests.
+( eval 'cat <(echo p)' ) 2>&1
+printf 'process substitution: %s\n' "$?"
+
+# `+=` is the one row where dash does not refuse: there is no append
+# operator, so `v+=y` is a command word and the shell goes looking for a
+# program called `v+=y`. A refusal and a misreading are different findings
+# and this is the second kind.
+( eval 'v=x; v+=y; echo $v' ) 2>&1
+printf 'append: %s\n' "$?"
+
+# $'…' is the second misreading and the more dangerous one. ext/
+# dollarquote.tests is a whole file of escapes; this dash reads the dollar as
+# an ordinary character and the rest as a single-quoted string, so the word
+# arrives with a literal dollar on the front and the escapes unprocessed, at
+# status 0 and with nothing on standard error. A script that used it gets a
+# wrong answer silently, which is exactly the class the corpus cannot see and
+# a suite can.
+( eval "printf '%s\n' \$'a\tb'" ) 2>&1
+printf 'dollar quote: %s\n' "$?"

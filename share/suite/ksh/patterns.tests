@@ -1,0 +1,59 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Pattern matching, the answer only ksh93 gives.
+#
+# The five ksh sub-patterns are always on in ksh93: no option turns them on
+# and none turns them off. bash hides the same five behind `shopt -s
+# extglob`, zsh behind `setopt KSH_GLOB`, and dash has nothing of the kind,
+# so a file that uses them unadorned is a file only ksh93 answers.
+#
+# `~(…)` — ksh93's pattern-modifier prefix, which is how it spells an ERE and
+# a case-insensitive match — is deliberately absent: this shell refuses it at
+# parse time, and the issue filed with this file carries the measurement.
+
+# The five, in a case where no option was set to reach them.
+for w in abc xyz abcabc ac ad abbbc nomatch; do
+  case $w in
+    @(abc|xyz)) printf '%s: @(…|…) is one of\n' "$w" ;;
+    +(abc))     printf '%s: +(…) is one or more\n' "$w" ;;
+    a?(b)c)     printf '%s: ?(…) is none or one\n' "$w" ;;
+    a!(b)d)     printf '%s: !(…) is anything but\n' "$w" ;;
+    a*(b)c)     printf '%s: *(…) is none or more\n' "$w" ;;
+    *)          printf '%s: none of them\n' "$w" ;;
+  esac
+done
+
+# The same five on the right of [[ == ]], which is where a script most often
+# wants them.
+[[ abc == @(abc|xyz) ]] && printf '%s\n' 'condition: @()'
+[[ abcabcabc == +(abc) ]] && printf '%s\n' 'condition: +()'
+[[ ac == a?(b)c ]] && printf '%s\n' 'condition: ?()'
+[[ axd == a!(b)d ]] && printf '%s\n' 'condition: !()'
+[[ ac == a*(b)c ]] && printf '%s\n' 'condition: *()'
+
+# And in the expansion operators, where the sub-pattern decides how much of
+# the word is eaten.
+p=aXbXcX
+printf '%s\n' "${p%%X}"
+printf '%s\n' "${p##*(a)}"
+printf '%s\n' "${p//@(X)/-}"
+printf '%s\n' "${p/+(a|X)/=}"
+
+# Alternation nests, and a sub-pattern takes an ordinary pattern inside it.
+[[ foo.tar.gz == *.@(tar.gz|tgz) ]] && printf '%s\n' 'nested: *.@(tar.gz|tgz)'
+[[ report2026 == @(report|memo)+([0-9]) ]] && printf '%s\n' 'nested: @()+([0-9])'
+[[ abc == !(@(x|y)) ]] && printf '%s\n' 'nested: !(@(x|y))'
+
+# A bracket expression keeps its POSIX meaning inside a sub-pattern, and a
+# character class works there too.
+[[ a1 == @([a-z])@([0-9]) ]] && printf '%s\n' 'bracket inside @()'
+[[ Q == @([[:upper:]]) ]] && printf '%s\n' 'class inside @()'
+
+# The ksh family strips the longest match with ## and %% and the shortest
+# with # and %, and a sub-pattern makes the difference visible.
+path=/one/two/three
+printf '%s\n' "${path#*/}"
+printf '%s\n' "${path##*/}"
+printf '%s\n' "${path%/*}"
+printf '%s\n' "${path%%/*}"

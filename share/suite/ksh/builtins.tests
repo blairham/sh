@@ -1,0 +1,58 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# The builtins ksh93 has that the rest of the panel does not, and the options
+# it gives the ones they share.
+#
+# `print` and `whence` are ksh's own: bash has neither name and dash has
+# neither, and zsh has both with a different option set. Nothing here uses an
+# absolute path out of `whence -p`, because a path is a fact about the
+# machine rather than about the shell.
+
+# print writes its arguments and a newline, and interprets the escapes that
+# echo's own history made unportable.
+print 'print interprets \t an escape'
+print -r -- 'print -r keeps \t literal'
+print -- '-- ends the options'
+print -n 'no newline follows this'
+print ''
+
+# -R is -r with the options off as well, so a later option word is data.
+print -R -r -- 'R took the rest as arguments'
+
+# print -s and -u are the two destinations that are not standard output; -u
+# takes a descriptor number.
+print -u2 'print -u2 goes to standard error' 2>&1
+
+# whence answers where a command word would go. Bare, it writes the name of a
+# builtin or a function; -v says what kind of thing it is.
+whence printf
+whence -v printf
+whence nosuchcommandanywhere
+printf 'whence on nothing: %s\n' "$?"
+
+f() { printf 'the function ran\n'; }
+whence f
+whence -v f
+f
+
+# A function is found before a builtin of the same name, and `command` steps
+# past the function to the builtin.
+printf() { command printf 'wrapped: %s' "$1"; command printf '\n'; }
+printf hello
+unset -f printf
+printf 'unwrapped again\n'
+
+# let takes arithmetic as words and reports the truth of the last one, which
+# is the inverse of a status: nonzero value, zero status.
+let 'a = 3 + 4'
+printf '%s\n' "$a"
+let "a == 7"
+printf 'let true: %s\n' "$?"
+let "a == 8"
+printf 'let false: %s\n' "$?"
+
+# typeset with no name lists nothing of a name that does not exist, and says
+# so through its status rather than its output.
+typeset -f nosuchfunction
+printf 'typeset -f on nothing: %s\n' "$?"

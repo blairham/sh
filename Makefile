@@ -316,6 +316,12 @@ dash-suite: ## dash has no suite of its own; prints why
 # the reference shell on the machine is the expectation, exactly as it is for
 # the corpus, and a .right file of ours would let us record our own bug as
 # correct.
+#
+# Three kinds of directory, and each carries a claim the run measures rather
+# than asserts. core/ says every reference wrote the same bytes; ext/ says the
+# three with the ksh-family constructs did; <dialect>/ says the opposite —
+# that this is the answer only that shell has — so its files are run under
+# every reference here and that column's own must be alone in what it wrote.
 # ash is absent from the loop and from the flags on purpose. Its reference is
 # BusyBox, which exists nowhere on a macOS machine, so that column is reached
 # through the oracle's own container route (#2263) and cross-compiles its own

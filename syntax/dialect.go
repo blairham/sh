@@ -636,6 +636,14 @@ type Dialect struct {
 	// the refusal of an `else` with nothing after it as a rule about empty
 	// arms, which would have refused the first shape here too.
 	//
+	// **And the end of the chain is not an arm.** A short `if` whose last
+	// arm is a brace body and which has no `else` may be closed with one
+	// `fi` written anyway: `if (( 1 )) { echo A } fi` runs, and so does the
+	// same line with an `elif` chain in front of it. It is the one place the
+	// production's two body spellings part — `if (( 1 )) (( 2 )) fi` is
+	// refused — and it is `if` alone, the short loops taking no `done`. See
+	// [Parser.redundantFi], which has the whole measured table. #2242.
+	//
 	// **A short body that took its separator took the construct's.** `if
 	// (( 1 )) echo A; else echo B` is refused with or without a `fi`: the
 	// `;` belongs to `echo A` and a short body's separator is the whole

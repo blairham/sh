@@ -2002,6 +2002,48 @@ var Corpus = []Case{
 		Why:     "the row above with a second command in the arm, and it is what tells the two readings apart: a short body is one command and this arm holds two, so `tail` runs only if the arm is the long form's list. A parser that took the first `;` as the short body's terminator prints `B` and then runs `echo tail` outside the `if` — same output here, which is why the row above cannot be graded alone; with `(( 1 ))` in the header that reading prints `tail` where the shell prints nothing",
 	},
 	{
+		ID: "core/a-short-if-with-no-else-takes-a-redundant-fi", Category: "command language",
+		Script: true, SyntaxError: true,
+		Snippet: `if (( 1 )) { echo A } fi`,
+		Why:     "the end of a short chain is not an arm, and it is the one place the construct is *permissive*: an `if` whose last arm is a brace body and which has no `else` may be closed with a `fi` written anyway, so the shell with the construct prints A where the six without it refuse the `{`. The rows below are the five directions it is narrow in, and every one of them is a line that shell refuses",
+	},
+	{
+		ID: "core/a-short-if-with-a-brace-elif-takes-the-redundant-fi", Category: "command language",
+		Script: true, SyntaxError: true,
+		Snippet: `if (( 1 )) { echo A } elif (( 1 )) { echo C } fi`,
+		Why:     "the row above with a chain in front of it, and it is what says the *last* arm decides rather than the first: an `elif` whose body is braces ends the chain short, and the optional `fi` follows the arm that ended it. `core/a-long-if-may-carry-a-brace-bodied-elif` is the same composition without the terminator",
+	},
+	{
+		ID: "core/a-short-if-takes-only-one-redundant-fi", Category: "command language",
+		Script: true, SyntaxError: true, GradedOnRefusal: true,
+		Snippet: `if (( 1 )) { echo A } fi fi`,
+		Why:     "exactly one, which is the first of the five boundaries: the shell that reads the row above refuses this from the far side — it has already taken the `fi` that closed nothing — where the six without a short form never get past the `{`. Graded on the refusal because the seven word it seven ways; what is pinned is that all seven decline",
+	},
+	{
+		ID: "core/a-short-else-refuses-the-redundant-fi-beside-it", Category: "command language",
+		Script: true, SyntaxError: true, GradedOnRefusal: true,
+		Snippet: `if (( 0 )) { echo A } else { echo B } fi`,
+		Why:     "the second boundary: the permission is for a chain with **no** `else`, so a short `else` refuses the terminator standing right beside it. `core/a-short-else-arm-owes-no-fi` is the same claim with a newline in front of the `fi` and cannot make it — a newline refuses the word after *any* short arm, `else` or not, so that row is graded by the separator rather than by the arm. Graded on the refusal; what is pinned is that all seven decline",
+	},
+	{
+		ID: "core/an-unbraced-short-if-body-refuses-the-redundant-fi", Category: "command language",
+		Script: true, SyntaxError: true, GradedOnRefusal: true,
+		Snippet: `if (( 1 )) (( 2 )) fi`,
+		Why:     "the third boundary, and the only place the short form's two body spellings part: the permission is for a **brace** body, and a body that is a single command declines it. The arithmetic command is the discriminator because it ends itself, so the `fi` after it is in command position — after a bare `echo` the word would be another of its arguments and the shell would print it rather than refuse it. Graded on the refusal; what is pinned is that all seven decline",
+	},
+	{
+		ID: "core/a-separator-before-the-redundant-fi-refuses-it", Category: "command language",
+		Script: true, SyntaxError: true, GradedOnRefusal: true,
+		Snippet: `if (( 1 )) { echo A } ; fi`,
+		Why:     "the fourth boundary: the word has to stand with nothing between it and the `}`, so the `;` ends the `if` and leaves the `fi` closing nothing. A newline in place of the `;` is refused the same way. That is the rule `core/a-short-else-arm-owes-no-fi` is really graded by, which is why it is written down here on its own. Graded on the refusal; what is pinned is that all seven decline",
+	},
+	{
+		ID: "core/a-short-loop-takes-no-redundant-done", Category: "command language",
+		Script: true, SyntaxError: true, GradedOnRefusal: true,
+		Snippet: `while (( 0 )) { : } done`,
+		Why:     "the fifth boundary and the control for the whole group: the permission belongs to `if` and not to the short form, so the loops built on the same production take no terminator written after them. `repeat 1 { echo R } done` and `for i (a) { echo $i } done` are refused the same way. Without this row the four above read as \"a short form may be closed with its keyword\", which is a rule the shell does not have. Graded on the refusal; what is pinned is that all seven decline",
+	},
+	{
 		ID: "core/a-short-else-arm-owes-no-fi", Category: "command language",
 		Script: true, SyntaxError: true, GradedOnRefusal: true,
 		Snippet: "if (( 0 )) { echo A } else { echo B }\nfi",

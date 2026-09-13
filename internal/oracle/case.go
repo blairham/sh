@@ -5392,6 +5392,98 @@ echo "st=$?"`,
 		Why:             "the nesting check beside `location/a-message-from-a-file-a-function-sourced`: the innermost file being read is what is named, not the outer one the function asked for and not the function. bash and zsh name `./inner.sh`; dash and ksh93 keep the script's own name and still count the innermost file's lines, ksh93 writing the whole chain of dots it came through",
 	},
 	{
+		ID: "location/a-message-from-the-top-level-of-a-script", Category: "diagnostics",
+		// The control for the whole `location/` family and for the frame
+		// chain below it: one file, nothing borrowed, nothing called. A rule
+		// about frames has to leave this row exactly where it was.
+		Script:          true,
+		LayoutSensitive: true,
+		Snippet:         "echo pad\nnosuchcmd-xyz\necho st=$?",
+		Why:             "the baseline every other location row is read against. All five columns name the script and the line the command is on, and the only thing that splits them is the shape — `line 2` in the two bashes and ksh93, a bare `2` in dash, and `:2:` with the sentence turned around in zsh. Written down so that a change to how a *borrowed* text is located can be shown not to have moved the ordinary case",
+	},
+	{
+		ID: "location/a-message-from-inside-an-eval", Category: "diagnostics",
+		// A script rather than -c, so the outer name is a file that could
+		// plausibly be named instead — the same reason
+		// `location/a-message-from-inside-a-sourced-file` is a script. The
+		// text is one line, so where the *lines* of eval's text are counted
+		// from is a separate question this row does not ask (#2462).
+		Script:          true,
+		LayoutSensitive: true,
+		Snippet:         "echo pad\neval 'nosuchcmd-xyz'\necho st=$?",
+		Why:             "the `eval` half of `location/a-message-from-inside-a-sourced-file`, and the panel splits the same four ways: both bashes name the script and the line the `eval` is on, zsh replaces the name outright with `(eval)` and counts within the text, dash names the script and puts `eval` after the location, and ksh93 writes a frame — `[2]` against the script, then the builtin, then the line inside the text",
+	},
+	{
+		ID: "location/an-eval-on-the-first-line-of-a-command-string", Category: "diagnostics",
+		// -c rather than a script, because the question is what the shell's
+		// *own* name carries on the first line of what it was given.
+		Snippet: `eval 'nosuchcmd-xyz'; echo st=$?`,
+		Why:     "the control for the line ksh93 leaves out: on the first line of a command string it writes no bracket at all — `<shell>: eval: line 1:` — where the same `eval` one line lower is `<shell>[2]: eval: line 1:`. So the suppression belongs to the shell's own name rather than to every frame, which is the distinction `location/an-eval-inside-an-eval` is the other half of. bash 3.2 leaves its line out here too and bash 5.3 does not, which is a second reason to have the row",
+	},
+	{
+		ID: "location/a-sourced-file-below-the-first-line-of-a-command-string", Category: "diagnostics",
+		// -c with the `.` on the *second* line, which is the half the row
+		// above cannot see: every other case of a borrow under -c in this
+		// corpus has it on line 1, where the two readings of the suppression
+		// agree.
+		LayoutSensitive: true,
+		Snippet:         "printf 'echo one\\nnosuchcmd-xyz\\n' > inc.sh\n. ./inc.sh\necho st=$?",
+		Why:             "the discriminating half of what ksh93 leaves out on line 1. Here the `.` is on line 2 and ksh93 writes `<shell>[2]: .: line 2:` — the bracket is back — where the same `.` on line 1 is `<shell>: .: line 2:` with none. So the suppression is about the first line of what the shell was *given* and not about the `-c` route, which is a distinction every other borrow row in this corpus is blind to because its `.` is on line 1 (#2417). bash and zsh name the sourced file and dash names it after the location, none of them caring which line the `.` was on",
+	},
+	{
+		ID: "location/an-eval-inside-an-eval", Category: "diagnostics",
+		// The pair to the row above: same route, same line 1, and a second
+		// frame in between.
+		Snippet: `eval 'eval "nosuchcmd-xyz"'; echo st=$?`,
+		Why:     "the discriminating half of the suppression rule. ksh93 answers `<shell>: eval[1]: eval: line 1:` — its own name carries no line on the first line of the command string, and the frame entered after it names line 1 anyway. A rule that left the line out of every frame, or out of none, gets one of these two rows wrong and cannot be told apart by either alone. The other four columns are blind to the nesting entirely and answer exactly what they answer for one `eval`",
+	},
+	{
+		ID: "location/a-message-from-an-eval-inside-a-sourced-file", Category: "diagnostics",
+		// Two borrowed texts of *different* kinds, one inside the other,
+		// which is what says a chain is a chain rather than a repeat count.
+		Script:          true,
+		LayoutSensitive: true,
+		Snippet:         "printf 'eval \"nosuchcmd-xyz\"\\n' > inc.sh\n. ./inc.sh\necho st=$?",
+		Why:             "a file that runs an `eval`, which is what a plugin loader does on every line it generates. ksh93 renders both — `<script>[2]: .[1]: eval: line 1:` — naming the `.` with the line the sourced file entered the `eval` from, and that inner `[1]` is the same measurement `location/an-eval-inside-an-eval` makes by another route. bash names the sourced file, zsh names `(eval)`, and dash names `eval` and forgets the file, so three columns report a place that cannot be searched for and only one says how it was reached",
+	},
+	{
+		ID: "location/a-message-from-a-function-an-eval-defined", Category: "diagnostics",
+		// The control that says a *function* adds nothing to the chain: the
+		// body runs one call deeper than the text that defined it, and the
+		// shell that renders frames still renders one.
+		Script:          true,
+		LayoutSensitive: true,
+		Snippet:         "echo pad\neval 'f() { nosuchcmd-xyz; }; f'\necho st=$?",
+		Why:             "text `eval` is running that defines a function and calls it. ksh93 answers exactly what it answers for `location/a-message-from-inside-an-eval` — the frame is the `eval`, and the call inside it adds nothing — which is the same rule `Runner.borrowedAtLocation` already records for dash: the innermost borrowed text answers, with no test that the failing line came from it. zsh is the one column the function reaches, naming `f` where it names `(eval)` without one",
+	},
+	{
+		ID: "location/a-builtins-complaint-at-the-top-of-a-script", Category: "diagnostics",
+		// The control for the form, with nothing borrowed: a builtin's own
+		// complaint is located differently from a message the shell speaks,
+		// and this is where that shows with one name and one line.
+		Script:  true,
+		Snippet: "cd /nonexistent-xyz\necho st=$?",
+		Why:     "the two shapes ksh93 chooses between — `<script>[1]:` for a builtin's own complaint against the `<script>: line 2:` of `location/a-message-from-the-top-level-of-a-script` — with no borrowed text anywhere near it. Both forms were already being written here without anything choosing between them (#2417). zsh is the other column that treats the two differently, naming the builtin inside the location rather than bracketing the line, and the bashes and dash write one shape for both",
+	},
+	{
+		ID: "location/a-builtins-complaint-from-inside-a-sourced-file", Category: "diagnostics",
+		// The same complaint one frame deeper, which is what says the frames
+		// and the builtin form compose rather than replacing one another.
+		Script:          true,
+		LayoutSensitive: true,
+		Snippet:         "printf 'cd /nonexistent-xyz\\n' > inc.sh\n. ./inc.sh\necho st=$?",
+		Why:             "the row above with a `.` in front of it. ksh93 writes `<script>[2]: .[1]: cd:` — the chain, and then the innermost frame in the *builtin's* shape rather than the `line N` a message the shell speaks would get, so the last component of a chain is located by the same rule a lone location is. zsh keeps its own pairing of the file with the builtin and the other three name the file or the script and the line",
+	},
+	{
+		ID: "location/a-parse-failure-in-a-file-a-sourced-file-sourced", Category: "diagnostics",
+		// The parse path, nested — the run-time chain and the parse chain are
+		// different code and only a row like this holds them together.
+		Script:          true,
+		LayoutSensitive: true,
+		Snippet:         "printf 'echo a\\nif true\\n' > inner.sh\nprintf '. ./inner.sh\\n' > outer.sh\n. ./outer.sh\necho st=$?",
+		Why:             "a file sourced by a sourced file that will not parse, which reaches the parse path rather than the run-time one. ksh93 renders the same chain there — `<script>[3]: .[1]: .: syntax error at line 3:` — and writes no line of its own at the end of it, because its wording already carries one. The statuses are five different numbers and the shells also disagree about whether the first line of the inner file ran at all, so the row pins three things at once",
+	},
+	{
 		ID: "name/a-lone-dash-given-to-a-builtin", Category: "builtins",
 		Snippet: `unalias -; echo "st=$?"`,
 		Why:     "a `-` on its own is an operand in three of the panel and an option in zsh, which eats it. `unalias` is where that shows: the three complain about an alias called `-`, each in its own words, and the fourth complains that it was given nothing to unalias at all. `unset -` looks the same in bash for a different reason — its bare form validates no operand — which is why the case is not written with that one",

@@ -1130,9 +1130,21 @@ func (r *Runner) unsetReadonly(name string) int {
 	// variable: x` here and `zsh:unset:1: 1x: invalid parameter name` for a
 	// bad name, from the same builtin. It is the same care setVarAs takes for
 	// the assignment this refusal is the twin of.
-	outer := r.inBuiltin
-	r.inBuiltin = ""
-	defer func() { r.inBuiltin = outer }()
+	//
+	// Only there, and that is the whole of the condition. Forgetting the
+	// builtin outright also forgets that a builtin is *speaking*, which is a
+	// second question and a different dialect's: ksh93 locates a builtin's
+	// complaint `<shell>[3]: ` where it locates the shell's own `<shell>:
+	// line 3: `, and this refusal is the builtin's there — `/bin/ksh[3]:
+	// unset: warning: r: is read only` against `/bin/ksh: line 3: r: is read
+	// only` for the assignment refused for the same reason. Measured
+	// 2026-09-12, and both forms were already in this tree with nothing
+	// choosing between them (#2417).
+	if r.diag().NamesBuiltinInLocation {
+		outer := r.inBuiltin
+		r.inBuiltin = ""
+		defer func() { r.inBuiltin = outer }()
+	}
 	msg := Wording(r.diag().UnsetReadonly, "unset: %s: cannot unset: readonly variable", name)
 	if r.ask(r.sem().UnsetReadonlyFatal, "unsetting a readonly name ending the script") {
 		// fatal carries FatalErrorStatusIsOne's number, which is the whole of

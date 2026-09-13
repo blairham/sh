@@ -2000,6 +2000,18 @@ type Runner struct {
 	// being an *expression* rather than only changing the letter listed. See
 	// Runner.literalSubscriptIsAKey.
 	indexedLetterHere map[string]bool
+	// tableLetterHere is the same record for the *table* letter — `typeset -A
+	// m=(alpha one)` and not `typeset -A m` followed by the assignment on the
+	// next line.
+	//
+	// One dialect needs the distinction and nothing else does: a literal of
+	// bare words onto a table is refused there where the letter is on the same
+	// command, and *converts* the name to an index array where it is not.
+	// Measured 2026-09-13, with `typeset -A m=([a]=1)` in front of it,
+	// `typeset -A m=(x y)` is `cannot append index array to associative array
+	// m` and `m=(x y)` lists `typeset -a m=(x y)`. See
+	// Semantics.BareElementsInATableLiteralEndTheScript.
+	tableLetterHere map[string]bool
 	// integer names evaluate what is assigned to them: with the attribute,
 	// `n=5+2` stores 7 rather than the four characters. It is a property of
 	// the name and not of the assignment, which is why it is recorded here.
@@ -4036,6 +4048,8 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		// same reason: a builtin can run another one.
 		outerIndexed := r.indexedLetterHere
 		r.indexedLetterHere = nil
+		outerTable := r.tableLetterHere
+		r.tableLetterHere = nil
 		if locks {
 			r.assignOperands(c)
 		} else {
@@ -4081,6 +4095,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		r.freezing = outerFreezing
 		r.literalOperands = outerLiterals
 		r.indexedLetterHere = outerIndexed
+		r.tableLetterHere = outerTable
 		if fatal {
 			return nil
 		}

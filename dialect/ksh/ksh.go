@@ -1249,6 +1249,17 @@ func Semantics() interp.Semantics {
 	// table letter carries them across (#2287).
 	s.TableUnderAnArrayLiteralDeclaration = interp.CompoundKindChangeEmptiesTheName
 	s.ArrayUnderATableLiteralDeclaration = interp.CompoundKindChangeEmptiesTheName
+	// A literal of **bare words** on a table is a third question again, and
+	// the one this shell answers alone: it reads the parentheses as an index
+	// array's value and will not put one in a table. Measured 2026-09-13,
+	// `typeset -A m=(alpha one)` is `cannot append index array to associative
+	// array m` and **the input ends**, where bash and zsh both pair the words
+	// off and list `[alpha]=one`. The same for `m=(alpha one)` on a name
+	// already *declared and empty* and for the `+=` spelling; a literal with
+	// no element written in it — `typeset -A m=()` — is taken, and a
+	// replacing literal onto a table that **has** an element converts the
+	// name instead of complaining. The axis carries those rows (#2611).
+	s.BareElementsInATableLiteralEndTheScript = true
 	// `a[@]=Z` is refused for either kind of name, in a sentence about the
 	// *subscript* rather than about the name, and the input ends under both
 	// separators. The only column that answers the two questions alike.
@@ -1668,6 +1679,10 @@ func Diagnostics() interp.Diagnostics {
 		// The subscript is the verb, not the name — see
 		// Semantics.WholeArraySubscriptAssigningAnArray.
 		InvalidSubscriptInAssignment: "%s: invalid subscript in assignment",
+		// `append` even for a plain `=`: the sentence is about the two kinds
+		// and not about the operator — see
+		// Semantics.BareElementsInATableLiteralEndTheScript.
+		IndexArrayIntoATable: "cannot append index array to associative array %[1]s",
 		// The same sentence from `unset`, with the builtin named in front of
 		// it as this shell names it in front of the arithmetic one below.
 		UnsetSubscriptBeforeTheFirstElement: "unset: %[1]s: subscript out of range",

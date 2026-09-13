@@ -1733,6 +1733,18 @@ type Diagnostics struct {
 	// to replace. One verb: the name.
 	SliceOfAnAssociativeArray string
 
+	// IndexArrayIntoATable is what the one refusing column says about a
+	// compound literal of **bare words** landing on a table: `cannot append
+	// index array to associative array m`. One verb, the name, and the verb
+	// is `append` even where the assignment was a plain `=` — that shell
+	// reads the parentheses as an index array's value and the sentence is
+	// about the two kinds rather than about the operator.
+	//
+	// Only a dialect answering
+	// Semantics.BareElementsInATableLiteralEndTheScript has anything to put
+	// here; the other two pair the words off and say nothing (#2611).
+	IndexArrayIntoATable string
+
 	// AppendToANumericSlice is what the shell that splices characters says
 	// when `+=` is written at a subscript of a name carrying an arithmetic
 	// attribute. It takes the name, which that shell's own sentence does not

@@ -1229,6 +1229,18 @@ func (r *Runner) markDeclaredCompound(name string, fresh bool, f declareFlags, h
 		}
 	}
 	if f.assoc {
+		if r.literalOperands[name] {
+			// The table letter and a literal on one command — the shape one
+			// dialect refuses a bare-word literal in outright, where the
+			// same literal written as a plain assignment converts the name.
+			// Recorded here for the same reason indexedLetterHere is: the
+			// operand assignment is handed the bare name and cannot see the
+			// letters. See Runner.tableLetterHere.
+			if r.tableLetterHere == nil {
+				r.tableLetterHere = map[string]bool{}
+			}
+			r.tableLetterHere[name] = true
+		}
 		v, p := r.declaredCompoundOverAScalar(name, f, r.sem().ScalarUnderATableDeclaration,
 			"a table declaration over a name already holding a scalar")
 		switch p {

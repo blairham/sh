@@ -14647,6 +14647,53 @@ both convert and keep the one element.
 Pinned by `decl/an-array-letter-over-a-declared-table` and
 `decl/a-table-letter-over-a-declared-array`.
 
+**`BareElementsInATableLiteralEndTheScript`** — bash no · dash no table to ask about · ksh93 yes · zsh no
+
+What a compound literal written with **bare words** means on a name that
+is a **table**. Not a kind change: the name is already the kind being
+declared and nothing is being converted. Two of the three columns with
+tables read the words as a list of pairs; the third reads the parentheses
+as an *index array*'s value and will not put one in a table.
+
+    typeset -A m=(alpha one); typeset -p m
+      bash 5.3.15  `declare -A m=([alpha]="one" )`
+      zsh 5.9.2    `typeset -A m=( [alpha]=one )`
+      ksh93u+      `cannot append index array to associative array m`,
+                   status 1, and the **input ends**
+
+Measured 2026-09-13, panel and machine as `oracle.md`. dash and BusyBox
+ash have no table to ask the question of; bash 3.2.57 has no `-A`.
+
+**The refusing column does not refuse every spelling of it**, and the
+three things that part them were measured rather than reasoned about.
+With `typeset -A m=([a]=1)` in front of them:
+
+    m=(x y)             `typeset -a m=(x y)` — the name **converts**
+    typeset m=(x y)     the same
+    typeset -A m=(x y)  `cannot append index array to associative array m`
+    m+=(x y)            the same refusal
+
+So an **append** never converts — there is no index array to append to a
+table, which is the one reading the sentence's verb is honest about — and
+the table **letter written on the same command** holds the name to its
+kind. The third is the surprise: an **empty** table refuses where a table
+with an element in it converts, so `typeset -A m; m=(x y)` and
+`typeset -A m=(); m=(x y)` both complain. That is that shell's own reading
+and it is reproduced rather than explained.
+
+It is the **written** shape that decides and not what the words came to.
+`e=; typeset -A m=($e)` is refused there although the element expands to
+nothing, and a literal with no element written in it — `typeset -A m=()` —
+is taken by every column. The expansion still happens first:
+`typeset -A m=($(echo SIDE >&2))` writes `SIDE` and then complains.
+
+`Diagnostics.IndexArrayIntoATable` is the wording, and
+`Runner.tableLetterHere` is what records the letter for the operand
+assignment, which is handed the bare name and cannot see the letters.
+
+Pinned by `decl/an-index-array-literal-on-a-table` and
+`decl/an-index-array-literal-replacing-a-table` (#2611).
+
 **A local declaration builds the array cell rather than converting one**,
 and that is core rather than a fourth answer. bash promotes at the top
 level and through `-g` — `b=1; typeset -a b` and

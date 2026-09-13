@@ -4704,6 +4704,55 @@ type Semantics struct {
 	// through one (#2287).
 	ArrayUnderATableLiteralDeclaration CompoundKindChangePolicy
 
+	// BareElementsInATableLiteralEndTheScript refuses a compound literal
+	// written with **bare words** where the name is a table — `typeset -A
+	// m=(alpha one)` and the `m=(alpha one)` beside it — instead of pairing
+	// the words off as key, value, key, value.
+	//
+	// Not a kind change and not one of the four fields above: the name is
+	// already the kind being declared and nothing is being converted. What is
+	// in question is what a literal whose elements carry no `[key]=` head
+	// *means* over a table, and the panel splits two ways. Measured
+	// 2026-09-13:
+	//
+	//	shell        `typeset -A m=(alpha one); typeset -p m`
+	//	bash 5.3.15  `declare -A m=([alpha]="one" )` — the words pair off
+	//	zsh 5.9.2    `typeset -A m=( [alpha]=one )` — the same
+	//	ksh93u+      `cannot append index array to associative array m`, and
+	//	             **the input ends**: nothing after it runs, status 1
+	//
+	// ksh93 reads the parentheses as an *index array* value and refuses to
+	// put one in a table, which is why its sentence says `append` even for a
+	// plain `=`. Diagnostics.IndexArrayIntoATable is the wording.
+	//
+	// It is the **written shape** that decides and not what the words came
+	// to: `e=; typeset -A m=($e)` is refused there although the element
+	// expands to nothing, and a literal with no element at all — `typeset -A
+	// m=()` — is accepted. The expansion still happens first, measured:
+	// `typeset -A m=($(echo SIDE >&2))` writes `SIDE` and then complains.
+	//
+	// The refusing column does not refuse every spelling of it, and the
+	// three things that part them were measured rather than reasoned about.
+	// With `typeset -A m=([a]=1)` in front of it:
+	//
+	//	m=(x y)            `typeset -a m=(x y)` — the name **converts**
+	//	typeset m=(x y)    the same
+	//	typeset -A m=(x y) `cannot append index array to associative array m`
+	//	m+=(x y)           the same refusal
+	//
+	// So an **append** never converts — there is no index array to append to
+	// a table, which is the one reading the sentence's verb is honest about
+	// — and the table **letter on the same command** holds the name to its
+	// kind, which is what Runner.tableLetterHere is for. The third is that an
+	// **empty** table refuses where a table with an element converts:
+	// `typeset -A m; m=(x y)` and `typeset -A m=(); m=(x y)` both complain.
+	// See interp.Runner.tableBecomesAnIndexArray, where the rows are.
+	//
+	// A bool rather than a policy because two answers is what was measured,
+	// and a refusal that costs less than the input is a value no dialect
+	// holds. dash and ash have no tables and never ask (#2611).
+	BareElementsInATableLiteralEndTheScript bool
+
 	// WholeArraySubscriptAssigningAnArray is what `a[@]=Z` and `a[*]=Z` mean
 	// where the name is **not** a table — see WholeArraySubscriptAssignPolicy
 	// for the five answers.

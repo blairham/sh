@@ -148,10 +148,10 @@ func registerSystemModule(r *interp.Runner) {
 	// table into a `typeset -p` listing as assignments somebody could source
 	// back.
 	r.MarkReadonly("sysparams")
-	r.MarkHidden("sysparams")
+	hideModuleParameter(r, "sysparams")
 	r.SetDynamicArray("errnos", errnosView)
 	r.MarkReadonly("errnos")
-	r.MarkHidden("errnos")
+	hideModuleParameter(r, "errnos")
 	r.RegisterMathFunction("systell", 1, 1, mathSystell)
 	// And the module's six builtins: the three that move bytes, the file
 	// lock, and the two that close it. See systemio.go, systemlock.go and

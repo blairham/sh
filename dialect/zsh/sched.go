@@ -129,7 +129,7 @@ func registerSched(r *interp.Runner) {
 	// table and never say so, which is the reason datetime.go gives for the
 	// same call.
 	r.MarkReadonly("zsh_scheduled_events")
-	r.MarkHidden("zsh_scheduled_events")
+	hideModuleParameter(r, "zsh_scheduled_events")
 }
 
 // schedEntry is one row of the table.

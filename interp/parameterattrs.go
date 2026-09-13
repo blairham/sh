@@ -142,6 +142,28 @@ func (r *Runner) parameterKind(name string) ParameterKind {
 	if r.integer[name] {
 		return IntegerParameter
 	}
+	// A produced parameter is in none of the tables above — that is what
+	// makes it produced — and the fact it would need is already stated
+	// beside its producer. [ProducedDeclaration] carries Integer and Float
+	// because a *listing* needs the letters (#2451); the type word needs the
+	// same two, and asking the tables alone answered `scalar` for every one
+	// of them where zsh names the type (#2552):
+	//
+	//	${(t)RANDOM}         integer-special
+	//	${(t)ARGC}           integer-readonly-special
+	//	${(t)EPOCHREALTIME}  float-readonly-hide-hideval-special
+	//
+	// Last rather than first, so a name that somehow carries a real
+	// attribute record keeps the answer that record gives: this adds a
+	// source for a name that had none and overrides nothing.
+	if d, ok := r.producedDeclaration(name); ok {
+		if d.Float {
+			return FloatParameter
+		}
+		if d.Integer {
+			return IntegerParameter
+		}
+	}
 	return ScalarParameter
 }
 

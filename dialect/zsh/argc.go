@@ -75,5 +75,14 @@ func registerARGC(r *interp.Runner) {
 	// Without it the readonly mark above put the name into both listings by
 	// the route an ordinary attributed name takes, and this shell wrote
 	// `typeset -r ARGC=0` where zsh writes nothing.
-	r.SetDynamicDeclaration("ARGC", interp.ProducedDeclaration{Silent: true})
+	//
+	// The integer half is silent's *neighbour* rather than its opposite, and
+	// leaving it out cost two answers rather than none (#2552). Silence is
+	// the `-p` word's, so the two forms that do write the name still need
+	// the letters: measured in the same run, a bare `typeset` writes
+	// `integer 10 readonly ARGC=0` where this wrote `readonly ARGC=0`, and
+	// `${(t)ARGC}` is `integer-readonly-special` where this said `scalar`.
+	// Both read the declaration, so a Silent that carried nothing else was a
+	// declaration answering one of the three questions asked of it.
+	r.SetDynamicDeclaration("ARGC", interp.ProducedDeclaration{Integer: true, Base: 10, Silent: true})
 }

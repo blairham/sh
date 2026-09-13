@@ -3265,7 +3265,12 @@ func Apply(r *interp.Runner) {
 	// 2026-09-12, `typeset -p LINENO` writes nothing at all and reports 0,
 	// where the same probe is a row in bash and ksh93 and was
 	// `LINENO: not found` here.
-	r.SetDynamicDeclaration("LINENO", interp.ProducedDeclaration{Silent: true})
+	//
+	// The integer letter and its base ride along, because the silence is the
+	// `-p` word's and the forms that do write the name want them: `typeset
+	// -r` writes `integer 10 readonly LINENO=…` and `${(t)LINENO}` is
+	// `integer-readonly-special` (#2552).
+	r.SetDynamicDeclaration("LINENO", interp.ProducedDeclaration{Integer: true, Base: 10, Silent: true})
 	// And it is read-only here, which no other column in the panel says.
 	// Measured 2026-09-12, zsh 5.9.2, `env -i PATH=/usr/bin:/bin` with a
 	// scratch HOME, over a script file:

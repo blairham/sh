@@ -80,7 +80,7 @@ func registerDatetimeModule(r *interp.Runner) {
 	// `typeset -ar epochtime` from `-p`.
 	for _, name := range []string{"EPOCHSECONDS", "EPOCHREALTIME", "epochtime"} {
 		r.MarkReadonly(name)
-		r.MarkHidden(name)
+		hideModuleParameter(r, name)
 	}
 	// The letters the two scalars list with, which the readonly mark could
 	// not supply: measured 2026-09-12 after `zmodload zsh/datetime`, real zsh

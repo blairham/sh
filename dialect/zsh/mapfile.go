@@ -110,7 +110,7 @@ func registerMapfileModule(r *interp.Runner) {
 	// `association-hide-hideval-special`. Without it a listing that reached
 	// the name would write out the contents of every file in the directory
 	// as an assignment somebody could source back.
-	r.MarkHidden("mapfile")
+	hideModuleParameter(r, "mapfile")
 	// And `-h` beside it, which is the other half of the same measurement:
 	// `local mapfile` inside a function is an ordinary parameter in the shell
 	// this models rather than a second view of the filesystem. Both or the

@@ -124,18 +124,19 @@ func runeStarts(line string) []int {
 // one this shell can draw.
 func parseRegionElement(elem string, starts []int) (repl.Highlight, bool) {
 	fields := strings.Fields(elem)
-	// `P` is its own field or glued to the start offset — "whitespace between
-	// the `P' and the start offset is optional", measured as written in the
-	// manual. Either spelling means the same thing and this shell honors
-	// neither, so both are refused in the same place.
-	if len(fields) > 0 && (fields[0] == "P" || strings.HasPrefix(fields[0], "P")) {
-		if fields[0] == "P" || isAllDigits(fields[0][1:]) {
-			return repl.Highlight{}, false
-		}
-	}
 	if len(fields) < 3 {
 		return repl.Highlight{}, false
 	}
+	// This is also where a `P` element goes, in both of its spellings. The
+	// flag says the offsets count a PREDISPLAY, which this shell does not
+	// have, so the element must not be drawn — and neither `P` nor `P0` is a
+	// number, so it is not.
+	//
+	// **Deliberately not a branch of its own.** One was written first and
+	// mutation testing found it inert: deleting it changed no behaviour and
+	// failed no test, because every element it claimed to catch was already
+	// being dropped here. A guard that cannot be removed by a test is a
+	// comment promising something the code does not do.
 	start, err1 := strconv.Atoi(fields[0])
 	end, err2 := strconv.Atoi(fields[1])
 	if err1 != nil || err2 != nil {
@@ -151,18 +152,6 @@ func parseRegionElement(elem string, starts []int) (repl.Highlight, bool) {
 		return repl.Highlight{}, false
 	}
 	return repl.Highlight{Start: starts[start], End: starts[end], Style: style}, true
-}
-
-func isAllDigits(s string) bool {
-	if s == "" {
-		return false
-	}
-	for _, c := range s {
-		if c < '0' || c > '9' {
-			return false
-		}
-	}
-	return true
 }
 
 // regionStyle is the escape sequence one spec opens with, or empty for a spec

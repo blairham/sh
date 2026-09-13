@@ -88,7 +88,7 @@ func TestTheOffsetsAreCharactersAndTheRunsAreBytes(t *testing.T) {
 // to say that it did.
 func TestAnElementThisShellCannotDrawIsDropped(t *testing.T) {
 	for _, c := range []struct{ name, elem string }{
-		{"a PREDISPLAY this shell does not have", `P0 3 fg=red`},
+		{"a PREDISPLAY this shell does not have", `P 0 3 fg=red`},
 		{"the same flag glued to the offset", `P0 3 fg=red`},
 		{"an end before the start", `4 2 fg=red`},
 		{"an end past the line", `0 99 fg=red`},

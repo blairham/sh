@@ -271,7 +271,7 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 		elems := produce(r)
 		a := make(Array, len(elems))
 		for i, v := range elems {
-			a[i] = str(v)
+			a[i] = Scalar(v)
 		}
 		d.arr, d.isArr = a, true
 		return d, true

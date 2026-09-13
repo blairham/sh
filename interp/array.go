@@ -64,15 +64,10 @@ type Element struct {
 // Scalar is an element holding a string, which is every element in five of the
 // six columns.
 //
-// Exported because a dialect builds produced tables of them and an embedder
-// hands whole arrays in; `str` is the same thing under the name the rest of
-// this package reads better with.
+// Exported because a dialect builds produced tables of them, an embedder hands
+// whole arrays in, and Runner.Arrays is exported itself — a caller that can
+// name the map can name what goes in it.
 func Scalar(v string) Element { return Element{Str: v} }
-
-func str(v string) Element { return Scalar(v) }
-
-// nested is an element holding an array of its own.
-func nested(a Array) Element { return Element{Nested: a} }
 
 // scalar is what the element reads as where one string is wanted — `${a[1]}`,
 // a field of `"${a[@]}"`, the subject of `${#a[1]}`.
@@ -235,7 +230,7 @@ func (a Array) pastTheEnd() int {
 func (r *Runner) setArray(name string, elems []string) {
 	a := make(Array, len(elems))
 	for i, v := range elems {
-		a[i] = str(v)
+		a[i] = Scalar(v)
 	}
 	r.storeArray(name, a)
 }
@@ -332,7 +327,7 @@ func (r *Runner) uniqueElems(a Array) Array {
 			continue
 		}
 		seen[e] = true
-		out[pos] = str(e)
+		out[pos] = Scalar(e)
 		pos++
 	}
 	return out
@@ -425,7 +420,7 @@ func (r *Runner) setArrayElem(name string, idx int, sub, value string) {
 	if !ok {
 		if idx < 0 && r.ask(r.sem().NegativeSubscriptPastTheStartInserts,
 			"a negative subscript past the first element placing one in front of it") {
-			r.storeArray(name, insertAtTheFront(a, str(value)))
+			r.storeArray(name, insertAtTheFront(a, Scalar(value)))
 			return
 		}
 		if r.unspecified {
@@ -458,8 +453,8 @@ func (r *Runner) setArrayElem(name string, idx int, sub, value string) {
 // The append spelling arrives here already joined — appendArrayElem reads the
 // element's scalar and hands the result over — so one rule covers both.
 func stringWritten(e Element, value string) Element {
-	if e.Nested == nil || len(e.Nested) == 0 {
-		return str(value)
+	if len(e.Nested) == 0 {
+		return Scalar(value)
 	}
 	e.Nested[0] = stringWritten(e.Nested[0], value)
 	return e
@@ -629,7 +624,7 @@ func (r *Runner) appendScalarToArray(name string, a Array, value string) {
 		r.appendArrayElem(name, r.arrayBase(), strconv.Itoa(r.arrayBase()), value)
 		return
 	}
-	a[a.pastTheEnd()] = str(value)
+	a[a.pastTheEnd()] = Scalar(value)
 	r.storeArray(name, a)
 }
 
@@ -2845,7 +2840,7 @@ func (r *Runner) foldedElems(name string, a Array) Array {
 			// is left as it stands rather than half rewritten.
 			return a
 		}
-		folded[sub] = str(v)
+		folded[sub] = Scalar(v)
 	}
 	return folded
 }
@@ -2866,7 +2861,7 @@ func (r *Runner) arrayForWrite(name string) Array {
 	if produce, produced := r.DynamicArrays[name]; produced {
 		a := make(Array, 0)
 		for i, v := range produce(r) {
-			a[i] = str(v)
+			a[i] = Scalar(v)
 		}
 		return a
 	}

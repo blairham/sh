@@ -164,7 +164,7 @@ func (r *Runner) setAssocElem(name, key, value string) {
 			return
 		}
 	}
-	a[key] = str(value)
+	a[key] = Scalar(value)
 	// Written to, so the name leaves the declared-only set — see
 	// compounddeclaredonly.go.
 	r.compoundWasAssigned(name)

@@ -197,7 +197,7 @@ func (r *Runner) appendedOverAScalar(name string) (Array, int) {
 	if !held {
 		return Array{}, 0
 	}
-	return Array{0: str(v)}, 1
+	return Array{0: Scalar(v)}, 1
 }
 
 // literalInto places a literal's elements into an array, starting at next.
@@ -215,7 +215,7 @@ func (r *Runner) literalInto(name string, a Array, next int, parsed []literalEle
 	for _, e := range parsed {
 		if !e.subscripted {
 			for _, f := range e.fields {
-				a[next] = str(f)
+				a[next] = Scalar(f)
 				next++
 			}
 			continue
@@ -264,7 +264,7 @@ func (r *Runner) literalInto(name string, a Array, next int, parsed []literalEle
 			}
 			value = v
 		}
-		a[pos] = str(value)
+		a[pos] = Scalar(value)
 		// A bare element after a subscripted one continues from there rather
 		// than from where the count had reached: `a=(x [3]=y z)` puts z at 4.
 		// Measured in both shells that accept the mixture, and it follows the

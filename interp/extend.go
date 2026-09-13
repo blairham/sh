@@ -1348,7 +1348,7 @@ func (r *Runner) SetAssoc(name string, values map[string]string) {
 	r.markAssoc(name)
 	table := make(AssocArray, len(values))
 	for k, v := range values {
-		table[k] = str(v)
+		table[k] = Scalar(v)
 	}
 	r.AssocArrays[name] = table
 }

@@ -1234,7 +1234,7 @@ func (r *Runner) markDeclaredCompound(name string, fresh bool, f declareFlags, h
 		switch p {
 		case ScalarUnderACompoundBecomesTheFirstElement:
 			r.markIndexed(name)
-			r.storeArray(name, Array{0: str(v)})
+			r.storeArray(name, Array{0: Scalar(v)})
 		case ScalarUnderACompoundDiscardsIt:
 			r.markIndexed(name)
 		case ScalarUnderACompoundStaysAScalar:
@@ -3170,7 +3170,7 @@ func (r *Runner) foldAssocElems(name string, a AssocArray) {
 			// stands rather than half rewritten.
 			return
 		}
-		a[k] = str(folded)
+		a[k] = Scalar(folded)
 	}
 }
 

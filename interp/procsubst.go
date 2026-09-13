@@ -809,9 +809,13 @@ func (r *Runner) holdsDescriptorOnto(path string) bool {
 	return named(r.Stdin) || named(r.Stdout) || named(r.Stderr)
 }
 
-// CleanUp removes what this shell made for itself.
+// CleanUp removes what this shell made for itself and hands back what it
+// borrowed from the process.
 //
-// Only the directory the named pipes went in, at present. Finish calls it, so
+// The directory the named pipes went in, and the signal dispositions a `trap`
+// changed — see restoreDispositions for why those two belong together, and
+// why the second is the only process-wide state a script can still reach.
+// Finish calls it, so
 // a shell that ran to its end — a binary, a Session that was closed, a
 // Runner.Run that returned — has already had this done. It stays public for
 // the caller that drives a Runner with RunPart and never reaches Finish,
@@ -831,6 +835,7 @@ func (r *Runner) CleanUp() {
 	if r.procSubHome != nil && r.procSubHome.dir != "" {
 		_ = os.RemoveAll(r.procSubHome.dir)
 	}
+	r.restoreDispositions()
 }
 
 // cleanUpAtEnd is CleanUp for the two places a shell stops being one.

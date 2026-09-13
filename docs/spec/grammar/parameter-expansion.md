@@ -1753,6 +1753,54 @@ Details, each measured:
   with no operator at all are all what they would have been without it.
   Written twice it is written once.
 
+- **`(B)`, `(E)`, `(N)` and `(R)` report about the match rather than
+  choosing one**, and they are the same span `(M)` reads. On the four
+  trims, with `str=aXbXc` and `(S)` putting the match on the second
+  character: `${(SB)str#X*}` is `2`, `${(SE)str#X*}` is `3` — one past the
+  end, so `B + N` — `${(SN)str#X*}` is `1`, and `${(SR)str#X*}` is `abXc`,
+  which is the plain trim's own answer. The indices are **one-based and in
+  characters**, the unit `${#x}` counts in.
+
+  A pattern that matches nothing is the same projection of an empty span at
+  the front rather than a case of its own: `${(B)str#zzz}` is `1`,
+  `${(E)str#zzz}` is `1`, `${(N)str#zzz}` is `0`, `${(R)str#zzz}` is the
+  whole value and `${(M)str#zzz}` is empty.
+
+  **They accumulate, in an order that is not the order they were written.**
+  `${(SBE)str#X*}` is `2 3`, `${(SBM)str#X*}` is `X 2`, `${(SBMR)str#X*}`
+  is `X abXc 2`, `${(BER)str#X*}` is `aXbXc 1 1`, and `${(SBENMR)str#X*}`
+  is `X abXc 2 3 1` — which fixes the order as **M, R, B, E, N**. So a
+  reading that treated them as alternative spellings of `(M)` and returned
+  one projection cannot produce any of these.
+
+  It is **one word and not a list**, which needs a discriminator because
+  this shell does not split an unquoted expansion: `printf '[%s]' ${(SBE)str#X*}`
+  is the single field `[2 3]` where a two-element array prints `[2][3]`.
+  The separator is a hard space rather than `$IFS[1]` — `IFS=-` leaves it
+  `2 3` — and a join flag does not reach it: `${(SBEj:_:)str#X*}` is `2 3`.
+
+  Everywhere else they do nothing, measured one operator at a time the way
+  `(M)`'s boundary was: `${(B)str}`, `${(B)str:1}`, `${(B)str:-alt}`,
+  `${(B)str/X/Y}` and `${(B)#str}` are all what they would have been
+  without the flag. The replacement is the interesting one, because `(S)`
+  *does* reach it — a flag that chooses between matches has something to
+  say there and a flag that reports about one does not.
+
+  The element-selecting operators are the exception and this
+  implementation **refuses them by name**. They do something in that shell
+  — `${(B)str:#a*}` is `1` and `${(N)str:#a*}` is `5`, so the whole-value
+  test reports a span the way a trim does — and the family does not do it
+  alike: with `a=(x y)` and `b=(y z)`, `${(B)a:|b}` and `${(B)a:/x/Q}`
+  both come back as the untouched array where `${(B)a:*b}` is empty.
+  Projecting a trim's span onto any of those would be a plausible value at
+  status 0, and that measurement has not been made (#2153).
+
+  `(I:expr:)` is the fifth flag in the same block of the vendor manual and
+  is still refused: it selects the *n*th match rather than reporting about
+  the one that was found, so it is a counter on the span search rather
+  than a projection of it, and "matches overlapping previous replacements
+  are ignored" is a rule nothing here has yet.
+
 - **Order of application.** Operators run before flags: `${(U)x:-def}` on an
   unset `x` is `DEF`, `${(U)x#h}` on `hello` is `ELLO`, `${(U)u:=def}`
   assigns `def` and substitutes `DEF`. `(P)` is the exception and runs

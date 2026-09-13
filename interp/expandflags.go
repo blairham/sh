@@ -26,7 +26,7 @@ import (
 // `-` a `q` ate is not in Flags at all, the parser having taken it out into
 // QuoteModifier. `+` is deliberately absent — it is no flag on its own, and
 // the parser refuses every `+` a `q` could not take.
-const implementedParamFlags = "ULfsj@kvP%qMuoOniaQbcwWA~Zze-lr0VtSm"
+const implementedParamFlags = "ULfsj@kvP%qMuoOniaQbcwWA~Zze-lr0VtSmBENR"
 
 // expandFlagged answers an expansion that carries a flag group, as fields.
 // It reports false only when the node carries no group, so the ordinary
@@ -183,6 +183,17 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 			r.expandErr = true
 			return nil, false, false, false
 		}
+	}
+	if reportsAboutTheMatch(e) && reportsAnElementOperator(e.Op) {
+		// The four reporting flags reach the trims and are refused over an
+		// operator that reshapes a list. They do something there and the
+		// family does not do it alike — see interp/reportflags.go for the
+		// measurement — so a projection of the trim's span would be a
+		// plausible value at status 0 rather than an answer.
+		r.diagf("${%s}: the (%c) expansion flag is not implemented beside this operator\n",
+			e.Src, firstOf(e.Flags, "BENR"))
+		r.expandErr = true
+		return nil, false, false, false
 	}
 	if strings.ContainsRune(e.Flags, 'm') && padApplies(e) {
 		// `(m)` is carried for the length operator and not for the padding
@@ -1292,17 +1303,26 @@ func (r *Runner) applyFlagOp(e *syntax.ParamExpr, words []string, set, isList bo
 		// `${(M)v##h*l}` is `hell`, so the shortest/longest choice is still
 		// the operator's.
 		//
+		// `(B)`, `(E)`, `(N)` and `(R)` join `(M)` here, and they
+		// accumulate rather than replace: written together they report one
+		// match from several sides, in a fixed order that is not the order
+		// they were written. So the five leave through one function holding
+		// one span — see interp/reportflags.go — and `(M)` alone still
+		// takes that route, which is what keeps the pair from drifting.
+		//
 		// `(S)` is the other flag this operator reads, and the node carries
 		// it rather than a second `take` here: it changes *which* match the
-		// trim found and not which side of it is substituted, so the two
+		// trim found and not what is reported about it, so the flags
 		// compose without either knowing about the other. See
 		// interp/searchflag.go.
-		take := r.trimWith
-		if matchingFlag(e) {
-			take = r.matchedWith
+		if want := matchReportFlags(e); want != "" {
+			for i, w := range words {
+				words[i] = r.trimReport(w, pattern, e, want)
+			}
+			break
 		}
 		for i, w := range words {
-			words[i] = take(w, pattern, e)
+			words[i] = r.trimWith(w, pattern, e)
 		}
 	case syntax.ParamReplace:
 		pattern := r.patternOf(e.Arg)

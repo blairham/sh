@@ -14,14 +14,17 @@ import (
 // associations a script can read.
 //
 // Measured 2026-09-06 against zsh 5.9.2 with a scratch HOME and no startup
-// files. Five of the module's thirty-three parameters are **implemented** —
-// the five a real plugin manager reads, counted in `~/.zi/bin/zi.zsh`:
-// `functions` 46 times, `options` 24, `commands` 3, `builtins` 2 and
-// `aliases` 1. The other twenty-eight are sorted into two kinds, and which
+// files. Ten of the module's thirty-three parameters are **implemented**. Five
+// of them are the five a real plugin manager reads, counted in
+// `~/.zi/bin/zi.zsh`: `functions` 46 times, `options` 24, `commands` 3,
+// `builtins` 2 and `aliases` 1; the other five arrived one reader at a time —
+// `funcstack` for the completion system, `galiases` and `saliases` for the
+// two alias namespaces, `parameters` for `${(t)name}`, and `reswords` for a
+// highlighter. The other twenty-three are sorted into two kinds, and which
 // kind a parameter is in is a statement about this shell rather than about
 // how far along it is:
 //
-//   - **Ten are empty, and that is the right answer.** Each reports on
+//   - **Eight are empty, and that is the right answer.** Each reports on
 //     something that cannot happen here, and the thing that cannot happen
 //     refuses by name where it is asked for — `alias -g`, `alias -s`,
 //     `disable -p` and `hash -d` are `bad option`, and `disable -a`, `-f`
@@ -30,7 +33,7 @@ import (
 //     is *true*, and it starts reporting by itself the day one of those
 //     letters lands. See zshEmptyParams, whose second column is what each is
 //     waiting on and which the tests hold to it.
-//   - **Eighteen are absent**, and they refuse by name when a script reads
+//   - **Fifteen are absent**, and they refuse by name when a script reads
 //     one — `jobstates: parameter not implemented yet`, at the expansion
 //     that asked. None of them reads as empty, which is the whole reason
 //     the module can load without them; see the note on the module rule in
@@ -94,8 +97,8 @@ import (
 // the function at status 0, exactly as here. Modeling the refusal would have
 // meant reproducing a zsh bug against a state this shell cannot be in.
 
-// registerParameterModule installs all thirty-three: seven as views, ten as
-// empty views, and sixteen as refusals.
+// registerParameterModule installs all thirty-three: ten as views, eight as
+// empty views, and fifteen as refusals.
 func registerParameterModule(r *interp.Runner) {
 	r.SetDynamicAssoc("functions", zshFunctionsView)
 	// And the same table read one key at a time, which is what nearly every
@@ -138,6 +141,17 @@ func registerParameterModule(r *interp.Runner) {
 	r.SetDynamic("ERRNO", zshErrnoValue)
 	r.SetDynamicWriter("ERRNO", writeZshErrno)
 	r.SetDynamicArray("funcstack", funcstackNames)
+	// `$reswords`, which is what a highlighter reads before it can tell a
+	// reserved word from a command — see reswords.go for the measurement and
+	// for why this one is a list rather than a producer over a live table.
+	r.SetDynamicArray("reswords", zshReservedWordsView)
+	// Readonly and hidden, the pair `builtins` needs and for the same two
+	// reasons. Measured: `${(t)reswords}` is
+	// `array-readonly-hide-hideval-special` in zsh 5.9.2, `reswords=(a b)` is
+	// `read-only variable: reswords`, and a plain `typeset` writes
+	// `array readonly reswords` with no value.
+	r.MarkReadonly("reswords")
+	r.MarkHidden("reswords")
 	r.SetDynamicAssoc("parameters", zshParametersView)
 	r.SetDynamicAssocElement("parameters", zshParameterValue)
 	// Readonly and hidden together, the pair `builtins` needs and for the same
@@ -157,16 +171,16 @@ func registerParameterModule(r *interp.Runner) {
 	registerAbsentParameters(r)
 }
 
-// zshEmptyParams are the ten parameters of the module that are empty in this
+// zshEmptyParams are the eight parameters of the module that are empty in this
 // shell and *right* to be, each with the thing it reports on.
 //
 // Not stubs. A stub is a value nobody produced standing in for one nobody can;
 // these are answers. `$galiases` is every global alias, `alias -g` is
 // `bad option` here, so there are none and the table is empty — the same
 // sentence a real zsh writes with none defined. Measured against zsh 5.9.2:
-// all ten are empty in a fresh shell there too.
+// all eight are empty in a fresh shell there too.
 //
-// `nameddirs` is the tenth and #1137's survey had it in the wrong column —
+// `nameddirs` is the eighth and #1137's survey had it in the wrong column —
 // filed as needing `hash -d`, which is true and is the point: `hash -d` is
 // `bad option` here, so no named directory can exist, so the empty table is
 // the answer rather than a gap. Measured both ways in zsh 5.9.2:
@@ -179,7 +193,7 @@ func registerParameterModule(r *interp.Runner) {
 // else in this file would have noticed — so the test fails instead, at the
 // name of the parameter that has to move with it (#1137).
 //
-// zsh's own types decide the rest. Eight are associations and two are arrays,
+// zsh's own types decide the rest. Six are associations and two are arrays,
 // and `dis_functions_source`, `dis_patchars` and `dis_reswords` are readonly
 // there — which is also what keeps a produced table from being shadowed by a
 // write, the way `builtins` is.
@@ -205,7 +219,7 @@ var zshEmptyParams = []struct {
 	{name: "nameddirs", waitsFor: "hash -d"},
 }
 
-// registerEmptyParameters installs the ten as *views* that happen to be
+// registerEmptyParameters installs the eight as *views* that happen to be
 // empty rather than as empty tables.
 //
 // A view rather than a stored table for the reason every other one here is:
@@ -259,19 +273,22 @@ func refuseEmptyParameterWrite(name, waitsFor string) func(*interp.Runner, strin
 	}
 }
 
-// zshAbsentParams are the eighteen this shell has not got at all.
+// zshAbsentParams are the fifteen this shell has not got at all.
 //
 // Every one of them is non-empty, or can be, in a shell that has it: `$modules`
-// is 14 entries in a fresh zsh, `$parameters` 214, `$reswords` 31, `$patchars`
-// 15, `$usergroups` 16, and the job and history tables fill as a session runs.
-// So none of them can be answered with an empty table the way the nine above
-// are — an empty `$reswords` is not "no reserved words", it is "nobody asked
-// the shell" — and each refuses by name instead.
+// is 14 entries in a fresh zsh, `$parameters` 214, `$patchars` 15,
+// `$usergroups` 16, and the job and history tables fill as a session runs.
+// So none of them can be answered with an empty table the way the eight above
+// are — an empty `$patchars` is not "no pattern characters", it is "nobody
+// asked the shell" — and each refuses by name instead. `$reswords` was the
+// sixteenth and left this list for the views above (#2517), which is the
+// route out of it: the table it reports on was already known, and what was
+// missing was the parameter.
 //
-// What each would cost is surveyed in #1137: eight are answerable from a table
-// this shell already keeps and ten need a seam that does not exist. Neither is
-// a distinction a script can see, so it is not one this file makes; both kinds
-// refuse identically until they are implemented.
+// What each would cost is surveyed in #1137: some are answerable from a table
+// this shell already keeps and the rest need a seam that does not exist.
+// Neither is a distinction a script can see, so it is not one this file makes;
+// both kinds refuse identically until they are implemented.
 //
 // Two of them are worth naming, because each looks like it belongs with the
 // empty ten and does not. `dirstack` would be empty if nothing could push a
@@ -284,14 +301,14 @@ var zshAbsentParams = []string{
 	"dirstack", "dis_builtins", "funcfiletrace", "funcsourcetrace",
 	"functions_source", "functrace", "history", "historywords",
 	"jobdirs", "jobstates", "jobtexts", "modules",
-	"patchars", "reswords", "userdirs", "usergroups",
+	"patchars", "userdirs", "usergroups",
 }
 
 // zshWritableAbsentParams are the ones a script may assign to even though
 // this shell has not built them, so they are absent without being frozen.
 //
 // Measured 2026-09-12 against zsh 5.9.2 under `-f`, one `name=(a b c)` per
-// entry from a script file: fifteen of the sixteen above answer `read-only
+// entry from a script file: fourteen of the fifteen above answer `read-only
 // variable: name` at status 1 and end the script, whether or not the module
 // has been loaded. `dirstack` is the one that does not — it is the directory
 // stack and assigning it is how a script sets one, so it takes the array in
@@ -597,7 +614,7 @@ func refuseZshCommandsWrite(r *interp.Runner, name, _ string, set bool) {
 // count drops by one and `${+builtins[cd]}` is 0 — which is why the names come
 // from [interp.Runner.BuiltinNames], the set that answers what running the
 // word would find, rather than from the wider one that includes the ones put
-// aside. zsh keeps those in `$dis_builtins`, which is one of the twenty-eight
+// aside. zsh keeps those in `$dis_builtins`, which is one of the twenty-three
 // parameters not here.
 func zshBuiltinsView(r *interp.Runner) interp.AssocArray {
 	names := r.BuiltinNames()

@@ -580,7 +580,7 @@ func TestTheProducedParametersStayOutOfASetListing(t *testing.T) {
 	}
 }
 
-// **Each of the eighteen refuses by name**, one name at a time.
+// **Each of the fifteen refuses by name**, one name at a time.
 //
 // The eight read routes are graded against `jobstates` alone above, which is
 // right for the routes — they are a property of the expansion and not of the
@@ -864,30 +864,40 @@ func moduleParams() []string {
 	}
 }
 
-// implementedModuleParams is the six that are live views: the five a real
-// plugin manager reads and the only five it reads (#1060), and `funcstack`,
-// which the completion system touches on its fourth line (#1598).
+// implementedModuleParams is the ten that are live views: the five a real
+// plugin manager reads and the only five it reads (#1060), `funcstack`, which
+// the completion system touches on its fourth line (#1598), `galiases` and
+// `saliases` for the two alias namespaces `alias -g` and `alias -s` brought
+// (#2081), `parameters` for `${(t)name}` (#1599), and `reswords`, which a
+// highlighter reads before it can tell a reserved word from a command
+// (#2517).
 func implementedModuleParams() []string {
 	return []string{
 		"aliases", "builtins", "commands", "funcstack", "functions",
-		"galiases", "options", "parameters", "saliases",
+		"galiases", "options", "parameters", "reswords", "saliases",
 	}
 }
 
-// absentModuleParams is the sixteen this shell has not got, each registered
+// absentModuleParams is the fifteen this shell has not got, each registered
 // with [interp.Runner.SetAbsentParameter] so that reading one is refused at
 // the expansion that asked (#1152).
 //
 // Every one of them is non-empty, or can be, in a shell that has it — so
 // reading empty would be a claim and not an answer, which is what separates
-// these from the ten above. Eight are answerable from a table this shell
-// already keeps and ten need a seam that does not exist; #1137 is the survey.
+// these from the eight above. Some are answerable from a table this shell
+// already keeps and the rest need a seam that does not exist; #1137 is the
+// survey.
+//
+// It was sixteen. `reswords` left when the reserved-word table was exposed
+// (#2517), which is the shrink the comment on TestEveryAbsentParameterRefusesByName
+// describes happening for real: the fact was already in the shell and the
+// parameter was what was missing.
 func absentModuleParams() []string {
 	return []string{
 		"dirstack", "dis_builtins", "funcfiletrace", "funcsourcetrace",
 		"functions_source", "functrace", "history", "historywords",
 		"jobdirs", "jobstates", "jobtexts", "modules",
-		"patchars", "reswords", "userdirs", "usergroups",
+		"patchars", "userdirs", "usergroups",
 	}
 }
 
@@ -978,7 +988,11 @@ done`)
 		"parameters:myassoc agree [association]\n" +
 		"parameters:myint agree [integer]\n" +
 		"parameters:options agree [association-special]\n" +
-		"parameters:reswords agree [UNSET]\n" +
+		// `reswords` was chosen here as a parameter the shell refused by
+		// name, and it is a produced readonly array since #2517 — which is
+		// what the row now reads, and which still covers the case it was
+		// picked for: `zznosuchparam` below is the refusing name.
+		"parameters:reswords agree [array-readonly-hideval-special]\n" +
 		"parameters:zznosuchparam agree [UNSET]\n"
 	if out != want || st != 0 {
 		t.Errorf("key against table = %q (status %d), want %q", out, st, want)

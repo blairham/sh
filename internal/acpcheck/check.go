@@ -70,6 +70,8 @@ type harness struct {
 	bin     string
 	dir     string
 	dialect string
+	// acpFlag is Config.ACPFlag, already defaulted.
+	acpFlag string
 }
 
 // args puts the dialect in front of a row's own flags, so that every way a
@@ -99,7 +101,7 @@ func (t *harness) dialectOr(fallback string) []string {
 // dial opens a connection with the given flags and answer policy, already
 // through the handshake and with a session open.
 func (t *harness) dial(args []string, answer func(Ask) string) (*Client, string, error) {
-	c, err := Dial(t.bin, Options{Args: t.args(append(args, "-acp")...), Dir: t.dir, Answer: answer})
+	c, err := Dial(t.bin, Options{Args: t.args(append(args, t.acpFlag)...), Dir: t.dir, Answer: answer})
 	if err != nil {
 		return nil, "", err
 	}
@@ -166,6 +168,25 @@ type Config struct {
 	Self    string
 	Only    string
 	Dialect string
+	// ACPFlag is how this binary is told to serve the protocol, and it is a
+	// field because there are two answers rather than one. The multi-call
+	// `sh` takes `-acp`; a dialect binary takes `--acp`, because real bash
+	// accepts `-acp` as the `-a -c -p` bundle and a single-dash spelling
+	// there would shadow working behavior. Empty means `-acp`.
+	//
+	// It is what makes the second table possible at all: the same rows, run
+	// against the binary a shebang names rather than against the substrate's
+	// own driver. See #2585, and #1826 for the same split in make sandbox.
+	ACPFlag string
+}
+
+// acpFlagOr settles the spelling once, so that a zero Config still grades the
+// binary this instrument has always graded.
+func acpFlagOr(f string) string {
+	if f == "" {
+		return "-acp"
+	}
+	return f
 }
 
 // Run grades the binary and returns the table.
@@ -191,7 +212,7 @@ func Run(ctx context.Context, cfg Config) Result {
 		// Each row gets its own deadline. A hung agent is a failure of the
 		// row rather than of the run, so the rest still report.
 		rowCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-		pass, detail := ch.run(&harness{ctx: rowCtx, bin: cfg.Bin, dir: dir, dialect: cfg.Dialect})
+		pass, detail := ch.run(&harness{ctx: rowCtx, bin: cfg.Bin, dir: dir, dialect: cfg.Dialect, acpFlag: acpFlagOr(cfg.ACPFlag)})
 		cancel()
 		res.Rows = append(res.Rows, Row{Name: ch.name, Claim: ch.claim, Pass: pass, Detail: detail, Known: ch.known})
 	}
@@ -203,7 +224,7 @@ func checks() []check {
 		name:  "handshake",
 		claim: "the shipped binary answers protocol version 1 and names itself",
 		run: func(t *harness) (bool, string) {
-			c, err := Dial(t.bin, Options{Args: t.args("-acp"), Dir: t.dir})
+			c, err := Dial(t.bin, Options{Args: t.args(t.acpFlag), Dir: t.dir})
 			if err != nil {
 				return false, err.Error()
 			}
@@ -224,7 +245,7 @@ func checks() []check {
 		name:  "handshake-first",
 		claim: "a session asked for before the handshake is refused, not served",
 		run: func(t *harness) (bool, string) {
-			c, err := Dial(t.bin, Options{Args: t.args("-acp"), Dir: t.dir})
+			c, err := Dial(t.bin, Options{Args: t.args(t.acpFlag), Dir: t.dir})
 			if err != nil {
 				return false, err.Error()
 			}

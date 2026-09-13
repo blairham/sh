@@ -197,12 +197,23 @@ smoke: ## Drive a realistic interactive session through a pty and report, per fe
 # dialect nobody uses (#2258). Narrow it with `make acp ACP_DIALECTS=zsh`.
 ACP_DIALECTS ?= bash zsh core
 
-acp: ## Drive the Agent Client Protocol front end as a client would, in every dialect, and report what works, what it costs, and what a pipe would have seen
+# The second table's binaries. `sh -dialect zsh -acp` and `zsh --acp` are two
+# routes to one gate, and only the first was ever graded: the instrument built
+# ./cmd/sh and drove it as -dialect X, so a green table said nothing about the
+# binary a shebang, chsh, login or an editor's shell setting actually names.
+# That is the blind spot #1826 fixed for `make sandbox` and #2585 for this.
+ACP_DIALECT_BINARIES ?= bash zsh ksh dash ash
+
+acp: ## Drive the Agent Client Protocol front end as a client would, in every dialect and on every binary that ships, and report what works, what it costs, and what a pipe would have seen
 	@mkdir -p $(BINDIR)
 	@go build -o $(BINDIR)/acp-sh ./cmd/sh
 	@go build -o $(BINDIR)/acpcheck ./internal/cmd/acpcheck
 	@rc=0; for d in $(ACP_DIALECTS); do \
 		$(BINDIR)/acpcheck -bin $(BINDIR)/acp-sh -dialect $$d $(ARGS) || rc=1; \
+	done; \
+	for d in $(ACP_DIALECT_BINARIES); do \
+		go build -o $(BINDIR)/acp-$$d ./cmd/$$d || { rc=1; continue; }; \
+		$(BINDIR)/acpcheck -bin $(BINDIR)/acp-$$d -dialect-binary $(ARGS) || rc=1; \
 	done; exit $$rc
 
 acp-wire: ## Print a real annotated ACP session, message by message, for showing somebody

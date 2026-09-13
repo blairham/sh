@@ -43,6 +43,11 @@ func main() {
 		// re-executed with this flag it speaks ACP as an agent instead of
 		// grading one. Not a mode anybody runs by hand.
 		asAgent = flag.String("as-agent", "", "internal: behave as a scripted ACP agent, not as the grader")
+		// The second table's switch. A dialect binary is told to serve with
+		// `--acp` and is never given `-dialect`: it is already the shell it
+		// is. Without this the instrument can only ever reach cmd/sh, which
+		// is the blind spot #2585 is about.
+		dialectBin = flag.Bool("dialect-binary", false, "drive a dialect binary with --acp instead of the multi-call sh with -acp")
 	)
 	flag.Parse()
 
@@ -96,13 +101,22 @@ func main() {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "acpcheck: naming this binary:", err)
 	}
+	acpFlag, route := "-acp", ""
+	if *dialectBin {
+		route = filepath.Base(shell) + " --acp"
+		acpFlag = "--acp"
+		// A dialect binary has no -dialect: it is the shell it is, and
+		// passing one would be an unknown option rather than a choice.
+		*dialect = ""
+	}
 	res := acpcheck.Run(ctx, acpcheck.Config{
 		Bin: shell, Root: dir, Self: self, Only: *only, Dialect: *dialect,
+		ACPFlag: acpFlag,
 	})
-	fmt.Print(table(res, *verb, *dialect))
+	fmt.Print(table(res, *verb, *dialect, route))
 
 	if *only == "" {
-		cmp, err := acpcheck.Compare(ctx, shell, filepath.Join(dir, "compare"), *dialect)
+		cmp, err := acpcheck.Compare(ctx, shell, filepath.Join(dir, "compare"), *dialect, acpFlag)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "acpcheck: comparison:", err)
 		} else {
@@ -115,7 +129,7 @@ func main() {
 }
 
 // table renders the graded rows.
-func table(res acpcheck.Result, verbose bool, dialect string) string {
+func table(res acpcheck.Result, verbose bool, dialect, route string) string {
 	var b strings.Builder
 	width := 0
 	for _, r := range res.Rows {
@@ -124,12 +138,19 @@ func table(res acpcheck.Result, verbose bool, dialect string) string {
 		}
 	}
 	// The dialect is in the header because a grade that does not say which
-	// shell it graded reads as a grade of all of them (#2258).
-	as := dialect
-	if as == "" {
-		as = "core, the binary's default"
+	// shell it graded reads as a grade of all of them (#2258). The *route* is
+	// there for the same reason one table over: the two tables grade the same
+	// rows against two different binaries, and one that does not say which it
+	// drove is the blind spot rather than the fix for it (#2585).
+	if route != "" {
+		fmt.Fprintf(&b, "\nACP, graded against the dialect binary that ships: %s\n\n", route)
+	} else {
+		as := dialect
+		if as == "" {
+			as = "core, the binary's default"
+		}
+		fmt.Fprintf(&b, "\nACP, graded against the binary that ships, as %s\n\n", as)
 	}
-	fmt.Fprintf(&b, "\nACP, graded against the binary that ships, as %s\n\n", as)
 	pass := 0
 	for _, r := range res.Rows {
 		mark := "FAIL"

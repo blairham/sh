@@ -25,7 +25,14 @@ import (
 // signal.Ignored, because a child is what the leak reaches: a disposition of
 // *ignored* survives exec, which is the whole of what `nohup` does, so the
 // tests that failed were failing in processes they had started.
-const signalProbe = "/bin/sh -c 'kill -INT $$; echo survived'\n"
+var signalProbe = childRaising("INT")
+
+// childRaising is that probe for one signal, so the two shapes of this
+// question — an ignore a script installed and an ignore it was born with —
+// ask it the same way rather than each spelling a child of its own.
+func childRaising(name string) string {
+	return "/bin/sh -c 'kill -" + name + " $$; echo survived'\n"
+}
 
 // probeDies is the probe's answer when SIGINT still has its default action:
 // the child is ended where it stands and prints nothing.
@@ -77,3 +84,82 @@ func TestAShellPutsBackAnIgnoreItWasHandedRatherThanADefault(t *testing.T) {
 		t.Error("a shell that was handed an ignored SIGUSR2 gave back a defaulted one")
 	}
 }
+
+// #2507, which is the same asymmetry seen from inside a single script rather
+// than across two of them.
+//
+// `trap - SIG` after `trap ” SIG` is a script asking for the ignore to go
+// away, and until the fix the *shell's* answer was right while the
+// *process's* was not: the trap table dropped the entry, signal.Reset left
+// SIG_IGN standing, and the next child inherited an ignore the script had
+// just disowned. The probe has to be a child for that reason — asking this
+// shell what it thinks of SIGINT answers correctly against the bug.
+//
+// Both halves are asserted in one test because either alone can be satisfied
+// by an implementation that is wrong: a shell that never ignores anything
+// passes the reset half, and the shell that shipped passes the control half.
+func TestAResetGivesBackAnIgnoreBeforeTheNextChildInheritsIt(t *testing.T) {
+	if _, err := os.Stat("/bin/sh"); err != nil {
+		t.Skipf("no /bin/sh to raise a signal at itself: %v", err)
+	}
+	// The probe against a process nobody has touched, for the reason the
+	// test above gives: a probe that cannot tell the two states apart would
+	// pass this whole test while proving nothing.
+	if !probeDies(t) {
+		t.Fatalf("the probe cannot tell the two states apart: it reported a surviving child with SIGINT at its default")
+	}
+
+	out, _ := runUnderBash(t, "trap '' INT\ntrap - INT\n"+signalProbe)
+	if strings.Contains(out, "survived") {
+		t.Errorf("a child started after `trap - INT` inherited the ignore `trap '' INT` installed: %q", out)
+	}
+
+	// The control, and the half that says this is a reset rather than a
+	// shell that has stopped ignoring anything at all. Unanimous in the
+	// panel: with no reset, the child is the ignore's to inherit.
+	out, _ = runUnderBash(t, "trap '' INT\n"+signalProbe)
+	if !strings.Contains(out, "survived") {
+		t.Errorf("a child started under `trap '' INT` was not handed the ignore: %q", out)
+	}
+}
+
+// The other side of the guard, and the reason there is one.
+//
+// A shell *started* with a signal ignored is a different question from a
+// shell that ignored one itself, and the panel splits on it: measured
+// 2026-09-12 through `trap ” INT; exec <shell> -c 'trap - INT; …'`, zsh
+// hands the inherited ignore back to its children and bash 5.3, bash 3.2,
+// ksh93 and dash all keep it. That split already has a name —
+// Semantics.QuitResetRestoresTheDefault asks it of the one signal a shell may
+// be born ignoring — so the core answers it nowhere, and `trap -` reaches
+// only the ignore this script installed.
+//
+// `nohup` is the shape that makes it concrete: a reset that dropped an
+// inherited ignore would be a script switching its caller's decision off from
+// the inside, for every child it starts afterwards.
+func TestAResetLeavesAloneAnIgnoreTheShellWasBornWith(t *testing.T) {
+	if _, err := os.Stat("/bin/sh"); err != nil {
+		t.Skipf("no /bin/sh to raise a signal at itself: %v", err)
+	}
+	probe := childRaising("USR2")
+	// The discriminating half first, with SIGUSR2 untouched: the probe has
+	// to be able to report a dead child before its report of a live one
+	// means anything.
+	if out, _ := runUnderBash(t, probe); strings.Contains(out, "survived") {
+		t.Fatalf("the probe cannot tell the two states apart: a surviving child with SIGUSR2 at its default: %q", out)
+	}
+
+	signal.Ignore(syscall.SIGUSR2)
+	t.Cleanup(func() { signal.Notify(dispositionDrain, syscall.SIGUSR2) })
+
+	out, _ := runUnderBash(t, "trap - USR2\n"+probe)
+	if !strings.Contains(out, "survived") {
+		t.Errorf("`trap - USR2` took away an ignore the shell was handed, and its child lost it too: %q", out)
+	}
+}
+
+// dispositionDrain is this file's own undo for an ignore it installed, and it
+// is a drain for the measured reason interp's own is: signal.Reset does not
+// undo signal.Ignore, and os/signal never blocks on delivery, so a full
+// channel drops the arrival rather than holding it.
+var dispositionDrain = make(chan os.Signal, 1)

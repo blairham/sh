@@ -1094,6 +1094,45 @@ is reached only through `QuitIgnoredWhenNotInteractive` and only after a
 reset, which is what lets three of the six presets leave it unanswered
 without changing how they run any script.
 
+### And what a child started after the reset inherits
+
+The two sections above ask the shell about its own disposition. A child
+asks a second question, because the answer crosses `exec` unevenly: an
+ignore survives it and a handler does not, which is the whole of what
+`nohup` is.
+
+    trap '' TERM; trap - TERM; sh -c 'kill -TERM $$; echo survived'
+
+    bash 5.3 · bash-as-sh · bash 3.2 · zsh · dash · ash → killed, 143
+    ksh93                                               → killed, 271
+
+Unanimous, so it is a correction and not an axis: the reset reaches the
+children started after it, and none of the seven hands one an ignore the
+script has dropped. The control — the same line with the reset taken away
+— leaves the child alive at status 0 in all seven, and a reset with no
+prior ignore, or with a handler in place of one, kills it just the same.
+Five corpus rows under `trap/` hold all four shapes.
+
+**A shell born ignoring the signal is the split above, seen from
+outside.** Measured through `trap '' INT; exec <shell> -c 'trap - INT;
+…'`, zsh hands its children the default and bash 5.3, bash 3.2, ksh93 and
+dash all keep the inherited ignore — the same disagreement
+`QuitResetRestoresTheDefault` records for the one signal a shell may be
+born ignoring, now visible for any signal and through a child rather than
+through a self-signal. The core therefore takes back only an ignore the
+*script* installed, which is the four-column answer and leaves the axis
+where it already is.
+
+This is where the implementation has a hazard worth writing down, because
+it is Go's and not a shell's. `signal.Reset` does not undo
+`signal.Ignore`: it restores the handler in place before the runtime's,
+which after an ignore is the `SIG_IGN` just installed. `signal.Notify`
+onto a drain is what clears it. `Notify` followed by `Stop` looks like the
+tidier spelling and is wrong for exactly SIGINT and SIGHUP, where the
+runtime lets an inherited ignore stand and `Stop` puts it back — and
+`signal.Ignored` answers **false** while it does, so a probe that asks Go
+reports success on the two signals it failed.
+
 ## A subshell that kills the shell, and where the process went
 
     (kill -TERM $$; echo inner); echo outer

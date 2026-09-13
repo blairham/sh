@@ -288,6 +288,7 @@ func (r *Runner) trapSignal(name string, sig syscall.Signal, body *string) {
 		}
 		s.defaultRestored[name] = true
 		signal.Reset(sig)
+		s.dropOwnIgnore(sig)
 	case *body == "":
 		s.traps[name] = ""
 		delete(s.defaultRestored, name)
@@ -297,6 +298,70 @@ func (r *Runner) trapSignal(name string, sig syscall.Signal, body *string) {
 		delete(s.defaultRestored, name)
 		signal.Notify(s.ch, sig)
 	}
+}
+
+// dropOwnIgnore takes back an ignore this shell installed, so that `trap -`
+// reaches the children started after it.
+//
+// Called with the lock held, from the `trap -` branch and only after
+// signal.Reset has had its say — which, for an ignore, is nothing at all. The
+// asymmetry restoreDispositions documents applies in full here: signal.Reset
+// puts back the handler that was in place before the Go runtime's, and after
+// signal.Ignore that is the SIG_IGN just installed. So `trap ” INT; trap -
+// INT` left the process ignoring SIGINT, and every child started after the
+// reset inherited an ignore the script had explicitly dropped, since an ignore
+// survives exec and a handled signal does not (#2507).
+//
+// Unanimous across the panel and so a correction rather than an axis.
+// Measured 2026-09-12 with a child that raises the signal at itself after
+// `trap ” SIG; trap - SIG`, for INT, TERM, QUIT and USR1: bash 5.3,
+// bash-as-`sh`, bash 3.2, zsh and dash all kill the child, and ksh93 kills it
+// too and reports the death its own 256-plus-the-number way. The control —
+// the same snippet without the reset — leaves the child alive in all six.
+//
+// # Only an ignore this shell installed
+//
+// The guard is borrowed, which records what the process was doing before the
+// first `trap` of this script touched the signal. A shell *started* with a
+// signal ignored is a different question and the panel splits on it: measured
+// the same day through `trap ” INT; exec <shell> -c 'trap - INT; …'`, zsh
+// drops the inherited ignore and bash 5.3, bash 3.2, ksh93 and dash all keep
+// it. That split is already an axis — Semantics.QuitResetRestoresTheDefault,
+// which asks the same question of the one signal a shell may be born ignoring
+// — and answering it here, in the core, for every signal at once would be
+// deciding it rather than asking. Leaving it alone keeps the four-column
+// answer this shell already gave, and keeps `nohup` meaning `nohup`.
+//
+// # Why Notify and not Notify-then-Stop
+//
+// Notify onto a drain is what clears SIG_IGN, and it has to stay subscribed.
+// Measured the same day, per signal, against a child:
+//
+//	after Ignore, then…     INT    HUP    USR1   TERM   QUIT
+//	Reset                   ignored across the board
+//	Notify                  default for all five
+//	Notify then Stop        ignored ignored default default default
+//
+// Stop hands the signal back to the handler the runtime saved when Notify
+// installed its own — which, at that moment, was the SIG_IGN being undone —
+// for exactly the signals the runtime lets an inherited ignore stand for. The
+// trap is that signal.Ignored answers **false** afterwards while the process
+// is still ignoring the signal, so a probe that asks Go rather than a child
+// reports the fix working on the two signals it does not work on.
+//
+// What the process keeps is therefore a *handled* signal rather than a
+// defaulted one — the same trade restoreDispositions makes and for the same
+// reason, since Go offers no way back to SIG_DFL once SIG_IGN is installed.
+// Children see the default, which is the graded behavior, and the process
+// drops an arrival it would otherwise have been ignoring anyway.
+func (s *signalState) dropOwnIgnore(sig syscall.Signal) {
+	if s.borrowed[sig] {
+		return
+	}
+	if !signal.Ignored(sig) {
+		return
+	}
+	signal.Notify(dispositionSink, sig)
 }
 
 // borrow records the disposition a signal had before this shell changed it.

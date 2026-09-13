@@ -776,6 +776,14 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 	}
 	status := code
 
+	// The freeze exemption one operand may be granted, put back at the end of
+	// the builtin however it returns. Set per operand below rather than here,
+	// because two names on one line are two separate questions — `readonly f
+	// s; typeset -i f s` retypes both and `readonly f; typeset -i f s` only
+	// the one that was frozen. See numericTypeLetterRetypesFrozen.
+	outerRetyping := r.retypingFrozen
+	defer func() { r.retypingFrozen = outerRetyping }()
+
 	for _, a := range args {
 		name, value, hasValue, appends := declarationOperand(a)
 		if r.typeLetterOverAnArrayLiteralRefused(name, f) {
@@ -875,6 +883,17 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		// name's attributes off, so these are the local's own and the caller
 		// gets its own back on return. Applied before it, they were saved as
 		// the outer name's and outlived the call (#1673).
+		if r.numericTypeLetterRetypesFrozen(name, df) {
+			// The whole operand is exempt and not only its assignment: a
+			// valueless `typeset -gi q` over a frozen scalar re-reads the
+			// standing text through applyAttributes and declareEmpty, which
+			// reach setVarAs the same way the assignment below does — so a name
+			// let past one of them met the refusal at the other and printed the
+			// sentence anyway. Put back at the top of the next iteration.
+			r.retypingFrozen = name
+		} else {
+			r.retypingFrozen = outerRetyping
+		}
 		r.applyAttributes(name, df)
 		if !df.global {
 			r.localExportAttribute(name, df.export)
@@ -907,7 +926,7 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 				return r.status
 			}
 		}
-		if hasValue && r.inconsistentTypeRefused(name, fresh) {
+		if hasValue && r.inconsistentTypeRefused(name, fresh, df) {
 			return r.status
 		}
 		if r.unspecified {
@@ -1323,8 +1342,25 @@ func (r *Runner) localCell(name string) bool {
 // One gate for `typeset`, `local`, `readonly` and `export` alike, because the
 // shell that refuses refuses all four in the same words with its own name in
 // the location.
-func (r *Runner) inconsistentTypeRefused(name string, fresh bool) bool {
+//
+// **A numeric type letter is not a plain word**, and that is measured rather
+// than reasoned: 2026-09-12 on zsh 5.9.2, `typeset -a q=(a); typeset -gi q=4`
+// lists `typeset -i q=4` and the `-F` spelling lists `typeset -F
+// q=4.0000000000`, where the identical line with `-x`, `-l`, `-r` or `-U` on
+// it is `q: inconsistent type for assignment` and so is the letterless
+// `typeset -g q=4`. A table converts the same way. So what the refusal is
+// about is a declaration that says nothing about the name's *type* landing on
+// a compound cell — a letter that names one is a retype and is taken.
+//
+// This is the same rule the freeze half records from the other side, and it is
+// why the two are not one field: see numericTypeLetterRetypesFrozen, whose
+// `typeset -ar q=(a); typeset -gi q=4` row reaches this gate first and would
+// have been refused here with the freeze already stood down.
+func (r *Runner) inconsistentTypeRefused(name string, fresh bool, f declareFlags) bool {
 	if fresh || !r.compoundCell(name) {
+		return false
+	}
+	if f.namesANumericType(r) {
 		return false
 	}
 	if !r.ask(r.sem().ScalarOverACompoundIsAnInconsistentType,
@@ -1608,19 +1644,28 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 	// read agrees with the other two, and only its `typeset -p` betrays the
 	// difference by listing the raw value. That listing nuance is
 	// deliberately not modeled; the fold every script observes is.
-	// A numeric letter on the *same* declaration beats a case letter, and
-	// beats it outright: the name is an integer and the case attribute is
-	// never set. Measured 2026-09-12 on ksh93u+, bash 5.3.15 and zsh 5.9.2,
-	// all three of which answer `typeset -li i=3+4` with `7` and
-	// `typeset -li v=AB` with `0`, in either order of the two letters.
+	// A numeric letter on the *same* declaration does not take the value out
+	// of the case attribute's hands — `typeset -li i=3+4` is `7` and
+	// `typeset -li v=AB` is `0` on ksh93u+, bash 5.3.15 and zsh 5.9.2 alike,
+	// in either order of the two letters — but it does not take the
+	// *attribute* off either, which is what this used to read it as.
+	// Measured 2026-09-12, `typeset -li v=4` lists `typeset -il v=4` in zsh,
+	// `declare -il v="4"` in bash and `typeset -l -i v=4` in ksh93, where
+	// this shell listed a bare `typeset -i v=4` in all three (#2541). So the
+	// letter is recorded and only the two questions below are asked of the
+	// dialect.
 	//
 	// Not the same question as CaseAttributeReplacesTheNumericAttribute,
 	// which is about a *later* declaration and where the three disagree:
 	// `typeset -i i; typeset -l i` leaves `3+4` in ksh93 and `7` in the
 	// other two. One command is not two, and this shell was reading the
 	// axis for both — so `integer='typeset -li'`, this shell's own alias
-	// for its own builtin, stopped evaluating anything (#2345).
-	if numeric := f.integer || f.float; f.lower && !numeric {
+	// for its own builtin, stopped evaluating anything (#2345). That is why
+	// caseLetterReplacesTheNumeric is still asked only where no numeric
+	// letter shares the line.
+	numeric := f.integer || f.float
+	canceled := r.caseLettersCancel(name, f)
+	if f.lower && !canceled {
 		if r.lowered == nil {
 			r.lowered = map[string]bool{}
 		}
@@ -1631,10 +1676,20 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 			// The two case attributes cannot both stand: the later one
 			// speaks, which is what both shells measured do.
 			delete(r.uppered, name)
-			r.caseLetterReplacesTheNumeric(name)
+			if !numeric {
+				r.caseLetterReplacesTheNumeric(name)
+			}
 		}
 	}
-	if numeric := f.integer || f.float; f.upper && !numeric {
+	upperRecords := f.upper && !canceled
+	if upperRecords && numeric {
+		// One shell writes nothing down for the upper letter beside a
+		// numeric type letter, where it writes the lower one down. Asked
+		// only here, so a line with no numeric letter on it meets no
+		// question — see upperLetterRecordsNothing.
+		upperRecords = !r.upperLetterRecordsNothing()
+	}
+	if upperRecords {
 		if r.uppered == nil {
 			r.uppered = map[string]bool{}
 		}
@@ -1643,7 +1698,9 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 		} else {
 			r.uppered[name] = true
 			delete(r.lowered, name)
-			r.caseLetterReplacesTheNumeric(name)
+			if !numeric {
+				r.caseLetterReplacesTheNumeric(name)
+			}
 		}
 	}
 	if f.unique {
@@ -1681,6 +1738,124 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 			r.hidden[name] = true
 		}
 	}
+}
+
+// namesANumericType reports whether this declaration actually *adds* the
+// integer or the float attribute, as against writing the letter under a plus
+// or not writing one at all.
+//
+// Two readers and they ask it for opposite reasons — inconsistentTypeRefused,
+// where naming a type is what makes a declaration something other than a plain
+// word over a compound cell, and numericTypeLetterRetypesFrozen, where it is
+// the first half of a retype. One function so the two cannot come apart, which
+// is the failure a second copy of `f.integer && !f.integerComesOff(r)` invites.
+func (f declareFlags) namesANumericType(r *Runner) bool {
+	switch {
+	case f.integer:
+		return !f.integerComesOff(r)
+	case f.float:
+		return !f.remove
+	}
+	return false
+}
+
+// numericTypeLetterRetypesFrozen reports whether this operand is the second
+// shape a frozen name still takes: a declaration whose integer or float letter
+// gives the name a numeric type it does not already hold.
+//
+// The letter half of what frozenScalarRetyped answers for an array literal,
+// and its own question rather than the same one reached twice — the two have
+// different domains over the same frozen name. A frozen *array* is retyped by
+// the letter and is not retyped by the literal, measured 2026-09-12 on zsh
+// 5.9.2: `typeset -ar q=(a); typeset -gi q=4` lists `typeset -ir q=4` where
+// `readonly q=(a); typeset -g q=(b)` is `read-only variable: q`. See
+// Semantics.NumericTypeLetterRetypesAFrozenName for the whole panel.
+//
+// Four guards before the dialect is reached, and each is a measured
+// discriminator:
+//
+//   - the name is frozen, or there was nothing to be exempt from;
+//   - a numeric type letter is actually being *added*, so `typeset +i` and a
+//     line with no type letter at all keep the refusal they had;
+//   - the type is one the name does not already hold, which is the *retype*
+//     half — `typeset -ir q=1; typeset -gi q=4` is refused, and so is the same
+//     line with a base written on it, because a base is not a type;
+//   - the name is not a module's absent parameter, whose kind this shell does
+//     not know. The same guard frozenScalarRetyped carries, for the same
+//     measured reason.
+//
+// The integer and float attributes are the two this engine records, so they
+// are the two asked about. `-E` is the float attribute wearing a second
+// rendering — measured, `typeset -Fr q=1; typeset -gE q=4` is refused in zsh,
+// which says the two letters name one type — and it is not implemented here
+// yet, so no third branch would have anything to read.
+func (r *Runner) numericTypeLetterRetypesFrozen(name string, f declareFlags) bool {
+	if !r.readonly[name] {
+		return false
+	}
+	if !f.namesANumericType(r) {
+		return false
+	}
+	switch {
+	case f.integer && r.integer[name]:
+		// Already an integer, so nothing is being retyped and the ordinary
+		// refusal stands.
+		return false
+	case f.float:
+		if _, isFloat := r.floatPrecision[name]; isFloat {
+			return false
+		}
+	}
+	if r.AbsentParameter(name) {
+		return false
+	}
+	return r.ask(r.sem().NumericTypeLetterRetypesAFrozenName,
+		"a numeric type letter retyping a frozen name")
+}
+
+// caseLettersCancel reports whether this declaration wrote **both** case
+// letters under a minus, which one reading makes a declaration that records
+// neither and takes off whichever the name was already carrying — see
+// Semantics.TwoCaseLettersOnOneDeclarationCancel.
+//
+// The removal happens here rather than in the two branches below, because the
+// branches are what the cancel switches *off* and a rule that only declined to
+// add would leave a standing attribute where two of the three shells take it
+// away.
+//
+// The sign is read per letter and not off the word, which is measured:
+// `typeset +l -u z=Ab` lists `typeset -u z=Ab` in zsh and `declare -u z="AB"`
+// in bash, so a letter written under a plus is not one of the two that cancel.
+// Same reading `readonlyOff` already takes for the `r` letter.
+func (r *Runner) caseLettersCancel(name string, f declareFlags) bool {
+	if !f.lower || !f.upper {
+		return false
+	}
+	lowerPlus, lowerWritten := f.lastSign('l')
+	upperPlus, upperWritten := f.lastSign('u')
+	if !lowerWritten || !upperWritten || lowerPlus || upperPlus {
+		return false
+	}
+	if !r.ask(r.sem().TwoCaseLettersOnOneDeclarationCancel,
+		"both case letters written on one declaration") {
+		return false
+	}
+	delete(r.lowered, name)
+	delete(r.uppered, name)
+	return true
+}
+
+// upperLetterRecordsNothing reports whether `-u` beside a numeric type letter
+// on the same declaration records no attribute, where `-l` beside the same
+// letter records one — see
+// Semantics.UpperCaseLetterBesideANumericTypeLetterRecordsNothing.
+//
+// A name is not passed and none is needed: the answer is about the pair of
+// letters and not about the cell, and the shell that drops the letter drops it
+// for every name.
+func (r *Runner) upperLetterRecordsNothing() bool {
+	return r.ask(r.sem().UpperCaseLetterBesideANumericTypeLetterRecordsNothing,
+		"the upper-case letter written beside a numeric type letter")
 }
 
 // numericLetterReplacesTheCase takes a case attribute off a name the integer

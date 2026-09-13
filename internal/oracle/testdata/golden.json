@@ -55622,6 +55622,57 @@
         "TimedOut": false
       }
     },
+    "decl/a-numeric-type-letter-over-a-frozen-name": {
+      "ash": {
+        "Stdout": "\u003cshell\u003e: typeset: not found~st=127~\u003cshell\u003e: typeset: not found~\u003cshell\u003e: typeset: not found~st=127~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "\u003cshell\u003e: line 1: typeset: q: readonly variable~st=1~declare -r q=\"1\"~\u003cshell\u003e: line 1: typeset: r: readonly variable~st=1~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "\u003cshell\u003e: line 1: typeset: q: readonly variable~st=1~declare -r q=\"1\"~\u003cshell\u003e: line 1: typeset: r: readonly variable~st=1~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "\u003cshell\u003e: line 0: typeset: q: readonly variable~st=1~declare -r q=\"1\"~\u003cshell\u003e: line 0: typeset: r: readonly variable~st=1~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "\u003cshell\u003e: 1: typeset: not found~st=127~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found~st=127~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: q: is read only",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0~typeset -ir q=4~\u003cshell\u003e:1: read-only variable: r",
+        "Stderr": "",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "decl/a-subscripted-operand-with-no-value": {
       "ash": {
         "Stdout": "",
@@ -55720,6 +55771,57 @@
         "Stdout": "st=0~[][] after",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "decl/a-type-letter-over-a-name-holding-an-array": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected \"(\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "st=0~declare -ai a=([0]=\"4\")~st=0~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0~declare -ai a=([0]=\"4\")~st=0~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0~declare -ai a='([0]=\"4\")'~st=0~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0~typeset -a -i a=(4)~st=0~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0~typeset -i a=4~\u003cshell\u003e:typeset:1: c: inconsistent type for assignment",
+        "Stderr": "",
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       }
@@ -55973,6 +56075,57 @@
       },
       "zsh": {
         "Stdout": "st=0~none",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "decl/case-letters-beside-a-numeric-type-letter": {
+      "ash": {
+        "Stdout": "\u003cshell\u003e: typeset: not found~\u003cshell\u003e: typeset: not found~\u003cshell\u003e: typeset: not found~z=[]~\u003cshell\u003e: typeset: not found",
+        "Stderr": "",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "declare -il v=\"4\"~declare -iu w=\"4\"~declare -- z=\"Ab\"~z=[Ab]~declare -- y=\"Cd\"",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "declare -il v=\"4\"~declare -iu w=\"4\"~declare -- z=\"Ab\"~z=[Ab]~declare -- y=\"Cd\"",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "\u003cshell\u003e: line 0: typeset: v: not found~\u003cshell\u003e: line 0: typeset: w: not found~\u003cshell\u003e: line 0: typeset: z: not found~z=[]~\u003cshell\u003e: line 0: typeset: y: not found",
+        "Stderr": "",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found~z=[]~\u003cshell\u003e: 1: typeset: not found",
+        "Stderr": "",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "typeset -l -i v=4~typeset -u -i w=4~z=AB~z=[AB]~y=CD",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "typeset -il v=4~typeset -i w=4~typeset z=Ab~z=[Ab]~typeset y=Cd",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

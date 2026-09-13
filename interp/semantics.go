@@ -3329,6 +3329,56 @@ type Semantics struct {
 	// assignment the reservation was for (#2250).
 	ArrayLiteralOperandRetypesAFrozenScalar Answer
 
+	// NumericTypeLetterRetypesAFrozenName lets a declaration whose integer or
+	// float letter gives a **frozen** name a numeric type it does not already
+	// have carry out its own assignment, without a refusal and with the freeze
+	// still on.
+	//
+	// The letter half of the rule ArrayLiteralOperandRetypesAFrozenScalar
+	// holds the literal half of, and a field of its own rather than a widening
+	// of that one — see the two rows at the bottom, where the two disagree
+	// with each other over the same frozen name.
+	//
+	// Measured 2026-09-12 under `env -i PATH=/bin HOME=/tmp`, zsh 5.9.2
+	// against bash 5.3.15, bash 3.2 and ksh93u+:
+	//
+	//	readonly q=1;    typeset -gi q=4   zsh takes it, `typeset -ir q=4`
+	//	readonly q=1;    typeset -gF q=4   the same, `typeset -Fr q=4.0000000000`
+	//	readonly q=1;    export -i q=4     the same, `export -ir q=4`
+	//	readonly q=1;    integer q=4       the same under the type's own word
+	//	readonly q;      typeset -gi q=4   the same, over a name holding nothing
+	//	readonly q=1;    typeset -gi q     the same with no value at all: the
+	//	                                   standing text is re-read and the
+	//	                                   listing is `typeset -ir q=1`
+	//	typeset -Fr q=1; typeset -gi q=4   the same — float to integer is a
+	//	                                   retype like any other
+	//	typeset -lr q=1; typeset -gi q=4   the same; a case letter is not a type
+	//
+	// and refused wherever the type does not move:
+	//
+	//	typeset -ir q=1; typeset -gi q=4   `read-only variable: q`
+	//	typeset -ir q=1; typeset -gi16 q=4 the same — a base is not a type
+	//	typeset -Fr q=1; typeset -gE q=4   the same — `-F` and `-E` are one
+	//	                                   type wearing two renderings
+	//	readonly q=1;    typeset -g q=4    the same — no type letter at all
+	//	readonly q=1; typeset -gi q=4; q=9 the freeze is still on afterwards
+	//
+	// bash refuses every taken row (`typeset: q: readonly variable`, and its
+	// `export` has no `-i` to refuse with) and so does ksh93u+ (`q: is read
+	// only`), so this is a conflict rather than something the core can hold.
+	//
+	// **Two rows say it is not one field with the literal half**, and they are
+	// the same frozen array reached by the two spellings:
+	//
+	//	typeset -ar q=(a); typeset -gi q=4  zsh **takes** it, `typeset -ir q=4`
+	//	readonly q=(a);    typeset -g q=(b) zsh **refuses** it
+	//
+	// The literal may only leave the scalar kind; the letter may leave any
+	// kind at all, an array and a table included. One field would have to
+	// carry two different guards, which is the shape a named axis exists to
+	// keep apart (#2539).
+	NumericTypeLetterRetypesAFrozenName Answer
+
 	// SetArrayBadNameLeavesZeroFromCommandString makes `set -A` refuse a
 	// name that is not one and leave the shell exiting **0**, where the same
 	// refusal from a script file leaves 1.
@@ -3827,6 +3877,75 @@ type Semantics struct {
 	// Only a listing observes it, so the whole cost of the wrong answer is a
 	// `typeset -p` that says more than the shell would.
 	NumericAttributeReplacesTheCaseAttribute Answer
+	// UpperCaseLetterBesideANumericTypeLetterRecordsNothing makes the `-u`
+	// letter written on the *same* declaration as the integer or float letter
+	// record no attribute at all, where `-l` beside the same letter records
+	// one.
+	//
+	// One shell's asymmetry and not a family, which is why it names the one
+	// letter. Measured 2026-09-12 under `env -i`:
+	//
+	//	typeset -li v=4; typeset -p v    typeset -ui v=4; typeset -p v
+	//
+	//	zsh 5.9.2    typeset -il v=4              typeset -i v=4
+	//	bash 5.3.15  declare -il v="4"            declare -iu v="4"
+	//	ksh93u+      typeset -l -i v=4            typeset -u -i v=4
+	//
+	// The order of the two letters decides nothing — `-il` and `-li` agree,
+	// and so do `-ui` and `-iu` — so it is not "the later letter wins". What
+	// the one shell that drops it is doing is visible in what the attribute
+	// is *for* there: a based integer renders in upper case by default, so
+	// `typeset -li16 v=255` reads `16#ff` and `-u` asks for the rendering the
+	// name already has. Nothing is written down for it.
+	//
+	// A *later* declaration is the other question and this shell answers it
+	// the other way: `typeset -i z=4; typeset -u z` lists `typeset -iu z=4`,
+	// so the letter records perfectly well once it is on a line of its own.
+	// One command is not two, the same split
+	// NumericAttributeReplacesTheCaseAttribute already draws.
+	//
+	// Only a listing observes it (#2541).
+	UpperCaseLetterBesideANumericTypeLetterRecordsNothing Answer
+	// TwoCaseLettersOnOneDeclarationCancel makes a declaration that writes
+	// both `-l` and `-u` record neither, and take off whichever of them the
+	// name was already carrying.
+	//
+	// Measured 2026-09-12 under `env -i`:
+	//
+	//	typeset -lu z=Ab; typeset -p z; echo "[$z]"
+	//
+	//	zsh 5.9.2    typeset z=Ab      [Ab]   neither letter, no fold
+	//	bash 5.3.15  declare -- z="Ab" [Ab]   the same
+	//	ksh93u+      z=AB              [AB]   the later letter wins
+	//
+	// and over a name already carrying one, which is what says the cancel
+	// *removes* rather than merely declining to add:
+	//
+	//	typeset -l z=Ab; typeset -lu z=Cd; typeset -p z
+	//
+	//	zsh 5.9.2    typeset z=Cd      the standing `-l` is gone
+	//	bash 5.3.15  declare -- z="Cd" the same
+	//
+	// The sign is per letter and not per word, which is the third row:
+	// `typeset +l -u z=Ab` lists `typeset -u z=Ab` in zsh and `declare -u
+	// z="AB"` in bash, so a letter written under a plus is not one of the two
+	// that cancel. Order decides nothing — `-lu`, `-ul` and `-l -u -l` all
+	// cancel — which is what makes this a rule rather than
+	// last-occurrence-wins with a twist.
+	//
+	// A later declaration is a different question and all three agree on it:
+	// `typeset -l z=Ab; typeset -u z` is `-u` everywhere. It is one word that
+	// splits them (#2541).
+	//
+	// **No** is the later letter winning, which is what the *value* does in
+	// the shell that answers it that way. Its listing is a third answer this
+	// field has no room for and does not claim: ksh93 keeps both letters and
+	// then writes the name with neither, so `typeset -lu z=Ab; typeset -p z`
+	// is a bare `z=AB` there against this engine's `typeset -u z=AB`. The
+	// value is right in every column and the listing is one letter's worth
+	// wrong in one of them, which is the trade a two-valued answer buys; the
+	// row is in the record so the next reader measures rather than assumes.
+	TwoCaseLettersOnOneDeclarationCancel Answer
 	// CaseAttributeReplacesTheNumericAttribute is the other direction: `-l`
 	// and `-u` take the integer or float letter off the name they are given.
 	//

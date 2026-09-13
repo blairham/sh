@@ -623,6 +623,13 @@ func Semantics() interp.Semantics {
 	// typeset -g q=(b)` is `q: is read only` at 1, where zsh replaces the
 	// scalar with an array and carries on.
 	s.ArrayLiteralOperandRetypesAFrozenScalar = interp.No
+	// The letter half of the same rule, and the same answer — which is the
+	// column #2539 was filed not knowing, since the word `integer` is this
+	// shell's own and nothing had asked it. Measured 2026-09-12 under
+	// `env -i` on ksh93u+, `readonly q=1; typeset -i q=4` is `q: is read
+	// only` and so are the `-F` and `export -i` spellings, with the name
+	// left at 1 (#2539).
+	s.NumericTypeLetterRetypesAFrozenName = interp.No
 	// An exported name whose declaration named a numeric type reaches a
 	// child as `0`, even though the shell itself reads the name as unset:
 	// `typeset -ix Z; env` hands over `Z=0` where `${Z+set}` is empty.
@@ -648,6 +655,16 @@ func Semantics() interp.Semantics {
 	// `typeset -i y; typeset -l y` is `typeset -l y=1`. This is the one
 	// column that answers both directions yes.
 	s.NumericAttributeReplacesTheCaseAttribute = interp.Yes
+	// Within one declaration both case letters record beside the numeric one
+	// alike. Measured 2026-09-12, `typeset -li v=4` lists `typeset -l -i
+	// v=4` and `typeset -ui v=4` lists `typeset -u -i v=4` — which is also
+	// what this shell's own `integer` word lists as, since it is `typeset
+	// -li` (#2541).
+	s.UpperCaseLetterBesideANumericTypeLetterRecordsNothing = interp.No
+	// And two case letters on one declaration do not cancel here: the later
+	// one wins and folds. Measured 2026-09-12, `typeset -lu z=Ab` reads `AB`
+	// and `typeset -ul z=Ab` reads `ab` (#2541).
+	s.TwoCaseLettersOnOneDeclarationCancel = interp.No
 	s.CaseAttributeReplacesTheNumericAttribute = interp.Yes
 	// But an attribute added to a name that already holds a value re-reads
 	// that value at once: `FOO=bar; typeset -i FOO` stores 0 over the text,

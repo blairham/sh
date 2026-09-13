@@ -426,7 +426,7 @@ func TestTheFreshShellIsSetUpTheWayTheFrontEndSetsOneUp(t *testing.T) {
 	sem := imageSemantics()
 	setUp := func(r *Runner) {
 		r.Register("only-in-a-composed-shell", func(r *Runner, _ context.Context, args []string) int {
-			fmt.Fprintf(r.Out(), "registered:%s\n", strings.Join(args, ","))
+			_, _ = fmt.Fprintf(r.Out(), "registered:%s\n", strings.Join(args, ","))
 			return 0
 		})
 	}

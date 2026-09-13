@@ -4986,29 +4986,6 @@ func (r *Runner) fatalQuiet() {
 	r.ctl, r.abandon, r.errexitStopped = controlExit, abandonError, false
 }
 
-// fatalQuietAt ends the script at a status the caller has already chosen,
-// rather than at the dialect's generic fatal status.
-//
-// A special builtin's usage error is the fatality that needs it. Measured
-// 2026-09-13: `shift -x`, `export -q`, `return abc` and `exit status` end a
-// shell in POSIX mode at **2** — bash 5.3.15 under `set -o posix` and under
-// the name `sh`, dash, ksh93 and BusyBox ash alike — where the same shells'
-// generic fatal status is 1 in bash and 2 in the rest, which is what
-// FatalErrorStatusIsOne records. Unanimous across every column that has a
-// dialect here, so it is the implementation rather than an axis; bash 3.2.57
-// is the one column that parts from it, ending `shift -x` at 1 while its own
-// `export -q` ends at 2, and no dialect claims that build.
-//
-// It was invisible while only dash, ksh93 and BusyBox ash could reach the
-// path: all three answer 2 to both questions, so the assignments the callers
-// already made before fatalQuiet — which setFatalStatus then overwrote — were
-// dead and read as live. bash reaching the same path through POSIX mode is
-// what told the two apart (#2583).
-func (r *Runner) fatalQuietAt(status int) {
-	r.fatalQuiet()
-	r.status = status
-}
-
 func (r *Runner) fatal(format string, args ...any) {
 	r.diagf(format, args...)
 	r.fatalQuiet()
@@ -5111,6 +5088,24 @@ func (r *Runner) failedExpansion() {
 
 // setFatalStatus is the status half of fatalQuiet, for the caller that wants
 // the number without the unwinding.
+// setFatalStatus writes the dialect's generic status for a fatal error.
+//
+// **A builtin's own return value wins over it**, because the dispatcher writes
+// what the builtin returned after the control flow is set — so a builtin that
+// reports a usage error, ends the script and returns 2 ends it at 2 however
+// this answers. That is the reading the panel wants: measured 2026-09-13,
+// `shift -x`, `export -q`, `return abc` and `exit status` end a shell in POSIX
+// mode at 2 in bash 5.3.15 under `set -o posix`, in that build under the name
+// `sh`, and in dash, ksh93 and BusyBox ash, while bash's generic fatal status
+// is 1 — a failed redirection on a special builtin ends it at 1 in the same
+// shell. bash 3.2.57 is the one column that parts from it, ending `shift -x`
+// at 1 while its own `export -q` ends at 2; no dialect here claims that build.
+//
+// So a caller on that path returns the builtin's status and never `r.status`,
+// and an assignment to r.status in front of fatalQuiet is dead either way.
+// Both facts were invisible while only dash, ksh93 and BusyBox ash could reach
+// it — all three answer 2 to both questions — and bash reaching the same path
+// through POSIX mode is what told them apart (#2583).
 func (r *Runner) setFatalStatus() {
 	if r.ask(r.sem().FatalErrorStatusIsOne, "the exit status of a fatal error") {
 		r.status = 1

@@ -693,7 +693,7 @@ func (r *Runner) unaliasWithNothingToRemove() int {
 	// bash answers `No` to both — and became a divergence the moment POSIX
 	// mode started moving the special-builtin one.
 	if r.ask(r.sem().AliasBadOptionFatal, "a bad `unalias` usage ending the script") {
-		r.fatalQuietAt(status)
+		r.fatalQuiet()
 	}
 	return status
 }

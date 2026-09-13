@@ -8914,6 +8914,18 @@ type Semantics struct {
 	// Unspecified is a real answer and means the mode leaves a script that
 	// reaches the question refused by name, exactly as the axis above does —
 	// a dialect whose POSIX mode nobody has measured must not be handed one.
+	//
+	// unpinned ash: every row that reaches it fails at baseline. This shell
+	// has no `set -o posix`, so the only door is the name, and the one row
+	// under it — invoke/called-sh-makes-a-special-builtins-usage-error-fatal
+	// — already diverges on the wording: BusyBox writes `shift: line 0:
+	// Illegal number: -x` where this dialect writes `Illegal number: -x`, at
+	// the same status 2. A failing row cannot record a flip, so no value of
+	// this axis changes the score here and a row written to pin it would be
+	// recording that diagnostic gap instead. The sweep's `never reached` for
+	// this pair is that same blindness read the other way round: it infers
+	// it from the Unspecified flip going unnoticed, which it does for the
+	// one reason above. It pins in the other four (#2583).
 	BadOptionToSpecialBuiltinFatalInPosixMode Answer
 
 	// AliasBadOptionFatal ends the script when `alias` or `unalias` is given

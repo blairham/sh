@@ -127,6 +127,16 @@ func TestSemantics(t *testing.T) {
 		want interp.Answer
 	}{
 		{"SetFTurnsOffGlobbing", s.SetFTurnsOffGlobbing, interp.No},
+		// The departure from the standard's preset, and the reason POSIX
+		// mode asks the dialect rather than writing one answer for
+		// everybody: this shell has no `set -o posix`, and under the name
+		// `sh` it still prints `bad option: -x` and runs the next command
+		// at 0 — while the same shell under the same name *does* start
+		// ending a script on a failed redirection. Measured 2026-09-13
+		// (#2583).
+		{"BadOptionToSpecialBuiltinFatal", s.BadOptionToSpecialBuiltinFatal, interp.No},
+		{"BadOptionToSpecialBuiltinFatalInPosixMode", s.BadOptionToSpecialBuiltinFatalInPosixMode, interp.No},
+		{"RedirectErrorOnSpecialBuiltinFatal", s.RedirectErrorOnSpecialBuiltinFatal, interp.No},
 		// The reading side of the split above: `$-` reports noglob as the
 		// capital, because `-F` is zsh's own short spelling of it.
 		{"NoglobLetterIsF", s.NoglobLetterIsF, interp.No},

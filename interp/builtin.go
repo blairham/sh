@@ -237,12 +237,12 @@ func biReturn(r *Runner, _ context.Context, args []string) int {
 func (r *Runner) refusedReturnOperand(arg string) int {
 	r.diagf("%s\n", Wording(r.diag().NumericArgument, "%[1]s: invalid number: %[2]s", "return", arg))
 	if r.ask(r.sem().BadOptionToSpecialBuiltinFatal, "a special builtin's usage error ending the script") {
-		// fatalQuietAt sets controlExit over the controlReturn above, which is
+		// fatalQuiet sets controlExit over the controlReturn above, which is
 		// the order that matters: the script ends rather than the function.
-		// The 2 is the builtin's own refusal status and not the shell's
-		// generic fatal one — see fatalQuietAt, and note that this used to
-		// reach the same answer by accident, through the return value below.
-		r.fatalQuietAt(2)
+		// No `r.status = 2` to go with the 2 below: the return value is what
+		// the dispatcher writes, and it is the status the panel ends at. See
+		// setFatalStatus.
+		r.fatalQuiet()
 	}
 	return 2
 }
@@ -2163,7 +2163,10 @@ func (r *Runner) shiftBadNumber(operand string) (int, bool) {
 	r.diagf("%s\n", Wording(d.ShiftBadNumber, "shift: %[1]s: numeric argument required", operand))
 	status := orDefault(d.BuiltinBadOptionStatus, 2)
 	if r.ask(r.sem().BadOptionToSpecialBuiltinFatal, "a special builtin's bad operand ending the script") {
-		r.fatalQuietAt(status)
+		r.fatalQuiet()
+		// The builtin's own status and not `r.status`, which fatalQuiet has
+		// just written the dialect's generic fatal answer into — 1 in bash,
+		// and the panel ends this at 2. See setFatalStatus (#2583).
 		return status, true
 	}
 	return status, true
@@ -4565,7 +4568,9 @@ func sortedKeys(m map[string]string) []string {
 func (r *Runner) badStatusArg(builtin, arg string) int {
 	r.diagf("%s\n", Wording(r.diag().NumericArgument, "%[1]s: invalid number: %[2]s", builtin, arg))
 	if r.ask(r.sem().BadOptionToSpecialBuiltinFatal, "a special builtin's bad operand ending the script") {
-		r.fatalQuietAt(2)
+		r.fatalQuiet()
+		// The 2 and not `r.status`, for the reason shiftBadNumber returns the
+		// builtin's status: see setFatalStatus (#2583).
 		return 2
 	}
 	// Reported and not obeyed: no control flow is set, so the next statement

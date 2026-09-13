@@ -17547,6 +17547,30 @@ case $PWD in */sub) echo moved;; *) echo stayed;; esac`,
 		Why:      "the control that keeps the shell with the array out of the rule the shells with the letters follow: two reads that both find end-of-file leave the array at 2 and a third reads end-of-file again, where `read -p` in ksh93 and zsh has forgotten the coprocess by its third call. Reaping is what takes this array back and reading it dry is not, which is why the end-of-file rule is not a value of the same axis",
 	},
 	{
+		ID:       "commands/a-write-to-a-coprocess-that-has-ended-notices-it",
+		Category: "commands",
+		Snippet: `mkfifo p
+exec 9<>p
+coproc CP { exit 0; }
+read -t 0.5 z <&9
+echo x >&${CP[1]}
+echo "after=$?"
+echo done`,
+		Why: "the shape #2582 and #2468 are both about: a coprocess that has certainly ended, no fork anywhere to reap it, and a write aimed at the end the array published. bash answers `${CP[1]}: ambiguous redirect` at 1 and carries on to `done` — the notice has landed by then and the array is gone. The half-second is what makes this a measurement rather than a coin flip, and it is spent inside *one builtin* rather than in a loop: the fifo is opened for reading and writing so the `read` blocks on a pipe nobody writes, and a whole second of SIGCHLD is far more room than the five-hundred-iteration loop #2468 measured, which is the shape #2506 showed goes wrong under load. Reaching this at all is why a write through the published name delivers the notice here — a coprocess that is a goroutine rather than a child has its ends closed the instant its body returns, so the write was a broken pipe and the shell died at 141 every time",
+	},
+	{
+		ID:       "commands/an-output-duplication-elsewhere-does-not-notice-a-coprocess-has-ended",
+		Category: "commands",
+		Snippet:  `coproc CP { echo hi; }; echo x >&2; echo "n=${#CP[@]}"`,
+		Why:      "the control on the row above, and the one that says the notice is not the *operator's*: an ordinary `>&2` after a coprocess has ended leaves the array at 2, thirty runs of thirty. So a shell that delivered the notice for every output duplication would answer 0 here and would still pass the row above — and `>&2` is written on more lines of more scripts than anything else this could have been keyed on. The issue's own reproduction proves it from the other side: it reports `n=2` through two `>&2` redirections before the write that matters",
+	},
+	{
+		ID:       "commands/a-duplicate-of-a-coprocess-s-write-end-outlives-the-reaping",
+		Category: "commands",
+		Snippet:  `coproc CP { echo hi; }; exec 3>&${CP[1]}; wait; echo "n=${#CP[@]}"; echo x >&3; echo "w=$?"; echo done`,
+		Why:      "the control that says the notice did not become a way to survive SIGPIPE. A copy parked on a number of the script's own is the same open file, and the reaping takes back the array and the entry without closing it — so the write finds a pipe with no reader and ends the shell at 141 with `w=` and `done` unreached, thirty runs of thirty in bash. `n=0` is printed first, which is what separates this from a shell that simply had not noticed: it had noticed, and the duplicate still dies. A rule that delivered the notice at the `exec` instead would answer `Bad file descriptor` at 1 here and reach `done`",
+	},
+	{
 		ID:       "commands/writing-by-a-letter-to-a-coprocess-that-has-ended",
 		Category: "commands",
 		Snippet:  `coproc (print hi); wait; print -p x; print "w=$?"; print done`,

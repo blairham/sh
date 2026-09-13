@@ -83,7 +83,7 @@ func returnAndDebugSem(s *Semantics) {
 	s.ErrTrapRunsInsideFunctions = No
 	s.ErrTrapRunsInSubshells = No
 	// `set -T` is what carries either trap into a call, and the letters are
-	// bash's — the dialect this behaviour was measured on.
+	// bash's — the dialect this behavior was measured on.
 	s.SetHasTraceLetters = Yes
 }
 

@@ -119,7 +119,19 @@ func (r *Runner) storeArrayElement(name string, idx int, subject string, value E
 }
 
 // storeAssocElement is the same write into a keyed table.
+//
+// A **produced** table is written through its own hook and never into the
+// stored one, which is setAssocElem's rule and not a nicety: a stored table
+// shadows the producer, so one assignment would turn a live view into a
+// snapshot taken at that instant. The hook takes a string, so what it is
+// handed is the element's scalar reading — the same bytes every other reader
+// of a nested element gets. Reaching the producer with a flattened value beats
+// storing the whole one where nothing will ever read it again.
 func (r *Runner) storeAssocElement(name, key string, value Element) {
+	if write, produced := r.dynamicAssocWriters[name]; produced {
+		write(r, key, value.scalar(), true)
+		return
+	}
 	a := r.AssocArrays[name]
 	if a == nil {
 		a = AssocArray{}

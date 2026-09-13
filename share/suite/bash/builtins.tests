@@ -4,9 +4,10 @@
 # The builtins bash has that the rest of the panel has not, and the spellings
 # bash gives the ones it shares.
 #
-# `shopt`, `mapfile`/`readarray`, `type -t` and `declare -p`'s exact output
-# are bash's own: zsh has `setopt` and a different `typeset -p`, ksh93 has
-# neither shopt nor mapfile, and dash has none of it.
+# `shopt`, `mapfile`/`readarray`, `type -t`, `history` and `declare -p`'s
+# exact output are bash's own: zsh has `setopt`, `fc` and a different
+# `typeset -p`, ksh93 has neither shopt nor mapfile and spells the history
+# builtin `hist`, and dash has none of it.
 
 # readarray reads lines into an array; -t strips the newline and -n bounds
 # how many are read.
@@ -73,3 +74,44 @@ printf 'shopt -q off: %s\n' "$?"
 shopt -o -s noglob
 printf '%s\n' "$(shopt -o -p noglob)"
 shopt -o -u noglob
+
+# history is a builtin a non-interactive shell still has, and it starts
+# empty: nothing is read from a history file unless the shell is interactive,
+# so what this measures is the list bash keeps in memory rather than what is
+# on the machine. It was one of the eleven builtins no case anywhere in this
+# tree mentioned (#2293).
+history
+printf 'empty -> %s\n' "$?"
+
+# -s pushes a line on without running it, which is the only way a script can
+# put anything there.
+history -s 'first entry'
+history -s 'second entry'
+history
+printf 'two entries -> %s\n' "$?"
+
+# A count is how many of the most recent to write.
+history 1
+
+# -p runs a word through history expansion and prints the result rather than
+# executing it. Nothing here is an expansion, so the word comes back whole.
+history -p 'plain words'
+
+# -d removes one by its number and the rest are renumbered from 1.
+history -d 1
+history
+
+# -c empties the list, and an empty list prints nothing and succeeds.
+history -c
+history
+printf 'after clear -> %s\n' "$?"
+
+# -w and -r are the file halves, and they name the file rather than taking
+# HISTFILE from the environment. A read appends to what is already there,
+# which is why the line is listed twice below rather than once.
+history -s kept
+history -w hfile
+printf 'written:\n'
+cat hfile
+history -r hfile
+history

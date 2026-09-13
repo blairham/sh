@@ -1,0 +1,102 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# The builtins only zsh has, and the nine of them that no case anywhere in
+# this tree mentioned (#2293) — every remaining name on that list but two.
+#
+# They are not one family. `compctl`, `log` and `zcompile` are zsh's own from
+# the start; the `zf_` nine come from the `zsh/files` module and are what a
+# script gets when it wants to move a file without a fork.
+
+# `log` reports who has logged in or out since it last looked. With no
+# `watch` set there is nobody to report, so it succeeds and says nothing —
+# which is the answer a script in a suite can have, and the only one, since
+# who is logged in is a property of the machine.
+log
+printf 'log -> %s\n' "$?"
+
+# `compctl` is the old completion system, still present and still writable
+# from a non-interactive shell. -L writes the definitions back as the
+# commands that would recreate them, which is what makes it askable at all.
+compctl -K handler mycmd
+printf 'compctl -> %s\n' "$?"
+compctl -L mycmd
+compctl -f otherc
+compctl -L otherc
+
+# A second definition for the same command replaces the first rather than
+# adding to it.
+compctl -f mycmd
+compctl -L mycmd
+
+# -L with no name writes everything it knows, the built-in defaults included.
+compctl -L
+
+# `zcompile` turns a script into a wordcode file beside it. The name is the
+# script's with .zwc on the end, and the original is untouched.
+printf 'print compiled\n' > unit.zsh
+zcompile unit.zsh
+printf 'zcompile -> %s\n' "$?"
+[[ -f unit.zsh.zwc ]] && printf 'wordcode written\n'
+[[ -f unit.zsh ]] && printf 'source kept\n'
+[[ -s unit.zsh.zwc ]] && printf 'and it is not empty\n'
+. ./unit.zsh
+
+# The `zf_` builtins come from a module, so the file loads it first. That
+# `zf_ln` answers before the `zmodload` line here and does not in zsh is
+# #1670, which recorded it and decided nothing: a name this shell registers
+# is registered from the start, so module membership is not something it can
+# consult at lookup time.
+zmodload zsh/files
+printf 'zmodload -> %s\n' "$?"
+
+# zf_ln makes a link, hard by default and symbolic with -s.
+printf 'pointee\n' > target
+zf_ln target hard
+printf 'zf_ln -> %s\n' "$?"
+[[ -f hard ]] && printf 'hard link is there\n'
+zf_ln -s target soft
+[[ -L soft ]] && printf 'and -s made a symbolic one\n'
+printf 'through the link: %s\n' "$(cat soft)"
+
+# A destination that exists is a refusal rather than an overwrite, and the
+# diagnostic names the builtin.
+zf_ln target hard
+printf 'over an existing name -> %s\n' "$?"
+
+# zf_chmod takes the octal bits.
+zf_chmod 600 target
+printf 'zf_chmod -> %s\n' "$?"
+[[ -r target ]] && printf 'still readable\n'
+[[ -x target ]] || printf 'and not executable\n'
+zf_chmod 700 target
+[[ -x target ]] && printf 'now it is\n'
+
+# zf_rmdir removes a directory and only an empty one.
+mkdir empty full
+: > full/occupant
+zf_rmdir empty
+printf 'zf_rmdir -> %s\n' "$?"
+[[ -d empty ]] || printf 'empty one is gone\n'
+zf_rmdir full
+printf 'non-empty -> %s\n' "$?"
+[[ -d full ]] && printf 'and is still there\n'
+
+# zf_sync flushes what is written and takes no operand.
+zf_sync
+printf 'zf_sync -> %s\n' "$?"
+
+# zf_chown and zf_chgrp are asked where the answer is the shell's rather than
+# the machine's: whether the file is there, and whether enough was said. A
+# successful chown needs a uid this run may or may not be allowed to use, and
+# a case whose answer moves with who is running it measures the machine.
+zf_chown 0 nosuchname
+printf 'zf_chown missing -> %s\n' "$?"
+zf_chgrp 0 nosuchname
+printf 'zf_chgrp missing -> %s\n' "$?"
+zf_chown
+printf 'zf_chown bare -> %s\n' "$?"
+zf_chgrp
+printf 'zf_chgrp bare -> %s\n' "$?"
+zf_chmod nosuchname
+printf 'zf_chmod with no mode -> %s\n' "$?"

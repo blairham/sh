@@ -1,0 +1,130 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# printf — the conversions, the escapes and the format reuse POSIX XCU gives
+# it, asked of printf itself rather than leaned on.
+#
+# Every other file in this suite emits with printf and none of them measures
+# it. That is the same shape as a shell matrix listing a construct as common
+# because it is used everywhere: a mention is not a measurement, and the most
+# exercised builtin here was until now the least graded one.
+#
+# What is asked is the agreed ground only. printf is where the shells part
+# more than almost anywhere else — an unknown escape, a leading zero in a
+# numeric operand, `%q`, `\xHH` and the rounding of a half all split the
+# panel — and each of those is asked in the file of the shell that answers it
+# alone.
+
+# A format with no conversion is written out as it stands.
+printf 'plain\n'
+printf 'no newline'; printf '\n'
+
+# %s writes the operand. An absent operand is the empty string, not an error.
+printf '%s\n' one
+printf '%s %s\n' one two
+printf 'a%sb\n' ''
+printf '%s\n'
+printf 'missing:[%s][%s]\n' only
+
+# The integer conversions, in the bases POSIX names for them.
+printf '%d\n' 0
+printf '%d\n' 1
+printf '%d\n' -1
+printf '%d\n' 42
+printf '%i\n' 7
+printf '%o %o\n' 8 64
+printf '%x %X\n' 255 255
+printf '%u\n' 7
+printf '%d\n' +5
+
+# A numeric operand may come from a variable or a substitution; it is the
+# same operand either way.
+v=9
+printf '%d\n' "$v"
+printf '%d\n' "$(printf '11')"
+
+# A leading single quote makes the operand the value of the character after
+# it, which is the one place printf reads a letter as a number.
+printf "%d\n" "'A"
+printf "%d\n" "'0"
+
+# %c writes the first character of the operand and nothing else of it. An
+# operand with no character in it — empty, or absent — is held out until
+# #2647 lands: every reference writes one NUL byte there and we write nothing.
+printf '%c\n' abc
+
+# %% is a literal percent and consumes no operand.
+printf '%% %s\n' after
+
+# Field width, left adjustment, precision, zero padding and the sign flags —
+# the same flags the C function has, on both the string and the integer
+# conversions.
+printf '[%5s]\n' hi
+printf '[%-5s]\n' hi
+printf '[%.2s]\n' hello
+printf '[%5.3s]\n' abcdefg
+printf '[%5d]\n' 42
+printf '[%-5d]\n' 42
+printf '[%05d]\n' 42
+printf '[%.3d]\n' 5
+printf '[%+d]\n' 42
+printf '[% d]\n' 42
+printf '[%3c]\n' x
+
+# A star taking the width or the precision from the operand list is held out
+# until #2646 lands: every reference has it and none of our five dialects
+# does.
+
+# The floating conversions round and format as C does, except at a half —
+# which is asked of ksh93 alone, because ksh93 alone rounds it upward.
+printf '[%5.2f]\n' 3.14159
+printf '[%e]\n' 1500
+printf '[%g]\n' 0.0001
+
+# Escapes in the format string. The control characters are written out so the
+# bytes are visible rather than the terminal's reading of them.
+printf 'tab:\tafter\n'
+printf 'backslash:\\\n'
+printf 'octal:\101\102\n'
+printf 'controls:\a\b\f\v\n' | od -An -c | tr -s ' '
+
+# %b processes the escapes of its operand, which plain %s does not.
+printf '[%b]\n' 'x\ty'
+printf '[%b]\n' 'a\nb'
+printf '[%s]\n' 'a\nb'
+printf '[%b]\n' '\0101\0102'
+printf '[%b%b]\n' a b
+
+# \c in a %b operand ends the output of that printf, including the rest of
+# the format; a later printf is unaffected.
+printf '[%b' 'x\c'
+printf 'and this is a separate command]\n'
+
+# The format is reused until the operands run out, and a final pass with
+# fewer operands than conversions fills the rest in as empty. A *numeric*
+# conversion left without an operand is held out until #2648 lands: the four
+# references here write the zero silently, BusyBox diagnoses it and ends at
+# status 1, and ours is silent in ash too.
+printf '%s=%s\n' a 1 b 2
+printf '%s|%s|%s|\n' a b c d e f
+printf '%s-%s;' a b c d e; printf '\n'
+
+# A format with no conversion at all is written once however many operands
+# follow it, because reuse is driven by operands being consumed.
+printf 'once\n' a b c
+
+# `--` ends the options, so a leading dash in the format or in an operand is
+# an operand rather than a flag.
+printf -- '%s\n' dashdash
+printf '%s\n' -n
+
+# Command substitution strips the trailing newlines of what printf wrote, so
+# a value carried through one is the text without them.
+printf '[%s]\n' "$(printf 'z\n\n\n')"
+
+# An operand is passed whole. Field splitting happened before printf saw it,
+# and a quoted operand keeps its spaces, its newline and its asterisk.
+printf '[%s]\n' '  spaced  '
+printf '[%s]\n' '*'
+printf '[%s]\n' 'a
+b'

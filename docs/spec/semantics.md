@@ -4416,6 +4416,60 @@ actually runs out of digits. It is the same split `PrintfHexEscapePolicy`
 records at the two `printf` sites, where it is one of the three details that
 made a policy out of a bool.
 
+## Two shells spell `\C-A` alike and mean different bytes by it
+
+Inside a `$'…'`, `\C` and `\M` are **three** things across the panel, and
+for a while they were modeled as two: an on/off field said zsh had them
+and bash did not, and ksh93 — which writes the same five characters and
+answers something else — sat unanswered rather than wrong.
+`Semantics.DollarSingleCaretMeta` is a `DollarSingleCaretMetaPolicy` now.
+
+    $'\C-A'   bash 5.3, bash 3.2, bash as sh   the four characters, as written
+              ash                              the same
+              dash                             no `$'…'` at all
+              zsh 5.9.2                        01
+              ksh93u+                          `m` then `A`
+
+**zsh's pair** — `DollarSingleCaretMetaMaskedWithAnOptionalDash`. `\C-X` is
+a control character and `\M-X` the same byte with the high bit set; the
+separating `-` is optional in both, so `\CA` and `\C-A` are one byte
+apiece, and either may take the other as its argument. The mask keeps a
+high bit it finds, and a written `?` is `7f` rather than masked — which a
+meta bit takes it back out of, so `$'\C-\M-?'` is `9f` and not `ff`.
+
+**ksh93's** — `DollarSingleCaretMetaFoldedWithNoDash`. `\C` takes exactly
+one argument and **no dash**, and answers it folded up and exclusive-ored
+with `0x40`. So `$'\C-A'` is the escape applied to `-` — `m` — and then a
+literal `A`, two bytes where zsh writes one. Measured 2026-09-13 on
+ksh93u+ 2012-08-01 through `od -c`:
+
+    $'\CA'  01     $'\Ca'  01     $'\C?'  7f     $'\C1'  q
+    $'\Cx'  18     $'\C['  1b     $'\C~'  3e     $'\C@'  the zero byte
+    $'\C\x41'  01  $'\C\101'  01  $'\C\n'  J   $'\C\C-A'  0d then `A`
+    $'x\C'  x — with nothing after it the escape produces nothing at all
+
+One rule with no exceptions, where the masked reading needs a special
+case for `?`: `?` is `3f`, and `3f ^ 40` is `7f` without being asked for.
+
+`\M` is **not an escape by itself** there — `$'\Mx'` is `Mx` and `$'\M'`
+is `M`, both by way of the unknown-escape rule — and the two characters
+`\M-` are the **escape byte**, taking nothing after them: `$'\M-x'` is
+`1b` then `x`, `$'\M-'` alone is `1b`, and `$'\M--'` is `1b` then a dash.
+The two compose in either order, each still reading its own way:
+`$'\M-\C-x'` is `1b m x` and `$'\C-\M-x'` is `m 1b x`.
+
+**`\c` is the complementary escape**, and the vocabularies interlock:
+zsh has the caret pair and no `\c`, bash has `\c` and no caret pair, and
+ksh93 has both — its `\c` being the same arithmetic as its `\C` under
+another spelling (`Semantics.DollarSingleBackslashC`,
+`DollarSingleControlToggled`).
+
+Pinned by `core/dollar-single-caret-and-meta`,
+`core/dollar-single-caret-and-meta-compose`, `interp`'s
+`TestTheTwoCaretReadingsPartOverTheSameSpelling` — which asserts both
+readings over one text, row by row — and `dialect/ksh`'s
+`TestTheControlEscapeTakesNoDash` (#2345).
+
 ## A function file that defines the function it is named after
 
 A file on `$fpath` may hold the function's **body**, or it may hold a
@@ -7840,13 +7894,15 @@ out=out`. `Semantics.DeclareGlobalReachesPastALocal`, asked only where a
 local shadows the name.
 
 **ksh93's `typeset -f` prints the source text verbatim** — its own
-two-space indentation, `echo two; echo three` still on one line. This
-engine keeps a tree, not the text, so the letter is refused as
-unimplemented rather than approximated. bash and zsh print from their
-trees, each in its own arrangement (`dialect/bash/layout.go`,
-`dialect/zsh/layout.go`); the header join differs too — bash gives the
-opening brace a line of its own, zsh keeps it on the header's
-(`Diagnostics.FunctionListingHeader`).
+two-space indentation, `echo two; echo three` still on one line. So that
+dialect's parser keeps the definition's characters on the declaration
+(`syntax.Dialect.FunctionDefinitionIsSourceText`,
+`syntax.FuncDecl.SourceText`) and its listing writes them back
+(`Diagnostics.FunctionListingIsSourceText`), terminator and all. bash and
+zsh print from their trees, each in its own arrangement
+(`dialect/bash/layout.go`, `dialect/zsh/layout.go`); the header join
+differs too — bash gives the opening brace a line of its own, zsh keeps it
+on the header's (`Diagnostics.FunctionListingHeader`).
 
 **A listing is not a pretty-printer, and nine questions about it are
 not about where the lines break.** Seven were reported together and two
@@ -8764,21 +8820,46 @@ The **names-only** listing keeps the same distinction with punctuation
 instead of a word: `f() { :; }; function g { :; }; typeset +f` writes
 `f()` and then `g`. zsh writes both bare.
 
-### What this listing does not promise
+### The listing is the source text, not a layout
 
-**ksh93 prints the source text back verbatim.** `f(){    echo     a   ;
-  }` lists with every one of those spaces, and a definition written on a
-`-c` line ends its listing with the `;` that followed it rather than with
-a newline. This implementation keeps a tree and not the source, so what it
-writes is a *layout* — the compact one, with the source's own separators —
-that reproduces that text for a definition written the way anybody writes
-one, and normalizes the spacing of one that is not.
+**ksh93 prints the definition back verbatim**, and this does too. The
+parser keeps the characters on the declaration —
+`syntax.Dialect.FunctionDefinitionIsSourceText` and
+`syntax.FuncDecl.SourceText` — and the listing writes them with nothing
+added, under `Diagnostics.FunctionListingIsSourceText`. Two flags because
+the text has to be *kept* by a parser and *written* by a vector, and a
+tree parsed by one dialect may be run by another's; either alone leaves
+the layout in place.
 
-Byte-identical, measured: a one-line body, either header spelling, several
-statements separated by `;`, and a bare listing of two functions. The one
-shape that differs is a body whose statements were separated by
-**newlines**, where the real shell keeps the last newline before the
-closing brace and this writes `; }`.
+The span runs from the name **through the character that ended the
+statement**, which is the whole of what a listing shows. Measured
+2026-09-13 on ksh93u+ 2012-08-01 through `cat -A` (#2610):
+
+    f(){    echo     a   ;   }; typeset -f f    f(){    echo     a   ;   };
+    f() { # note⏎ :; }; typeset -f f            f() { # note⏎ :; };
+    f() { :; }   ; typeset -f f                 f() { :; }   ;
+    eval "f() { :; }"; typeset -f f             f() { :; }
+    f() { :; }; g() { :; }; typeset -f          f() { :; };g() { :; };
+    f() {⏎  echo a⏎}⏎typeset -f f               f() {⏎  echo a⏎}⏎
+
+So a `-c` line's listing has **no trailing newline at all** — the `;` is
+the end of it — and a bare listing of two definitions runs them together,
+each carrying its own terminator and nothing between. A definition with
+nothing after it, which is the last thing an `eval` string holds, ends at
+its body.
+
+Three things follow that no printer could give: a comment inside the body
+survives, `${x}` keeps its braces, and odd spacing comes back as it was
+written. The fallback is still the compact layout — `FunctionLayout()` —
+for a declaration that carries no text: one built by an embedder, and one
+this shell is still waiting to read a body for.
+
+**What is still not reproduced** is a ksh93 fault rather than a layout:
+a **nested** definition truncates there. `f() { inner() { echo i; };
+echo o; }` lists as `f() { inner() { echo i; };` — the outer body's end is
+the inner one's — where this writes the outer definition whole. Corpus:
+`declare/f-says-a-nested-declaration-back`,
+`declare/f-says-a-nested-keyword-declaration-back`.
 
 
 ## The job and lookup long tail: type's letters, job specs, wait -n, disown, ulimit -a, the directory stack
@@ -10651,7 +10732,7 @@ type's own values are documented beside it in `interp/semantics.go`:
 `StatusArgumentPolicy`, `TrapBodyLineStyle`, `SelectMenuLayout`,
 `DeclarationListingForm`, `KillStatusStyle`, `BracketPolicy`,
 `DollarSingleControlPolicy`, `DollarSingleUnknownPolicy`,
-`UnsetArraySpanPolicy`. Where an entry below says "see X", X is one of
+`DollarSingleCaretMetaPolicy`, `UnsetArraySpanPolicy`. Where an entry below says "see X", X is one of
 those.
 
 **This catalog is not the whole of the vector.** The axes with their own
@@ -12146,8 +12227,9 @@ and the attached form is the probe that separates the two readings. In ash,
 `-o`, which prints the option listing, followed by the letters of
 `zzznosuch`, and refuses the `z`. An `-o` is present in all three spellings,
 so "the `-o` route is the gentle one" predicts 1 for the third and is
-falsified. (Where our own parse lands for that word is a separate
-divergence, #2640.)
+falsified. (Where our own parse lands for that word was a separate
+divergence — it refused the `-o` itself as an invalid option letter, which
+no column does — and is `SetOLetterAttachesItsName` below, #2640.)
 
 **The status splits in a different column from the fatality**, which is why
 `Diagnostics.SetInvalidOptionNameStatus` and `SetInvalidOptionLetterStatus`
@@ -12163,6 +12245,69 @@ and prints `after` here, and `set +o posix` puts it back. That is #2641,
 left out of the split deliberately — bash is the only panel column with a
 POSIX mode to measure, so the `…InPosixMode` pair it wants would have four
 presets holding a value no shell was ever asked for.
+
+**`BadSetOptionNameAtInvocationExitsZero`** — bash no · dash no · ksh93 no ·
+zsh no · ash **yes**
+
+Makes a refused `set -o` **name** on the command line that started the
+shell report success. The shell still declines — the command string or
+script never runs — and then exits 0.
+
+Measured 2026-09-13, `<shell> -o zzznosuch -c "echo after"`: `after` is
+printed by nobody, dash and all three bash columns and ksh93 exit 2, zsh
+exits 1, and BusyBox ash writes `illegal option -o zzznosuch` and exits
+**0**. `Diagnostics.SetInvalidOptionNameStatus` is one number for the
+builtin and the invocation alike, so it held 1 — right for a script's own
+`set -o zzznosuch` in this shell, and wrong here.
+
+Not a fact about that front end. Every other refusal on the same route
+reports a failure there: a refused option *letter* is 2, a `-c` with no
+operand is 2, a script that does not exist is 2, an unknown `--long` is 2,
+and a command nobody has is 127. So it is one refusal on one route, which
+is why it is an axis beside the pair above rather than something about
+invocations.
+
+An axis rather than a third status field, and the reason is what the value
+would have to be: 0 is the zero value every `int` in `Diagnostics` reads as
+"not stated", so the one column that needs the field could not fill it in.
+And 0 here is not a number the refusal happens to report — it is the refusal
+not counting as a failure, which is the thing to write down (#2639).
+
+**`SetOLetterAttachesItsName`** — bash no · dash no · ksh93 **yes** · zsh
+**yes** · ash no
+
+Reads `set -oNAME` — the `-o` letter with its operand welded to the same
+word — as the long name NAME, instead of as a bare `-o` followed by more
+option letters.
+
+Measured 2026-09-13 across all seven columns, at the builtin and at the
+invocation, which answer alike:
+
+| | `set -oerrexit zzznosuch` | `sh -oerrexit -c 'echo hi'` |
+| --- | --- | --- |
+| ksh93, zsh | errexit on, `zzznosuch` is `$1` | errexit on, prints `hi` |
+| the other five | `zzznosuch` refused as the name | `-c` refused as the name |
+
+So the seam is not "welded or not". The five that answer No give `-o` the
+**next word** whether or not characters follow the letter, and read those
+characters as further option letters afterwards. With no word behind it,
+`set -oe` lists the options — which is what a bare `-o` does — and then
+turns errexit on, in all five; the listing is not incidental, since
+`set -ozzznosuch` writes the whole option table to standard output before it
+complains.
+
+Ours matched no column at all: it cut the word at a *trailing* `o` only, so
+an `-o` anywhere else fell through to the letter table — where `o` is
+nobody's option letter — and came back `set: -o: invalid option` with the
+rest of the word never read (#2640). Asked only where characters follow the
+`o`; `set -o name`, `set -euo pipefail` and a bare `set -o` are read alike in
+all seven and consult nothing.
+
+Not folded in: bash reports the letter it refuses *after* the listing at 1
+and survivably, where its own `set -Z` is 2 and ends an `sh` script. That is
+not a third value of this axis — `set -oe -Q` in bash applies neither the `e`
+nor the listing and reports the *later* word's error, so bash validates every
+option word before applying any, which no per-refusal status can express.
 
 **It is `set`'s fatality and not the option's**, which a dialect with a
 second option builtin makes visible. Measured on a pipe in zsh 5.9.2,
@@ -14619,6 +14764,53 @@ both convert and keep the one element.
 
 Pinned by `decl/an-array-letter-over-a-declared-table` and
 `decl/a-table-letter-over-a-declared-array`.
+
+**`BareElementsInATableLiteralEndTheScript`** — bash no · dash no table to ask about · ksh93 yes · zsh no
+
+What a compound literal written with **bare words** means on a name that
+is a **table**. Not a kind change: the name is already the kind being
+declared and nothing is being converted. Two of the three columns with
+tables read the words as a list of pairs; the third reads the parentheses
+as an *index array*'s value and will not put one in a table.
+
+    typeset -A m=(alpha one); typeset -p m
+      bash 5.3.15  `declare -A m=([alpha]="one" )`
+      zsh 5.9.2    `typeset -A m=( [alpha]=one )`
+      ksh93u+      `cannot append index array to associative array m`,
+                   status 1, and the **input ends**
+
+Measured 2026-09-13, panel and machine as `oracle.md`. dash and BusyBox
+ash have no table to ask the question of; bash 3.2.57 has no `-A`.
+
+**The refusing column does not refuse every spelling of it**, and the
+three things that part them were measured rather than reasoned about.
+With `typeset -A m=([a]=1)` in front of them:
+
+    m=(x y)             `typeset -a m=(x y)` — the name **converts**
+    typeset m=(x y)     the same
+    typeset -A m=(x y)  `cannot append index array to associative array m`
+    m+=(x y)            the same refusal
+
+So an **append** never converts — there is no index array to append to a
+table, which is the one reading the sentence's verb is honest about — and
+the table **letter written on the same command** holds the name to its
+kind. The third is the surprise: an **empty** table refuses where a table
+with an element in it converts, so `typeset -A m; m=(x y)` and
+`typeset -A m=(); m=(x y)` both complain. That is that shell's own reading
+and it is reproduced rather than explained.
+
+It is the **written** shape that decides and not what the words came to.
+`e=; typeset -A m=($e)` is refused there although the element expands to
+nothing, and a literal with no element written in it — `typeset -A m=()` —
+is taken by every column. The expansion still happens first:
+`typeset -A m=($(echo SIDE >&2))` writes `SIDE` and then complains.
+
+`Diagnostics.IndexArrayIntoATable` is the wording, and
+`Runner.tableLetterHere` is what records the letter for the operand
+assignment, which is handed the bare name and cannot see the letters.
+
+Pinned by `decl/an-index-array-literal-on-a-table` and
+`decl/an-index-array-literal-replacing-a-table` (#2611).
 
 **A local declaration builds the array cell rather than converting one**,
 and that is core rather than a fourth answer. bash promotes at the top

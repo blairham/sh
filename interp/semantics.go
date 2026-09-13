@@ -684,33 +684,32 @@ type Semantics struct {
 	// the byte keeps the rest of the span with it — `[abccc]` — which is the
 	// second thing no Answer could have said.
 	DollarSingleNul DollarSingleNulPolicy
-	// DollarSingleCaretMeta reads `\C-X` inside `$'…'` as a control
-	// character and `\M-X` as the same byte with the high bit set. The
-	// separating `-` is optional in both, so `\CA` and `\C-A` are one byte
-	// apiece, and either may take the other as its argument.
+	// DollarSingleCaretMeta is what `\C` and `\M` mean inside a `$'…'`, and
+	// the three shells that have anything to say about them do not have the
+	// same escapes — see DollarSingleCaretMetaPolicy for the three values.
 	//
-	// Yes in zsh alone. Measured 2026-09-08 from `$'\C-A'`, `$'\M-x'`,
-	// `$'\M-\C-?'` and `$'\cA'` in each shell:
+	// It used to be an Answer, and that was a reading of the panel rather
+	// than the panel: `\C-A` is spelled identically in zsh and ksh93 and is
+	// **a different escape in each**, so "on" and "off" could not hold the
+	// second one and ksh93 sat unanswered rather than wrong. Measured
+	// 2026-09-08 and re-measured 2026-09-13 from `$'\C-A'`, `$'\CA'`,
+	// `$'\M-x'`, `$'\M-\C-?'` and `$'\cA'`:
 	//
 	//	bash 5.3, bash 3.2, bash as sh   \C-A and \M-x kept as written,
 	//	                                 and `\cA` is the control escape
 	//	dash                             no `$'…'` at all
-	//	ksh93                            `\C` is a control escape of its own,
-	//	                                 spelled without the dash, so
-	//	                                 `$'\C-A'` is control-`-` then `A`,
-	//	                                 and `\M-x` is ESC then `x`
+	//	ksh93                            `\C` takes one argument and **no
+	//	                                 dash**, so `$'\C-A'` is `m` then `A`
+	//	                                 — `-` folded up and exclusive-ored
+	//	                                 with 0x40 — `$'\CA'` is 01, and
+	//	                                 `\M-` is the escape byte on its own
 	//	zsh                              01, f8, ff, and `\c` is nothing
-	//
-	// So it is No in bash and unspecified in ksh93, whose two escapes are a
-	// different reading rather than this one turned off — and refusing it
-	// there is the point: `$'\C-A'` answered as `C-A` would be off by a
-	// byte and silent about it.
 	//
 	// Asked only for a `$'…'` that has a `\C` or an `\M` in it. This is the
 	// reading side of what the `q+` expansion flag writes, and the two are
 	// the same table seen from its two ends: a `q+` whose spelling the shell
 	// cannot read back is not a quoting flag at all.
-	DollarSingleCaretMeta Answer
+	DollarSingleCaretMeta DollarSingleCaretMetaPolicy
 
 	// ReadOptions is the set of letters `read` takes, a `:` after a letter
 	// marking one whose argument follows it — the getopts convention, the
@@ -3228,6 +3227,37 @@ type Semantics struct {
 	// four presets with nothing to put in it.
 	BadSetOptionLetterFatal Answer
 
+	// BadSetOptionNameAtInvocationExitsZero makes a refused `set -o` **name**
+	// on the command line that started the shell report success. The shell
+	// still declines — the command string or script never runs — and then
+	// exits 0.
+	//
+	// Yes in BusyBox ash alone; No in bash, dash, ksh93 and zsh. Measured
+	// 2026-09-13, `<shell> -o zzznosuch -c "echo after"`: `after` is printed
+	// by nobody, dash, all three bash columns and ksh93 exit 2, zsh exits 1,
+	// and ash writes `illegal option -o zzznosuch` and exits **0**.
+	//
+	// Not a fact about this shell's front end. Every other refusal on the
+	// same route reports a failure there — a refused option *letter* is 2,
+	// a `-c` with no operand is 2, a script that does not exist is 2, an
+	// unknown `--long` is 2, and a command nobody has is 127 — so it is this
+	// one refusal on this one route, which is why it is an axis beside the
+	// pair above rather than something about invocations.
+	//
+	// An axis rather than a third status field, and the reason is what the
+	// value would have to be. Diagnostics.SetInvalidOptionNameStatus holds
+	// what the *builtin* reports, and the invocation would want 0 — which is
+	// the zero value every `int` in Diagnostics reads as "not stated", so
+	// the one column that needs the field could not fill it in. And 0 here
+	// is not a number the refusal happens to report: it is the refusal not
+	// counting as a failure, which is the thing to write down (#2639).
+	//
+	// Read on the invocation route only. A `set -o zzznosuch` in a script
+	// reports Diagnostics.SetInvalidOptionNameStatus as it always did — 1 in
+	// this shell — and the two are measurably different numbers in the same
+	// binary, which is what the field could not hold.
+	BadSetOptionNameAtInvocationExitsZero Answer
+
 	// CdLastPathOptionWins lets the last of `cd -L` and `cd -P` decide.
 	// True in bash, dash and ksh93 — `cd -P -L` is logical there. zsh gives
 	// `-P` the answer wherever it appears, so both orders resolve.
@@ -4704,6 +4734,55 @@ type Semantics struct {
 	// through one (#2287).
 	ArrayUnderATableLiteralDeclaration CompoundKindChangePolicy
 
+	// BareElementsInATableLiteralEndTheScript refuses a compound literal
+	// written with **bare words** where the name is a table — `typeset -A
+	// m=(alpha one)` and the `m=(alpha one)` beside it — instead of pairing
+	// the words off as key, value, key, value.
+	//
+	// Not a kind change and not one of the four fields above: the name is
+	// already the kind being declared and nothing is being converted. What is
+	// in question is what a literal whose elements carry no `[key]=` head
+	// *means* over a table, and the panel splits two ways. Measured
+	// 2026-09-13:
+	//
+	//	shell        `typeset -A m=(alpha one); typeset -p m`
+	//	bash 5.3.15  `declare -A m=([alpha]="one" )` — the words pair off
+	//	zsh 5.9.2    `typeset -A m=( [alpha]=one )` — the same
+	//	ksh93u+      `cannot append index array to associative array m`, and
+	//	             **the input ends**: nothing after it runs, status 1
+	//
+	// ksh93 reads the parentheses as an *index array* value and refuses to
+	// put one in a table, which is why its sentence says `append` even for a
+	// plain `=`. Diagnostics.IndexArrayIntoATable is the wording.
+	//
+	// It is the **written shape** that decides and not what the words came
+	// to: `e=; typeset -A m=($e)` is refused there although the element
+	// expands to nothing, and a literal with no element at all — `typeset -A
+	// m=()` — is accepted. The expansion still happens first, measured:
+	// `typeset -A m=($(echo SIDE >&2))` writes `SIDE` and then complains.
+	//
+	// The refusing column does not refuse every spelling of it, and the
+	// three things that part them were measured rather than reasoned about.
+	// With `typeset -A m=([a]=1)` in front of it:
+	//
+	//	m=(x y)            `typeset -a m=(x y)` — the name **converts**
+	//	typeset m=(x y)    the same
+	//	typeset -A m=(x y) `cannot append index array to associative array m`
+	//	m+=(x y)           the same refusal
+	//
+	// So an **append** never converts — there is no index array to append to
+	// a table, which is the one reading the sentence's verb is honest about
+	// — and the table **letter on the same command** holds the name to its
+	// kind, which is what Runner.tableLetterHere is for. The third is that an
+	// **empty** table refuses where a table with an element converts:
+	// `typeset -A m; m=(x y)` and `typeset -A m=(); m=(x y)` both complain.
+	// See interp.Runner.tableBecomesAnIndexArray, where the rows are.
+	//
+	// A bool rather than a policy because two answers is what was measured,
+	// and a refusal that costs less than the input is a value no dialect
+	// holds. dash and ash have no tables and never ask (#2611).
+	BareElementsInATableLiteralEndTheScript bool
+
 	// WholeArraySubscriptAssigningAnArray is what `a[@]=Z` and `a[*]=Z` mean
 	// where the name is **not** a table — see WholeArraySubscriptAssignPolicy
 	// for the five answers.
@@ -5497,6 +5576,47 @@ type Semantics struct {
 	// two readings differ — every other spelling is parsed identically.
 	IntegerPlusFormTakesAttributesOff Answer
 
+	// SetOLetterAttachesItsName reads `set -oNAME` — the `-o` letter with its
+	// operand welded to the same word — as the long name NAME, instead of as
+	// a bare `-o` followed by more option letters.
+	//
+	// Yes in ksh93 and zsh; No in the three bash columns, dash and BusyBox
+	// ash. Measured 2026-09-13 across all seven columns, at the builtin and
+	// at the invocation, which answer alike:
+	//
+	//	set -oerrexit zzznosuch    ksh93, zsh  errexit on, `zzznosuch` is $1
+	//	                           the other five  `zzznosuch` refused as the name
+	//	sh -oerrexit -c 'echo hi'  ksh93, zsh  errexit on, prints `hi`
+	//	                           the other five  `-c` refused as the name
+	//
+	// So the seam is not "welded or not". The five that answer No give `-o`
+	// the **next word** whether or not characters follow the letter, and read
+	// those characters as further option letters afterwards. With no word
+	// behind it, `set -oe` lists the options — which is what a bare `-o` does
+	// — and then turns errexit on, in all five. That listing is not
+	// incidental: `set -ozzznosuch` writes the whole option table to standard
+	// output before it complains.
+	//
+	// Ours matched no column at all. It cut the word at a *trailing* `o`
+	// only, so `-o` anywhere else in a word fell through to the letter table
+	// and was refused as `set: -o: invalid option`, with the rest of the word
+	// never read (#2640). The front end said as much in a comment and took
+	// neither side, so `sh -oerrexit` was `unknown option "-oerrexit"` in
+	// every dialect.
+	//
+	// Asked only where characters follow the `o`. `set -o name`, `set -euo
+	// pipefail` and a bare `set -o` are read alike in all seven and consult
+	// nothing.
+	//
+	// Not folded in: bash reports the letter it refuses *after* the listing
+	// at 1 and survivably, where its own `set -Z` is 2 and ends an `sh`
+	// script. That is not a third value of this axis — `set -oe -Q` in bash
+	// applies neither `e` nor the listing and reports the *later* word's
+	// error, so bash validates every option word before applying any, which
+	// no per-refusal status can express. Filed with its measurement rather
+	// than guessed at here.
+	SetOLetterAttachesItsName Answer
+
 	// SetArrayLetter is `set -A name value …`, which assigns an array through
 	// a name a variable holds — the thing `name=(…)` cannot do, because the
 	// name is a literal there.
@@ -5672,8 +5792,9 @@ type Semantics struct {
 	// shells that have both words do not answer the two the same: zsh writes
 	// the identical parameter table either way, and bash's bare `declare` is
 	// every variable the shell holds rather than the running function's
-	// locals. Only zsh's answer is a value this form already carries, so the
-	// others stay unanswered and are refused by name rather than guessed at.
+	// locals. ksh93 writes a third thing again — the names that carry an
+	// attribute, in its own vocabulary and with no value — which is
+	// BareLocalListsAttributedNames and was measured for #2345.
 	//
 	// unexhibited BareLocalListsLocals: BareLocalListing holds it, for
 	// bash's bare `local`. It is not this builtin's answer anywhere:
@@ -5684,9 +5805,9 @@ type Semantics struct {
 	// (#2060).
 	//
 	// unexhibited BareLocalListsNothing: BareLocalListing holds it, for
-	// dash's and ksh93's bare `local`. Neither shell reaches this field:
-	// dash has no `typeset` and ksh93u+ has no `local`, so both are
-	// unanswered rather than silent-by-measurement (#2060).
+	// dash's and ksh93's bare `local`. Neither of those is this field's
+	// answer — dash has no `typeset` to reach it with, and ksh93 reaches it
+	// and is not silent (#2060, #2345).
 	BareTypesetListing BareLocalListingForm
 
 	// SetListing is what `set` with no arguments writes — see
@@ -12843,6 +12964,63 @@ func (p ScalarUnderACompoundPolicy) String() string {
 // survived under the old reading and no column agreed; `typeset -A` over an
 // array emptied it in every dialect, which is right for one column of three
 // (#1375).
+// DollarSingleCaretMetaPolicy is what `\C` and `\M` mean inside a `$'…'`.
+//
+// Three values because two shells write `\C-A` and mean different bytes by
+// it, which an on/off field cannot hold: see Semantics.DollarSingleCaretMeta
+// for the panel and #2345.
+type DollarSingleCaretMetaPolicy int
+
+const (
+	// DollarSingleCaretMetaUnspecified is no answer, and it is refused
+	// rather than guessed at. The two readings differ by a byte on the same
+	// spelling, so picking either for a shell that was never measured would
+	// be silently wrong rather than visibly missing.
+	DollarSingleCaretMetaUnspecified DollarSingleCaretMetaPolicy = iota
+	// DollarSingleCaretMetaAbsent has neither escape: the backslash is in
+	// front of a character this shell claims nothing about, so
+	// DollarSingleUnknownEscape decides what becomes of it. bash in all
+	// three of its columns, and BusyBox ash.
+	DollarSingleCaretMetaAbsent
+	// DollarSingleCaretMetaMaskedWithAnOptionalDash is zsh's pair: `\C-X` is
+	// a control character and `\M-X` the same byte with the high bit set,
+	// the separating `-` is optional in both — `\CA` and `\C-A` are one
+	// byte apiece — and either may take the other as its argument. The mask
+	// keeps a high bit it finds, and a written `?` is 0x7f rather than
+	// masked.
+	DollarSingleCaretMetaMaskedWithAnOptionalDash
+	// DollarSingleCaretMetaFoldedWithNoDash is ksh93's, and it is a
+	// different vocabulary rather than the same one spelled loosely.
+	//
+	// `\C` takes exactly one argument — a character, or a further escape,
+	// including another `\C` — and answers it **folded up and
+	// exclusive-ored with 0x40**: `$'\CA'` and `$'\Ca'` are both 01,
+	// `$'\C?'` is 7f, `$'\C1'` is `q`. There is **no dash in the
+	// spelling**, so `$'\C-A'` is the escape applied to `-` — `m` — and
+	// then a literal `A`, which is the byte zsh's reading of the same five
+	// characters does not produce. `\C` with nothing after it produces
+	// nothing at all.
+	//
+	// `\M` is not an escape by itself — `$'\Mx'` is `Mx` — and the two
+	// characters `\M-` are the **escape byte**, taking no argument:
+	// `$'\M-x'` is 1b then `x`, and `$'\M-\C-?'` is 1b, `m`, `?`.
+	//
+	// Measured 2026-09-13 on ksh93u+ 2012-08-01 through `od -c` (#2345).
+	DollarSingleCaretMetaFoldedWithNoDash
+)
+
+func (p DollarSingleCaretMetaPolicy) String() string {
+	switch p {
+	case DollarSingleCaretMetaAbsent:
+		return "absent: neither is an escape"
+	case DollarSingleCaretMetaMaskedWithAnOptionalDash:
+		return "masked, the dash optional"
+	case DollarSingleCaretMetaFoldedWithNoDash:
+		return "folded, no dash, and `\\M-` is the escape byte"
+	}
+	return "unspecified"
+}
+
 type CompoundKindChangePolicy int
 
 const (
@@ -13821,6 +13999,23 @@ func (r *Runner) shiftOptionWords() ShiftOptionWordPolicy {
 	p := r.sem().ShiftOptionWords
 	if p == ShiftOptionWordsUnspecified {
 		r.diagf("%s\n", r.unanswered("`shift -x` read as an option rather than as a count"))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
+}
+
+// dollarSingleCaretMeta resolves the `\C`/`\M` axis, reporting where no
+// dialect has chosen — and reporting rather than refusing, because the
+// unknown-escape rule can still say what the two characters come to and a
+// `$'…'` that merely *mentions* `\C` must not lose the rest of its word.
+//
+// Asked only for a `$'…'` with a `\C` or an `\M` in it. See
+// Semantics.DollarSingleCaretMeta.
+func (r *Runner) dollarSingleCaretMeta() DollarSingleCaretMetaPolicy {
+	p := r.sem().DollarSingleCaretMeta
+	if p == DollarSingleCaretMetaUnspecified {
+		r.diagf("%s\n", r.unanswered("the `\\C-` and `\\M-` escapes of a `$'…'`"))
 		r.status = 2
 		r.unspecified = true
 	}

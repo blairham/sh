@@ -245,6 +245,8 @@ func printReport(w io.Writer, rep suite.Report) {
 		"", 100*rep.MeanFile)
 	o.println()
 
+	printDiffering(o, rep)
+
 	printRefused(o, rep)
 
 	o.printf("  not scored       %d unstable · %d oracle hung · %d dialect hung\n",
@@ -294,6 +296,8 @@ func printReport(w io.Writer, rep suite.Report) {
 	}
 	o.println()
 
+	printExcuses(o, rep)
+
 	if len(rep.StatusPairs) > 0 {
 		o.println("  exit status of the files that ran and disagreed  (ours / oracle)")
 		o.println("  (numbers, because our runtime diagnostics would quote the file back;")
@@ -303,6 +307,40 @@ func printReport(w io.Writer, rep suite.Report) {
 		}
 		o.println()
 	}
+}
+
+// printDiffering is the figure this column is burned down by, and the two
+// things it is made of that the single number hides.
+//
+// It is the larger of the two sides per file — the reference's lines we never
+// printed, and ours it never asked for — so a column can be carrying a large
+// figure because it prints too much rather than because it answers too
+// little, and those are different work. Both are printed.
+//
+// And some of the reference's side is not available to anybody here: the text
+// of its own help builtin, the usage block it answers a bad option with, its
+// version and its license. Matching those means copying them, which
+// CLEANROOM.md's red list forbids, so they are counted and taken off rather
+// than left in a number somebody estimates from. See [suite.Doc].
+func printDiffering(o out, rep suite.Report) {
+	differing := rep.Longest - rep.Common
+	if differing == 0 {
+		return
+	}
+	o.printf("  differing lines  %6d   the longer side of each file, less the lines the two\n", differing)
+	o.printf("                            runs have in common — the figure a burndown moves\n")
+	o.printf("                   %6d   the reference printed and we did not\n", rep.Missing)
+	o.printf("                   %6d   we printed and the reference never asked for\n", rep.Excess)
+	if !rep.ProseAsked() {
+		o.println()
+		return
+	}
+	o.printf("                   %6d   of the first, the reference quoting its own\n", rep.Prose)
+	o.printf("                            documentation: help text, a usage block, a version\n")
+	o.printf("                            and a license. Not work — matching it means copying\n")
+	o.printf("                            it. A floor, counted by asking the shell for its own\n")
+	o.printf("                            help and testing membership, never by reading\n")
+	o.println()
 }
 
 // printRefused is what a refused static read actually cost, and what part of
@@ -326,6 +364,28 @@ func printRefused(o out, rep suite.Report) {
 		rep.ReferenceRefuses)
 	o.println("          succeeds and this is not a gap in this parser: an option set at run")
 	o.println("          time decides what a later line means, and a static read has no run time")
+	o.println()
+}
+
+// printExcuses is the runtime half of a disagreement, ranked — and it is the
+// half this report used to have nothing to say about.
+//
+// The line below the status table has been true for as long as it has been
+// there: a whole diagnostic of ours names the command, the word or the option
+// that provoked it, and those come from a file nobody here may read. Our own
+// *catalog* carries none of that, so counting how many unmatched lines
+// carry each phrase says what this shell refused without printing anything of
+// the file — the same standard the static read's causes already meet.
+func printExcuses(o out, rep suite.Report) {
+	if len(rep.Excuses) == 0 {
+		return
+	}
+	o.println("  what we said and the reference did not, by lines")
+	o.println("  (our own catalog only — a whole diagnostic names the word that provoked")
+	o.println("   it and that word is the file's; these phrases are ours)")
+	for _, e := range rep.Excuses {
+		o.printf("    %4d  %s\n", e.Lines, e.Phrase)
+	}
 	o.println()
 }
 

@@ -4878,19 +4878,23 @@ func (r *Runner) expandDollarSingle(s string) string {
 			}
 			i += 1 + used
 		case c == 'C' || c == 'M':
-			if !r.ask(r.sem().DollarSingleCaretMeta, "the `\\C-` and `\\M-` escapes of a `$'…'`") {
-				// A shell without them, or one that has not said. Either
-				// way the backslash is before a character nothing here
-				// claims, and the unknown rule decides it.
+			p := r.dollarSingleCaretMeta()
+			if !caretMetaIsAnEscape(p) || !caretMetaWritten(p, s, i) {
+				// A shell without them, or one whose vocabulary this
+				// spelling is not in — ksh93's `\M` is only an escape when
+				// a `-` follows it. Either way the backslash is before a
+				// character nothing here claims, and the unknown rule
+				// decides it.
 				r.writeUnknownEscape(&b, c)
 				i += 2
 				continue
 			}
-			v, next, ok := caretMetaEscape(s, i)
+			v, next, ok := caretMetaEscape(p, s, i)
 			if !ok {
 				// Nothing left to make a byte out of: measured, `$'x\C'`
-				// and `$'x\M-'` are both `x`, the escape producing nothing
-				// rather than the characters it was written with.
+				// and `$'x\M-'` are both `x` in the shell that has them,
+				// the escape producing nothing rather than the characters
+				// it was written with.
 				i = next
 				continue
 			}
@@ -5033,13 +5037,35 @@ func controlArgument(p DollarSingleControlPolicy, s string, i int) (byte, int, b
 // already applied. A doubled control is written nowhere — the flag that
 // writes these never nests one — and reproducing it would mean carrying the
 // argument's *spelling* past the point it became a byte.
-func caretMetaEscape(s string, i int) (byte, int, bool) {
+func caretMetaEscape(p DollarSingleCaretMetaPolicy, s string, i int) (byte, int, bool) {
 	meta := s[i+1] == 'M'
+	if p == DollarSingleCaretMetaFoldedWithNoDash {
+		if meta {
+			// `\M-` is the escape byte itself and takes no argument at all:
+			// measured, `$'\M-x'` is 1b then a literal `x`, and `$'\M-'`
+			// alone is 1b. caretMetaWritten has already refused a `\M` with
+			// no dash behind it.
+			return 0x1b, i + 3, true
+		}
+		// No dash in the spelling, so the character after `\C` *is* the
+		// argument — `$'\C-A'` is this escape applied to `-`.
+		x, next, ok := caretMetaArgument(p, s, i+2)
+		if !ok {
+			return 0, next, false
+		}
+		// Folded up and then exclusive-ored, which is one rule rather than a
+		// mask with exceptions: `a` and `A` both come to 01, `?` to 7f and
+		// `1` to `q`, with no character outside it.
+		if x >= 'a' && x <= 'z' {
+			x -= 'a' - 'A'
+		}
+		return x ^ 0x40, next, true
+	}
 	j := i + 2
 	if j < len(s) && s[j] == '-' {
 		j++
 	}
-	x, next, ok := caretMetaArgument(s, j)
+	x, next, ok := caretMetaArgument(p, s, j)
 	if !ok {
 		return 0, j, false
 	}
@@ -5058,13 +5084,36 @@ func caretMetaEscape(s string, i int) (byte, int, bool) {
 	return x & 0x9f, next, true
 }
 
+// caretMetaIsAnEscape reports whether the policy has these escapes at all.
+// A shell without them and one that has not said reach the same place here —
+// the unknown-escape rule — and they are told apart by the report
+// dollarSingleCaretMeta has already made.
+func caretMetaIsAnEscape(p DollarSingleCaretMetaPolicy) bool {
+	return p == DollarSingleCaretMetaMaskedWithAnOptionalDash ||
+		p == DollarSingleCaretMetaFoldedWithNoDash
+}
+
+// caretMetaWritten reports whether the two characters at i are this dialect's
+// escape at all, which only one of the two readings ever answers no to.
+//
+// ksh93's `\M` is an escape only with a `-` behind it: `$'\Mx'` is `Mx`
+// there and `$'\M'` is `M`, so the spelling falls to the unknown-escape rule
+// rather than to this reader. zsh's takes the dash or leaves it, so every
+// `\C` and `\M` in a `$'…'` is its escape.
+func caretMetaWritten(p DollarSingleCaretMetaPolicy, s string, i int) bool {
+	if p != DollarSingleCaretMetaFoldedWithNoDash || s[i+1] != 'M' {
+		return true
+	}
+	return i+2 < len(s) && s[i+2] == '-'
+}
+
 // caretMetaArgument reads the one character, or escape, that a `\C-` or
 // `\M-` controls.
 //
 // It is this file's own reading rather than controlArgument's, because that
 // one answers for `\c` and carries three shells' policies for it; the two
 // agree on the ordinary escapes and only this one takes a nested `\C-`.
-func caretMetaArgument(s string, i int) (byte, int, bool) {
+func caretMetaArgument(p DollarSingleCaretMetaPolicy, s string, i int) (byte, int, bool) {
 	switch {
 	case i >= len(s):
 		return 0, i, false
@@ -5072,8 +5121,8 @@ func caretMetaArgument(s string, i int) (byte, int, bool) {
 		return s[i], i + 1, true
 	}
 	switch c := s[i+1]; {
-	case c == 'C' || c == 'M':
-		return caretMetaEscape(s, i)
+	case (c == 'C' || c == 'M') && caretMetaWritten(p, s, i):
+		return caretMetaEscape(p, s, i)
 	case c == 'x':
 		if n, used := scanBase(s[i+2:], 16, 2); used > 0 {
 			return byte(n), i + 2 + used, true

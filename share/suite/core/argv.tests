@@ -1,0 +1,76 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Invocation and argv — #2315. `$0`, the positional parameters, `$@` against
+# `$*`, `set --` and `shift`.
+#
+# The difference between `"$@"` and `"$*"` is the single most load-bearing
+# quoting rule a shell has and nothing in the tree asked it.
+#
+# Two cases the panel splits on are held out and belong in zsh/: an unquoted
+# `$@` or `$*` is not field-split in zsh, which is SH_WORD_SPLIT off and the
+# most visible thing about writing a script for zsh. And `shift` past the end
+# is held out for a third reason — it is not a disagreement about a number,
+# it is a disagreement about whether the script continues: `shift` is a
+# special builtin and its failure ends a non-interactive ksh93 and dash.
+
+# $0 is the script as the shell was told to run it, and it is not a
+# positional parameter: with no arguments $# is zero.
+printf 'zero=[%s]\n' "$0"
+printf 'count=%s\n' "$#"
+
+set -- a b c
+printf 'count=%s\n' "$#"
+printf 'one=[%s] two=[%s] three=[%s]\n' "$1" "$2" "$3"
+
+# "$*" is one word with the parameters joined; "$@" is one word each. In a
+# printf that reuses its format the difference is a line count.
+printf 'star=[%s]\n' "$*"
+printf 'at=[%s]\n' "$@"
+for w in "$@"; do printf 'at word [%s]\n' "$w"; done
+for w in "$*"; do printf 'star word [%s]\n' "$w"; done
+
+# And an argument with a space in it stays one word through "$@" — which is
+# the whole reason the form exists.
+set -- 'a b' c
+printf 'count=%s\n' "$#"
+for w in "$@"; do printf 'quoted [%s]\n' "$w"; done
+
+# "$*" joins with the first character of IFS rather than always with a space.
+set -- a b c
+IFS=-
+printf 'star with IFS=[%s]\n' "$*"
+IFS=' '
+
+# `set --` with nothing after it clears them, and "$@" with none left expands
+# to no words at all rather than to one empty one.
+set --
+printf 'cleared=%s at=[%s] star=[%s]\n' "$#" "$*" "$@"
+for w in "$@"; do printf 'no words [%s]\n' "$w"; done
+
+# An empty parameter is still a parameter, and $# counts it.
+set -- '' ''
+printf 'two empties=%s [%s][%s]\n' "$#" "$1" "$2"
+
+# shift drops from the front, takes a count, and takes zero.
+set -- a b c d e
+shift
+printf 'after shift one=[%s] count=%s\n' "$1" "$#"
+shift 2
+printf 'after shift 2 one=[%s] count=%s\n' "$1" "$#"
+shift 0
+printf 'shift 0 count=%s\n' "$#"
+
+# Past nine the name needs braces: `$10` is `$1` with a `0` after it.
+set -- 1 2 3 4 5 6 7 8 9 10 11
+printf 'ninth=[%s] tenth=[%s] eleventh=[%s]\n' "$9" "${10}" "${11}"
+
+# A function has positional parameters of its own, and the caller's come back
+# when it returns — including when the function replaced them with `set`.
+set -- x
+f() { printf 'in func count=%s one=[%s]\n' "$#" "$1"; }
+f p q
+printf 'after func count=%s one=[%s]\n' "$#" "$1"
+g() { set -- inner; printf 'func set count=%s one=[%s]\n' "$#" "$1"; }
+g outer
+printf 'outer intact count=%s one=[%s]\n' "$#" "$1"

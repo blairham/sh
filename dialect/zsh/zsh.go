@@ -1611,7 +1611,11 @@ func Semantics() interp.Semantics {
 	// bytes.
 	s.DollarSingleHexReadsEveryDigit = interp.No
 	s.DollarSingleDigitlessEscapeIsAZeroByte = interp.Yes
-	s.DollarSingleCaretMeta = interp.Yes
+	// `\C-X` is a control character and `\M-X` the same byte with the high
+	// bit set, the dash optional in both and either able to take the other as
+	// its argument. ksh93 writes `\C-A` too and means `m` then `A` by it, so
+	// the value names the reading rather than saying yes (#2345).
+	s.DollarSingleCaretMeta = interp.DollarSingleCaretMetaMaskedWithAnOptionalDash
 	s.GetoptsAssignmentRestartsWord = interp.No
 	// OPTIND is local to a shell function here: the call starts at 1 and the
 	// caller's position — words and the place inside a clustered word alike —
@@ -2018,6 +2022,11 @@ func Semantics() interp.Semantics {
 	// And the letter too, at zsh's own 1: `set -Z; echo one` prints
 	// nothing and exits 1.
 	s.BadSetOptionLetterFatal = interp.Yes
+	// The other welding column, and it agrees with ksh93 word for word on
+	// behavior: `set -oerrexit zzznosuch` is errexit with `zzznosuch` as $1,
+	// and `set -oe` is `no such option: e`.
+	s.SetOLetterAttachesItsName = interp.Yes
+	s.BadSetOptionNameAtInvocationExitsZero = interp.No
 	s.UnknownConditionOptionIsAStatus = interp.Yes
 	s.ReturnOutsideAFunctionIsRefused = interp.No
 	// And `break` with no loop around it stops the script here, which is the

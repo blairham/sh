@@ -1,0 +1,44 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Aliases — #2319, and a short file on purpose.
+#
+# Almost nothing about aliases is common ground, and finding that out is the
+# result rather than a reason to skip the area. Measured on this machine:
+#
+#   * bash does not expand an alias in a non-interactive shell at all, so the
+#     one thing an alias is for is a bash answer by its absence. The other
+#     three expand. That is asked in bash/.
+#   * every shell starts with preset aliases of its own — ksh93 has more than
+#     twenty, zsh has two — so `alias` with no arguments prints a different
+#     list in each, and `r` is a preset alias in ksh93, which is how an
+#     earlier draft of core/test.tests came to define a function nothing
+#     could call.
+#   * `alias name` prints `alias name='…'` in bash and `name='…'` in zsh and
+#     ksh93, so even the query has no shared spelling.
+#
+# What is left is the table underneath: defining, querying and removing an
+# alias, and the statuses those report. All four agree on every line below,
+# and that is the whole of what they agree on.
+
+alias hi='printf "aliased\n"'; printf 'define -> %s\n' "$?"
+alias a1='printf "one\n"' a2='printf "two\n"'; printf 'define two -> %s\n' "$?"
+
+# The name may be quoted along with its value; it is one word to the shell
+# and `alias` splits it at the first `=`.
+alias 'weird=printf "w\n"'; printf 'define quoted -> %s\n' "$?"
+
+# Querying: a name that is an alias succeeds, one that is not fails.
+alias hi > /dev/null 2>&1; printf 'query present -> %s\n' "$?"
+alias nosuchalias_zz > /dev/null 2>&1; printf 'query missing -> %s\n' "$?"
+
+# Removing, one name and several. Removing a name that is *not* an alias is
+# held out: run from a script file, ksh93 answers 0 where the other three
+# answer 1 — and ksh93 answers 1 for the same line under `-c`, so it is an
+# answer about how the shell was entered as much as about unalias.
+unalias hi; printf 'unalias -> %s\n' "$?"
+unalias a1 a2; printf 'unalias two -> %s\n' "$?"
+unalias weird; printf 'unalias quoted -> %s\n' "$?"
+
+# And the name is gone from the query afterwards.
+alias hi > /dev/null 2>&1; printf 'query removed -> %s\n' "$?"

@@ -1854,10 +1854,18 @@ put a letter beside a name in the same shell, and it predates the ash
 column entirely. See `docs/spec/semantics.md` for the fatality table and
 for the probe showing the seam is the spelling and not the `-o` route.
 
-The one cell above that no field holds is ash's **0** for a name at an
-invocation: BusyBox writes the complaint, declines to run the command
-string, and exits 0. `invoke/a-long-option-name-that-is-not-one` records it
-and is graded on the refusal for that reason; #2639 is where it goes.
+ash's **0** for a name at an invocation held no field until #2639: BusyBox
+writes the complaint, declines to run the command string, and exits 0 — where
+the same name inside a script reports 1 and the same *letter* on the same
+route reports 2. It is `Semantics.BadSetOptionNameAtInvocationExitsZero`, and
+an axis rather than a third status because 0 is the zero value every
+`Diagnostics` int reads as "not stated", so the one column that needs the
+number could not write it down.
+
+It is one refusal on one route rather than a fact about that front end, which
+is what the neighbors say: measured 2026-09-13, a refused option letter there
+is 2, a `-c` with no operand is 2, a script that does not exist is 2, an
+unknown `--long` is 2, and a command nobody has is 127.
 
 The letter asked neither question until #483. It reported the front end's own
 2 for everybody, so `zsh -q` exited 2 where zsh exits 1 — while
@@ -1915,6 +1923,41 @@ which is the rule every other builtin's letters already follow. Measured
 bash has `abefhkmnoprtuvxBCEHPT`, dash `abefimnosuvxCEIV`, ksh93
 `abefhkmnoprstuvxABCGH`, and zsh has every letter but `b`, `c`, `j`, `q` and
 `z`.
+
+### `-o` with its name welded to the letter
+
+**The rule.** `sh -oerrexit` and `set -ozzznosuch` are one parse, and the
+panel splits two ways over it with nothing in between.
+`Semantics.SetOLetterAttachesItsName` is which.
+
+Measured 2026-09-13, all seven columns, at the builtin and at the invocation,
+which answer alike:
+
+| | `set -oerrexit zzznosuch` | `sh -oerrexit -c 'echo hi'` |
+| --- | --- | --- |
+| ksh93, zsh | errexit on, `zzznosuch` is `$1` | errexit on, prints `hi` |
+| bash 5.3, bash 3.2, bash-as-`sh`, dash, ash | `zzznosuch` refused as the name | `-c` refused as the name |
+
+So the seam is not "welded or not". The five that answer No give `-o` the
+**next word** whether or not characters follow the letter, and read those
+characters as further option letters afterwards. With no word behind it,
+`set -oe` lists the options — which is what a bare `-o` does — and then turns
+errexit on, in all five; `set -ozzznosuch` writes the whole option table to
+standard output before it complains about `-z`.
+
+This engine matched no column at all until #2640. It cut the word at a
+*trailing* `o` only, so an `-o` anywhere else fell through to the letter
+table — where `o` is nobody's option letter — and the whole word came back
+`set: -o: invalid option` with the rest never read. The front end said as much
+in a comment and took neither side, so `sh -oerrexit` was `unknown option` in
+every dialect. The core still answers neither and still refuses the word.
+
+**A second wrinkle here is measured and deliberately not modeled.** bash
+reports the letter it refuses *after* the listing at 1 and survivably, where
+its own `set -Z` is 2 and ends an `sh` script. That is not a third value of
+the axis: `set -oe -Q` in bash applies neither the `e` nor the listing and
+reports the *later* word's error, so bash validates every option word before
+applying any — which no per-refusal status can express.
 
 **One wrinkle is measured and deliberately not modeled.** bash exits **1**,
 with no usage block, when a letter it *has* comes before the bad one in the

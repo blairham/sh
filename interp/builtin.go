@@ -402,11 +402,19 @@ func loopDepth(args []string) int {
 // from the same list — an assignment prefixed to one persists, and a failure
 // in one is fatal to a non-interactive shell — so it is one concept rather
 // than two lists that could drift.
+// `source` is here and is not POSIX's, because POSIX has no `source`: it is
+// the other spelling of `.` in the two dialects that have it, and both of
+// them mark it special everywhere the rule applies. Measured 2026-09-13 —
+// under `bash -o posix` and `zsh -o posixbuiltins` alike, an assignment
+// prefixed to `source` persists exactly as one prefixed to `.` does, and
+// under bash a usage error in either ends the script. A list that held one
+// spelling and not the other would answer two different ways about one
+// builtin depending on which name the script used.
 var specialBuiltins = map[string]bool{
 	"break": true, ":": true, "continue": true, ".": true, "eval": true,
 	"exec": true, "exit": true, "export": true, "readonly": true,
-	"return": true, "set": true, "shift": true, "times": true,
-	"trap": true, "unset": true,
+	"return": true, "set": true, "shift": true, "source": true,
+	"times": true, "trap": true, "unset": true,
 }
 
 func biTrue(*Runner, context.Context, []string) int  { return 0 }
@@ -468,20 +476,60 @@ func (r *Runner) setOptionsAndOperands(_ context.Context, args []string) int {
 		// `set -euo pipefail` is the line at the top of a great many scripts,
 		// and it was refused outright. The letters before it are ordinary
 		// letters and still apply.
-		if letters, ok := strings.CutSuffix(a[1:], "o"); ok {
-			if !r.setLetters(letters, on) {
+		//
+		// And the *first* `o` rather than a trailing one, because characters
+		// behind it are an operand welded to the letter — `set -ozzznosuch`,
+		// which is also the spelling `sh -oerrexit` reaches the front end
+		// with. Cutting only a trailing `o` sent every such word to the
+		// letter table, where `o` is nobody's option letter, so the whole of
+		// it came back as `set: -o: invalid option` — an answer no panel
+		// column gives (#2640). Which reading applies is
+		// Semantics.SetOLetterAttachesItsName.
+		if before, after, ok := strings.Cut(a[1:], "o"); ok {
+			if !r.setLetters(before, on) {
 				return r.setOptionFailure()
+			}
+			if after != "" {
+				if r.ask(r.sem().SetOLetterAttachesItsName,
+					"`set -oNAME` reading the rest of the word as the long name") {
+					// The namespace the *script* means by a `set -o` name,
+					// exactly as the spaced spelling reads it.
+					if !r.setNamedOption(after, on) {
+						return r.setOptionFailure()
+					}
+					continue
+				}
+				if r.unspecified {
+					return r.status
+				}
 			}
 			if i+1 >= len(args) {
 				// With no name to set, `-o` lists the options and `+o`
 				// writes them back as input — four shapes, each the
 				// dialect's own.
-				return r.listOptions(!on)
+				st := r.listOptions(!on)
+				if after == "" {
+					return st
+				}
+				// And in the shells that do not weld, what follows the `o`
+				// is more option letters, read after the listing rather than
+				// instead of it.
+				if !r.setLetters(after, on) {
+					return r.setOptionFailure()
+				}
+				continue
 			}
 			i++
 			// The namespace the *script* means by a `set -o` name, which is
 			// the dialect's own where it has one (#1080).
 			if !r.setNamedOption(args[i], on) {
+				return r.setOptionFailure()
+			}
+			// The welded characters are letters here too, and they are read
+			// *after* the name the next word gave: measured, `set -oe x` in
+			// bash, dash and ash refuses `x` as the name and never turns
+			// errexit on.
+			if after != "" && !r.setLetters(after, on) {
 				return r.setOptionFailure()
 			}
 			continue

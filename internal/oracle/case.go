@@ -14605,7 +14605,34 @@ printf 'TWO=still-running\n'`,
 	{
 		ID: "declare/f-says-a-named-function-back", Category: "declarations",
 		Snippet: `f() { if true; then echo one; fi; }; typeset -f f; echo "st=$?"`,
-		Why:     "three engines, three renderings of identical state: one gives the brace a line of its own and terminates with `;`, one keeps the brace on the header and terminates with nothing, and one prints the source text verbatim — which this engine does not keep, so the third is refused as unimplemented rather than approximated",
+		Why:     "three engines, three renderings of identical state: one gives the brace a line of its own and terminates with `;`, one keeps the brace on the header and terminates with nothing, and one says the **source text** back — so the third column is not an arrangement at all and is reproduced by keeping the characters rather than by a layout, see syntax.FuncDecl.SourceText (#2610)",
+	},
+	// The verbatim column, asked four ways (#2610). Two engines lay a tree
+	// out and ksh93 reproduces the characters the definition was written
+	// with, which is a different kind of answer rather than a third
+	// arrangement — so these rows ask about things a tree has already
+	// forgotten by the time a listing is wanted. Nothing here discriminates
+	// between the two printing engines; that is what the `#2427` block below
+	// is for.
+	{
+		ID: "declare/f-says-the-blanks-it-was-written-with", Category: "declarations",
+		Snippet: `f(){    echo     a   ;   }; typeset -f f`,
+		Why:     "spacing no tree holds. The two printing engines answer with their usual arrangement whatever was typed — four spaces become one, the `;` becomes a line break — and ksh93 gives every blank back, including the run between the `;` and the `}`. The listing there is the source text and not a layout, which is why a definition's characters are kept on the declaration rather than re-derived (#2610)",
+	},
+	{
+		ID: "declare/f-says-a-comment-in-the-body-back", Category: "declarations",
+		Snippet: "f() { # note\n :; }; typeset -f f",
+		Why:     "the row that cannot be passed by a layout however good: a comment is in no tree at all, so an engine that prints from one has nothing to write and ksh93 writes it back. It is the same fact `autoload`'s `# undefined` marker rests on from the other side — a body listing that reproduced comments would make that marker indistinguishable from a line somebody typed (#2610)",
+	},
+	{
+		ID: "declare/f-says-two-functions-back-with-nothing-between", Category: "declarations",
+		Snippet: `f() { :; }; g() { :; }; typeset -f`,
+		Why:     "what separates two listings, which is nothing in the column that says the source back: each definition carries the `;` that ended it and the shell writes no newline of its own, so ksh93 answers `f() { :; };g() { :; };` on one line where the other two write a block each. It is the control for the terminator being part of the listing rather than a line ending the shell adds (#2610)",
+	},
+	{
+		ID: "declare/f-says-a-definition-nothing-terminated-back", Category: "declarations",
+		Snippet: `eval "f() { :; }"; typeset -f f`,
+		Why:     "the other half of the row above, and the one that says the terminator is *read* rather than appended: text ending on the `}` has no terminator, so ksh93's listing has none either and the whole answer is `f() { :; }` with no trailing newline anywhere. The two printing engines write their usual block, so the row also says an `eval`-defined function is an ordinary one to all three (#2610)",
 	},
 	// The shape of a listed body, past where its lines break (#2427). Every
 	// row below is one question with two answers among the engines that
@@ -14652,7 +14679,7 @@ printf 'TWO=still-running\n'`,
 	{
 		ID: "declare/f-says-a-nested-keyword-declaration-back", Category: "declarations",
 		Snippet: `f() { function inner { echo i; }; }; typeset -f f`,
-		Why:     "the same nested declaration written the other way. Both engines answer exactly as they answer the row above, which is what says they respell rather than preserve — and it is the reason a listing may not simply drop the keyword everywhere: ksh93 scopes a `typeset` by the word, and its column keeps it",
+		Why:     "the same nested declaration written the other way. Both engines answer exactly as they answer the row above, which is what says they respell rather than preserve — and it is the reason a listing may not simply drop the keyword everywhere: ksh93 scopes a `typeset` by the word, and its column keeps it. The ksh93 column of this row and the one above is a **fault of that shell** and is recorded rather than reproduced: the outer definition's end is taken from the inner one's, so the listing stops at the inner `}` and the outer body is truncated (#2610)",
 	},
 	{
 		ID: "declare/f-says-a-background-statement-back", Category: "declarations",
@@ -16642,6 +16669,21 @@ echo "st=$? alive"`,
 		Why:     "the letter half of the question the long name asks, and **not** the same answer — which is what this row said for a year and what #2629 measured out of it. `-q`, `-j`, `-z` and `-A` are letters all seven refuse, and comparing them against each other is what the #483 measurement did; comparing one of them against a refused *name* in the same shell is what it never did. bash 5.3 and bash 3.2 carry on at 2 where their names are 2 and **1**; bash-as-`sh`, dash, ksh93 and BusyBox ash stop at 2 and zsh at 1, and ash's name is 1 and survivable. So the letter is the harsher spelling in two columns and the same in five. The letter had no dialect answer at all until #483 — it reported 2 everywhere and never stopped a script — and it had the *name's* answer until #2629",
 	},
 	{
+		ID: "opt/a-set-o-name-welded-to-the-letter", Category: "shell options",
+		Snippet: `set -oerrexit zzznosuch; echo "st=$?"; echo "p1=[$1]"; case $- in *e*) echo "e=on";; *) echo "e=off";; esac`,
+		Why:     "`-o` with its operand welded to the letter, and the panel splits two ways with nothing in between. ksh93 and zsh read the rest of the word as the long name: errexit goes on, `zzznosuch` is left as an ordinary operand and becomes `$1`, and nothing is said. The three bash columns, dash and BusyBox ash give `-o` the **next word** regardless — so the name they refuse is `zzznosuch`, errexit never goes on, and each says so in its own words at its own status. The row the `SetOLetterAttachesItsName` probe reads, and the welded characters spell a real option name deliberately: a name no shell has would be refused under *both* readings and could tell them apart only by wording. Ours refused the `-o` itself as an invalid option letter and never looked at the rest of the word, which is an answer no column gives (#2640)",
+	},
+	{
+		ID: "opt/a-welded-set-o-with-no-word-behind-it", Category: "shell options",
+		Snippet: `set -ozzznosuch >/dev/null; echo "st=$?"; echo after`,
+		Why:     "the same spelling with nothing for `-o` to take, which is where the five that do not weld show what they do with the rest of the word: it is more option **letters**, read after a bare `-o` has written the whole option table — the listing this row sends to /dev/null so that the record holds the refusal rather than seven option tables. dash, BusyBox ash and the bash columns stop at `-z`, ksh93 and zsh refuse `zzznosuch` as a name. It is also the probe that settled #2629: an `-o` is present here and ash still gives it the letter's answer, so the gentle answer belongs to the spelling refused and not to the `-o` route. bash reports the letter it refuses after a listing at 1 and survivably where its own `set -Z` is 2 and ends an `sh` script, which no field holds and which is not this axis — `set -oe -Q` there applies neither the `e` nor the listing and reports the later word, so bash validates every option word before applying any",
+	},
+	{
+		ID: "opt/a-welded-set-o-reads-the-rest-as-letters", Category: "shell options",
+		Snippet: `set -oe >/dev/null; echo "st=$?"; case $- in *e*) echo "e=on";; *) echo "e=off";; esac`,
+		Why:     "the half the row above cannot show, because a refusal looks the same whichever way the word was cut: here the welded character is a letter every shell has. The five that do not weld list the options, turn errexit on and report 0; ksh93 and zsh read `e` as a long name, have no option by that name, and stop. So `set -oe` is a success in five columns and a fatal refusal in two, from one word with no bad spelling in it",
+	},
+	{
 		ID: "opt/a-refused-letter-echoes-the-sign", Category: "shell options",
 		Snippet: `set +q; echo "st=$?"`,
 		Why:     "the other half of the letter's spelling: bash and ksh93 echo the `+` back where dash and zsh write `-q` whichever way they were asked, so the sign is a verb in two of the wordings and a literal in the other two",
@@ -18150,6 +18192,57 @@ alias '!'='echo took;'
 sp ! true
 echo "st=$?"`,
 		Why: "the same question one position further in: a value ending in a space makes the next word eligible — the rule `alias/a-trailing-space-carries-on` pins on an ordinary name — and the word made eligible that way is judged by the same reservation. Same split as the row above and on two visible things at once: `took` and status 0 where the alias won, silence and 1 where `! true` stayed a negation. `!` rather than `for` because every corpus snippet has to be a program on its own, and `!` is the one reserved word that is an ordinary argument in this position: `sp for x in a` followed by `do` does not parse until the substitution has already happened, so a row spelled that way would be asking the parser a question only the answer can pose",
+	},
+	{
+		ID:       "alias/a-reserved-word-alias-at-the-head-of-a-pipeline",
+		Category: "alias",
+		Script:   true,
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias '!'='echo took'
+! true
+echo "st=$?"`,
+		Why: "the one position the reserved-word flag did not reach (#2638). `!` is read as a pipeline's negation one level out from a command, before the alias table is consulted at all, so the substitution never happened here however the dialect was set. The split is exactly the one the row above draws — bash 5.3, bash 3.2 and zsh print `took true` and answer 0; dash, ksh93, BusyBox ash and bash called `sh` print nothing and answer 1, because `! true` stayed a negation — which is what says this is that field reaching further and not an axis of its own. `alias/a-reserved-word-after-an-alias-ending-in-a-blank` is the control: it asks the same word in the one position that already worked, so a change that breaks the flag itself is visible in both rows and a change that breaks only the reach is visible in this one",
+	},
+	{
+		ID:       "alias/an-ordinary-alias-at-the-head-of-a-pipeline",
+		Category: "alias",
+		Script:   true,
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias e=echo
+! e hi
+echo "st=$?"`,
+		Why: "the control for the row above, and the reason the reach is guarded by the *word* rather than applied to every head: a name the grammar does not reserve is expanded behind the negation exactly as it is anywhere a command word stands, and all seven columns agree — `hi`, then 1, the negation of a success. A fix that asked the reserved-word question about every word a pipeline begins with would take this row's `e` away in the four columns that protect, which nothing else in the corpus would notice",
+	},
+	{
+		ID:       "alias/a-pipeline-head-alias-whose-body-begins-with-a-bang",
+		Category: "alias",
+		Script:   true,
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias '!'='! x'
+! true
+echo "st=$?"`,
+		Why: "the negation is read off the word the substitution *left*, not the word that was written. The body opens with the name it was reached by, so the inner `!` is inside the chain that name opened and is not expanded again — `alias/a-body-that-names-itself-past-a-separator` is the general form — and what stands there is the reserved word doing its reserved job: the three that expand report `x: command not found` and answer 0, the negation of a 127. The four that protect never substitute at all and answer 1. It is also the row that says the word *behind* the negation is still an ordinary command word: `x` is looked up rather than swallowed",
+	},
+	{
+		ID:       "alias/a-pipeline-head-value-ending-in-a-blank",
+		Category: "alias",
+		Script:   true,
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias '!'='echo '
+alias hi='echo HI'
+! hi
+echo "st=$?"`,
+		Why: "the trailing-blank rule reaches the head of a pipeline too, which is the half of #2638 a fix can silently drop: the word after a value ending in a blank is eligible in turn, so the three that expand run `echo` with the *expansion of* `hi` behind it and print `echo HI` at 0. The four that protect keep the negation, run the ordinary alias behind it and print `HI` at 1 — so the two readings differ in both the output and the status, and neither cell can be reached by accident",
+	},
+	{
+		ID:       "alias/a-time-alias-in-front-of-a-pipeline",
+		Category: "alias",
+		Script:   true,
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias time='echo took;'
+time true
+echo "st=$?"`,
+		Why: "the second word a pipeline reads before a command exists, and the same gap: `time` binds the whole pipeline and is read one level out, so nothing asked the table for it either. bash 5.3, bash 3.2 and zsh take the alias and print `took`; ksh93 and bash called `sh` keep the keyword and report on the pipeline instead. dash and BusyBox ash take it as well — not because they expand a reserved word but because neither has the keyword to protect, which is the same thing `alias/a-reserved-word-is-read-the-way-the-grammar-reads-it` says about `select` and `function` and is what makes the protected set the grammar's own. The body ends in `;` so that the timing report and the alias are two different lines rather than two readings of one",
 	},
 	{
 		ID: "alias/a-reserved-word-alias-in-posix-mode", Category: "alias",
@@ -22504,6 +22597,16 @@ echo "st=$?"`,
 		ID: "decl/an-array-literal-over-the-other-kind-of-array", Category: "declarations",
 		Snippet: "typeset -A h 2>/dev/null; h[k]=v\ntypeset -a h=(x) 2>&1; echo \"st=$?\"; typeset -p h 2>&1\ntypeset -a c=(x y) 2>/dev/null\ntypeset -A c=([k]=v) 2>&1; echo \"st=$?\"; typeset -p c 2>&1",
 		Why:     "a declaration carrying its own **array literal** over a name already holding the *other* kind of compound, in both directions. Not the same question as the valueless `typeset -a h`, and ksh93 is what says so: it ends the script over the valueless array letter and converts this one without a word. zsh converts too and both of them keep the literal's element and drop what was there -- the literal is an assignment and it replaces what it lands on -- where bash refuses at 1 and leaves the name as it was. Two further things the columns disagree about are in the fields deliberately: bash's sentence carries **no builtin name**, which is what says the complaint comes from the assignment rather than from the utility, and the `st=` reads 1 rather than nothing because the four commands are separated by **newlines**. Under `;` bash prints nothing after the complaint by either invocation route and all of it under newlines by either, so what the refusal costs is the command list and not the input -- #1182's square, and #2287 was filed on the other cell of it. This shell kept the table and stored the literal's word as a key, silently, at 0. See Semantics.TableUnderAnArrayLiteralDeclaration and ArrayUnderATableLiteralDeclaration (#2287)",
+	},
+	{
+		ID: "decl/an-index-array-literal-on-a-table", Category: "declarations",
+		Snippet: "typeset -A e=() 2>&1; echo \"st=$?\"\ntypeset -A k=([a]=1) 2>&1; echo \"k=[${k[a]}]\"\ntypeset -A m=(alpha one); echo \"st=$?\"; typeset -p m 2>&1\necho tail",
+		Why:     "a compound literal written with **bare words** landing on a table, which is not a kind change -- the name is already the kind being declared -- and which the panel splits two ways. bash and zsh pair the words off as key, value, key, value and list `[alpha]=one`; ksh93 reads the parentheses as an *index array*'s value, will not put one in a table, and **the input ends**: `cannot append index array to associative array m`, with `tail` never printed. The two rows in front of the split are the control, and they are what a shell that simply refused every table literal would fail: an empty literal is taken by every column with tables, and a keyed one is taken and readable. Its `append` verb for a plain `=` is measured and not a slip -- the sentence is about the two kinds rather than about the operator. The complaint is left on **stderr** rather than folded in with `2>&1` like the two rows above it: ksh93 writes it past a redirection on the declaration itself, which is a fact about where that shell reports from and not about this row. See Semantics.BareElementsInATableLiteralEndTheScript (#2611)",
+	},
+	{
+		ID: "decl/an-index-array-literal-replacing-a-table", Category: "declarations",
+		Snippet: "typeset -A m=([a]=1) 2>/dev/null\nm=(x y) 2>&1; echo \"st=$? [${m[0]}][${m[a]}]\"; typeset -p m 2>&1\ntypeset -A n=([a]=1) 2>/dev/null\nn+=(p q) 2>&1; echo \"st=$?\"; typeset -p n 2>&1\necho tail",
+		Why:     "the other half of the row above, and the reason the refusing column's answer cannot be read as \"a table refuses bare words\": a **replacing** literal onto a table that already holds an element *converts* the name there, silently -- `typeset -a m=(x y)` -- where an **append** onto the same table is refused and ends the input. So the verb in that sentence is doing real work. The pairing columns answer both rows alike, storing `[x]=y` and then adding `[p]=q`, which is what makes the row discriminate three readings rather than two. An empty table refuses the replacing form there too, which is that shell's own and is pinned in dialect/ksh rather than here, the input ending before anything could show it (#2611)",
 	},
 	{
 		ID: "arrays/a-whole-array-subscript-on-the-left", Category: "arrays",

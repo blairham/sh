@@ -57,6 +57,35 @@ const (
 	// BareLocalListsLocals, which is a genuinely different listing, and this
 	// value is deliberately not offered to it.
 	BareLocalListsWhatSetLists
+	// BareLocalListsAttributedNames is ksh93's answer for the declaration
+	// word, and it is neither a table of every parameter nor a table of the
+	// scope's own: it is every name that **carries an attribute**, written
+	// as that attribute in words and then the name, with **no value** on the
+	// line at all.
+	//
+	// Measured 2026-09-13 on ksh93u+ 2012-08-01, `env -i`:
+	//
+	//	plain=1; export ex=2; integer n=3; typeset -u up=q; typeset
+	//	  ...
+	//	  export ex
+	//	  long integer n
+	//	  toupper up
+	//
+	// `plain` is not there, and that is the whole of what separates this
+	// from BareLocalListsEveryParameter — which writes every name, attribute
+	// or none, and writes the value too. A local carrying an attribute
+	// *does* list, so this is not the scope's table either: `function f {
+	// integer loc=9; typeset; }` writes `long integer loc`.
+	//
+	// The words are their own vocabulary and their own order — see
+	// Runner.attributePhraseHead for the measurement and for why it is a
+	// second renderer rather than a flag on the first.
+	//
+	// Silent about a value by construction rather than by a rule, which is
+	// what makes it safe over a produced parameter: the listing a shell
+	// writes for a clock cannot differ from itself between two reads if it
+	// never writes the reading (#1618).
+	BareLocalListsAttributedNames
 )
 
 func (f BareLocalListingForm) String() string {
@@ -69,6 +98,8 @@ func (f BareLocalListingForm) String() string {
 		return "BareLocalListsEveryParameter"
 	case BareLocalListsWhatSetLists:
 		return "BareLocalListsWhatSetLists"
+	case BareLocalListsAttributedNames:
+		return "BareLocalListsAttributedNames"
 	}
 	return "BareLocalListingUnspecified"
 }
@@ -390,6 +421,19 @@ func (r *Runner) bareDeclarationListing() int {
 		// under this word. See the constant for the measurement that says
 		// they are the same bytes.
 		return r.setListing()
+	case BareLocalListsAttributedNames:
+		for _, name := range r.declarableNames() {
+			d, _ := r.declarationOf(name)
+			head := r.attributePhraseHead(d)
+			if head == "" {
+				// No attribute, so no line. The name is held and is
+				// reachable and this listing says nothing about it, which
+				// is what the form is.
+				continue
+			}
+			r.printf("%s%s\n", head, name)
+		}
+		return 0
 	case BareLocalListsLocals:
 		// No shell answers a bare declaration this way, and the value is in
 		// the form for `local`'s sake. Reaching it would be a preset saying

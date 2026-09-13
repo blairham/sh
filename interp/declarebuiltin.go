@@ -1229,6 +1229,18 @@ func (r *Runner) markDeclaredCompound(name string, fresh bool, f declareFlags, h
 		}
 	}
 	if f.assoc {
+		if r.literalOperands[name] {
+			// The table letter and a literal on one command — the shape one
+			// dialect refuses a bare-word literal in outright, where the
+			// same literal written as a plain assignment converts the name.
+			// Recorded here for the same reason indexedLetterHere is: the
+			// operand assignment is handed the bare name and cannot see the
+			// letters. See Runner.tableLetterHere.
+			if r.tableLetterHere == nil {
+				r.tableLetterHere = map[string]bool{}
+			}
+			r.tableLetterHere[name] = true
+		}
 		v, p := r.declaredCompoundOverAScalar(name, f, r.sem().ScalarUnderATableDeclaration,
 			"a table declaration over a name already holding a scalar")
 		switch p {
@@ -2301,7 +2313,7 @@ func (r *Runner) declareFunctions(names []string, narrowed, namesOnly, asDeclara
 		}
 		switch {
 		case !namesOnly:
-			r.printf("%s\n", r.listedFunction(name, fn))
+			r.printf("%s", r.listedFunctionLine(name, fn))
 		case named && asDeclarations && locates:
 			// Extended debugging: the name, the line the definition begins
 			// on and the file it was read from. See LocatesFunctions — it is
@@ -2316,6 +2328,31 @@ func (r *Runner) declareFunctions(names []string, narrowed, namesOnly, asDeclara
 		}
 	}
 	return status
+}
+
+// listedFunctionLine is one row of a body listing, terminator and all — what
+// the shell writes for one function and nothing more.
+//
+// Every caller writes this string as it stands rather than adding a newline,
+// because in one dialect there is no newline to add: ksh93 says the
+// definition back verbatim and the text already ends with the character that
+// ended the statement, so a listing under `-c` ends with a `;` and a bare
+// listing of two functions runs them together. See
+// Diagnostics.FunctionListingIsSourceText.
+//
+// A function still waiting for its body is asked about first. The text a
+// listing writes in its place is the shell's own sentence about the name —
+// see SetUndefinedFunctions — and the declaration it is marked on may well
+// carry the source of the body it *used* to have, which is not what that
+// shell writes there.
+func (r *Runner) listedFunctionLine(name string, fn *syntax.FuncDecl) string {
+	if _, undefined := r.undefinedFunction(name); undefined {
+		return r.listedFunction(name, fn) + "\n"
+	}
+	if r.diag().FunctionListingIsSourceText && fn != nil && fn.SourceText != "" {
+		return fn.SourceText
+	}
+	return r.listedFunction(name, fn) + "\n"
 }
 
 // listedFunction is a function said back whole, in the dialect's arrangement:

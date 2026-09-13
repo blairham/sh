@@ -111,6 +111,21 @@ type Parser struct {
 	// global-alias hook. See primeAliases.
 	aliasPrimed bool
 
+	// aliasHeadHandled says the *current* token has already been offered to
+	// the alias table as a command word, by parsePipeline rather than by
+	// parseCommand. It is about that one token and nothing else, which is
+	// why next clears it.
+	//
+	// Two words are read one level out from a command — a pipeline's
+	// leading `!` and the `time` in front of it — so the table has to be
+	// consulted before either is answered. parseCommand would otherwise
+	// offer the same word a second time, and a second offer is not
+	// harmless: it begins a fresh set of spent names and clears the
+	// trailing-blank flag the first one set, which is what makes
+	// `alias '!'='echo '` leave the word after it eligible. See
+	// [Parser.expandPipelineHead].
+	aliasHeadHandled bool
+
 	err        error
 	incomplete bool
 
@@ -376,6 +391,13 @@ func (p *Parser) next() {
 	if p.tok.Kind != TokEOF && p.tok.Text != "" {
 		p.lastText = p.tok.Text
 	}
+	// Whatever parsePipeline offered to the alias table, it offered the
+	// token that is about to stop being current. Cleared here rather than
+	// where it is read, so that the flag cannot outlive the word it
+	// describes: `alias '!'='! x'` expands at the head, the `!` the body
+	// begins with is then read as the negation, and `x` behind it is a
+	// command word that has never been offered to anything.
+	p.aliasHeadHandled = false
 	if p.aliasSpliced > 0 {
 		p.aliasSpliced--
 		if p.aliasSpliced == 0 {
@@ -1317,6 +1339,10 @@ func (p *Parser) parseStmt() *Stmt {
 		return nil
 	}
 	st := &Stmt{Expr: expr, Semi: p.bodyTookTerm}
+	// Where the statement's terminator ends, for keepFunctionSource below.
+	// Invalid until a terminator is read, which is the "nothing followed it"
+	// case that method is written for.
+	var term Pos
 	switch p.tok.Kind {
 	case TokPipeAmp:
 		// Only where the dialect reads the operator as a coprocess. Where it
@@ -1362,11 +1388,47 @@ func (p *Parser) parseStmt() *Stmt {
 		p.next()
 	case TokSemi:
 		st.Semi = p.tok.Pos
+		term = p.tok.End
 		p.next()
 	case TokNewline:
 		st.Semi = p.tok.Pos
+		term = p.tok.End
 	}
+	p.keepFunctionSource(expr, term)
 	return st
+}
+
+// keepFunctionSource records a definition's own source text on it, for the
+// dialect that says a function back as it was written rather than as a tree.
+// See [Dialect.FunctionDefinitionIsSourceText] and [FuncDecl.SourceText].
+//
+// It happens here and not where the declaration is parsed because the span
+// runs **through the terminator**, which the declaration never holds: ksh93
+// writes `f() { :; };` for a definition followed by a `;` and `f() { :; }`
+// plus the newline for one written in a file. A definition with nothing after
+// it — the last thing an `eval` string holds — ends at its body, which is the
+// invalid `term` this is called with everywhere else.
+//
+// Only a statement that is nothing *but* one definition is recorded. `f() {
+// :; } && echo ok` is a binary expression whose terminator belongs to the
+// whole of it, and a pipeline of several commands has no one declaration to
+// carry the text.
+func (p *Parser) keepFunctionSource(expr Expr, term Pos) {
+	if !p.dialect.FunctionDefinitionIsSourceText {
+		return
+	}
+	pl, ok := expr.(*Pipeline)
+	if !ok || pl.Negated || len(pl.Cmds) != 1 {
+		return
+	}
+	fn, ok := pl.Cmds[0].(*FuncDecl)
+	if !ok || fn.Body == nil {
+		return
+	}
+	if !term.IsValid() {
+		term = fn.End()
+	}
+	fn.SourceText = p.rawBetween(fn.Pos(), term)
 }
 
 // refusedFuncName is the word a definition's complaint names, for the dialects
@@ -1418,11 +1480,18 @@ func offsetBy(pos Pos, n int) Pos {
 }
 
 func (p *Parser) textBetween(from, to Pos) string {
+	return strings.TrimSpace(p.rawBetween(from, to))
+}
+
+// rawBetween is the same span untrimmed, for the one caller that wants the
+// characters exactly as they were written — see [FuncDecl.SourceText], where
+// the blanks before a terminator are part of what the shell says back.
+func (p *Parser) rawBetween(from, to Pos) string {
 	src := p.lex.src
 	if from.Offset < 0 || int(to.Offset) > len(src) || from.Offset >= to.Offset {
 		return ""
 	}
-	return strings.TrimSpace(src[from.Offset:to.Offset])
+	return src[from.Offset:to.Offset]
 }
 
 // parseAndOr reads pipelines joined by && and ||.
@@ -1536,6 +1605,10 @@ func (p *Parser) parseAndOr() Expr {
 // binds: the whole pipeline, on either side of the `!` — `time ! true` and
 // `! time true` both parse, and both report.
 func (p *Parser) parsePipeline() Expr {
+	// The two words below are read before a command is parsed at all, so
+	// the alias table has to be consulted here or never. Every other
+	// reserved word is reached through parseCommand, which asks first.
+	p.expandPipelineHead()
 	if p.dialect.TimeKeyword && p.atWord("time") {
 		return p.parseTime(false, Pos{})
 	}
@@ -1670,10 +1743,12 @@ func (p *Parser) parseCommand() Command {
 	// Before the keyword dispatch below, because an alias may hold one:
 	// `alias iff='if true; then'` has to produce the `if` the grammar reads.
 	// The set is fresh per command, so `e yes; e two` expands `e` twice.
-	if p.Aliases != nil || p.SuffixAliases != nil {
-		p.aliasNextWord = false
-		p.aliasDone = map[string]bool{}
-		p.expandCommandWord(p.aliasDone)
+	//
+	// Unless parsePipeline has already offered this very word — it reads two
+	// words of its own in front of a command and so has to ask first. See
+	// Parser.aliasHeadHandled.
+	if !p.aliasHeadHandled {
+		p.expandCommandStart()
 	}
 	switch {
 	case p.at(TokEOF), p.at(TokNewline), p.atStopWord():

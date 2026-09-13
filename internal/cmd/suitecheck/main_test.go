@@ -124,3 +124,76 @@ func TestARunWithNothingRefusedPrintsNoBand(t *testing.T) {
 		t.Errorf("a run with no refusals does not say so:\n%s", out)
 	}
 }
+
+// TestTheDifferingLinesAreSplitIntoTheirTwoSides.
+//
+// The figure a burndown moves is the longer side less the common lines, and
+// on its own it cannot be read: a column printing far too much and a column
+// answering far too little wear the same number. Both halves are printed, so
+// nobody estimates a file as missing answers when what it has is excess
+// output.
+func TestTheDifferingLinesAreSplitIntoTheirTwoSides(t *testing.T) {
+	rep := refusedReport()
+	rep.Missing, rep.Excess = 12, 16
+	out := render(rep)
+	for _, want := range []string{
+		"differing lines      16",
+		"12   the reference printed and we did not",
+		"16   we printed and the reference never asked for",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the report does not say %q\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "quoting its own") {
+		t.Error("a column that was never asked for its documentation reported a discount anyway")
+	}
+}
+
+// TestTheDocumentationDiscountIsPrintedWhereItWasAsked.
+//
+// A shell answering a command with its own manual puts every line of it in
+// the differing count, and none of those lines may be reproduced here —
+// CLEANROOM.md's red list covers another project's text. The report says how
+// much of the figure that is, because the alternative is an estimate made
+// from a number two thirds of which was never available.
+func TestTheDocumentationDiscountIsPrintedWhereItWasAsked(t *testing.T) {
+	rep := refusedReport()
+	rep.Suite.SelfDoc = "help"
+	rep.Missing, rep.Excess, rep.Prose = 12, 3, 9
+	out := render(rep)
+	for _, want := range []string{
+		"9   of the first, the reference quoting its own",
+		"Not work — matching it means copying",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the report does not say %q\n%s", want, out)
+		}
+	}
+}
+
+// TestOurOwnDiagnosticsAreRankedWithoutQuotingTheFile.
+//
+// The runtime half of a disagreement was a table of exit statuses and nothing
+// else, on the reasoning that a diagnostic of ours quotes the file back. That
+// is true of a whole line and false of the catalog it is built from, and
+// the difference is the one the static read's causes have always been printed
+// under.
+func TestOurOwnDiagnosticsAreRankedWithoutQuotingTheFile(t *testing.T) {
+	rep := refusedReport()
+	rep.Excuses = []suite.Excuse{
+		{Phrase: "not implemented yet", Lines: 11},
+		{Phrase: "readonly variable", Lines: 5},
+	}
+	out := render(rep)
+	for _, want := range []string{
+		"what we said and the reference did not, by lines",
+		"11  not implemented yet",
+		"5  readonly variable",
+		"these phrases are ours",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the report does not say %q\n%s", want, out)
+		}
+	}
+}

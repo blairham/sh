@@ -992,7 +992,10 @@ func Semantics() interp.Semantics {
 	// two characters it was written as: `$'\xzz'` is `\xzz` here.
 	s.DollarSingleHexReadsEveryDigit = interp.No
 	s.DollarSingleDigitlessEscapeIsAZeroByte = interp.No
-	s.DollarSingleCaretMeta = interp.No
+	// And neither `\C` nor `\M` is an escape here: `$'\C-A'` and `$'\M-x'`
+	// are kept as written, where zsh reads them as one byte apiece and ksh93
+	// reads a different escape out of the same spelling (#2345).
+	s.DollarSingleCaretMeta = interp.DollarSingleCaretMetaAbsent
 	s.GetoptsAssignmentRestartsWord = interp.Yes
 	s.GetoptsClearsOptarg = interp.No
 	// A `local OPTIND` gives the call the whole cursor and gives the caller
@@ -1449,6 +1452,12 @@ func Semantics() interp.Semantics {
 	// answer — the substrate assumed it until #2629 and was wrong about
 	// BusyBox ash.
 	s.BadSetOptionLetterFatal = interp.No
+	// `-o` takes the next word and never the rest of its own: measured,
+	// `set -oe x` is `x: invalid option name` with errexit left off, and
+	// `bash -oerrexit -c cmd` refuses `-c` the same way. With no word behind
+	// it, `set -oe` writes the option table and then turns errexit on.
+	s.SetOLetterAttachesItsName = interp.No
+	s.BadSetOptionNameAtInvocationExitsZero = interp.No
 	s.UnknownConditionOptionIsAStatus = interp.No
 	s.ReturnOutsideAFunctionIsRefused = interp.Yes
 	// `break` with no loop around it is reported and then ignored here: the

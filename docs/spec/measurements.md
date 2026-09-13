@@ -11462,6 +11462,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `opt/command-tracking-starts-on-where-the-letter-says-so` | `letter=out~after=out` | `hashall=on~letter=in~hashall=off~after=out` | `hashall=on~letter=in~hashall=off~after=out` | `hashall=on~letter=in~hashall=off~after=out` | `trackall=on~letter=in~trackall=off~after=out` | `letter=out~after=out` | `letter=out~after=out` |
 | `opt/an-unknown-long-name-is-refused` | **2>** `<shell>: 1: set: Illegal option -o zzznosuch` *(status 2)* | `on=2~off=2` **2>** `<shell>: line 1: set: zzznosuch: invalid option name~<shell>: line 1: set: zzznosuch: invalid option name` | **2>** `<shell>: line 1: set: zzznosuch: invalid option name` *(status 2)* | `on=1~off=1` **2>** `<shell>: line 0: set: zzznosuch: invalid option name~<shell>: line 0: set: zzznosuch: invalid option name` | **2>** `<shell>: set: zzznosuch: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>:set:1: no such option: zzznosuch` *(status 1)* | `on=1~off=1` **2>** `<shell>: set: line 0: illegal option -o zzznosuch~<shell>: set: line 0: illegal option +o zzznosuch` |
 | `opt/an-unknown-letter-is-refused` | **2>** `<shell>: 1: set: Illegal option -q` *(status 2)* | `st=2~alive` **2>** `<shell>: line 1: set: -q: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]` | **2>** `<shell>: line 1: set: -q: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]` *(status 2)* | `st=2~alive` **2>** `<shell>: line 0: set: -q: invalid option~set: usage: set [--abefhkmnptuvxBCHP] [-o option] [arg ...]` | **2>** `<shell>: set: -q: unknown option~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>:set:1: bad option: -q` *(status 1)* | **2>** `<shell>: set: line 0: illegal option -q` *(status 2)* |
+| `opt/a-set-o-name-welded-to-the-letter` | **2>** `<shell>: 1: set: Illegal option -o zzznosuch` *(status 2)* | `st=2~p1=[]~e=off` **2>** `<shell>: line 1: set: zzznosuch: invalid option name` | **2>** `<shell>: line 1: set: zzznosuch: invalid option name` *(status 2)* | `st=1~p1=[]~e=off` **2>** `<shell>: line 0: set: zzznosuch: invalid option name` | `st=0~p1=[zzznosuch]~e=on` | `st=0~p1=[zzznosuch]~e=on` | `st=1~p1=[]~e=off` **2>** `<shell>: set: line 0: illegal option -o zzznosuch` |
+| `opt/a-welded-set-o-with-no-word-behind-it` | **2>** `<shell>: 1: set: Illegal option -z` *(status 2)* | `st=1~after` **2>** `<shell>: line 1: set: -z: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]` | `st=1~after` **2>** `<shell>: line 1: set: -z: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]` | `st=1~after` **2>** `<shell>: line 0: set: -z: invalid option~set: usage: set [--abefhkmnptuvxBCHP] [-o option] [arg ...]` | **2>** `<shell>: set: zzznosuch: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>:set:1: no such option: zzznosuch` *(status 1)* | **2>** `<shell>: set: line 0: illegal option -z` *(status 2)* |
+| `opt/a-welded-set-o-reads-the-rest-as-letters` | `st=0~e=on` | `st=0~e=on` | `st=0~e=on` | `st=0~e=on` | **2>** `<shell>: set: e: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>:set:1: no such option: e` *(status 1)* | `st=0~e=on` |
 | `opt/a-refused-letter-echoes-the-sign` | **2>** `<shell>: 1: set: Illegal option -q` *(status 2)* | `st=2` **2>** `<shell>: line 1: set: +q: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]` | **2>** `<shell>: line 1: set: +q: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]` *(status 2)* | `st=2` **2>** `<shell>: line 0: set: +q: invalid option~set: usage: set [--abefhkmnptuvxBCHP] [-o option] [arg ...]` | **2>** `<shell>: set: +q: unknown option~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>:set:1: bad option: -q` *(status 1)* | **2>** `<shell>: set: line 0: illegal option +q` *(status 2)* |
 | `opt/an-unknown-letter-at-an-invocation` | **2>** `<shell>: 0: Illegal option -q` *(status 2)* | **2>** `<shell>: -q: invalid option~Usage:	<shell> [GNU long option] [option] ...~	<shell> [GNU long option] [option] script-file ...~GNU long options:~	--debug~	--debugger~	--dump-po-strings~	--dump-strings~	--help~	--init-file~	--login~	--noediting~	--noprofile~	--norc~	--posix~	--pretty-print~	--rcfile~	--restricted~	--verbose~	--version~Shell options:~	-ilrsD or -c command or -O shopt_option		(invocation only)~	-abefhkmnptuvxBCEHPT or -o option` *(status 2)* | **2>** `<shell>: -q: invalid option~Usage:	<shell> [GNU long option] [option] ...~	<shell> [GNU long option] [option] script-file ...~GNU long options:~	--debug~	--debugger~	--dump-po-strings~	--dump-strings~	--help~	--init-file~	--login~	--noediting~	--noprofile~	--norc~	--posix~	--pretty-print~	--rcfile~	--restricted~	--verbose~	--version~Shell options:~	-ilrsD or -c command or -O shopt_option		(invocation only)~	-abefhkmnptuvxBCEHPT or -o option` *(status 2)* | **2>** `<shell>: -q: invalid option~Usage:	<shell> [GNU long option] [option] ...~	<shell> [GNU long option] [option] script-file ...~GNU long options:~	--debug~	--debugger~	--dump-po-strings~	--dump-strings~	--help~	--init-file~	--login~	--noediting~	--noprofile~	--norc~	--posix~	--protected~	--rcfile~	--restricted~	--verbose~	--version~	--wordexp~Shell options:~	-irsD or -c command or -O shopt_option		(invocation only)~	-abefhkmnptuvxBCHP or -o option` *(status 2)* | **2>** `<shell>: -q: unknown option~Usage: <shell> [-cilrsDEabefhkmnprtuvxBCGH] [-R file] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>: bad option: -q` *(status 1)* | **2>** `<shell>: illegal option -q` *(status 2)* |
 | `opt/an-unknown-long-name-at-an-invocation` | **2>** `<shell>: 0: Illegal option -o zzznosuch` *(status 2)* | **2>** `<shell>: line 0: <shell>: zzznosuch: invalid option name` *(status 2)* | **2>** `<shell>: line 0: sh: zzznosuch: invalid option name` *(status 2)* | **2>** `<shell>: line 0: <shell>: zzznosuch: invalid option name` *(status 2)* | **2>** `<shell>: zzznosuch: bad option(s)~Usage: <shell> [-cilrsDEabefhkmnprtuvxBCGH] [-R file] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>: no such option: zzznosuch` *(status 1)* | **2>** `<shell>: illegal option -o zzznosuch` |
@@ -12203,6 +12206,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `opt/an-unknown-letter-is-refused` — the letter half of the question the long name asks, and **not** the same answer — which is what this row said for a year and what #2629 measured out of it. `-q`, `-j`, `-z` and `-A` are letters all seven refuse, and comparing them against each other is what the #483 measurement did; comparing one of them against a refused *name* in the same shell is what it never did. bash 5.3 and bash 3.2 carry on at 2 where their names are 2 and **1**; bash-as-`sh`, dash, ksh93 and BusyBox ash stop at 2 and zsh at 1, and ash's name is 1 and survivable. So the letter is the harsher spelling in two columns and the same in five. The letter had no dialect answer at all until #483 — it reported 2 everywhere and never stopped a script — and it had the *name's* answer until #2629
   ```sh
   set -q; echo "st=$?"; echo alive
+  ```
+- `opt/a-set-o-name-welded-to-the-letter` — `-o` with its operand welded to the letter, and the panel splits two ways with nothing in between. ksh93 and zsh read the rest of the word as the long name: errexit goes on, `zzznosuch` is left as an ordinary operand and becomes `$1`, and nothing is said. The three bash columns, dash and BusyBox ash give `-o` the **next word** regardless — so the name they refuse is `zzznosuch`, errexit never goes on, and each says so in its own words at its own status. The row the `SetOLetterAttachesItsName` probe reads, and the welded characters spell a real option name deliberately: a name no shell has would be refused under *both* readings and could tell them apart only by wording. Ours refused the `-o` itself as an invalid option letter and never looked at the rest of the word, which is an answer no column gives (#2640)
+  ```sh
+  set -oerrexit zzznosuch; echo "st=$?"; echo "p1=[$1]"; case $- in *e*) echo "e=on";; *) echo "e=off";; esac
+  ```
+- `opt/a-welded-set-o-with-no-word-behind-it` — the same spelling with nothing for `-o` to take, which is where the five that do not weld show what they do with the rest of the word: it is more option **letters**, read after a bare `-o` has written the whole option table — the listing this row sends to /dev/null so that the record holds the refusal rather than seven option tables. dash, BusyBox ash and the bash columns stop at `-z`, ksh93 and zsh refuse `zzznosuch` as a name. It is also the probe that settled #2629: an `-o` is present here and ash still gives it the letter's answer, so the gentle answer belongs to the spelling refused and not to the `-o` route. bash reports the letter it refuses after a listing at 1 and survivably where its own `set -Z` is 2 and ends an `sh` script, which no field holds and which is not this axis — `set -oe -Q` there applies neither the `e` nor the listing and reports the later word, so bash validates every option word before applying any
+  ```sh
+  set -ozzznosuch >/dev/null; echo "st=$?"; echo after
+  ```
+- `opt/a-welded-set-o-reads-the-rest-as-letters` — the half the row above cannot show, because a refusal looks the same whichever way the word was cut: here the welded character is a letter every shell has. The five that do not weld list the options, turn errexit on and report 0; ksh93 and zsh read `e` as a long name, have no option by that name, and stop. So `set -oe` is a success in five columns and a fatal refusal in two, from one word with no bad spelling in it
+  ```sh
+  set -oe >/dev/null; echo "st=$?"; case $- in *e*) echo "e=on";; *) echo "e=off";; esac
   ```
 - `opt/a-refused-letter-echoes-the-sign` — the other half of the letter's spelling: bash and ksh93 echo the `+` back where dash and zsh write `-q` whichever way they were asked, so the sign is a verb in two of the wordings and a literal in the other two
   ```sh
@@ -18406,6 +18421,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `declare/print-arrays-back` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `declare -a arr=([0]="x" [1]="y")~declare -A m=([k]="a b" )` | `declare -a arr=([0]="x" [1]="y")~declare -A m=([k]="a b" )` | `declare -a arr='([0]="x" [1]="y")'~declare -a m='([0]="a b")'` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `typeset -a arr=(x y)~typeset -A m=([k]='a b')` | `typeset -a arr=( x y )~typeset -A m=( [k]='a b' )` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
 | `declare/print-a-missing-name` | `st=127` **2>** `<shell>: 1: typeset: not found` | `st=1` **2>** `<shell>: line 1: typeset: nosuch: not found` | `st=1` **2>** `<shell>: line 1: typeset: nosuch: not found` | `st=1` **2>** `<shell>: line 0: typeset: nosuch: not found` | `st=0` | `st=1` **2>** `<shell>:typeset:1: no such variable: nosuch` | `st=127` **2>** `<shell>: typeset: not found` |
 | `declare/f-says-a-named-function-back` | `st=127` **2>** `<shell>: 1: typeset: not found` | `f () ~{ ~    if true; then~        echo one;~    fi~}~st=0` | `f () ~{ ~    if true; then~        echo one;~    fi~}~st=0` | `f () ~{ ~    if true; then~        echo one;~    fi~}~st=0` | `f() { if true; then echo one; fi; };st=0` | `f () {~	if true~	then~		echo one~	fi~}~st=0` | `st=127` **2>** `<shell>: typeset: not found` |
+| `declare/f-says-the-blanks-it-was-written-with` | **2>** `<shell>: 1: typeset: not found` *(status 127)* | `f () ~{ ~    echo a~}` | `f () ~{ ~    echo a~}` | `f () ~{ ~    echo a~}` | `f(){    echo     a   ;   };` | `f () {~	echo a~}` | **2>** `<shell>: typeset: not found` *(status 127)* |
+| `declare/f-says-a-comment-in-the-body-back` | **2>** `<shell>: 2: typeset: not found` *(status 127)* | `f () ~{ ~    :~}` | `f () ~{ ~    :~}` | `f () ~{ ~    :~}` | `f() { # note~ :; };` | `f () {~	:~}` | **2>** `<shell>: typeset: not found` *(status 127)* |
+| `declare/f-says-two-functions-back-with-nothing-between` | **2>** `<shell>: 1: typeset: not found` *(status 127)* | `f () ~{ ~    :~}~g () ~{ ~    :~}` | `f () ~{ ~    :~}~g () ~{ ~    :~}` | `f () ~{ ~    :~}~g () ~{ ~    :~}` | `f() { :; };g() { :; };` | `f () {~	:~}~g () {~	:~}` | **2>** `<shell>: typeset: not found` *(status 127)* |
+| `declare/f-says-a-definition-nothing-terminated-back` | **2>** `<shell>: 1: typeset: not found` *(status 127)* | `f () ~{ ~    :~}` | `f () ~{ ~    :~}` | `f () ~{ ~    :~}` | `f() { :; }` | `f () {~	:~}` | **2>** `<shell>: typeset: not found` *(status 127)* |
 | `declare/f-says-a-braced-parameter-back` | **2>** `<shell>: 1: typeset: not found` *(status 127)* | `f () ~{ ~    echo "${x}"~}` | `f () ~{ ~    echo "${x}"~}` | `f () ~{ ~    echo "${x}"~}` | `f() { echo "${x}"; };` | `f () {~	echo "${x}"~}` | **2>** `<shell>: typeset: not found` *(status 127)* |
 | `declare/f-says-a-bare-parameter-back` | **2>** `<shell>: 1: typeset: not found` *(status 127)* | `f () ~{ ~    echo "$x"~}` | `f () ~{ ~    echo "$x"~}` | `f () ~{ ~    echo "$x"~}` | `f() { echo "$x"; };` | `f () {~	echo "$x"~}` | **2>** `<shell>: typeset: not found` *(status 127)* |
 | `declare/f-says-a-stderr-pipe-back` | **2>** `<shell>: 1: Syntax error: "&" unexpected` *(status 2)* | `f () ~{ ~    echo a 2>&1 \| cat~}` | `f () ~{ ~    echo a 2>&1 \| cat~}` | **2>** `<shell>: -c: line 0: syntax error near unexpected token `&'~<shell>: -c: line 0: `f() { echo a \|& cat; }; typeset -f f'` *(status 2)* | `f() { echo a \|& cat; };` | `f () {~	echo a 2>&1 \| cat~}` | **2>** `<shell>: syntax error: unexpected "&"` *(status 2)* |
@@ -18561,6 +18580,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `declare/a-local-over-a-produced-readonly-parameter` | `g=[]f=[5] tail` | `g=[]f=[5] tail` | `g=[]f=[5] tail` | `g=[]f=[5] tail` | `g=[]f=[] tail` **2>** `<shell>: local: not found~<shell>: local: not found` | `g=[0]` **2>** `f: read-only variable: ARGC` | `g=[]f=[5] tail` |
 | `decl/case-letters-beside-a-numeric-type-letter` | `<shell>: 1: typeset: not found~<shell>: 1: typeset: not found~<shell>: 1: typeset: not found~z=[]~<shell>: 1: typeset: not found` *(status 127)* | `declare -il v="4"~declare -iu w="4"~declare -- z="Ab"~z=[Ab]~declare -- y="Cd"` | `declare -il v="4"~declare -iu w="4"~declare -- z="Ab"~z=[Ab]~declare -- y="Cd"` | `<shell>: line 0: typeset: v: not found~<shell>: line 0: typeset: w: not found~<shell>: line 0: typeset: z: not found~z=[]~<shell>: line 0: typeset: y: not found` *(status 1)* | `typeset -l -i v=4~typeset -u -i w=4~z=AB~z=[AB]~y=CD` | `typeset -il v=4~typeset -i w=4~typeset z=Ab~z=[Ab]~typeset y=Cd` | `<shell>: typeset: not found~<shell>: typeset: not found~<shell>: typeset: not found~z=[]~<shell>: typeset: not found` *(status 127)* |
 | `decl/an-array-literal-over-the-other-kind-of-array` | **2>** `<shell>: 1: h[k]=v: not found~<shell>: 2: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 2: h: cannot convert associative to indexed array~<shell>: line 4: c: cannot convert indexed to associative array` *(status 1)* | **2>** `<shell>: line 2: h: cannot convert associative to indexed array~<shell>: line 4: c: cannot convert indexed to associative array` *(status 1)* | `st=0~declare -a h='([0]="x")'~<shell>: line 3: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~st=2~declare -a c='([0]="v")'` | `st=0~typeset -a h=(x)~st=0~typeset -A c=([k]=v)` | `st=0~typeset -a h=( x )~st=0~typeset -A c=( [k]=v )` | **2>** `<shell>: h[k]=v: not found~<shell>: syntax error: unexpected "("` *(status 2)* |
+| `decl/an-index-array-literal-on-a-table` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=0~k=[1]~st=0~declare -A m=([alpha]="one" )~tail` | `st=0~k=[1]~st=0~declare -A m=([alpha]="one" )~tail` | `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~st=2~<shell>: line 1: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~k=[1]~st=2~declare -a m='([0]="alpha" [1]="one")'~tail` **2>** `<shell>: line 2: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `st=0~k=[1]` **2>** `<shell>: line 3: cannot append index array to associative array m` *(status 1)* | `st=0~k=[1]~st=0~typeset -A m=( [alpha]=one )~tail` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
+| `decl/an-index-array-literal-replacing-a-table` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=0 [][]~declare -A m=([x]="y" )~st=0~declare -A n=([p]="q" [a]="1" )~tail` | `st=0 [][]~declare -A m=([x]="y" )~st=0~declare -A n=([p]="q" [a]="1" )~tail` | `st=0 [x][x]~declare -a m='([0]="x" [1]="y")'~st=0~declare -a n='([0]="1" [1]="p" [2]="q")'~tail` | `st=0 [x][x]~typeset -a m=(x y)` **2>** `<shell>: line 4: cannot append index array to associative array n` *(status 1)* | `st=0 [][]~typeset -A m=( [x]=y )~st=0~typeset -A n=( [a]=1 [p]=q )~tail` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
 
 - `declare/typeset-assigns` — `typeset` is the older of the two names and the one three of the four have; dash has neither and reports a command it cannot find
   ```sh
@@ -19514,9 +19535,26 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   typeset -p nosuch; echo "st=$?"
   ```
-- `declare/f-says-a-named-function-back` — three engines, three renderings of identical state: one gives the brace a line of its own and terminates with `;`, one keeps the brace on the header and terminates with nothing, and one prints the source text verbatim — which this engine does not keep, so the third is refused as unimplemented rather than approximated
+- `declare/f-says-a-named-function-back` — three engines, three renderings of identical state: one gives the brace a line of its own and terminates with `;`, one keeps the brace on the header and terminates with nothing, and one says the **source text** back — so the third column is not an arrangement at all and is reproduced by keeping the characters rather than by a layout, see syntax.FuncDecl.SourceText (#2610)
   ```sh
   f() { if true; then echo one; fi; }; typeset -f f; echo "st=$?"
+  ```
+- `declare/f-says-the-blanks-it-was-written-with` — spacing no tree holds. The two printing engines answer with their usual arrangement whatever was typed — four spaces become one, the `;` becomes a line break — and ksh93 gives every blank back, including the run between the `;` and the `}`. The listing there is the source text and not a layout, which is why a definition's characters are kept on the declaration rather than re-derived (#2610)
+  ```sh
+  f(){    echo     a   ;   }; typeset -f f
+  ```
+- `declare/f-says-a-comment-in-the-body-back` — the row that cannot be passed by a layout however good: a comment is in no tree at all, so an engine that prints from one has nothing to write and ksh93 writes it back. It is the same fact `autoload`'s `# undefined` marker rests on from the other side — a body listing that reproduced comments would make that marker indistinguishable from a line somebody typed (#2610)
+  ```sh
+  f() { # note
+   :; }; typeset -f f
+  ```
+- `declare/f-says-two-functions-back-with-nothing-between` — what separates two listings, which is nothing in the column that says the source back: each definition carries the `;` that ended it and the shell writes no newline of its own, so ksh93 answers `f() { :; };g() { :; };` on one line where the other two write a block each. It is the control for the terminator being part of the listing rather than a line ending the shell adds (#2610)
+  ```sh
+  f() { :; }; g() { :; }; typeset -f
+  ```
+- `declare/f-says-a-definition-nothing-terminated-back` — the other half of the row above, and the one that says the terminator is *read* rather than appended: text ending on the `}` has no terminator, so ksh93's listing has none either and the whole answer is `f() { :; }` with no trailing newline anywhere. The two printing engines write their usual block, so the row also says an `eval`-defined function is an ordinary one to all three (#2610)
+  ```sh
+  eval "f() { :; }"; typeset -f f
   ```
 - `declare/f-says-a-braced-parameter-back` — the braces of a `${x}` survive the round trip through the tree in both engines that print from one, and they have to: reprinted as `$x` the body is a different program the moment the next character continues a name. The two spellings are one node to everything that expands them, so only a flag on the span can say which was read
   ```sh
@@ -19546,7 +19584,7 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   f() { inner() { echo i; }; }; typeset -f f
   ```
-- `declare/f-says-a-nested-keyword-declaration-back` — the same nested declaration written the other way. Both engines answer exactly as they answer the row above, which is what says they respell rather than preserve — and it is the reason a listing may not simply drop the keyword everywhere: ksh93 scopes a `typeset` by the word, and its column keeps it
+- `declare/f-says-a-nested-keyword-declaration-back` — the same nested declaration written the other way. Both engines answer exactly as they answer the row above, which is what says they respell rather than preserve — and it is the reason a listing may not simply drop the keyword everywhere: ksh93 scopes a `typeset` by the word, and its column keeps it. The ksh93 column of this row and the one above is a **fault of that shell** and is recorded rather than reproduced: the outer definition's end is taken from the inner one's, so the listing stops at the inner `}` and the outer body is truncated (#2610)
   ```sh
   f() { function inner { echo i; }; }; typeset -f f
   ```
@@ -20210,6 +20248,21 @@ grades it and nothing drift-checks it either, for the same reason.
   typeset -a c=(x y) 2>/dev/null
   typeset -A c=([k]=v) 2>&1; echo "st=$?"; typeset -p c 2>&1
   ```
+- `decl/an-index-array-literal-on-a-table` — a compound literal written with **bare words** landing on a table, which is not a kind change -- the name is already the kind being declared -- and which the panel splits two ways. bash and zsh pair the words off as key, value, key, value and list `[alpha]=one`; ksh93 reads the parentheses as an *index array*'s value, will not put one in a table, and **the input ends**: `cannot append index array to associative array m`, with `tail` never printed. The two rows in front of the split are the control, and they are what a shell that simply refused every table literal would fail: an empty literal is taken by every column with tables, and a keyed one is taken and readable. Its `append` verb for a plain `=` is measured and not a slip -- the sentence is about the two kinds rather than about the operator. The complaint is left on **stderr** rather than folded in with `2>&1` like the two rows above it: ksh93 writes it past a redirection on the declaration itself, which is a fact about where that shell reports from and not about this row. See Semantics.BareElementsInATableLiteralEndTheScript (#2611)
+  ```sh
+  typeset -A e=() 2>&1; echo "st=$?"
+  typeset -A k=([a]=1) 2>&1; echo "k=[${k[a]}]"
+  typeset -A m=(alpha one); echo "st=$?"; typeset -p m 2>&1
+  echo tail
+  ```
+- `decl/an-index-array-literal-replacing-a-table` — the other half of the row above, and the reason the refusing column's answer cannot be read as "a table refuses bare words": a **replacing** literal onto a table that already holds an element *converts* the name there, silently -- `typeset -a m=(x y)` -- where an **append** onto the same table is refused and ends the input. So the verb in that sentence is doing real work. The pairing columns answer both rows alike, storing `[x]=y` and then adding `[p]=q`, which is what makes the row discriminate three readings rather than two. An empty table refuses the replacing form there too, which is that shell's own and is pinned in dialect/ksh rather than here, the input ending before anything could show it (#2611)
+  ```sh
+  typeset -A m=([a]=1) 2>/dev/null
+  m=(x y) 2>&1; echo "st=$? [${m[0]}][${m[a]}]"; typeset -p m 2>&1
+  typeset -A n=([a]=1) 2>/dev/null
+  n+=(p q) 2>&1; echo "st=$?"; typeset -p n 2>&1
+  echo tail
+  ```
 
 ## select
 
@@ -20742,6 +20795,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | `alias/the-name-of-a-bare-lookup` | `st=1~two` **2>** `alias: a$b not found` | `st=1~two` **2>** `<shell>: line 1: alias: a$b: not found` | `st=1~two` **2>** `<shell>: line 1: alias: a$b: not found` | `st=1~two` **2>** `<shell>: line 0: alias: a$b: not found` | **2>** `alias: a$b: invalid alias name` *(status 1)* | `st=1~two` | `st=1~two` **2>** `alias: a$b not found` |
 | `alias/a-reserved-word-is-read-the-way-the-grammar-reads-it` | `[a]` | `took~[a]` | `[a]` | `took~[a]` | `[a]` | `took~[a]` | `[a]` |
 | `alias/a-reserved-word-after-an-alias-ending-in-a-blank` | `st=1` | `took~st=0` | `st=1` | `took~st=0` | `st=1` | `took~st=0` | `st=1` |
+| `alias/a-reserved-word-alias-at-the-head-of-a-pipeline` | `st=1` | `took true~st=0` | `st=1` | `took true~st=0` | `st=1` | `took true~st=0` | `st=1` |
+| `alias/an-ordinary-alias-at-the-head-of-a-pipeline` | `hi~st=1` | `hi~st=1` | `hi~st=1` | `hi~st=1` | `hi~st=1` | `hi~st=1` | `hi~st=1` |
+| `alias/a-pipeline-head-alias-whose-body-begins-with-a-bang` | `st=1` | `st=0` **2>** `<script>: line 3: x: command not found` | `st=1` | `st=0` **2>** `<script>: line 3: x: command not found` | `st=1` | `st=0` **2>** `<script>:3: command not found: x` | `st=1` |
+| `alias/a-pipeline-head-value-ending-in-a-blank` | `HI~st=1` | `echo HI~st=0` | `HI~st=1` | `echo HI~st=0` | `HI~st=1` | `echo HI~st=0` | `HI~st=1` |
+| `alias/a-time-alias-in-front-of-a-pipeline` | `took~st=0` | `took~st=0` | `st=0` **2>** `~real	0m0.000s~user	0m0.000s~sys	0m0.000s` | `took~st=0` | `st=0` **2>** `~real	0m0.00s~user	0m0.00s~sys	0m0.00s` | `took~st=0` | `took~st=0` |
 | `alias/a-reserved-word-alias-in-posix-mode` | **2>** `<script>: 3: set: Illegal option -o posix` *(status 2)* | `[a]` | `[a]` | `[a]` | **2>** `<script>[3]: set: posix: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | **2>** `<script>:set:3: no such option: posix` *(status 1)* | `[a]` **2>** `<script>: set: line 3: illegal option -o posix` |
 | `alias/leaving-posix-mode-hands-the-reserved-word-back` | **2>** `<script>: 3: set: Illegal option -o posix` *(status 2)* | `took~[a]` | `took~[a]` | `took~[a]` | **2>** `<script>[3]: set: posix: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | **2>** `<script>:set:3: no such option: posix` *(status 1)* | `[a]` **2>** `<script>: set: line 3: illegal option -o posix~<script>: set: line 4: illegal option +o posix` |
 | `alias/a-word-the-grammar-does-not-reserve-expands-in-posix-mode` | **2>** `<script>: 2: set: Illegal option -o posix` *(status 2)* | `took there` | `took there` | `took there` | **2>** `<script>[2]: set: posix: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | **2>** `<script>:set:2: no such option: posix` *(status 1)* | `took there` **2>** `<script>: set: line 2: illegal option -o posix` |
@@ -21072,6 +21130,42 @@ grades it and nothing drift-checks it either, for the same reason.
   alias sp=' '
   alias '!'='echo took;'
   sp ! true
+  echo "st=$?"
+  ```
+- `alias/a-reserved-word-alias-at-the-head-of-a-pipeline` — the one position the reserved-word flag did not reach (#2638). `!` is read as a pipeline's negation one level out from a command, before the alias table is consulted at all, so the substitution never happened here however the dialect was set. The split is exactly the one the row above draws — bash 5.3, bash 3.2 and zsh print `took true` and answer 0; dash, ksh93, BusyBox ash and bash called `sh` print nothing and answer 1, because `! true` stayed a negation — which is what says this is that field reaching further and not an axis of its own. `alias/a-reserved-word-after-an-alias-ending-in-a-blank` is the control: it asks the same word in the one position that already worked, so a change that breaks the flag itself is visible in both rows and a change that breaks only the reach is visible in this one
+  ```sh
+  shopt -s expand_aliases 2>/dev/null
+  alias '!'='echo took'
+  ! true
+  echo "st=$?"
+  ```
+- `alias/an-ordinary-alias-at-the-head-of-a-pipeline` — the control for the row above, and the reason the reach is guarded by the *word* rather than applied to every head: a name the grammar does not reserve is expanded behind the negation exactly as it is anywhere a command word stands, and all seven columns agree — `hi`, then 1, the negation of a success. A fix that asked the reserved-word question about every word a pipeline begins with would take this row's `e` away in the four columns that protect, which nothing else in the corpus would notice
+  ```sh
+  shopt -s expand_aliases 2>/dev/null
+  alias e=echo
+  ! e hi
+  echo "st=$?"
+  ```
+- `alias/a-pipeline-head-alias-whose-body-begins-with-a-bang` — the negation is read off the word the substitution *left*, not the word that was written. The body opens with the name it was reached by, so the inner `!` is inside the chain that name opened and is not expanded again — `alias/a-body-that-names-itself-past-a-separator` is the general form — and what stands there is the reserved word doing its reserved job: the three that expand report `x: command not found` and answer 0, the negation of a 127. The four that protect never substitute at all and answer 1. It is also the row that says the word *behind* the negation is still an ordinary command word: `x` is looked up rather than swallowed
+  ```sh
+  shopt -s expand_aliases 2>/dev/null
+  alias '!'='! x'
+  ! true
+  echo "st=$?"
+  ```
+- `alias/a-pipeline-head-value-ending-in-a-blank` — the trailing-blank rule reaches the head of a pipeline too, which is the half of #2638 a fix can silently drop: the word after a value ending in a blank is eligible in turn, so the three that expand run `echo` with the *expansion of* `hi` behind it and print `echo HI` at 0. The four that protect keep the negation, run the ordinary alias behind it and print `HI` at 1 — so the two readings differ in both the output and the status, and neither cell can be reached by accident
+  ```sh
+  shopt -s expand_aliases 2>/dev/null
+  alias '!'='echo '
+  alias hi='echo HI'
+  ! hi
+  echo "st=$?"
+  ```
+- `alias/a-time-alias-in-front-of-a-pipeline` — the second word a pipeline reads before a command exists, and the same gap: `time` binds the whole pipeline and is read one level out, so nothing asked the table for it either. bash 5.3, bash 3.2 and zsh take the alias and print `took`; ksh93 and bash called `sh` keep the keyword and report on the pipeline instead. dash and BusyBox ash take it as well — not because they expand a reserved word but because neither has the keyword to protect, which is the same thing `alias/a-reserved-word-is-read-the-way-the-grammar-reads-it` says about `select` and `function` and is what makes the protected set the grammar's own. The body ends in `;` so that the timing report and the alias are two different lines rather than two readings of one
+  ```sh
+  shopt -s expand_aliases 2>/dev/null
+  alias time='echo took;'
+  time true
   echo "st=$?"
   ```
 - `alias/a-reserved-word-alias-in-posix-mode` — the mode moves it: the two bash builds print only the loop here where they print `took` above. The other four have no `posix` option at all and say so in three different ways — an illegal option, bad option(s) with the usage line, and no such option — which is the same taxonomy this corpus records everywhere the name is bash's. dash and ksh93 end the script over it and BusyBox ash reports it and carries on, which is why ash still reaches the loop and prints `[a]`

@@ -1,0 +1,51 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# The answers only zsh gives about options, splitting and scope — every one
+# of them cut from a core/ file where the panel split, and named there.
+#
+# These are not obscure corners. Three of the five below are the reasons a
+# script written for bash does not run under zsh unchanged, and the first is
+# a letter that means something else entirely.
+
+# `set -f` is noglob in bash, ksh93 and dash. In zsh the letter is "read no
+# rc files" and globbing is untouched — the globbing option is -F, which is
+# held out until #2654 lands: that letter is refused here.
+( set -f; printf '[%s]\n' /dev/nul* ) 2> /dev/null
+printf 'set -f -> %s\n' "$?"
+
+# An unquoted `$@` or `$*` is one word. zsh does not field-split the result
+# of an expansion unless SH_WORD_SPLIT is on, which is the single most
+# visible difference between writing a script for zsh and for anything else.
+set -- 'a b' c
+for w in $@; do printf 'unquoted at [%s]\n' "$w"; done
+for w in $*; do printf 'unquoted star [%s]\n' "$w"; done
+for w in "$@"; do printf 'quoted at [%s]\n' "$w"; done
+
+# The same rule applied to an ordinary variable, which is where a script
+# meets it first.
+v='x y z'
+for w in $v; do printf 'unquoted var [%s]\n' "$w"; done
+( setopt shwordsplit; for w in $v; do printf 'with shwordsplit [%s]\n' "$w"; done )
+
+# IFS starts as space, tab, newline and NUL. The other four stop at newline.
+printf 'IFS default [%s]\n' "$(printf '%s' "$IFS" | od -An -c | tr -s ' ')"
+
+# Assigning over a readonly ends the shell here. bash, ksh93 and dash
+# diagnose it and carry on.
+( readonly RO=fixed; RO=changed; printf 'assigned over readonly\n' ) 2> /dev/null
+printf 'readonly -> %s\n' "$?"
+
+# `set -o` with a name no shell has is 1 here and 2 in the other three.
+( set -o nosuchoption_zz ) 2> /dev/null
+printf 'bad option name -> %s\n' "$?"
+
+# `$0` inside a dot script is the sourced file here and the outer script
+# everywhere else.
+printf 'printf "zero [%%s]\\n" "$0"\n' > s0.sh
+. ./s0.sh
+
+# And a dot of a file that is not there is 127 — the status of a command that
+# does not exist — where bash says 1 and ksh93 and dash end the script.
+( . ./nosuchfile_zz.sh ) 2> /dev/null
+printf 'missing dot -> %s\n' "$?"

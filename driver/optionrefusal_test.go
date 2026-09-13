@@ -91,3 +91,56 @@ func TestARefusedInvocationOptionDefaultsToTwo(t *testing.T) {
 		}
 	}
 }
+
+// TestDecliningAnInvocationOptionNameCanReportSuccess is #2639: one shell
+// writes the complaint for a refused `set -o` name on its command line,
+// declines to run what it was given, and exits **0**.
+//
+// The two halves are asserted together because either alone is the wrong
+// answer: a shell that ran the command string would be accepting the option,
+// and one that exited nonzero would be every other column. The letter by the
+// same route is asserted beside it and must *not* move, since that is the
+// measurement that made this an axis about one refusal rather than about this
+// shell's front end.
+func TestDecliningAnInvocationOptionNameCanReportSuccess(t *testing.T) {
+	shell := func(zero interp.Answer) driver.Shell {
+		sem := interp.PosixSemantics()
+		sem.BadSetOptionNameFatal = interp.No
+		sem.BadSetOptionLetterFatal = interp.No
+		sem.BadSetOptionNameAtInvocationExitsZero = zero
+		return driver.Shell{
+			Name:      "testsh",
+			Dialect:   syntax.Core(),
+			Semantics: sem,
+			Diagnostics: interp.Diagnostics{
+				SetInvalidOptionNameStatus:   1,
+				SetInvalidOptionLetterStatus: 2,
+			},
+		}
+	}
+	for _, c := range []struct {
+		name string
+		zero interp.Answer
+		argv []string
+		want int
+	}{
+		{"the name, where declining is not a failure", interp.Yes, []string{"testsh", "-o", "nosuchoption", "-c", "echo hi"}, 0},
+		{"the name, where it is", interp.No, []string{"testsh", "-o", "nosuchoption", "-c", "echo hi"}, 1},
+		{"the letter, which the axis does not reach", interp.Yes, []string{"testsh", "-q", "-c", "echo hi"}, 2},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			var out, errs strings.Builder
+			sh := shell(c.zero)
+			sh.Stdout, sh.Stderr = &out, &errs
+			if got := driver.MainArgs(sh, c.argv); got != c.want {
+				t.Errorf("status %d, want %d (stderr %q)", got, c.want, errs.String())
+			}
+			if out.String() != "" {
+				t.Errorf("ran %q, want the shell to decline whatever status it reports", out.String())
+			}
+			if errs.String() == "" {
+				t.Error("said nothing, want the refusal spoken even where it reports success")
+			}
+		})
+	}
+}

@@ -328,6 +328,11 @@ func Semantics() interp.Semantics {
 	s.ArrayNameWithoutSubscriptIsTheList = interp.No
 	// A subscript inside a literal is an expression: `a=([1+1]=c)` lands at 2.
 	s.ArrayLiteralSubscriptIsAKey = interp.No
+	// A `[k]+=` element of a replacing keyed literal joins the value the
+	// *name* held, which `m=(…)` is in the middle of discarding:
+	// `typeset -A m; m[k]=v; m=([k]+=x)` is `vx` here and `x` in the other
+	// two — see Semantics.KeyedLiteralAppendJoinsTheReplacedValue.
+	s.KeyedLiteralAppendJoinsTheReplacedValue = interp.Yes
 	// `typeset -A m[k]=v` — see Semantics.TableLetterReachesItsOwnOperandsSubscript.
 	s.TableLetterReachesItsOwnOperandsSubscript = interp.Yes
 	// bash reads a group built out of an expansion — see

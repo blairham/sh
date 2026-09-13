@@ -214,6 +214,9 @@ func Semantics() interp.Semantics {
 	// pattern groups either, for the same reason dash has none.
 	// unanswered TableLetterReachesItsOwnOperandsSubscript: BusyBox ash has
 	// no arrays and no table letter, for the same reason dash has neither.
+	// unanswered KeyedLiteralAppendJoinsTheReplacedValue: no keyed table and
+	// no literal here either. Measured 2026-09-12 on BusyBox v1.37.0,
+	// `m=([k]+=x)` is `syntax error: unexpected "("` (#2405).
 	// unanswered UnsetReferenceLetterRemovesANonReference: no `-n` on `unset`
 	// here either. Measured 2026-09-12 on BusyBox v1.37.0, `unset -n x` is
 	// `unset: line 0: illegal option -n`, and the shell ends at 2 without

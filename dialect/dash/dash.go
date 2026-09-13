@@ -247,6 +247,10 @@ func Semantics() interp.Semantics {
 	// unanswered TableLetterReachesItsOwnOperandsSubscript: dash has no
 	// arrays and no table letter, so `typeset -A m[k]=v` is a bad command
 	// name here rather than a declaration whose ordering could be measured.
+	// unanswered KeyedLiteralAppendJoinsTheReplacedValue: there is no keyed
+	// table and no literal to write one with. Measured 2026-09-12,
+	// `m=([k]+=x)` is `Syntax error: "(" unexpected` before any element is
+	// looked at, so no value is ever joined to anything (#2405).
 	// unanswered EarlierDeclarationLetterBlocksALaterPlus: there is no
 	// declaration command to write the letter on. `typeset` is not a
 	// builtin here and `integer` is not a word, so neither sign of `-i`

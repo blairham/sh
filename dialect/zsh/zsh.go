@@ -1321,6 +1321,9 @@ func Semantics() interp.Semantics {
 	// `typeset -A m[k]=v` is `m[k]: inconsistent type for assignment` and
 	// fatal, so there is no key and no evaluated subscript to choose between.
 	s.ArrayLiteralSubscriptIsAKey = interp.No
+	// A `[k]+=` element joins what the literal has built, not the table it
+	// replaced: `typeset -A m; m[k]=v; m=([k]+=x)` is `x`.
+	s.KeyedLiteralAppendJoinsTheReplacedValue = interp.No
 	// The FUNCTION_ARGZERO option, on by default and the reason this shell
 	// alone moves `$0`: it names the function being run, or the file being
 	// sourced, and goes back to the script's name when that call returns.

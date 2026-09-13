@@ -395,6 +395,10 @@ func (r *Runner) assignAssocElems(name string, parsed []literalElem, appendTo bo
 		r.diagf("%s: assigning to the whole of a produced association is not implemented yet\n", name)
 		return
 	}
+	// Read before the clear below, because that is what one of the two
+	// answers to KeyedLiteralAppendJoinsTheReplacedValue needs and the clear
+	// is about to destroy it.
+	replaced := r.replacedElems(name, parsed, appendTo)
 	if !appendTo {
 		if r.AssocArrays == nil {
 			r.AssocArrays = map[string]AssocArray{}
@@ -408,7 +412,15 @@ func (r *Runner) assignAssocElems(name string, parsed []literalElem, appendTo bo
 	var pairs []string
 	for _, e := range parsed {
 		if e.subscripted {
-			r.setAssocElem(name, e.sub, e.value)
+			value := e.value
+			if e.appendValue {
+				v, ok := r.keyedLiteralAppend(name, e.sub, value, replaced)
+				if !ok {
+					return
+				}
+				value = v
+			}
+			r.setAssocElem(name, e.sub, value)
 			continue
 		}
 		pairs = append(pairs, e.fields...)
@@ -422,21 +434,82 @@ func (r *Runner) assignAssocElems(name string, parsed []literalElem, appendTo bo
 	}
 }
 
-// assocElem reads one `[key]=value` element of an associative literal.
+// replacedElems is what the append elements of a *replacing* keyed literal
+// would join if they joined the value the name held before it — read through
+// the ordinary element read, so a produced table answers as it would to a
+// script, and nil where no element asks the question.
+//
+// Nil for an appending literal on purpose: `m+=([k]+=x)` keeps the table, so
+// the value before the literal and the value built so far are the same thing
+// and there is nothing to tell apart. The map is keyed by the key and not by
+// position because two elements may name one key, which is exactly the
+// spelling the axis below is visible in.
+func (r *Runner) replacedElems(name string, parsed []literalElem, appendTo bool) map[string]string {
+	if appendTo {
+		return nil
+	}
+	var replaced map[string]string
+	for _, e := range parsed {
+		if !e.subscripted || !e.appendValue {
+			continue
+		}
+		if replaced == nil {
+			replaced = map[string]string{}
+		}
+		replaced[e.sub] = r.assocElemCurrent(name, e.sub)
+	}
+	return replaced
+}
+
+// keyedLiteralAppend is what a `[k]+=v` element of a keyed literal stores.
+//
+// The join itself is appendedValue's, so an integer-attributed table adds
+// where a plain one concatenates, exactly as `m[k]+=v` on its own line does.
+// What is decided here is only *which value is joined to*, and that is a
+// measured disagreement — see KeyedLiteralAppendJoinsTheReplacedValue.
+//
+// Asked only where the two readings part. They agree for every appending
+// literal, for a key the name did not hold, and for the first append of a key
+// the literal has not already written — which is nearly every line anyone
+// writes, and none of them should have to name a shell to run.
+func (r *Runner) keyedLiteralAppend(name, key, add string, replaced map[string]string) (string, bool) {
+	base := r.assocElemCurrent(name, key)
+	if old, asked := replaced[key]; asked && old != base {
+		if r.ask(r.sem().KeyedLiteralAppendJoinsTheReplacedValue,
+			"a `[k]+=` element of a replacing keyed literal joining the value the name held before it") {
+			base = old
+		}
+		if r.unspecified {
+			return "", false
+		}
+	}
+	return r.appendedValue(name, base, add)
+}
+
+// assocElem reads one `[key]=value` or `[key]+=value` element of a literal.
 //
 // The shape is decided on the word as written, before any expansion — the
 // same rule assignShaped applies — because expanding first would hand `[k]=v`
 // to the pattern matcher, where it is a character class. The key is the
 // literal text between the brackets; the value expands as an assignment's,
 // which is what keeps `[k]=$x` whole and `[k]=*` a star.
-func (r *Runner) assocElem(w *syntax.Word) (key, value string, ok bool) {
+//
+// The append spelling is read in exactly the places the plain one is, which
+// is what every shell in the panel that reads either does. It was not read at
+// all, so `a=(p q r); a+=( [1]+=Z )` left a fourth element holding the seven
+// characters `[1]+=Z` where bash and zsh join the value to the element the
+// subscript names — silently, at status 0, with an array that is the wrong
+// length and looks populated (#2405). In the dialect whose subscripts are
+// keys the same word went in as a *key* spelled `[1]+=Z`, which is worse: the
+// table grows an entry nothing will ever read.
+func (r *Runner) assocElem(w *syntax.Word) (key, value string, appendValue, ok bool) {
 	if w == nil || len(w.Spans) == 0 {
-		return "", "", false
+		return "", "", false, false
 	}
 	head := w.Spans[0]
 	if head.Kind != syntax.Literal || head.Quoting != syntax.Unquoted ||
 		!strings.HasPrefix(head.Value, "[") {
-		return "", "", false
+		return "", "", false, false
 	}
 	// The `]=` that closes the key is looked for across the spans, not only
 	// in the first: `["c d"]=v` and `[$k]=v` put quoting or an expansion
@@ -450,7 +523,7 @@ func (r *Runner) assocElem(w *syntax.Word) (key, value string, ok bool) {
 		if i == 0 {
 			text = text[1:]
 		}
-		j := strings.Index(text, "]=")
+		j, width, appends := elemTerminator(text)
 		if j < 0 {
 			continue
 		}
@@ -464,11 +537,36 @@ func (r *Runner) assocElem(w *syntax.Word) (key, value string, ok bool) {
 			Kind: syntax.Literal, Value: text[:j], Quoting: s.Quoting, Pos: s.Pos,
 		})
 		valueWord := syntax.Word{Spans: append([]syntax.Span{{
-			Kind: syntax.Literal, Value: text[j+2:], Quoting: s.Quoting, Pos: s.Pos,
+			Kind: syntax.Literal, Value: text[j+width:], Quoting: s.Quoting, Pos: s.Pos,
 		}}, w.Spans[i+1:]...)}
-		return r.expandAssignValue(&keyWord), r.expandAssignValue(&valueWord), true
+		return r.expandAssignValue(&keyWord), r.expandAssignValue(&valueWord), appends, true
 	}
-	return "", "", false
+	return "", "", false, false
+}
+
+// elemTerminator finds where a literal element's subscript ends: the first
+// `]` that an `=` or a `+=` follows. It reports the offset, how many
+// characters the terminator takes, and whether it is the append spelling.
+//
+// One scan for both spellings rather than two searches compared, because the
+// two starts are the same character: at any given `]` only one of them can
+// match, so "the first `]=`" and "the first `]+=`" are never in a race and
+// the earlier terminator is simply the earlier `]`. Searching for `]=` alone
+// and then for `]+=` would read `[a]=b]+=c` as an append, since the second
+// pattern occurs in the *value* the first one already delimited.
+func elemTerminator(text string) (at, width int, appendValue bool) {
+	for i := 0; i < len(text); i++ {
+		if text[i] != ']' {
+			continue
+		}
+		switch {
+		case strings.HasPrefix(text[i+1:], "="):
+			return i, 2, false
+		case strings.HasPrefix(text[i+1:], "+="):
+			return i, 3, true
+		}
+	}
+	return -1, 0, false
 }
 
 // SetDynamicAssoc registers an associative array whose contents are produced

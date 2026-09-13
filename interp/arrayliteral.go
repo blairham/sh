@@ -25,6 +25,11 @@ type literalElem struct {
 	// subscripted distinguishes the shapes. A bare element's fields are in
 	// `fields` and both strings are empty.
 	subscripted bool
+	// appendValue marks the `[sub]+=value` spelling, which joins what the
+	// element already holds rather than replacing it. Only ever true
+	// alongside subscripted: the append spelling of a *bare* element is not
+	// a shape a literal has.
+	appendValue bool
 	// fields is what a bare element expanded to, which may be any number of
 	// words: an array is built from a command's output that way.
 	fields []string
@@ -70,8 +75,10 @@ type literalElem struct {
 func (r *Runner) literalElems(elems []*syntax.Word) ([]literalElem, bool) {
 	out := make([]literalElem, 0, len(elems))
 	for _, w := range elems {
-		if sub, value, ok := r.assocElem(w); ok {
-			out = append(out, literalElem{sub: sub, value: value, subscripted: true})
+		if sub, value, appends, ok := r.assocElem(w); ok {
+			out = append(out, literalElem{
+				sub: sub, value: value, subscripted: true, appendValue: appends,
+			})
 			continue
 		}
 		out = append(out, literalElem{fields: r.expandWord(w)})
@@ -236,7 +243,28 @@ func (r *Runner) literalInto(name string, a Array, next int, parsed []literalEle
 				"%[1]s[%[2]s]: bad array subscript", name, e.sub, e.value))
 			return nil, false
 		}
-		a[pos] = e.value
+		value := e.value
+		if e.appendValue {
+			// `a=(p q r); a+=( [1]+=Z )` joins the element rather than
+			// replacing it, and through appendedValue rather than with `+`
+			// because the name's attribute decides which join this is —
+			// `typeset -ia n=(1 2 3); n+=( [1]+=5 )` is 7 and not 25, the
+			// same answer `n[1]+=5` gives on its own line.
+			//
+			// The value joined is the one this literal has put there, which
+			// for `a=(…)` is whatever the literal itself wrote — the array
+			// started empty — and for `a+=(…)` is the element that was
+			// already standing. Unanimous in the panel's indexed arrays, and
+			// not the question KeyedLiteralAppendJoinsTheReplacedValue asks:
+			// see keyedLiteralAppend, where one column reads the replaced
+			// table instead.
+			v, ok := r.appendedValue(name, a[pos], value)
+			if !ok {
+				return nil, false
+			}
+			value = v
+		}
+		a[pos] = value
 		// A bare element after a subscripted one continues from there rather
 		// than from where the count had reached: `a=(x [3]=y z)` puts z at 4.
 		// Measured in both shells that accept the mixture, and it follows the

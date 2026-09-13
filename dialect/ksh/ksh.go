@@ -391,6 +391,9 @@ func Semantics() interp.Semantics {
 	// literal written with one declares a keyed array: `typeset -p` answers
 	// `-A` and `${a[2]}` does not find what `[1+1]=c` stored.
 	s.ArrayLiteralSubscriptIsAKey = interp.Yes
+	// A `[k]+=` element joins what the literal has built, not the table it
+	// replaced: `typeset -A m; m[k]=v; m=([k]+=x)` is `x`.
+	s.KeyedLiteralAppendJoinsTheReplacedValue = interp.No
 	// `typeset -A m[k]=v` — see Semantics.TableLetterReachesItsOwnOperandsSubscript.
 	s.TableLetterReachesItsOwnOperandsSubscript = interp.No
 	// ksh93 globs a result but will not let one build a group — see

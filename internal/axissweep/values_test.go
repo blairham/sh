@@ -199,6 +199,10 @@ func TestTheFlipVerdictsAreOnTheAxesTheyAnswer(t *testing.T) {
 		"SystemStartupFiles.Login":          "bash",
 		"SystemStartupFiles.Interactive":    "bash",
 		"SystemStartupFiles.LateLogin":      "bash",
+		// The two options one shell has and the other does not, which is why
+		// these are scoped the other way round from the ten above.
+		"StartupFileOptions.SuppressInteractive": "zsh",
+		"StartupFileOptions.NameInteractive":     "zsh",
 	} {
 		if verdict(notes[field], dialect) == "" {
 			t.Errorf("%s: nothing says why no corpus row objects in %s", field, dialect)

@@ -10413,6 +10413,16 @@ type StartupFileOptions struct {
 	// It suppresses the file the shell reads *of its own name* and not
 	// `$ENV`: measured, `bash --posix --norc -i` still reads `$ENV`, because
 	// in that mode the standard's file is the one it was going to read.
+	//
+	// unpinned zsh: reached, and the flip is unobservable by construction. This
+	// shell has no such option — its escape hatch is the one that drops every
+	// file at once, SuppressAll above — so the axis holds the empty string, and
+	// the only other value the sweep has for a string axis is a word it invented
+	// (`axis-sweep-probe`). A row could object only by passing that exact word,
+	// which would be a case written against the instrument rather than against a
+	// shell. The shell that *does* have the option is pinned by a row:
+	// `startup/an-option-skips-the-interactive-file` and
+	// `startup/an-option-names-the-interactive-file` (#2059).
 	SuppressInteractive string
 
 	// NameInteractive names the options whose operand — the next word — is
@@ -10423,6 +10433,16 @@ type StartupFileOptions struct {
 	// the file: measured, `bash --norc --rcfile f -i` reads neither, and so
 	// does `bash --rcfile f -l -i`, where a login shell was not going to read
 	// an interactive file at all.
+	//
+	// unpinned zsh: reached, and the flip is unobservable by construction. This
+	// shell has no such option — its escape hatch is the one that drops every
+	// file at once, SuppressAll above — so the axis holds the empty string, and
+	// the only other value the sweep has for a string axis is a word it invented
+	// (`axis-sweep-probe`). A row could object only by passing that exact word,
+	// which would be a case written against the instrument rather than against a
+	// shell. The shell that *does* have the option is pinned by a row:
+	// `startup/an-option-skips-the-interactive-file` and
+	// `startup/an-option-names-the-interactive-file` (#2059).
 	NameInteractive string
 }
 

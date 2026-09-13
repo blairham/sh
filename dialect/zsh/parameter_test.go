@@ -992,7 +992,7 @@ done`)
 		// name, and it is a produced readonly array since #2517 — which is
 		// what the row now reads, and which still covers the case it was
 		// picked for: `zznosuchparam` below is the refusing name.
-		"parameters:reswords agree [array-readonly-hideval-special]\n" +
+		"parameters:reswords agree [array-readonly-hide-hideval-special]\n" +
 		"parameters:zznosuchparam agree [UNSET]\n"
 	if out != want || st != 0 {
 		t.Errorf("key against table = %q (status %d), want %q", out, st, want)

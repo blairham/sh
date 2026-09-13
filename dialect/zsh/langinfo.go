@@ -120,7 +120,7 @@ func registerLangInfoModule(r *interp.Runner) {
 	// this repository, and the second is the fact it can act on.
 	r.SetAbsentElements("langinfo", "no locale data for this locale")
 	r.MarkReadonly("langinfo")
-	r.MarkHidden("langinfo")
+	hideModuleParameter(r, "langinfo")
 }
 
 // langInfoCategory is one of the five locale categories, and the keys it

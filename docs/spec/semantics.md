@@ -7840,13 +7840,15 @@ out=out`. `Semantics.DeclareGlobalReachesPastALocal`, asked only where a
 local shadows the name.
 
 **ksh93's `typeset -f` prints the source text verbatim** — its own
-two-space indentation, `echo two; echo three` still on one line. This
-engine keeps a tree, not the text, so the letter is refused as
-unimplemented rather than approximated. bash and zsh print from their
-trees, each in its own arrangement (`dialect/bash/layout.go`,
-`dialect/zsh/layout.go`); the header join differs too — bash gives the
-opening brace a line of its own, zsh keeps it on the header's
-(`Diagnostics.FunctionListingHeader`).
+two-space indentation, `echo two; echo three` still on one line. So that
+dialect's parser keeps the definition's characters on the declaration
+(`syntax.Dialect.FunctionDefinitionIsSourceText`,
+`syntax.FuncDecl.SourceText`) and its listing writes them back
+(`Diagnostics.FunctionListingIsSourceText`), terminator and all. bash and
+zsh print from their trees, each in its own arrangement
+(`dialect/bash/layout.go`, `dialect/zsh/layout.go`); the header join
+differs too — bash gives the opening brace a line of its own, zsh keeps it
+on the header's (`Diagnostics.FunctionListingHeader`).
 
 **A listing is not a pretty-printer, and nine questions about it are
 not about where the lines break.** Seven were reported together and two
@@ -8764,21 +8766,46 @@ The **names-only** listing keeps the same distinction with punctuation
 instead of a word: `f() { :; }; function g { :; }; typeset +f` writes
 `f()` and then `g`. zsh writes both bare.
 
-### What this listing does not promise
+### The listing is the source text, not a layout
 
-**ksh93 prints the source text back verbatim.** `f(){    echo     a   ;
-  }` lists with every one of those spaces, and a definition written on a
-`-c` line ends its listing with the `;` that followed it rather than with
-a newline. This implementation keeps a tree and not the source, so what it
-writes is a *layout* — the compact one, with the source's own separators —
-that reproduces that text for a definition written the way anybody writes
-one, and normalizes the spacing of one that is not.
+**ksh93 prints the definition back verbatim**, and this does too. The
+parser keeps the characters on the declaration —
+`syntax.Dialect.FunctionDefinitionIsSourceText` and
+`syntax.FuncDecl.SourceText` — and the listing writes them with nothing
+added, under `Diagnostics.FunctionListingIsSourceText`. Two flags because
+the text has to be *kept* by a parser and *written* by a vector, and a
+tree parsed by one dialect may be run by another's; either alone leaves
+the layout in place.
 
-Byte-identical, measured: a one-line body, either header spelling, several
-statements separated by `;`, and a bare listing of two functions. The one
-shape that differs is a body whose statements were separated by
-**newlines**, where the real shell keeps the last newline before the
-closing brace and this writes `; }`.
+The span runs from the name **through the character that ended the
+statement**, which is the whole of what a listing shows. Measured
+2026-09-13 on ksh93u+ 2012-08-01 through `cat -A` (#2610):
+
+    f(){    echo     a   ;   }; typeset -f f    f(){    echo     a   ;   };
+    f() { # note⏎ :; }; typeset -f f            f() { # note⏎ :; };
+    f() { :; }   ; typeset -f f                 f() { :; }   ;
+    eval "f() { :; }"; typeset -f f             f() { :; }
+    f() { :; }; g() { :; }; typeset -f          f() { :; };g() { :; };
+    f() {⏎  echo a⏎}⏎typeset -f f               f() {⏎  echo a⏎}⏎
+
+So a `-c` line's listing has **no trailing newline at all** — the `;` is
+the end of it — and a bare listing of two definitions runs them together,
+each carrying its own terminator and nothing between. A definition with
+nothing after it, which is the last thing an `eval` string holds, ends at
+its body.
+
+Three things follow that no printer could give: a comment inside the body
+survives, `${x}` keeps its braces, and odd spacing comes back as it was
+written. The fallback is still the compact layout — `FunctionLayout()` —
+for a declaration that carries no text: one built by an embedder, and one
+this shell is still waiting to read a body for.
+
+**What is still not reproduced** is a ksh93 fault rather than a layout:
+a **nested** definition truncates there. `f() { inner() { echo i; };
+echo o; }` lists as `f() { inner() { echo i; };` — the outer body's end is
+the inner one's — where this writes the outer definition whole. Corpus:
+`declare/f-says-a-nested-declaration-back`,
+`declare/f-says-a-nested-keyword-declaration-back`.
 
 
 ## The job and lookup long tail: type's letters, job specs, wait -n, disown, ulimit -a, the directory stack

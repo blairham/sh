@@ -59,6 +59,19 @@ func TestAListingCanBeTheDefinitionsOwnSourceText(t *testing.T) {
 		{"the blanks as written", "f(){   :;   }; typeset -f f", "f(){   :;   };"},
 		{"a comment inside the body", "f() { # note\n :; }; typeset -f f", "f() { # note\n :; };"},
 		{
+			// Including whatever stood between the body and the terminator.
+			"the blanks before the terminator too",
+			"f() { :; }   ; typeset -f f", "f() { :; }   ;",
+		},
+		{
+			// A body written over several lines, whose terminator is the
+			// newline after the `}` — the row that says the span is taken
+			// raw rather than trimmed at its ends.
+			"a body written over several lines",
+			"f() {\n  echo a\n  echo b\n}\ntypeset -f f",
+			"f() {\n  echo a\n  echo b\n}\n",
+		},
+		{
 			"the terminator, and nothing added after it",
 			"f() { :; }; typeset -f f; echo AFTER", "f() { :; };AFTER\n",
 		},

@@ -1469,15 +1469,15 @@ func Semantics() interp.Semantics {
 	// The letters `typeset` reads here. `-g` it simply does not have, and
 	// there is no `local` (see Register), so LocalOptions stays empty.
 	//
-	// `-f` is here now (#1494). The real shell prints a function back
-	// *verbatim* — it keeps the source text and this engine keeps a tree —
-	// so the listing is a layout that reproduces that text for a definition
-	// written the way anybody writes one; see FunctionLayout for what that
-	// does and does not promise. What the listing must get right is not the
-	// spacing: it is the `function` keyword, because `typeset` declares a
-	// local in a keyword body here and the global in the other, so a
-	// listing that dropped the word would hand back a program whose
-	// variables leak.
+	// `-f` is here now (#1494), and it says the function back *verbatim*:
+	// the parser keeps the definition's own characters and the listing
+	// writes them, terminator and all — see
+	// syntax.Dialect.FunctionDefinitionIsSourceText and FunctionLayout for
+	// what is left of the layout (#2610). What the listing must get right
+	// beyond the spacing is the `function` keyword, because `typeset`
+	// declares a local in a keyword body here and the global in the other,
+	// so a listing that dropped the word would hand back a program whose
+	// variables leak — and the source text keeps it because it was written.
 	s.DeclareOptions = "aAfilmMprux"
 	// `-m` is here now, and it is not the letter zsh spells the same way:
 	// it *moves* a parameter — `typeset -m new=old` — where the other

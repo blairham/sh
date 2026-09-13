@@ -14545,7 +14545,34 @@ printf 'TWO=still-running\n'`,
 	{
 		ID: "declare/f-says-a-named-function-back", Category: "declarations",
 		Snippet: `f() { if true; then echo one; fi; }; typeset -f f; echo "st=$?"`,
-		Why:     "three engines, three renderings of identical state: one gives the brace a line of its own and terminates with `;`, one keeps the brace on the header and terminates with nothing, and one prints the source text verbatim — which this engine does not keep, so the third is refused as unimplemented rather than approximated",
+		Why:     "three engines, three renderings of identical state: one gives the brace a line of its own and terminates with `;`, one keeps the brace on the header and terminates with nothing, and one says the **source text** back — so the third column is not an arrangement at all and is reproduced by keeping the characters rather than by a layout, see syntax.FuncDecl.SourceText (#2610)",
+	},
+	// The verbatim column, asked four ways (#2610). Two engines lay a tree
+	// out and ksh93 reproduces the characters the definition was written
+	// with, which is a different kind of answer rather than a third
+	// arrangement — so these rows ask about things a tree has already
+	// forgotten by the time a listing is wanted. Nothing here discriminates
+	// between the two printing engines; that is what the `#2427` block below
+	// is for.
+	{
+		ID: "declare/f-says-the-blanks-it-was-written-with", Category: "declarations",
+		Snippet: `f(){    echo     a   ;   }; typeset -f f`,
+		Why:     "spacing no tree holds. The two printing engines answer with their usual arrangement whatever was typed — four spaces become one, the `;` becomes a line break — and ksh93 gives every blank back, including the run between the `;` and the `}`. The listing there is the source text and not a layout, which is why a definition's characters are kept on the declaration rather than re-derived (#2610)",
+	},
+	{
+		ID: "declare/f-says-a-comment-in-the-body-back", Category: "declarations",
+		Snippet: "f() { # note\n :; }; typeset -f f",
+		Why:     "the row that cannot be passed by a layout however good: a comment is in no tree at all, so an engine that prints from one has nothing to write and ksh93 writes it back. It is the same fact `autoload`'s `# undefined` marker rests on from the other side — a body listing that reproduced comments would make that marker indistinguishable from a line somebody typed (#2610)",
+	},
+	{
+		ID: "declare/f-says-two-functions-back-with-nothing-between", Category: "declarations",
+		Snippet: `f() { :; }; g() { :; }; typeset -f`,
+		Why:     "what separates two listings, which is nothing in the column that says the source back: each definition carries the `;` that ended it and the shell writes no newline of its own, so ksh93 answers `f() { :; };g() { :; };` on one line where the other two write a block each. It is the control for the terminator being part of the listing rather than a line ending the shell adds (#2610)",
+	},
+	{
+		ID: "declare/f-says-a-definition-nothing-terminated-back", Category: "declarations",
+		Snippet: `eval "f() { :; }"; typeset -f f`,
+		Why:     "the other half of the row above, and the one that says the terminator is *read* rather than appended: text ending on the `}` has no terminator, so ksh93's listing has none either and the whole answer is `f() { :; }` with no trailing newline anywhere. The two printing engines write their usual block, so the row also says an `eval`-defined function is an ordinary one to all three (#2610)",
 	},
 	// The shape of a listed body, past where its lines break (#2427). Every
 	// row below is one question with two answers among the engines that
@@ -14592,7 +14619,7 @@ printf 'TWO=still-running\n'`,
 	{
 		ID: "declare/f-says-a-nested-keyword-declaration-back", Category: "declarations",
 		Snippet: `f() { function inner { echo i; }; }; typeset -f f`,
-		Why:     "the same nested declaration written the other way. Both engines answer exactly as they answer the row above, which is what says they respell rather than preserve — and it is the reason a listing may not simply drop the keyword everywhere: ksh93 scopes a `typeset` by the word, and its column keeps it",
+		Why:     "the same nested declaration written the other way. Both engines answer exactly as they answer the row above, which is what says they respell rather than preserve — and it is the reason a listing may not simply drop the keyword everywhere: ksh93 scopes a `typeset` by the word, and its column keeps it. The ksh93 column of this row and the one above is a **fault of that shell** and is recorded rather than reproduced: the outer definition's end is taken from the inner one's, so the listing stops at the inner `}` and the outer body is truncated (#2610)",
 	},
 	{
 		ID: "declare/f-says-a-background-statement-back", Category: "declarations",

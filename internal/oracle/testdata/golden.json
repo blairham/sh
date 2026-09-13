@@ -175158,6 +175158,210 @@
         "TimedOut": false
       }
     },
+    "subscript/a-blank-in-a-case-subject": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected word (expecting \"in\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `bar]'~\u003cshell\u003e: -c: line 1: `case m[foo bar] in *) echo arm;; esac'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `bar]'~\u003cshell\u003e: -c: line 1: `case m[foo bar] in *) echo arm;; esac'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `bar]'~\u003cshell\u003e: -c: line 0: `case m[foo bar] in *) echo arm;; esac'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: word unexpected (expecting \"in\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `bar]' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: parse error near `bar]'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "subscript/a-blank-in-a-compound-commands-redirection-target": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected word",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `bar]'~\u003cshell\u003e: -c: line 1: `{ :; } \u003e m[foo bar]; ls'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `bar]'~\u003cshell\u003e: -c: line 1: `{ :; } \u003e m[foo bar]; ls'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `bar]'~\u003cshell\u003e: -c: line 0: `{ :; } \u003e m[foo bar]; ls'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: word unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "m[foo bar]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: parse error near `bar]'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "subscript/a-blank-in-a-redirection-target": {
+      "ash": {
+        "Stdout": "m[foo",
+        "Stderr": "\u003cshell\u003e: bar]: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "m[foo",
+        "Stderr": "\u003cshell\u003e: line 1: bar]: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "m[foo",
+        "Stderr": "\u003cshell\u003e: line 1: bar]: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "m[foo",
+        "Stderr": "\u003cshell\u003e: bar]: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "m[foo",
+        "Stderr": "\u003cshell\u003e: 1: bar]: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "m[foo bar]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: bad pattern: m[foo",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "subscript/a-blank-in-a-redirection-target-after-a-word": {
+      "ash": {
+        "Stdout": "m[foo",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "m[foo",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "m[foo",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "m[foo",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "m[foo",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "m[foo",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: bad pattern: m[foo",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "subscript/a-blank-in-an-argument-subscript": {
       "ash": {
         "Stdout": "\u003cm[foo\u003e\u003cbar]=v\u003e",
@@ -175765,6 +175969,57 @@
       "zsh": {
         "Stdout": "n=2[two][three]",
         "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "subscript/a-redirection-target-with-text-after-the-subscript": {
+      "ash": {
+        "Stdout": "pre[1",
+        "Stderr": "\u003cshell\u003e: 2]post: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "pre[1",
+        "Stderr": "\u003cshell\u003e: line 1: 2]post: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "pre[1",
+        "Stderr": "\u003cshell\u003e: line 1: 2]post: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "pre[1",
+        "Stderr": "\u003cshell\u003e: 2]post: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "pre[1",
+        "Stderr": "\u003cshell\u003e: 1: 2]post: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "pre[1 2]post",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: bad pattern: pre[1",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

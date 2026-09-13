@@ -15102,6 +15102,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | `array/a-literal-value-holding-a-bracket` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `<x[1><2]>` | `<x[1><2]>` | `<x[1><2]>` | `<x[1 2]>` | **2>** `<shell>:1: bad pattern: x[1` *(status 1)* | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
 | `array/a-quoted-bracket-at-a-literal-elements-front` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `<[1 2]=x>` | `<[1 2]=x>` | `<[1 2]=x>` | `<[1 2]=x>` | `<[1 2]=x>` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
 | `subscript/a-blank-in-an-argument-subscript` | `<m[foo><bar]=v>` | `<m[foo><bar]=v>` | `<m[foo><bar]=v>` | `<m[foo><bar]=v>` | `<m[foo><bar]=v>` | **2>** `<shell>:1: bad pattern: m[foo` *(status 1)* | `<m[foo><bar]=v>` |
+| `subscript/a-blank-in-a-redirection-target` | `m[foo` **2>** `<shell>: 1: bar]: not found` | `m[foo` **2>** `<shell>: line 1: bar]: command not found` | `m[foo` **2>** `<shell>: line 1: bar]: command not found` | `m[foo` **2>** `<shell>: bar]: command not found` | `m[foo bar]` | **2>** `<shell>:1: bad pattern: m[foo` | `m[foo` **2>** `<shell>: bar]: not found` |
+| `subscript/a-blank-in-a-redirection-target-after-a-word` | `m[foo` | `m[foo` | `m[foo` | `m[foo` | `m[foo` | **2>** `<shell>:1: bad pattern: m[foo` *(status 1)* | `m[foo` |
+| `subscript/a-blank-in-a-compound-commands-redirection-target` | **2>** `<shell>: 1: Syntax error: word unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `bar]'~<shell>: -c: line 1: `{ :; } > m[foo bar]; ls'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `bar]'~<shell>: -c: line 1: `{ :; } > m[foo bar]; ls'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `bar]'~<shell>: -c: line 0: `{ :; } > m[foo bar]; ls'` *(status 2)* | `m[foo bar]` | **2>** `<shell>:1: parse error near `bar]'` *(status 1)* | **2>** `<shell>: syntax error: unexpected word` *(status 2)* |
+| `subscript/a-blank-in-a-case-subject` | **2>** `<shell>: 1: Syntax error: word unexpected (expecting "in")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `bar]'~<shell>: -c: line 1: `case m[foo bar] in *) echo arm;; esac'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `bar]'~<shell>: -c: line 1: `case m[foo bar] in *) echo arm;; esac'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `bar]'~<shell>: -c: line 0: `case m[foo bar] in *) echo arm;; esac'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `bar]' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `bar]'` *(status 1)* | **2>** `<shell>: syntax error: unexpected word (expecting "in")` *(status 2)* |
+| `subscript/a-redirection-target-with-text-after-the-subscript` | `pre[1` **2>** `<shell>: 1: 2]post: not found` | `pre[1` **2>** `<shell>: line 1: 2]post: command not found` | `pre[1` **2>** `<shell>: line 1: 2]post: command not found` | `pre[1` **2>** `<shell>: 2]post: command not found` | `pre[1 2]post` | **2>** `<shell>:1: bad pattern: pre[1` | `pre[1` **2>** `<shell>: 2]post: not found` |
 
 - `array/a-semicolon-ends-the-literal-elements` — a `;` between the parentheses of an array literal, in the one position two shells agree on. Every bash column names the `;`, ksh93 and zsh both take it, and the two are reading it differently — a terminator there and a separator here — which the rows below separate. The `n=` is what makes the difference visible rather than the exit status: a shell that took the `;` as an element would answer 2
   ```sh
@@ -15174,6 +15179,26 @@ grades it and nothing drift-checks it either, for the same reason.
 - `subscript/a-blank-in-an-argument-subscript` — the control for the four rows above, and the reason the rule is about command position rather than about subscripts. Every column that reads a command word through to the matching `]` still ends an *argument* at the blank, so all five print two fields; only zsh differs, and it differs by refusing the pattern rather than by joining the word
   ```sh
   printf "<%s>" m[foo bar]=v; echo
+  ```
+- `subscript/a-blank-in-a-redirection-target` — the same word boundary in a third position, and the one the panel splits on. ksh93 reads a redirection's target the way it reads a command word, so one file called `m[foo bar]` is made and `echo hi` is what writes to it; every bash ends the target at the blank, makes `m[foo` and then runs `bar]` as a command. Four columns span at command position and one spans here, which is why #2410 followed bash and recorded this rather than implementing it (#2449)
+  ```sh
+  > m[foo bar] echo hi; ls
+  ```
+- `subscript/a-blank-in-a-redirection-target-after-a-word` — the control that says the rule is *where the target stands* and not *that it is a target*: with a word in front of the redirection the target is argument position, and ksh93 cuts it at the blank exactly as bash does — the file is `m[foo` and `bar]` becomes another word of the echo. Unanimous, and it is the row a fix reaching every redirection would fail
+  ```sh
+  echo hi > m[foo bar]; ls
+  ```
+- `subscript/a-blank-in-a-compound-commands-redirection-target` — the other half of that boundary: a compound command's trailing redirection is not an argument either, so ksh93 spans there too and writes `m[foo bar]`. Every bash refuses the line outright — `syntax error near unexpected token `bar]`` — which is a different answer again from the command-word row and is what makes this worth recording separately from it
+  ```sh
+  { :; } > m[foo bar]; ls
+  ```
+- `subscript/a-blank-in-a-case-subject` — the near miss, and the reason the position is asked for by name rather than inferred. A `case` subject is read where a command may begin and takes no assignment, exactly as a redirection standing in front of a command does — and ksh93 does **not** span there: it cuts at the blank and the `]` is unexpected, the same refusal bash gives. A reading that shared one flag between the two positions would parse this and match nothing
+  ```sh
+  case m[foo bar] in *) echo arm;; esac
+  ```
+- `subscript/a-redirection-target-with-text-after-the-subscript` — the matching `]` ends the *subscript* and not the word, so ksh93 names one file `pre[1 2]post` rather than stopping at the bracket. bash cuts at the blank and reaches `2]post` as a command. Without it the rule would read as `the target is the bracketed text`, which is a narrower claim than the shell makes
+  ```sh
+  > pre[1 2]post echo hi; ls
   ```
 
 ## patterns

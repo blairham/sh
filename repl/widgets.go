@@ -53,7 +53,7 @@ const (
 	// to bind it to and nothing to name.
 	//
 	// What makes it one is that a shell can redefine it. A syntax highlighter
-	// works by wrapping every widget in `$widgets` and re-colouring the line
+	// works by wrapping every widget in `$widgets` and re-coloring the line
 	// after each one, and the widget it most needs is the one that runs when a
 	// person types — so a shell whose table has no `self-insert` is a shell
 	// where a highlighter loads, binds nothing that matters, and never sees a

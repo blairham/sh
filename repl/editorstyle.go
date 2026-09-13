@@ -57,7 +57,7 @@ type EditorStyle struct {
 	// Named, because the name is the whole mechanism: on a printable key the
 	// editor asks the shell whether anything has been put in front of typing,
 	// and it can only ask by name. A syntax highlighter is what does that — it
-	// wraps every widget in the shell's table and recolours the line after
+	// wraps every widget in the shell's table and recolors the line after
 	// each, so the widget it most needs is the one that runs when a person
 	// types (#2485).
 	//

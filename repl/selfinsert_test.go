@@ -13,7 +13,7 @@ import (
 // Every other action here is something a key is *bound* to. This is what the
 // key loop does when nothing else claims the key — so it was not a Widget at
 // all, and a shell could not get in front of it. A syntax highlighter needs
-// exactly that: it wraps every widget the shell names and recolours the line
+// exactly that: it wraps every widget the shell names and recolors the line
 // after each one, and the one that matters most is the one that runs when a
 // person types (#2485).
 

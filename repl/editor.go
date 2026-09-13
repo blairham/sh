@@ -431,7 +431,7 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 			}
 			// The shell first, where it has put something in front of typing.
 			// A syntax highlighter is the case this exists for: it wraps
-			// `self-insert` and recolours the line after the insertion, so a
+			// `self-insert` and recolors the line after the insertion, so a
 			// key that went straight into the line would never reach it
 			// (#2485).
 			//

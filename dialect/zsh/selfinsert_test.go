@@ -16,7 +16,7 @@ import (
 // It is what a printable key does when nothing else claims it, so it is not a
 // key anybody binds — but it is a name a shell can **redefine**, and that is
 // the whole of why it has to be in the table. A syntax highlighter wraps every
-// name in `$widgets` and recolours the line after each one; the name it most
+// name in `$widgets` and recolors the line after each one; the name it most
 // needs is the one that runs when a person types.
 //
 // Measured against zsh 5.9.2 with the same rc: `${+widgets[self-insert]}` was

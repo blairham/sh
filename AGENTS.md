@@ -652,6 +652,37 @@ alike and the legal values no dialect holds. Both are lists to re-measure,
 not verdicts: a preset is not the whole of a dialect, and zsh's `localtraps`
 reaches an answer no preset holds.
 
+`make axis-grade` asks the third question, and it is the one nothing asked
+until #2441: not whether a dialect **answers** an axis (`make axis-coverage`)
+and not whether the **record** matches the shells (the oracle panel), but
+whether a **preset agrees with the record**. Those are three different
+questions and only the third catches a wrong answer nobody exercises —
+`dialect/ash` held dash's value for `QuitIgnoredWhenNotInteractive` for the
+whole life of the ash column, with the record right throughout and every
+instrument green.
+
+It costs nothing, because the record is already on disk: a **probe** names the
+corpus rows whose recorded cells show one axis and says, in code, what those
+cells mean, and the check compares that reading with what each dialect's
+vector holds. So it is gated as a test in `make check`; this target is the
+same check with its whole ledger printed, and `ARGS=-write` regenerates
+`internal/axissweep/testdata/graded.txt` after a probe is added.
+
+**A reading never names a shell**, so every dialect with a panel column is
+graded by every probe and one added tomorrow is graded on the commit that adds
+it — proven by pointing a throwaway sixth dialect at the `bash32` column no
+preset claims, which was graded on sixteen axes with no change to the probes
+and caught four wrong inherited values. The first real run caught one:
+`dialect/ash` inherited `ShiftPastEndFatal` from `PosixSemantics`, where
+BusyBox ash prints `survived`, leaves 1 behind and says nothing at all.
+
+**Most axes have no probe, and the report says how many.** Sixteen of 519
+today, so 2515 of the 2595 dialect/axis pairs are compared with nothing — that
+number is the blind spot and it is printed on a passing run, because a pair
+nothing grades must never read as a pair that agrees. The same rule shapes the
+ledger: a pair the record *cannot* answer is a committed line reading `-`
+rather than a missing one.
+
 `make startup` times process start to a first prompt, and the `-c` path a
 script's every subshell pays, against the real shells on the same machine in
 the same minute. `internal/startupcost` is the harness; it uses a

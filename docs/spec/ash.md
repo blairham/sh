@@ -188,6 +188,19 @@ sweep above is still worth running:
   conformance-dialects` is where a wrong answer shows as a number that
   did not move, or moved the wrong way.
 
+  And a number that did not move is a poor signal, which is why `make
+  axis-grade` exists (#2441). It reads an axis's value off the *recorded
+  cells* of the ash column and compares it with what this preset holds, so
+  a wrong answer is named rather than folded into a score — with no shell
+  run, since the record is already on disk. Two of this dialect's answers
+  have been wrong that way and both were caught by reading the record:
+  `QuitIgnoredWhenNotInteractive`, which held dash's value for the whole
+  life of the column, and `ShiftPastEndFatal`, which was inherited from
+  `PosixSemantics` and never overridden. Note what the two have in common:
+  **the failure mode of a preset that starts from POSIX is a value nobody
+  ever chose**, and an inherited value is indistinguishable from a measured
+  one in the source.
+
 What it does do is make the #2272 shape impossible to ship quietly, which
 was the specific failure: an axis added elsewhere, unanswered here,
 refusing at run time with the test suite green.

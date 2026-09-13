@@ -57,6 +57,67 @@ func (p *Parser) expandCommandWord(done map[string]bool) {
 	p.expandSuffixAlias(done)
 }
 
+// expandCommandStart offers the current token to the alias table as the word
+// a command begins with, beginning a fresh set of spent names for it.
+//
+// Two callers, one door. parseCommand makes this call before it dispatches on
+// the keyword, and parsePipeline makes it for the two words it reads in front
+// of a command — see [Parser.expandPipelineHead]. A second copy of the three
+// lines is what let the head of a pipeline drift away from every other
+// command word in the first place.
+func (p *Parser) expandCommandStart() {
+	if p.Aliases == nil && p.SuffixAliases == nil {
+		return
+	}
+	p.aliasNextWord = false
+	p.aliasDone = map[string]bool{}
+	p.expandCommandWord(p.aliasDone)
+}
+
+// expandPipelineHead offers the word a pipeline begins with to the alias
+// table, for the two words [Parser.parsePipeline] reads for itself.
+//
+// [Dialect.AliasesExpandReservedWords] governs every other reserved word
+// without anything further, because every other one is read by parseCommand
+// and parseCommand asks the table before it dispatches — which is what lets
+// `alias iff='if true; then'` supply the keyword. A pipeline's leading `!`
+// and the `time` in front of it are read one level out, before a command
+// exists to be parsed, and nothing there asked: `alias '!'='echo took'`
+// followed by `! true` printed nothing and answered 1, where bash 5.3, bash
+// 3.2 and zsh each print `took true` and answer 0. The five columns that
+// protect a reserved-word alias protect this one too, so it is the same field
+// reaching one position further rather than an axis of its own (#2638).
+//
+// The reservation itself is not decided here. [Parser.expandAlias] owns it,
+// for these two words as for every other, and a second copy of the condition
+// in front of this call would be a second place to fix it — the mistake this
+// tree has made four times. What this guard decides is *which words
+// parsePipeline reads for itself*, which is a fact about the grammar: only
+// those two can be answered before a command is parsed, and `time` only where
+// the grammar has the keyword. Everywhere else `time` is an ordinary command
+// name and parseCommand reads it.
+//
+// So an ordinary alias at the head of a pipeline takes the route it always
+// took, through parseCommand, and the dialect is not consulted about it at
+// all — see TestAnOrdinaryHeadAsksTheReservedWordFieldNothing.
+//
+// Nothing else `!` means is reachable from here. Negation is the only one
+// parsePipeline reads; `[[ ! x ]]` is read by parseCond, `${!v}` by
+// parseParamExp, and neither is a token this ever sees.
+func (p *Parser) expandPipelineHead() {
+	readsBang := p.atWord("!")
+	readsTime := p.dialect.TimeKeyword && p.atWord("time")
+	if !readsBang && !readsTime {
+		return
+	}
+	p.expandCommandStart()
+	// Whatever came of it, this token has been offered and parseCommand must
+	// not offer it again. True even when the table declined — the word is
+	// then still `!` or `time`, parsePipeline consumes it, and next clears
+	// this before the word behind it is reached.
+	p.aliasHeadHandled = true
+}
+
 // expandAlias replaces the current token when look says it names an alias,
 // and keeps doing so while the replacement names another.
 //

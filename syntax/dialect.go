@@ -1792,6 +1792,16 @@ type Dialect struct {
 	// written down a second time here. (ksh93's cell for `{` is a dash
 	// because it refuses the alias *name*, which is a different axis.)
 	//
+	// Two of the words are read one level out from a command — a pipeline's
+	// leading `!` and the `time` in front of it — and that is where this
+	// reached nothing at first: parsePipeline answered both before a
+	// command existed to consult a table for, so `alias '!'='echo took'`
+	// with `! true` behind it printed nothing here and `took true` in all
+	// three shells that expand (#2638). The same field decides them, at the
+	// same three-against-four split, from [Parser.expandPipelineHead]. The
+	// `time` cell above is measured in that position and the `!` cell in
+	// both it and the one after a value ending in a blank.
+	//
 	// Both shells with a POSIX mode move it, in both directions, and
 	// interp.Runner.SetPosixMode is what moves it: `set -o posix` protects
 	// the words in bash 5.3 and in the 3.2 macOS ships, and `set +o posix`

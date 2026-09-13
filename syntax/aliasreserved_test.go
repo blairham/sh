@@ -63,13 +63,13 @@ func TestAnAliasStandsInForAReservedWordOnlyWhereTheDialectSaysSo(t *testing.T) 
 		t.Run(w, func(t *testing.T) {
 			a, src := table(w, "echo took"), w
 			if w == "!" {
-				// `!` is reached one position further in. At the head of a
-				// pipeline the parser answers it as the negation before a
-				// table is consulted at all — a gap of its own, since bash
-				// and zsh both substitute there — so the position this word
-				// is reachable in is the one after a value ending in a
-				// blank, which is where the corpus row asks it too.
-				a, src = table("sp", " ", w, "echo took"), "sp ! true"
+				// A bare `!` is a pipeline with nothing in it, which is its
+				// own question — see Dialect.BareNegationReach — so the word
+				// is asked here in front of a command. Both positions `!`
+				// stands in are covered: this one by
+				// TestThePipelineWordsAreAskedOfTheTableFirst and the one
+				// after a value ending in a blank by the loop below.
+				src = "! true"
 			}
 
 			if got := parsedIn(t, wholeGrammar(true), a, src); !strings.Contains(got, "echo took") {
@@ -80,6 +80,21 @@ func TestAnAliasStandsInForAReservedWordOnlyWhereTheDialectSaysSo(t *testing.T) 
 			}
 		})
 	}
+
+	// The other position `!` stands in: a value ending in a blank makes the
+	// word after it eligible, and the word made eligible that way is judged
+	// by the same reservation. It is the control the corpus row
+	// `alias/a-reserved-word-after-an-alias-ending-in-a-blank` is written
+	// around, and the one position the flag reached before #2638.
+	t.Run("! after a value ending in a blank", func(t *testing.T) {
+		a := table("sp", " ", "!", "echo took")
+		if got := parsedIn(t, wholeGrammar(true), a, "sp ! true"); !strings.Contains(got, "echo took") {
+			t.Errorf("with the flag on, `sp ! true` came to %q, want the alias to have won", got)
+		}
+		if got := parsedIn(t, wholeGrammar(false), a, "sp ! true"); strings.Contains(got, "echo took") {
+			t.Errorf("with the flag off, `sp ! true` took the alias; the negation must survive")
+		}
+	})
 
 	// The name is still *stored* — only the substitution is declined — which
 	// is what keeps `alias` and `unalias` working on it. The parser cannot
@@ -141,5 +156,156 @@ func TestTheProtectedSetIsTheWordsThisGrammarReserves(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// # The two words a pipeline reads for itself
+//
+// Every other reserved word is read by parseCommand, which offers the word to
+// the alias table before it dispatches on the keyword. A pipeline's leading
+// `!` and the `time` in front of it are read one level out, in parsePipeline,
+// before there is a command to parse — so until #2638 nothing asked the table
+// there at all, and the flag that decides every other reserved word did not
+// reach these two.
+//
+// Measured 2026-09-13 from a script file. `alias '!'='echo took'` with `!
+// true` behind it prints `took true` and answers 0 in bash 5.3, bash 3.2 and
+// zsh, and prints nothing and answers 1 in bash as `sh`, zsh as `sh`, dash,
+// ksh93 and BusyBox ash. `alias time='echo took;'` with `time true` behind it
+// splits the same way, with dash and ash on the taking side because neither
+// has the keyword to protect. That is the split
+// [syntax.Dialect.AliasesExpandReservedWords] already holds, so it is this
+// field reaching further rather than an axis of its own.
+
+// pipelineHeads are the places the word a pipeline begins with is read from.
+// A pipeline stands in all of them, so the substitution has to reach all of
+// them: the head of a line, the right of an `&&`, an `if` condition, and the
+// far side of a bar.
+var pipelineHeads = []struct {
+	name string
+	src  string
+}{
+	{"a line of its own", "! true"},
+	{"the right of an &&", "true && ! true"},
+	{"an if condition", "if ! true; then echo y; fi"},
+	{"the far side of a bar", "echo x | ! cat"},
+}
+
+func TestThePipelineWordsAreAskedOfTheTableFirst(t *testing.T) {
+	t.Run("!", func(t *testing.T) {
+		for _, c := range pipelineHeads {
+			t.Run(c.name, func(t *testing.T) {
+				a := table("!", "echo took")
+				if got := parsedIn(t, wholeGrammar(true), a, c.src); !strings.Contains(got, "echo took") {
+					t.Errorf("with the flag on, %q came to %q, want the alias to have won", c.src, got)
+				}
+				if got := parsedIn(t, wholeGrammar(false), a, c.src); strings.Contains(got, "echo took") {
+					t.Errorf("with the flag off, %q took the alias; the negation must survive", c.src)
+				}
+			})
+		}
+	})
+
+	// `time` is asked only where the grammar has the keyword, which is the
+	// same question reservedInDialect asks about it: a dialect without `time`
+	// never reads the word here, and parseCommand expands it as an ordinary
+	// command name. That is why dash and ash take this alias while ksh93 does
+	// not, and it is what makes the protected set the grammar's own.
+	t.Run("time", func(t *testing.T) {
+		a := table("time", "echo took;")
+		if got := parsedIn(t, wholeGrammar(true), a, "time true"); !strings.Contains(got, "echo took") {
+			t.Errorf("with the flag on, `time true` came to %q, want the alias to have won", got)
+		}
+		if got := parsedIn(t, wholeGrammar(false), a, "time true"); strings.Contains(got, "echo took") {
+			t.Error("with the flag off, `time true` took the alias; the keyword must survive")
+		}
+		d := wholeGrammar(false)
+		d.TimeKeyword = false
+		if got := parsedIn(t, d, a, "time true"); !strings.Contains(got, "echo took") {
+			t.Errorf("a grammar without the keyword protects nothing, so `time true` should have taken the alias; got %q", got)
+		}
+	})
+}
+
+// An ordinary alias at the head of a pipeline must run without the dialect
+// being consulted at all: the reservation is about the *name*, and a name the
+// grammar does not reserve is expanded there exactly as it is anywhere a
+// command word stands.
+//
+// Asserted as the answer being the same on both sides of the flag, which is
+// what falsifies the over-reach this fix could have been written as — asking
+// the flag about every word a pipeline begins with, and so letting a dialect
+// that protects reserved words swallow `e hi` too.
+func TestAnOrdinaryHeadAsksTheReservedWordFieldNothing(t *testing.T) {
+	for _, c := range []struct{ name, src, want string }{
+		{"a line of its own", "e hi", "echo hi"},
+		{"behind a negation", "! e hi", "! echo hi"},
+		{"the right of an &&", "true && e hi", "true && echo hi"},
+		{"the far side of a bar", "true | e hi", "true | echo hi"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			for _, expand := range []bool{true, false} {
+				if got := parsedIn(t, wholeGrammar(expand), table("e", "echo"), c.src); got != c.want {
+					t.Errorf("with the flag %v, %q came to %q, want %q", expand, c.src, got, c.want)
+				}
+			}
+		})
+	}
+}
+
+// The substitution reaches the negation and nothing else `!` means. The other
+// two are read by parseCond and by parseParamExp, from tokens parsePipeline
+// never sees, and a table holding `!` must leave both alone — with the flag
+// **on**, which is the only setting that could have reached them.
+func TestTheHeadExpansionReachesNoOtherBang(t *testing.T) {
+	d := wholeGrammar(true)
+	d.DoubleBracket = true
+	d.ParamIndirection = true
+	a := table("!", "echo took")
+
+	for _, c := range []struct{ name, src, want string }{
+		{"the negation inside [[ ]]", "[[ ! -n x ]]", "[[ ! -n x ]]"},
+		{"an indirect parameter expansion", "echo ${!v}", "echo ${!v}"},
+		{"a quoted word is not the name", `"!" true`, `"!" true`},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			if got := parsedIn(t, d, a, c.src); got != c.want {
+				t.Errorf("%q came to %q, want %q", c.src, got, c.want)
+			}
+		})
+	}
+}
+
+// The two rules the existing machinery carries have to survive the new door,
+// because the head expansion is the same expansion and not a second copy of
+// one.
+//
+//   - A value ending in a blank makes the word after it eligible. `alias
+//     '!'='echo '` with `alias hi='echo HI'` behind it is `echo echo HI` in
+//     all three shells that expand here — the second `echo` is the alias `hi`
+//     expanded in turn — so the flag the splice sets must not be cleared by
+//     parseCommand offering the same word a second time.
+//   - A body that names itself stops. `alias '!'='echo took;!'` prints `took`
+//     and then answers 1, rather than expanding forever: the `!` the body
+//     ends with is inside the chain `!` opened, so it is read as the negation
+//     of nothing. That is Parser.pendingChains, and this asserts the head
+//     door reaches it.
+func TestTheHeadExpansionKeepsTheRestOfTheAlgorithm(t *testing.T) {
+	d := wholeGrammar(true)
+	if got := parsedIn(t, d, table("!", "echo ", "hi", "echo HI"), "! hi"); got != "echo echo HI" {
+		t.Errorf("`! hi` came to %q, want the blank to have carried the expansion on", got)
+	}
+	if got := parsedIn(t, d, table("!", "echo took;!"), "! true"); !strings.Contains(got, "echo took") {
+		t.Errorf("`! true` came to %q, want the body to have been taken once", got)
+	}
+
+	// The word *behind* a `!` the head expansion produced is an ordinary
+	// command word and has never been offered to anything, so parseCommand
+	// still has to offer it. `alias '!'='! x'` is `x: command not found` at
+	// 0 in all three shells that expand here — the body's `!` is the
+	// negation, because it is inside the chain `!` opened — and `x` is
+	// looked up like any other name.
+	if got := parsedIn(t, d, table("!", "! x", "x", "echo X"), "! true"); got != "! echo X true" {
+		t.Errorf("`! true` came to %q, want `! echo X true`", got)
 	}
 }

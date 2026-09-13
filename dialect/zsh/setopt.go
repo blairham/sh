@@ -133,12 +133,15 @@ type zshOption struct {
 	// def is the state a zsh default run has, which is what the listings
 	// compare against.
 	//
-	// Four of the entries this file inherited hold this shell's own state
-	// here instead of zsh's — `banghist`, `emacs`, `hashcmds` and
-	// `interactivecomments` are all measured the other way round in real zsh
-	// — which silences four deviations the listing exists to show. They are
-	// left as they were found rather than corrected in a change about the
-	// name set; see docs/spec/semantics.md.
+	// Entries this file inherited hold this shell's own state here instead
+	// of zsh's — `banghist` and `hashcmds` are both still measured the other
+	// way round in real zsh — which silences two deviations the listing
+	// exists to show. They are left as they were found; see
+	// docs/spec/semantics.md. `interactivecomments` was a third and was
+	// corrected in #2516, `emacs` a fourth in #1858, and neither correction
+	// says anything about the two that remain: each of those needs its own
+	// measurement, and `hashcmds` in particular has a real state behind it
+	// where the corrected two did not.
 	def bool
 	// recorded marks a name that is remembered and not acted on. It is what
 	// tells the listings and `emulate` that the state lives in the store
@@ -380,10 +383,23 @@ var zshOptions = []zshOption{
 		base: "interactive", def: false,
 		get: func(r *interp.Runner) bool { return r.Interactive },
 	},
-	// Comments are honored wherever they are written, and go on being, which
-	// is why the name is recorded rather than refused: the shell keeps doing
-	// the thing in either direction.
-	recorded("interactivecomments", true),
+	// Off in a default zsh, and recorded on here until #2516. Measured
+	// 2026-09-12 on zsh 5.9.2 with an empty HOME: `zsh -f -c '[[ -o
+	// interactivecomments ]]'` exits 1, `set -o` prints
+	// `interactivecomments   off`, and a bare `unsetopt` names it. So the
+	// default the listings compare against is off.
+	//
+	// The old value was this shell's own state rather than zsh's — comments
+	// are honored wherever they are written, and go on being — and that is
+	// not what a recorded default is for. The name is `recorded`: recognized,
+	// remembered, and acted on by nothing, exactly like the 140 others, so
+	// what a `#` does here is unchanged and is not this entry's to say.
+	//
+	// Claiming otherwise was not cosmetic. A syntax highlighter reads this
+	// option to pick a tokenizer; told it is on, it splits the line
+	// comment-aware and classified a bare `ls` as a comment, so every command
+	// typed came out in the comment style (#2516).
+	recorded("interactivecomments", false),
 	{
 		base: "ksharrays", def: false,
 		// Read off the base, which is the axis the name is about; the four

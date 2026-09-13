@@ -4711,17 +4711,39 @@ are none left to need it.
 
 **A known inaccuracy, inherited rather than introduced.** The table records
 zsh's default for each name, which is what the listings compare against.
-Three entries hold this shell's own state there instead — `banghist`,
-`hashcmds` and `interactivecomments` are all measured the other way
-round in real zsh — which silences three deviations the listing exists to
+Three entries held this shell's own state there instead — `banghist`,
+`hashcmds` and `interactivecomments` were all measured the other way
+round in real zsh — which silenced three deviations the listing exists to
 show. #1739 moved three of them between kinds and left the defaults
 exactly where it found them, because the kind and the default are different
 questions: what a name *does* when asked to move is this section, and what
-its listing compares against is this paragraph. Correcting them would make the bare `unsetopt` listing byte-identical
-to zsh's 184 lines and would move the same lines of divergence onto the
-bare `setopt` listing, because the underlying fact is that this shell's
-state genuinely differs from zsh's for those three. It is a trade rather than
-a fix, and it is left where it was found.
+its listing compares against is this paragraph. The reason given for leaving
+them was that correcting them would move the same lines of divergence onto
+the bare `setopt` listing rather than remove them, because this shell's state
+genuinely differs from zsh's. It was a trade rather than a fix.
+
+**`interactivecomments` is corrected and `banghist` and `hashcmds` are not**
+(#2516). The two are not one situation, and the kind is what tells them
+apart. A `recorded` name has no state behind it to diverge: its reader is the
+recorded default XOR a stored deviation, so a fresh shell reads back whatever
+the table says and deviates from nothing. Correcting such a default adds no
+row to the bare `setopt` listing — measured, that listing is byte-identical
+to zsh's before and after — so for that kind the trade above does not apply
+and the correction is free. `hashcmds` is the one it does apply to: it is
+backed by the substrate's `hashall`, which is off because nothing is hashed
+here (interp/shellopts.go records that as a deliberate refusal to report a
+state the shell is not in), so its default and its state are two facts and
+not one. `banghist` is recorded and so is the corrected name, but it has not
+been measured for its own consequences and is left alone here rather than
+swept in alongside.
+
+What the correction cost to leave undone is worth recording, because it is
+what found it. F-Sy-H reads `interactivecomments` to choose a tokenizer; told
+it is on where zsh has it off, it splits the line comment-aware and
+classifies a bare `ls` as a comment, so every command typed comes out in the
+comment style. What this shell does with a `#` is unchanged by the fix — the
+name is recorded, so it is recognized, remembered and acted on by nothing —
+and the listings now report zsh's default rather than this shell's habit.
 
 **`emacs` was the fourth and is not any more** (#1858). It is the one of
 the four whose default was wrong only because the *state* behind it was:
@@ -4733,12 +4755,12 @@ selected here either until something selects it, the recorded default is off
 like zsh's, and the name is silent in every listing until a script moves it.
 The spurious `noemacs` row a script got for writing `setopt vi` goes with it.
 
-It is visible in three listings now rather than one, because `set -o` and
+It is visible in three listings rather than one, because `set -o` and
 `set +o` write from the same table (#1080) and the printed spelling is
-derived from the recorded default: those two write `banghist`, `hashcmds`
+derived from the recorded default: those two wrote `banghist`, `hashcmds`
 and `nointeractivecomments` where zsh writes `nobanghist`, `nohashcmds` and
-`interactivecomments`. Three rows of 185; the other 182 are byte-identical
-to zsh 5.9.2's, in the same order.
+`interactivecomments`. The third row is gone since #2516 and the other two
+remain; the other 183 are byte-identical to zsh 5.9.2's, in the same order.
 
 Two names are one-way. `noexec` ignores being turned back off in all four
 shells — and with it on, the command that would do so never runs anyway.

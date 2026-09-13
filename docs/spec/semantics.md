@@ -12152,12 +12152,76 @@ Measured by the bytes rather than by the display, which is the only way
 to tell the middle one from the last: ksh93's output *looks* truncated
 next to zsh's until the control character is read as a byte.
 
-**`PrintfEmptyIsNotANumber`** — bash yes · dash no · ksh93 no · zsh no
+**`PrintfEmptyIsNotANumber`** — bash yes · dash no · ksh93 no · zsh no · ash **yes**
 
 Complains about a numeric conversion given an operand that is present
-and empty. bash alone: `printf '%d' ""` is an error there and a zero in
-the other three, all of which print the zero anyway. An argument that is
-*missing* is never an error in any of them.
+and empty. `printf '%d' ""` is an error in bash and in ash and a zero in
+the other three, all of which print the zero anyway. Four of the five say
+the same of an argument that is *missing*; the fifth is ash, and the
+entry below is that.
+
+**`PrintfAbsentNumberIsAnEmptyOne`** — bash no · dash no · ksh93 no · zsh no · ash **yes**
+
+Reads a numeric conversion with no operand left as a conversion of the
+empty string, complaint and all, rather than as a silent zero. ash alone
+(#2648). BusyBox does not separate the two cases:
+
+    printf '[%d]\n'          ash   [0]  and `ash: invalid number ''` at 1
+                             the rest   [0]  in silence at 0
+    printf '[%x][%o][%u]\n'  ash   three complaints, one per absent operand
+
+Not a spelling of `PrintfEmptyIsNotANumber` above, because the answers
+cross: bash says an empty operand is an error and an absent one is not,
+ash says both are. One axis for the pair would have been right about ash
+and wrong about bash.
+
+It does not reach the `*` of a width or a precision, which is the
+measurement that keeps it honest: `printf '[%.*s]\n'` with no operands is
+a silent `[]` in ash, and `printf 'a%*db\n'` writes one complaint and not
+two.
+
+**`PrintfStarWithoutOperandIsRefused`** — bash no · dash no · ksh93 **yes** · zsh no · ash no
+
+Refuses the whole directive when the `*` standing for a width or a
+precision finds the operand list already empty. ksh93 alone (#2646):
+
+    printf '%s[%*d]\n' x     ksh93   `printf: .: unknown format specifier` at 1
+                             the rest   x[0] at 0
+
+The trigger is the star's operand and not the operand count: `printf
+'[%*d]\n' 6` — where the star has its 6 and the `%d` is the one with
+nothing left — is `[     0]` at 0 in ksh93 too. The name in the complaint
+is the constant `.` whatever the conversion was; `%*s` and `%*.*f` both
+report `.`.
+
+The status and the complaint are reproduced. ksh93's **stdout** is not:
+the refusal rewinds the pass to the start of the last conversion that
+consumed an operand, so `printf 'AB%sCD%sEF%*dG' q r` is `ABqCD` there
+and `ABqCDrEF` here. Eight formats were measured to arrive at that rule
+and all eight fit it, including the two that read as exceptions — a
+conversion whose own stars ran out consumed nothing and so is not the
+mark, which is why `printf 'XY%s%*.*dZ' q 3` rewinds past the `%s` to
+`XY`. Recorded rather than implemented: rewinding needs the whole pass
+held, and ksh93 is the one dialect that writes through, so holding it
+would put every other complaint in the pass *after* the output it
+currently precedes — a live behavior traded for a dead one.
+
+**`PrintfStarComplaintCostsTheStatus`** — bash yes · dash yes · ksh93 yes · zsh yes · ash **no**
+
+Lets a complaint about the operand a `*` took report failure, as the same
+complaint about a conversion's own operand does. ash alone says no, and
+says it while still printing the complaint:
+
+    printf '[%*s]\n' abc hi   ash   [hi], `ash: invalid number 'abc'`, and 0
+                              bash, dash   the same two, and 1
+
+The diagnostic, the output and the status are three observations here and
+they do not move together, which is why this is its own axis and not a
+reading of `PrintfReportsBadNumber`. Asked only where there is a
+complaint for it to cost anything, so ksh93 and zsh — `no` at both
+`PrintfReportsBadNumber` and `PrintfEmptyIsNotANumber` — never reach it.
+They answer it all the same: an unanswered axis is indistinguishable from
+one nobody thought about.
 
 **`PrintfQuote`** — bash backslash · dash absent · ksh93 single quoted · zsh backslash
 

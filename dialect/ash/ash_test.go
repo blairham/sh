@@ -232,3 +232,38 @@ func TestTypeHasNoLettersAtAll(t *testing.T) {
 		t.Errorf("TypeOptions = %q, want none: this shell's type has no options", got)
 	}
 }
+
+// TestPrintfAbsentNumberIsAnEmptyOne is ash's own answer, and the whole of
+// #2648: BusyBox does not separate an absent numeric operand from one that is
+// present and empty. `printf '[%d]\n'` writes `ash: invalid number ”` and
+// ends at 1, exactly as `printf '[%d]\n' ”` does, where bash, zsh, ksh93 and
+// dash all write the zero in silence at 0.
+func TestPrintfAbsentNumberIsAnEmptyOne(t *testing.T) {
+	s := ash.Semantics()
+	if got, want := s.PrintfAbsentNumberIsAnEmptyOne, interp.Yes; got != want {
+		t.Errorf("PrintfAbsentNumberIsAnEmptyOne = %v, want %v", got, want)
+	}
+	// The pair it depends on. Were this No, the axis above would never be
+	// reached and the row would be silently inert.
+	if got, want := s.PrintfEmptyIsNotANumber, interp.Yes; got != want {
+		t.Errorf("PrintfEmptyIsNotANumber = %v, want %v", got, want)
+	}
+}
+
+// TestPrintfStarComplaintCostsTheStatus is ash's alone in the other
+// direction: the complaint about a `*` operand it cannot read goes out and
+// the status stays 0. `printf '[%*s]\n' abc hi` writes `ash: invalid number
+// 'abc'` to stderr, `[hi]` to stdout and reports success, where bash and dash
+// report 1 for the same line.
+func TestPrintfStarComplaintCostsTheStatus(t *testing.T) {
+	s := ash.Semantics()
+	if got, want := s.PrintfStarComplaintCostsTheStatus, interp.No; got != want {
+		t.Errorf("PrintfStarComplaintCostsTheStatus = %v, want %v", got, want)
+	}
+	// And an absent star operand is a silent zero even here, which is what
+	// keeps it a separate question from the absent *conversion* operand
+	// above: `printf 'a%*db'` writes one complaint in BusyBox and not two.
+	if got, want := s.PrintfStarWithoutOperandIsRefused, interp.No; got != want {
+		t.Errorf("PrintfStarWithoutOperandIsRefused = %v, want %v", got, want)
+	}
+}

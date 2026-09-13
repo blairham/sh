@@ -398,9 +398,15 @@ func TestPrintfAnswers(t *testing.T) {
 		want any
 	}{
 		{"PrintfReportsBadNumber", s.PrintfReportsBadNumber, interp.Yes},
-		// bash alone: an operand present and empty is an error, where a
-		// missing one is an error in none of the four.
+		// bash: an operand present and empty is an error. An operand that
+		// is *missing* is not — which is the pair below, and the two cross,
+		// because ash says yes to both (#2648).
 		{"PrintfEmptyIsNotANumber", s.PrintfEmptyIsNotANumber, interp.Yes},
+		{"PrintfAbsentNumberIsAnEmptyOne", s.PrintfAbsentNumberIsAnEmptyOne, interp.No},
+		// The `*` of a width takes its operand here as everywhere, and
+		// bash's complaint about one it cannot read reports failure (#2646).
+		{"PrintfStarWithoutOperandIsRefused", s.PrintfStarWithoutOperandIsRefused, interp.No},
+		{"PrintfStarComplaintCostsTheStatus", s.PrintfStarComplaintCostsTheStatus, interp.Yes},
 		{"PrintfBackslashC", s.PrintfBackslashC, interp.PrintfBackslashCLiteral},
 		{"PrintfQuote", s.PrintfQuote, interp.PrintfQuoteAnsiCWord},
 	} {

@@ -483,6 +483,9 @@ func Semantics() interp.Semantics {
 	s.AmbiguousJobNameIsRefused = interp.No
 	s.WaitReportsAMissingJob = interp.No
 	s.WaitNWaitsForTheNextJob = interp.No
+	// `wait -p` is not ksh93's either: `wait: -p: unknown option`, beside
+	// its own usage line. Measured 2026-09-13.
+	s.WaitPNamesTheFinishedJob = interp.No
 	// The lone divergence on an interrupted wait: a bare one reports this
 	// shell's own 256 plus the signal, and one that names a job — `wait $!`
 	// or `wait %1` — reports a plain 1 instead.

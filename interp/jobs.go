@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -844,14 +845,18 @@ func biWait(r *Runner, _ context.Context, args []string) int {
 	// of the ways rather than the way: a subshell or an external command
 	// delivers the same notice without any wait being written.
 	defer r.retireCoproc()
-	args, next, code := r.waitOptions(args)
+	args, opts, code := r.waitOptions(args)
 	if code != 0 {
 		return code
 	}
-	if next {
-		return r.waitNext()
+	if opts.next {
+		return r.waitNext(args, opts)
 	}
 	if len(args) == 0 {
+		// A bare `wait` names no job, so `-p` empties its variable rather
+		// than leaving it alone — measured, and the same rule the narrowed
+		// form follows when it finds nothing to wait for.
+		r.storeWaitedPID(opts, nil)
 		for _, j := range r.jobs {
 			_, sig, hit, stopped := r.waitFor(j)
 			if r.unspecified {
@@ -889,9 +894,18 @@ func biWait(r *Runner, _ context.Context, args []string) int {
 		return 0
 	}
 	last := 0
+	// The last job actually waited out, which is what `-p` names when the
+	// operands are several: measured, `wait -p V $b1 $b2` leaves V holding
+	// b2 — the last id, and the one whose status is reported.
+	var named *Job
+	defer func() { r.storeWaitedPID(opts, named) }()
 	for _, a := range args {
 		if strings.HasPrefix(a, "%") {
-			last = r.waitJobSpec(a)
+			var j *Job
+			last, j = r.waitJobSpecNaming(a)
+			if j != nil {
+				named = j
+			}
 			if r.unspecified {
 				return r.status
 			}
@@ -918,7 +932,7 @@ func biWait(r *Runner, _ context.Context, args []string) int {
 					// stopped is not a job that finished.
 					return r.stoppedWaitStatus(j)
 				}
-				last = st
+				last, named = st, j
 				found = true
 			}
 		}
@@ -946,48 +960,135 @@ func biWait(r *Runner, _ context.Context, args []string) int {
 // first — is one dialect's and implemented; its remaining letters (-f, -p)
 // and ksh93's --version are not, and say so rather than being taken as a job
 // and reported as missing.
-func (r *Runner) waitOptions(args []string) (rest []string, next bool, code int) {
-	if len(args) > 0 {
+func (r *Runner) waitOptions(args []string) (rest []string, opts waitOpts, code int) {
+	for len(args) > 0 {
 		a := args[0]
 		if len(a) < 2 || a[0] != '-' {
-			return args, false, 0
+			return args, opts, 0
 		}
 		if a == "--" {
-			return args[1:], false, 0
+			return args[1:], opts, 0
 		}
 		if a == "-n" {
 			// Asked on the exact word: in the shell with no options at all
 			// the same word is a job spec, and the axis below decides that.
 			if r.ask(r.sem().WaitNWaitsForTheNextJob, "`wait -n` waiting for the next job to finish") {
-				return args[1:], true, 0
+				args, opts.next = args[1:], true
+				continue
 			}
 			if r.unspecified {
-				return nil, false, 2
+				return nil, waitOpts{}, 2
 			}
 		}
 		if !r.ask(r.sem().WaitReadsOptions, "`wait -x` read as an option rather than as a job") {
-			return args, false, 0
+			return args, opts, 0
 		}
 		if r.unspecified {
-			return nil, false, 2
+			return nil, waitOpts{}, 2
 		}
-		// Past -n, `wait` has no options this shell implements, so every
-		// letter is either one the dialect has and we lack, or unknown.
-		return nil, false, r.refuseOption("wait", a, "")
+		// Past -n there is one more letter this shell implements, and it
+		// takes an argument — so the word has to be walked rather than
+		// compared, and a bundle spends the rest of itself on that argument
+		// the way every other option word here does: `-np V` and `-npV` are
+		// both the pair. Measured 2026-09-13 on bash 5.3.15.
+		used, code := r.waitLetters(a, args[1:], &opts)
+		if code != 0 {
+			return nil, waitOpts{}, code
+		}
+		args = args[1+used:]
 	}
-	return args, false, 0
+	return args, opts, 0
+}
+
+// waitOpts is what the option words asked for: `-n` and `-p var`.
+//
+// A struct rather than two results because the pair is read together and
+// `wait -p V -n %2` is one request — and because the next letter this shell
+// grows will be a third thing the same walk collects.
+type waitOpts struct {
+	// next is `-n`: report the first job to finish rather than waiting the
+	// operands out in order.
+	next bool
+	// pvar is `-p`'s argument, the name the finished job's process id is
+	// stored under, and named says the letter was given at all. The two are
+	// separate because the store happens even when there is no job to name:
+	// measured, a bare `wait -p V` empties V rather than leaving it alone.
+	pvar  string
+	named bool
+}
+
+// waitLetters walks one option word past the leading `-`, and returns how
+// many of the words *after* it were consumed as an argument.
+//
+// A letter this shell does not implement is refused whole-word, which is what
+// the panel does: the diagnostic names the word rather than the letter inside
+// it, and Diagnostics.UnimplementedOptionLetters is what separates a letter
+// the dialect has from one nobody has.
+func (r *Runner) waitLetters(word string, rest []string, opts *waitOpts) (used, code int) {
+	letters := word[1:]
+	for i := 0; i < len(letters); i++ {
+		switch letters[i] {
+		case 'n':
+			if !r.ask(r.sem().WaitNWaitsForTheNextJob, "`wait -n` waiting for the next job to finish") {
+				if r.unspecified {
+					return 0, 2
+				}
+				return 0, r.refuseOption("wait", word, "")
+			}
+			opts.next = true
+		case 'p':
+			if !r.ask(r.sem().WaitPNamesTheFinishedJob, "`wait -p var` naming the job the status came from") {
+				if r.unspecified {
+					return 0, 2
+				}
+				return 0, r.refuseOption("wait", word, "")
+			}
+			opts.named = true
+			if tail := letters[i+1:]; tail != "" {
+				opts.pvar = tail
+				return 0, 0
+			}
+			if len(rest) == 0 {
+				// The letter is there and its argument is not. bash's own
+				// wording for an option that wants one.
+				return 0, r.refuseOption("wait", word, "")
+			}
+			opts.pvar = rest[0]
+			return 1, 0
+		default:
+			return 0, r.refuseOption("wait", word, "")
+		}
+	}
+	return 0, 0
 }
 
 // waitNext is `wait -n`: block until whichever job finishes first and report
 // its status, forgetting it the way a plain wait for it would. With nothing
 // to wait for the answer is a missing command's 127 and no words at all —
 // measured in the one shell with the letter.
-func (r *Runner) waitNext() int {
-	if len(r.jobs) == 0 {
+//
+// The operands narrow which jobs count. `wait -n` with nothing after it takes
+// the first of every job the shell holds; `wait -n %2 %3` takes the first of
+// those two and lets a job that finishes sooner go on being a job. Measured
+// 2026-09-13 on bash 5.3.15 with a one-second job and a two-second one: the
+// bare form reports the first and the narrowed form reports the second.
+//
+// This function used to take no arguments at all, which is the whole of the
+// defect: a script that named the jobs it cared about was answered by
+// whichever unrelated job happened to end first, seconds too early and with
+// another job's status.
+func (r *Runner) waitNext(args []string, opts waitOpts) int {
+	jobs, code := r.waitNextJobs(args)
+	if code != 0 {
+		r.storeWaitedPID(opts, nil)
+		return code
+	}
+	if len(jobs) == 0 {
+		r.storeWaitedPID(opts, nil)
 		return 127
 	}
-	first := make(chan *Job, len(r.jobs))
-	for _, j := range r.jobs {
+	first := make(chan *Job, len(jobs))
+	for _, j := range jobs {
 		go func(j *Job) {
 			j.Wait()
 			first <- j
@@ -995,8 +1096,83 @@ func (r *Runner) waitNext() int {
 	}
 	j := <-first
 	st := j.Status
+	r.storeWaitedPID(opts, j)
 	r.Forget(j)
 	return st
+}
+
+// waitNextJobs is the set `wait -n` may return from: every job with no
+// operands, and the ones the operands name otherwise.
+//
+// An operand that names nothing is the same complaint and the same status a
+// plain `wait` gives it, which is what keeps one spelling of "no such job"
+// in the shell rather than two.
+func (r *Runner) waitNextJobs(args []string) ([]*Job, int) {
+	if len(args) == 0 {
+		return r.jobs, 0
+	}
+	var jobs []*Job
+	for _, a := range args {
+		if strings.HasPrefix(a, "%") {
+			j, code := r.findJobQuietly(a)
+			if code == jobFound {
+				jobs = append(jobs, j)
+				continue
+			}
+			if code == jobSpecAmbiguous {
+				r.diagf("%s\n", Wording(r.diag().AmbiguousJobSpec,
+					"%[1]s: %[2]s: ambiguous job spec", "wait", strings.TrimPrefix(a, "%")))
+				return nil, orDefault(r.diag().WaitNoSuchJobStatus, 127)
+			}
+			if code == jobSpecUnanswered {
+				return nil, r.status
+			}
+			if !r.ask(r.sem().WaitReportsAMissingJob, "`wait` reporting a job spec that names nothing") {
+				if r.unspecified {
+					return nil, r.status
+				}
+				continue
+			}
+			r.diagf("%s\n", Wording(r.diag().WaitNoSuchJob, "wait: %[1]s: no such job", a))
+			return nil, orDefault(r.diag().WaitNoSuchJobStatus, 127)
+		}
+		pid, ok := atoi(a)
+		if !ok {
+			return nil, r.waitBadJob(a)
+		}
+		found := false
+		for _, j := range r.jobs {
+			if j.PID == pid {
+				jobs = append(jobs, j)
+				found = true
+			}
+		}
+		if !found {
+			if w := r.diag().WaitNotOurChild; w != "" {
+				r.diagf("%s\n", Wording(w, "", pid))
+			}
+			return nil, 127
+		}
+	}
+	return jobs, 0
+}
+
+// storeWaitedPID is `-p`'s half: the process id of the job the status came
+// from, written through the same store an assignment uses so that
+// `wait -p A[$key] -n %2` reaches an associative element.
+//
+// A nil job empties the name rather than leaving it alone, which is measured:
+// `V=preset; wait -p V` with nothing to wait for leaves V empty in bash
+// 5.3.15. So the letter always writes once it was given.
+func (r *Runner) storeWaitedPID(opts waitOpts, j *Job) {
+	if !opts.named || opts.pvar == "" {
+		return
+	}
+	value := ""
+	if j != nil {
+		value = strconv.Itoa(j.PID)
+	}
+	r.storeThroughOperand(opts.pvar, value)
 }
 
 // reportStoppedWait says a wait gave up because the job stopped, in whichever
@@ -1036,46 +1212,51 @@ func (r *Runner) interruptedWaitStatus(sig syscall.Signal, named bool) int {
 	return st
 }
 
-// waitJobSpec waits for the job a `%` spec names.
-func (r *Runner) waitJobSpec(spec string) int {
+// waitJobSpecNaming waits for the job a `%` spec names, and hands the job
+// back so that `-p` can name it.
+//
+// The job is returned only where one was found and waited out: a spec that
+// names nothing, or a wait that gave up, leaves `-p` with nothing to write
+// but the empty string.
+func (r *Runner) waitJobSpecNaming(spec string) (int, *Job) {
 	j, code := r.findJobQuietly(spec)
 	switch code {
 	case jobFound:
 		st, sig, hit, stopped := r.waitFor(j)
 		if r.unspecified {
-			return r.status
+			return r.status, nil
 		}
 		if hit {
 			// The wait did not finish, so the job is not finished with
 			// either and stays in the table for the next one.
-			return r.interruptedWaitStatus(sig, true)
+			return r.interruptedWaitStatus(sig, true), nil
 		}
 		if stopped {
 			// Kept for the same reason, and said out loud on this route:
 			// the wait gave up, the job is still there stopped, and `fg`
 			// and `bg` can still name it.
 			r.reportStoppedWait(j, r.diag().WaitForJobStopped)
-			return r.stoppedWaitStatus(j)
+			return r.stoppedWaitStatus(j), nil
 		}
 		r.Forget(j)
-		return st
+		return st, j
 	case jobSpecAmbiguous:
 		r.diagf("%s\n", Wording(r.diag().AmbiguousJobSpec,
 			"%[1]s: %[2]s: ambiguous job spec", "wait", strings.TrimPrefix(spec, "%")))
-		return orDefault(r.diag().WaitNoSuchJobStatus, 127)
+		return orDefault(r.diag().WaitNoSuchJobStatus, 127), nil
 	case jobSpecUnanswered:
-		return r.status
+		return r.status, nil
 	}
 	// A spec that names nothing: said and failed, or — in one shell —
 	// nothing at all and 0.
 	if !r.ask(r.sem().WaitReportsAMissingJob, "`wait` reporting a job spec that names nothing") {
 		if r.unspecified {
-			return r.status
+			return r.status, nil
 		}
-		return 0
+		return 0, nil
 	}
 	r.diagf("%s\n", Wording(r.diag().WaitNoSuchJob, "wait: %[1]s: no such job", spec))
-	return orDefault(r.diag().WaitNoSuchJobStatus, 127)
+	return orDefault(r.diag().WaitNoSuchJobStatus, 127), nil
 }
 
 // waitBadJob is an operand that names neither a process nor a job.

@@ -471,6 +471,10 @@ func Semantics() interp.Semantics {
 	s.AmbiguousJobNameIsRefused = interp.Yes
 	s.WaitReportsAMissingJob = interp.Yes
 	s.WaitNWaitsForTheNextJob = interp.Yes
+	// And `-p var` beside it, which names the job the status came from.
+	// bash 5's letter alone: the 3.2 build answers `wait: -p: invalid
+	// option`. Measured 2026-09-13.
+	s.WaitPNamesTheFinishedJob = interp.Yes
 	// A trapped signal cuts a `wait` short with 128 plus the signal, and the
 	// form that names a job answers the same as the bare one.
 	s.WaitForAJobFailsWhenInterrupted = interp.No
@@ -1998,7 +2002,7 @@ func Diagnostics() interp.Diagnostics {
 			// Semantics.SetHasTheTLetter.
 			"set": "bkrHP",
 			// Options these builtins have here and this shell does not.
-			"wait": "fp",
+			"wait": "f",
 			// disown's sweepers: -a for every job, -h for HUP shielding
 			// alone, -r for the running ones.
 			"disown": "ahr",

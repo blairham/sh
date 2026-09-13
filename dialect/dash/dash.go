@@ -493,6 +493,8 @@ func Semantics() interp.Semantics {
 	s.JobSpecsByName = interp.No
 	s.WaitReportsAMissingJob = interp.Yes
 	s.WaitNWaitsForTheNextJob = interp.No
+	// Nor `-p`: `wait: Illegal option -p`. Measured 2026-09-13.
+	s.WaitPNamesTheFinishedJob = interp.No
 	// A trapped signal cuts a `wait` short with 128 plus the signal, and the
 	// form that names a job answers the same as the bare one.
 	s.WaitForAJobFailsWhenInterrupted = interp.No

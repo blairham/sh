@@ -28,7 +28,6 @@ var builtins = map[string]Builtin{
 	"false":    biFalse,
 	"echo":     biEcho,
 	"pwd":      biPwd,
-	"wait":     biWait,
 	"trap":     biTrap,
 	"break":    biBreak,
 	"continue": biContinue,
@@ -62,6 +61,12 @@ var builtins = map[string]Builtin{
 // shell. It was in the literal above while it could only move the runner and
 // print.
 //
+// `wait` joined them for exactly `read`'s reason, one letter later: `wait -p
+// A[$key]` stores the finished job's process id through the same element
+// route an assignment takes, and that route evaluates the subscript — so a
+// command substitution written inside one reaches the dispatcher. Before the
+// letter there was nothing of `wait`'s that could reach anything.
+//
 // `set` is the newest and reaches the dispatcher two constructs further out:
 // `set -A a …` stores an array, a name carrying the integer attribute folds
 // every element through the arithmetic, and a subscript with a flag group in
@@ -74,6 +79,7 @@ func init() {
 	builtins["exit"] = biExit
 	builtins["return"] = biReturn
 	builtins["read"] = biRead
+	builtins["wait"] = biWait
 	builtins["cd"] = biCd
 }
 

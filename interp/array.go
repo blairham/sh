@@ -1057,6 +1057,81 @@ func (r *Runner) spliceElementSpan(name, text string, elems []string, from, to i
 	r.setArray(name, out)
 }
 
+// assignWholeArraySubscript performs `a[@]=v`, which the panel answers five
+// ways over two questions — see Semantics.WholeArraySubscriptAssigningAnArray
+// and WholeArraySubscriptAssigningATable, where the rows are.
+//
+// Two fields rather than one because bash and zsh swap sides between them:
+// bash refuses this over an array and stores a key for a table, and zsh
+// writes every element of an array and refuses it over a table. A single
+// field would have had to give one of them the other's answer.
+//
+// The kind of the name is read *before* anything is stored, since the taking
+// answer replaces the name's contents and would make its own question moot.
+//
+// The caller asks wholeArraySubscript of the subscript **as written** rather
+// than of what it expands to, and that is measured rather than an economy: in
+// the shell that reads this spelling, `i=@; a[$i]=Z` is `bad math expression:
+// operand expected at '@'` and `a["@"]=Z` is the same complaint about `"@"`.
+// So a subscript that merely comes out `@` is an arithmetic subscript like any
+// other, and only the typed characters name every element.
+func (r *Runner) assignWholeArraySubscript(a *syntax.Assign) {
+	policy := r.sem().WholeArraySubscriptAssigningAnArray
+	what := "the whole-array subscript on the left of an assignment"
+	if r.assocDeclared(a.Name) {
+		policy = r.sem().WholeArraySubscriptAssigningATable
+		what = "the whole-array subscript on the left of an assignment to a table"
+	}
+	switch policy {
+	case WholeArraySubscriptNamesEveryElement:
+		value := r.assignValue(a)
+		if a.Append {
+			// `a[@]+=Z` adds one element at the end rather than joining
+			// every element: measured, `x=(p q); x[@]+=Z` is `p q Z`.
+			elems, _ := r.arrayElemsOfTheName(a.Name)
+			r.setArray(a.Name, append(elems, value))
+			return
+		}
+		// The whole name and not its elements: a scalar and an unset name
+		// both come out a one-element array, so this cannot read what is
+		// there and splice into it.
+		r.setArray(a.Name, []string{value})
+	case WholeArraySubscriptIsAnOrdinaryKey:
+		key, ok := r.assocAssignKey(a.Name, a.Index)
+		if !ok {
+			return
+		}
+		value := r.assignValue(a)
+		if a.Append {
+			v, joined := r.appendedValue(a.Name, r.AssocArrays[a.Name][key], value)
+			if !joined {
+				return
+			}
+			value = v
+		}
+		r.setAssocElem(a.Name, key, value)
+	case WholeArraySubscriptIsABadSubscript:
+		// Reported, 1, and the rest of the command list given up — the same
+		// cost a bare assignment to a frozen name has, and measured the same
+		// way: the commands after it run when they are on the next line and
+		// do not when they share this one.
+		r.diagf("%s\n", Wording(r.diag().BadArraySubscript,
+			"%[1]s[%[2]s]: bad array subscript", a.Name, a.IndexText))
+		r.status, r.assignFailed = 1, true
+		r.ctl, r.abandonLine = controlAbandon, r.line
+	case WholeArraySubscriptIsInvalidInAnAssignment:
+		// The subscript is the verb here, not the name.
+		r.fatal("%s\n", Wording(r.diag().InvalidSubscriptInAssignment,
+			"%s: invalid subscript in assignment", a.IndexText))
+	case WholeArraySubscriptIsASliceOfATable:
+		r.fatal("%s\n", Wording(r.diag().SliceOfAnAssociativeArray,
+			"%[1]s: attempt to set slice of associative array", a.Name))
+	default:
+		r.diagf("%s\n", r.unanswered(what))
+		r.status, r.unspecified = 2, true
+	}
+}
+
 // storeThroughOperand writes a value through a name that may carry a
 // subscript, which is the shape a *builtin* is handed one in: `read 'buf[2]'`
 // and `read m[k]` arrive as a single word rather than as a parsed assignment,

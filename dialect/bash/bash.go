@@ -1150,6 +1150,15 @@ func Semantics() interp.Semantics {
 	// the complaint, by either invocation route (#2287).
 	s.TableUnderAnArrayLiteralDeclaration = interp.CompoundKindChangeAbandonsTheLine
 	s.ArrayUnderATableLiteralDeclaration = interp.CompoundKindChangeAbandonsTheLine
+	// `a[@]=Z` over an indexed array is a bad subscript, and it costs the
+	// command list rather than the input: measured 2026-09-12, `x=(p q);
+	// x[@]=Z; echo "st=$?"; echo after` prints only `x[@]: bad array
+	// subscript` where the same commands on separate lines print `st=1` and
+	// `after`. Over a *table* the same spelling is an ordinary key and is
+	// taken silently at 0, which is this shell swapping sides with zsh
+	// between the two questions (#2285).
+	s.WholeArraySubscriptAssigningAnArray = interp.WholeArraySubscriptIsABadSubscript
+	s.WholeArraySubscriptAssigningATable = interp.WholeArraySubscriptIsAnOrdinaryKey
 	// And a *read* whose key comes out empty is reported too, with a
 	// different subject and a different outcome: measured 2026-09-12,
 	// `typeset -A m; m[k]=v; w=; ${m[$w]}` writes `m: bad array subscript` —

@@ -156,6 +156,8 @@ ash   UnsetReferenceLetterRemovesANonReference
 ash   UnsetStatusIsTheLastSubscripts
 ash   UnsetSubscriptSkippedWhenNameUnset
 ash   UpperCaseLetterBesideANumericTypeLetterRecordsNothing
+ash   WholeArraySubscriptAssigningATable
+ash   WholeArraySubscriptAssigningAnArray
 bash  ArithIntegerOperatorRefusesFloat
 bash  ArithSubscriptSkippedWhenNameUnset
 bash  BareSubscriptIsASubscript
@@ -313,6 +315,8 @@ dash  UnsetStatusIsTheLastSubscripts
 dash  UnsetSubscriptSkippedWhenNameUnset
 dash  UpperCaseLetterBesideANumericTypeLetterRecordsNothing
 dash  ValuelessDeclarationOfAHeldNameListsIt
+dash  WholeArraySubscriptAssigningATable
+dash  WholeArraySubscriptAssigningAnArray
 ksh   ArithSubscriptSkippedWhenNameUnset
 ksh   AssignmentUpdatesPipelineStatus
 ksh   AutoCdAnnouncesTheSubstitution

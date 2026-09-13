@@ -274,6 +274,12 @@ func Semantics() interp.Semantics {
 	// 2026-09-12, `typeset -A h` is `typeset: not found` and `h=(x)` is
 	// `Syntax error: "(" unexpected`, so the question is refused twice over
 	// before there is a compound to change the kind of (#2287).
+	// unanswered WholeArraySubscriptAssigningAnArray and
+	// unanswered WholeArraySubscriptAssigningATable: there are no arrays, so
+	// a subscript on the left of an assignment is not a subscript. Measured
+	// 2026-09-12, `x=(p q)` is `Syntax error: "(" unexpected` and `x[@]=Z`
+	// on its own is `x[@]=Z: not found` — the word is a command name here,
+	// which is a third thing again and not an answer to either field (#2285).
 	// unanswered EarlierDeclarationLetterBlocksALaterPlus: there is no
 	// declaration command to write the letter on. `typeset` is not a
 	// builtin here and `integer` is not a word, so neither sign of `-i`

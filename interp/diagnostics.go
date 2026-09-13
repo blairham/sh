@@ -1607,6 +1607,16 @@ type Diagnostics struct {
 	// same one-verb sentence, for Semantics.ArrayUnderATableLiteralDeclaration.
 	CannotConvertArrayToTableAtTheAssignment string
 
+	// InvalidSubscriptInAssignment is what one shell says about `a[@]=Z` and
+	// `a[*]=Z`, for a name of either kind. One verb, and it is the
+	// **subscript** rather than the name: `@: invalid subscript in
+	// assignment`, where the other refusing column names the name and the
+	// subscript together as `x[@]: bad array subscript`.
+	//
+	// Only a dialect answering a WholeArraySubscriptAssign axis with
+	// WholeArraySubscriptIsInvalidInAnAssignment has anything to put here.
+	InvalidSubscriptInAssignment string
+
 	// ArrayValueToNonArray is what the splicing shell says when the name a
 	// subscripted literal writes through holds a plain string. One verb: the
 	// name, without the subscript. An *unset* name is not this — it becomes

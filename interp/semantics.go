@@ -4488,6 +4488,49 @@ type Semantics struct {
 	// through one (#2287).
 	ArrayUnderATableLiteralDeclaration CompoundKindChangePolicy
 
+	// WholeArraySubscriptAssigningAnArray is what `a[@]=Z` and `a[*]=Z` mean
+	// where the name is **not** a table — see WholeArraySubscriptAssignPolicy
+	// for the five answers.
+	//
+	// Measured 2026-09-12 with `x=(p q)` in front of it, and with the
+	// commands separated both by `;` and by newlines, since the two refusals
+	// cost different amounts:
+	//
+	//	shell        `x[@]=Z; echo "st=$?"; echo "n=${#x[@]}"; echo after`
+	//	zsh 5.9.2    `st=0 n=1` — every element replaced by the one value
+	//	bash 5.3.15  `x[@]: bad array subscript`, 1, `n=2`, `after` — but only
+	//	             under newlines; under `;` nothing after the complaint runs
+	//	ksh93u+      `@: invalid subscript in assignment`, and the input ends
+	//	             under **both** separators
+	//
+	// So bash gives up the command list where ksh93 gives up the script, and
+	// the square is what tells them apart rather than one `-c` program.
+	//
+	// The taking column takes it over any name at all: a scalar and an unset
+	// name both come out a one-element array, so what the spelling means
+	// there is "this name is now these values" rather than "replace the
+	// elements it has". `a[@]+=Z` adds one element to the end.
+	//
+	// `[*]` and `[@]` are one answer in all three, so a second field would
+	// have nothing to say (#2285).
+	WholeArraySubscriptAssigningAnArray WholeArraySubscriptAssignPolicy
+	// WholeArraySubscriptAssigningATable is the same spelling over a name
+	// **declared a table**, and the panel is not the same panel — which is
+	// the whole reason it is a second field.
+	//
+	// Measured 2026-09-12 with `typeset -A m; m[k]=v` in front of it:
+	//
+	//	shell        `m[@]=Z`
+	//	zsh 5.9.2    `m: attempt to set slice of associative array`, input ends
+	//	bash 5.3.15  taken, silently, at 0 — a key named `@`
+	//	ksh93u+      `@: invalid subscript in assignment`, input ends
+	//
+	// bash and zsh swap sides between the two fields: bash refuses the array
+	// and takes the table, zsh takes the array and refuses the table. Only
+	// ksh93 answers both the same way, which is what a single field would
+	// have had to assume of all three (#2285).
+	WholeArraySubscriptAssigningATable WholeArraySubscriptAssignPolicy
+
 	// ValuelessDeclarationHidesTheOuterValue makes `local u` in a function
 	// hide any outer `u` — the local exists unset, so `${u-UNSET}` fires the
 	// default even when the caller had a value. Reached only when
@@ -11833,6 +11876,65 @@ const (
 	// newlines, again by both. So what ends is the list and not the input.
 	CompoundKindChangeAbandonsTheLine
 )
+
+// WholeArraySubscriptAssignPolicy is what `a[@]=v` and `a[*]=v` mean — a
+// subscript on the *left* of an assignment written as the whole-array
+// spelling, which every shell with arrays reads and no two read alike.
+//
+// Five answers over two questions, because the columns that refuse do not
+// refuse both and the columns that take it do not take the same thing:
+// see Semantics.WholeArraySubscriptAssigningAnArray for the rows.
+//
+// The subscript has to be written **bare**, which is measured rather than
+// assumed: in the shell that takes it, `i=@; a[$i]=Z` is `bad math
+// expression: operand expected at '@'` and `a["@"]=Z` is the same complaint
+// about `"@"`. So it is the two characters as they were typed, and not what
+// the subscript expands to.
+type WholeArraySubscriptAssignPolicy int
+
+const (
+	// WholeArraySubscriptAssignUnspecified is no answer, and it is refused
+	// rather than guessed at: one column writes every element, one writes a
+	// key, and the other three refuse in three different ways at two
+	// different costs.
+	WholeArraySubscriptAssignUnspecified WholeArraySubscriptAssignPolicy = iota
+	// WholeArraySubscriptNamesEveryElement replaces the whole array with the
+	// one value the assignment carries — `a=(p q); a[@]=Z` leaves one element
+	// — and appends one where the operator is `+=`. zsh, for a name that is
+	// not a table.
+	WholeArraySubscriptNamesEveryElement
+	// WholeArraySubscriptIsABadSubscript refuses with the bad-subscript
+	// sentence, leaves 1 behind and gives up the rest of the command list.
+	// bash, for a name holding an indexed array.
+	WholeArraySubscriptIsABadSubscript
+	// WholeArraySubscriptIsInvalidInAnAssignment refuses with a sentence
+	// about the subscript rather than about the name, and ends the input.
+	// ksh93, for either kind of name.
+	WholeArraySubscriptIsInvalidInAnAssignment
+	// WholeArraySubscriptIsAnOrdinaryKey stores under the one-character key
+	// `@` or `*` like any other subscript on a table, silently and at 0.
+	// bash, for a name declared a table.
+	WholeArraySubscriptIsAnOrdinaryKey
+	// WholeArraySubscriptIsASliceOfATable refuses by name — a table has no
+	// slice to set — and ends the input. zsh, for a name declared a table.
+	WholeArraySubscriptIsASliceOfATable
+)
+
+func (p WholeArraySubscriptAssignPolicy) String() string {
+	switch p {
+	case WholeArraySubscriptNamesEveryElement:
+		return "names every element"
+	case WholeArraySubscriptIsABadSubscript:
+		return "a bad array subscript"
+	case WholeArraySubscriptIsInvalidInAnAssignment:
+		return "invalid in an assignment"
+	case WholeArraySubscriptIsAnOrdinaryKey:
+		return "an ordinary key"
+	case WholeArraySubscriptIsASliceOfATable:
+		return "a slice of a table"
+	}
+	return "unspecified"
+}
 
 func (p CompoundKindChangePolicy) String() string {
 	switch p {

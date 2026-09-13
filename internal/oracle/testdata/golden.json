@@ -21450,6 +21450,57 @@
         "TimedOut": false
       }
     },
+    "arrays/a-whole-array-subscript-on-the-left": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected \"(\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "st=0 [Z v]~tail",
+        "Stderr": "\u003cshell\u003e: line 2: x[@]: bad array subscript~\u003cshell\u003e: line 4: y[*]: bad array subscript",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 2: x[@]: bad array subscript",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "tail",
+        "Stderr": "\u003cshell\u003e: line 1: x[@]: bad array subscript~\u003cshell\u003e: line 3: y[*]: bad array subscript~\u003cshell\u003e: line 5: m[@]: bad array subscript",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 2: @: invalid subscript in assignment",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0 n=1 [Z]~st=0 [p q Z]~\u003cshell\u003e:6: m: attempt to set slice of associative array",
+        "Stderr": "",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "assignment/arithmetic-that-will-not-parse": {
       "ash": {
         "Stdout": "",

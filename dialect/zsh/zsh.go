@@ -1757,6 +1757,15 @@ func Semantics() interp.Semantics {
 	// y); typeset -A a=([k]=v)` lists `typeset -A a=( [k]=v )` at 0 (#2287).
 	s.TableUnderAnArrayLiteralDeclaration = interp.CompoundKindChangeEmptiesTheName
 	s.ArrayUnderATableLiteralDeclaration = interp.CompoundKindChangeEmptiesTheName
+	// `a[@]=Z` names every element: the name comes out holding the one value
+	// whatever it held before, and `a[@]+=Z` adds one at the end. Over a
+	// table the same spelling is refused by name and the input ends.
+	// Measured 2026-09-12, `x=(p q); x[@]=Z` leaves `${#x[@]}` at 1, `v=s;
+	// v[@]=Z` and a bare `u[@]=Z` both leave a one-element array, and
+	// `typeset -A m; m[k]=v; m[@]=Z` is `m: attempt to set slice of
+	// associative array` under both separators (#2285).
+	s.WholeArraySubscriptAssigningAnArray = interp.WholeArraySubscriptNamesEveryElement
+	s.WholeArraySubscriptAssigningATable = interp.WholeArraySubscriptIsASliceOfATable
 	// Nor is reading one reported: measured 2026-09-12, `typeset -A m;
 	// m[k]=v; w=; ${m[$w]}` is the empty string at status 0 and silent
 	// (#1972).

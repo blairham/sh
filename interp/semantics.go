@@ -3228,6 +3228,37 @@ type Semantics struct {
 	// four presets with nothing to put in it.
 	BadSetOptionLetterFatal Answer
 
+	// BadSetOptionNameAtInvocationExitsZero makes a refused `set -o` **name**
+	// on the command line that started the shell report success. The shell
+	// still declines — the command string or script never runs — and then
+	// exits 0.
+	//
+	// Yes in BusyBox ash alone; No in bash, dash, ksh93 and zsh. Measured
+	// 2026-09-13, `<shell> -o zzznosuch -c "echo after"`: `after` is printed
+	// by nobody, dash, all three bash columns and ksh93 exit 2, zsh exits 1,
+	// and ash writes `illegal option -o zzznosuch` and exits **0**.
+	//
+	// Not a fact about this shell's front end. Every other refusal on the
+	// same route reports a failure there — a refused option *letter* is 2,
+	// a `-c` with no operand is 2, a script that does not exist is 2, an
+	// unknown `--long` is 2, and a command nobody has is 127 — so it is this
+	// one refusal on this one route, which is why it is an axis beside the
+	// pair above rather than something about invocations.
+	//
+	// An axis rather than a third status field, and the reason is what the
+	// value would have to be. Diagnostics.SetInvalidOptionNameStatus holds
+	// what the *builtin* reports, and the invocation would want 0 — which is
+	// the zero value every `int` in Diagnostics reads as "not stated", so
+	// the one column that needs the field could not fill it in. And 0 here
+	// is not a number the refusal happens to report: it is the refusal not
+	// counting as a failure, which is the thing to write down (#2639).
+	//
+	// Read on the invocation route only. A `set -o zzznosuch` in a script
+	// reports Diagnostics.SetInvalidOptionNameStatus as it always did — 1 in
+	// this shell — and the two are measurably different numbers in the same
+	// binary, which is what the field could not hold.
+	BadSetOptionNameAtInvocationExitsZero Answer
+
 	// CdLastPathOptionWins lets the last of `cd -L` and `cd -P` decide.
 	// True in bash, dash and ksh93 — `cd -P -L` is logical there. zsh gives
 	// `-P` the answer wherever it appears, so both orders resolve.

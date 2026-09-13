@@ -1876,6 +1876,14 @@ func (sh Shell) applyOptions(r *interp.Runner, opts []optionSpec) (int, bool) {
 			apply = r.SetNamedOption
 		}
 		if code := apply(o.spec, o.on); code != 0 {
+			if o.isName && sh.Semantics.BadSetOptionNameAtInvocationExitsZero == interp.Yes {
+				// One shell declines the option, refuses to run what it was
+				// given, and then reports **success**. The `false` is what
+				// makes that two facts rather than one: nothing runs, and
+				// the status is 0 anyway. See the axis for the measurement
+				// and for why the status field could not hold it (#2639).
+				return 0, false
+			}
 			return code, false
 		}
 	}

@@ -383,6 +383,30 @@ func Probes() []Probe {
 			},
 		},
 		{
+			Field: "BadSetOptionNameAtInvocationExitsZero",
+			Cases: []string{"opt/an-unknown-long-name-at-an-invocation"},
+			// The one axis here whose row is an *invocation* rather than a
+			// snippet, and it needs the same control for the same reason: a
+			// shell that owned `zzznosuch` would run `echo hi` and leave at
+			// 0, which is the exact pair of observations a Yes is. The
+			// stderr guard and the `hi` guard together are what tell the two
+			// zeros apart.
+			Reading: "`<shell> -o zzznosuch -c 'echo hi'` refuses the name and runs nothing in all seven; the status it leaves with is 0 in the shell where declining is not a failure, and nonzero in the rest",
+			Read: func(cells map[string]oracle.Result) (string, string) {
+				r := cells["opt/an-unknown-long-name-at-an-invocation"]
+				if strings.TrimSpace(r.Stderr) == "" {
+					return "", "this shell refused nothing — the recorded cell holds no refusal, so the row says nothing about what one would report"
+				}
+				if strings.Contains(r.Stdout, "hi") {
+					return "", "the command string ran, so the shell did not decline and the row is not about a refusal"
+				}
+				if r.Status == 0 {
+					return "Yes", ""
+				}
+				return "No", ""
+			},
+		},
+		{
 			Field: "SetOLetterAttachesItsName",
 			Cases: []string{"opt/a-set-o-name-welded-to-the-letter"},
 			// The welded characters spell `errexit` — a name every column

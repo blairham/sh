@@ -1454,6 +1454,7 @@ func Semantics() interp.Semantics {
 	// `bash -oerrexit -c cmd` refuses `-c` the same way. With no word behind
 	// it, `set -oe` writes the option table and then turns errexit on.
 	s.SetOLetterAttachesItsName = interp.No
+	s.BadSetOptionNameAtInvocationExitsZero = interp.No
 	s.UnknownConditionOptionIsAStatus = interp.No
 	s.ReturnOutsideAFunctionIsRefused = interp.Yes
 	// `break` with no loop around it is reported and then ignored here: the

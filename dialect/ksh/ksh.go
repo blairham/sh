@@ -1426,6 +1426,7 @@ func Semantics() interp.Semantics {
 	// an option *name* rather than reading it as a letter. Its own usage
 	// line spells the form, `[-o[option]]`.
 	s.SetOLetterAttachesItsName = interp.Yes
+	s.BadSetOptionNameAtInvocationExitsZero = interp.No
 	s.UnknownConditionOptionIsAStatus = interp.No
 	s.ReturnOutsideAFunctionIsRefused = interp.No
 	// And a `break` with no loop around it is ignored, silently: measured on

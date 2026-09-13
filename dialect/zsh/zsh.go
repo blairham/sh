@@ -2014,6 +2014,7 @@ func Semantics() interp.Semantics {
 	// behavior: `set -oerrexit zzznosuch` is errexit with `zzznosuch` as $1,
 	// and `set -oe` is `no such option: e`.
 	s.SetOLetterAttachesItsName = interp.Yes
+	s.BadSetOptionNameAtInvocationExitsZero = interp.No
 	s.UnknownConditionOptionIsAStatus = interp.Yes
 	s.ReturnOutsideAFunctionIsRefused = interp.No
 	// And `break` with no loop around it stops the script here, which is the

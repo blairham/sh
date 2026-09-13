@@ -64,6 +64,11 @@ func declRunWith(t *testing.T, src string, set func(*Semantics), dg Diagnostics,
 	sem.ExportLetterDeclaresAGlobal = No
 	sem.ValuelessDeclarationOfAHeldNameListsIt = No
 	sem.ScalarOverACompoundIsAnInconsistentType = No
+	// The quiet way here is Yes: the retype is taken and nothing is written to
+	// stderr, where No is a refusal with a wording a suite about something else
+	// has not set. See interp/frozenletterretype_test.go for the suite that is
+	// about it, which answers the axis itself.
+	sem.NumericTypeLetterRetypesAFrozenName = Yes
 	sem.ReadonlyRecordsTheCompoundAttribute = No
 	sem.TypeLetterAndAnArrayLiteralIsAnInconsistentType = No
 	sem.NumericAttributeReplacesTheCaseAttribute = No

@@ -773,6 +773,14 @@ func Semantics() interp.Semantics {
 	// declare -g q=(b)` is `q: readonly variable` and the name is untouched,
 	// where zsh retypes it. Both builds, so it is not a version's answer.
 	s.ArrayLiteralOperandRetypesAFrozenScalar = interp.No
+	// And the letter half of the same rule is refused too. Measured
+	// 2026-09-12 under `env -i`, `readonly q=1; typeset -i q=4` is
+	// `typeset: q: readonly variable` in both builds and the name is left at
+	// 1; `-F` is not even a float here — it is the function-listing letter,
+	// and the complaint is about `-f` — and `export -i` is an invalid
+	// option. So no spelling of the numeric type letter reaches a frozen
+	// name (#2539).
+	s.NumericTypeLetterRetypesAFrozenName = interp.No
 	s.BuiltinSyntaxErrorFatal = interp.No
 	// An error inside a file `.` read ends the shell here, not just the file:
 	// measured, a sourced file whose third line is `echo X${NOPE}` under

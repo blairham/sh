@@ -1715,7 +1715,7 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 			// refusal `typeset`'s does where the name is really holding an
 			// array. No scope is ever taken here, so the cell is never a
 			// fresh one. See Runner.inconsistentTypeRefused.
-			if r.inconsistentTypeRefused(name, false) {
+			if r.inconsistentTypeRefused(name, false, declareFlags{}) {
 				return r.status
 			}
 			if r.unspecified {
@@ -4264,7 +4264,7 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 		if hasValue {
 			// See biExport: a declaration's plain word over a name really
 			// holding an array is the same refusal under this word.
-			if r.inconsistentTypeRefused(name, false) {
+			if r.inconsistentTypeRefused(name, false, declareFlags{}) {
 				return r.status
 			}
 			if r.unspecified {

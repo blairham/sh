@@ -913,6 +913,14 @@ func Semantics() interp.Semantics {
 	// a table refuses the same operand — so it is the retype and not the
 	// write. See the axis for the rows (#2250).
 	s.ArrayLiteralOperandRetypesAFrozenScalar = interp.Yes
+	// The letter half of the same rule: a numeric type letter that moves the
+	// name to a type it does not already hold carries out its own
+	// assignment over the freeze, and the freeze stays on. Not one field
+	// with the literal half, because the two disagree over the same frozen
+	// array — `typeset -ar q=(a); typeset -gi q=4` is taken and `readonly
+	// q=(a); typeset -g q=(b)` is refused. See the axis for the rows
+	// (#2539).
+	s.NumericTypeLetterRetypesAFrozenName = interp.Yes
 	s.DeclaredNameWithoutValueIsEmpty = interp.Yes
 	// The export letter carries `-g` with it, so `typeset -x v=1` inside a
 	// function declares no local — `local -x` is the spelling that still

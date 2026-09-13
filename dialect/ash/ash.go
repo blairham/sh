@@ -733,6 +733,10 @@ func Semantics() interp.Semantics {
 	// utility and no array literal here either. Measured 2026-09-12 on
 	// BusyBox, `readonly q=1; typeset -g q=(b)` is `syntax error: unexpected
 	// "("` at 2 — the same wall dash meets, and for the same reason (#2250).
+	// unanswered NumericTypeLetterRetypesAFrozenName: no numeric type letter
+	// either. Measured 2026-09-12 on BusyBox in a container, `typeset` is
+	// `not found` and `export -i q=4` is `illegal option -i` — the same two
+	// walls dash meets (#2539).
 	// unanswered EarlierDeclarationLetterBlocksALaterPlus: there is no
 	// declaration command to write the letter on. `typeset` is not a
 	// builtin here and `integer` is not a word, so neither sign of `-i`

@@ -623,6 +623,13 @@ func Semantics() interp.Semantics {
 	// typeset -g q=(b)` is `q: is read only` at 1, where zsh replaces the
 	// scalar with an array and carries on.
 	s.ArrayLiteralOperandRetypesAFrozenScalar = interp.No
+	// The letter half of the same rule, and the same answer — which is the
+	// column #2539 was filed not knowing, since the word `integer` is this
+	// shell's own and nothing had asked it. Measured 2026-09-12 under
+	// `env -i` on ksh93u+, `readonly q=1; typeset -i q=4` is `q: is read
+	// only` and so are the `-F` and `export -i` spellings, with the name
+	// left at 1 (#2539).
+	s.NumericTypeLetterRetypesAFrozenName = interp.No
 	// An exported name whose declaration named a numeric type reaches a
 	// child as `0`, even though the shell itself reads the name as unset:
 	// `typeset -ix Z; env` hands over `Z=0` where `${Z+set}` is empty.

@@ -3329,6 +3329,56 @@ type Semantics struct {
 	// assignment the reservation was for (#2250).
 	ArrayLiteralOperandRetypesAFrozenScalar Answer
 
+	// NumericTypeLetterRetypesAFrozenName lets a declaration whose integer or
+	// float letter gives a **frozen** name a numeric type it does not already
+	// have carry out its own assignment, without a refusal and with the freeze
+	// still on.
+	//
+	// The letter half of the rule ArrayLiteralOperandRetypesAFrozenScalar
+	// holds the literal half of, and a field of its own rather than a widening
+	// of that one — see the two rows at the bottom, where the two disagree
+	// with each other over the same frozen name.
+	//
+	// Measured 2026-09-12 under `env -i PATH=/bin HOME=/tmp`, zsh 5.9.2
+	// against bash 5.3.15, bash 3.2 and ksh93u+:
+	//
+	//	readonly q=1;    typeset -gi q=4   zsh takes it, `typeset -ir q=4`
+	//	readonly q=1;    typeset -gF q=4   the same, `typeset -Fr q=4.0000000000`
+	//	readonly q=1;    export -i q=4     the same, `export -ir q=4`
+	//	readonly q=1;    integer q=4       the same under the type's own word
+	//	readonly q;      typeset -gi q=4   the same, over a name holding nothing
+	//	readonly q=1;    typeset -gi q     the same with no value at all: the
+	//	                                   standing text is re-read and the
+	//	                                   listing is `typeset -ir q=1`
+	//	typeset -Fr q=1; typeset -gi q=4   the same — float to integer is a
+	//	                                   retype like any other
+	//	typeset -lr q=1; typeset -gi q=4   the same; a case letter is not a type
+	//
+	// and refused wherever the type does not move:
+	//
+	//	typeset -ir q=1; typeset -gi q=4   `read-only variable: q`
+	//	typeset -ir q=1; typeset -gi16 q=4 the same — a base is not a type
+	//	typeset -Fr q=1; typeset -gE q=4   the same — `-F` and `-E` are one
+	//	                                   type wearing two renderings
+	//	readonly q=1;    typeset -g q=4    the same — no type letter at all
+	//	readonly q=1; typeset -gi q=4; q=9 the freeze is still on afterwards
+	//
+	// bash refuses every taken row (`typeset: q: readonly variable`, and its
+	// `export` has no `-i` to refuse with) and so does ksh93u+ (`q: is read
+	// only`), so this is a conflict rather than something the core can hold.
+	//
+	// **Two rows say it is not one field with the literal half**, and they are
+	// the same frozen array reached by the two spellings:
+	//
+	//	typeset -ar q=(a); typeset -gi q=4  zsh **takes** it, `typeset -ir q=4`
+	//	readonly q=(a);    typeset -g q=(b) zsh **refuses** it
+	//
+	// The literal may only leave the scalar kind; the letter may leave any
+	// kind at all, an array and a table included. One field would have to
+	// carry two different guards, which is the shape a named axis exists to
+	// keep apart (#2539).
+	NumericTypeLetterRetypesAFrozenName Answer
+
 	// SetArrayBadNameLeavesZeroFromCommandString makes `set -A` refuse a
 	// name that is not one and leave the shell exiting **0**, where the same
 	// refusal from a script file leaves 1.

@@ -106,11 +106,42 @@ type KindTally struct {
 	Total, Asked int
 }
 
+// Origin is one body of cases a report was computed from: a name, and how
+// many of them there were.
+//
+// It is printed under the title because the denominator of this instrument is
+// whatever it was handed, and a report that does not say what it read cannot
+// be read twice and compared. It arrived the hard way: `make coverage` ran
+// for a day against the corpus alone while our own suite sat in the tree
+// unread, and the report named three elements as unasked that 35 committed
+// files had been asking about (#2630). Nothing was wrong with the number —
+// it was the honest answer to a question nobody meant to put.
+//
+// A Count of zero prints as a name alone, which is how a body of cases that
+// could not be read says so.
+type Origin struct {
+	Name  string
+	Count int
+}
+
 // Report renders the columns. list caps how many unasked names are printed
-// per kind; 0 prints them all.
-func Report(cols []Column, list int) string {
+// per kind; 0 prints them all. read is where the cases came from, and it is
+// printed under the title — see [Origin].
+func Report(cols []Column, list int, read []Origin) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "\n  coverage — what the cases never mention\n\n")
+	fmt.Fprintf(&b, "\n  coverage — what the cases never mention\n")
+	if len(read) > 0 {
+		var parts []string
+		for _, o := range read {
+			if o.Count == 0 {
+				parts = append(parts, o.Name)
+				continue
+			}
+			parts = append(parts, fmt.Sprintf("%d %s", o.Count, o.Name))
+		}
+		fmt.Fprintf(&b, "  read %s\n", strings.Join(parts, ", "))
+	}
+	b.WriteString("\n")
 	for _, c := range cols {
 		fmt.Fprintf(&b, "  %s\n", c.Name)
 		fmt.Fprintf(&b, "    %d of %d sources parsed under this grammar\n", c.Parsed, c.Sources)

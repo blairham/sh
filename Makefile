@@ -229,11 +229,17 @@ acp-wire: ## Print a real annotated ACP session, message by message, for showing
 # of shell processes against a 3000-row corpus, on demand. See the `lint`
 # comment above for what wiring a slow thing into every commit costs here.
 # The denominator axis-sweep does not cover: what nothing ever *asks* about.
-# Report-only and cheap — it parses the corpus and reads the tree's own
-# tables, and starts no shell at all — so unlike the sweep above there is
-# nothing here to schedule around. Still not in `check`: it is a work-list
-# rather than a gate, and an element nobody has written a case for yet is not
-# a broken build.
+# Report-only and cheap — it parses the corpus and our own suite, reads the
+# tree's own tables, and starts no shell at all — so unlike the sweep above
+# there is nothing here to schedule around. Still not in `check`: it is a
+# work-list rather than a gate, and an element nobody has written a case for
+# yet is not a broken build.
+#
+# Both bodies of cases, and by default rather than by a flag typed here: for a
+# day this read the corpus alone while share/suite sat in the tree unread, and
+# named three elements as unasked that our own files had been asking about
+# (#2630). The report prints what it read, so the denominator is never again
+# something a reader has to assume.
 coverage: ## Report, per dialect, every builtin, node kind and operator no case mentions (#2293)
 	@go run ./internal/cmd/coverage $(ARGS)
 

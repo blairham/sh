@@ -1,0 +1,76 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# dash's own answers among the builtins every shell has.
+#
+# dash adds almost nothing to POSIX, so its dialect answers are not extra
+# features — they are the places where the same builtin behaves differently
+# here than in the other three. `echo` processing escapes with no option is
+# the one a portable script trips over most.
+
+# echo interprets the escape sequences with no -e and no option set. bash
+# does not, which is the whole reason `printf` is the portable spelling.
+echo 'tab: a\tb'
+echo 'newline: a\nb'
+echo 'backslash: a\\b'
+echo 'octal: \0101'
+
+# \c stops the output there, newline included.
+echo 'stops here \c and this is gone'
+echo ''
+
+# -n suppresses the newline, and it is the option rather than an argument.
+echo -n 'no newline'
+echo ''
+
+# printf %b asks for the same processing on an argument, and that spelling
+# is portable where echo's is not.
+printf '%b\n' 'b flag: a\tb'
+
+# `local` is dash's — POSIX has no such builtin and ksh93 has not got it. A
+# local name shadows the outer one and the assignment inside the function
+# does not escape.
+outer=kept
+f() {
+  local outer=inner
+  outer=changed
+  printf 'inside: %s\n' "$outer"
+}
+f
+printf 'outside: %s\n' "$outer"
+
+# `local` with no value leaves the name set to nothing rather than unset,
+# which is the half of it shells disagree about.
+g() {
+  local u
+  printf 'valueless: [%s]\n' "${u-unset}"
+}
+g
+
+# local takes several names at once, and the list is names rather than a
+# declaration.
+h() {
+  local a b
+  a=1
+  b=2
+  printf '%s %s\n' "$a" "$b"
+}
+h
+
+# type says what a word is, in dash's wording.
+type echo
+type f
+type nosuchcommandanywhere
+printf 'type on nothing: %s\n' "$?"
+
+# command -v answers with the word for a function and a builtin alike.
+command -v f
+command -v echo
+command -v nosuchcommandanywhere
+printf 'command -v on nothing: %s\n' "$?"
+
+# The special builtins keep their POSIX status rule: a redirection error on
+# one is fatal to a non-interactive shell, so this is run where the death is
+# contained.
+( : > /nonexistent/path/that/cannot/be/made; printf 'not reached\n' ) 2>&1
+printf 'after the redirection failure: %s\n' "$?"

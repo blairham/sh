@@ -1,0 +1,82 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Parameter expansion, the answer only zsh gives.
+#
+# Two things separate zsh from the rest of the panel here and both are in
+# this file. An unquoted expansion is not split on IFS, which is the single
+# largest behavioural difference between zsh and every other shell a script
+# can be written for; and the expansion *flags* — `${(j:x:)a}`, `${(f)…}`,
+# `${(U)…}` — are a whole operator family the ksh family has no spelling for.
+#
+# The flags that this shell does not implement yet are not here, and the
+# issue filed with this file names them. A suite file records what was
+# measured; a file of things we wish were true is a wish list.
+
+# The rule the rest of the panel does not have: an unquoted expansion of a
+# value with spaces in it is one word.
+v="two  words"
+set -- $v
+printf 'unquoted stayed one word: %s [%s]\n' "$#" "$1"
+
+# And the option that turns the other shells' rule back on, which is how a
+# script written for sh is run under zsh at all.
+setopt shwordsplit
+set -- $v
+printf 'with shwordsplit: %s\n' "$#"
+unsetopt shwordsplit
+set -- $v
+printf 'without it again: %s\n' "$#"
+
+# The case flags. (U) upper, (L) lower, and they apply to the expansion
+# rather than to the variable, so the value is untouched.
+printf '%s\n' "${(U)v}"
+printf '%s\n' "${(L)v}"
+printf '%s\n' "$v"
+
+# (j:x:) joins an array on a string of any length; (s:x:) splits on one.
+a=(one two three)
+printf '%s\n' "${(j:-:)a}"
+printf '%s\n' "${(j:, :)a}"
+set -- "${(s:,:)"$(printf 'p,q,r')"}"
+printf 'split on a comma gave %s: [%s][%s][%s]\n' "$#" "$1" "$2" "$3"
+
+# (f) is (s:\n:) under a name, which is how a command's output becomes an
+# array of lines without touching IFS.
+set -- "${(f)"$(printf 'x\ny\nz\n')"}"
+printf 'lines: %s\n' "$#"
+printf '  [%s]\n' "$@"
+
+# (o) and (O) sort — and only where there is still an array to sort. In
+# double quotes the expansion is one word before the flag can order anything,
+# so the quoted spelling gives the elements back in the order they were
+# written and the unquoted one gives them sorted. That pair is the case; the
+# quoted line on its own would read as a flag that does nothing.
+b=(4 2 3 1)
+printf '%s\n' "${(o)b}"
+printf '%s\n' ${(o)b}
+printf '%s\n' ${(O)b}
+printf '%s\n' ${(n)b}
+printf '%s\n' "${(q)$( printf 'a b' )}"
+typeset -A m
+m[k]=v
+printf '%s\n' "${(k)m}"
+printf '%s\n' "${m[k]}"
+
+# (l) and (r) pad on the left and the right, and the pad string is an
+# argument of the flag rather than of the expansion.
+n=5
+printf '%s\n' "${(l:3::0:)n}"
+printf '[%s]\n' "${(r:6:)v}"
+
+# ${+name} is setness as a number, which is zsh's spelling of a test other
+# shells write as a substitution.
+printf '%s\n' "${+novar}"
+printf '%s\n' "${+v}"
+
+# A modifier after a colon is history syntax reused on a parameter.
+p=/one/two/three.txt
+printf '%s\n' "${p:t}"
+printf '%s\n' "${p:h}"
+printf '%s\n' "${p:r}"
+printf '%s\n' "${p:e}"

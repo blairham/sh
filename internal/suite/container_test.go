@@ -98,9 +98,17 @@ func TestEveryTierHasCases(t *testing.T) {
 	}
 }
 
-// A column may not claim a tier the instrument does not have, and the tier
-// list may not hold one no column runs — either way a directory and a report
-// would be saying different things.
+// A column may not claim a directory nothing checks the claim of, and the
+// tier list may not hold one no column runs — either way a directory and a
+// report would be saying different things.
+//
+// There are exactly two kinds of claimed directory and each has its own
+// check. A shared tier is in [Tiers] and [CrossCheck] asks whether the
+// references agree about it. A dialect tier is named for the column's own
+// dialect and [OnlyHere] asks the opposite question. A third spelling would
+// be graded — Dirs is Dirs — and neither check would ever find it, so its
+// files would pass forever without the directory's claim being measured at
+// all.
 func TestEveryClaimedDirIsATier(t *testing.T) {
 	named := map[string]bool{}
 	for _, tier := range Tiers {
@@ -110,10 +118,11 @@ func TestEveryClaimedDirIsATier(t *testing.T) {
 	for _, s := range Ours {
 		for _, dir := range s.Dirs {
 			claimed[dir] = true
-			if !named[dir] {
-				t.Fatalf("the %s column runs %s/ and it is not in Tiers, so its files are "+
-					"graded and never cross-checked", s.Name, dir)
+			if named[dir] || dir == s.Dialect {
+				continue
 			}
+			t.Fatalf("the %s column runs %s/, which is neither a tier in Tiers nor its own "+
+				"dialect name, so nothing measures what that directory claims", s.Name, dir)
 		}
 	}
 	for _, tier := range Tiers {

@@ -1,0 +1,73 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Parameter expansion, the answer only bash gives.
+#
+# The operators here arrived in bash 4.0 and 4.4 and have no spelling in the
+# ksh93 on this machine, none in dash, and a different one in zsh — where
+# case conversion is an expansion flag and a transformation is a modifier.
+# That is what puts the family in a dialect directory rather than in ext/.
+
+v=hello
+
+# Case modification. One caret or comma converts the first character that the
+# pattern matches, two convert every one, and a tilde inverts.
+printf '%s\n' "${v^}"
+printf '%s\n' "${v^^}"
+printf '%s\n' "${v~}"
+printf '%s\n' "${v~~}"
+u=HELLO
+printf '%s\n' "${u,}"
+printf '%s\n' "${u,,}"
+
+# A pattern after the operator says which characters are converted.
+printf '%s\n' "${v^^[aeiou]}"
+printf '%s\n' "${v^^l}"
+
+# The @ transformations. Q quotes the value so it can be read back, U and L
+# and u are the case operators again by another name, and E processes the
+# escapes a $'…' literal would.
+printf '%s\n' "${v@Q}"
+printf '%s\n' "${v@U}"
+printf '%s\n' "${v@u}"
+printf '%s\n' "${u@L}"
+esc='a\tb'
+printf '%s\n' "${esc@E}"
+
+# @a is the attribute letters of a name, and @A is a declaration that would
+# recreate it.
+declare -ir n=7
+printf '%s\n' "${n@a}"
+printf '%s\n' "${n@A}"
+
+# printf -v assigns instead of writing, which is bash's way to format into a
+# variable without a command substitution.
+printf -v out 'formatted %s and %s' one two
+printf '%s\n' "$out"
+printf -v pad '%05d' 42
+printf '%s\n' "$pad"
+
+# A positional slice takes a count rather than an end, and $0 is only
+# included when the offset starts at zero.
+set -- p q r s
+printf '%s\n' "${@:2:2}"
+printf '%s\n' "${@: -1}"
+printf 'count: %s\n' "$#"
+
+# An array slice is the same operator on a name, and ${!name[@]} is the
+# subscripts.
+a=(zero one two three)
+printf '%s\n' "${a[@]:1:2}"
+printf '%s\n' "${!a[@]}"
+
+# An associative array declared with -A, and the subscripts read back.
+declare -A m=([k]=v [j]=w)
+printf '%s\n' "${m[k]}"
+printf '%s\n' "${m[j]}"
+printf 'keys: %s\n' "${#m[@]}"
+
+# ${!name} is an indirection in bash — it reads the variable the value names —
+# where ksh93 gives back the name itself.
+target=found
+ref=target
+printf '%s\n' "${!ref}"

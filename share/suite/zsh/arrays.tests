@@ -1,0 +1,75 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Arrays, the answer only zsh gives.
+#
+# ext/arrays.tests carries the half the ksh family shares, and it carries no
+# numeric subscript at all — because the base is where the two families part.
+# zsh counts from one. This file is the rest: the base, the slices, the
+# search subscripts, and the whole-array-as-a-word rule that follows from
+# zsh not splitting.
+
+a=(one two three four)
+
+# One-based, and a subscript needs no braces: `$a[1]` is the element where
+# every other shell in the panel reads that as `$a` followed by literal text.
+printf '%s\n' "$a[1]"
+printf '%s\n' "${a[1]}"
+printf '%s\n' "$a[4]"
+
+# A negative subscript counts from the end, and -1 is the last element rather
+# than an error or an empty word.
+printf '%s\n' "$a[-1]"
+printf '%s\n' "$a[-2]"
+
+# A comma makes it a slice, and the ends are inclusive. A negative end works
+# there too.
+printf '%s\n' "${a[2,3]}"
+printf '%s\n' "${a[2,-2]}"
+printf '%s\n' "${a[1,1]}"
+
+# ${#a} on an array is the element count, not the length of the first
+# element — which is the ksh family's answer and the reason a script has to
+# know which shell it is in.
+printf '%s\n' "${#a}"
+printf '%s\n' "${#a[@]}"
+
+# Assigning past the end extends the array to that index.
+a[6]=six
+printf '%s\n' "${#a}"
+printf '%s\n' "$a[6]"
+printf '[%s]\n' "$a[5]"
+
+# A bare array in double quotes is the elements joined by a space, because
+# zsh has no splitting to undo. Every other shell in the panel needs [*] for
+# this.
+printf '%s\n' "$a"
+
+# (r) is a subscript that searches by value and yields the element; (i)
+# searches and yields its index. A miss from (i) is one past the end.
+printf '%s\n' "${a[(r)two]}"
+printf '%s\n' "${a[(i)three]}"
+printf '%s\n' "${a[(i)nothing]}"
+
+# An empty array is empty rather than one empty element, and += appends.
+b=()
+printf 'empty count: %s\n' "${#b}"
+b+=(x)
+b+=(y z)
+printf '%s\n' "${#b}"
+printf '%s\n' "$b[3]"
+
+# set -A is zsh's other spelling of an array assignment, and it replaces
+# rather than appends.
+set -A c p q r
+printf '%s\n' "$c[2]"
+set -A c only
+printf '%s\n' "${#c}"
+
+# An associative array is declared, and its subscript is the key.
+typeset -A m
+m[one]=1
+m[two]=2
+printf '%s\n' "$m[one]"
+printf '%s\n' "${#m}"
+printf '%s\n' "${(k)m[(r)2]}"

@@ -1,0 +1,75 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# The ext/ boundary, measured from BusyBox ash's side — and it is not dash's
+# boundary.
+#
+# dash and ash both sit outside ext/ in docs/spec/shell-matrix.md, and the
+# two columns' Dirs say so identically. This file is why that identical
+# spelling hides two different shells: BusyBox ash has the condition command,
+# `$'…'`, the `function` keyword and process substitution, and dash has none
+# of the four. What they share is the refusal of arrays, here strings, the
+# C-style for and `+=`.
+#
+# So "ash does not run ext/" is a coarser statement than it looks, and this
+# is the fine-grained version of it. Each construct ext/ has a file for is
+# put to ash and the answer recorded: which ones it takes, which it refuses,
+# and at what status.
+#
+# Each is inside `( eval … )` for dash/boundary.tests' reason: a parse error
+# is fatal to the shell it is in, and the subshell is what lets the file
+# reach its next line.
+
+# Arrays — refused, as in dash. ext/arrays.tests.
+( eval 'a=(one two)' ) 2>&1
+printf 'array: %s\n' "$?"
+
+# The condition command — taken, where dash has not got it.
+# ext/dblbracket.tests.
+( eval '[[ a == a ]] && echo condition-ran' ) 2>&1
+printf 'double bracket: %s\n' "$?"
+
+# $'…' — taken, and the escapes processed. dash reads the same word as a
+# literal dollar in front of a single-quoted string.
+# ext/dollarquote.tests.
+( eval "printf '%s\n' \$'a\tb'" ) 2>&1
+printf 'dollar quote: %s\n' "$?"
+
+# The `function` keyword — taken. ext/funcform.tests.
+( eval 'function g { echo function-body-ran; }; g' ) 2>&1
+printf 'function keyword: %s\n' "$?"
+
+# Process substitution — taken. ext/procsub.tests.
+( eval 'cat <(echo substituted)' ) 2>&1
+printf 'process substitution: %s\n' "$?"
+
+# Here strings — refused, as in dash. ext/herestring.tests.
+( eval 'cat <<< word' ) 2>&1
+printf 'here string: %s\n' "$?"
+
+# The C-style for loop — refused, as in dash. ext/cfor.tests.
+( eval 'for ((i=0;i<1;i++)); do echo c; done' ) 2>&1
+printf 'C-style for: %s\n' "$?"
+
+# select — refused. ext/select.tests.
+( eval 'select x in a; do break; done < /dev/null' ) 2>&1
+printf 'select: %s\n' "$?"
+
+# `+=` — not refused and not implemented: with no append operator the word is
+# a command name, so the shell goes looking for a program called `v+=y` and
+# the assignment never happens. Same misreading as dash's.
+# ext/plusassign.tests.
+( eval 'v=x; v+=y; echo $v' ) 2>&1
+printf 'append: %s\n' "$?"
+
+# Pattern substitution and substrings — taken, where dash refuses both. They
+# are ext/patsub.tests and ext/substrings.tests, and they are the two rows
+# that put ash and dash on opposite sides while one Dirs list covers them.
+v=abc
+printf '%s\n' "${v/b/B}"
+printf '%s\n' "${v//b/B}"
+printf '%s\n' "${v:1:1}"
+printf '%s\n' "${v:1}"
+
+# Exponentiation — taken, where dash refuses it.
+printf '%s\n' "$((2**3))"

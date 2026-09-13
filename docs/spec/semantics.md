@@ -570,11 +570,13 @@ it wrong:
   `.` itself was written on — which inside a one-line function is that
   function's own line. So it is a chain of *borrowed texts*, not of calls,
   whatever the shape looks like.
-- **The outermost component takes no bracket where the route names no line.**
+- **The outermost component leaves line 1 unwritten where the route does.**
   Measured over `-c`: `ksh -c '. ./p.sh'` is `<shell>: .: line 3:` and
-  `ksh -c '. ./s.sh'` is `<shell>: .[2]: .: line 3:` — the inner components
-  keep theirs. That is the route's own location showing through rather than a
-  second rule, since this shell's plain `-c` complaint carries no line either.
+  `ksh -c '. ./s.sh'` is `<shell>: .[2]: .: line 3:`. That is the route's own
+  location showing through rather than a second rule, since this shell's plain
+  `-c` complaint carries no line on line 1 either — and it is **line 1** and
+  not the route, which the rows above cannot see because their `.` is on line 1
+  of the program in both. The `.` one line lower is `<shell>[2]: .: line 3:`.
 - **The name is the builtin.** `SourceFileIsTheBuiltin` already said that for
   the innermost; the components above it are the same word.
 
@@ -593,6 +595,49 @@ The two paths render it separately because they are separate code —
 `Runner.reportBorrowedParseFailure` for a parse failure — and the rule differs
 between them in exactly the last component, which is the reason it is worth
 saying twice rather than once.
+
+#### The line 1 that is left out belongs to the first component alone
+
+A script names every line, so the six rows above cannot see this and the first
+reading written from them was wrong in two places at once. Four more
+arrangements over `-c`, measured the same day on the same build:
+
+| arrangement | ksh93 |
+| --- | --- |
+| `eval` on line 1, failing on the text's line 1 | `/bin/ksh: eval: line 1: …` |
+| `eval` on line **2**, failing on the text's line 1 | `/bin/ksh[2]: eval: line 1: …` |
+| an `eval` inside that `eval` | `/bin/ksh: eval[1]: eval: line 1: …` |
+| `cd` failing inside an `eval` on line 1 | `/bin/ksh: eval[1]: cd: …` |
+
+`LocationLineWordAfterFirst` and `LocationBracketLineAfterFirst` are the
+styles that leave line 1 unwritten, and what they are about is **the first
+line of what the shell was given**. So the first component reads them as
+written — row two gets its bracket back — and every component after it names
+its line however small it is, which is `Diagnostics.prefixAfterTheFirstFrame`.
+
+Rows one and three are the pair that decides it. A rule suppressing in every
+component writes `/bin/ksh: eval: ` for the first and `/bin/ksh: eval: eval: `
+for the third; a rule suppressing nowhere writes `/bin/ksh[1]: eval: line 1: `
+for the first. Neither row alone can tell the three readings apart, and the
+corpus carries both as
+`location/an-eval-on-the-first-line-of-a-command-string` and
+`location/an-eval-inside-an-eval`.
+
+#### A builtin's complaint is located the builtin's way at the end of a chain
+
+The last component is located the way an ordinary diagnostic in this dialect
+is, which means `BuiltinLocation` decides it there as it does anywhere else:
+`<script>[2]: .[2]: cd: …` for a builtin's own complaint inside a sourced file
+against `<script>[2]: .: line 2: …` for a message the shell speaks there.
+
+That is one question and this tree used to answer it with another. `unset`
+refusing a readonly name is the **builtin's** complaint here —
+`<shell>[3]: unset: warning: r: is read only` — where the assignment refused
+for the same reason is the shell's, `<shell>: line 3: r: is read only`.
+`Runner.unsetReadonly` forgot the builtin outright so that zsh would not name
+it in the location, which answered one dialect's question by discarding the
+fact a second dialect needs: that a builtin is speaking at all. It clears it
+only where `NamesBuiltinInLocation` says a dialect would write the name.
 
 ### The lines of `eval`'s text
 

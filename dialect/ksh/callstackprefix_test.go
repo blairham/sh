@@ -23,13 +23,17 @@ import (
 //	bs.sh line 2 sources a bad file   ./bs.sh[2]: .: syntax error at line 2: …
 //	be.sh line 2 evals bad text       ./be.sh[2]: eval: syntax error at line 2: …
 //
-// and over `-c`, which is the route these cases take:
+// and over `-c`, which is the route these cases take. **The line the `.` is
+// written on decides the outermost bracket**, so the programs are written out
+// here as the cases run them rather than as the shortest way of reaching the
+// failure — a `.` on line 1 and the same `.` on line 2 are two different rows
+// and the first draft of this table conflated them (#2417):
 //
-//	. ./p.sh          /bin/ksh: .: line 3: …
-//	. ./s.sh          /bin/ksh: .[2]: .: line 3: …
-//	f(){ . ./p.sh; }  /bin/ksh: .: line 3: …
-//	. ./bad.sh        /bin/ksh: .: syntax error at line 2: …
-//	. ./bs.sh         /bin/ksh: .[2]: .: syntax error at line 2: …
+//	. ./bad.sh                 /bin/ksh: .: syntax error at line 2: …
+//	. ./bs.sh                  /bin/ksh: .[2]: .: syntax error at line 2: …
+//	set -u ⏎ . ./p.sh          /bin/ksh[2]: .: line 3: …
+//	set -u ⏎ . ./s.sh          /bin/ksh[2]: .[2]: .: line 3: …
+//	set -u ⏎ f(){ . ./p.sh; }⏎f  /bin/ksh[2]: .: line 3: …
 //
 // Three things in those rows are the whole of the rule, and each was a way to
 // get it wrong:
@@ -40,9 +44,12 @@ import (
 //   - **The innermost component carries the location and the rest carry a
 //     bracket**, and a parse failure's innermost carries neither, because the
 //     message already says `at line N` and this shell does not say it twice.
-//   - **The outermost component takes no bracket under `-c`**, because this
-//     shell names no line for a `-c` program at all — its plain complaint
-//     there is `/bin/ksh: NOPE: parameter not set`.
+//   - **The outermost component leaves line 1 unwritten under `-c`**, because
+//     this shell names no line for the first line of a `-c` program — its
+//     plain complaint there is `/bin/ksh: NOPE: parameter not set`. It is
+//     line 1 and not the route: the rows with `set -u` in front bracket their
+//     `[2]`. Every component *after* the first names its line however small
+//     it is, which is what `location/an-eval-inside-an-eval` pins (#2417).
 func TestTheCallStackIsRenderedIntoThePrefix(t *testing.T) {
 	dir := t.TempDir()
 	write := func(name, body string) {
@@ -59,22 +66,22 @@ func TestTheCallStackIsRenderedIntoThePrefix(t *testing.T) {
 		{
 			name: "one sourced file",
 			src:  "set -u\n. ./p.sh\n",
-			want: "ksh: .: line 3: NOPE: parameter not set\n",
+			want: "ksh[2]: .: line 3: NOPE: parameter not set\n",
 		},
 		{
 			name: "a file that sources a file",
 			src:  "set -u\n. ./s.sh\n",
-			want: "ksh: .[2]: .: line 3: NOPE: parameter not set\n",
+			want: "ksh[2]: .[2]: .: line 3: NOPE: parameter not set\n",
 		},
 		{
 			name: "a function that sources adds no component",
 			src:  "set -u\nf() { . ./p.sh; }\nf\n",
-			want: "ksh: .: line 3: NOPE: parameter not set\n",
+			want: "ksh[2]: .: line 3: NOPE: parameter not set\n",
 		},
 		{
 			name: "text eval is running",
 			src:  "set -u\neval \"echo a\necho \\$NOPE\"\n",
-			want: "ksh: eval: line 2: NOPE: parameter not set\n",
+			want: "ksh[2]: eval: line 2: NOPE: parameter not set\n",
 		},
 		{
 			// The innermost component has no location on the parse path.

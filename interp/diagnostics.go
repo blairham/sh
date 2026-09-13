@@ -2579,6 +2579,23 @@ type Diagnostics struct {
 	// it: that field turns the *name* on, and turning it on for this shell
 	// without the brackets writes `./s.sh: .: line 3:` — closer and still
 	// wrong, which a corpus row cannot tell from right (#2461).
+	//
+	// **The suppression that leaves line 1 unwritten belongs to the first
+	// component alone**, which the six rows above cannot see: a script names
+	// every line, so only the `-c` route asks. Four more, measured on the
+	// same day and the same build (#2417):
+	//
+	//	-c, eval on line 1, fails on the text's line 1   /bin/ksh: eval: line 1: …
+	//	-c, eval on line 2, fails on the text's line 1   /bin/ksh[2]: eval: line 1: …
+	//	-c, an eval inside that eval                     /bin/ksh: eval[1]: eval: line 1: …
+	//	-c, `cd` failing inside an eval on line 1        /bin/ksh: eval[1]: cd: …
+	//
+	// So the first component follows [LocationBracketLineAfterFirst] — a
+	// bracket once there is a line worth naming — and every component after
+	// it names its line however small, which is
+	// [Diagnostics.prefixAfterTheFirstFrame]. A rule that suppressed
+	// everywhere, or nowhere, gets exactly one of the first three rows right,
+	// and no one of them can tell the readings apart alone.
 	BorrowedTextRendersTheCallStack bool
 	// UnterminatedEndsOnNextLine puts the end of input on the line after the
 	// text rather than on its last: `eval "if"` is line 2 in bash and line 1
@@ -4933,6 +4950,64 @@ func (d Diagnostics) prefixWithoutLine(name, builtin string) string {
 		return ""
 	}
 	return name + ": "
+}
+
+// locationNamesALineAt reports whether the ordinary location this dialect
+// writes carries a line number at line.
+//
+// It differs from asking the style directly in one place and that place is
+// the whole reason it exists: [LocationLineWordAfterFirst] and
+// [LocationBracketLineAfterFirst] leave the line out on **line 1 only**, so
+// the answer depends on the line as well as on the dialect. Read by the chain
+// of borrowed texts, where the outermost component follows the shell's own
+// name — see [Diagnostics.BorrowedTextRendersTheCallStack].
+func (d Diagnostics) locationNamesALineAt(line int) bool {
+	switch d.Location {
+	case LocationLineWordAfterFirst, LocationBracketLineAfterFirst:
+		return line > 1
+	case LocationNone, LocationNameOnly, LocationBuiltinNameOnly:
+		return false
+	}
+	return true
+}
+
+// prefixAfterTheFirstFrame is prefix for a location that is not the first
+// thing the shell wrote: a frame the dialect that renders a chain entered
+// after the one carrying its own name, and the innermost text at the end of
+// such a chain.
+//
+// The only difference is the suppression that leaves line 1 unwritten.
+// [LocationLineWordAfterFirst] and [LocationBracketLineAfterFirst] are about
+// the first line of what the shell was *given* — `ksh -c 'nosuchcmd'` names no
+// line — and a frame entered after that names its line however small it is.
+// Measured 2026-09-12, ksh93u+ 2012-08-01, and only the `-c` route can see it
+// because a script names every line already:
+//
+//	ksh -c 'eval "nosuchcmd"'          /bin/ksh: eval: line 1: …
+//	ksh -c 'eval "eval \"nosuchcmd\""'  /bin/ksh: eval[1]: eval: line 1: …
+//
+// Both rows name line 1 from a shell whose own name carried none, and a rule
+// applying the suppression to every component writes `/bin/ksh: eval: ` for
+// the first and `/bin/ksh: eval: eval: ` for the second. The outer components
+// ask [Diagnostics.locationNamesALineAt] for the same fact; this is the one
+// the innermost asks, because it is located rather than bracketed. See
+// [Diagnostics.BorrowedTextRendersTheCallStack] (#2417).
+func (d Diagnostics) prefixAfterTheFirstFrame(name, builtin string, byBuiltin bool, line int) string {
+	d.Location = namesEveryLine(d.Location)
+	d.BuiltinLocation = namesEveryLine(d.BuiltinLocation)
+	return d.prefix(name, builtin, byBuiltin, line)
+}
+
+// namesEveryLine is style with its "leave line 1 unwritten" answer taken out,
+// and every other style unchanged.
+func namesEveryLine(style LocationStyle) LocationStyle {
+	switch style {
+	case LocationLineWordAfterFirst:
+		return LocationLineWord
+	case LocationBracketLineAfterFirst:
+		return LocationBracketLine
+	}
+	return style
 }
 
 func (d Diagnostics) prefix(name, builtin string, byBuiltin bool, line int) string {

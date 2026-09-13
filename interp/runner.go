@@ -2394,7 +2394,10 @@ func (r *Runner) locationPrefix() string {
 		// Diagnostics.BorrowedTextRendersTheCallStack for the six rows this
 		// is read off, and borrowedStack for the chain itself.
 		chain, innermost := r.borrowedStack(d, name)
-		return chain + d.prefix(innermost, r.speaking(), r.builtinIsSpeaking(), line)
+		// prefixAfterTheFirstFrame rather than prefix: the innermost text is
+		// not the first thing this shell wrote, so it names line 1 where the
+		// shell's own name would have left it out.
+		return chain + d.prefixAfterTheFirstFrame(innermost, r.speaking(), r.builtinIsSpeaking(), line)
 	}
 	return d.prefix(name, r.speaking(), r.builtinIsSpeaking(), line) + r.borrowedName(d)
 }
@@ -2449,16 +2452,22 @@ func (r *Runner) borrowedStack(d Diagnostics, outer string) (chain, inner string
 	var b strings.Builder
 	name := outer
 	for i, t := range r.borrowed {
-		if i == 0 && d.locationOnly(t.callerLine) == "" {
-			// The outermost frame is the shell itself where there is no
-			// script, and this shell names no line for one: measured
-			// 2026-09-12, `ksh -u -c '. ./p.sh'` is
-			// `/bin/ksh: .: line 3: …` with no bracket, exactly as its plain
-			// `-c` diagnostic is `/bin/ksh: NOPE: parameter not set` with no
-			// line. The frames *inside* keep theirs — `ksh -c '. ./s.sh'` is
-			// `/bin/ksh: .[2]: .: line 3:` — so this is the outermost
-			// component following the route's own location and not a rule
-			// about brackets.
+		if i == 0 && !d.locationNamesALineAt(t.callerLine) {
+			// The outermost component is the shell's own name, and where
+			// that name would carry no line neither does the frame: measured
+			// 2026-09-12, `ksh -u -c '. ./p.sh'` is `/bin/ksh: .: line 3: …`
+			// with no bracket, exactly as its plain `-c` diagnostic is
+			// `/bin/ksh: NOPE: parameter not set` with no line. The route's
+			// own location showing through rather than a rule about
+			// brackets.
+			//
+			// **And it is the line rather than the route**, which the rows
+			// this was first written from could not see: their `.` was on
+			// line 1 of the program in every one. The same `.` one line lower
+			// is `/bin/ksh[2]: .: line 3: …`, so the question is whether the
+			// location names a line *at this line*, and the frames inside
+			// keep theirs however small — `/bin/ksh: eval[1]: eval: line 1:`
+			// (#2417).
 			fmt.Fprintf(&b, "%s: ", name)
 		} else {
 			fmt.Fprintf(&b, "%s[%d]: ", name, t.callerLine)

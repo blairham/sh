@@ -1012,6 +1012,11 @@ func openWidgetParameters(r *interp.Runner, completion bool) {
 		left := string(runes[:widgetCursor(rr)])
 		rr.SetVar(zleBuffer, left+value)
 	})
+	// `region_highlight` is opened here and is not one of the five: the other
+	// parameters are the line, and this one is what the widget wants *done*
+	// with it. It is also the only one backed by a store that outlives the
+	// call — see regionhighlight.go.
+	openRegionHighlight(r)
 	r.SetDynamic("WIDGET", func(rr *interp.Runner) string {
 		name, _ := rr.GetVar(zleWidget)
 		return name
@@ -1037,6 +1042,11 @@ func closeWidgetParameters(r *interp.Runner) {
 	for _, name := range zleParameters {
 		r.UnsetDynamic(name)
 	}
+	// Not added to zleParameters, because that list is also what the
+	// completion branch above marks read-only and what the tests walk as "the
+	// line parameters". This one is neither: a completion widget may colour
+	// the line it is refused permission to rewrite.
+	closeRegionHighlight(r)
 }
 
 // The line a widget is editing, as this file keeps it.

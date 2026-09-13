@@ -253,6 +253,23 @@ type Shell struct {
 	// it may not change.
 	Hooks HookStyle
 
+	// StartLine is called once before each new line is read, and not before a
+	// continuation of one already begun.
+	//
+	// It exists for state a dialect keeps for the length of a line and must
+	// not carry into the next — zsh's `region_highlight`, whose effect the
+	// manual says "disappears as soon as the line is accepted". Nil is a
+	// dialect with no such state, which is three of the four.
+	//
+	// Deliberately told nothing and answering nothing. What a line is made of
+	// is this package's, and what a dialect keeps about one is the dialect's;
+	// the only thing crossing here is the *moment*, which is the same reason
+	// RunScheduled is shaped the way it is. Overloading that one instead was
+	// the alternative and it would have tied "a command was put aside until a
+	// time" to "a line began", which are unrelated facts that happen to share
+	// an instant.
+	StartLine func()
+
 	// Highlighter colors the line as it is typed. Nil draws it plainly, which
 	// is what every shell in the panel does and what a front end that has not
 	// said gets.
@@ -779,6 +796,12 @@ func (s Shell) runEach(ctx context.Context, stmts []*syntax.File) bool {
 // re-ran a command substitution in it.
 func (s Shell) beforeReading(ctx context.Context, state *terminalState, pending *strings.Builder) drawnPrompt {
 	continuing := pending.Len() > 0
+	// Before anything else, and not on a continuation: what this clears is
+	// kept for the length of a line, and a construct still asking for more
+	// text is the same line.
+	if !continuing && s.StartLine != nil {
+		s.StartLine()
+	}
 	// Before anything is drawn, because the prompt itself may be written
 	// against $COLUMNS — a right-aligned segment is the usual reason a
 	// startup file asks for this at all — and a prompt drawn from last

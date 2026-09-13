@@ -595,6 +595,110 @@ rather than half-built, which is the rule the tree keeps for a gap:
   read the terminal and redraw, so running one from inside a call is
   re-entering the read loop rather than transforming the line.
 
+## Coloring the line as it is typed
+
+Neither shell colors a line on its own. zsh gives a widget a way to ask for
+it, and every syntax highlighter on a real machine is built out of that one
+parameter: `region_highlight`.
+
+Measured 2026-09-12 under a pseudo-terminal against zsh 5.9.2, `-f`, with
+`TERM=xterm-256color` and `LANG=en_US.UTF-8`, by binding a widget that writes
+the parameter and reading the bytes that reached the terminal.
+
+### What one element says
+
+`zshzle(1)` gives the grammar and the measurement agrees with it:
+
+    [P] start end spec [memo=token]
+
+- **`P`** is optional and means the offsets count `PREDISPLAY` too. There is
+  no `PREDISPLAY` here, so an element carrying it is dropped rather than
+  applied at the wrong place — a highlighter that asked about text this shell
+  does not have is not answered by pretending the flag was absent.
+- **`start` and `end`** are "in the same units as `CURSOR`", which is
+  **characters, not bytes**. Measured: `BUFFER="héllo wörld"` — eleven
+  characters, thirteen bytes — reads `${#BUFFER}` of 11.
+- **`spec`** is the `zle_highlight` type list, comma-separated.
+- **`memo=token`** is carried verbatim and parsed no further. It exists so a
+  plugin can find its own elements again; it selects no color and is ignored
+  here for the same reason zsh ignores it.
+
+### It lives as long as the line does
+
+`${(t)region_highlight}` inside a widget is **`array-local-special`**, and
+`${+region_highlight}` is 1 there. Outside a widget the parameter does not
+exist — the same rule the five line parameters follow.
+
+It **persists from one widget to the next within a line**, and it is **empty
+again at the next line**. Measured with a widget bound to a key that reports
+what it finds and then appends one element:
+
+| keystroke | found | left |
+| --- | --- | --- |
+| first `x` | *(empty)* | `0 2 fg=green` |
+| second `x`, same line | `1 3 fg=green` | `1 3 fg=green`, `0 2 fg=green` |
+| after the line is accepted | *(empty)* | — |
+
+The manual says the same in one line: "the effect of `region_highlight` is not
+saved and disappears as soon as the line is accepted."
+
+**zsh also moves the offsets as the line changes** — the `0 2` written by the
+first keystroke reads back as `1 3` after a character was inserted before it.
+That is measured and it is **not** implemented here; see *What is still
+missing*. It does not affect a highlighter that rewrites the whole array on
+every keystroke, which is what the ones on this machine do
+(`region_highlight=( $reply )`).
+
+### What a spec paints
+
+Measured by capturing the bytes around a known run. The left column is what
+was written, the middle what zsh sent before the run:
+
+| spec | before the run | after it |
+| --- | --- | --- |
+| `fg=red` | `ESC[31m` | `ESC[39m` |
+| `fg=b`, `fg=bl` | `ESC[30m` | `ESC[39m` |
+| `fg=3` | `ESC[33m` | `ESC[39m` |
+| `fg=200` | `ESC[38;5;200m` | `ESC[39m` |
+| `fg=#ff8800` | `ESC[38;2;255;136;0m` | `ESC[39m` |
+| `bg=red` | `ESC[41m` | `ESC[49m` |
+| `bg=200` | `ESC[48;5;200m` | `ESC[49m` |
+| `bold` | `ESC[1m` | `ESC[0m` |
+| `standout` | `ESC[7m` | `ESC[27m` |
+| `underline` | `ESC[4m` | `ESC[24m` |
+| `none` | nothing | nothing |
+| `fg=default` | nothing | nothing |
+| `fg=red,bold` | `ESC[1m` `ESC[31m` | `ESC[0m` `ESC[39m` |
+| `fg=cyan,bg=magenta,underline` | `ESC[4m` `ESC[36m` `ESC[45m` | `ESC[24m` `ESC[39m` `ESC[49m` |
+
+Three things the table settles that the manual leaves open:
+
+- **The order is the shell's, not the spec's.** `fg=red,bold` is written
+  foreground first and sent bold first. Attributes go out before `fg`, and
+  `fg` before `bg`, whatever order they were asked for in.
+- **A palette color above 7 is not `fg_start_code` plus digits.** The manual
+  describes `\e[3` followed by "one to three ASCII digits", which would make
+  `fg=200` into `ESC[3200m`. It is `ESC[38;5;200m`, and a hex triplet is
+  `ESC[38;2;r;g;bm`.
+- **Color names abbreviate.** `b` and `bl` both select black, so a prefix is
+  matched against the eight names rather than the whole word being required.
+
+`none` and `fg=default` paint nothing at all, so an element carrying either
+is an element with no effect rather than one that resets what is under it.
+
+### What this shell does with it
+
+The closing sequences above are **not** reproduced. `repl` ends every run with
+a full reset by its own documented design — see `repl/highlight.go` — and a
+run that chose its own ending is the thing that file refuses. So only the
+opening sequence is derived from the spec, and what follows the run is
+`repl`'s. On a line where one run ends where the next begins the difference is
+invisible; on one where a run ends inside another's span it is not, and that
+is a shape `region_highlight` can express and this does not.
+
+The offsets are converted from characters to bytes on the way in, because
+`repl.Highlight` counts bytes.
+
 ## Work put aside until a time
 
 A shell can be told to run a command later — zsh's `sched`. Nothing about that
@@ -758,6 +862,15 @@ was on this list and is not any more — `^R` is `repl/search.go` and
   with zsh's negative arguments counting from the start instead — coherently,
   where bash's are not (`M--` gives `w3` and `M--1` gives nothing). So it needs
   its own field as well as its own mechanism.
+- **`region_highlight` offsets moving with the line.** Measured: an element
+  written as `0 2` reads back as `1 3` once a character is inserted before it,
+  so zsh adjusts the stored offsets as the text changes rather than leaving
+  them where the widget put them. Here they stay put. A highlighter that
+  rewrites the whole array every keystroke — which both of the ones on this
+  machine do — cannot tell the difference; one that writes an element once and
+  expects it to follow the text can. Needs the editor to report *what* changed
+  and not only the line that resulted, which is a wider seam than the redraw
+  has now.
 - **`M-y`** — walk back through earlier kills. This keeps one kill rather
   than a ring, so there is nothing to walk.
 - **Case and other word operators** — `M-u`, `M-l`, `M-c`.

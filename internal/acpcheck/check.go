@@ -70,6 +70,8 @@ type harness struct {
 	bin     string
 	dir     string
 	dialect string
+	// acpFlag is Config.ACPFlag, already defaulted.
+	acpFlag string
 }
 
 // args puts the dialect in front of a row's own flags, so that every way a
@@ -89,17 +91,74 @@ func (t *harness) args(extra ...string) []string {
 // dialectOr is args for a row that needs a particular dialect when the run
 // did not name one. The run's choice wins: a row that forces bash on a zsh
 // run would be grading a shell nobody asked about.
+//
+// A dialect binary is already the shell it is, and has no `-dialect` to give:
+// passing one is an unknown option, so the agent exits before answering and
+// the row reads as a protocol failure. That is the trap AGENTS.md names for
+// make sandbox — when a row will not go green, check that the route can reach
+// it at all before assuming the shell is at fault.
 func (t *harness) dialectOr(fallback string) []string {
+	if t.dialectBinary() {
+		return t.args()
+	}
 	if t.dialect == "" {
 		return []string{"-dialect", fallback}
 	}
 	return t.args()
 }
 
+// dash is how this route spells the acp flags: a dialect binary takes the long
+// form only, because real bash reads `-acp` as the `-a -c -p` bundle.
+func (t *harness) dash() string {
+	if t.dialectBinary() {
+		return "--"
+	}
+	return "-"
+}
+
+// dialectBinary is whether this run drives one of the shipped dialect binaries
+// rather than the multi-call sh. The flag spelling is the tell, because it is
+// the thing that differs: `--acp` is the long form only a dialect binary takes.
+func (t *harness) dialectBinary() bool { return t.acpFlag == "--acp" }
+
+// deny refuses every action at or under a path, in whichever spelling this
+// route has.
+//
+// `-deny` is cmd/sh's own debug flag and no dialect binary has one; the
+// shipped half of that surface is `--policy`, and a rule is a `-deny` value
+// with its decision word put back. So the same intent reaches both routes
+// without a row having to know which it is on.
+func (t *harness) deny(path string) ([]string, error) {
+	if !t.dialectBinary() {
+		return []string{"-deny", path}, nil
+	}
+	p := filepath.Join(t.dir, "deny.policy")
+	// Three things here are each load-bearing, and each was measured rather
+	// than assumed after the row failed for the wrong reason.
+	//
+	// The version line: a policy this parser cannot vouch for is refused
+	// outright rather than half-read, so a file without it fails the shell
+	// before the protocol starts and the row reads as an agent that would not
+	// answer.
+	//
+	// `default allow`: a file holding nothing but a deny refuses *everything*
+	// else too, which is a wall rather than the one refusal `-deny` is. The
+	// row would then pass for the wrong reason — the write it checks for is
+	// missing because nothing could write at all.
+	//
+	// `path` as the selector: `-deny` means every action at or under the
+	// path, and a bare path is not a rule the grammar takes.
+	rule := "version 1\ndefault allow\ndeny path " + path + "\n"
+	if err := os.WriteFile(p, []byte(rule), 0o600); err != nil {
+		return nil, err
+	}
+	return []string{"--policy", p}, nil
+}
+
 // dial opens a connection with the given flags and answer policy, already
 // through the handshake and with a session open.
 func (t *harness) dial(args []string, answer func(Ask) string) (*Client, string, error) {
-	c, err := Dial(t.bin, Options{Args: t.args(append(args, "-acp")...), Dir: t.dir, Answer: answer})
+	c, err := Dial(t.bin, Options{Args: t.args(append(args, t.acpFlag)...), Dir: t.dir, Answer: answer})
 	if err != nil {
 		return nil, "", err
 	}
@@ -166,6 +225,25 @@ type Config struct {
 	Self    string
 	Only    string
 	Dialect string
+	// ACPFlag is how this binary is told to serve the protocol, and it is a
+	// field because there are two answers rather than one. The multi-call
+	// `sh` takes `-acp`; a dialect binary takes `--acp`, because real bash
+	// accepts `-acp` as the `-a -c -p` bundle and a single-dash spelling
+	// there would shadow working behavior. Empty means `-acp`.
+	//
+	// It is what makes the second table possible at all: the same rows, run
+	// against the binary a shebang names rather than against the substrate's
+	// own driver. See #2585, and #1826 for the same split in make sandbox.
+	ACPFlag string
+}
+
+// acpFlagOr settles the spelling once, so that a zero Config still grades the
+// binary this instrument has always graded.
+func acpFlagOr(f string) string {
+	if f == "" {
+		return "-acp"
+	}
+	return f
 }
 
 // Run grades the binary and returns the table.
@@ -191,7 +269,7 @@ func Run(ctx context.Context, cfg Config) Result {
 		// Each row gets its own deadline. A hung agent is a failure of the
 		// row rather than of the run, so the rest still report.
 		rowCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-		pass, detail := ch.run(&harness{ctx: rowCtx, bin: cfg.Bin, dir: dir, dialect: cfg.Dialect})
+		pass, detail := ch.run(&harness{ctx: rowCtx, bin: cfg.Bin, dir: dir, dialect: cfg.Dialect, acpFlag: acpFlagOr(cfg.ACPFlag)})
 		cancel()
 		res.Rows = append(res.Rows, Row{Name: ch.name, Claim: ch.claim, Pass: pass, Detail: detail, Known: ch.known})
 	}
@@ -203,7 +281,7 @@ func checks() []check {
 		name:  "handshake",
 		claim: "the shipped binary answers protocol version 1 and names itself",
 		run: func(t *harness) (bool, string) {
-			c, err := Dial(t.bin, Options{Args: t.args("-acp"), Dir: t.dir})
+			c, err := Dial(t.bin, Options{Args: t.args(t.acpFlag), Dir: t.dir})
 			if err != nil {
 				return false, err.Error()
 			}
@@ -224,7 +302,7 @@ func checks() []check {
 		name:  "handshake-first",
 		claim: "a session asked for before the handshake is refused, not served",
 		run: func(t *harness) (bool, string) {
-			c, err := Dial(t.bin, Options{Args: t.args("-acp"), Dir: t.dir})
+			c, err := Dial(t.bin, Options{Args: t.args(t.acpFlag), Dir: t.dir})
 			if err != nil {
 				return false, err.Error()
 			}
@@ -448,7 +526,11 @@ func checks() []check {
 			// overrule. If the request reached the client at all, a client
 			// that always allows would have undone the policy.
 			target := filepath.Join(t.dir, "policy.txt")
-			c, s, err := t.dial([]string{"-deny", target}, always(AllowAlways))
+			deny, err := t.deny(target)
+			if err != nil {
+				return false, err.Error()
+			}
+			c, s, err := t.dial(deny, always(AllowAlways))
 			if err != nil {
 				return false, err.Error()
 			}
@@ -664,7 +746,11 @@ func clientChecks(self string) []check {
 			if err != nil {
 				return false, err.Error()
 			}
-			denied, err := driveAgent(t, self, "read", target, []string{"-deny", target})
+			deny, err := t.deny(target)
+			if err != nil {
+				return false, err.Error()
+			}
+			denied, err := driveAgent(t, self, "read", target, deny)
 			if err != nil {
 				return false, err.Error()
 			}
@@ -704,7 +790,11 @@ func clientChecks(self string) []check {
 			if err != nil {
 				return false, err.Error()
 			}
-			denied, err := driveAgent(t, self, "run", line, []string{"-deny", "/bin/echo"})
+			deny, err := t.deny("/bin/echo")
+			if err != nil {
+				return false, err.Error()
+			}
+			denied, err := driveAgent(t, self, "run", line, deny)
 			if err != nil {
 				return false, err.Error()
 			}
@@ -733,7 +823,7 @@ func driveAgent(t *harness, self, script, target string, flags []string) (AgentR
 		// -acp-allow answers the questions a person would be asked, because
 		// there is no person here. A policy refusal is not one of those
 		// questions, which is the point of the row that uses both.
-		"-acp-allow", "-acp-connect", self, "-as-agent", script)
+		t.dash()+"acp-allow", t.dash()+"acp-connect", self, "-as-agent", script)
 	cmd := exec.CommandContext(t.ctx, t.bin, args...)
 	cmd.Dir = t.dir
 	cmd.Env = append(os.Environ(),

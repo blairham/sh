@@ -127,6 +127,7 @@ import (
 	"github.com/blairham/sh/dialect/ksh"
 	"github.com/blairham/sh/dialect/zsh"
 	"github.com/blairham/sh/driver"
+	"github.com/blairham/sh/internal/acpboot"
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
 )
@@ -176,6 +177,12 @@ func run(argv []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return fail(stderr, err)
 	}
 	sh, err := pickDialect(own.dialect)
+	// The protocol server, for the front end's own `--acp` as well as this
+	// binary's `-acp`. Both spellings reach one implementation; see #2585 for
+	// why the dialect binaries needed the long form at all.
+	sh.ServeACP = acpboot.ServeAs("sh")
+	sh.ConnectACP = acpboot.ConnectAs("sh", "-")
+	sh.Version = version
 	if err != nil {
 		return fail(stderr, err)
 	}
@@ -246,7 +253,7 @@ func run(argv []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		// they are not a shell invocation either — and the seams are already
 		// installed, so a policy governs what the agent asks us to do exactly
 		// as it governs what a script does.
-		code := connectACP(sh, own.acpAllow, own.acpAuth, rest)
+		code := acpboot.ConnectAs("sh", "-")(sh, own.acpAllow, own.acpAuth, rest)
 		done()
 		return code
 	}

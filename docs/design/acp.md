@@ -11,6 +11,33 @@ An editor that spawns `sh -c` and watches the pipe sees what a script
 chose to print. An ACP front end over this seam sees every exec, every
 open, every stat and every signal, including the ones inside an `eval`.
 
+## Which binaries serve it, and how it is spelled
+
+Every binary this repository ships. That was not always so: until #2585 the
+protocol was reachable only through the substrate's own driver, `cmd/sh`, and
+the binaries a shebang, `chsh`, `login` and an editor's shell setting actually
+name could not serve it at all.
+
+The spelling differs by binary, and the difference is measured rather than
+stylistic:
+
+| binary | serve | drive an agent |
+| --- | --- | --- |
+| `sh` | `-acp` or `--acp` | `-acp-connect` or `--acp-connect` |
+| `bash`, `zsh`, `ksh`, `dash`, `ash` | `--acp` | `--acp-connect` |
+
+The dialect binaries take the **long form only**, because real bash accepts
+`-acp` as the bundle `-a -c -p` and sets `allexport` — a one-dash word there
+would shadow working behavior rather than add a flag. `sh` keeps both, as it
+keeps `-policy` beside `--policy`: its whole flag namespace is already its own.
+`docs/spec/invocation.md` holds the panel measurement for all four spellings.
+
+`internal/acp` imports `driver`, so `driver` cannot import it back. The front
+end therefore *reads* the options and calls a hook — `driver.Shell.ServeACP`
+and `ConnectACP`, nil in a library and filled in by a binary, the same shape
+as `Runner.ReplaceProcess` and `Runner.DieBySignal`. A binary that supplies no
+hook refuses the option rather than accepting the word and doing nothing.
+
 ## Two directions, one protocol
 
 ACP has two roles. An **Agent** does work and asks permission; a

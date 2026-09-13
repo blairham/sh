@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Blair Hamilton
 // SPDX-License-Identifier: Apache-2.0
 
-package main
+package acpboot
 
 import (
 	"bufio"
@@ -53,7 +53,7 @@ func TestTerminalAuthNeedsATerminalOnBothStreams(t *testing.T) {
 		{"neither", pipe, pipe, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			hook := terminalAuth([]string{"npx", "pkg"}, tc.in, tc.out)
+			hook := terminalAuth("sh", []string{"npx", "pkg"}, tc.in, tc.out)
 			if (hook != nil) != tc.wantHook {
 				t.Errorf("relaunch hook present = %v, want %v", hook != nil, tc.wantHook)
 			}
@@ -111,7 +111,7 @@ func TestTalkCarriesTheNamedAuthMethod(t *testing.T) {
 		wg.Wait()
 	})
 
-	if code := talk(ctx, client, "no-such-method", bufio.NewScanner(strings.NewReader(""))); code == 0 {
+	if code := talk("sh", "-", ctx, client, "no-such-method", bufio.NewScanner(strings.NewReader(""))); code == 0 {
 		t.Error("a method the agent never advertised was reported as a success")
 	}
 }
@@ -149,7 +149,7 @@ func TestWhoAnswersAPermissionRequest(t *testing.T) {
 			if tc.typed == "\x00none" {
 				input = ""
 			}
-			answer := answerer(tc.allow, tc.tty, bufio.NewScanner(strings.NewReader(input)))
+			answer := answerer("sh", tc.allow, tc.tty, bufio.NewScanner(strings.NewReader(input)))
 			got, err := answer(t.Context(), ask)
 			if err != nil {
 				t.Fatalf("answering: %v", err)
@@ -173,7 +173,7 @@ func TestAnAnswerIsKeyedToTheOptionKindNotItsId(t *testing.T) {
 		{OptionID: "yes-just-this-once", Name: "Yes", Kind: acp.KindAllowOnce},
 		{OptionID: "no-thanks", Name: "No", Kind: acp.KindRejectOnce},
 	}
-	answer := answerer(false, true, bufio.NewScanner(strings.NewReader("a\n")))
+	answer := answerer("sh", false, true, bufio.NewScanner(strings.NewReader("a\n")))
 	got, err := answer(t.Context(), acp.RequestPermissionRequest{Options: offered})
 	if err != nil {
 		t.Fatalf("answering: %v", err)
@@ -189,7 +189,7 @@ func TestAnAnswerIsKeyedToTheOptionKindNotItsId(t *testing.T) {
 // end: an agent that sent a malformed option would otherwise have it picked by
 // the answer that means "I did not answer".
 func TestAnEmptyAnswerCannotSelectAnEmptyOptionId(t *testing.T) {
-	answer := answerer(false, true, bufio.NewScanner(strings.NewReader("\n")))
+	answer := answerer("sh", false, true, bufio.NewScanner(strings.NewReader("\n")))
 	got, err := answer(t.Context(), acp.RequestPermissionRequest{
 		Options: []acp.PermissionOption{
 			{OptionID: "", Name: "Allow", Kind: acp.KindAllowOnce},
@@ -213,7 +213,7 @@ func TestAnEmptyAnswerCannotSelectAnEmptyOptionId(t *testing.T) {
 // reason to read it as anything, and one of them reads an unknown id as no
 // answer at all.
 func TestAnAnswerCannotInventAnOption(t *testing.T) {
-	answer := answerer(false, true, bufio.NewScanner(strings.NewReader("A\n")))
+	answer := answerer("sh", false, true, bufio.NewScanner(strings.NewReader("A\n")))
 	got, err := answer(t.Context(), acp.RequestPermissionRequest{
 		Options: []acp.PermissionOption{
 			{OptionID: "allow-once", Name: "Allow", Kind: acp.KindAllowOnce},
@@ -251,7 +251,7 @@ func TestAFixedAnswerUsesTheAgentsOwnOptionIds(t *testing.T) {
 		{"no flag", false, "reject"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			answer := answerer(tc.allow, false, bufio.NewScanner(strings.NewReader("")))
+			answer := answerer("sh", tc.allow, false, bufio.NewScanner(strings.NewReader("")))
 			got, err := answer(t.Context(), acp.RequestPermissionRequest{Options: offered})
 			if err != nil {
 				t.Fatalf("answering: %v", err)
@@ -269,7 +269,7 @@ func TestAFixedAnswerUsesTheAgentsOwnOptionIds(t *testing.T) {
 // line on standard error says which happened.
 func TestAFixedAnswerCancelsWhatTheAgentDidNotOffer(t *testing.T) {
 	only := []acp.PermissionOption{{OptionID: "reject", Name: "Reject", Kind: acp.KindRejectOnce}}
-	answer := answerer(true, false, bufio.NewScanner(strings.NewReader("")))
+	answer := answerer("sh", true, false, bufio.NewScanner(strings.NewReader("")))
 	got, err := answer(t.Context(), acp.RequestPermissionRequest{Options: only})
 	if err != nil {
 		t.Fatalf("answering: %v", err)
@@ -310,7 +310,7 @@ func TestAFormFieldIsReadAsItsDeclaredType(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			fill := form(true, bufio.NewScanner(strings.NewReader(tc.typed+"\n")))
+			fill := form("sh", true, bufio.NewScanner(strings.NewReader(tc.typed+"\n")))
 			if fill == nil {
 				t.Fatal("no form hook at a terminal")
 			}
@@ -341,7 +341,7 @@ func TestAFormFieldIsReadAsItsDeclaredType(t *testing.T) {
 // order they are asked in is Go's to choose, and a test that fed one answer
 // per type would depend on that order.
 func TestEveryFieldOfAFormComesBack(t *testing.T) {
-	fill := form(true, bufio.NewScanner(strings.NewReader("one\ntwo\nthree\n")))
+	fill := form("sh", true, bufio.NewScanner(strings.NewReader("one\ntwo\nthree\n")))
 	got, err := fill(t.Context(), acp.CreateElicitationRequest{
 		Mode: acp.ElicitForm,
 		RequestedSchema: &acp.ElicitationSchema{
@@ -374,7 +374,7 @@ func TestEveryFieldOfAFormComesBack(t *testing.T) {
 // An enum takes one of its own values and nothing else, and a value that is
 // not one of them is asked for again rather than accepted.
 func TestAnEnumTakesOnlyItsOwnValues(t *testing.T) {
-	fill := form(true, bufio.NewScanner(strings.NewReader("purple\nblue\n")))
+	fill := form("sh", true, bufio.NewScanner(strings.NewReader("purple\nblue\n")))
 	got, err := fill(t.Context(), acp.CreateElicitationRequest{
 		Mode: acp.ElicitForm,
 		RequestedSchema: &acp.ElicitationSchema{
@@ -395,7 +395,7 @@ func TestAnEnumTakesOnlyItsOwnValues(t *testing.T) {
 // A required field left empty declines the whole form: a form returned without
 // what it required is not an answer to it.
 func TestAFormMissingARequiredFieldIsDeclined(t *testing.T) {
-	fill := form(true, bufio.NewScanner(strings.NewReader("\n")))
+	fill := form("sh", true, bufio.NewScanner(strings.NewReader("\n")))
 	got, err := fill(t.Context(), acp.CreateElicitationRequest{
 		Mode: acp.ElicitForm,
 		RequestedSchema: &acp.ElicitationSchema{
@@ -415,7 +415,7 @@ func TestAFormMissingARequiredFieldIsDeclined(t *testing.T) {
 // A value that will not read as its type is asked for again rather than
 // refused: a mistyped number is a slip and not a decision.
 func TestAMistypedValueIsAskedForAgain(t *testing.T) {
-	fill := form(true, bufio.NewScanner(strings.NewReader("twelve\n12\n")))
+	fill := form("sh", true, bufio.NewScanner(strings.NewReader("twelve\n12\n")))
 	got, err := fill(t.Context(), acp.CreateElicitationRequest{
 		Mode: acp.ElicitForm,
 		RequestedSchema: &acp.ElicitationSchema{
@@ -434,7 +434,7 @@ func TestAMistypedValueIsAskedForAgain(t *testing.T) {
 // No terminal, no form hook — and it is the nil hook that withholds the
 // capability, so an agent is never told to ask a question that goes nowhere.
 func TestNoTerminalMeansNoForm(t *testing.T) {
-	if form(false, bufio.NewScanner(strings.NewReader(""))) != nil {
+	if form("sh", false, bufio.NewScanner(strings.NewReader(""))) != nil {
 		t.Error("a form hook was built with no terminal to draw it on")
 	}
 }
@@ -460,7 +460,7 @@ func TestTheCoverageNoticeSaysWhichHalfOfThePolicyApplied(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := commandCoverage(tc.asked, tc.announced)
+			got := commandCoverage("sh", tc.asked, tc.announced)
 			if tc.want == "" {
 				if got != "" {
 					t.Errorf("said %q, want silence", got)
@@ -510,7 +510,7 @@ func TestASessionRefusedForAuthenticationSaysExactlyWhy(t *testing.T) {
 
 	t.Run("with no method named, the list is a menu", func(t *testing.T) {
 		var out strings.Builder
-		refusedASession(&out, "gemini-cli 0.58.0", "", gemini, refusal)
+		refusedASession("sh", "-", &out, "gemini-cli 0.58.0", "", gemini, refusal)
 		got := out.String()
 		for _, want := range []string{
 			"gemini-cli 0.58.0",
@@ -527,7 +527,7 @@ func TestASessionRefusedForAuthenticationSaysExactlyWhy(t *testing.T) {
 
 	t.Run("with a method accepted, it is the credential and not the choice", func(t *testing.T) {
 		var out strings.Builder
-		refusedASession(&out, "gemini-cli 0.58.0", "gemini-api-key", gemini, refusal)
+		refusedASession("sh", "-", &out, "gemini-cli 0.58.0", "gemini-api-key", gemini, refusal)
 		got := out.String()
 		// The false thing it used to say. A person who named a method and had
 		// it accepted did authenticate, and being told to do it first is what
@@ -558,7 +558,7 @@ func TestASessionRefusedForAuthenticationSaysExactlyWhy(t *testing.T) {
 	t.Run("one method, already tried, leaves nothing to suggest", func(t *testing.T) {
 		var out strings.Builder
 		only := []acp.AuthMethod{{ID: "terminal-login", Type: acp.AuthTerminal, Name: "Log in"}}
-		refusedASession(&out, "an-agent 1.0", "terminal-login", only, refusal)
+		refusedASession("sh", "-", &out, "an-agent 1.0", "terminal-login", only, refusal)
 		if got := out.String(); strings.Contains(got, "choose one with") {
 			t.Errorf("it offers a choice where there is none:\n%s", got)
 		}
@@ -566,93 +566,16 @@ func TestASessionRefusedForAuthenticationSaysExactlyWhy(t *testing.T) {
 
 	t.Run("an agent that advertises none says so", func(t *testing.T) {
 		var out strings.Builder
-		refusedASession(&out, "an-agent 1.0", "", nil, refusal)
+		refusedASession("sh", "-", &out, "an-agent 1.0", "", nil, refusal)
 		if got := out.String(); !strings.Contains(got, "advertised no authentication methods") {
 			t.Errorf("an empty list is reported as %q", got)
 		}
 	})
 }
 
-// The claim the whole client side rests on, and the reason an agent's command
-// line is interpreted rather than exec'd: the gate sees the commands *inside*
-// the line.
-//
-// It has to be tested at full depth rather than at the seam, because every
-// piece of it can be right while the composition is wrong — a Shell copied
-// without its Gate would run the line perfectly and see nothing. The probe is
-// `/bin/echo` rather than `echo`, which is exactly the distinction that makes
-// this a test: `echo` is a builtin, so a line containing one execs nothing and
-// a gate that was never wired would look identical to one that was.
-func TestTheInterpreterRunsUnderTheSessionsGate(t *testing.T) {
-	var trace bytes.Buffer
-	sh, closer, err := installSeams(driver.Shell{}, ownFlags{traceEvents: true}, &trace)
-	if err != nil {
-		t.Fatalf("installing the seams: %v", err)
-	}
-	if closer != nil {
-		defer func() { _ = closer.Close() }()
-	}
-
-	var out bytes.Buffer
-	code := interpreter(sh)(t.Context(), acp.TerminalCommand{
-		Line: "/bin/echo inside-the-line", Env: os.Environ(),
-	}, &out)
-
-	if code != 0 {
-		t.Errorf("status = %d, want the line to have run", code)
-	}
-	if got := out.String(); !strings.Contains(got, "inside-the-line") {
-		t.Errorf("output = %q, want what the command wrote", got)
-	}
-	if got := trace.String(); !strings.Contains(got, "/bin/echo") {
-		t.Errorf("the gate never saw the exec inside the line; trace = %q", got)
-	}
-}
-
-// And a policy reaches it. This is the half that does not negotiate: the
-// person's answer to the agent's permission request has already been given by
-// the time a line is interpreted, and the policy still refuses.
-//
-// It is also the sharpest argument for interpreting rather than exec'ing. On
-// the exec route a gate would be asked about one filename; here it is asked
-// about every command the line runs, so a rule naming `/bin/echo` reaches an
-// `/bin/echo` the agent buried in a pipeline.
-func TestAPolicyRefusesACommandInsideAnAgentsLine(t *testing.T) {
-	var trace bytes.Buffer
-	sh, closer, err := installSeams(driver.Shell{},
-		ownFlags{deny: []string{"exec:/bin/echo"}}, &trace)
-	if err != nil {
-		t.Fatalf("installing the seams: %v", err)
-	}
-	if closer != nil {
-		defer func() { _ = closer.Close() }()
-	}
-
-	var out bytes.Buffer
-	interpreter(sh)(t.Context(), acp.TerminalCommand{
-		Line: "true | /bin/echo refused-inside-a-pipeline", Env: os.Environ(),
-	}, &out)
-
-	if got := out.String(); strings.Contains(got, "refused-inside-a-pipeline") {
-		t.Errorf("the denied command ran anyway: %q", got)
-	}
-	if got := out.String(); !strings.Contains(got, "refused") {
-		t.Errorf("output = %q, want the refusal said out loud", got)
-	}
-}
-
-// An `exec` inside the agent's line must not replace the process serving the
-// connection, which is also the process that *is* the boundary: every gate
-// consultation and every audit record for the session comes from it.
-//
-// An awkward test, because a regression does not produce an assertion
-// failure. The binary is replaced partway through and the package exits with
-// no test output at all — no `--- PASS`, no `--- FAIL`, and nothing from the
-// logging below, which under `-v` always prints. So reaching the end of this
-// function is itself part of what is being asserted.
 func TestAnExecInTheAgentsLineDoesNotReplaceTheShell(t *testing.T) {
 	var out bytes.Buffer
-	code := interpreter(driver.Shell{Name: "sh"})(
+	code := Interpreter(driver.Shell{Name: "sh"})(
 		t.Context(), acp.TerminalCommand{Line: "exec echo replaced"}, &out)
 	if code != 0 {
 		t.Errorf("status = %d, want the exec'd command to have run", code)
@@ -684,7 +607,7 @@ func TestAnAgentsLineIsRunAsAShell(t *testing.T) {
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			var out bytes.Buffer
-			status := interpreter(driver.Shell{Name: "sh"})(
+			status := Interpreter(driver.Shell{Name: "sh"})(
 				t.Context(), acp.TerminalCommand{Line: c.line}, &out)
 			if got := out.String(); got != c.want {
 				t.Errorf("%s\n  wrote %q\n  want  %q", c.line, got, c.want)
@@ -701,7 +624,7 @@ func TestAnAgentsLineIsRunAsAShell(t *testing.T) {
 func TestAnAgentsLineRunsWhereItAsked(t *testing.T) {
 	dir := t.TempDir()
 	var out bytes.Buffer
-	if status := interpreter(driver.Shell{Name: "sh"})(
+	if status := Interpreter(driver.Shell{Name: "sh"})(
 		t.Context(), acp.TerminalCommand{Line: "pwd -P", Dir: dir}, &out); status != 0 {
 		t.Fatalf("pwd -P: status = %d, output = %q", status, out.String())
 	}
@@ -722,7 +645,7 @@ func TestAnAgentsLineRunsWhereItAsked(t *testing.T) {
 func TestAnAgentsLineTakesTheEnvironmentItWasGiven(t *testing.T) {
 	var out bytes.Buffer
 	env := append(os.Environ(), "FROM_THE_AGENT=yes")
-	if status := interpreter(driver.Shell{Name: "sh"})(
+	if status := Interpreter(driver.Shell{Name: "sh"})(
 		t.Context(), acp.TerminalCommand{Line: `echo "[$FROM_THE_AGENT]"`, Env: env}, &out); status != 0 {
 		t.Fatalf("status = %d, output = %q", status, out.String())
 	}

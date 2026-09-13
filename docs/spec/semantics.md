@@ -11959,6 +11959,41 @@ True only in bash. PATH is searched first everywhere, and wins over an
 identically named file in the current directory in all four — this is
 only about what happens when PATH does not have it.
 
+**And it is about `.`, not about sourcing.** One shell's second name for
+the builtin answers differently, which is a disagreement inside a single
+shell and so cannot be an axis at all: a semantics field is one answer
+per runner. Measured 2026-09-12 on zsh 5.9.2 (`-f`), in a directory
+holding `plain.sh` with a *different* file of the same name on `$path`:
+
+| written | zsh 5.9.2 | bash 5.3.15 | ksh93u+ | dash | BusyBox ash |
+| --- | --- | --- | --- | --- | --- |
+| `source plain.sh`, file on `$path` too | the one in the current directory | the one on PATH | `cannot open`, 1 | `source: not found`, 127 | `not found` |
+| `. plain.sh`, file on PATH too | the one on PATH | the one on PATH | `cannot open`, 1 | `not found` | `not found` |
+| `source plain.sh`, file only here | `sourced`, 0 | `sourced`, 0 | `cannot open`, 1 | `source: not found`, 127 | `not found` |
+| `. plain.sh`, file only here | `no such file or directory`, 127 | `sourced`, 0 | `cannot open`, 1 | `not found` | `not found` |
+
+So zsh's `source` searches the current directory *before* `$path` and its
+`.` never searches it at all. The second and fourth rows are what make the
+measurement discriminating: a shell that simply searched the current
+directory for both names agrees with the first and third and breaks the
+other two. bash's two names agree with each other, and ksh93 has the
+second name while answering `.` for both — the diagnostic says `.`
+whichever was written.
+
+The lookup is therefore a property of the *call*, taken by it rather than
+left standing: measured on the same shell, a `.` inside a file that
+`source` found in the current directory is the ordinary builtin again and
+reports the file missing, while a `source` inside it looks there.
+
+Two neighbors measured in the same session and deliberately not modeled
+here. `setopt PATH_DIRS` changes neither name's answer to a bare operand;
+what it does is make an operand *with* a slash in it searched on `$path`
+as well, for `.` and `source` alike — the option is recorded in this
+dialect and not implemented, so that is a gap of its own rather than part
+of this row. And a current-directory hit is reported as the **bare
+operand** in diagnostics, `$0` and the source stack, where a `$path` hit
+is the joined path and `source ./x` is `./x`.
+
 **`DotPassesArguments`** — bash yes · dash no · ksh93 yes · zsh yes
 
 Gives a sourced file its own positional parameters from the words after

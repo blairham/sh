@@ -69341,6 +69341,57 @@
         "TimedOut": false
       }
     },
+    "dot/source-is-not-always-the-same-builtin": {
+      "ash": {
+        "Stdout": "from-path~source=0~from-path~dot=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "from-path~source=0~from-path~dot=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "from-path~source=0~from-path~dot=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "from-path~source=0~from-path~dot=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "source=127~from-path~dot=0",
+        "Stderr": "\u003cshell\u003e: 1: source: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "from-path~source=0~from-path~dot=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "from-cwd~source=0~from-path~dot=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "dot/source-is-not-in-dash": {
       "ash": {
         "Stdout": "via-source~st=0",

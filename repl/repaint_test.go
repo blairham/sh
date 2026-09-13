@@ -161,3 +161,143 @@ func TestReopeningAQuoteRecolorsWhatWasAlreadyDrawn(t *testing.T) {
 		{`echo "one" two`, 14},
 	})
 }
+
+// A redraw that cannot account for the screen puts the whole line back, and
+// the prompt with it. These are the ways the screen moves without this editor
+// having written anything.
+//
+// The whole-line draw is recognized by the prompt appearing again: it is the
+// one thing an incremental redraw never writes, which is most of why it is
+// cheaper.
+func TestAScreenThisCannotAccountForIsDrawnWhole(t *testing.T) {
+	const prompt = "PROMPT> "
+	t.Run("the terminal was resized", func(t *testing.T) {
+		var out strings.Builder
+		cols := 40
+		e := &editor{out: &out, width: func() int { return cols }}
+		p := drawPrompt(prompt)
+		e.line, e.pos = []rune("echo hi"), 7
+		e.redraw(p)
+
+		// A key typed at the same width does not mention the prompt.
+		out.Reset()
+		e.line, e.pos = []rune("echo hit"), 8
+		e.redraw(p)
+		if strings.Contains(out.String(), prompt) {
+			t.Errorf("drew the prompt again for a keystroke: %q", out.String())
+		}
+
+		// One typed after a resize does: the terminal reflowed everything
+		// that was on it, and where the line now sits is not something the
+		// last draw can be reasoned from.
+		out.Reset()
+		cols = 20
+		e.line, e.pos = []rune("echo hits"), 9
+		e.redraw(p)
+		if !strings.Contains(out.String(), prompt) {
+			t.Errorf("did not draw the whole line after a resize: %q", out.String())
+		}
+	})
+
+	t.Run("the prompt changed", func(t *testing.T) {
+		// Same width, different text — a prompt that recolored itself. The
+		// width matching is not enough: the old text is still on the row.
+		var out strings.Builder
+		e := &editor{out: &out, width: func() int { return 40 }}
+		e.line, e.pos = []rune("echo hi"), 7
+		e.redraw(drawPrompt("\x1b[32mPROMPT> \x1b[0m"))
+		out.Reset()
+		e.redraw(drawPrompt("\x1b[31mPROMPT> \x1b[0m"))
+		if !strings.Contains(out.String(), "PROMPT> ") {
+			t.Errorf("did not draw the new prompt: %q", out.String())
+		}
+	})
+
+	t.Run("the prompt is wider than the terminal", func(t *testing.T) {
+		// The rest of this package counts the line's rows from the row the
+		// prompt's last row begins on and takes that to be the row the cursor
+		// is on, which a prompt that wraps on its own makes untrue.
+		var out strings.Builder
+		e := &editor{out: &out, width: func() int { return 10 }}
+		wide := drawPrompt("a-very-long-prompt> ")
+		e.write(wide.lead + wide.text)
+		e.promptDrawn(wide)
+		out.Reset()
+		e.line, e.pos = []rune("x"), 1
+		e.redraw(wide)
+		if !strings.Contains(out.String(), wide.text) {
+			t.Errorf("did not draw the whole line under a wrapping prompt: %q", out.String())
+		}
+	})
+}
+
+// The cost of a keystroke does not depend on the prompt.
+//
+// This is the property the change is for, and it is the one zsh has: a prompt
+// is drawn when a line begins, and a key typed into the line has no reason to
+// touch it. A theme of the kind people run is several hundred bytes of escape
+// sequences, so a redraw that re-emitted it would make one keystroke cost more
+// than the whole line does.
+//
+// Driven through readLine rather than by calling redraw, because the prompt is
+// written there and the first key of a line is the one that would pay for it.
+//
+// A bound rather than a number. What a keystroke costs depends on how many
+// runs the highlighter returned and how long their escape sequences are, and
+// pinning the total would make this fail for a change to either that is
+// nobody's regression.
+func TestAKeystrokeCostsTheSameUnderAThemedPrompt(t *testing.T) {
+	const themed = "\x1b[38;5;31m\x1b[48;5;238m \x1b[38;5;250m~/src/sh \x1b[0m" +
+		"\x1b[38;5;238m\x1b[48;5;236m \x1b[38;5;114mmain \x1b[0m\x1b[38;5;236m\x1b[0m " +
+		"\x1b[38;5;76m❯\x1b[0m "
+	const keys = "echo hi"
+	cost := func(prompt string) (drawn int, sessions string) {
+		var out strings.Builder
+		e := &editor{
+			in: typing(keys + "\r"), out: &out,
+			highlighter: tokenColors{},
+			width:       func() int { return 80 },
+		}
+		p := drawPrompt(prompt)
+		if _, err := e.readLine(p); err != nil {
+			t.Fatalf("readLine: %v", err)
+		}
+		return out.Len() - len(p.lead) - len(p.text), out.String()
+	}
+	plain, _ := cost("$ ")
+	fancy, session := cost(themed)
+	if plain != fancy {
+		t.Errorf("typing %q cost %d bytes under a plain prompt and %d under a themed one; "+
+			"the prompt is being redrawn", keys, plain, fancy)
+	}
+	if n := strings.Count(session, "❯"); n != 1 {
+		t.Errorf("the themed prompt was drawn %d times for one line", n)
+	}
+	// And the cost per keystroke is of the order of the change, not of the
+	// line: the bound is generous, and a whole-line redraw of this line under
+	// this prompt is several hundred bytes a key.
+	if perKey := plain / len(keys); perKey > 40 {
+		t.Errorf("a keystroke cost %d bytes; the line is being redrawn whole", perKey)
+	}
+}
+
+// A redraw that changes nothing says nothing.
+//
+// Widgets ask for one whenever they have run, whether or not they touched the
+// line — see runShellWidget, where the redraw is unconditional because an
+// opaque action cannot be asked what it did. With a highlighter in front of
+// `self-insert` that is every keystroke, so the do-nothing case is on the hot
+// path rather than beside it.
+func TestARedrawThatChangesNothingWritesNothing(t *testing.T) {
+	var out strings.Builder
+	e := &editor{out: &out, highlighter: tokenColors{}, width: func() int { return 80 }}
+	p := drawPrompt("$ ")
+	e.line, e.pos = []rune("echo hi"), 7
+	e.redraw(p)
+	out.Reset()
+	e.redraw(p)
+	e.redraw(p)
+	if out.Len() != 0 {
+		t.Errorf("redrawing an unchanged line wrote %q", out.String())
+	}
+}

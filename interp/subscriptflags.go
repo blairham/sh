@@ -746,11 +746,13 @@ func (r *Runner) flaggedTargetIndex(e *syntax.ParamExpr, endsTheLine bool) (int,
 		return idx, true
 	}
 	if _, isAssoc := r.assocFor(a.Name); isAssoc {
-		// The same refusal the read side gives, and for the same reason: the
-		// letters mean something else over a table, and answering with the
-		// ordered array's rule would write to a plausible wrong key. The
-		// shell refuses it too, as `attempt to set slice`.
-		refuse(string(search), " for an associative array")
+		// A search over a table names several elements and no place to write,
+		// and answering with the ordered array's rule would write to a
+		// plausible wrong key. The shell's own sentence for it, through the
+		// one place that words it — the roads that can also reach the
+		// *key* reading decide before they get here, so this is the safety
+		// net rather than the ordinary path (#2288).
+		r.refuseTableSliceWrite(a.Name, endsTheLine)
 		return 0, false
 	}
 	// `k` and `K` are `r` and `R` on everything but a table, which the branch
@@ -1019,19 +1021,41 @@ func (r *Runner) assignAssocElement(a *syntax.Assign) {
 // silent no-op at status 0 while `${m[(e)aa]}` beside it read the key (#2288).
 func (r *Runner) assignFlaggedTableElement(a *syntax.Assign) {
 	e := &syntax.ParamExpr{Name: a.Name, Index: a.IndexFlags.Arg, IndexFlags: a.IndexFlags}
+	if !r.flaggedTableWriteIsAKey(e, true) {
+		return
+	}
+	r.assignAssocElement(a)
+}
+
+// flaggedTableWriteIsAKey is the decision every road that writes through a
+// table with a flag group makes, and it is one function because there is more
+// than one road: the plain `m[(e)k]=Z`, and the same subscript reached through
+// a reference — `n="m[(e)k]"; ${(P)n::=Z}`. Both were wrong in both directions
+// until #2288, and fixing the first alone left the second saying the letter
+// was not implemented where the shell names the construct.
+//
+// True means the operand behind the group is an ordinary key and the caller
+// should store through it with whatever key function its road uses. False
+// means it has been refused and nothing is to be written.
+//
+// endsTheLine is the assignment's road, where the refusal is fatal, against
+// `unset`'s, where it is a status the builtin carries on past.
+func (r *Runner) flaggedTableWriteIsAKey(e *syntax.ParamExpr, endsTheLine bool) bool {
 	search, ok := r.subscriptSearch(e)
 	if !ok {
 		// A letter this does not carry, refused by name already — the read
 		// side's answer for the same letter, and the documented partial
 		// rather than a reading of the shell's.
-		r.fatalQuiet()
-		return
+		if endsTheLine {
+			r.fatalQuiet()
+		}
+		return false
 	}
-	if search != 0 {
-		r.refuseTableSliceWrite(a.Name)
-		return
+	if search == 0 {
+		return true
 	}
-	r.assignAssocElement(a)
+	r.refuseTableSliceWrite(e.Name, endsTheLine)
+	return false
 }
 
 // refuseTableSliceWrite is what a search naming a place to write in a table
@@ -1043,7 +1067,12 @@ func (r *Runner) assignFlaggedTableElement(a *syntax.Assign) {
 // both and for one reason: a subscript over a table names a key, so a
 // subscript naming several elements names no place at all. One field for the
 // two, rather than a second with the same words in it.
-func (r *Runner) refuseTableSliceWrite(name string) {
-	r.fatal("%s\n", Wording(r.diag().SliceOfAnAssociativeArray,
-		"%[1]s: attempt to set slice of associative array", name))
+func (r *Runner) refuseTableSliceWrite(name string, endsTheLine bool) {
+	msg := Wording(r.diag().SliceOfAnAssociativeArray,
+		"%[1]s: attempt to set slice of associative array", name)
+	if endsTheLine {
+		r.fatal("%s\n", msg)
+		return
+	}
+	r.diagf("%s\n", msg)
 }

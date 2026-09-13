@@ -286,6 +286,22 @@ func (r *Runner) assignIndirect(written string, t *indirectTarget, v string) boo
 // the two spellings out of step.
 func (r *Runner) assignThroughReference(e *syntax.ParamExpr, v string) bool {
 	if e.IndexFlags != nil {
+		if r.assocDeclared(e.Name) {
+			// A table takes the same two answers here it takes on the direct
+			// road, through the same function: a search naming a place to
+			// write is refused as the construct it is, and a group selecting
+			// nothing leaves an ordinary key behind it. Measured 2026-09-12
+			// on zsh 5.9.2, `typeset -A m; m=(aa 1); n="m[(r)1]";
+			// ${(P)n::=Z}` is `m: attempt to set slice of associative array`
+			// and `n="m[(e)aa]"` beside it stores `Z` under `aa` — the same
+			// pair the direct spelling gives, which is why this road may not
+			// have a rule of its own (#2288).
+			if !r.flaggedTableWriteIsAKey(e, true) {
+				return false
+			}
+			r.setAssocElem(e.Name, r.assocKey(e.Subscript()), v)
+			return true
+		}
 		// A search names the element, on this side exactly as `a[(r)y]=Q`
 		// does — and through flaggedTargetIndex, so the refusal is the fatal
 		// one an assignment earns rather than the per-operand one `unset`

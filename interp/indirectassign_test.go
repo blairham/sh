@@ -263,6 +263,22 @@ func TestAWriteThroughAReferenceReachesEverySubscript(t *testing.T) {
 			`typeset -A m; m[k]=old; w='m[k]'; : ${(P)w::=Z}; printf "[%s]" "${m[k]}"`,
 			"[Z]",
 		},
+		{
+			// A group that selects nothing over a table leaves an ordinary
+			// key behind it here as it does on the direct road. This road
+			// answered `assignment to invalid subscript range` and wrote
+			// nothing, and the direct one dropped the store in silence —
+			// two roads, one bug, and fixing either alone leaves the other
+			// (#2288).
+			"a group selecting nothing is a key on a table",
+			`typeset -A m; m[k]=old; w='m[(e)k]'; : ${(P)w::=Z}; printf "[%s]%d" "${m[k]}" "${#m[@]}"`,
+			"[Z]1",
+		},
+		{
+			"and one naming a key that is not there makes it",
+			`typeset -A m; m[k]=old; w='m[(e)zz]'; : ${(P)w::=Z}; printf "[%s]%d" "${m[zz]}" "${#m[@]}"`,
+			"[Z]2",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, st := indirectSpanRun(t, tc.src)
@@ -270,6 +286,31 @@ func TestAWriteThroughAReferenceReachesEverySubscript(t *testing.T) {
 				t.Errorf("%s = %q (status %d), want %q at 0", tc.src, out, st, tc.want)
 			}
 		})
+	}
+}
+
+// A search naming a place to write in a table is refused through a reference
+// exactly as it is written out, which is one function's job and not two: this
+// road reached the flag machinery by a different door and said the *letter*
+// was not implemented where the shell names the construct.
+//
+// Measured 2026-09-12 on zsh 5.9.2: `typeset -A m; m=(aa 1); n="m[(r)1]";
+// ${(P)n::=Z}` is `m: attempt to set slice of associative array`, the same
+// sentence and the same status the direct spelling earns (#2288).
+func TestASearchWritingATableThroughAReferenceIsRefusedAsASlice(t *testing.T) {
+	for _, letters := range []string{"(r)old", "(R)old", "(k)k", "(K)k", "(i)k", "(I)k"} {
+		src := `typeset -A m; m[k]=old; trap 'printf "[%s]" "${m[k]}"' EXIT; ` +
+			`w='m[` + letters + `]'; : ${(P)w::=Z}`
+		out, st := indirectSpanRun(t, src)
+		if !strings.Contains(out, "m: attempt to set slice of associative array") {
+			t.Errorf("%s = %q, want the construct refused rather than the letter", src, out)
+		}
+		if strings.Contains(out, "not implemented") {
+			t.Errorf("%s = %q, want no not-implemented wording: the letters are carried", src, out)
+		}
+		if !strings.Contains(out, "[old]") || st == 0 {
+			t.Errorf("%s = %q (status %d), want the table untouched and the refusal visible", src, out, st)
+		}
 	}
 }
 

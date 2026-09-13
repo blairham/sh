@@ -87,6 +87,29 @@ func (r *Runner) setHideInScope(name string, f declareFlags) {
 		r.hideInScope = map[string]bool{}
 	}
 	r.hideInScope[name] = true
+	// And where the shadow kept a produced parameter's freeze, the letter is
+	// what lifts it — this declaration's shadow is an ordinary parameter now
+	// and takes an ordinary value. Measured: `f(){ local -h ARGC=5; print
+	// $ARGC }` is `5` in zsh 5.9.2, against `read-only variable: ARGC` for
+	// the same line without the letter.
+	//
+	// Only where a shadow was taken, which is the control on the other side:
+	// `typeset -h ARGC; ARGC=5` at the top level is `read-only variable:
+	// ARGC` in the same shell, so the letter alone thaws nothing. The scope
+	// has already recorded what to put back — see shadow, which writes
+	// savedReadonly before this runs.
+	//
+	// The freeze is the half of the letter this reaches. The other half —
+	// that the shadow is an ordinary parameter rather than a second view of
+	// the producer — is not wired for a produced parameter here, so the
+	// value read back inside that function is still the producer's `0` and
+	// not the `5` the declaration wrote. Unchanged by this line, which only
+	// turns a refusal into the answer the name already gave; it is the same
+	// gap `local parameters` has, recorded in dialect/zsh's
+	// hideModuleParameter (#2552).
+	if r.localInTheInnermostScope(name) {
+		delete(r.readonly, name)
+	}
 }
 
 // hidesItsTie reports whether either half of a tie carries the attribute.
@@ -127,4 +150,76 @@ func (r *Runner) MarkHideInScope(name string) {
 		r.hideInScope = map[string]bool{}
 	}
 	r.hideInScope[name] = true
+	// And where the shadow kept a produced parameter's freeze, the letter is
+	// what lifts it — this declaration's shadow is an ordinary parameter now
+	// and takes an ordinary value. Measured: `f(){ local -h ARGC=5; print
+	// $ARGC }` is `5` in zsh 5.9.2, against `read-only variable: ARGC` for
+	// the same line without the letter.
+	//
+	// Only where a shadow was taken, which is the control on the other side:
+	// `typeset -h ARGC; ARGC=5` at the top level is `read-only variable:
+	// ARGC` in the same shell, so the letter alone thaws nothing. The scope
+	// has already recorded what to put back — see shadow, which writes
+	// savedReadonly before this runs.
+	//
+	// The freeze is the half of the letter this reaches. The other half —
+	// that the shadow is an ordinary parameter rather than a second view of
+	// the producer — is not wired for a produced parameter here, so the
+	// value read back inside that function is still the producer's `0` and
+	// not the `5` the declaration wrote. Unchanged by this line, which only
+	// turns a refusal into the answer the name already gave; it is the same
+	// gap `local parameters` has, recorded in dialect/zsh's
+	// hideModuleParameter (#2552).
+	if r.localInTheInnermostScope(name) {
+		delete(r.readonly, name)
+	}
+}
+
+// freezeSurvivesAShadow reports whether a declaration standing in front of a
+// frozen name leaves it frozen.
+//
+// Ordinarily it does not: a local is a fresh binding, the freeze is displaced
+// with the value, and `readonly z=1; f(){ local z=5; print $z }` is `5` in
+// the shell that allows the shadow at all. That is the answer for a name a
+// *script* froze, and it is the wrong answer for one the shell produces.
+//
+// Measured 2026-09-12, zsh 5.9.2, `env -i PATH=/usr/bin:/bin` with a scratch
+// `HOME`, `ZDOTDIR` and `HISTFILE`, over a script file, with `ARGC` — a
+// produced parameter this engine has marked readonly since the name was
+// added:
+//
+//	f(){ local ARGC=5; print $ARGC }     f: read-only variable: ARGC, fatal
+//	f(){ typeset ARGC=5; … }             the same, and `declare` too
+//	f(){ local ARGC=""; … }              the same: an empty value is a value
+//	f(){ local ARGC; print $ARGC }       0, and the outer value is intact
+//	f(){ local ARGC; ARGC=5 }            0, then read-only variable: ARGC
+//	f(){ local -i ARGC; print $ARGC }    0 — a letter is not a value either
+//	readonly z=1; f(){ local z=5; … }    5 — the control, and it goes the
+//	                                     other way
+//
+// Row five is the one that decides the shape. A refusal aimed at the
+// *declaration* would pass rows one to four and fail it: there the
+// declaration is taken, the shadow happens, and the assignment on the next
+// line is what the shell refuses. So the freeze is not displaced — the local
+// cell is still the special parameter — and every refusal above is the
+// ordinary one an assignment to a frozen name already makes.
+//
+// Restricted to a *produced* parameter, which is what the control row asks
+// for: an ordinary readonly is thawed by the shadow in the same shell in the
+// same run. Not an axis, because no other column in the panel has such a name
+// to ask about — a produced parameter is marked readonly only by the dialect
+// modeling the shell above, and bash's `SECONDS` and `EPOCHSECONDS` carry no
+// mark by measurement (see dialect/bash/epoch.go).
+//
+// The hide-in-scope letter is the exemption, and it is measured rather than
+// reasoned from: `f(){ local -h ARGC=5; print $ARGC }` is `5` there, and so
+// is a local of a module parameter, which carries the letter from
+// registration — `f(){ local parameters=1; print $parameters }` is `1`. That
+// is the whole of what `-h` means, applied to the freeze instead of to a tie:
+// the shadow is an ordinary parameter that merely happens to be spelled like
+// the shell's own. A letter written on *this* declaration is applied after
+// the shadow, so the freeze is lifted there rather than here — see
+// setHideInScope.
+func (r *Runner) freezeSurvivesAShadow(name string) bool {
+	return r.readonly[name] && r.DynamicParameter(name) && !r.hideInScope[name]
 }

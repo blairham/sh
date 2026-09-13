@@ -41,7 +41,7 @@ func TestReswordsIsZshsReservedWordTable(t *testing.T) {
 // where the difference is recorded rather than matched.
 func TestReswordsReadsWithoutTheModuleBeingLoaded(t *testing.T) {
 	out, st := runZsh(t, t.TempDir(), `print -r -- "n=${#reswords} t=${(t)reswords}"`)
-	want := "n=31 t=array-readonly-hideval-special\n"
+	want := "n=31 t=array-readonly-hide-hideval-special\n"
 	if out != want || st != 0 {
 		t.Errorf("$reswords unloaded = %q (status %d), want %q", out, st, want)
 	}

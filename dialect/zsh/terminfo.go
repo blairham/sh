@@ -201,5 +201,5 @@ func registerCapabilityParameter(r *interp.Runner, name string, view func(*inter
 	// would turn the view into a snapshot that never says it stopped
 	// tracking.
 	r.MarkReadonly(name)
-	r.MarkHidden(name)
+	hideModuleParameter(r, name)
 }

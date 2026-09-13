@@ -171,3 +171,29 @@ func TestTheDocumentationDiscountIsPrintedWhereItWasAsked(t *testing.T) {
 		}
 	}
 }
+
+// TestOurOwnDiagnosticsAreRankedWithoutQuotingTheFile.
+//
+// The runtime half of a disagreement was a table of exit statuses and nothing
+// else, on the reasoning that a diagnostic of ours quotes the file back. That
+// is true of a whole line and false of the catalogue it is built from, and
+// the difference is the one the static read's causes have always been printed
+// under.
+func TestOurOwnDiagnosticsAreRankedWithoutQuotingTheFile(t *testing.T) {
+	rep := refusedReport()
+	rep.Excuses = []suite.Excuse{
+		{Phrase: "not implemented yet", Lines: 11},
+		{Phrase: "readonly variable", Lines: 5},
+	}
+	out := render(rep)
+	for _, want := range []string{
+		"what we said and the reference did not, by lines",
+		"11  not implemented yet",
+		"5  readonly variable",
+		"these phrases are ours",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the report does not say %q\n%s", want, out)
+		}
+	}
+}

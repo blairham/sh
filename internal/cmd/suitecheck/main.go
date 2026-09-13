@@ -296,6 +296,8 @@ func printReport(w io.Writer, rep suite.Report) {
 	}
 	o.println()
 
+	printExcuses(o, rep)
+
 	if len(rep.StatusPairs) > 0 {
 		o.println("  exit status of the files that ran and disagreed  (ours / oracle)")
 		o.println("  (numbers, because our runtime diagnostics would quote the file back;")
@@ -362,6 +364,28 @@ func printRefused(o out, rep suite.Report) {
 		rep.ReferenceRefuses)
 	o.println("          succeeds and this is not a gap in this parser: an option set at run")
 	o.println("          time decides what a later line means, and a static read has no run time")
+	o.println()
+}
+
+// printExcuses is the runtime half of a disagreement, ranked — and it is the
+// half this report used to have nothing to say about.
+//
+// The line below the status table has been true for as long as it has been
+// there: a whole diagnostic of ours names the command, the word or the option
+// that provoked it, and those come from a file nobody here may read. Our own
+// *catalogue* carries none of that, so counting how many unmatched lines
+// carry each phrase says what this shell refused without printing anything of
+// the file — the same standard the static read's causes already meet.
+func printExcuses(o out, rep suite.Report) {
+	if len(rep.Excuses) == 0 {
+		return
+	}
+	o.println("  what we said and the reference did not, by lines")
+	o.println("  (our own catalogue only — a whole diagnostic names the word that provoked")
+	o.println("   it and that word is the file's; these phrases are ours)")
+	for _, e := range rep.Excuses {
+		o.printf("    %4d  %s\n", e.Lines, e.Phrase)
+	}
 	o.println()
 }
 

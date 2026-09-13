@@ -83,6 +83,11 @@ type Result struct {
 	// count is driven by our own excess, which is a different kind of work
 	// from a missing answer and used to be invisible.
 	OurLines, RefLines int
+	// Excuses counts our own catalogue phrases in the lines we printed that
+	// the reference never asked for, parallel to [Catalogue]. It is what
+	// ranks the runtime half of a disagreement, which up to now was a table
+	// of exit statuses and nothing else.
+	Excuses []int
 	// Prose is how many of the differing lines are the reference printing
 	// its own documentation — see [Doc]. Those are not work: matching them
 	// means copying the text. It is a lower bound and it is never more than
@@ -167,6 +172,9 @@ type Report struct {
 	// whose count is driven by Excess is one where we are printing too much
 	// rather than answering too little, and those are different work.
 	Missing, Excess int64
+	// Excuses is our own diagnostics over the whole column, ranked: what this
+	// shell said and the reference did not.
+	Excuses []Excuse
 	// Prose is the sum of [Result.Prose]: how many of this column's
 	// differing lines are the reference quoting its own documentation, and
 	// so are not available to be written here at all. Zero for a column with
@@ -311,6 +319,7 @@ func Sweep(ctx context.Context, s Suite, dir, ours, reference string, opts Optio
 
 	causes := map[string]int{}
 	shared := map[string]int{}
+	excused := make([]int, len(Catalogue))
 	statuses := map[[2]int]int{}
 	var meanSum float64
 	for i, res := range results {
@@ -357,6 +366,9 @@ func Sweep(ctx context.Context, s Suite, dir, ours, reference string, opts Optio
 				rep.Refused.Longest += int64(res.Longest)
 			}
 			rep.Prose += int64(res.Prose)
+			for i, n := range res.Excuses {
+				excused[i] += n
+			}
 			rep.Missing += int64(res.RefLines - res.Common)
 			rep.Excess += int64(res.OurLines - res.Common)
 			meanSum += ratio(res.Common, res.Longest)
@@ -373,6 +385,7 @@ func Sweep(ctx context.Context, s Suite, dir, ours, reference string, opts Optio
 		rep.MeanFile = meanSum / float64(rep.Scored)
 	}
 	rep.Causes = rank(causes, shared)
+	rep.Excuses = RankExcuses(excused)
 	rep.StatusPairs = rankStatuses(statuses)
 	return rep, nil
 }
@@ -496,6 +509,7 @@ func grade(ctx context.Context, s Suite, tests, name, ours, reference string, di
 	res.OurLines, res.RefLines = len(ourLines), len(refLines)
 	res.Common, res.Longest, res.LineCapped = agreement(ourLines, refLines)
 	res.Prose = min(doc.Attribute(ourLines, refLines), res.Longest-res.Common)
+	res.Excuses = excuses(ourLines, refLines)
 	return res
 }
 

@@ -20731,6 +20731,14 @@ grades it and nothing drift-checks it either, for the same reason.
 | `startup/a-startup-files-bare-return` | `BEFORE~MAIN<1>` **2>** `<shell>: 0: can't access tty; job control turned off` | `BEFORE~MAIN<1>` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `BEFORE~MAIN<1>` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `BEFORE~MAIN<1>` **2>** `<shell>: no job control in this shell` | `BEFORE~MAIN<1>` | `BEFORE~MAIN<1>` | `BEFORE~MAIN<1>` **2>** `<shell>: can't access tty; job control turned off` |
 | `startup/a-startup-file-carries-its-status-out` | `BEFORE~MAIN<5>` **2>** `<shell>: 0: can't access tty; job control turned off` | `BEFORE~MAIN<5>` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `BEFORE~MAIN<5>` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `BEFORE~MAIN<5>` **2>** `<shell>: no job control in this shell` | `BEFORE~MAIN<5>` | `BEFORE~MAIN<5>` | `BEFORE~MAIN<5>` **2>** `<shell>: can't access tty; job control turned off` |
 | `prompt/the-startup-file-sees-the-default-prompt` | `RC[set][nonempty]~main` **2>** `<shell>: 0: can't access tty; job control turned off` | `RC[set][nonempty]~main` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `RC[set][nonempty]~main` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `RC[set][nonempty]~main` **2>** `<shell>: no job control in this shell` | `RC[][]~main` | `RC[set][nonempty]~main` | `RC[set][nonempty]~main` **2>** `<shell>: can't access tty; job control turned off` |
+| `startup/a-login-shell-reads-a-profile` | `.profile~main` | `.bash_profile~main` | `.profile~main` | `.bash_profile~main` | `.profile~main` | `.zshenv~.zprofile~.zlogin~main` | `.profile~main` |
+| `startup/the-profile-falls-back-to-the-next-name` | `.profile~main` | `.bash_login~main` | `.profile~main` | `.bash_login~main` | `.profile~main` | `.zprofile~main` | `.profile~main` |
+| `startup/the-profile-falls-back-to-the-last-name` | `.profile~main` | `.profile~main` | `.profile~main` | `.profile~main` | `.profile~main` | `main` | `.profile~main` |
+| `startup/an-option-skips-the-profile` | **2>** `<shell>: 0: Illegal option --` *(status 2)* | `main` | `main` | `main` | **2>** `<shell>: noprofile: bad option(s)~Usage: <shell> [ options ] [arg ...]` *(status 2)* | **2>** `<shell>: no such option: noprofile` *(status 1)* | **2>** `<shell>: bad option '--noprofile'` *(status 2)* |
+| `startup/an-option-skips-every-startup-file` | `.profile~main` | `.bash_profile~main` | `.profile~main` | `.bash_profile~main` | `.profile~main` | `main` | `.profile~main` |
+| `startup/an-option-skips-the-interactive-file` | **2>** `<shell>: 0: Illegal option --` *(status 2)* | `main` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `main` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `main` **2>** `<shell>: no job control in this shell` | `main` | **2>** `<shell>: no such option: norc` *(status 1)* | **2>** `<shell>: bad option '--norc'` *(status 2)* |
+| `startup/the-interactive-file-is-read-at-a-prompt-by-name` | `main` **2>** `<shell>: 0: can't access tty; job control turned off` | `.bashrc~main` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `main` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `.bashrc~main` **2>** `<shell>: no job control in this shell` | `main` | `.zshrc~main` | `main` **2>** `<shell>: can't access tty; job control turned off` |
+| `startup/an-option-names-the-interactive-file` | **2>** `<shell>: 0: Illegal option --` *(status 2)* | `named-rc-file~main` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `main` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `named-rc-file~main` **2>** `<shell>: no job control in this shell` | **2>** `<shell>: rcfile: bad option(s)~Usage: <shell> [ options ] [arg ...]` *(status 2)* | **2>** `<shell>: no such option: rcfile` *(status 1)* | **2>** `<shell>: bad option '--rcfile'` *(status 2)* |
 
 - `set/posix-mode-makes-a-failed-redirection-fatal` — the same binary, both answers: bash 5.3 and bash 3.2 print `after` without this line and stop at 1 with it, which is the bash-as-`sh` column reached at run time. The other three have no such name and refuse the `set` instead, each in its own words
   ```sh
@@ -21133,6 +21141,38 @@ grades it and nothing drift-checks it either, for the same reason.
 - `prompt/the-startup-file-sees-the-default-prompt` — the daily-driver shape: what a person's run-commands file finds when it runs. Six of the seven columns have the default in hand before the file, which is what makes the guard mean what it was written to mean. ksh93 is the one that waits — PS1 is unset while `$ENV` runs and reads `$ ` by the time a prompt is drawn, while its PS2 and PS4 are already set — so the disagreement is about the moment and not the value, and it is a row of the prompt table rather than an axis
   ```sh
   echo "RC[${PS1+set}][${PS1:+nonempty}]"
+  ```
+- `startup/a-login-shell-reads-a-profile` — the whole of what a login shell reads, in one row: which name, how many, and in what order. Measured 2026-09-13 — bash reads `.bash_profile` alone, dash and ksh93 `.profile`, and zsh three of them in order (`.zshenv`, `.zprofile`, `.zlogin`), which is why the file read on every invocation and the one read *after* the interactive file are separate axes from the profile itself. Semantics.LoginStartupFiles, UnconditionalStartupFile, LateLoginStartupFile and StartupFileOptions.Login
+  ```sh
+  echo main
+  ```
+- `startup/the-profile-falls-back-to-the-next-name` — the profile is a chain and exactly one link runs: with the most preferred name absent, the shell that has three of them takes the second. Pair it with startup/a-login-shell-reads-a-profile, where all three are present and only the first is read — one row alone cannot tell a preference order from a shell that reads whatever it finds
+  ```sh
+  echo main
+  ```
+- `startup/the-profile-falls-back-to-the-last-name` — the end of the chain, and the row that makes the standard's own name the shared fallback: with only `.profile` there, the shell whose own two names are missing reads it and the shell whose profile is `.zprofile` reads nothing at all. Three rows for one axis because a preference order is not observable in fewer
+  ```sh
+  echo main
+  ```
+- `startup/an-option-skips-the-profile` — a broken startup file has to be escapable, which is the reason the skip options are modeled at all. The shell that has this option reads no profile and still runs the command string; the ones that do not have it refuse the word, each in its own way, which is the fact worth recording beside it. Semantics.StartupFileOptions.SuppressLogin
+  ```sh
+  echo main
+  ```
+- `startup/an-option-skips-every-startup-file` — the widest escape hatch, and the letter is the point: one shell reads `-f` as "skip every startup file" and every other column reads it as "turn globbing off" and reads its profile anyway. So the row is a disagreement about a letter rather than about a file, which is why the skip options are a table of spellings per dialect and not one axis. Semantics.StartupFileOptions.SuppressAll
+  ```sh
+  echo main
+  ```
+- `startup/an-option-skips-the-interactive-file` — the interactive half of the escape hatch. `-i` rather than a terminal, because reading the file is gated on being interactive and `-i` says so on every route — pair it with startup/the-interactive-file-is-read-at-a-prompt-by-name, which is the same invocation without the option. Semantics.StartupFileOptions.SuppressInteractive
+  ```sh
+  echo main
+  ```
+- `startup/the-interactive-file-is-read-at-a-prompt-by-name` — the control for the row above, and the file a person actually edits: an interactive shell reads the run-commands file of its own name out of the home directory. It is the counterpart of env/the-interactive-file-is-read-at-a-prompt, which asks the same question of the standard's `$ENV` — the two are alternatives rather than a sequence, so a shell appearing in both would be a finding
+  ```sh
+  echo main
+  ```
+- `startup/an-option-names-the-interactive-file` — the other half of being able to repair a shell from: not only skipping the run-commands file but putting another in its place. No fixture file is needed — the named file is the snippet, which is what `ArgScript` is for. Semantics.StartupFileOptions.NameInteractive
+  ```sh
+  echo named-rc-file
   ```
 
 ## harness invocation

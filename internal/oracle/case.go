@@ -196,6 +196,34 @@ type Case struct {
 	// Args then say what the shell is to run instead.
 	Env []string
 
+	// Files are files written into the scratch directory before the shell
+	// starts. That directory is the case's `$HOME` and its working
+	// directory, so this is how a case puts a **startup file** where a shell
+	// will look for one.
+	//
+	// It exists because the corpus could not ask about the startup files at
+	// all, and could not say so either. `$ENV` and `BASH_ENV` are reachable
+	// through Env, since those name a *path* and ArgScript supplies one; a
+	// profile is not, because the shell decides the name and the only file
+	// the harness ever wrote was `case.sh`. So seven startup axes were
+	// unpinned for one reason — no row is ever a login shell with a home
+	// directory in it — and the sweep could not tell that from an axis
+	// nobody had got to (#2059).
+	//
+	// A marker file per name rather than one file per case, which is the
+	// shape driver/rcfiles_test.go already found necessary: what a startup
+	// rule gets wrong is nearly always *which* file, and a case holding only
+	// the file it expects cannot tell "read the right one" from "read
+	// everything".
+	//
+	// Both sides of a comparison get the same files, written before either
+	// shell starts. The name is a plain relative path under the scratch
+	// directory; `case.sh` is refused, since the script route owns it, and
+	// so is anything absolute or climbing out with `..` — a corpus that can
+	// write outside its own scratch directory is a corpus that can edit the
+	// machine that is measuring it.
+	Files []File
+
 	// GradedOnRefusal grades a case on the fact that the shell said no,
 	// rather than on the words it said no in.
 	//
@@ -295,6 +323,38 @@ type Case struct {
 	// which ran is not reported unfinished, and that check is right for
 	// every case but this shape.
 	Unfinished bool
+}
+
+// File is one fixture file a case puts in the scratch directory. See
+// Case.Files.
+//
+// A slice of pairs rather than a map, so the order a case writes them in is
+// the order they land — a map's iteration is deliberately random, and a
+// harness whose fixture depends on iteration order is a harness that answers
+// differently on different runs.
+type File struct {
+	// Name is a relative path under the scratch directory. Directories in it
+	// are created.
+	Name string
+	// Contents is written verbatim. A startup file wants its own newline;
+	// nothing is added.
+	Contents string
+}
+
+// startupMarkers is a home directory holding one file per startup name, each
+// echoing its own name.
+//
+// A marker per name rather than one file per case: what a startup rule gets
+// wrong is nearly always *which* file and in what order, and a row that wrote
+// only the file it expected could not tell "read the right one" from "read
+// everything". driver/rcfiles_test.go reached the same shape for the same
+// reason, and this is the corpus's version of it.
+func startupMarkers(names ...string) []File {
+	out := make([]File, 0, len(names))
+	for _, n := range names {
+		out = append(out, File{Name: n, Contents: "echo " + n + "\n"})
+	}
+	return out
 }
 
 // Corpus is the checked-in set. Every table in docs/spec should be derivable
@@ -20687,6 +20747,84 @@ echo "st=$?"`,
 		Args:    []string{"-i", "-c", "echo main"},
 		Snippet: `echo "RC[${PS1+set}][${PS1:+nonempty}]"`,
 		Why:     "the daily-driver shape: what a person's run-commands file finds when it runs. Six of the seven columns have the default in hand before the file, which is what makes the guard mean what it was written to mean. ksh93 is the one that waits — PS1 is unset while `$ENV` runs and reads `$ ` by the time a prompt is drawn, while its PS2 and PS4 are already set — so the disagreement is about the moment and not the value, and it is a row of the prompt table rather than an axis",
+	},
+
+	// --- the startup files a login shell reads (#2059) ----------------
+	//
+	// Seven startup axes came out of the first axis sweep with nothing
+	// objecting, and they shared one cause: no corpus row was ever a login
+	// shell, and none had a home directory with anything in it. `$ENV` and
+	// `BASH_ENV` were reachable because they name a *path* and `ArgScript`
+	// supplies one; a profile is not, because the shell decides the name.
+	// Case.Files is what closed that, and these are the rows it exists for.
+	//
+	// **`-l` and not `--login`**, measured 2026-09-13 under `env -i` with a
+	// scratch `$HOME`: dash answers `--login` with `Illegal option --` and
+	// takes `-l`, and every other column takes both. The short spelling is
+	// the one all of them share, so it is the one that asks every column the
+	// same question.
+	//
+	// A **marker per name** rather than the one file a row expects, which is
+	// the shape driver/rcfiles_test.go already found necessary: what a
+	// startup rule gets wrong is nearly always which file, and a row holding
+	// only the file it expects cannot tell "read the right one" from "read
+	// everything". The run-commands files are among the markers for the same
+	// reason — a login shell with a script to run must not read them, and a
+	// row that left them out could not say so.
+	{
+		ID: "startup/a-login-shell-reads-a-profile", Category: "invocation",
+		Files:   startupMarkers(".bash_profile", ".bash_login", ".profile", ".zshenv", ".zprofile", ".zlogin", ".bashrc", ".zshrc"),
+		Args:    []string{"-l", "-c", ArgSnippet},
+		Snippet: `echo main`,
+		Why:     "the whole of what a login shell reads, in one row: which name, how many, and in what order. Measured 2026-09-13 — bash reads `.bash_profile` alone, dash and ksh93 `.profile`, and zsh three of them in order (`.zshenv`, `.zprofile`, `.zlogin`), which is why the file read on every invocation and the one read *after* the interactive file are separate axes from the profile itself. Semantics.LoginStartupFiles, UnconditionalStartupFile, LateLoginStartupFile and StartupFileOptions.Login",
+	},
+	{
+		ID: "startup/the-profile-falls-back-to-the-next-name", Category: "invocation",
+		Files:   startupMarkers(".bash_login", ".profile", ".zprofile"),
+		Args:    []string{"-l", "-c", ArgSnippet},
+		Snippet: `echo main`,
+		Why:     "the profile is a chain and exactly one link runs: with the most preferred name absent, the shell that has three of them takes the second. Pair it with startup/a-login-shell-reads-a-profile, where all three are present and only the first is read — one row alone cannot tell a preference order from a shell that reads whatever it finds",
+	},
+	{
+		ID: "startup/the-profile-falls-back-to-the-last-name", Category: "invocation",
+		Files:   startupMarkers(".profile"),
+		Args:    []string{"-l", "-c", ArgSnippet},
+		Snippet: `echo main`,
+		Why:     "the end of the chain, and the row that makes the standard's own name the shared fallback: with only `.profile` there, the shell whose own two names are missing reads it and the shell whose profile is `.zprofile` reads nothing at all. Three rows for one axis because a preference order is not observable in fewer",
+	},
+	{
+		ID: "startup/an-option-skips-the-profile", Category: "invocation",
+		Files:   startupMarkers(".bash_profile", ".bash_login", ".profile", ".zshenv", ".zprofile", ".zlogin"),
+		Args:    []string{"--noprofile", "-l", "-c", ArgSnippet},
+		Snippet: `echo main`,
+		Why:     "a broken startup file has to be escapable, which is the reason the skip options are modeled at all. The shell that has this option reads no profile and still runs the command string; the ones that do not have it refuse the word, each in its own way, which is the fact worth recording beside it. Semantics.StartupFileOptions.SuppressLogin",
+	},
+	{
+		ID: "startup/an-option-skips-every-startup-file", Category: "invocation",
+		Files:   startupMarkers(".bash_profile", ".profile", ".zshenv", ".zprofile", ".zlogin", ".bashrc", ".zshrc"),
+		Args:    []string{"-f", "-l", "-c", ArgSnippet},
+		Snippet: `echo main`,
+		Why:     "the widest escape hatch, and the letter is the point: one shell reads `-f` as \"skip every startup file\" and every other column reads it as \"turn globbing off\" and reads its profile anyway. So the row is a disagreement about a letter rather than about a file, which is why the skip options are a table of spellings per dialect and not one axis. Semantics.StartupFileOptions.SuppressAll",
+	},
+	{
+		ID: "startup/an-option-skips-the-interactive-file", Category: "invocation",
+		Files:   startupMarkers(".bashrc", ".zshrc", ".profile"),
+		Args:    []string{"--norc", "-i", "-c", ArgSnippet},
+		Snippet: `echo main`,
+		Why:     "the interactive half of the escape hatch. `-i` rather than a terminal, because reading the file is gated on being interactive and `-i` says so on every route — pair it with startup/the-interactive-file-is-read-at-a-prompt-by-name, which is the same invocation without the option. Semantics.StartupFileOptions.SuppressInteractive",
+	},
+	{
+		ID: "startup/the-interactive-file-is-read-at-a-prompt-by-name", Category: "invocation",
+		Files:   startupMarkers(".bashrc", ".zshrc", ".profile"),
+		Args:    []string{"-i", "-c", ArgSnippet},
+		Snippet: `echo main`,
+		Why:     "the control for the row above, and the file a person actually edits: an interactive shell reads the run-commands file of its own name out of the home directory. It is the counterpart of env/the-interactive-file-is-read-at-a-prompt, which asks the same question of the standard's `$ENV` — the two are alternatives rather than a sequence, so a shell appearing in both would be a finding",
+	},
+	{
+		ID: "startup/an-option-names-the-interactive-file", Category: "invocation",
+		Args:    []string{"--rcfile", ArgScript, "-i", "-c", "echo main"},
+		Snippet: `echo named-rc-file`,
+		Why:     "the other half of being able to repair a shell from: not only skipping the run-commands file but putting another in its place. No fixture file is needed — the named file is the snippet, which is what `ArgScript` is for. Semantics.StartupFileOptions.NameInteractive",
 	},
 
 	// --- the shapes an automated caller writes (#499) ------------------

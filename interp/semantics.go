@@ -2236,6 +2236,13 @@ type Semantics struct {
 	// Read rather than `ask`ed, as DefaultOptionLetters is: reporting an
 	// option is not the place to refuse a script over a disagreement, and a
 	// dialect that answers nothing gets the majority's no.
+	//
+	// unpinned: never reached from the corpus. The mode is chosen when a line
+	// editor starts and no row has one — `-i -c` runs a command string without
+	// ever reading a line — so the axis is not consulted at all, measured
+	// 2026-09-13 in bash and zsh. interp/editingmodedefault_test.go pins both
+	// answers and the third state (TestNoEditingModeIsSelectedUntilOneIs,
+	// TestTheModeABindingBuiltinReadsFollowsIt) (#2058).
 	InteractiveSelectsEmacs Answer
 
 	// SetFTurnsOffGlobbing makes `set -f` the short spelling of `set -o
@@ -2384,6 +2391,15 @@ type Semantics struct {
 	// refusing a whole `$-` expansion over an unanswered field would break
 	// `case $- in *e*)` in every script running under a preset that has not
 	// chosen.
+	//
+	// unpinned: reached, and no row can tell the two answers apart. `$-` is
+	// readable from a case, and `-i -c` is spellable, but what an interactive
+	// shell *starts* with is only the starting point — the letters a row
+	// observes are the live option state by the time it looks. Measured
+	// 2026-09-13 in bash and zsh. interp/specialvars_test.go pins the mechanism
+	// with made-up letters (TestDollarDashTakesTheInteractiveLettersInsteadOfTheDefaultOnes,
+	// TestTheInteractiveLettersAreStillOnlyTheStartingPoint) and each dialect's
+	// real value is asserted in its own package (#2058).
 	InteractiveOptionLetters string
 
 	// CommandStringShowsCInDollarDash puts `c` in `$-` when the program came
@@ -2777,6 +2793,20 @@ type Semantics struct {
 	// zsh; dash says nothing at all.
 	//
 	// Only ever at a prompt: no shell announces one to a script.
+	//
+	// unpinned: never reached from the corpus, and it cannot be. Every case
+	// runs under `-c` or from a script with no controlling terminal, `TERM=dumb`
+	// and a scratch `$HOME`, so no row is ever the interactive shell that has
+	// somebody to tell. Measured 2026-09-13 in bash and in zsh: moving the axis
+	// to the unanswered constant — which refuses wherever it is consulted —
+	// changes no row at all, which is the sweep's own way of saying the corpus
+	// never asks. It is pinned instead by driver/interactivejobs_test.go, which
+	// drives a real pseudo-terminal and asserts all three answers
+	// (TestAnInteractiveScriptAnnouncesItsJobs,
+	// TestAnInteractiveScriptMayAnnounceOnlyTheEnd,
+	// TestAnInteractiveScriptMayAnnounceNothing), and below the front end by
+	// interp/jobnotice_test.go (TestABackgroundedJobIsAnnounced). What each
+	// dialect answers is pinned in its own vector table (#2058).
 	AnnouncesBackgroundJob Answer
 
 	// AnnouncesBackgroundJobWithoutTheMonitor keeps that announcement when
@@ -2802,6 +2832,13 @@ type Semantics struct {
 	// FinishedJobNotices simply stays quiet. dash's late report of a finished
 	// job with an empty command is its own oddity, measured and not
 	// reproduced (#1738).
+	//
+	// unpinned: never reached from the corpus. The monitor is off in every row
+	// and there is nobody to tell either way, so no case can separate the two
+	// answers — measured 2026-09-13 in bash and zsh alike.
+	// interp/monitoroff_test.go builds exactly the shape the corpus cannot, a
+	// shell that announces with the monitor deliberately off, and moves the axis
+	// both ways (TestTheStartNoticeUnderAMonitorThatIsOff) (#2058).
 	AnnouncesBackgroundJobWithoutTheMonitor Answer
 
 	// NextJobNumberRefillsAHole puts the next job in the lowest slot nobody
@@ -6011,11 +6048,26 @@ type Semantics struct {
 	// than as 80. zsh says yes — with no terminal to ask it puts forty items
 	// on one line — and bash says no. It does not arise for a menu that is
 	// always vertical, which is why ksh93 leaves it unanswered.
+	//
+	// unpinned: reached, and the corpus cannot discriminate. It decides how a
+	// `select` menu is laid out when `COLUMNS` is unset, and the layout is only
+	// visible where the menu is drawn — which needs a terminal on standard
+	// error, since neither shell draws the menu without one. Measured
+	// 2026-09-13 in bash and zsh. interp/selectclause_test.go pins both answers
+	// (TestSelectAssumesUnboundedWidthIsAnAxis) and each dialect's value is in
+	// its own vector table (#2058).
 	SelectAssumesUnboundedWidth Answer
 	// SelectEofEndsPromptLine writes a newline to standard error when the
 	// input runs out, closing the line the prompt left open. zsh alone does;
 	// bash closes the line on standard *output* instead, which is a different
 	// question and the field below.
+	//
+	// unpinned: reached, and the corpus cannot discriminate — the newline it is
+	// about is written to the terminal the prompt was drawn on, and a case has
+	// none. Measured 2026-09-13 in bash and zsh. interp/selectclause_test.go and
+	// interp/terminalinput_test.go pin it against a real character device
+	// (TestAPromptIsStillPrintedForARealTerminal), and each dialect's value is
+	// in its own vector table (#2058).
 	SelectEofEndsPromptLine Answer
 	// SelectEofPrintsNewline writes a newline to standard *output* when the
 	// input runs out — the one thing this loop prints that does not go to
@@ -6106,6 +6158,15 @@ type Semantics struct {
 	// The cost of answering yes where the shell answers no is a command
 	// disappearing: the next line typed is read as part of the construct
 	// already refused, so `echo three` above never runs (#1893).
+	//
+	// unpinned: reached, and the corpus cannot discriminate. It is about what
+	// the *prompt* does after a parse failure, and no row draws a second
+	// prompt to be asked again at — measured 2026-09-13 in bash and zsh
+	// alike. driver/promptrefuse_test.go carries it to the front end
+	// (TestTheFrontEndCarriesWhetherAPromptAsksAgain),
+	// the tests beside repl/promptcomments_test.go drive the retry through a
+	// session, and dialect/zsh/promptrefuse_test.go pins one shell's answer
+	// (TestAPromptKeepsAskingAfterARefusedToken) (#2058).
 	PromptAsksAgainAfterARefusedToken bool
 
 	// PromptCommentsNeedTheOption names the option a `#` typed at this
@@ -6145,6 +6206,21 @@ type Semantics struct {
 	// the option and gets the honest answer still tokenizes the line with
 	// the shell's own splitter, and the two then disagree about where the
 	// words are (#2537).
+	//
+	// unpinned: reached, and the corpus cannot discriminate, for two reasons
+	// that land on the two dialects separately. In the shell that names an
+	// option, a `#` is a comment in every row already, because the question
+	// is what an *interactive line* does with one and no row is typed at a
+	// prompt. In the shell that names none the axis holds the empty string,
+	// and the only other value the sweep has for a string axis is a word it
+	// invented — a row could object only by passing that exact word, which
+	// would be a case written against the instrument rather than against a
+	// shell. Measured 2026-09-13 in bash and zsh.
+	// repl/promptcomments_test.go drives a session and pins both answers
+	// (TestAHashAtThePromptFollowsTheNamedOption,
+	// TestTheCommentOptionIsReReadForEveryLine), and
+	// driver/promptrefuse_test.go pins that the name reaches the prompt
+	// (TestTheFrontEndCarriesWhichOptionAHashWaitsOn) (#2058).
 	PromptCommentsNeedTheOption string
 
 	// CompoundPipelineStatusRecord is what a compound command does to the
@@ -7390,6 +7466,12 @@ type Semantics struct {
 	// An axis rather than a bash-shaped default with a zsh exception,
 	// because the two answers are a conflict and not a subset: there is no
 	// ordering of the shells in which one derives the other's silence.
+	//
+	// unpinned: never reached from the corpus. `autocd` is an interactive
+	// option, no row turns it on, and with it off there is no substitution to
+	// announce — measured 2026-09-13 in bash and zsh. interp/autocd_test.go
+	// turns the option on and asserts both answers
+	// (TestABareDirectoryNameMayBeReadAsACd) (#2058).
 	AutoCdAnnouncesTheSubstitution Answer
 
 	// FcEmptyHistoryIsAnError has `fc` report the event it cannot find —
@@ -7729,6 +7811,16 @@ type Semantics struct {
 	// makes bash read its profile with a script to run, so the option
 	// overrides this rather than setting the same bit. See
 	// StartupFileOptions.Login.
+	//
+	// unpinned: reached, and no row can be a login shell. The harness invokes
+	// every case under the shell's own name and puts no profile in the scratch
+	// `$HOME`, so login-ness inferred from argv[0] never happens and there is no
+	// file to read if it did. Measured 2026-09-13 in bash and zsh.
+	// driver/loginprofile_test.go and driver/rcfiles_test.go invoke `-testsh`
+	// with a home full of marker files and assert which are read
+	// (TestALoginShellReadsTheProfileWithAScriptToRun,
+	// TestTheLoginProfileIsAChainAndOneLinkRuns); each dialect's value is
+	// asserted in its own package (#2058, #2059).
 	LoginProfileWhenNonInteractive bool
 
 	// NonInteractiveStartupVariable names a variable whose value is expanded
@@ -7760,6 +7852,16 @@ type Semantics struct {
 	// with the standard's own posix option, and nothing when invoked as `sh` —
 	// the two spellings of the same mode. So the absence in the `sh` column is
 	// the mode again rather than a second fact about a second name.
+	//
+	// unpinned zsh: reached, and the flip is unobservable by construction. The empty
+	// string means this shell has no such name, and the only other value the
+	// sweep has for a string axis is a word it invented — `axis-sweep-probe`. A
+	// row could only object by using that exact word, which would be a corpus
+	// case written against the instrument's internal probe rather than against a
+	// shell. That is the flip in the other direction being the one worth having,
+	// and where a shell does hold a name, it is a row: see the
+	// `startup/…` family, which pins every non-empty name in this group
+	// (#2059).
 	NonInteractiveStartupVariable string
 
 	// StartupDirectoryVariable names a variable whose value replaces the home
@@ -7777,6 +7879,25 @@ type Semantics struct {
 	// A variable name rather than a path, for the reason
 	// NonInteractiveStartupVariable is one: what the shell calls the thing is
 	// the dialect's, and the value is the person's.
+	//
+	// unpinned bash: reached, and the flip is unobservable by construction.
+	// The empty string means this shell has no such name, and the only other value the
+	// sweep has for a string axis is a word it invented — `axis-sweep-probe`. A
+	// row could only object by using that exact word, which would be a corpus
+	// case written against the instrument's internal probe rather than against a
+	// shell. That is the flip in the other direction being the one worth having,
+	// and where a shell does hold a name, it is a row: see the
+	// `startup/…` family, which pins every non-empty name in this group
+	// (#2059).
+	//
+	// unpinned zsh: reached, and the shell that *has* one is the harder half — a
+	// row would have to put this variable in the environment, and its value is a
+	// *directory*. Case.Files can write into one, but Case.Env interpolates only
+	// the script's path, so a row cannot name the scratch directory it wrote
+	// into. Worth one measurement before anybody writes a harness change for it:
+	// a case runs with its scratch directory as the working directory, so a
+	// **relative** value may resolve there and make this a row rather than a
+	// standing verdict (#2059).
 	StartupDirectoryVariable string
 
 	// UnconditionalStartupFile names a file read on *every* invocation —
@@ -7789,6 +7910,16 @@ type Semantics struct {
 	//
 	// First of the files, before the profile: measured, `zsh -l -i` reads
 	// `.zshenv`, `.zprofile`, `.zshrc` and `.zlogin`, in that order.
+	//
+	// unpinned bash: reached, and the flip is unobservable by construction.
+	// The empty string means this shell has no such name, and the only other value the
+	// sweep has for a string axis is a word it invented — `axis-sweep-probe`. A
+	// row could only object by using that exact word, which would be a corpus
+	// case written against the instrument's internal probe rather than against a
+	// shell. That is the flip in the other direction being the one worth having,
+	// and where a shell does hold a name, it is a row: see the
+	// `startup/…` family, which pins every non-empty name in this group
+	// (#2059).
 	UnconditionalStartupFile string
 
 	// LoginStartupFiles names the profile a login shell reads, most preferred
@@ -7825,6 +7956,16 @@ type Semantics struct {
 	// then `.zshrc`, then `.zlogin`, so a person's `.zlogin` sees what their
 	// `.zshrc` did. It is read for a non-interactive login shell too, in the
 	// dialects that read a profile there at all.
+	//
+	// unpinned bash: reached, and the flip is unobservable by construction.
+	// The empty string means this shell has no such name, and the only other value the
+	// sweep has for a string axis is a word it invented — `axis-sweep-probe`. A
+	// row could only object by using that exact word, which would be a corpus
+	// case written against the instrument's internal probe rather than against a
+	// shell. That is the flip in the other direction being the one worth having,
+	// and where a shell does hold a name, it is a row: see the
+	// `startup/…` family, which pins every non-empty name in this group
+	// (#2059).
 	LateLoginStartupFile string
 
 	// InteractiveStartupFile names the file read when the shell is
@@ -7860,6 +8001,14 @@ type Semantics struct {
 	// interactive file is `$ENV` reads it in both cases — measured, `-sh -i`
 	// reads `.profile` and then `$ENV` in dash, ksh93 and bash-as-`sh` alike —
 	// so there is nothing here to answer.
+	//
+	// unpinned: never reached from the corpus. It is asked only of an
+	// interactive *login* shell that has an interactive file to read, and no row
+	// is one — the harness passes neither `--login` nor an argv[0] beginning
+	// with a dash, and it puts no dotfile in the scratch `$HOME` for a shell to
+	// find. Measured 2026-09-13 in bash and zsh. driver/rcfiles_test.go builds
+	// both shapes with a home directory full of marker files and asserts which
+	// names are read (TestTheInteractiveStartupFileIsRead) (#2058, #2059).
 	InteractiveStartupFileWhenLogin Answer
 
 	// SystemStartupFiles names the files this shell reads from a directory
@@ -8374,6 +8523,13 @@ type Semantics struct {
 	// puts `m` in `$-` and announces its jobs while its own `set -o` still
 	// lists `monitor off` — it disagrees with itself, and what is recorded
 	// here is the state the other two readers report.
+	//
+	// unpinned zsh: never reached from the corpus, which gives no case a
+	// controlling terminal — so "would a terminal have turned the monitor on"
+	// has the same answer in every row. Measured 2026-09-13; the bash pair is
+	// pinned. driver/interactivemonitor_test.go supplies a real terminal and
+	// pins both answers (TestAnInteractiveShellWithATerminalRunsTheMonitor,
+	// TestWithNoTerminalTheMonitorIsTheDialectsAnswer) (#2058).
 	InteractiveMonitorNeedsATerminal Answer
 
 	// InteractiveScriptAnnouncesJobs gives an interactive shell running a
@@ -8430,6 +8586,13 @@ type Semantics struct {
 	// that route bash, ksh93 and zsh announce and dash does not, which is a
 	// different split and therefore a different axis; `docs/spec/invocation.md`
 	// has the grid. See InteractiveCommandStringAnnouncesJobs.
+	//
+	// unpinned: never reached from the corpus — no case is ever an interactive
+	// shell running a *named script*, which is the one route this axis is about.
+	// Measured 2026-09-13 in bash and zsh. driver/interactivejobs_test.go pins
+	// it through a pseudo-terminal on that exact route
+	// (TestAnInteractiveScriptAnnouncesItsJobs and
+	// TestAnInteractiveScriptMayAnnounceNothing) (#2058).
 	InteractiveScriptAnnouncesJobs Answer
 
 	// InteractiveCommandStringAnnouncesJobs is the same question on the other
@@ -8467,6 +8630,13 @@ type Semantics struct {
 	// The preset says no, on the same two grounds: XCU has nothing to say
 	// about a notice on this route, and a core made of what the panel agrees
 	// on is the quiet one.
+	//
+	// unpinned: never reached from the corpus. A row can spell `-i -c`, but the
+	// notice needs a job *and* a terminal, and the harness gives no case either
+	// — measured 2026-09-13 in bash and zsh.
+	// driver/interactivejobs_test.go supplies both and is also what keeps this
+	// axis separate from the script one above
+	// (TestACommandStringReadsItsOwnAxisAndNotTheScriptOne) (#2058).
 	InteractiveCommandStringAnnouncesJobs Answer
 
 	// FinishedJobNoticeNeedsAPrompt holds back the `Done` row until there is a
@@ -8495,6 +8665,15 @@ type Semantics struct {
 	// The preset says yes, which is the answer that claims less: a shell that
 	// has not been asked for a job report does not write one where nobody is
 	// waiting at a prompt to read it.
+	//
+	// unpinned: never reached from the corpus, which draws no prompt in any
+	// row — so there is no moment for the notice to be waiting for, in bash
+	// or in zsh. Measured 2026-09-13. driver/interactivejobs_test.go pins it
+	// on both routes through a pseudo-terminal
+	// (TestAFinishedJobNoticeMayWaitForAPromptThatNeverComes,
+	// TestAScriptRouteObeysTheSameFinishedNoticeAxis), and
+	// repl/jobnotice_test.go pins the prompt it waits for
+	// (TestANoticeWaitsForAPromptThatIsNotAContinuation) (#2058).
 	FinishedJobNoticeNeedsAPrompt Answer
 
 	// PunctuatedFunctionNameIsRefused stops the script when a function
@@ -10057,6 +10236,20 @@ type SystemStartupFiles struct {
 	// The "cannot be overridden" half is deliberately *not* modeled — see
 	// StartupFileOptions.SuppressSystem — because SuppressAll suppressing
 	// everything is measured and this exception is not.
+	//
+	// unpinned: reached, and no corpus row can be written for it. These files
+	// live in a directory the machine's administrator owns, and the harness gives
+	// each case a scratch directory it made — a row that created `/etc/profile`
+	// to observe it being read would be editing the machine that is measuring the
+	// panel, once per shell per regeneration. Case.Files refuses any name that
+	// climbs out of the scratch directory for exactly that reason.
+	//
+	// The home-directory half of the same question *is* pinned, by the
+	// `startup/…` rows: which profile a login shell reads, in what order, and
+	// which option skips it. What stays here is the administrator's copy alone,
+	// and driver/rcfiles_test.go is where it is asserted instead — a test can
+	// point the whole search at a directory it made, which a corpus row invoking
+	// a real shell cannot (#2059).
 	Unconditional string
 
 	// Login is the system-wide profile, read before the first of
@@ -10068,6 +10261,20 @@ type SystemStartupFiles struct {
 	// nor `~/.bash_profile`, which is LoginProfileWhenNonInteractive
 	// answering for both files at once. `--noprofile` suppresses both, also
 	// measured.
+	//
+	// unpinned: reached, and no corpus row can be written for it. These files
+	// live in a directory the machine's administrator owns, and the harness gives
+	// each case a scratch directory it made — a row that created `/etc/profile`
+	// to observe it being read would be editing the machine that is measuring the
+	// panel, once per shell per regeneration. Case.Files refuses any name that
+	// climbs out of the scratch directory for exactly that reason.
+	//
+	// The home-directory half of the same question *is* pinned, by the
+	// `startup/…` rows: which profile a login shell reads, in what order, and
+	// which option skips it. What stays here is the administrator's copy alone,
+	// and driver/rcfiles_test.go is where it is asserted instead — a test can
+	// point the whole search at a directory it made, which a corpus row invoking
+	// a real shell cannot (#2059).
 	Login string
 
 	// Interactive is the system-wide counterpart of InteractiveStartupFile,
@@ -10081,6 +10288,20 @@ type SystemStartupFiles struct {
 	// answers `off` in bash 3.2 — so bash reached `/etc/bashrc` only
 	// through `/etc/profile`, which sources it by hand for a login shell.
 	// A shell that read it here would read it twice.
+	//
+	// unpinned: reached, and no corpus row can be written for it. These files
+	// live in a directory the machine's administrator owns, and the harness gives
+	// each case a scratch directory it made — a row that created `/etc/profile`
+	// to observe it being read would be editing the machine that is measuring the
+	// panel, once per shell per regeneration. Case.Files refuses any name that
+	// climbs out of the scratch directory for exactly that reason.
+	//
+	// The home-directory half of the same question *is* pinned, by the
+	// `startup/…` rows: which profile a login shell reads, in what order, and
+	// which option skips it. What stays here is the administrator's copy alone,
+	// and driver/rcfiles_test.go is where it is asserted instead — a test can
+	// point the whole search at a directory it made, which a corpus row invoking
+	// a real shell cannot (#2059).
 	Interactive string
 
 	// LateLogin is the system-wide counterpart of LateLoginStartupFile.
@@ -10090,6 +10311,20 @@ type SystemStartupFiles struct {
 	// on this machine. The slot itself is measured — the two system files
 	// that do exist each come first in their own slot — so what is taken on
 	// the manual's word is the name and not the position.
+	//
+	// unpinned: reached, and no corpus row can be written for it. These files
+	// live in a directory the machine's administrator owns, and the harness gives
+	// each case a scratch directory it made — a row that created `/etc/profile`
+	// to observe it being read would be editing the machine that is measuring the
+	// panel, once per shell per regeneration. Case.Files refuses any name that
+	// climbs out of the scratch directory for exactly that reason.
+	//
+	// The home-directory half of the same question *is* pinned, by the
+	// `startup/…` rows: which profile a login shell reads, in what order, and
+	// which option skips it. What stays here is the administrator's copy alone,
+	// and driver/rcfiles_test.go is where it is asserted instead — a test can
+	// point the whole search at a directory it made, which a corpus row invoking
+	// a real shell cannot (#2059).
 	LateLogin string
 }
 
@@ -10121,6 +10356,16 @@ type StartupFileOptions struct {
 	// letter this meaning instead — measured, `zsh -f -c 'echo /etc/pas*'`
 	// still expands the pattern — which is why the letter is a per-dialect
 	// spelling here rather than a set option every shell shares.
+	//
+	// unpinned bash: reached, and the flip is unobservable by construction. The
+	// empty string means this shell has no such option, and the only other value
+	// the sweep has for a string axis is a word it invented —
+	// `axis-sweep-probe`. A row could only object by passing that exact word,
+	// which would be a corpus case written against the instrument's internal
+	// probe rather than against a shell. The options this shell *does* have are
+	// pinned by rows: `startup/an-option-skips-the-profile`,
+	// `startup/an-option-skips-the-interactive-file` and
+	// `startup/an-option-names-the-interactive-file` (#2059).
 	SuppressAll string
 
 	// Login names the options that make this a login shell whatever argv[0]
@@ -10155,6 +10400,23 @@ type StartupFileOptions struct {
 	// bash's `--noprofile` is *not* this. Measured, it suppresses
 	// `/etc/profile` and `~/.bash_profile` together, so it is SuppressLogin
 	// answering for both files in that slot rather than a second option.
+	//
+	// unpinned bash: reached, and the flip is unobservable by construction. The
+	// empty string means this shell has no such option, and the only other value
+	// the sweep has for a string axis is a word it invented —
+	// `axis-sweep-probe`. A row could only object by passing that exact word,
+	// which would be a corpus case written against the instrument's internal
+	// probe rather than against a shell. The options this shell *does* have are
+	// pinned by rows: `startup/an-option-skips-the-profile`,
+	// `startup/an-option-skips-the-interactive-file` and
+	// `startup/an-option-names-the-interactive-file` (#2059).
+	//
+	// unpinned zsh: reached, and no row can observe it, for the reason the files
+	// it suppresses cannot be observed either — they live in a directory the
+	// machine's administrator owns, and a case writes only in the scratch
+	// directory it was given. With nothing of ours in `/etc`, `-d -l -c` and `-l
+	// -c` read exactly the same files, so the option is invisible whichever way
+	// the axis is set. See SystemStartupFiles (#2059).
 	SuppressSystem string
 
 	// SuppressLogin names the options that suppress the login profile and
@@ -10167,6 +10429,15 @@ type StartupFileOptions struct {
 	//
 	// It beats Login above, which is measured: `bash --noprofile --login -i`
 	// reads no profile.
+	//
+	// unpinned zsh: reached, and the flip is unobservable by construction. This
+	// shell has no option for the profile alone — the one it has drops every
+	// startup file at once, SuppressAll above — so the axis holds the empty
+	// string, and the only other value the sweep has for a string axis is a word
+	// it invented. A row could object only by passing that exact word, which
+	// would be a case written against the instrument rather than against a
+	// shell. The shell that does have it is pinned by
+	// `startup/an-option-skips-the-profile` (#2059).
 	SuppressLogin string
 
 	// SuppressInteractive names the options that suppress the interactive
@@ -10175,6 +10446,16 @@ type StartupFileOptions struct {
 	// It suppresses the file the shell reads *of its own name* and not
 	// `$ENV`: measured, `bash --posix --norc -i` still reads `$ENV`, because
 	// in that mode the standard's file is the one it was going to read.
+	//
+	// unpinned zsh: reached, and the flip is unobservable by construction. This
+	// shell has no such option — its escape hatch is the one that drops every
+	// file at once, SuppressAll above — so the axis holds the empty string, and
+	// the only other value the sweep has for a string axis is a word it invented
+	// (`axis-sweep-probe`). A row could object only by passing that exact word,
+	// which would be a case written against the instrument rather than against a
+	// shell. The shell that *does* have the option is pinned by a row:
+	// `startup/an-option-skips-the-interactive-file` and
+	// `startup/an-option-names-the-interactive-file` (#2059).
 	SuppressInteractive string
 
 	// NameInteractive names the options whose operand — the next word — is
@@ -10185,6 +10466,16 @@ type StartupFileOptions struct {
 	// the file: measured, `bash --norc --rcfile f -i` reads neither, and so
 	// does `bash --rcfile f -l -i`, where a login shell was not going to read
 	// an interactive file at all.
+	//
+	// unpinned zsh: reached, and the flip is unobservable by construction. This
+	// shell has no such option — its escape hatch is the one that drops every
+	// file at once, SuppressAll above — so the axis holds the empty string, and
+	// the only other value the sweep has for a string axis is a word it invented
+	// (`axis-sweep-probe`). A row could object only by passing that exact word,
+	// which would be a case written against the instrument rather than against a
+	// shell. The shell that *does* have the option is pinned by a row:
+	// `startup/an-option-skips-the-interactive-file` and
+	// `startup/an-option-names-the-interactive-file` (#2059).
 	NameInteractive string
 }
 

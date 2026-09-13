@@ -661,6 +661,20 @@ cannot reach, **a disagreement that is not there**, or an axis whose *type*
 is too narrow for the panel — and only re-measuring the shells tells you
 which. `ARGS='-only <Field>'` sweeps one axis while triaging it.
 
+**A verdict is a line on the axis, and two things keep it honest.** A pair the
+corpus structurally cannot reach — most of the interactive surface, since every
+case runs under `-c` or a script with no controlling terminal, `TERM=dumb` and
+an empty scratch `$HOME` — is answered by `unpinned <dialect>: why` in the
+field's own doc comment, and the answer worth writing names the Go test that
+*does* pin it. Two things keep that from rotting. The scope word is derived
+from `Presets()` rather than written out (#2583) — `unpinned ash:` matched
+nothing at all while the list said four dialects, which reads as prose and
+leaves the pair untriaged, and the report says the same thing either way. And
+`TestAVerdictNamesATestThatExists` requires every `TestSomething` a verdict
+names to be a test function that is really in the tree. It cannot check that
+the test *pins* the axis — that is a judgement — only that a reader following
+the pointer arrives somewhere, which is the half that rots.
+
 **A pin is made by the first row that stops agreeing, and the sweep says so.**
 The instrument's positive claim is weaker than it reads: it counts the first
 casualty of a flip as the objection, without checking that the row has

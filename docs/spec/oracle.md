@@ -255,6 +255,43 @@ they appear rather than only as the whole string, so a case whose program
 arrives on standard input writes it once as its `Snippet` and the
 rendered table shows what actually ran.
 
+## Cases that put a file where the shell will look for one
+
+`Case.Files` writes files into the scratch directory before either shell
+starts. That directory is the case's `$HOME` and its working directory,
+so it is how a row puts a **startup file** where a shell looks for one.
+
+It exists because the corpus could not ask about the startup files at all,
+and could not say so either. `$ENV` and `BASH_ENV` were always reachable,
+because those name a *path* and `ArgScript` supplies one; a profile is not,
+because the shell decides the name and the only file the harness ever wrote
+was `case.sh`. So seven startup axes were unpinned for one reason — no row
+was ever a login shell with a home directory in it — and nothing
+distinguished that from an axis nobody had got to (#2059).
+
+Two rules, and each was a decision:
+
+**A marker per name, not the one file the row expects.** What a startup
+rule gets wrong is nearly always *which* file and in what order, and a row
+holding only the file it expects cannot tell "read the right one" from
+"read everything". `startup/a-login-shell-reads-a-profile` writes eight and
+asks one question of every column at once: bash reads `.bash_profile`
+alone, dash, ksh93, BusyBox ash and bash-as-`sh` read `.profile`, and zsh
+reads three in order.
+
+**A name that leaves the scratch directory is refused**, absolute or
+climbing out with `..`, and so is `case.sh`, which the script route owns.
+The scratch directory is made fresh per run, so nothing here is defending a
+real home; what it defends is the machine running the panel, which a `..`
+in a committed row would otherwise write to once per shell per
+regeneration. The system-wide startup files stay out of reach for the same
+reason and are recorded as such on the axes themselves.
+
+**`-l` and not `--login`.** Measured 2026-09-13 under `env -i` with a
+scratch `$HOME`: dash answers `--login` with `Illegal option --` and takes
+`-l`; every other column takes both. The short spelling is the one that
+asks every column the same question.
+
 ## The harness
 
 `internal/oracle` implements this, and `internal/cmd/oracle` drives it:

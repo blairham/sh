@@ -149,20 +149,75 @@ func TestAnUnpinnedVerdictIsReadBackPerDialect(t *testing.T) {
 }
 
 // TestTheFlipVerdictsAreOnTheAxesTheyAnswer is the same claim the preset one
-// makes, for the four triaged in #2057 that cannot be pinned by any row.
+// makes, for the pairs triaged under #2057 that cannot be pinned by any row.
+//
+// A list of pairs rather than a map keyed by field, and that is not a style
+// choice: an axis can be unpinned in two dialects for *opposite* reasons —
+// the shell that has the option and the shell that does not — and a map held
+// one dialect per field, so the second entry was a compile error and the
+// second reason went unwritten.
 func TestTheFlipVerdictsAreOnTheAxesTheyAnswer(t *testing.T) {
 	t.Parallel()
 	notes, err := FieldNotes()
 	if err != nil {
 		t.Fatal(err)
 	}
-	for field, dialect := range map[string]string{
-		"PrintfEmptyIsNotANumber":                "zsh",
-		"SetBTurnsOffBraceExpansion":             "zsh",
-		"ValuelessDeclarationHidesTheOuterValue": "zsh",
+	for _, pair := range []struct{ field, dialect string }{
+		{"PrintfEmptyIsNotANumber", "zsh"},
+		{"SetBTurnsOffBraceExpansion", "zsh"},
+		{"ValuelessDeclarationHidesTheOuterValue", "zsh"},
+		// The terminal family (#2058). Every one of these is a fact about a
+		// shell somebody is *watching* — a job announced, an editing mode
+		// chosen, a menu laid out, a prompt asked again, a profile read —
+		// and the corpus runs every case under `-c` or a script with no
+		// controlling terminal, `TERM=dumb` and an empty scratch `$HOME`.
+		// Re-measured 2026-09-13; the pairs that had been pinned since the
+		// first run are deliberately not listed here.
+		{"AnnouncesBackgroundJob", "bash"},
+		{"AnnouncesBackgroundJobWithoutTheMonitor", "zsh"},
+		{"AutoCdAnnouncesTheSubstitution", "zsh"},
+		{"InteractiveScriptAnnouncesJobs", "bash"},
+		{"InteractiveCommandStringAnnouncesJobs", "zsh"},
+		{"InteractiveSelectsEmacs", "bash"},
+		{"InteractiveMonitorNeedsATerminal", "zsh"},
+		{"FinishedJobNoticeNeedsAPrompt", "bash"},
+		{"FinishedJobNoticeNeedsAPrompt", "zsh"},
+		{"InteractiveStartupFileWhenLogin", "bash"},
+		{"InteractiveOptionLetters", "zsh"},
+		{"SelectAssumesUnboundedWidth", "bash"},
+		{"SelectEofEndsPromptLine", "zsh"},
+		{"PromptAsksAgainAfterARefusedToken", "bash"},
+		{"PromptAsksAgainAfterARefusedToken", "zsh"},
+		{"PromptCommentsNeedTheOption", "bash"},
+		{"PromptCommentsNeedTheOption", "zsh"},
+		{"LoginProfileWhenNonInteractive", "bash"},
+		// The startup family (#2059), and the reason the list is pairs and
+		// not a map keyed by field: a shell that *has* the thing and a shell
+		// that does not are unpinned for opposite reasons, and both have to
+		// be answered. Three of the bash entries are an absence — the empty
+		// string means no such name, and the sweep's only other value for a
+		// string axis is a word it invented, so the flip is unobservable by
+		// construction. Four are the administrator's copies, which live
+		// where a corpus row must not write. The names a shell does hold are
+		// pinned by the `startup/…` rows Case.Files made writable.
+		{"StartupDirectoryVariable", "bash"},
+		{"StartupDirectoryVariable", "zsh"},
+		{"UnconditionalStartupFile", "bash"},
+		{"LateLoginStartupFile", "bash"},
+		{"NonInteractiveStartupVariable", "zsh"},
+		{"StartupFileOptions.SuppressAll", "bash"},
+		{"StartupFileOptions.SuppressSystem", "bash"},
+		{"StartupFileOptions.SuppressSystem", "zsh"},
+		{"StartupFileOptions.SuppressLogin", "zsh"},
+		{"StartupFileOptions.SuppressInteractive", "zsh"},
+		{"StartupFileOptions.NameInteractive", "zsh"},
+		{"SystemStartupFiles.Unconditional", "bash"},
+		{"SystemStartupFiles.Login", "bash"},
+		{"SystemStartupFiles.Interactive", "bash"},
+		{"SystemStartupFiles.LateLogin", "bash"},
 	} {
-		if verdict(notes[field], dialect) == "" {
-			t.Errorf("%s: nothing says why no corpus row objects in %s", field, dialect)
+		if verdict(notes[pair.field], pair.dialect) == "" {
+			t.Errorf("%s: nothing says why no corpus row objects in %s", pair.field, pair.dialect)
 		}
 	}
 }

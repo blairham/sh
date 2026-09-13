@@ -81,7 +81,7 @@ func (r *Runner) setListing() int {
 		// The same capture surface `declare -f` is, reached by the other
 		// name, so the same functions are the person's here (#1035).
 		for _, name := range r.scriptFuncNames() {
-			r.printf("%s\n", r.listedFunction(name, r.funcs[name]))
+			r.printf("%s", r.listedFunctionLine(name, r.funcs[name]))
 		}
 	}
 	return 0

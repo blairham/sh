@@ -174,7 +174,7 @@ func (r *Runner) typeOneMode(name string, m typeMode) int {
 				return 2
 			}
 			if says {
-				r.printf("%s\n", r.listedFunction(name, fn))
+				r.printf("%s", r.listedFunctionLine(name, fn))
 				return 0
 			}
 		}
@@ -325,7 +325,7 @@ func (r *Runner) typeAll(name string, m typeMode) int {
 			}
 			r.printf("%s\n", r.typeFunctionLine(dg, name))
 			if shows {
-				r.printf("%s\n", r.listedFunction(name, fn))
+				r.printf("%s", r.listedFunctionLine(name, fn))
 			}
 		}
 	}
@@ -427,7 +427,7 @@ func (r *Runner) describeName(name string, kind typeKind, skipFuncs bool, notFou
 			// what this shell has, and the spelling it was written with is
 			// gone by now. Which is why there is a printer — see
 			// syntax.PrintWith.
-			r.printf("%s\n", r.listedFunction(name, fn))
+			r.printf("%s", r.listedFunctionLine(name, fn))
 		}
 		return 0
 	}

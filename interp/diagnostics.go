@@ -1333,6 +1333,32 @@ type Diagnostics struct {
 	// visible — a row with one declaration form reads as a fixed suffix.
 	FunctionNameListingKeyword string
 
+	// FunctionListingIsSourceText writes a function back as it was
+	// **written** — [syntax.FuncDecl.SourceText], terminator and all —
+	// instead of laying the tree out under FunctionListingHeader.
+	//
+	// ksh93 alone, and it is not a spacing preference. That shell keeps the
+	// definition's characters and reproduces them: comments inside the body
+	// survive, `f(){    echo     a   ;   }` comes back with every one of
+	// those blanks, and the listing ends with the `;` that ended the
+	// statement rather than with a newline of its own — so a `-c` line's
+	// listing has no trailing newline at all and a script's ends with the
+	// one that terminated the definition. Measured 2026-09-13 on ksh93u+
+	// 2012-08-01 through `cat -A`.
+	//
+	// Nothing is added around the text, which is what makes a bare listing
+	// of two definitions read `f() { :; };g() { :; };` there: each one
+	// carries its own terminator and the shell writes no separator between
+	// them.
+	//
+	// It reads the text and never keeps it: [syntax.Dialect].
+	// FunctionDefinitionIsSourceText is what puts it on the declaration, and
+	// a tree that was parsed without it — or built by hand, or left by a
+	// refused parse — has none, so this falls back to the layout rather than
+	// writing nothing. The two flags are separate because a tree parsed by
+	// one dialect may be run by another's vector (#2610).
+	FunctionListingIsSourceText bool
+
 	// BuiltinUsageUnprefixed writes it with no location and no shell name in
 	// front, which is what ksh93 does with every usage line.
 	BuiltinUsageUnprefixed bool

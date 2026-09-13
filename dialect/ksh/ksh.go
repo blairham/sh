@@ -151,6 +151,14 @@ func Dialect() syntax.Dialect {
 	// stops the script. interp.Semantics.FunctionNameWhenTheDefinitionRuns is
 	// what happens then (#1296).
 	d.FunctionNameCheckedWhenTheDefinitionRuns = true
+	// And a definition keeps the characters it was written with, because this
+	// shell's `typeset -f` says them back rather than laying the tree out:
+	// `f(){    echo     a   ;   }` lists with every one of those blanks, a
+	// comment inside the body survives, and the listing ends with the `;`
+	// that ended the statement. See syntax.FuncDecl.SourceText for the
+	// measurement and Diagnostics.FunctionListingIsSourceText for the half
+	// that writes it (#2610).
+	d.FunctionDefinitionIsSourceText = true
 	// A colon written before a trim is ignored here: `${v:#hel*}` is
 	// `${v#hel*}` and comes to `lo`, where zsh reads the same six characters
 	// as an element exclusion and bash refuses them as arithmetic. All four
@@ -2085,6 +2093,14 @@ func Diagnostics() interp.Diagnostics {
 		// give back the one it was handed (#1494, #1406).
 		FunctionListingHeader:        "%[1]s()%[2]s",
 		FunctionListingKeywordHeader: "function %[1]s %[2]s",
+		// Both headers are the fallback rather than the ordinary path now:
+		// what this shell really writes is the definition's own source text,
+		// terminator and all, and the parser keeps it — see
+		// syntax.Dialect.FunctionDefinitionIsSourceText. The headers still
+		// answer for a function whose declaration carries no text: one built
+		// by an embedder, and one this shell is still waiting to read a body
+		// for (#2610).
+		FunctionListingIsSourceText: true,
 		// And the names-only listing keeps the same distinction with
 		// punctuation instead of a word: measured, `f() { :; }; function g
 		// { :; }; typeset +f` writes `f()` and then `g`.

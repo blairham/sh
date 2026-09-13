@@ -46,9 +46,11 @@ echo after`)
 	// The control, and the reason the letter is refused rather than dropped:
 	// with it gone the same line is a listing, so a shell that accepted `-t`
 	// and ignored it would write the body where this shell writes nothing.
+	// The body comes back with the blanks the definition was written with,
+	// which is what that listing is — see functionlisting_test.go.
 	out, st = runKsh(t, t.TempDir(), `f() { echo hi; }
 typeset -f f`)
-	if out != "f(){ echo hi; }\n" || st != 0 {
+	if out != "f() { echo hi; }\n" || st != 0 {
 		t.Errorf("got %q (status %d), want the listing", out, st)
 	}
 }

@@ -2811,6 +2811,34 @@ type Dialect struct {
 	// already what those three print.
 	FunctionNameIsSourceText bool
 
+	// FunctionDefinitionIsSourceText keeps a definition's own source text on
+	// the declaration — see [FuncDecl.SourceText] — for the dialect that
+	// writes a function back as it was **written** rather than as a tree.
+	//
+	// ksh93 alone. `typeset -f` there does not pretty-print: it reproduces
+	// the characters the definition was spelled with, comments and odd
+	// spacing and all, and ends with the character that ended the statement.
+	// Measured 2026-09-13 on ksh93u+ 2012-08-01 through `cat -A`:
+	//
+	//	ksh -c 'f(){    echo     a   ;   }; typeset -f f'
+	//	                     f(){    echo     a   ;   };
+	//	ksh -c 'f() { :; }   ; typeset -f f'    f() { :; }   ;
+	//	ksh -c 'eval "f() { :; }"; typeset -f f'    f() { :; }
+	//	printf 'g() { :; }\ntypeset -f g' | file    g() { :; }\n
+	//
+	// So the span is the name through the terminator inclusive, and a
+	// definition with no terminator after it — the last thing an `eval`
+	// string holds — ends at its body. The other five dialects print from
+	// the tree and never read this, which is why keeping the text is a
+	// dialect's answer and not something every parse pays for.
+	//
+	// The parser is where it has to happen: the interpreter is handed a tree
+	// and the source is gone by then. [Diagnostics.FunctionListingIsSourceText]
+	// is the other half — this one keeps the text and that one writes it —
+	// and both are needed, because a tree parsed by one dialect may be run by
+	// another's vector and neither half may assume the other (#2610).
+	FunctionDefinitionIsSourceText bool
+
 	// PatternAlternation enables a bare `(a|b)` inside a pattern word, which
 	// zsh has and the others do not: `a(b|c)` matches `ab` there. It is why
 	// `@(abc|xyz)` is a literal `@` followed by a group in zsh rather than an

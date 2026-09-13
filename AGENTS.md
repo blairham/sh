@@ -643,6 +643,21 @@ cannot reach, **a disagreement that is not there**, or an axis whose *type*
 is too narrow for the panel — and only re-measuring the shells tells you
 which. `ARGS='-only <Field>'` sweeps one axis while triaging it.
 
+**A pin is made by the first row that stops agreeing, and the sweep says so.**
+The instrument's positive claim is weaker than it reads: it counts the first
+casualty of a flip as the objection, without checking that the row has
+anything to do with the axis — so a value that reaches an unhandled branch, or
+a string mutated to nonsense, breaks the shell in some general way and the axis
+reads as pinned (#2061). The discriminator costs nothing, because the record
+already holds every panel column per row: **an axis records a disagreement between
+real shells, so the row recording it should be one the panel itself splits
+on.** A pair whose every pin rests on a row every column answers identically
+is printed as suspect — on every run, empty or not, since a pin nothing vouches
+for must not read like an ordinary pin. It is a heuristic and not a verdict, so
+it does not move a pair into the backlog and does not touch the exit status:
+518 of the record's 3847 rows are unanimous (measured 2026-09-13), and one of
+those can still exercise an axis only this implementation distinguishes.
+
 `ARGS=-presets` is the cheap half and takes about a second: it starts no
 shell at all and asks the four dialect vectors what they hold, which finds
 the one shape the flip test structurally cannot — an axis whose two values

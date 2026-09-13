@@ -12267,6 +12267,26 @@ echo unreachable`,
 		Why:     "the case that tells the two readings apart, and the reason it was worth a row of its own: evaluating the subscript answered 99 with no diagnostic at all, which is a wrong value a script cannot see. The three shells with the attribute all read the key",
 	},
 	{
+		ID: "arith/a-key-holding-a-bracket-under-an-increment", Category: "arithmetic",
+		Snippet: `typeset -A m; key='x],b['; m[$key]=1; (( m[$key]++ )); printf "[%s][%s]" "$?" "${m[$key]}"`,
+		Why:     "an associative key is a *string*, and the columns part over whether a shell that has just expanded one hands the result back to the bracket scanner. bash and ksh93 increment the element; zsh reads the tail of the key as a second array — `not an identifier: b[]`, status 2 — and leaves the element where it was. The store and the read are not in question and are unanimous: `m[$key]=1` and `${m[$key]}` are right in every column, which is what makes this the arithmetic route alone (#2581)",
+	},
+	{
+		ID: "arith/a-key-holding-a-bracket-runs-its-substitution-once", Category: "arithmetic",
+		Snippet: `typeset -A m; key="x],b[$(echo BOOM >&2)"; m[$key]=1; (( m[$key]++ )); printf "[%s]" "$?"`,
+		Why:     "the row beside it that stops a fix from buying the increment with a second run of the key. The substitution belongs to the *assignment* that built the value, so it happens once and nothing in the arithmetic may run it again — measured, no column in the panel writes BOOM twice, and the record is what a protection scheme that re-expanded the subscript would fail against",
+	},
+	{
+		ID: "arith/a-subscript-the-source-left-open-takes-the-value-bracket", Category: "arithmetic",
+		Snippet: `a=(9 8 7); k="1]"; printf "[%s]" "$(( a[$k ))"`,
+		Why:     "the boundary of that protection, and the reason it is about the *source* brackets rather than about values. Here the script never closed the bracket it opened, so there is none of its own for a value's to be distinguished from, and bash reads the value's `]` as the closer and answers with the element. A protection written as \"a bracket from a value is never a bracket\" answers this one differently",
+	},
+	{
+		ID: "arith/a-value-holding-a-whole-subscript-outside-brackets", Category: "arithmetic",
+		Snippet: `a=(9 8 7); v="a[1]"; printf "[%s]" "$(( $v ))"`,
+		Why:     "the other boundary: with no bracket of the script's anywhere, the value's brackets are read as a subscript and the element comes back. So the expansion is not protected because it is an expansion — it is protected because of where in the source it stands, which is the distinction the pair of rows above cannot make on its own",
+	},
+	{
 		ID: "arith/an-element-holding-a-name-is-chased", Category: "arithmetic",
 		Snippet: `y=5; a=(y); printf "[%s]" "$(( a[0] ))"`,
 		Why:     "the chase a bare name already got, asked of an element: the storage an operand came out of is not what decides how it reads. bash and ksh93 reach 5 here and zsh counts from 1 so its element 0 is nothing, which is the same split `${a[0]}` shows and not a second rule",

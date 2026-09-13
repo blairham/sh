@@ -622,6 +622,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `array/counting-an-empty-array-through-an-inner-expansion` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: ${#${u}[@]}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${#${u}[@]}: bad substitution` *(status 127)* | **2>** `<shell>: ${#${u}[@]}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `!' unexpected` *(status 3)* | `[sub=0][bare=0][two=2]` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
 | `array/a-length-over-a-quoted-inner-is-refused` **(refusal)** | **2>** `<shell>: 1: Syntax error: Unterminated quoted string` *(status 2)* | **2>** `<shell>: line 1: ${#"$(echo abc)"}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${#"$(echo abc)"}: bad substitution` *(status 127)* | **2>** `<shell>: ${#"$(echo abc)"}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `"' unexpected` *(status 3)* | **2>** `<shell>:1: bad substitution` *(status 1)* | **2>** `<shell>: syntax error: unterminated quoted string` *(status 2)* |
 | `assoc/unsetting-at-is-a-key-and-not-every-element` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[k]=v: not found~<shell>: 1: m[j]=w: not found~<shell>: 1: unset: m[@]: bad variable name` *(status 2)* | `n=2` | `n=2` | `n=0` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `n=2` | `n=2` | **2>** `<shell>: typeset: not found~<shell>: m[k]=v: not found~<shell>: m[j]=w: not found~<shell>: unset: line 0: m[@]: bad variable name` *(status 2)* |
+| `assoc/a-keyed-literal-of-unkeyed-words` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `declare -A m=([alpha]="one" )~after` | `declare -A m=([alpha]="one" )~after` | `declare -a m='([0]="alpha" [1]="one")'~after` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | **2>** `<shell>: cannot append index array to associative array m` *(status 1)* | `typeset -A m=( [alpha]=one )~after` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
+| `assoc/a-keyed-literal-of-unkeyed-words-over-a-table-with-elements` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `declare -A m=([a]="b" )~after` | `declare -A m=([a]="b" )~after` | `declare -a m='([0]="a" [1]="b")'~after` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `typeset -a m=(a b)~after` | `typeset -A m=( [a]=b )~after` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
+| `assoc/a-keyed-literal-appending-unkeyed-words` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `declare -A m=([x]="1" [a]="b" )~after` | `declare -A m=([x]="1" [a]="b" )~after` | `declare -a m='([0]="1" [1]="a" [2]="b")'~after` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | **2>** `<shell>: cannot append index array to associative array m` *(status 1)* | `typeset -A m=( [a]=b [x]=1 )~after` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
+| `assoc/a-keyed-literal-of-keyed-elements` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[1][2]~after` | `[1][2]~after` | `[2][2]~after` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `[1][2]~after` | `[1][2]~after` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
 | `assoc/a-missing-key-quoted-is-one-field` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[k]=v: not found~<shell>: 1: Bad substitution` *(status 2)* | `n=1` | `n=1` | `n=1` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `n=1` | `n=1` | **2>** `<shell>: typeset: not found~<shell>: m[k]=v: not found~<shell>: syntax error: bad substitution` *(status 2)* |
 | `assoc/a-string-subscript` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[k]=v: not found~<shell>: 1: Bad substitution` *(status 2)* | `v k` | `v k` | `v 0` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `v k` | **2>** `<shell>:1: bad substitution` *(status 1)* | **2>** `<shell>: typeset: not found~<shell>: m[k]=v: not found~<shell>: syntax error: bad substitution` *(status 2)* |
 | `assoc/the-subscript-is-not-arithmetic` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[1+1]=x: not found~<shell>: 1: Bad substitution` *(status 2)* | `[x]` | `[x]` | `[x]` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `[x]` | `[x]` | **2>** `<shell>: typeset: not found~<shell>: m[1+1]=x: not found~<shell>: syntax error: bad substitution` *(status 2)* |
@@ -2067,6 +2071,22 @@ grades it and nothing drift-checks it either, for the same reason.
 - `assoc/unsetting-at-is-a-key-and-not-every-element` — the whole-array reading belongs to the indexed array alone. With the attribute on, `@` is a key like any other and nothing was stored under it, so all three that have the attribute leave both elements where they are — including the two that clear an indexed array through the same spelling. It is the boundary a fix is likeliest to cross by accident, because the two kinds share a builtin and an operand shape
   ```sh
   typeset -A m; m[k]=v; m[j]=w; unset "m[@]"; echo "n=${#m[@]}"
+  ```
+- `assoc/a-keyed-literal-of-unkeyed-words` — the shape a script reaches for when it wants a table in one line, and the three columns with the attribute do not agree that it is one. bash and zsh both read the unkeyed words as alternating keys and values and list a one-element table; ksh93 refuses it — `cannot append index array to associative array m`, status 1, and the shell ends without reaching `after`. The sentence names an index array where the line mentions none, which is kept as written because it is the diagnostic a script's log will hold (#2611)
+  ```sh
+  typeset -A m=(alpha one); typeset -p m; echo after
+  ```
+- `assoc/a-keyed-literal-of-unkeyed-words-over-a-table-with-elements` — the same shape onto a table that already holds something, and the refusing column does not refuse it: ksh93 takes the words and *demotes* the name, listing `typeset -a m=(a b)` with the associative attribute gone, where the identical line on a table with no elements is the refusal one row up. The discriminator is whether the table happens to be empty, which is a state rather than a shape — recorded here so the divergence is visible, and deliberately not implemented
+  ```sh
+  typeset -A m=([x]=1); m=(a b); typeset -p m; echo after
+  ```
+- `assoc/a-keyed-literal-appending-unkeyed-words` — the append spelling of the row above, and it is the one that says the demotion belongs to replacement rather than to the words: the same table and the same words are refused here in the shell that took them with `=`. The two rows together are what keep a fix for either from being written as a rule about unkeyed words alone
+  ```sh
+  typeset -A m=([x]=1); m+=(a b); typeset -p m; echo after
+  ```
+- `assoc/a-keyed-literal-of-keyed-elements` — the control the three rows above need: written with `[key]=value` heads the same literal is the table in every column that has the attribute, so what one of them refuses is the *unkeyed* shape and not compound assignment to a table. Without it the refusal reads as a shell with no literal syntax for a table at all
+  ```sh
+  typeset -A m=([a]=1 [b]=2); echo "[${m[a]}][${m[b]}]"; echo after
   ```
 - `assoc/a-missing-key-quoted-is-one-field` — the same guarantee where the subscript is a key rather than an index: a key nothing was stored under is one empty field in quotes, in all three that have the attribute. The declared path had its own reading of an absent element and gave no field either
   ```sh
@@ -10406,6 +10426,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `arith/increment-through-a-subscript` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[5]` | `[5]` | `[5]` | `[5]` | `[4]` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
 | `arith/increment-through-a-key` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[k]=1: not found~<shell>: 1: m[k]++: not found~<shell>: 1: Bad substitution` *(status 2)* | `[2]` | `[2]` | `[2]` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `[2]` | `[2]` | **2>** `<shell>: typeset: not found~<shell>: m[k]=1: not found~<shell>: m[k]++: not found~<shell>: syntax error: bad substitution` *(status 2)* |
 | `arith/a-key-is-not-an-index-in-an-expression` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[k]=7: not found~<shell>: 1: m[0]=99: not found~<shell>: 1: arithmetic expression: expecting EOF: " m[k] "` *(status 2)* | `[7]` | `[7]` | `[99]` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `[7]` | `[7]` | **2>** `<shell>: typeset: not found~<shell>: m[k]=7: not found~<shell>: m[0]=99: not found~<shell>: arithmetic syntax error` *(status 2)* |
+| `arith/a-key-holding-a-bracket-under-an-increment` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[x],b[]=1: not found~<shell>: 1: m[x],b[]++: not found~<shell>: 1: Bad substitution` *(status 2)* | `[0][2]` | `[0][2]` | **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~<shell>: x],b[: syntax error: invalid arithmetic operator (error token is "],b[")` *(status 1)* | `[0][2]` | `[2][1]` **2>** `<shell>:1: not an identifier: b[]` | **2>** `<shell>: typeset: not found~<shell>: m[x],b[]=1: not found~<shell>: m[x],b[]++: not found~<shell>: syntax error: bad substitution` *(status 2)* |
+| `arith/a-key-holding-a-bracket-runs-its-substitution-once` | `[127]` **2>** `<shell>: 1: typeset: not found~BOOM~<shell>: 1: m[x],b[]=1: not found~<shell>: 1: m[x],b[]++: not found` | `[0]` **2>** `BOOM` | `[0]` **2>** `BOOM` | **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~BOOM~<shell>: x],b[: syntax error: invalid arithmetic operator (error token is "],b[")` *(status 1)* | `[0]` **2>** `BOOM` | `[2]` **2>** `BOOM~<shell>:1: not an identifier: b[]` | `[127]` **2>** `<shell>: typeset: not found~BOOM~<shell>: m[x],b[]=1: not found~<shell>: m[x],b[]++: not found` |
+| `arith/a-subscript-the-source-left-open-takes-the-value-bracket` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[8]` | `[8]` | `[8]` | **2>** `<shell>: syntax error at line 1: `)' unexpected` *(status 3)* | `[]` **2>** `<shell>:1: bad pattern: a[1]` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
+| `arith/a-value-holding-a-whole-subscript-outside-brackets` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[8]` | `[8]` | `[8]` | `[8]` | `[9]` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
 | `arith/an-element-holding-a-name-is-chased` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[5]` | `[5]` | `[5]` | `[5]` | `[0]` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
 | `arith/integer-division-stays-integer` | `1` | `1` | `1` | `1` | `1` | `1` | `1` |
 | `arith/one-float-makes-the-expression-float` | **2>** `<shell>: 1: arithmetic expression: expecting EOF: "3.0/2"` *(status 2)* | **2>** `<shell>: line 1: 3.0/2: arithmetic syntax error: invalid arithmetic operator (error token is ".0/2")` *(status 1)* | **2>** `<shell>: line 1: 3.0/2: arithmetic syntax error: invalid arithmetic operator (error token is ".0/2")` *(status 127)* | **2>** `<shell>: 3.0/2: syntax error: invalid arithmetic operator (error token is ".0/2")` *(status 1)* | `1.5` | `1.5` | **2>** `<shell>: arithmetic syntax error` *(status 2)* |
@@ -10992,6 +11016,22 @@ grades it and nothing drift-checks it either, for the same reason.
 - `arith/a-key-is-not-an-index-in-an-expression` — the case that tells the two readings apart, and the reason it was worth a row of its own: evaluating the subscript answered 99 with no diagnostic at all, which is a wrong value a script cannot see. The three shells with the attribute all read the key
   ```sh
   typeset -A m; m[k]=7; m[0]=99; k=0; printf "[%s]" "$(( m[k] ))"
+  ```
+- `arith/a-key-holding-a-bracket-under-an-increment` — an associative key is a *string*, and the columns part over whether a shell that has just expanded one hands the result back to the bracket scanner. bash and ksh93 increment the element; zsh reads the tail of the key as a second array — `not an identifier: b[]`, status 2 — and leaves the element where it was. The store and the read are not in question and are unanimous: `m[$key]=1` and `${m[$key]}` are right in every column, which is what makes this the arithmetic route alone (#2581)
+  ```sh
+  typeset -A m; key='x],b['; m[$key]=1; (( m[$key]++ )); printf "[%s][%s]" "$?" "${m[$key]}"
+  ```
+- `arith/a-key-holding-a-bracket-runs-its-substitution-once` — the row beside it that stops a fix from buying the increment with a second run of the key. The substitution belongs to the *assignment* that built the value, so it happens once and nothing in the arithmetic may run it again — measured, no column in the panel writes BOOM twice, and the record is what a protection scheme that re-expanded the subscript would fail against
+  ```sh
+  typeset -A m; key="x],b[$(echo BOOM >&2)"; m[$key]=1; (( m[$key]++ )); printf "[%s]" "$?"
+  ```
+- `arith/a-subscript-the-source-left-open-takes-the-value-bracket` — the boundary of that protection, and the reason it is about the *source* brackets rather than about values. Here the script never closed the bracket it opened, so there is none of its own for a value's to be distinguished from, and bash reads the value's `]` as the closer and answers with the element. A protection written as "a bracket from a value is never a bracket" answers this one differently
+  ```sh
+  a=(9 8 7); k="1]"; printf "[%s]" "$(( a[$k ))"
+  ```
+- `arith/a-value-holding-a-whole-subscript-outside-brackets` — the other boundary: with no bracket of the script's anywhere, the value's brackets are read as a subscript and the element comes back. So the expansion is not protected because it is an expansion — it is protected because of where in the source it stands, which is the distinction the pair of rows above cannot make on its own
+  ```sh
+  a=(9 8 7); v="a[1]"; printf "[%s]" "$(( $v ))"
   ```
 - `arith/an-element-holding-a-name-is-chased` — the chase a bare name already got, asked of an element: the storage an operand came out of is not what decides how it reads. bash and ksh93 reach 5 here and zsh counts from 1 so its element 0 is nothing, which is the same split `${a[0]}` shows and not a second rule
   ```sh
@@ -12219,6 +12259,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `param/a-substring-offset-that-names-a-variable` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[cd]~after` | `[cd]~after` | `[cd]~after` | `[cd]~after` | **2>** `<shell>:1: unrecognized modifier `i'` *(status 1)* | `[cd]~after` |
 | `param/a-substring-offset-that-is-a-modifier` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[File.Txt]` | `[File.Txt]` | `[File.Txt]` | `[File.Txt]` | `[/tmp/Dir]` | `[File.Txt]` |
 | `param/a-substring-offset-that-does-not-begin-with-a-letter` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[bc] [bc] [bc]` | `[bc] [bc] [bc]` | `[bc] [bc] [bc]` | **2>** `<shell>: \(_q\):2: arithmetic syntax error` *(status 1)* | `[bc] [bc] [bc]` | `[bc] [bc] [bc]` |
+| `param/a-substring-range-and-the-characters-one-column-protects` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[def]~after` | `[def]~after` | `[def]~after` | **2>** `<shell>: 1\\|2: arithmetic syntax error` *(status 1)* | `[def]~after` | `[def]~after` |
+| `param/a-substring-range-keeps-the-characters-nothing-protects` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[bcdef] [bcdef] [cdef]~after` | `[bcdef] [bcdef] [cdef]~after` | `[bcdef] [bcdef] [cdef]~after` | `[bcdef] [bcdef] [cdef]~after` | `[bcdef] [bcdef] [cdef]~after` | `[bcdef] [bcdef] [cdef]~after` |
+| `param/a-substring-length-with-a-protected-character` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[bc]~after` | `[bc]~after` | `[bc]~after` | **2>** `<shell>: \(2\): arithmetic syntax error` *(status 1)* | `[bc]~after` | `[bc]~after` |
 | `param/a-substring-length-that-names-a-variable` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[cd]~after` | `[cd]~after` | `[cd]~after` | `[cd]~after` | **2>** `<shell>:1: unrecognized modifier `i'` *(status 1)* | `[cd]~after` |
 | `param/a-substring-modifier-after-an-offset` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[mp/]` | `[mp/]` | `[mp/]` | `[mp/]` | `[File.Txt]` | `[mp/]` |
 | `param/a-substring-modifier-chain` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[File.Txt]` | `[File.Txt]` | `[File.Txt]` | `[File.Txt]` | `[Dir]` | `[File.Txt]` |
@@ -12501,6 +12544,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `param/the-names-with-a-prefix-joined` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[ZQ_a ZQ_b]` | `[ZQ_a ZQ_b]` | `[ZQ_a ZQ_b]` | `[ZQ_a ZQ_b]` | **2>** `<shell>:1: bad substitution` *(status 1)* | **2>** `<shell>: syntax error: bad substitution` *(status 2)* |
 | `param/no-names-with-that-prefix` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[]` | `[]` | `[]` | `[]` | **2>** `<shell>:1: bad substitution` *(status 1)* | **2>** `<shell>: syntax error: bad substitution` *(status 2)* |
 | `param/the-names-with-a-prefix-are-sorted` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `ZQ_a ZQ_b` | `ZQ_a ZQ_b` | `ZQ_a ZQ_b` | `ZQ_a ZQ_b` | **2>** `<shell>:1: bad substitution` *(status 1)* | **2>** `<shell>: syntax error: bad substitution` *(status 2)* |
+| `param/the-names-with-a-prefix-and-the-name-that-is-the-prefix` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[ZQ][ZQ_a][ZQ_b]` | `[ZQ][ZQ_a][ZQ_b]` | `[ZQ][ZQ_a][ZQ_b]` | `[ZQ_a][ZQ_b]` | **2>** `<shell>:1: bad substitution` *(status 1)* | **2>** `<shell>: syntax error: bad substitution` *(status 2)* |
+| `param/the-only-name-with-a-prefix-is-the-prefix` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[ZQ]st=0` | `[ZQ]st=0` | `[ZQ]st=0` | `[]st=0` | **2>** `<shell>:1: bad substitution` *(status 1)* | **2>** `<shell>: syntax error: bad substitution` *(status 2)* |
 | `param/the-escape-flag-reads-the-meta-prefixes-too` | **2>** `<shell>: 1: Bad substitution` | **2>** `<shell>: line 1: ${(g:e:)v}: bad substitution` | **2>** `<shell>: line 1: ${(g:e:)v}: bad substitution` | **2>** `<shell>: ${(g:e:)v}: bad substitution` | **2>** `<shell>: syntax error at line 1: `v}' unexpected` | ` [ X ] [ X 377 Y ] ` | **2>** `<shell>: syntax error: bad substitution` |
 | `param/the-type-of-a-produced-parameter` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: ${(t)RANDOM}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(t)RANDOM}: bad substitution` *(status 127)* | **2>** `<shell>: ${(t)RANDOM}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `RANDOM}' unexpected` *(status 3)* | `[integer-special][integer-special][integer-readonly-special][integer-readonly-special]` | **2>** `<shell>: syntax error: bad substitution` *(status 2)* |
 
@@ -12531,6 +12576,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `param/a-substring-offset-that-does-not-begin-with-a-letter` — the boundary of that reading, measured three ways: an underscore is not a letter, a leading space puts the letter second, and a parenthesis does the same — so all three are ranges rather than modifiers, and the shell that has modifiers answers them exactly as bash does. It says the rule is about the first byte and not about the segment containing a name. ksh93 is the odd column and for an unrelated reason: it refuses a parenthesized offset outright, naming it with the parentheses backslashed
   ```sh
   x=abcdef; _q=1; echo "[${x:_q:2}] [${x: _q:2}] [${x:(_q):2}]"
+  ```
+- `param/a-substring-range-and-the-characters-one-column-protects` — not a parenthesis, and that is the finding: ksh93 protects a range's *pattern characters* before reading it, so a bitwise or is `1\|2: arithmetic syntax error` there and 3 — `def` — in every other column with substrings. Written with an operator rather than with a grouping because the parenthesized offset one row up reads as a rule about grouping, and this one cannot (#2618)
+  ```sh
+  x=abcdef; echo "[${x:1|2}]"; echo after
+  ```
+- `param/a-substring-range-keeps-the-characters-nothing-protects` — the other side of that set, and what makes it a set rather than "punctuation in a range is refused": a comparison, a remainder and a comma sequence all evaluate in the shell that refuses `|`, `&` and `*` in the same position. Three operators in one line on purpose — a single one could be a case the protection happens to miss, and the row would then pass against a protection covering every character
+  ```sh
+  x=abcdef; echo "[${x:1<2}] [${x:1%2}] [${x:1,2}]"; echo after
+  ```
+- `param/a-substring-length-with-a-protected-character` — the length half of the same protection, and it is blamed alone: the offset in front of it evaluated and is not named, where the same shell naming an *offset* names the whole range behind it. So the two halves are protected separately and then joined, rather than the range being protected as one string
+  ```sh
+  x=abcdef; echo "[${x:1:(2)}]"; echo after
   ```
 - `param/a-substring-length-that-names-a-variable` — the length is the same question as the offset, and the shell with modifiers reads it the same way — the segment begins with a letter, so it is a modifier and not a count. Pinned separately because the offset and the length are evaluated by different call sites and a fix that caught one silently left the other
   ```sh
@@ -13672,6 +13729,14 @@ grades it and nothing drift-checks it either, for the same reason.
 - `param/the-names-with-a-prefix-are-sorted` — set in the other order and returned in the same one, so the order is the names' rather than the order they happened to be created in — a map has none to inherit
   ```sh
   ZQ_b=2; ZQ_a=1; echo ${!ZQ_@}
+  ```
+- `param/the-names-with-a-prefix-and-the-name-that-is-the-prefix` — the name that matches the prefix *exactly*, with two names extending it beside it. The two columns with the operator part here: bash lists all three, so the operator is a plain prefix match there, and ksh93 lists only `ZQ_a` and `ZQ_b` — the names extending the prefix rather than the names beginning with it. The prefix is set and readable in both, so this is the operator's rule and not a name that could not be seen (#2619)
+  ```sh
+  ZQ=0; ZQ_a=1; ZQ_b=2; printf "[%s]" "${!ZQ@}"; echo
+  ```
+- `param/the-only-name-with-a-prefix-is-the-prefix` — the control the row above needs: with nothing extending it, the shell that leaves the exact name out answers with nothing at all and still exits 0, so the exclusion is on that one name and not a refusal or a count. Without this pair a filter that dropped the *last* match would record the same answer as one that drops the exact one
+  ```sh
+  ZQ=0; printf "[%s]" "${!ZQ@}"; echo "st=$?"
   ```
 - `param/the-escape-flag-reads-the-meta-prefixes-too` — the same two edges reached through the `(g:e:)` flag rather than through `print`, which is what says the decoder is one and not two: zsh answers `[X][X` 0xff `Y]`, read through `od` because a raw 0xff is not text and a record has to be. A second copy of the escape set behind the flag would have to be fixed twice and is the shape this tree has been bitten by before
   ```sh

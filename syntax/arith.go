@@ -1357,6 +1357,52 @@ type arithSubscript struct {
 // brackets. Where it is false the empty pair is the parse failure it has
 // always been; where it is true Empty says so and Index is nil, which is a
 // question for whoever evaluates it. See ArithIndex.Empty.
+// ArithValueMark stands in front of a byte that arrived in a **value** and
+// must not be read again as subscript syntax.
+//
+// An arithmetic expression is expanded before it is parsed — `$(( $x$y ))`
+// with `1+` and `2` is 3 in every shell in the panel, so the text the parser
+// reads is the text the expansions produced. That is right for the expression
+// and wrong for a *subscript*: an associative array's key is a string, and a
+// shell that has just expanded one does not hand the result back to the
+// bracket scanner. Measured 2026-09-13, `key='x],b['; m[$key]=1; (( m[$key]++
+// ))` increments the element in bash 5.3.15 and under `sh`, where reading the
+// expanded `m[x],b[++` back as syntax finds a subscript of `x`, a comma, and a
+// second name with an empty subscript (#2581).
+//
+// So the marks are put on by whoever expanded the text, over the bytes that
+// came from a value and only inside brackets the *source* wrote. A bracket the
+// script wrote still delimits, and a bracket a value carries does not — which
+// is the same distinction markWrittenBars draws for a pattern's alternation,
+// and drawn here for the same reason: the two cannot be told apart once the
+// text exists.
+//
+// NUL because no source text holds one and no shell value is supposed to. A
+// mark in front of a mark is a NUL that was data, so a bare one can only be
+// this.
+const ArithValueMark = '\x00'
+
+// UnmarkArithValue takes the marks back off, leaving the text a value
+// actually held. Exported for whoever put them on: text that never became a
+// subscript still has to be shown without them.
+func UnmarkArithValue(s string) string { return unmarkArithValue(s) }
+
+// unmarkArithValue takes the marks back off, leaving the text a value
+// actually held.
+func unmarkArithValue(s string) string {
+	if strings.IndexByte(s, ArithValueMark) < 0 {
+		return s
+	}
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		if s[i] == ArithValueMark && i+1 < len(s) {
+			i++
+		}
+		b.WriteByte(s[i])
+	}
+	return b.String()
+}
+
 func (a *arithParser) subscript(emptyOK bool) arithSubscript {
 	// The same flag that admits `${a[1]}`: one question about whether the
 	// dialect has subscripts at all, asked in the two places that need it.
@@ -1372,12 +1418,16 @@ func (a *arithParser) subscript(emptyOK bool) arithSubscript {
 	depth := 0
 	for a.off < len(a.src) {
 		switch a.src[a.off] {
+		case ArithValueMark:
+			// The byte behind the mark came from a value, so it is text and
+			// not a bracket however it is spelled. See ArithValueMark.
+			a.off++
 		case '[':
 			depth++
 		case ']':
 			depth--
 			if depth == 0 {
-				inner := a.src[open+1 : a.off]
+				inner := unmarkArithValue(a.src[open+1 : a.off])
 				a.off++
 				if inner == "" && emptyOK {
 					return arithSubscript{Present: true, Empty: true}

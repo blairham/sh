@@ -4474,6 +4474,18 @@ func (r *Runner) expandRawText(text string) string {
 // measured, a here-document body holding `$((nofunc()))` twice is one
 // diagnostic in zsh and was two here, because nothing stopped the walk.
 func (r *Runner) expandRawSpans(text string) (out, head string, ok bool) {
+	return r.expandRawSpansWith(text, nil)
+}
+
+// expandRawSpansWith is that expansion with a hook over each part, for the one
+// caller that has to know which bytes a *value* put there.
+//
+// The hook rather than a second walk, because "which bytes came from a value"
+// is only knowable while the spans are being expanded: once the text exists it
+// is one string and the question cannot be asked of it. It is called for every
+// part in order, with whether the span it came from was literal, and returns
+// what to write. See expandArithText, the one caller that passes one.
+func (r *Runner) expandRawSpansWith(text string, hook func(literal bool, part string) string) (out, head string, ok bool) {
 	var b, h strings.Builder
 	spans, ok := r.rawSpans(text)
 	if !ok {
@@ -4507,6 +4519,9 @@ func (r *Runner) expandRawSpans(text string) (out, head string, ok bool) {
 		// and a here-document has no glob stage — the text is input, not a
 		// pattern. Without this a backslash in the body came out doubled.
 		part = globUnescape(part)
+		if hook != nil {
+			part = hook(s.Kind == syntax.Literal, part)
+		}
 		b.WriteString(part)
 		switch {
 		case !literal:

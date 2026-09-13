@@ -8384,6 +8384,38 @@ type Semantics struct {
 	// all: ksh93; bash and zsh count the negative length from the end.
 	SubstringNegativeLengthIsEmpty Answer
 
+	// ArithSubscriptRereadsItsExpandedText hands what a subscript's
+	// expansion produced back to the bracket scanner, so a key holding `]`
+	// or `[` is read as syntax rather than as the string a key is: zsh.
+	//
+	// An arithmetic expression is expanded before it is parsed in every
+	// shell in the panel — `$(( $x$y ))` with `1+` and `2` is 3 in all of
+	// them — and the columns part over whether that also applies to the
+	// text between a subscript's brackets. Measured 2026-09-13 with
+	// `key='x],b['; m[$key]=1; (( m[$key]++ ))`:
+	//
+	//	bash 5.3.15        status 0, the element is 2
+	//	bash 5.3.15 as sh  the same
+	//	ksh93u+            the same
+	//	zsh 5.9.2          `not an identifier: b[]`, status 2, element 1
+	//
+	// zsh's own diagnostic is what identifies the mechanism: `b[` is the
+	// tail of the *key*, and it is being named as a second array with an
+	// empty subscript. bash 3.2 has no associative arrays to ask, and dash
+	// and ash have no arrays at all.
+	//
+	// The read and write sides are not this axis and are unanimous:
+	// `m[$key]=1` stores under the key and `${m[$key]}` reads it back in
+	// every column, zsh included. It is the arithmetic route alone.
+	//
+	// Asked only where a subscript's expansion really produced a bracket,
+	// so the ordinary `$(( a[$i] ))` needs no answer from anyone — and only
+	// where the *source* closed the bracket it opened, since a script that
+	// left one open has no bracket of its own for a value's to be
+	// distinguished from and bash reads the value's as the closer there
+	// (#2581).
+	ArithSubscriptRereadsItsExpandedText Answer
+
 	// KeyedLiteralBareWordsArePairs reads a compound assignment's unkeyed
 	// words as alternating keys and values on a name carrying the
 	// associative attribute — `m=(a 1 b 2)` is two elements. bash and zsh;
@@ -11526,6 +11558,10 @@ func PosixSemantics() Semantics {
 		WholeSubscriptOnAScalarSlicesIt: Yes,
 		UnsetNameAtIsOneEmptyField:      No,
 		SubstringNegativeLengthIsEmpty:  No,
+		// The standard has no arrays, so this follows the two columns with
+		// associative arrays that keep a key a string. zsh is the column
+		// that overrides it.
+		ArithSubscriptRereadsItsExpandedText: No,
 		// The standard has no associative arrays, so this follows the two
 		// columns that take the shape at all. ksh93 is the column that
 		// overrides it.

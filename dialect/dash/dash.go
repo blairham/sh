@@ -375,6 +375,9 @@ func Semantics() interp.Semantics {
 	s.KillStatus = interp.KillStatusAnyFailure
 	s.SubshellJobTable = interp.SubshellJobsCleared
 	s.PrintfEmptyIsNotANumber = interp.No
+	s.PrintfAbsentNumberIsAnEmptyOne = interp.No
+	s.PrintfStarWithoutOperandIsRefused = interp.No
+	s.PrintfStarComplaintCostsTheStatus = interp.Yes
 	s.PrintfReportsBadNumber = interp.Yes
 	s.PrintfBackslashC = interp.PrintfBackslashCLiteral
 	s.PrintfUnfinishedConversionIsAPercent = interp.No

@@ -1006,6 +1006,9 @@ func Semantics() interp.Semantics {
 	s.SubshellJobTable = interp.SubshellJobsKept
 	s.PrintfOutputPrecedesComplaint = interp.Yes
 	s.PrintfEmptyIsNotANumber = interp.No
+	s.PrintfAbsentNumberIsAnEmptyOne = interp.No
+	s.PrintfStarWithoutOperandIsRefused = interp.Yes
+	s.PrintfStarComplaintCostsTheStatus = interp.Yes
 	s.PrintfReportsBadNumber = interp.No
 	s.PrintfBackslashC = interp.PrintfBackslashCControl
 	// `printf 'a%5'` is `a%` here and reports success: the unfinished

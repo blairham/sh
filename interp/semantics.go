@@ -2101,7 +2101,8 @@ type Semantics struct {
 	// PrintfEmptyIsNotANumber complains about a numeric conversion given an
 	// operand that is present and empty. bash alone: `printf '%d' ""` is an
 	// error there and a zero in the other three, all of which print the zero
-	// anyway. An argument that is *missing* is never an error in any of them.
+	// anyway. Four of the five say the same of an argument that is *missing*;
+	// the fifth is ash, and PrintfAbsentNumberIsAnEmptyOne below is that.
 	//
 	// unpinned zsh: reached, and both answers print the same thing there.
 	// Measured 2026-09-12: moving it to `Unspecified` in the zsh dialect
@@ -2113,6 +2114,80 @@ type Semantics struct {
 	// other side. No row can separate the two until that second axis moves
 	// (#2057).
 	PrintfEmptyIsNotANumber Answer
+
+	// PrintfAbsentNumberIsAnEmptyOne reads a numeric conversion with no
+	// operand left as a conversion of the empty string, complaint and all,
+	// rather than as a silent zero.
+	//
+	// ash alone, and it is the whole of #2648. BusyBox does not separate the
+	// two cases: `printf '[%d]\n'` writes `ash: invalid number ''` and ends
+	// at 1, exactly as `printf '[%d]\n' ''` does, and one complaint comes
+	// out per absent operand — `printf '[%x][%o][%u]\n'` writes three.
+	// bash, zsh, ksh93 and dash all write the zero in silence at 0, which is
+	// what makes this the ash column's row rather than a gap everywhere.
+	//
+	// Separate from PrintfEmptyIsNotANumber above and not a spelling of it:
+	// the answers cross. bash says an empty operand is an error and an
+	// absent one is not; ash says both are. Folding them into one axis would
+	// have been right about ash and wrong about bash.
+	//
+	// The zero is still printed either way, as it is for every other
+	// complaint on this path — the diagnostic is beside the output rather
+	// than instead of it.
+	//
+	// It does not reach the `*` of a width or a precision, which is the
+	// measurement that keeps it honest: `printf '[%.*s]\n'` with no operands
+	// is a silent `[]` in ash, and `printf 'a%*db\n'` writes one complaint
+	// and not two. See PrintfStarWithoutOperandIsRefused.
+	PrintfAbsentNumberIsAnEmptyOne Answer
+
+	// PrintfStarWithoutOperandIsRefused refuses the whole directive when a
+	// `*` standing for a width or a precision finds the operand list already
+	// empty.
+	//
+	// ksh93 alone. `printf '%s[%*d]\n' x` is `x[0]` in the other six and in
+	// ksh93 is nothing at all on stdout, `printf: .: unknown format
+	// specifier` on stderr and a status of 1. The trigger is the star's
+	// operand and not the operand count: `printf '[%*d]\n' 6` — where the
+	// star has its 6 and the `%d` is the one with nothing left — is
+	// `[     0]` at 0 in ksh93 too.
+	//
+	// The name in the complaint is the constant `.`, whatever the conversion
+	// was: `%*s` and `%*.*f` both report `.`. Measured 2026-09-13 rather
+	// than derived, and reproduced as a constant for that reason.
+	//
+	// The status and the complaint are what this axis reproduces. What it
+	// does not is ksh93's *stdout*, which the refusal rewinds: the pass is
+	// truncated back to the start of the last conversion that consumed an
+	// operand, so `printf 'AB%sCD%sEF%*dG' q r` is `ABqCD` there and
+	// `ABqCDrEF` here. Eight formats were measured to arrive at that rule and
+	// every one of them fits it, including the two that look like exceptions
+	// — a conversion whose own stars ran out consumed nothing and so is not
+	// the mark, which is why `printf 'XY%s%*.*dZ' q 3` rewinds past the `%s`
+	// to `XY`. It is recorded rather than implemented because rewinding needs
+	// the whole pass held, and ksh93 is the one dialect that writes through:
+	// holding it would put every other complaint in the pass *after* the
+	// output it currently precedes, which is a live behavior traded for a
+	// dead one. Filed separately.
+	PrintfStarWithoutOperandIsRefused Answer
+
+	// PrintfStarComplaintCostsTheStatus lets a complaint about the operand a
+	// `*` took report failure, as the same complaint about a conversion's own
+	// operand does.
+	//
+	// ash alone says no, and it says it while still printing the complaint:
+	// `printf '[%*s]\n' abc hi` writes `ash: invalid number 'abc'` to stderr,
+	// `[hi]` to stdout, and reports 0. bash and dash report 1 for the same
+	// line. The diagnostic, the output and the status are three observations
+	// here and they do not move together, which is why this is its own axis
+	// and not a reading of PrintfReportsBadNumber.
+	//
+	// Asked only where there is a complaint for it to cost anything, so the
+	// two dialects that never complain about a number — ksh93 and zsh, both
+	// `No` at PrintfReportsBadNumber and PrintfEmptyIsNotANumber — never
+	// reach it. They answer it all the same, because an unanswered axis is
+	// indistinguishable from one nobody thought about.
+	PrintfStarComplaintCostsTheStatus Answer
 
 	// PidListingFinishesWithAJob makes `jobs -p` forget a finished job the
 	// way a listing of states does.

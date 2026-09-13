@@ -37,6 +37,19 @@
 // scores zero rather than perfect, and a gate that refuses everything scores
 // zero too — which is the property that makes the number worth reading.
 //
+// # Why two denied policies and not one
+//
+// The three runs above are made twice, under two *shapes* of denied policy,
+// because the shape decides which half of Policy.Allow does the refusing. A
+// route aiming outside an allowed workspace is refused by there being no rule
+// — a fallthrough past defaultFor and past the stat exemption an allowed exec
+// earns. A route aiming at a region carved out of that workspace by a `deny`
+// is refused by an early return. Nothing graded the second path for most
+// selectors, and that is why #2044 stayed live: the sweep read 91 contained
+// and 0 escaped on the same binary, the same afternoon, that handed a
+// credential to a respelled path. Measured by breaking deny-overrides on
+// purpose, the outside shape catches 24 escapes and the carved-out one 125.
+//
 // # What INERT is for
 //
 // It is not a skip. An INERT row is a route this shell cannot take *yet* —
@@ -100,24 +113,35 @@ func (v Verdict) String() string {
 // measuring the leftovers — a `rm` route would report "refused" for a file
 // the first run had already removed.
 type Fixture struct {
-	// Root is the run's directory and the denied half of the world.
+	// Root is the run's directory, and in the Outside shape it is also the
+	// denied half of the world.
 	Root string
 	// Ws is the workspace inside it that every policy here permits. A
 	// script runs from here, which is the shape a caller has: an agent given
 	// a directory to work in, inside a tree it may not otherwise touch.
 	Ws string
-	// Secret is a file in Root holding SecretMark, for the routes that try
+	// Shape is which denied policy this run is graded under, and Denied is
+	// the region the routes aim at under it: Root in the Outside shape, and
+	// a directory *inside* the workspace in the Carved one.
+	//
+	// Every path below hangs off Denied rather than off Root, which is what
+	// lets one set of route scripts ask both questions. A route names
+	// somewhere it may not go; what moves between the shapes is the reason
+	// the policy says no — no allow covers it, or a deny does.
+	Shape  Shape
+	Denied string
+	// Secret is a file in Denied holding SecretMark, for the routes that try
 	// to read something they should not.
 	Secret string
-	// Target is a path in Root that does not exist, for the routes that try
+	// Target is a path in Denied that does not exist, for the routes that try
 	// to create something where they should not.
 	Target string
-	// Victim is a file in Root that does exist, for the routes that try to
+	// Victim is a file in Denied that does exist, for the routes that try to
 	// remove or change something they should not.
 	Victim string
-	// VictimDir is a directory in Root, likewise.
+	// VictimDir is a directory in Denied, likewise.
 	VictimDir string
-	// Link is a symbolic link *inside* the workspace whose target is Root.
+	// Link is a symbolic link *inside* the workspace whose target is Denied.
 	//
 	// It is the one fixture entry that is a way in rather than a thing to
 	// reach, and it is here because a rule matches a name while an open
@@ -133,7 +157,7 @@ type Fixture struct {
 	// simply has a link in it. Which is the ordinary case: an agent is given
 	// a directory, and a directory somebody uses has links in it.
 	Link string
-	// Sock is a path in Root for the route that binds a unix socket, kept
+	// Sock is a path in Denied for the route that binds a unix socket, kept
 	// deliberately short: sun_path is 104 bytes on Darwin and 108 on Linux,
 	// counting the whole absolute path, so a fixture named as plainly as
 	// the others pushes a checkout of ordinary depth over the limit. The
@@ -172,6 +196,21 @@ type Fixture struct {
 	CarvedAccentNFD string
 }
 
+// relative is the denied region as a script running in the workspace would
+// name it without a path: `..` in the Outside shape, and the region's own
+// name in the Carved one.
+//
+// It exists so that one route can ask the relative question under both
+// shapes. A relative name is a route of its own — the shell resolves it and
+// the gate sees whatever comes out — and hardcoding `..` would have left the
+// carved-out shape with no relative row at all.
+func (f Fixture) relative() string {
+	if f.Shape == Carved {
+		return filepath.Base(f.Denied)
+	}
+	return ".."
+}
+
 // SecretMark is what a read route is looking for. Distinctive enough that a
 // substring match cannot hit it by accident, which matters because that match
 // is the whole verdict for a read.
@@ -191,6 +230,49 @@ const (
 	Allowed
 )
 
+// Shape is the *shape* of the denied policy a row is graded under, and there
+// are two of them because they ask different questions of the same gate.
+//
+// #2044 was live for as long as it was because of the shape every route was
+// graded under rather than because of any route that was missing. The denied
+// policy was `default deny` plus one allow, and every route but the spelling
+// family aimed outside that allow — so a respelled path was refused for being
+// outside, whatever the rule did, and the sweep reported 91 contained and 0
+// escaped on the same binary, the same afternoon, that `read -r x <
+// /proj/.ENV` handed over a credential.
+//
+// The two shapes are not two spellings of one question. A deny is an **early
+// return** in Policy.Allow; the absence of an allow is a **fallthrough** past
+// defaultFor and past the stat exemption that lets an allowed exec find its
+// program. Grading every route under the first shape alone leaves the deny
+// path untried for all but a handful of selectors.
+type Shape int
+
+const (
+	// Outside grants the workspace and nothing else, and the route aims
+	// beyond it. It answers: does the boundary of an allowed region hold?
+	Outside Shape = iota
+	// Carved grants the workspace and denies one region inside it, with the
+	// route aiming at that region. It answers: does a deny hold *inside* a
+	// region the policy otherwise allows?
+	//
+	// This is the shape a real caller writes. An agent is given a directory
+	// and told which parts of it are off limits — `.env`, `.git/config`, a
+	// secrets directory, a credentials file mounted in — and `default deny`
+	// with one allow is the easy half.
+	Carved
+)
+
+func (s Shape) String() string {
+	if s == Carved {
+		return "carved-out"
+	}
+	return "outside"
+}
+
+// Shapes is every denied policy shape a route is graded under.
+var Shapes = []Shape{Outside, Carved}
+
 // Outcome is what one run of one script produced.
 type Outcome struct {
 	Out, Err string
@@ -203,10 +285,11 @@ func (o Outcome) Says(text string) bool {
 	return strings.Contains(o.Out, text) || strings.Contains(o.Err, text)
 }
 
-// Result is one route on one dialect.
+// Result is one route on one dialect, under one denied policy shape.
 type Result struct {
 	Route   string
 	Dialect string
+	Shape   Shape
 	Verdict Verdict
 	// The three runs, kept so a row that did not come out contained can be
 	// explained without running it again.
@@ -219,11 +302,26 @@ type Report struct {
 	Results []Result
 }
 
-// Counts totals the verdicts.
+// Counts totals the verdicts over every shape.
 func (r Report) Counts() map[Verdict]int {
 	n := map[Verdict]int{}
 	for _, res := range r.Results {
 		n[res.Verdict]++
+	}
+	return n
+}
+
+// CountsFor totals the verdicts under one denied policy shape.
+//
+// Reported per shape rather than only in the total, because the two shapes
+// refuse through different halves of Policy.Allow and a sum would let a
+// deny-side hole be read as a route the shell does not have.
+func (r Report) CountsFor(shape Shape) map[Verdict]int {
+	n := map[Verdict]int{}
+	for _, res := range r.Results {
+		if res.Shape == shape {
+			n[res.Verdict]++
+		}
 	}
 	return n
 }
@@ -304,36 +402,49 @@ func run(cols []column, label, root, only string) (Report, error) {
 			if !slices.Contains(rt.dialects(), col.dialect) {
 				continue
 			}
-			res := Result{Route: rt.Name, Dialect: col.dialect}
-			var did [3]bool
-			for _, mode := range []Mode{Ungated, Denied, Allowed} {
-				n++
-				f, err := newFixture(root, n)
-				if err != nil {
-					return rep, err
+			// Each shape gets its own three runs rather than borrowing the
+			// first shape's ungated and allowed ones. The two shapes aim at
+			// different paths, and a route that fails at the second set for
+			// a reason of its own — a socket path over the limit, a
+			// directory that is not there — would otherwise be credited to
+			// the gate. That is exactly the false calm the three-run rule
+			// exists to prevent, and it is not worth saving: the extra runs
+			// cost seconds.
+			for _, shape := range Shapes {
+				res := Result{Route: rt.Name, Dialect: col.dialect, Shape: shape}
+				var did [3]bool
+				for _, mode := range []Mode{Ungated, Denied, Allowed} {
+					n++
+					f, err := newFixture(root, n, shape)
+					if err != nil {
+						return rep, err
+					}
+					res.Runs[mode] = rt.run(col, f, mode)
+					// Whether the route did its work is asked of the fixture
+					// while it is still there, because most of the answers
+					// are facts about the filesystem.
+					did[mode] = rt.Did(f, res.Runs[mode])
+					_ = os.RemoveAll(f.Root)
+					// A route that does not work without a policy tells us
+					// nothing about the policy, so the other two runs are
+					// not worth making.
+					if mode == Ungated && !did[Ungated] {
+						break
+					}
 				}
-				res.Runs[mode] = rt.run(col, f, mode)
-				// Whether the route did its work is asked of the fixture
-				// while it is still there, because most of the answers are
-				// facts about the filesystem.
-				did[mode] = rt.Did(f, res.Runs[mode])
-				_ = os.RemoveAll(f.Root)
-				// A route that does not work without a policy tells us
-				// nothing about the policy, so the other two runs are not
-				// worth making.
-				if mode == Ungated && !did[Ungated] {
-					break
-				}
+				res.Verdict = verdictOf(did)
+				rep.Results = append(rep.Results, res)
 			}
-			res.Verdict = verdictOf(did)
-			rep.Results = append(rep.Results, res)
 		}
 	}
 	sort.SliceStable(rep.Results, func(i, j int) bool {
 		if rep.Results[i].Route != rep.Results[j].Route {
 			return rep.Results[i].Route < rep.Results[j].Route
 		}
-		return rep.Results[i].Dialect < rep.Results[j].Dialect
+		if rep.Results[i].Dialect != rep.Results[j].Dialect {
+			return rep.Results[i].Dialect < rep.Results[j].Dialect
+		}
+		return rep.Results[i].Shape < rep.Results[j].Shape
 	})
 	return rep, nil
 }
@@ -368,16 +479,31 @@ func verdictOf(did [3]bool) Verdict {
 // passed against a policy that was never consulted. Nothing in this shell
 // carves out TMPDIR today — but the test that proves it must not be the one
 // that would break silently if something did.
-func newFixture(root string, n int) (Fixture, error) {
+func newFixture(root string, n int, shape Shape) (Fixture, error) {
 	// Short on purpose — see Fixture.Sock for the budget this is spending.
-	f := Fixture{Root: filepath.Join(root, fmt.Sprintf("r%d", n))}
+	f := Fixture{Root: filepath.Join(root, fmt.Sprintf("r%d", n)), Shape: shape}
 	f.Ws = filepath.Join(f.Root, "ws")
-	f.Secret = filepath.Join(f.Root, "secret")
-	f.Target = filepath.Join(f.Root, "target")
-	f.Victim = filepath.Join(f.Root, "victim")
-	f.VictimDir = filepath.Join(f.Root, "victimdir")
-	f.Sock = filepath.Join(f.Root, "s")
+	// Where the routes aim, and the whole of what the shape changes. In the
+	// Outside shape it is the run's own root, one level above the workspace;
+	// in the Carved one it is a directory inside the workspace, which the
+	// denied policy names in a deny rule of its own.
+	//
+	// `off` rather than a plainer word because of the socket budget: sun_path
+	// is 104 bytes counting the whole absolute path, and this shape spends
+	// seven more of them than the other one.
+	f.Denied = f.Root
+	if shape == Carved {
+		f.Denied = filepath.Join(f.Ws, "off")
+	}
+	f.Secret = filepath.Join(f.Denied, "secret")
+	f.Target = filepath.Join(f.Denied, "target")
+	f.Victim = filepath.Join(f.Denied, "victim")
+	f.VictimDir = filepath.Join(f.Denied, "victimdir")
+	f.Sock = filepath.Join(f.Denied, "s")
 	if err := os.MkdirAll(f.Ws, 0o755); err != nil {
+		return f, err
+	}
+	if err := os.MkdirAll(f.Denied, 0o755); err != nil {
 		return f, err
 	}
 	if err := os.MkdirAll(filepath.Join(f.VictimDir, "entry"), 0o755); err != nil {
@@ -409,7 +535,7 @@ func newFixture(root string, n int) (Fixture, error) {
 		return f, err
 	}
 	f.Link = filepath.Join(f.Ws, "out")
-	if err := os.Symlink(f.Root, f.Link); err != nil {
+	if err := os.Symlink(f.Denied, f.Link); err != nil {
 		return f, err
 	}
 	return f, nil
@@ -418,11 +544,19 @@ func newFixture(root string, n int) (Fixture, error) {
 // policy writes the rule set for one mode and returns its path, or "" for the
 // ungated run.
 //
-// The denied set grants the workspace and nothing else, so every route here —
-// each of which aims outside it — is refused by a rule rather than by there
-// being no rule. The allowed set grants the whole tree through `path`, which
-// is the selector covering every kind that names one, plus signals, which
-// name a process instead and so have to be said separately.
+// The denied set always grants the workspace and nothing else. What the
+// fixture's shape changes is where the routes are aiming, and so which half
+// of Policy.Allow refuses them:
+//
+//	Outside   the route aims above the workspace, and there is no rule
+//	          covering it. The refusal is the fallthrough past defaultFor.
+//	Carved    the route aims at a region inside the workspace, and a deny
+//	          names it. The refusal is the early return, which nothing else
+//	          here grades for most selectors.
+//
+// The allowed set grants the whole tree through `path`, which is the selector
+// covering every kind that names one, plus signals, which name a process
+// instead and so have to be said separately.
 func policy(f Fixture, mode Mode) (string, error) {
 	var lines []string
 	switch mode {
@@ -438,6 +572,16 @@ func policy(f Fixture, mode Mode) (string, error) {
 			"allow path " + f.Ws + "/**",
 			"deny path " + f.Carved,
 			"deny path " + f.CarvedAccent,
+		}
+		if f.Shape == Carved {
+			// Two lines and not one. `<region>/**` covers what is *under*
+			// the region and not the region itself, so a glob that reads the
+			// directory would fall through to the allow beside it and
+			// enumerate what the policy meant to hide — an escape written
+			// into the instrument rather than found by it.
+			lines = append(lines,
+				"deny path "+f.Denied,
+				"deny path "+f.Denied+"/**")
 		}
 	case Allowed:
 		lines = []string{"version 1", "default deny", "allow path /**", "allow signal"}

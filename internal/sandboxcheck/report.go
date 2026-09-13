@@ -19,11 +19,77 @@ import (
 func (r Report) Text(verbose bool) string {
 	var b strings.Builder
 	w := &b
-	fmt.Fprintf(w, "sandbox: %d routes × dialects, against %s\n\n", len(Routes()), r.Shell)
+	fmt.Fprintf(w, "sandbox: %d routes × dialects × %d policy shapes, against %s\n",
+		len(Routes()), len(Shapes), r.Shell)
 
+	// One table per denied policy shape, rather than one table with two marks
+	// per cell. The two shapes ask different questions of the same gate — a
+	// boundary that holds and a deny that holds inside one — and a row is only
+	// as good as the weaker of them, so each has to be readable on its own.
+	for _, shape := range Shapes {
+		fmt.Fprintf(w, "\n%s\n", shapeHeading(shape))
+		r.table(w, shape)
+	}
+
+	// The inert ledger. Printed always rather than under -v, because these
+	// are the rows that become escapes the day the feature lands, and a list
+	// nobody sees is not a ledger.
+	var inert []string
+	for _, res := range r.Results {
+		if res.Verdict == Inert {
+			inert = append(inert, res.Route+"/"+res.Dialect+" ("+res.Shape.String()+")")
+		}
+	}
+	if len(inert) > 0 {
+		fmt.Fprintf(w, "\n  not reachable yet — each becomes an escape the day it works:\n")
+		for _, s := range inert {
+			fmt.Fprintf(w, "    %s\n", s)
+		}
+	}
+
+	for _, res := range r.Results {
+		if res.Verdict == Contained && !verbose {
+			continue
+		}
+		if res.Verdict == Inert && !verbose {
+			continue
+		}
+		fmt.Fprintf(w, "\n  %s (%s, %s): %s\n", res.Route, res.Dialect, res.Shape, res.Verdict)
+		for i, label := range []string{"ungated", "denied ", "allowed"} {
+			o := res.Runs[i]
+			fmt.Fprintf(w, "    %s  code=%d out=%q err=%q\n",
+				label, o.Code, trim(o.Out), trim(o.Err))
+		}
+	}
+	return b.String()
+}
+
+// shapeHeading says which question the table under it answers, in the words
+// the reader needs rather than the one-word name.
+//
+// Both are spelled out on every run, including the run where they agree. The
+// whole finding behind #2055 is that a table can be complete about the routes
+// it has and silent about the policy shape those routes were graded under, so
+// the shape a reader is looking at is never left implicit.
+func shapeHeading(s Shape) string {
+	if s == Carved {
+		return "  carved-out of an allowed region — `allow <ws>/**` plus `deny <ws>/off`,\n" +
+			"  with the route aiming at the denied region inside the workspace.\n" +
+			"  Answers: does a deny hold inside a region the policy otherwise allows?"
+	}
+	return "  outside the workspace — `default deny` plus `allow <ws>/**`, with the\n" +
+		"  route aiming beyond it.\n" +
+		"  Answers: does the boundary of an allowed region hold?"
+}
+
+// table prints one shape's grid and its counts.
+func (r Report) table(w *strings.Builder, shape Shape) {
 	byRoute := map[string]map[string]Result{}
 	var order []string
 	for _, res := range r.Results {
+		if res.Shape != shape {
+			continue
+		}
 		if _, seen := byRoute[res.Route]; !seen {
 			order = append(order, res.Route)
 			byRoute[res.Route] = map[string]Result{}
@@ -60,41 +126,9 @@ func (r Report) Text(verbose bool) string {
 		fmt.Fprintln(w)
 	}
 
-	n := r.Counts()
+	n := r.CountsFor(shape)
 	fmt.Fprintf(w, "\n  contained %d   ESCAPED %d   OVERBLOCKED %d   inert %d\n",
 		n[Contained], n[Escaped], n[Overblocked], n[Inert])
-
-	// The inert ledger. Printed always rather than under -v, because these
-	// are the rows that become escapes the day the feature lands, and a list
-	// nobody sees is not a ledger.
-	var inert []string
-	for _, res := range r.Results {
-		if res.Verdict == Inert {
-			inert = append(inert, res.Route+"/"+res.Dialect)
-		}
-	}
-	if len(inert) > 0 {
-		fmt.Fprintf(w, "\n  not reachable yet — each becomes an escape the day it works:\n")
-		for _, s := range inert {
-			fmt.Fprintf(w, "    %s\n", s)
-		}
-	}
-
-	for _, res := range r.Results {
-		if res.Verdict == Contained && !verbose {
-			continue
-		}
-		if res.Verdict == Inert && !verbose {
-			continue
-		}
-		fmt.Fprintf(w, "\n  %s (%s): %s\n", res.Route, res.Dialect, res.Verdict)
-		for i, label := range []string{"ungated", "denied ", "allowed"} {
-			o := res.Runs[i]
-			fmt.Fprintf(w, "    %s  code=%d out=%q err=%q\n",
-				label, o.Code, trim(o.Out), trim(o.Err))
-		}
-	}
-	return b.String()
 }
 
 func mark(v Verdict) string {

@@ -984,6 +984,25 @@ dialects. Deleting the flag reading today turns the second table to 116
 OVERBLOCKED and leaves the first untouched, which is that blind spot in one
 picture.
 
+**Two shapes of denied policy, because a deny and the absence of an allow are
+different code paths.** Every row is graded twice more than the three runs
+below suggest: once with the route aiming *outside* a workspace the policy
+grants whole, which is refused by there being no rule, and once with it aiming
+at a region *carved out of* that workspace by a `deny` beside the `allow`,
+which is refused by a rule. In `Policy.Allow` the first is a fallthrough past
+`defaultFor` and past the stat exemption an allowed exec gets, and the second
+is an early return — so a table built only from the first leaves the deny path
+untried for all but a handful of selectors. That is not a tidiness argument:
+#2044 was live for as long as it was because of the shape, not because of a
+missing route, and the sweep read 91 contained and 0 escaped on the same binary
+that handed over a credential. The carve-out is also the shape a real caller
+writes — an agent given a directory and told which parts of it are off limits.
+
+Measured 2026-09-13 by breaking deny-overrides in `Policy.Allow` (`continue`
+where it returns): the outside shape catches **24** escapes and the carved-out
+shape catches **125**. The 101 that only the second one sees are what every
+row was missing.
+
 It exists because **the gate's unit tests are written by somebody who
 already knows where the boundary is**, and every escape this repository has
 had came in somewhere else: `sysopen` and `zsystem flock` opened files with

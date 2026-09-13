@@ -1189,3 +1189,41 @@ func TestPrintfStarWithoutOperandIsRefusedIsAnAxis(t *testing.T) {
 		})
 	}
 }
+
+// The three axes this file added are asked at the disagreement and nowhere
+// else, and the strongest way to say so is to run the core vector — where
+// every one of them is unanswered, and an axis that *is* consulted refuses
+// the command and says which one on stderr.
+//
+// So an ordinary `printf` has to work under a shell that has answered none of
+// them, and a star that is given its operands is ordinary: the panel is
+// unanimous about it, which is what made #2646 a correction.
+func TestPrintfDoesNotConsultTheStarAxesOnThePlainPath(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		src  string
+		want string
+	}{
+		{"a number", `printf '%d' 5`, "5"},
+		{"a string and a number", `printf '[%s=%d]' n 5`, "[n=5]"},
+		{"a width written out", `printf '[%6d]' 42`, "[    42]"},
+		{"a width from the operands", `printf '[%*d]' 6 42`, "[    42]"},
+		{"a precision from the operands", `printf '[%.*s]' 3 hello`, "[hel]"},
+		{"both of them", `printf '[%*.*f]' 10 2 3.14159`, "[      3.14]"},
+		{"a negative width", `printf '[%*d]' -5 42`, "[42   ]"},
+		{"the format reused", `printf '[%*d]' 6 42 3 7`, "[    42][  7]"},
+		// The absent *conversion* operand is the panel's silent zero too,
+		// and the guard in printfEmptyNumberIsAnError is what keeps the core
+		// from being asked about it.
+		{"an absent operand", `printf '[%d]'`, "[0]"},
+		{"an absent operand part way through", `printf '[%d][%d]' 1`, "[1][0]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := CoreSemantics()
+			out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q status %d, want %q and 0 — an axis was consulted on the plain path", out, st, tc.want)
+			}
+		})
+	}
+}

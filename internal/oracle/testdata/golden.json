@@ -744,108 +744,6 @@
         "TimedOut": false
       }
     },
-    "alias/a-pipeline-head-alias-whose-body-begins-with-a-bang": {
-      "ash": {
-        "Stdout": "st=1",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash": {
-        "Stdout": "st=0",
-        "Stderr": "\u003cscript\u003e: line 3: x: command not found",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash-as-sh": {
-        "Stdout": "st=1",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash32": {
-        "Stdout": "st=0",
-        "Stderr": "\u003cscript\u003e: line 3: x: command not found",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "dash": {
-        "Stdout": "st=1",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "ksh93": {
-        "Stdout": "st=1",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "zsh": {
-        "Stdout": "st=0",
-        "Stderr": "\u003cscript\u003e:3: command not found: x",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      }
-    },
-    "alias/a-pipeline-head-value-ending-in-a-blank": {
-      "ash": {
-        "Stdout": "HI~st=1",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash": {
-        "Stdout": "echo HI~st=0",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash-as-sh": {
-        "Stdout": "HI~st=1",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash32": {
-        "Stdout": "echo HI~st=0",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "dash": {
-        "Stdout": "HI~st=1",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "ksh93": {
-        "Stdout": "HI~st=1",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "zsh": {
-        "Stdout": "echo HI~st=0",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      }
-    },
     "alias/a-plus-word-prints-the-names": {
       "ash": {
         "Stdout": "--+--~st=1~--+g--~--L+--~--+L--~st=1",
@@ -993,57 +891,6 @@
       },
       "zsh": {
         "Stdout": "took~st=0",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      }
-    },
-    "alias/a-reserved-word-alias-at-the-head-of-a-pipeline": {
-      "ash": {
-        "Stdout": "st=1",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash": {
-        "Stdout": "took true~st=0",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash-as-sh": {
-        "Stdout": "st=1",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash32": {
-        "Stdout": "took true~st=0",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "dash": {
-        "Stdout": "st=1",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "ksh93": {
-        "Stdout": "st=1",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "zsh": {
-        "Stdout": "took true~st=0",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -1611,57 +1458,6 @@
         "TimedOut": false
       }
     },
-    "alias/a-time-alias-in-front-of-a-pipeline": {
-      "ash": {
-        "Stdout": "took~st=0",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash": {
-        "Stdout": "took~st=0",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash-as-sh": {
-        "Stdout": "st=0",
-        "Stderr": "~real\t0m0.000s~user\t0m0.000s~sys\t0m0.000s",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash32": {
-        "Stdout": "took~st=0",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "dash": {
-        "Stdout": "took~st=0",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "ksh93": {
-        "Stdout": "st=0",
-        "Stderr": "~real\t0m0.00s~user\t0m0.00s~sys\t0m0.00s",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "zsh": {
-        "Stdout": "took~st=0",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      }
-    },
     "alias/a-trailing-space-carries-on": {
       "ash": {
         "Stdout": "BEE",
@@ -2115,57 +1911,6 @@
       },
       "zsh": {
         "Stdout": "HI~st=0",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      }
-    },
-    "alias/an-ordinary-alias-at-the-head-of-a-pipeline": {
-      "ash": {
-        "Stdout": "hi~st=1",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash": {
-        "Stdout": "hi~st=1",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash-as-sh": {
-        "Stdout": "hi~st=1",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash32": {
-        "Stdout": "hi~st=1",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "dash": {
-        "Stdout": "hi~st=1",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "ksh93": {
-        "Stdout": "hi~st=1",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "zsh": {
-        "Stdout": "hi~st=1",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -28278,6 +28023,159 @@
       },
       "zsh": {
         "Stdout": "after=[2]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/printf-absent-number-is-an-empty-one": {
+      "ash": {
+        "Stdout": "[0]~st=1~[0][0][0]~st=1~[1][0]~st=1",
+        "Stderr": "\u003cshell\u003e: invalid number ''~\u003cshell\u003e: invalid number ''~\u003cshell\u003e: invalid number ''~\u003cshell\u003e: invalid number ''~\u003cshell\u003e: invalid number ''",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[0]~st=0~[0][0][0]~st=0~[1][0]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[0]~st=0~[0][0][0]~st=0~[1][0]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[0]~st=0~[0][0][0]~st=0~[1][0]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[0]~st=0~[0][0][0]~st=0~[1][0]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[0]~st=0~[0][0][0]~st=0~[1][0]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[0]~st=0~[0][0][0]~st=0~[1][0]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/printf-star-complaint-costs-the-status": {
+      "ash": {
+        "Stdout": "[hi]~st=0~[]~st=0",
+        "Stderr": "\u003cshell\u003e: invalid number 'abc'~\u003cshell\u003e: invalid number 'abc'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[hi]~st=1~[]~st=1",
+        "Stderr": "\u003cshell\u003e: line 1: printf: abc: invalid number~\u003cshell\u003e: line 1: printf: abc: invalid number",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[hi]~st=1~[]~st=1",
+        "Stderr": "\u003cshell\u003e: line 1: printf: abc: invalid number~\u003cshell\u003e: line 1: printf: abc: invalid number",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[hi]~st=1~[]~st=1",
+        "Stderr": "\u003cshell\u003e: line 0: printf: abc: invalid number~\u003cshell\u003e: line 0: printf: abc: invalid number",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[hi]~st=1~[]~st=1",
+        "Stderr": "\u003cshell\u003e: 1: printf: abc: expected numeric value~\u003cshell\u003e: 1: printf: abc: expected numeric value",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[hi]~st=0~[]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[hi]~st=0~[]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/printf-star-without-operand": {
+      "ash": {
+        "Stdout": "0~st=1",
+        "Stderr": "\u003cshell\u003e: invalid number ''",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "0~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "0~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "0~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "0~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e: printf: .: unknown format specifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "0~st=0",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -150996,6 +150894,57 @@
       },
       "zsh": {
         "Stdout": "[a\\ b][a\\'b][a!b][\\=ab]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "printf/star-takes-the-width-from-the-operands": {
+      "ash": {
+        "Stdout": "    42~  7~hel|      3.14~[42   ][hello]~[    hi][000042]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "    42~  7~hel|      3.14~[42   ][hello]~[    hi][000042]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "    42~  7~hel|      3.14~[42   ][hello]~[    hi][000042]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "    42~  7~hel|      3.14~[42   ][hello]~[    hi][000042]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "    42~  7~hel|      3.14~[42   ][hello]~[    hi][000042]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "    42~  7~hel|      3.14~[42   ][hello]~[    hi][000042]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "    42~  7~hel|      3.14~[42   ][hello]~[    hi][000042]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

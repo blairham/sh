@@ -3219,6 +3219,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `echo/a-hexadecimal-escape-with-no-digits` | ` 2d 65 20 61 5c 78 5a 3a 61 5c 75 5a 0a ` | ` 61 5c 78 5a 3a 61 5c 75 5a 0a ` | ` 61 5c 78 5a 3a 61 5c 75 5a 0a ` | ` 61 5c 78 5a 3a 61 5c 75 5a 0a ` | ` 61 5c 78 5a 3a 61 5c 75 5a 0a ` | ` 61 00 5a 3a 61 00 5a 0a ` | ` 61 5c 78 5a 3a 61 5c 75 5a 0a` |
 | `echo/the-order-of-e-and-capital-e` | `-e -E m	n` | `m\tn` | `m\tn` | `m\tn` | `-E m	n` | `m	n` | `m	n` |
 | `printf/quoted-operand-is-a-character-value` | `65~65~0x61~65~0~65.000000` | `65~65~0x61~65~0~65.000000` | `65~65~0x61~65~0~65.000000` | `65~65~0x61~65~0~65.000000` | `65~65~0x61~65~0~65.000000` **2>** `<shell>: printf: warning: 'AB: invalid character constant~<shell>: printf: warning: ': invalid character constant` | `65~65~0x61~65~0~65.000000` | `65~65~0x61~65~0~65.000000` |
+| `printf/star-takes-the-width-from-the-operands` | `    42~  7~hel\|      3.14~[42   ][hello]~[    hi][000042]` | `    42~  7~hel\|      3.14~[42   ][hello]~[    hi][000042]` | `    42~  7~hel\|      3.14~[42   ][hello]~[    hi][000042]` | `    42~  7~hel\|      3.14~[42   ][hello]~[    hi][000042]` | `    42~  7~hel\|      3.14~[42   ][hello]~[    hi][000042]` | `    42~  7~hel\|      3.14~[42   ][hello]~[    hi][000042]` | `    42~  7~hel\|      3.14~[42   ][hello]~[    hi][000042]` |
+| `axis/printf-star-without-operand` | `0~st=0` | `0~st=0` | `0~st=0` | `0~st=0` | `st=1` **2>** `<shell>: printf: .: unknown format specifier` | `0~st=0` | `0~st=1` **2>** `<shell>: invalid number ''` |
+| `axis/printf-absent-number-is-an-empty-one` | `[0]~st=0~[0][0][0]~st=0~[1][0]~st=0` | `[0]~st=0~[0][0][0]~st=0~[1][0]~st=0` | `[0]~st=0~[0][0][0]~st=0~[1][0]~st=0` | `[0]~st=0~[0][0][0]~st=0~[1][0]~st=0` | `[0]~st=0~[0][0][0]~st=0~[1][0]~st=0` | `[0]~st=0~[0][0][0]~st=0~[1][0]~st=0` | `[0]~st=1~[0][0][0]~st=1~[1][0]~st=1` **2>** `<shell>: invalid number ''~<shell>: invalid number ''~<shell>: invalid number ''~<shell>: invalid number ''~<shell>: invalid number ''` |
+| `axis/printf-star-complaint-costs-the-status` | `[hi]~st=1~[]~st=1` **2>** `<shell>: 1: printf: abc: expected numeric value~<shell>: 1: printf: abc: expected numeric value` | `[hi]~st=1~[]~st=1` **2>** `<shell>: line 1: printf: abc: invalid number~<shell>: line 1: printf: abc: invalid number` | `[hi]~st=1~[]~st=1` **2>** `<shell>: line 1: printf: abc: invalid number~<shell>: line 1: printf: abc: invalid number` | `[hi]~st=1~[]~st=1` **2>** `<shell>: line 0: printf: abc: invalid number~<shell>: line 0: printf: abc: invalid number` | `[hi]~st=0~[]~st=0` | `[hi]~st=0~[]~st=0` | `[hi]~st=0~[]~st=0` **2>** `<shell>: invalid number 'abc'~<shell>: invalid number 'abc'` |
 | `printf/quoted-operand-needs-the-quote-first` | `0~st=1` **2>** `<shell>: 1: printf:  'A: expected numeric value` | `0~st=1` **2>** `<shell>: line 1: printf:  'A: invalid number` | `0~st=1` **2>** `<shell>: line 1: printf:  'A: invalid number` | `0~st=1` **2>** `<shell>: line 0: printf:  'A: invalid number` | `65~st=0` | `0~st=1` **2>** `<shell>:1: bad math expression: illegal character: '` | `65~st=0` |
 | `readonly/reassignment-by-a-declaration` | **2>** `<shell>: 1: export: x: is read only` *(status 2)* | `after` **2>** `<shell>: line 1: x: readonly variable` | **2>** `<shell>: line 1: x: readonly variable` *(status 1)* | `after` **2>** `<shell>: x: readonly variable` | **2>** `<shell>: x: is read only` *(status 1)* | **2>** `<shell>:1: read-only variable: x` *(status 1)* | **2>** `<shell>: export: line 0: x: is read only` *(status 2)* |
 | `readonly/reassignment-from-a-command-string` | **2>** `<shell>: 1: x: is read only` *(status 2)* | **2>** `<shell>: line 1: x: readonly variable` *(status 1)* | **2>** `<shell>: line 1: x: readonly variable` *(status 127)* | **2>** `<shell>: x: readonly variable` *(status 1)* | **2>** `<shell>: x: is read only` *(status 1)* | **2>** `<shell>:1: read-only variable: x` *(status 1)* | **2>** `<shell>: x: is read only` *(status 2)* |
@@ -3866,6 +3870,22 @@ grades it and nothing drift-checks it either, for the same reason.
 - `printf/quoted-operand-is-a-character-value` — a numeric conversion whose operand begins with a quote takes the value of the *character after it* rather than reading digits — POSIX XCU says so in so many words and all seven columns do it, so it is the core's. It is also the only way a shell has of asking what a character's code is, which is what made the gap sting here: `printf '0x%x' "'a"` answered `invalid number` and printed `0x0`. Five readings in one row: both quote characters, a hex and a float conversion taking the same operand, a trailing character ignored rather than refused — ksh93 warns beside the same 65 — and a lone quote worth zero
   ```sh
   printf '%d\n' "'A"; printf '%d\n' '"A'; printf '0x%x\n' "'a"; printf '%d\n' "'AB"; printf '%d\n' "'"; printf '%f\n' "'A"
+  ```
+- `printf/star-takes-the-width-from-the-operands` — POSIX XCU gives printf C's `*` for a field width and for a precision, taken from the operand list in order ahead of the operand being converted, and all seven columns do it — so it is the core's and not an axis (#2646). Six readings in one row, and the third is the one that separates a real fix from a partial one: `%*.*f` takes the width, then the precision, then the value, as two operands in written order, where a fix that resolved a single star passes `%*d` and `%.*s` and still gets it wrong. Then the two signs, which are C's rule and not an approximation of it — a negative width is the `-` flag and the magnitude, a negative precision is no precision at all rather than a zero one, so `%.*s` of -3 is `hello` and not the empty string — and the reuse loop counting the star's operand, which the first conversion exercises twice over
+  ```sh
+  printf '%*d\n' 6 42 3 7; printf '%.*s|%*.*f\n' 3 hello 10 2 3.14159; printf '[%*d][%.*s]\n' -5 42 -3 hello; printf '[%*s][%0*d]\n' 6 hi 6 42
+  ```
+- `axis/printf-star-without-operand` — a `*` that finds the operand list already empty: six columns take a silent zero and ksh93 alone refuses the directive, naming the constant `.` whatever the conversion was. Written with the conversion first deliberately — ksh93's refusal also rewinds the pass's stdout to the start of the last conversion that consumed an operand, which this shell records in docs/spec/semantics.md and does not reproduce, so a format with a literal ahead of the star would grade that unreproduced fact instead of this axis
+  ```sh
+  printf '%*d\n'; echo "st=$?"
+  ```
+- `axis/printf-absent-number-is-an-empty-one` — a numeric conversion with no operand left: bash, zsh, ksh93 and dash write the zero in silence at 0, and BusyBox ash reads it as a conversion of the empty string — `invalid number ''` at 1, the same complaint it makes for an operand that is present and empty (#2648). The second line is why the axis is not satisfied by complaining once: ash writes one complaint per absent operand and three come out. The third shows the operands running out part way through a format rather than at its start, which is the shape a script actually meets
+  ```sh
+  printf '[%d]\n'; echo "st=$?"; printf '[%x][%o][%u]\n'; echo "st=$?"; printf '[%d][%d]\n' 1; echo "st=$?"
+  ```
+- `axis/printf-star-complaint-costs-the-status` — the complaint about an operand a `*` took, and whether it reports failure. bash and dash say yes, ksh93 and zsh never complain about a number at all, and ash writes the complaint and reports success anyway — the diagnostic, the output and the status are three observations here and they do not move together. The width it could not read is none, which is why the field comes out unpadded in every column
+  ```sh
+  printf '[%*s]\n' abc hi; echo "st=$?"; printf '[%.*s]\n' abc hello; echo "st=$?"
   ```
 - `printf/quoted-operand-needs-the-quote-first` — the control for the row above, and the reason the operand is not trimmed before that reading where a plain numeral is: one blank in front of the quote makes the word an ordinary operand again and a bad number in five of the seven columns, each in its own wording. ksh93 and ash read through the blank and answer 65
   ```sh
@@ -20725,11 +20745,6 @@ grades it and nothing drift-checks it either, for the same reason.
 | `alias/the-name-of-a-bare-lookup` | `st=1~two` **2>** `alias: a$b not found` | `st=1~two` **2>** `<shell>: line 1: alias: a$b: not found` | `st=1~two` **2>** `<shell>: line 1: alias: a$b: not found` | `st=1~two` **2>** `<shell>: line 0: alias: a$b: not found` | **2>** `alias: a$b: invalid alias name` *(status 1)* | `st=1~two` | `st=1~two` **2>** `alias: a$b not found` |
 | `alias/a-reserved-word-is-read-the-way-the-grammar-reads-it` | `[a]` | `took~[a]` | `[a]` | `took~[a]` | `[a]` | `took~[a]` | `[a]` |
 | `alias/a-reserved-word-after-an-alias-ending-in-a-blank` | `st=1` | `took~st=0` | `st=1` | `took~st=0` | `st=1` | `took~st=0` | `st=1` |
-| `alias/a-reserved-word-alias-at-the-head-of-a-pipeline` | `st=1` | `took true~st=0` | `st=1` | `took true~st=0` | `st=1` | `took true~st=0` | `st=1` |
-| `alias/an-ordinary-alias-at-the-head-of-a-pipeline` | `hi~st=1` | `hi~st=1` | `hi~st=1` | `hi~st=1` | `hi~st=1` | `hi~st=1` | `hi~st=1` |
-| `alias/a-pipeline-head-alias-whose-body-begins-with-a-bang` | `st=1` | `st=0` **2>** `<script>: line 3: x: command not found` | `st=1` | `st=0` **2>** `<script>: line 3: x: command not found` | `st=1` | `st=0` **2>** `<script>:3: command not found: x` | `st=1` |
-| `alias/a-pipeline-head-value-ending-in-a-blank` | `HI~st=1` | `echo HI~st=0` | `HI~st=1` | `echo HI~st=0` | `HI~st=1` | `echo HI~st=0` | `HI~st=1` |
-| `alias/a-time-alias-in-front-of-a-pipeline` | `took~st=0` | `took~st=0` | `st=0` **2>** `~real	0m0.000s~user	0m0.000s~sys	0m0.000s` | `took~st=0` | `st=0` **2>** `~real	0m0.00s~user	0m0.00s~sys	0m0.00s` | `took~st=0` | `took~st=0` |
 | `alias/a-reserved-word-alias-in-posix-mode` | **2>** `<script>: 3: set: Illegal option -o posix` *(status 2)* | `[a]` | `[a]` | `[a]` | **2>** `<script>[3]: set: posix: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | **2>** `<script>:set:3: no such option: posix` *(status 1)* | `[a]` **2>** `<script>: set: line 3: illegal option -o posix` |
 | `alias/leaving-posix-mode-hands-the-reserved-word-back` | **2>** `<script>: 3: set: Illegal option -o posix` *(status 2)* | `took~[a]` | `took~[a]` | `took~[a]` | **2>** `<script>[3]: set: posix: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | **2>** `<script>:set:3: no such option: posix` *(status 1)* | `[a]` **2>** `<script>: set: line 3: illegal option -o posix~<script>: set: line 4: illegal option +o posix` |
 | `alias/a-word-the-grammar-does-not-reserve-expands-in-posix-mode` | **2>** `<script>: 2: set: Illegal option -o posix` *(status 2)* | `took there` | `took there` | `took there` | **2>** `<script>[2]: set: posix: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | **2>** `<script>:set:2: no such option: posix` *(status 1)* | `took there` **2>** `<script>: set: line 2: illegal option -o posix` |
@@ -21060,42 +21075,6 @@ grades it and nothing drift-checks it either, for the same reason.
   alias sp=' '
   alias '!'='echo took;'
   sp ! true
-  echo "st=$?"
-  ```
-- `alias/a-reserved-word-alias-at-the-head-of-a-pipeline` — the one position the reserved-word flag did not reach (#2638). `!` is read as a pipeline's negation one level out from a command, before the alias table is consulted at all, so the substitution never happened here however the dialect was set. The split is exactly the one the row above draws — bash 5.3, bash 3.2 and zsh print `took true` and answer 0; dash, ksh93, BusyBox ash and bash called `sh` print nothing and answer 1, because `! true` stayed a negation — which is what says this is that field reaching further and not an axis of its own. `alias/a-reserved-word-after-an-alias-ending-in-a-blank` is the control: it asks the same word in the one position that already worked, so a change that breaks the flag itself is visible in both rows and a change that breaks only the reach is visible in this one
-  ```sh
-  shopt -s expand_aliases 2>/dev/null
-  alias '!'='echo took'
-  ! true
-  echo "st=$?"
-  ```
-- `alias/an-ordinary-alias-at-the-head-of-a-pipeline` — the control for the row above, and the reason the reach is guarded by the *word* rather than applied to every head: a name the grammar does not reserve is expanded behind the negation exactly as it is anywhere a command word stands, and all seven columns agree — `hi`, then 1, the negation of a success. A fix that asked the reserved-word question about every word a pipeline begins with would take this row's `e` away in the four columns that protect, which nothing else in the corpus would notice
-  ```sh
-  shopt -s expand_aliases 2>/dev/null
-  alias e=echo
-  ! e hi
-  echo "st=$?"
-  ```
-- `alias/a-pipeline-head-alias-whose-body-begins-with-a-bang` — the negation is read off the word the substitution *left*, not the word that was written. The body opens with the name it was reached by, so the inner `!` is inside the chain that name opened and is not expanded again — `alias/a-body-that-names-itself-past-a-separator` is the general form — and what stands there is the reserved word doing its reserved job: the three that expand report `x: command not found` and answer 0, the negation of a 127. The four that protect never substitute at all and answer 1. It is also the row that says the word *behind* the negation is still an ordinary command word: `x` is looked up rather than swallowed
-  ```sh
-  shopt -s expand_aliases 2>/dev/null
-  alias '!'='! x'
-  ! true
-  echo "st=$?"
-  ```
-- `alias/a-pipeline-head-value-ending-in-a-blank` — the trailing-blank rule reaches the head of a pipeline too, which is the half of #2638 a fix can silently drop: the word after a value ending in a blank is eligible in turn, so the three that expand run `echo` with the *expansion of* `hi` behind it and print `echo HI` at 0. The four that protect keep the negation, run the ordinary alias behind it and print `HI` at 1 — so the two readings differ in both the output and the status, and neither cell can be reached by accident
-  ```sh
-  shopt -s expand_aliases 2>/dev/null
-  alias '!'='echo '
-  alias hi='echo HI'
-  ! hi
-  echo "st=$?"
-  ```
-- `alias/a-time-alias-in-front-of-a-pipeline` — the second word a pipeline reads before a command exists, and the same gap: `time` binds the whole pipeline and is read one level out, so nothing asked the table for it either. bash 5.3, bash 3.2 and zsh take the alias and print `took`; ksh93 and bash called `sh` keep the keyword and report on the pipeline instead. dash and BusyBox ash take it as well — not because they expand a reserved word but because neither has the keyword to protect, which is the same thing `alias/a-reserved-word-is-read-the-way-the-grammar-reads-it` says about `select` and `function` and is what makes the protected set the grammar's own. The body ends in `;` so that the timing report and the alias are two different lines rather than two readings of one
-  ```sh
-  shopt -s expand_aliases 2>/dev/null
-  alias time='echo took;'
-  time true
   echo "st=$?"
   ```
 - `alias/a-reserved-word-alias-in-posix-mode` — the mode moves it: the two bash builds print only the loop here where they print `took` above. The other four have no `posix` option at all and say so in three different ways — an illegal option, bad option(s) with the usage line, and no such option — which is the same taxonomy this corpus records everywhere the name is bash's. dash and ksh93 end the script over it and BusyBox ash reports it and carries on, which is why ash still reaches the loop and prints `[a]`

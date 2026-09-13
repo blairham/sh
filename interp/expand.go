@@ -3201,14 +3201,6 @@ func (r *Runner) armOrder() armOrder {
 	}
 }
 
-// matchedWith is trimWith with the flag that keeps what the pattern took.
-func (r *Runner) matchedWith(value, pattern string, e *syntax.ParamExpr) string {
-	out, m := matched(value, pattern, e.Op, r.patternOpts(pattern),
-		r.armOrder(), searchingFlag(e))
-	r.publishMatch(m)
-	return out
-}
-
 // replaceWith substitutes a matching span, expanding the replacement text
 // once per match where — and only where — the pattern reports something.
 //
@@ -3344,6 +3336,13 @@ func trim(value, pattern string, op syntax.ParamOp, o patternOpts, arm armOrder,
 
 // matched is trim's other half: the part the pattern took rather than the part
 // it left, and nothing at all when it took none.
+//
+// It is `(M)`'s projection of the span, and the flag no longer reaches it
+// through a wrapper of its own: `(M)`, `(B)`, `(E)`, `(N)` and `(R)` may be
+// written together and have to report **one** match, so the five leave
+// through Runner.trimReport holding one span (#2153). What is left here is
+// the pairing itself — this and trim above are the two halves of the same
+// split, asserted directly by interp/patternedge_test.go.
 //
 // One flag turns a trim into this — the same operator, the same match, the
 // other side of the same split — which is why it shares trimSpan rather than

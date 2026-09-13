@@ -117187,6 +117187,159 @@
         "TimedOut": false
       }
     },
+    "param/the-reporting-flags-accumulate-in-a-fixed-order": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: [${(SBE)str#X*}][${(SBM)str#X*}][${(SBMR)str#X*}][${(BER)str#X*}][${(EB)str#X*}][${(SBENMR)str#X*}]: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: [${(SBE)str#X*}][${(SBM)str#X*}][${(SBMR)str#X*}][${(BER)str#X*}][${(EB)str#X*}][${(SBENMR)str#X*}]: bad substitution",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: [${(SBE)str#X*}][${(SBM)str#X*}][${(SBMR)str#X*}][${(BER)str#X*}][${(EB)str#X*}][${(SBENMR)str#X*}]: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `str#X*}][${(SBM)str#X*}][${(SBMR)str#X*}][${(BER)str#X*}][${(EB)str#X*}][${(SBENMR)str#X*}]\"\"' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[2 3][X 2][X abXc 2][aXbXc 1 1][1 1][X abXc 2 3 1]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "param/the-reporting-flags-elsewhere-do-nothing": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: [${(B)str}][${(B)str:1}][${(B)str:-alt}][${(B)str/X/Y}][${(B)#str}][${(N)str:1}]: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: [${(B)str}][${(B)str:1}][${(B)str:-alt}][${(B)str/X/Y}][${(B)#str}][${(N)str:1}]: bad substitution",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: [${(B)str}][${(B)str:1}][${(B)str:-alt}][${(B)str/X/Y}][${(B)#str}][${(N)str:1}]: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `str}][${(B)str:1}][${(B)str:-alt}][${(B)str/X/Y}][${(B)#str}][${(N)str:1}]\"\"' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[aXbXc][XbXc][aXbXc][aYbXc][5][XbXc]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "param/the-reporting-flags-project-the-match": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: [${(SB)str#X*}][${(SE)str#X*}][${(SN)str#X*}][${(SR)str#X*}][${(B)str#X*}][${(N)str#X*}][${(SB)str%X*}]: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: [${(SB)str#X*}][${(SE)str#X*}][${(SN)str#X*}][${(SR)str#X*}][${(B)str#X*}][${(N)str#X*}][${(SB)str%X*}]: bad substitution",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: [${(SB)str#X*}][${(SE)str#X*}][${(SN)str#X*}][${(SR)str#X*}][${(B)str#X*}][${(N)str#X*}][${(SB)str%X*}]: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `str#X*}][${(SE)str#X*}][${(SN)str#X*}][${(SR)str#X*}][${(B)str#X*}][${(N)str#X*}][${(SB)str%X*}]\"\"' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[2][3][1][abXc][1][0][4]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "param/the-searching-and-matching-flags-compose": {
       "ash": {
         "Stdout": "",

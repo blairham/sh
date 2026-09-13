@@ -311,8 +311,14 @@ with no startup files:
 
 A write through either name is read back through both, it takes `local`
 inside a function and the outer value returns with the frame, `typeset -x`
-exports it, and `typeset -p` reports an ordinary scalar. bash has no such
-parameter; the other three shells in the panel have none either.
+exports it, and `typeset -p` reports an ordinary scalar.
+
+**zsh is the only shell in the panel that ships it set.** bash recognizes the
+name — the manual documents `histchars` as the characters history expansion is
+spelled with, and an assignment to it is honored — but a fresh bash leaves it
+**empty**, interactive or not, measured on 5.3.15 and on 3.2.57. ksh93 and
+dash read it as an ordinary unset name. So the value is zsh's answer rather
+than the panel's, and it is kept in this dialect rather than in the core.
 
 The value and the two spellings are what this shell keeps. It performs no
 history expansion, so nothing here *acts* on the characters — the parameter

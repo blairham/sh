@@ -152,6 +152,108 @@ type Layout struct {
 	// CasePatternsParenthesised writes an arm's pattern with the opening
 	// parenthesis that the grammar allows and most shells leave out.
 	CasePatternsParenthesised bool
+
+	// BackgroundKeepsTheLine lets the statement after a `&` follow it on the
+	// same line rather than starting one of its own.
+	//
+	// A `&` is a terminator, so `a & b` is already two statements and an
+	// arrangement that puts each on a line of its own is free to break there.
+	// One engine does and another does not, which is the whole of why this is
+	// a field: `f() { echo bg & ( exit 1 ); echo $?; }` comes back with the
+	// subshell on the `&`'s line in one listing and on the next line in the
+	// other.
+	BackgroundKeepsTheLine bool
+
+	// ElifWrittenAsANestedIf writes an `elif` out as an `else` whose body is
+	// an `if` of its own.
+	//
+	// The two are the same program and are not the same tree, so this is the
+	// one field here that a round trip cannot survive — which is what makes
+	// it a field rather than the printer's default. Measured: one engine
+	// expands every `elif` of a listed body and the other keeps the word, and
+	// neither is a taste this package may hold.
+	ElifWrittenAsANestedIf bool
+
+	// ParameterBracesAsWritten keeps the braces of a `${x}` that was written
+	// with them, instead of dropping the pair a plain name does not need.
+	//
+	// Off by default because the *word* printer is a diagnostic's, and a
+	// diagnostic quotes a redirect target the way every shell does: `$e:
+	// ambiguous redirect`, never `${e}`. A listing is the other caller and
+	// wants the spelling back — `echo "${x}"` reprinted as `echo "$x"` is a
+	// different program the moment the next character continues a name, and
+	// a person reading the listing cannot see which of the two they have.
+	//
+	// [Span.Bare] is what records the spelling; this decides whether the
+	// printer reads it.
+	ParameterBracesAsWritten bool
+
+	// PipeBothWrittenOut writes the `2>&1` that a `|&` stands for, and a
+	// plain `|` after it, rather than the operator the script used.
+	//
+	// The redirection is in the tree either way — see [Redirect.PipeBoth] —
+	// so this decides which of the two the reader is shown. Both engines that
+	// say a body back write it out, and one of them cannot read the operator
+	// at all: `|&` arrived in bash 4, so a listing that kept it would hand
+	// bash 3.2 a syntax error for a function it can run.
+	PipeBothWrittenOut bool
+
+	// BodyIsAlwaysBraced writes the command handed to [PrintWith] as a brace
+	// group where it is not one already.
+	//
+	// A function's body is the caller: `f() ( … )` and `f() if …; fi` are
+	// declarations both engines that list a body write back with `{ … }`
+	// around them, so what a person reads is the shape a listing always has
+	// rather than the shape the author wrote. It is a normalization and not a
+	// round trip — the braces are a node the source did not have — which is
+	// why it is asked for rather than assumed.
+	BodyIsAlwaysBraced bool
+
+	// FunctionHeader is how a function declaration's header is spelled: the
+	// `function` keyword, the `()`, or both.
+	FunctionHeader FunctionHeader
+
+	// BraceAfterAFunctionHeaderOnItsOwnLine gives the `{` that opens a
+	// declared body a line of its own, the way the first statement of a
+	// block does under OutermostBraceOpensALine.
+	//
+	// Only where the header was written with `()`; the keyword form already
+	// decides this for itself, since a name list is greedy and only a
+	// newline ends it.
+	BraceAfterAFunctionHeaderOnItsOwnLine bool
+}
+
+// FunctionHeader is how a function declaration's header is spelled.
+//
+// The three values are the three answers measured, and the spelling matters
+// beyond taste in exactly one dialect: `typeset` in a `function f { … }` body
+// declares a local there and assigns the global in an `f() { … }` body, which
+// is the axis Semantics.TypesetLocalNeedsKeywordFunction records. So the
+// default keeps what was written, and a listing that respells says so.
+type FunctionHeader uint8
+
+const (
+	// FunctionHeaderAsWritten writes the keyword where the declaration had
+	// one and `()` where it did not, which is the spelling that reads back
+	// to the same tree.
+	FunctionHeaderAsWritten FunctionHeader = iota
+	// FunctionHeaderKeywordAndParens writes both, whichever was used:
+	// `function f () `. The hybrid spelling, which parses to the keyword
+	// declaration in every grammar that takes it.
+	FunctionHeaderKeywordAndParens
+	// FunctionHeaderParens writes `f () ` and never the keyword. Correct
+	// only where the two bodies run alike, which is every dialect but one.
+	FunctionHeaderParens
+)
+
+func (h FunctionHeader) String() string {
+	switch h {
+	case FunctionHeaderKeywordAndParens:
+		return "keyword and parens"
+	case FunctionHeaderParens:
+		return "parens"
+	}
+	return "as written"
 }
 
 // PrintWith renders one command with a chosen arrangement.
@@ -160,8 +262,23 @@ func PrintWith(c Command, l Layout) string {
 		return ""
 	}
 	p := printer{layout: l}
-	p.command(c)
+	p.printed(c)
 	return p.b.String()
+}
+
+// printed writes the command a caller handed in, put in a brace group first
+// where the arrangement asks for a body that is always one.
+//
+// The wrapping is here rather than in command because it is about the
+// outermost command alone: a subshell *inside* a body is written as the
+// subshell it is, and it is only the body itself that a listing spells with
+// braces however it was declared.
+func (p *printer) printed(c Command) {
+	if _, braced := c.(*Group); p.layout.BodyIsAlwaysBraced && !braced {
+		p.braceGroup([]*Stmt{{Expr: &Pipeline{Cmds: []Command{c}}}})
+		return
+	}
+	p.command(c)
 }
 
 type printer struct {
@@ -239,6 +356,13 @@ func (p *printer) stmts(list []*Stmt) {
 // separate writes what goes between two statements.
 func (p *printer) separate(prev, next *Stmt) {
 	if p.layout.Lines {
+		if prev.Background && p.layout.BackgroundKeepsTheLine {
+			// The `&` is the terminator, so there is nothing to write
+			// between them but the blank that keeps them apart — and the
+			// line goes on rather than ending here.
+			p.str(" ")
+			return
+		}
 		// A shape the caller asked for, so the source's own lines do not
 		// come into it. A backgrounded statement is already terminated
 		// whatever the arrangement says, and so is one whose here-document
@@ -317,9 +441,12 @@ func (p *printer) expr(e Expr) {
 		}
 		for i, c := range x.Cmds {
 			if i > 0 {
-				if mergesStderr(x.Cmds[i-1]) {
+				if mergesStderr(x.Cmds[i-1]) && !p.layout.PipeBothWrittenOut {
 					p.str(" |& ")
 				} else {
+					// The redirection the operator stands for has already
+					// been written by the command before this one, which is
+					// what leaves a plain pipe to write here.
 					p.str(" | ")
 				}
 			}
@@ -509,20 +636,31 @@ func (p *printer) command(c Command) {
 		// the other, and `eval "$(typeset -f f)"` keeps the locality only
 		// because it does.
 		//
-		// Unconditional rather than a Layout option, and no dialect is
-		// asked: a tree can only carry the keyword if the grammar that read
+		// The *default* rather than unconditional, and no dialect is asked
+		// for it: a tree can only carry the keyword if the grammar that read
 		// it has the keyword, so writing it back is writing what that
 		// grammar reads. The same reasoning AnonFunc above already prints
-		// on, from the same field.
+		// on, from the same field. An arrangement that asked to respell the
+		// header says so through Layout.FunctionHeader, which is how a
+		// listing reaches the two spellings the engines actually write —
+		// and neither of those is this one.
 		//
 		// The hybrid `function f() { …; }` comes back in the keyword form
 		// without its parentheses, which is the tree it parsed to: the
 		// parser consumes them and records nothing, because the only shell
 		// that parts the two spellings refuses the hybrid outright and the
 		// two that take it treat all three alike.
-		if x.Keyword {
+		keyword, parens := x.Keyword, !x.Keyword
+		switch p.layout.FunctionHeader {
+		case FunctionHeaderKeywordAndParens:
+			keyword, parens = true, true
+		case FunctionHeaderParens:
+			keyword, parens = false, true
+		}
+		if keyword {
 			p.str("function ")
 		}
+		named := p.b.Len()
 		// The name as *written* where it was written with an expansion:
 		// printing its literal text would name a different function, which
 		// is the same loss the parser used to take (see FuncDecl.NameWord).
@@ -549,7 +687,28 @@ func (p *printer) command(c Command) {
 				p.str(printedFuncName(n.Name))
 			}
 		}
-		if x.Keyword {
+		switch {
+		case parens:
+			// The `()` ends the name list, so the greedy reading below
+			// cannot arise and the body may open on this line.
+			//
+			// A blank between the name and the parentheses where the header
+			// was respelled, and none where it was kept: `f()` is how a
+			// declaration is written and `f () ` is how both engines that
+			// list one write it back, and the tree records neither — so the
+			// spelling travels with the field that asked for it. None at all
+			// before an anonymous function's `()`, whose name is empty and
+			// where a leading space would be a word of its own.
+			if p.layout.FunctionHeader != FunctionHeaderAsWritten && p.b.Len() > named {
+				p.str(" ")
+			}
+			p.str("()")
+			if _, braced := x.Body.(*Group); braced && p.layout.BraceAfterAFunctionHeaderOnItsOwnLine {
+				p.str(" \n" + p.pad())
+			} else {
+				p.str(" ")
+			}
+		case keyword:
 			// A newline where the body does not open with a `{`, because the
 			// name list is greedy: written on one line, `function a if true;
 			// then :; fi` reads `if` and `true` back as two more *names* and
@@ -563,8 +722,6 @@ func (p *printer) command(c Command) {
 			} else {
 				p.str("\n" + p.pad())
 			}
-		} else {
-			p.str("() ")
 		}
 		p.command(x.Body)
 	case *CoprocClause:
@@ -713,6 +870,29 @@ func (p *printer) parenItems(has bool, items []*Word) {
 }
 
 func (p *printer) ifClause(x *IfClause) {
+	if len(x.Elifs) > 0 && p.layout.ElifWrittenAsANestedIf {
+		// The first `elif` becomes an `else` whose one statement is an `if`
+		// carrying everything after it, and the rest arrive back here
+		// through that `if`. So the recursion is the construct's own rather
+		// than a second walk written beside it, and the `else`, the
+		// indentation and the terminator before `fi` are the ones every
+		// other body gets.
+		p.str("if ")
+		p.stmts(x.Cond)
+		p.opener("then", p.layout.ThenOnItsOwnLine)
+		p.body(x.Then, true)
+		p.keyword("else")
+		rest := &IfClause{
+			Cond: x.Elifs[0].Cond, Then: x.Elifs[0].Then,
+			Elifs: x.Elifs[1:], Else: x.Else, HasElse: x.HasElse,
+		}
+		p.body([]*Stmt{{Expr: &Pipeline{Cmds: []Command{rest}}}}, true)
+		p.keyword("fi")
+		// On the outermost clause alone: the nested ones carry none, since
+		// the construct they were split out of had one set of them.
+		p.redirs(x.Redirs)
+		return
+	}
 	p.str("if ")
 	p.stmts(x.Cond)
 	p.opener("then", p.layout.ThenOnItsOwnLine)
@@ -1008,9 +1188,11 @@ func (p *printer) assign(a *Assign) {
 
 func (p *printer) redirs(rs []*Redirect) {
 	for _, rd := range rs {
-		if rd.PipeBoth {
+		if rd.PipeBoth && !p.layout.PipeBothWrittenOut {
 			// Nobody wrote this one: it is what the `|&` after the command
-			// means, and the pipeline writes that operator back instead.
+			// means, and the pipeline writes that operator back instead —
+			// unless the arrangement asked for the meaning rather than the
+			// operator, which is what PipeBothWrittenOut says.
 			continue
 		}
 		p.str(" ")
@@ -1022,13 +1204,22 @@ func (p *printer) redirs(rs []*Redirect) {
 			p.word(rd.N)
 		}
 		p.str(rd.Op.String())
-		// Always a space, because the two run together otherwise: `< <(cmd)`
+		// A space, because the two run together otherwise: `< <(cmd)`
 		// written without one is `<<`, a here-document, which is not a
 		// redirection with a target at all. The round trip found that; a
 		// rule about which characters can combine would have been a guess
 		// about the lexer, and this needs none.
-		p.str(" ")
-		p.word(rd.Word)
+		//
+		// A here-document is the exception, and it is measured rather than
+		// preferred: every shell in the panel that says a body back writes
+		// `cat <<XEOF` tight, and none writes `cat << XEOF`. See
+		// heredocDelimiterNeedsABlank for the two delimiters that still take
+		// the space.
+		delim := p.printedWord(rd.Word)
+		if !rd.Op.IsHeredoc() || heredocDelimiterNeedsABlank(rd.Op, delim) {
+			p.str(" ")
+		}
+		p.str(delim)
 		if rd.Op.IsHeredoc() {
 			// The body is not on the line the operator is on — it is the
 			// lines after the command — so it is written after everything
@@ -1040,6 +1231,31 @@ func (p *printer) redirs(rs []*Redirect) {
 			p.heredocs = append(p.heredocs, rd)
 		}
 	}
+}
+
+// printedWord is a word written to a string rather than to the output, for
+// the one decision that needs the text before it is committed: whether an
+// operator can be written tight against what follows it.
+//
+// The sub-printer carries this one's arrangement and its two word-level
+// flags, so the text it produces is the text that would have been written.
+func (p *printer) printedWord(w *Word) string {
+	sub := printer{layout: p.layout, raw: p.raw, caseBlanks: p.caseBlanks}
+	sub.word(w)
+	return sub.b.String()
+}
+
+// heredocDelimiterNeedsABlank reports whether a here-document's operator has
+// to be held off its delimiter by a space.
+//
+// Only where writing them tight would spell a *longer operator*, which is two
+// delimiters and no more: after `<<`, a leading `<` makes `<<<`, the
+// herestring, and a leading `-` makes `<<-`, the tab-stripping document. Both
+// are a different construct reading a different body, printed at status 0.
+//
+// `<<-` extends into nothing, so a document written with it is always tight.
+func heredocDelimiterNeedsABlank(op Kind, delim string) bool {
+	return op == TokDLess && delim != "" && (delim[0] == '<' || delim[0] == '-')
 }
 
 // dup writes a `<&` or `>&` redirection, which is spelled with no space.
@@ -1318,10 +1534,17 @@ func (p *printer) span(s Span) {
 
 // bareParam reports whether a parameter can be written without its braces.
 //
-// Two conditions, and the second is the one that bites: the name has to be
-// one the shell would read unbraced, and nothing may follow that would run
-// into it. `${x}y` unbraced is the parameter `xy`.
+// Three conditions, and the second is the one that bites: the arrangement has
+// to allow the braces to go, the name has to be one the shell would read
+// unbraced, and nothing may follow that would run into it. `${x}y` unbraced is
+// the parameter `xy`.
 func (p *printer) bareParam(s Span) (string, bool) {
+	if p.layout.ParameterBracesAsWritten && !s.Bare {
+		// Written with braces, so it keeps them: the tree records which
+		// spelling was read, and a caller that asked for the spelling back
+		// is asking for this field to be honored.
+		return "", false
+	}
 	v := s.Value
 	if v == "" || !plainParamName(v) {
 		return "", false

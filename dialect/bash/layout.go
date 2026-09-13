@@ -47,5 +47,35 @@ func common() syntax.Layout {
 		DoAfterWordsOnItsOwnLine:   true,
 		BraceOpenSuffix:            " ",
 		CaseHeaderSuffix:           " ",
+
+		// What a listing says about a body beyond where its lines break,
+		// all of it measured on bash 5.3.15 and bash 3.2.57 through
+		// `declare -f` and `export -f`, which answer alike (#2427).
+		//
+		// The braces of a `${x}` are kept, because a body reprinted with
+		// `$x` where `${x}` was written is a different program the moment
+		// the next character continues a name. The `2>&1` a `|&` stands for
+		// is written out and the operator is not — which this shell has a
+		// second reason for, since `|&` arrived in bash 4 and 3.2 answers a
+		// syntax error to a body it can otherwise run. A body that is not a
+		// brace group is put in one, so `f() ( … )` lists as `f () \n{ ( …
+		// ) \n}`. A statement after a `&` stays on the `&`'s line. And an
+		// `elif` is written out as an `else` holding an `if` of its own.
+		ParameterBracesAsWritten: true,
+		PipeBothWrittenOut:       true,
+		BodyIsAlwaysBraced:       true,
+		BackgroundKeepsTheLine:   true,
+		ElifWrittenAsANestedIf:   true,
+
+		// A nested declaration is respelled with both the keyword and the
+		// parentheses, whichever it was written with: `inner() { … }` inside
+		// a listed body comes back `function inner () ` with the brace on
+		// the next line. The header of the listing *itself* is not this —
+		// that is `f () `, with no keyword, and it is written by the builtin
+		// rather than by the printer. Two spellings from one shell, which is
+		// why the outer one is Diagnostics.FunctionListingHeader and this
+		// one is here.
+		FunctionHeader:                        syntax.FunctionHeaderKeywordAndParens,
+		BraceAfterAFunctionHeaderOnItsOwnLine: true,
 	}
 }

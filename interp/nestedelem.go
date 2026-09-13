@@ -15,18 +15,23 @@ import (
 //
 // ksh93's answer, and the one the store had no shape for until Element grew a
 // Nested field. The array keeps its length and the element stops being a
-// string: `a=(x y); a[1]=(p q)` is still two elements, `${a[1]}` is `p`,
-// `${a[1][1]}` is `q` and `typeset -p a` prints `typeset -a a=(x (p q) )`.
+// string: `a=(x y); a[1]=(p q)` is still two elements, `${a[1]}` is `p`, and
+// `typeset -p a` prints `typeset -a a=(x (p q) )`.
 //
 // Measured on ksh93u+ 2012-08-01, 2026-09-13, `env -i` with a scratch HOME:
 //
 //	a=(x y);   a[1]=(p q)   ${a[@]} -> x p     n=2
 //	a=(x y z); a[1]=()      ${a[@]} -> x, an empty one, z    n=3
-//	a=(x y);   a[1]+=(p)    ${a[@]} -> x p     the element was a string
-//	a=(x y);   a[1]=(p q); a[1]+=(r)   ${a[1][@]} -> p q r   and now it is not
+//	a=(x y);   a[1]+=(p)    typeset -a a=(x (p) )     the element was a string
+//	a=(x y);   a[1]=(p q); a[1]+=(r)   typeset -a a=(x (p q r) )   and now not
 //	s=abc;     s[1]=(p q)   typeset -a s=(abc (p q) )
 //	unset a;   a[3]=(x y)   ${a[@]} -> x       n=1, the gap is no element
 //	typeset -A h; h[a,b]=(x y)   typeset -A h=([a,b]=(x y) )
+//
+// The listing is how the nested words are read back here at all: a second
+// subscript — `${a[1][1]}`, which is `q` on the real shell — is still a parse
+// error, and it is recorded in docs/spec/semantics.md as not modeled rather
+// than left to be rediscovered.
 //
 // No range reading is asked for and that is not an omission: this dialect
 // reads a subscript's comma as the arithmetic operator whose value is its

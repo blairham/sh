@@ -224,7 +224,7 @@ func (r *Runner) typePath(name string, m typeMode) int {
 	if r.unspecified {
 		return 2
 	}
-	path, err := r.lookPath(name)
+	path, err := r.lookPathReporting(name)
 	if err != nil {
 		if sentence {
 			return r.typeNotFound(m.kind, r.typeNotFoundWording(name))
@@ -449,7 +449,7 @@ func (r *Runner) describeName(name string, kind typeKind, skipFuncs bool, notFou
 	// executable called /usr/bin/umask and this shell will not run it, so
 	// saying where it is would be answering about the wrong thing.
 	if !r.reservedBuiltin(name) {
-		if path, err := r.lookPath(name); err == nil {
+		if path, err := r.lookPathReporting(name); err == nil {
 			if r.sayKind(kind, name, "file", NamedKindWord(NameFile)) {
 				// The kind and never the path, which is what keeps the word
 				// comparable on any machine.

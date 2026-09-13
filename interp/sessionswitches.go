@@ -45,6 +45,19 @@ func (r *Runner) AutoCd() bool { return r.autoCd }
 // SetAutoCd moves it.
 func (r *Runner) SetAutoCd(on bool) { r.autoCd = on }
 
+// ChecksHashedCommand reports whether the command hash is looked at before it
+// is believed.
+//
+// bash's `shopt -s checkhash` is the only spelling in the panel, and it is
+// here rather than in that dialect for the reason every switch in this file
+// is: the *behavior* is the core's — lookPath either falls back to a fresh
+// search or does not — and three of the four shells do it with nothing set.
+// See Semantics.CommandHashIsTrusted, which this can only turn down.
+func (r *Runner) ChecksHashedCommand() bool { return r.checksHashedCommand }
+
+// SetChecksHashedCommand moves it.
+func (r *Runner) SetChecksHashedCommand(on bool) { r.checksHashedCommand = on }
+
 // CompletesEmptyCommandWord reports whether completing an empty command word
 // offers everything that could run — every builtin, function, reserved word
 // and executable on PATH.

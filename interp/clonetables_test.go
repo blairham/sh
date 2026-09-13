@@ -91,6 +91,7 @@ func seedStacks(r *Runner) {
 	r.pipeStatus = append(make([]int, 0, 4), 0)
 	r.freezeAfter = append(make([]string, 0, 4), "seed")
 	r.mathOrder = append(make([]string, 0, 4), "seed")
+	r.cmdHashOrder = append(make([]string, 0, 4), "seed")
 }
 
 // TestACloneOwnsEveryStack is TestACloneOwnsEveryTable for the slices, and it
@@ -243,6 +244,7 @@ func seedTables(r *Runner) {
 	r.absentParams = map[string]string{"seed": "v"}
 	r.aliases = map[string]aliasDef{"seed": {value: "v"}}
 	r.suffixAliases = map[string]string{"seed": "v"}
+	r.cmdHash = map[string]hashedCommand{"seed": {path: "/bin/seed", hits: 1}}
 	r.assigned = map[string]string{"seed": "v"}
 	r.completions = map[string]completionSpec{"seed": {options: []string{"nospace"}, words: []string{"-F", "f"}}}
 	r.custom = map[string]Builtin{"seed": func(*Runner, context.Context, []string) int { return 0 }}

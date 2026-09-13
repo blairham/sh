@@ -88,6 +88,40 @@ func (r *Runner) lookPath(name string) (string, error) {
 		return full, nil
 	}
 
+	// What the command hash already holds, which is the whole reason it is
+	// kept — and the one place the panel parts company over it. bash runs
+	// what it remembered and reports the *remembered path* when it has gone;
+	// zsh, ksh93 and dash look before they leap, and a stale entry sends
+	// them back to PATH, where they find the next copy and run it. Measured
+	// with two copies of one name on PATH, the first hashed and then
+	// deleted — the arrangement that tells the readings apart, since with
+	// one copy all four fail and only the wording moves.
+	if hashed, ok := r.hashedCommandPath(name); ok {
+		full := r.absolute(hashed)
+		err := r.runnable(full)
+		if err == nil {
+			r.hashCommandHit(name)
+			return full, nil
+		}
+		if r.ask(r.sem().CommandHashIsTrusted, "a hashed path used without looking for it again") &&
+			!r.checksHashedCommand {
+			// The remembered path is the answer even now, so the failure is
+			// reported as that *path* — the same sentence a command word
+			// with a slash in it gets, and the same 127. Measured: bash says
+			// `/tmp/hb/zzcmd: No such file or directory` where the other
+			// three have already found the next copy and run it.
+			r.hashCommandHit(name)
+			return "", &pathError{
+				name: hashed, resolved: full,
+				missing: errors.Is(err, os.ErrNotExist), err: err,
+			}
+		}
+		// Gone, and this dialect looks again. Forgotten here rather than
+		// re-checked on every later lookup: a second run of the same name
+		// walks PATH once and hashes what it finds.
+		r.forgetHashedCommand(name)
+	}
+
 	// A file that exists and will not run is remembered rather than returned:
 	// a later entry may still have a good one, and only if none does is this
 	// the answer. A directory of the matching name is remembered apart from

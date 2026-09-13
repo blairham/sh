@@ -7250,6 +7250,130 @@ type Semantics struct {
 	// /usr/bin/cd. Recorded as `hash/a-builtin-counts-except-in-zsh`.
 	HashSearchesPathAlone Answer
 
+	// CommandHashIsTrusted runs the path the command hash holds without
+	// asking whether it is still there.
+	//
+	// bash alone. The split is only visible once an entry has gone stale,
+	// and then it decides whether the command runs at all. Measured
+	// 2026-09-13 with `zzcmd` in two directories, both on PATH, the first
+	// hashed and then deleted:
+	//
+	//	bash 5.3.15  /tmp/hb/zzcmd: No such file or directory   127
+	//	zsh 5.9.2    V2                                           0
+	//	ksh93        V2                                           0
+	//	dash         V2                                           0
+	//
+	// So three of the four fall back to a fresh PATH walk and find the
+	// second copy, while bash uses what it remembered and reports the
+	// *remembered path* rather than the name — which is why the diagnostic
+	// differs too, and why a probe that only deleted the single copy could
+	// not tell the readings apart: all four fail there, and only the wording
+	// moves.
+	//
+	// This is what `hash -r` is for in the one shell that needs it.
+	CommandHashIsTrusted Answer
+
+	// HashListingIsSorted lists the command hash in name order.
+	//
+	// zsh alone, and it is asked rather than assumed because the other three
+	// have no reproducible order at all: bash, ksh93 and dash each walk their
+	// own hash table's buckets, so `awk`, `ls`, `sed` hashed in that order
+	// come out `ls awk sed` in bash and `awk sed ls` in dash. See
+	// hashedCommandNames — insertion order is this shell's answer where the
+	// dialect's own is a property of its hash function.
+	HashListingIsSorted Answer
+
+	// HashListsAsCommands is `hash -l`: the table written as the `hash -p`
+	// lines that would rebuild it. bash alone, which is also the only column
+	// with `-p` to write.
+	//
+	// Measured: `builtin hash -p /bin/ls ls`, one line per entry, and an
+	// empty table prints *nothing* — unlike the bare listing, which
+	// announces itself. zsh, ksh93 and dash refuse the letter.
+	HashListsAsCommands Answer
+
+	// HashTakesAPathToRemember is `hash -p pathname name`: an entry put
+	// there by hand rather than by a search. bash alone.
+	//
+	// The path is taken as written and never checked — `hash -p
+	// /nonexistent/zz qq; qq` reports `/nonexistent/zz: No such file or
+	// directory` at 127 — which is the same reading of the table as
+	// CommandHashIsTrusted and the reason the two belong to one dialect.
+	HashTakesAPathToRemember Answer
+
+	// HashForgetsOneName is `hash -d name`: one entry out, where `-r` is all
+	// of them. bash alone. zsh has the letter and means something else by it
+	// — its named-directory table — which is why this is a question about
+	// `hash` rather than about a letter.
+	HashForgetsOneName Answer
+
+	// HashReportsThePath is `hash -t name`: what the table holds for a name.
+	// bash alone.
+	//
+	// One name prints the path by itself and two or more print `name<TAB>path`,
+	// so the shape depends on how many were asked for rather than on a
+	// letter — measured, and it is the same rule `type` does not follow.
+	HashReportsThePath Answer
+
+	// ALookupRemembersThePath puts a name in the command hash when a builtin
+	// was only asked *where* it is — `type`, `command -v`, `command -V`,
+	// `type -p`.
+	//
+	// zsh, ksh93 and dash do; bash does not. Measured 2026-09-13 with an
+	// empty table, `type ls >/dev/null; hash`:
+	//
+	//	bash 5.3.15   the table is still empty
+	//	zsh 5.9.2     ls is in it
+	//	ksh93         ls is in it
+	//	dash          ls is in it
+	//
+	// This was written down here as unanimous on the strength of a bash-only
+	// probe, and it is not — which is the failure this burndown keeps making
+	// and is worth the sentence. What *is* unanimous is the other half:
+	// running a command hashes it in all four, so hashCommandRun stays on
+	// the execution path and is asked about by nobody.
+	//
+	// bash's `type -P` is not this question and no dialect here answers it
+	// differently: measured, it hashes in none of the four — in bash because
+	// no lookup does, and in the other three because they have no such
+	// letter for the question to be put through.
+	//
+	// **Read rather than asked** — see Runner.lookPathReporting. The
+	// disagreement is invisible to the builtin that would have to refuse:
+	// `type ls` prints the same sentence in all four, and only a later
+	// `hash` can tell them apart.
+	ALookupRemembersThePath Answer
+
+	// HashObeysCommandTracking stops filling the command hash when command
+	// tracking is turned off — bash's `hashall` and `set +h`, zsh's
+	// `hashcmds`, ksh93's `trackall`.
+	//
+	// bash and zsh; ksh93 does not. Measured 2026-09-13:
+	//
+	//	bash    set +h; ls >/dev/null; hash            nothing remembered
+	//	zsh     unsetopt hashcmds; ls >/dev/null; hash nothing remembered
+	//	ksh93   set +o trackall; ls >/dev/null; hash   still lists ls
+	//
+	// dash has no such option at all. zsh's *letter* `-h` is a history
+	// option and never reaches this — the long name is the only spelling
+	// there that does.
+	//
+	// Asked only where a script has *moved* the option, which is the one
+	// place the answers differ and the only place this is on the path of
+	// every external command. See Runner.hashCommandRun.
+	HashObeysCommandTracking Answer
+
+	// HashRefusesWhileTrackingIsOff closes the builtin itself while the
+	// option above is off, rather than only stopping what is put in.
+	//
+	// bash alone, and it is the second half of a question the first cut of
+	// this modeled as one. Measured with the option off: bash answers a bare
+	// listing, `hash -r` and `hash name` alike with one sentence at 1, where
+	// zsh answers all three at 0 and an explicit `hash ls` still puts `ls`
+	// in the table — so its listing afterwards shows the name the automatic
+	// hashing would not have put there.
+	HashRefusesWhileTrackingIsOff Answer
+
 	// UnderscoreTracksTheLastArgument moves `$_` to the previous simple
 	// command's last expanded argument — the command word itself when it
 	// had none, and empty after a bare assignment. bash and zsh; dash and
@@ -11187,6 +11311,22 @@ func PosixSemantics() Semantics {
 		// counts builtins and functions too, and reports a missing name.
 		HashReportsAMissingName: Yes,
 		HashSearchesPathAlone:   No,
+		// POSIX says a shell "shall remember" the location and says nothing
+		// about re-checking it; the majority of the panel looks again, and
+		// the one that does not overrides. The letters past `-r` are bash's
+		// own and are off here for the same reason every extension is.
+		CommandHashIsTrusted:          No,
+		HashListingIsSorted:           No,
+		HashListsAsCommands:           No,
+		HashTakesAPathToRemember:      No,
+		HashForgetsOneName:            No,
+		HashReportsThePath:            No,
+		HashObeysCommandTracking:      No,
+		HashRefusesWhileTrackingIsOff: No,
+		// dash is the closest reading of the standard here and it hashes
+		// what it was only asked about; so do zsh and ksh93, and bash
+		// overrides.
+		ALookupRemembersThePath: Yes,
 		// POSIX has no such names; refusal is one shell's own answer.
 		PunctuatedFunctionNameIsRefused: No,
 		SetHasTraceLetters:              No,

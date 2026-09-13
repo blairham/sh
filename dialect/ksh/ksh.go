@@ -1923,8 +1923,11 @@ func Diagnostics() interp.Diagnostics {
 		UlimitBadNumber:            "ulimit: %[1]s: parameter not set",
 		BuiltinBadOption:           "%[1]s: %[2]s: unknown option",
 		BadOptionNaming:            interp.BadOptionWholeWord,
-		WaitBadJob:                 "wait: %[1]s: Arguments must be %%job, process ids, or job pool names",
-		WaitBadJobStatus:           1,
+		// `ls=/bin/ls`: ksh93's hash is `alias -t`, so its listing is the
+		// alias shape — which is zsh's too, by a different road.
+		HashListing:      interp.HashListingNameEqualsPath,
+		WaitBadJob:       "wait: %[1]s: Arguments must be %%job, process ids, or job pool names",
+		WaitBadJobStatus: 1,
 		// ksh93 has `--version` here, which this shell does not.
 		UnimplementedOptionLetters: map[string]string{
 			// `set` letters ksh93 has and this shell does not: -b job

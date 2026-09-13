@@ -3406,6 +3406,20 @@ grades it and nothing drift-checks it either, for the same reason.
 | `hash/bare-and-r-succeed-everywhere` | `st=0~r=0` | `hash: hash table empty~st=0~r=0` | `st=0~r=0` | `hash: hash table empty~st=0~r=0` | `st=0~r=0` | `st=0~r=0` | `st=0~r=0` |
 | `hash/a-missing-name-diverges` | `st=1` **2>** `<shell>: 1: hash: nosuchcmd-xyz: not found` | `st=1` **2>** `<shell>: line 1: hash: nosuchcmd-xyz: not found` | `st=1` **2>** `<shell>: line 1: hash: nosuchcmd-xyz: not found` | `st=1` **2>** `<shell>: line 0: hash: nosuchcmd-xyz: not found` | `st=0` | `st=1` **2>** `<shell>:hash:1: no such command: nosuchcmd-xyz` | `st=1` **2>** `<shell>: hash: line 0: nosuchcmd-xyz: not found` |
 | `hash/a-builtin-counts-except-in-zsh` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=1` **2>** `<shell>:hash:1: no such command: shift` | `st=0` |
+| `hash/a-run-command-is-remembered` | `zzc` | `hits	command~   1	zzc` | `hits	command~   1	zzc` | `hits	command~   1	zzc` | `zzc=zzc` | `zzc=zzc` | `zzc` |
+| `hash/a-lookup-that-only-reports-a-path` | `zzc` | `hash: hash table empty` | *(no output, status 0)* | `hash: hash table empty` | `zzc=zzc` | `zzc=zzc` | `zzc` |
+| `hash/the-listing-counts-lookups-not-runs` | `zzc` | `hits	command~   3	zzc` | `hits	command~   3	zzc` | `hits	command~   3	zzc` | `zzc=zzc` | `zzc=zzc` | `zzc` |
+| `hash/assigning-path-empties-the-table` | *(no output, status 0)* | `hash: hash table empty` | *(no output, status 0)* | `hash: hash table empty` | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* |
+| `hash/a-stale-entry-is-trusted-or-searched-again` | `V1~V2~st=0` | `V1~st=127` | `V1~V2~st=0` | `V1~st=127` | `V1~V2~st=0` | `V1~V2~st=0` | `V1~V2~st=0` |
+| `hash/checkhash-makes-bash-look-first` | `V1~V2~st=0` | `V1~V2~st=0` | `V1~V2~st=0` | `V1~V2~st=0` | `V1~V2~st=0` | `V1~V2~st=0` | `V1~V2~st=0` |
+| `hash/the-letters-past-r` | `t=2~l=2~d=2~p=2` | `t=1~l=0~d=1~p=0` | `t=1~l=0~d=1~p=0` | `t=1~l=0~d=0~p=0` | *(no output, status 1)* | `t=1~l=1~d=1~p=1` | `t=2~l=2~d=2~p=2` |
+| `hash/a-path-put-there-by-hand-is-read-back` | `p=2` **2>** `<shell>: 1: zzq: not found` | `p=0~PUT~zzp~builtin hash -p zzp zzq` | `p=0~PUT~zzp~builtin hash -p zzp zzq` | `p=0~PUT~zzp~builtin hash -p zzp zzq` | *(no output, status 1)* | `p=1` **2>** `<shell>:1: command not found: zzq` | `p=2` **2>** `<shell>: zzq: not found` |
+| `hash/forgetting-one-name-and-all-of-them` | `d=2~zzc` | `d=0~hash: hash table empty~hash: hash table empty` | `d=0` | `d=0~hash: hash table empty~hash: hash table empty` | *(no output, status 1)* | `d=1~zzc=zzc` | `d=2~zzc` |
+| `hash/a-subshell-keeps-its-own-entries` | *(no output, status 0)* | `hash: hash table empty` | *(no output, status 0)* | `hash: hash table empty` | `zzc=zzc` | *(no output, status 0)* | *(no output, status 0)* |
+| `hash/bash-cmds-is-the-table` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `keys=zzc~val=zzc` | `keys=zzc~val=zzc` | `keys=~val=` | `keys=~val=` | **2>** `<shell>:1: bad substitution` *(status 1)* | **2>** `<shell>: syntax error: bad substitution` *(status 2)* |
+| `hash/command-tracking-off-stops-the-table` | *(no output, status 2)* | `st=1~0` | `st=1~0` | `st=1~0` | `st=0~1` | `st=0~1` | *(no output, status 2)* |
+| `hash/the-long-name-stops-it-in-two-shells` | *(no output, status 2)* | `st=1~0` | `st=1~0` | `st=1~0` | *(no output, status 2)* | `st=0~0` | `st=0~1` |
+| `hash/an-assignment-to-bash-cmds-hashes` | *(no output, status 2)* | `hits	command~   0	/bin/echo~/bin/echo` | `hits	command~   0	/bin/echo~/bin/echo` | `hash: hash table empty` *(status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 2)* |
 | `complete/registers-in-a-script` | `st=127` **2>** `<shell>: 1: complete: not found~<shell>: 1: complete: not found` *(status 127)* | `st=0~complete -W 'a b' foo` | `st=0~complete -W 'a b' foo` | `st=0~complete -W 'a b' foo` | `st=127` **2>** `<shell>: complete: not found~<shell>: complete: not found` *(status 127)* | `st=127` **2>** `<shell>:1: command not found: complete~<shell>:1: command not found: complete` *(status 127)* | `st=127` **2>** `<shell>: complete: not found~<shell>: complete: not found` *(status 127)* |
 | `complete/removes-and-misses` | `r=127~p=127` **2>** `<shell>: 1: complete: not found~<shell>: 1: complete: not found~<shell>: 1: complete: not found` | `r=0~p=1` **2>** `<shell>: line 1: complete: foo: no completion specification` | `r=0~p=1` **2>** `<shell>: line 1: complete: foo: no completion specification` | `r=0~p=1` **2>** `<shell>: line 0: complete: foo: no completion specification` | `r=127~p=127` **2>** `<shell>: complete: not found~<shell>: complete: not found~<shell>: complete: not found` | `r=127~p=127` **2>** `<shell>:1: command not found: complete~<shell>:1: command not found: complete~<shell>:1: command not found: complete` | `r=127~p=127` **2>** `<shell>: complete: not found~<shell>: complete: not found~<shell>: complete: not found` |
 | `mapfile/reads-lines-into-an-array` | **2>** `<shell>: 1: mapfile: not found~<shell>: 1: Bad substitution` *(status 2)* | `b` | `b` | **2>** `<shell>: mapfile: command not found` | **2>** `<shell>: mapfile: not found` | **2>** `<shell>:1: command not found: mapfile` | **2>** `<shell>: mapfile: not found~<shell>: syntax error: bad substitution` *(status 2)* |
@@ -4664,6 +4678,62 @@ grades it and nothing drift-checks it either, for the same reason.
 - `hash/a-builtin-counts-except-in-zsh` — zsh hashes only what PATH holds, so a builtin is 'no such command' there; measured with shift because macOS ships /usr/bin/cd
   ```sh
   hash shift; echo "st=$?"
+  ```
+- `hash/a-run-command-is-remembered` — running a bare name puts it in the command hash in every shell, and the listing is three shapes over four columns: bash's hits/command table, zsh's and ksh93's name=path, dash's bare path
+  ```sh
+  mkdir -p d1; printf '#!/bin/sh\n:\n' > d1/zzc; chmod +x d1/zzc; PATH=$PWD/d1:$PATH; zzc; hash 2>&1 | sed "s|$PWD/d1/||"
+  ```
+- `hash/a-lookup-that-only-reports-a-path` — bash leaves the command hash alone when it was only asked where a command is; zsh, ksh93 and dash all remember it — the half of 'what goes in the table' that a bash-only probe reported as unanimous
+  ```sh
+  mkdir -p d1; printf '#!/bin/sh\n:\n' > d1/zzc; chmod +x d1/zzc; PATH=$PWD/d1:$PATH; type zzc >/dev/null 2>&1; command -v zzc >/dev/null 2>&1; hash 2>&1 | sed "s|$PWD/d1/||"
+  ```
+- `hash/the-listing-counts-lookups-not-runs` — bash's hits column counts every lookup the table answered — two runs and a type are three — where a listing itself walks nothing; the other three keep no count to show
+  ```sh
+  mkdir -p d1; printf '#!/bin/sh\n:\n' > d1/zzc; chmod +x d1/zzc; PATH=$PWD/d1:$PATH; zzc; zzc; type zzc >/dev/null; hash 2>&1 | sed "s|$PWD/d1/||"
+  ```
+- `hash/assigning-path-empties-the-table` — unanimous: a new PATH makes every remembered answer a guess about a search nobody ran, so all four empty the table — and bash then announces the empty table where the others say nothing
+  ```sh
+  mkdir -p d1; printf '#!/bin/sh\n:\n' > d1/zzc; chmod +x d1/zzc; PATH=$PWD/d1:$PATH; zzc; PATH=$PATH; hash 2>&1 | sed "s|$PWD/d1/||"
+  ```
+- `hash/a-stale-entry-is-trusted-or-searched-again` — the axis behind hash -r: bash runs the path it remembered and fails at 127, where zsh, ksh93 and dash look first and find the second copy — two copies on PATH is the only arrangement that tells the readings apart
+  ```sh
+  mkdir -p d1 d2; printf '#!/bin/sh\necho V1\n' > d1/zzc; printf '#!/bin/sh\necho V2\n' > d2/zzc; chmod +x d1/zzc d2/zzc; PATH=$PWD/d1:$PWD/d2:$PATH; zzc; rm d1/zzc; zzc 2>/dev/null; echo "st=$?"
+  ```
+- `hash/checkhash-makes-bash-look-first` — the one switch over that axis: with checkhash set bash re-searches and runs the second copy like the other three, which is also what the option does in a shell that has no such name
+  ```sh
+  shopt -s checkhash 2>/dev/null; mkdir -p d1 d2; printf '#!/bin/sh\necho V1\n' > d1/zzc; printf '#!/bin/sh\necho V2\n' > d2/zzc; chmod +x d1/zzc d2/zzc; PATH=$PWD/d1:$PWD/d2:$PATH; zzc; rm d1/zzc; zzc 2>/dev/null; echo "st=$?"
+  ```
+- `hash/the-letters-past-r` — bash alone has the four; zsh reads -d as its named-directory table and refuses the rest, dash refuses all four, and ksh93's hash is alias -t so its refusals are alias's
+  ```sh
+  hash -t nosuchzz >/dev/null 2>&1; echo "t=$?"; hash -l >/dev/null 2>&1; echo "l=$?"; hash -d nosuchzz >/dev/null 2>&1; echo "d=$?"; hash -p /bin/echo zzp >/dev/null 2>&1; echo "p=$?"
+  ```
+- `hash/a-path-put-there-by-hand-is-read-back` — hash -p names a command PATH would never find, -t reads the entry back and -l writes the table as the commands that would rebuild it; the three letters are one feature and only bash has it
+  ```sh
+  mkdir -p d1; printf '#!/bin/sh\necho PUT\n' > d1/zzp; chmod +x d1/zzp; hash -r; hash -p $PWD/d1/zzp zzq 2>/dev/null; echo "p=$?"; zzq; hash -t zzq 2>/dev/null | sed "s|$PWD/d1/||"; hash -l 2>/dev/null | sed "s|$PWD/d1/||"
+  ```
+- `hash/forgetting-one-name-and-all-of-them` — -r is every shell's and -d is bash's: one name out against all of them, and the empty table afterwards is announced in one column and silent in three
+  ```sh
+  mkdir -p d1; printf '#!/bin/sh\n:\n' > d1/zzc; chmod +x d1/zzc; PATH=$PWD/d1:$PATH; zzc; hash -d zzc 2>/dev/null; echo "d=$?"; hash 2>&1 | sed "s|$PWD/d1/||"; zzc; hash -r; hash 2>&1 | sed "s|$PWD/d1/||"
+  ```
+- `hash/a-subshell-keeps-its-own-entries` — a command run in a subshell is hashed in the subshell: bash, zsh and dash leave the parent's table as it was, and ksh93 — whose subshells are virtual — carries the entry back out
+  ```sh
+  mkdir -p d1; printf '#!/bin/sh\n:\n' > d1/zzc; chmod +x d1/zzc; PATH=$PWD/d1:$PATH; ( zzc ); hash 2>&1 | sed "s|$PWD/d1/||"
+  ```
+- `hash/bash-cmds-is-the-table` — bash presents the command hash as an association, the way it presents the alias table as BASH_ALIASES; the other three have no such name and two of them cannot parse the subscript at all
+  ```sh
+  mkdir -p d1; printf '#!/bin/sh\n:\n' > d1/zzc; chmod +x d1/zzc; PATH=$PWD/d1:$PATH; zzc; echo "keys=${!BASH_CMDS[@]}"; echo "val=${BASH_CMDS[zzc]}" | sed "s|$PWD/d1/||"
+  ```
+- `hash/command-tracking-off-stops-the-table` — bash reads set +h as a stop: every spelling of hash answers 'hashing disabled' at 1 and nothing is remembered, where ksh93 goes on hashing with trackall off and zsh's -h is a history option that never reaches the table
+  ```sh
+  set +h 2>/dev/null; mkdir -p d1; printf '#!/bin/sh\n:\n' > d1/zzc; chmod +x d1/zzc; PATH=$PWD/d1:$PATH; zzc; hash >/dev/null 2>&1; echo "st=$?"; hash 2>/dev/null | wc -l | tr -d " "
+  ```
+- `hash/the-long-name-stops-it-in-two-shells` — the letter is not the option: zsh spells command tracking hashall too and stops filling the table when it is off, while leaving the builtin answering at 0 — where bash closes the builtin as well. ksh93 and dash have no such name and the special builtin's failure ends the script, which is the other half of what this records
+  ```sh
+  set +o hashall 2>/dev/null; mkdir -p d1; printf '#!/bin/sh\n:\n' > d1/zzc; chmod +x d1/zzc; PATH=$PWD/d1:$PATH; zzc; hash >/dev/null 2>&1; echo "st=$?"; hash 2>/dev/null | wc -l | tr -d " "
+  ```
+- `hash/an-assignment-to-bash-cmds-hashes` — the view writes as well as reads: an element assignment puts an entry in exactly as hash -p does, at zero hits
+  ```sh
+  BASH_CMDS[zzw]=/bin/echo 2>/dev/null; hash 2>&1; hash -t zzw 2>/dev/null
   ```
 - `complete/registers-in-a-script` — every bash_completion.d file runs in a non-interactive shell and must register at status 0 and read itself back; the other three have no such command and die at 127, which is what broke carapace here
   ```sh

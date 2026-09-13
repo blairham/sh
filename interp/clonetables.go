@@ -161,6 +161,13 @@ func (c *Runner) ownTables(r *Runner) {
 	c.exportedFuncs = maps.Clone(r.exportedFuncs)
 	c.aliases = maps.Clone(r.aliases)
 	c.suffixAliases = maps.Clone(r.suffixAliases)
+	// And the command hash, which is the same kind of table under a third
+	// name: what PATH last resolved a name to. A subshell owns its entries —
+	// measured, `(ls >/dev/null); hash` leaves the parent's table empty in
+	// bash, zsh and dash — and the order slice is copied outright so a
+	// forgetting inside one cannot shorten the parent's listing.
+	c.cmdHash = maps.Clone(r.cmdHash)
+	c.cmdHashOrder = append([]string(nil), r.cmdHashOrder...)
 	c.disabledBuiltins = maps.Clone(r.disabledBuiltins)
 	c.withdrawnBuiltins = maps.Clone(r.withdrawnBuiltins)
 	// And the parameter half, which has to travel with the tables it takes

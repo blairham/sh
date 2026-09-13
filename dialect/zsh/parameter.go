@@ -586,11 +586,14 @@ func zshCommandValue(r *interp.Runner, name string) (string, bool) {
 // refuseZshCommandsWrite is `commands[c]=/path` and `unset "commands[c]"`,
 // which in zsh put an entry in the command hash and take one out.
 //
-// Refused by name, because this shell has no command hash for either to reach:
-// a lookup here is the PATH search every time, so there is nothing an entry
-// could change and nothing a removal could drop. Accepting and dropping the
-// request would leave a caller holding a name it believes it has arranged for,
-// which is the failure this whole file is arranged to avoid.
+// Refused by name, because the *read* side of this view is still the PATH
+// search every time: there is a command hash since #2554, but nothing routes
+// `$commands` through it, so an entry written there would not change what the
+// next `${commands[c]}` says and a removal would not drop one. Accepting and
+// dropping the request would leave a caller holding a name it believes it has
+// arranged for, which is the failure this whole file is arranged to avoid.
+// Making the view the table — the way `dialect/bash/bashcmds.go` makes
+// BASH_CMDS one — is what would lift the refusal, and is #2631.
 //
 // The unset is refused where the empty tables' is not, and the difference is
 // what the *next read* says rather than a preference. Measured: zsh's

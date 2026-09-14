@@ -1662,3 +1662,49 @@ func TestPrintfAsksTheNonFiniteAxisOnlyWhereTheReadingsDiffer(t *testing.T) {
 		})
 	}
 }
+
+// A field wider than Go's `fmt` renders is laid out by this shell instead.
+//
+// Past `printfFmtWidthCeiling` the package writes its own error text into the
+// output — `%!(NOVERB)%!(EXTRA int64=1)` — which is a message for a Go
+// programmer arriving in a shell script's stdout. Measured by bisection
+// 2026-09-14: 10000009 renders and 10000010 does not (#2663).
+//
+// The widths here are one past the ceiling rather than the issue's hundred
+// million: the shape is the same and the test writes ten megabytes instead of
+// a hundred.
+func TestAFieldWiderThanFmtRendersIsLaidOutHere(t *testing.T) {
+	// One past the ceiling the in-package TestAZeroInTheWidthIsNotTheZeroFlag
+	// names; spelled out here because this file is the external test package.
+	const over = 10000010
+	for _, tc := range []struct {
+		name        string
+		src         string
+		first, last byte
+		wantLen     int
+	}{
+		// The plain case, and the one the issue reported.
+		{"a literal width", `printf '%10000010d' 1`, ' ', '1', over},
+		// The same field reached through a `*` operand, which is the route
+		// that makes the width *data* — a script can hold one in a variable.
+		{"a width from a star", `printf '%*d' 10000010 1`, ' ', '1', over},
+		// Left-aligned: the digit leads and the padding follows.
+		{"left-aligned", `printf '%-10000010d' 1`, '1', ' ', over},
+		// Zero-padded, with the sign kept in front of the zeros it earned.
+		{"zero-padded and signed", `printf '%010000010d' -42`, '-', '2', over},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, _ := run(t, tc.src+"\n", nil)
+			if len(out) != tc.wantLen {
+				t.Fatalf("len = %d, want %d", len(out), tc.wantLen)
+			}
+			if out[0] != tc.first || out[len(out)-1] != tc.last {
+				t.Errorf("ends are %q…%q, want %q…%q",
+					out[0], out[len(out)-1], tc.first, tc.last)
+			}
+			if strings.Contains(out, "NOVERB") {
+				t.Error("fmt's own complaint reached the output")
+			}
+		})
+	}
+}

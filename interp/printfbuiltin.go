@@ -415,8 +415,81 @@ func (r *Runner) printfStarOperand(next func() (string, bool)) (int64, int, bool
 	return n, code, false
 }
 
+// printfFmtWidthCeiling is the widest field Go's `fmt` will render. Past it
+// the package writes its own error text — `%!(NOVERB)%!(EXTRA …)` — into the
+// output instead of the field, which is a diagnostic aimed at a Go programmer
+// arriving in a shell script's stdout.
+//
+// Measured by bisection 2026-09-14: `fmt.Sprintf("%10000009d", 1)` is ten
+// million characters and `%10000010d` is 25 characters of complaint.
+const printfFmtWidthCeiling = 10000009
+
+// printfWideField reports a width this shell has to lay out itself because
+// `fmt` will not, answering the spec with that width taken out.
+//
+// The width may arrive as digits in the format or through a `*` operand, and
+// both are settled into the spec before they get here — so one test at the
+// one place every conversion passes covers both routes (#2663).
+func printfWideField(spec string) (narrow, flags string, width int, wide bool) {
+	i := 1 // past the '%'
+	for i < len(spec) && strings.ContainsRune("-+ #0'", rune(spec[i])) {
+		i++
+	}
+	j := i
+	for j < len(spec) && spec[j] >= '0' && spec[j] <= '9' {
+		j++
+	}
+	if j == i {
+		return spec, "", 0, false
+	}
+	n, err := strconv.Atoi(spec[i:j])
+	if err != nil || n <= printfFmtWidthCeiling {
+		return spec, "", 0, false
+	}
+	// The flags are returned rather than looked for in the whole spec,
+	// because a width is made of digits: `%10000010d` holds a `0` that is not
+	// the zero flag, and asking `strings.Contains(spec, "0")` zero-pads a
+	// field the panel pads with spaces.
+	return spec[:i] + spec[j:], spec[1:i], n, true
+}
+
+// printfPadToWidth lays a rendered field out to a width `fmt` refused.
+//
+// Only the space and zero paddings are modeled, which is the whole of what a
+// width means once the field is rendered. A `0` that would have to fall
+// *inside* the text — after a sign, or after a `0x` — is deliberately not
+// reconstructed here: the narrowed spec keeps the `0` flag, so `fmt` has
+// already placed any zeros it owes against the precision, and what is left is
+// the outer field.
+func printfPadToWidth(field string, width int, left, zero bool) string {
+	if len(field) >= width {
+		return field
+	}
+	pad := byte(' ')
+	if zero && !left {
+		pad = '0'
+	}
+	fill := strings.Repeat(string(pad), width-len(field))
+	if left {
+		return field + fill
+	}
+	if pad == '0' && field != "" && (field[0] == '-' || field[0] == '+' || field[0] == ' ') {
+		// The sign stays in front of the padding it earned.
+		return field[:1] + fill + field[1:]
+	}
+	return fill + field
+}
+
 // printfConvert formats one conversion whose width and precision are settled.
 func (r *Runner) printfConvert(spec string, verb byte, timeFmt string, next func() (string, bool)) (string, int, bool) {
+	// A width past what `fmt` renders is laid out here instead. Done before
+	// the argument is taken so the conversion below sees exactly the spec it
+	// would have, minus a width it could not have honored.
+	if narrow, flags, width, wide := printfWideField(spec); wide {
+		field, code, stop := r.printfConvert(narrow, verb, timeFmt, next)
+		return printfPadToWidth(field, width,
+			strings.Contains(flags, "-"), strings.Contains(flags, "0")), code, stop
+	}
 	arg, present := next()
 	switch verb {
 	case 'T':

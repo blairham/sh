@@ -12679,6 +12679,55 @@ grouping, where a dropped character would not. Asked only where
 `PrintfGroupingFlag` has already said yes and a `'` is actually written
 past the flag run, so neither `%d` nor `%'d` reaches it.
 
+**`PrintfNonFiniteIsConverted`** — bash yes · dash yes · ksh93 yes · zsh **no** · ash yes
+
+Puts an infinity or a not-a-number through the conversion that named it,
+rather than writing the bare word. Two consequences and one axis, because
+they move together in every column and are the same fact seen twice —
+whether the value reaches C's conversion at all.
+
+    printf '[%E][%G]' inf nan    bash, dash, ash   [INF][NAN]
+                                 zsh               [inf][nan]
+    printf '[%10f]' inf          bash, dash, ash   [       inf]
+                                 zsh               [inf]
+    printf '[%+f]' inf           bash, dash, ash   [+inf]
+                                 zsh               [inf]
+
+Under `No` nothing touches the word: no width pads it, no precision
+reaches it, no flag prefixes it and an upper-case conversion does not
+capitalize it. The sign the *value* carries is not a flag and is written
+either way, so `printf '[%10f]' -inf` is `[-inf]` in zsh.
+
+**The spelling itself is not part of this and is not an axis.** `inf`,
+`-inf` and `nan` are what all six reading columns write, where Go's
+`strconv` writes `+Inf`, `-Inf` and `NaN` — and a not-a-number carries no
+sign in any of them, whatever its own sign, so `printf '%f' -nan` is `nan`
+everywhere. That is the core's, and #2707 is where it was wrong. The `0`
+flag is not a third reading either: what pads is spaces in every
+converting column, because the field a non-finite value goes through is
+C's `%s` field rather than the float conversion's.
+
+**Asked only where the two readings differ**, so `printf '%f' inf` needs
+no dialect. The question arrives with an upper-case conversion, a width
+wide enough to pad, or a `+` or space flag on an infinity — and nowhere
+else.
+
+ksh93 answers yes and is the one column that cannot be measured for it. It
+reads `inf` and `nan` through its arithmetic evaluator and never reaches
+the conversion: `printf '%f' inf` is `-0.000000` there, and `printf '%f'
+'nan(1)'` is `printf: nan(1): unknown function`. That is its operand
+reader rather than its conversion — `printf '%10f' -0` pads to ten there
+and `printf '%+f' 0` writes `+0.000000` — and not an evaluator worth
+reproducing: `echo $((1e300*1e300))` is `inf` in ksh93, and handing that
+word straight back to its own `printf` writes `-0.000000`.
+
+One cell parts the converting columns and it is a C library rather than a
+language. BusyBox ash writes `[+nan]` for `printf '%+f' nan` where the
+five macOS columns write `[nan]`: musl's formatter takes the `+` flag
+before it looks at the value, and BSD's clears the sign of a not-a-number
+outright. This shell writes `nan` unsigned in every dialect, and the
+corpus row records ash's column as the fact it is.
+
 **`PrintfQuote`** — bash backslash · dash absent · ksh93 single quoted · zsh backslash
 
 Is how `%q` quotes, which is three answers and an absence rather than a

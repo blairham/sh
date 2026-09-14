@@ -431,6 +431,11 @@ func TestPrintfAnswers(t *testing.T) {
 	if got, want := dash.Semantics().PrintfGroupingFlagAfterTheWidth, interp.No; got != want {
 		t.Errorf("PrintfGroupingFlagAfterTheWidth = %v, want %v", got, want)
 	}
+	// An infinity goes through the conversion, as it does in bash: `%G` of
+	// one is `INF` and `%10f` of one is `[       inf]` (#2707).
+	if got, want := dash.Semantics().PrintfNonFiniteIsConverted, interp.Yes; got != want {
+		t.Errorf("PrintfNonFiniteIsConverted = %v, want %v", got, want)
+	}
 	d := dash.Diagnostics()
 	if got, want := d.PrintfBadVerbStatus, 2; got != want {
 		t.Errorf("PrintfBadVerbStatus = %d, want %d", got, want)

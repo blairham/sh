@@ -448,6 +448,14 @@ func TestPrintfAnswers(t *testing.T) {
 	if got, want := s.PrintfBackslashC, interp.PrintfBackslashCControl; got != want {
 		t.Errorf("PrintfBackslashC = %v, want %v", got, want)
 	}
+	// Answered rather than measured, and the axis comment says why: ksh93
+	// reads `inf` and `nan` through its arithmetic evaluator and never
+	// reaches the conversion, so `printf '%f' inf` is `-0.000000` there.
+	// Its field and its flags are C's — `printf '%10f' -0` pads to ten and
+	// `printf '%+f' 0` writes `+0.000000` — which is what this takes (#2707).
+	if got, want := s.PrintfNonFiniteIsConverted, interp.Yes; got != want {
+		t.Errorf("PrintfNonFiniteIsConverted = %v, want %v", got, want)
+	}
 	if got, want := s.PrintfOutputPrecedesComplaint, interp.Yes; got != want {
 		t.Errorf("PrintfOutputPrecedesComplaint = %v, want %v", got, want)
 	}

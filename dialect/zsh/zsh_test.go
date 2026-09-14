@@ -593,6 +593,12 @@ func TestPrintfAnswers(t *testing.T) {
 	if got, want := s.PrintfGroupingFlagAfterTheWidth, interp.No; got != want {
 		t.Errorf("PrintfGroupingFlagAfterTheWidth = %v, want %v", got, want)
 	}
+	// zsh alone writes an infinity and a not-a-number as the bare word:
+	// `printf '[%E][%G]' inf nan` is `[inf][nan]` and `printf '[%10f]'
+	// inf` is `[inf]`, where the other four pad and capitalize (#2707).
+	if got, want := s.PrintfNonFiniteIsConverted, interp.No; got != want {
+		t.Errorf("PrintfNonFiniteIsConverted = %v, want %v", got, want)
+	}
 }
 
 // TestCdAnswers: zsh moves silently and names the reason before the operand,

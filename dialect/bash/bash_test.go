@@ -398,6 +398,9 @@ func TestPrintfAnswers(t *testing.T) {
 		want any
 	}{
 		{"PrintfReportsBadNumber", s.PrintfReportsBadNumber, interp.Yes},
+		// An infinity goes through the conversion that named it: `%G` of
+		// one is `INF` and `%10f` of one is `[       inf]` (#2707).
+		{"PrintfNonFiniteIsConverted", s.PrintfNonFiniteIsConverted, interp.Yes},
 		// bash: an operand present and empty is an error. An operand that
 		// is *missing* is not — which is the pair below, and the two cross,
 		// because ash says yes to both (#2648).

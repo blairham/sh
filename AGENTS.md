@@ -529,11 +529,12 @@ tree.
 linters `.golangci.yml` enables, so the lint job already runs it over the
 same code.
 
-`main` is protected, and these three must pass before a merge:
+`main` is protected, and these four must pass before a merge:
 
     Build and test (ubuntu-latest)
     Build and test (macos-latest)
     Pre-commit
+    Lint
 
 **A branch does not have to be up to date with `main` first.**
 `required_status_checks.strict` is **`false`** — read off the API on
@@ -543,9 +544,19 @@ rule that was not there. So a `BLOCKED` pull request is waiting on a
 **check**, never on a rebase. Rebase when you want the newer tree, not to
 be allowed to merge.
 
-`Lint` and `Oracle (report only)` run on every pull request but are **not**
-required contexts. Read them anyway: `Lint` is where golangci-lint lives,
-and it catches real defects a green build does not.
+**`Lint` is required, and it is required because it is a whole-tree run.**
+It grades the tree the branch would produce, not the branch's own diff
+(#1640), so a finding that lands through a merge does not fail the branch
+that introduced it — it fails *every later pull request from every session*
+until somebody cleans it up. That happened: #2479 auto-merged while `Lint`
+was red on two `misspell` findings, and the tree stayed red for everyone
+until #2483. An advisory check cannot stop that, and a convention about
+when to arm `--auto` is exactly the thing that failed, so the check gates
+(#2501).
+
+`Oracle (report only)` runs on every pull request and is **not** required —
+it watches the oracle panel rather than this tree, so a panel shell moving
+under us is news and not a reason to refuse a merge. Read it anyway.
 
 Merges are **squash only** — linear history is enforced, and the merge and
 rebase buttons are turned off so the UI cannot offer what protection would

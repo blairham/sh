@@ -1006,6 +1006,9 @@ func Semantics() interp.Semantics {
 	s.PrintfAbsentNumberIsAnEmptyOne = interp.No
 	s.PrintfStarWithoutOperandIsRefused = interp.No
 	s.PrintfStarComplaintCostsTheStatus = interp.Yes
+	// C's own reading, which is C's library: `%G` of an infinity is `INF`
+	// and `%10f` of one pads to ten.
+	s.PrintfNonFiniteIsConverted = interp.Yes
 	// The `'` flag, among the flags and nowhere else: `%'d` groups and
 	// `%15'd` is `` `'': invalid format character ``.
 	s.PrintfGroupingFlag = interp.Yes

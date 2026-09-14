@@ -448,6 +448,7 @@ func Semantics() interp.Semantics {
 	s.PrintfAbsentNumberIsAnEmptyOne = interp.Yes
 	s.PrintfStarWithoutOperandIsRefused = interp.No
 	s.PrintfStarComplaintCostsTheStatus = interp.No
+	s.PrintfNonFiniteIsConverted = interp.Yes
 	// No `'` flag, as dash has none: `%'d` is `invalid format` at 1.
 	s.PrintfGroupingFlag = interp.No
 	s.PrintfGroupingFlagAfterTheWidth = interp.No

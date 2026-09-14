@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -475,12 +476,102 @@ func (r *Runner) printfConvert(spec string, verb byte, timeFmt string, next func
 		return fmt.Sprintf(spec+string(verb), n), code, false
 	case 'f', 'e', 'E', 'g', 'G':
 		f, code := r.printfFloat(arg, present)
+		if text, ok, stop := r.printfNonFinite(spec, verb, f); ok {
+			return text, code, stop
+		}
 		if verb == 'g' || verb == 'G' {
 			spec = printfSignificantDigits(spec)
 		}
 		return fmt.Sprintf(spec+string(verb), f), code, false
 	}
 	return "", 0, false
+}
+
+// printfNonFinite writes an infinity or a not-a-number, and reports whether
+// this was one — a finite float is left to the conversion, which is right
+// about every one of them.
+//
+// C spells these `inf` and `nan`, capitalized under an upper-case conversion;
+// Go's `strconv` spells them `+Inf`, `-Inf` and `NaN`, and handing the float
+// to `fmt.Sprintf` wrote Go's spelling in every float conversion at once
+// (#2707). The sign is the smaller half of that and the same bug: `+Inf` is
+// wrong twice, because C writes a sign for an infinity only when the value is
+// negative or a flag asked for one.
+//
+// The field is C's `%s` field and not the float conversion's. A width pads,
+// `-` pads on the right, and the `0` flag and the precision are both ignored:
+// `printf '[%010f][%.2f][%08.2f]' inf inf inf` is `[       inf][inf][     inf]`
+// in bash, dash and BusyBox ash. So the text is put through the spec with
+// everything but `-` and the width stripped out, which is what leaves the
+// padding in place — a special case that returns the bare word drops it, and
+// that is the shape zsh actually has and the other five do not.
+//
+// A not-a-number never carries a sign here. See
+// Semantics.PrintfNonFiniteIsConverted for the axis, for why the sign of a
+// not-a-number is not one, and for the measurement behind both.
+func (r *Runner) printfNonFinite(spec string, verb byte, f float64) (string, bool, bool) {
+	if !math.IsInf(f, 0) && !math.IsNaN(f) {
+		return "", false, false
+	}
+	bare := "nan"
+	switch {
+	case math.IsNaN(f):
+	case math.IsInf(f, -1):
+		bare = "-inf"
+	default:
+		bare = "inf"
+	}
+	full := printfNonFiniteField(spec, verb, f, bare)
+	if full == bare {
+		// The two readings agree, so there is nothing to ask. That covers
+		// the whole of `printf '%f' inf` — the common case, and one no
+		// dialect should have to be chosen for.
+		return bare, true, false
+	}
+	if !r.ask(r.sem().PrintfNonFiniteIsConverted, "`printf` putting an infinity or a not-a-number through the conversion rather than writing the bare word") {
+		if r.unspecified {
+			return "", true, true
+		}
+		return bare, true, false
+	}
+	return full, true, false
+}
+
+// printfNonFiniteField is the converted reading: the word capitalized to
+// match the verb, the sign a flag or the value asked for, and the whole put
+// through the width.
+func printfNonFiniteField(spec string, verb byte, f float64, bare string) string {
+	word := strings.TrimPrefix(bare, "-")
+	if verb == 'E' || verb == 'G' {
+		word = strings.ToUpper(word)
+	}
+	i := 1 // past the %
+	for i < len(spec) && strings.IndexByte("-+ #0", spec[i]) >= 0 {
+		i++
+	}
+	flags := spec[1:i]
+	start := i
+	for i < len(spec) && spec[i] >= '0' && spec[i] <= '9' {
+		i++
+	}
+	width := spec[start:i]
+
+	sign := ""
+	switch {
+	case math.IsNaN(f):
+		// No sign, whatever the flags and whatever the value's own sign.
+	case math.IsInf(f, -1):
+		sign = "-"
+	case strings.ContainsRune(flags, '+'):
+		sign = "+"
+	case strings.ContainsRune(flags, ' '):
+		sign = " "
+	}
+	left := ""
+	if strings.ContainsRune(flags, '-') {
+		left = "-"
+	}
+	return fmt.Sprintf("%"+left+width+"s", sign+word)
 }
 
 // printfSignificantDigits writes `%g`'s default precision out, because C's
@@ -572,10 +663,56 @@ func (r *Runner) printfFloat(arg string, present bool) (float64, int) {
 	if f, err := strconv.ParseFloat(strings.TrimSpace(arg), 64); err == nil {
 		return f, 0
 	}
+	if f, ok := cNotANumber(strings.TrimSpace(arg)); ok {
+		return f, 0
+	}
 	if !r.ask(r.sem().PrintfReportsBadNumber, "`printf` complaining about an operand that is not a number") {
 		return 0, 0
 	}
 	return 0, r.printfReport(printfBadNumber, arg)
+}
+
+// cNotANumber reads the not-a-number operands C's `strtod` takes and Go's
+// `strconv.ParseFloat` does not: one written with a sign, and the
+// `nan(n-char-sequence)` form.
+//
+// Go takes `nan` and `NaN` and it takes a sign before an infinity, but a sign
+// before a not-a-number is a syntax error there and the parenthesized form is
+// one too. Six columns read both — bash 5.3, bash as sh, bash 3.2, zsh, dash
+// and BusyBox ash all answer `nan` for `-nan`, `+nan`, `nan(1)`, `nan()` and
+// `nan(abc)`, measured 2026-09-13 — so this is a correction and not an axis.
+// The seventh is ksh93, which reads neither because it reads no operand: see
+// Semantics.PrintfNonFiniteIsConverted.
+//
+// The sign is read and dropped. Every column writes `nan` for `-nan`, and
+// nothing downstream can see the bit anyway — printfNonFinite writes a
+// not-a-number unsigned whatever its sign.
+//
+// Only the spellings Go refuses. The plain ones still go through ParseFloat
+// above, so there is one reader for `nan` and not two.
+func cNotANumber(s string) (float64, bool) {
+	s = strings.TrimPrefix(strings.TrimPrefix(s, "-"), "+")
+	if len(s) < 3 || !strings.EqualFold(s[:3], "nan") {
+		return 0, false
+	}
+	rest := s[3:]
+	if rest == "" {
+		// `-nan` or `+nan`: the sign is the only thing Go objected to.
+		return math.NaN(), true
+	}
+	// `nan(…)`, whose characters C leaves to the implementation and every
+	// column here ignores. The closing parenthesis has to be the last byte,
+	// so `nan(1)x` stays the bad operand it is in every column.
+	if rest[0] != '(' || rest[len(rest)-1] != ')' {
+		return 0, false
+	}
+	for _, c := range rest[1 : len(rest)-1] {
+		// C's n-char-sequence: digits, letters and underscores.
+		if !(c == '_' || (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) {
+			return 0, false
+		}
+	}
+	return math.NaN(), true
 }
 
 // printfQuote is `%q`, which quotes so the shell can read it back.

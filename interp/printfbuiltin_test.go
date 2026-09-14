@@ -1504,3 +1504,155 @@ func TestPrintfGDefaultsToSixSignificantDigits(t *testing.T) {
 		})
 	}
 }
+
+// An infinity and a not-a-number are written C's way, which is not Go's.
+//
+// Go's `strconv` spells them `+Inf`, `-Inf` and `NaN`, and the conversion
+// handed the float straight to `fmt.Sprintf`, so every float conversion wrote
+// Go's spelling at once (#2707). Run under CoreSemantics deliberately: the
+// spelling itself is unanimous across bash 5.3, bash as sh, bash 3.2, zsh,
+// dash and BusyBox ash, so no axis may be consulted to reach it — and the
+// rows here are the ones where the two readings of
+// PrintfNonFiniteIsConverted agree, which is what makes them the core's.
+func TestPrintfWritesAnInfinityAndANotANumberCsWay(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		src  string
+		want string
+	}{
+		{"an infinity", `printf '[%f]' inf`, "[inf]"},
+		{"a negative one keeps its sign", `printf '[%f]' -inf`, "[-inf]"},
+		{"a not-a-number", `printf '[%f]' nan`, "[nan]"},
+		// The sign of a not-a-number is never written. Six columns answer
+		// `nan` for `-nan`, and no reading of the axis writes one.
+		{"a negative not-a-number is still unsigned", `printf '[%f]' -nan`, "[nan]"},
+		{"`%e` spells it the same way", `printf '[%e]' inf`, "[inf]"},
+		{"and `%g`", `printf '[%g]' inf`, "[inf]"},
+		{"and `%g` of a not-a-number", `printf '[%g]' nan`, "[nan]"},
+		// A precision is meaningless for these and is dropped rather than
+		// truncating the word, which a naive `%s` of it would do.
+		{"a precision does not truncate it", `printf '[%.2f]' inf`, "[inf]"},
+		{"nor a precision of zero", `printf '[%.0f]' inf`, "[inf]"},
+		{"nor one on a not-a-number", `printf '[%.1e]' nan`, "[nan]"},
+		// The operand spellings, which are the reader's half of the same
+		// bug and need the same six columns to settle.
+		{"capitals are read", `printf '[%f]' INF`, "[inf]"},
+		{"mixed case too", `printf '[%f]' NaN`, "[nan]"},
+		{"the long spelling", `printf '[%f]' infinity`, "[inf]"},
+		{"the long spelling in capitals", `printf '[%f]' INFINITY`, "[inf]"},
+		{"a sign before an infinity", `printf '[%f]' +inf`, "[inf]"},
+		{"and a sign before a not-a-number, which Go refuses", `printf '[%f]' +nan`, "[nan]"},
+		{"the parenthesized form, which Go refuses too", `printf '[%f]' 'nan(1)'`, "[nan]"},
+		{"with letters in it", `printf '[%f]' 'nan(abc)'`, "[nan]"},
+		{"with nothing in it", `printf '[%f]' 'nan()'`, "[nan]"},
+		{"and with a sign as well", `printf '[%f]' '-nan(_1)'`, "[nan]"},
+		// The controls. A finite float must not go near any of this, and
+		// the words are only numbers where a *number* was asked for.
+		{"a finite value is untouched", `printf '[%f]' 1.5`, "[1.500000]"},
+		{"a negative zero keeps its sign", `printf '[%f]' -0.0`, "[-0.000000]"},
+		{"a very large finite value", `printf '[%g]' 1e300`, "[1e+300]"},
+		{"`%s` of the word is the word", `printf '[%s]' inf`, "[inf]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := CoreSemantics()
+			out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q status %d, want %q and 0", out, st, tc.want)
+			}
+		})
+	}
+}
+
+// Where the panel splits: whether the word goes through the conversion.
+//
+// Yes is bash, dash and BusyBox ash — C's own reading, because it is C's
+// library — and No is zsh, which writes the word as it stands. The two
+// consequences are tested together because they are one rule: an upper-case
+// conversion capitalizes it, and a width pads it.
+func TestPrintfNonFiniteAxis(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		src       string
+		converted string
+		bare      string
+	}{
+		{"`%E` capitalizes it", `printf '[%E]' inf`, "[INF]", "[inf]"},
+		{"`%G` too", `printf '[%G]' inf`, "[INF]", "[inf]"},
+		{"and a not-a-number", `printf '[%G]' nan`, "[NAN]", "[nan]"},
+		{"a negative infinity keeps its sign under either", `printf '[%E]' -inf`, "[-INF]", "[-inf]"},
+		{"a width pads it", `printf '[%10f]' inf`, "[       inf]", "[inf]"},
+		{"the `-` flag pads on the right", `printf '[%-10f]' inf`, "[inf       ]", "[inf]"},
+		// The `0` flag is ignored by the converted reading too: what pads is
+		// spaces, because the field is C's `%s` field and not the float's.
+		{"the `0` flag pads with spaces all the same", `printf '[%010f]' inf`, "[       inf]", "[inf]"},
+		{"a width with a precision that means nothing", `printf '[%20.3e]' nan`, "[                 nan]", "[nan]"},
+		{"the `+` flag signs an infinity", `printf '[%+f]' inf`, "[+inf]", "[inf]"},
+		{"and so does the space flag", `printf '[% f]' inf`, "[ inf]", "[inf]"},
+		{"a width and a sign together", `printf '[%+10g]' inf`, "[      +inf]", "[inf]"},
+		{"a negative width from an operand", `printf '[%*f]' -10 inf`, "[inf       ]", "[inf]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, reading := range []struct {
+				answer Answer
+				want   string
+			}{{Yes, tc.converted}, {No, tc.bare}} {
+				sem := printfSem()
+				sem.PrintfNonFiniteIsConverted = reading.answer
+				out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+				if out != reading.want || st != 0 {
+					t.Errorf("%v: got %q status %d, want %q and 0", reading.answer, out, st, reading.want)
+				}
+			}
+		})
+	}
+}
+
+// The axis is asked at the disagreement and nowhere else.
+//
+// Both halves are asserted, because either one alone is satisfiable by a
+// mistake: a shell that never asks writes zsh's answer for everyone, and one
+// that always asks refuses `printf '%f' inf` under a core vector. So the
+// rows the two readings agree on must reach an unanswered core, and the rows
+// they differ on must refuse it and say so.
+func TestPrintfAsksTheNonFiniteAxisOnlyWhereTheReadingsDiffer(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		src   string
+		asked bool
+	}{
+		{"a bare conversion", `printf '[%f]' inf`, false},
+		{"a not-a-number", `printf '[%f]' nan`, false},
+		{"a negative infinity", `printf '[%f]' -inf`, false},
+		{"a lower-case `%e`", `printf '[%e]' inf`, false},
+		// A width no wider than the word pads nothing, so the two readings
+		// still write the same three bytes.
+		{"a width narrower than the word", `printf '[%2f]' inf`, false},
+		{"a width exactly the word's length", `printf '[%3f]' inf`, false},
+		// The `+` flag on a not-a-number is not a disagreement either: no
+		// reading writes a sign for one.
+		{"the `+` flag on a not-a-number", `printf '[%+f]' nan`, false},
+		{"the space flag on one", `printf '[% f]' nan`, false},
+		// And the whole of the finite path, which never reaches the question.
+		{"a finite value with a width", `printf '[%10f]' 1.5`, false},
+		{"a finite value under `%G`", `printf '[%G]' 1.5`, false},
+		{"an upper-case conversion", `printf '[%E]' inf`, true},
+		{"`%G`", `printf '[%G]' nan`, true},
+		{"a width wide enough to pad", `printf '[%4f]' inf`, true},
+		{"the `+` flag on an infinity", `printf '[%+f]' inf`, true},
+		{"the space flag on one", `printf '[% f]' inf`, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := CoreSemantics()
+			out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+			asked := strings.Contains(out, "disagree")
+			switch {
+			case asked != tc.asked:
+				t.Errorf("got %q status %d, want the axis consulted = %v", out, st, tc.asked)
+			case asked && st == 0:
+				t.Errorf("got %q status %d, want a refusal to cost the status", out, st)
+			case !asked && st != 0:
+				t.Errorf("got %q status %d, want 0", out, st)
+			}
+		})
+	}
+}

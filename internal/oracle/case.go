@@ -6401,6 +6401,11 @@ echo "st=$?"`,
 		Why:     "a `return` outside both a function and a sourced file has nothing to return from, and the panel splits over what that means — not over the wording but over *where the script stops*. Three obey it and end there with the status given; one reports it, leaves 2 behind and runs the next command. A script whose last statement is such a `return` therefore ends two different ways with the same output, which is why the status is half the case",
 	},
 	{
+		ID: "return/a-refused-operand-with-nothing-to-return-from", Category: "builtins",
+		Snippet: `( return abc ); echo "ret=$?"`,
+		Why:     "both things that are wrong with one `return`, and the row that says they are not alternatives: bash 5.3 and bash 3.2 write `return: abc: numeric argument required` *and* the `can only return from a function or sourced script` line, in that order; the same bash called as `sh` writes the operand's line alone, because a special builtin's usage error is fatal there and the script never reaches the place; dash and BusyBox ash word the operand their own way and stop too; ksh93 and zsh refuse neither and print no line at all at `ret=0`. The subshell is what makes the column comparable — the three that stop end it rather than the script, so `ret=` is printed in all seven. Ours wrote the place's line alone in every column, and the status agreed everywhere, which is why nothing graded on status saw it (#2762)",
+	},
+	{
 		ID: "return/inside-a-sourced-file", Category: "builtins",
 		Snippet: "printf 'return 7\\n' > s.sh\n. ./s.sh\necho \"st=$?\"\n",
 		Why:     "the other side of the same question, and unanimous: a sourced file is something to return *from*, so all four obey it and it becomes the source's status. Recorded next to the case above because together they say the disagreement is about having nothing to return from rather than about `return` itself",

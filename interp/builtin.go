@@ -192,7 +192,57 @@ func (r *Runner) loopControlFloor(want int) int {
 	return floor
 }
 
+// biReturn reads the operand before it judges the place, and reports the
+// operand's complaint first.
+//
+// The two complaints are not alternatives, which is what the old order
+// assumed. Measured 2026-09-14, `( return abc ); echo "ret=$?"` in a script
+// file under `env -i PATH=/usr/bin:/bin`:
+//
+//	bash 5.3.15   return: abc: numeric argument required
+//	              return: can only `return' from a function or sourced script
+//	              ret=2, and the script carries on
+//	bash 3.2      the same two lines
+//	bash-as-sh    return: abc: numeric argument required — and nothing more
+//	dash          return: Illegal number: abc
+//	BusyBox ash   return: Illegal number: abc
+//	ksh93, zsh    nothing at all, ret=0
+//
+// So the shell with both writes the operand's first, and the three that stop
+// on the operand never reach the place — bash called as `sh` is the clearest
+// of them, because it is the same binary as the first row with one complaint
+// missing rather than a different wording. Refusing the place first left the
+// operand unread in every column, and the status agreed in all seven, which
+// is why nothing in the tree noticed (#2762).
 func biReturn(r *Runner, _ context.Context, args []string) int {
+	// What `$?` was as `return` began, which is what the RETURN trap's
+	// action sees — the operand below is for the caller, not the trap. Read
+	// here rather than where it is stored, because the operand is an
+	// arithmetic expression in one dialect and reading one is a step of its
+	// own.
+	seen := r.status
+	operand, haveOperand := 0, false
+	if len(args) > 0 {
+		switch n, ok := r.statusOperand("return", args[0]); {
+		case ok:
+			operand, haveOperand = n, true
+		case r.unspecified:
+			// statusArgument has reported the unanswered axis already. It is
+			// the first question this builtin asks, so it is the one the
+			// strict core reports.
+			return 2
+		default:
+			status := r.refusedReturnOperand(args[0])
+			if r.ctl == controlExit {
+				// A special builtin's usage error is fatal here, so the
+				// script is already leaving and there is no place left to
+				// judge. That is the bash-as-`sh`, dash and ash row above:
+				// one complaint and gone.
+				return status
+			}
+			operand, haveOperand = status, true
+		}
+	}
 	if !r.hasSomethingToReturnFrom() {
 		// Nothing to return from. Three of the panel end the script here
 		// with the status given; bash refuses and carries on, which is a
@@ -208,19 +258,10 @@ func biReturn(r *Runner, _ context.Context, args []string) int {
 			return 2
 		}
 	}
-	// What `$?` was as `return` began, which is what the RETURN trap's
-	// action sees — the argument below is for the caller, not the trap.
-	r.returnSeenStatus = r.status
+	r.returnSeenStatus = seen
 	r.ctl = controlReturn
-	if len(args) > 0 {
-		switch n, ok := r.statusOperand("return", args[0]); {
-		case ok:
-			return n
-		case r.unspecified:
-			return 2
-		default:
-			return r.refusedReturnOperand(args[0])
-		}
+	if haveOperand {
+		return operand
 	}
 	return r.status
 }
@@ -243,8 +284,10 @@ func biReturn(r *Runner, _ context.Context, args []string) int {
 func (r *Runner) refusedReturnOperand(arg string) int {
 	r.diagf("%s\n", Wording(r.diag().NumericArgument, "%[1]s: invalid number: %[2]s", "return", arg))
 	if r.ask(r.sem().BadOptionToSpecialBuiltinFatal, "a special builtin's usage error ending the script") {
-		// fatalQuiet sets controlExit over the controlReturn above, which is
-		// the order that matters: the script ends rather than the function.
+		// fatalQuiet sets controlExit, which the caller reads: the script
+		// ends rather than the function, and nothing after this point runs —
+		// including the complaint about having nowhere to return to, which
+		// the shells that stop here do not write.
 		// No `r.status = 2` to go with the 2 below: the return value is what
 		// the dispatcher writes, and it is the status the panel ends at. See
 		// setFatalStatus.

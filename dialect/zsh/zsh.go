@@ -2807,7 +2807,12 @@ func Diagnostics() interp.Diagnostics {
 			{Prefix: "-u: processes                       ", Res: interp.ResourceProcesses, Scale: 1},
 			{Prefix: "-n: file descriptors                ", Res: interp.ResourceOpenFiles, Scale: 1},
 		},
-		TraceQuoting: interp.QuoteShell,
+		// Lazy rather than QuoteShell: this shell drops the empty `''`
+		// segments that closing and reopening leaves, so `ab'` traces as
+		// `'ab'\\'` where bash writes `'ab'\\'''`. Measured 2026-09-13 against
+		// bash 5.3.15; the two shared a value until #2695 because the corpus
+		// row used `it's`, the one shape they agree on.
+		TraceQuoting: interp.QuoteShellLazy,
 		// No position rule at all: every character it quotes it quotes
 		// anywhere, which is what makes the *shape* of this field necessary
 		// rather than a longer string in one shared set. It is the only one

@@ -76,7 +76,7 @@ const pathMax = 1024
 // link.
 const maxSymlinks = 32
 
-func openat(dirfd int, name string, flags int, perm uint32) (int, error) {
+func openatOnce(dirfd int, name string, flags int, perm uint32) (int, error) {
 	p, err := syscall.BytePtrFromString(name)
 	if err != nil {
 		return -1, err
@@ -89,7 +89,7 @@ func openat(dirfd int, name string, flags int, perm uint32) (int, error) {
 	return int(fd), nil
 }
 
-func readlinkat(dirfd int, name string, buf []byte) (int, error) {
+func readlinkatOnce(dirfd int, name string, buf []byte) (int, error) {
 	p, err := syscall.BytePtrFromString(name)
 	if err != nil {
 		return 0, err

@@ -29,9 +29,9 @@ const pathMax = 1 << 20
 
 func traverseFlags() int { return 0 }
 
-func openat(int, string, int, uint32) (int, error) { return -1, walkUnsupported }
+func openatOnce(int, string, int, uint32) (int, error) { return -1, walkUnsupported }
 
-func readlinkat(int, string, []byte) (int, error) { return 0, walkUnsupported }
+func readlinkatOnce(int, string, []byte) (int, error) { return 0, walkUnsupported }
 
 // walkSupported says whether this platform has a walk at all.
 const walkSupported = false

@@ -124,7 +124,7 @@ func walkOpen(path string, flags int, perm fs.FileMode, ask func(string) error) 
 		full = wd + "/" + full
 	}
 
-	rootfd, err := syscall.Open("/", traverseFlags()|syscall.O_CLOEXEC, 0)
+	rootfd, err := openRoot(traverseFlags() | syscall.O_CLOEXEC)
 	if err != nil {
 		return fail(err)
 	}

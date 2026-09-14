@@ -199,3 +199,154 @@ func TestTheHideLetterIsTheDialectsToGive(t *testing.T) {
 		}
 	}
 }
+
+// The other thing the letter detaches: a parameter the shell **produces**.
+//
+// A tie is what the letter is observable through for a name a *script* can
+// make, and a produced parameter is the second seam it reaches — and the one
+// it did not reach for as long as the attribute merely tied and untied
+// (#2586). Every row below registers a producer the way a dialect does, with
+// SetDynamic, and the assertion is whether the local holds what the
+// declaration wrote or what the producer says.
+
+// withHidingInScope is withHidingAndTies without the tie letters, for the
+// rows whose subject is a producer rather than a pair of names. Named for the
+// letter it spells, because hidevalue_test.go's withHiding spells the *other*
+// hiding letter and the two are not the same attribute (#2042).
+func withHidingInScope(s *Semantics) {
+	s.DeclareOptions = "aAghilprux"
+	s.LocalOptions = "aAhilprux"
+	s.DeclaredNameWithoutValueIsEmpty = Yes
+	s.TypesetLocalNeedsKeywordFunction = No
+}
+
+// producedAndHidden registers a produced scalar and gives it the attribute,
+// which is what a dialect's module registration does — the shell's own
+// parameters carry it from the moment the module is loaded rather than from
+// anything a script writes.
+func producedAndHidden(name, value string, hide, frozen bool) func(*Runner) {
+	return func(r *Runner) {
+		r.SetDynamic(name, func(*Runner) string { return value })
+		if frozen {
+			r.MarkReadonly(name)
+		}
+		if hide {
+			r.MarkHideInScope(name)
+		}
+	}
+}
+
+// The whole of what the attribute does to a producer: the shadow is an
+// ordinary parameter, so it holds what the declaration wrote and the name is
+// the shell's own again on return.
+func TestAHiddenShadowOfAProducedNameIsAnOrdinaryParameter(t *testing.T) {
+	out, errs, st := declRunWith(t, `f() { local P=5; echo "in=[$P]"; }
+f
+echo "after=[$P]"`, withHidingInScope, Diagnostics{}, nil, producedAndHidden("P", "produced", true, false))
+	want := "in=[5]\nafter=[produced]\n"
+	if out != want || st != 0 || errs != "" {
+		t.Errorf("a hidden shadow of a produced name = %q (stderr %q, status %d), want %q",
+			out, errs, st, want)
+	}
+}
+
+// The control the row above is only meaningful against, and the one that says
+// this is the *attribute* rather than "a local of a produced name is always
+// ordinary": the same producer without it is read straight through the
+// shadow, and the value the declaration wrote is never seen.
+func TestAShadowOfAProducedNameWithoutTheAttributeIsTheProducedView(t *testing.T) {
+	out, errs, st := declRunWith(t, `f() { local P=5; echo "in=[$P]"; }
+f`, withHidingInScope, Diagnostics{}, nil, producedAndHidden("P", "produced", false, false))
+	want := "in=[produced]\n"
+	if out != want || st != 0 || errs != "" {
+		t.Errorf("a plain shadow of a produced name = %q (stderr %q, status %d), want %q",
+			out, errs, st, want)
+	}
+}
+
+// A valueless declaration of a hidden producer is the empty cell the dialect
+// says a valueless declaration is, and not the produced value — which is the
+// row a fix aimed at the *assignment* would fail.
+func TestAValuelessHiddenShadowOfAProducedNameIsEmpty(t *testing.T) {
+	out, errs, st := declRunWith(t, `f() { local P; echo "in=[$P]"; }
+f`, withHidingInScope, Diagnostics{}, nil, producedAndHidden("P", "produced", true, false))
+	want := "in=[]\n"
+	if out != want || st != 0 || errs != "" {
+		t.Errorf("a valueless hidden shadow = %q (stderr %q, status %d), want %q",
+			out, errs, st, want)
+	}
+}
+
+// The letter written on the declaration reaches a producer the same way the
+// registration does, for a name that carries nothing of its own.
+func TestTheHideLetterOnADeclarationDetachesAProducer(t *testing.T) {
+	out, errs, st := declRunWith(t, `f() { local -h P=5; echo "in=[$P]"; }
+f
+echo "after=[$P]"`, withHidingInScope, Diagnostics{}, nil, producedAndHidden("P", "produced", false, false))
+	want := "in=[5]\nafter=[produced]\n"
+	if out != want || st != 0 || errs != "" {
+		t.Errorf("`local -h` over a produced name = %q (stderr %q, status %d), want %q",
+			out, errs, st, want)
+	}
+}
+
+// And `+h` puts the producer back, which is more than the absence of `-h`:
+// the name carries the attribute already, so this declaration is the only
+// thing asking for the second view — and a `+h` that merely parsed would
+// leave the local holding the 5 it wrote.
+func TestThePlusHideLetterPutsTheProducerBack(t *testing.T) {
+	out, errs, st := declRunWith(t, `f() { local +h P=5; echo "in=[$P]"; }
+f`, withHidingInScope, Diagnostics{}, nil, producedAndHidden("P", "produced", true, false))
+	want := "in=[produced]\n"
+	if out != want || st != 0 || errs != "" {
+		t.Errorf("`local +h` over a hidden producer = %q (stderr %q, status %d), want %q",
+			out, errs, st, want)
+	}
+}
+
+// The attribute suspends a producer only where a local stands, which is the
+// same control the tie half has: a name carrying it at the top level is
+// still produced there.
+func TestTheHideAttributeSuspendsNoProducerWithoutALocal(t *testing.T) {
+	out, errs, st := declRunWith(t, `echo "top=[$P]"`, withHidingInScope, Diagnostics{}, nil,
+		producedAndHidden("P", "produced", true, false))
+	want := "top=[produced]\n"
+	if out != want || st != 0 || errs != "" {
+		t.Errorf("a hidden producer at the top level = %q (stderr %q, status %d), want %q",
+			out, errs, st, want)
+	}
+}
+
+// The freeze and the producer come off together, which is what makes the
+// letter usable at all over one of the shell's own frozen names: without the
+// second half the declaration is accepted and then discarded, and the local
+// reads the produced value at status 0.
+func TestAHiddenShadowOfAFrozenProducerHoldsWhatItWasGiven(t *testing.T) {
+	frozen := func(s *Semantics) {
+		withHidingInScope(s)
+		s.DeclarationMayShadowAReadonly = Yes
+	}
+	out, errs, st := declRunWith(t, `f() { local -h P=5; echo "in=[$P]"; }
+f
+echo "after=[$P]"`, frozen, Diagnostics{}, nil, producedAndHidden("P", "produced", false, true))
+	want := "in=[5]\nafter=[produced]\n"
+	if out != want || st != 0 || errs != "" {
+		t.Errorf("`local -h` over a frozen producer = %q (stderr %q, status %d), want %q",
+			out, errs, st, want)
+	}
+}
+
+// A nested call inside a hidden shadow sees the ordinary parameter, because
+// the producer is out of the tables for as long as the shadow stands rather
+// than for the one expansion the declaration is on.
+func TestANestedCallInsideAHiddenShadowSeesTheOrdinaryParameter(t *testing.T) {
+	out, errs, st := declRunWith(t, `g() { echo "g=[$P]"; }
+f() { local P=5; g; }
+f
+g`, withHidingInScope, Diagnostics{}, nil, producedAndHidden("P", "produced", true, false))
+	want := "g=[5]\ng=[produced]\n"
+	if out != want || st != 0 || errs != "" {
+		t.Errorf("a nested call inside a hidden shadow = %q (stderr %q, status %d), want %q",
+			out, errs, st, want)
+	}
+}

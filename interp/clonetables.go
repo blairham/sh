@@ -325,6 +325,8 @@ func cloneScopes(scopes []*scope) []*scope {
 		c.assocExisted = maps.Clone(sc.assocExisted)
 		c.savedReadonly = maps.Clone(sc.savedReadonly)
 		c.savedHideInScope = maps.Clone(sc.savedHideInScope)
+		c.hiddenShadow = maps.Clone(sc.hiddenShadow)
+		c.suspendedProducers = maps.Clone(sc.suspendedProducers)
 		c.savedAttrs = maps.Clone(sc.savedAttrs)
 		c.savedAssigned = maps.Clone(sc.savedAssigned)
 		c.assignedSpoken = maps.Clone(sc.assignedSpoken)

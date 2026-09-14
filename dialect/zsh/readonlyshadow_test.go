@@ -63,10 +63,18 @@ echo "never"`)
 // The shape `zi.zsh:2159` is written in, and the one the issue was filed
 // from: a local shadow of a *produced* readonly name.
 //
-// It is no longer fatal, and what is left of it refuses by name — the two
-// gaps behind it are an association assigned whole and `local -h`, each
-// named rather than swallowed. That is the difference this makes: before,
-// the session ended here.
+// It is no longer fatal, and since #2586 nothing is left of it: both lines
+// answer exactly as zsh 5.9.2 does. Measured there on 2026-09-13, `env -i
+// PATH=/usr/bin:/bin` with a scratch `HOME` and `ZDOTDIR`, over a script
+// file — `in=[q]`, `st=0`, `g ran`, `gst=0`, `after`, the whole of it.
+//
+// This used to assert `is not implemented yet` instead, over the whole-table
+// assignment, and that was a true report of a gap rather than a measurement:
+// the shadow was still a second view of the module's table, so assigning to
+// it was assigning to the producer. With the producer suspended for the
+// hidden shadow the local is an ordinary array and the assignment is an
+// ordinary one, which is why the sentence went away rather than being
+// implemented.
 func TestALocalOverAProducedReadonlyNameNoLongerEndsTheSession(t *testing.T) {
 	out, st := runZsh(t, t.TempDir(), `zmodload zsh/parameter
 f() { local builtins=(q); echo "in=[${builtins[1]}]"; }
@@ -81,10 +89,8 @@ echo after`)
 	if strings.Contains(out, "read-only variable") {
 		t.Errorf("out = %q, want no readonly refusal — the shadow is allowed here", out)
 	}
-	// What is left is named, not swallowed.
-	for _, want := range []string{"is not implemented yet"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("out = %q, want %q in it", out, want)
-		}
+	if want := "in=[q]\nst=0\ng ran\ngst=0\nafter\n"; out != want {
+		t.Errorf("a local over a produced readonly = %q, want %q — the shadow is an "+
+			"ordinary parameter and both lines are the shell's answer", out, want)
 	}
 }

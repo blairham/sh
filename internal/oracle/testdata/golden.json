@@ -70261,6 +70261,57 @@
         "TimedOut": false
       }
     },
+    "declare/hide-in-scope-detaches-a-local-produced-parameter": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: local: line 0: -h: bad variable name",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "st=2 []",
+        "Stderr": "\u003cshell\u003e: line 1: local: -h: invalid option~local: usage: local [option] name[=value] ...",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=2 []",
+        "Stderr": "\u003cshell\u003e: line 1: local: -h: invalid option~local: usage: local [option] name[=value] ...",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=2 []",
+        "Stderr": "\u003cshell\u003e: line 0: local: -h: invalid option~local: usage: local name[=value] ...",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: local: -h: bad variable name",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127 []",
+        "Stderr": "\u003cshell\u003e: local: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0 [5]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "declare/hide-in-scope-detaches-a-local-special": {
       "ash": {
         "Stdout": "",

@@ -3671,6 +3671,28 @@ func (r *Runner) shadow(name string) (fresh bool) {
 			sc.savedHideInScope = map[string]bool{}
 		}
 		sc.savedHideInScope[name] = r.hideInScope[name]
+		// And whether *this* shadow is a hidden one, which is a different
+		// question from the attribute being saved above: what governs the
+		// shadow is what the binding it displaced carried, and the fresh
+		// binding carries nothing unless the declaration writes `-h`.
+		// Measured — `typeset -h v=1` is `scalar-hide` and a plain `local v`
+		// inside a function is `scalar-local`, with no `hide` in the word.
+		// So the answer is recorded here and the attribute comes off with
+		// every other one; shadowIsHidden is what reads it back.
+		if sc.hiddenShadow == nil {
+			sc.hiddenShadow = map[string]bool{}
+		}
+		hidden := r.shadowIsHidden(name)
+		sc.hiddenShadow[name] = hidden
+		delete(r.hideInScope, name)
+		if hidden {
+			// And the producer, which is what makes the shadow an ordinary
+			// parameter rather than a second view of the shell's own: the
+			// cell this declaration is about to write is where the value
+			// comes from now (#2586). After freezeSurvivesAShadow above,
+			// which asked the outer binding's question and has been answered.
+			r.suspendProducer(sc, name)
+		}
 		// And the rest of the attributes, taken off for the same reason the
 		// frozen one is: the cell this declaration writes is a fresh binding
 		// and carries nothing the outer name carried. Recorded whether or

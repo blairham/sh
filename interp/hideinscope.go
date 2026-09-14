@@ -26,11 +26,26 @@ package interp
 //
 // Three facts are in those rows.
 //
-//   - **It is an attribute of the name, not of the declaration.** Row four
-//     sets it at the top level and rows five and six are a *later* function
-//     reading it: a plain `local` with no `h` of its own inherits whatever
-//     the name it shadows carries. So it lives in a map on the runner beside
-//     the other attributes of a name, and not in declareFlags alone.
+//   - **It is an attribute of a binding, and what it governs is the binding
+//     in front of it.** Row four sets it at the top level and rows five and
+//     six are a *later* function reading it: a plain `local` with no `h` of
+//     its own is detached because the binding it displaced carried the
+//     letter. So it lives in a map on the runner beside the other attributes
+//     of a name, and not in declareFlags alone.
+//
+//     The shadow's own binding is a fresh one and carries nothing, which is
+//     measured rather than reasoned from and is where this file used to say
+//     "an attribute of the name". zsh 5.9.2, 2026-09-13:
+//
+//	typeset -h v=1;  ${(t)v}                     scalar-hide
+//	f(){ local    v=2; print ${(t)v} }; f        scalar-local
+//	f(){ local -h v=2; print ${(t)v} }; f        scalar-local-hide
+//
+//     Row two is the one that says so: the behavior is inherited and the
+//     *word* is not, so a shadow that kept the attribute described itself
+//     with a letter the shell never writes there. What the scope records at
+//     the shadow is therefore the answer and not the attribute — see
+//     shadowIsHidden, which every consumer of the letter goes through.
 //
 //   - **It detaches only where a local stands.** Row four is the control that
 //     says so: the attribute is set and the global `PATH` goes on driving
@@ -53,6 +68,38 @@ package interp
 // `path` holding `/y`, and only `typeset +h PATH` puts the tie back in a
 // local's reach. clearAttributes says so, with the four rows.
 //
+// **It detaches a produced parameter as well as a tie**, and that is the
+// second thing it means rather than a second letter. A name the shell
+// *produces* — `ARGC`, or any of the thirty parameters a zsh module
+// registers, all of which carry `hide` from the module — reads back the
+// shell's own value through a plain shadow, and a hidden shadow is an
+// ordinary parameter holding whatever the declaration wrote. Measured
+// 2026-09-13, zsh 5.9.2, `env -i PATH=/usr/bin:/bin` with a scratch `HOME`,
+// `ZDOTDIR` and `HISTFILE`, over a script file with the modules loaded:
+//
+//	f(){ local    ARGC;   print $ARGC }          0    the produced value
+//	f(){ local    ARGC=5; … }                    f: read-only variable: ARGC
+//	f(){ local -h ARGC=5; print $ARGC }          5
+//	f(){ local -h ARGC=5; print ${(t)ARGC} }     scalar-local-hide
+//	f(){ local parameters; print "$parameters" } (an empty line)
+//	f(){ local parameters; print ${(t)parameters} }  scalar-local
+//	f(){ local EPOCHSECONDS=5; print $EPOCHSECONDS } 5
+//	f(){ local +h EPOCHSECONDS=5; … }            f: read-only variable: …
+//
+// Rows four and six are what says the *producer* is gone and not merely the
+// freeze: the kind and the `special` word are both read off the produced
+// tables, so a shadow that lifted the freeze alone would still describe as
+// `integer-…-special` and still answer the shell's value. Row eight is the
+// control on the other side, since `EPOCHSECONDS` carries `hide` from its
+// module and `+h` is the only thing asking for the second view back.
+//
+// This half was described and not wired for as long as the word was right
+// (#2552, #2586): `hideInScope` reached a tie and nothing else, so
+// `local parameters` read the whole table and `local EPOCHSECONDS=5` read the
+// clock. suspendProducer is the wiring, and it is per-scope for the reason
+// the freeze is — the name is the shell's own again the moment the call
+// returns.
+//
 // No listing shows it. `typeset -h v=1; typeset -p v` is `typeset v=1` there,
 // and `typeset -p PATH` after `typeset -h PATH` still writes the tie — so
 // declareprint asks nothing about this and the letter is invisible except
@@ -72,6 +119,9 @@ package interp
 // declaration takes its shadow: the scope saves the outer state at that
 // moment, and applying the letter first would leave the scope saving the
 // attribute this very declaration had just added and putting it back forever.
+//
+// And it runs *before* the value, which is what makes the `+h` row below a
+// refusal rather than an assignment — see the caller in declarebuiltin.go.
 func (r *Runner) setHideInScope(name string, f declareFlags) {
 	if !f.hideNamed {
 		// Nothing written, so the name keeps whatever it carries — which is
@@ -81,38 +131,122 @@ func (r *Runner) setHideInScope(name string, f declareFlags) {
 	}
 	if !f.hide {
 		delete(r.hideInScope, name)
+		r.shadowStopsHiding(name)
 		return
 	}
 	if r.hideInScope == nil {
 		r.hideInScope = map[string]bool{}
 	}
 	r.hideInScope[name] = true
-	// And where the shadow kept a produced parameter's freeze, the letter is
-	// what lifts it — this declaration's shadow is an ordinary parameter now
-	// and takes an ordinary value. Measured: `f(){ local -h ARGC=5; print
-	// $ARGC }` is `5` in zsh 5.9.2, against `read-only variable: ARGC` for
-	// the same line without the letter.
-	//
-	// Only where a shadow was taken, which is the control on the other side:
-	// `typeset -h ARGC; ARGC=5` at the top level is `read-only variable:
-	// ARGC` in the same shell, so the letter alone thaws nothing. The scope
-	// has already recorded what to put back — see shadow, which writes
-	// savedReadonly before this runs.
-	//
-	// The freeze is the half of the letter this reaches. The other half —
-	// that the shadow is an ordinary parameter rather than a second view of
-	// the producer — is not wired for a produced parameter here, so the
-	// value read back inside that function is still the producer's `0` and
-	// not the `5` the declaration wrote. Unchanged by this line, which only
-	// turns a refusal into the answer the name already gave; it is the same
-	// gap `local parameters` has, recorded in dialect/zsh's
-	// hideModuleParameter (#2552).
-	if r.localInTheInnermostScope(name) {
-		delete(r.readonly, name)
+	r.shadowStartsHiding(name)
+}
+
+// shadowStartsHiding makes the shadow standing over a name a hidden one:
+// an ordinary parameter that merely happens to be spelled like one of the
+// shell's own.
+//
+// Two things come off, and they are the two halves of what the letter means.
+//
+//   - **The freeze**, where the shadow kept a produced parameter's. Measured:
+//     `f(){ local -h ARGC=5; print $ARGC }` is `5` in zsh 5.9.2, against
+//     `read-only variable: ARGC` for the same line without the letter.
+//
+//   - **The producer**, which is the half this used to leave standing. With
+//     it in place the cell the declaration wrote was never read: the value
+//     came from the shell, so `local EPOCHSECONDS=5` read the clock and
+//     `local parameters` read the whole table where zsh reads `5` and an
+//     empty line (#2586). Suspending it for the scope is what makes the
+//     shadow an ordinary parameter rather than a second view — and it is why
+//     `${(t)}` inside the shadow is `scalar-local` there and not
+//     `association-local-hide-special`, since the kind and the `special`
+//     word are both read off the produced tables.
+//
+// Only where a shadow was taken, which is the control on the other side:
+// `typeset -h ARGC; ARGC=5` at the top level is `read-only variable: ARGC` in
+// the same shell and `${(t)ARGC}` is still `integer-readonly-hide-special`,
+// so the letter alone thaws nothing and suspends nothing. The scope has
+// already recorded what to put back — see shadow, which writes savedReadonly
+// before this runs.
+func (r *Runner) shadowStartsHiding(name string) {
+	if !r.localInTheInnermostScope(name) {
+		return
+	}
+	sc := r.scopes[len(r.scopes)-1]
+	if sc.hiddenShadow == nil {
+		sc.hiddenShadow = map[string]bool{}
+	}
+	sc.hiddenShadow[name] = true
+	delete(r.readonly, name)
+	r.suspendProducer(sc, name)
+}
+
+// shadowStopsHiding is `+h` reaching a shadow that was already a hidden one,
+// and it is not the absence of the line above: it puts the producer back and
+// the freeze with it.
+//
+// Measured 2026-09-13, zsh 5.9.2, `env -i PATH=/usr/bin:/bin` with a scratch
+// `HOME`, `ZDOTDIR` and `HISTFILE`, over a script file with `zsh/datetime`
+// loaded — `EPOCHSECONDS` carries `hide` from its module, so a plain shadow
+// of it is ordinary and `+h` is what asks for the second view back:
+//
+//	f(){ local    EPOCHSECONDS=5; print $EPOCHSECONDS }   5
+//	f(){ local +h EPOCHSECONDS=5; print $EPOCHSECONDS }   f: read-only
+//	                                                      variable: …
+//	f(){ local +h parameters; print "$parameters" }       the whole table
+//
+// The second row is the one that says the freeze comes back: without it the
+// declaration would take its value and print it, which is what this engine
+// did. The third says the producer does — a `+h` that only re-froze would
+// leave the name empty.
+func (r *Runner) shadowStopsHiding(name string) {
+	if !r.localInTheInnermostScope(name) {
+		return
+	}
+	sc := r.scopes[len(r.scopes)-1]
+	if sc.hiddenShadow == nil {
+		sc.hiddenShadow = map[string]bool{}
+	}
+	sc.hiddenShadow[name] = false
+	r.resumeProducer(sc, name)
+	// And the freeze the shadow displaced, on the terms freezeSurvivesAShadow
+	// states: a produced parameter's survives its shadow and a script's does
+	// not, so only the first comes back here.
+	if sc.savedReadonly[name] && r.DynamicParameter(name) {
+		if r.readonly == nil {
+			r.readonly = map[string]bool{}
+		}
+		r.readonly[name] = true
 	}
 }
 
-// hidesItsTie reports whether either half of a tie carries the attribute.
+// shadowIsHidden reports whether the declaration standing over a name took a
+// hidden shadow, which is the question every consumer of the letter actually
+// asks.
+//
+// Not `r.hideInScope[name]`, and the difference is the whole of why this
+// exists: the attribute describes a *binding*, and the shadow's binding is a
+// fresh one that carries the letter only if the declaration wrote it.
+// Measured on zsh 5.9.2 — `typeset -h v=1` is `scalar-hide` and a plain
+// `local v=2` inside a function is `scalar-local`, with no `hide` in the
+// word, while `local -h v=2` is `scalar-local-hide`. So what governs the
+// shadow is the attribute the *outer* binding carried, which the scope
+// records at the shadow and this reads back.
+//
+// The innermost scope that shadowed the name answers, which is what lets a
+// `+h` deeper in take the hiding off a name an outer scope hid; a name no
+// scope has shadowed falls back to the binding's own attribute, so nothing
+// changes at the top level.
+func (r *Runner) shadowIsHidden(name string) bool {
+	for i := len(r.scopes) - 1; i >= 0; i-- {
+		if hidden, ok := r.scopes[i].hiddenShadow[name]; ok {
+			return hidden
+		}
+	}
+	return r.hideInScope[name]
+}
+
+// hidesItsTie reports whether either half of a tie stands under a hidden
+// shadow.
 //
 // Either half answers for both, and that is a choice worth naming. The shell
 // with the letter keeps the *other* half tied to the outer cell — inside
@@ -129,7 +263,103 @@ func (r *Runner) setHideInScope(name string, f declareFlags) {
 // where the scope a tie belongs to is worked out: the attribute alone
 // detaches nothing, which is the second fact in the comment above.
 func (r *Runner) hidesItsTie(t tie) bool {
-	return r.hideInScope[t.scalar] || r.hideInScope[t.array]
+	return r.shadowIsHidden(t.scalar) || r.shadowIsHidden(t.array)
+}
+
+// suspendedProducer is everything a hidden shadow took out of the produced
+// tables, kept whole so that the scope's exit needs nothing to have been
+// remembered elsewhere.
+//
+// The same shape [withdrawnParameter] keeps and for the same reason, and
+// deliberately not the same type: a withdrawal is a *module selection*, it is
+// per-runner and takes the readonly and hidden marks with it, where this is
+// per-scope and leaves both to the scope's own records. Sharing one struct
+// would have tied a scope's exit to what a `zmodload -F` had done.
+type suspendedProducer struct {
+	scalar      func(*Runner) string
+	array       func(*Runner) []string
+	assoc       func(*Runner) AssocArray
+	element     func(*Runner, string) (string, bool)
+	writeScalar func(*Runner, string)
+	writeArray  func(*Runner, []string)
+	writeAssoc  func(*Runner, string, string, bool)
+
+	declaration ProducedDeclaration
+	declared    bool
+}
+
+// suspendProducer takes a name out of the produced tables for as long as one
+// scope's hidden shadow stands over it.
+//
+// Nothing happens for a name the shell does not produce, which is most of
+// them: `typeset -h v=1` is an ordinary scalar with a letter on it, and the
+// letter is visible there only through a tie.
+func (r *Runner) suspendProducer(sc *scope, name string) {
+	if _, already := sc.suspendedProducers[name]; already {
+		return
+	}
+	if !r.DynamicParameter(name) {
+		return
+	}
+	p := suspendedProducer{
+		scalar:      r.Dynamic[name],
+		array:       r.DynamicArrays[name],
+		assoc:       r.DynamicAssocs[name],
+		element:     r.dynamicAssocElements[name],
+		writeScalar: r.dynamicWriters[name],
+		writeArray:  r.dynamicArrayWriters[name],
+		writeAssoc:  r.dynamicAssocWriters[name],
+	}
+	p.declaration, p.declared = r.dynamicDeclarations[name]
+	delete(r.Dynamic, name)
+	delete(r.DynamicArrays, name)
+	delete(r.DynamicAssocs, name)
+	delete(r.dynamicAssocElements, name)
+	delete(r.dynamicWriters, name)
+	delete(r.dynamicArrayWriters, name)
+	delete(r.dynamicAssocWriters, name)
+	delete(r.dynamicDeclarations, name)
+	if sc.suspendedProducers == nil {
+		sc.suspendedProducers = map[string]suspendedProducer{}
+	}
+	sc.suspendedProducers[name] = p
+}
+
+// resumeProducer puts a suspended name back into every table it came out of.
+//
+// The nil checks are the caller's half of the trap [putBack] records: a
+// function read out of a map that has no such key is a *typed* nil, and
+// registering one is a producer nothing can call.
+func (r *Runner) resumeProducer(sc *scope, name string) {
+	p, ok := sc.suspendedProducers[name]
+	if !ok {
+		return
+	}
+	if p.scalar != nil {
+		putBack(&r.Dynamic, name, p.scalar)
+	}
+	if p.array != nil {
+		putBack(&r.DynamicArrays, name, p.array)
+	}
+	if p.assoc != nil {
+		putBack(&r.DynamicAssocs, name, p.assoc)
+	}
+	if p.element != nil {
+		putBack(&r.dynamicAssocElements, name, p.element)
+	}
+	if p.writeScalar != nil {
+		putBack(&r.dynamicWriters, name, p.writeScalar)
+	}
+	if p.writeArray != nil {
+		putBack(&r.dynamicArrayWriters, name, p.writeArray)
+	}
+	if p.writeAssoc != nil {
+		putBack(&r.dynamicAssocWriters, name, p.writeAssoc)
+	}
+	if p.declared {
+		putBack(&r.dynamicDeclarations, name, p.declaration)
+	}
+	delete(sc.suspendedProducers, name)
 }
 
 // MarkHideInScope gives a name the hide-in-scope attribute from outside the
@@ -145,34 +375,17 @@ func (r *Runner) hidesItsTie(t tie) bool {
 // only one of them describes with only that word, so a dialect that set one
 // and meant both would be telling a script switching on `${(t)…}` about the
 // wrong letter (#2042).
+//
+// A dialect calls this while registering, which is the top level and has no
+// scope — but it goes through the same seam the letter does rather than
+// setting the map and stopping, because a second helper that does nearly the
+// same thing is where the next fix lands in only one of them.
 func (r *Runner) MarkHideInScope(name string) {
 	if r.hideInScope == nil {
 		r.hideInScope = map[string]bool{}
 	}
 	r.hideInScope[name] = true
-	// And where the shadow kept a produced parameter's freeze, the letter is
-	// what lifts it — this declaration's shadow is an ordinary parameter now
-	// and takes an ordinary value. Measured: `f(){ local -h ARGC=5; print
-	// $ARGC }` is `5` in zsh 5.9.2, against `read-only variable: ARGC` for
-	// the same line without the letter.
-	//
-	// Only where a shadow was taken, which is the control on the other side:
-	// `typeset -h ARGC; ARGC=5` at the top level is `read-only variable:
-	// ARGC` in the same shell, so the letter alone thaws nothing. The scope
-	// has already recorded what to put back — see shadow, which writes
-	// savedReadonly before this runs.
-	//
-	// The freeze is the half of the letter this reaches. The other half —
-	// that the shadow is an ordinary parameter rather than a second view of
-	// the producer — is not wired for a produced parameter here, so the
-	// value read back inside that function is still the producer's `0` and
-	// not the `5` the declaration wrote. Unchanged by this line, which only
-	// turns a refusal into the answer the name already gave; it is the same
-	// gap `local parameters` has, recorded in dialect/zsh's
-	// hideModuleParameter (#2552).
-	if r.localInTheInnermostScope(name) {
-		delete(r.readonly, name)
-	}
+	r.shadowStartsHiding(name)
 }
 
 // freezeSurvivesAShadow reports whether a declaration standing in front of a

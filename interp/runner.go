@@ -5102,6 +5102,24 @@ type scope struct {
 	// not mean the same thing here either — absent means this scope never
 	// shadowed the name. See hideinscope.go.
 	savedHideInScope map[string]bool
+	// hiddenShadow is whether the shadow this scope took over a name is a
+	// *hidden* one — an ordinary parameter that merely happens to be spelled
+	// like one of the shell's own, rather than a second view of it. Written
+	// for every name the scope shadows, because absent and false are
+	// different questions here too: absent means this scope never shadowed
+	// the name, and the innermost scope that did is the one that answers.
+	//
+	// Separate from savedHideInScope, which is a *value* being kept for the
+	// return, because the two disagree the moment either `-h` or `+h` is
+	// written on the declaration — and separate from r.hideInScope, which
+	// after the shadow describes the fresh binding and no longer the outer
+	// one that governed it. See hideinscope.go.
+	hiddenShadow map[string]bool
+	// suspendedProducers is what a hidden shadow took out of the produced
+	// tables, so that the name reads and writes as an ordinary parameter for
+	// as long as the shadow stands and is the shell's own again on return.
+	// See hideinscope.go.
+	suspendedProducers map[string]suspendedProducer
 	// savedAttrs is every other attribute a shadowed name carried — integer
 	// and its base, float and its precision, the two case letters, unique
 	// and hidden. Saved and taken off at the shadow and put back on return,

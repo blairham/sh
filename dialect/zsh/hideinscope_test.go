@@ -3,7 +3,10 @@
 
 package zsh_test
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // `typeset -h` and `typeset +h`, measured against zsh 5.9.2 with `-f` and a
 // two-entry `PATH` (2026-09-09). It is this shell's letter alone: bash 5.3 and
@@ -116,5 +119,84 @@ f`)
 	want := "st=0\n"
 	if out != want || st != 0 {
 		t.Errorf("compaudit's declaration = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// The letter's other half, and the one this shell described for a while
+// without doing (#2586): a local of a parameter the shell *produces* is an
+// ordinary parameter, not a second view of the producer.
+//
+// Every module parameter carries `hide` from its registration — see
+// moduleparam.go — so a plain `local` of one is a hidden shadow with no
+// letter written anywhere, which is the shape a real script hits. Measured
+// against zsh 5.9.2 on 2026-09-13, `env -i PATH=/usr/bin:/bin` with a scratch
+// `HOME`, `ZDOTDIR` and `HISTFILE`, over a script file with the modules
+// loaded.
+func TestALocalOfAModuleParameterIsAnOrdinaryParameter(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `zmodload zsh/parameter
+zmodload zsh/datetime
+f() { local parameters; print -r -- "bare=[$parameters] ${(t)parameters}"; }
+f
+g() { local parameters; parameters=(a b); print -r -- "set=[$parameters] ${(t)parameters}"; }
+g
+h() { local EPOCHSECONDS=5; print -r -- "clock=[$EPOCHSECONDS] ${(t)EPOCHSECONDS}"; }
+h
+print -r -- "after=${(t)EPOCHSECONDS}"`)
+	// `scalar-local` rather than `association-local-hide-special` is the half
+	// a value alone cannot show: the kind and the `special` word are both
+	// read off the produced tables, so they go quiet exactly when the
+	// producer does — and `hide` is not among them either, because the
+	// shadow's binding is a fresh one that carries the letter only if the
+	// declaration writes it.
+	want := "bare=[] scalar-local\nset=[a b] array-local\n" +
+		"clock=[5] scalar-local\nafter=integer-readonly-hide-hideval-special\n"
+	if out != want || st != 0 {
+		t.Errorf("a local of a module parameter = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// And the same for one of the shell's *own* produced parameters, which is
+// what says this is the attribute and not "modules are different": `ARGC`
+// carries neither hiding letter, so a plain shadow of it is still the
+// produced view and `-h` on the declaration is the only thing asking for the
+// ordinary parameter.
+//
+// The middle row is the control that makes the letter the subject: without
+// it the declaration is refused, because the freeze on a produced name
+// survives its shadow. Not written as `( … )` — a subshell is not where the
+// scope is, and the whole row would pass on a shell that ignored the letter.
+func TestTheHideLetterDetachesALocalOfAProducedParameter(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `plain() { local ARGC; print -r -- "plain=[$ARGC] ${(t)ARGC}"; }
+plain
+hidden() { local -h ARGC=5; print -r -- "hidden=[$ARGC] ${(t)ARGC}"; }
+hidden
+print -r -- "after=[$ARGC] ${(t)ARGC}"`)
+	want := "plain=[0] integer-local-readonly-special\nhidden=[5] scalar-local-hide\n" +
+		"after=[0] integer-readonly-special\n"
+	if out != want || st != 0 {
+		t.Errorf("`local -h` over a produced parameter = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// `+h` over a module parameter is the second view asked for by name, and it
+// brings the freeze back with the producer: `EPOCHSECONDS` is readonly there,
+// so the declaration's own value is refused rather than taken.
+func TestThePlusHideFormPutsAModuleParameterBack(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `zmodload zsh/parameter
+f() { local +h parameters; print -r -- "kind=${(t)parameters}"; }
+f
+g() { local +h EPOCHSECONDS=5; print -r -- "never"; }
+g
+print -r -- "after"`)
+	// `association` and `special` are the words the producer brings back, and
+	// `readonly` the freeze with it. The two hiding words stay gone, because
+	// they are the shadow's binding's to carry and it carries neither — zsh
+	// 5.9.2 writes exactly this, `association-local-readonly-special`.
+	if !strings.Contains(out, "kind=association-local-readonly-special") {
+		t.Errorf("`local +h` over a module parameter = %q, want the produced view back", out)
+	}
+	if !strings.Contains(out, "read-only variable: EPOCHSECONDS") || strings.Contains(out, "never") {
+		t.Errorf("`local +h` over a frozen producer = %q (status %d), want the refusal "+
+			"the freeze makes — the plus form puts that back too", out, st)
 	}
 }

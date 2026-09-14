@@ -34,16 +34,15 @@ import "github.com/blairham/sh/interp"
 // #2042 was filed for, reappearing at the registration sites after being
 // fixed in the description.
 //
-// **What this fixes is the word, and the word only.** `hide` also means that
-// a local declaration of the name is an ordinary parameter rather than a
-// second view of the module's table, and that half is not wired for a
-// produced parameter here: `f() { local parameters; echo "$parameters"; }`
-// still prints the whole table where zsh prints an empty line, and
-// `local EPOCHSECONDS=5` still reads the clock where zsh reads 5. That is
-// [Runner.hideInScope] reaching only a *tie* today, it is the same gap for
-// every name on this list, and it is not made worse by describing the
-// attribute correctly — the description was wrong in both directions before.
-// Reported on rather than smuggled in here (#2552).
+// **Both halves of the letter are here.** `hide` is a word in `${(t)…}` and
+// it is also a behavior: a local declaration of the name is an ordinary
+// parameter rather than a second view of the module's table. #2552 fixed the
+// word and left the behavior, and #2586 wired the behavior — the producer is
+// suspended for as long as a hidden shadow stands over the name, so
+// `f() { local parameters; echo "$parameters"; }` prints an empty line and
+// `local EPOCHSECONDS=5` reads 5, as zsh 5.9.2 does. See
+// [interp.Runner.MarkHideInScope] and interp/hideinscope.go, where the rows
+// are.
 func hideModuleParameter(r *interp.Runner, name string) {
 	r.MarkHidden(name)
 	r.MarkHideInScope(name)

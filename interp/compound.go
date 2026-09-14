@@ -1057,6 +1057,12 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 			delete(r.hideInScope, name)
 		}
 	}
+	// And the producer a hidden shadow suspended, which is the half of the
+	// letter that makes the local an ordinary parameter: the name is the
+	// shell's own again the moment the call returns. See hideinscope.go.
+	for name := range sc.suspendedProducers {
+		r.resumeProducer(sc, name)
+	}
 	// And every other attribute the declaration displaced, which goes both
 	// ways for the reason the frozen one does — see localattributes.go.
 	for name, was := range sc.savedAttrs {

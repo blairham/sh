@@ -78,6 +78,8 @@ func seedStacks(r *Runner) {
 		assocExisted:       map[string]bool{"seed": true},
 		savedReadonly:      map[string]bool{"seed": true},
 		savedHideInScope:   map[string]bool{"seed": true},
+		hiddenShadow:       map[string]bool{"seed": true},
+		suspendedProducers: map[string]suspendedProducer{"seed": {}},
 		savedAttrs:         map[string]nameAttributes{"seed": {}},
 		savedAssigned:      map[string]string{"seed": "v"},
 		assignedSpoken:     map[string]bool{"seed": true},

@@ -657,56 +657,69 @@ func setODeclinedWord(a string) bool {
 	return a == "" || setOptionWord(a)
 }
 
-// refuseBeforeApplyingSetOptions is the pass bash makes over every option
-// word's letters before it applies one, and is the whole of where that
-// reading is decided.
+// refuseBeforeApplyingSetOptions is the pass over every option word that runs
+// before one of them is applied, and is the whole of where that reading is
+// decided.
 //
 // A dialect that applies as it goes needs nothing here: the loop below is
 // already that reading. What this adds is the other one, where a single bad
-// letter anywhere in the word list leaves the shell exactly as it was — so
+// word anywhere in the list leaves the shell exactly as it was — so
 // `set -e -Q` in bash is errexit **off**, where `set -Q -e` is off in every
 // column and tells the two readings apart from nothing.
 //
-// See Semantics.SetValidatesOptionLettersFirst for the measurement and for
-// why the invocation and the environment are not this question.
+// Two dialects want it and they want different reaches, which is the whole of
+// what `names` carries. bash's pass knows the letter table and not the name
+// table, so `command set -e -o zzznosuch` is errexit **on** there — the axis
+// is Semantics.SetValidatesOptionLettersFirst, and it is asked. ksh93's
+// reaches both, because a shell that reports every bad option word has by
+// then read every option word: `command set -u -o zzznosuch` is nounset
+// **off** there. That second reach is not a value of the letters axis but the
+// other half of Semantics.SetReportsEveryBadOption, which no other dialect
+// answers yes to — so it is read where that one is read rather than asked
+// again (#2670).
+//
+// See Semantics.SetValidatesOptionLettersFirst for why the invocation and the
+// environment are not this question.
 func (r *Runner) refuseBeforeApplyingSetOptions(args []string) (int, bool) {
-	if r.reportsEveryBadSetOption() {
-		// ksh93 reads every option word and reports every bad one, names and
-		// letters alike and in the order they were written — `set -o nosuch
-		// -z` draws both sentences and one usage line. It applies none of
-		// them either, measured, so it agrees with bash about what is left
-		// behind and disagrees about how far the reading goes: a pass over
-		// the *letters* would lose the name reports that make this dialect
-		// what it is, and one over both would leave errexit off where bash
-		// leaves it on. Two mechanisms, and this axis is only one of them —
-		// so this dialect is not asked and does not answer it.
-		return 0, false
-	}
 	if r.atInvocation || r.fromEnvironment {
 		// The front end's own parse is position-sensitive where this one is
 		// not, measured; one pass cannot be both, and guessing that they are
 		// one would put the builtin's answer on a route that contradicts it.
 		return 0, false
 	}
-	_, _, preceded, found := r.unknownSetLetter(args, false)
-	if !found || !preceded {
-		// Either every letter is one this dialect has, or the bad one is the
-		// first thing in the word list — where applying as you go has
-		// applied nothing either, so the two readings cannot be told apart
-		// and neither is worth asking about.
+	names := r.reportsEveryBadSetOption()
+	preceded, found := r.unknownSetOption(args, names, false)
+	if !found {
+		// Every option word is one this dialect has, so there is nothing to
+		// read ahead for and the loop below is the only pass.
 		return 0, false
 	}
-	if !r.ask(r.sem().SetValidatesOptionLettersFirst,
-		"`set` reading every option word's letters before it applies any of them") {
-		if r.unspecified {
-			return r.status, true
+	if !names {
+		if !preceded {
+			// The bad word is the first thing in the list, where applying as
+			// you go has applied nothing either — the two readings cannot be
+			// told apart and neither is worth asking about.
+			return 0, false
 		}
-		return 0, false
+		if !r.ask(r.sem().SetValidatesOptionLettersFirst,
+			"`set` reading every option word's letters before it applies any of them") {
+			if r.unspecified {
+				return r.status, true
+			}
+			return 0, false
+		}
 	}
-	// Said the same way the applying loop says it, and by the same call, so
+	// No `preceded` gate on the wider reach, because that dialect leaves
+	// nothing applied wherever the bad word stands: `command set -Z -e` is
+	// errexit off in ksh93, so the options *behind* a bad one are as unapplied
+	// as the ones in front of it. Under the letters-only reading that row is
+	// off in every column and says nothing, which is why the gate belongs to
+	// the axis that is asked and not to this one.
+	//
+	// Said the same way the applying loop says it, and by the same calls, so
 	// that the dialect which reports every bad word still reports every bad
 	// word — with nothing applied, nothing listed and no parameters replaced.
-	r.unknownSetLetter(args, true)
+	r.unknownSetOption(args, names, true)
 	if r.setRefusalOwed {
 		// Paid by biSet, which is the one door out of the builtin.
 		return r.status, true
@@ -714,33 +727,50 @@ func (r *Runner) refuseBeforeApplyingSetOptions(args []string) (int, bool) {
 	return r.setOptionFailure(), true
 }
 
-// unknownSetLetter walks `set`'s option words without applying anything, and
-// finds the first letter this dialect has not got.
+// unknownSetOption walks `set`'s option words without applying anything, and
+// finds the first one this dialect has not got.
 //
 // The word shapes are the applying loop's on purpose: a pass that cut the
-// words differently would validate letters the other one never reads. The one
-// place the two must part is the `o` — the characters behind it are what the
-// `-o` takes under either reading, so this pass never reads them as letters,
-// and that is the whole of why a refusal can survive into the applying pass
-// at all. `set -A name` is where it stops rather than guesses: what follows
-// that name is another dialect's answer, and this pass may not ask one.
+// words differently would validate options the other one never reads.
+// `set -A name` is where it stops rather than guesses: what follows that name
+// is another dialect's answer, and this pass may not ask one.
 //
-// With report false nothing is written and nothing is said. The third result
-// is whether anything stood in front of the bad letter, which is the only
-// place the two readings disagree. With report true each bad letter is
-// refused by the same call the applying loop refuses one with, so the
-// wording, the status, the usage debt and the fatality are all decided in one
-// place rather than two.
-func (r *Runner) unknownSetLetter(args []string, report bool) (bad rune, on, preceded, found bool) {
+// `names` is how far the reading reaches. With it false only the option
+// *letters* are read, and the characters behind an `o` are what the `-o`
+// takes under either reading rather than letters — which is the whole of why
+// a refusal can survive into the applying pass at all. With it true the long
+// names are read too, in both spellings the applying loop takes them in: the
+// next word after a bare `-o`, and the rest of the word where the dialect
+// welds. The two reaches are one walk because the second is the first plus
+// the names, and a second walk would be free to cut the words differently
+// from this one and from the loop below.
+//
+// With report false nothing is written and nothing is said. The second result
+// is whether anything stood in front of the bad option, which is the only
+// place the two letters-readings disagree. With report true each bad option is
+// refused by the same call the applying loop refuses one with, so the wording,
+// the status, the usage debt and the fatality are all decided in one place
+// rather than two.
+func (r *Runner) unknownSetOption(args []string, names, report bool) (preceded, found bool) {
 	seen := false
-	refuse := func(opt rune, sign bool) bool {
+	mark := func() {
 		if !found {
-			bad, on, preceded, found = opt, sign, seen, true
+			preceded, found = seen, true
 		}
+	}
+	refuseLetter := func(opt rune, sign bool) bool {
+		mark()
 		if !report {
 			return false
 		}
 		return r.badSetOptionLetter(opt, sign)
+	}
+	refuseName := func(name string) bool {
+		mark()
+		if !report {
+			return false
+		}
+		return r.badSetOptionName(name)
 	}
 	for i := 0; i < len(args); i++ {
 		a := args[i]
@@ -751,22 +781,35 @@ func (r *Runner) unknownSetLetter(args []string, report bool) (bad rune, on, pre
 		letters, read, stop := a[1:], false, false
 		if before, after, ok := strings.Cut(letters, "o"); ok {
 			letters, read = before, true
-			// A word the `-o` will not take is not the `-o`'s operand, so
-			// this pass reads it as the letters it is — which is the whole
-			// of why bash's `set -o -Z` refuses `Z` with no listing written.
-			// Read rather than asked, for the reason hasSetLetter is: a pass
-			// that applies nothing must not be the one that refuses a
-			// dialect for an unanswered axis.
-			if after == "" && i+1 < len(args) &&
-				(!setODeclinedWord(args[i+1]) || r.sem().SetODeclinesADashWord != Yes) {
+			switch {
+			case after != "" && r.sem().SetOLetterAttachesItsName == Yes:
+				// `set -oNAME`, where the dialect welds. Strictly Yes and not
+				// "not No", for the reason hasSetLetter gives about being
+				// generous: an unanswered axis leaves the applying pass to
+				// report the missing dialect, and a name refused here would
+				// be a refusal that pass might never have made.
+				if names && !r.hasSetOptionName(after) && !refuseName(after) {
+					return
+				}
+			case after == "" && i+1 < len(args) &&
+				(!setODeclinedWord(args[i+1]) || r.sem().SetODeclinesADashWord != Yes):
+				// A word the `-o` will not take is not the `-o`'s operand, so
+				// this pass reads it as the letters it is — which is the whole
+				// of why bash's `set -o -Z` refuses `Z` with no listing
+				// written. Read rather than asked, for the reason hasSetLetter
+				// is: a pass that applies nothing must not be the one that
+				// refuses a dialect for an unanswered axis.
 				i++
+				if names && !r.hasSetOptionName(args[i]) && !refuseName(args[i]) {
+					return
+				}
 			}
 		} else if cut, ok := strings.CutSuffix(letters, "A"); ok && r.setArrayLetter() {
 			letters, stop = cut, true
 		}
 		for _, opt := range letters {
 			if !r.hasSetLetter(opt) {
-				if !refuse(opt, sign) {
+				if !refuseLetter(opt, sign) {
 					return
 				}
 				continue
@@ -785,6 +828,31 @@ func (r *Runner) unknownSetLetter(args []string, report bool) (bad rune, on, pre
 		}
 	}
 	return
+}
+
+// hasSetOptionName reports whether a `set -o` name is one this dialect has at
+// all, and is to the names what hasSetLetter is to the letters — including in
+// being allowed to be too generous and never too strict. A name it calls this
+// dialect's that the applying pass then refuses — one the shell has and will
+// not move — costs only that the reading pass misses it and the applying pass
+// answers as it did before.
+//
+// A dialect with a `set -o` namespace of its own is taken at its word without
+// being asked, because asking is how that namespace is *moved*: optionMover
+// answers "known" and "moved" in one call, and a pass that applies nothing
+// cannot make it. No dialect installs one and reports every bad option word,
+// so nothing reaches this today; being generous is what keeps that from
+// mattering if one ever does.
+func (r *Runner) hasSetOptionName(name string) bool {
+	if r.optionMover != nil {
+		return true
+	}
+	if name == "pipefail" {
+		// The one name with an axis of its own, and setOption asks it there.
+		return r.sem().PipefailOption != No
+	}
+	_, ok := r.lookupSetOption(name)
+	return ok
 }
 
 // hasSetLetter reports whether an option letter is one this dialect has at

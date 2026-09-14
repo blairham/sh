@@ -104,10 +104,10 @@ func TestTheTerminalIsAskedToBracketAPaste(t *testing.T) {
 			// Around the read, which is what the order says: the request
 			// comes before the prompt the line is typed at, and is taken back
 			// after the newline that ends it.
-			if prompt := strings.Index(drawn, "$ "); !(on < prompt) {
+			if prompt := strings.Index(drawn, "$ "); on >= prompt {
 				t.Errorf("the request came after the prompt rather than before it: %q", drawn)
 			}
-			if end := strings.LastIndex(drawn, "\r\n"); !(off > end) {
+			if end := strings.LastIndex(drawn, "\r\n"); off <= end {
 				t.Errorf("the request was taken back before the line ended rather than after it: %q", drawn)
 			}
 		})

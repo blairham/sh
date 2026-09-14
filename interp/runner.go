@@ -2698,8 +2698,32 @@ func (r *Runner) borrowedAtLocation() (borrowedText, bool) {
 // parameter not set`, and the same failure inside an `eval` is `./e.sh: 3:
 // eval: NOPE: parameter not set` — the file by the path the script wrote, and
 // the builtin's own name for text that came from no file.
+//
+// **A builtin's own complaint takes that slot instead, and nothing is written
+// here** (#2532). The two names are alternatives rather than a pair: dash has
+// one place after the location for a name, and a builtin naming itself fills
+// it.
+//
+// The discriminator is [Runner.speaking] — the builtin that is naming itself —
+// and deliberately not [Runner.builtinIsSpeaking], which the issue proposed
+// and which is wider by a failed redirection opened for a builtin. Measured
+// 2026-09-13, dash 0.5.12, `env -i`, each line inside a sourced file and again
+// inside `eval`, both arrangements agreeing:
+//
+//	cd /nonexistent      ./s.sh: 1: cd: can't cd to …          no file name
+//	shift 99             ./s.sh: 2: shift: can't shift …       no file name
+//	nosuchcmd            ./s.sh: 1: ./i.sh: nosuchcmd: not found      named
+//	readonly R=1; R=2    ./s.sh: 2: ./i.sh: R: is read only          named
+//	echo hi > /bad/f     ./s.sh: 1: ./i.sh: cannot create …          named
+//
+// The last three are the shell speaking and keep the name; only the first two
+// are a builtin speaking for itself. Taking the wider question would have
+// dropped the name from the redirection row, where dash writes it.
 func (r *Runner) borrowedName(d Diagnostics) string {
 	if !d.BorrowedTextIsNamedAtRunTime {
+		return ""
+	}
+	if r.speaking() != "" {
 		return ""
 	}
 	b, ok := r.borrowedAtLocation()

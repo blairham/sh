@@ -531,12 +531,59 @@ Two consequences of keeping the name follow, and the second was a defect for a
 day. The end-of-file nudge — the repeated last-writer close in
 `nudgeFifoEOF`, which exists because a reader can come out of `open` into a
 pipe whose end-of-file has already gone past — used to be ended by the unlink:
-ENOENT said there was no pipe to tell through. With the name kept and a reader
-that stays for the session, neither of its two answers could ever arrive, and
-it went round every twenty milliseconds for the life of the shell, per
-substitution. It has a deadline now: a hundred milliseconds of repeating a
+`ENOENT` said there was no pipe to tell through. With the name kept and a
+reader that stays for the session, neither of its two answers could ever
+arrive, and it went round every twenty milliseconds for the life of the shell,
+per substitution. It has a deadline now: a hundred milliseconds of repeating a
 transition whose race is between two system calls, after which a reader that
 is still there is one holding the pipe for its own reasons.
+
+### The shell holds a reading end of its own as well
+
+A FIFO's pipe exists only while somebody holds it open. When the last reader
+and the last writer have gone, the buffer goes with them and the next open
+makes a new one — and **a reader that is still inside `open(2)` is not yet
+holding anything**, though it is enough for a writer's nonblocking open to
+succeed against rather than answer `ENXIO`. So a shell that opens the write
+end, writes and closes inside that window has run a whole pipe's life cycle
+beside a command that was attached to none of it.
+
+Measured 2026-09-14, macOS 26.5.2 on arm64, 40,000 rounds of each of two
+spellings with eight shells at once — a `while read` over a redirection, and
+`sysopen` on the path — **24 and 23 rounds** answered with the body's first
+chunk missing, or with nothing at all, or never finished at all: about one
+round in four thousand, and the three shapes are one defect (#2733).
+
+So the shell **holds a reading end of its own** on a `<(cmd)`'s pipe, opened
+before the body has written a byte and released when the command that named
+the path is done with it. On the same instrument that is **0 and 0**. It is
+the mirror of the placeholder `>(cmd)` has had since the beginning, and the
+two are deliberately not the same flags: that one is `O_RDWR`, because it has
+to be a *writer* to keep an immediate end-of-file away from a body that is
+reading; this one is `O_RDONLY`, because the end-of-file the command is
+reading until is the shell's writing end closing and nothing may hold that
+away. Neither is ever read or written through.
+
+**It does not replace the nudge above, and the measurement is the only reason
+anyone would know that.** The two look like one fix for one race. They are
+answers to two states: the placeholder keeps the *bytes* from being discarded
+under a command still arriving, and the nudge wakes a command parked in
+`open` — which is waiting for a **writer**, so no reading end of ours can
+ever be the thing it is waiting for. With the nudge taken out and only the
+placeholder left, the byte loss is 0 in 40,000 and `cat <(echo sub; echo
+noise >&2)` parks at round 991 of 2,000.
+
+What the placeholder does change is which of the nudge's three answers ends
+it. `ENXIO` — no reader left to tell — cannot arrive while the placeholder is
+up, since the placeholder is a reader; an ordinary substitution's loop ends on
+`ENOENT` instead, from the same unlink that releases the placeholder at the
+end of the command that named the path.
+
+This is an artifact of the named pipe rather than a divergence from the panel.
+A real shell forks and hands the child a descriptor that is attached before
+the child exists, so the window has no analog there — which is why the
+behavior being defended is "the command gets what the body wrote", and no
+shell was asked anything new to establish it.
 
 ### When a writing body's output lands
 

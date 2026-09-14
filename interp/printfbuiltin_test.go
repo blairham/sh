@@ -542,6 +542,36 @@ func TestPrintfBadVerbNamesTheConversionOrTheDirective(t *testing.T) {
 	}
 }
 
+// `%c` with no character to write is one NUL byte and not nothing, which is
+// the reading of that conversion easiest to get backwards: an empty operand
+// looks like there is nothing to write, and every reference writes a byte.
+//
+// The empty operand and the absent one are one case rather than two. That is
+// worth a row each, because the distinction exists a few lines away — a `%d`
+// with nothing left is a different question from a `%d` given the empty
+// string in ash — and here it makes no difference to a single byte.
+//
+// Not an axis. bash 5.3, zsh, ksh93, dash and BusyBox ash all write the NUL;
+// bash 3.2 alone writes nothing, which is the age of one binary rather than a
+// language the dialects have to carry (#2647).
+func TestPrintfCWithNothingToWriteIsANul(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"an empty operand", `printf "[%c]" ''`, "[\x00]"},
+		{"no operand at all", `printf "[%c]"`, "[\x00]"},
+		{"two conversions in one pass", `printf "[%c%c]" '' ''`, "[\x00\x00]"},
+		{"the format reused around one", `printf "[%c]" a '' b`, "[a][\x00][b]"},
+		{"the byte goes through the field", `printf "[%3c][%-3c]" '' ''`, "[  \x00][\x00  ]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := printfSem()
+			out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q status %d, want %q and 0", out, st, tc.want)
+			}
+		})
+	}
+}
+
 // The parts every shell in the panel agrees on, which is most of printf and
 // worth pinning as the thing a dialect does not get to change.
 func TestPrintfTheUnanimousParts(t *testing.T) {

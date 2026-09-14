@@ -441,11 +441,26 @@ func (r *Runner) printfConvert(spec string, verb byte, timeFmt string, next func
 		return field, 0, stop
 	case 'c':
 		if arg == "" {
-			return "", 0, false
+			// No character to write — an empty operand, or none left at all
+			// — and the answer is one NUL byte rather than nothing (#2647).
+			// The two cases are one case: `printf '[%c]' ''` and `printf
+			// '[%c]'` are the same bytes in every reference, so this reads
+			// `arg` and never `present`.
+			//
+			// Every dialect's reference agrees — bash 5.3, zsh, ksh93, dash
+			// and BusyBox ash — so there is no axis. The one panel column
+			// that writes nothing is bash 3.2, which is a bash predating the
+			// agreement rather than a language of its own: the record splits
+			// on the age of a binary, and a dialect is not an age.
+			arg = "\x00"
 		}
 		// The first *byte*, padded as a string. `%c` of a rune would encode
 		// it: `printf '%c' $'\xc0'` is the one byte 0xc0 in every shell in
 		// the panel, and Go's `%c` on `rune(0xc0)` writes two.
+		//
+		// The NUL above goes through the same field, because that is what
+		// the references do with it: `printf '[%3c]' ''` is two spaces and
+		// then the NUL in all five, and `%-3c` the NUL and then two spaces.
 		return fmt.Sprintf(spec+"s", arg[:1]), 0, false
 	case 'q':
 		return r.printfQuote(spec, arg)

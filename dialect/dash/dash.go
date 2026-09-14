@@ -668,6 +668,14 @@ func Semantics() interp.Semantics {
 	s.BadSetOptionNameFatal = interp.Yes
 	// And the letter too: `set -Z; echo one` prints nothing and exits 2.
 	s.BadSetOptionLetterFatal = interp.Yes
+	// This shell has no POSIX mode — `set -o posix` is `Illegal option -o
+	// posix` — so the only door into the core's is argv[0] of `sh`, and it
+	// is measured through that one: `sh -c 'set -o zzznosuch; …'` and the
+	// same with `set -Z` both stop at 2, exactly as under its own name. The
+	// mode moves nothing here, which is the answer written down rather than
+	// left to a refusal (#2641).
+	s.BadSetOptionNameFatalInPosixMode = interp.Yes
+	s.BadSetOptionLetterFatalInPosixMode = interp.Yes
 	// As in bash: `set -oe x` is `Illegal option -o x`, and `set -ozzznosuch`
 	// with nothing behind it lists the options and then stops at `-z`.
 	s.SetOLetterAttachesItsName = interp.No

@@ -1370,6 +1370,12 @@ type Runner struct {
 	posixSavedForName       ForNameRunForm
 	posixSavedFuncName      FuncNameRunForm
 	posixSavedBadOption     Answer
+	// The two `set` refusals, saved separately from each other and from the
+	// bad-option axis above because the panel does not answer them alike:
+	// BusyBox ash is fatal on the letter and not on the name, so one
+	// remembered answer would put the wrong one back for it.
+	posixSavedBadSetName   Answer
+	posixSavedBadSetLetter Answer
 	// Whether an assignment written in front of a special builtin is still
 	// set on the next line. Saved like the rest, and for a reason the others
 	// only half share: the two dialects that answer `No` are the two with a

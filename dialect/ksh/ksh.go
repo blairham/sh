@@ -1582,6 +1582,12 @@ func Semantics() interp.Semantics {
 	s.BadSetOptionNameFatal = interp.Yes
 	// And the letter too: `set -Z; echo one` prints nothing and exits 2.
 	s.BadSetOptionLetterFatal = interp.Yes
+	// No POSIX mode here either — `set -o posix` is `posix: bad option(s)` —
+	// so the measurement is through the `sh` name, which is the door the
+	// core's mode has: both spellings stop at 2 there as they do under
+	// `ksh`. The mode moves neither (#2641).
+	s.BadSetOptionNameFatalInPosixMode = interp.Yes
+	s.BadSetOptionLetterFatalInPosixMode = interp.Yes
 	// One of the two columns that weld: `set -oerrexit zzznosuch` turns
 	// errexit on and leaves `zzznosuch` as $1, and `set -oe` refuses `e` as
 	// an option *name* rather than reading it as a letter. Its own usage

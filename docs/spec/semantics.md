@@ -12977,12 +12977,48 @@ neither — a bash three versions back, not a BusyBox quirk. A single "the
 letter is harsher" axis would have been right about ash and wrong about
 bash 3.2.
 
-**Neither axis is moved by POSIX mode**, and bash moves both when its mode
-is entered: `set -o posix; set -o zzznosuch; echo after` stops in bash 5.3
-and prints `after` here, and `set +o posix` puts it back. That is #2641,
-left out of the split deliberately — bash is the only panel column with a
-POSIX mode to measure, so the `…InPosixMode` pair it wants would have four
-presets holding a value no shell was ever asked for.
+**`BadSetOptionNameFatalInPosixMode`** — bash **yes** · dash yes · ksh93
+yes · zsh yes · ash **no**
+
+**`BadSetOptionLetterFatalInPosixMode`** — bash yes · dash yes · ksh93 yes ·
+zsh yes · ash yes
+
+The same two questions asked of a shell in POSIX mode, which is a state
+rather than a preset: `Runner.SetPosixMode` swaps these in on the way in and
+puts the two above back on the way out. Measured 2026-09-14, `set -o posix`
+in front of each refusal and then `echo "st=$?"; echo after`:
+
+| | default | `set -o posix` | called `sh` |
+| --- | --- | --- | --- |
+| bash 5.3 name | `st=2`, carries on | **stops at 2** | **stops at 2** |
+| bash 5.3 letter | `st=2`, carries on | **stops at 2** | **stops at 2** |
+| bash 3.2 name | `st=1`, carries on | `st=1`, carries on | `st=1`, carries on |
+| bash 3.2 letter | `st=2`, carries on | **stops at 2** | **stops at 2** |
+| dash, ksh93 both | **stops at 2** | no such mode | **stops at 2** |
+| zsh both | **stops at 1** | no such mode | **stops at 1** |
+| ash name | `st=1`, carries on | no such mode | `st=1`, carries on |
+| ash letter | **stops at 2** | no such mode | **stops at 2** |
+
+**A pair of fields rather than a constant inside the mode, and BusyBox ash
+is the row that decides it.** The core's POSIX mode is entered by *every*
+dialect invoked as `sh`, so a written-in `Yes` reaches four shells that have
+no mode of their own — and for the name axis that is not a no-op: ash
+carries on at 1 under either name, so the standard's answer written there
+would end a BusyBox script that really goes on. That is the test #2659
+states and #2676 passes, failed here. The letter axis passes it; a pair that
+split would be two mechanisms for one question, so both are fields (#2641).
+
+Nothing is invented for the four shells with no `set -o posix`. Each was
+asked by the door it does have — argv[0] of `sh`, which is what puts the
+core into this mode — and each answers exactly as it does under its own
+name. Only bash moves, and bash 3.2 is the reminder that the move is not
+uniform even within bash: its mode takes the letter and leaves the name.
+
+Three corpus rows, one per state: `opt/posix-mode-makes-a-refused-set-o-
+name-fatal`, `opt/posix-mode-makes-a-refused-set-option-letter-fatal` and
+`opt/leaving-posix-mode-puts-the-set-refusals-back`. The third is the one a
+swap gets wrong quietly — writing the standard's answer on the way in and
+its opposite on the way out passes the first two and fails only there.
 
 **`BadSetOptionNameAtInvocationExitsZero`** — bash no · dash no · ksh93 no ·
 zsh no · ash **yes**
@@ -18294,8 +18330,13 @@ say:
   put it.
   Those three take the standard's answer; whether an axis the mode moves
   does is a question per axis, and
-  `BadOptionToSpecialBuiltinFatalInPosixMode` is the one that had to be
+  `BadOptionToSpecialBuiltinFatalInPosixMode` is the first that had to be
   asked of the dialect instead (#2583).
+  `BadSetOptionNameFatalInPosixMode` and
+  `BadSetOptionLetterFatalInPosixMode` joined it for the same reason read
+  the other way round: not a shell whose own mode declines the move, but a
+  shell with no mode at all that the core's mode would otherwise hand an
+  answer to (#2641).
 - **`read ?` was a contaminated probe, and this document's field comment
   cited it.** A leading `?` argument is a *prompt* in zsh, so the value
   lands in `REPLY` and the word never stood where a name belongs. Worse,

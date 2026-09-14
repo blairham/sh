@@ -1627,18 +1627,28 @@ whole corpus rather than for the case that means to ask.
 ### The mode is the core's; what it moves is not
 
 The knob is entered by **any** dialect invoked as `sh`, so what it writes has
-to be true of all of them. Four of the five axes it swaps take the standard's
-own answer, which is what the name asks for and what every shell with a POSIX
-mode was measured to take. The fifth is read off the vector, because the shells
-disagree about it: `shift -x` ends bash at 2 under this name and leaves zsh
-printing its complaint and running on at 0, while the *same* two shells both
-start stopping on a failed redirection under it. See
-`Semantics.BadOptionToSpecialBuiltinFatalInPosixMode`, which is the field a
-dialect answers that with (#2583).
+to be true of all of them. Most of the axes it swaps take the standard's own
+answer, which is what the name asks for and what every shell with a POSIX mode
+was measured to take. Three are read off the vector instead, because the shells
+part company over them:
+
+- `shift -x` ends bash at 2 under this name and leaves zsh printing its
+  complaint and running on at 0, while the *same* two shells both start
+  stopping on a failed redirection under it. See
+  `Semantics.BadOptionToSpecialBuiltinFatalInPosixMode` (#2583).
+- `set -o zzznosuch` and `set -Z` end a bash 5.3 script under this name and
+  are survivable under bash's own, but BusyBox ash — which has no POSIX mode
+  at all and is the same shell under either name — carries on past the refused
+  *name* at 1. So the standard's answer written into the knob would end a
+  script that really runs to the end. See
+  `Semantics.BadSetOptionNameFatalInPosixMode` and
+  `BadSetOptionLetterFatalInPosixMode` (#2641).
 
 So an axis that moves with the mode is not automatically the knob's to write.
 The question to ask of each is whether every shell's POSIX mode moves it the
-same way; where they part, the value comes from the dialect.
+same way — and, for the shells that have no POSIX mode of their own, whether
+they already hold the answer the knob would write under every name they answer
+to. Where either half fails, the value comes from the dialect.
 
 ## `+c`: the sign of the option letter
 

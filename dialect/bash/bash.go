@@ -1538,6 +1538,21 @@ func Semantics() interp.Semantics {
 	// answer — the substrate assumed it until #2629 and was wrong about
 	// BusyBox ash.
 	s.BadSetOptionLetterFatal = interp.No
+	// The one column in the panel with a POSIX mode, and it moves both:
+	// `set -o posix; set -o zzznosuch; echo "st=$?"; echo after` prints the
+	// complaint and nothing else at 2, and the same line with `set -Z` does
+	// too. Measured 2026-09-14 on 5.3.15, and the `sh` name is the other
+	// door to the same place — `bash-as-sh` stops for both spellings where
+	// `bash` stops for neither. `set +o posix` puts the two answers above
+	// back (#2641).
+	//
+	// bash 3.2.57 takes the letter and leaves the name — `set -o posix; set
+	// -o zzznosuch` is still 1 and still carries on there, under `-o posix`
+	// and under the `sh` name alike. This preset claims 5.3 and says so
+	// here, because a reader arriving from macOS's /bin/bash would otherwise
+	// read this as a claim about their shell.
+	s.BadSetOptionNameFatalInPosixMode = interp.Yes
+	s.BadSetOptionLetterFatalInPosixMode = interp.Yes
 	// `-o` takes the next word and never the rest of its own: measured,
 	// `set -oe x` is `x: invalid option name` with errexit left off, and
 	// `bash -oerrexit -c cmd` refuses `-c` the same way. With no word behind

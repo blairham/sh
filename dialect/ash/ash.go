@@ -374,6 +374,16 @@ func Semantics() interp.Semantics {
 	// end scripts that really carry on (#2629).
 	s.BadSetOptionNameFatal = interp.No
 	s.BadSetOptionLetterFatal = interp.Yes
+	// And the column that decides the POSIX-mode pair has to be a pair of
+	// fields rather than a constant in the mode. BusyBox has no `set -o
+	// posix` and its `sh` applet is its `ash` applet, so nothing here moves
+	// under either door: the name still reports 1 and carries on, the letter
+	// still stops at 2. The core's mode is entered by *every* dialect
+	// invoked as `sh`, so a written-in `Yes` for the name would end a script
+	// this shell runs to the end — the same shape as #2629's bug, arriving
+	// through the mode instead of through the preset (#2641).
+	s.BadSetOptionNameFatalInPosixMode = interp.No
+	s.BadSetOptionLetterFatalInPosixMode = interp.Yes
 	// `set -ozzznosuch` here is a bare `-o` — the whole option table on
 	// standard output — and then the letters of `zzznosuch`, so it stops at
 	// 2 on `z` where `set -o zzznosuch` reports 1 and carries on. Which is

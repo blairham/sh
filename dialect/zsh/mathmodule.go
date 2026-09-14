@@ -153,10 +153,10 @@ var mathFuncModule = buildMathFuncModule()
 func buildMathFuncModule() []mathFunction {
 	out := make([]mathFunction, 0, 47)
 	for _, u := range mathUnaryFloat {
-		out = append(out, mathFunction{name: u.name, min: 1, max: 1, fn: unaryMathFunc(u.fn)})
+		out = append(out, mathFunction{name: u.name, min: 1, max: 1, fn: interp.UnaryMathFunction(u.fn)})
 	}
 	for _, b := range mathBinaryFloat {
-		out = append(out, mathFunction{name: b.name, min: 2, max: 2, fn: binaryMathFunc(b.fn)})
+		out = append(out, mathFunction{name: b.name, min: 2, max: 2, fn: interp.BinaryMathFunction(b.fn)})
 	}
 	return append(out,
 		mathFunction{name: "abs", min: 1, max: 1, fn: mathAbs},
@@ -245,34 +245,7 @@ func mathLgamma(f float64) float64 {
 // of two to scale by, or a Bessel function's order. Truncated the way `int`
 // truncates, and clamped to what a Go `int` holds so that a nonsensical
 // operand is a saturated one rather than an undefined conversion.
-func mathExponent(f float64) int { return mathTruncate(f) }
-
-// unaryMathFunc and binaryMathFunc are the two shapes above turned into
-// registrations. One place where an operand is evaluated for each shape, so a
-// function that gains an operand cannot gain a second way of reading one.
-func unaryMathFunc(fn func(float64) float64) interp.MathFunction {
-	return func(_ *interp.Runner, call interp.MathCall) (interp.MathValue, error) {
-		x, err := call.Value(0)
-		if err != nil {
-			return interp.MathValue{}, err
-		}
-		return interp.MathFloat(fn(x.Float())), nil
-	}
-}
-
-func binaryMathFunc(fn func(a, b float64) float64) interp.MathFunction {
-	return func(_ *interp.Runner, call interp.MathCall) (interp.MathValue, error) {
-		a, err := call.Value(0)
-		if err != nil {
-			return interp.MathValue{}, err
-		}
-		b, err := call.Value(1)
-		if err != nil {
-			return interp.MathValue{}, err
-		}
-		return interp.MathFloat(fn(a.Float(), b.Float())), nil
-	}
-}
+func mathExponent(f float64) int { return interp.MathTruncate(f) }
 
 // mathAbs is the absolute value, and the one function whose *kind* of result
 // is its argument's: `abs(-2)` is `2` and `abs(-2.0)` is `2.`.
@@ -336,28 +309,7 @@ func mathInt(_ *interp.Runner, call interp.MathCall) (interp.MathValue, error) {
 	if !x.IsFloat() {
 		return interp.MathInt(x.Int()), nil
 	}
-	return interp.MathInt(mathTruncate(x.Float())), nil
-}
-
-// mathTruncate is the conversion Go leaves undefined, given the answers this
-// shell was measured to give: `int(1e30)` is the largest integer, `int(-1e30)`
-// the smallest, and `int` of a NaN is 0.
-//
-// Written out rather than left to a plain conversion because an out-of-range
-// float converted to an integer in Go is not defined to do anything in
-// particular — it is one number on one architecture and another elsewhere,
-// which is exactly the sort of thing that passes here and fails on the release
-// runner.
-func mathTruncate(f float64) int {
-	switch {
-	case math.IsNaN(f):
-		return 0
-	case f >= -float64(math.MinInt):
-		return math.MaxInt
-	case f <= float64(math.MinInt):
-		return math.MinInt
-	}
-	return int(math.Trunc(f))
+	return interp.MathInt(interp.MathTruncate(x.Float())), nil
 }
 
 // mathSigngam is the sign C's `lgamma` records. Always 0 — see the top of the

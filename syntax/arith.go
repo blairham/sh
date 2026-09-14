@@ -272,7 +272,8 @@ func (n *ArithIndex) arithNode() {}
 // `$(( 1 + nosuchmf(1) + 2 ))` is `nosuchmf(1) + 2 : unknown function` and a
 // subscript, being its own expression, is `$(( x[nosuchmf(1)] ))` →
 // `nosuchmf(1): unknown function`. Measured 2026-09-12; see
-// interp.Diagnostics.MathFunctionUnknown, which carries one verb today.
+// interp.Diagnostics.MathFunctionUnknown, whose second verb is that tail and
+// which Within and Offset below are what answer.
 type ArithCall struct {
 	Name string
 	// Args are the arguments, each an expression of its own. `mf()` with
@@ -287,9 +288,31 @@ type ArithCall struct {
 	// `$(( mf( 5 , 6 ) ))` against a one-argument registration is
 	// `wrong number of arguments: mf( 5 , 6 )`, spaces and all, so the
 	// sentence is the source text rather than a rendering of the tree.
-	Text  string
-	Start Pos
-	Stop  Pos
+	Text string
+	// Within is the whole expression the call was written in, and Offset the
+	// byte position of the call's first byte inside it — so `Within[Offset:]`
+	// is the text from the name to the end of the expression.
+	//
+	// Both are here because the other shell with the construct words its two
+	// sentences over extents *larger* than the call: the tail for a name it
+	// does not know, and the expression entire, blanks and all, for a call
+	// whose argument count is wrong. Measured 2026-09-13 on ksh93u+
+	// 2012-08-01:
+	//
+	//	$(( 1 + nosuchmf(1) + 2 ))   nosuchmf(1) + 2 : unknown function
+	//	$((nosuchmf(1)))             nosuchmf(1): unknown function
+	//	$(( atan(1,2) ))              atan(1,2) : function has wrong number
+	//	                             of arguments
+	//
+	// Recorded by the parser rather than reconstructed by the evaluator,
+	// which cannot: a subscript is parsed as an expression of its own, so
+	// `$(( x[nosuchmf(1)] ))` blames `nosuchmf(1)` and not the brackets
+	// around it, and only the parser knows which source each tree came from.
+	// Both are slices of that source and neither copies it.
+	Within string
+	Offset int
+	Start  Pos
+	Stop   Pos
 }
 
 func (n *ArithCall) Pos() Pos   { return n.Start }
@@ -1084,6 +1107,7 @@ func (a *arithParser) call(name string, start Pos, begin int) ArithExpr {
 		return nil
 	}
 	n.Text = a.src[begin:a.off]
+	n.Within, n.Offset = a.src, begin
 	return n
 }
 

@@ -223,22 +223,38 @@ func mathFuncSpec(name string, fn mathFunc) string {
 
 // evalMathFunc runs a math function call written inside an expression.
 //
-// The three failures are separate sentences in the shell that has them, and
+// The three failures are separate sentences in the shells that have them, and
 // they are separate because they are separate questions: a name nobody
 // registered, a registration called with the wrong count, and a registration
-// whose implementation is not there. The middle one quotes the call as it was
-// written, which is why [syntax.ArithCall] keeps the source text.
+// whose implementation is not there. Each is handed both extents the panel
+// blames over — the call as written and the expression around it — because
+// the two columns pick different ones; see Diagnostics.MathFunctionUnknown.
+//
+// The lookup comes first, and that order is measured rather than incidental:
+// `$(( nosuchmf() ))` is `unknown function` in ksh93 where `$(( sqrt() ))` is
+// a syntax error, so a name that is not there is answered before its argument
+// list is weighed at all.
 func (r *Runner) evalMathFunc(x *syntax.ArithCall) (arithNum, error) {
 	fn, ok := r.mathFuncs[x.Name]
 	if !ok {
 		return intNum(0), arithError{
-			msg:      Wording(r.diag().MathFunctionUnknown, "unknown function: %s", x.Name),
+			msg: Wording(r.diag().MathFunctionUnknown, "unknown function: %[1]s",
+				x.Name, x.Within[x.Offset:]),
 			complete: true,
 		}
 	}
+	if len(x.Args) == 0 && fn.min > 0 && r.diag().MathFunctionNoArgumentIsASyntaxError {
+		// A known name with nothing between its parentheses, in the dialect
+		// that reads that as an operand missing rather than as a count. Not
+		// complete: ArithError wraps it, which is what puts the expression
+		// in front of the reason the way every other syntax failure there is
+		// worded.
+		return intNum(0), arithError{msg: Wording(r.diag().ArithOperandExpected, "operand expected")}
+	}
 	if len(x.Args) < fn.min || (fn.max != mathFuncUnbounded && len(x.Args) > fn.max) {
 		return intNum(0), arithError{
-			msg:      Wording(r.diag().MathFunctionArgumentCount, "wrong number of arguments: %s", x.Text),
+			msg: Wording(r.diag().MathFunctionArgumentCount, "wrong number of arguments: %[1]s",
+				x.Text, x.Within),
 			complete: true,
 		}
 	}

@@ -5,6 +5,7 @@ package interp
 
 import (
 	"errors"
+	"math"
 
 	"github.com/blairham/sh/syntax"
 )
@@ -103,6 +104,65 @@ func (c MathCall) Name(i int) (string, bool) {
 // value out, and an error that becomes the expression's own failure with the
 // error's text as its sentence.
 type MathFunction func(r *Runner, call MathCall) (MathValue, error)
+
+// MathTruncate is a float as a Go integer, truncated toward zero and clamped
+// to what an `int` holds — with a NaN at 0.
+//
+// Written out rather than left to a plain conversion because an out-of-range
+// float converted to an integer in Go is not defined to do anything in
+// particular: it is one number on one architecture and another elsewhere,
+// which is exactly the sort of thing that passes here and fails on the release
+// runner.
+//
+// The clamping is also measured behavior in the shell whose `int` truncates —
+// `int(1e30)` is the largest integer there and `int(-1e30)` the smallest — and
+// it is the conversion both tables reach for when an operand is an *exponent*
+// rather than a number, which is why it sits here and not in either of them.
+func MathTruncate(f float64) int {
+	switch {
+	case math.IsNaN(f):
+		return 0
+	case f >= -float64(math.MinInt):
+		return math.MaxInt
+	case f <= float64(math.MinInt):
+		return math.MinInt
+	}
+	return int(math.Trunc(f))
+}
+
+// UnaryMathFunction and BinaryMathFunction are the two shapes almost every
+// one of these takes: a function of one number, or of two, giving a float
+// back however whole it is.
+//
+// Here rather than in a dialect because *both* dialects with a table of math
+// functions want them, and the first of them had its own pair. A rule with
+// two homes is a rule that can be fixed in one of them — the operand-reading
+// here is where a failure inside an argument, `sqrt(1/0)`, is handed back
+// rather than swallowed, and that is not a thing to keep two copies of.
+func UnaryMathFunction(fn func(float64) float64) MathFunction {
+	return func(_ *Runner, call MathCall) (MathValue, error) {
+		x, err := call.Value(0)
+		if err != nil {
+			return MathValue{}, err
+		}
+		return MathFloat(fn(x.Float())), nil
+	}
+}
+
+// BinaryMathFunction is the same for a function of two numbers.
+func BinaryMathFunction(fn func(a, b float64) float64) MathFunction {
+	return func(_ *Runner, call MathCall) (MathValue, error) {
+		a, err := call.Value(0)
+		if err != nil {
+			return MathValue{}, err
+		}
+		b, err := call.Value(1)
+		if err != nil {
+			return MathValue{}, err
+		}
+		return MathFloat(fn(a.Float(), b.Float())), nil
+	}
+}
 
 // RegisterMathFunction records a math function implemented in Go under a name
 // arithmetic may call, taking between min and max operands — with a max of

@@ -31,6 +31,20 @@ func setEveryRun(t *testing.T, src string, every, fatal Answer) (string, int) {
 	sem.BadSetOptionNameFatal = fatal
 	sem.BadSetOptionLetterFatal = fatal
 	sem.FatalErrorStatusIsOne = No
+	// The control column is the one that applies as it goes, so that
+	// answering this axis No is the whole of the difference between the two
+	// runs of every row below. Left Unspecified it would be a third reading
+	// — bash's — and a row whose bad word has something in front of it would
+	// stop on the unanswered axis rather than on the option. Every row here
+	// happens to put its bad letter first, where the question is not asked at
+	// all; saying it out loud is what keeps a later row from inheriting an
+	// answer nobody chose.
+	sem.SetValidatesOptionLettersFirst = No
+	// One row below is written `-oNAME`, and a shell that has not answered
+	// this would stop on the unanswered axis rather than on the option word.
+	// No other row puts anything behind the `o`, so the answer reaches only
+	// the row that asked for it.
+	sem.SetOLetterAttachesItsName = Yes
 	dg := Diagnostics{
 		// The shell's name still stands in front of each sentence, which is
 		// why every expectation below carries it: the assertion is the whole
@@ -257,5 +271,177 @@ func TestReportingEveryBadOptionDoesNotReachTheInvocationRoute(t *testing.T) {
 	}
 	if strings.Contains(got, "z: unknown option") {
 		t.Errorf("output %q, want only the first letter reported", got)
+	}
+}
+
+// The other half of the axis: the dialect that reports every bad option word
+// applies **none** of them, names as well as letters.
+//
+// Measured 2026-09-13 across all seven columns with `command set` in front of
+// the builtin, so that the columns where a refusal is fatal live long enough
+// to be asked what they applied, and with `command set -e` alone as the
+// control that the probe can see an option at all:
+//
+//	command set -e -Z             errexit off in ksh93 and the three bash
+//	                              columns, on in dash and BusyBox ash
+//	command set -eu -o zzznosuch  nounset and errexit **off** in ksh93,
+//	                              **on** in every other column
+//
+// So the reach is what parts ksh93 from bash, and it is the reach the reports
+// already imply: a shell that names every bad option word has by then read
+// every option word. zsh takes neither probe — `command` does not reach its
+// builtins — and was asked with a listing instead: `set -eu -o zzznosuch -o`
+// there writes the option table with errexit and nounset both on.
+//
+// Two options are set with the bad word behind them, rather than one, because
+// a row that checks only the option next to the refusal cannot tell "nothing
+// was applied" from "the first one was". Nounset and noclobber rather than
+// errexit, because errexit would end the script over the refusal's own status
+// and take the line that reports the state with it.
+func TestReportingEveryBadOptionAppliesNoneOfThem(t *testing.T) {
+	for _, tc := range []struct {
+		why, src     string
+		every, first string
+	}{
+		{
+			why:   "a bad letter behind a good one",
+			src:   "set -u -Z\n",
+			every: "-=\n",
+			first: "-=u\n",
+		},
+		{
+			// The row with no `preceded` gate on it. The two answers agree —
+			// a shell that applies as it goes stops at the first bad word and
+			// never reaches the `-u` either, which is dash's `set -Z -e`
+			// leaving errexit off — but they did not agree before the fold:
+			// the dialect that carries on *reading* past a bad word used to
+			// carry on applying, so this was the one column where the option
+			// behind the refusal came on.
+			why:   "a good letter behind the bad one",
+			src:   "set -Z -u\n",
+			every: "-=\n",
+			first: "-=\n",
+		},
+		{
+			why:   "two good letters in one word, behind them a bad letter",
+			src:   "set -uC -Z\n",
+			every: "-=\n",
+			first: "-=uC\n",
+		},
+		{
+			// The half no letters-only pass can reach, and the reason this is
+			// not a value of SetValidatesOptionLettersFirst: bash's first
+			// pass knows the letter table and not the name table, so this row
+			// is both letters there as well as in the shells that apply as
+			// they go.
+			why:   "two good letters in one word, behind them a bad `-o` name",
+			src:   "set -uC -o zzznosuch\n",
+			every: "-=\n",
+			first: "-=uC\n",
+		},
+		{
+			why:   "a bad `-o` name welded to its letter",
+			src:   "set -uC -ozzznosuch\n",
+			every: "-=\n",
+			first: "-=uC\n",
+		},
+		{
+			why:   "a good `-o` name in front of a bad letter",
+			src:   "set -o nounset -Z\n",
+			every: "-=\n",
+			first: "-=u\n",
+		},
+		{
+			// The control: no bad word, and the dialect that reads them all
+			// applies them all. Without it every row above would pass in a
+			// `set` that had quietly stopped working.
+			why:   "nothing bad, so everything applies",
+			src:   "set -uC\n",
+			every: "-=uC\n",
+			first: "-=uC\n",
+		},
+	} {
+		t.Run(tc.why, func(t *testing.T) {
+			if got, _ := setAppliedRun(t, tc.src, Yes); !strings.HasSuffix(got, tc.every) {
+				t.Errorf("reporting every bad word:\n got %q\nwant it to end %q", got, tc.every)
+			}
+			if got, _ := setAppliedRun(t, tc.src, No); !strings.HasSuffix(got, tc.first) {
+				t.Errorf("applying as it goes:\n got %q\nwant it to end %q", got, tc.first)
+			}
+		})
+	}
+}
+
+// setAppliedRun runs a `set` and then prints the option letters it left
+// behind, with the refusal made survivable so that there is something to ask.
+func setAppliedRun(t *testing.T, src string, every Answer) (string, int) {
+	t.Helper()
+	return setEveryRun(t, src+"echo \"-=$-\"\n", every, No)
+}
+
+// Nothing is listed either, which is the same fact from the other side: the
+// applying loop is where a bare `-o` writes the option table, and a `set` that
+// refused a word never reaches it. Measured — `set -o -Z` in ksh93, where a
+// bare `-o` takes no next word, draws the refusal and its usage line and no
+// table at all, and `set -e -Z -o` draws the same. Ours listed the whole table
+// with `errexit on` in it, which is the partial application in plain sight.
+func TestReportingEveryBadOptionListsNothingEither(t *testing.T) {
+	got, _ := setEveryRun(t, "set -u -Z -o\n", Yes, No)
+	if strings.Contains(got, "nounset") {
+		t.Errorf("output %q, want no option table under a refused word", got)
+	}
+	// The control: the same words with nothing bad among them do list, so the
+	// row above is a suppressed listing and not a listing that never worked.
+	got, _ = setEveryRun(t, "set -u -o\n", Yes, No)
+	if !strings.Contains(got, "nounset") {
+		t.Errorf("output %q, want the option table", got)
+	}
+}
+
+// The fold is a widening of one dialect's answer and not of the other's.
+//
+// bash validates the option **letters** first and its pass does not know the
+// name table, so `command set -eu -o zzznosuch` is nounset and errexit on
+// there where ksh93's is off — measured on the same day, in all three bash
+// columns. A reading pass that had grown the names for everybody would put
+// this row's answer where the measurement says it is not, which is exactly
+// why the second half went to the axis only one dialect answers yes to rather
+// than to SetValidatesOptionLettersFirst (#2670).
+func TestValidatingTheLettersFirstStillDoesNotReachTheNames(t *testing.T) {
+	sem := PosixSemantics()
+	sem.SetReportsEveryBadOption = No
+	sem.SetValidatesOptionLettersFirst = Yes
+	sem.BadSetOptionNameFatal = No
+	sem.BadSetOptionLetterFatal = No
+	sem.FatalErrorStatusIsOne = No
+	dg := Diagnostics{
+		Location:                     LocationNone,
+		SetInvalidOptionLetter:       "set: %[2]s: invalid option",
+		SetInvalidOptionName:         "set: %[1]s: invalid option name",
+		SetInvalidOptionNameStatus:   2,
+		SetInvalidOptionLetterStatus: 2,
+	}
+	run := func(src string) string {
+		t.Helper()
+		var buf strings.Builder
+		r := newTestRunner(t, &Runner{
+			Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "sh",
+		})
+		f, err := syntax.Parse(src+"echo \"-=$-\"\n", syntax.Core())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := r.Run(context.Background(), f); err != nil {
+			t.Fatal(err)
+		}
+		return buf.String()
+	}
+	if got := run("set -uC -o zzznosuch\n"); !strings.HasSuffix(got, "-=uC\n") {
+		t.Errorf("a bad name behind two good letters:\n got %q\nwant it to end %q", got, "-=uC\n")
+	}
+	// And the letter it does reach, so the row above is the reach and not a
+	// pass that has stopped running.
+	if got := run("set -uC -Z\n"); !strings.HasSuffix(got, "-=\n") {
+		t.Errorf("a bad letter behind two good letters:\n got %q\nwant it to end %q", got, "-=\n")
 	}
 }

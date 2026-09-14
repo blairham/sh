@@ -12882,10 +12882,14 @@ the order they were written, names and letters alike — `set -o nosuch -z`
 draws both sentences and one usage line — and applies none of them.
 `command set -u -o zzznosuch` is nounset **off** there where bash's is on.
 That is `SetReportsEveryBadOption` carried one step further, and folding it
-in would either lose the name reports or put bash's errexit off where the
-measurement says it is on. The builtin declines to ask the question of any
-dialect that reports every bad option, so the unanswered field is never
-reached rather than quietly defaulting.
+into an axis about *letters* would either lose the name reports or put bash's
+errexit off where the measurement says it is on. So it is recorded as the
+second half of that axis instead, which ksh93 is the only column to answer
+yes: a shell that names every bad option word has by then read every option
+word, so "reports them all" and "applies none of them" are one reading rather
+than two. The builtin reads it there and declines to put the letters question
+to any dialect that reports every bad option, so the unanswered field is
+never reached rather than quietly defaulting.
 
 **The invocation is a different mechanism** and is deliberately outside this
 axis, which is read only where `set` itself is speaking. Measured the same

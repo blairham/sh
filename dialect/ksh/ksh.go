@@ -1566,10 +1566,12 @@ func Semantics() interp.Semantics {
 	// `command set -u -o zzznosuch` is nounset off where bash's is on. That
 	// is SetReportsEveryBadOption carried one step further, and folding it
 	// into an axis about *letters* would either lose the name reports or put
-	// bash's errexit off where the measurement says it is on. The builtin
-	// declines to put the question to any dialect that reports every bad
-	// option, so the unanswered field is never reached rather than quietly
-	// defaulting; #2670 is where the second mechanism is filed.
+	// bash's errexit off where the measurement says it is on. So it is the
+	// second half of SetReportsEveryBadOption above, which this column is the
+	// only one to answer yes (#2670), and the builtin reads it there rather
+	// than putting the letters question to a dialect that reports every bad
+	// option — the unanswered field is never reached rather than quietly
+	// defaulting.
 	s.BadSetOptionNameAtInvocationExitsZero = interp.No
 	s.UnknownConditionOptionIsAStatus = interp.No
 	s.ReturnOutsideAFunctionIsRefused = interp.No

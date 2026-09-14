@@ -3748,6 +3748,50 @@ type Semantics struct {
 	// The fatality is applied after them as well, so it ends the script
 	// *after* the reports rather than instead of them.
 	//
+	// And it **applies none of them**, names as well as letters, which is the
+	// half this axis went without for a week (#2670). A shell that names
+	// every bad option word has by then read every option word, so the two
+	// facts are one reading rather than two: the words are taken in, the bad
+	// ones are reported in the order they were written, and the shell is left
+	// exactly as it was — nothing applied, nothing listed, no positional
+	// parameters replaced.
+	//
+	// Measured 2026-09-13 over all seven columns, with `command set` in front
+	// of the builtin so that the columns where a refusal is fatal live long
+	// enough to be asked what they applied, and with `command set -e` alone
+	// as the control that the probe can see an option at all:
+	//
+	//	command set -e -Z             errexit **off** in ksh93 and in the
+	//	                              three bash columns, on in dash and ash
+	//	command set -eu -o zzznosuch  nounset and errexit **off** in ksh93,
+	//	                              **on** in every other column
+	//	command set -Z -e             errexit off everywhere, so the row that
+	//	                              puts the bad word first says nothing
+	//
+	// Two options are set with the bad word behind them rather than one,
+	// because a probe that asks only about the option next to the refusal
+	// cannot tell "nothing was applied" from "the first one was". zsh takes
+	// neither probe — `command` does not reach its builtins — and was asked
+	// with a listing instead: `set -eu -o zzznosuch -o` there writes the
+	// option table with errexit and nounset both on.
+	//
+	// The second row is the whole of why this half is here and not a value of
+	// SetValidatesOptionLettersFirst. That axis is the *letters*, and it is
+	// Yes in bash — where this same row leaves both letters **on**, because
+	// bash's first pass knows the letter table and not the name table.
+	// Widening it to cover names would put bash's answer where the
+	// measurement says it is not, and answering it Yes for ksh93 would give
+	// that dialect a letters-only pass and lose the name reports that make it
+	// what it is. One dialect answers yes to this field and one mechanism
+	// produces both halves, so they are folded rather than set beside each
+	// other.
+	//
+	// The listing is the same fact seen from outside a shell that survives:
+	// `set -o -Z` in ksh93, where a bare `-o` takes no next word, draws the
+	// refusal and its usage line and no option table at all, and so does
+	// `set -e -Z -o`. Writing the table is something the applying loop does,
+	// and that loop never runs.
+	//
 	// This is the rule Runner.builtinNames already follows for bad
 	// *operands*, where bash is the shell that reports each one. Two
 	// different shells answer yes to the two questions, which is what keeps
@@ -6058,9 +6102,15 @@ type Semantics struct {
 	// That is SetReportsEveryBadOption carried one step further and it is a
 	// second mechanism, not a value of this one — a letters-only pass there
 	// would lose the name reports, and a pass over both would put bash's
-	// errexit off where the measurement says it is on. refuseBeforeApplying
-	// SetOptions declines to ask any dialect that reports every bad option,
-	// so the unanswered field is never reached rather than quietly defaulting.
+	// errexit off where the measurement says it is on. It is modeled as the
+	// second half of that field (#2670), and refuseBeforeApplyingSetOptions
+	// reads it there rather than asking this one, so the unanswered field is
+	// never reached rather than quietly defaulting.
+	//
+	// The two reaches are one walk — unknownSetOption, told how far to read —
+	// because a second walk would be free to cut the option words differently
+	// from this one and from the applying loop, and then a pass would be
+	// validating options the loop never reads.
 	//
 	// The consequence this was found by. Characters welded behind an `o` are
 	// what the `-o` takes under either reading, so the validating pass never

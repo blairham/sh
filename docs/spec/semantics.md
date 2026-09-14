@@ -6181,6 +6181,43 @@ The corpus cannot catch this class of difference — `internal/oracle` pins
 environment — so the pinning lives in unit tests that set the variables
 per case.
 
+**The sites that *match* without case are the same question, and they had
+drifted too.** `nocasematch` and its kin fold letters rather than converting
+them, and the policy above governs how far that fold reaches just as it
+governs a conversion. Measured 2026-09-13 on bash 5.3.15 with the option on,
+`ÉTÉ` against `été`:
+
+|  | `en_US.UTF-8` | `LC_ALL=C` | ours before #2644, either locale |
+| --- | --- | --- | --- |
+| `[[ ÉTÉ =~ ^été$ ]]` | matches | does not | **matches** |
+| `[[ ÉTÉ == été ]]` | matches | does not | **does not** |
+
+The two miss in **opposite** directions, which is what made the pair unable
+to find each other: `=~` handed the fold to a regular-expression engine whose
+case flag folds Unicode and has no locale to be told about, so it was right
+under UTF-8 and too permissive under `C`, while `==`, `case`, the
+substitution operators and `nocaseglob` folded with an ASCII byte swap under
+every locale, so they were right under `C` and too strict under UTF-8. Each
+half had a test that agreed with it.
+
+Both now ask `Runner.caseFoldReachesBeyondASCII`, which is the question
+`caseMapper` already asked, and the pinning is one table over every folding
+surface for the reason the converting half is one table. Two things the fold
+measures that a swap would get backwards, and that only the characters whose
+case mapping is not a pair can tell apart: it is the **lower-case** map
+applied to both sides, so U+212A KELVIN SIGN folds with `k` and `K` while
+U+017F LATIN SMALL LETTER LONG S folds with neither `s` nor `S`.
+
+Narrowing the *regex* engine's fold needed a mechanism rather than a flag.
+`regexp/syntax` folds a bracket expression **before** it complements one —
+which is the behavior `[[ A =~ ^[^a]$ ]]` measures — so nothing can be
+undone after the parse, and the engine offers no ASCII-only fold to ask for.
+What the narrowing does instead is take the characters out of its reach:
+every character above ASCII that has a case is swapped, in the expression and
+the subject alike, for a private-use character that has none, and the offsets
+a match reports are mapped back so that a capture is still a span of the
+script's own text.
+
 ### `LC_NUMERIC` is the category with no data, and that is decided too
 
 The policy above is about the encoding — what a letter is and how many

@@ -14269,6 +14269,10 @@ func (r *Runner) matchPatternR(pattern, s string, condition bool) bool {
 		classes:      r.patternClasses(pattern),
 		unknownClass: r.unknownClassPolicy(pattern),
 	}
+	// The locale narrows the fold, and only a fold there is asks: the helper
+	// is shared with the sites that convert a value rather than match one,
+	// so the two cannot drift. See interp/multibyte.go and #2644.
+	o.foldWide = o.fold && r.caseFoldReachesBeyondASCII(pattern, s)
 	// The status a rejected pattern exits with is the surface's, and the two
 	// this function serves do not agree: measured, `[[ x == (#Z)a ]]` exits 2
 	// and the same pattern in a `case` exits 0.

@@ -599,6 +599,17 @@ type patternOpts struct {
 	// call sites that honor an option set it and the rest leave it off: the
 	// shell with the options keeps parameter expansion exact either way.
 	fold bool
+	// foldWide says the fold above reaches past ASCII, which is the locale's
+	// answer rather than the option's: an explicit C or POSIX locale narrows
+	// a fold to ASCII and any other locale folds Unicode. The conclusion is
+	// carried rather than the question, for the reason chars below is —
+	// the matcher has no Runner to ask — and it is resolved by the one
+	// helper the converting sites use, interp/multibyte.go's
+	// caseFoldReachesBeyondASCII. See #2644.
+	//
+	// Never set with fold off, so nothing here asks a locale question a
+	// script did not reach for by turning the option on.
+	foldWide bool
 	// chars makes one unit of the subject a character rather than a byte, so
 	// `?` consumes a whole one, a bracket matches a whole one, and a `*`
 	// tries only the split points between them.
@@ -678,13 +689,27 @@ func eqByte(a, b byte, fold bool) bool {
 }
 
 // eqUnit compares two whole units — one byte each, or one character each.
-// Equal bytes are equal characters, so the multi-byte case needs nothing of
-// its own beyond comparing the whole run.
-func eqUnit(a, b string, fold bool) bool {
+//
+// wide is whether the fold reaches past ASCII, which is where a multi-byte
+// unit stops being a run of bytes to compare and becomes a character with a
+// case of its own: with it off, `[[ é == [É] ]]` is a miss, and with it on it
+// matches, which is what bash 5.3.15 answers under a UTF-8 locale.
+func eqUnit(a, b string, fold, wide bool) bool {
 	if len(a) == 1 && len(b) == 1 {
 		return eqByte(a[0], b[0], fold)
 	}
-	return a == b
+	if a == b {
+		return true
+	}
+	if !fold || !wide {
+		return false
+	}
+	ar, an := utf8.DecodeRuneInString(a)
+	br, bn := utf8.DecodeRuneInString(b)
+	if an != len(a) || bn != len(b) {
+		return false
+	}
+	return eqRuneFolded(ar, br)
 }
 
 // ordOf ranks one unit for a bracket range or a character class: its code
@@ -704,6 +729,38 @@ func ordOf(unit string) rune {
 	}
 	c, _ := utf8.DecodeRuneInString(unit)
 	return c
+}
+
+// eqRuneFolded reports whether two characters are the same letter in
+// different cases.
+//
+// Lower-casing **both** sides rather than swapping one and comparing, which
+// is measured rather than tidiness. The two disagree on the characters whose
+// case mapping is not a pair, and the panel follows the lower-casing:
+// measured 2026-09-13 on bash 5.3.15 under `en_US.UTF-8` with `nocasematch`
+// on, the Kelvin sign K (U+212A) matches both `k` and `K` — its lower case is
+// the ASCII `k` — while ſ (U+017F) matches neither `s` nor `S`, because it is
+// already lower case and lower-casing `s` cannot reach it. A swap through
+// `unicode.ToUpper` would answer the opposite on both: ſ upper-cases to `S`
+// and the Kelvin sign upper-cases to itself.
+//
+// It is the C library's towlower that those shells fold with, and Go's
+// unicode.ToLower is the same simple mapping, so this is a correction and not
+// a platform's answer.
+func eqRuneFolded(a, b rune) bool {
+	return a == b || unicode.ToLower(a) == unicode.ToLower(b)
+}
+
+// swapRuneCase is the other case of a letter, or the character itself, for
+// the two places a bracket expression needs one character rather than a
+// comparison. Lower case first, for the reason eqRuneFolded lower-cases:
+// measured, `[[ K == [a-z] ]]` matches with the fold on, because the Kelvin
+// sign's lower case is the ASCII `k` that the range holds.
+func swapRuneCase(c rune) rune {
+	if l := unicode.ToLower(c); l != c {
+		return l
+	}
+	return unicode.ToUpper(c)
 }
 
 // swapCase is the other case of an ASCII letter, or the byte itself.
@@ -1126,10 +1183,14 @@ func matchBranch(p, s string, pp, at int, o patternOpts) bool {
 			p, s, pp, at = p[2:], s[1:], pp+2, at+1
 
 		default:
-			if s == "" || !o.eqPatternByte(p[0], s[0]) {
+			if s == "" {
 				return false
 			}
-			p, s, pp, at = p[1:], s[1:], pp+1, at+1
+			pw, sw, ok := o.eqPatternHere(p, s)
+			if !ok {
+				return false
+			}
+			p, s, pp, at = p[pw:], s[sw:], pp+pw, at+sw
 		}
 	}
 	return s == ""
@@ -1641,9 +1702,23 @@ func matchBracket(p string, c string, o *patternOpts) (rest string, ok bool) {
 					// the scan carries on past it.
 					continue
 				}
+				// The fold here stays ASCII whatever the locale says,
+				// because widening it would spread a divergence rather than
+				// close one: measured 2026-09-13 on bash 5.3.15 with
+				// `nocasematch` on, `[[ A == [[:lower:]] ]]` is a **miss** —
+				// the option does not reach a POSIX class inside a *glob*
+				// bracket at all, where it does reach a range beside it and
+				// does reach a class inside a `=~` expression. This
+				// implementation folds it, which is its own measurement and
+				// its own defect; taking that past ASCII would only make it
+				// bigger. #2716 has the table, including the two `/bin/bash`
+				// columns disagreeing with each other about it. A range is
+				// the neighbor that does fold, and folds
+				// wide — `[[ K == [a-z] ]]` matches, the Kelvin sign by way
+				// of its ASCII lower case.
 				if !frozen &&
 					(inClass(name, c, o.classes) ||
-						(o.fold && inClass(name, swapUnitCase(c), o.classes))) {
+						(o.fold && inClass(name, swapUnitCase(c, false), o.classes))) {
 					matched = true
 				}
 				continue
@@ -1665,13 +1740,13 @@ func matchBracket(p string, c string, o *patternOpts) (rest string, ok bool) {
 			// byte for byte.
 			from, to := ordOf(lo), ordOf(hi)
 			if !frozen && (inRange(ordOf(c), from, to) ||
-				(o.fold && inRange(ordOf(swapUnitCase(c)), from, to))) {
+				(o.fold && inRange(ordOf(swapUnitCase(c, o.foldWide)), from, to))) {
 				matched = true
 			}
 			i = after
 			continue
 		}
-		if !frozen && eqUnit(lo, c, o.fold) {
+		if !frozen && eqUnit(lo, c, o.fold, o.foldWide) {
 			matched = true
 		}
 		i = next
@@ -2019,14 +2094,32 @@ func inWideClass(name string, c rune) bool {
 // inRange reports whether a unit ranks inside a bracket range.
 func inRange(c, lo, hi rune) bool { return c >= lo && c <= hi }
 
-// swapUnitCase is swapCase over a whole unit. ASCII only, like swapCase: the
-// folding in a pattern is `nocasematch`, which this implementation has never
-// taken past ASCII.
-func swapUnitCase(unit string) string {
-	if len(unit) != 1 {
+// swapUnitCase is the other case of a whole unit, or the unit itself.
+//
+// wide is patternOpts.foldWide: with it off this is swapCase over one byte,
+// which is every unit a byte-counting locale has and the only fold this
+// matcher used to do. With it on a multi-byte unit swaps too, which is what
+// `[[ ÉTÉ == été ]]` needs under a UTF-8 locale.
+//
+// A unit that is not one whole character is handed back as itself. That is
+// the undecodable byte that characters() passes through, and folding it would
+// be inventing a letter where the subject holds a byte.
+func swapUnitCase(unit string, wide bool) string {
+	if len(unit) == 1 {
+		return string(swapCase(unit[0]))
+	}
+	if !wide {
 		return unit
 	}
-	return string(swapCase(unit[0]))
+	c, size := utf8.DecodeRuneInString(unit)
+	if size != len(unit) || c == utf8.RuneError {
+		return unit
+	}
+	swapped := swapRuneCase(c)
+	if swapped == c {
+		return unit
+	}
+	return string(swapped)
 }
 
 func isLetter(c byte) bool { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') }

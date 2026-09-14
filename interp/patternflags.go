@@ -3,7 +3,10 @@
 
 package interp
 
-import "strings"
+import (
+	"strings"
+	"unicode/utf8"
+)
 
 // The pattern operators one shell keeps behind an option of its own —
 // [ExtendedPatternOperators] — and which are ordinary text without it.
@@ -126,6 +129,48 @@ func (o *patternOpts) eqPatternByte(pat, sub byte) bool {
 		return pat >= 'a' && pat <= 'z' && swapCase(pat) == sub
 	}
 	return false
+}
+
+// eqPatternHere compares the character at the front of a pattern with the one
+// at the front of a subject, and reports how many bytes of each it consumed.
+//
+// Two widths rather than one because a fold that reaches past ASCII can put
+// characters of different lengths on the two sides — the pattern `s` against
+// a subject `ſ` is one byte against two — and because a pattern character and
+// a subject character are the same length only when neither folds.
+//
+// The byte path is not an optimization of the wide one, it is the other
+// answer: with the fold narrowed to ASCII a multi-byte character is a run of
+// bytes and its two cases are different runs, which is what makes
+// `[[ ÉTÉ == été ]]` a miss under `LC_ALL=C`. chars is read beside foldWide
+// because a character is what a wide fold swaps: where the matcher counts
+// bytes, a `?` passes over one of them and a literal must too, and a fold
+// that consumed a whole character would be walking the subject by two
+// different measures at once. The two answers come from the same locale and
+// part company only in a single-byte locale that is not `C`, which folds by
+// a table this matcher has not got either way.
+//
+// It is also where the flag folds
+// — `(#i)` and `(#l)` — live, which this implementation has never taken past
+// ASCII and which no dialect can reach with foldWide on: the option that sets
+// foldWide and the extended glob that spells the flags belong to different
+// shells.
+//
+// An undecodable byte falls back to the byte comparison rather than folding a
+// replacement character, because two *different* bad bytes both decode to
+// U+FFFD and comparing those would call them equal — which would make
+// `[[ É == \é ]]` match, since the escape splits the pattern's character in
+// half and leaves the second byte to be matched on its own.
+func (o *patternOpts) eqPatternHere(pat, sub string) (pw, sw int, ok bool) {
+	if !o.foldWide || !o.chars || (pat[0] < utf8.RuneSelf && sub[0] < utf8.RuneSelf) {
+		return 1, 1, o.eqPatternByte(pat[0], sub[0])
+	}
+	pr, pn := utf8.DecodeRuneInString(pat)
+	sr, sn := utf8.DecodeRuneInString(sub)
+	if pr == utf8.RuneError && pn == 1 || sr == utf8.RuneError && sn == 1 {
+		return 1, 1, o.eqPatternByte(pat[0], sub[0])
+	}
+	return pn, sn, eqRuneFolded(pr, sr)
 }
 
 // splitPatternFlags peels a `(#…)` flag group off the front of p.

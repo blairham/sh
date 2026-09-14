@@ -113,8 +113,8 @@ func (r *Run) Markdown(cases []Case) string {
 			}
 			fmt.Fprintf(&b, "| `%s`%s |", c.ID, gradeMark(c))
 			for _, n := range names {
-				res, measured := r.Results[c.ID][n]
-				fmt.Fprintf(&b, " %s |", cell(res, measured))
+				res, recorded := r.Results[c.ID][n]
+				fmt.Fprintf(&b, " %s |", cell(res, recorded))
 			}
 			b.WriteString("\n")
 		}
@@ -139,14 +139,14 @@ func (r *Run) Markdown(cases []Case) string {
 // reason to spell it that way: a shell can print the characters `2>` and a
 // reader still has to be able to tell that from the harness saying "the rest
 // of this came out on standard error".
-func cell(res Result, measured bool) string {
+func cell(res Result, recorded bool) string {
 	switch {
-	case !measured:
-		// A cell the record does not have, which is a cell no run could
-		// measure — see Result.Unmeasured and Run.dropUnmeasured. The zero
-		// Result would render as `*(no output, status 0)*`, an answer a
-		// shell might really have given, so the one thing this must not do
-		// is fall through to the cases below.
+	case !recorded, res.Unmeasured:
+		// A cell no run could measure, and a cell the record does not have
+		// at all — see Result.Unmeasured. The zero Result would render as
+		// `*(no output, status 0)*`, an answer a shell might really have
+		// given, so the one thing neither may do is fall through to the
+		// cases below.
 		return "*(not measured)*"
 	case res.TimedOut:
 		return "*(timeout)*"
@@ -248,44 +248,43 @@ func categories(cases []Case) []string {
 func (r *Run) Record(prev *Run, cases []Case, docPath, goldenPath string) error {
 	r.KeepRacingRows(prev, cases)
 	// Before the document is rendered and not only before the record is
-	// saved: the two are written from one Run, and a cell dropped from the
-	// record while the document still carried it would fail the check that
-	// compares them on the next run.
-	r.dropUnmeasured()
+	// saved: the two are written from one Run, and a cell reduced in the
+	// record while the document still carried the complaint would fail the
+	// check that compares them on the next run.
+	r.markUnmeasured()
 	if err := os.WriteFile(docPath, []byte(r.Markdown(cases)), 0o644); err != nil {
 		return err
 	}
 	return r.Save(goldenPath)
 }
 
-// dropUnmeasured takes the cells that are not measurements out of the run,
-// and answers what it took, worst-named first.
+// markUnmeasured reduces every cell that is not a measurement to the bare
+// marker that says so.
 //
-// Dropped rather than carried forward from the previous record, which is the
-// choice worth stating because the neighboring KeepRacingRows does the
-// opposite. A racing row's old cell is a *measurement* — one sample of a coin
-// the shell flips — so keeping it holds a true fact steady. A cell nothing
-// measured has no old fact to hold: carrying one forward would put a value in
-// the record that this run did not see and cannot vouch for, and it is
-// exactly how the harness error in the record survived every regeneration
-// after the one that wrote it.
+// The cell stays. Taking it out was the first attempt and
+// TestTheCommittedRecordKeepsTheAshColumn refused it in the same run: a
+// column the record half-has "grades a subset nobody chose", which is a
+// second way for the record to mislead rather than a fix for the first.
 //
-// What that costs is a cell in the document reading `*(not measured)*` until
-// a run reaches the shell, which is the honest shape of a narrower panel and
-// the same one Run.Absent already takes for a whole column.
-func (r *Run) dropUnmeasured() []string {
-	var gone []string
-	for id, row := range r.Results {
+// What is taken out is the harness's complaint — the text that made the cell
+// look like a shell's answer in the first place, and that a container can
+// vary from run to run. See Result.Unmeasured for why the reason is printed
+// rather than stored, which is the rule Run.Absent already keeps.
+//
+// Not carried forward from the previous record either, which is worth stating
+// because the neighboring KeepRacingRows does the opposite. A racing row's old
+// cell is a *measurement* — one sample of a coin the shell flips — so keeping
+// it holds a true fact steady. A cell nothing measured has no old fact to
+// hold, and carrying one forward is exactly how the harness error survived
+// every regeneration after the one that wrote it.
+func (r *Run) markUnmeasured() {
+	for _, row := range r.Results {
 		for sh, res := range row {
-			if !res.Unmeasured {
-				continue
+			if res.Unmeasured {
+				row[sh] = Result{Unmeasured: true}
 			}
-			gone = append(gone, id+" ["+sh+"]")
-			delete(row, sh)
 		}
 	}
-	sort.Strings(gone)
-	return gone
 }
 
 // Unmeasured is what a run could not measure, as `case [shell]`, with the
@@ -433,16 +432,18 @@ func (r *Run) Compare(golden *Run) []Drift {
 			continue
 		}
 		for sh, nowRes := range now {
-			if nowRes.Unmeasured {
-				// The other direction of the same rule the record keeps: a
-				// run that could not reach the shell has nothing to report
-				// about it, so this is silence rather than a shell that
-				// changed. Without it a container dying mid-run makes every
-				// case it touched read as drift (#2752).
-				continue
-			}
 			wasRes, ok := was[sh]
 			if !ok {
+				continue
+			}
+			if nowRes.Unmeasured || wasRes.Unmeasured {
+				// Neither side, and for one reason: drift is a shell that
+				// moved, and a cell nothing measured says nothing about a
+				// shell. A run that could not reach it would otherwise
+				// report every case the container touched as drift, and a
+				// record that could not reach it would report the first
+				// *successful* measurement as drift — which is #2752 as it
+				// happened.
 				continue
 			}
 			if wasRes != nowRes {

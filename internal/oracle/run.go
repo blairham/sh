@@ -110,28 +110,36 @@ type Result struct {
 	TimedOut bool
 
 	// Unmeasured marks a Result that is not a measurement at all: the
-	// harness could not reach the shell, so what this holds is the harness's
-	// own complaint rather than anything a shell did.
+	// harness could not reach the shell, so there is no answer here and the
+	// cell must not be read as one.
 	//
-	// It is `json:"-"` on purpose, and that is the invariant rather than a
-	// detail of encoding: **a cell in the record is a measurement by
-	// construction**, because the only value that could say otherwise is the
-	// one value the record cannot carry. Run.Record drops these before it
-	// writes, so there is no shape for the field to round-trip through.
+	// Recorded, and that is the half that took a second attempt. The first
+	// fix for #2752 dropped these cells from the record entirely — which is
+	// the other option the issue offered, and which
+	// TestTheCommittedRecordKeepsTheAshColumn immediately refused: a column
+	// with a hole in it "grades a subset nobody chose". Both rules are right,
+	// and a cell that is present and says what it is satisfies both, where
+	// absence satisfies only one.
 	//
-	// It exists because the record held one anyway. A container that died
-	// mid-run wrote `harness error: the container runner did not survive
-	// this case: EOF` into a cell where a shell's answer goes, and the check
-	// that compares the panel with the record then reported the *working*
-	// run as drift — the gate failing on a defect in itself, which is how a
-	// gate teaches people to discount it (#2752).
+	// It exists because the record held a non-measurement anyway, unmarked. A
+	// container that died mid-run wrote `harness error: the container runner
+	// did not survive this case: EOF` into the cell where a shell's answer
+	// goes, and the check comparing the panel with the record then reported
+	// the *working* run as drift — the gate failing on a defect in itself,
+	// which is how a gate teaches people to discount it.
 	//
-	// A distinction this repository already draws elsewhere and did not draw
-	// here: internal/suite keeps a failed start out of its score and prints
-	// it as NOT MEASURED, "beside the hung pair and distinct from it — a
-	// hang is something a shell did, a failure to start is something the
-	// harness did".
-	Unmeasured bool `json:"-"`
+	// The harness's own complaint is *not* recorded with it. That is the rule
+	// Run.Absent already keeps for a whole column: a reason is a fact about
+	// the machine that ran, so storing it would make the record differ
+	// between two machines that agree about every shell they have — and this
+	// one would also churn, since a container can fail a different way each
+	// time. The reason is printed, where a person can act on it; the marker
+	// is recorded, where the check can see it.
+	//
+	// A distinction internal/suite already draws and this instrument did not:
+	// a hang is something a shell did, a failure to start is something the
+	// harness did.
+	Unmeasured bool `json:"unmeasured,omitempty"`
 }
 
 // harnessError is the Result for a case that could not be measured.

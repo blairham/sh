@@ -127,7 +127,7 @@ func run(check bool, goldenPath, docPath string) error {
 	// in the record reading like a shell's behavior (#2752).
 	if missed := got.Unmeasured(); len(missed) > 0 {
 		fmt.Fprintf(os.Stderr, "%d cell(s) NOT MEASURED — the harness could not reach the shell.\n"+
-			"They are left out of the record rather than written into it:\n\n", len(missed))
+			"The record says so in the cell rather than holding the complaint below:\n\n", len(missed))
 		for _, m := range missed {
 			fmt.Fprintln(os.Stderr, "  "+m)
 		}

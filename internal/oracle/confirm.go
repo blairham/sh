@@ -75,6 +75,25 @@ func (r *Run) CellChangesFrom(prev *Run) []CellChange {
 			if !ok {
 				continue
 			}
+			if nowRes.Unmeasured || wasRes.Unmeasured {
+				// Not a change, for the same reason it is not drift: a cell
+				// nothing measured says nothing about a shell.
+				//
+				// Both sides, and the live one is not the theoretical half.
+				// Before the marker was recorded, a cell loaded from the
+				// record carried the harness's complaint and a live one
+				// carried the same complaint plus the flag — a difference
+				// neither *rendered*, so the regeneration announced two
+				// identical halves as a change:
+				//
+				//	was: err "harness error: …" (status -1)
+				//	now: err "harness error: …" (status -1)
+				//
+				// A report whose two halves are the same text is worse than
+				// no report: a reader trusts it and goes looking for a
+				// difference that is not there.
+				continue
+			}
 			if wasRes != nowRes {
 				out = append(out, CellChange{CaseID: id, Shell: sh, Was: wasRes, Now: nowRes})
 			}

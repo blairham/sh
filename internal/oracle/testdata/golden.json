@@ -108522,10 +108522,11 @@
     "kill/signaling-a-process-that-is-not-ours": {
       "ash": {
         "Stdout": "",
-        "Stderr": "harness error: the container runner did not survive this case: EOF",
-        "Status": -1,
+        "Stderr": "",
+        "Status": 0,
         "Signal": 0,
-        "TimedOut": false
+        "TimedOut": false,
+        "unmeasured": true
       },
       "bash": {
         "Stdout": "st=1",

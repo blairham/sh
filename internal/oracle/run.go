@@ -108,6 +108,30 @@ type Result struct {
 
 	// TimedOut marks a snippet the shell never finished.
 	TimedOut bool
+
+	// Unmeasured marks a Result that is not a measurement at all: the
+	// harness could not reach the shell, so what this holds is the harness's
+	// own complaint rather than anything a shell did.
+	//
+	// It is `json:"-"` on purpose, and that is the invariant rather than a
+	// detail of encoding: **a cell in the record is a measurement by
+	// construction**, because the only value that could say otherwise is the
+	// one value the record cannot carry. Run.Record drops these before it
+	// writes, so there is no shape for the field to round-trip through.
+	//
+	// It exists because the record held one anyway. A container that died
+	// mid-run wrote `harness error: the container runner did not survive
+	// this case: EOF` into a cell where a shell's answer goes, and the check
+	// that compares the panel with the record then reported the *working*
+	// run as drift — the gate failing on a defect in itself, which is how a
+	// gate teaches people to discount it (#2752).
+	//
+	// A distinction this repository already draws elsewhere and did not draw
+	// here: internal/suite keeps a failed start out of its score and prints
+	// it as NOT MEASURED, "beside the hung pair and distinct from it — a
+	// hang is something a shell did, a failure to start is something the
+	// harness did".
+	Unmeasured bool `json:"-"`
 }
 
 // harnessError is the Result for a case that could not be measured.
@@ -116,7 +140,7 @@ type Result struct {
 // a reader scanning the record for the stream a message came out on should
 // not find the harness's own failures filed under a shell's output.
 func harnessError(err error) Result {
-	return Result{Stderr: "harness error: " + err.Error(), Status: -1}
+	return Result{Stderr: "harness error: " + err.Error(), Status: -1, Unmeasured: true}
 }
 
 // ArgSnippet and ArgScript are the placeholders a Case.Args may use to say

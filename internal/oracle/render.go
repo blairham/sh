@@ -113,7 +113,8 @@ func (r *Run) Markdown(cases []Case) string {
 			}
 			fmt.Fprintf(&b, "| `%s`%s |", c.ID, gradeMark(c))
 			for _, n := range names {
-				fmt.Fprintf(&b, " %s |", cell(r.Results[c.ID][n]))
+				res, measured := r.Results[c.ID][n]
+				fmt.Fprintf(&b, " %s |", cell(res, measured))
 			}
 			b.WriteString("\n")
 		}
@@ -138,8 +139,15 @@ func (r *Run) Markdown(cases []Case) string {
 // reason to spell it that way: a shell can print the characters `2>` and a
 // reader still has to be able to tell that from the harness saying "the rest
 // of this came out on standard error".
-func cell(res Result) string {
+func cell(res Result, measured bool) string {
 	switch {
+	case !measured:
+		// A cell the record does not have, which is a cell no run could
+		// measure — see Result.Unmeasured and Run.dropUnmeasured. The zero
+		// Result would render as `*(no output, status 0)*`, an answer a
+		// shell might really have given, so the one thing this must not do
+		// is fall through to the cases below.
+		return "*(not measured)*"
 	case res.TimedOut:
 		return "*(timeout)*"
 	case res.Stdout == "" && res.Stderr == "":
@@ -239,10 +247,64 @@ func categories(cases []Case) []string {
 // that still churned. Nothing about the two writes says so on its own.
 func (r *Run) Record(prev *Run, cases []Case, docPath, goldenPath string) error {
 	r.KeepRacingRows(prev, cases)
+	// Before the document is rendered and not only before the record is
+	// saved: the two are written from one Run, and a cell dropped from the
+	// record while the document still carried it would fail the check that
+	// compares them on the next run.
+	r.dropUnmeasured()
 	if err := os.WriteFile(docPath, []byte(r.Markdown(cases)), 0o644); err != nil {
 		return err
 	}
 	return r.Save(goldenPath)
+}
+
+// dropUnmeasured takes the cells that are not measurements out of the run,
+// and answers what it took, worst-named first.
+//
+// Dropped rather than carried forward from the previous record, which is the
+// choice worth stating because the neighboring KeepRacingRows does the
+// opposite. A racing row's old cell is a *measurement* — one sample of a coin
+// the shell flips — so keeping it holds a true fact steady. A cell nothing
+// measured has no old fact to hold: carrying one forward would put a value in
+// the record that this run did not see and cannot vouch for, and it is
+// exactly how the harness error in the record survived every regeneration
+// after the one that wrote it.
+//
+// What that costs is a cell in the document reading `*(not measured)*` until
+// a run reaches the shell, which is the honest shape of a narrower panel and
+// the same one Run.Absent already takes for a whole column.
+func (r *Run) dropUnmeasured() []string {
+	var gone []string
+	for id, row := range r.Results {
+		for sh, res := range row {
+			if !res.Unmeasured {
+				continue
+			}
+			gone = append(gone, id+" ["+sh+"]")
+			delete(row, sh)
+		}
+	}
+	sort.Strings(gone)
+	return gone
+}
+
+// Unmeasured is what a run could not measure, as `case [shell]`, with the
+// harness's own complaint beside it.
+//
+// Read before Record, which is what removes them: a caller that asks
+// afterwards is asking a question the answer has already been taken out of.
+func (r *Run) Unmeasured() []string {
+	var out []string
+	for id, row := range r.Results {
+		for sh, res := range row {
+			if res.Unmeasured {
+				out = append(out, fmt.Sprintf("%s [%s]: %s", id, sh,
+					strings.TrimPrefix(res.Stderr, "harness error: ")))
+			}
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 // Save writes the golden record.
@@ -371,6 +433,14 @@ func (r *Run) Compare(golden *Run) []Drift {
 			continue
 		}
 		for sh, nowRes := range now {
+			if nowRes.Unmeasured {
+				// The other direction of the same rule the record keeps: a
+				// run that could not reach the shell has nothing to report
+				// about it, so this is silence rather than a shell that
+				// changed. Without it a container dying mid-run makes every
+				// case it touched read as drift (#2752).
+				continue
+			}
 			wasRes, ok := was[sh]
 			if !ok {
 				continue

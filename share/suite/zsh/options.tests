@@ -9,10 +9,19 @@
 # a letter that means something else entirely.
 
 # `set -f` is noglob in bash, ksh93 and dash. In zsh the letter is "read no
-# rc files" and globbing is untouched — the globbing option is -F, which is
-# held out until #2654 lands: that letter is refused here.
+# rc files" and globbing is untouched.
 ( set -f; printf '[%s]\n' /dev/nul* ) 2> /dev/null
 printf 'set -f -> %s\n' "$?"
+
+# And `-F` is the letter that does turn globbing off here. The pair is the
+# point rather than either line alone: a script written for another shell says
+# `set -f` for noglob, gets the rc-file option, and keeps globbing — so the two
+# rows have to disagree or neither is measuring the split. `set -o noglob` is
+# spelled the same in all four shells and is what a portable script writes.
+( set -F; printf '[%s]\n' /dev/nul* ) 2> /dev/null
+printf 'set -F -> %s\n' "$?"
+( set -o noglob; printf '[%s]\n' /dev/nul* ) 2> /dev/null
+printf 'set -o noglob -> %s\n' "$?"
 
 # An unquoted `$@` or `$*` is one word. zsh does not field-split the result
 # of an expansion unless SH_WORD_SPLIT is on, which is the single most

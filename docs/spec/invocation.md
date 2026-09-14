@@ -1980,6 +1980,18 @@ is the other way round — `set -eZ` and `set -Ze` both report 2 and both leave
 nothing applied — so a validating pass cannot be what produces this, and one
 mechanism does not serve both routes.
 
+**A dash word behind the `-o` parts the two routes in one column.** At the
+builtin, bash and ksh93 will not take a next word that begins with `-` or `+`
+as the long name: the `-o` stays bare, so it lists, and the word is read as
+the option letters it looks like — `set -o -e` there is errexit **on** at 0.
+On the command line that starts the shell, bash takes it after all —
+`bash -o -e -c 'echo hi'` is `-e: invalid option name` — while ksh93 answers
+the same way on both routes and prints `hi`. So the axis,
+`Semantics.SetODeclinesADashWord` (#2671), is read only where `set` itself is
+speaking, and the front end keeps the reading it had. That is the same
+position-sensitivity the paragraph above records: one mechanism does not serve
+both routes here either.
+
 ## Naming a version: `--version`
 
 **The rule.** Three of the four shells in the panel answer an invocation

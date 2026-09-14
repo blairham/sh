@@ -446,6 +446,9 @@ func TestPrintfAnswers(t *testing.T) {
 	if got, want := dash.Diagnostics().PrintfIncompleteNumber, "printf: %[1]s: not completely converted"; got != want {
 		t.Errorf("PrintfIncompleteNumber = %q, want %q", got, want)
 	}
+	if got, want := dash.Diagnostics().PrintfNumberOutOfRange, "printf: %[1]s: Result too large"; got != want {
+		t.Errorf("PrintfNumberOutOfRange = %q, want %q", got, want)
+	}
 	d := dash.Diagnostics()
 	if got, want := d.PrintfBadVerbStatus, 2; got != want {
 		t.Errorf("PrintfBadVerbStatus = %d, want %d", got, want)

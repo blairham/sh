@@ -140,7 +140,7 @@ func TestAPromptIsTheStandardInputRoute(t *testing.T) {
 	sh := routeShell(interp.Unspecified, interp.Unspecified)
 	sh.Stdin, sh.Stdout, sh.Stderr = tty, tty, tty
 
-	drawn := watch(t, control)
+	drawn := watch(t, control, defaultPrompt)
 	done := make(chan int, 1)
 	go func() { done <- driver.MainArgs(sh, []string{"testsh"}) }()
 

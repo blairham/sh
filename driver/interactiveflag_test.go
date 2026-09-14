@@ -122,7 +122,7 @@ func TestAPromptIsInteractiveWithoutBeingTold(t *testing.T) {
 	sh := shell()
 	sh.Stdin, sh.Stdout, sh.Stderr = tty, tty, tty
 
-	drawn := watch(t, control)
+	drawn := watch(t, control, defaultPrompt)
 	done := make(chan int, 1)
 	go func() { done <- driver.MainArgs(sh, []string{"testsh"}) }()
 

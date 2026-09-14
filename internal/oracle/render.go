@@ -113,7 +113,8 @@ func (r *Run) Markdown(cases []Case) string {
 			}
 			fmt.Fprintf(&b, "| `%s`%s |", c.ID, gradeMark(c))
 			for _, n := range names {
-				fmt.Fprintf(&b, " %s |", cell(r.Results[c.ID][n]))
+				res, recorded := r.Results[c.ID][n]
+				fmt.Fprintf(&b, " %s |", cell(res, recorded))
 			}
 			b.WriteString("\n")
 		}
@@ -138,8 +139,15 @@ func (r *Run) Markdown(cases []Case) string {
 // reason to spell it that way: a shell can print the characters `2>` and a
 // reader still has to be able to tell that from the harness saying "the rest
 // of this came out on standard error".
-func cell(res Result) string {
+func cell(res Result, recorded bool) string {
 	switch {
+	case !recorded, res.Unmeasured:
+		// A cell no run could measure, and a cell the record does not have
+		// at all — see Result.Unmeasured. The zero Result would render as
+		// `*(no output, status 0)*`, an answer a shell might really have
+		// given, so the one thing neither may do is fall through to the
+		// cases below.
+		return "*(not measured)*"
 	case res.TimedOut:
 		return "*(timeout)*"
 	case res.Stdout == "" && res.Stderr == "":
@@ -239,10 +247,63 @@ func categories(cases []Case) []string {
 // that still churned. Nothing about the two writes says so on its own.
 func (r *Run) Record(prev *Run, cases []Case, docPath, goldenPath string) error {
 	r.KeepRacingRows(prev, cases)
+	// Before the document is rendered and not only before the record is
+	// saved: the two are written from one Run, and a cell reduced in the
+	// record while the document still carried the complaint would fail the
+	// check that compares them on the next run.
+	r.markUnmeasured()
 	if err := os.WriteFile(docPath, []byte(r.Markdown(cases)), 0o644); err != nil {
 		return err
 	}
 	return r.Save(goldenPath)
+}
+
+// markUnmeasured reduces every cell that is not a measurement to the bare
+// marker that says so.
+//
+// The cell stays. Taking it out was the first attempt and
+// TestTheCommittedRecordKeepsTheAshColumn refused it in the same run: a
+// column the record half-has "grades a subset nobody chose", which is a
+// second way for the record to mislead rather than a fix for the first.
+//
+// What is taken out is the harness's complaint — the text that made the cell
+// look like a shell's answer in the first place, and that a container can
+// vary from run to run. See Result.Unmeasured for why the reason is printed
+// rather than stored, which is the rule Run.Absent already keeps.
+//
+// Not carried forward from the previous record either, which is worth stating
+// because the neighboring KeepRacingRows does the opposite. A racing row's old
+// cell is a *measurement* — one sample of a coin the shell flips — so keeping
+// it holds a true fact steady. A cell nothing measured has no old fact to
+// hold, and carrying one forward is exactly how the harness error survived
+// every regeneration after the one that wrote it.
+func (r *Run) markUnmeasured() {
+	for _, row := range r.Results {
+		for sh, res := range row {
+			if res.Unmeasured {
+				row[sh] = Result{Unmeasured: true}
+			}
+		}
+	}
+}
+
+// Unmeasured is what a run could not measure, as `case [shell]`, with the
+// harness's own complaint beside it.
+//
+// Read before Record, which is what removes them: a caller that asks
+// afterwards is asking a question the answer has already been taken out of.
+func (r *Run) Unmeasured() []string {
+	var out []string
+	for id, row := range r.Results {
+		for sh, res := range row {
+			if res.Unmeasured {
+				out = append(out, fmt.Sprintf("%s [%s]: %s", id, sh,
+					strings.TrimPrefix(res.Stderr, "harness error: ")))
+			}
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 // Save writes the golden record.
@@ -373,6 +434,16 @@ func (r *Run) Compare(golden *Run) []Drift {
 		for sh, nowRes := range now {
 			wasRes, ok := was[sh]
 			if !ok {
+				continue
+			}
+			if nowRes.Unmeasured || wasRes.Unmeasured {
+				// Neither side, and for one reason: drift is a shell that
+				// moved, and a cell nothing measured says nothing about a
+				// shell. A run that could not reach it would otherwise
+				// report every case the container touched as drift, and a
+				// record that could not reach it would report the first
+				// *successful* measurement as drift — which is #2752 as it
+				// happened.
 				continue
 			}
 			if wasRes != nowRes {

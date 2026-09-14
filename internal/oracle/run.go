@@ -108,6 +108,38 @@ type Result struct {
 
 	// TimedOut marks a snippet the shell never finished.
 	TimedOut bool
+
+	// Unmeasured marks a Result that is not a measurement at all: the
+	// harness could not reach the shell, so there is no answer here and the
+	// cell must not be read as one.
+	//
+	// Recorded, and that is the half that took a second attempt. The first
+	// fix for #2752 dropped these cells from the record entirely — which is
+	// the other option the issue offered, and which
+	// TestTheCommittedRecordKeepsTheAshColumn immediately refused: a column
+	// with a hole in it "grades a subset nobody chose". Both rules are right,
+	// and a cell that is present and says what it is satisfies both, where
+	// absence satisfies only one.
+	//
+	// It exists because the record held a non-measurement anyway, unmarked. A
+	// container that died mid-run wrote `harness error: the container runner
+	// did not survive this case: EOF` into the cell where a shell's answer
+	// goes, and the check comparing the panel with the record then reported
+	// the *working* run as drift — the gate failing on a defect in itself,
+	// which is how a gate teaches people to discount it.
+	//
+	// The harness's own complaint is *not* recorded with it. That is the rule
+	// Run.Absent already keeps for a whole column: a reason is a fact about
+	// the machine that ran, so storing it would make the record differ
+	// between two machines that agree about every shell they have — and this
+	// one would also churn, since a container can fail a different way each
+	// time. The reason is printed, where a person can act on it; the marker
+	// is recorded, where the check can see it.
+	//
+	// A distinction internal/suite already draws and this instrument did not:
+	// a hang is something a shell did, a failure to start is something the
+	// harness did.
+	Unmeasured bool `json:"unmeasured,omitempty"`
 }
 
 // harnessError is the Result for a case that could not be measured.
@@ -116,7 +148,7 @@ type Result struct {
 // a reader scanning the record for the stream a message came out on should
 // not find the harness's own failures filed under a shell's output.
 func harnessError(err error) Result {
-	return Result{Stderr: "harness error: " + err.Error(), Status: -1}
+	return Result{Stderr: "harness error: " + err.Error(), Status: -1, Unmeasured: true}
 }
 
 // ArgSnippet and ArgScript are the placeholders a Case.Args may use to say

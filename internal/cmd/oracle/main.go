@@ -113,6 +113,27 @@ func run(check bool, goldenPath, docPath string) error {
 	}
 	fmt.Printf("  %d cases across %d shells\n\n", len(oracle.Corpus), len(got.Shells))
 
+	// Said here, before either branch, because it is true of both and
+	// because it is the one result that is neither a measurement nor a
+	// refusal to run. A column the panel never had is announced above as
+	// NOT RUN; this is the same honesty one cell at a time — the shell was
+	// there, the harness reached for it, and what came back was the
+	// harness's own complaint.
+	//
+	// Not a failure, for the reason a narrower panel is not one: the right
+	// response to a weaker claim is to say so. What must not happen is the
+	// silence, because a cell nobody could measure and a cell that agreed
+	// look identical once the run is over — which is how one spent months
+	// in the record reading like a shell's behavior (#2752).
+	if missed := got.Unmeasured(); len(missed) > 0 {
+		fmt.Fprintf(os.Stderr, "%d cell(s) NOT MEASURED — the harness could not reach the shell.\n"+
+			"The record says so in the cell rather than holding the complaint below:\n\n", len(missed))
+		for _, m := range missed {
+			fmt.Fprintln(os.Stderr, "  "+m)
+		}
+		fmt.Fprintln(os.Stderr)
+	}
+
 	if !check {
 		// The record is read before it is written: a racing row's cells are
 		// one sample of a coin flip, and rewriting them is the only way such

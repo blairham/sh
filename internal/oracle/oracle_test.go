@@ -490,29 +490,39 @@ func TestCellNamesTheStreamAMessageCameOutOn(t *testing.T) {
 	// bold, and therefore outside the code span, so a shell that prints the
 	// characters `2>` cannot be mistaken for the harness saying "stderr".
 	for _, tc := range []struct {
-		in   Result
-		want string
+		in       Result
+		measured bool
+		want     string
 	}{
-		{Result{Stdout: "a"}, "`a`"},
-		{Result{Stderr: "oops", Status: 1}, "**2>** `oops` *(status 1)*"},
-		{Result{Stdout: "a", Stderr: "oops", Status: 1}, "`a` **2>** `oops` *(status 1)*"},
-		{Result{Status: 2}, "*(no output, status 2)*"},
-		{Result{TimedOut: true, Status: -1}, "*(timeout)*"},
+		// The one that is not a measurement, and the one it must not be
+		// confused with. A cell the record has no entry for is a cell no run
+		// could reach the shell for, and the zero Result beside it is a real
+		// answer a shell can really give — so these two lines are the whole
+		// of why `cell` is told which it has (#2752).
+		{Result{}, false, "*(not measured)*"},
+		{Result{}, true, "*(no output, status 0)*"},
+		{Result{Stdout: "a"}, true, "`a`"},
+		{Result{Stderr: "oops", Status: 1}, true, "**2>** `oops` *(status 1)*"},
+		{Result{Stdout: "a", Stderr: "oops", Status: 1}, true, "`a` **2>** `oops` *(status 1)*"},
+		{Result{Status: 2}, true, "*(no output, status 2)*"},
+		{Result{TimedOut: true, Status: -1}, true, "*(timeout)*"},
 		// A signal death is named rather than given the -1 that stands for
 		// the exit status it does not have. The word comes out of the record
 		// beside the number, so a cell reads the same on any machine (#776) —
 		// which is why these two spell it rather than leaving it derived.
 		{
 			Result{Status: -1, Signal: syscall.SIGTERM, SignalName: "terminated"},
+			true,
 			"*(no output, killed by signal 15 (terminated))*",
 		},
 		{
 			Result{Stdout: "a", Status: -1, Signal: syscall.SIGINT, SignalName: "interrupt"},
+			true,
 			"`a` *(killed by signal 2 (interrupt))*",
 		},
 	} {
-		if got := cell(tc.in); got != tc.want {
-			t.Errorf("cell(%+v) = %q, want %q", tc.in, got, tc.want)
+		if got := cell(tc.in, tc.measured); got != tc.want {
+			t.Errorf("cell(%+v, measured=%v) = %q, want %q", tc.in, tc.measured, got, tc.want)
 		}
 	}
 }

@@ -208,6 +208,34 @@ func TestAfterTheSeamTheInputIsReadAtItsRealPosition(t *testing.T) {
 	}
 }
 
+// An opener the *input* holds is named where it really is, and not at the
+// alias word.
+//
+// The seam makes one word out of two texts, so the construct blamed when that
+// word runs out can be on either side of it: `alias q='echo "'` used as
+// `q $(echo hi` opens the quote in the body and the substitution three columns
+// into the input, and the dialects that blame the innermost blame the second.
+// ksh93 reports the `(` at line 4 column 3 on a file laid out this way, and
+// zsh — which blames the outermost — reports the quote at the end of the
+// input; both readings come from this one error.
+func TestAnOpenerTheInputHoldsIsNamedWhereItStands(t *testing.T) {
+	const src = "echo zero\necho one\nalias q='echo \"'\nq $(echo hi\n"
+	p := syntax.NewParser(src, syntax.Core())
+	p.Aliases = table("q", `echo "`)
+	p.Parse()
+	var se *syntax.Error
+	if !errors.As(p.Err(), &se) {
+		t.Fatalf("err %v, want a syntax.Error", p.Err())
+	}
+	if se.Token != "$(" {
+		t.Fatalf("blamed %q, want the substitution — the innermost of the two", se.Token)
+	}
+	if se.Pos.Line != 4 || se.Pos.Col != 3 {
+		t.Errorf("blamed %d:%d, want 4:3 — where the `$(` is written, not where the alias word is",
+			se.Pos.Line, se.Pos.Col)
+	}
+}
+
 // A blank the body ends with is inside the construct the body opened, so it
 // is not the trailing blank that makes the next word eligible for expansion
 // in turn. `alias q='echo "x '` used as `q b"` is `x  b` in all seven

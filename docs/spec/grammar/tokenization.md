@@ -692,11 +692,16 @@ did not write.
 Two consequences of the first rule follow from it rather than being rules
 of their own:
 
-- The blank a body may end **inside** an open construct is not the
-  trailing blank that makes the next word eligible. `alias q='echo "x '`
-  used as `q b"` is `x  b` in all seven columns and never the expansion of
-  `b`: the word after the alias word is inside the quote and was never a
-  word at all.
+- The word a construct **swallows** is never offered to the table, even
+  where the value ends in a blank. `alias q='echo "x '` used as `q b"` is
+  `x  b` in all seven columns and never the expansion of `b`: the word
+  after the alias word is inside the quote and was never a word at all.
+  Whether the word *past* the construct is offered is the one question
+  inside this seam the panel splits on, and
+  `Dialect.AliasTrailingBlankReachesPastAnOpenConstruct` is the axis —
+  `alias c='CEE'` beside the same `q`, used as `q b" c`, is `x  b CEE` in
+  bash 5.3, that binary as `sh` and bash 3.2, and `x  b c` in dash, ksh93,
+  zsh and BusyBox ash.
 - A snippet like the first one **does not parse on its own**, and is right
   not to: until the `alias` line has run, the closing `"` belongs to
   nothing. The reference shells' own `-n` refuses the same text for the

@@ -225,6 +225,37 @@ func TestABlankInsideAnOpenConstructMakesNoNextWordEligible(t *testing.T) {
 	}
 }
 
+// The one question inside the seam the panel does not agree on: whether the
+// word *past* the construct is offered to the table in turn.
+//
+// bash offers it — `alias c='CEE'; alias q='echo "x '` used as `q b" c` is
+// `x  b CEE` in bash 5.3, that binary as `sh`, and bash 3.2 — and dash,
+// ksh93, zsh and BusyBox ash offer nothing, because what follows the value is
+// inside the quote. The core refuses what the panel disagrees about, so the
+// field is off there; dialect/aliasquote_test.go says which preset holds
+// which value.
+func TestTheAxisDecidesWhetherTheBlankReachesPastTheConstruct(t *testing.T) {
+	for _, c := range []struct {
+		on   bool
+		want string
+	}{
+		{false, `echo "x  b" c`},
+		{true, `echo "x  b" CEE`},
+	} {
+		d := syntax.Core()
+		d.AliasTrailingBlankReachesPastAnOpenConstruct = c.on
+		p := syntax.NewParser(`q b" c`, d)
+		p.Aliases = table("q", `echo "x `, "c", "CEE")
+		f := p.Parse()
+		if err := p.Err(); err != nil {
+			t.Fatalf("on=%v: did not parse: %v", c.on, err)
+		}
+		if got := strings.TrimSpace(syntax.Print(f)); got != c.want {
+			t.Errorf("on=%v: came to %q, want %q", c.on, got, c.want)
+		}
+	}
+}
+
 // The seam is crossed only where the text after the alias word is the
 // *input's*. A body expanded from inside another body's expansion has that
 // body's remaining tokens in front of it, and a token keeps no text to be

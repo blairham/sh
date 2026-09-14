@@ -18511,6 +18511,18 @@ echo two`,
 		Script:             true,
 	},
 	{
+		ID: "alias/the-blank-past-an-open-quote-splits-the-panel", Category: "alias",
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias c='CEE'
+alias q='echo "x '
+echo one
+q b" c
+echo two`,
+		Why:                "the one question inside the quote seam that is not unanimous, and the row `Dialect.AliasTrailingBlankReachesPastAnOpenConstruct` is decided at. The value ends in a blank, which makes the next word eligible for expansion in turn — and the blank is inside the quote the body opened. bash 5.3, that binary as `sh`, and bash 3.2 print `x  b CEE`: they offer the next *word* of the resulting line, which is the one after the quote closes. dash, ksh93, zsh and BusyBox ash print `x  b c`, offering the text immediately after the value, which is inside the quote and is no word at all. The sibling row `alias/a-blank-inside-an-open-quote-is-not-the-trailing-blank` is the half that does not split — the word the quote swallows is never a candidate anywhere (#2685)",
+		ExpansionCompletes: true,
+		Script:             true,
+	},
+	{
 		ID: "alias/nested-text-expands-where-the-command-string-did-not", Category: "alias",
 		Snippet: `alias t=echo; eval "t E"; v=$(t S); echo "v=$v"`,
 		Why:     "zsh expands no alias in a `-c` string and expands one in `eval` and in a substitution reached from that same string. So its refusal under `-c` is not a rule about aliases: the option is the only gate on a nested text, and a `-c` string simply being read whole is what stops a definition on one line reaching the next. This is the row #2109 split `Dialect.ExpandAliases` in two for — one field held both the option's default and the route rule, and the front end derived the nested texts' answer from the route, which turned the table off for every `eval` and `$( )` under a zsh command string. The dash column is a *different* fault and still misses: that shell parses a substitution with the line that holds it, so its `$( )` here is read before the `alias` beside it has run — #2357",

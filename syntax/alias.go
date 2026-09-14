@@ -403,10 +403,14 @@ func (p *Parser) carryOpenWord(last *Token, tail string) {
 		return
 	}
 	// The blank an unfinished body may end in is inside the construct rather
-	// than between two words, so it makes no next word eligible: `alias
-	// q='echo "x '` used as `q b"` prints `x  b` in all seven columns, and
-	// not the expansion of `b`.
-	p.aliasNextWord = false
+	// than between two words. The word the construct swallows is never a
+	// candidate — `alias q='echo "x '` used as `q b"` is `x  b` in all
+	// seven columns and never the expansion of `b` — and whether the word
+	// *past* the construct is one splits the panel three to four. See
+	// [Dialect.AliasTrailingBlankReachesPastAnOpenConstruct].
+	if !p.dialect.AliasTrailingBlankReachesPastAnOpenConstruct {
+		p.aliasNextWord = false
+	}
 	if join.Incomplete() {
 		// Nothing in the input closes it either. The construct has swallowed
 		// the rest of the file, which is what every column reports and is the

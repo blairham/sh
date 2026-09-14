@@ -1977,6 +1977,39 @@ type Dialect struct {
 	// since nothing is ever spliced.
 	AliasBodyCountsLines bool
 
+	// AliasTrailingBlankReachesPastAnOpenConstruct keeps the value's
+	// trailing blank working when the blank is *inside* a construct the
+	// body opened, so the word after that construct closes is offered to
+	// the table in turn.
+	//
+	// A value ending in a blank makes the next word eligible — the rule
+	// behind `alias sudo='sudo '` — and it is unanimous while the blank is
+	// a blank. Where the body also opens a quote, the blank is inside the
+	// quote and the panel parts:
+	//
+	//	alias c='CEE'
+	//	alias q='echo "x '
+	//	q b" c
+	//
+	//	bash 5.3, bash as sh, bash 3.2   x  b CEE
+	//	dash, ksh93, zsh, BusyBox ash    x  b c
+	//
+	// Measured 2026-09-13 from a script file, since zsh expands no alias
+	// under `-c`. bash offers the next *word* of the resulting line, which
+	// is the one after the quote closes; the other four offer the text
+	// immediately after the value, which is inside the quote and is no word
+	// at all, so nothing is offered.
+	//
+	// The half that does not split is measured with it: `q b"` alone, with
+	// `b` an alias, is `x  b` in all seven — the word the quote swallows is
+	// never a candidate anywhere. So this is about the word *past* the
+	// construct and not about the one inside it.
+	//
+	// Off in the core, which refuses what the panel disagrees about, and it
+	// is reachable only through [Parser.carryOpenWord] — there is no open
+	// construct for a blank to be inside of otherwise (#2685).
+	AliasTrailingBlankReachesPastAnOpenConstruct bool
+
 	// ParamExpansionFlags enables the parenthesized flag group that may open
 	// an expansion: `${(U)x}`, `${(s.:.)x}`, `${(%):-%x}`. One shell in the
 	// panel parses it; to the rest the whole expansion is a bad substitution,

@@ -148,15 +148,83 @@ func TestAnUnansweredDeclineIsAskedOnlyWhereItMatters(t *testing.T) {
 	}
 }
 
-// The predicate is the loop's own reading of a word, and a one-character `-`
-// is not one it reads as options — `set - a b` leaves three positional
-// parameters here where bash and ksh93 leave two. So `set -o -` is still a
-// name, which is measured-wrong in both columns that decline and is pinned
-// here rather than papered over: the day the bare `-` is read as an option
-// word, this follows it and this test is what says so.
-func TestABareDashIsNotYetADeclinedWord(t *testing.T) {
+// The predicate is the loop's own reading of a word, and since #2699 a
+// one-character `-` **is** one it reads as options. So `set -o -` declines the
+// `-` and lists, which is what both columns that decline a dash word do.
+//
+// This test was written the other way round — pinning the gap, and saying that
+// the day the bare `-` became an option word it would follow and this test
+// would be what said so. It said so: closing #2699 reddened it, and this is
+// the same assertion with the answer moved.
+func TestABareDashIsADeclinedWord(t *testing.T) {
 	out, st := runDashWord(t, "set -o -\necho after\n", Yes)
-	if strings.Contains(out, "errexit") || !strings.Contains(out, "set: -: invalid option name") {
-		t.Errorf("got %q at %d, want `-` still taken as the option name — see the corners on Semantics.SetODeclinesADashWord", out, st)
+	if strings.Contains(out, "invalid option name") || !strings.Contains(out, "errexit") {
+		t.Errorf("got %q at %d, want the `-` declined and the table listed", out, st)
+	}
+	if !strings.HasSuffix(out, "after\n") {
+		t.Errorf("got %q, want the script to carry on after the listing", out)
+	}
+	// And the other half of the same predicate: the word is consumed rather
+	// than becoming an operand. `set - a b` leaves two positional parameters
+	// in every column of the panel, which is unanimous and is why it is not
+	// an axis.
+	out, st = runDashWord(t, `set - a b; echo "n=$# 1=[$1]"`+"\n", Yes)
+	if out != "n=2 1=[a]\n" || st != 0 {
+		t.Errorf("got %q at %d, want n=2 1=[a]", out, st)
+	}
+}
+
+// What a bare `-` or `+` *means* once it is consumed, which is a three-way and
+// not a bool — the reason [BareOptionWordReading] is an enum.
+//
+// Consuming the word is unanimous across the panel and is not asked here.
+// Clearing `-x` and `-v` is not: `-` clears in four columns and `+` clears in
+// one, so no single flag on the dash holds both readings. Measured 2026-09-13
+// over script files under `env -i PATH=/usr/bin:/bin` (#2699):
+//
+//	                       set -v -      set -v +
+//	four of the columns    verbose off   verbose on
+//	one column             verbose off   verbose off
+//	one column             verbose on    verbose on
+//
+// `set +v -` leaves verbose off under every reading, which is what says the
+// rule clears rather than toggles — a toggle would turn it back on.
+func TestABareOptionWordMeansThreeDifferentThings(t *testing.T) {
+	for _, tc := range []struct {
+		name             string
+		reading          BareOptionWordReading
+		afterDash        string
+		afterPlus        string
+		afterDashWhenOff string
+	}{
+		{"inert", BareOptionWordIsInert, "on", "on", "off"},
+		{"the dash alone", BareDashClearsTraceAndVerbose, "off", "on", "off"},
+		{"either sign", BareEitherSignClearsTraceAndVerbose, "off", "off", "off"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := dashWordSem(Yes)
+			sem.BareOptionWord = tc.reading
+			probe := func(src string) string {
+				out, _ := run(t, src+"\ncase $- in *v*) echo on;; *) echo off;; esac\n",
+					func(r *Runner) { r.Semantics = &sem })
+				return strings.TrimSpace(out)
+			}
+			if got := probe("set -v -"); got != tc.afterDash {
+				t.Errorf("`set -v -` = %s, want %s", got, tc.afterDash)
+			}
+			if got := probe("set -v +"); got != tc.afterPlus {
+				t.Errorf("`set -v +` = %s, want %s", got, tc.afterPlus)
+			}
+			// The control: it clears rather than toggles, so a word arriving
+			// where the option is already off leaves it off under all three.
+			if got := probe("set +v -"); got != tc.afterDashWhenOff {
+				t.Errorf("`set +v -` = %s, want %s", got, tc.afterDashWhenOff)
+			}
+			// And the consumption, which no reading changes.
+			out, _ := run(t, `set - a b; echo "n=$#"`+"\n", func(r *Runner) { r.Semantics = &sem })
+			if out != "n=2\n" {
+				t.Errorf("`set - a b` = %q, want n=2 under every reading", out)
+			}
+		})
 	}
 }

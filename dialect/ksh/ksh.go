@@ -1525,6 +1525,8 @@ func Semantics() interp.Semantics {
 	// mechanism rather than another answer here, #2698. Measured on the
 	// field.
 	s.SetODeclinesADashWord = interp.Yes
+	// A bare `-` turns `-x` and `-v` off here and so does a bare `+`, which is this column alone (#2699).
+	s.BareOptionWord = interp.BareEitherSignClearsTraceAndVerbose
 	// unanswered SetValidatesOptionLettersFirst: this column does agree with
 	// bash about what a refusal leaves behind — `command set -e -Z` is
 	// errexit off, and `set -o -Z`, where a bare `-o` takes no next word,

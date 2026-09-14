@@ -169668,6 +169668,57 @@
         "TimedOut": false
       }
     },
+    "set/a-bare-dash-or-plus-as-an-option-word": {
+      "ash": {
+        "Stdout": "[n=2:a][dash=off][plus=on]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[n=2:a][dash=off][plus=on]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[n=2:a][dash=off][plus=on]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[n=2:a][dash=off][plus=on]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[n=2:a][dash=off][plus=on]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[n=2:a][dash=off][plus=off]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[n=2:a][dash=on][plus=on]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "set/a-name-only-one-shell-has": {
       "ash": {
         "Stdout": "st=1",

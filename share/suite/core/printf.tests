@@ -49,9 +49,16 @@ printf "%d\n" "'A"
 printf "%d\n" "'0"
 
 # %c writes the first character of the operand and nothing else of it. An
-# operand with no character in it — empty, or absent — is held out until
-# #2647 lands: every reference writes one NUL byte there and we write nothing.
+# operand with no character in it — empty, or absent — is one NUL byte, and
+# the two spellings of "no character" are the same answer. A NUL shows as
+# nothing on a terminal, so those lines are read as bytes; the field is read
+# in hex as well, because `tr -s` would squeeze away the padding that is half
+# of what the last line asks.
 printf '%c\n' abc
+printf '[%c]' '' | od -An -tx1 | tr -s ' '
+printf '[%c]' | od -An -tx1 | tr -s ' '
+printf '[%c]' a '' b | od -An -tx1 | tr -s ' '
+printf '[%3c][%-3c]' '' '' | od -An -tx1 | tr -s ' '
 
 # %% is a literal percent and consumes no operand.
 printf '%% %s\n' after

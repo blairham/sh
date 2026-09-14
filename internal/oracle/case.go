@@ -3547,6 +3547,21 @@ echo "reached-after st=$?"`,
 		Snippet: `printf '%c' $'\xc0' | od -An -tx1 | tr -s " "`,
 		Why:     "%c takes the first byte of its operand rather than the first character, so a byte above the ASCII range is written alone and not as the pair an encoding would spell it with",
 	},
+	{
+		ID: "printf/a-c-conversion-with-an-empty-operand", Category: "printf",
+		Snippet: `printf '[%c]' '' | od -An -tx1 | tr -s " "`,
+		Why:     "the first byte of nothing is still a byte: six of the seven write one NUL where an empty operand leaves %c no character to take. bash 3.2 alone writes nothing, and that column is why this is read as bytes rather than eyeballed — a NUL is invisible in a terminal, so the two answers look identical until od names them (#2647)",
+	},
+	{
+		ID: "printf/a-c-conversion-with-no-operand-at-all", Category: "printf",
+		Snippet: `printf '[%c]' | od -An -tx1 | tr -s " "`,
+		Why:     "the same conversion with the operand absent rather than empty, and the answer is the same NUL in every column that writes one. Worth its own row because the distinction is real elsewhere in this builtin — ash reads a numeric conversion with nothing left differently from one given the empty string — so that it is *not* real here had to be measured rather than assumed",
+	},
+	{
+		ID: "printf/a-c-conversion-nul-fills-its-field", Category: "printf",
+		Snippet: `printf '[%3c][%-3c]' '' '' | od -An -tx1 | tr -s " "`,
+		Why:     "the NUL is a character in the field like any other: right-adjusted it arrives after two spaces, left-adjusted before them, in every column that writes it at all. Recorded in hex and not in od's character form, because `tr -s \" \"` squeezes the run of spaces that is half of what this row is asking about",
+	},
 
 	// --- kill: a builtin, because a shell has to know what it sent ---------
 	{

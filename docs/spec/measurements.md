@@ -10056,6 +10056,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `printf/an-octal-escape-is-a-byte-and-not-a-code-point` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a` |
 | `printf/a-quoted-escape-used-as-a-format` | ` 24 61 5c 78 63 30 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a` |
 | `printf/a-c-conversion-writes-one-byte` | ` 24 ` | ` c0 ` | ` c0 ` | ` c0 ` | ` c0 ` | ` c0 ` | ` c0` |
+| `printf/a-c-conversion-with-an-empty-operand` | ` 5b 00 5d ` | ` 5b 00 5d ` | ` 5b 00 5d ` | ` 5b 5d ` | ` 5b 00 5d ` | ` 5b 00 5d ` | ` 5b 00 5d` |
+| `printf/a-c-conversion-with-no-operand-at-all` | ` 5b 00 5d ` | ` 5b 00 5d ` | ` 5b 00 5d ` | ` 5b 5d ` | ` 5b 00 5d ` | ` 5b 00 5d ` | ` 5b 00 5d` |
+| `printf/a-c-conversion-nul-fills-its-field` | ` 5b 20 20 00 5d 5b 00 20 20 5d ` | ` 5b 20 20 00 5d 5b 00 20 20 5d ` | ` 5b 20 20 00 5d 5b 00 20 20 5d ` | ` 5b 20 20 20 5d 5b 20 20 20 5d ` | ` 5b 20 20 00 5d 5b 00 20 20 5d ` | ` 5b 20 20 00 5d 5b 00 20 20 5d ` | ` 5b 20 20 00 5d 5b 00 20 20 5d` |
 
 - `printf/assigns-with-v` — `printf -v name` puts the formatted text in a variable and prints nothing, which is how a script formats a value without a command substitution and a subshell. bash and zsh have it; dash and ksh93 reject it as an unknown option, and each words that differently
   ```sh
@@ -10316,6 +10319,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `printf/a-c-conversion-writes-one-byte` — %c takes the first byte of its operand rather than the first character, so a byte above the ASCII range is written alone and not as the pair an encoding would spell it with
   ```sh
   printf '%c' $'\xc0' | od -An -tx1 | tr -s " "
+  ```
+- `printf/a-c-conversion-with-an-empty-operand` — the first byte of nothing is still a byte: six of the seven write one NUL where an empty operand leaves %c no character to take. bash 3.2 alone writes nothing, and that column is why this is read as bytes rather than eyeballed — a NUL is invisible in a terminal, so the two answers look identical until od names them (#2647)
+  ```sh
+  printf '[%c]' '' | od -An -tx1 | tr -s " "
+  ```
+- `printf/a-c-conversion-with-no-operand-at-all` — the same conversion with the operand absent rather than empty, and the answer is the same NUL in every column that writes one. Worth its own row because the distinction is real elsewhere in this builtin — ash reads a numeric conversion with nothing left differently from one given the empty string — so that it is *not* real here had to be measured rather than assumed
+  ```sh
+  printf '[%c]' | od -An -tx1 | tr -s " "
+  ```
+- `printf/a-c-conversion-nul-fills-its-field` — the NUL is a character in the field like any other: right-adjusted it arrives after two spaces, left-adjusted before them, in every column that writes it at all. Recorded in hex and not in od's character form, because `tr -s " "` squeezes the run of spaces that is half of what this row is asking about
+  ```sh
+  printf '[%3c][%-3c]' '' '' | od -An -tx1 | tr -s " "
   ```
 
 ## kill

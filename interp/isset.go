@@ -93,7 +93,15 @@ func (r *Runner) isSetNameKind(name string) bool {
 	// the trim cannot leak an answer, because the *lookup* below is on the
 	// untrimmed name: `[[ -v "x " ]]` passes the shape test and then finds
 	// nothing under `x `, which is the unset all three shells report.
-	return isNameLike(name)
+	//
+	// A dotted name is a name where the dialect says so, which is how a
+	// compound variable's member is asked about: measured 2026-09-13,
+	// `c=(a=1); [[ -v c.a ]]` is true on ksh93u+ and `[[ -v c.zz ]]` is
+	// false, so the operator looks and finds rather than declining the
+	// spelling. Not an axis — the other four dialects never read a `.` as a
+	// name character, so the question cannot arise there. See
+	// Runner.dottedName.
+	return isNameLike(name) || r.dottedName(name)
 }
 
 // isPositionalName reports whether a name is a positional parameter or `$0`,

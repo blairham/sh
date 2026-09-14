@@ -4,6 +4,7 @@
 package interp
 
 import (
+	"context"
 	"strconv"
 
 	"github.com/blairham/sh/syntax"
@@ -183,10 +184,10 @@ func (r *Runner) paramsExtendedTo(n int) []string {
 // because the answer there is to do nothing at all: `set -- a b; 1=X /bin/echo
 // hi` leaves `a b`, and `1=X /usr/bin/env` shows the child no `1` in its
 // environment.
-func (r *Runner) prefixAssignsPositional(a *syntax.Assign) bool {
+func (r *Runner) prefixAssignsPositional(ctx context.Context, a *syntax.Assign) bool {
 	if _, ok := positionalAssignIndex(a.Name); !ok {
 		return false
 	}
-	r.assign(a)
+	r.assign(ctx, a)
 	return true
 }

@@ -57,6 +57,13 @@ type declareFlags struct {
 	export      bool
 	assoc       bool
 	array       bool
+	// compoundVar is `-C`, ksh93's compound-variable letter: a fourth kind
+	// beside the scalar and the two arrays. Its own field rather than a
+	// third value of a container enum because it is not a container — the
+	// name holds no elements, it holds *names*, and what the letter declares
+	// is how the parent reads, lists and enumerates. See
+	// interp/compoundvariable.go.
+	compoundVar bool
 	lower       bool
 	upper       bool
 	global      bool
@@ -406,6 +413,12 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 				f.readonlyOff = f.remove
 			case 'x':
 				f.export = true
+			case 'C':
+				// The compound-variable attribute — `typeset -C c`, which
+				// the one dialect that has it also spells `compound c`.
+				// Recorded like `-A` and for the same reason: it changes
+				// what a later `c=( … )` and a later `${c.a}` mean.
+				f.compoundVar = true
 			case 'A':
 				// The associative attribute, and unlike `-a` it must be
 				// recorded: it changes what a later subscript *means*, the
@@ -1289,6 +1302,16 @@ func (r *Runner) markDeclaredCompound(name string, fresh bool, f declareFlags, h
 	if r.unspecified {
 		return true
 	}
+	if f.compoundVar {
+		// Ahead of both container letters because it is neither of them, and
+		// because it takes whatever the name held: measured 2026-09-13 on
+		// ksh93u+, `c=1; typeset -C c` lists `typeset -C c=()` — the scalar
+		// is discarded rather than becoming a first member, which is the
+		// answer no ScalarUnderACompound policy spells. So this asks no axis:
+		// one dialect has the letter and it has one answer.
+		r.markCompoundVariable(name)
+		return true
+	}
 	if f.array {
 		if r.literalOperands[name] {
 			// The indexed letter and an array literal on one command, which
@@ -1592,6 +1615,16 @@ func (r *Runner) declaredCompoundOverAScalar(name string, f declareFlags, p Scal
 		return "", ScalarUnderACompoundDiscardsIt
 	}
 	if _, produced := r.DynamicArrays[name]; produced {
+		return "", ScalarUnderACompoundDiscardsIt
+	}
+	if r.isCompoundVariable(name) {
+		// ksh93's fourth kind is not a scalar either, and a container letter
+		// over one discards it whole: measured 2026-09-13, `c=(a=1); typeset
+		// -a c` is `typeset -a c` there with no members left, and `typeset -A
+		// c` is `typeset -A c=()`. Ahead of getVar, which is what makes this
+		// a line rather than a fall-through — a compound *does* answer a
+		// value, its whole tree laid out over several lines, and reading it
+		// here would have made that text the new array's first element.
 		return "", ScalarUnderACompoundDiscardsIt
 	}
 	// `!f.global` because a `-g` declaration is not a local one whatever the

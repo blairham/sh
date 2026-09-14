@@ -112,10 +112,22 @@ var dottedNameRefusers = map[string]bool{"export": true}
 // in the first place, so a `.` in an operand there is a bad name exactly as it
 // was.
 func (r *Runner) dottedBuiltinName(builtin, name string) bool {
-	if !r.dialect().DottedName || dottedNameRefusers[builtin] {
+	if dottedNameRefusers[builtin] {
 		return false
 	}
-	if !strings.Contains(name, ".") {
+	return r.dottedName(name)
+}
+
+// dottedName reports whether the text is a name with a `.` in it and this
+// dialect reads such a thing as a name at all.
+//
+// Its own function because two questions ask it — whether a builtin may take
+// the operand, and whether `[[ -v c.a ]]` is looking at a parameter — and a
+// second spelling of the character set is how the two would come to disagree
+// about which bytes a member's name may hold. See [syntax.Dialect.DottedName],
+// which is the grammar half this follows.
+func (r *Runner) dottedName(name string) bool {
+	if !r.dialect().DottedName || !strings.Contains(name, ".") {
 		return false
 	}
 	for i := 0; i < len(name); i++ {

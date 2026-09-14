@@ -21,6 +21,15 @@ import "strings"
 // word it replaced, every position still points into the real input, and
 // there is no position mapping to keep.
 //
+// The model has one seam and [Parser.carryOpenWord] is it. A body lexed
+// between its own edges cannot be asked what it left *open*, and every
+// column in the panel answers that question textually: a quote the body
+// opens is still open when the rest of the line is read, and one nothing
+// closes is an unterminated quote (#2685). So the body's unfinished tail is
+// read again joined to the input, and what that reading took of the input is
+// skipped in the input's own lexer — one construct spanning the seam,
+// without the positions moving.
+//
 // The one place the two models are visible from outside is a body containing
 // a newline, and [Dialect.AliasBodyCountsLines] is the axis. Where it is on,
 // the body's newlines are lines of the input: a command on the body's second
@@ -296,6 +305,9 @@ func (p *Parser) spliceAlias(name, value string) {
 	// question in the grammar that has no other way to ask.
 	var touches []bool
 	lastEnd := -1
+	// Where the body's last token began, in the body's own offsets, for the
+	// one that may still be running when the body ends. See carryOpenWord.
+	lastStart := 0
 	for {
 		t := sub.Next()
 		if t.Kind == TokEOF {
@@ -303,6 +315,7 @@ func (p *Parser) spliceAlias(name, value string) {
 		}
 		touches = append(touches, int(t.Pos.Offset) == lastEnd)
 		lastEnd = int(t.End.Offset)
+		lastStart = int(t.Pos.Offset)
 		pos, stop := at, end
 		if counts {
 			pos.Line += t.Pos.Line - 1
@@ -322,6 +335,9 @@ func (p *Parser) spliceAlias(name, value string) {
 		p.next()
 		return
 	}
+	if sub.Incomplete() && lastEnd == len(value) {
+		p.carryOpenWord(&toks[len(toks)-1], value[lastStart:])
+	}
 	// The body itself, for the diagnostic that echoes the borrowed text
 	// rather than the line the alias word was written on. Cleared by next()
 	// once the last of these tokens has been handed out.
@@ -339,6 +355,73 @@ func (p *Parser) spliceAlias(name, value string) {
 	// The first token of a body replaces the alias word, which stood where
 	// it stood: nothing about the body says it touches what came before.
 	p.tokTouches = false
+}
+
+// carryOpenWord continues a construct the alias body opened and did not close
+// over the input the body was substituted into.
+//
+// This is the one place the token model and the textual one part company, and
+// the measurement says the text wins. Substitution replaces the alias word
+// with the alias *value* in the input the shell is reading, and lexing carries
+// on over the join — so a quote the body opens is still open when the rest of
+// the line is read, and a quote the body leaves open at the end of the input
+// is an unterminated quote. `alias q='echo "'` followed by `q hello"` prints
+// ` hello` in dash, bash 5.3, that binary as `sh`, bash 3.2, ksh93, zsh and
+// BusyBox ash; `alias a='echo "x'` followed by `a` is a refusal in all seven
+// (#2685). A body lexed on its own can do neither, because its lexer starts
+// and ends at the body's edges: the quote could not enter it and could not
+// leave it, and the second half is the worse one — closing a quote the script
+// never closed runs a command the author did not write.
+//
+// The join is read by a lexer over the body's unfinished tail and the rest of
+// the input, which is the only arrangement in which one construct can span the
+// two. What it consumed of the input is then skipped in the input's own lexer,
+// so every token after this one is read from the real text at the real
+// position, and the carried token keeps the alias word's start — the position
+// every spliced token carries — and ends where the input's lexer now stands.
+//
+// tail is the body's last token, which is the one that was still being read
+// when the body ran out; last is where it has been put in the splice.
+func (p *Parser) carryOpenWord(last *Token, tail string) {
+	if len(p.pending) > 0 {
+		// The text after the alias word is another body's tokens rather than
+		// the input's, and those have no text left to read: an expansion
+		// keeps its tokens, not the offsets they came from. So the seam this
+		// walks over is the outermost one only, and a body opening a quote
+		// from *inside* another body's expansion is left as it was — see
+		// #2709, which has the panel rows for it.
+		return
+	}
+	rest := p.lex.src[p.lex.off:]
+	join := NewLexer(tail+rest, p.dialect)
+	t := join.Next()
+	if !join.Incomplete() && int(t.End.Offset) <= len(tail) {
+		// The joined reading finished without taking any of the input, so
+		// there was no seam to cross: the route that ends an unterminated
+		// quote at the end of the input has already ended this one, and the
+		// body stands as it was lexed. See [Dialect.CloseQuotesAtEOF].
+		return
+	}
+	// The blank an unfinished body may end in is inside the construct rather
+	// than between two words. The word the construct swallows is never a
+	// candidate — `alias q='echo "x '` used as `q b"` is `x  b` in all
+	// seven columns and never the expansion of `b` — and whether the word
+	// *past* the construct is one splits the panel three to four. See
+	// [Dialect.AliasTrailingBlankReachesPastAnOpenConstruct].
+	if !p.dialect.AliasTrailingBlankReachesPastAnOpenConstruct {
+		p.aliasNextWord = false
+	}
+	if join.Incomplete() {
+		// Nothing in the input closes it either. The construct has swallowed
+		// the rest of the file, which is what every column reports and is the
+		// whole of the second half of #2685.
+		p.lex.skipOver(len(rest))
+		p.lex.adoptOpenConstruct(join, len(tail), last.Pos)
+	} else {
+		p.lex.skipOver(int(t.End.Offset) - len(tail))
+	}
+	t.Pos, t.End = last.Pos, p.lex.pos()
+	*last = t
 }
 
 // endsInBlank reports whether an alias value ends in a space or a tab, which

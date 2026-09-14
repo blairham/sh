@@ -31,6 +31,16 @@ func TestCorpusLexes(t *testing.T) {
 				if c.SyntaxError {
 					return
 				}
+				// And a snippet that is only a program once an alias body
+				// has been substituted into it can run out here rather
+				// than at the parser: a body ending inside a quote leaves
+				// the quote's other half in the input, where a read that
+				// never runs anything meets it with nothing open. The
+				// reference shells' own `-n` refuses the same text for the
+				// same reason. TestCorpusParses makes this allowance too.
+				if c.ExpansionCompletes {
+					return
+				}
 				t.Fatalf("did not lex: %v\n  snippet: %s", err, c.Snippet)
 			}
 			if l.Incomplete() && !c.Unfinished {

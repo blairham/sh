@@ -360,6 +360,84 @@ func (l *Lexer) pos() Pos {
 // still has to be numbered as though it had been.
 func (l *Lexer) shiftLines(n int) { l.line += n }
 
+// skipOver moves the lexer n bytes further into the input, counting the lines
+// and columns it passes over.
+//
+// One caller, and it is the one seam in the language where two lexers read the
+// same text: an alias body whose last construct was still open when the body
+// ended is continued by a lexer over the body's tail joined to the rest of
+// this input, because that is the only arrangement in which a quote can span
+// the two. See Parser.carryOpenWord. This is how much of the input that
+// reading consumed.
+func (l *Lexer) skipOver(n int) {
+	for range n {
+		if l.eof() {
+			return
+		}
+		l.advance()
+	}
+}
+
+// posAt is where an offset of this input falls, counted from the start.
+//
+// The lexer knows its own line and column as it goes and has no way back to a
+// position it has already passed, which is all that is ever wanted — except on
+// the one error path that is handed an offset by somebody else. See
+// adoptOpenConstruct. Linear in the offset, and on a path that has already
+// decided the parse is over.
+func (l *Lexer) posAt(off int) Pos {
+	off = min(max(off, 0), len(l.src))
+	line, col := 1, 1
+	for i := range off {
+		if l.src[i] == '\n' {
+			line++
+			col = 1
+		} else {
+			col++
+		}
+	}
+	return Pos{Offset: int32(off), Line: int32(line), Col: int32(col)}
+}
+
+// adoptOpenConstruct takes the failure of the joined reading described on
+// skipOver as this lexer's own, and it is the one report whose opener is not
+// in this input at all: an alias body is text the program never contained.
+//
+// So the opener is named where the alias word stood, which is what the panel
+// does — `alias a='echo "x'` used on line 4 of a five-line file is blamed on
+// line 4 by bash 5.3, bash 3.2, bash as `sh` and ksh93, and at the end of the
+// input by zsh and dash. Both of those are already on the error, and which
+// one a dialect prints is [interp.Diagnostics]' to decide; what this fills in
+// is the pair, with the end taken from where this input really ran out.
+//
+// split is how long the borrowed text was, so an opener past it is one the
+// input does hold and is named where it really is.
+func (l *Lexer) adoptOpenConstruct(join *Lexer, split int, word Pos) {
+	l.ranOut(join.Open())
+	var se *Error
+	if !errors.As(join.Err(), &se) {
+		if l.err == nil {
+			l.err = join.Err()
+		}
+		return
+	}
+	e := *se
+	e.Pos = word
+	if int(se.Pos.Offset) >= split {
+		e.Pos = l.posAt(len(l.src) - (len(join.src) - int(se.Pos.Offset)))
+	}
+	e.EofLine = l.line
+	e.EndLine = l.line
+	if len(l.src) > 0 && l.src[len(l.src)-1] != '\n' {
+		// The text stopped mid-line, so the end of it is the line after — the
+		// same convention failUnmatched uses.
+		e.EndLine++
+	}
+	if l.err == nil {
+		l.err = &e
+	}
+}
+
 func (l *Lexer) eof() bool { return l.off >= len(l.src) }
 
 func (l *Lexer) peek() byte {

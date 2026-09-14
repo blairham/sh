@@ -54,6 +54,13 @@ func Dialect() syntax.Dialect {
 	// interp.Runner.SetPosixMode, in both directions — which is what makes
 	// it a mode this shell enters and leaves rather than a build.
 	d.AliasesExpandReservedWords = true
+	// And a value's trailing blank goes on working when the body also opens
+	// a quote, so the word past the quote is offered to the table in turn.
+	// bash offers the next *word* of the resulting line; dash, ksh93, zsh and
+	// BusyBox ash offer the text immediately after the value, which is inside
+	// the quote and is no word. `alias c='CEE'; alias q='echo "x '` used as
+	// `q b" c` is `x  b CEE` here and `x  b c` in those four (#2685).
+	d.AliasTrailingBlankReachesPastAnOpenConstruct = true
 	// The utilities that take an array assignment as an operand. bash has
 	// all five.
 	d.DeclarationUtilities = map[string]bool{

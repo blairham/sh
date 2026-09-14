@@ -164,7 +164,7 @@ func (r *Runner) procSub(ctx context.Context, span syntax.Span) (string, bool) {
 		// is bounded now rather than endless; openFifoWriteEnd is where
 		// that is done and why.
 		r.spawn(func() {
-			end, err := openFifoWriteEnd(path)
+			end, hold, err := openFifoWriteEnd(path)
 			if err != nil {
 				// Nobody opened the other end — the command did not use the
 				// path it was given, and the pipe went with it. There is
@@ -175,6 +175,12 @@ func (r *Runner) procSub(ctx context.Context, span syntax.Span) (string, bool) {
 			sub.emit(ctx, Event{Kind: EventAccess, Action: action})
 			sub.Stdout = end
 			keep.opened(end)
+			// And the reading end of the shell's own that came with it,
+			// which outlives the count: the pipe has to survive this end
+			// closing, or the command that named the path reads from a
+			// pipe that is no longer the one the body wrote into. See
+			// openFifoWriteEnd, and substEnd.holding for who releases it.
+			keep.holding(hold)
 			if _, err := sub.Run(ctx, f); err != nil {
 				sub.diagf("%v\n", err)
 			}
@@ -188,8 +194,11 @@ func (r *Runner) procSub(ctx context.Context, span syntax.Span) (string, bool) {
 			//
 			// The nudge is inside letGo for the same reason the close is:
 			// repeating a last-writer close while a writer is still there
-			// delivers nothing, and would spin until the pipe was taken
-			// away. See substEnd.
+			// delivers nothing. The reading end taken above is *not*
+			// released here, and that is the whole of #2733: this close is
+			// the moment the pipe would be torn down under a reader still
+			// arriving, and the two answer different halves of that — see
+			// openFifoWriteEnd. See substEnd.
 			keep.letGo()
 			releaseFds()
 		})
@@ -203,7 +212,7 @@ func (r *Runner) procSub(ctx context.Context, span syntax.Span) (string, bool) {
 	if kind == syntax.ProcSubstOut {
 		body = keep.finished()
 	}
-	r.procSubs = append(r.procSubs, procSubPipe{path: path, hold: hold, body: body})
+	r.procSubs = append(r.procSubs, procSubPipe{path: path, hold: hold, body: body, keep: keep})
 	return path, true
 }
 
@@ -671,6 +680,13 @@ type procSubPipe struct {
 	// any — see endHeldProcSubs for why they are remembered rather than
 	// looked up again at the end.
 	shellEnds []*os.File
+	// keep is the count on this shell's end of the pipe, carried here for
+	// the one thing the command that named the path decides: when the
+	// reading end a `<(cmd)` holds against the kernel's teardown is let go.
+	// The descriptor itself cannot be in this struct — it is opened on the
+	// body's goroutine, after the entry was made — so the count, which has
+	// the lock, is what travels. Nil for `=(cmd)`, which has no pipe.
+	keep *substEnd
 }
 
 // takeProcSubs hands over the paths a command's substitutions made, and
@@ -766,6 +782,12 @@ func (r *Runner) removeProcSubs(pipes []procSubPipe) {
 		if p.hold != nil {
 			_ = p.hold.Close()
 		}
+		// And the other direction's, which is the same placeholder seen from
+		// the other side: `<(cmd)`'s reading end of this shell's own, whose
+		// whole job is to outlive the body's close and last until the
+		// command is finished with the pipe. That is now. See
+		// openFifoWriteEnd.
+		p.keep.releaseHold()
 		if r.holdsDescriptorOnto(p.path) {
 			// Kept rather than dropped. The clause above says the *name*
 			// stays while this shell holds the pipe; what it left out is
@@ -1057,14 +1079,22 @@ func (r *Runner) cleanUpAtEnd() {
 // open. Reading the redirection here would be a refinement onto the wrong
 // side of the measurement.
 //
-// # Why the nudge moved
+// # Why the nudge is here
 //
 // nudgeFifoEOF repeats a last-writer close until no reader is left to tell.
-// With a writer still in the pipe there is nothing for it to deliver, and its
-// give-up condition — ENXIO, no reader — cannot be reached while the command
-// that named the path is still reading, so it would spin at its longest
-// interval until removeProcSubs took the pipe away. It belongs with the close
-// it is repeating, which is the last one.
+// With a writer still in the pipe there is nothing for it to deliver, so it
+// belongs with the close it is repeating, which is the last one.
+//
+// # The one thing here that is not on the count
+//
+// The reading end a `<(cmd)` holds against the kernel's teardown outlives the
+// count entirely: it is released by the command that named the path, in
+// removeProcSubs, and not by the last shell to let go of the writing end.
+// That is not an inconsistency but the point of it — the window it covers
+// opens when this end closes, so a placeholder released with it covers
+// nothing. It is carried here because this is the thing with the lock and
+// the body's goroutine is what opens it. See openFifoWriteEnd, which also
+// says why it does not make the nudge above unnecessary.
 type substEnd struct {
 	mu   sync.Mutex
 	held int
@@ -1077,6 +1107,17 @@ type substEnd struct {
 	// end-of-file — `<(cmd)`, where the shell is the writer. Empty for
 	// `>(cmd)`, whose reader has a placeholder instead. See openFifoReadEnd.
 	nudge string
+	// hold is the reading end of this shell's own on a `<(cmd)`'s pipe,
+	// open from before the body's first write until the command that named
+	// the path is done. Nil for `>(cmd)`, whose placeholder is the mirror of
+	// it and is held in the procSubPipe from the start, because that
+	// direction opens its ends on the goroutine that expands the word.
+	hold *os.File
+	// holdEnded says the release has already been asked for, so a hold
+	// arriving after it is closed instead of kept. The two happen on
+	// different goroutines and in either order: a command can be finished
+	// with the path before the body's own open of it has returned.
+	holdEnded bool
 	// done is closed when the last holder has let go, which is the moment
 	// the body — and any job it backgrounded — has finished with this end
 	// and so has finished writing. It is what removeProcSubs waits on for a
@@ -1141,6 +1182,50 @@ func (e *substEnd) letGo() {
 	_ = f.Close()
 	if nudge != "" {
 		nudgeFifoEOF(nudge)
+	}
+}
+
+// holding takes the reading end openFifoWriteEnd opened beside the writing
+// one, and answers to nobody: what it guards is in openFifoWriteEnd, and who
+// releases it is removeProcSubs.
+//
+// A hold that arrives after the release has been asked for is closed here
+// rather than kept. The body's goroutine opens this and the command that
+// named the path releases it, and nothing orders those two: `echo <(true)`
+// is a command that can be over before the body has opened anything.
+func (e *substEnd) holding(f *os.File) {
+	if e == nil || f == nil {
+		return
+	}
+	e.mu.Lock()
+	if e.holdEnded {
+		e.mu.Unlock()
+		_ = f.Close()
+		return
+	}
+	e.hold = f
+	e.mu.Unlock()
+}
+
+// releaseHold closes the reading end, and is the end of the window #2733 is
+// about: after it, a `<(cmd)`'s pipe is torn down when its last real end goes,
+// which is what lets a body still writing into a pipe nobody reads any more
+// learn that nobody does — `head -1 <(yes)` is that shape.
+//
+// Called on every path a command leaves behind, including the ones that never
+// had a hold: a substitution nothing opened, a `=(cmd)`'s regular file, a
+// `>(cmd)` whose placeholder is released beside this call. Nil-safe for the
+// same reason.
+func (e *substEnd) releaseHold() {
+	if e == nil {
+		return
+	}
+	e.mu.Lock()
+	f := e.hold
+	e.hold, e.holdEnded = nil, true
+	e.mu.Unlock()
+	if f != nil {
+		_ = f.Close()
 	}
 }
 

@@ -23,6 +23,10 @@ import (
 // a race and there is no other honest shape for it. The mechanism, the
 // evidence and the standalone reproduction are in interp.nudgeFifoEOF.
 //
+// It is also what says the reading end #2733 added is not a replacement for
+// that repeated close: with the nudge taken out and only the placeholder
+// left, the second shape below parked at round 991 of 2000.
+//
 // # What it detects, measured on the unfixed tree
 //
 // macOS 26.5.2 on arm64. Three runs of the case as written: two of them

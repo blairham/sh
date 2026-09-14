@@ -37,9 +37,18 @@ func mkfifo(path string) error { return syscall.Mkfifo(path, 0o600) }
 // again would leave that reader waiting forever — a worse failure than the
 // one being fixed, since it is the *command* that hangs. What is fixed
 // instead is the endlessness.
+//
+// What both directions turn out to need is the same thing, and it took until
+// #2733 to see that it was: an end of the shell's own, opposite the one the
+// pipe is for, held for as long as the command that named the path is using
+// it. Each direction's is below, and neither is a descriptor anything reads
+// or writes — they exist so that the pipe is still the same pipe when the two
+// real ends finally meet in it.
 
 // openFifoWriteEnd opens the shell's writing end of a substitution's pipe,
 // once something has opened the reading end, and gives up when nothing will.
+// It answers with a reading end of the shell's own beside it, which is what
+// keeps what the body writes from being thrown away.
 //
 // O_NONBLOCK turns the wait into a question: with no reader the open fails
 // with ENXIO instead of blocking, so the waiting becomes ours to bound. What
@@ -49,18 +58,78 @@ func mkfifo(path string) error { return syscall.Mkfifo(path, 0o600) }
 // going to answer. The give-up condition is a fact about the file system
 // rather than a second channel to keep in step with the first.
 //
-// It cannot give up on a reader that is really there. A successful
-// nonblocking open means a reader held the pipe open at that instant, and a
-// reader that is going to *read* cannot finish before the shell has written,
-// because what it is waiting for is this end closing. Only a command that
-// opens the path and closes it again without reading can be missed, and such
-// a command gets nothing either way.
+// It cannot give up on a reader that is really there: a successful
+// nonblocking open means a reader held the pipe open at that instant, and
+// only a command that opens the path and closes it again without reading can
+// be missed — such a command gets nothing either way.
 //
 // The flag is cleared once the open succeeds, because it belongs to the open
 // file description and would otherwise travel into the command on the far
 // side of the substitution, where a write longer than a pipe buffer would
-// fail with EAGAIN rather than wait.
-func openFifoWriteEnd(path string) (*os.File, error) {
+// fail with EAGAIN rather than wait. It is left set on the placeholder, which
+// nothing ever reads through.
+//
+// # Why the shell holds a reading end too
+//
+// This function used to claim more than the open can support: that a reader
+// which is going to *read* cannot finish before the shell has written,
+// because what it is waiting for is this end closing. That is false on this
+// platform, and #2733 is the measurement — 40,000 rounds of each of two
+// spellings, eight shells at once, about one round in four thousand losing
+// the body's first chunk, or all of it, or never finishing at all.
+//
+// A FIFO's pipe exists only while somebody holds it open; when the last
+// reader and the last writer have gone, the buffer goes with them and the
+// next open makes a new one. The open above succeeds against a reader that
+// is still *inside* `open(2)` — counted enough to answer ENXIO, not yet
+// attached to anything — so a shell that opens, writes and closes inside
+// that window has run a whole pipe's life cycle beside a reader that was
+// attached to none of it. All three shapes in the issue are that: the write
+// refused with a spurious EPIPE, the writes accepted into a pipe that is
+// then discarded, and the reader left parked in an `open` nothing will
+// complete.
+//
+// A reading end of the shell's own, taken here — before the body has written
+// a byte — and released when the command that named the path is done with
+// it, is what makes the pipe outlast that window: 0 lost in 40,000 where the
+// tree without it loses 25. It is also the arrangement `>(cmd)` has had
+// since the beginning, for the mirror-image reason; see openFifoReadEnd.
+//
+// O_RDONLY and not the O_RDWR that direction uses, and the difference is the
+// whole point of each. That placeholder has to be a *writer*, to keep an
+// end-of-file away from a body that would otherwise see one immediately.
+// This one must not be one: the end-of-file the command is reading until is
+// this shell's writing end closing, so the count of writers still has to
+// fall to zero when the body is done. A reader is all that is added, and all
+// that is added is that the pipe is still there to deliver through.
+//
+// Nothing reads from it. A descriptor that read would be taking the bytes the
+// command was given the path for.
+//
+// # And why it does not replace the nudge
+//
+// It was expected to, and the measurement said otherwise — which is the one
+// thing here worth remembering, because the two look like the same fix for
+// the same race and are not. nudgeFifoEOF below repeats the last-writer
+// close for a reader that never heard the first one. Take it away and leave
+// only the placeholder, and the byte loss above goes to **0 in 40,000**
+// while #1079's own stress case stops again at round 991 of 2000: `cat
+// <(echo sub; echo noise >&2)` parked forever.
+//
+// The two failures are two states, and each answer reaches only its own. The
+// placeholder is a *reader*, and it keeps the pipe — and so the bytes in it
+// — from being torn down under a command that is still arriving. A command
+// parked in `open(O_RDONLY)` is waiting for a **writer**, which no reader of
+// ours can be without also holding away the end-of-file the command is
+// there for. Only opening the write end again is that transition.
+//
+// So they compose, and what composing costs is the nudge's first answer.
+// ENXIO — no reader left to tell — is unreachable while the placeholder is
+// up, since the placeholder is a reader; what ends the loop instead is the
+// pipe's name going away with the command that named it, which is the same
+// removeProcSubs that releases the placeholder, or the deadline. See
+// nudgeFifoEOF for why that is a bound rather than a spin.
+func openFifoWriteEnd(path string) (end, hold *os.File, err error) {
 	// Short enough that the usual case — a command that opens the path as
 	// soon as it starts — is not made to wait for the poll, long enough that
 	// a command which opens it late is not spun on.
@@ -74,15 +143,22 @@ func openFifoWriteEnd(path string) (*os.File, error) {
 		case err == nil:
 			if err := syscall.SetNonblock(fd, false); err != nil {
 				_ = syscall.Close(fd)
-				return nil, err
+				return nil, nil, err
 			}
-			return os.NewFile(uintptr(fd), path), nil
+			// Before anything is written through the descriptor above, which
+			// is the only ordering that matters here.
+			hfd, herr := syscall.Open(path, syscall.O_RDONLY|syscall.O_NONBLOCK|syscall.O_CLOEXEC, 0)
+			if herr != nil {
+				_ = syscall.Close(fd)
+				return nil, nil, herr
+			}
+			return os.NewFile(uintptr(fd), path), os.NewFile(uintptr(hfd), path), nil
 		case errors.Is(err, syscall.EINTR):
 			continue
 		case !errors.Is(err, syscall.ENXIO):
 			// ENOENT among them: the pipe has been taken away, so there is
 			// no reader coming.
-			return nil, err
+			return nil, nil, err
 		}
 		time.Sleep(wait)
 		if wait *= 2; wait > lastWait {
@@ -136,7 +212,8 @@ func openFifoReadEnd(path string) (end, hold *os.File, err error) {
 }
 
 // nudgeFifoEOF repeats the last-writer close until there is no reader left to
-// tell about it, or the pipe is gone.
+// tell about it, the pipe is gone, or it has been repeated for longer than a
+// lost wakeup could need.
 //
 // # Why a close has to be repeated
 //
@@ -183,44 +260,42 @@ func openFifoReadEnd(path string) (end, hold *os.File, err error) {
 // interpreter loses with a write too. With this repeated close the same
 // standalone is 0 in 3,000.
 //
-// # Why repeating the close is the fix
+// # Why repeating the close is the fix, and why the placeholder is not
 //
 // Opening for writing and closing again is exactly the transition that was
 // lost, and it is the only one that delivers an end-of-file: there is no
-// other way to tell a pipe's reader that its input has ended. Holding
-// something open instead — the placeholder trick `>(cmd)` uses in the other
-// direction — cannot work here, because for `<(cmd)` the shell is the writer
-// and anything holding the write end open is the very thing keeping the
-// end-of-file away.
+// other way to tell a pipe's reader that its input has ended. The reading
+// end openFifoWriteEnd holds is not a substitute and was tried as one —
+// **0 byte losses in 40,000 and this case parked at round 991 of 2,000** —
+// because a reader is not a writer and what the parked command is waiting
+// for is a writer. A descriptor of ours that *were* one would hold away the
+// very end-of-file this delivers.
 //
 // Each round costs one open and one close, and there are three ways out.
 // ENXIO says no reader is left to tell; anything else — ENOENT among them —
 // says there is no pipe to tell through; and a deadline says the transition
-// has been repeated for longer than a lost wakeup could plausibly need. In
-// the ordinary case it ends on the first or second round, as soon as the
-// reader has taken its end-of-file and gone.
+// has been repeated for longer than a lost wakeup could plausibly need.
 //
-// The deadline is the third way out because the second stopped being
-// guaranteed. It used to be: removeProcSubs took the pipe away at the end of
-// the command that named it, so a loop that had run out of readers to tell
-// hit ENOENT and stopped, and "this cannot outlive the command" was true by
-// construction. Since #1750 a pipe keeps its name while one of this shell's
-// descriptors is open on it — which is exactly the arrangement where a
-// reader stays open for the rest of the session — and the loop then
-// succeeded forever: measured at 56 rounds in the second of script life
-// after the body had finished, once every twenty milliseconds, for every
-// substitution a shell holds open (#1907).
+// **Which of the three ends it moved when the placeholder arrived**, and the
+// answer is worth stating because the first one used to carry the ordinary
+// case. ENXIO cannot arrive while the placeholder is up, since the
+// placeholder is a reader; what ends an ordinary round now is ENOENT, from
+// the same removeProcSubs that releases the placeholder at the end of the
+// command that named the path — so the loop still stops when the
+// substitution is over rather than running out its clock. A pipe whose name
+// this shell is keeping open (#1750) has neither, and the deadline is what
+// it ends on.
 //
 // It is a deadline rather than a count because what it bounds is time: the
 // race it covers is between two system calls on two threads, and a hundred
 // milliseconds is several orders of magnitude more than that window, while
-// the round count that spans it changes with the backoff above.
+// the round count that spans it changes with the backoff above. Before it
+// went in, the shape with a kept name went round every twenty milliseconds
+// for the life of the shell, per substitution (#1907).
 //
 // It is not gated on the platform. A lost wakeup is not a thing a program can
 // ask about, and a shell that only worked on the kernels somebody had
-// measured would be worse than one that repeats a close nobody needed: where
-// the first close was heard, the reader has already gone and the first open
-// here answers ENXIO.
+// measured would be worse than one that repeats a close nobody needed.
 //
 // The opens are the shell's own scaffolding on a path the script never wrote,
 // exactly as the first open was, so the gate is not asked and no event is

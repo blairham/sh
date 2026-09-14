@@ -1901,7 +1901,16 @@ func Diagnostics() interp.Diagnostics {
 		// nothing added. bash and zsh add a space on each side.
 		TraceArithCommand: interp.TraceArithTight,
 		TraceArithForPart: interp.TraceArithTight,
-		ScriptLocation:    interp.LocationLineWord,
+		// And the text those parentheses go round is the part *this* shell
+		// kept, which is neither the part as written nor the part with its
+		// leading blanks off: the first two give up their trailing blanks
+		// and the third gives up its leading ones, so one header traces
+		// `((  i=0))` and `((i++  ))`. The same string a complaint blames —
+		// ` i=1/0: divide by zero` against the step's `i=1/0 : divide by
+		// zero` — which is why it is one answer and not two. Measured
+		// 2026-09-13; interp/arithforpart.go holds it (#2420).
+		ArithForPartText: interp.ArithForPartTextLosesOneEnd,
+		ScriptLocation:   interp.LocationLineWord,
 		// At a prompt this shell names no line at all — see
 		// withPromptWordings, where the sentences it writes there are
 		// measured. The location is already name-only for line 1 under `-c`;

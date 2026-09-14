@@ -200,6 +200,12 @@ func TestDiagnosticAnswersTheInterpTestsRelyOn(t *testing.T) {
 	if got, want := d.TraceArithForPart, interp.TraceArithTight; got != want {
 		t.Errorf("TraceArithForPart = %v, want %v", got, want)
 	}
+	// And the text those parentheses go round is the part this shell kept,
+	// which is neither the part as written nor the part with its leading
+	// blanks off. See interp/arithforpart.go.
+	if got, want := d.ArithForPartText, interp.ArithForPartTextLosesOneEnd; got != want {
+		t.Errorf("ArithForPartText = %v, want %v", got, want)
+	}
 	if got := d.SyntaxStatus(); got != 3 {
 		t.Errorf("SyntaxStatus() = %d, want 3", got)
 	}

@@ -176,6 +176,11 @@ func TestDiagnosticAnswersTheInterpTestsRelyOn(t *testing.T) {
 	if got, want := d.TraceArithForPart, interp.TraceArithBare; got != want {
 		t.Errorf("TraceArithForPart = %v, want %v", got, want)
 	}
+	// The part entire here too, which is the half this shell shares with
+	// bash. See interp/arithforpart.go.
+	if got, want := d.ArithForPartText, interp.ArithForPartTextAsWritten; got != want {
+		t.Errorf("ArithForPartText = %v, want %v", got, want)
+	}
 	if got, want := d.Location, interp.LocationTightLine; got != want {
 		t.Errorf("Location = %v, want %v", got, want)
 	}

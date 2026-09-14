@@ -4123,6 +4123,13 @@ type Diagnostics struct {
 	// answers the two differently: it wraps a `(( ))` command in spaced
 	// parentheses and writes a loop header's parts with none at all.
 	TraceArithForPart TraceArithSpelling
+	// ArithForPartText is how much of a `for (( ))` header part this dialect
+	// keeps once it has read it, which is not a trace question even though a
+	// trace is one of the two things that quote it back — a complaint blames
+	// the same string. Zero is ArithForPartTextAsWritten, which is bash's and
+	// zsh's answer and the substrate's own; ksh93 gives up the blanks at one
+	// end of each part. See interp/arithforpart.go.
+	ArithForPartText ArithForPartTextPolicy
 	// TraceArrayLiteral is how the parenthesized list of `a=(1 2)` is
 	// rendered. Zero is TraceArrayTight, which is bash's answer and the
 	// substrate's own; ksh93 and zsh write a space inside each parenthesis.

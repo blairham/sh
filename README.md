@@ -88,6 +88,13 @@ own file in front of each. `docs/install.md` has the measured grid.
 The first tag is `v0.0.0` because this list is real, not because the list
 is short.
 
+- **A real `~/.zshrc` takes completion away.** This shell completes
+  filenames with a completer of its own, and a startup file that runs
+  `compinit` binds zsh's completion widget over it — which needs a module
+  that is not here, so Tab then completes nothing and says so twice. The
+  shell is worse with the rc than without it, which is the configuration
+  anybody would actually use — [#2770][2770], measured in
+  `docs/install.md`.
 - **A prompt can land on top of unfinished output.** There is no
   `PROMPT_SP`/`PROMPT_CR` handling yet, so a command whose last line has
   no newline gets the next prompt drawn onto it — [#2477][2477].
@@ -103,6 +110,7 @@ is short.
   and a binary that cannot start is worse than no binary.
 
 [2477]: https://github.com/blairham/sh/issues/2477
+[2770]: https://github.com/blairham/sh/issues/2770
 
 ## Using it as a library
 

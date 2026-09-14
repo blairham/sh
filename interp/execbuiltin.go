@@ -255,16 +255,21 @@ func isMultiTarget(v any) bool {
 // two identically in every case but one: a bare name that was never found is
 // "command not found" from a command word and "exec: name: not found" here.
 func (r *Runner) execCannotRun(err error) int {
-	// A command that could not be found is the shell's failure rather than
-	// the builtin's, and the one dialect that names a builtin in the location
-	// agrees: `exec nosuchcmd` is `zsh:1: command not found: nosuchcmd`, with
-	// no `exec` segment — exactly what a bare command word reports. The
-	// message still names exec wherever the dialect's wording does; it is the
-	// *location* that must not, which is the rule Diagnostics already states
-	// and this was the one place not following it.
-	outer := r.inBuiltin
-	r.inBuiltin = ""
-	defer func() { r.inBuiltin = outer }()
+	// One dialect calls a command that could not be found the shell's failure
+	// rather than the builtin's: `exec nosuchcmd` is `zsh:1: command not
+	// found: nosuchcmd`, with no `exec` segment — exactly what a bare command
+	// word reports. The message still names exec wherever the dialect's
+	// wording does; it is the *location* that must not.
+	//
+	// A dialect's answer and not a rule, which the second shell to name a
+	// builtin in its location settled: BusyBox ash writes `./e.sh: exec: line
+	// 1: /nonexistent/x: not found` and keeps it. See
+	// Diagnostics.ExecNotFoundIsTheShellsOwn (#2761).
+	if r.diag().ExecNotFoundIsTheShellsOwn {
+		outer := r.inBuiltin
+		r.inBuiltin = ""
+		defer func() { r.inBuiltin = outer }()
+	}
 	return r.cannotRun(err, naming{
 		bare:          r.diag().ExecNotFound,
 		fallback:      "exec: %[1]s: not found",

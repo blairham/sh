@@ -7264,6 +7264,14 @@ grades it and nothing drift-checks it either, for the same reason.
 | `unterminated/a-substitution-is-quoted-back-with-its-word` | **2>** `<script>: 4: Syntax error: end of file unexpected (expecting ")")` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `)'~<script>: line 4: syntax error: unexpected end of file` *(status 2)* | **2>** `<script>: syntax error at line 1: `(' unmatched` *(status 3)* | **2>** `<script>:4: parse error near `a$(echo hi'` *(status 1)* | **2>** `<script>: line 4: syntax error: unexpected end of file (expecting ")")` *(status 2)* |
 | `unterminated/a-substitution-in-a-word-of-its-own-quotes-only-itself` | **2>** `<script>: 4: Syntax error: end of file unexpected (expecting ")")` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `)'~<script>: line 4: syntax error: unexpected end of file` *(status 2)* | **2>** `<script>: syntax error at line 1: `(' unmatched` *(status 3)* | **2>** `<script>:4: parse error near `$(echo hi'` *(status 1)* | **2>** `<script>: line 4: syntax error: unexpected end of file (expecting ")")` *(status 2)* |
 | `unterminated/a-word-is-not-cut-at-a-quoted-blank` | **2>** `<script>: 4: Syntax error: end of file unexpected (expecting ")")` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `)'~<script>: line 4: syntax error: unexpected end of file` *(status 2)* | **2>** `<script>: syntax error at line 1: `(' unmatched` *(status 3)* | **2>** `<script>:4: parse error near `"a b"$(echo hi'` *(status 1)* | **2>** `<script>: line 4: syntax error: unexpected end of file (expecting ")")` *(status 2)* |
+| `diag/a-builtin-names-itself-in-the-location` | `one` **2>** `<script>: 2: shift: Illegal number: -1` *(status 2)* | `one~st=1` **2>** `<script>: line 2: shift: -1: shift count out of range` | `one~st=1` **2>** `<script>: line 2: shift: -1: shift count out of range` | `one~st=1` **2>** `<script>: line 2: shift: -1: shift count out of range` | `one` **2>** `<script>[2]: shift: -1: unknown option~Usage: shift [ options ] [n]` *(status 2)* | `one~st=1` **2>** `<script>:shift:2: argument to shift must be non-negative` | `one` **2>** `<script>: shift: line 2: Illegal number: -1` *(status 2)* |
+| `diag/a-builtin-whose-name-is-punctuation` | `one` **2>** `<script>: 2: .: cannot open /nonexistent/file: No such file` *(status 2)* | `one~st=1` **2>** `<script>: line 2: /nonexistent/file: No such file or directory` | `one` **2>** `<script>: line 2: /nonexistent/file: No such file or directory` *(status 1)* | `one~st=1` **2>** `<script>: line 2: /nonexistent/file: No such file or directory` | `one` **2>** `<script>[2]: .: /nonexistent/file: cannot open [No such file or directory]` *(status 1)* | `one~st=127` **2>** `/nonexistent/file:.:2: no such file or directory: /nonexistent/file` | `one` **2>** `<script>: .: line 2: can't open '/nonexistent/file': No such file or directory` *(status 2)* |
+| `diag/a-builtin-takes-the-sourced-files-slot` | `one` **2>** `<script>: 2: shift: Illegal number: -1` *(status 2)* | `one~st=1` **2>** `./p.sh: line 2: shift: -1: shift count out of range` | `one~st=1` **2>** `./p.sh: line 2: shift: -1: shift count out of range` | `one~st=1` **2>** `./p.sh: line 2: shift: -1: shift count out of range` | `one` **2>** `<script>[2]: .[2]: shift: -1: unknown option~Usage: shift [ options ] [n]` *(status 2)* | `one~st=1` **2>** `./p.sh:shift:2: argument to shift must be non-negative` | `one` **2>** `<script>: shift: line 2: Illegal number: -1` *(status 2)* |
+| `diag/a-sourced-files-own-failure-keeps-its-name` | `one` **2>** `<script>: 2: ./p.sh: NOPE: parameter not set` *(status 2)* | `one` **2>** `./p.sh: line 2: NOPE: unbound variable` *(status 1)* | `one` **2>** `./p.sh: line 2: NOPE: unbound variable` *(status 1)* | `one` **2>** `./p.sh: line 2: NOPE: unbound variable` *(status 1)* | `one~st=1` **2>** `<script>[3]: .: line 2: NOPE: parameter not set` | `one~st=126` **2>** `./p.sh:2: NOPE: parameter not set` | `one` **2>** `<script>: ./p.sh: line 2: NOPE: parameter not set` *(status 2)* |
+| `diag/unset-refusing-a-readonly-name` | **2>** `<script>: 2: unset: r: is read only` *(status 2)* | `st=1` **2>** `<script>: line 2: unset: r: cannot unset: readonly variable` | **2>** `<script>: line 2: unset: r: cannot unset: readonly variable` *(status 1)* | `st=1` **2>** `<script>: line 2: unset: r: cannot unset: readonly variable` | `st=1` **2>** `<script>[2]: unset: warning: r: is read only` | **2>** `<script>:2: read-only variable: r` *(status 1)* | **2>** `<script>: unset: line 2: r: is read only` *(status 2)* |
+| `diag/exec-cannot-find-the-command` | `one` **2>** `<script>: 2: exec: /nonexistent/x: not found` *(status 127)* | `one` **2>** `<script>: line 2: /nonexistent/x: No such file or directory` *(status 127)* | `one` **2>** `<script>: line 2: /nonexistent/x: No such file or directory` *(status 127)* | `one` **2>** `<script>: line 2: /nonexistent/x: No such file or directory~<script>: line 2: exec: /nonexistent/x: cannot execute: No such file or directory` *(status 126)* | `one` **2>** `<script>[2]: exec: /nonexistent/x: not found` *(status 127)* | `one` **2>** `<script>:2: no such file or directory: /nonexistent/x` *(status 127)* | `one` **2>** `<script>: exec: line 2: /nonexistent/x: not found` *(status 127)* |
+| `diag/a-builtins-redirection-is-not-the-builtins` | `one~st=2` **2>** `<script>: 2: cannot open /nonexistent/f: No such file` | `one~st=1` **2>** `<script>: line 2: /nonexistent/f: No such file or directory` | `one~st=1` **2>** `<script>: line 2: /nonexistent/f: No such file or directory` | `one~st=1` **2>** `<script>: line 2: /nonexistent/f: No such file or directory` | `one~st=1` **2>** `<script>[2]: /nonexistent/f: cannot open [No such file or directory]` | `one~st=1` **2>** `<script>:2: no such file or directory: /nonexistent/f` | `one~st=1` **2>** `<script>: line 2: can't open /nonexistent/f: no such file` |
+| `diag/trap-refusing-a-condition-it-does-not-know` | `st=1~st=1` **2>** `trap: NOSUCHSIG: bad trap~trap: 99: bad trap` | `st=1~st=1` **2>** `<script>: line 1: trap: NOSUCHSIG: invalid signal specification~<script>: line 3: trap: 99: invalid signal specification` | `st=1~st=1` **2>** `<script>: line 1: trap: NOSUCHSIG: invalid signal specification~<script>: line 3: trap: 99: invalid signal specification` | `st=1~st=1` **2>** `<script>: line 1: trap: NOSUCHSIG: invalid signal specification~<script>: line 3: trap: 99: invalid signal specification` | `st=1~st=1` **2>** `<script>[1]: trap: NOSUCHSIG: bad trap~<script>[3]: trap: 99: bad trap` | `st=1` **2>** `<script>:trap:1: undefined signal: NOSUCHSIG` *(killed by signal 11 (segmentation fault))* | `st=1~st=1` **2>** `<script>: trap: line 1: NOSUCHSIG: invalid signal specification~<script>: trap: line 3: 99: invalid signal specification` |
 | `diag/a-line-worth-naming` | `one~st=127` **2>** `<shell>: 2: nosuchcmd: not found` | `one~st=127` **2>** `<shell>: line 2: nosuchcmd: command not found` | `one~st=127` **2>** `<shell>: line 2: nosuchcmd: command not found` | `one~st=127` **2>** `<shell>: line 1: nosuchcmd: command not found` | `one~st=127` **2>** `<shell>: line 2: nosuchcmd: not found` | `one~st=127` **2>** `<shell>:2: command not found: nosuchcmd` | `one~st=127` **2>** `<shell>: nosuchcmd: not found` |
 | `diag/a-command-after-an-operator` | `one~st=127` **2>** `<shell>: 3: nosuchcmd: not found` | `one~st=127` **2>** `<shell>: line 3: nosuchcmd: command not found` | `one~st=127` **2>** `<shell>: line 3: nosuchcmd: command not found` | `one~st=127` **2>** `<shell>: line 2: nosuchcmd: command not found` | `one~st=127` **2>** `<shell>: line 3: nosuchcmd: not found` | `one~st=127` **2>** `<shell>:3: command not found: nosuchcmd` | `one~st=127` **2>** `<shell>: nosuchcmd: not found` |
 | `axis/readonly-removal-refusal-names-the-builtin` | `end` **2>** `<script>: 1: typeset: not found~<script>: 2: typeset: not found` | `end` **2>** `<script>: line 2: typeset: s1: readonly variable` | `end` **2>** `<script>: line 2: typeset: s1: readonly variable` | `end` **2>** `<script>: line 2: typeset: s1: readonly variable` | **2>** `<script>[2]: typeset: s1: is read only` *(status 1)* | `end` | `end` **2>** `<script>: line 1: typeset: not found~<script>: line 2: typeset: not found` |
@@ -7528,6 +7536,56 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   echo "a b"$(echo hi
   echo after
+  ```
+- `diag/a-builtin-names-itself-in-the-location` — which shells put the reporting builtin's name between the script and the line. Two of the seven do and each punctuates it the way its own location style punctuates everything else: zsh writes `<shell>:shift:2:` and BusyBox ash `<script>: shift: line 2:`, where bash 5.3, bash 3.2, bash-as-`sh`, dash and ksh93 name only the place. From a script rather than `-c` because that is the route where every column names a line at all, so the segment is the only thing that varies. Ours had the segment as a zsh-only rule joined with a bare colon, which is the right characters for one of the two (#2761)
+  ```sh
+  echo one
+  shift -1
+  echo "st=$?"
+  ```
+- `diag/a-builtin-whose-name-is-punctuation` — the same segment for the builtin whose name is a single `.`, which is the row a rule written as a list of names would get wrong: both shells that name a builtin here spell it `.` rather than skipping it. It also carries each shell's own sentence for a file it could not open and its own status for one, which is why the case is not only about the prefix
+  ```sh
+  echo one
+  . /nonexistent/file
+  echo "st=$?"
+  ```
+- `diag/a-builtin-takes-the-sourced-files-slot` — a builtin failing inside a sourced file, where two names compete for one slot: BusyBox ash writes `<script>: shift: line 2:` and drops the path it writes for the file's *own* failures, so the builtin takes the slot rather than standing beside it — the same rule dash follows for the name it writes after the location (#2532). zsh replaces its own name with the file and keeps its builtin segment, bash names the file, ksh93 renders a chain, and dash names the file after the location. The line is the one inside the sourced file in every column
+  ```sh
+  printf 'echo one\nshift -1\n' > p.sh
+  . ./p.sh
+  echo "st=$?"
+  ```
+- `diag/a-sourced-files-own-failure-keeps-its-name` — the control for the row above, and the reason it is evidence rather than noise: an unset parameter inside the same file at the same line is the *shell's* failure, so every column that names the file keeps it and neither shell that names builtins writes one. A fix that dropped the borrowed name whenever a builtin was anywhere in the frame would pass the row above and fail this one
+  ```sh
+  printf 'echo one\necho $NOPE\n' > p.sh
+  set -u
+  . ./p.sh
+  echo "st=$?"
+  ```
+- `diag/unset-refusing-a-readonly-name` — the one refusal the two shells that name builtins disagree about: BusyBox ash writes `<script>: unset: line 2: r: is read only` and zsh `<shell>:2: read-only variable: r`, dropping the segment it writes for every other complaint out of the same builtin — `unset 1x` is `<shell>:unset:N:` there. Three of the others name the builtin in the *sentence* instead and one says nothing at all, so the row is four arrangements of one name. Whether the script survives it is the other half and is a semantics axis rather than a wording
+  ```sh
+  readonly r=1
+  unset r
+  echo "st=$?"
+  ```
+- `diag/exec-cannot-find-the-command` — the second refusal those two disagree about, and the opposite pairing to the row above: BusyBox ash keeps `exec` in the location where zsh calls the failure the shell's own and reports word for word what a bare command word reports. `alive` is what says every column ends the script here, which no shell in the panel does not — so the case grades the sentence rather than the survival
+  ```sh
+  echo one
+  exec /nonexistent/x
+  echo alive
+  ```
+- `diag/a-builtins-redirection-is-not-the-builtins` — a redirection opened *for* a builtin, which is the near miss both of the naming rules have to be told from: neither shell that names a builtin in its location names one here, and the two dialects that locate a builtin's complaint its own way part company — ksh93 counts the redirection as the builtin's and BusyBox ash does not, which on a script route is invisible and on `-c` is a line against none. It is interp.Diagnostics.BuiltinLocationIsTheSpeakersOnly, and the sentences and statuses differ again besides
+  ```sh
+  echo one
+  read x < /nonexistent/f
+  echo "st=$?"
+  ```
+- `diag/trap-refusing-a-condition-it-does-not-know` — the wording half of the same family, and the row that says a location fix is not a wording fix: BusyBox ash says `NOSUCHSIG: invalid signal specification` where dash — its closest sibling everywhere else — says `bad trap`, and both write the builtin's name, one in the location and one in the sentence. The number out of range is the second line because a shell that read the condition as a signal *number* could refuse the name and take the 99
+  ```sh
+  trap '' NOSUCHSIG
+  echo "st=$?"
+  trap '' 99
+  echo "st=$?"
   ```
 - `diag/a-line-worth-naming` — ksh93 names the line under `-c` only after the first: `ksh: nosuchcmd: not found` on line 1 and `ksh: line 2: nosuchcmd: not found` here. Every earlier measurement used a one-line `-c`, where naming no line and naming line 1 are the same output
   ```sh

@@ -1662,6 +1662,12 @@ func (r *Runner) unsetReadonly(name string) int {
 	// bad name, from the same builtin. It is the same care setVarAs takes for
 	// the assignment this refusal is the twin of.
 	//
+	// **And it is that dialect's answer rather than a rule about the
+	// refusal**, which is what the second dialect to name a builtin in a
+	// location showed: BusyBox ash writes `./z.sh: unset: line 2: r: is read
+	// only`, keeping the name zsh drops. See
+	// Diagnostics.UnsetReadonlyIsTheShellsOwn for both rows (#2761).
+	//
 	// Only there, and that is the whole of the condition. Forgetting the
 	// builtin outright also forgets that a builtin is *speaking*, which is a
 	// second question and a different dialect's: ksh93 locates a builtin's
@@ -1671,7 +1677,7 @@ func (r *Runner) unsetReadonly(name string) int {
 	// only` for the assignment refused for the same reason. Measured
 	// 2026-09-12, and both forms were already in this tree with nothing
 	// choosing between them (#2417).
-	if r.diag().NamesBuiltinInLocation {
+	if r.diag().NamesBuiltinInLocation && r.diag().UnsetReadonlyIsTheShellsOwn {
 		outer := r.inBuiltin
 		r.inBuiltin = ""
 		defer func() { r.inBuiltin = outer }()

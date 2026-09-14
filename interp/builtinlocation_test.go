@@ -169,3 +169,64 @@ func TestTheMarkerIsPutBackAfterTheRedirections(t *testing.T) {
 		t.Errorf("output = %q, the marker outlived the redirections", out)
 	}
 }
+
+// TestTheBuiltinLocationCanBeTheSpeakersOnly is the third answer to the same
+// question, and the one that needs its own field: a dialect that gives the
+// builtin's location to the builtin's own complaint and never to a
+// redirection opened for one.
+//
+// The two axes here are separate and this proves they are: the bracketed
+// style is chosen by "a builtin was involved" for one dialect and by "a
+// builtin is speaking" for another, over the identical pair of messages. See
+// Diagnostics.BuiltinLocationIsTheSpeakersOnly for the rows it is read off
+// (#2761).
+func TestTheBuiltinLocationCanBeTheSpeakersOnly(t *testing.T) {
+	dg := Diagnostics{
+		Location:                         LocationLineWord,
+		BuiltinLocation:                  LocationBracketLine,
+		BuiltinLocationIsTheSpeakersOnly: true,
+	}
+	dir := t.TempDir()
+
+	spoken := prefixRun(t, dir, "cd /no/such/dir-xyz", dg)
+	if !strings.HasPrefix(spoken, "testsh[1]: ") {
+		t.Errorf("a builtin speaking = %q, want the bracketed line", spoken)
+	}
+	// The same redirection the field above gives the bracketed style to.
+	redirected := prefixRun(t, dir, "echo hi > /nonexistent-dir-xyz/x", dg)
+	if !strings.HasPrefix(redirected, "testsh: line 1: ") {
+		t.Errorf("a builtin's redirection = %q, want the shell's own location", redirected)
+	}
+	if strings.Contains(redirected, "[1]") {
+		t.Errorf("a builtin's redirection = %q, the builtin's style leaked", redirected)
+	}
+}
+
+// TestTheBuiltinSegmentIsPunctuatedByTheStyle is the rule that let a second
+// dialect name a builtin in its location without a second axis: the segment
+// is joined the way the style already joins the shell's name to what follows
+// it.
+//
+// Measured on `shift -1` in a script file — one dialect writes
+// `zsh:shift:1:` under the tight style and another `/s.sh: shift: line 1:`
+// under the `line N` one, which is the same two punctuations those styles
+// use with no builtin in them at all. `name + ":" + builtin`, which was the
+// whole rule while one dialect asked, wrote `/s.sh:shift: line 1:` for the
+// second (#2761).
+func TestTheBuiltinSegmentIsPunctuatedByTheStyle(t *testing.T) {
+	for _, tc := range []struct {
+		style LocationStyle
+		want  string
+	}{
+		{LocationTightLine, "testsh:cd:1: "},
+		{LocationLineWord, "testsh: cd: line 1: "},
+		{LocationColonLine, "testsh: cd: 1: "},
+		{LocationNameOnly, "testsh: cd: "},
+	} {
+		dg := Diagnostics{Location: tc.style, NamesBuiltinInLocation: true}
+		got := prefixRun(t, t.TempDir(), "cd /no/such/dir-xyz", dg)
+		if !strings.HasPrefix(got, tc.want) {
+			t.Errorf("%v: %q, want it to start %q", tc.style, got, tc.want)
+		}
+	}
+}

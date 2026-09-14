@@ -1010,6 +1010,45 @@ func Diagnostics() interp.Diagnostics {
 		Location:       interp.LocationNameOnly,
 		ScriptLocation: interp.LocationLineWord,
 		StdinLocation:  interp.LocationNameOnly,
+		// A builtin names itself between the script and the line, and on
+		// every route rather than only where the shell's own message carries
+		// a line. Measured 2026-09-14, BusyBox v1.37.0 in the pinned image:
+		//
+		//	a script     /s.sh: export: line 1: illegal option -q
+		//	-c           /bin/ash: export: line 0: illegal option -q
+		//	standard in  /bin/ash: shift: line 1: Illegal number: -1
+		//	a prompt     /bin/ash: shift: Illegal number: -1
+		//
+		// so the name is unconditional and the *line* is what the route
+		// decides — which is why the three builtin locations below say
+		// something the plain ones do not: `-c` and standard input name no
+		// line for the shell's own failures and both name one here, and the
+		// prompt names neither.
+		//
+		// It is a rule rather than a list, and the same rule zsh follows:
+		// `export`, `set`, `unset`, `readonly`, `trap`, `shift`, `.`,
+		// `return`, `break`, `continue`, `exit`, `cd`, `read`, `eval`,
+		// `umask`, `getopts`, `hash`, `local`, `wait` and `command` were
+		// measured and every one names itself. What stays bare is equally
+		// consistent: a command that was not found, a parse failure the
+		// shell reads for itself, an unset parameter, a division by zero, a
+		// redirection that would not open, and an assignment to a readonly
+		// name. Those are the shell's own failures and not a builtin's
+		// (#2761).
+		NamesBuiltinInLocation: true,
+		// The three routes where a builtin's location is not the shell's.
+		// LocationNone would mean "the same as Location", which is this
+		// shell's name and no line — and a builtin does carry one on the two
+		// routes where the shell does not.
+		BuiltinLocation:       interp.LocationLineWord,
+		StdinBuiltinLocation:  interp.LocationLineWord,
+		PromptBuiltinLocation: interp.LocationNameOnly,
+		// And the line belongs to the builtin's own complaint rather than to
+		// anything a builtin was merely involved in: `ash -c 'read x <
+		// /nofile'` is `ash: can't open /nofile: no such file`, with neither
+		// the builtin's name nor a line, where `ash -c 'shift -1'` has both.
+		// See interp.Diagnostics.BuiltinLocationIsTheSpeakersOnly.
+		BuiltinLocationIsTheSpeakersOnly: true,
 		// A sourced file and an `eval` are both named between the shell and
 		// the line, which is bash's and ksh93's placing rather than dash's:
 		// `ash: ./p.sh: line 3: NOPE: parameter not set`, and `ash: eval:
@@ -1073,6 +1112,14 @@ func Diagnostics() interp.Diagnostics {
 
 		// The command-resolution family. Neither a name nor a line in front
 		// of the `not found`, which is the shape ksh93 uses too.
+		// `trap` words a condition it does not know as bash does rather than
+		// as dash does, which is the half of #2761 that is not a location:
+		// `/s.sh: trap: line 1: NOSUCHSIG: invalid signal specification`
+		// against dash's `bad trap`, and the same sentence for a number out
+		// of range. Measured 2026-09-14 over `NOSUCHSIG`, `99` and a second
+		// condition after a good one; the status is 1 in every row.
+		TrapBadSignal: "trap: %[1]s: invalid signal specification",
+
 		TypeKeyword:            "%[1]s is a shell keyword",
 		TypeFunction:           "%[1]s is a function",
 		TypeAlias:              "%[1]s is an alias for %[2]s",

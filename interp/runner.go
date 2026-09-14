@@ -2727,6 +2727,23 @@ func (r *Runner) locationPrefix() string {
 		// between the shell's and the location rather than after it, which
 		// is a prefix of its own rather than something to append. See
 		// Runner.borrowedNameBefore.
+		if b := r.speaking(); b != "" && d.NamesBuiltinInLocation {
+			// And a builtin naming itself takes that slot, rather than
+			// standing beside the text it was reached through. The same rule
+			// the dialect that writes the name *after* the location follows
+			// — see Runner.borrowedName and #2532 — measured here on BusyBox
+			// v1.37.0, 2026-09-14, with `p.sh` holding `shift -1`:
+			//
+			//	./s.sh does `. /p.sh`      /s.sh: shift: line 2: Illegal number: -1
+			//	the same under `-c`        /bin/ash: shift: line 2: …
+			//	./e.sh does eval "shift -1"  /e.sh: shift: line 1: …
+			//	an unset parameter in p.sh  /s.sh: /p.sh: line 2: NOPE: …
+			//
+			// so the file keeps the slot for what the *shell* says and loses
+			// it to whatever builtin speaks for itself. The line is the one
+			// inside the borrowed text either way.
+			source = b
+		}
 		return d.forBorrowed().borrowedPrefix(name, source, line)
 	}
 	return d.prefix(name, r.speaking(), r.builtinIsSpeaking(), line) + r.borrowedName(d)

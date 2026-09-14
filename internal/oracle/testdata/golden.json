@@ -76738,6 +76738,210 @@
         "TimedOut": false
       }
     },
+    "diag/a-builtin-names-itself-in-the-location": {
+      "ash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: shift: line 2: Illegal number: -1",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "one~st=1",
+        "Stderr": "\u003cscript\u003e: line 2: shift: -1: shift count out of range",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one~st=1",
+        "Stderr": "\u003cscript\u003e: line 2: shift: -1: shift count out of range",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one~st=1",
+        "Stderr": "\u003cscript\u003e: line 2: shift: -1: shift count out of range",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: 2: shift: Illegal number: -1",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e[2]: shift: -1: unknown option~Usage: shift [ options ] [n]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one~st=1",
+        "Stderr": "\u003cscript\u003e:shift:2: argument to shift must be non-negative",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "diag/a-builtin-takes-the-sourced-files-slot": {
+      "ash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: shift: line 2: Illegal number: -1",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "one~st=1",
+        "Stderr": "./p.sh: line 2: shift: -1: shift count out of range",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one~st=1",
+        "Stderr": "./p.sh: line 2: shift: -1: shift count out of range",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one~st=1",
+        "Stderr": "./p.sh: line 2: shift: -1: shift count out of range",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: 2: shift: Illegal number: -1",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e[2]: .[2]: shift: -1: unknown option~Usage: shift [ options ] [n]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one~st=1",
+        "Stderr": "./p.sh:shift:2: argument to shift must be non-negative",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "diag/a-builtin-whose-name-is-punctuation": {
+      "ash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: .: line 2: can't open '/nonexistent/file': No such file or directory",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "one~st=1",
+        "Stderr": "\u003cscript\u003e: line 2: /nonexistent/file: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 2: /nonexistent/file: No such file or directory",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one~st=1",
+        "Stderr": "\u003cscript\u003e: line 2: /nonexistent/file: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: 2: .: cannot open /nonexistent/file: No such file",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e[2]: .: /nonexistent/file: cannot open [No such file or directory]",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one~st=127",
+        "Stderr": "/nonexistent/file:.:2: no such file or directory: /nonexistent/file",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "diag/a-builtins-redirection-is-not-the-builtins": {
+      "ash": {
+        "Stdout": "one~st=1",
+        "Stderr": "\u003cscript\u003e: line 2: can't open /nonexistent/f: no such file",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "one~st=1",
+        "Stderr": "\u003cscript\u003e: line 2: /nonexistent/f: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one~st=1",
+        "Stderr": "\u003cscript\u003e: line 2: /nonexistent/f: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one~st=1",
+        "Stderr": "\u003cscript\u003e: line 2: /nonexistent/f: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one~st=2",
+        "Stderr": "\u003cscript\u003e: 2: cannot open /nonexistent/f: No such file",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one~st=1",
+        "Stderr": "\u003cscript\u003e[2]: /nonexistent/f: cannot open [No such file or directory]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one~st=1",
+        "Stderr": "\u003cscript\u003e:2: no such file or directory: /nonexistent/f",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "diag/a-command-after-an-operator": {
       "ash": {
         "Stdout": "one~st=127",
@@ -76836,6 +77040,211 @@
         "Stdout": "one~st=127",
         "Stderr": "\u003cshell\u003e:2: command not found: nosuchcmd",
         "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "diag/a-sourced-files-own-failure-keeps-its-name": {
+      "ash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: ./p.sh: line 2: NOPE: parameter not set",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "one",
+        "Stderr": "./p.sh: line 2: NOPE: unbound variable",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one",
+        "Stderr": "./p.sh: line 2: NOPE: unbound variable",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one",
+        "Stderr": "./p.sh: line 2: NOPE: unbound variable",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: 2: ./p.sh: NOPE: parameter not set",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one~st=1",
+        "Stderr": "\u003cscript\u003e[3]: .: line 2: NOPE: parameter not set",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one~st=126",
+        "Stderr": "./p.sh:2: NOPE: parameter not set",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "diag/exec-cannot-find-the-command": {
+      "ash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: exec: line 2: /nonexistent/x: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 2: /nonexistent/x: No such file or directory",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 2: /nonexistent/x: No such file or directory",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 2: /nonexistent/x: No such file or directory~\u003cscript\u003e: line 2: exec: /nonexistent/x: cannot execute: No such file or directory",
+        "Status": 126,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: 2: exec: /nonexistent/x: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e[2]: exec: /nonexistent/x: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e:2: no such file or directory: /nonexistent/x",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "diag/trap-refusing-a-condition-it-does-not-know": {
+      "ash": {
+        "Stdout": "st=1~st=1",
+        "Stderr": "\u003cscript\u003e: trap: line 1: NOSUCHSIG: invalid signal specification~\u003cscript\u003e: trap: line 3: 99: invalid signal specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "st=1~st=1",
+        "Stderr": "\u003cscript\u003e: line 1: trap: NOSUCHSIG: invalid signal specification~\u003cscript\u003e: line 3: trap: 99: invalid signal specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1~st=1",
+        "Stderr": "\u003cscript\u003e: line 1: trap: NOSUCHSIG: invalid signal specification~\u003cscript\u003e: line 3: trap: 99: invalid signal specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1~st=1",
+        "Stderr": "\u003cscript\u003e: line 1: trap: NOSUCHSIG: invalid signal specification~\u003cscript\u003e: line 3: trap: 99: invalid signal specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=1~st=1",
+        "Stderr": "trap: NOSUCHSIG: bad trap~trap: 99: bad trap",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1~st=1",
+        "Stderr": "\u003cscript\u003e[1]: trap: NOSUCHSIG: bad trap~\u003cscript\u003e[3]: trap: 99: bad trap",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cscript\u003e:trap:1: undefined signal: NOSUCHSIG",
+        "Status": -1,
+        "Signal": 11,
+        "SignalName": "segmentation fault",
+        "TimedOut": false
+      }
+    },
+    "diag/unset-refusing-a-readonly-name": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: unset: line 2: r: is read only",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cscript\u003e: line 2: unset: r: cannot unset: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 2: unset: r: cannot unset: readonly variable",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cscript\u003e: line 2: unset: r: cannot unset: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 2: unset: r: is read only",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cscript\u003e[2]: unset: warning: r: is read only",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:2: read-only variable: r",
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       }

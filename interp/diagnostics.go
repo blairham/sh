@@ -314,6 +314,56 @@ type Diagnostics struct {
 	// file is `./f.sh:2: NOPE: parameter not set`, with no `.` anywhere in it.
 	NamesBuiltinInLocation bool
 
+	// UnsetReadonlyIsTheShellsOwn takes `unset` out of the location for the
+	// one refusal it makes about a name it may not remove, in a dialect that
+	// names the builtin there for everything else.
+	//
+	// Two dialects name a builtin in the location and they answer this
+	// differently, which is what makes it a value rather than the rule the
+	// site used to hard-code. Measured on `readonly r=1; unset r` in a script
+	// file — zsh 5.9.2 on 2026-09-12, BusyBox v1.37.0 on 2026-09-14:
+	//
+	//	zsh          ./z.sh:2: read-only variable: r
+	//	BusyBox ash  ./z.sh: unset: line 2: r: is read only
+	//
+	// and the same shells' `unset 1x` is `zsh:unset:1: 1x: invalid parameter
+	// name`, so zsh's silence here is about this refusal and not about the
+	// builtin. False — the zero value and the substrate's own — names it,
+	// which is what every dialect but zsh was measured to do.
+	UnsetReadonlyIsTheShellsOwn bool
+
+	// ExecNotFoundIsTheShellsOwn takes `exec` out of the location when the
+	// command it was given does not exist, for the same reason and in the
+	// same two dialects:
+	//
+	//	zsh          ./e.sh:1: command not found: nosuchcmd
+	//	BusyBox ash  ./e.sh: exec: line 1: /nonexistent/x: not found
+	//
+	// zsh reports exactly what a bare command word reports, which is the
+	// argument for calling it the shell's failure rather than the builtin's;
+	// BusyBox keeps the builtin, and its wording keeps the distinction the
+	// other way round — `exec:` in the location where a plain command word
+	// has none. False names it.
+	ExecNotFoundIsTheShellsOwn bool
+
+	// BuiltinLocationIsTheSpeakersOnly gives BuiltinLocation to a complaint
+	// the builtin makes itself, and never to a redirection opened for one.
+	//
+	// The wider question is [Runner.builtinIsSpeaking], which is what every
+	// other dialect's BuiltinLocation keys off: ksh93 counts a failed
+	// redirection on a builtin as the builtin's. BusyBox ash does not, and
+	// says so on the one route where its two locations differ. Measured
+	// 2026-09-14, BusyBox v1.37.0 in the pinned image, `-c` in both rows:
+	//
+	//	ash -c 'shift -1'            /bin/ash: shift: line 0: Illegal number: -1
+	//	ash -c 'read x < /nofile'    /bin/ash: can't open /nofile: no such file
+	//
+	// The second is the shell's own location — no line, which is what this
+	// route writes for everything the shell speaks — so the redirection is
+	// not the builtin's here in either respect: it is not named and it is
+	// not located as one. In a script the two coincide and nothing shows.
+	BuiltinLocationIsTheSpeakersOnly bool
+
 	// TestNamesFirstOperand makes a malformed three-argument `test` blame the
 	// first word rather than the middle one: `test a b c` is "a: unexpected
 	// operator" in dash and names `b` — the word that should have been an
@@ -4744,10 +4794,12 @@ func (d Diagnostics) forBorrowed() Diagnostics {
 // borrowed text between their own name and the location: `ash: ./p.sh: line
 // 2: `, and bash's `bash: eval: line 2: `.
 //
-// It takes no builtin, which is the shape the two callers share rather than
-// an omission: no dialect in the panel both names borrowed text here and
-// names the builtin that is speaking in its location, so writing one would
-// pin a combination nothing has been measured on.
+// It takes no builtin because the two names are *alternatives* rather than a
+// pair: the one dialect that both names borrowed text here and names the
+// builtin that is speaking writes the builtin in this very slot, so the
+// caller hands it over in place of the source. See Runner.locationPrefix,
+// and Runner.borrowedName for the same rule in the dialect that writes the
+// name after the location instead (#2532).
 //
 // The caller is expected to have applied [Diagnostics.forBorrowed] already —
 // SourceReport does it for the parse path, and Runner.locationPrefix for the
@@ -5566,13 +5618,37 @@ func (d Diagnostics) prefixWithoutLine(name, builtin string) string {
 	if name == "" {
 		name = "sh"
 	}
-	if builtin != "" && d.NamesBuiltinInLocation {
-		name += ":" + builtin
-	}
+	name = d.withBuiltinInLocation(name, builtin, d.Location)
 	if d.Location == LocationNone {
 		return ""
 	}
 	return name + ": "
+}
+
+// withBuiltinInLocation puts the speaking builtin's name between the shell's
+// name and the line, punctuated the way this location style already
+// punctuates the name it writes.
+//
+// Two dialects name the builtin here and neither needs an axis to say how,
+// because each writes the separator its own style writes everywhere else.
+// Measured on `shift -1` in a script file — zsh 5.9.2 on 2026-09-12, BusyBox
+// v1.37.0 in the pinned image on 2026-09-14:
+//
+//	zsh          zsh:shift:1: …      LocationTightLine, a bare colon
+//	BusyBox ash  /s.sh: shift: line 1: …   LocationLineWord, a colon and a space
+//
+// So the tight style joins every segment with a bare colon and the rest put
+// a space after theirs, and `name + ":" + builtin` — which was the whole of
+// this rule while zsh was the only dialect asking — wrote `/s.sh:shift: line
+// 1: ` for the second (#2761).
+func (d Diagnostics) withBuiltinInLocation(name, builtin string, style LocationStyle) string {
+	if builtin == "" || !d.NamesBuiltinInLocation {
+		return name
+	}
+	if style == LocationTightLine {
+		return name + ":" + builtin
+	}
+	return name + ": " + builtin
 }
 
 // locationNamesALineAt reports whether the ordinary location this dialect
@@ -5637,21 +5713,25 @@ func (d Diagnostics) prefix(name, builtin string, byBuiltin bool, line int) stri
 	if name == "" {
 		name = "sh"
 	}
+	if d.BuiltinLocationIsTheSpeakersOnly {
+		// One dialect gives the builtin's own location to the builtin's own
+		// complaint and to nothing else — see the field.
+		byBuiltin = builtin != ""
+	}
 	if byBuiltin && builtin != "" && d.BuiltinLocation == LocationBuiltinNameOnly {
 		// The builtin speaks for itself: no shell, no line.
 		return builtin + ": "
-	}
-	if builtin != "" && d.NamesBuiltinInLocation {
-		// One dialect names the builtin that is speaking, between the shell
-		// and the line. It rides on the shell's name rather than being a
-		// fourth LocationStyle, because it composes with whichever style the
-		// dialect already uses instead of replacing it.
-		name += ":" + builtin
 	}
 	style := d.Location
 	if byBuiltin && d.BuiltinLocation != LocationNone {
 		style = d.BuiltinLocation
 	}
+	// Two dialects name the builtin that is speaking, between the shell and
+	// the line. It rides on the shell's name rather than being a fifth
+	// LocationStyle, because it composes with whichever style the dialect
+	// already uses instead of replacing it — and the *effective* style is
+	// what punctuates it, which is why this comes after the choice above.
+	name = d.withBuiltinInLocation(name, builtin, style)
 	switch style {
 	case LocationLineWordAfterFirst:
 		if line <= 1 {

@@ -3227,9 +3227,20 @@ func Diagnostics() interp.Diagnostics {
 		// zsh lowercases every strerror string it quotes, where the other
 		// three print the C string as it comes.
 		// zsh names the builtin that is speaking between its own name and the
-		// line: `zsh:shift:1:`. A rule rather than a handful of cases, and the
-		// only shell in the panel that does it.
+		// line: `zsh:shift:1:`. A rule rather than a handful of cases, and
+		// the first shell in the panel measured to do it — BusyBox ash is the
+		// second, with a space after the colon rather than none, which is the
+		// location style's own punctuation and not a second axis (#2761).
 		NamesBuiltinInLocation: true,
+		// Two refusals this shell locates as its own rather than the
+		// builtin's, where the other shell that names builtins keeps the
+		// name. `readonly r=1; unset r` is `zsh:2: read-only variable: r` and
+		// `exec nosuchcmd` is `zsh:1: command not found: nosuchcmd` — the
+		// second word for word what a bare command word reports. Both were
+		// rules in the substrate until a dialect disagreed with them; see the
+		// fields for the rows.
+		UnsetReadonlyIsTheShellsOwn: true,
+		ExecNotFoundIsTheShellsOwn:  true,
 		// Except for a math complaint, which this shell writes as its own:
 		// `let '1+'` is `zsh:1: bad math expression: …` where its `cd` is
 		// `zsh:cd:1: …`, and `let` with no operand at all *is* the builtin's

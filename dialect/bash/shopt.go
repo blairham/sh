@@ -276,6 +276,7 @@ var shoptSwitches = map[string]struct {
 			r.SetErrorTracing(on)
 			r.SetFunctionTracing(on)
 			r.SetLocatesFunctions(on)
+			r.SetDebugActionDecides(on)
 		},
 	},
 	// The one name in this table that moves a *semantics axis* rather than a

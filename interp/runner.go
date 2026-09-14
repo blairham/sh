@@ -1047,6 +1047,13 @@ type Runner struct {
 	// locatesFunctions is whether a names-only function listing says where
 	// each function was defined — see Runner.LocatesFunctions.
 	locatesFunctions bool
+	// debugActionDecides is whether a DEBUG action's *status* decides what
+	// runs next — see Runner.DebugActionDecides.
+	debugActionDecides bool
+	// debugSkip is the answer one firing left behind: the command that
+	// firing preceded must not run. Cleared where it is read, so an earlier
+	// command's answer cannot skip a later one.
+	debugSkip bool
 	// funcLine is the line the function being run was written on, which one
 	// dialect counts a message's line from instead of from the top of the
 	// file.
@@ -3626,7 +3633,7 @@ func (r *Runner) command(ctx context.Context, c syntax.Command) error {
 	r.suppressedHead = false
 	if head {
 		r.debugCompoundHead(ctx, c)
-		if r.ctl != controlNone {
+		if r.debugTrapStopped() {
 			return nil
 		}
 	}
@@ -3681,7 +3688,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 	// nothing, which no column in the panel does. An action that exits takes
 	// the command it was about to precede with it.
 	r.runDebugTrap(ctx)
-	if r.ctl != controlNone {
+	if r.debugTrapStopped() {
 		return nil
 	}
 	r.unspecified, r.expandErr, r.assignFailed = false, false, false

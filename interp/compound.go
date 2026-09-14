@@ -314,8 +314,18 @@ func (r *Runner) forClause(ctx context.Context, c *syntax.ForClause) error {
 			// measures to in both of them: the head is the pass and not the
 			// construct.
 			r.debugPass(ctx, c.Pos())
+			// The two answers part here. An action that unwound ends the
+			// loop, and one that merely refused this head costs this pass
+			// and no more — measured on bash 5.3.15, 2026-09-14, an action
+			// refusing the second pass's head of `for i in 1 2 3; do echo
+			// b$i; done` writes `b1` and `b3`. Read before the unwind test
+			// so the flag is taken away on both routes.
+			skipped := r.debugTrapSkipped()
 			if r.ctl != controlNone {
 				return nil
+			}
+			if skipped {
+				continue
 			}
 			// A final pass with fewer words than names leaves the names it
 			// did not reach **empty rather than unset** — measured 2026-09-06
@@ -396,16 +406,33 @@ func (r *Runner) forArithClause(ctx context.Context, c *syntax.ForArithClause) e
 		// reading may skip when the script did not write one; the condition
 		// is written or not and fires either way — see debugArithPart.
 		r.debugArithPart(ctx, c.Pos(), arithPartWritten(c.Init, initText))
+		// A refused initializer is not *evaluated*, and that is all it is:
+		// the loop runs on with whatever the name held before. Measured on
+		// bash 5.3.15, 2026-09-14 — an action refusing the first firing of
+		// `for ((i=0;i<3;i++)); do echo b$i; done` writes `b`, `b1` and
+		// `b2`, the empty first one being the `i` the initializer never
+		// set. An action that unwound still ends the loop.
+		skippedInit := r.debugTrapSkipped()
 		if r.ctl != controlNone {
 			return nil
 		}
-		if _, ok := r.forArithPart(c.Init, initText); !ok {
-			return nil
+		if !skippedInit {
+			if _, ok := r.forArithPart(c.Init, initText); !ok {
+				return nil
+			}
 		}
 		defer r.enteringLoop()()
 		for {
 			r.debugPass(ctx, c.Pos())
-			if r.ctl != controlNone {
+			// The condition is the one of the three parts a refusal ends the
+			// loop at rather than skipping past, which is why it keeps the
+			// combined test where the initializer and the step above do not.
+			// Measured on bash 5.3.15, 2026-09-14: an action refusing the
+			// second firing of `for ((i=0;i<3;i++)); do echo b$i; done`
+			// writes nothing at all, and one refusing the fifth writes `b0`
+			// alone — a loop that stops where the condition was refused
+			// rather than one that runs on unconditioned.
+			if r.debugTrapStopped() {
 				return nil
 			}
 			if c.Cond != nil || c.CondText != "" {
@@ -435,11 +462,19 @@ func (r *Runner) forArithClause(ctx context.Context, c *syntax.ForArithClause) e
 			// settled.
 			r.settleBackgroundJobAtALoopsBackEdge()
 			r.debugArithPart(ctx, c.Pos(), arithPartWritten(c.Post, postText))
+			// And a refused step is the same shape as the refused
+			// initializer above: not evaluated, loop carries on. Measured
+			// the same day on the same loop — an action refusing the fourth
+			// firing writes `b0` twice before `b1` and `b2`, the repeat
+			// being the pass whose `i++` never happened.
+			skippedPost := r.debugTrapSkipped()
 			if r.ctl != controlNone {
 				return nil
 			}
-			if _, ok := r.forArithPart(c.Post, postText); !ok {
-				return nil
+			if !skippedPost {
+				if _, ok := r.forArithPart(c.Post, postText); !ok {
+					return nil
+				}
 			}
 		}
 	})

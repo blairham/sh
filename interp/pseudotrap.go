@@ -118,7 +118,12 @@ func (r *Runner) setPseudoTrap(name, body string) {
 // where RETURN goes with the signals and is numbered from the body's own
 // first line. Measured rather than reasoned from "these are the
 // pseudo-conditions" — see Semantics.CommandTrapBodyLine.
-func (r *Runner) runPseudoTrapBody(ctx context.Context, name, body string, sees int) {
+//
+// The status it returns is the *action's* own, which is the thing this
+// function otherwise throws away. Only DEBUG under extended debugging reads
+// it — see Runner.debugActionDecided — and it is returned rather than left in
+// a field so that the discard stays the default.
+func (r *Runner) runPseudoTrapBody(ctx context.Context, name, body string, sees int) int {
 	st, ctl, raised := r.status, r.ctl, r.pipefailRaised
 	r.status = sees
 	r.ctl = controlNone
@@ -134,10 +139,12 @@ func (r *Runner) runPseudoTrapBody(ctx context.Context, name, body string, sees 
 	r.inCommandTrap = name == "DEBUG" || name == "ERR" || name == "RETURN"
 	r.runTrapBody(ctx, body)
 	r.inCommandTrap = outer
+	acted := r.status
 	if r.ctl == controlNone {
 		r.status, r.ctl = st, ctl
 	}
 	r.pipefailRaised = raised
+	return acted
 }
 
 // runErrTrap fires the ERR trap for the failure the caller just judged.
@@ -223,8 +230,16 @@ func (r *Runner) fireDebugTrap(ctx context.Context, entering bool) {
 		return
 	}
 	r.inDebugTrap = true
-	r.runPseudoTrapBody(ctx, "DEBUG", *body, r.status)
+	acted := r.runPseudoTrapBody(ctx, "DEBUG", *body, r.status)
 	r.inDebugTrap = false
+	if entering {
+		// The firing with the frame already entered answers differently, and
+		// it is the one place the two rules can be told apart — see
+		// Runner.debugEntryActionDecided.
+		r.debugEntryActionDecided(acted)
+		return
+	}
+	r.debugActionDecided(acted)
 }
 
 // runReturnTrap fires the RETURN trap as a function or a sourced file ends.
@@ -343,3 +358,152 @@ func (r *Runner) LocatesFunctions() bool { return r.locatesFunctions }
 
 // SetLocatesFunctions moves it.
 func (r *Runner) SetLocatesFunctions(on bool) { r.locatesFunctions = on }
+
+// DebugActionDecides reports whether a DEBUG action's **status** decides what
+// runs next: the fourth state bash's extended debugging carries.
+//
+// With it off, the action's status is discarded and the command the trap
+// fired for sees the `$?` it would have seen with no trap set — which is what
+// runPseudoTrapBody does for every pseudo-condition and is measured to be
+// right for DEBUG in every column that has the condition.
+//
+// With it on, three rules, and each was measured against the case that parts
+// it from the others. bash 5.3.15, 2026-09-14, `env -i PATH=/usr/bin:/bin`:
+//
+//   - **Any non-zero status skips the command the trap fired for**, and the
+//     next command sees `$?` of 0. `d(){ [[ $BASH_COMMAND == "echo two" ]] &&
+//     return 1; return 0; }` over `echo one; echo two; echo three` writes
+//     `one` and `three`, and 1, 2 and 5 all write it. A compound head is a
+//     command for this and takes its whole construct with it: an action
+//     refusing `for i in 1 2` writes no pass, and one refusing `case a in `
+//     writes no branch.
+//   - **A status of exactly 2, inside a call, also simulates a `return`**,
+//     and the call reports 2. The same action returning 2 for `echo g2`
+//     inside `g(){ echo g1; echo g2; echo g3; }` writes `g1` and nothing
+//     else of `g`, and the caller's next command still runs; returning 1 or
+//     5 there writes `g1` and `g3` and the call reports 0. Nested, a 2 at
+//     the inner frame returns from the inner call alone. A sourced file is a
+//     call for this, measured the same way, and at the top level there is no
+//     frame so a 2 only skips.
+//   - **At the firing that happens with the frame already entered, any
+//     non-zero returns from that call, reporting the action's own status** —
+//     see Runner.debugEntryActionDecided, which is where that one lives.
+//
+// The issue this closes describes the first two the other way round — 2
+// skipping and everything else returning — which is what a probe with an
+// unconditional action cannot tell apart: with every command skipped nothing
+// is printed either way. The discriminator is an action that fires once, for
+// one named command, inside a function.
+//
+// One combination is deliberately not reproduced. With a RETURN trap also
+// set, the rule that returns from a call **hangs bash 5.3.15**: the probe
+// above with `trap 'echo R' RETURN` beside it writes `g1` and then nothing,
+// forever, where the same script with the action returning 1 instead of 2
+// finishes. That is the reference wedging itself rather than an answer to
+// copy, so this shell runs the return and carries on (#2778).
+//
+// A capability rather than an axis, for the reason the three above it are: of
+// the panel only bash has the condition *and* an option over it.
+func (r *Runner) DebugActionDecides() bool { return r.debugActionDecides }
+
+// SetDebugActionDecides moves it.
+func (r *Runner) SetDebugActionDecides(on bool) { r.debugActionDecides = on }
+
+// debugActionDecided applies that rule to the status a DEBUG action left.
+//
+// Called with the action's own status, before runPseudoTrapBody's restore has
+// been consulted for anything: the restore is exactly the behavior this is
+// the exception to, so the two cannot be written as one.
+func (r *Runner) debugActionDecided(status int) {
+	if !r.debugActionDecides || status == 0 || r.ctl != controlNone {
+		// An action that set control flow of its own — an `exit`, a `return`
+		// written in the body — has already said what happens, and it says
+		// more than this rule does.
+		return
+	}
+	// The command does not run, and what it leaves behind is 0 rather than
+	// the action's status: measured, `d` returning 5 ahead of `echo skipped`
+	// leaves `st=0` for the command after it.
+	r.debugSkip, r.status = true, 0
+	if status != 2 || r.currentFrameSerial() == 0 {
+		return
+	}
+	// And a 2 inside a call returns from it, at 2. returnSeenStatus is what
+	// the RETURN trap's action reads, and it is the status as the return
+	// began — which the line above has just made 0, the same thing the
+	// skipped command left for anybody else who asks.
+	//
+	// Not measured against the reference, and deliberately so: the probe
+	// that would ask — this rule firing with a RETURN trap set — hangs bash
+	// 5.3.15 outright (#2778), so there is no reading to copy. The value is
+	// taken from the rule beside it rather than invented.
+	r.returnSeenStatus = r.status
+	r.ctl, r.status = controlReturn, 2
+}
+
+// debugEntryActionDecided applies the rule to the *entry* firing: the second
+// one this shell makes for a call, with the frame already pushed.
+//
+// A separate rule because it measures differently, and the difference is not
+// a nuance. bash 5.3.15, 2026-09-14: an action returning 1, 2, 5 or 7 at the
+// entry firing leaves the body unrun and the call reporting **that status** —
+// `g-st=1`, `g-st=5` — where the same statuses at an ordinary firing inside
+// the body skip one command and leave the call reporting 0. So at this one
+// site every non-zero returns, and it carries the action's status out rather
+// than the 2 the other rule is fixed at.
+//
+// Nested, it returns from the entered call alone: a 5 at `inner`'s entry
+// leaves `inner-st=5` and the enclosing `outer` running on to report 0. And
+// it is functions only — a sourced file gets no second firing to apply it
+// to, measured, `. ./l2.sh` writing one head and not two.
+func (r *Runner) debugEntryActionDecided(status int) {
+	if !r.debugActionDecides || status == 0 || r.ctl != controlNone {
+		// Same exemption as the rule above: an action that unwound on its
+		// own has already said more than this would.
+		return
+	}
+	// No debugSkip here. The frame is entered, so the thing that must not run
+	// is the body, and a return says that by itself — a skip flag set at this
+	// site would have no reader and would go on to stop somebody else's
+	// command. See Runner.debugTrapStopped for who reads it.
+	r.returnSeenStatus = r.status
+	r.ctl, r.status = controlReturn, status
+}
+
+// debugTrapSkipped reports whether the firing that just happened refused the
+// thing it preceded, and takes the answer away as it reads it.
+//
+// Read-and-clear rather than a field a site may forget: the flag means "the
+// *next* thing does not run", so one left set outlives its firing and stops
+// somebody else's command. Every site that fires reads it, including the two
+// that have nothing to do with the answer.
+//
+// What "does not run" costs is the caller's to say, and the readings are not
+// the same — see debugTrapStopped for the sites where it ends the construct,
+// and the loops in compound.go for the ones where it costs a single pass.
+func (r *Runner) debugTrapSkipped() bool {
+	skip := r.debugSkip
+	r.debugSkip = false
+	return skip
+}
+
+// debugTrapStopped reports whether the firing that just happened means the
+// command it preceded must not run *and* nothing further in the construct
+// does either.
+//
+// One helper rather than a test at each firing site, because the question
+// grew a second half: it used to be `r.ctl != controlNone`, which is an
+// action that set control flow, and extended debugging adds an action whose
+// *status* says the same thing without unwinding. A site left reading only
+// the first half would run the command the trap had just refused.
+//
+// Only for the sites where the two halves agree about how far the refusal
+// reaches — a simple command, and a compound head that stands for its whole
+// construct. A loop's per-pass head is the case where they part: an action
+// unwinding ends the loop, and one merely refusing the pass costs that pass
+// alone. Measured on bash 5.3.15, 2026-09-14, an action refusing the second
+// pass's head of `for i in 1 2 3; do echo b$i; done` writes `b1` and `b3`.
+func (r *Runner) debugTrapStopped() bool {
+	skip := r.debugTrapSkipped()
+	return skip || r.ctl != controlNone
+}

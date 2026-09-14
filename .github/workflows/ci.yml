@@ -88,19 +88,27 @@ jobs:
   #
   # No `fetch-depth: 0` any more: nothing here computes a merge base, so the
   # default shallow checkout is enough and is faster.
+  #
+  # Gated per step, never on the job, for the same reason `test` is: this is a
+  # required check, and a required check that never runs is reported as
+  # *pending forever* rather than as passed, which would make a docs-only pull
+  # request unmergeable. So the job always runs and always reports, and only
+  # the expensive steps are skipped when nothing but prose changed.
   lint:
     name: Lint
     needs: changes
-    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v6
+      if: needs.changes.outputs.code == 'true'
     - uses: actions/setup-go@v6
+      if: needs.changes.outputs.code == 'true'
       with:
         go-version-file: go.mod
         check-latest: true
         cache: true
     - name: Is the whole tree clean?
+      if: needs.changes.outputs.code == 'true'
       run: go tool golangci-lint run
 
   # Gating happens inside the jobs, never with a workflow-level `paths:`

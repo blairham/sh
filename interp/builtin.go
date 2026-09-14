@@ -625,8 +625,8 @@ func (r *Runner) setOptionsAndOperands(_ context.Context, args []string) int {
 // A one-character `-` or `+` is not one of these, which is measured and is
 // wrong: `set - a b` leaves three positional parameters here and two in every
 // column that has been asked. Left alone on purpose — see the corners under
-// Semantics.SetODeclinesADashWord — so that the two questions are fixed
-// separately and this one follows that one for free.
+// Semantics.SetODeclinesADashWord, and #2699 — so that the two questions are
+// fixed separately and this one follows that one for free.
 func setOptionWord(a string) bool {
 	return len(a) >= 2 && (a[0] == '-' || a[0] == '+')
 }

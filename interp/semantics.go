@@ -5862,13 +5862,6 @@ type Semantics struct {
 	//	set -o -Z   bash x3         `-Z: invalid option`, 2, **no listing**
 	//	            ksh93           `-Z: unknown option`, 2
 	//
-	// The **empty** word goes with the dash words rather than behind an axis
-	// of its own, because the panel splits over it in the same place:
-	// `set -o ""` lists in the three bash columns and in ksh93, and is
-	// refused as a name in dash, BusyBox ash and zsh — `Illegal option -o `
-	// and `no such option: ` with nothing after the space. Two fields could
-	// only ever have agreed.
-	//
 	// The third row is this axis meeting SetValidatesOptionLettersFirst:
 	// with the word declined it is an option letter, so bash's validating
 	// pass sees it and applies nothing — the listing included. Read from the
@@ -5876,6 +5869,13 @@ type Semantics struct {
 	// `zzznosuch` never complained about, which is the same rule seen
 	// backwards: the name *was* taken there, because it does not begin with
 	// a dash.
+	//
+	// The **empty** word goes with the dash words rather than behind an axis
+	// of its own, because the panel splits over it in the same place:
+	// `set -o ""` lists in the three bash columns and in ksh93, and is
+	// refused as a name in dash, BusyBox ash and zsh — `Illegal option -o `
+	// and `no such option: ` with nothing after the space. Two fields could
+	// only ever have agreed.
 	//
 	// Asked only of the builtin, and only where a bare `-o` has a next word
 	// that this same loop would read as options. **The invocation route
@@ -5894,7 +5894,8 @@ type Semantics struct {
 	//     and ksh93 leave two, and `set -x -` leaves xtrace on where both
 	//     turn it off. That is a divergence of its own and not one this axis
 	//     should paper over; the predicate is the loop's own reading of a
-	//     word, so the day that one is fixed this follows it.
+	//     word, so the day that one is fixed this follows it. Filed as
+	//     #2699.
 	//   - ksh93's listing. It defers to the end of the option parse and
 	//     prints once, in a form the last `-o`/`+o` decides: `set -o -e` is
 	//     the `+o` re-input form, `set -o -e -o` and `set +o -o` are the
@@ -5903,7 +5904,8 @@ type Semantics struct {
 	//     form, which is exactly bash's reading — `set -o -o` there is two
 	//     listings and `set +o -o` is one of each. So ksh93 answers this
 	//     axis, because it does decline the word; what it still owes is a
-	//     listing mechanism, which is a different question.
+	//     listing mechanism, which is a different question. Filed as #2698,
+	//     with the ten measured shapes.
 	SetODeclinesADashWord Answer
 
 	// SetValidatesOptionLettersFirst makes the `set` builtin read the option

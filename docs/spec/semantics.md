@@ -12696,7 +12696,7 @@ Two corners are deliberately outside it, both measured:
   parameters here where bash and ksh93 leave two, and `set -x -` leaves
   xtrace on where both turn it off. That is a divergence of its own, and the
   predicate is the loop's own reading of a word, so the day it is fixed this
-  follows it.
+  follows it. Filed as #2699.
 - **ksh93's listing.** It defers to the end of the option parse and prints
   once, in a form the last `-o`/`+o` decides: `set -o -e` is the `+o`
   re-input form, `set -o -e -o` and `set +o -o` are the two-column one and
@@ -12704,7 +12704,8 @@ Two corners are deliberately outside it, both measured:
   where it stands, in the sign's own form, which is exactly bash's reading —
   `set -o -o` there is two listings and `set +o -o` is one of each. So ksh93
   answers this axis, because it does decline the word; what it still owes is
-  a listing mechanism, which is a different question.
+  a listing mechanism, which is a different question. Filed as #2698, with
+  the ten measured shapes.
 
 Ours took the next word in every dialect, so `set -o -e` refused `-e` as a
 name and left errexit off where bash and ksh93 turn it on (#2671).

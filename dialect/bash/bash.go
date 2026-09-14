@@ -1015,6 +1015,11 @@ func Semantics() interp.Semantics {
 	s.PrintfGroupingFlagAfterTheWidth = interp.No
 	s.PrintfReportsBadNumber = interp.Yes
 	s.PrintfNumberOperand = interp.PrintfNumberLeadingNumber
+	// unanswered PrintfRefusedOperandKeepsItsLeadingNumber: the question is
+	// what survives an *arithmetic* failure, and this shell runs no
+	// arithmetic over a printf operand. Keeping the number at the front is
+	// its whole reading and is PrintfNumberLeadingNumber above, so there is
+	// nothing left here to decide.
 	s.PrintfBackslashC = interp.PrintfBackslashCLiteral
 	// A format that ends inside a conversion is an error here, with a
 	// second wording of its own — see PrintfMissingVerb.

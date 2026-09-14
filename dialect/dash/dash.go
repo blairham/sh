@@ -406,6 +406,9 @@ func Semantics() interp.Semantics {
 	s.PrintfGroupingFlagAfterTheWidth = interp.No
 	s.PrintfReportsBadNumber = interp.Yes
 	s.PrintfNumberOperand = interp.PrintfNumberLeadingNumber
+	// unanswered PrintfRefusedOperandKeepsItsLeadingNumber: as in bash — the
+	// reading above never evaluates an operand, so no arithmetic failure ever
+	// reaches this question.
 	s.PrintfBackslashC = interp.PrintfBackslashCLiteral
 	s.PrintfUnfinishedConversionIsAPercent = interp.No
 	// No `\x` in a format at all: `printf 'a\x41Z'` is the six characters

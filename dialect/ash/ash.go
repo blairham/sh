@@ -454,6 +454,9 @@ func Semantics() interp.Semantics {
 	s.PrintfGroupingFlagAfterTheWidth = interp.No
 	s.PrintfReportsBadNumber = interp.Yes
 	s.PrintfNumberOperand = interp.PrintfNumberWholeOperand
+	// unanswered PrintfRefusedOperandKeepsItsLeadingNumber: this shell keeps
+	// no partial number at all — an operand its reader cannot finish is a
+	// zero — and it evaluates nothing, so the question has no site here.
 	s.PrintfUnfinishedConversionIsAPercent = interp.No
 	// `printf -v x '%s' hi` assigns nothing: `-v` is read as the format.
 	s.PrintfAssignsWithV = interp.No

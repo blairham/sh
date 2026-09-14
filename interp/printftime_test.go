@@ -95,6 +95,7 @@ func TestPrintfTimeConversion(t *testing.T) {
 		out, st := printfTime(t, `printf '%(%Y)T\n' abc`, Yes, func(r *Runner) {
 			sem := timeSemantics(Yes)
 			sem.PrintfReportsBadNumber = Yes
+			sem.PrintfNumberOperand = PrintfNumberLeadingNumber
 			r.Semantics = &sem
 			r.Vars = map[string]string{"TZ": "UTC"}
 		})

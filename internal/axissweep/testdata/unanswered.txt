@@ -116,6 +116,7 @@ ash   OneCommandStopsACommandString
 ash   OperatorDistributesOverStarSubscript
 ash   PrefixRefusalCostsTheCommand
 ash   PrintfOutputPrecedesComplaint
+ash   PrintfRefusedOperandKeepsItsLeadingNumber
 ash   PrintfTimeOperandIsADateString
 ash   ProducedParameterListing
 ash   ReadExactCountKeepsPartial
@@ -179,6 +180,7 @@ bash  ExitTrapFiresPastTheEnd
 bash  ImmovableOptionsSetAtInvocation
 bash  IntegerPlusFormTakesAttributesOff
 bash  PrintfOutputPrecedesComplaint
+bash  PrintfRefusedOperandKeepsItsLeadingNumber
 bash  SetArrayBadNameLeavesZeroFromCommandString
 bash  SetArrayLetter
 bash  SetArrayOptionsContinuePastTheName
@@ -286,6 +288,7 @@ dash  OperatorDistributesOverStarSubscript
 dash  PipefailSubstitutesTheBareSignal
 dash  PrefixRefusalCostsTheCommand
 dash  PrintfOutputPrecedesComplaint
+dash  PrintfRefusedOperandKeepsItsLeadingNumber
 dash  ProducedParameterListing
 dash  QuitResetRestoresTheDefault
 dash  ReadCountJudgesTheNamesAfterTheFirst

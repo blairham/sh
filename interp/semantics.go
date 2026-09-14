@@ -2310,12 +2310,13 @@ type Semantics struct {
 	// together in every column measured, and they are the same fact seen twice
 	// — whether the value reaches C's conversion at all.
 	//
-	//	Yes	`%G` of an infinity is `INF`, and `%10f` of one is seven spaces
-	//		and then `inf`. The `+` and the space flag are written ahead of
-	//		an infinity too, and `-` puts the padding on the right.
+	//	Yes	`%G` of an infinity is `INF`, and `%10f` of one is seven
+	//		spaces and then `inf`. The `+` and the space flag are
+	//		written ahead of an infinity too, and `-` puts the padding
+	//		on the right.
 	//	No	`inf`, `-inf` and `nan` are written as they stand. No width
-	//	pads them, no precision touches them, no flag prefixes them, and
-	//	an upper-case conversion does not capitalize them.
+	//		pads them, no precision touches them, no flag prefixes them,
+	//		and an upper-case conversion does not capitalize them.
 	//
 	// Measured 2026-09-13 under `LC_ALL=C`. bash 5.3.15, bash as sh, bash 3.2,
 	// dash and BusyBox ash 1.37.0 are Yes: `printf '[%e][%E][%g][%G]' inf inf

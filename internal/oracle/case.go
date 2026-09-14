@@ -16445,9 +16445,13 @@ printf "[%s]" .@(hid); echo`,
 			`GLOBIGNORE='*x.txt'; echo */*`,
 		Why: "a `*` in one of those patterns stops at a `/` exactly as one in the " +
 			"expansion's own pattern does, so a pattern with no separator in it cannot " +
-			"reach a name with one: `sub/x.txt` stays in every column, including the " +
-			"shell that has the parameter. Its sibling row is what makes this " +
-			"falsifiable — with the separator written into the pattern the same name goes",
+			"reach a name with one: `sub/x.txt` stays. It is the one row of these five " +
+			"where the two bash builds part — 3.2.57 lets the `*` cross the separator " +
+			"and answers `sub/y.log`, which is its *sibling* row's answer — so the rule " +
+			"is 5.x's rather than bash's, and a claim recorded against one build here " +
+			"would have been wrong for the other. That sibling is also what makes this " +
+			"falsifiable: with the separator written into the pattern the name goes in " +
+			"every column that has the parameter, this one included",
 	},
 	{
 		ID: "pat/the-ignore-parameter-with-the-separator-written-in", Category: "pattern matching",
@@ -16455,7 +16459,10 @@ printf "[%s]" .@(hid); echo`,
 			`GLOBIGNORE='*/x.txt'; echo */*`,
 		Why: "the other half of the row above, and the one that moves: with the `/` in " +
 			"the pattern the name is taken out and `sub/y.log` is the whole answer in " +
-			"the shell with the parameter, against both names everywhere else",
+			"the shell with the parameter, against both names everywhere else. It is " +
+			"where the two bash builds agree, which is what places their disagreement " +
+			"above on the *separator* and not on the parameter — a pair that differed " +
+			"on both rows would say only that 3.2 had it and read it differently",
 	},
 	{
 		ID: "pat/everything-ignored-is-a-pattern-that-matched-nothing", Category: "pattern matching",

@@ -1857,8 +1857,10 @@ taken back out.
 
 Measured on bash 5.3.15 and bash 3.2.57, 2026-09-13, in a directory
 holding `a.txt`, `b.txt`, `c.log`, `.dot`, `.hid.txt` and a directory
-`sub` that holds `x.txt` and `.y`. The two builds answer alike
-throughout.
+`sub` that holds `x.txt` and `.y`. The two builds answer alike on every
+row below **but one**, marked where it falls; the separator rule and the
+fold are 5.x's rather than bash's. No preset here is bash 3.2, so both
+differences are recorded and neither is given an axis.
 
 | written | answer |
 | --- | --- |
@@ -1866,7 +1868,7 @@ throughout.
 | `GLOBIGNORE='a.txt:c.log'; echo *` | `.dot .hid.txt b.txt sub` |
 | `GLOBIGNORE='a.txt:'; echo *` | `.dot .hid.txt b.txt c.log sub` |
 | `GLOBIGNORE='*.txt'; echo *.txt` | `*.txt` |
-| `GLOBIGNORE='*x.txt'; echo */*` | `sub/.y sub/x.txt` |
+| `GLOBIGNORE='*x.txt'; echo */*` | `sub/.y sub/x.txt` — **3.2.57: `sub/.y`** |
 | `GLOBIGNORE='*/x.txt'; echo */*` | `sub/.y` |
 | `GLOBIGNORE='sub/*'; echo */*` | `*/*` |
 | `GLOBIGNORE='sub'; echo */` | `sub/` |
@@ -1890,6 +1892,13 @@ pattern does, which is why `*x.txt` does not reach `sub/x.txt`. There is
 **no leading-period rule** to go with it — `sub/*` does take `sub/.y` out
 — so only one half of the rule the walk itself follows survives here.
 
+This is the row where the builds part: **bash 3.2.57 lets the `*` cross the
+separator** and answers `sub/.y`, the same as the row below it. The two rows
+are a pair for exactly that reason — 3.2.57 agrees on the second, so its
+disagreement is about the separator and not about having the parameter at
+all. The corpus carries both, and the golden record holds `bash32`'s own
+answer beside `bash`'s.
+
 **A word the patterns left with nothing is a word that matched nothing.**
 The pattern stands where no option says otherwise, `nullglob` deletes the
 word, and `failglob` refuses it. The operand in those rows matched every
@@ -1899,9 +1908,12 @@ the expansion's.
 **It reaches pathname expansion alone.** `case`, `[[ ]]` and the pattern
 operators of parameter expansion are untouched with it set.
 
-The comparison is under the same fold the expansion is under: with
-`nocaseglob` on, an ignore pattern of `*.TXT` takes `a.txt` out, and with
-it off it does not.
+The comparison is under the same fold the expansion is under: on bash
+5.3.15, with `nocaseglob` on, an ignore pattern of `*.TXT` takes `a.txt`
+out, and with it off it does not. Both halves are the measurement — a
+filter that always folded would answer the first and a filter that never
+folded the second, so either alone says nothing. **bash 3.2.57 folds
+neither way here**, which is the second of the two places the builds part.
 
 ### The switch the assignment writes, and why this follows the assignment
 
@@ -1913,6 +1925,7 @@ behavior beside it, which is what these measurements say together:
 | `GLOBIGNORE=a; shopt dotglob` | `on` |
 | `GLOBIGNORE=a; shopt -u dotglob; echo *` | no hidden names |
 | `GLOBIGNORE=a; GLOBIGNORE=; shopt dotglob` | `on` |
+| `GLOBIGNORE=; shopt dotglob` | `off` |
 | `GLOBIGNORE=a; unset GLOBIGNORE; shopt dotglob` | `off` |
 | `shopt -s dotglob; unset GLOBIGNORE; shopt dotglob` | `off` |
 
@@ -1920,6 +1933,12 @@ So the assignment writes the switch and a script may write it back; the
 *unset* writes it the other way whoever set it; and an assignment of
 nothing writes neither, which is why a null value is not the same state as
 no value at all.
+
+The third and fourth rows are a pair and the fourth is the one that says
+anything. A null assignment made where the switch is **already on** is a
+row both readings of it answer alike — leaving the switch alone and turning
+it on are the same answer there — so it shows only that the assignment was
+noticed. The row that starts from the switch off is where the two part.
 
 **A value inherited from the environment does none of this and is not read
 at all.** `env GLOBIGNORE='*.txt' bash -c 'echo *'` lists the `.txt`

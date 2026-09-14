@@ -547,6 +547,35 @@ func TestAPromptWaitIsNotAnsweredByOutputHoldingThePromptsText(t *testing.T) {
 	}
 }
 
+// TestAPromptWaitBlocksWhileOnlyTheEchoOfItsTextIsDrawn is the same fact
+// asserted on awaitReadyForInput rather than on the seek beneath it.
+//
+// Which seek that helper calls is precisely what #2760 got wrong, so a test
+// that exercised only seekPrompt would pass with the helper still calling the
+// other one — and the session test would pass too, on any machine where the
+// shell happens to reach its read in time. This one cannot: the prompt is
+// arranged to arrive late and the assertion is on the lower bound, which load
+// can only lengthen.
+func TestAPromptWaitBlocksWhileOnlyTheEchoOfItsTextIsDrawn(t *testing.T) {
+	const late = 50 * time.Millisecond
+
+	drawn := &screen{prompt: ptyPrompt}
+	drawn.buf.WriteString("SAW-PS1[" + ptyPrompt + "]\r\n")
+
+	go func() {
+		time.Sleep(late)
+		drawn.mu.Lock()
+		drawn.buf.WriteString(ptyPrompt)
+		drawn.mu.Unlock()
+	}()
+
+	start := time.Now()
+	drawn.awaitReadyForInput(t)
+	if waited := time.Since(start); waited < late {
+		t.Errorf("the wait returned after %v, answered by the session's own output before the prompt was drawn at %v", waited, late)
+	}
+}
+
 // TestTheFirstPromptOnAScreenBeginsALine: the start of the screen is a line
 // start, which an implementation written as a search for a newline and then
 // the prompt would miss — and it would miss it in every session that says

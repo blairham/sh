@@ -2088,6 +2088,14 @@ func Semantics() interp.Semantics {
 	// And the letter too, at zsh's own 1: `set -Z; echo one` prints
 	// nothing and exits 1.
 	s.BadSetOptionLetterFatal = interp.Yes
+	// `set -o posix` is `no such option: posix` here, so the `sh` name is
+	// the only door — and this is the shell whose `sh` emulation changes the
+	// most, which is why it was asked rather than assumed. Measured 2026-09-14
+	// through a symlink named `sh`: both spellings still stop at 1. The mode
+	// moves neither, and this preset says so for the same reason it declines
+	// the special-builtin move above (#2641).
+	s.BadSetOptionNameFatalInPosixMode = interp.Yes
+	s.BadSetOptionLetterFatalInPosixMode = interp.Yes
 	// The other welding column, and it agrees with ksh93 word for word on
 	// behavior: `set -oerrexit zzznosuch` is errexit with `zzznosuch` as $1,
 	// and `set -oe` is `no such option: e`.

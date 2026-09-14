@@ -254,17 +254,17 @@ var extraSetOptions = map[string]setOption{
 	// It moves the axes measured to move with it and no others, which is the
 	// same partial honesty `emulate` keeps in the zsh dialect: real posix
 	// modes fold in dozens of behaviors, and claiming those would be a
-	// promise nothing here keeps. Today that is nine axes, and the evidence
+	// promise nothing here keeps. Today that is eleven axes, and the evidence
 	// is direct in every case — `set -o posix` makes a failed redirection on
 	// a special builtin end bash 5.3 and bash 3.2, `set +o posix` makes bash
 	// invoked as `sh` carry on, and the two states are exactly the panel's
 	// `bash` and `bash-as-sh` columns. See SetPosixMode for the list and for
 	// the measurement behind each.
 	//
-	// Eight of the nine take the standard's own answer, and the ninth takes
-	// the *dialect's* answer to what its mode makes of that axis. See
-	// SetPosixMode: the mode is the core's, and what a given shell's mode
-	// moves is not (#2583).
+	// Eight of the eleven take the standard's own answer, and the other
+	// three take the *dialect's* answer to what its mode makes of that axis.
+	// See SetPosixMode: the mode is the core's, and what a given shell's
+	// mode moves is not (#2583, #2641).
 	//
 	// Turning it *off* puts back the answer the dialect started with rather
 	// than writing the opposite of the standard's, which is not the same
@@ -366,15 +366,25 @@ var extraSetOptions = map[string]setOption{
 // two questions; this is the mode, and it is the core's for the same reason
 // PosixSemantics is.
 //
-// **Nine of the ten axes it moves take the standard's own answer**, because
+// **Nine of the twelve axes it moves take the standard's own answer**, because
 // that is what the name asks for and every shell with a POSIX mode was measured
-// to take them. The tenth — BadOptionToSpecialBuiltinFatal — it takes from the
-// dialect, through BadOptionToSpecialBuiltinFatalInPosixMode, because the shells
-// disagree about what their own mode makes of it: bash's moves it to fatal
-// through either door and zsh's leaves it alone, while both shells' mode moves
-// the redirection axis beside it. A knob that wrote one shell's answer here
-// would be imposing bash's semantics on every dialect invoked as `sh`, which is
-// the thing the core is not allowed to do (#2583).
+// to take them. The other three it takes from the dialect, through a field of
+// their own apiece, because a value written in here reaches every dialect
+// invoked as `sh` and the panel does not agree about any of them:
+//
+//   - BadOptionToSpecialBuiltinFatal, through
+//     BadOptionToSpecialBuiltinFatalInPosixMode, because bash's mode moves it
+//     to fatal through either door and zsh's leaves it alone, while both
+//     shells' mode moves the redirection axis beside it. A knob that wrote
+//     bash's answer would have given zsh-as-`sh` a fatality zsh has not got
+//     (#2583).
+//   - BadSetOptionNameFatal and BadSetOptionLetterFatal, through
+//     BadSetOptionNameFatalInPosixMode and BadSetOptionLetterFatalInPosixMode,
+//     because `set`'s own refusal has never gone through the axis above — it
+//     has one per spelling — and because BusyBox ash, which has no POSIX mode
+//     at all, carries on past a refused *name* under every name it is called
+//     by. The standard's answer written in here would end a script it does not
+//     end (#2641).
 //
 // The saved fields are the whole of the care it needs, and the reason it is
 // one function rather than a line at each call site. Entering records the
@@ -401,6 +411,7 @@ func (r *Runner) SetPosixMode(on bool) {
 	readonlyListing := r.posixSavedReadonlyListing
 	bareListing := r.posixSavedBareListing
 	badOption := r.posixSavedBadOption
+	badSetName, badSetLetter := r.posixSavedBadSetName, r.posixSavedBadSetLetter
 	assignPrefix := r.posixSavedAssignPrefix
 	aliasReserved := r.posixSavedAliasReserved
 	if on {
@@ -420,6 +431,10 @@ func (r *Runner) SetPosixMode(on bool) {
 		bareListing = posixListing(r.posixSavedBareListing)
 		r.posixSavedBadOption = r.sem().BadOptionToSpecialBuiltinFatal
 		badOption = r.sem().BadOptionToSpecialBuiltinFatalInPosixMode
+		r.posixSavedBadSetName = r.sem().BadSetOptionNameFatal
+		r.posixSavedBadSetLetter = r.sem().BadSetOptionLetterFatal
+		badSetName = r.sem().BadSetOptionNameFatalInPosixMode
+		badSetLetter = r.sem().BadSetOptionLetterFatalInPosixMode
 		r.posixSavedAssignPrefix = r.sem().AssignmentPrefixPersistsOnSpecialBuiltin
 		assignPrefix = Yes
 		r.posixSavedAliasReserved = r.dialect().AliasesExpandReservedWords
@@ -541,8 +556,24 @@ func (r *Runner) SetPosixMode(on bool) {
 		// prefix rule as a whole, which is why this is the one field written
 		// and not the site in Runner.execBuiltin.
 		s.AssignmentPrefixPersistsOnSpecialBuiltin = assignPrefix
+		// The tenth and eleventh, and the second pair the mode takes from
+		// the dialect rather than from the standard. `set`'s own refusal
+		// never went through BadOptionToSpecialBuiltinFatal — it has an axis
+		// per spelling — so the axis above moved and these two did not,
+		// which left `set -o posix; set -o zzznosuch` carrying on here and
+		// ending the script in bash.
+		//
+		// From the dialect for the reason the bad-option axis is, and the
+		// deciding row is BusyBox ash: it has no POSIX mode, its `sh` applet
+		// is its `ash` applet, and it carries on at 1 past a refused *name*
+		// under either name. Every dialect invoked as `sh` comes through
+		// here, so a written-in `Yes` would end an ash script that really
+		// goes on. See Semantics.BadSetOptionNameFatalInPosixMode for the
+		// panel and for why the two spellings are two fields (#2641).
+		s.BadSetOptionNameFatal = badSetName
+		s.BadSetOptionLetterFatal = badSetLetter
 	})
-	// The tenth, and the only one that is not on the vector at all: whether
+	// The twelfth, and the only one that is not on the vector at all: whether
 	// an alias may stand in for a word the grammar reserves is decided while
 	// a line is *read*, so it is a dialect field and the mode reaches it the
 	// way a grammar-reaching option does — a replaced Dialect, never a write

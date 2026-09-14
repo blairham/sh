@@ -3566,13 +3566,65 @@ type Semantics struct {
 	// measurable rides on those two choices today — which is precisely why
 	// they are written down rather than left to whichever field was nearest.
 	//
-	// Neither this nor the name's axis is moved by POSIX mode, and bash
-	// moves both when its mode is entered — `set -o posix; set -o zzznosuch`
-	// stops there and carries on here. That is a real divergence and it is
-	// #2641 rather than a value in this field: bash is the only panel column
-	// with a POSIX mode to measure, so the `…InPosixMode` pair it wants has
-	// four presets with nothing to put in it.
+	// Neither this nor the name's axis holds the answer POSIX mode wants;
+	// BadSetOptionNameFatalInPosixMode and BadSetOptionLetterFatalInPosixMode
+	// do, and [Runner.SetPosixMode] swaps them in (#2641).
 	BadSetOptionLetterFatal Answer
+
+	// BadSetOptionNameFatalInPosixMode and BadSetOptionLetterFatalInPosixMode
+	// are the same two questions asked of a shell that is in POSIX mode,
+	// which is a state rather than a preset — [Runner.SetPosixMode] swaps
+	// these values in on the way in and puts the two above back on the way
+	// out.
+	//
+	// Measured 2026-09-14, `<shell> -c 'set -o posix; set -o zzznosuch;
+	// echo "st=$?"; echo after'` and the same line with `set -Z`, against
+	// every door each shell has into the mode:
+	//
+	//	                    default            `set -o posix`      called `sh`
+	//	bash 5.3.15  name   st=2, carries on   stops at 2          stops at 2
+	//	bash 5.3.15  letter st=2, carries on   stops at 2          stops at 2
+	//	bash 3.2.57  name   st=1, carries on   st=1, carries on    st=1, carries on
+	//	bash 3.2.57  letter st=2, carries on   stops at 2          stops at 2
+	//	dash         both   stops at 2         no such mode        stops at 2
+	//	ksh93u+      both   stops at 2         no such mode        stops at 2
+	//	zsh 5.9.2    both   stops at 1         no such mode        stops at 1
+	//	BusyBox ash  name   st=1, carries on   no such mode        st=1, carries on
+	//	BusyBox ash  letter stops at 2         no such mode        stops at 2
+	//
+	// A pair of fields rather than a constant inside the swap, and the
+	// reason is the row BusyBox ash is on. The core's POSIX mode is entered
+	// by *every* dialect invoked as `sh`, so a written-in `Yes` is imposed
+	// on the four shells that have no mode of their own — and for the name
+	// axis that is not a no-op: ash carries on at 1 under either name, so
+	// the standard's answer written here would end a BusyBox script that
+	// really goes on. That is the test #2659 states and #2676 passed, failed
+	// on this axis: *does every dialect with no POSIX mode of its own
+	// already hold the standard's answer, under every name?* The letter axis
+	// passes it and the name axis does not, and a pair that split would be
+	// two mechanisms for one question, so both are fields.
+	//
+	// So every preset answers both, and none of the answers is invented: the
+	// four shells with no `set -o posix` were asked by the door they do have
+	// — argv[0] of `sh`, which is what puts the core into this mode — and
+	// each answers exactly as it does under its own name. Only bash moves.
+	//
+	// bash 3.2.57 is the reminder that the move is not even uniform within
+	// bash: its mode takes the letter and leaves the name. No dialect here
+	// claims that build, and it is the same warning
+	// BadOptionToSpecialBuiltinFatalInPosixMode carries about `return abc`.
+	//
+	// Unspecified is a real answer and means the mode leaves a script that
+	// reaches the question refused by name, exactly as the two axes above
+	// do — a dialect whose POSIX mode nobody has measured must not be handed
+	// one. That is what the core preset holds, because it holds Unspecified
+	// for the pair above too.
+	BadSetOptionNameFatalInPosixMode Answer
+
+	// BadSetOptionLetterFatalInPosixMode is the letter's half of the pair.
+	// See BadSetOptionNameFatalInPosixMode for the measurement and for why
+	// the two spellings need a field each.
+	BadSetOptionLetterFatalInPosixMode Answer
 
 	// BadSetOptionNameAtInvocationExitsZero makes a refused `set -o` **name**
 	// on the command line that started the shell report success. The shell

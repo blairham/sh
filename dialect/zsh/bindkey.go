@@ -259,13 +259,106 @@ func KeyBindings(r *interp.Runner, km repl.Keymap) map[string]repl.Binding {
 				continue
 			}
 		}
-		if _, defined := widgetDefinitionOf(r, widget); defined {
+		if def, defined := widgetDefinitionOf(r, widget); defined {
+			// **A completion widget is answered by its completer, not by its
+			// function.** See completionBinding, which carries the whole of
+			// why — and note that the question is asked of the definition
+			// rather than of the name, because the name is whatever the
+			// completion loader chose to call it.
+			if def.completer != "" {
+				out[seq] = completionBinding(def.completer)
+				continue
+			}
 			out[seq] = repl.Binding{Function: widget}
 			continue
 		}
 		out[seq] = repl.Binding{Widget: bindkeyWidgets[widget]}
 	}
 	return out
+}
+
+// completionBinding is what a key bound to a `zle -C` widget does here: the
+// editor's own completion, named by the widget's *completer* — and never the
+// widget's function.
+//
+// # The failure this exists to stop
+//
+// `zle -C name completer function` is two claims about one widget: that it
+// behaves like the builtin completion widget `completer`, and that `function`
+// is what produces the candidates. zle.go says at length what this shell has
+// of the second — nothing. A completion widget's function reads the line
+// through `$BUFFER` and cannot offer a match, because the whole of how a
+// candidate is produced, filtered and shown is `compadd`, `compset` and
+// `$compstate`, and this shell has none of them.
+//
+// That was a statement about a widget somebody invoked, and it was harmless
+// while it stayed one. What made it a broken Tab on a real machine is that
+// **a real startup file puts such a widget on the Tab key** (#2770). `compinit`
+// ends by redefining the eight builtin completion widgets —
+//
+//	zle -C complete-word .complete-word _main_complete
+//
+// — and then, when `_expand` is among the configured completers, rebinding
+// `^I` to one of them:
+//
+//	bindkey '^i' complete-word
+//
+// Both lines run to completion here, so `^I` arrives in this table bound to a
+// name that *is* defined, and the editor called `_main_complete`. Measured
+// 2026-09-14 through a pseudo-terminal against this machine's own `~/.zshrc`,
+// typing `cat uniquef` and pressing Tab in a directory whose only match is
+// `uniquefile_marker.txt`: nothing completed and the widget printed
+//
+//	_main_complete:94: command not found: compset
+//	_setup:37: compstate: assignment to invalid subscript range
+//
+// where the same shell under `-f` completed the name correctly. **A real rc
+// took a working completion away and put a failing one in its place**, which
+// is worse than having no completion system at all, and is why the issue is a
+// daily-driver blocker rather than a missing feature.
+//
+// # Why the completer is the honest answer
+//
+// The first of the widget's two claims is one this shell *can* keep. A key
+// bound to `complete-word` with no `zle -C` in sight already runs the editor's
+// completion — that is bindkeyWidgets, three lines up — and `zle -C` has not
+// changed what the key is for. It named a different way of producing the
+// candidates, and this shell has one way and only one. So the key goes on
+// completing, and the function that cannot complete is not called.
+//
+// This is the same split complist.go makes for `zsh/complist` — the keymaps,
+// which are real here, and not the widget, which is not — and the one
+// filesmodule.go makes between `zf_rm` and `rm`. Take the half that is true.
+//
+// The lookup is bindkeyWidgets, the table every other widget name is answered
+// from, with the leading `.` off: `.complete-word` reaches the builtin even
+// when something has redefined the plain name, and the two spellings are the
+// same action. Two of the eight completers are in that table, and they are the
+// two that matter — zsh binds Tab to `expand-or-complete`, and `compinit`
+// rebinds it to `complete-word`. The other six answer WidgetNone, which is
+// what a key bound to `menu-complete` or `list-choices` does in this shell
+// today with no completion widget involved: nothing, in the open, rather than
+// a diagnostic per keystroke. Menu completion and a listing widget are the
+// editor's to grow, and #2776 is where the rest of this lives.
+//
+// # What this does not do
+//
+// It does not run the rc's completions. `_main_complete` knows how to complete
+// a `git` subcommand and this does not; what a person gets on a real rc is
+// this shell's own completion of files and commands, which is what they get
+// with no rc at all. The gap is the completion system itself — `zsh/complete`
+// and `zsh/computil`, some sixty builtins and parameters between them — and it
+// is #2776 rather than this issue.
+//
+// Nor is it the module table, and that is worth saying because the issue was
+// filed as though it were. `zmodload zsh/complete` is refused here, before
+// this change and after it, and Tab completes anyway: `compinit` tolerates
+// the refusal and binds the widget regardless, so **the loader is not the
+// surface that gates the keystroke** — the missing `compset` builtin is the
+// one the widget reaches first. Registering the module would have moved the
+// diagnostic, not removed it.
+func completionBinding(completer string) repl.Binding {
+	return repl.Binding{Widget: bindkeyWidgets[strings.TrimPrefix(completer, ".")]}
 }
 
 // keymapBindings is what the editor is told about one of its two states.

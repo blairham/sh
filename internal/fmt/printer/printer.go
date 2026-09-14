@@ -24,7 +24,9 @@ import (
 
 // Format lays out f, which must be src's tree, with cs recovered from the
 // same pair, arranged the way st says. The result ends in exactly one newline
-// for non-empty input.
+// for non-empty input, with the two exceptions [Format] cannot take one: a
+// here-document body that runs to end of file, and a word that ends in a
+// backslash the input ended after.
 //
 // st is the dialect's answer, from `dialect/<shell>.Style()`. A zero Style is
 // not a usable one — its Indent is empty and its MaxBlankLines is zero — so a
@@ -44,7 +46,39 @@ func Format(src string, f *syntax.File, cs []comments.Comment, st syntax.Style) 
 		// runs to end of file and its blank lines are content.
 		return out
 	}
-	return strings.TrimRight(out, "\n") + "\n"
+	out = strings.TrimRight(out, "\n")
+	if endsInAnUnescapedBackslash(out) {
+		// The other text that cannot carry a final newline, and for the
+		// same reason as the here-document above: adding one changes what
+		// it says. A backslash the input ends after is a word — `printf x\`
+		// is the two words `printf` and `x\` — and a newline behind it
+		// makes it an ordinary line continuation instead, which joins the
+		// word to nothing and takes the backslash with it. The tree would
+		// then have two words where it had three, which is the formatter's
+		// first promise broken rather than a layout choice.
+		//
+		// Respelling it `\\` would also keep the tree and would keep the
+		// newline, and it is not what happens here: this package emits
+		// every token by its source extent and never respells a word. See
+		// the package comment. So the newline is what gives way.
+		return out
+	}
+	return out + "\n"
+}
+
+// endsInAnUnescapedBackslash says whether appending a newline to s would turn
+// its last byte into a line continuation.
+//
+// A backslash is the last byte only where the text around it is unquoted — a
+// quoted run ends with its closing quote, not with its content — so the run
+// of backslashes at the end is all there is to read, and its length decides:
+// an odd run leaves one unpaired.
+func endsInAnUnescapedBackslash(s string) bool {
+	n := 0
+	for i := len(s) - 1; i >= 0 && s[i] == '\\'; i-- {
+		n++
+	}
+	return n%2 == 1
 }
 
 type printer struct {

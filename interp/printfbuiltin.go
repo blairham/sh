@@ -571,12 +571,22 @@ func (r *Runner) scanPrintfSpec(s string) (string, byte, string, int, int) {
 		return "", 0, "", len(s), 0
 	}
 	// The `'` that survived the prefix scan is this dialect's grouping flag,
-	// and it is dropped here because Go's formatter has no such flag and the
-	// grouping it asks for is the locale's — which is empty in the C locale,
-	// the only one this shell has numeric data for. See
-	// Semantics.PrintfGroupingFlag and #2675: a dialect that does *not* have
-	// the flag never gets this far, because the `'` is the conversion
-	// character it was refused as.
+	// and it is dropped here rather than honored. It asks for the digits to
+	// be parted by `LC_NUMERIC`'s thousands separator, and
+	// interp/localenumeric.go is the one home for what this shell knows about
+	// that category: the separator is empty under every locale it has numeric
+	// data for, so the grouped conversion and the plain one are the same
+	// string and Go — which has no such flag — can be handed the plain one.
+	//
+	// That the two halves agree is not left to this comment.
+	// TestPrintfDropsTheGroupingFlagOnlyBecauseTheSeparatorIsEmpty asserts
+	// LocaleNumericFor's separator beside this output, so teaching the shell
+	// a locale that groups fails there rather than silently writing a number
+	// with the flag thrown away. #2675 records why there is no such locale.
+	//
+	// A dialect that does *not* have the flag never gets this far, because
+	// the `'` is the conversion character it was refused as. See
+	// Semantics.PrintfGroupingFlag.
 	spec := "%" + strings.ReplaceAll(s[1:i], "'", "")
 	if s[i] == '(' {
 		// `%(fmt)T`, the one conversion whose format is inside the

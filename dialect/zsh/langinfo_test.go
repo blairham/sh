@@ -55,7 +55,7 @@ func TestTheCodesetIsTheOneKeyAnsweredUnderEveryLocale(t *testing.T) {
 		{"en_US.ISO8859-1", "ISO8859-1"},
 		{"zh_CN.GB18030", "GB18030"},
 		// The encoding rides on the C locale without changing anything else,
-		// which is the row langInfoLocaleIsC exists for.
+		// which is the row interp.LocaleIsC exists for.
 		{"C.UTF-8", "UTF-8"},
 	} {
 		t.Run(c.locale, func(t *testing.T) {

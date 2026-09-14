@@ -6181,6 +6181,107 @@ The corpus cannot catch this class of difference — `internal/oracle` pins
 environment — so the pinning lives in unit tests that set the variables
 per case.
 
+### `LC_NUMERIC` is the category with no data, and that is decided too
+
+The policy above is about the encoding — what a letter is and how many
+bytes a character takes. `LC_NUMERIC` is the other half of a locale a
+shell can be asked about: the character a fractional part is written
+after, and the one a number's digit groups are parted by. `printf`'s `'`
+flag asks for the second (`Semantics.PrintfGroupingFlag`), and
+`$langinfo[RADIXCHAR]` and `[THOUSEP]` ask for both.
+
+**This shell has the C locale's numeric data and no other**, so `RADIXCHAR`
+is `.`, `THOUSEP` is empty, and a conversion carrying the `'` flag is
+written ungrouped. Every other locale is refused by name at `$langinfo`
+and produces the same ungrouped number at `printf`. Generating a table of
+the rest — the shape `widthgen` and `normgen` use for the Unicode data,
+which is the shape #2675 filed this to consider — was measured and
+**declined**. Three findings, each of which would have to be answered
+before a table could be right about anything.
+
+**The answer is the host C library's, not the shell's.** One
+`printf "%'d" 1234567` under `LC_ALL=en_US.UTF-8`, measured 2026-09-13:
+
+| host | C library | bash 5.3 writes |
+| --- | --- | --- |
+| macOS 15, arm64 | Apple libc | `1,234,567` |
+| the pinned Alpine image | musl | `1234567` |
+| Arch container, stock | glibc 2.44 | `1,234,567` |
+
+and under `LC_ALL=de_DE.UTF-8` the third host does not write `1.234.567`
+— it warns `cannot change locale (de_DE.UTF-8)` and writes `1234567`,
+because glibc's locale definitions are a package somebody installs and
+then generates, and a stock container has `en_US` alone. The second row is
+the panel's own `ash` image, `alpine@sha256:28bd5f…` (3.24.1), with bash
+5.3.9 added to it: musl carries no locale data — the image has no `locale`
+command to list any — so **the row this shell already produces is the row
+bash produces on every Alpine system there is**, under `C.UTF-8`,
+`en_US.UTF-8` and `de_DE.UTF-8` alike. Same shell, same locale name, three
+answers. A generated table would be a fourth, agreeing with
+none of them by construction, and it would agree with them *differently*
+depending on which machine the reader was sitting at — which is the
+`$langinfo` argument exactly: an answer a caller cannot tell from a real
+one.
+
+**The panel does not agree with itself outside C.** Measured 2026-09-13 on
+macOS, the same conversion:
+
+| `LC_ALL` | bash 5.3 · bash 3.2 · zsh 5.9.2 | ksh93u+ |
+| --- | --- | --- |
+| `en_US.UTF-8` | `1,234,567` | `1,234,567` |
+| `de_DE.UTF-8` | `1.234.567` | `1.234.567` |
+| `hi_IN.UTF-8` | `12,34,567` | `1,234,567` |
+| `fr_FR.UTF-8` | `31 e2 80 af 32 33 34 e2 80 af 35 36 37` | `31 e2 32 33 34 e2 35 36 37` |
+| `ru_RU.UTF-8` | `31 c2 a0 32 33 34 c2 a0 35 36 37` | `31 c2 32 33 34 c2 35 36 37` |
+
+The last two rows are bytes because that is where the disagreement is:
+the separator is U+202F in one and U+00A0 in the other, and only one
+column writes a whole one.
+
+Two disagreements and neither is a wording one. ksh93 takes the locale's
+separator and **not** its grouping rule, so the Indian 3-then-2 grouping
+is 3 there; and where the separator is multibyte ksh93 writes **one byte
+of it**, which is invalid UTF-8 — U+202F is `e2 80 af` and only the `e2`
+survives, and `ru_RU.UTF-8`'s U+00A0 goes the same way. So there is no
+single table to generate. Matching bash would put the ksh dialect wrong
+in every locale that groups by anything but threes or separates by
+anything above ASCII; matching ksh93 would mean reproducing a mojibake
+bug on purpose.
+
+**The separator is the smaller half.** The radix character moves under the
+same category, and it moves the *reader* as well as the writer. Measured
+under `LC_ALL=de_DE.UTF-8`:
+
+    printf "%f" 1.5     bash 5.3   printf: 1.5: Ungültige Zahl, and 1
+                        ksh93u+    printf: 1.5: arithmetic syntax error, and 1
+                        zsh 5.9.2  1,500000
+
+Two of the three refuse a number written with a point, because the point
+is not the radix character there — and the third accepts it and writes a
+comma back. An honest `LC_NUMERIC` is therefore not a lookup at the
+formatter: it is a locale-sensitive number *parser*, per dialect, with an
+axis over whether the C-locale spelling is still accepted. That is a
+larger piece of work than the flag that started it, and it has no caller
+asking for it.
+
+**And nothing in this repository could grade the result.** `internal/oracle`
+pins `LC_ALL=C` for every case so the record does not depend on the
+developer's environment, and under `C` all seven columns agree with what
+this shell already writes. A case that set a locale would record a
+divergence and would also depend on that locale existing on whatever
+machine ran it — and the pinned Alpine image, which is the first table's
+second row, has none to exist. The evidence above is a hand measurement
+for that reason, and it is the reason there is no corpus row.
+
+So the C locale's numeric data is the data. It is written down **once**,
+in `interp/localenumeric.go`, because two callers read it: `printf` drops
+the `'` flag on the strength of the separator being empty, and
+`dialect/zsh`'s `$langinfo` publishes the same two values. Neither keeps a
+copy. `TestPrintfDropsTheGroupingFlagOnlyBecauseTheSeparatorIsEmpty` joins
+the two halves, so teaching this shell a locale that groups fails a test
+that names `printf` rather than quietly writing a number with the flag
+thrown away.
+
 ## Where a one-shell builtin's code lives: register in the core, take it away
 
 Two placements are available for a builtin only some shells have, and the
@@ -12390,8 +12491,12 @@ locale database, the C locale's numeric data is all it has, and `THOUSEP`
 there is empty — `$langinfo` already refuses every other locale in so many
 words rather than answering `,` for the two locales anybody tests in. So a
 conversion carrying the flag is written ungrouped: right under every
-locale this shell can speak for, wrong under one it cannot. Filed as
-#2675.
+locale this shell can speak for, wrong under one it cannot — and right on
+every musl system there is, where bash writes the same ungrouped number
+because the C library it asks has no locale data either. #2675 weighed
+generating the rest of the locales and declined; the measurements and the
+reasons are *`LC_NUMERIC` is the category with no data* above, and the two
+values live in `interp/localenumeric.go` where `$langinfo` reads them too.
 
 Which conversions take the flag is not a second question. Measured, `%d`,
 `%i`, `%u` and `%f` group; `%s`, `%x`, `%e`, `%g`, `%c` and `%b` accept it

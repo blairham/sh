@@ -1199,8 +1199,9 @@ func TestPrintfStarWithoutOperandIsRefusedIsAnAxis(t *testing.T) {
 //
 // The grouping itself is not in this table because there is none to see: the
 // separator is the locale's, this shell has numeric data for the C locale
-// alone, and `THOUSEP` there is empty. See Semantics.PrintfGroupingFlag and
-// #2675.
+// alone, and `THOUSEP` there is empty. That is asserted rather than assumed by
+// TestPrintfDropsTheGroupingFlagOnlyBecauseTheSeparatorIsEmpty below. See
+// Semantics.PrintfGroupingFlag and #2675.
 func TestPrintfGroupingFlagIsAnAxis(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
@@ -1233,6 +1234,50 @@ func TestPrintfGroupingFlagIsAnAxis(t *testing.T) {
 			out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
 			if out != tc.want || st != tc.status {
 				t.Errorf("got %q status %d, want %q and %d", out, st, tc.want, tc.status)
+			}
+		})
+	}
+}
+
+// The `'` flag is dropped, and this is the assertion that says *why*.
+//
+// `printf` writes a conversion carrying the flag ungrouped, which is right
+// only for as long as the separator it would group by is empty. That
+// separator lives in one place — interp.LocaleNumericFor, which
+// `$langinfo[THOUSEP]` reads too — and nothing in printfbuiltin.go consults
+// it, because under every locale this shell has numeric data for the grouped
+// string and the plain one are the same bytes.
+//
+// So the two halves are joined here instead. Give the C locale a separator
+// and this test stops at its first assertion, naming `printf` as the thing
+// that now has grouping to do; leave both alone and it keeps passing.
+// Without it the reason for the drop is a comment, and a comment does not
+// fail (#2675).
+//
+// The locale in force is not a variable of this test. LocaleNumericFor
+// answers for the C locale and refuses every other, so the shell's output is
+// the same under all of them — which is the third row, and the reason the
+// separator and not the locale is the thing pinned.
+func TestPrintfDropsTheGroupingFlagOnlyBecauseTheSeparatorIsEmpty(t *testing.T) {
+	numeric, ok := LocaleNumericFor("C")
+	if !ok {
+		t.Fatal("LocaleNumericFor has no data for the C locale, which is the one locale it is for")
+	}
+	if numeric.ThousandsSeparator != "" {
+		t.Fatalf("the C locale now groups by %q — printf must group with it rather than dropping the `'` flag; see interp/printfbuiltin.go and #2675",
+			numeric.ThousandsSeparator)
+	}
+	for _, tc := range []struct{ name, src string }{
+		{"the C locale", `printf "[%'d]" 1234567`},
+		{"a locale that was never set", `unset LC_ALL LC_NUMERIC LANG; printf "[%'d]" 1234567`},
+		{"a locale this shell has no numeric data for", `LC_ALL=en_US.UTF-8; printf "[%'d]" 1234567`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := printfSem()
+			sem.PrintfGroupingFlag = Yes
+			out, st := run(t, "LC_ALL=C; "+tc.src, func(r *Runner) { r.Semantics = &sem })
+			if out != "[1234567]" || st != 0 {
+				t.Errorf("got %q status %d, want %q and 0", out, st, "[1234567]")
 			}
 		})
 	}

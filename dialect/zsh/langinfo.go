@@ -3,11 +3,7 @@
 
 package zsh
 
-import (
-	"strings"
-
-	"github.com/blairham/sh/interp"
-)
+import "github.com/blairham/sh/interp"
 
 // The `zsh/langinfo` module: `$langinfo`, the locale's own vocabulary.
 //
@@ -140,6 +136,11 @@ type langInfoCategory struct {
 // by key against zsh 5.9.2 under `LC_ALL=C`. `CODESET` is absent from the
 // table on purpose: it is the one key that is answered under every locale, so
 // its value is computed rather than looked up. See langInfoView.
+//
+// The `LC_NUMERIC` pair is not written down here either, for the opposite
+// reason: it is answered *elsewhere too*. `printf`'s `'` flag asks for the
+// same thousands separator, so both read interp.LocaleNumericFor — see
+// langInfoNumericItems and interp/localenumeric.go.
 var langInfoCategories = []langInfoCategory{
 	{variable: "LC_TIME", items: map[string]string{
 		"ABDAY_1": "Sun", "ABDAY_2": "Mon", "ABDAY_3": "Tue", "ABDAY_4": "Wed",
@@ -164,10 +165,7 @@ var langInfoCategories = []langInfoCategory{
 		"ERA": "", "ERA_D_FMT": "", "ERA_D_T_FMT": "", "ERA_T_FMT": "",
 		"ALT_DIGITS": "",
 	}},
-	{variable: "LC_NUMERIC", items: map[string]string{
-		"RADIXCHAR": ".",
-		"THOUSEP":   "",
-	}},
+	{variable: "LC_NUMERIC", items: langInfoNumericItems()},
 	{variable: "LC_MONETARY", items: map[string]string{
 		"CRNCYSTR": "",
 	}},
@@ -192,7 +190,11 @@ const (
 func langInfoView(r *interp.Runner) interp.AssocArray {
 	out := interp.AssocArray{langInfoCodesetKey: interp.Scalar(langInfoCodeset(r))}
 	for _, cat := range langInfoCategories {
-		if !langInfoLocaleIsC(r.LocaleFor(cat.variable)) {
+		// interp.LocaleIsC rather than a test of this module's own: the
+		// question — a locale name this shell can answer for without a
+		// database — is `printf`'s too now that the `'` flag asks it of the
+		// same numeric data, so it moved to where the locale is read (#2675).
+		if !interp.LocaleIsC(r.LocaleFor(cat.variable)) {
 			// Not this shell's locale to speak for. Every key the category
 			// owns is left out, and each refuses by name when it is read.
 			continue
@@ -218,26 +220,21 @@ func langInfoCodeset(r *interp.Runner) string {
 	return codeset
 }
 
-// langInfoLocaleIsC reports whether a locale name is the one this shell can
-// answer for without a database.
+// langInfoNumericItems is the LC_NUMERIC half of the table, taken from the
+// one place this shell writes its numeric data down.
 //
-// `C` and `POSIX` are that locale, and so is a name that was never set — a
-// shell with none of the three variables is in the C locale by POSIX's own
-// rule, and measured, its `$langinfo` is the C locale's key for key.
+// Not spelled out here. `interp` is where the locale is read, and
+// interp.LocaleNumericFor is the single home for the radix character and the
+// thousands separator — `printf`'s `'` flag asks the same question of the same
+// function. Two keys are little enough to copy, which is exactly how a copy
+// gets made and then drifts (#2675).
 //
-// `C.UTF-8` is **not** it, and that is the row that makes this a function
-// rather than a comparison. Measured: under `LC_ALL=C.UTF-8` the date formats
-// and the yes-and-no patterns are the C locale's while `CODESET` is `UTF-8`,
-// so the encoding rides on the name without changing anything else. The two
-// halves of that are already separate here — the codeset is read off the name
-// above and never off this answer — so the name is compared with its encoding
-// stripped, and `C.UTF-8` answers for the C locale exactly as `C` does.
-func langInfoLocaleIsC(locale string) bool {
-	if i := strings.IndexByte(locale, '@'); i >= 0 {
-		locale = locale[:i]
+// The C locale's values, because langInfoView only reaches this table once
+// interp.LocaleIsC has said the category is in that locale.
+func langInfoNumericItems() map[string]string {
+	numeric, _ := interp.LocaleNumericFor("C")
+	return map[string]string{
+		"RADIXCHAR": numeric.RadixChar,
+		"THOUSEP":   numeric.ThousandsSeparator,
 	}
-	if i := strings.IndexByte(locale, '.'); i >= 0 {
-		locale = locale[:i]
-	}
-	return locale == "" || locale == "C" || locale == "POSIX"
 }

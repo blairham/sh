@@ -1440,7 +1440,7 @@ func TestPrintfGDefaultsToSixSignificantDigits(t *testing.T) {
 		{"the small end of the threshold", `printf '[%g]' 0.0001`, "[0.0001]"},
 		{"and one step below it", `printf '[%g]' 0.00001`, "[1e-05]"},
 		{"`%G` is the same number in capitals", `printf '[%G]' 123456789`, "[1.23457E+08]"},
-		// The neighbours, pinned rather than changed: Go's default precision
+		// The neighbors, pinned rather than changed: Go's default precision
 		// for these three is already six, which is why the gap survived
 		// beside verbs that look like it.
 		{"`%e` keeps its own six", `printf '[%e]' 123456789`, "[1.234568e+08]"},

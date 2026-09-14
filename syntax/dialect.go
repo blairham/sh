@@ -1443,6 +1443,62 @@ type Dialect struct {
 	// test [Dialect.FunctionNameExpands] already makes and this shares it.
 	FunctionNameIsAnyWord bool
 
+	// FunctionNameIsAnyBareWord is the third answer to the same question, and
+	// the one that turns on **how the word was written** rather than on what
+	// it says: a name written bare is a name whatever its characters, and a
+	// name written with any quoting or any expansion in it is read, defines
+	// nothing, and is not complained about.
+	//
+	// BusyBox ash alone, and it is the seventh column rather than a variant
+	// of one of the six. Measured 2026-09-13 in the digest-pinned alpine
+	// image, BusyBox v1.37.0, each line its own script file:
+	//
+	//	'f'() { echo p; }; f          `f: not found`, 127 — and `f` is a
+	//	                              name nobody could object to, so this
+	//	                              is not the characters
+	//	a.b() { echo hi; }; a.b       `hi` — bare punctuation defines, which
+	//	                              is [Dialect.FunctionNamePunctuation]
+	//	a*b() { echo d; }; a*b        `d`, and `a?b`, `a[b`, `a{b`, `a}b`
+	//	                              and `a~b` the same: a bare word is not
+	//	                              matched against the filesystem here,
+	//	                              which is where this parts company with
+	//	                              [Dialect.FunctionNameIsAnyWord]
+	//	\f() { echo p; }; f           `f: not found` — one backslash over an
+	//	                              ordinary letter is enough
+	//	a"b"() { echo p; }; ab        `ab: not found` — so it is the word and
+	//	                              not the span the quotes are on
+	//	''() { echo x; }; echo $?     `0`, nothing said
+	//	w=foo; _p_${w}() { … }        `_p_foo: not found`
+	//
+	// And the same eight answers come back for the `function` keyword's
+	// spelling, which is why this is one flag where the two above are two:
+	// the panels differ for those and coincide here. `function 'f' { … }`,
+	// `function a\*b { … }` and `function $(echo n) { … }` all define
+	// nothing, and `function a.c { … }` and `function a*b { … }` both
+	// define.
+	//
+	// **Nothing is defined, rather than something being defined under
+	// another name.** Three probes say so and no one of them would have on
+	// its own: `command -v` and `type` both answer 127 for the word's text
+	// *and* for its source text, so it is not hiding under `'g'`; and
+	// `g() { echo old; }; 'g'() { echo new; }; g` prints `old`, so an
+	// existing definition is not replaced either. The definition's own
+	// status is 0 and its body never runs.
+	//
+	// The body is still **parsed**: `'h'() { if; }` is `syntax error:
+	// unexpected ";"` at status 2, so this is a definition the grammar reads
+	// whole and not a line it skips. That is what makes this the same shape
+	// [Dialect.FunctionNameCheckedWhenTheDefinitionRuns] records — the word
+	// reaches [FuncDecl.RefusedName] as source text and the answer is the
+	// interpreter's, which for this shell is
+	// interp.FuncNameDefinesNothing: no wording, nothing bound, status 0.
+	//
+	// An assignment is still an assignment, and lexically, exactly as the
+	// two flags above have it: `a=()` is `syntax error: unexpected "("`
+	// here, and `'a=b'() { echo x; }` is a definition of nothing at status
+	// 0 — the `=` has to be bare to make one.
+	FunctionNameIsAnyBareWord bool
+
 	// FunctionMultipleNames lets the `function` keyword take more than one
 	// name for one body: `function clipcopy clippaste { … }` defines both,
 	// and `$0` inside the body is the name that was called, which is what

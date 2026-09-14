@@ -3132,6 +3132,57 @@ are both definitions of `a=b` in zsh, and `a[$i]=()` empties an element.
 A name that cannot be written bare is **printed** quoted, by the same
 rule and the same function the keyword form's is.
 
+### The third reading: the name has to be written bare
+
+BusyBox ash answers the same question a third way, and it is the one
+that turns on **how the word was written** rather than on what the word
+says. A name written bare is a name whatever its characters; a name
+written with any quoting or any expansion in it is read, defines
+nothing, and is not complained about. Measured 2026-09-13 in the
+digest-pinned alpine image, BusyBox v1.37.0, each line its own script
+file:
+
+| written | what ash does |
+| --- | --- |
+| `f() { … }`, `function f { … }` | defines `f` |
+| `a.b() { … }` | defines `a.b` — the punctuation flag, already recorded |
+| `a*b() { … }` | defines `a*b` and calls it, and `a?b`, `a[b`, `a{b`, `a}b` and `a~b` the same |
+| `'f'() { … }` | defines nothing; `f` afterwards is `f: not found` at 127 |
+| `"f"() { … }`, `\f() { … }`, `a"b"() { … }` | the same, so one backslash is as much as a pair of quotes |
+| `''() { … }` | the same, silently, at status 0 |
+| `_p_${w}() { … }`, `$(echo n)() { … }` | the same |
+
+The `a*b` row is what separates this from `FunctionNameIsAnyWord` above:
+zsh matches such a word against the filesystem and defines nothing, and
+this shell never consults it. The `'f'` row is what separates it from
+`FunctionNameIsSourceText`: `f` is a name no set of names could exclude,
+so what stops the definition is the spelling.
+
+**Nothing is bound, rather than something bound under another name.**
+`command -v` and `type` answer 127 for the word's text *and* for its
+source text, and `g() { echo old; }; 'g'() { echo new; }; g` still
+prints `old`, so an existing definition is not replaced either. The body
+is still parsed — `'h'() { if; }` is `syntax error: unexpected ";"` at 2
+— which is what makes this a definition the grammar reads whole rather
+than a line the shell passes over.
+
+An assignment is still an assignment, lexically as everywhere else here:
+`a=()` is `syntax error: unexpected "("`, this shell having no array
+literal, and `'a=b'() { … }` is a definition of nothing at status 0. The
+`a+=(2)` spelling falls out of the same rule and is where most of the
+corpus movement was: there is no `+=` operator here, so `a+=` is a bare
+word before a parenthesis, the line is a function definition, and the
+`2` stands where the `)` belongs — `syntax error: unexpected word
+(expecting ")")`.
+
+Grammar flag: `FunctionNameIsAnyBareWord`, ash alone, and **one flag for
+both spellings** where the two above are two — the panels differ for
+those and coincide here, `function 'f' { … }` and `'f'() { … }` giving
+the same answer. What happens when the definition is reached is
+`interp.Semantics.FunctionNameWhenTheDefinitionRuns` at its fourth
+value, `FuncNameDefinesNothing`: no wording, nothing bound, status 0
+(#2590).
+
 ### One body, several names
 
     function clipcopy clippaste { … }
@@ -3334,19 +3385,27 @@ Not what the word comes to, and not its literal spelling, which is why
 `FuncDecl.RefusedName` keeps the source text rather than a name or a
 word.
 
-Grammar flag: `FunctionNameCheckedWhenTheDefinitionRuns`, on for `bash`
-and `ksh`. What happens when the definition is reached is
-`interp.Semantics.FunctionNameWhenTheDefinitionRuns`, three answers
-among those two with POSIX mode as the third — bash's own name fails the
+Grammar flag: `FunctionNameCheckedWhenTheDefinitionRuns`, on for `bash`,
+`ksh` and `ash`. What happens when the definition is reached is
+`interp.Semantics.FunctionNameWhenTheDefinitionRuns`, four answers among
+those three with POSIX mode as the third — bash's own name fails the
 definition and carries on, `sh` and `set -o posix` stop at the
-syntax-error status, ksh93 stops at 1. The wording is
-`Diagnostics.FunctionNameInvalid`, the same field the *expanded*-name
-refusal uses, because ksh93 says one sentence for both (#1296).
+syntax-error status, ksh93 stops at 1, and ash says nothing and carries
+on at 0. The wording is `Diagnostics.FunctionNameInvalid`, the same field
+the *expanded*-name refusal uses, because ksh93 says one sentence for
+both (#1296).
 
-Only the keyword form is carried this far. The `name()` spelling is its
-own question with its own panel: `_p_${w}() { … }` is
-``syntax error … `}' unexpected`` in ksh93 and the run-time complaint in
-bash, which is a different split again.
+**ash reaches this by a different test**, which is worth holding on to
+before reading a value off the axis: for bash and ksh93 the word's *text*
+is not a name, and for ash the word was not written **bare** — see the
+third reading above, where `'f'` is carried this far and a bare `a*b` is
+defined (#2590).
+
+For `bash` and `ksh` only the keyword form is carried this far, and the
+`name()` spelling is its own question with its own panel: `_p_${w}() { …
+}` is ``syntax error … `}' unexpected`` in ksh93 and the run-time
+complaint in bash, which is a different split again. ash carries both
+spellings, its rule being one rule.
 
 ### When the definition is committed to
 

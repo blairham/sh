@@ -82,6 +82,21 @@ func Dialect() syntax.Dialect {
 	// And a name with punctuation in it is a name: `a.b() { echo hi; }; a.b`
 	// prints hi.
 	d.FunctionNamePunctuation = true
+	// A bare word is a name whatever is in it, and a word that was not
+	// written bare is a definition that binds nothing: `a*b() { echo d; };
+	// a*b` prints `d` here, and `'f'() { echo p; }; f` is `f: not found` at
+	// 127 even though `f` is a name nobody could object to. So it is the
+	// spelling and not the characters, which is the third answer to a
+	// question the other six columns split three ways — see
+	// syntax.Dialect.FunctionNameIsAnyBareWord for the measurements, and
+	// note that both spellings of a definition answer alike here where the
+	// panels for the two flags either side of that one differ (#2590).
+	d.FunctionNameIsAnyBareWord = true
+	// The word is carried to the definition rather than refused while
+	// reading, which is what the run below has to say anything about: the
+	// body is parsed like any other, `'h'() { if; }` being `syntax error:
+	// unexpected ";"` at status 2.
+	d.FunctionNameCheckedWhenTheDefinitionRuns = true
 	// One operator may stand where a case pattern belongs: `case a in ;)
 	// echo x;; *) echo def;; esac` reaches the default arm rather than
 	// failing to parse.
@@ -646,6 +661,14 @@ func Semantics() interp.Semantics {
 	// which is the opposite pairing from dash's on the first half.
 	s.FunctionCallIsALoopControlBoundary = interp.No
 	s.SubshellIsALoopControlBoundary = interp.No
+	// A definition whose name was not written bare binds nothing and says
+	// nothing about it: `'f'() { echo body; }` is status 0 with an empty
+	// stderr, `f` after it is `f: not found` at 127, and `g() { echo old;
+	// }; 'g'() { echo new; }; g` still prints `old`, so an existing
+	// definition is not replaced either. Measured 2026-09-13 in the pinned
+	// alpine image; syntax.Dialect.FunctionNameIsAnyBareWord above is which
+	// words reach this and interp.FuncNameDefinesNothing is the answer.
+	s.FunctionNameWhenTheDefinitionRuns = interp.FuncNameDefinesNothing
 	// `break` with no loop around it is ignored, silently: `echo t; break;
 	// echo after` prints both and ends at 0.
 	s.LoopControlOutsideALoopIsFatal = interp.No

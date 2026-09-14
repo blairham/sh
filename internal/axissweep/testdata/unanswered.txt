@@ -88,7 +88,6 @@ ash   ExpansionResultSuppliesGroupSyntax
 ash   ExportLetterDeclaresAGlobal
 ash   ExportedCompoundReachesAChildAsItsFirstValue
 ash   ForNameWhenTheLoopRuns
-ash   FunctionNameWhenTheDefinitionRuns
 ash   FunctionNamesUnderPlus
 ash   HeldExitListsTheJobs
 ash   ImmovableOptionsSetAtInvocation

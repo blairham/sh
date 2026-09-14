@@ -7,20 +7,29 @@ package interp
 // the word standing where its name belongs is not a name.
 //
 // A form rather than a flag, and for the reason ForNameRunForm is one: there
-// are three answers among the two shells that get this far, and the third
-// differs from the second in its status alone. Only the dialects with
+// are four answers among the three shells that get this far, the third differs
+// from the second in its status alone, and the fourth says nothing at all.
+// Only the dialects with
 // [syntax.Dialect.FunctionNameCheckedWhenTheDefinitionRuns] ever ask — zsh
 // reads such a name as a word and defines what it comes to, and dash has no
 // keyword to reach the question with.
 //
 // Measured 2026-09-10 through `-c`, over `w=foo; function _p_${w} { echo HI;
-// }; echo st=$?; echo after`:
+// }; echo st=$?; echo after`, and ash on 2026-09-13 from a script file in the
+// digest-pinned alpine image:
 //
 //	shell        what a run prints                       script status
 //	bash 5.3.15  the complaint, then st=1 and after      0
 //	bash-as-sh   the complaint, and stops                2
 //	bash 3.2.57  the complaint, then st=1 and after      0
 //	ksh93u+      the complaint, and stops                1
+//	BusyBox ash  nothing, then st=0 and after            0
+//
+// The ash row reaches this by a different route and it matters to what the
+// axis means: the other four are asked because the word's **text** is not a
+// name, and ash is asked because of how the word was **written** — see
+// [syntax.Dialect.FunctionNameIsAnyBareWord], where `'f'` is refused and a
+// bare `a*b` is not.
 //
 // **The bash-as-`sh` row is POSIX mode and not the build**: `set -o posix`
 // in bash 5.3 stops at 2 on the same line, exactly as the same binary invoked
@@ -56,6 +65,24 @@ const (
 	// with it, which is measured: bash invoked as `sh` writes ``line 1:
 	// `_p_${w}': not a valid identifier`` word for word as bash does.
 	FuncNameEndsTheScriptAsASyntaxError
+
+	// FuncNameDefinesNothing says nothing, binds nothing, and gives the
+	// definition status 0. BusyBox ash, which reaches the question by a
+	// different route from the three above: there the word's *text* is not a
+	// name, and here it is the **spelling** —
+	// [syntax.Dialect.FunctionNameIsAnyBareWord] — so a name as ordinary as
+	// `f` arrives here for having been written `'f'`.
+	//
+	// The fourth value rather than a silent variant of the first, because
+	// the status differs too. Measured 2026-09-13 in the digest-pinned
+	// alpine image, BusyBox v1.37.0: `'f'() { echo body; }` is status 0 with
+	// nothing on stderr, and the call after it is `f: not found` at 127.
+	//
+	// **Nothing is bound, rather than something bound elsewhere.** `command
+	// -v` and `type` answer 127 for both the word's text and its source
+	// text, and `g() { echo old; }; 'g'() { echo new; }; g` prints `old`, so
+	// a definition already standing under that name is not replaced either.
+	FuncNameDefinesNothing
 )
 
 func (f FuncNameRunForm) String() string {
@@ -66,12 +93,18 @@ func (f FuncNameRunForm) String() string {
 		return "FuncNameEndsTheScript"
 	case FuncNameEndsTheScriptAsASyntaxError:
 		return "FuncNameEndsTheScriptAsASyntaxError"
+	case FuncNameDefinesNothing:
+		return "FuncNameDefinesNothing"
 	}
 	return "FuncNameRunUnspecified"
 }
 
-// refuseFuncName raises the complaint a definition's unusable name earns when
-// the definition is reached.
+// refuseFuncName settles a definition whose name the dialect will not bind,
+// where the dialect settles it when the definition is reached.
+//
+// Four of the five answers raise a complaint and one — ash's — is silence, so
+// this is "what happens" rather than "what is said"; the name is kept in the
+// signature because the four that speak all quote it.
 //
 // The wording is [Diagnostics.FunctionNameInvalid], which is the sentence the
 // *expanded*-name refusal already uses — ksh93 says `%s: invalid function
@@ -86,6 +119,12 @@ func (f FuncNameRunForm) String() string {
 // syntax-error status instead, which is the one number that does vary.
 func (r *Runner) refuseFuncName(word string) {
 	form := r.sem().FunctionNameWhenTheDefinitionRuns
+	if form == FuncNameDefinesNothing {
+		// The one answer with no complaint in it: the definition is over,
+		// the table is untouched, and the script carries on at 0.
+		r.status = 0
+		return
+	}
 	if form == FuncNameRunUnspecified {
 		r.errf("%s\n", r.diag().Report(r.name(), r.line,
 			r.unanswered("a function name that is not a name, reached at run time")))

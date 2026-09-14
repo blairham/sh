@@ -1447,8 +1447,15 @@ func (p *Parser) keepFunctionSource(expr Expr, term Pos) {
 // none. So this is a span walk rather than either whole-token spelling — a
 // literal span contributes its value, which is the lexer's text with its own
 // quotes already gone, and every other span contributes its source.
+//
+// [Dialect.FunctionNameIsAnyBareWord] takes the first answer for a different
+// reason, and it is worth saying which: that shell prints no complaint at all,
+// so nothing here is a wording. What the word is kept for there is the
+// **print**, and a definition printed back without the quotes it was written
+// with is a definition the shell would then take — `'f'()` reads back as
+// `f()`, which defines `f` where the input defined nothing.
 func (p *Parser) refusedFuncName(t Token) string {
-	if p.dialect.FunctionNameIsSourceText {
+	if p.dialect.FunctionNameIsSourceText || p.dialect.FunctionNameIsAnyBareWord {
 		return p.textBetween(t.Pos, t.End)
 	}
 	var b strings.Builder
@@ -2374,10 +2381,36 @@ func spansHoldAnExpansion(spans []Span) bool {
 // decides it and is read per span: `'a*b'` is ordinary text and is a name,
 // `a*'b'` is not, because the `*` in it is still bare.
 func (p *Parser) keywordFuncName(t Token) bool {
+	if p.dialect.FunctionNameIsAnyBareWord {
+		// The third reading: how the word was *written* decides it, so a
+		// bare word is a name whatever its characters — `function a*b { … }`
+		// defines there, the filesystem never being consulted — and a word
+		// carrying any quoting is not one. The caller has already dealt with
+		// an expansion, which is the other half of "written bare".
+		return tokenIsWrittenBare(t)
+	}
 	if !p.dialect.FunctionKeywordNameIsAnyWord {
 		return isFuncName(p.funcNameText(t), p.dialect.FunctionNamePunctuation)
 	}
 	return !holdsBarePatternCharacter(t)
+}
+
+// tokenIsWrittenBare reports whether every part of t was written as plain
+// unquoted text: no quoting of any kind, and nothing the shell would expand.
+//
+// The test [Dialect.FunctionNameIsAnyBareWord] turns on, and it is about the
+// *spelling* rather than about the text — `\f` and `'f'` and `a"b"` all come
+// to names a shell would take, and none of them was written bare.
+func tokenIsWrittenBare(t Token) bool {
+	if len(t.Spans) == 0 {
+		return false
+	}
+	for _, sp := range t.Spans {
+		if sp.Kind != Literal || sp.Quoting != Unquoted {
+			return false
+		}
+	}
+	return true
 }
 
 // funcNameText is the text a definition's name is tested as.
@@ -2942,6 +2975,9 @@ func (p *Parser) looksLikeFuncDef() bool {
 	if p.dialect.FunctionNameIsAnyWord {
 		return p.anyWordFuncDef()
 	}
+	if p.dialect.FunctionNameIsAnyBareWord {
+		return p.bareWordFuncDef()
+	}
 	// A quoted name is not a definition in most dialects, and quoting is not
 	// an expansion: `'q'() { :; }` is refused here as it was before the flag.
 	// Two dialects read one, by different routes: the one whose names are any
@@ -3054,6 +3090,30 @@ func (p *Parser) anyWordFuncDef() bool {
 	return p.peekIsFuncParens()
 }
 
+// bareWordFuncDef is looksLikeFuncDef for the dialect that reads the word
+// whatever it is and defines nothing unless it was written bare — see
+// [Dialect.FunctionNameIsAnyBareWord].
+//
+// There is no name test at all here, so the parentheses are the whole
+// announcement, as they are for [Parser.anyWordFuncDef]. It parts from that
+// one in the exclusion it does *not* make: a bare `*`, `?` or `[` in the word
+// is refused there because that shell matches such a word against the
+// filesystem, and this one defines `a*b` and calls it, so refusing the word
+// would lose a definition the shell being modeled makes.
+//
+// The assignment exclusion is the same and is lexical for the same reason:
+// `a=()` is a syntax error in this shell, and `'a=b'()` is a definition whose
+// name was not written bare — read, and binding nothing.
+func (p *Parser) bareWordFuncDef() bool {
+	if _, isAssign := p.isAssign(p.tok); isAssign {
+		return false
+	}
+	if p.dialect.FuncDefAtParen {
+		return p.peekIsLeftParen()
+	}
+	return p.peekIsFuncParens()
+}
+
 // peekIsLeftParen and peekIsRightParen are peekIsFuncParens' one-parenthesis
 // halves, asked the same way and for the same reason. The right-hand one is
 // asked where the `(` is already the current token, which is the other side of
@@ -3095,8 +3155,14 @@ func (p *Parser) peekIsFuncParens() bool {
 
 func (p *Parser) parseFuncPosix() Command {
 	fn := &FuncDecl{Name: p.tok.Literal(), Start: p.tok.Pos}
-	if text := p.funcNameText(p.tok); text != fn.Name &&
-		!isFuncName(text, p.dialect.FunctionNamePunctuation) {
+	switch text := p.funcNameText(p.tok); {
+	case p.dialect.FunctionNameIsAnyBareWord && !tokenIsWrittenBare(p.tok):
+		// The dialect where the *spelling* decides it, given a word that was
+		// not written bare: the declaration is read whole and binds nothing
+		// when it runs. There is no name, so none is kept — a declaration
+		// carrying one is a declaration the interpreter could define.
+		fn.Name, fn.RefusedName = "", p.refusedFuncName(p.tok)
+	case text != fn.Name && !isFuncName(text, p.dialect.FunctionNamePunctuation):
 		// The dialect that reads the name as source text, given a word whose
 		// text is not one: the declaration is read whole and the word is
 		// kept as it was written, which is what the complaint quotes when

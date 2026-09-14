@@ -40,14 +40,16 @@ func runStagedFuncName(t *testing.T, src string, form FuncNameRunForm) (string, 
 
 const stagedFuncSrc = "function _p_${w} { echo HI; }\necho \"reached-after st=$?\"\n"
 
-// The three forms, which are the three answers among the two panel columns
-// that reach the definition at all — see FuncNameRunForm for the run they
+// The four forms, which are the four answers among the three panel columns
+// that reach the definition at all — see FuncNameRunForm for the runs they
 // come from.
 //
-// The complaint is the same sentence in all three; only what becomes of the
-// script differs, which is the whole reason the wording is one Diagnostics
-// field and the consequence is an axis.
-func TestTheThreeAnswersToARefusedFunctionName(t *testing.T) {
+// The complaint is the same sentence in the three that make one; only what
+// becomes of the script differs, which is the whole reason the wording is one
+// Diagnostics field and the consequence is an axis. The fourth makes no
+// complaint at all, and that is why it is a value here rather than a silent
+// spelling of the first: the status differs too.
+func TestTheFourAnswersToARefusedFunctionName(t *testing.T) {
 	for _, tc := range []struct {
 		form FuncNameRunForm
 		out  string
@@ -61,6 +63,11 @@ func TestTheThreeAnswersToARefusedFunctionName(t *testing.T) {
 		// bash in POSIX mode: the same sentence, and the script ends at the
 		// dialect's *syntax-error* status. 2 here, which is bash's.
 		{FuncNameEndsTheScriptAsASyntaxError, "sh: `_p_${w}': not a valid identifier\n", 2},
+		// BusyBox ash: nothing said, the definition at 0, and the script
+		// carries on. The empty stderr is half of the row — a value that
+		// reported the complaint and then carried on would be the first
+		// value, and would pass a test asserting only the status.
+		{FuncNameDefinesNothing, "reached-after st=0\n", 0},
 	} {
 		out, st := runStagedFuncName(t, stagedFuncSrc, tc.form)
 		if out != tc.out || st != tc.st {
@@ -73,15 +80,35 @@ func TestTheThreeAnswersToARefusedFunctionName(t *testing.T) {
 // cannot show. The literal text of `_p_${w}` is `_p_w`, a perfectly good name
 // for a different function, and defining that silently at status 0 is the bug
 // #1256 removed and this must not bring back.
+//
+// Asserted of every form and not only of the one that complains, because the
+// silent value is where a definition could hide: FuncNameDefinesNothing says
+// nothing and ends at 0, so a run that bound `_p_w` under it would look
+// exactly like a run that bound nothing (#2590).
 func TestARefusedFunctionNameDefinesNothing(t *testing.T) {
 	const src = "function _p_${w} { echo HI; }\n_p_w 2>/dev/null || echo nolit\n" +
 		"_p_ 2>/dev/null || echo noempty\n"
-	out, _ := runStagedFuncName(t, src, FuncNameFailsTheDefinition)
-	if !strings.Contains(out, "nolit") || !strings.Contains(out, "noempty") {
-		t.Errorf("got %q, want neither the literal name nor the prefix defined", out)
+	for _, form := range []FuncNameRunForm{FuncNameFailsTheDefinition, FuncNameDefinesNothing} {
+		out, _ := runStagedFuncName(t, src, form)
+		if !strings.Contains(out, "nolit") || !strings.Contains(out, "noempty") {
+			t.Errorf("%v: got %q, want neither the literal name nor the prefix defined", form, out)
+		}
+		if strings.Contains(out, "HI") {
+			t.Errorf("%v: got %q, want the body never to have run", form, out)
+		}
 	}
-	if strings.Contains(out, "HI") {
-		t.Errorf("got %q, want the body never to have run", out)
+}
+
+// And a definition already standing under the name is left alone, which no
+// other form can be asked: the three that complain never reach a table at all,
+// and the silent one is the one a script could mistake for a redefinition.
+// Measured in the shell this models — `g() { echo old; }; 'g'() { echo new;
+// }; g` prints `old` — so the earlier body has to survive.
+func TestASilentlyRefusedNameLeavesAnEarlierDefinitionStanding(t *testing.T) {
+	const src = "function g { echo old; }\nfunction _p_${w} { echo new; }\ng\n"
+	out, st := runStagedFuncName(t, src, FuncNameDefinesNothing)
+	if out != "old\n" || st != 0 {
+		t.Errorf("got %q (status %d), want %q at 0", out, st, "old\n")
 	}
 }
 

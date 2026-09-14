@@ -2794,7 +2794,39 @@ func (p *Parser) parseAssign(h assignHead) *Assign {
 			p.next()
 			return a
 		}
+		// The shape one dialect settles on its first element, and the token
+		// it settled it on. Asked here rather than after the loop because
+		// both consequences are ahead of the elements that follow: the
+		// lexer's spanning has to be turned off before the *next* token is
+		// read, and a bare element the shape has already refused has to be
+		// named where it stands. See
+		// [Dialect.ArrayLiteralShapeFollowsTheFirstElement].
+		shaped := p.dialect.ArrayLiteralShapeFollowsTheFirstElement
+		subscripted := false
 		for p.tok.Kind == TokWord && p.err == nil {
+			// Saved before p.word(), which reads the token after this one on
+			// its way out: by the time the element is a word the parser has
+			// moved past it, and a refusal has to quote what was written
+			// here and blame the line it was written on.
+			at := p.tok
+			if shaped {
+				if len(a.Elems) == 0 {
+					subscripted = subscriptedElementSpans(at.Spans)
+					if !subscripted {
+						// A bare first element makes every bracket in this
+						// literal text, and text is lexed by the ordinary
+						// rules — `a=(p [1 2]=A)` is three words from here
+						// on. Restored with the rest at the end of the
+						// literal, so a nested one is unaffected.
+						p.lex.inArrayLiteral = false
+					}
+				} else if subscripted && !subscriptedElementSpans(at.Spans) {
+					p.lex.inArgument = saved
+					p.lex.inArrayLiteral = savedArray
+					p.failUnexpectedAt(at, "", false)
+					return a
+				}
+			}
 			el := p.word()
 			// An element is not a word a command takes, and one dialect
 			// refuses a process substitution there while reading (#930).

@@ -72,18 +72,107 @@ type literalElem struct {
 // bash and ksh93 alike, and left us holding the words that *did* expand — at
 // status 0 for the division, so the shell reported a value it had just said
 // it could not compute and called it success.
-func (r *Runner) literalElems(elems []*syntax.Word) ([]literalElem, bool) {
+// readsSubscripts says whether a `[sub]=value` element names where its value
+// goes or is an ordinary word with a bracket in front of it. True everywhere
+// but one dialect; see [Runner.literalReadsSubscripts], which is the whole of
+// what decides it and where it is measured.
+func (r *Runner) literalElems(elems []*syntax.Word, readsSubscripts bool) ([]literalElem, bool) {
 	out := make([]literalElem, 0, len(elems))
 	for _, w := range elems {
-		if sub, value, appends, ok := r.assocElem(w); ok {
-			out = append(out, literalElem{
-				sub: sub, value: value, subscripted: true, appendValue: appends,
-			})
-			continue
+		// Asked before the element is read rather than after it, so that an
+		// element the shape has made a word is expanded once and not twice.
+		// A discarded reading is not free: `i=0; a=(p [$((i++))]=v)` is two
+		// words in the dialect that reads it that way and leaves `i` at 1,
+		// measured — splitting the halves, expanding them and then throwing
+		// them away for the word would leave it at 2.
+		if readsSubscripts {
+			if sub, value, appends, ok := r.assocElem(w); ok {
+				out = append(out, literalElem{
+					sub: sub, value: value, subscripted: true, appendValue: appends,
+				})
+				continue
+			}
 		}
 		out = append(out, literalElem{fields: r.expandWord(w)})
 	}
 	return out, !r.failedHeading()
+}
+
+// literalReadsSubscripts reports whether this compound literal's elements name
+// where their values go, or are plain words that happen to open with a
+// bracket.
+//
+// Everywhere but one dialect they always do, and an element carrying no
+// `[sub]=` head simply takes the next position going, so the two shapes mix
+// freely: `a=(x [3]=y z)` is three elements in bash and in zsh.
+//
+// Two facts are asked here, and they are different kinds of fact even though
+// one flag gates both.
+//
+// The first is the **grammar's**, and belongs to the flag it is read from:
+// the literal is either subscripted throughout or a word list, and its first
+// element settles which — see
+// [syntax.Dialect.ArrayLiteralShapeFollowsTheFirstElement], where the
+// measurement is and where the parser refuses the mixture outright. Nothing
+// here can be reached by a literal the parser called a syntax error, so what
+// is left of that half is only the word-list reading.
+//
+// The second is the **store's**, and it is why this is not simply the
+// parser's answer carried down. An append whose name is already holding an
+// indexed array cannot turn it into a keyed one, and rather than complaining
+// the shell gives the subscripted reading up and keeps the elements as the
+// words they were written as. Measured 2026-09-14 on ksh93u+ 2012-08-01,
+// each read back with `typeset -p a`:
+//
+//	unset a; a+=([1]=Z [2]=Y)      typeset -A a=([1]=Z [2]=Y)
+//	a=one;   a+=([1]=Z)            typeset -A a=([0]=one [1]=Z)
+//	a=(p q r); a+=([1]=Z)          typeset -a a=(p q r '[1]=Z')
+//	a=(p q r); a+=([5]=Z)          typeset -a a=(p q r '[5]=Z')
+//	a=(p q r); a+=([1]+=Z)         typeset -a a=(p q r '[1]+=Z')
+//	typeset -A m=([k]=v); m+=([j]=w)   typeset -A m=([j]=w [k]=v)
+//
+// — so it is the *indexed array* that refuses, and not the append: an unset
+// name, a scalar and a keyed table all read the subscripts. This is the
+// reachable consequence #2505 was filed for. We marked the name associative
+// and stored the keyed reading over the top, so `a=(p q r); a+=([1]=Z)`
+// answered `typeset -A a=([1]=Z)` — three elements gone, silently, at status
+// 0, with a plausible array standing where the script's own was.
+//
+// The keyed name is not reached from here at all: a declared associative
+// array takes the assoc path above, which is the last row and which already
+// agreed.
+func (r *Runner) literalReadsSubscripts(name string, elems []*syntax.Word, appendTo bool) bool {
+	if !r.dialect().ArrayLiteralShapeFollowsTheFirstElement {
+		return true
+	}
+	if !r.literalShapeReadsSubscripts(elems) {
+		return false
+	}
+	if !appendTo {
+		return true
+	}
+	// arrayToAppendTo rather than the store, for the reason the append
+	// itself reads it that way: a *produced* array is holding elements too,
+	// and they are as much in the way of a keyed reading as stored ones.
+	_, indexed := r.arrayToAppendTo(name)
+	return !indexed
+}
+
+// literalShapeReadsSubscripts is the grammar half of the question above, and
+// the whole of it for every literal that is not an append.
+//
+// Its own function because three other seams read a literal — a declared
+// keyed name, an element given a literal of its own, and the nested literal
+// that splices — and the shape rule reaches all four. Measured on ksh93u+
+// 2012-08-01: `a[1]=(p [2]=z)` is `typeset -a a=([1]=(p '[2]=z') )`, a word
+// list inside the element, and `a[1]=([2]=z p)` is the same syntax error the
+// whole-array spelling gives. What those three do *not* share is the store
+// half, which is about what an append may turn an indexed array into.
+func (r *Runner) literalShapeReadsSubscripts(elems []*syntax.Word) bool {
+	if !r.dialect().ArrayLiteralShapeFollowsTheFirstElement {
+		return true
+	}
+	return len(elems) > 0 && syntax.SubscriptedElement(elems[0])
 }
 
 // assignArrayLiteral is `a=(…)` and `a+=(…)` on a name with no associative
@@ -95,7 +184,7 @@ func (r *Runner) literalElems(elems []*syntax.Word) ([]literalElem, bool) {
 // text — `${a[0]}` answered the six characters `[2]=c` — and nothing reported
 // it, so the array looked populated and was not.
 func (r *Runner) assignArrayLiteral(name string, elems []*syntax.Word, appendTo bool) {
-	parsed, ok := r.literalElems(elems)
+	parsed, ok := r.literalElems(elems, r.literalReadsSubscripts(name, elems, appendTo))
 	if !ok {
 		// The elements were not read, so there is nothing to store and the
 		// name keeps whatever it was holding. Before literalSubscriptIsAKey,

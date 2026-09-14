@@ -3,7 +3,12 @@
 
 package interp
 
-import "github.com/blairham/sh/internal/tty"
+import (
+	"strconv"
+	"strings"
+
+	"github.com/blairham/sh/internal/tty"
+)
 
 // `$COLUMNS` and `$LINES` as parameters of the shell rather than as variables
 // something assigns.
@@ -195,6 +200,60 @@ func (r *Runner) windowSizeValue(name string) string {
 		return itoa(tty.FallbackCols)
 	}
 	return "0"
+}
+
+// ScreenSize is how big the terminal is, answered the way a *terminal
+// capability* asks it rather than the way `$COLUMNS` does.
+//
+// Exported for the dialect that presents the terminal's description as a
+// parameter: `$terminfo[cols]` and `$terminfo[lines]` are the screen's size
+// there and not the description's, so the two names have to be answered from
+// the same reader `$COLUMNS` uses. It is here rather than in that dialect for
+// the reason ProvideWindowSize gives — the question has one right answer and
+// one reader, and a dialect that implemented it would be implementing it for
+// the next one to ask.
+//
+// **Three answers where windowSizeValue has five**, and the two it does not
+// have are the point of the separate entry. Measured against zsh 5.9.2
+// through a pseudo-terminal opened 100x37, 2026-09-14:
+//
+//	pty 100x37, TERM=xterm-256color   cols=100 lines=37   the terminal,
+//	                                  not the description's 80x24
+//	pty 100x37, COLUMNS=55 in env     cols=100 lines=37   the terminal wins
+//	pty 100x37, COLUMNS=77 assigned   cols=100 lines=37   and an assignment
+//	                                  moves `$COLUMNS` and not this
+//	pty of no size                    cols=80  lines=24
+//	no terminal, COLUMNS=100 in env   cols=100 lines=40
+//	no terminal, nothing in the env   cols=80  lines=24   where `$COLUMNS`
+//	                                  is 0
+//
+// So what a script assigned is **not** consulted — row three — and a shell
+// with no window at all answers the classic 80 by 24 rather than the nought
+// `${COLUMNS}` reports there. Both differences are why this is not
+// windowSizeValue with a different caller.
+func (r *Runner) ScreenSize() (rows, cols int) {
+	rows, cols, _ = r.terminalSize()
+	if cols <= 0 {
+		cols = r.inheritedSize("COLUMNS", tty.FallbackCols)
+	}
+	if rows <= 0 {
+		rows = r.inheritedSize("LINES", tty.FallbackRows)
+	}
+	return rows, cols
+}
+
+// inheritedSize is the environment's answer for one of the two names, and the
+// classic fallback where it has none or where what it has is not a count.
+func (r *Runner) inheritedSize(name string, fallback int) int {
+	v, ok := r.inheritedValue(name)
+	if !ok {
+		return fallback
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(v))
+	if err != nil || n <= 0 {
+		return fallback
+	}
+	return n
 }
 
 // isWindowSizeParameter reports whether this name is one of the two the shell

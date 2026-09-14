@@ -63,30 +63,48 @@ package repl
 //
 // Swept over 250 of the 2,684 descriptions in /usr/share/terminfo, comparing
 // this reader's answers against zsh 5.9.2's `$terminfo` key by key and byte
-// by byte, 2026-09-11. Every value agreed except for three things, and all
-// three are recorded rather than emulated:
+// by byte, 2026-09-11. Every value agreed except for three things. Two of
+// them are now matched in dialect/zsh/terminfo.go — `cols` and `lines` are
+// the screen's size (#2101), and the extended section reads without being
+// enumerated (#2102) — and the third is recorded rather than emulated:
 //
 //   - **`rs2` and `is3`.** zsh answers absent for these two on descriptions
 //     that carry them — `screen`, `vt100`, `sun`, `aixterm`, `putty` and
 //     about a fifth of the database — while `infocmp` prints the value and
-//     this reader returns it. Reproduced with descriptions compiled for the
-//     purpose: `rs2` is answered when `rs1` or `rs3` is also present and not
-//     otherwise, which is a rule with no explanation behind it. Emulating it
-//     would be encoding an unexplained artifact of one machine's curses
-//     library; reporting what the description holds is the answer `infocmp`
-//     gives and the one a script asking for a reset string wants.
-//   - **`cols` and `lines`.** Where a description carries neither — `dumb`,
-//     `linux`, `cygwin`, `putty` — zsh answers 80 and 24 anyway, and answers
-//     `$COLUMNS` and `$LINES` when those are set. That is the *screen size*
-//     rather than the description, a separate thing this shell tracks
-//     elsewhere, and wiring the two together is its own change.
-//   - **Which capabilities are enumerated.** `${#terminfo}` is 220 for
-//     `xterm-256color` in zsh and 281 here, and the difference is entirely
-//     the extended section: zsh answers `${terminfo[Se]}` with the cursor
-//     sequence and `${+terminfo[Se]}` with 1 while leaving `Se` out of
-//     `${(k)terminfo}`. Listing what can be read is the consistency
-//     interp.Runner.SetDynamicAssocElement requires of a produced
-//     association, so the extended names are in both readings here.
+//     this reader returns it. The rule is that `rs2` is answered when `rs1`
+//     or `rs3` is also present and not otherwise, reproduced with
+//     descriptions compiled for the purpose.
+//
+//     #2100 asked for one of two things before deciding: a mechanism in the
+//     curses library that made the rule predictable and platform-independent,
+//     or a second platform where the behaviour was not there. Measured
+//     2026-09-14 on Alpine 3.20 under a container — zsh 5.9 against musl and
+//     ncurses 6.4, reading that image's own /usr/share/terminfo — and neither
+//     answer is the one that arrived:
+//
+//     The behaviour **is** there. `${+terminfo[rs2]}` is 0 for `screen`,
+//     `vt100`, `sun`, `aixterm` and `putty` and 1 for `xterm-256color`,
+//     exactly as on this machine, and the same compiled two-line
+//     descriptions reproduce the rule in both places: `rs2=\EQQ` alone reads
+//     absent, `rs1=\EWW, rs2=\EQQ` and `rs2=\EQQ, rs3=\EGG` both read, and
+//     `rep=\EDD, rs2=\EQQ` does not. So it is not an artifact of one
+//     machine's curses library.
+//
+//     And it is not the curses *lookup* either, which is the half that
+//     settles what to do about it: `tput rs2` prints the bytes on both
+//     platforms for every description zsh calls absent, so `tigetstr("rs2")`
+//     answers and the suppression is the shell's own. On a description
+//     carrying nothing but `rs2` the two readings of zsh's own parameter then
+//     disagree — `${(kv)terminfo}` iterates `rs2` with its value while
+//     `${terminfo[rs2]}` is empty and `${+terminfo[rs2]}` is 0, measured
+//     identically on both platforms.
+//
+//     Matching that would mean listing a key the lookup denies, which is the
+//     one direction interp.Runner.SetDynamicAssocElement's contract refuses
+//     and for a concrete reason: it is what makes `${terminfo[rs2]:-d}` take
+//     the default for a name the shell has just enumerated. So the answer
+//     stands — report what the description holds, in both readings — and it
+//     is a comment rather than an open question.
 //
 // TerminalCapabilityKind is which of the description's three sections a
 // capability came from.
@@ -132,6 +150,18 @@ type TerminalCapability struct {
 	// Kind is which section it came from, which is what says whether Value is
 	// bytes for the terminal or a word for a person.
 	Kind TerminalCapabilityKind
+
+	// Extended says the name came from the description's own extended
+	// section rather than from terminfo's standard table.
+	//
+	// Carried because one caller has to be able to **read** an extended
+	// capability without **listing** it: that is what the shell being modeled
+	// does, and `${+terminfo[Se]}` is 1 with the cursor sequence behind it
+	// while `Se` is not among the names `${(k)terminfo}` gives. An empty
+	// Termcap is nearly the same set and is not the same question — a modern
+	// standard capability predates no termcap either — so the fact is
+	// recorded where it is known rather than inferred later.
+	Extended bool
 }
 
 // TerminalCapabilities is every capability in the description `$TERM` names,

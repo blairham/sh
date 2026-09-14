@@ -62305,6 +62305,57 @@
         "TimedOut": false
       }
     },
+    "decl/the-hide-letter-over-a-frozen-produced-name": {
+      "ash": {
+        "Stdout": "\u003cshell\u003e: typeset: not found~st=127",
+        "Stderr": "\u003cshell\u003e: syntax error: bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "\u003cshell\u003e: line 1: typeset: -h: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~st=2",
+        "Stderr": "\u003cshell\u003e: line 1: t=${(t)ARGC}: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "\u003cshell\u003e: line 1: typeset: -h: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~st=2",
+        "Stderr": "\u003cshell\u003e: line 1: t=${(t)ARGC}: bad substitution",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "\u003cshell\u003e: line 0: typeset: -h: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~st=2",
+        "Stderr": "\u003cshell\u003e: t=${(t)ARGC}: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "\u003cshell\u003e: 1: typeset: not found~st=127",
+        "Stderr": "\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `ARGC}' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0~t=integer-readonly-hide-special~a=0~b=2",
+        "Stderr": "\u003cshell\u003e:1: read-only variable: ARGC",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "declare/a-bad-name-among-good-ones": {
       "ash": {
         "Stdout": "NOT-FATAL~[U][U]",
@@ -122743,6 +122794,57 @@
       },
       "zsh": {
         "Stdout": "3 3",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "param/an-assignment-prefix-to-a-produced-parameter": {
+      "ash": {
+        "Stdout": "a=~b=~c=300",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "a=0~b=0~c=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "a=0~b=0~c=300",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "a=0~b=0~c=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "a=~b=~c=300",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "a=0.000~b=200.000~c=300.000",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "a=0~b=0~c=0",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

@@ -474,7 +474,7 @@ func appendExtendedCapabilities(caps []TerminalCapability, rd *terminfoReader, w
 		if !ok || name == "" {
 			continue
 		}
-		entry := TerminalCapability{Terminfo: name, Termcap: "", Value: ""}
+		entry := TerminalCapability{Terminfo: name, Termcap: "", Value: "", Extended: true}
 		switch {
 		case i < boolCount:
 			entry.Value, entry.Kind = terminfoBoolean(bools[i]), BooleanCapability

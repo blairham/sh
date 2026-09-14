@@ -766,6 +766,27 @@ func (r *Runner) SetDynamicAssocWriter(name string, write func(r *Runner, key, v
 // with its own table would make `${m[k]}` and `${(k)m}` describe different
 // shells.
 //
+// # With one exception, and it has a direction
+//
+// A view may **read more than it lists, never less**. Where the two differ,
+// the element producer is the answer and the whole table is the enumeration,
+// and a key it answers for that the table does not carry is allowed.
+//
+// The asymmetry is not a taste. Everything the contract above protects is
+// answered by the *element* reading — `${m[k]}`, `${m[k]:-d}`, `${+m[k]}`,
+// the absent-element refusal — so a key that reads and is not listed leaves
+// every branch a script can take correct, and costs only that `${(k)m}` is
+// narrower than what `${m[k]}` will answer. A key that *lists* and does not
+// read is the other thing entirely: it makes `${m[k]:-d}` take the default
+// for a name the shell has just enumerated, which is the failure this whole
+// paragraph exists to prevent.
+//
+// The case that earned it is `$terminfo`, and it is what the shell being
+// modeled does: `${+terminfo[Se]}` is 1 with the terminal's cursor sequence
+// behind it while `Se` is not among the names `${(k)terminfo}` gives, because
+// the description's extended section is readable and not enumerated there.
+// See dialect/zsh/terminfo.go, which carries the measurement (#2102).
+//
 // A *stored* table shadows both readings, the same way and for the same
 // reason it shadows the whole-table producer — see assocFor.
 func (r *Runner) SetDynamicAssocElement(name string, value func(r *Runner, key string) (string, bool)) {

@@ -575,23 +575,60 @@ func biBg(r *Runner, _ context.Context, args []string) int {
 }
 
 // resume finds the job `fg` or `bg` was asked about.
+//
+// Or refuses, which is what happens whenever this shell has no job control.
+// Measured from a script with no terminal: every member of the panel refuses,
+// so the divergence is in when that is said and what is said, and never in
+// whether the job runs. This shell used to take it as a live request, print
+// the job's command line on stdout the way an interactive `fg` does, and fail
+// afterwards — which put a line of output in a script that had written
+// `fg 2>/dev/null` precisely so there would be none (#2657).
 func (r *Runner) resume(args []string, name string) (*Job, int) {
-	if !r.JobControl &&
-		r.ask(r.sem().JobControlAbsenceIsReportedFirst, "`bg` with no job control refusing before reading its operand") {
-		// Two shells notice there is no job control before looking at
-		// anything else, so the operand is never named — reporting it as a
-		// missing job would claim job control exists.
-		r.diagf("%s\n", Wording(r.diag().NoJobControl, "%[1]s: no job control", name))
-		return nil, 1
+	first := false
+	if !r.JobControl {
+		first = r.ask(r.sem().JobControlAbsenceIsReportedFirst, "`bg` with no job control refusing before reading its operand")
 	}
 	if r.unspecified {
 		return nil, 2
 	}
+	if first {
+		// Three shells notice there is no job control before looking at
+		// anything else, so the operand is never named — reporting it as a
+		// missing job would claim job control exists. One of the three
+		// refuses without a word; see Diagnostics.NoJobControl.
+		if w := r.diag().NoJobControl; w != "" {
+			r.diagf("%s\n", Wording(w, "", name))
+		}
+		return nil, 1
+	}
+	j, code := r.pickJob(args, name)
+	if j == nil {
+		return nil, code
+	}
+	if !r.JobControl {
+		// The operand read first and nothing wrong with it, which leaves the
+		// refusal this shell had all along. dash names the spec here, and
+		// names it `(null)` where there was none.
+		d := r.diag()
+		spec := d.AbsentJobSpec
+		if len(args) > 0 {
+			spec = args[0]
+		}
+		r.diagf("%s\n", Wording(d.JobNotUnderJobControl, "%[1]s: no job control", name, spec))
+		return nil, orDefault(d.JobNotUnderJobControlStatus, 1)
+	}
+	return j, 0
+}
+
+// pickJob is the operand half of resume: the job an argument names, or the
+// current one where there is no argument.
+func (r *Runner) pickJob(args []string, name string) (*Job, int) {
 	if len(args) == 0 {
 		current := r.currentJob()
 		if current == nil {
-			r.diagf("%s\n", Wording(r.diag().NoSuchJob, "%[1]s: no current job", name))
-			return nil, 1
+			d := r.diag()
+			r.diagf("%s\n", Wording(d.NoCurrentJob, "%[1]s: no current job", name))
+			return nil, orDefault(d.NoCurrentJobStatus, 1)
 		}
 		return current, 0
 	}

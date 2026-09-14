@@ -896,3 +896,25 @@ func TestPrintfGroupingFlagAfterTheWidth(t *testing.T) {
 		t.Errorf("PrintfGroupingFlag = %v, want %v", got, want)
 	}
 }
+
+// `fg` and `bg` in a script are refused before the operand is read, and the
+// refusal is silent — two facts that look like one absence.
+//
+// Measured 2026-09-13 from a script with no terminal, ksh93u+ 93u+ 2012-08-01:
+// `sleep 0 & fg` writes nothing at all and reports 1, and so does `fg %2`
+// naming a job that does not exist. That second probe is what settles the
+// axis for a shell that prints nothing: `jobs %2` on the same line answers
+// `jobs: no such job`, so the operand is reachable and `fg` is not reaching
+// it. This shell read the operand, resumed the job and printed its command
+// line until #2657, on the strength of the silence alone.
+func TestFgAndBgRefuseBeforeTheOperandAndSayNothing(t *testing.T) {
+	if got := ksh.Semantics().JobControlAbsenceIsReportedFirst; got != interp.Yes {
+		t.Errorf("JobControlAbsenceIsReportedFirst = %v, want Yes", got)
+	}
+	if got := ksh.Diagnostics().NoJobControl; got != "" {
+		t.Errorf("NoJobControl = %q, want empty — this shell refuses without a word", got)
+	}
+	if got := ksh.Diagnostics().JobNotUnderJobControl; got != "" {
+		t.Errorf("JobNotUnderJobControl = %q, want empty — this shell never reads the operand", got)
+	}
+}

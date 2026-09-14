@@ -18674,7 +18674,7 @@ cat pf`,
 	{
 		ID: "jobs/bg-with-no-job-control", Category: "commands",
 		Snippet: `bg --version; echo "st=$?"`,
-		Why:     "bash and zsh refuse before reading the operand — there is no job control under -c and they say so first; dash and ksh93 read the operand and complain about that instead",
+		Why:     "bash and zsh refuse before reading the operand — there is no job control under -c and they say so first; ksh93 refuses in the same place and prints nothing while doing it, so the line it writes here is about the *option* and not the operand; dash alone reads the operand and complains about that. What tells ksh93's silence from a reading is `fg %2`, which names no job and is silent too, where its own `jobs %2` on the same line answers `no such job` (#2657)",
 	},
 	{
 		ID: "cd/cdpath-may-announce-the-move", Category: "cd",

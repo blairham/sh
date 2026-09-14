@@ -1413,6 +1413,15 @@ func Semantics() interp.Semantics {
 	// A `jobs` listing: which end it starts from, and whether a job that
 	// has already ended appears in it at all.
 	s.JobsListNewestFirst = interp.Yes
+	// `fg` and `bg` in a script are refused for want of job control before
+	// the operand is read, exactly as in bash and zsh — this shell is only
+	// the one that says nothing while doing it, and silence is what made it
+	// look like the other half of the axis (#2657). The probe that tells
+	// them apart: `sleep 0 & fg %2` names a job that does not exist and is
+	// silent at 1, where `jobs %2` on the same line answers `jobs: no such
+	// job`. A shell that read the operand first would have said so for both.
+	// Measured 2026-09-13 from a script with no terminal.
+	s.JobControlAbsenceIsReportedFirst = interp.Yes
 	// The panel's lone dissent on the current-job marker: it goes to the
 	// newest job here rather than staying with one that stopped. Measured
 	// 2026-09-12 through a pseudo-terminal, `sleep 40` stopped with ^Z and

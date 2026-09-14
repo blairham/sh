@@ -660,3 +660,42 @@ func TestTypeHasNoLettersAtAll(t *testing.T) {
 		t.Errorf("TypeOptions = %q, want none: this shell's type has no options", got)
 	}
 }
+
+// dash reads `fg` and `bg`'s operand before it notices it has no job control,
+// so it is the one member of the panel that reaches a job it holds and has to
+// say why it will not resume it.
+//
+// Measured 2026-09-13 from a script with no terminal, dash 0.5.x as macOS
+// ships it, and the three sentences are three different lookups rather than
+// one with a hole in it:
+//
+//	sleep 0 & fg %1   fg: job %1 not created under job control   status 2
+//	sleep 0 & fg      fg: job (null) not created under job control  status 2
+//	fg                fg: No current job                        status 2
+//	sleep 0 & fg %2   fg: No such job: %2                       status 2
+//
+// The `(null)` is dash's own formatter printing the null pointer it was
+// handed for an operand there was none of. The last line is NoSuchJob, which
+// this dialect already answered; the other three arrived with #2657, where
+// this shell resumed the job and printed its command line instead.
+func TestFgAndBgRefuseAfterReadingTheOperand(t *testing.T) {
+	if got := dash.Semantics().JobControlAbsenceIsReportedFirst; got != interp.No {
+		t.Errorf("JobControlAbsenceIsReportedFirst = %v, want No", got)
+	}
+	d := dash.Diagnostics()
+	if got, want := d.JobNotUnderJobControl, "%[1]s: job %[2]s not created under job control"; got != want {
+		t.Errorf("JobNotUnderJobControl = %q, want %q", got, want)
+	}
+	if got := d.JobNotUnderJobControlStatus; got != 2 {
+		t.Errorf("JobNotUnderJobControlStatus = %d, want 2", got)
+	}
+	if got := d.AbsentJobSpec; got != "(null)" {
+		t.Errorf("AbsentJobSpec = %q, want %q", got, "(null)")
+	}
+	if got, want := d.NoCurrentJob, "%[1]s: No current job"; got != want {
+		t.Errorf("NoCurrentJob = %q, want %q", got, want)
+	}
+	if got := d.NoCurrentJobStatus; got != 2 {
+		t.Errorf("NoCurrentJobStatus = %d, want 2", got)
+	}
+}

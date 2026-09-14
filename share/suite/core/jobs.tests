@@ -29,17 +29,11 @@
 #     tty and carries on, and zsh refuses and ends the script. Three answers
 #     to one line, in a suite run with no terminal anywhere.
 #
-# One more is held out because *we* are the odd one out. It was found by the
-# `fg` cases added after this file's first run:
-#   `fg` with a live background job  #2657 — cmd/ksh and cmd/dash take it as
-#     a live request, print the job's command line on stdout the way an
-#     interactive shell does, and only then fail. ksh93 says nothing at all
-#     and dash refuses; cmd/bash and cmd/zsh are already right
-#
-# Two that were held out for the same reason are now in the file below, #2650
-# and #2651 having been fixed: `$!` is a number for a background job with no
-# operating-system process, and a job a `wait` has reported gives its number
-# back so the next job takes it.
+# Three that were held out because *we* were the odd one out are now in the
+# file below, #2650, #2651 and #2657 having been fixed: `$!` is a number for a
+# background job with no operating-system process, a job a `wait` has reported
+# gives its number back so the next job takes it, and `fg` with a job in the
+# table refuses instead of running it.
 
 # Nothing to wait for is a success, not an error.
 wait; printf 'wait with nothing -> %s\n' "$?"
@@ -118,6 +112,25 @@ printf 'fg stdout [%s]\n' "$( ( fg ) 2> /dev/null )"
 # And it is not fatal: the shell carries on past it.
 ( fg ) 2> /dev/null
 printf 'still running after fg\n'
+
+# With a job actually in the table, which is the case this shell got wrong:
+# it took `fg` as a live request, named the job on stdout the way an
+# interactive shell does, and only then failed (#2657). Every column refuses
+# and none of them writes anything on stdout doing it.
+#
+# `fg` is run directly rather than inside `( )`, and its output is caught in a
+# file rather than in `$( )`, because both of those are a subshell and a
+# subshell is not where the job is. Wrapped either way the case passes on a
+# shell that has the bug, which is the shape of a row that grades nothing.
+( exit 0 ) &
+fg > fgout 2> /dev/null
+if [ "$?" -eq 0 ]; then printf 'fg with a job -> ran\n'; else printf 'fg with a job -> refused\n'; fi
+printf 'fg with a job, stdout [%s]\n' "$(cat fgout)"
+( exit 0 ) &
+fg %1 > fgout1 2> /dev/null
+if [ "$?" -eq 0 ]; then printf 'fg %%1 with a job -> ran\n'; else printf 'fg %%1 with a job -> refused\n'; fi
+printf 'fg %%1 with a job, stdout [%s]\n' "$(cat fgout1)"
+wait
 
 # All of it works inside a function, which is where a script that
 # parallelizes actually puts it.

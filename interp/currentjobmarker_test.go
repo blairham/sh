@@ -107,7 +107,10 @@ func TestStoppingAJobTakesTheMarkerEitherWay(t *testing.T) {
 			// The `fg %1` below resumes the first and it stops again.
 			{Signal: syscall.SIGTSTP, Stopped: true},
 		}}
-		_, _, r := jobRun(t, f, echoCmd+"\n"+lsCmd,
+		// At a prompt, because the `fg %1` below is what re-stops the older
+		// job and `fg` resumes nothing in a shell with no job control
+		// (#2657). What that announces is not read here — the listing is.
+		_, _, r := jobRunAtAPrompt(t, f, echoCmd+"\n"+lsCmd,
 			func(s *Semantics) { s.StoppedJobTakesTheCurrentJobMarker = keep })
 		if _, _, _ = jobRun2(t, r, "fg %1"); len(r.Jobs()) != 2 {
 			t.Fatalf("keep=%v: %d jobs after `fg %%1`, want 2", keep, len(r.Jobs()))

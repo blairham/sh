@@ -188,8 +188,13 @@ func TestAJobThatStopsUnderFgSaysSoAgain(t *testing.T) {
 //
 // Measured: bash's `fg` prints the command alone and its `bg` prints `[1]+
 // sleep 40 &`; zsh prints the same listing row for both, with a state —
-// `continued` — that appears in no listing. Run without a person to tell, so
-// that what the resume printed is the whole of the output.
+// `continued` — that appears in no listing.
+//
+// Run at a prompt, which is the only shell either builtin resumes anything
+// in: a script's `fg` is a refusal in every column of the panel, so a run
+// with nobody to tell would be measuring the refusal (#2657). The ^Z above
+// is announced to that same person, so the resume notice is the last line
+// rather than the whole of the output.
 func TestTheResumeNoticeIsTheDialectsOwn(t *testing.T) {
 	for _, tc := range []struct {
 		name           string
@@ -223,14 +228,14 @@ func TestTheResumeNoticeIsTheDialectsOwn(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// `fg` waits, so the second wait is the resumed command ending.
 			fg, _, _ := jobSession(t, &fakeJobs{waits: []Wait{stopped, {Status: 0}}},
-				echoCmd+"\nfg", false, tc.shape)
-			if fg != tc.wantFg {
-				t.Errorf("fg said %q, want %q", fg, tc.wantFg)
+				echoCmd+"\nfg", true, tc.shape)
+			if got := lastLine(fg) + "\n"; got != tc.wantFg {
+				t.Errorf("fg said %q, want its last line to be %q", fg, tc.wantFg)
 			}
 			bg, _, _ := jobSession(t, &fakeJobs{waits: []Wait{stopped}},
-				echoCmd+"\nbg", false, tc.shape)
-			if bg != tc.wantBg {
-				t.Errorf("bg said %q, want %q", bg, tc.wantBg)
+				echoCmd+"\nbg", true, tc.shape)
+			if got := lastLine(bg) + "\n"; got != tc.wantBg {
+				t.Errorf("bg said %q, want its last line to be %q", bg, tc.wantBg)
 			}
 		})
 	}

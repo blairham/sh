@@ -12094,11 +12094,33 @@ at all.
 
 Only ever at a prompt: no shell announces one to a script.
 
-**`JobControlAbsenceIsReportedFirst`** — bash yes · dash no · ksh93 no · zsh yes
+**`JobControlAbsenceIsReportedFirst`** — bash yes · dash no · ksh93 yes · zsh yes
 
 Refuses `bg` and `fg` before reading the operand when there is no job
-control — bash and zsh; dash and ksh93 read their operands and options
-first and complain about those.
+control. dash alone reads the operand first and complains about that.
+
+**No column resumes the job either way.** A script that has not asked for
+the monitor has no job control in any shell in the panel, so `fg` there is
+a refusal everywhere and the axis is about when it is said and what is
+said, never about whether the job runs. This shell used to take it as a
+live request in the ksh and dash columns, print the job's command line on
+standard output the way an interactive `fg` does, and fail afterwards —
+which put a line of output into a script that had written `fg 2>/dev/null`
+precisely so there would be none (#2657).
+
+ksh93 was read as the second camp for a while because it says nothing at
+all. It is not: measured 2026-09-13 from a script with no terminal,
+`sleep 0 & fg %2` names a job that does not exist and is silent at 1,
+where `jobs %2` on the same line answers `jobs: no such job`. The operand
+is reachable and `fg` is not reaching it, so ksh93 refuses first and the
+silence is `Diagnostics.NoJobControl` left empty. A shell that says nothing
+needs a probe about something else to place it.
+
+What dash says once the operand has resolved is
+`Diagnostics.JobNotUnderJobControl` — `fg: job %1 not created under job
+control` at status 2, and `job (null)` where there was no operand at all,
+which is its own formatter printing the null pointer it was handed. With
+nothing in the table to resolve to it is `fg: No current job`, also at 2.
 
 **`JobsListFinishedJobs`** — bash yes · dash yes · ksh93 yes · zsh no
 

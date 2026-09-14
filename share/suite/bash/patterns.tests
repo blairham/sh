@@ -112,4 +112,28 @@ shopt -s nocaseglob
 printf 'nocaseglob: %s\n' g/ONE
 shopt -u nocaseglob
 
+# GLOBIGNORE is not an option but a parameter, and its patterns take names
+# back out of what a pathname expansion produced. The assignment does two
+# things at once: the pattern removes a name and the non-null value brings
+# the hidden ones in, which is why `g/.hidden` arrives on the line that takes
+# `g/one` away.
+#
+# The fixture above is what makes each line discriminate. `g/.hidden` is
+# there so the reveal is visible; `g/one` is a directory so a pattern with no
+# separator in it has something with one to fail to reach; and the last line
+# leaves the parameter unset rather than null, because those are different
+# states — an assignment of nothing leaves the hidden names on.
+GLOBIGNORE='g/one'
+printf 'ignore: [%s]\n' g/*
+GLOBIGNORE='g/one:g/.hidden'
+printf 'list: [%s]\n' g/*
+GLOBIGNORE='g/one:'
+printf 'empty element: [%s]\n' g/*
+GLOBIGNORE='*one'
+printf 'separator: [%s]\n' g/*
+GLOBIGNORE='g/*'
+printf 'all ignored: [%s]\n' g/*
+unset GLOBIGNORE
+printf 'unset: [%s]\n' g/*
+
 rm -rf g

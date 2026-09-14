@@ -71,6 +71,14 @@ type declareFlags struct {
 	hideNamed bool
 	unique    bool
 	tie       bool
+	// typeName is the name that rode on the `T` letter in the dialect that
+	// reads it as a *type* — `typeset -TPt v` — and typeNamed says one was
+	// written at all. The two cannot be one field for the reason
+	// mappingName and mappingNamed cannot: an attached name and a name taken
+	// from the first operand are indistinguishable afterwards, and only one
+	// of them shortens the operand list. See interp/declaretype.go.
+	typeName  string
+	typeNamed bool
 	function  bool
 	// functionOff is the sign of the `f` letter, which decides what the
 	// function form *writes* rather than whether it is the function form at
@@ -417,6 +425,21 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 				// here and read by biDeclare, which takes its own path for
 				// them.
 				f.tie = true
+				if r.sem().DeclareTypeLetter != DeclareTypeLetterNamesAType {
+					break
+				}
+				// Under the *type* reading the rest of the word is the
+				// type's name rather than more letters — `-TPt v` declares
+				// `v` of type `Pt` — so this is the second case that stops
+				// the walk, exactly as `M` is. Asked of the dialect for the
+				// same reason: the other shell that spells the letter reads
+				// `typeset -TU S s` as the tie plus the unique attribute,
+				// and swallowing the `U` as a type name would take a line
+				// that shell runs and read it as another one.
+				if rest := a[at+2:]; rest != "" {
+					f.typeName, f.typeNamed = rest, true
+					break letters
+				}
 			case 'U':
 				// Keep only the first occurrence of each element. Like
 				// `-i` and the case attributes it is a property of the
@@ -838,6 +861,55 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		// `declare -Fp g` is `declare -f g` with no location in it at all.
 		return r.declareFunctions(args, narrowed, namesOnly, f.funcNames,
 			r.LocatesFunctions() && !f.print)
+	}
+
+	if f.tie {
+		switch r.sem().DeclareTypeLetter {
+		case DeclareTypeLetterNamesAType:
+			// The letter names a *type* here and the operands are type
+			// names rather than a scalar and an array — a different command
+			// with the same spelling. Ahead of every branch below because
+			// this reading has nothing in common with the tie's: a bare
+			// `typeset -T` is a listing under both readings and the two
+			// list different things, and the operand form shares no
+			// grammar at all. See interp/declaretype.go.
+			return r.declareType(name, args, f)
+		case DeclareTypeLetterUnspecified:
+			// A dialect that spells the letter and has not said which of
+			// the two it means. Refused by name rather than given one
+			// shell's reading, the way every unanswered axis is: a guess
+			// would tie two of a script's type names together or declare a
+			// scalar and an array as types.
+			r.errf("%s\n", r.diag().Report(r.name(), r.line,
+				r.unanswered("the `T` letter of a declaration")))
+			r.status, r.unspecified = 2, true
+			return r.status
+		}
+	}
+
+	if f.hidden {
+		switch r.sem().DeclareHideValueLetter {
+		case DeclareHideValueLetterUnspecified:
+			// A dialect that spells the `H` letter and has not said which of
+			// the two things it is. Refused by name rather than given one
+			// shell's reading, the way every unanswered axis is: a guess
+			// either withholds a value a script's listing is meant to carry
+			// or writes a letter into one that never had it. See
+			// interp/declarehide.go.
+			r.errf("%s\n", r.diag().Report(r.name(), r.line,
+				r.unanswered("the `H` letter of a declaration")))
+			r.status, r.unspecified = 2, true
+			return r.status
+		case DeclareHideValueLetterIsAnInertAttribute:
+			if hideValueLetterCompany(f) {
+				// The letter and the integer attribute are exclusive under
+				// this reading: measured, `typeset -iH n=5` and `integer -H
+				// n=5` are both the builtin's usage block at 2 with nothing
+				// above it. zsh takes the pair and lists `typeset -i n`, so
+				// this belongs to the reading rather than to the letter.
+				return r.refuseWithUsage(name)
+			}
+		}
 	}
 
 	if len(args) == 0 && !f.tie {

@@ -100,19 +100,30 @@ type declaration struct {
 	exported bool
 	lower    bool
 	upper    bool
-	// hidden keeps the value out of the listing — `typeset -H`. Not a flag
-	// letter in any listed form: the shell that has the attribute says it by
-	// writing no value, and never writes an `H` back.
+	// hidden says the `-H` attribute is on the name. What it *does* is the
+	// dialect's — see Semantics.DeclareHideValueLetter — so this field is
+	// the record and hidesTheValue below is one of the two readings of it.
+	//
+	// The other reading is ksh93's, where the attribute is inert and is said
+	// back as a letter: BareAssignments writes `-H` for it, between the kind
+	// letter and the case letters. Clustered never sees it — bash has no
+	// `-H` at all.
+	hidden bool
+	// hidesTheValue is the reading under which `-H` withholds the value: the
+	// name is declared, holds what it holds and reads back exactly as it
+	// would without the letter, and only a listing that would have written
+	// `=value` writes the bare name instead. The letter itself is never
+	// written back under this reading.
 	//
 	// Only the forms that shell reaches honor it — ExportSpelled, its
-	// `typeset -p` and `readonly -p`; CommandWord, its `export -p`; and
-	// PlainAssignment, its bare `export` and `readonly`. Clustered and
-	// BareAssignments are left alone on purpose rather than for want of
-	// effort: bash has no `-H` at all, and the letter ksh93 does have is a
-	// different attribute whose listing keeps the value — `typeset -H h=v`
-	// lists back as `typeset -H h=v` there. Hiding in those forms would be
-	// output no shell in the panel produces.
-	hidden bool
+	// `typeset -p` and `readonly -p`; CommandWord, its `export -p`;
+	// PlainAssignment, its bare `export` and `readonly`; and the bare `set`
+	// listing in setlisting.go.
+	//
+	// Read rather than derived at each site, because the same struct is
+	// rendered by five forms and a policy consulted five times is a policy
+	// four of them will eventually stop consulting.
+	hidesTheValue bool
 	// tied is the tie this name is half of — `typeset -T` — and holds when
 	// either half is being listed. The entry is not the ordinary one: it
 	// names *both* parameters, always writes the array's elements as the
@@ -214,6 +225,12 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 	_, d.float = r.floatPrecision[name]
 	d.width, d.hasWidth = r.fieldWidth[name]
 	d.tied, d.hasTie = r.tieOf(name)
+	// Which of the two things `-H` is here. The attribute is recorded the
+	// same way for both readings — see interp/declarehide.go — and this is
+	// where the dialect is asked what it stands for, once, for every listing
+	// form that renders this struct.
+	d.hidesTheValue = d.hidden &&
+		r.sem().DeclareHideValueLetter == DeclareHideValueLetterHidesTheValue
 	attributed := d.integer || d.float || d.readonly || d.exported || d.lower ||
 		d.upper || d.hidden || d.unique || d.hasWidth
 	if pd, ok := r.producedDeclaration(name); ok {
@@ -493,9 +510,9 @@ func (r *Runner) listedDeclaration(form DeclarationListingForm, d declaration) s
 // value half of that shell's own `-p`, which is what a listing claims to be.
 func (r *Runner) commandWordDeclaration(d declaration) string {
 	head := r.inBuiltin + " " + d.name
-	if d.hidden || d.unset {
-		// Nothing to write a value from: `-H` withholds it, and a typed name
-		// whose value was taken away has none.
+	if d.hidesTheValue || d.unset {
+		// Nothing to write a value from: `-H` withholds it under the reading
+		// that does, and a typed name whose value was taken away has none.
 		return head
 	}
 	if !d.hasValue && !d.isArr && !d.isAssoc {
@@ -519,9 +536,10 @@ func (r *Runner) commandWordDeclaration(d declaration) string {
 // these shells and as the based text it holds in the other, and that
 // difference is already written down once.
 func (r *Runner) plainAssignmentDeclaration(d declaration) string {
-	if d.hidden || d.unset {
-		// Nothing to write a value from: `-H` withholds it, and a typed name
-		// whose value was taken away has none. Measured on the second —
+	if d.hidesTheValue || d.unset {
+		// Nothing to write a value from: `-H` withholds it under the reading
+		// that does, and a typed name whose value was taken away has none.
+		// Measured on the second —
 		// ksh93 writes a bare `u` for `typeset -a u; typeset -a`, where the
 		// shell that declares a name *empty* instead has an empty array to
 		// print and writes `u=(  )`.
@@ -796,9 +814,9 @@ func (r *Runner) exportSpelledDeclaration(d declaration) string {
 		}
 		return out
 	}
-	if d.hidden {
-		// The whole of what `-H` does: the attributes still speak, the value
-		// does not — a scalar's, an array's and a table's alike. Measured
+	if d.hidesTheValue {
+		// The whole of what `-H` does under this reading: the attributes
+		// still speak, the value does not — a scalar's, an array's and a table's alike. Measured
 		// `typeset -A C`, `typeset -a A`, `typeset -i n`, `typeset -r r` and
 		// `export e` back from names that all held values.
 		return head
@@ -913,6 +931,18 @@ func (r *Runner) bareAssignmentDeclaration(d declaration) string {
 	}
 	if d.isAssoc {
 		flags = append(flags, "-A")
+	}
+	if d.hidden && !d.hidesTheValue {
+		// The inert reading of `-H`, which is the only one that reaches this
+		// form: the letter is written and the value stays. Measured a pair at
+		// a time on ksh93u+ — `typeset -x -H h=1`, `typeset -r -H h=1`,
+		// `typeset -a -H h=(1 2)`, `typeset -A -H m=([k]=v)`, `typeset -H -l
+		// h=ab` and `typeset -H -u h=AB` — so it stands after the kind letter
+		// and before the case letters, which is exactly here. See
+		// interp/declarehide.go; the reading that withholds the value writes
+		// no letter at all, and the guard says which one this is rather than
+		// leaving the two to be told apart by which dialect happened to call.
+		flags = append(flags, "-H")
 	}
 	if d.lower {
 		flags = append(flags, "-l")

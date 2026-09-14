@@ -20,6 +20,7 @@ import (
 // withTies is declRun's setter for a dialect that spells the letter.
 func withTies(s *Semantics) {
 	s.DeclareOptions = "aAgHilpruUTx"
+	s.DeclareTypeLetter = DeclareTypeLetterTiesAScalarAndAnArray
 	s.LocalOptions = "aAHilpruUTx"
 	s.DeclareListing = DeclareListingExportSpelled
 	s.DeclareValueQuoting = ListingQuoteWhenNeededEscaped
@@ -239,6 +240,7 @@ typeset -p C c`, withTies, Diagnostics{})
 func TestTheTieSeamSeedsDefaultsAndConfersNoExport(t *testing.T) {
 	sem := permissive()
 	sem.DeclareOptions = "aAgHilpruUTx"
+	sem.DeclareTypeLetter = DeclareTypeLetterTiesAScalarAndAnArray
 	sem.DeclareListing = DeclareListingExportSpelled
 	sem.DeclareValueQuoting = ListingQuoteWhenNeededEscaped
 	sem.ArraysAreSparse = No

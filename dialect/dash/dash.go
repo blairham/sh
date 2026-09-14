@@ -259,6 +259,11 @@ func Semantics() interp.Semantics {
 	// the letter can be put to this shell (#2345).
 	// unanswered DeclareMappingLetter: the same wall. `typeset -M tolower v`
 	// is `typeset: not found` here too.
+	// unanswered DeclareTypeLetter: the same wall again. Measured
+	// 2026-09-13, `typeset -T TS ts` and `declare -T TS ts` are both `not
+	// found` at 127, so there is no builtin here to read the letter either
+	// way (#2419).
+	// unanswered DeclareHideValueLetter: the same, for `typeset -H h=hid`.
 	// unanswered ExpansionResultSuppliesGroupSyntax: dash has no pattern
 	// groups at all, so `(`, `)` and `|` out of a value are text here
 	// however they arrived and there is nothing for the axis to choose.

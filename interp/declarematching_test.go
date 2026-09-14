@@ -206,6 +206,7 @@ func TestMatchingWithAPlusWritesTheAttributeWordsInOrder(t *testing.T) {
 	set := func(s *Semantics) {
 		withMatching(s)
 		s.DeclareOptions = "aAfgilmpruUxT"
+		s.DeclareTypeLetter = DeclareTypeLetterTiesAScalarAndAnArray
 		s.DeclareMatchingLetter = DeclareMatchingLetterSelects
 	}
 	for _, tc := range []struct{ name, decl, want string }{
@@ -233,6 +234,7 @@ func TestMatchingWithAPlusNamesAnExportOnlyWhereItIsNotAPlainEnvironmentEntry(t 
 	set := func(s *Semantics) {
 		withMatching(s)
 		s.DeclareOptions = "aAfgilmpruUxT"
+		s.DeclareTypeLetter = DeclareTypeLetterTiesAScalarAndAnArray
 		s.DeclareMatchingLetter = DeclareMatchingLetterSelects
 		s.LocalOptions = "aAgilpruUx"
 	}
@@ -261,6 +263,7 @@ func TestMatchingWithAPlusNamesTheOtherHalfOfATie(t *testing.T) {
 	set := func(s *Semantics) {
 		withMatching(s)
 		s.DeclareOptions = "aAfgilmpruUxT"
+		s.DeclareTypeLetter = DeclareTypeLetterTiesAScalarAndAnArray
 		s.DeclareMatchingLetter = DeclareMatchingLetterSelects
 	}
 	out, errs, st := declRun(t, "typeset -T QS qs\ntypeset +m 'qs'\ntypeset +m 'QS'", set, Diagnostics{})
@@ -278,6 +281,7 @@ func TestMatchingReadsEachLettersSignAndNotTheLastWords(t *testing.T) {
 	set := func(s *Semantics) {
 		withMatching(s)
 		s.DeclareOptions = "aAfgilmpruUxT"
+		s.DeclareTypeLetter = DeclareTypeLetterTiesAScalarAndAnArray
 		s.DeclareMatchingLetter = DeclareMatchingLetterSelects
 	}
 	src := "qa=1\ntypeset -x qa\n"
@@ -302,6 +306,7 @@ func TestMatchingDeclaresOverNothingTheShellProduces(t *testing.T) {
 	set := func(s *Semantics) {
 		withMatching(s)
 		s.DeclareOptions = "aAfgilmpruUxT"
+		s.DeclareTypeLetter = DeclareTypeLetterTiesAScalarAndAnArray
 		s.DeclareMatchingLetter = DeclareMatchingLetterSelects
 	}
 	// Both kinds of produced parameter, because the guard has to name both

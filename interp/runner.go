@@ -2120,6 +2120,12 @@ type Runner struct {
 	// tied holds the ties `typeset -T` made — see tiedscalar.go — under
 	// both of each tie's names, so either half finds it.
 	tied map[string]tie
+	// declaredTypes holds the type names `typeset -T` registered, in the
+	// order they were first written, for the dialect whose `T` letter names
+	// a type — see interp/declaretype.go. Names and not definitions: a type
+	// is a compound value this engine has no representation for (#2620), so
+	// what is kept is the one thing the bare `-T` listing can write back.
+	declaredTypes []string
 	// mirroring says a tie is already writing the other half, which is what
 	// keeps the two mirrors from calling each other forever.
 	mirroring bool

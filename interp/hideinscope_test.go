@@ -34,6 +34,7 @@ import (
 func withHidingAndTies(s *Semantics) {
 	s.DeclareOptions = "aAghilprTuUx"
 	s.LocalOptions = "aAhilprTuUx"
+	s.DeclareTypeLetter = DeclareTypeLetterTiesAScalarAndAnArray
 	s.ArraysAreSparse = No
 	s.ArrayBaseIsZero = No
 	s.DeclaredNameWithoutValueIsEmpty = Yes

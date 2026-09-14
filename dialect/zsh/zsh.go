@@ -2181,6 +2181,15 @@ func Semantics() interp.Semantics {
 	// function here, where ksh93's `M` names a character mapping. The same
 	// shape as the `m` letter above and for the same reason.
 	s.DeclareMappingLetter = interp.DeclareMappingLetterRegistersAMathFunction
+	// And the `T` of `typeset`: it ties a scalar to an array here — see
+	// interp/tiedscalar.go — where ksh93's names a type. The third letter of
+	// that shape and the third for the same reason.
+	s.DeclareTypeLetter = interp.DeclareTypeLetterTiesAScalarAndAnArray
+	// And the `H`, which is the fourth: it withholds a name's *value* from a
+	// listing here — `typeset -H h=hid` lists back as `typeset h` — where
+	// ksh93 records an inert attribute and writes the letter and the value
+	// alike. Measured 2026-09-13; interp/declarehide.go holds it.
+	s.DeclareHideValueLetter = interp.DeclareHideValueLetterHidesTheValue
 	// `export` is this word's declaration under another name, and it takes
 	// the same letters bar six. Measured 2026-09-12, a letter at a time
 	// against `export -X q=4`: `-A`, `-g`, `-m`, `-x` and `-z` are

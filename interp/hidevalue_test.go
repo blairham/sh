@@ -19,6 +19,7 @@ import (
 func withHiding(s *Semantics) {
 	s.DeclareOptions = "aAgHilprux"
 	s.LocalOptions = "aAHilprux"
+	s.DeclareHideValueLetter = DeclareHideValueLetterHidesTheValue
 	s.DeclareListing = DeclareListingExportSpelled
 	s.ExportListing = DeclareListingCommandWord
 	s.BareDeclarationListing = DeclareListingPlainAssignment

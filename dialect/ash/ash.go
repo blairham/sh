@@ -250,6 +250,11 @@ func Semantics() interp.Semantics {
 	// `q=(a b)` is `syntax error: unexpected "("`, so the shell refuses the
 	// spelling before any frozen name is consulted.
 	// unanswered DeclareMappingLetter: the same, for `typeset -M x`.
+	// unanswered DeclareTypeLetter: no declaration utility here either.
+	// Measured 2026-09-13 in the pinned image, `typeset -T q=1` is
+	// `typeset: not found` at 127, so neither the tie nor the type reading
+	// of the letter can be put to this shell (#2419).
+	// unanswered DeclareHideValueLetter: the same, for `typeset -H q=1`.
 	// unanswered ExpansionResultSuppliesGroupSyntax: BusyBox ash has no
 	// pattern groups either, for the same reason dash has none.
 	// unanswered TableLetterReachesItsOwnOperandsSubscript: BusyBox ash has

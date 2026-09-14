@@ -1547,6 +1547,11 @@ func Semantics() interp.Semantics {
 	// `declare: -m: invalid option` followed by the usage line, so the
 	// question of what the letter *means* never arises (#2345).
 	// unanswered DeclareMappingLetter: the same, for `typeset -M tolower v`.
+	// unanswered DeclareTypeLetter: nor a `T` letter under either reading.
+	// Measured 2026-09-13 on 5.3.15 and 3.2.57 alike, `declare -T q=1` is
+	// `declare: -T: invalid option` at 2 with the usage line under it, so
+	// neither the tie nor the type can be asked for here (#2419).
+	// unanswered DeclareHideValueLetter: the same, for `declare -H q=1`.
 	s.LocalOptions = "aAgilprux"
 	// A bad `declare` option is reported and the script goes on.
 	s.TypesetBadOptionFatal = interp.No

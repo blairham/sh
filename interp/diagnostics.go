@@ -3176,6 +3176,23 @@ type Diagnostics struct {
 	// has operands and no mapping to apply to them. One verb: the builtin's
 	// complaint name.
 	DeclareMappingNeedsAName string
+
+	// DeclareTypeNeedsACompoundAssignment is what `typeset -T TS=1` says in
+	// the dialect whose `T` letter names a type: a type is defined by a
+	// compound assignment and by nothing else. One verb: the operand's name.
+	//
+	// The builtin is *not* in the location for this one where it is for the
+	// bad-name refusal beside it, which is measured — see
+	// Runner.refuseTypeNeedsACompound. See interp/declaretype.go, and
+	// Semantics.DeclareTypeLetter for the other reading of the same letter.
+	DeclareTypeNeedsACompoundAssignment string
+
+	// DeclareTypeNameHasNoParent is what the same letter says about a first
+	// operand that is not an identifier — `typeset -T ':' ts` — which that
+	// shell reports through the compound namespace it keeps its types in
+	// rather than as a bad variable name. Two verbs: the builtin's complaint
+	// name and the operand.
+	DeclareTypeNameHasNoParent string
 	// IntegerBadBase is an output base the dialect will not spell — `typeset
 	// -i64 a=100` and `typeset -i1 f=5`.
 	//

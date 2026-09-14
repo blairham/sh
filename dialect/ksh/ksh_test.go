@@ -435,8 +435,17 @@ func TestKshHasItsOwnNamesForThings(t *testing.T) {
 	// cannot parse. It said `parameter not set` until #1629, standing in for
 	// a lookup that did not happen; the lookup happens now — see
 	// Semantics.ArithRecursedNameMustBeSet — and that sentence belongs to it.
-	if got, want := d.InvalidNumber, "%[1]s: arithmetic syntax error"; got != want {
+	//
+	// The reason alone, with no verb: ArithError names the text being
+	// blamed, so a `%[1]s` here named it twice (#2767).
+	if got, want := d.InvalidNumber, "arithmetic syntax error"; got != want {
 		t.Errorf("InvalidNumber = %q, want %q", got, want)
+	}
+	if strings.Contains(d.InvalidNumber, "%") {
+		// The doubling was invisible in the field on its own and only showed
+		// through the wrapper, so this says the rule rather than the value:
+		// a reason takes no verbs, and every route into this one is wrapped.
+		t.Errorf("InvalidNumber = %q, want a reason with no verbs in it", d.InvalidNumber)
 	}
 }
 

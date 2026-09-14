@@ -506,10 +506,10 @@ func (r *Runner) setOptionsAndOperands(_ context.Context, args []string) int {
 					return r.status
 				}
 			}
-			// A next word there is behind the `-o` is not always its
-			// name: in bash and ksh93 a word this loop would itself read as
-			// options is not taken at all, so the `-o` is a bare one and the
-			// word is read as option letters after the listing.
+			// The word behind a bare `-o` is not always its name: in bash
+			// and ksh93 a word this loop would itself read as options is
+			// not taken at all, so the `-o` stays a bare one and the word
+			// is read as option letters after the listing.
 			// Semantics.SetODeclinesADashWord, asked only where there is
 			// such a word to decline.
 			declined := false
@@ -532,7 +532,7 @@ func (r *Runner) setOptionsAndOperands(_ context.Context, args []string) int {
 					return r.setOptionFailure()
 				}
 				if declined {
-					// The word the `-o` would not have is left to the loop,
+					// The word the `-o` would not take is left to the loop,
 					// which reads it as what it looks like.
 					continue
 				}

@@ -29457,6 +29457,108 @@
         "TimedOut": false
       }
     },
+    "axis/printf-number-operand": {
+      "ash": {
+        "Stdout": "[0][0][8]~[0][0]~[0][0]~[0.000000][16.000000]~st=1",
+        "Stderr": "\u003cshell\u003e: invalid number '1.5'~\u003cshell\u003e: invalid number '1e3'~\u003cshell\u003e: invalid number '1+1'~\u003cshell\u003e: invalid number '42abc'~\u003cshell\u003e: invalid number 'v'~\u003cshell\u003e: invalid number 'abc'~\u003cshell\u003e: invalid number '1e3abc'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[1][1][8]~[1][42]~[0][0]~[1000.000000][16.000000]~st=1",
+        "Stderr": "\u003cshell\u003e: line 1: printf: 1.5: invalid number~\u003cshell\u003e: line 1: printf: 1e3: invalid number~\u003cshell\u003e: line 1: printf: 1+1: invalid number~\u003cshell\u003e: line 1: printf: 42abc: invalid number~\u003cshell\u003e: line 1: printf: v: invalid number~\u003cshell\u003e: line 1: printf: abc: invalid number~\u003cshell\u003e: line 1: printf: 1e3abc: invalid number",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[1][1][8]~[1][42]~[0][0]~[1000.000000][16.000000]~st=1",
+        "Stderr": "\u003cshell\u003e: line 1: printf: 1.5: invalid number~\u003cshell\u003e: line 1: printf: 1e3: invalid number~\u003cshell\u003e: line 1: printf: 1+1: invalid number~\u003cshell\u003e: line 1: printf: 42abc: invalid number~\u003cshell\u003e: line 1: printf: v: invalid number~\u003cshell\u003e: line 1: printf: abc: invalid number~\u003cshell\u003e: line 1: printf: 1e3abc: invalid number",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[0][0][8]~[0][0]~[0][0]~[0.000000][16.000000]~st=1",
+        "Stderr": "\u003cshell\u003e: line 0: printf: 1.5: invalid number~\u003cshell\u003e: line 0: printf: 1e3: invalid number~\u003cshell\u003e: line 0: printf: 1+1: invalid number~\u003cshell\u003e: line 0: printf: 42abc: invalid number~\u003cshell\u003e: line 0: printf: v: invalid number~\u003cshell\u003e: line 0: printf: abc: invalid number~\u003cshell\u003e: line 0: printf: 1e3abc: invalid number",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[1][1][8]~[1][42]~[0][0]~[1000.000000][16.000000]~st=1",
+        "Stderr": "\u003cshell\u003e: 1: printf: 1.5: not completely converted~\u003cshell\u003e: 1: printf: 1e3: not completely converted~\u003cshell\u003e: 1: printf: 1+1: not completely converted~\u003cshell\u003e: 1: printf: 42abc: not completely converted~\u003cshell\u003e: 1: printf: v: expected numeric value~\u003cshell\u003e: 1: printf: abc: expected numeric value~\u003cshell\u003e: 1: printf: 1e3abc: not completely converted",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[1][1000][10]~[2][42]~[7][0]~[1000.000000][16.000000]~st=1",
+        "Stderr": "\u003cshell\u003e: printf: 42abc: arithmetic syntax error~\u003cshell\u003e: printf: warning: invalid argument of type d~\u003cshell\u003e: printf: 1e3abc: arithmetic syntax error~\u003cshell\u003e: printf: 1e3abc: arithmetic syntax error~\u003cshell\u003e: printf: warning: invalid argument of type f",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[1][1000][10]~[2][0]~[7][0]~[0.000000][16.000000]~st=1",
+        "Stderr": "\u003cshell\u003e:1: bad math expression: operator expected at `abc'~\u003cshell\u003e:1: bad math expression: operator expected at `abc'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/printf-refused-operand-keeps-its-leading-number": {
+      "ash": {
+        "Stdout": "[0][0]~[0.000000][0]~st=1",
+        "Stderr": "\u003cshell\u003e: invalid number '42abc'~\u003cshell\u003e: invalid number '1e3abc'~\u003cshell\u003e: invalid number '1.5abc'~\u003cshell\u003e: invalid number 'abc42'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[42][1]~[1.500000][0]~st=1",
+        "Stderr": "\u003cshell\u003e: line 1: printf: 42abc: invalid number~\u003cshell\u003e: line 1: printf: 1e3abc: invalid number~\u003cshell\u003e: line 1: printf: 1.5abc: invalid number~\u003cshell\u003e: line 1: printf: abc42: invalid number",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[42][1]~[1.500000][0]~st=1",
+        "Stderr": "\u003cshell\u003e: line 1: printf: 42abc: invalid number~\u003cshell\u003e: line 1: printf: 1e3abc: invalid number~\u003cshell\u003e: line 1: printf: 1.5abc: invalid number~\u003cshell\u003e: line 1: printf: abc42: invalid number",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[0][0]~[0.000000][0]~st=1",
+        "Stderr": "\u003cshell\u003e: line 0: printf: 42abc: invalid number~\u003cshell\u003e: line 0: printf: 1e3abc: invalid number~\u003cshell\u003e: line 0: printf: 1.5abc: invalid number~\u003cshell\u003e: line 0: printf: abc42: invalid number",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[42][1]~[1.500000][0]~st=1",
+        "Stderr": "\u003cshell\u003e: 1: printf: 42abc: not completely converted~\u003cshell\u003e: 1: printf: 1e3abc: not completely converted~\u003cshell\u003e: 1: printf: 1.5abc: not completely converted~\u003cshell\u003e: 1: printf: abc42: expected numeric value",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[42][1000]~[1.500000][0]~st=1",
+        "Stderr": "\u003cshell\u003e: printf: 42abc: arithmetic syntax error~\u003cshell\u003e: printf: warning: invalid argument of type d~\u003cshell\u003e: printf: 1e3abc: arithmetic syntax error~\u003cshell\u003e: printf: warning: invalid argument of type d~\u003cshell\u003e: printf: 1.5abc: arithmetic syntax error~\u003cshell\u003e: printf: 1.5abc: arithmetic syntax error~\u003cshell\u003e: printf: warning: invalid argument of type f",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[0][0]~[0.000000][0]~st=1",
+        "Stderr": "\u003cshell\u003e:1: bad math expression: operator expected at `abc'~\u003cshell\u003e:1: bad math expression: operator expected at `abc'~\u003cshell\u003e:1: bad math expression: operator expected at `abc'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "axis/printf-star-complaint-costs-the-status": {
       "ash": {
         "Stdout": "[hi]~st=0~[]~st=0",
@@ -152987,6 +153089,57 @@
       "zsh": {
         "Stdout": " 61 c0 5a ",
         "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "printf/a-range-error-keeps-the-value": {
+      "ash": {
+        "Stdout": "[inf][-inf]~[       inf][inf][INF]~[0.000000][9.99989e-321]~[0][0]~st=1",
+        "Stderr": "\u003cshell\u003e: invalid number '1e400'~\u003cshell\u003e: invalid number '-1e400'~\u003cshell\u003e: invalid number '1e400'~\u003cshell\u003e: invalid number '1e400'~\u003cshell\u003e: invalid number '1e400'~\u003cshell\u003e: invalid number '1e-400'~\u003cshell\u003e: invalid number '1e-320'~\u003cshell\u003e: invalid number '99999999999999999999'~\u003cshell\u003e: invalid number '-99999999999999999999'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[inf][-inf]~[       inf][inf][INF]~[0.000000][9.99989e-321]~[9223372036854775807][-9223372036854775808]~st=1",
+        "Stderr": "\u003cshell\u003e: line 1: printf: 1e400: Result too large~\u003cshell\u003e: line 1: printf: -1e400: Result too large~\u003cshell\u003e: line 1: printf: 1e400: Result too large~\u003cshell\u003e: line 1: printf: 1e400: Result too large~\u003cshell\u003e: line 1: printf: 1e400: Result too large~\u003cshell\u003e: line 1: printf: 1e-400: Result too large~\u003cshell\u003e: line 1: printf: 1e-320: Result too large~\u003cshell\u003e: line 1: printf: 99999999999999999999: Result too large~\u003cshell\u003e: line 1: printf: -99999999999999999999: Result too large",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[inf][-inf]~[       inf][inf][INF]~[0.000000][9.99989e-321]~[9223372036854775807][-9223372036854775808]~st=1",
+        "Stderr": "\u003cshell\u003e: line 1: printf: 1e400: Result too large~\u003cshell\u003e: line 1: printf: -1e400: Result too large~\u003cshell\u003e: line 1: printf: 1e400: Result too large~\u003cshell\u003e: line 1: printf: 1e400: Result too large~\u003cshell\u003e: line 1: printf: 1e400: Result too large~\u003cshell\u003e: line 1: printf: 1e-400: Result too large~\u003cshell\u003e: line 1: printf: 1e-320: Result too large~\u003cshell\u003e: line 1: printf: 99999999999999999999: Result too large~\u003cshell\u003e: line 1: printf: -99999999999999999999: Result too large",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[inf][-inf]~[       inf][inf][INF]~[0.000000][9.99989e-321]~[9223372036854775807][-9223372036854775808]~st=0",
+        "Stderr": "\u003cshell\u003e: line 0: printf: warning: 1e400: Result too large~\u003cshell\u003e: line 0: printf: warning: -1e400: Result too large~\u003cshell\u003e: line 0: printf: warning: 1e400: Result too large~\u003cshell\u003e: line 0: printf: warning: 1e400: Result too large~\u003cshell\u003e: line 0: printf: warning: 1e400: Result too large~\u003cshell\u003e: line 0: printf: warning: 1e-400: Result too large~\u003cshell\u003e: line 0: printf: warning: 1e-320: Result too large~\u003cshell\u003e: line 0: printf: warning: 99999999999999999999: Result too large~\u003cshell\u003e: line 0: printf: warning: -99999999999999999999: Result too large",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[inf][-inf]~[       inf][inf][INF]~[0.000000][9.99989e-321]~[9223372036854775807][-9223372036854775808]~st=1",
+        "Stderr": "\u003cshell\u003e: 1: printf: 1e400: Result too large~\u003cshell\u003e: 1: printf: -1e400: Result too large~\u003cshell\u003e: 1: printf: 1e400: Result too large~\u003cshell\u003e: 1: printf: 1e400: Result too large~\u003cshell\u003e: 1: printf: 1e400: Result too large~\u003cshell\u003e: 1: printf: 1e-400: Result too large~\u003cshell\u003e: 1: printf: 1e-320: Result too large~\u003cshell\u003e: 1: printf: 99999999999999999999: Result too large~\u003cshell\u003e: 1: printf: -99999999999999999999: Result too large",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[-0.000000][0.000000]~[ -0.000000][-0][-0.000000E+00]~[0.000000][0]~[9223372036854775807][-9223372036854775808]~st=1",
+        "Stderr": "\u003cshell\u003e: printf: warning: 99999999999999999999: overflow exception~\u003cshell\u003e: printf: warning: -99999999999999999999: overflow exception",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[inf][-inf]~[inf][inf][inf]~[0.000000][9.99989e-321]~[-8446744073709551617][8446744073709551617]~st=0",
+        "Stderr": "\u003cshell\u003e:1: number truncated after 19 digits: 99999999999999999999~\u003cshell\u003e:1: number truncated after 19 digits: 99999999999999999999",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

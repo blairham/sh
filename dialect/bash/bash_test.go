@@ -401,6 +401,20 @@ func TestPrintfAnswers(t *testing.T) {
 		// An infinity goes through the conversion that named it: `%G` of
 		// one is `INF` and `%10f` of one is `[       inf]` (#2707).
 		{"PrintfNonFiniteIsConverted", s.PrintfNonFiniteIsConverted, interp.Yes},
+		// The number C's reader finds at the front, with the tail
+		// complained about: `printf '%d' 1.5` is 1 and `printf '%d' 1e3`
+		// is 1, because `strtoimax` stops at the `.` and at the `e`
+		// (#2731). Measured 2026-09-14 on bash 5.3.15.
+		{"PrintfNumberOperand", s.PrintfNumberOperand, interp.PrintfNumberLeadingNumber},
+		// C's errno written back, in both directions and for both kinds
+		// of conversion: `printf '%f' 1e400` and `printf '%f' 1e-320`
+		// are the same sentence in bash 5.3.15, which is what says it is
+		// reporting `ERANGE` and not a reading of the operand (#2727).
+		{"PrintfNumberOutOfRange", bash.Diagnostics().PrintfNumberOutOfRange, "printf: %[1]s: Result too large"},
+		// And no second sentence for a partial read: `printf '%d' 1.5`
+		// and `printf '%d' abc` are both `invalid number` here, where
+		// dash has two.
+		{"PrintfIncompleteNumber", bash.Diagnostics().PrintfIncompleteNumber, ""},
 		// bash: an operand present and empty is an error. An operand that
 		// is *missing* is not — which is the pair below, and the two cross,
 		// because ash says yes to both (#2648).

@@ -269,6 +269,14 @@ func TestPrintfStarComplaintCostsTheStatus(t *testing.T) {
 	if got, want := s.PrintfNonFiniteIsConverted, interp.Yes; got != want {
 		t.Errorf("PrintfNonFiniteIsConverted = %v, want %v", got, want)
 	}
+	// The whole operand or nothing: `printf '%d' 1.5` is 0 here where four
+	// columns read a 1, and `printf '%d' 99999999999999999999` is 0 where
+	// three saturate — its integer reader returns nothing on `ERANGE`,
+	// while its `strtod` returns the infinity and `printf '%f' 1e400` is
+	// `inf` all the same (#2731, #2727).
+	if got, want := s.PrintfNumberOperand, interp.PrintfNumberWholeOperand; got != want {
+		t.Errorf("PrintfNumberOperand = %v, want %v", got, want)
+	}
 	// And an absent star operand is a silent zero even here, which is what
 	// keeps it a separate question from the absent *conversion* operand
 	// above: `printf 'a%*db'` writes one complaint in BusyBox and not two.

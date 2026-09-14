@@ -436,6 +436,19 @@ func TestPrintfAnswers(t *testing.T) {
 	if got, want := dash.Semantics().PrintfNonFiniteIsConverted, interp.Yes; got != want {
 		t.Errorf("PrintfNonFiniteIsConverted = %v, want %v", got, want)
 	}
+	// A leading number with the tail complained about, as in bash — and
+	// with dash's own second sentence for it: `printf '%d' 1.5` is 1 at
+	// `not completely converted` where `printf '%d' abc` is 0 at `expected
+	// numeric value` (#2731).
+	if got, want := dash.Semantics().PrintfNumberOperand, interp.PrintfNumberLeadingNumber; got != want {
+		t.Errorf("PrintfNumberOperand = %v, want %v", got, want)
+	}
+	if got, want := dash.Diagnostics().PrintfIncompleteNumber, "printf: %[1]s: not completely converted"; got != want {
+		t.Errorf("PrintfIncompleteNumber = %q, want %q", got, want)
+	}
+	if got, want := dash.Diagnostics().PrintfNumberOutOfRange, "printf: %[1]s: Result too large"; got != want {
+		t.Errorf("PrintfNumberOutOfRange = %q, want %q", got, want)
+	}
 	d := dash.Diagnostics()
 	if got, want := d.PrintfBadVerbStatus, 2; got != want {
 		t.Errorf("PrintfBadVerbStatus = %d, want %d", got, want)

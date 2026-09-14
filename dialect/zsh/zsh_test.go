@@ -599,6 +599,17 @@ func TestPrintfAnswers(t *testing.T) {
 	if got, want := s.PrintfNonFiniteIsConverted, interp.No; got != want {
 		t.Errorf("PrintfNonFiniteIsConverted = %v, want %v", got, want)
 	}
+	// The operand is an arithmetic expression: `printf '%d' 1e3` is 1000,
+	// `printf '%d' 010` is 10, and `printf '%d' 'x=5'` leaves x set to 5
+	// (#2731). An operand its arithmetic refuses leaves nothing behind,
+	// which is where it parts from ksh93: `printf '%d' 42abc` is 0 here
+	// and 42 there, and both complain.
+	if got, want := s.PrintfNumberOperand, interp.PrintfNumberArithmetic; got != want {
+		t.Errorf("PrintfNumberOperand = %v, want %v", got, want)
+	}
+	if got, want := s.PrintfRefusedOperandKeepsItsLeadingNumber, interp.No; got != want {
+		t.Errorf("PrintfRefusedOperandKeepsItsLeadingNumber = %v, want %v", got, want)
+	}
 }
 
 // TestCdAnswers: zsh moves silently and names the reason before the operand,

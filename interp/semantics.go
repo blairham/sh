@@ -2490,6 +2490,29 @@ type Semantics struct {
 	// rather than a switch — see PrintfQuoteStyle.
 	PrintfQuote PrintfQuoteStyle
 
+	// PrintfNumberOperand is how a numeric conversion reads an operand that
+	// is not already the whole number C asked for — see PrintfNumberReading.
+	PrintfNumberOperand PrintfNumberReading
+
+	// PrintfRefusedOperandKeepsItsLeadingNumber writes the number the front
+	// of the operand held when the arithmetic behind it would not evaluate.
+	//
+	// Asked only where PrintfNumberOperand is already
+	// PrintfNumberArithmetic and that arithmetic has already failed, which
+	// is the one place the two columns that evaluate part company: `printf
+	// '%d' 42abc` is `42` in ksh93u+ and `0` in zsh 5.9.2, and both
+	// complain. The readings that do not evaluate never reach it — for them
+	// keeping the leading number *is* the reading, or refusing the whole
+	// operand is.
+	//
+	// The number kept is the one C's `strtod` would have read off the front
+	// rather than the one `strtoimax` would: ksh93u+ answers `1000` for
+	// `printf '%d' 1e3abc` and `1` for `printf '%d' 1.5abc`, which is a
+	// float read truncated and not an integer read. Measured 2026-09-14
+	// under `LC_ALL=C`; `printf '%d' 0x10zz` is `16` there and `printf
+	// '%d' abc42` is `0`, so what is kept is a prefix and not a search.
+	PrintfRefusedOperandKeepsItsLeadingNumber Answer
+
 	// RedirectsUseEveryTarget makes a stream redirected more than once use
 	// *every* file it names rather than only the last, in both directions:
 	// output goes to all of them and input arrives as all of them in the
@@ -13261,6 +13284,85 @@ func (p PrintfQuoteStyle) String() string {
 		return "absent"
 	}
 	return "unspecified"
+}
+
+// PrintfNumberReading is how a numeric conversion reads an operand that is
+// not, on its own, the number C's conversion asked for.
+//
+// The operand a conversion can read entirely — `42` at `%d`, `1.5` at `%f` —
+// is not this question and never reaches it: every column in the panel answers
+// those the same way, so no dialect is consulted for them. What this names is
+// what happens to the rest, and the panel is three languages about it.
+// Measured 2026-09-14 under `LC_ALL=C` on bash 5.3.15, bash as sh, bash 3.2.57,
+// zsh 5.9.2, ksh93u+, dash 0.5.12 and BusyBox ash 1.37.0:
+//
+//	operand   bash/dash   ash   zsh/ksh93
+//	1.5       1           0     1
+//	1e3       1           0     1000
+//	42abc     42          0     42 (ksh93) / 0 (zsh)
+//	010       8           8     10
+//	1+1       1           0     2
+//
+// The `010` row is what makes the third column a *reading of the operand*
+// rather than a longer number scan: C's `strtoimax` with base 0 calls a
+// leading zero octal and the two evaluating shells do not. The `1+1` row is
+// what makes it arithmetic rather than any kind of scan at all, and `printf
+// '%d' 'x=5'` settles it outright — `x` is 5 afterwards in zsh and ksh93 and
+// unset in the other five, so the operand is an expression the shell
+// *evaluates*, side effects and all.
+//
+// bash 3.2 answers like BusyBox ash and is not a dialect for it: the record
+// splits on the age of a binary there, the reading #2647 took of `%c`.
+type PrintfNumberReading int
+
+const (
+	// PrintfNumberUnspecified is no answer, and is refused like any other.
+	PrintfNumberUnspecified PrintfNumberReading = iota
+	// PrintfNumberWholeOperand takes the operand only when the conversion's
+	// own reader consumes all of it, and calls everything else a zero:
+	// BusyBox ash.
+	PrintfNumberWholeOperand
+	// PrintfNumberLeadingNumber takes the number C's reader finds at the
+	// front and complains about what is left: bash and dash. The reader is
+	// the conversion's own, which is why `1e3` is `1` at `%d` — `strtoimax`
+	// stops at the `e` — and `1000` at `%f`, where `strtod` does not.
+	PrintfNumberLeadingNumber
+	// PrintfNumberArithmetic reads the operand the way the shell reads a
+	// value a variable was holding: as a numeral if it is one, and as an
+	// expression otherwise. zsh and ksh93.
+	//
+	// The stored-value reading and not the written-literal one, and that is
+	// measured rather than assumed: `printf '%d' 010` is `10` in ksh93u+
+	// where `echo $((010))` there is `8`, and `x=010; echo $((x))` is `10` —
+	// see Semantics.ArithStoredValueReadsALeadingZeroAsDecimal, which is the
+	// axis that already holds that difference.
+	PrintfNumberArithmetic
+)
+
+func (p PrintfNumberReading) String() string {
+	switch p {
+	case PrintfNumberWholeOperand:
+		return "the whole operand or nothing"
+	case PrintfNumberLeadingNumber:
+		return "the number at the front"
+	case PrintfNumberArithmetic:
+		return "an arithmetic expression"
+	}
+	return "unspecified"
+}
+
+// numberReading resolves the axis, and only for an operand no conversion in
+// the panel could read on its own — see printfPartialNumber, which is the one
+// caller and reaches it only after the whole-operand reading has failed.
+func (r *Runner) numberReading() PrintfNumberReading {
+	p := r.sem().PrintfNumberOperand
+	if p == PrintfNumberUnspecified {
+		r.errf("%s\n", r.diag().Report(r.name(), r.line,
+			r.unanswered("printf: an operand a numeric conversion cannot read whole")))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
 }
 
 // quoteStyle resolves the axis, and only for a `%q` that is actually there.

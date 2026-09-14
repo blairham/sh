@@ -405,6 +405,10 @@ func Semantics() interp.Semantics {
 	s.PrintfGroupingFlag = interp.No
 	s.PrintfGroupingFlagAfterTheWidth = interp.No
 	s.PrintfReportsBadNumber = interp.Yes
+	s.PrintfNumberOperand = interp.PrintfNumberLeadingNumber
+	// unanswered PrintfRefusedOperandKeepsItsLeadingNumber: as in bash — the
+	// reading above never evaluates an operand, so no arithmetic failure ever
+	// reaches this question.
 	s.PrintfBackslashC = interp.PrintfBackslashCLiteral
 	s.PrintfUnfinishedConversionIsAPercent = interp.No
 	// No `\x` in a format at all: `printf 'a\x41Z'` is the six characters
@@ -975,10 +979,12 @@ func Diagnostics() interp.Diagnostics {
 		GetoptsMissingArgument: "No arg for -%[1]s option",
 		// Nothing in front of it at all — the only diagnostic in the panel
 		// that names neither the shell nor a line.
-		GetoptsUnprefixed: true,
-		CdCannotChange:    "cd: can't cd to %[1]s",
-		CdStatus:          2,
-		PrintfBadNumber:   "printf: %[1]s: expected numeric value",
+		GetoptsUnprefixed:      true,
+		CdCannotChange:         "cd: can't cd to %[1]s",
+		CdStatus:               2,
+		PrintfBadNumber:        "printf: %[1]s: expected numeric value",
+		PrintfIncompleteNumber: "printf: %[1]s: not completely converted",
+		PrintfNumberOutOfRange: "printf: %[1]s: Result too large",
 		// Every complaint about an argument is 2 here, as it is elsewhere.
 		PrintfBadVerbStatus:     2,
 		PrintfBadVerb:           "printf: %[2]s: invalid directive",

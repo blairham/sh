@@ -34,6 +34,8 @@ func printfSem() Semantics {
 	s.PrintfStarComplaintCostsTheStatus = Yes
 	s.PrintfGroupingFlag = Yes
 	s.PrintfGroupingFlagAfterTheWidth = No
+	s.PrintfNumberOperand = PrintfNumberLeadingNumber
+	s.PrintfRefusedOperandKeepsItsLeadingNumber = No
 	return s
 }
 

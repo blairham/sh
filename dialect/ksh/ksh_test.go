@@ -456,6 +456,19 @@ func TestPrintfAnswers(t *testing.T) {
 	if got, want := s.PrintfNonFiniteIsConverted, interp.Yes; got != want {
 		t.Errorf("PrintfNonFiniteIsConverted = %v, want %v", got, want)
 	}
+	// The operand is an arithmetic expression, and the *stored value*
+	// reading of one: `printf '%d' 010` is 10 here where `echo $((010))`
+	// is 8, which is the same difference ArithStoredValueReadsALeading-
+	// ZeroAsDecimal already holds (#2731).
+	if got, want := s.PrintfNumberOperand, interp.PrintfNumberArithmetic; got != want {
+		t.Errorf("PrintfNumberOperand = %v, want %v", got, want)
+	}
+	// And what a refused operand leaves behind, which is where ksh93 parts
+	// from zsh: `printf '%d' 42abc` is 42 here and 0 there. The number kept
+	// is `strtod`'s — `printf '%d' 1e3abc` is 1000.
+	if got, want := s.PrintfRefusedOperandKeepsItsLeadingNumber, interp.Yes; got != want {
+		t.Errorf("PrintfRefusedOperandKeepsItsLeadingNumber = %v, want %v", got, want)
+	}
 	if got, want := s.PrintfOutputPrecedesComplaint, interp.Yes; got != want {
 		t.Errorf("PrintfOutputPrecedesComplaint = %v, want %v", got, want)
 	}

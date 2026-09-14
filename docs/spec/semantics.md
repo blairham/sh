@@ -12771,6 +12771,83 @@ before it looks at the value, and BSD's clears the sign of a not-a-number
 outright. This shell writes `nan` unsigned in every dialect, and the
 corpus row records ash's column as the fact it is.
 
+**`PrintfNumberOperand`** — bash *the number at the front* · dash *the
+number at the front* · ksh93 *an arithmetic expression* · zsh *an
+arithmetic expression* · ash *the whole operand or nothing*
+
+How a numeric conversion reads an operand it cannot read whole. The
+operand a conversion *can* read whole — `42` at `%d`, `1.5` at `%f` — is
+not this question and reaches no dialect: every column answers those the
+same way. What this names is the rest, and the panel is three languages
+about it. Measured 2026-09-14 under `LC_ALL=C`:
+
+    operand    bash/dash   ash   zsh/ksh93
+    1.5        1           0     1
+    1e3        1           0     1000
+    010        8           8     10
+    1+1        1           0     2
+    42abc      42          0     42 (ksh93) · 0 (zsh)
+
+`1e3` parts a `strtoimax` that stops at the `e` from something that does
+not. `010` is what makes the third reading a *reading of the operand*
+rather than a longer number scan: C's base-zero reader calls a leading
+zero octal, and the two columns that evaluate do not. `1+1` makes it
+arithmetic rather than any kind of scan at all, and `printf '%d' 'x=5'`
+settles it outright — `x` is 5 afterwards in zsh and ksh93 and unset in
+the other five, so the operand is an expression the shell *evaluates*,
+side effects and all.
+
+It is the **stored value** reading of arithmetic and not the written
+literal one, which is measured rather than assumed: `printf '%d' 010` is
+10 in ksh93 where `echo $((010))` there is 8, and `x=010; echo $((x))` is
+10. That is `ArithStoredValueReadsALeadingZeroAsDecimal`, the axis that
+already holds the difference.
+
+bash 3.2 answers like BusyBox ash and is not a dialect for it — the
+record splits on the age of a binary there, the reading #2647 took of
+`%c`.
+
+**Asked only where the readings differ.** An operand that is an integer
+all three read the same way never reaches it, which is decided by
+comparing the readings and not by the leading zero: `007` and `00` are
+the same number under every reading and are not questioned, where `010`
+is.
+
+**`PrintfRefusedOperandKeepsItsLeadingNumber`** — ksh93 yes · zsh **no**
+
+What is left of an operand the arithmetic reading would not evaluate.
+
+    printf '[%d]' 42abc     ksh93 [42]          zsh [0]
+    printf '[%d]' 1e3abc    ksh93 [1000]        zsh [0]
+    printf '[%f]' 1.5abc    ksh93 [1.500000]    zsh [0.000000]
+
+Both complain: the value and the diagnostic are separate observations
+here, as they are throughout this builtin. The number kept is C's
+`strtod`'s and not `strtoimax`'s — an integer reader would have stopped at
+the `e` and answered 1 for `1e3abc` — and it is a *prefix* rather than a
+search, so `printf '%d' abc42` is 0 in both.
+
+Asked only where `PrintfNumberOperand` is already *an arithmetic
+expression* and that arithmetic has already failed. The three columns
+that never evaluate do not reach it at all: keeping the leading number is
+bash's and dash's whole reading, and keeping nothing is ash's.
+
+**A range error is a third outcome and not a kind of refusal.** An
+operand that is a number C cannot hold keeps its value in six columns:
+`printf '%f' 1e400` is `inf` — `strtod` returns the infinity it overflowed
+to *and* sets `errno` — where this shell discarded the value with the
+error and wrote `0.000000` (#2727). Whether anything is *said* about it is
+`PrintfReportsBadNumber`, which was already here; the sentence is
+`Diagnostics.PrintfNumberOutOfRange`, which bash and dash spell `Result
+too large` in **both** directions. That one sentence for an overflow and
+an underflow alike is what says those columns report `errno` rather than a
+reading of the operand: `printf '%f' 1e-320` earns it too, with a perfectly
+good denormal for a value. The integer conversions part along
+`PrintfNumberOperand` — the readings that take a prefix saturate the way
+`strtoimax` does, and the one that must read the whole operand is left
+with nothing, which is why BusyBox ash writes `inf` at `%f` and `0` at
+`%d` for the same kind of overflow.
+
 **`PrintfQuote`** — bash backslash · dash absent · ksh93 single quoted · zsh backslash
 
 Is how `%q` quotes, which is three answers and an absence rather than a

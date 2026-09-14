@@ -515,6 +515,33 @@ type Diagnostics struct {
 	PrintfBadNumber string
 	// PrintfBadNumberStatus is what that reports. Zero means 1.
 	PrintfBadNumberStatus int
+	// PrintfIncompleteNumber is a numeric conversion given an operand whose
+	// *front* was a number and whose tail was not. One verb: the operand.
+	//
+	// Empty means the dialect says what it says about an operand that is no
+	// number at all, which is what bash and BusyBox ash do — `printf '%d'
+	// 1.5` and `printf '%d' abc` are both `invalid number` there. dash is
+	// the one column with two sentences: `not completely converted` for the
+	// first and `expected numeric value` for the second.
+	PrintfIncompleteNumber string
+	// PrintfNumberOutOfRange is an operand that is a number C cannot hold —
+	// `1e400` at `%f`, `99999999999999999999` at `%d`, and `1e-320`, which
+	// underflows. One verb: the operand.
+	//
+	// Empty means the dialect's ordinary bad-number sentence, which is what
+	// BusyBox ash writes. bash and dash write C's `strtod` errno back
+	// instead, in both directions: `Result too large` is the sentence for
+	// the underflow as well, which is what says it is reporting `ERANGE`
+	// rather than a reading of the operand.
+	PrintfNumberOutOfRange string
+	// PrintfArithOperandFailure wraps the arithmetic complaint a refused
+	// operand earns where PrintfNumberOperand is PrintfNumberArithmetic.
+	// One verb: the sentence the same expression would earn in `$(( ))`.
+	//
+	// Empty means the sentence as it stands, which is zsh — `printf '%d'
+	// 42abc` and `echo $((42abc))` are the same line there. ksh93 puts the
+	// builtin's name in front of it.
+	PrintfArithOperandFailure string
 	// PrintfBadVerb is a conversion this shell does not have. Two verbs, and
 	// the panel splits evenly between them: %[1]s is the conversion
 	// character alone and %[2]s is the whole directive as written, so `%lQ`

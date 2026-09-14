@@ -624,6 +624,55 @@ func Probes() []Probe {
 			},
 		},
 		{
+			Field: "PrintfNumberOperand",
+			Cases: []string{"axis/printf-number-operand"},
+			// The row's **first** line, because one line carries all three
+			// readings: `1.5` parts reading something from reading nothing,
+			// `1e3` parts a `strtoimax` that stops at the `e` from an
+			// evaluation, and `010` parts C's octal from arithmetic's
+			// decimal. A reading built on any one of the three could not
+			// tell the other two apart.
+			Reading: "`printf '[%d][%d][%d]' 1.5 1e3 010` is `[0][0][8]` in a shell that takes the whole operand or nothing, `[1][1][8]` in one that takes the number at the front, and `[1][1000][10]` in one that evaluates it",
+			Read: func(cells map[string]oracle.Result) (string, string) {
+				first, _, _ := strings.Cut(cells["axis/printf-number-operand"].Stdout, "~")
+				switch first {
+				case "[0][0][8]":
+					return "PrintfNumberWholeOperand", ""
+				case "[1][1][8]":
+					return "PrintfNumberLeadingNumber", ""
+				case "[1][1000][10]":
+					return "PrintfNumberArithmetic", ""
+				}
+				return "", "this column answered the three operands in a combination no reading produces, so the row says nothing about which one it has"
+			},
+		},
+		{
+			Field: "PrintfRefusedOperandKeepsItsLeadingNumber",
+			Cases: []string{"axis/printf-number-operand", "axis/printf-refused-operand-keeps-its-leading-number"},
+			// Two rows, and the first one is not decoration: what a *refused
+			// arithmetic* leaves behind can only be read from a column that
+			// runs arithmetic at all. bash answers `[42][1]` to the second
+			// row's first line and BusyBox ash answers `[0][0]`, which are
+			// the two values this axis names — so a probe reading that line
+			// alone would score three columns that never reach the question
+			// as if they had answered it.
+			Reading: "in a column that evaluates its operand, `printf '[%d][%d]' 42abc 1e3abc` is `[42][1000]` where a refused evaluation keeps the number `strtod` read off the front and `[0][0]` where it keeps nothing",
+			Read: func(cells map[string]oracle.Result) (string, string) {
+				reading, _, _ := strings.Cut(cells["axis/printf-number-operand"].Stdout, "~")
+				if reading != "[1][1000][10]" {
+					return "", "this column does not evaluate a printf operand at all, so nothing here can say what an evaluation it refused would leave behind"
+				}
+				kept, _, _ := strings.Cut(cells["axis/printf-refused-operand-keeps-its-leading-number"].Stdout, "~")
+				switch kept {
+				case "[42][1000]":
+					return "Yes", ""
+				case "[0][0]":
+					return "No", ""
+				}
+				return "", "the row neither kept both leading numbers nor zeroed both, so it did not answer this one way"
+			},
+		},
+		{
 			Field: "WaitRemembersAReapedJob",
 			Cases: []string{"axis/wait-remembers-a-reaped-job"},
 			// The first status is the control and is why this row cannot be

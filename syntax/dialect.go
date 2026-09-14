@@ -905,6 +905,46 @@ type Dialect struct {
 	// (#2656).
 	ReplySubstitution bool
 
+	// SubshellSubstitution reads `${(list)}` as a command substitution whose
+	// body is the parenthesized subshell. ksh93 has it and nothing else in
+	// the panel does: bash 5.3 and bash 3.2 call it a bad substitution, dash
+	// and BusyBox ash the same, and zsh reads the parenthesis as its
+	// expansion flags and complains about the letters inside.
+	//
+	// **Its extent is the parenthesis and not a command list, which is
+	// measured rather than inferred from the four lines that work.** #2615
+	// filed it as the blank form above with a subshell for a body — the
+	// reading the isolation invites, since `${(cd /tmp; pwd)}` leaves the
+	// caller's directory alone exactly as a subshell would. A list would go
+	// on past the `)`, and it does not; measured 2026-09-13 on ksh93u+
+	// 2012-08-01, in a script so that `ksh -n` can say which stage refused:
+	//
+	//	${(echo a)}              a
+	//	${(echo a);}             `}' unexpected      refused while reading
+	//	${(echo a) ;}            `}' unexpected      refused while reading
+	//	${(echo a); echo b;}     `}' unexpected      refused while reading
+	//	${(echo a)b}             `b}' unexpected     refused at the run
+	//	${(echo a}               `(' unmatched       refused while reading
+	//
+	// So the `}` has to sit directly behind the matching `)` with nothing
+	// between them, not even a blank, and the read-time refusals are what
+	// say so: a body that were a list would take `;` and a second command
+	// the way the blank form does. The blank form is the contrast, and it is
+	// a list — `${ (echo a); echo b;}` runs both there.
+	//
+	// A separate flag from CurrentShellSubstitution for the reason
+	// ReplySubstitution is one: the panel separates them (bash 5.3 has the
+	// blank form and refuses this) and so does the grammar (that body ends
+	// where a list ends, this one where its parenthesis does).
+	//
+	// `${((` is **not** this construct and is deliberately left out: it is
+	// ksh93's braced arithmetic, `${((1+2))}` is 3 there and `${((echo hi))}`
+	// an arithmetic syntax error, so the two adjacent parens are the whole of
+	// the discriminator — `${( (1+2) )}` runs `1+2` as a command and reports
+	// it not found. That spelling is refused here as it was before this flag,
+	// and it is a construct of its own rather than a corner of this one.
+	SubshellSubstitution bool
+
 	// CasePatternAcceptsOperator lets an operator stand where a case pattern
 	// belongs, which produces an arm with no patterns at all.
 	//

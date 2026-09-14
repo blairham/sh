@@ -187,6 +187,15 @@ func Dialect() syntax.Dialect {
 	// the flag above, and load-bearing for the same reason — the body's `#`
 	// is a comment here too (#2656).
 	d.ReplySubstitution = true
+	// `${(echo hi)}` — the parenthesized subshell as a substitution body.
+	// One of the seven columns has it, ksh93, and the corpus records what
+	// the other six say instead; same argument as the two flags above, the
+	// grammar that has to *read* every case being the one that takes the
+	// construct. It is narrow by measurement rather than by caution: the `}`
+	// has to sit directly behind the matching `)`, so `${(o)$(f)}` and the
+	// other zsh flag groups in this file are untouched by it and are still
+	// read as the parameter form (#2615).
+	d.SubshellSubstitution = true
 	// `a |& b` — the pipe-of-both-streams cases. Four of the seven columns
 	// take the operator — three as a pipe and ksh93 as a coprocess — and the
 	// corpus records what the other three say about it, so the grammar that

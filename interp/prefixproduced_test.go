@@ -116,6 +116,13 @@ func TestAPrefixToAProducedNameIsTakenBackAfterAFunctionWhereTheAxisSaysSo(t *te
 	var out, errs strings.Builder
 	sem := permissive()
 	sem.AssignmentPrefixPersistsAfterAFunction = No
+	// The export answer is pinned to the reading that records `false`, so
+	// the *only* thing that has moved about the name is the message to its
+	// producer. Under the other reading the name gains the attribute for the
+	// call, and that difference alone is enough to send the take-back
+	// through — which would let a comparison that never looked at the
+	// message pass this row for the wrong reason.
+	sem.PrefixToAFunctionIsExported = No
 	r := producedPrefixRunner(t, &out, &errs, &sem)
 	r.SetDynamic("counter", countsFromWhatItWasAssigned)
 	runProducedPrefix(t, r, `f(){ :; }
@@ -132,6 +139,7 @@ func TestAPrefixToAProducedNameStandsAfterAFunctionWhereTheAxisSaysSo(t *testing
 	var out, errs strings.Builder
 	sem := permissive()
 	sem.AssignmentPrefixPersistsAfterAFunction = Yes
+	sem.PrefixToAFunctionIsExported = No
 	r := producedPrefixRunner(t, &out, &errs, &sem)
 	r.SetDynamic("counter", countsFromWhatItWasAssigned)
 	runProducedPrefix(t, r, `f(){ :; }

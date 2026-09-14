@@ -1745,6 +1745,16 @@ var Corpus = []Case{
 		Why:     "the nesting the older spelling exists for, written the way that runs into the end of the input, with its three controls beside it. The body is unescaped and re-lexed, so `` `echo \\\\` `` hands the inner parse `echo \\` — a backslash the *inner* input ends after — and the refusal came back out as the outer line's (#2680). The second field is that reduction on its own. The third is the same nesting written so it never runs out, `` `echo \\`echo n\\`` ``, which is `n` in all eight and moves with nothing; the fourth is the `$( )` spelling, which needs no escaping to nest and hands its body on unchanged, so both backslashes survive. A change to the word rule that reached either control would show here",
 	},
 	{
+		ID: "core/the-older-substitution-nested-three-deep", Category: "quoting",
+		Snippet: "printf \"[%s]\" \"`echo \\`echo \\\\\\`echo n\\\\\\`\\``\" \"$(echo $(echo $(echo n)))\"; echo",
+		Why:     "the same nesting one layer further, because a rule that holds at depth two usually breaks at depth three: each layer doubles the backslashes the backquotes under it have to survive, so the innermost pair is written `\\\\\\`` and the middle one `\\``. Unanimous `[n]` — the depth is not an axis, and neither is the spelling. The second field is the same depth in `$( )`, which needs no escaping at any depth; it is the guard that says a change to the older form's unescaping did not reach the newer one's, which takes its body whole",
+	},
+	{
+		ID: "core/an-unbalanced-nested-backquote", Category: "quoting",
+		Snippet: "echo A; echo \"`echo \\`echo n`\"; echo B",
+		Why:     "the nesting written wrong: the escaped backquote opens an inner body that nothing closes, so the unescaped text the outer substitution hands on runs out mid-substitution. A refusal is a legitimate answer and most of the panel gives one, but status, what reaches standard output and what reaches standard error move independently here and the row records all three. dash and BusyBox ash refuse at 2 having printed nothing — they read the whole line before running any of it; zsh refuses at 1 with `A` already out; bash 5.3, bash as `sh` and bash 3.2 complain on standard error and carry on at **0**, so `A`, an empty line and `B` are all printed; and ksh93 does not object at all and prints `n`. The four answers are four different places to put the boundary of a substitution's parse failure",
+	},
+	{
 		ID: "core/single-quotes-in-a-quoted-expansion-body", Category: "quoting",
 		Snippet: `v=VAL; printf '[%s]' "${u:-'$v'}" "${w:-''}"; echo`,
 		Why:     "a `${ }` body written inside double quotes is double-quoted *content*, so a single quote in it is an ordinary character rather than a quote: all seven shells keep the two quote characters and substitute the `$v` between them. The empty pair is the guard on the same fact — `''` is two characters here where a quoting reading makes it nothing",

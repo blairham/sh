@@ -98,11 +98,14 @@ func TestABackslashTheInputEndsAfterIsAWord(t *testing.T) {
 // difference between zsh and bash 3.2 and the reason the dropping reading
 // still produces a span.
 //
-// `printf "[%s][%s]" a \` is `[a][]` in zsh 5.9.2 and `[a]` in bash 3.2: zsh
-// keeps an empty field where 3.2 loses the word with the backslash. No
-// dialect preset is bash 3.2, so the fourth reading is recorded in
-// docs/spec/semantics.md and not given a value — but an implementation that
-// returned *no* span would be bash 3.2's, silently, and this is what says so.
+// `printf "[%s]" a \` is `[a][]` in zsh 5.9.2 and `[a]` in bash 3.2: zsh keeps
+// an empty field where 3.2 loses the word with the backslash. The format is
+// reused rather than doubled on purpose — `printf "[%s][%s]" a \` prints
+// `[a][]` in both, because two conversions fill a missing operand with the
+// empty string and cannot tell an empty word from an absent one. No dialect
+// preset is bash 3.2, so the fourth reading is recorded in the corpus and not
+// given a value — but an implementation that returned *no* span would be bash
+// 3.2's, silently, and this is what says so.
 func TestTheDroppedBackslashStillLeavesAWord(t *testing.T) {
 	d := Core()
 	d.BackslashAtEndOfInput = EndOfInputBackslashIsDropped

@@ -22,15 +22,18 @@ import (
 // else — the backslash is an ordinary line continuation then, and every
 // column drops it.
 //
-//	written                bash 5.3  dash    ksh93   zsh     ash
-//	printf "[%s]" x\       [x\]      [x\]    [x]     [x]     [x\]
-//	printf "[%s]" \        [\]       [\]     [\]     []      [\]
-//	printf "[%s][%s]" a \  [a][\]    [a][\]  [a][\]  [a][]   [a][\]
+//	written            bash 5.3  dash    ksh93   zsh    ash
+//	printf "[%s]" x\   [x\]      [x\]    [x]     [x]    [x\]
+//	printf "[%s]" \    [\]       [\]     [\]     []     [\]
+//	printf "[%s]" a \  [a][\]    [a][\]  [a][\]  [a][]  [a][\]
 //
 // bash 3.2 is the column with no dialect of its own: it drops the *word*
 // along with the backslash — `[a]` on the third row, where zsh keeps the
 // empty field — so a fourth reading nothing could ask for stays out of the
-// vector. See docs/spec/semantics.md.
+// vector. That row only says so because it reuses one conversion:
+// `printf "[%s][%s]" a \` is `[a][]` in bash 3.2 too, since a second
+// conversion fills a missing operand with the empty string. The corpus
+// carries it, so docs/spec/measurements.md has the bash 3.2 column.
 func TestEachDialectEndsAWordOnATrailingBackslash(t *testing.T) {
 	for _, c := range []struct {
 		name                    string
@@ -48,9 +51,12 @@ func TestEachDialectEndsAWordOnATrailingBackslash(t *testing.T) {
 			`[\]`, `[]`, `[\]`, `[\]`,
 		},
 		{
-			// Two conversions, so the empty field is visible as a field:
-			// zsh prints `[a][]` where losing the word would print `[a]`.
-			"the whole word, with the field made visible", `printf "[%s][%s]" a \`,
+			// One conversion reused, so an empty field is visible as a
+			// field: zsh prints `[a][]` where losing the word prints `[a]`.
+			// Written `printf "[%s][%s]" a \` the row measures nothing —
+			// the second conversion prints `[]` for an operand that is not
+			// there, so the two readings look alike.
+			"the whole word, with the field made visible", `printf "[%s]" a \`,
 			`[a][\]`, `[a][]`, `[a][\]`, `[a][\]`,
 		},
 		{
@@ -76,6 +82,24 @@ func TestEachDialectEndsAWordOnATrailingBackslash(t *testing.T) {
 			"the newer spelling is untouched", "echo \"$(echo \\`echo n\\`)\"",
 			"`echo n`\n", "`echo n`\n", "`echo n`\n", "`echo n`\n",
 		},
+		{
+			// Depth three, because a rule that holds at depth two usually
+			// breaks there: each layer doubles the backslashes in front of
+			// the backquotes it has to survive, so the innermost pair is
+			// written `\\\`` and the middle one `\``. Unanimous `n` in all
+			// eight columns, and it parsed here before the fix too — which
+			// is the point of the row: the fix is to the word rule the
+			// *inner* parse runs into, and depth is not what decided it.
+			"nested three deep", "echo \"`echo \\`echo \\\\\\`echo n\\\\\\`\\``\"",
+			"n\n", "n\n", "n\n", "n\n",
+		},
+		{
+			// The same depth in the newer spelling, which needs no escaping
+			// at any depth. If a change to the older form's unescaping ever
+			// reached shared code, this is the row that would move.
+			"the newer spelling three deep", "echo \"$(echo $(echo $(echo n)))\"",
+			"n\n", "n\n", "n\n", "n\n",
+		},
 	} {
 		for _, d := range []struct{ name, want string }{
 			{"bash", c.bash}, {"zsh", c.zsh}, {"ksh", c.ksh}, {"dash", c.dashOut},
@@ -92,6 +116,62 @@ func TestEachDialectEndsAWordOnATrailingBackslash(t *testing.T) {
 			if out != d.want {
 				t.Errorf("%s/%s: got %q, want %q", c.name, d.name, out, d.want)
 			}
+		}
+	}
+}
+
+// An unbalanced nested backquote, whole line and status, per dialect (#2680).
+//
+// The snippet writes the nesting wrong: the escaped backquote opens an inner
+// body nothing closes, so the text the outer substitution hands on runs out
+// mid-substitution. A refusal is a legitimate answer — most of the panel
+// gives one — but status, what reaches standard output and what reaches
+// standard error move independently, and the panel puts the boundary of a
+// substitution's parse failure in four different places. The corpus row
+// `core/an-unbalanced-nested-backquote` records all three observations:
+//
+//	dash, BusyBox ash   2, nothing printed — the line is read before it is run
+//	zsh 5.9.2           1, `A` already out
+//	bash 5.3, 3.2       0, the complaint on stderr and `A`, an empty line, `B`
+//	ksh93u+             0, and it prints `n` — no objection at all
+//
+// We refuse in every dialect, which is zsh's and dash's reading and not
+// bash's: `B` is never reached here. That divergence is older than this fix
+// and unmoved by it — the same lines come out of the merge base — and it is
+// about where a substitution's parse failure stops, not about the word rule
+// above. Pinned rather than corrected, so matching bash has to be deliberate.
+//
+// The wording is the half that is #2680's: the same end of input inside the
+// same re-lexed body used to come back out as `input ends after a backslash`,
+// which named a rule instead of the construct. A refusal whose cause really
+// is the missing backquote has to keep saying so.
+func TestAnUnbalancedNestedBackquoteNamesTheBackquote(t *testing.T) {
+	// `echo A` runs first in every dialect here, which is itself a fact
+	// about where the failure happens: the older substitution's body is
+	// unescaped and re-lexed when the word is *expanded*, not when the line
+	// is parsed, so `syntax.Parse` accepts this text and the refusal arrives
+	// mid-run. dash and BusyBox ash are the columns that read the whole line
+	// first and so print nothing at all.
+	const src = "echo A; echo \"`echo \\`echo n`\"; echo B"
+	for _, c := range []struct {
+		name, want string
+		status     int
+	}{
+		{"bash", "A\nbash: line 1: unexpected EOF while looking for matching ``'\n", 2},
+		{"zsh", "A\nzsh:1: unmatched `\n", 1},
+		{"ksh", "A\nksh: syntax error at line 1: ``' unmatched\n", 3},
+		{"dash", "A\ndash: 1: Syntax error: EOF in backquote substitution\n", 2},
+	} {
+		out, st, err := presets[c.name].Combined(t, dialecttest.Base{}, src)
+		if err != nil {
+			t.Errorf("%s: %v", c.name, err)
+			continue
+		}
+		if st != c.status {
+			t.Errorf("%s: status %d, want %d", c.name, st, c.status)
+		}
+		if out != c.want {
+			t.Errorf("%s: got %q, want %q", c.name, out, c.want)
 		}
 	}
 }

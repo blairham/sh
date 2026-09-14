@@ -319,16 +319,24 @@ const (
 // different question with one answer: the backslash is then an ordinary
 // continuation, and every column drops it and prints `[x]` and `[]`.
 //
-//	written                bash 5.3  bash as sh  bash 3.2  dash    ksh93   zsh     zsh as sh  ash
-//	printf "[%s]" x\       [x\]      [x\]        [x]       [x\]    [x]     [x]     [x]        [x\]
-//	printf "[%s]" \        [\]       [\]         []        [\]     [\]     []      []         [\]
-//	printf "[%s][%s]" a \  [a][\]    [a][\]      [a]       [a][\]  [a][\]  [a][]   [a][]      [a][\]
+//	written            bash 5.3  bash as sh  bash 3.2  dash    ksh93   zsh    zsh as sh  ash
+//	printf "[%s]" x\   [x\]      [x\]        [x]       [x\]    [x]     [x]    [x]        [x\]
+//	printf "[%s]" \    [\]       [\]         []        [\]     [\]     []     []         [\]
+//	printf "[%s]" a \  [a][\]    [a][\]      [a]       [a][\]  [a][\]  [a][]  [a][]      [a][\]
 //
-// bash 3.2 holds a fourth reading and it is recorded rather than given a
+// The third row reuses one conversion rather than writing two, and that is
+// the only spelling that can see the fourth reading: `printf "[%s][%s]" a \`
+// prints `[a][]` in bash 3.2 as well as in zsh, because a format with two
+// conversions fills a missing operand with the empty string and so cannot
+// tell a word that is empty from a word that is gone. Reused, the format is
+// printed once per operand, so `[a]` alone says the operand is not there.
+//
+// bash 3.2 holds that fourth reading and it is recorded rather than given a
 // value: it drops the *word* along with the backslash, where zsh keeps an
 // empty one — `[a]` against `[a][]` on the third row. No dialect preset is
 // bash 3.2, so inventing a value for it would put a reading in the vector
-// that nothing could ask for. See docs/spec/semantics.md.
+// that nothing could ask for. The row it is visible in is in the corpus, so
+// docs/spec/measurements.md carries the column.
 type EndOfInputBackslash uint8
 
 const (

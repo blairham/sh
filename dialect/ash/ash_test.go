@@ -260,6 +260,15 @@ func TestPrintfStarComplaintCostsTheStatus(t *testing.T) {
 	if got, want := s.PrintfStarComplaintCostsTheStatus, interp.No; got != want {
 		t.Errorf("PrintfStarComplaintCostsTheStatus = %v, want %v", got, want)
 	}
+	// An infinity goes through the conversion here too, with one cell that
+	// is musl rather than BusyBox: `printf '%+f' nan` is `+nan` in the
+	// image and `nan` in every other column, because musl takes the `+`
+	// flag before it looks at the value and BSD clears the sign of a
+	// not-a-number outright. A dialect is not a libc, so this shell writes
+	// `nan` unsigned and the corpus row records the difference (#2707).
+	if got, want := s.PrintfNonFiniteIsConverted, interp.Yes; got != want {
+		t.Errorf("PrintfNonFiniteIsConverted = %v, want %v", got, want)
+	}
 	// And an absent star operand is a silent zero even here, which is what
 	// keeps it a separate question from the absent *conversion* operand
 	// above: `printf 'a%*db'` writes one complaint in BusyBox and not two.

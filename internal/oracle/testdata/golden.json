@@ -29406,6 +29406,57 @@
         "TimedOut": false
       }
     },
+    "axis/printf-non-finite-is-converted": {
+      "ash": {
+        "Stdout": "[INF][NAN][-INF]~[       inf][inf       ][       inf]~[+inf][ inf][+nan]~[                 nan][ inf]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[INF][NAN][-INF]~[       inf][inf       ][       inf]~[+inf][ inf][nan]~[                 nan][ inf]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[INF][NAN][-INF]~[       inf][inf       ][       inf]~[+inf][ inf][nan]~[                 nan][ inf]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[INF][NAN][-INF]~[       inf][inf       ][       inf]~[+inf][ inf][nan]~[                 nan][ inf]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[INF][NAN][-INF]~[       inf][inf       ][       inf]~[+inf][ inf][nan]~[                 nan][ inf]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[-0.000000E+00][-2][0.000000E+00]~[ -0.000000][-0.000000 ][-00.000000]~[-0.000000][-0.000000][-2.000000]~[          -2.000e+00][  -0]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[inf][nan][-inf]~[inf][inf][inf]~[inf][inf][nan]~[nan][inf]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "axis/printf-star-complaint-costs-the-status": {
       "ash": {
         "Stdout": "[hi]~st=0~[]~st=0",
@@ -153955,6 +154006,57 @@
       "zsh": {
         "Stdout": "st=1",
         "Stderr": "\u003cshell\u003e:printf:1: not enough arguments",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "printf/non-finite-is-spelled-c-s-way": {
+      "ash": {
+        "Stdout": "[inf][inf][inf]~[-inf][nan][nan]~[inf][nan]~[inf][nan][inf][inf]~[nan][nan][nan]~[0.000000][0.000000]~st=1",
+        "Stderr": "\u003cshell\u003e: invalid number 'nan(a-b)'~\u003cshell\u003e: invalid number 'nan(*)'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[inf][inf][inf]~[-inf][nan][nan]~[inf][nan]~[inf][nan][inf][inf]~[nan][nan][nan]~[nan][nan]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[inf][inf][inf]~[-inf][nan][nan]~[inf][nan]~[inf][nan][inf][inf]~[nan][nan][nan]~[nan][nan]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[inf][inf][inf]~[-inf][nan][nan]~[inf][nan]~[inf][nan][inf][inf]~[nan][nan][nan]~[nan][nan]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[inf][inf][inf]~[-inf][nan][nan]~[inf][nan]~[inf][nan][inf][inf]~[nan][nan][nan]~[nan][nan]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[-0.000000][-0.000000e+00][-0]~[0.000000][-2.000000][2.000000]~[-0.00][-2e+00]~[-0.000000][-2.000000][0.000000][-0.000000]~[0.000000][0.000000][0.000000]~[0.000000][0.000000]~st=1",
+        "Stderr": "\u003cshell\u003e: printf: nan(1): unknown function~\u003cshell\u003e: printf: nan(1): unknown function~\u003cshell\u003e: printf: warning: invalid argument of type f~\u003cshell\u003e: printf: nan(): unknown function~\u003cshell\u003e: printf: nan(): unknown function~\u003cshell\u003e: printf: warning: invalid argument of type f~\u003cshell\u003e: printf: nan(abc): unknown function~\u003cshell\u003e: printf: nan(abc): unknown function~\u003cshell\u003e: printf: warning: invalid argument of type f~\u003cshell\u003e: printf: nan(a-b): unknown function~\u003cshell\u003e: printf: nan(a-b): unknown function~\u003cshell\u003e: printf: warning: invalid argument of type f~\u003cshell\u003e: printf: nan(*): unknown function~\u003cshell\u003e: printf: nan(*): unknown function~\u003cshell\u003e: printf: warning: invalid argument of type f",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[inf][inf][inf]~[-inf][nan][nan]~[inf][nan]~[inf][nan][inf][inf]~[nan][nan][nan]~[nan][nan]~st=0",
+        "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

@@ -2303,6 +2303,59 @@ type Semantics struct {
 	// it.
 	PrintfGroupingFlagAfterTheWidth Answer
 
+	// PrintfNonFiniteIsConverted puts an infinity or a not-a-number through the
+	// conversion that named it, rather than writing the bare word.
+	//
+	// Two consequences and one rule, which is why they are one axis: they move
+	// together in every column measured, and they are the same fact seen twice
+	// — whether the value reaches C's conversion at all.
+	//
+	//	Yes	`%G` of an infinity is `INF`, and `%10f` of one is seven
+	//		spaces and then `inf`. The `+` and the space flag are
+	//		written ahead of an infinity too, and `-` puts the padding
+	//		on the right.
+	//	No	`inf`, `-inf` and `nan` are written as they stand. No width
+	//		pads them, no precision touches them, no flag prefixes them,
+	//		and an upper-case conversion does not capitalize them.
+	//
+	// Measured 2026-09-13 under `LC_ALL=C`. bash 5.3.15, bash as sh, bash 3.2,
+	// dash and BusyBox ash 1.37.0 are Yes: `printf '[%e][%E][%g][%G]' inf inf
+	// inf inf` is `[inf][INF][inf][INF]`, `printf '[%10f]' inf` is
+	// `[       inf]`, and `printf '[%+f]' inf` is `[+inf]`. zsh 5.9.2 is No:
+	// the same three lines are `[inf][inf][inf][inf]`, `[inf]` and `[inf]`,
+	// and `[%20.3e]` of a not-a-number is `[nan]` rather than seventeen
+	// spaces and `nan`. The sign the *value* carries is not a flag and zsh
+	// writes it either way: `printf '[%10f]' -inf` is `[-inf]` there.
+	//
+	// ksh93 answers Yes and is the one column that cannot be measured for it,
+	// because it never reaches the conversion: `inf` and `nan` go through its
+	// arithmetic evaluator, which answers `-0` and `-2`, so `printf '%f' inf`
+	// is `-0.000000` and `printf '%f' 'nan(1)'` is `printf: nan(1): unknown
+	// function`. That is its operand reader and not its conversion — the same
+	// `printf '%10f' -0` pads to ten and `printf '%+f' 0` writes `+0.000000`,
+	// so the field and the flags are C's there as everywhere else — and this
+	// shell does not reproduce an evaluator that cannot spell an infinity it
+	// can itself produce: `echo $((1e300*1e300))` is `inf` in ksh93, and
+	// handing that word straight back to its own `printf` writes `-0.000000`.
+	// The axis is answered rather than left open, because an unanswered axis
+	// is indistinguishable from one nobody thought about.
+	//
+	// **Asked only where the two readings differ**, which is why `printf '%f'
+	// inf` needs no dialect: `inf` is `inf` under both. The question arrives
+	// only with an upper-case conversion, a width wide enough to pad, or a
+	// `+` or space flag on an infinity.
+	//
+	// The sign of a not-a-number is not part of this and is not an axis. No
+	// column writes one for the value's own sign — `printf '%f' -nan` is `nan`
+	// in all six that read the operand — and the one column that writes one
+	// for the `+` flag is BusyBox ash, whose `[%+f]` of a not-a-number is
+	// `[+nan]` where the five macOS columns write `[nan]`. That is the C
+	// library and not the language: musl's formatter takes the `+` flag before
+	// it looks at the value, and BSD's clears the sign for a not-a-number
+	// outright. A dialect is not a libc, so this shell writes `nan` unsigned
+	// everywhere and the corpus row records ash's column as the fact it is.
+	PrintfNonFiniteIsConverted Answer
+
 	// PidListingFinishesWithAJob makes `jobs -p` forget a finished job the
 	// way a listing of states does.
 	//

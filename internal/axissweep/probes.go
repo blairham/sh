@@ -602,6 +602,28 @@ func Probes() []Probe {
 			},
 		},
 		{
+			Field: "PrintfNonFiniteIsConverted",
+			Cases: []string{"axis/printf-non-finite-is-converted"},
+			// The row's **first** line, because it is the only one whose
+			// two answers differ in more than whitespace: `[INF][NAN][-INF]`
+			// against `[inf][nan][-inf]`. The padding lines part the two
+			// readings as well, but a reading built on counting spaces
+			// cannot say which of a missing width and a missing value it
+			// saw, and the third line's `[+inf]` is the same fact a second
+			// time.
+			Reading: "`printf '[%E][%G][%E]' inf nan -inf` capitalizes the word in a shell that puts a non-finite value through the conversion and leaves it lower case in one that writes the bare word",
+			Read: func(cells map[string]oracle.Result) (string, string) {
+				first, _, _ := strings.Cut(cells["axis/printf-non-finite-is-converted"].Stdout, "~")
+				switch first {
+				case "[INF][NAN][-INF]":
+					return "Yes", ""
+				case "[inf][nan][-inf]":
+					return "No", ""
+				}
+				return "", "this shell never reached the conversion — it read `inf` and `nan` as something other than a non-finite value, so what it wrote says nothing about how it would have converted one"
+			},
+		},
+		{
 			Field: "WaitRemembersAReapedJob",
 			Cases: []string{"axis/wait-remembers-a-reaped-job"},
 			// The first status is the control and is why this row cannot be

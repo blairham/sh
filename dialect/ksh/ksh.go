@@ -1107,6 +1107,10 @@ func Semantics() interp.Semantics {
 	s.PrintfAbsentNumberIsAnEmptyOne = interp.No
 	s.PrintfStarWithoutOperandIsRefused = interp.Yes
 	s.PrintfStarComplaintCostsTheStatus = interp.Yes
+	// Unmeasurable rather than measured — ksh93 reads `inf` through its
+	// arithmetic evaluator and never reaches the conversion — so it takes
+	// C's reading, which is what its field and its flags already do.
+	s.PrintfNonFiniteIsConverted = interp.Yes
 	// The `'` flag, and this shell alone reads it wherever it is written in
 	// the prefix: `%15'd` and `%.5'd` are accepted here and refused by the
 	// other two that have the flag at all.

@@ -1628,6 +1628,9 @@ func Semantics() interp.Semantics {
 	s.PrintfAbsentNumberIsAnEmptyOne = interp.No
 	s.PrintfStarWithoutOperandIsRefused = interp.No
 	s.PrintfStarComplaintCostsTheStatus = interp.Yes
+	// zsh alone writes the bare word: `%G` of an infinity is `inf` and
+	// `%10f` of one is `inf` unpadded.
+	s.PrintfNonFiniteIsConverted = interp.No
 	// The `'` flag, among the flags and nowhere else: `%15'd` is
 	// `%15': invalid directive`.
 	s.PrintfGroupingFlag = interp.Yes

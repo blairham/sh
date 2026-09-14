@@ -19972,6 +19972,13 @@
       }
     },
     "array/a-subscript-without-braces-open-at-the-end-of-the-word": {
+      "ash": {
+        "Stdout": "\u003cxx[\u003est=0~alive",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "\u003cxx[\u003est=0~alive",
         "Stderr": "",
@@ -20016,6 +20023,13 @@
       }
     },
     "array/a-subscript-without-braces-the-word-never-closes": {
+      "ash": {
+        "Stdout": "\u003cxx[1\u003e\u003c2]\u003est=0~alive",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "\u003cxx[1\u003e\u003c2]\u003est=0~alive",
         "Stderr": "",

@@ -5297,6 +5297,75 @@ type Semantics struct {
 	// dialect without the word never meets it.
 	CoprocEndsInAnArray Answer
 
+	// CoprocessEndPlacement is *where in the descriptor table* those near
+	// ends are put, which is a separate question from how a script reaches
+	// them and is answered two ways by the shells that have a coprocess.
+	//
+	// bash moves them to the top of the table, deliberately out of the way of
+	// the numbers a script allocates for itself. Measured 2026-09-13 on bash
+	// 5.3.15, four coprocesses started in a row and none of them ended:
+	//
+	//	coproc A { sleep 5; }   ${A[@]} is `63 60`
+	//	coproc B { sleep 5; }   ${B[@]} is `62 58`
+	//	coproc C { sleep 5; }   ${C[@]} is `61 56`
+	//	coproc D { sleep 5; }   ${D[@]} is `59 54`
+	//
+	// One rule predicts all four, and five further probes confirm it: the
+	// shell takes the **four** highest free numbers at or below 63 — its own
+	// read end, the child's output, the child's input, its own write end, in
+	// that order — and publishes the first and the fourth. The child's two are
+	// closed in the parent straight after the fork, so the next coprocess
+	// finds them free again. Parking a descriptor in the way moves exactly the
+	// numbers the rule says it should: with 63 held the pair is `62 59`, with
+	// 62, 61 or 60 held it is `63 59`, and with all four of 63, 62, 61 and 60
+	// held it is `59 56`.
+	//
+	// The other two shells put them where any other allocation goes, which is
+	// measurable even though neither publishes a number. Asking the shell for
+	// a descriptor of its own straight afterwards says how many of the low
+	// numbers the coprocess took: `exec {a}>/dev/null {b}>/dev/null
+	// {c}>/dev/null` answers `11 12 13` in zsh 5.9.2 with no coprocess running
+	// and `12 13 15` with one, and `10 11 12` in ksh93 with none and `11 12
+	// 13` with one. bash answers `10 11 12` either way — its coprocess is not
+	// in that region at all — which is the same fact from the other side.
+	//
+	// **The top of the table is a constant and not a fraction of the limit**,
+	// and it is conditional on the process being able to hold it. Measured the
+	// same day by sweeping `ulimit -n` from 20 to 256: the pair is `63 60` for
+	// every limit of 64 and above, including 1048576, and bash does not move
+	// the ends at all for any limit of 63 or below. So the test is whether 63
+	// is a legal descriptor number, and a Runner with no GetRlimit has no
+	// limit to be asked about and takes the unbounded answer — the same
+	// reasoning Semantics.FdNumberBoundedByOpenFileLimit is read under. What a
+	// shell that declines to move them then publishes is its own raw pipe
+	// numbers, which no allocator here produces and which this shell does not
+	// reproduce; it falls back to the ordinary allocation instead.
+	//
+	// **There is no unanswered value.** A coprocess that reached the
+	// allocation is going to be given two numbers, so a refusal would have
+	// nothing to attach itself to — the same reasoning
+	// Semantics.FirstAllocatedDescriptor records. The zero value is therefore
+	// an answer, and it is the one this shell gave everywhere before the axis
+	// existed.
+	//
+	// unpinned: dash and ash have no coprocess of any spelling — no `coproc`
+	// word and no `|&` operator — so neither dialect ever consults this axis
+	// and no row could object however it was written. bash 3.2 is the same and
+	// has no dialect of its own here (#2596).
+	//
+	// unpinned zsh: a shell that publishes no array publishes no number, and
+	// the indirect probe above is red in that column for a reason that is not
+	// this axis: this shell's coprocess takes two adjacent numbers from the
+	// base up, where zsh's are 11 and 14. A row measuring the probe would stay
+	// red under a flip, and a red row that stays red is not an objection
+	// (#2596).
+	//
+	// unpinned ksh: the same, from the other side — ksh93's `|&` publishes
+	// nothing either, and only one of its two ends is at or above the base it
+	// allocates from, so the probe is off by one here whichever value this
+	// axis holds (#2596).
+	CoprocessEndPlacement CoprocEndPlacement
+
 	// ReapedCoprocessEnds is what becomes of those near ends when the
 	// coprocess itself has been reaped, which is a separate question from how
 	// a script reached them and is answered three ways by the three shells
@@ -13682,6 +13751,35 @@ func (b DescriptorAllocationBase) number() int {
 
 func (b DescriptorAllocationBase) String() string {
 	return "from " + itoa(b.number())
+}
+
+// CoprocEndPlacement is where in the descriptor table a shell puts a
+// coprocess's two near ends. See Semantics.CoprocessEndPlacement, which is the
+// only reader and which records the measurements and why this type has no
+// unanswered value.
+type CoprocEndPlacement uint8
+
+const (
+	// CoprocEndsWhereAnyDescriptorGoes numbers them as `exec {v}>f` would —
+	// the first free entries from the dialect's allocation base up.
+	//
+	// zsh 5.9.2 and ksh93 (AJM 93u+ 2012-08-01), and the zero value because it
+	// is what this shell did everywhere before the axis existed.
+	CoprocEndsWhereAnyDescriptorGoes CoprocEndPlacement = iota
+
+	// CoprocEndsAtTheTopOfTheTable moves them out of the way of the numbers a
+	// script allocates for itself: the highest free entries at or below 63,
+	// four of them taken and the first and last of those four kept.
+	//
+	// bash 5.3.15, and bash invoked as sh.
+	CoprocEndsAtTheTopOfTheTable
+)
+
+func (p CoprocEndPlacement) String() string {
+	if p == CoprocEndsAtTheTopOfTheTable {
+		return "at the top of the table"
+	}
+	return "where any descriptor goes"
 }
 
 // CoprocEndDisposal is what a shell does with a coprocess's near ends once

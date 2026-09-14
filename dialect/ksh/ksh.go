@@ -1695,6 +1695,12 @@ func Semantics() interp.Semantics {
 	// nothing left is not this axis — both shells with the letters forget the
 	// whole coprocess there, reaped or not. Measured 2026-09-12 (#2411).
 	s.ReapedCoprocessEnds = interp.CoprocWriteEndGoesWithTheCoprocess
+	// The ends are numbered where any other allocation goes rather than at
+	// the top of the table. Measured 2026-09-13 through the numbers left over
+	// for the shell to hand out: `exec {a}>/dev/null; exec {b}>/dev/null;
+	// exec {c}>/dev/null` answers `10 11 12` with no coprocess and `11 12 13`
+	// with one, so the coprocess is in that region and bash's is not (#2596).
+	s.CoprocessEndPlacement = interp.CoprocEndsWhereAnyDescriptorGoes
 
 	// A `{name}>f` descriptor goes back with the command's other
 	// redirections, and closing through a name that holds nothing is not

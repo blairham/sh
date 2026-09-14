@@ -9614,6 +9614,64 @@ a dialect should instead hold a table of the names it *presents* as
 builtins — which would move `type` too, and is therefore not a local
 change — is left open.
 
+### Where a coprocess's near ends are numbered
+
+A coprocess starts and the shell is left holding two descriptors. What
+number they get is `CoprocessEndPlacement`, and the panel splits two
+ways — measured 2026-09-13.
+
+bash moves them to the **top of the table**, deliberately clear of the
+numbers a script allocates for itself. Four coprocesses in a row, none
+of them ended:
+
+    coproc A { sleep 5; }     ${A[@]} is  63 60
+    coproc B { sleep 5; }     ${B[@]} is  62 58
+    coproc C { sleep 5; }     ${C[@]} is  61 56
+    coproc D { sleep 5; }     ${D[@]} is  59 54
+
+One rule predicts all four: the shell takes the **four** highest free
+numbers at or below 63 — its own read end, the child's output, the
+child's input, its own write end, in that order — and publishes the
+first and the fourth. The child's two are closed in the parent straight
+after the fork, so the next coprocess finds them free again. Five
+further probes confirm it rather than restating it: with 63 held the
+pair is `62 59`, with 62, 61 or 60 held it is `63 59`, and with all four
+of 63, 62, 61 and 60 held it is `59 56`.
+
+zsh and ksh93 number them **where any other allocation goes**, which is
+measurable even though neither publishes an array. Asking the shell for
+a descriptor of its own straight afterwards says how many of the low
+numbers the coprocess took:
+
+    exec {a}>/dev/null {b}>/dev/null {c}>/dev/null
+
+    zsh 5.9.2      11 12 13  with no coprocess ·  12 13 15  with one
+    ksh93          10 11 12  with no coprocess ·  11 12 13  with one
+    bash 5.3.15    10 11 12  either way
+
+`{name}>f` is a different allocator and keeps its own base, which is
+`FirstAllocatedDescriptor` — so the divergence has two halves a script
+feels separately: the pair the array publishes, and the number the next
+allocation answers with.
+
+**The top of the table is a constant, and it is conditional.** Sweeping
+`ulimit -n` from 20 to 256 on bash 5.3.15: the pair is `63 60` at every
+limit of 64 and above, including the default 1048576, and the ends are
+not moved at all at any limit of 63 or below. So the test is whether 63
+is a legal descriptor number. This shell asks the embedder — a `Runner`
+with no `GetRlimit` has no limit to be asked about and takes the
+unbounded answer, the same route `FdNumberBoundedByOpenFileLimit` uses.
+
+**One difference is recorded rather than reproduced.** What bash
+publishes when it declines to move the ends is its own raw pipe numbers
+— `3 6` — which no allocator here produces, since a coprocess's far ends
+are files handed to a goroutine and never enter this table. Under a
+limit that low this shell falls back to the ordinary allocation instead.
+
+The corpus row pins the relationship and not the numbers
+(`commands/a-coprocess-s-ends-keep-clear-of-the-numbers-the-shell-hands-out`):
+a cell holding 63 would depend on the recording machine's limit.
+
 ### What a coprocess leaves behind when it ends
 
 A coprocess ends and the shell is left holding two descriptors into a

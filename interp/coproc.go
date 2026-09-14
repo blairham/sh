@@ -181,14 +181,14 @@ func (r *Runner) startCoproc(ctx context.Context, name string, run func(*Runner)
 	r.setLastJob(job)
 	r.becomeCurrentJob(job)
 
-	// The near ends go into the descriptor table the way `exec {fd}>f`
-	// would put them there: numbered from ten up, for keeps.
+	// The near ends go into the descriptor table for keeps, at the numbers
+	// the dialect puts them at — see coprocEndNumbers and
+	// Semantics.CoprocessEndPlacement.
 	// Marked as the shell's own, so they stay out of an external child's
 	// descriptor table — see shellOwnedFd for what a child holding the write
 	// end open would cost the coprocess.
-	rfd := r.nextFreeFd(-1)
+	rfd, wfd := r.coprocEndNumbers()
 	r.setFd(rfd, shellOwnedFd{shellR})
-	wfd := r.nextFreeFd(-1)
 	r.setFd(wfd, shellOwnedFd{shellW})
 	// Kept whichever dialect this is: `print -p` and `read -p` need them in
 	// the shell that has no array to find them in, and the shell that has one
@@ -197,6 +197,85 @@ func (r *Runner) startCoproc(ctx context.Context, name string, run func(*Runner)
 	// one is the one `print -p` reaches.
 	r.coproc = &coprocEnds{read: rfd, write: wfd, job: job, owner: r}
 	return job, nil
+}
+
+// coprocEndNumbers picks the two numbers the shell's own ends are kept at.
+//
+// Where they go is the dialect's — Semantics.CoprocessEndPlacement — and the
+// two answers are not two bases: one counts *up* from the ordinary allocation
+// base, the way `exec {v}>f` does, and the other counts *down* from the top of
+// the table so the numbers a script allocates for itself stay clear.
+//
+// The downward answer takes **four** numbers and keeps the first and the
+// fourth, which is bash's own arrangement rather than an accident of ours: it
+// moves its read end, the child's output, the child's input and its write end,
+// in that order, and closes the child's two in the parent straight after the
+// fork. Publishing the first and fourth of the four highest free numbers is
+// what reproduces the sequence a run of coprocesses gets — `63 60`, then
+// `62 58`, then `61 56`, then `59 54` — and it reproduces the arrangement
+// under a script's own parked descriptors too. Here the child's ends are
+// files handed to a goroutine and never enter this table at all, so the two
+// numbers in the middle are computed and dropped rather than held.
+//
+// The descent stops at the allocation base for the same reason nextFreeFd
+// starts there: below it are the single digits a script addresses by number,
+// and a shell with nowhere left above the base takes the ordinary answer
+// instead.
+func (r *Runner) coprocEndNumbers() (read, write int) {
+	if r.sem().CoprocessEndPlacement == CoprocEndsAtTheTopOfTheTable && r.topOfTableIsReachable() {
+		if fds, ok := r.highestFreeFds(topOfTheDescriptorTable, 4); ok {
+			return fds[0], fds[3]
+		}
+	}
+	read = r.nextFreeFd(-1)
+	for write = read + 1; ; write++ {
+		if _, held := r.fds[write]; !held {
+			return read, write
+		}
+	}
+}
+
+// topOfTheDescriptorTable is the number the downward answer starts at.
+//
+// A constant rather than a fraction of anything, measured 2026-09-13 on bash
+// 5.3.15 by sweeping `ulimit -n` from 20 to 256: the published pair is `63 60`
+// at every limit of 64 and above — including the default 1048576 — and the
+// ends are not moved at all at any limit of 63 or below.
+const topOfTheDescriptorTable = 63
+
+// topOfTableIsReachable says whether this process could hold that number.
+//
+// It is the condition the sweep above found: bash moves the ends only where 63
+// is a legal descriptor, and answers with its raw pipe numbers where it is not.
+// Asked of the embedder rather than of the kernel, which is the same route
+// refuseFdOverLimit takes — a Runner given no GetRlimit has no limit to be
+// asked about, and a library that was given none is not the place to invent
+// one.
+func (r *Runner) topOfTableIsReachable() bool {
+	if r.GetRlimit == nil {
+		return true
+	}
+	soft, _, err := r.GetRlimit(ResourceOpenFiles)
+	if err != nil || soft == RlimitInfinity {
+		return true
+	}
+	return int64(topOfTheDescriptorTable) < soft
+}
+
+// highestFreeFds is the n highest free entries at or below from, in descending
+// order, or false where there are not that many above the allocation base.
+func (r *Runner) highestFreeFds(from, n int) ([]int, bool) {
+	base := r.sem().FirstAllocatedDescriptor.number()
+	out := make([]int, 0, n)
+	for fd := from; fd >= base && len(out) < n; fd-- {
+		if _, held := r.fds[fd]; !held {
+			out = append(out, fd)
+		}
+	}
+	if len(out) < n {
+		return nil, false
+	}
+	return out, true
 }
 
 // retireCoproc lets go of a coprocess that has ended, in the way the dialect

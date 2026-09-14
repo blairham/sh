@@ -18569,6 +18569,11 @@ case $PWD in */sub) echo moved;; *) echo stayed;; esac`,
 		Why:     "the other side of the same rule, and the one worth pinning: before a *simple* command the first word is the command, so `coproc MY cat` runs MY and the array is the default COPROC. A function named MY is what makes that visible without a race — bash reports `MY: command not found` from the background job otherwise, whenever the job gets there — and the line read back is the function's own output, which no shell that had taken MY as a name could produce",
 	},
 	{
+		ID: "commands/a-coprocess-s-ends-keep-clear-of-the-numbers-the-shell-hands-out", Category: "commands",
+		Snippet: `coproc CP { cat; }; exec {v}>/dev/null; echo "v=$v high=$(( ${CP[0]} > v && ${CP[1]} > v ))"`,
+		Why:     "where a coprocess's near ends are numbered, asked as a relationship rather than as the numbers themselves: bash publishes `63 60` and still answers 10 for the next descriptor a script asks it to pick, so both ends are clear of the region the allocator hands out and `high=1`. This shell put them at 10 and 11 — exactly on top of it — and answered `v=12`, so a script that started a coprocess and then asked for a descriptor got a different number here and one that printed the array got a different pair (#2596). The literal 63 is deliberately not in the row: bash moves the ends only where the process can hold that number and publishes its own raw pipe numbers under a lower `ulimit -n`, so a cell holding it would depend on the recording machine. Only the two bash columns reach the line at all — bash 3.2, dash, ash and ksh93 refuse the `}`, and zsh's `coproc` takes no name",
+	},
+	{
 		ID: "commands/coproc-speaks-by-a-letter-where-it-has-no-array", Category: "commands",
 		Snippet: `coproc cat; print -p hi; read -p l; echo "l=$l COPROC=${#COPROC[@]}"`,
 		Why:     "the other coprocess model, and the reason the word alone is not the whole feature: zsh starts one with the same keyword, gives it no name and publishes no array, and a script reaches its two ends with `print -p` and `read -p` — `l=hi` with COPROC still empty. bash has the array and neither letter, ksh93 has both letters and starts no coprocess for them, and bash 3.2 and dash have none of it",

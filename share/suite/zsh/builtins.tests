@@ -100,3 +100,19 @@ zf_chgrp
 printf 'zf_chgrp bare -> %s\n' "$?"
 zf_chmod nosuchname
 printf 'zf_chmod with no mode -> %s\n' "$?"
+
+# An infinity and a not-a-number are written as the bare word, which is zsh's
+# answer alone: no width pads them, no precision touches them, no flag
+# prefixes them, and an upper-case conversion does not capitalize them. bash,
+# dash and BusyBox ash put the word through the conversion and do all four,
+# and ksh93 never reads the operand at all — it goes through the arithmetic
+# evaluator there, which answers -0 for an infinity.
+#
+# Only the readings zsh answers alone are here. The spelling itself — `inf`
+# and `nan` rather than Go's `+Inf` and `NaN` — is common ground between four
+# of the five and belongs to no tier in this suite, so the corpus row
+# printf/non-finite-is-spelled-c-s-way carries it across all seven columns.
+printf '[%E][%G]\n' inf nan
+printf '[%10f][%-10f][%010f]\n' inf inf inf
+printf '[%+f][% f]\n' inf inf
+printf '[%20.3e][%4g]\n' nan inf

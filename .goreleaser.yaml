@@ -249,16 +249,19 @@ release:
   target_commitish: "{{ .Commit }}"
   prerelease: auto
   mode: replace
-  # The changelog is suppressed for a first tag — see `changelog:` above — so
-  # this header is the whole of what a reader gets on the v0.0.0 page. It says
-  # what the thing is, what it scored, and what is missing, in that order.
+  # The changelog is suppressed only for a first tag — see `changelog:` above —
+  # so from v0.0.1 on this header sits above a real one. It stays because a
+  # changelog says what moved and never what the thing is: this says what it is,
+  # what it scored, and what is missing, in that order. Keep it version-agnostic
+  # so a tag needs no edit here; the table and the case count are the exceptions,
+  # and `make conformance-dialects` is what refreshes them.
   header: |
     A shell parser, interpreter and formatter in Go. One core — the common
     denominator of real shells — with `bash`, `zsh`, `ksh`, `dash` and `ash`
     as presets over a semantics vector rather than forks of one another.
 
-    **The first tag is `v0.0.0`, and it means it.** This is early, and
-    breakage is expected.
+    **This is a `0.x` tag and means it.** Early, and breakage is expected.
+    What changed since the last tag is the changelog below.
 
     ### What is in the archive
 
@@ -272,7 +275,7 @@ release:
 
     ### Where it stands
 
-    Each dialect graded against the real shell it models, over 3670 cases —
+    Each dialect graded against the real shell it models, over 4106 cases —
     `make conformance-dialects`:
 
     | binary | against | exact | behavioral |
@@ -280,8 +283,8 @@ release:
     | `bash` | bash 5.3.15 | 96% | **100%** |
     | `zsh` | zsh 5.9.2 | 98% | 99% |
     | `dash` | dash | 98% | **100%** |
-    | `ksh` | ksh93 AJM 93u+ | 91% | 97% |
-    | `ash` | BusyBox 1.37 ash | 79% | 97% |
+    | `ksh` | ksh93 AJM 93u+ | 94% | 98% |
+    | `ash` | BusyBox 1.37 ash | 80% | 98% |
 
     *Exact* is byte-identical stdout, stderr and status; *behavioral* allows a
     diagnostic to be worded differently when the status and output agree. The

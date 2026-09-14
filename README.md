@@ -7,18 +7,18 @@
 
 A shell parser and interpreter in Go.
 
-**Status: early — the first tag is `v0.0.0` and means it.** The core parser
+**Status: early — these are `0.x` tags and they mean it.** The core parser
 and interpreter are in place, and all five dialect binaries grade against a
 panel of the real shells they model. Measured on macOS with
-`make conformance-dialects`, 2026-09-12, 3670 cases each:
+`make conformance-dialects`, 2026-09-14, 4106 cases each:
 
 | our binary | graded against | exact | behavioral |
 | --- | --- | --- | --- |
 | `bash` | bash 5.3.15 | 96% | **100%** |
 | `zsh` | zsh 5.9.2 | 98% | 99% |
 | `dash` | dash | 98% | **100%** |
-| `ksh` | ksh93 AJM 93u+ | 91% | 97% |
-| `ash` | BusyBox 1.37 ash | 79% | 97% |
+| `ksh` | ksh93 AJM 93u+ | 94% | 98% |
+| `ash` | BusyBox 1.37 ash | 80% | 98% |
 
 **Exact** is byte-identical stdout, stderr and exit status. **Behavioral**
 lets a diagnostic be worded differently so long as the status and the output
@@ -85,19 +85,9 @@ own file in front of each. `docs/install.md` has the measured grid.
 
 ## What is not there yet
 
-The first tag is `v0.0.0` because this list is real, not because the list
-is short.
+The tags are `0.x` because this list is real, not because the list is
+short.
 
-- **A real `~/.zshrc` takes completion away.** This shell completes
-  filenames with a completer of its own, and a startup file that runs
-  `compinit` binds zsh's completion widget over it — which needs a module
-  that is not here, so Tab then completes nothing and says so twice. The
-  shell is worse with the rc than without it, which is the configuration
-  anybody would actually use — [#2770][2770], measured in
-  `docs/install.md`.
-- **A prompt can land on top of unfinished output.** There is no
-  `PROMPT_SP`/`PROMPT_CR` handling yet, so a command whose last line has
-  no newline gets the next prompt drawn onto it — [#2477][2477].
 - **Diagnostic wording is the biggest remaining gap**, and it is most of
   the distance between the two columns above — `ksh` and `ash` agree on
   what happens and still phrase the complaint differently.
@@ -108,9 +98,6 @@ is short.
 - **POSIX only.** No Windows target — every route into this program is a
   process group, a controlling terminal, a signal or a `syscall.Exec`,
   and a binary that cannot start is worse than no binary.
-
-[2477]: https://github.com/blairham/sh/issues/2477
-[2770]: https://github.com/blairham/sh/issues/2770
 
 ## Using it as a library
 

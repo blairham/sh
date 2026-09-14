@@ -1964,6 +1964,15 @@ func (r *Runner) unsetOneName(name string) {
 	// declared-only shape, and not the emptied one. See
 	// compounddeclaredonly.go.
 	delete(r.declaredOnlyCompound, name)
+	// A compound's members are names of their own, so taking the parent away
+	// has to take them with it: `c=(a=1); unset c; ${c.a}` is empty in the
+	// shell, and leaving the member behind read back the value the shell had
+	// just been told to forget. Before the mark is dropped, because the
+	// members are found through it.
+	if r.compoundVariable[name] {
+		delete(r.compoundVariable, name)
+		r.unsetCompoundMembers(name)
+	}
 	r.clearAttributes(name)
 	// Recorded as well as deleted: a name that came from the environment is
 	// not in Vars to begin with, and deleting nothing left it visible to

@@ -2723,6 +2723,32 @@ func (p *Parser) parseAssign(h assignHead) *Assign {
 		p.lex.inArrayLiteral = true
 		p.next()
 		p.skipArrayElementSeparators(false)
+		// Two constructs share these parentheses in the one dialect that has
+		// compound variables, and the first word decides which was written.
+		// Ahead of the element loop because the readings take a `;`
+		// differently and an element read here could not be given back — see
+		// [Parser.opensACompoundVariableBody].
+		// A subscript alongside the parentheses is a different construct
+		// again — `a[1]=(p q)` makes the *element* a value of its own — and
+		// its own axis already answers it, so the compound reading is not
+		// offered there. See [interp.Semantics.SubscriptedArrayLiteral].
+		if h.index == nil && p.opensACompoundVariableBody() {
+			a.Members = p.compoundVariableBody()
+			if p.err == nil && !p.at(TokRightParen) {
+				p.lex.inArgument = saved
+				p.lex.inArrayLiteral = savedArray
+				p.failUnexpected(")")
+				return a
+			}
+			p.lex.inArgument = saved
+			p.lex.inArrayLiteral = savedArray
+			if p.err != nil {
+				return a
+			}
+			a.Stop = p.tok.End
+			p.next()
+			return a
+		}
 		for p.tok.Kind == TokWord && p.err == nil {
 			el := p.word()
 			// An element is not a word a command takes, and one dialect

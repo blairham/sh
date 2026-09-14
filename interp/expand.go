@@ -5301,6 +5301,15 @@ func ifsFirst(ifs string, set bool) string {
 // It reads the same places a lookup does — what the shell has set, and what
 // it inherited — and skips what `unset` took away, so a name that cannot be
 // read is not listed either.
+//
+// A compound variable's own name is among those places, and it has to be:
+// ksh93's `c=(a=1 b=(y=2)); ${!c.@}` answers `c.a c.b c.b.y`, so the *branch*
+// `c.b` is listed beside the leaf under it. A branch holds no value of its own
+// and so is in none of the value tables — see interp/compoundvariable.go,
+// where the mark is the only record that the name exists — and without this
+// the enumeration skipped every interior node and answered `c.a c.b.y`.
+// Nothing outside ksh ever puts a name in that table, so no other dialect's
+// listing moves.
 func (r *Runner) namesWithPrefix(prefix string) []string {
 	seen := map[string]bool{}
 	var out []string
@@ -5319,6 +5328,9 @@ func (r *Runner) namesWithPrefix(prefix string) []string {
 	}
 	for k := range r.inheritedEnv {
 		add(k)
+	}
+	for name := range r.compoundVariable {
+		add(name)
 	}
 	sort.Strings(out)
 	return out

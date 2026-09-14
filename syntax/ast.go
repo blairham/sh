@@ -267,6 +267,22 @@ type Assign struct {
 	// absent `for` list differs from an empty one.
 	Elems   []*Word
 	IsArray bool
+	// Members is the body of a **compound variable** literal — `c=(a=1 b=2)`,
+	// whose parentheses hold a list of declarations rather than a list of
+	// elements. IsArray is true alongside it, because the two readings share
+	// one spelling and only the first word inside tells them apart; see
+	// [Dialect.CompoundVariableDeclarators] for what decides.
+	//
+	// Each item is the simple command it was written as, so `a=1 b=2` is one
+	// item carrying two assignments and `typeset -i n=5` is one carrying the
+	// declaration word, its options, and the assignment it makes. Nothing
+	// else may stand there: a body item whose command word is not a
+	// declarator is a syntax error while reading, which is the shell's own
+	// answer.
+	//
+	// Nil where the literal was read as an array, which is every dialect but
+	// one and every literal whose first word is not an assignment.
+	Members []*SimpleCmd
 	// Index is the subscript of `name[i]=value`, nil otherwise.
 	Index *Word
 	// IndexFlags is the parenthesized flag group that subscript opened with,

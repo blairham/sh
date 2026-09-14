@@ -178,3 +178,91 @@ t[k]=v
 t[a,b]=(x y)
 printf 'n=%s\n' "${#t[@]}"
 typeset -p t
+
+# A parenthesized literal whose first word is an assignment is a *compound
+# variable* and not an array: the members are names of their own, spelled with
+# a dot, and `${c.a}` reads one. No other shell on the panel has the construct
+# — all four read `c=(a=1 b=2)` as an array of two strings — which is why the
+# whole block is here rather than in ext/ (#2620).
+c2=(a=1 b=2)
+printf '%s\n' "${c2.a}" "${c2.b}"
+typeset -p c2
+typeset -p c2.a
+
+# The members list in sorted order whatever order they were written in, and a
+# `;` between two of them is the same literal as a blank.
+c3=(b=2; a=1)
+typeset -p c3
+
+# A member may be a compound of its own, and the listing nests.
+c4=(a=1 b=(y=2))
+printf '%s\n' "${c4.b.y}"
+typeset -p c4
+
+# The body holds declarations and not only assignments, so a member carries
+# its own attributes — which is the half that makes it a program rather than a
+# word list.
+c5=(typeset -i n=5+5)
+printf '%s\n' "${c5.n}"
+typeset -p c5
+typeset -p c5.n
+
+# An array-valued member keeps its own letters in the listing.
+c6=(a=1 q=(p r))
+printf '%s\n' "${c6.q[1]}"
+typeset -p c6
+
+# A bare `$c` is the whole tree laid out over lines, and it is text: `d=$c`
+# leaves `d` a scalar holding those lines rather than a compound of its own.
+c7=(a=1 b=2)
+c8=$c7
+typeset -p c8
+printf '[%s]\n' "${c8.a}"
+
+# Every name under the compound enumerates, branches included: `c9.b` is
+# listed beside the leaf stored under it.
+c9=(a=1 b=(y=2))
+printf '[%s]' "${!c9.@}"
+printf '\n'
+
+# `unset` of a member takes that name away and leaves the rest, and `unset` of
+# the parent takes the members with it.
+ca=(a=1 b=2)
+unset ca.a
+printf '[%s]\n' "${ca.a}"
+typeset -p ca
+unset ca
+printf '[%s]\n' "${ca.b}"
+
+# `+=` adds to a compound where a plain assignment replaces it whole.
+cb=(a=1)
+cb+=(b=2)
+typeset -p cb
+cb=(d=3)
+typeset -p cb
+
+# A value of another kind retypes the name, and the members go with it.
+cc=(a=1)
+cc=(x y)
+typeset -p cc
+printf '[%s]\n' "${cc.a}"
+
+# The letter declares the kind without a literal, and `compound` is the same
+# declaration spelled as a word.
+typeset -C cd
+cd.a=1
+typeset -p cd
+compound ce=(a=1)
+typeset -p ce
+
+# `[[ -v ]]` sees a member as the name it is.
+cf=(a=1)
+[[ -v cf.a ]] && printf '%s\n' 'cf.a: set'
+[[ -v cf.zz ]] || printf '%s\n' 'cf.zz: unset'
+
+# A dotted name whose head is *not* a compound is two ordinary scalars, which
+# is what says the dot is a name character rather than a tree operator.
+cg=1
+cg.b=2
+typeset -p cg
+printf '%s\n' "${cg.b}"

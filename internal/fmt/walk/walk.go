@@ -116,6 +116,9 @@ func Nodes(n syntax.Node, fn func(syntax.Node) bool) {
 		word(x.Value, fn)
 		word(x.Index, fn)
 		words(x.Elems, fn)
+		for _, item := range x.Members {
+			Nodes(item, fn)
+		}
 	case *syntax.Redirect:
 		word(x.N, fn)
 		word(x.Word, fn)

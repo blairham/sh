@@ -769,6 +769,25 @@ type Runner struct {
 	// this one rather than its complement.
 	declaredOnlyCompound map[string]bool
 
+	// compoundVariable is the set of names that are ksh93 compound
+	// variables — `c=(a=1 b=2)` and `typeset -C c`, the fourth kind of thing
+	// a name can be beside a scalar, an indexed array and a table.
+	//
+	// A set rather than a table of members, and that is the load-bearing
+	// choice: a compound's members are *ordinary names spelled with a dot*,
+	// stored in Vars, Arrays and AssocArrays like any other, so `${c.a}` is
+	// the lookup it looks like and a member keeps its own attributes for
+	// free. Measured, and it is the shell's own model rather than a
+	// convenience — `a=1; a.b=2` is accepted there and `${!a.@}` answers
+	// `a.b`, so a name has children whether or not it is a compound, and what
+	// `typeset -C` adds is how the *parent* reads and lists.
+	//
+	// A second table holding the members would be that rule with two homes:
+	// every write through `c.a=9`, `unset c.a`, `typeset -i c.n` and `read
+	// c.x` would have to keep it in step, and the one that forgot would make
+	// a member that reads back and does not list. See compoundvariable.go.
+	compoundVariable map[string]bool
+
 	// aliases is the table `alias` and `unalias` keep. Substitution happens
 	// when a line is parsed, which is the other half of the feature and lives
 	// in the parser rather than here; the two meet at [Runner.ExpandingAlias].
@@ -3816,7 +3835,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		// So: run them with the previous status still in place, and decide
 		// afterwards from whether a substitution reported anything.
 		r.substRan = false
-		r.assignAll(c.Assigns)
+		r.assignAll(ctx, c.Assigns)
 		if r.ctl == controlExit || r.ctl == controlAbandon {
 			// A readonly reassignment is fatal in three of the four shells
 			// and abandons the statement in the fourth. Zeroing the status
@@ -4005,7 +4024,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 			if a.Operand {
 				continue
 			}
-			if r.prefixAssignsPositional(a) {
+			if r.prefixAssignsPositional(ctx, a) {
 				continue
 			}
 			if refused && r.readonly[a.Name] {
@@ -4080,7 +4099,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 				// An argument to the builtin, not a prefix to it.
 				continue
 			}
-			if r.prefixAssignsPositional(a) {
+			if r.prefixAssignsPositional(ctx, a) {
 				// The parameters are not in the table the undo below saves,
 				// so this one is not taken back — which is measured, not a
 				// gap. See Runner.prefixAssignsPositional.
@@ -4153,7 +4172,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		outerTable := r.tableLetterHere
 		r.tableLetterHere = nil
 		if locks {
-			r.assignOperands(c)
+			r.assignOperands(ctx, c)
 		} else {
 			// `declare -ar A=(x y)` has the same problem `readonly` solves by
 			// assigning first, and cannot solve it the same way — the array
@@ -4168,7 +4187,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		r.inBuiltin = outer
 		fatal := false
 		if st == 0 && !locks {
-			r.assignOperands(c)
+			r.assignOperands(ctx, c)
 			switch {
 			case r.ctl == controlExit:
 				// Something here was fatal, and a fatal error has already set
@@ -5859,6 +5878,10 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 	if r.scalarOverCompound(name, value, form) {
 		return
 	}
+	// And a name holding a *compound variable* keeps none of it: the scalar
+	// replaces the whole tree. See compoundVariableRetyped for the five
+	// stores this is one of, and why it is five rather than one.
+	r.compoundVariableRetyped(name)
 	if r.Vars == nil {
 		r.Vars = map[string]string{}
 	}
@@ -6041,6 +6064,13 @@ func (r *Runner) varValue(name string, folded bool) (string, bool) {
 			return f(r), true
 		}
 	}
+	if r.isCompoundVariable(name) {
+		// A compound answers with its whole tree laid out over several lines,
+		// which is the shell's own — `${c}` there is `(`, a tab-indented line
+		// per member, `)`. Ahead of every table because the name is in none
+		// of them: see interp/compoundvariable.go.
+		return r.compoundVariableText(name), true
+	}
 	if a, ok := r.Arrays[name]; ok && !r.removed[name] {
 		// Ahead of Vars, which holds a copy of one element: the array is the
 		// store, and both what a bare name reads and whether it is set at all
@@ -6107,10 +6137,10 @@ func (r *Runner) varValue(name string, folded bool) (string, bool) {
 
 // assignOperands applies the array assignments a declaration utility was given
 // as operands, which the parser kept apart from the prefix ones.
-func (r *Runner) assignOperands(c *syntax.SimpleCmd) {
+func (r *Runner) assignOperands(ctx context.Context, c *syntax.SimpleCmd) {
 	for _, a := range c.Assigns {
 		if a.Operand {
-			r.assign(a)
+			r.assign(ctx, a)
 		}
 	}
 }
@@ -6260,10 +6290,10 @@ func (r *Runner) clearTypeAttributes(name string) {
 // Nothing re-expands. Tracing observes a command; it does not run it again, and
 // doing so ran the command substitution on a right-hand side twice with both
 // sets of side effects (#1915).
-func (r *Runner) assignAll(assigns []*syntax.Assign) {
+func (r *Runner) assignAll(ctx context.Context, assigns []*syntax.Assign) {
 	if !r.xtrace {
 		for _, a := range assigns {
-			r.assign(a)
+			r.assign(ctx, a)
 		}
 		return
 	}
@@ -6275,7 +6305,7 @@ func (r *Runner) assignAll(assigns []*syntax.Assign) {
 		if separately {
 			r.traceAssignments(assigns[i:i+1], values[i:i+1])
 		}
-		r.withExpandedValue(a, values[i])
+		r.withExpandedValue(ctx, a, values[i])
 	}
 	if !separately {
 		r.traceAssignments(assigns, values)
@@ -6309,16 +6339,16 @@ func (r *Runner) assignValue(a *syntax.Assign) string {
 }
 
 // withExpandedValue performs one assignment from a value already expanded.
-func (r *Runner) withExpandedValue(a *syntax.Assign, value string) {
+func (r *Runner) withExpandedValue(ctx context.Context, a *syntax.Assign, value string) {
 	saved := r.expanded
 	r.expanded = &expandedAssign{assign: a, value: value}
 	defer func() { r.expanded = saved }()
-	r.assign(a)
+	r.assign(ctx, a)
 }
 
 // assign performs one assignment, which is three different things wearing the
 // same syntax: a scalar, a whole array, or one element of one.
-func (r *Runner) assign(a *syntax.Assign) {
+func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 	// The refusal stands in front of all three, and it used to stand in front
 	// of one: setVarAs is where it lived, and only the scalar branch below
 	// goes through setVarAs. An element write, an array literal and a
@@ -6359,6 +6389,17 @@ func (r *Runner) assign(a *syntax.Assign) {
 		return
 	}
 	switch {
+	case a.Members != nil:
+		// A compound variable's body, which the parser told apart from an
+		// element list by the first word inside the parentheses. Ahead of
+		// every array branch because each of them answers to `a.IsArray`,
+		// which is true here too: one spelling, two constructs.
+		//
+		// A subscript alongside it is not a shape this reaches — `c[1]=(a=1)`
+		// makes the element a nested *array* of the one string there, which
+		// is Semantics.SubscriptedArrayLiteral's question and not this one.
+		r.assignCompoundVariable(ctx, a)
+		return
 	case a.IsArray && a.Index != nil:
 		// An array literal *and* a subscript, which is a third thing rather
 		// than either of the two below: the words go where the subscript

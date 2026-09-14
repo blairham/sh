@@ -113,6 +113,9 @@ func (r *Runner) markAssoc(name string) {
 	if _, ok := r.AssocArrays[name]; ok {
 		return
 	}
+	// As for the indexed letter: `c=(a=1); typeset -A c` is `typeset -A c=()`
+	// there, with the compound's members gone. See compoundVariableRetyped.
+	r.compoundVariableRetyped(name)
 	r.AssocArrays[name] = AssocArray{}
 	// Declared and not assigned, which is the state one listing writes
 	// without the `=()` — see compounddeclaredonly.go.
@@ -145,6 +148,9 @@ func (r *Runner) setAssocElem(name, key, value string) {
 		if r.AssocArrays == nil {
 			r.AssocArrays = map[string]AssocArray{}
 		}
+		// A keyed write over a compound variable replaces it, the same way
+		// an indexed one does in storeArray. See compoundVariableRetyped.
+		r.compoundVariableRetyped(name)
 		r.AssocArrays[name] = a
 	}
 	// What the name's attributes make of the value, the same fold an array's

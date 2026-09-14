@@ -3131,6 +3131,56 @@ type Dialect struct {
 	// one is safe to be wrong about loudly.
 	ArrayLiteral bool
 
+	// CompoundVariableDeclarators are the command words that, standing first
+	// inside `name=( … )`, make the parentheses a **compound variable's body**
+	// rather than a list of array elements — and their presence at all is what
+	// says the dialect has compound variables.
+	//
+	// Two constructs share one spelling, and what tells them apart is the
+	// first word as it was *written*. ksh93u+ 2012-08-01, measured 2026-09-13
+	// with `env -i PATH=/usr/bin:/bin` and a scratch HOME:
+	//
+	//	written                  typeset -p says
+	//	c=(x y)                  typeset -a c=(x y)
+	//	c=(a=1 b=2)              typeset -C c=(a=1;b=2)
+	//	c=(x b=2)                typeset -a c=(x b\=2)      the first word decides
+	//	c=("a=1")                typeset -a c=(a\=1)        quoted is not an assignment
+	//	w=a=1; c=($w)            typeset -a c=(a\=1)        nor is an expansion
+	//	c=(typeset -i n=5)       typeset -C c=(typeset -i n=5)
+	//	c=(integer n=1)          typeset -C c=(typeset -l -i n=1)
+	//	c=(float n=1)            typeset -C c=(typeset -l -E n=1)
+	//	c=(readonly x=1)         typeset -C c=(typeset -r x=1)
+	//	c=(export x=1)           typeset -C c=(typeset -x x=1)
+	//	c=(declare x=1)          typeset -a c=(declare x\=1)   not a word of this shell
+	//	c=(local x=1)            typeset -a c=(local x\=1)     nor is this
+	//	c=(set x=1)              typeset -a c=(set x\=1)       nor an ordinary builtin
+	//
+	// So the set is closed and small, and it is a *grammar* question rather
+	// than a runtime one for the reason DeclarationUtilities is: the two
+	// readings take a `;` differently, which is a parse and not a value.
+	// Under SemicolonInAnArrayLiteral's ksh93 value one `;` *ends* the element
+	// list — `a=( x; y )` is `` `y' unexpected `` — where the compound body
+	// takes as many as there are members:
+	//
+	//	a=( x; y )               `y' unexpected
+	//	c=(a=1; b=2)             typeset -C c=(a=1;b=2)
+	//	c=(a=1; echo mid; b=2)   `echo' unexpected      a body holds declarations
+	//	c=(a=1 && b=2)           `&&' unexpected        and nothing else
+	//	c=(a=1; ; b=2)           `;' unexpected         each one needs a member
+	//	c=(; a=1)                `;' unexpected
+	//
+	// Empty means the dialect has no compound variable, which is every column
+	// but ksh93: there `c=(a=1 b=2)` is an indexed array of the two strings
+	// `a=1` and `b=2`, which is also what this shell stored for every dialect
+	// before #2620.
+	//
+	// The empty literal `c=()` is *not* read as one here, and that is
+	// deliberate rather than unmeasured: ksh93 answers `typeset -C c=()`, but
+	// no word stands in the parentheses to decide the reading, and the same
+	// retyping of an empty array is already declined in the listing — see the
+	// note in Runner.bareAssignmentValue. Recorded in docs/spec/semantics.md.
+	CompoundVariableDeclarators map[string]bool
+
 	// SemicolonInAnArrayLiteral is how far a `;` between the parentheses of
 	// an array literal is taken. See [ArraySemicolon], where the rows are.
 	//

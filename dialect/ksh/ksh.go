@@ -43,6 +43,20 @@ func Dialect() syntax.Dialect {
 	d.DeclarationUtilities = map[string]bool{
 		"typeset": true, "export": true, "readonly": true,
 	}
+	// And the words that open a *compound variable's* body when they stand
+	// first inside `c=( … )`. A superset of the utilities above, because this
+	// shell spells three of `typeset`'s letters as words of their own —
+	// `integer` is `typeset -l -i`, `float` is `typeset -l -E`, `compound` is
+	// `typeset -C` — and `nameref` is `typeset -n`. `declare`, `local`, `set`
+	// and every ordinary builtin are *not* in it: `c=(declare x=1)` is an
+	// indexed array of the two words there, which is what says the set is
+	// closed rather than "anything that looks like a command". Measured
+	// 2026-09-13 on 93u+; the rows are in
+	// [syntax.Dialect.CompoundVariableDeclarators] (#2620).
+	d.CompoundVariableDeclarators = map[string]bool{
+		"typeset": true, "export": true, "readonly": true,
+		"integer": true, "float": true, "compound": true, "nameref": true,
+	}
 	// A `!` with no pipeline after it is a pipeline of its own here, and this
 	// shell is the union of the other two answers: it reaches a statement
 	// terminator and a `&` the way bash does, and every closer and an and-or
@@ -1584,7 +1598,7 @@ func Semantics() interp.Semantics {
 	// declares a local in a keyword body here and the global in the other,
 	// so a listing that dropped the word would hand back a program whose
 	// variables leak — and the source text keeps it because it was written.
-	s.DeclareOptions = "aAfHilmMprTux"
+	s.DeclareOptions = "aACfHilmMprTux"
 	// `-m` is here now, and it is not the letter zsh spells the same way:
 	// it *moves* a parameter — `typeset -m new=old` — where the other
 	// shell selects several by pattern. Measured 2026-09-13 on ksh93u+;
@@ -1669,7 +1683,7 @@ func Semantics() interp.Semantics {
 	// fatally, since these are special builtins there — where `typeset -f
 	// nm` on the same line lists. The word carries a type and a function
 	// has none.
-	s.IntegerOptions = "aAHilmMprTux"
+	s.IntegerOptions = "aACHilmMprTux"
 	// `-i16` and `-i 16` are an output base here — `integer -i 16 b=255` is
 	// `16#ff` — and this engine has no base to keep, so it refuses by name.
 	s.IntegerAttributeTakesABase = interp.Yes
@@ -2164,7 +2178,11 @@ func Diagnostics() interp.Diagnostics {
 			// interp/declarehide.go. The lower-case `-h` stays: it takes a
 			// *string* argument here (`[-h string]` in the usage block) and
 			// is neither zsh's hide-in-scope nor anything this shell does.
-			"typeset": "-bFhnstCELRSXZ",
+			//
+			// `-C` has left it as well: the compound-variable letter is
+			// built, and it is the declaration half of the kind `c=(a=1)`
+			// makes — see interp/compoundvariable.go (#2620).
+			"typeset": "-bFhnstELRSXZ",
 			// `functions` is `typeset -f` under a second name, so the
 			// letters it is missing are read off its own set: `-t` traces a
 			// function and `-u` marks one to be read from `$FPATH`, both of
@@ -2207,7 +2225,11 @@ func Diagnostics() interp.Diagnostics {
 			// and the two are exclusive — measured, `typeset -iH n=5` is
 			// that same block. Refused for the conflict rather than for the
 			// letter, which is what interp/declarehide.go says.
-			"integer": "-bFhnstCELRSXZ",
+			//
+			// `-C` leaves this list with the one above it, for the reason
+			// every letter here shares one: `integer` reads typeset's whole
+			// grammar.
+			"integer": "-bFhnstELRSXZ",
 		},
 		// `-u` on a `-f` line, which is the one letter that cannot go in
 		// the list above: it is also the upper-case attribute, and this

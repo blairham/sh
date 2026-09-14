@@ -95,11 +95,17 @@ type declaration struct {
 	isArr    bool
 	assoc    AssocArray
 	isAssoc  bool
-	integer  bool
-	readonly bool
-	exported bool
-	lower    bool
-	upper    bool
+	// compoundVar is a ksh93 compound variable — `typeset -C`. A fourth kind
+	// beside the scalar and the two arrays, and the only one whose value is
+	// not in this struct: a compound's members are names of their own and are
+	// read off the store when the listing is built. See
+	// interp/compoundvariable.go.
+	compoundVar bool
+	integer     bool
+	readonly    bool
+	exported    bool
+	lower       bool
+	upper       bool
 	// hidden says the `-H` attribute is on the name. What it *does* is the
 	// dialect's — see Semantics.DeclareHideValueLetter — so this field is
 	// the record and hidesTheValue below is one of the two readings of it.
@@ -222,6 +228,7 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 
 		declaredOnly: r.declaredOnlyCompound[name],
 	}
+	d.compoundVar = r.isCompoundVariable(name)
 	_, d.float = r.floatPrecision[name]
 	d.width, d.hasWidth = r.fieldWidth[name]
 	d.tied, d.hasTie = r.tieOf(name)
@@ -259,6 +266,12 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 		}
 		// Only a surviving attribute keeps a name with neither listable.
 		return d, attributed
+	}
+	// A compound variable, ahead of every table because it is in none of
+	// them: its value is the members stored under it, and markCompoundVariable
+	// took the old scalar or array away when the name became one.
+	if d.compoundVar {
+		return d, true
 	}
 	// The array tables answer ahead of Vars, which mirrors an array's first
 	// element — the same order every read follows.
@@ -379,6 +392,11 @@ func (r *Runner) declarableNames() []string {
 	for name := range r.unique {
 		seen[name] = true
 	}
+	for name, on := range r.compoundVariable {
+		if on {
+			seen[name] = true
+		}
+	}
 	for k := range r.inheritedEnv {
 		// isNameLike keeps the entries that are variables: an exported
 		// function travels in the environment under a decorated name no
@@ -397,6 +415,16 @@ func (r *Runner) declarableNames() []string {
 		// fifteen rows naming parameters that are not there. Measured: zsh's
 		// own `readonly` writes none of them.
 		delete(seen, name)
+	}
+	for name := range seen {
+		// A compound's members are listed *inside* it and not beside it:
+		// `c=(a=1 b=2); typeset -p` writes one line there, `typeset -C
+		// c=(a=1;b=2)`, and never a `c.a=1` of its own. Named explicitly they
+		// still list — `typeset -p c.a` is `c.a=1` — which is why this is a
+		// filter on the walk rather than a rule about the name.
+		if r.memberOfACompoundVariable(name) {
+			delete(seen, name)
+		}
 	}
 	for name := range seen {
 		// A name whose value was taken away is a row only where something of
@@ -864,30 +892,18 @@ func (r *Runner) exportSpelledDeclaration(d declaration) string {
 // is how the two would come to disagree about a gap or a based number.
 func (r *Runner) bareAssignmentValue(d declaration) (string, bool) {
 	switch {
+	case d.compoundVar:
+		// A compound's members are not in the declaration at all — they are
+		// names in the store, spelled with a dot — so the body is gathered
+		// here rather than carried. See Runner.compoundVariableBody for the
+		// `;` rule, which is measured and is not the one a symmetry argument
+		// gives.
+		return "(" + r.compoundVariableBody(d.name, true) + ")", true
 	case d.isAssoc:
-		pairs := make([]string, 0, len(d.assoc))
-		for _, k := range d.assoc.keys() {
-			// Keys quote the way values do here, `$'...'` included.
-			pairs = append(pairs, "["+r.declareQuoted(k)+"]="+r.listedElement(d.assoc[k]))
-		}
+		pairs, _ := r.bareAssignmentElements(d)
 		return "(" + strings.Join(pairs, " ") + nestTrailingSpace(d.assoc.lastElement()) + ")", true
 	case d.isArr:
-		subs := d.arr.subscripts()
-		elems := make([]string, 0, len(subs))
-		for _, i := range subs {
-			// Subscripts appear only where they carry information: an array
-			// that is contiguous from zero lists its values alone.
-			//
-			// Measured aside: the real engine lists an *empty* indexed array
-			// as `typeset -C arr=()`, retyping it as a compound variable.
-			// That is a fact about its type system, not about `-p`, and it
-			// is deliberately not followed — an empty array keeps `-a` here.
-			if r.arrayHasGaps(d.arr) {
-				elems = append(elems, fmt.Sprintf("[%d]=%s", i, r.listedElement(d.arr[i])))
-			} else {
-				elems = append(elems, r.listedElement(d.arr[i]))
-			}
-		}
+		elems, _ := r.bareAssignmentElements(d)
 		return "(" + strings.Join(elems, " ") + nestTrailingSpace(d.arr.lastElement()) + ")", true
 	case d.hasValue && d.base != 0:
 		// A based number lists bare here, where an ordinary value carrying a
@@ -906,9 +922,65 @@ func (r *Runner) bareAssignmentValue(d declaration) (string, bool) {
 	return "", false
 }
 
+// bareAssignmentElements is a parenthesized value's members, one string each,
+// and whether the name has a parenthesized value at all.
+//
+// Split out of bareAssignmentValue because a compound variable's multi-line
+// rendering writes the same strings a line apart rather than a blank apart,
+// and quoting an element two ways is how the two forms would disagree about a
+// key holding a blank.
+func (r *Runner) bareAssignmentElements(d declaration) ([]string, bool) {
+	switch {
+	case d.isAssoc:
+		pairs := make([]string, 0, len(d.assoc))
+		for _, k := range d.assoc.keys() {
+			// Keys quote the way values do here, `$'...'` included.
+			pairs = append(pairs, "["+r.declareQuoted(k)+"]="+r.listedElement(d.assoc[k]))
+		}
+		return pairs, true
+	case d.isArr:
+		subs := d.arr.subscripts()
+		elems := make([]string, 0, len(subs))
+		for _, i := range subs {
+			// Subscripts appear only where they carry information: an array
+			// that is contiguous from zero lists its values alone.
+			//
+			// Measured aside: the real engine lists an *empty* indexed array
+			// as `typeset -C arr=()`, retyping it as a compound variable.
+			// That is a fact about its type system, not about `-p`, and it
+			// is deliberately not followed — an empty array keeps `-a` here.
+			if r.arrayHasGaps(d.arr) {
+				elems = append(elems, fmt.Sprintf("[%d]=%s", i, r.listedElement(d.arr[i])))
+			} else {
+				elems = append(elems, r.listedElement(d.arr[i]))
+			}
+		}
+		return elems, true
+	}
+	return nil, false
+}
+
 // bareAssignmentDeclaration is DeclareListingBareAssignments — see the
 // constant.
 func (r *Runner) bareAssignmentDeclaration(d declaration) string {
+	flags := bareAssignmentFlags(d)
+	value, hasValue := r.bareAssignmentValue(d)
+	head := bareAssignmentHead(flags, d.name)
+	if len(flags) == 0 {
+		// No attributes: a bare assignment, with no command word at all. A
+		// name with neither attributes nor value never reaches here — it is
+		// the missing-name case, which this engine passes over in silence.
+		return head + "=" + value
+	}
+	if hasValue {
+		head += "=" + value
+	}
+	return head
+}
+
+// bareAssignmentFlags is the letters a bare-assignment listing writes for a
+// name, in this engine's own order.
+func bareAssignmentFlags(d declaration) []string {
 	var flags []string
 	// Not the clustered order: this engine leads with what the name *is
 	// for* — export first, then readonly — and follows with what it is.
@@ -931,6 +1003,9 @@ func (r *Runner) bareAssignmentDeclaration(d declaration) string {
 	}
 	if d.isAssoc {
 		flags = append(flags, "-A")
+	}
+	if d.compoundVar {
+		flags = append(flags, "-C")
 	}
 	if d.hidden && !d.hidesTheValue {
 		// The inert reading of `-H`, which is the only one that reaches this
@@ -959,18 +1034,23 @@ func (r *Runner) bareAssignmentDeclaration(d declaration) string {
 			flags = append(flags, itoa(d.base))
 		}
 	}
-	value, hasValue := r.bareAssignmentValue(d)
+	return flags
+}
+
+// bareAssignmentHead is everything a bare-assignment listing writes in front
+// of the `=`: the command word and letters where the name carries attributes,
+// and the bare name where it carries none.
+//
+// Its own function because a compound variable's *multi-line* rendering writes
+// the same head with the value laid out across lines instead of inside one
+// pair of parentheses — `typeset -A h=(` and then a line per element — and a
+// second spelling of the letters beside this one is how the two forms would
+// come to disagree about an order that was measured.
+func bareAssignmentHead(flags []string, name string) string {
 	if len(flags) == 0 {
-		// No attributes: a bare assignment, with no command word at all. A
-		// name with neither attributes nor value never reaches here — it is
-		// the missing-name case, which this engine passes over in silence.
-		return d.name + "=" + value
+		return name
 	}
-	head := "typeset " + strings.Join(flags, " ") + " " + d.name
-	if hasValue {
-		head += "=" + value
-	}
-	return head
+	return "typeset " + strings.Join(flags, " ") + " " + name
 }
 
 // flagLetters is the clustered spelling of what a name is: kind first, then

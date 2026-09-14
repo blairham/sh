@@ -1220,6 +1220,21 @@ func (p *printer) assign(a *Assign) {
 	}
 	p.str("=")
 	switch {
+	case a.Members != nil:
+		// A compound variable's body, whose items are separated by the `;`
+		// that was written between them rather than by a blank: a blank
+		// between two of them is what the source may have had, and either
+		// spelling reads back as the same tree — but `;` is the one spelling
+		// that is right for every item, since a declaration command's
+		// operands run on without it.
+		p.str("(")
+		for i, item := range a.Members {
+			if i > 0 {
+				p.str("; ")
+			}
+			p.compoundVariableItem(item)
+		}
+		p.str(")")
 	case a.IsArray:
 		p.str("(")
 		for i, e := range a.Elems {
@@ -1231,6 +1246,28 @@ func (p *printer) assign(a *Assign) {
 		p.str(")")
 	case a.Value != nil:
 		p.word(a.Value)
+	}
+}
+
+// compoundVariableItem writes back one declaration of a compound variable's
+// body, in the order the words and assignments were written: a declaration
+// command's own operands may be assignments, so the two lists interleave and
+// the command word is what says which order to take them in.
+func (p *printer) compoundVariableItem(c *SimpleCmd) {
+	first := true
+	space := func() {
+		if !first {
+			p.str(" ")
+		}
+		first = false
+	}
+	for _, w := range c.Args {
+		space()
+		p.word(w)
+	}
+	for _, a := range c.Assigns {
+		space()
+		p.assign(a)
 	}
 }
 

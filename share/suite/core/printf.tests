@@ -81,6 +81,19 @@ printf '[%5.2f]\n' 3.14159
 printf '[%e]\n' 1500
 printf '[%g]\n' 0.0001
 
+# %g defaults to six significant digits, which is C's number and not the
+# shortest representation that round-trips. 999999.5 needs both halves of the
+# conversion at once: six digits round it to 1000000 and the trailing zeros
+# are then stripped to 1e+06. The three after it agree whatever the default
+# is, and are here so that rounding to six decimal places fails them.
+printf '[%g]\n' 1234567
+printf '[%g]\n' 999999.5
+printf '[%g]\n' 0.1
+printf '[%g]\n' 100000
+printf '[%g]\n' 1000000
+printf '[%G]\n' 123456789
+printf '[%.10g]\n' 123456789
+
 # Escapes in the format string. The control characters are written out so the
 # bytes are visible rather than the terminal's reading of them.
 printf 'tab:\tafter\n'

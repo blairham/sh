@@ -1405,3 +1405,72 @@ func TestPrintfDoesNotConsultTheStarAxesOnThePlainPath(t *testing.T) {
 		})
 	}
 }
+
+// `%g` defaults to six significant digits, which is C's number and not Go's.
+//
+// Go's `%g` writes the shortest representation that round-trips, so handing
+// the verb through with no precision wrote every digit the float had. Run
+// under CoreSemantics deliberately: bash 5.3, bash as sh, bash 3.2, ksh93,
+// zsh, dash and BusyBox ash all answer the same thing, so this is the core's
+// and no axis may be consulted to reach it (#2687).
+func TestPrintfGDefaultsToSixSignificantDigits(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		src  string
+		want string
+	}{
+		{"a value with more digits than six", `printf '[%g]' 1234567`, "[1.23457e+06]"},
+		{"and one with a great many more", `printf '[%g]' 123456789`, "[1.23457e+08]"},
+		{"a small one counts its digits the same way", `printf '[%g]' 0.0001234567`, "[0.000123457]"},
+		{"a value whose digits are all significant", `printf '[%g]' 3.14159265358979`, "[3.14159]"},
+		// Rounding to six and *then* switching to an exponent, which is the
+		// row that needs both halves of `%g` at once: six significant digits
+		// carry 999999.5 to 1000000, and the trailing zeros the conversion
+		// strips make that 1e+06. A precision default with no stripping
+		// writes 1.00000e+06 and a stripping with no default writes 999999.5.
+		{"six digits and the stripping together", `printf '[%g]' 999999.5`, "[1e+06]"},
+		// The two rows that agree whatever the default is. They are here
+		// because a fix that rounded everything to six *decimal places*, or
+		// that stopped stripping, passes the rows above and fails these.
+		{"a value six digits already reach", `printf '[%g]' 0.1`, "[0.1]"},
+		{"the exponent threshold from below", `printf '[%g]' 100000`, "[100000]"},
+		{"and from above", `printf '[%g]' 1000000`, "[1e+06]"},
+		{"a zero", `printf '[%g]' 0`, "[0]"},
+		{"a digit past the sixth that rounds away", `printf '[%g]' 1.000000000000001`, "[1]"},
+		{"the small end of the threshold", `printf '[%g]' 0.0001`, "[0.0001]"},
+		{"and one step below it", `printf '[%g]' 0.00001`, "[1e-05]"},
+		{"`%G` is the same number in capitals", `printf '[%G]' 123456789`, "[1.23457E+08]"},
+		// The neighbors, pinned rather than changed: Go's default precision
+		// for these three is already six, which is why the gap survived
+		// beside verbs that look like it.
+		{"`%e` keeps its own six", `printf '[%e]' 123456789`, "[1.234568e+08]"},
+		{"`%E` too", `printf '[%E]' 123456789`, "[1.234568E+08]"},
+		{"and `%f`, which counts places rather than digits", `printf '[%f]' 123456789`, "[123456789.000000]"},
+		// A written precision was never wrong and still is not.
+		{"an explicit precision wins", `printf '[%.10g]' 123456789`, "[123456789]"},
+		{"a small explicit precision wins too", `printf '[%.3g]' 3.14159265358979`, "[3.14]"},
+		{"a precision of zero is taken as one", `printf '[%.0g]' 3.14159265358979`, "[3]"},
+		{"and so is a `.` with no digits after it", `printf '[%.g]' 3.14159265358979`, "[3]"},
+		{"a precision from the operands wins", `printf '[%.*g]' 3 3.14159265358979`, "[3.14]"},
+		// C's rule for a negative `*` precision is that there is none, so
+		// this default is what fills in — the same path #2646 resolved.
+		{"a negative one is no precision, so the default applies", `printf '[%.*g]' -1 123456789`, "[1.23457e+08]"},
+		// The width applies to the *shortened* text, which is how a caller
+		// notices the default at all in a field wide enough to hide it.
+		{"a width pads what six digits left", `printf '[%12g]' 1234567`, "[ 1.23457e+06]"},
+		{"the `-` flag with it", `printf '[%-12g]' 1234567`, "[1.23457e+06 ]"},
+		{"the `0` flag with it", `printf '[%012g]' 1234567`, "[01.23457e+06]"},
+		{"and a sign flag", `printf '[%+g]' 1234567`, "[+1.23457e+06]"},
+		// `#` asks for the trailing zeros back, and asks for six of them.
+		{"the `#` flag keeps the zeros the default counted", `printf '[%#g]' 1.5`, "[1.50000]"},
+		{"including past the exponent threshold", `printf '[%#g]' 1000000`, "[1.00000e+06]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := CoreSemantics()
+			out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q status %d, want %q and 0", out, st, tc.want)
+			}
+		})
+	}
+}

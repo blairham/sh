@@ -460,9 +460,43 @@ func (r *Runner) printfConvert(spec string, verb byte, timeFmt string, next func
 		return fmt.Sprintf(spec+string(verb), n), code, false
 	case 'f', 'e', 'E', 'g', 'G':
 		f, code := r.printfFloat(arg, present)
+		if verb == 'g' || verb == 'G' {
+			spec = printfSignificantDigits(spec)
+		}
 		return fmt.Sprintf(spec+string(verb), f), code, false
 	}
 	return "", 0, false
+}
+
+// printfSignificantDigits writes `%g`'s default precision out, because C's
+// default and Go's are different numbers and neither of them is "none".
+//
+// C gives `%g` six significant digits where no precision is written, and Go
+// gives it "the shortest representation that round-trips" — so handing the
+// verb through unchanged wrote every digit the float had: `1.234567e+06`
+// against the `1.23457e+06` that bash 5.3, bash as sh, bash 3.2, ksh93, zsh,
+// dash and BusyBox ash all answer (#2687). Unanimous across the panel, so
+// this is the core's number rather than an axis.
+//
+// Only `%g` and `%G`. Go's default precision for `%e`, `%E` and `%f` is
+// already six, which is why the gap survived beside verbs that look like it.
+//
+// It is the *default* and nothing else: a spec that already carries a `.` is
+// returned untouched, so `%.10g`, `%.0g` — which C takes as 1, and so does
+// Go's strconv — and the `%.` that means a precision of zero all keep the
+// precision they were written with. A `%.*g` whose operand was negative has
+// no precision by then, which is C's rule for a negative one, and so takes
+// this default: `printf '%.*g' -1 123456789` is `1.23457e+08` in all seven.
+//
+// Six digits is also all it does. The trailing zeros `%g` strips, and the
+// exponent threshold that strips them from `999999.5` all the way to `1e+06`,
+// are already Go's `%g` behaving as C's — the conversion was never wrong
+// about those, only about how many digits to start from.
+func printfSignificantDigits(spec string) string {
+	if strings.IndexByte(spec, '.') >= 0 {
+		return spec
+	}
+	return spec + ".6"
 }
 
 // printfNumber reads an integer operand, complaining where the dialect does.

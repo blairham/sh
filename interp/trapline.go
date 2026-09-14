@@ -79,7 +79,7 @@ func (r *Runner) bodyLineStyle() TrapBodyLineStyle {
 // enterTrapBody sets the lines a trap body's diagnostics will name, and
 // returns what puts them back.
 func (r *Runner) enterTrapBody() func() {
-	base, pin, command := r.lineBase, r.linePin, r.inCommandTrap
+	base, pin, command, inTrap := r.lineBase, r.linePin, r.inCommandTrap, r.inTrapBody
 	// The line the shell had reached is part of what a body borrows and has
 	// to give back. A trap body is a script of its own, so running it walks
 	// `r.line` through the body's lines — and through the lines of anything
@@ -92,7 +92,7 @@ func (r *Runner) enterTrapBody() func() {
 	// reported the last line the body ran.
 	line := r.line
 	restore := func() {
-		r.lineBase, r.linePin, r.inCommandTrap = base, pin, command
+		r.lineBase, r.linePin, r.inCommandTrap, r.inTrapBody = base, pin, command, inTrap
 		r.line = line
 	}
 	switch r.bodyLineStyle() {
@@ -106,6 +106,10 @@ func (r *Runner) enterTrapBody() func() {
 	// question of its own — without this, a signal delivered inside a DEBUG
 	// body would be numbered by the rule the DEBUG body was given.
 	r.inCommandTrap = false
+	// And set for it, which is a different question to the one above: the
+	// record of what the shell is running belongs to the script, so nothing a
+	// body runs may move it — see Runner.recordRunning.
+	r.inTrapBody = true
 	return restore
 }
 

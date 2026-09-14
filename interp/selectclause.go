@@ -109,7 +109,7 @@ func (r *Runner) selectClause(ctx context.Context, c *syntax.SelectClause) error
 			// the reply that ends the loop is not a pass: measured, a
 			// two-reply `select` writes two heads there and no third one
 			// when the input runs out.
-			r.debugSelectPass(ctx, c.Pos())
+			r.debugSelectPass(ctx, c)
 			// The skip half of this test cannot arrive, and the reason is
 			// worth writing down rather than leaving as an accident: a
 			// refused firing is bash's rule alone and bash does not write a

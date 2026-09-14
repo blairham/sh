@@ -2431,6 +2431,9 @@ func Apply(r *interp.Runner) {
 	// And how they are laid out, which is this shell's taste rather than
 	// anything the printer should know.
 	r.SetFunctionLayout(FunctionLayout(), ExportedFunctionLayout())
+	// The command the shell is running, which a DEBUG action reads to find
+	// out which one it fired for. See bashcommand.go.
+	registerRunningCommand(r)
 	r.SetDynamic("RANDOM", func(*interp.Runner) string { return interp.Randoms() })
 	// How the two of them list back, which a produced parameter has to be
 	// told rather than carry: `declare -p RANDOM` is

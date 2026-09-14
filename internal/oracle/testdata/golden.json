@@ -193213,6 +193213,108 @@
         "TimedOut": false
       }
     },
+    "trap/a-debug-action-names-a-compound-head": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: trap: line 0: DEBUG: invalid signal specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "D:[for w in a b]~D:[:]~D:[for w in a b]~D:[:]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "D:[for w in a b]~D:[:]~D:[for w in a b]~D:[:]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "D:[for w in a b]~D:[:]~D:[for w in a b]~D:[:]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "trap: DEBUG: bad trap",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "D:[]~D:[]~D:[]~D:[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "D:[]~D:[]~D:[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "trap/a-debug-action-names-the-command-it-fired-for": {
+      "ash": {
+        "Stdout": "one~two",
+        "Stderr": "\u003cshell\u003e: trap: line 0: DEBUG: invalid signal specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "D:[echo one]~one~D:[echo two]~two",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "D:[echo one]~one~D:[echo two]~two",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "D:[echo one]~one~D:[echo two]~two",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one~two",
+        "Stderr": "trap: DEBUG: bad trap",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "D:[]~one~D:[]~two",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "D:[]~one~D:[]~two",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "trap/a-function-holding-its-own-return-trap-fires-it-inside-a-debug-body": {
       "ash": {
         "Stdout": "",
@@ -193520,6 +193622,57 @@
         "TimedOut": false
       }
     },
+    "trap/a-trap-action-does-not-move-the-running-command": {
+      "ash": {
+        "Stdout": "one",
+        "Stderr": "\u003cshell\u003e: trap: line 0: DEBUG: invalid signal specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "D:[echo one]~one",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "D:[echo one]~one",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "D:[echo one]~one",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one",
+        "Stderr": "trap: DEBUG: bad trap",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "D:[]~one",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "D:[]~one",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "trap/an-elements-broken-pipe-is-not-the-outer-shells-to-handle": {
       "ash": {
         "Stdout": "after",
@@ -193616,6 +193769,57 @@
       },
       "zsh": {
         "Stdout": "e=[child~child~\u003cshell\u003e:echo:1: write error: broken pipe~\u003cshell\u003e:1: write error: broken pipe~child]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "trap/an-exit-action-names-the-command-the-script-reached": {
+      "ash": {
+        "Stdout": "one~X:[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "one~X:[echo one]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one~X:[echo one]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one~X:[echo one]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one~X:[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one~X:[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one~X:[]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -195926,6 +196130,57 @@
       "zsh": {
         "Stdout": "ran~ran~done",
         "Stderr": "\u003cscript\u003e:trap:3: undefined signal: RETURN~\u003cscript\u003e:trap:7: undefined signal: RETURN",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "trap/the-running-command-is-named-with-no-trap-set": {
+      "ash": {
+        "Stdout": "[]~[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[echo \"[$BASH_COMMAND]\"]~[echo \"[$BASH_COMMAND]\"]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[echo \"[$BASH_COMMAND]\"]~[echo \"[$BASH_COMMAND]\"]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[echo \"[$BASH_COMMAND]\"]~[echo \"[$BASH_COMMAND]\"]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[]~[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[]~[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[]~[]",
+        "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

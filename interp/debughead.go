@@ -130,6 +130,7 @@ func (r *Runner) debugCompoundHead(ctx context.Context, c syntax.Command) {
 			return
 		}
 	}
+	r.recordRunning(c, WholeCommand)
 	r.runDebugTrap(ctx)
 }
 
@@ -138,26 +139,35 @@ func (r *Runner) debugCompoundHead(ctx context.Context, c syntax.Command) {
 // and each evaluation of an arithmetic `for`'s three expressions — naming the
 // head's own line rather than wherever the body has got to.
 //
-// pos is the head's position, because a pass after the first fires with the
-// line record sitting on the body's last command. The record is put back
-// afterward, so nothing about the body's own reporting moves.
-func (r *Runner) debugPass(ctx context.Context, pos syntax.Pos) {
+// The head's own position is what the line record is moved to, because a pass
+// after the first fires with that record sitting on the body's last command.
+// It is put back afterward, so nothing about the body's own reporting moves.
+func (r *Runner) debugPass(ctx context.Context, c syntax.Command) {
+	r.debugPassOf(ctx, c, WholeCommand)
+}
+
+// debugPassOf is debugPass with the part of the command spelled out, for the
+// arithmetic loop whose three expressions each fire on their own — see
+// CommandPart. A head is the whole of its command for this, which is what the
+// caller above passes.
+func (r *Runner) debugPassOf(ctx context.Context, c syntax.Command, part CommandPart) {
 	if !r.sem().DebugTrapCompoundHeads.headsPerPass() {
 		return
 	}
+	r.recordRunning(c, part)
 	line := r.line
-	r.line = r.lineOf(pos)
+	r.line = r.lineOf(c.Pos())
 	r.runDebugTrap(ctx)
 	r.line = line
 }
 
 // debugSelectPass fires a menu loop's head for the one reading that repeats
 // it with the replies. The other two fire it once, from the dispatcher.
-func (r *Runner) debugSelectPass(ctx context.Context, pos syntax.Pos) {
+func (r *Runner) debugSelectPass(ctx context.Context, c *syntax.SelectClause) {
 	if r.sem().DebugTrapCompoundHeads != DebugTrapHeadsEveryPassAndWrittenParts {
 		return
 	}
-	r.debugPass(ctx, pos)
+	r.debugPass(ctx, c)
 }
 
 // debugArithPart fires the trap for the arithmetic `for`'s initializer or its
@@ -168,9 +178,9 @@ func (r *Runner) debugSelectPass(ctx context.Context, pos syntax.Pos) {
 // writes one head per round in the reading that skips the unwritten parts and
 // two in the one that does not, and both of those counts are the same for
 // every combination of the three parts a script can leave out.
-func (r *Runner) debugArithPart(ctx context.Context, pos syntax.Pos, written bool) {
+func (r *Runner) debugArithPart(ctx context.Context, c *syntax.ForArithClause, part CommandPart, written bool) {
 	if !written && r.sem().DebugTrapCompoundHeads == DebugTrapHeadsEveryPassAndWrittenParts {
 		return
 	}
-	r.debugPass(ctx, pos)
+	r.debugPassOf(ctx, c, part)
 }

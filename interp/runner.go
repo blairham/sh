@@ -1858,6 +1858,18 @@ type Runner struct {
 	// trap leaves this as it found it.
 	inCommandTrap bool
 
+	// inTrapBody marks any trap body as running — a signal's, EXIT's, or one
+	// of the three pseudo-conditions'. Where inCommandTrap says *which*
+	// condition this body belongs to, this one says only that the shell is
+	// inside one, which is the question the running-command record asks. Set
+	// by enterTrapBody and put back by the restore it hands out, so a nesting
+	// leaves it as it found it.
+	inTrapBody bool
+
+	// running is the command the shell is running, for a dialect with a
+	// parameter naming it — see RunningCommand.
+	running RunningCommand
+
 	// programEnd is the line after the script's last, which is where the
 	// shell has got to once the script has run — what one dialect calls the
 	// EXIT trap's line.
@@ -3693,6 +3705,11 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 	// table replaced a claim written here that a compound heading fires
 	// nothing, which no column in the panel does. An action that exits takes
 	// the command it was about to precede with it.
+	//
+	// And this is where the command is recorded as the one the shell is
+	// running, before its own words are expanded — so a command reading the
+	// parameter that names it reads itself. See RunningCommand.
+	r.recordRunning(c, WholeCommand)
 	r.runDebugTrap(ctx)
 	if r.debugTrapStopped() {
 		return nil

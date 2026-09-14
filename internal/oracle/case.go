@@ -17554,6 +17554,31 @@ echo "st=$? alive"`,
 		Why:     "the counter-case: `break` still stops only as many loops as it was asked to, which is what an exit must not be confused with",
 	},
 	{
+		ID: "trap/a-debug-action-names-the-command-it-fired-for", Category: "traps and exit",
+		Snippet: `trap 'echo "D:[$BASH_COMMAND]"' DEBUG; echo one; echo two`,
+		Why:     "the parameter a DEBUG action reads to find out *which* command it fired for, without which an action can only do something unconditional: a breakpoint is `[[ $BASH_COMMAND == … ]]` and there is no other way to write one, since `set -x` prints the expanded command and this is the unexpanded one. All three bash columns name each command in turn; ksh93 and zsh have the condition and not the parameter, so they fire in the right places and write an empty name; dash and ash refuse the condition. Ours fired in the right places and wrote nothing at all (#2779)",
+	},
+	{
+		ID: "trap/the-running-command-is-named-with-no-trap-set", Category: "traps and exit",
+		Snippet: `echo "[$BASH_COMMAND]"; true; echo "[$BASH_COMMAND]"`,
+		Why:     "the parameter is not the trap's: it is recorded before each command's own words are expanded, whether a trap is set or not, so a command reading it reads itself — both `echo` lines write their own text in the bash columns rather than the `true` between them. It is what says the record is kept by the shell running commands rather than by the trap machinery, and a shell that filled the name in only while an action ran would pass the row above and fail this one",
+	},
+	{
+		ID: "trap/a-trap-action-does-not-move-the-running-command", Category: "traps and exit",
+		Snippet: `trap 'true; echo "D:[$BASH_COMMAND]"' DEBUG; echo one`,
+		Why:     "the other half of the rule above, and the half that makes the parameter usable: the action runs a command of its own before reading it, and still reads the command it fired for rather than that one. A record updated by every command would name `true` here, which would leave an action unable to say anything about what it was announcing",
+	},
+	{
+		ID: "trap/an-exit-action-names-the-command-the-script-reached", Category: "traps and exit",
+		Snippet: `trap 'echo "X:[$BASH_COMMAND]"' EXIT; echo one`,
+		Why:     "the same suspension reaches every trap body and not only DEBUG's, which is what makes an EXIT action able to say where the script had got to. It is also the row that reaches the three shells with no DEBUG condition, since EXIT is a condition all six have",
+	},
+	{
+		ID: "trap/a-debug-action-names-a-compound-head", Category: "traps and exit",
+		Snippet: `trap 'echo "D:[$BASH_COMMAND]"' DEBUG; for w in a b; do :; done`,
+		Why:     "a head is named as the head and not as the whole construct — `for w in a b` rather than the loop with its body — and it is named again on the second pass, beside the body it announces. The name is this shell printing the head back rather than quoting the script, so the words keep their quoting and lose the script's spacing; ksh93 and zsh fire heads of their own here and have no parameter to put one in",
+	},
+	{
 		ID: "cmd/command-v-names-a-builtin", Category: "command lookup",
 		Snippet: `command -v echo`,
 		Why:     "`command -v` asks what would run rather than running it, and answers a builtin with the name as written — the portable way a script tests whether it has a tool",

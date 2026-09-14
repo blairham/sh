@@ -60,7 +60,11 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	defer os.RemoveAll(home)
+	// Discarded on purpose, and the same way every other cleanup here
+	// discards: this is a scratch home under the system temporary directory
+	// and the run is about to end, so a failed removal has nobody to tell and
+	// nothing to undo.
+	defer func() { _ = os.RemoveAll(home) }()
 
 	control, terminal, err := pty.Open()
 	if err != nil {

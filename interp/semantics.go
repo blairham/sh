@@ -5171,6 +5171,74 @@ type Semantics struct {
 	// (#2060).
 	DeclareListing DeclarationListingForm
 
+	// ProducedParameterListing is what `declare -p` and `typeset -p` with
+	// **no operands** write for a parameter the dialect produces. The named
+	// `typeset -p RANDOM` is a different question and is answered by the
+	// registering dialect, per parameter, in [ProducedDeclaration].
+	//
+	// Reached only where a dialect has registered a producer with
+	// [Runner.SetDynamicDeclaration], so dash and BusyBox ash — which have
+	// no declaration utility to list anything with — never answer it.
+	//
+	// Measured 2026-09-13, `env -i PATH=/usr/bin:/bin` with a scratch HOME,
+	// over a script file. The `RANDOM` row out of `typeset -p` with no
+	// operands, before and after a plain `: $RANDOM`, with the status taken
+	// from a discarded run ahead of it — an empty listing cannot tell a
+	// shell with no such builtin from a shell with a builtin and no row:
+	//
+	//	              status  before the read      after it
+	//	dash          127     —                    —
+	//	BusyBox ash   127     —                    —
+	//	bash 5.3        0     declare -i RANDOM    declare -i RANDOM="24214"
+	//	bash-as-sh      0     declare -i RANDOM    declare -i RANDOM="…"
+	//	bash 3.2        0     no row               RANDOM=20998
+	//	ksh93u+         0     typeset -i RANDOM=…  typeset -i RANDOM=…
+	//	zsh 5.9.2       0     typeset -i10 RAND…=… typeset -i10 RAND…=…
+	//
+	// So the two answers this holds are the *standing* ones: bash writes the
+	// row and withholds the reading, ksh93 and zsh write the reading. The
+	// third column of that table is a second axis and not a third value
+	// here — bash gates the value on the parameter having been **read**,
+	// which is one fact spanning both bash columns rather than the version
+	// split #2518 recorded. This engine has no such gate and
+	// no cache of the last reading to write once the gate opens; both are
+	// #2722.
+	//
+	// The choice is not free of consequence and the consequence is measured.
+	// ProducedListingWithValue re-reads the producer, so a listing that
+	// names a clock differs from itself between two reads. Both shells that
+	// hold this value do exactly that. Two `typeset -p` runs a line apart,
+	// **redirected rather than piped** — see below — with nothing between
+	// them, the two bash columns having read the parameter first so that
+	// they have a reading to compare at all:
+	//
+	//	           first listing         second listing
+	//	ksh93u+    RANDOM=32035          RANDOM=1241
+	//	zsh 5.9.2  RANDOM=22537          RANDOM=21677
+	//	bash 5.3   RANDOM="22963"        RANDOM="22963"
+	//	bash 3.2   RANDOM=3261           RANDOM=3261
+	//
+	// So bash repeats the last reading and the other two draw again, and
+	// that is the second half of bash's gate rather than a separate policy:
+	// a parameter nothing has read has no last reading to write. See the
+	// warning in interp/localbuiltin.go, which this axis is the answer to —
+	// the hazard it names is real, and it is what two of the panel's columns
+	// do.
+	//
+	// **Measure this with a redirection and never through a pipe.** A
+	// `typeset -p | grep` forks the listing into a subshell, so two of them
+	// draw the same number out of the same inherited state and every column
+	// reads as frozen. That artifact is how #2518's own table came to
+	// describe zsh as repeating a reading it re-draws.
+	//
+	// It governs the operand-less `-p` alone. `export -p` and `readonly -p`
+	// narrow the same walk with a filter, and no produced parameter carries
+	// either attribute in any column — measured in the same run, neither
+	// writes a `RANDOM` or a `SECONDS` row anywhere in the panel — so they
+	// are left out rather than filtered out. What the bare `typeset` word
+	// and a bare `set` write is a third question again (#2722).
+	ProducedParameterListing ProducedListing
+
 	// DeclareValueQuoting is how a listed declaration spells its value. A
 	// field of its own over the shared vocabulary because it does not follow
 	// the dialect's other listings: the engine that single-quotes its

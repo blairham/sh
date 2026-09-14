@@ -445,6 +445,35 @@ func Semantics() interp.Semantics {
 	// `declare -p` writes `declare -- v="1"` — double quotes, unlike the
 	// single-quoting listings above.
 	s.DeclareListing = interp.DeclareListingClustered
+	// And a listing with no operands writes the produced parameters with no
+	// reading beside them: `declare -i RANDOM`, `declare -- SECONDS`,
+	// `declare -- LINENO`, `declare -- EPOCHSECONDS`. Measured 2026-09-13,
+	// bash 5.3.15, `env -i PATH=/usr/bin:/bin` with a scratch HOME, over a
+	// script file — and the same rows from the same binary under argv[0] of
+	// `sh`, so the shape is bash's and not the invocation's.
+	//
+	// Not what the *named* `declare -p RANDOM` writes in that shell, which is
+	// `declare -i RANDOM="16735"` — see interp.ProducedDeclaration, which is
+	// where the letters come from and which this deliberately does not
+	// re-derive. The two forms disagreeing in one shell is why the axis
+	// exists (#2518).
+	//
+	// bash writes the reading once the parameter has been read, and then
+	// writes the *same* one again — two listings a line apart both hold
+	// `declare -i RANDOM="22963"`, where ksh93 and zsh draw again. So the
+	// gate and the cache are one behavior: a parameter nothing has expanded
+	// has no last reading to write. Neither half is modeled here, and both
+	// are #2722.
+	//
+	// One letter moves with that gate and is left as the after state on
+	// purpose. `SECONDS` lists as `declare -- SECONDS` until something reads
+	// it and `declare -i SECONDS="0"` afterwards — measured 2026-09-13, and
+	// it is the only one of the seven that moves; `RANDOM`, `SRANDOM` and
+	// `BASHPID` carry `-i` from the start and `LINENO`, `EPOCHSECONDS` and
+	// `EPOCHREALTIME` carry none either side. This engine writes `-i` in
+	// both states, which is the letter the named `declare -p SECONDS` writes
+	// in bash whatever has been read (#2451) and is the after state here.
+	s.ProducedParameterListing = interp.ProducedListingNameOnly
 	s.DeclareValueQuoting = interp.ListingQuoteAlwaysDouble
 	s.ListingControlEscape = interp.ControlEscapeOctal
 	// A `#` in a listed value is quoted only where a comment could begin —

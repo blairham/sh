@@ -208,9 +208,16 @@ func (r *Runner) attributeWordDeclaration(d declaration, isLocal bool) string {
 		// #1618 is four missing zsh modules, and the clock was found in the
 		// same work rather than filed there. What guards against it is this
 		// branch and nothing else, which is why the warning belongs here.
-		// The open question the warning is about — which produced names a
+		//
+		// The question the warning was about — which produced names a
 		// listing with no operands writes at all, and whether the row
-		// carries a value — is #2518.
+		// carries a value — is answered for `-p` by
+		// Semantics.ProducedParameterListing (#2518), and the answer is that
+		// two columns really do put a clock in their own listing: ksh93 and
+		// zsh re-read the producer, so two `typeset -p` runs a line apart
+		// hold two different `RANDOM`s. bash writes the last reading
+		// instead, which is the shape this branch has by construction. What
+		// the *bare* word writes is still open and is #2722.
 		return head + d.name
 	}
 	return head + d.name + "=" + r.listedDeclarationValue(d)

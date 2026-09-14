@@ -15878,6 +15878,69 @@ Pinned by `declare/a-subscripted-operand-to-a-declaration`,
 Is the shape of what `declare -p` and `typeset -p` write back. Three
 engines rather than two answers — see DeclarationListingForm.
 
+**`ProducedParameterListing`** — bash ProducedListingNameOnly · dash
+ProducedListingUnspecified · ksh93 ProducedListingWithValue · zsh
+ProducedListingWithValue · ash ProducedListingUnspecified
+
+Is what `declare -p` and `typeset -p` **with no operands** write for a
+parameter the dialect produces. The named `typeset -p RANDOM` is a different
+question, answered per parameter by the registering dialect in
+`interp.ProducedDeclaration`, and the two disagree inside one shell: bash
+5.3 writes `declare -i RANDOM="16735"` for the name asked by hand and a bare
+`declare -i RANDOM` in the whole listing.
+
+Measured 2026-09-13, `env -i PATH=/usr/bin:/bin` with a scratch `HOME`, over
+a script file. The `RANDOM` row out of the listing, before and after a plain
+`: $RANDOM`, and then a second listing with nothing in between:
+
+| | status | unread | after a read | and again |
+| --- | --- | --- | --- | --- |
+| dash | 127 | — | — | — |
+| BusyBox ash | 127 | — | — | — |
+| bash 5.3 | 0 | `declare -i RANDOM` | `declare -i RANDOM="22963"` | `declare -i RANDOM="22963"` |
+| bash-as-`sh` | 0 | `declare -i RANDOM` | same as bash 5.3 | same |
+| bash 3.2 | 0 | *no row* | `RANDOM=3261` | `RANDOM=3261` |
+| ksh93u+ | 0 | `typeset -i RANDOM=32035` | same shape | `typeset -i RANDOM=1241` |
+| zsh 5.9.2 | 0 | `typeset -i10 RANDOM=22537` | same shape | `typeset -i10 RANDOM=21677` |
+
+The status is printed from a discarded run, because an empty listing cannot
+tell a shell with no such builtin from a shell with a builtin and no row.
+
+**Two standing answers, and a gate that is not a third.** bash writes the
+*last* reading, so a parameter nothing has expanded has no reading to write:
+5.3 writes the row without it, and 3.2 — whose listing form is bare
+assignments, which has no way to spell a name with no value — writes nothing
+at all. #2518 read those two cells as a version split, and they are one rule
+seen twice. ksh93 and zsh re-read the producer instead, which is what
+`ProducedListingWithValue` does and is why a listing there differs from
+itself. Neither bash's gate nor its cache is modeled here; both are #2722.
+
+**Measure it with a redirection and never through a pipe.** A `typeset -p |
+grep` forks the listing into a subshell, so two of them draw the same number
+out of the same inherited state and every column reads as frozen. That
+artifact is how #2518's own table came to describe zsh as repeating a reading
+it re-draws.
+
+**One letter rides on bash's gate.** `SECONDS` lists as `declare -- SECONDS`
+unread and `declare -i SECONDS="0"` afterwards, alone among the seven names
+bash lists this way: `RANDOM`, `SRANDOM` and `BASHPID` carry `-i` on both
+sides, and `LINENO`, `EPOCHSECONDS` and `EPOCHREALTIME` carry none on either.
+This engine writes `-i` in both states — the after state, and the letter the
+named `declare -p SECONDS` writes in bash whatever has been read.
+
+**Reachable only where a dialect registered a producer** with
+`Runner.SetDynamicDeclaration`, which is also what keeps the listing small: a
+produced *table* — the hundred-entry `errnos`, the fifty-five-key locale map —
+registers no declaration and stays out, as it must, since neither is state a
+listing could carry. dash and BusyBox ash have no declaration utility to list
+anything with, so they never answer the axis.
+
+It governs the operand-less `-p` alone. `export -p` and `readonly -p` narrow
+the same walk with a filter, and no produced parameter carries either
+attribute in any column. What the bare `typeset` word and a bare `set` write
+is a third question, still open: ksh93's bare `typeset` withholds the reading
+its `typeset -p` writes, which is the opposite way round from bash (#2722).
+
 **`DeclareValueQuoting`** — bash ListingQuoteAlwaysDouble · dash ListingQuoteAlwaysEscaped · ksh93 ListingQuoteWhenNeededDollar · zsh ListingQuoteWhenNeededEscaped
 
 Is how a listed declaration spells its value. A field of its own over

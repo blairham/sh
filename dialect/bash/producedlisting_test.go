@@ -52,3 +52,44 @@ func TestListingAProducedParameterDoesNotChangeWhatAssigningItDoes(t *testing.T)
 		t.Errorf("got %q at %d, want %q at 0 — the clock still answers", out, st, want)
 	}
 }
+
+// And the listing with **no operands** writes the row without the reading —
+// the opposite of what the same shell writes when the name is asked for by
+// hand, which is why the two are separate facts. Measured 2026-09-13, bash
+// 5.3.15, `env -i PATH=/usr/bin:/bin` with a scratch HOME, over a script
+// file, with nothing having read the parameters first:
+//
+//	declare -i RANDOM      declare -- LINENO
+//	declare -- SECONDS     declare -- EPOCHSECONDS
+//
+// The same rows come back from the same binary invoked as `sh`, so the shape
+// belongs to bash rather than to the invocation. bash writes the reading once
+// something has expanded the parameter and repeats the same one afterwards;
+// neither the gate nor the cache is modeled here, and both are #2722 (#2518).
+func TestABareListingWritesTheProducedNamesWithNoReading(t *testing.T) {
+	dir := t.TempDir()
+	out, st := runBash(t, dir, "declare -p")
+	if st != 0 {
+		t.Fatalf("declare -p answered %d, want 0: %q", st, out)
+	}
+	for _, want := range []string{
+		`(?m)^declare -i RANDOM$`,
+		`(?m)^declare -- LINENO$`,
+		`(?m)^declare -- EPOCHSECONDS$`,
+	} {
+		if !regexp.MustCompile(want).MatchString(out) {
+			t.Errorf("declare -p = %q, want a row matching %q", out, want)
+		}
+	}
+	// The control, and the reason the rows above are anchored: a listing
+	// that had simply stopped writing values would pass all three.
+	if want := regexp.MustCompile(`(?m)^declare -- OPTIND="1"$`); !want.MatchString(out) {
+		t.Errorf("declare -p = %q, want an ordinary name to keep its value", out)
+	}
+	// And a produced name asked for by hand still carries one, from the same
+	// shell in the same run.
+	named, st := runBash(t, dir, "declare -p RANDOM")
+	if want := regexp.MustCompile(`^declare -i RANDOM="[0-9]+"\n$`); !want.MatchString(named) || st != 0 {
+		t.Errorf("declare -p RANDOM = %q at %d, want the reading beside the name", named, st)
+	}
+}

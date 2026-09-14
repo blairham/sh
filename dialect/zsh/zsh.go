@@ -874,6 +874,20 @@ func Semantics() interp.Semantics {
 	// `typeset -p` writes `typeset v=1`, an exported scalar as `export e=E`
 	// — values in the alias style, keys in the trap one.
 	s.DeclareListing = interp.DeclareListingExportSpelled
+	// A listing with no operands writes the produced parameters with their
+	// readings. Measured 2026-09-13, zsh 5.9.2, `env -i PATH=/usr/bin:/bin`
+	// with a scratch HOME, over a script file: `typeset -i10 RANDOM=11798`
+	// and `typeset -i10 SECONDS=0`, with no reference to either first, and no
+	// `LINENO` row — that one is interp.ProducedDeclaration.Silent and is
+	// answered per parameter rather than here.
+	//
+	// It re-reads the producer, which zsh does too: two listings a line
+	// apart hold `RANDOM=22537` and then `RANDOM=21677`, so a listing here
+	// differs from itself exactly as ksh93's does. Measure that with a
+	// redirection — `typeset -p | grep` forks the listing and two forks off
+	// one state draw the same number, which reads as a freeze that is not
+	// there (#2518).
+	s.ProducedParameterListing = interp.ProducedListingWithValue
 	s.DeclareValueQuoting = interp.ListingQuoteWhenNeededRuns
 	s.ListingControlEscape = interp.ControlEscapeCaret
 	// `export -p` is that same form narrowed to the exported names, not a

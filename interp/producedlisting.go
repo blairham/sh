@@ -93,3 +93,97 @@ func (r *Runner) producedDeclaration(name string) (ProducedDeclaration, bool) {
 	d, ok := r.dynamicDeclarations[name]
 	return d, ok
 }
+
+// ProducedListing is what a listing with **no operands** writes for a
+// parameter the dialect produces — see [Semantics.ProducedParameterListing].
+//
+// A separate question from [ProducedDeclaration], which is the named
+// `typeset -p NAME`. The panel answers the two differently in the same shell,
+// which is why one cannot be derived from the other.
+type ProducedListing uint8
+
+const (
+	// ProducedListingUnspecified is no answer, and is refused like any other.
+	ProducedListingUnspecified ProducedListing = iota
+
+	// ProducedListingNameOnly writes the row — the command word and the
+	// letters the dialect stated — and stops before the `=`.
+	//
+	// bash's answer, and the shape that cannot put a clock into its own
+	// output: a listing that never writes the reading cannot differ from
+	// itself between two reads.
+	ProducedListingNameOnly
+
+	// ProducedListingWithValue writes the value the producer gives, in the
+	// same row an ordinary name would take.
+	//
+	// ksh93's and zsh's answer. It is what re-reads the producer, and in
+	// ksh93 that is observable: two listings a line apart hold two different
+	// `RANDOM`s.
+	ProducedListingWithValue
+)
+
+func (p ProducedListing) String() string {
+	switch p {
+	case ProducedListingNameOnly:
+		return "ProducedListingNameOnly"
+	case ProducedListingWithValue:
+		return "ProducedListingWithValue"
+	}
+	return "ProducedListingUnspecified"
+}
+
+// producedListing asks the axis, and is asked once per listing rather than
+// once per name: an unanswered axis writes one refusal, and a shell with six
+// registered producers would otherwise write six.
+//
+// Only reached where a dialect has registered a producer with
+// [Runner.SetDynamicDeclaration]. dash and BusyBox ash have no declaration
+// utility at all, so they register none and are never asked.
+func (r *Runner) producedListing() ProducedListing {
+	p := r.sem().ProducedParameterListing
+	if p == ProducedListingUnspecified {
+		r.diagf("%s\n", r.unanswered(
+			"what a listing with no operands writes for a produced parameter"))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
+}
+
+// producedListingNames are the registered produced parameters a listing with
+// no operands has to name on top of the ones declarableNames already walks.
+//
+// Keyed off the *registered* set and not off Runner.Dynamic, which is what
+// keeps the listing small and keeps it a dialect's decision: a produced
+// parameter no dialect has said how to list stays out, exactly as it does for
+// the named `typeset -p NAME`. That is also what keeps the hundred-entry
+// error table and the fifty-five-key locale table out — those are produced
+// *arrays*, and nothing registers a declaration for them.
+//
+// A name the walk already has is left to the walk. A script that assigned to
+// the parameter has an entry in one of those tables, and its own value is the
+// one a listing writes.
+func (r *Runner) producedListingNames(walked []string) []string {
+	if len(r.dynamicDeclarations) == 0 {
+		return nil
+	}
+	have := make(map[string]bool, len(walked))
+	for _, name := range walked {
+		have[name] = true
+	}
+	var add []string
+	for name := range r.dynamicDeclarations {
+		if have[name] {
+			continue
+		}
+		if _, ok := r.producedDeclaration(name); !ok {
+			// `unset` has taken the parameter away — producedDeclaration is
+			// where that is decided, so that a listing and a named `-p`
+			// cannot disagree about whether the name is still there.
+			continue
+		}
+		add = append(add, name)
+	}
+	return add
+}

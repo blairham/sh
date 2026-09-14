@@ -106,6 +106,21 @@ func TestWhatDoesNotCountAsAnUnclosedBareSubscript(t *testing.T) {
 		{"braced", `printf "[%s]" ${a}[1`, "[xx[1]"},
 		// Nothing directly behind the name, so no subscript was started.
 		{"not directly behind the name", `printf "[%s]" "$a]1["`, "[xx]1[]"},
+		// A `]` later in the word closes the bracket, even though the lexer
+		// gave the characters back rather than reading a subscript out of
+		// them — which is the row that makes the test "the word closes it"
+		// and not "the lexer took it". Measured on zsh 5.9.2, 2026-09-12:
+		// `$a[$(: ]; echo 2)]` is not refused there, where every shape above
+		// it is. What is asserted here is that it is not refused and the
+		// value is *this* harness's; the shell's own field-splitting of it
+		// differs from ours and is #2786, which is neither this rule nor
+		// changed by it.
+		//
+		// Without this row, dropping the closing test from the parser — so
+		// that any `[` the lexer gave back is "unclosed" — is a mutation
+		// nothing catches, because every other shape here stops short of the
+		// parser's loop.
+		{"a `]` the word supplies later", `printf "[%s]" $a[$(: ]; echo 2)]`, "[xx[2]]"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, st := runBare(t, bareArray+tc.src, Yes)

@@ -184,7 +184,7 @@ func (r *Runner) shadowStartsHiding(name string) {
 // and it is not the absence of the line above: it puts the producer back and
 // the freeze with it.
 //
-// Measured 2026-09-12, zsh 5.9.2, `env -i PATH=/usr/bin:/bin` with a scratch
+// Measured 2026-09-13, zsh 5.9.2, `env -i PATH=/usr/bin:/bin` with a scratch
 // `HOME`, `ZDOTDIR` and `HISTFILE`, over a script file with `zsh/datetime`
 // loaded — `EPOCHSECONDS` carries `hide` from its module, so a plain shadow
 // of it is ordinary and `+h` is what asks for the second view back:

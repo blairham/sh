@@ -766,6 +766,14 @@ One corner splits the panel and is silent:
 compound variable instead — `typeset -p a` answers `typeset -C a=()`,
 `${#a[@]}` is 1, and `${a[0]}` renders as the two-line text `(` `)`.
 
+**Modeled since #2620**, and in the parser rather than at any store: the
+empty parentheses hold no word to decide the reading with, so what decides
+is whether the dialect has compound variables at all — which is why the
+other columns cannot move. A later `a+=(x y)` starts at subscript 1 there,
+and a prior `typeset -a a` does not change the reading. The declaration's
+own letters do: `typeset -a a=()` is an empty array in that shell too, and
+`typeset -C a=(x y)` is a syntax error, so the letters reach the parse.
+
 **`a+=(…)` over a name holding a scalar keeps that value as the first
 element.** The append promotes what is there and then adds; it does not
 build a fresh array from the words. Measured 2026-09-08, panel and
@@ -787,7 +795,10 @@ value and is kept; an unset name has nothing to keep, and the inherited
 environment counts as holding one (`a=1 sh -c 'a+=(2)'` is `1 2`
 throughout). The last row is ksh93's compound-variable reading of empty
 parentheses, which it gives an unset name too and which therefore says
-nothing about the scalar; see the `a=()` corner above.
+nothing about the scalar; see the `a=()` corner above. A name already
+holding an *array* or a table is the exception and is measured — `a=(x y);
+a+=()` keeps both elements there — so the empty body adds nothing where
+there is something to add to, and declares the kind everywhere else.
 
 The whole-array spelling still **replaces**: `a=1; a=(2)` is one element
 in every column. So this belongs to the operator and not to "an array

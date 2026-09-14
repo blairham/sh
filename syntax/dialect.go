@@ -3329,6 +3329,7 @@ type Dialect struct {
 	//	written                  typeset -p says
 	//	c=(x y)                  typeset -a c=(x y)
 	//	c=(a=1 b=2)              typeset -C c=(a=1;b=2)
+	//	c=()                     typeset -C c=()            and so is an empty one
 	//	c=(x b=2)                typeset -a c=(x b\=2)      the first word decides
 	//	c=("a=1")                typeset -a c=(a\=1)        quoted is not an assignment
 	//	w=a=1; c=($w)            typeset -a c=(a\=1)        nor is an expansion
@@ -3360,11 +3361,31 @@ type Dialect struct {
 	// `a=1` and `b=2`, which is also what this shell stored for every dialect
 	// before #2620.
 	//
-	// The empty literal `c=()` is *not* read as one here, and that is
-	// deliberate rather than unmeasured: ksh93 answers `typeset -C c=()`, but
-	// no word stands in the parentheses to decide the reading, and the same
-	// retyping of an empty array is already declined in the listing — see the
-	// note in Runner.bareAssignmentValue. Recorded in docs/spec/semantics.md.
+	// **The empty literal is a compound too**, and the set's own emptiness is
+	// what says so — there is no word in `c=()` to decide with, so what
+	// decides is whether the dialect has the construct at all. Measured, and
+	// the knock-ons are the reason it is worth stating: `${#c[@]}` answers 1,
+	// `${c[0]}` is the tree's rendering, `${!c[@]}` is `0`, a later
+	// `c+=(x y)` starts at subscript 1, and `[[ -v c ]]` is true. A prior
+	// `typeset -a c` does not change any of it. The spelling is the ordinary
+	// way a script starts an array, so nothing outside ksh may move — which
+	// is what the emptiness of the set guarantees rather than promises.
+	//
+	// A **declaration's own letters** settle it ahead of either rule, which
+	// is why [compoundLiteralReading] exists: `-a` and `-A` take the compound
+	// reading off the table and `-C` puts it on, so `typeset -a c=(a=1 b=2)`
+	// is an array of two strings and `typeset -C c=(x y)` is
+	// `` `x' unexpected ``. That is a parse and not a store, because the
+	// readings take a `;` differently: `typeset -a c=(a=1; b=2)` is
+	// `` `b=2' unexpected `` there.
+	//
+	// One measured row is *not* modeled and is recorded rather than
+	// reproduced: `typeset -A c=(a=1 b=2)` nests the compound under the key
+	// `0` — `typeset -A c=([0]=(a=1;b=2))` — where the array reading this
+	// takes reaches ksh93's own `cannot append index array to associative
+	// array c`, which is what it answers for `typeset -A c=(x y)`. A value
+	// under a key with a kind of its own is [SubscriptedArrayLiteralNests]'s
+	// question rather than this one.
 	CompoundVariableDeclarators map[string]bool
 
 	// SemicolonInAnArrayLiteral is how far a `;` between the parentheses of

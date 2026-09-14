@@ -39,6 +39,13 @@ type Parser struct {
 	// after it is eligible in turn.
 	pending       []Token
 	aliasNextWord bool
+	// literalReading is what the declaration command now being read has
+	// settled about the parentheses of its next operand's literal, where the
+	// dialect has a construct its letters can settle. Set by
+	// declarationArray around one call and consumed by parseAssign, which
+	// clears it so that a nested literal is read on its own terms. See
+	// [compoundLiteralReading].
+	literalReading compoundLiteralReading
 	// pendingTouches runs beside pending: whether each token was written
 	// with nothing at all between it and the one in front of it *in the
 	// alias body*. It cannot be recovered from the tokens themselves,
@@ -2765,7 +2772,12 @@ func (p *Parser) parseAssign(h assignHead) *Assign {
 		// again — `a[1]=(p q)` makes the *element* a value of its own — and
 		// its own axis already answers it, so the compound reading is not
 		// offered there. See [interp.Semantics.SubscriptedArrayLiteral].
-		if h.index == nil && p.opensACompoundVariableBody() {
+		// The declaration's letters, consumed here and not carried down:
+		// a body of its own is read by rules of its own, so the nested
+		// `q=(p r)` in `typeset -C c=(a=1 q=(p r))` is an array member.
+		reading := p.literalReading
+		p.literalReading = literalWordDecides
+		if h.index == nil && p.opensACompoundVariableBody(reading) {
 			a.Members = p.compoundVariableBody()
 			if p.err == nil && !p.at(TokRightParen) {
 				p.lex.inArgument = saved
@@ -2959,7 +2971,14 @@ func (p *Parser) declarationArray(c *SimpleCmd) (a *Assign, consumed bool) {
 		return nil, false
 	}
 	tok := p.tok
+	// What the command's own letters have already settled about the
+	// parentheses, where the dialect has a construct they can settle. Set
+	// around the one call because parseAssign consumes it: see
+	// [compoundLiteralReading].
+	saved := p.literalReading
+	p.literalReading = declarationLiteralReading(c.Args)
 	a = p.parseAssign(h)
+	p.literalReading = saved
 	if a != nil && a.IsArray {
 		a.Operand = true
 		return a, true

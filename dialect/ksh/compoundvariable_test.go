@@ -220,3 +220,193 @@ func TestTheCompoundLetterIsNoLongerRefused(t *testing.T) {
 		t.Errorf("IntegerOptions = %q, want the C letter", s.IntegerOptions)
 	}
 }
+
+// Copying a compound is a bare **name** on the right of an assignment, not
+// the value the name reads back as — `d=$c` renders the tree as text and
+// leaves a scalar. Two spellings read the right-hand side that way and they
+// differ in one measured place: a `-C` declaration takes a name of *any*
+// kind, where a bare assignment to a target that is already a compound takes
+// only another compound and otherwise stores the text.
+//
+// Measured on ksh93u+ 2012-08-01, 2026-09-13. See interp/compoundcopy.go.
+func TestACompoundIsCopiedByName(t *testing.T) {
+	for _, c := range []struct{ src, want string }{
+		{`c=(a=1 b=2); typeset -C d=c; typeset -p d`, "typeset -C d=(a=1;b=2)\n"},
+		{`c=(a=1 b=2); d=(a=9); d=c; typeset -p d`, "typeset -C d=(a=1;b=2)\n"},
+		// The copy is independent afterwards, which is what makes it a copy
+		// rather than another name for the same tree.
+		{`c=(a=1); typeset -C d=c; d.a=9; printf '[%s]' "${c.a}" "${d.a}"`, "[1][9]"},
+		// The right-hand name decides the *kind*, so a scalar source leaves
+		// a scalar and an array source an array — the `-C` letter says how
+		// the value is read and not what the target ends up being.
+		{`x=5; typeset -C d=x; typeset -p d`, "d=5\n"},
+		{`a=(x y); typeset -C d=a; typeset -p d`, "typeset -a d=(x y)\n"},
+		{`typeset -A h=([k]=v); typeset -C d=h; typeset -p d`, "typeset -A d=([k]=v)\n"},
+		// A member is a name, so it is a source like any other.
+		{`c=(a=(p=1)); typeset -C d=c.a; typeset -p d`, "typeset -C d=(p=1)\n"},
+		{`c=(a=1); typeset -C d=c.a; typeset -p d`, "d=1\n"},
+		// A source nobody set takes the target with it rather than leaving
+		// an empty compound behind, which is the same statement
+		// Runner.moveParameter makes about a move with nothing to move.
+		{`d=hello; typeset -C d=nosuch; printf '[%s]' "$d"; [[ -v d ]] || echo unset`, "[]unset\n"},
+		// Text that is not a name at all is not a source, so the letter's
+		// own empty compound is what stands.
+		{`typeset -C d="not a name"; typeset -p d`, "typeset -C d=()\n"},
+		{`c=(a=1 b=2); typeset -C d=${c}; typeset -p d`, "typeset -C d=()\n"},
+		// The target is emptied before the source is read, which is the rule
+		// a self-copy states on its own.
+		{`c=(a=1); typeset -C d=(z=2); typeset -C d=c; typeset -p d`, "typeset -C d=(a=1)\n"},
+		{`c=(a=1); typeset -C c=c; typeset -p c`, "typeset -C c=()\n"},
+		// `+=` merges instead, with the source standing over the target.
+		{`c=(a=1); typeset -C d=(z=2); d+=c; typeset -p d`, "typeset -C d=(a=1;z=2)\n"},
+		{`c=(a=1 z=3); typeset -C d=(z=2); d+=c; typeset -p d`, "typeset -C d=(a=1;z=3)\n"},
+		// A member's attributes travel, because they are part of the
+		// compound's value; the root's do not, because they belong to the
+		// name holding it. Both rows measured.
+		{`c=(typeset -i n=5); typeset -C d=c; typeset -p d.n`, "typeset -i d.n=5\n"},
+		{`typeset -i x=7; typeset -C d=x; typeset -p d`, "d=7\n"},
+		// The nesting travels whole.
+		{`c=(a=1 b=(y=2)); typeset -C d=c; printf '[%s]' "${d.b.y}" "${!d.@}"`, "[2][d.a][d.b][d.b.y]"},
+		// The bare spelling reads only a compound out of the name: every
+		// other kind is the text it was written as, and a target that was
+		// not a compound is never a copy at all.
+		{`x=5; d=(a=9); d=x; typeset -p d`, "d=x\n"},
+		{`a=(p q); d=(a=9); d=a; typeset -p d`, "d=a\n"},
+		{`c=(a=1 b=2); d=c; typeset -p d`, "d=c\n"},
+		{`c=(a=1); typeset -C d=(z=2); d=nosuchname; typeset -p d`, "d=nosuchname\n"},
+	} {
+		if out, st := kshOut(t, c.src); out != c.want || st != 0 {
+			t.Errorf("%s\n got %q at %d\nwant %q at 0", c.src, out, st, c.want)
+		}
+	}
+}
+
+// A write *through a subscript* is not a whole-name write: the compound stops
+// reading as one and its members stay, where `c=(x y)` and `c=hello` take them
+// with the mark. Measured on ksh93u+ 2012-08-01, 2026-09-13.
+//
+// Two more facts come with it and neither follows from the other: the
+// compound's text is never what the write builds on — element 0 is absent
+// after `c[1]=z` — and the compound still occupies the base, which is why
+// `c+=(x y)` starts at subscript 1. See interp/compoundvariable.go.
+func TestASubscriptedWriteKeepsTheMembers(t *testing.T) {
+	for _, c := range []struct{ src, want string }{
+		{`c=(a=1); c[0]=z; typeset -p c`, "typeset -a c=(z)\n"},
+		{`c=(a=1); c[0]=z; printf '[%s]' "${c.a}" "${!c.@}"`, "[1][c.a]"},
+		{`c=(a=1); c[1]=z; typeset -p c`, "typeset -a c=([1]=z)\n"},
+		{`c=(a=1); c[1]=z; printf '[%s]' "${c.a}"`, "[1]"},
+		{`c=(a=1); c[0]+=z; typeset -p c`, "typeset -a c=(z)\n"},
+		{`c=(a=1); c+=(x y); typeset -p c`, "typeset -a c=([1]=x [2]=y)\n"},
+		{`c=(a=1); c+=(x y); printf '[%s]' "${c.a}"`, "[1]"},
+		{`typeset -C c; c+=(x y); typeset -p c`, "typeset -a c=([1]=x [2]=y)\n"},
+		// A scalar append is a whole-name write, so it drops them — and the
+		// tree's text is not what it joins either.
+		{`c=(a=1); c+=z; typeset -p c`, "c=z\n"},
+		{`c=(a=1); c+=z; printf '[%s]' "${c.a}"`, "[]"},
+		// The subtree goes with the parent even once the parent is an array,
+		// which is what keeps the mark after the reading is gone.
+		{`c=(a=1); c[0]=z; unset c; printf '[%s]' "${c.a}"`, "[]"},
+		// And a name inside it is listed inside its parent, so nowhere:
+		// `a=1; a.b=2; a=(x y)` writes `a.b=2` beside the array and this
+		// writes the array alone, which is the pair that says the filter
+		// asks the mark rather than the reading.
+		{`c=(a=1); c[0]=z; typeset -p c`, "typeset -a c=(z)\n"},
+	} {
+		if out, st := kshOut(t, c.src); out != c.want || st != 0 {
+			t.Errorf("%s\n got %q at %d\nwant %q at 0", c.src, out, st, c.want)
+		}
+	}
+}
+
+// An **empty** literal is a compound too, and the knock-ons are what make it
+// worth a test of its own: `c=()` is the ordinary way a script starts an
+// array, so reading it as a compound moves `${#c[@]}`, moves `${c[0]}`, and
+// moves where a later `+=` begins. Measured on ksh93u+ 2012-08-01,
+// 2026-09-13; the same spelling under every other dialect is the empty array
+// it always was, which TestAnEmptyLiteralIsAnArrayEverywhereElse holds.
+func TestAnEmptyLiteralIsACompound(t *testing.T) {
+	for _, c := range []struct{ src, want string }{
+		{`c=(); typeset -p c`, "typeset -C c=()\n"},
+		{`c=(); printf '%s\n' "$c"`, "(\n)\n"},
+		{`c=(); c.a=1; typeset -p c`, "typeset -C c=(a=1)\n"},
+		{`c=(); printf '%s\n' "${#c[@]}" "${!c[@]}"`, "1\n0\n"},
+		{`c=(); c+=(x y); typeset -p c`, "typeset -a c=([1]=x [2]=y)\n"},
+		{`c=(); [[ -v c ]] && echo set`, "set\n"},
+		// A prior declaration of the other kind does not change the reading.
+		{`typeset -a c; c=(); typeset -p c`, "typeset -C c=()\n"},
+		{`a=(x y); a=(); typeset -p a`, "typeset -C a=()\n"},
+		// The declaration's own letters do, and they reach the *parse*: the
+		// two readings take a `;` differently, and an empty pair of
+		// parentheses has no word in it to decide with.
+		{`typeset -C c=(); typeset -p c`, "typeset -C c=()\n"},
+		{`typeset -A c=(); printf '%s\n' "${#c[@]}"`, "0\n"},
+		{`typeset -a c=(); printf '%s\n' "${#c[@]}"`, "0\n"},
+		{`typeset -a c=(a=1 b=2); printf '%s\n' "${#c[@]}" "${c[0]}"`, "2\na=1\n"},
+		// `+=` with an empty body adds nothing to a name that is already a
+		// container, where it declares the kind over anything else.
+		{`a=(x y); a+=(); typeset -p a`, "typeset -a a=(x y)\n"},
+		{`typeset -A h=([k]=v); h+=(); typeset -p h`, "typeset -A h=([k]=v)\n"},
+		{`a=1; a+=(); typeset -p a`, "typeset -C a=()\n"},
+		{`unset a; a+=(); typeset -p a`, "typeset -C a=()\n"},
+	} {
+		if out, st := kshOut(t, c.src); out != c.want || st != 0 {
+			t.Errorf("%s\n got %q at %d\nwant %q at 0", c.src, out, st, c.want)
+		}
+	}
+}
+
+// And the letters refuse the body the other reading would have taken, which
+// is the half that says this is a parse and not a store: `typeset -C c=(x y)`
+// has a word in it that is no declaration, and `typeset -a c=(a=1; b=2)`
+// has a `;` where an element list ends.
+func TestTheDeclarationLettersDecideTheLiteral(t *testing.T) {
+	for _, c := range []struct{ src, want string }{
+		{`typeset -C c=(x y)`, `"x" unexpected`},
+		{`typeset -a c=(a=1; b=2)`, `"b=2" unexpected`},
+	} {
+		out, st := kshOut(t, c.src)
+		if !strings.Contains(out, c.want) || st == 0 {
+			t.Errorf("%s\n got %q at %d\nwant %q and a nonzero status", c.src, out, st, c.want)
+		}
+	}
+}
+
+// `a=()` is the ordinary way a script starts an array and it must keep being
+// one everywhere else, which is the regression the empty-literal reading is
+// one line away from. Asserted on the tree rather than on an output: what
+// distinguishes the two readings at run time is a store, and what distinguishes
+// them here is whether the parser produced a body at all.
+func TestAnEmptyLiteralIsAnArrayEverywhereElse(t *testing.T) {
+	members := func(t *testing.T, d syntax.Dialect) []*syntax.SimpleCmd {
+		t.Helper()
+		f, err := syntax.Parse("a=()", d)
+		if err != nil {
+			t.Fatal(err)
+		}
+		pipe, ok := f.Stmts[0].Expr.(*syntax.Pipeline)
+		if !ok || len(pipe.Cmds) != 1 {
+			t.Fatalf("a=() parsed as %T", f.Stmts[0].Expr)
+		}
+		call, ok := pipe.Cmds[0].(*syntax.SimpleCmd)
+		if !ok || len(call.Assigns) != 1 {
+			t.Fatalf("a=() parsed as %T", pipe.Cmds[0])
+		}
+		return call.Assigns[0].Members
+	}
+	if got := members(t, ksh.Dialect()); got == nil {
+		t.Errorf("ksh: a=() has no compound body, want an empty one")
+	} else if len(got) != 0 {
+		t.Errorf("ksh: a=() has %d body items, want none", len(got))
+	}
+	for _, d := range []struct {
+		name string
+		dia  syntax.Dialect
+	}{
+		{"bash", bash.Dialect()},
+		{"zsh", zsh.Dialect()},
+	} {
+		if got := members(t, d.dia); got != nil {
+			t.Errorf("%s: a=() has a compound body, want an array literal", d.name)
+		}
+	}
+}

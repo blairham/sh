@@ -1165,6 +1165,18 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 			return r.status
 		}
 		switch {
+		case hasValue && df.compoundVar:
+			// The value on a `-C` operand is the *name of a variable to copy
+			// from* rather than a value to store, and the kind travels with
+			// it: `typeset -C d=c` is a compound, `typeset -C d=x` over a
+			// scalar `x` is a plain scalar, and a name nobody set leaves the
+			// target unset. Ahead of the append branch because that spelling
+			// is not one this shell reaches — `typeset -C d+=c` is `d+:
+			// invalid variable name` there. See interp/compoundcopy.go.
+			r.compoundDeclarationValue(name, value)
+			if r.unspecified || r.ctl == controlExit {
+				return r.status
+			}
 		case hasValue && appends:
 			// `declare a+=2` joins what the name is holding, through
 			// whatever its attributes make of the join — see

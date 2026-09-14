@@ -69,3 +69,48 @@ func TestASubstringRangeIsReadAsFarAsItIsBlamed(t *testing.T) {
 		}
 	}
 }
+
+// A numeral whose leading part reads and whose tail does not is named once.
+//
+// Measured against ksh93u+ 2012-08-01 (2026-09-14): `$((1e3abc))` is
+// `ksh: 1e3abc: arithmetic syntax error`, and the expression is blamed whole
+// where the numeral is part of a longer one. We wrote the text twice —
+// `1e3abc: 1e3abc: arithmetic syntax error` — because this preset's
+// InvalidNumber carried a verb that the ArithError wrapper already supplies
+// (#2767).
+//
+// The shape matters and is why the doubling survived: `1e3abc` is the only
+// kind of operand that reaches InvalidNumber here. `42abc` and `1abc` fail
+// at their first letter and are worded through DigitTooGreatForBase, which
+// has no verb, so they read correctly throughout. Asserting the field's
+// value cannot catch this; asserting the sentence can.
+func TestANumeralWithAnUnreadableTailIsNamedOnce(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		// The reported case, and its whole-expression siblings: what stands
+		// in the leading position is the expression as written, never the
+		// operand that failed inside it.
+		{"1e3abc", "1e3abc: arithmetic syntax error"},
+		{"1e3abc+1", "1e3abc+1: arithmetic syntax error"},
+		{"1+1e3abc", "1+1e3abc: arithmetic syntax error"},
+		// The controls, which never doubled and must not start: these reach
+		// the same sentence by the integer route.
+		{"42abc", "42abc: arithmetic syntax error"},
+		{"1abc", "1abc: arithmetic syntax error"},
+	} {
+		if got, want := arithLine(t, tc.src), arithLoc+tc.want+"\n"; got != want {
+			t.Errorf("$((%s)): got %q, want %q", tc.src, got, want)
+		}
+	}
+}
+
+// The same text reached through a stored value, which is the second route the
+// report measured and the one that says the sentence and not one caller was
+// wrong.
+func TestAStoredValueWithAnUnreadableTailIsNamedOnce(t *testing.T) {
+	// runKsh names the shell `ksh` where arithLine's helper names it `sh`,
+	// so the prefix is spelled out rather than borrowed from arithLoc.
+	out, _ := runKsh(t, t.TempDir(), `x=1e3abc; echo "$((x))"`)
+	if got, want := out, "ksh: 1e3abc: arithmetic syntax error\n"; got != want {
+		t.Errorf("x=1e3abc; $((x)): got %q, want %q", got, want)
+	}
+}

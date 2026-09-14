@@ -2141,13 +2141,22 @@ func Diagnostics() interp.Diagnostics {
 		// measured 2026-09-11, `x=1abc; $((x+1))` and `x="1 2"; $((x+1))`
 		// are both `arithmetic syntax error`.
 		//
+		// A reason and nothing else, which is the field's contract:
+		// ArithError above supplies the text being blamed, and this sentence
+		// carrying a `%[1]s` of its own named it a second time — `$((1e3abc))`
+		// was `1e3abc: 1e3abc: arithmetic syntax error` against ksh93's one
+		// naming (#2767). Only a numeral whose *leading* part reads and whose
+		// tail does not reaches this field here, which is why the doubling
+		// took a shape as particular as `1e3abc` to see: every other
+		// unreadable literal is worded through DigitTooGreatForBase.
+		//
 		// It said `parameter not set` until #1629, which is the sentence a
 		// *name-shaped* value earns — and it earns it by being looked up and
 		// found unset, not by failing to be a number. Now that the lookup
 		// really happens (Semantics.ArithRecursedNameMustBeSet) the stand-in
 		// is not merely unnecessary: it was answering the wrong sentence for
 		// every value that is no name at all.
-		InvalidNumber: "%[1]s: arithmetic syntax error",
+		InvalidNumber: "arithmetic syntax error",
 		// No name in front of it and no `.:` either: ksh93 prints a usage
 		// line bare, the same way it prints `kill`'s.
 		DotNoOperand:       "Usage: . [ options ] name [arg ...]",

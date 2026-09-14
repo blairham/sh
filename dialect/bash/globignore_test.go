@@ -64,6 +64,13 @@ func TestGlobIgnoreWritesTheDotglobOption(t *testing.T) {
 		{`GLOBIGNORE='zzz'; shopt -u dotglob; printf "[%s]" *`, `[a.txt][b.txt][c.log]`},
 		{`GLOBIGNORE='zzz'; unset GLOBIGNORE; shopt dotglob`, "dotglob             \toff\n"},
 		{`shopt -s dotglob; unset GLOBIGNORE; shopt dotglob`, "dotglob             \toff\n"},
+		// And the row that says an assignment of *nothing* writes neither
+		// half. It has to start from the option off, because starting from
+		// it on is a state both readings of a null assignment agree about —
+		// leaving the switch alone and turning it on are the same answer
+		// there, and such a row would say only that the assignment was
+		// seen. Measured on bash 5.3.15 and bash 3.2.57, 2026-09-13.
+		{`GLOBIGNORE=; shopt dotglob`, "dotglob             \toff\n"},
 	} {
 		if out, _ := runBash(t, dir, tc.src); out != tc.want {
 			t.Errorf("%s = %q, want %q", tc.src, out, tc.want)
@@ -83,6 +90,31 @@ func TestGlobIgnoreFollowsTheMatchOptionsThatDecideAMiss(t *testing.T) {
 		{
 			"shopt -s failglob\nGLOBIGNORE='*.txt'\nprintf \"[%s]\" *.txt\necho done",
 			"bash: line 3: no match: *.txt\ndone\n",
+		},
+	} {
+		if out, _ := runBash(t, dir, tc.src); out != tc.want {
+			t.Errorf("%s = %q, want %q", tc.src, out, tc.want)
+		}
+	}
+}
+
+// TestGlobIgnoreFollowsTheNocaseglobOption is the fold, under the name this
+// shell gives it. The patterns are compared under whatever fold the
+// expansion itself is under rather than under one of their own, and the
+// second row is the control that says so: the same pattern takes nothing out
+// with the option off.
+//
+// Measured on bash 5.3.15, 2026-09-13, in this fixture — and **not** on bash
+// 3.2.57, which folds neither way here and lists all five names under both
+// settings. This is the one row in the file whose answer is 5.x's rather than
+// bash's. It is graded against the panel's bash, which is 5.3.15.
+func TestGlobIgnoreFollowsTheNocaseglobOption(t *testing.T) {
+	dir := globIgnoreDir(t)
+	for _, tc := range []struct{ src, want string }{
+		{`shopt -s nocaseglob; GLOBIGNORE='*.TXT'; printf "[%s]" *`, `[.dot][c.log]`},
+		{
+			`shopt -u nocaseglob; GLOBIGNORE='*.TXT'; printf "[%s]" *`,
+			`[.dot][.hid.txt][a.txt][b.txt][c.log]`,
 		},
 	} {
 		if out, _ := runBash(t, dir, tc.src); out != tc.want {

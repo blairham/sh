@@ -41,6 +41,18 @@ func (r *Runner) ignoredNamePatterns() []string {
 		// is nothing, so `:b` and `b:` ignore exactly what `b` ignores.
 		// Measured, and it is what keeps a value ending in a colon from
 		// deleting every word an expansion produced.
+		//
+		// **A mutation that deletes this guard survives**, and is recorded
+		// so the next reader does not go hunting for the row that would
+		// kill it: matchPattern answers false for an empty pattern against
+		// every word an expansion can produce, so an empty element kept is
+		// an element that never matches. The guard says the intent rather
+		// than carrying it, and it is what a matcher answering `""`
+		// differently would need. The rows *are* falsifiable against the
+		// reading this names — a mutant making an empty element `*` is
+		// killed by `an empty element ignores nothing` and by `a leading
+		// colon ignores nothing either`, which is the reading a shell gets
+		// wrong here and the one they exist for.
 		if p != "" {
 			out = append(out, p)
 		}
@@ -81,8 +93,15 @@ func (r *Runner) ignoredNameMatches(parts []string, pattern string) bool {
 	for i, piece := range pieces {
 		o := r.patternOpts(piece, parts[i])
 		// The same fold pathname expansion itself is under, which is
-		// measured rather than assumed: with `nocaseglob` on, an ignore
-		// pattern of `*.TXT` takes `a.txt` out, and with it off it does not.
+		// measured rather than assumed: on bash 5.3.15, with `nocaseglob`
+		// on, an ignore pattern of `*.TXT` takes `a.txt` out, and with it
+		// off it does not. Pinned both ways in
+		// TestIgnoredNamesFoldCaseWithTheExpansion — one row alone would be
+		// answered by a filter that always folded or by one that never did.
+		//
+		// bash 3.2.57 folds neither way here, so this is 5.x's answer and
+		// not bash's. No preset is bash 3.2, so it is recorded rather than
+		// given an axis.
 		o.fold = fold
 		o.foldWide = o.fold && r.caseFoldReachesBeyondASCII(piece, parts[i])
 		if !matchPattern(piece, parts[i], o) {

@@ -50,8 +50,14 @@ func ignoring(dir string) func(*Runner) {
 // TestIgnoredNamesTakeWordsOutOfAPathnameExpansion.
 //
 // Measured on bash 5.3.15 and bash 3.2.57, 2026-09-13, in this fixture. The
-// two builds answer identically throughout, which is why neither is named in
-// the rows: it is the facility and not a version of it.
+// two builds answer alike on every row here **but one**, so the version is
+// named where it matters rather than nowhere: on `a star in the pattern does
+// not cross a separator` bash 3.2.57 answers `[sub/.y]`, having let the `*`
+// cross the `/` and taken `sub/x.txt` out. The separator rule is 5.x's.
+// (The other place the builds part is the fold — see
+// TestIgnoredNamesFoldCaseWithTheExpansion.) No preset is bash 3.2, so both
+// are recorded rather than made an axis; the golden record carries bash32's
+// own answer on the corpus row for this.
 func TestIgnoredNamesTakeWordsOutOfAPathnameExpansion(t *testing.T) {
 	dir := ignoreTree(t)
 	for _, tc := range []struct{ name, src, want string }{
@@ -180,6 +186,42 @@ func TestIgnoredNamesEmptiedByTheOptionsThatDecideAMiss(t *testing.T) {
 	}
 }
 
+// TestIgnoredNamesFoldCaseWithTheExpansion pins the composition the filter
+// has with the fold the expansion itself is under: one question and not two,
+// so the patterns fold exactly where the walk's own do.
+//
+// Both rows are needed and neither alone would do. A filter that always
+// folded answers the first and fails the second; one that never folded
+// answers the second and fails the first.
+//
+// Measured on bash 5.3.15, 2026-09-13, with `nocaseglob`. **bash 3.2.57 does
+// not fold here** — `*.TXT` takes nothing out under either setting of the
+// option there — so this is 5.x's answer rather than bash's, and is the
+// second of the two rules in this file where the two builds part. No preset
+// is bash 3.2, so the divergence is recorded and not given an axis.
+func TestIgnoredNamesFoldCaseWithTheExpansion(t *testing.T) {
+	dir := ignoreTree(t)
+	for _, tc := range []struct {
+		name string
+		fold bool
+		want string
+	}{
+		{"the patterns fold where the expansion folds", true, `[.dot][c.log][sub]`},
+		{
+			"and do not where it does not", false,
+			`[.dot][.hid.txt][a.txt][b.txt][c.log][sub]`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, _ := run(t, `GLOBIGNORE='*.TXT'; printf "[%s]" *`,
+				withOption(GlobFoldsCase, tc.fold, ignoring(dir)))
+			if out != tc.want {
+				t.Errorf("with fold %v = %s, want %s", tc.fold, out, tc.want)
+			}
+		})
+	}
+}
+
 // TestIgnoredNamesFollowTheAssignmentAndNotTheValue.
 //
 // The one surprising thing about the facility, and the reason this shell
@@ -244,6 +286,19 @@ func TestIgnoredNamesWriteTheHiddenNameSwitch(t *testing.T) {
 			"assigning nothing leaves the switch where it was",
 			false, `GLOBIGNORE='zzz'; GLOBIGNORE=; printf "[%s]" *`,
 			`[.dot][.hid.txt][a.txt][b.txt][c.log][sub]`,
+		},
+		{
+			// And the row that makes the one above an assertion. It starts
+			// from the switch already **on**, so "leaves it where it was"
+			// and "turns it on" answer it alike — it proves the null
+			// assignment was noticed and nothing more. This one starts from
+			// the switch off, which is the only place the two part company.
+			//
+			// Measured on bash 5.3.15 and bash 3.2.57, 2026-09-13:
+			// `GLOBIGNORE=` lists no hidden name and reports `dotglob` off.
+			"assigning nothing does not turn it on either",
+			false, `GLOBIGNORE=; printf "[%s]" *`,
+			`[a.txt][b.txt][c.log][sub]`,
 		},
 		{
 			// And the unset writes it off whoever turned it on — here the

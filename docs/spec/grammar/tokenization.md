@@ -513,6 +513,10 @@ inside such a body reads the same. So a spliced token carries the
 position of the word it replaced, every position still points into the
 real input, and there is no position map to keep.
 
+The model has one seam, and what crosses it is below: a construct the body
+**left open** is continued over the input, because that is the one thing a
+body lexed between its own edges cannot be asked about.
+
 The one place the two models are distinguishable from outside is a body
 containing a **newline**, and `Dialect.AliasBodyCountsLines` is the axis.
 
@@ -650,6 +654,59 @@ that expand aliases in scripts:
   following word eligible, not the value's own second word.
 - **A value that is empty or all blanks leaves nothing behind**, and the
   command becomes whatever followed it.
+
+### A construct the body opens reaches the rest of the line
+
+The token model above is right about positions and right about keywords,
+and there is one question it cannot answer from inside the body: what the
+body **left open**. Substitution puts the body in the input the shell is
+reading, and lexing carries on over the join, so a quote the body opens is
+still open when the rest of the line is read — and a quote nothing closes
+runs to the end of the input and is an unterminated quote.
+
+    alias q='echo "'
+    echo one
+    q hello"          →  one, ` hello`, two — 0 in all seven columns
+    echo two
+
+    alias a='echo "x'
+    echo one
+    a                 →  one, then a refusal in all seven
+    echo two
+
+Measured 2026-09-13 from a script file, because zsh expands no alias under
+`-c`, across dash, bash 5.3, that binary as `sh`, bash 3.2, ksh93, zsh and
+BusyBox ash. The first is `0` everywhere, with bash 3.2 writing the blank
+twice; the second is a refusal everywhere, at 2 in five columns, 1 in zsh
+and 3 in ksh93, and the line each names is the alias word's in four of them
+and the end of the input in zsh and dash.
+
+**Not a rule about quotes.** It is the lexer crossing the seam, so it holds
+for everything the lexer can be inside: both spellings of a command
+substitution carry the same way, and `alias q='echo $('` used as
+`q echo hi)` prints `hi` in all seven. The second direction is the reason
+it matters beyond the construct — a shell that runs `alias a='echo "x'; a`
+is closing a quote the script never closed and running a command the author
+did not write.
+
+Two consequences of the first rule follow from it rather than being rules
+of their own:
+
+- The blank a body may end **inside** an open construct is not the
+  trailing blank that makes the next word eligible. `alias q='echo "x '`
+  used as `q b"` is `x  b` in all seven columns and never the expansion of
+  `b`: the word after the alias word is inside the quote and was never a
+  word at all.
+- A snippet like the first one **does not parse on its own**, and is right
+  not to: until the `alias` line has run, the closing `"` belongs to
+  nothing. The reference shells' own `-n` refuses the same text for the
+  same reason, and the corpus marks such a case `ExpansionCompletes`.
+
+The seam is crossed only where the text after the alias word is the
+**input's**. A body expanded from inside another body's expansion has that
+body's remaining tokens in front of it, and a token keeps no text to be
+read again, so the carry is declined there; see #2705 for the panel rows
+on the nested arrangement.
 
 ### The table reaches every text this shell reads, and the *option* is its only gate
 

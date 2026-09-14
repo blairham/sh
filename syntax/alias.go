@@ -21,6 +21,15 @@ import "strings"
 // word it replaced, every position still points into the real input, and
 // there is no position mapping to keep.
 //
+// The model has one seam and [Parser.carryOpenWord] is it. A body lexed
+// between its own edges cannot be asked what it left *open*, and every
+// column in the panel answers that question textually: a quote the body
+// opens is still open when the rest of the line is read, and one nothing
+// closes is an unterminated quote (#2685). So the body's unfinished tail is
+// read again joined to the input, and what that reading took of the input is
+// skipped in the input's own lexer — one construct spanning the seam,
+// without the positions moving.
+//
 // The one place the two models are visible from outside is a body containing
 // a newline, and [Dialect.AliasBodyCountsLines] is the axis. Where it is on,
 // the body's newlines are lines of the input: a command on the body's second
@@ -386,9 +395,11 @@ func (p *Parser) carryOpenWord(last *Token, tail string) {
 	rest := p.lex.src[p.lex.off:]
 	join := NewLexer(tail+rest, p.dialect)
 	t := join.Next()
-	if int(t.End.Offset) <= len(tail) {
-		// Nothing of the input was taken, so there is no seam to cross and
-		// the body stands as it was lexed.
+	if !join.Incomplete() && int(t.End.Offset) <= len(tail) {
+		// The joined reading finished without taking any of the input, so
+		// there was no seam to cross: the route that ends an unterminated
+		// quote at the end of the input has already ended this one, and the
+		// body stands as it was lexed. See [Dialect.CloseQuotesAtEOF].
 		return
 	}
 	// The blank an unfinished body may end in is inside the construct rather
@@ -399,7 +410,7 @@ func (p *Parser) carryOpenWord(last *Token, tail string) {
 	if join.Incomplete() {
 		// Nothing in the input closes it either. The construct has swallowed
 		// the rest of the file, which is what every column reports and is the
-		// whole of direction B.
+		// whole of the second half of #2685.
 		p.lex.skipOver(len(rest))
 		p.lex.adoptOpenConstruct(join, len(tail), last.Pos)
 	} else {

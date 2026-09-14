@@ -294,6 +294,13 @@ type Case struct {
 	// name will turn into. bash's own `-n` refuses the same text for the same
 	// reason, measured.
 	//
+	// The refusal is not always the parser's. A body ending inside a quote
+	// leaves the quote's other half in the input — `alias q='echo "'` then
+	// `q hello"` — so the read runs out at the *lexer*, with nothing open
+	// that the closing mark could belong to (#2685). Same mark, because it is
+	// the same claim: the text is a program once something has been
+	// substituted into it and not before.
+	//
 	// It is not [SyntaxError], and keeping the two apart is the point rather
 	// than a nicety. A SyntaxError case is one the reference shells reject
 	// and this parser must reject too; this is one every column in the panel
@@ -18434,6 +18441,72 @@ ab { echo "[$0]"; }
 a
 b`,
 		Why:                "the second inside reading, and the one that needs both halves of the seam at once: the names and the `(` come from the body and the `)` is the last token of it, with the brace in the input. zsh defines both names and prints `[a]` and `[b]`; nothing else in the panel has a definition that takes more than one name at all",
+		ExpansionCompletes: true,
+		Script:             true,
+	},
+	{
+		ID: "alias/a-quote-a-body-opens-reaches-the-rest-of-the-line", Category: "alias",
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias q='echo "'
+echo one
+q hello"
+echo two`,
+		Why:                "substitution replaces the alias word with the alias *text* in the input the shell is reading, and lexing carries on over the join — so a quote the body opens is still open when the rest of the line is read. Every column prints ` hello` between `one` and `two` and exits 0; bash 3.2 writes the blank twice, which is the same reading with its own spacing. Here the body was lexed on its own, so the quote could not leave it, and the `\"` left in the input was an unterminated quote at 2. Written from a file, because zsh expands no alias under `-c` (#2685)",
+		ExpansionCompletes: true,
+		Script:             true,
+	},
+	{
+		ID: "alias/a-single-quote-a-body-opens-reaches-it-too", Category: "alias",
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias q="echo '"
+echo one
+q hello'
+echo two`,
+		Why:                "the other quote, and a different scanner: single quotes protect everything and have no escape inside them, so nothing about the first row's reading carries over to this one by construction. Unanimous ` hello` at 0 across the panel, with bash 3.2's second blank again",
+		ExpansionCompletes: true,
+		Script:             true,
+	},
+	{
+		ID: "alias/a-substitution-a-body-opens-reaches-it-as-well", Category: "alias",
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias q='echo $('
+echo one
+q echo hi)
+echo two`,
+		Why:                "the seam is the lexer's rather than quoting's, and this is the row that says so: a body ending inside `$(` takes the rest of its command from the input in all seven columns, printing `hi`. It is also the row that would move if the carry were written for quote characters alone — the two quotes above would pass a fix that reads a quote table, and this would not",
+		ExpansionCompletes: true,
+		Script:             true,
+	},
+	{
+		ID: "alias/a-quote-a-body-leaves-open-is-unterminated", Category: "alias",
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias a='echo "x'
+echo one
+a
+echo two`,
+		Why:             "the other direction of the same rule, and the worse half: a quote the body leaves open runs to the end of the input and is an unterminated quote. `one` and then a refusal in every column — 2 in bash 5.3, that binary as `sh`, bash 3.2, dash and BusyBox ash, 1 in zsh, 3 in ksh93 — and `two` is inside the quote and never runs. Here it exited 0 having printed `x` and `two`, which is this shell closing a quote the script never closed and running a command the author did not write. The four diagnostics are four sentences at three statuses and the lines they name split four to two, the opener's against the end of the input; that spread belongs to #2324",
+		LayoutSensitive: true,
+		Script:          true,
+	},
+	{
+		ID: "alias/a-body-that-closes-its-own-quotes-takes-nothing", Category: "alias",
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias q='echo "a"'
+echo one
+q b
+echo two`,
+		Why:    "the control on the three rows above, and it is what keeps the carry from being a fix that over-reaches: a body whose quoting closes inside it leaves the input alone, so `b` is a word of its own and not part of a quoted one. `one`, `a b`, `two` at 0 everywhere",
+		Script: true,
+	},
+	{
+		ID: "alias/a-blank-inside-an-open-quote-is-not-the-trailing-blank", Category: "alias",
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias b='BEE'
+alias q='echo "x '
+echo one
+q b"
+echo two`,
+		Why:                "the two rules of this family meeting: a value ending in a blank makes the next word eligible for expansion in turn, and a blank *inside* a quote the body opened is not that blank. Every column prints `x  b` rather than `x  BEE`, so the word after the alias word is inside the quote and was never a word. The sibling row `alias/a-body-that-closes-its-own-quotes-takes-nothing` is the same shape with the quote closed, where the trailing blank does its usual work",
 		ExpansionCompletes: true,
 		Script:             true,
 	},

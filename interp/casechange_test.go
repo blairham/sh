@@ -530,3 +530,45 @@ func TestAWideFoldIsTheLowerCaseMapAndNotASwap(t *testing.T) {
 		})
 	}
 }
+
+// The narrowed fold writes private-use characters in place of the ones the
+// engine must not fold, and a subject that already holds one of those must
+// not be caught by a stand-in handed out for a different character.
+//
+// The block is skipped rather than counted through for that reason, and this
+// is the row that says so: with the first character of the block sitting in
+// the subject, `é` must still not match `É`, and the block character must
+// still match only itself.
+func TestANarrowedRegexFoldDoesNotCollideWithAPrivateUseSubject(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		// The subject is the first character of the block and nothing else,
+		// so a stand-in handed out by counting from the start of the block
+		// would be exactly it — and `é` would match a character it has
+		// nothing to do with.
+		{"a stand-in is not a character the subject holds", "[[ \U000F0000 =~ ^é$ ]] && echo hit || echo miss", "miss"},
+		// And the block character still matches itself, so the skipping is
+		// not simply refusing to rewrite anything.
+		{"the block character still matches itself", "[[ \U000F0000 =~ ^\U000F0000$ ]] && echo hit || echo miss", "hit"},
+		{"and the narrowing still holds beside it", "[[ \U000F0000É =~ ^\U000F0000é$ ]] && echo fold || echo exact", "exact"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f, err := syntax.Parse(tc.src, syntax.Core())
+			if err != nil {
+				t.Fatalf("parse %q: %v", tc.src, err)
+			}
+			var buf bytes.Buffer
+			sem := permissive()
+			r := newTestRunner(t, &Runner{
+				Stdout: &buf, Stderr: &buf, Semantics: &sem,
+				Vars: map[string]string{"LC_ALL": "C"}, Env: []string{},
+			})
+			r.SetMatchOption(RegexFoldsCase, true)
+			if _, rerr := r.Run(context.Background(), f); rerr != nil {
+				t.Fatal(rerr)
+			}
+			if got := strings.TrimSpace(buf.String()); got != tc.want {
+				t.Errorf("%s: got %q, want %q", tc.src, got, tc.want)
+			}
+		})
+	}
+}

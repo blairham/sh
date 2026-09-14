@@ -1711,7 +1711,9 @@ func matchBracket(p string, c string, o *patternOpts) (rest string, ok bool) {
 				// does reach a class inside a `=~` expression. This
 				// implementation folds it, which is its own measurement and
 				// its own defect; taking that past ASCII would only make it
-				// bigger. A range is the neighbor that does fold, and folds
+				// bigger. #2716 has the table, including the two `/bin/bash`
+				// columns disagreeing with each other about it. A range is
+				// the neighbor that does fold, and folds
 				// wide — `[[ K == [a-z] ]]` matches, the Kelvin sign by way
 				// of its ASCII lower case.
 				if !frozen &&

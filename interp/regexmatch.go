@@ -77,7 +77,62 @@ func (r *Runner) regexFold() string {
 // engine must not fold. Plane 15 is private use throughout, so nothing in it
 // is a letter, nothing in it has a case, and `(?i)` leaves every one of them
 // alone.
-const caselessStandInBase = 0xF0000
+const (
+	caselessStandInFirst = 0xF0000
+	caselessStandInLast  = 0xFFFFD
+)
+
+// standIns hands out the characters a narrowed fold writes in place of the
+// ones the engine must not fold.
+//
+// present is every character of the operands that falls in the block, and it
+// is why the block is not simply counted through: a private-use character an
+// operand actually holds must not be handed out as a stand-in for a different
+// character, or the two would match each other. Skipping what is there rather
+// than rewriting it as well is what keeps the number of stand-ins bounded by
+// the operands' *cased* characters.
+type standIns struct {
+	of      map[string]rune
+	present map[rune]bool
+	next    rune
+}
+
+func newStandIns(operands ...string) *standIns {
+	m := &standIns{of: map[string]rune{}, present: map[rune]bool{}, next: caselessStandInFirst}
+	for _, s := range operands {
+		for _, c := range s {
+			if c >= caselessStandInFirst && c <= caselessStandInLast {
+				m.present[c] = true
+			}
+		}
+	}
+	return m
+}
+
+// pick is the stand-in for one character, the same one every time it is
+// asked, so that an expression and a subject rewritten one after the other
+// are still about each other.
+//
+// It reports false when the block has no character left that the operands do
+// not already hold, and the caller then leaves the character as it stands —
+// the un-narrowed fold, which is where this began. That needs an operand
+// holding all 65,534 characters of plane 15, so it is a degradation and not
+// an error: there is nothing here for a script to have done wrong.
+func (m *standIns) pick(unit string) (rune, bool) {
+	if c, ok := m.of[unit]; ok {
+		return c, true
+	}
+	for m.next <= caselessStandInLast {
+		c := m.next
+		m.next++
+		if m.present[c] {
+			continue
+		}
+		m.of[unit] = c
+		return c, true
+	}
+	return 0, false
+}
 
 // regexOperands resolves the pair a `=~` evaluation hands to the engine: the
 // expression to compile, the subject to match it against, and — where the two
@@ -136,7 +191,7 @@ func (r *Runner) regexOperands(pat, subject string) (expr, subj string, back []i
 	if fold == "" || r.caseFoldReachesBeyondASCII(pat, subject) {
 		return fold + pat, subject, nil
 	}
-	stand := map[string]rune{}
+	stand := newStandIns(pat, subject)
 	subj, back = standInFor(subject, stand)
 	expr, _ = standInFor(pat, stand)
 	return fold + expr, subj, back
@@ -151,12 +206,7 @@ func (r *Runner) regexOperands(pat, subject string) (expr, subj string, back []i
 // end so that the end of a match maps as well as its start. It is nil when
 // nothing was rewritten, which is the answer for every subject that holds no
 // cased character above ASCII.
-//
-// The block cannot run out. A stand-in is asked for once per *distinct*
-// character, only characters with a simple case mapping are asked about, and
-// Unicode has some thousands of those against plane 15's 65,534 — so there is
-// no exhaustion branch here, because one could not be reached to be tested.
-func standInFor(s string, stand map[string]rune) (string, []int) {
+func standInFor(s string, stand *standIns) (string, []int) {
 	if isASCII(s) {
 		return s, nil
 	}
@@ -176,12 +226,16 @@ func standInFor(s string, stand map[string]rune) (string, []int) {
 			i += w
 			continue
 		}
-		rewrote = true
-		in, ok := stand[unit]
+		in, ok := stand.pick(unit)
 		if !ok {
-			in = rune(caselessStandInBase + len(stand))
-			stand[unit] = in
+			b.WriteString(unit)
+			for j := 0; j < w; j++ {
+				back = append(back, i)
+			}
+			i += w
+			continue
 		}
+		rewrote = true
 		n := b.Len()
 		b.WriteRune(in)
 		for j := n; j < b.Len(); j++ {

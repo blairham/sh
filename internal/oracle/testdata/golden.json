@@ -193366,6 +193366,57 @@
         "TimedOut": false
       }
     },
+    "trap/a-function-named-for-a-condition-is-the-handler": {
+      "ash": {
+        "Stdout": "done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "caught~done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "trap/a-handler-and-a-reset-leave-a-child-the-default": {
       "ash": {
         "Stdout": "st=143",
@@ -193571,6 +193622,57 @@
         "TimedOut": false
       }
     },
+    "trap/a-reset-takes-the-trap-function-away": {
+      "ash": {
+        "Stdout": "done",
+        "Stderr": "\u003cshell\u003e: trap: line 0: ZERR: invalid signal specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "done",
+        "Stderr": "\u003cshell\u003e: line 1: trap: ZERR: invalid signal specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "done",
+        "Stderr": "\u003cshell\u003e: line 1: trap: ZERR: invalid signal specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "done",
+        "Stderr": "\u003cshell\u003e: line 0: trap: ZERR: invalid signal specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "done",
+        "Stderr": "trap: ZERR: bad trap",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "done",
+        "Stderr": "\u003cshell\u003e: trap: ZERR: bad trap",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "trap/a-reset-with-no-ignore-leaves-a-child-the-default": {
       "ash": {
         "Stdout": "st=143",
@@ -193667,6 +193769,159 @@
       },
       "zsh": {
         "Stdout": "D:[]~one",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "trap/a-trap-function-is-handed-the-condition-number": {
+      "ash": {
+        "Stdout": "body",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "body",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "body",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "body",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "body",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "body",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "body~E:0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "trap/a-trap-function-lists-as-the-function": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "TRAPZERR () {~\techo Z~}",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "trap/a-trap-function-name-is-read-case-sensitively": {
+      "ash": {
+        "Stdout": "f~done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "f~done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "f~done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "f~done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "f~done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "f~done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "f~done",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -195516,6 +195771,57 @@
         "TimedOut": false
       }
     },
+    "trap/removing-the-trap-function-untraps-the-condition": {
+      "ash": {
+        "Stdout": "done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "trap/reset-restores-the-default": {
       "ash": {
         "Stdout": "",
@@ -196033,6 +196339,108 @@
         "TimedOut": false
       }
     },
+    "trap/the-err-trap-fires-once-for-a-nested-failure": {
+      "ash": {
+        "Stdout": "E~E~done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "E~E~done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "E~E~done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "E~E~done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "done",
+        "Stderr": "trap: ERR: bad trap",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "E~E~E~done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "E~E~done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "trap/the-listing-echoes-the-name-the-condition-was-given": {
+      "ash": {
+        "Stdout": "trap -- 'echo E' ERR",
+        "Stderr": "\u003cshell\u003e: trap: line 0: ZERR: invalid signal specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "trap -- 'echo E' ERR",
+        "Stderr": "\u003cshell\u003e: line 1: trap: ZERR: invalid signal specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "trap -- 'echo E' ERR",
+        "Stderr": "\u003cshell\u003e: line 1: trap: ZERR: invalid signal specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "trap -- 'echo E' ERR",
+        "Stderr": "\u003cshell\u003e: line 0: trap: ZERR: invalid signal specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "trap: ZERR: bad trap~trap: ERR: bad trap",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "trap -- 'echo E' ERR",
+        "Stderr": "\u003cshell\u003e: trap: ZERR: bad trap",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "trap -- 'echo E' ZERR~trap -- 'echo E' ERR",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "trap/the-return-trap-is-carried-into-an-err-body": {
       "ash": {
         "Stdout": "",
@@ -196186,6 +196594,57 @@
         "TimedOut": false
       }
     },
+    "trap/the-trap-command-takes-the-trap-function-away": {
+      "ash": {
+        "Stdout": "done~\u003cshell\u003e: functions: not found~fn=127",
+        "Stderr": "\u003cshell\u003e: trap: line 0: ZERR: invalid signal specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "done~\u003cshell\u003e: line 1: functions: command not found~fn=127",
+        "Stderr": "\u003cshell\u003e: line 1: trap: ZERR: invalid signal specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "done~\u003cshell\u003e: line 1: functions: command not found~fn=127",
+        "Stderr": "\u003cshell\u003e: line 1: trap: ZERR: invalid signal specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "done~\u003cshell\u003e: functions: command not found~fn=127",
+        "Stderr": "\u003cshell\u003e: line 0: trap: ZERR: invalid signal specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "done~\u003cshell\u003e: 1: functions: not found~fn=127",
+        "Stderr": "trap: ZERR: bad trap",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "done~TRAPZERR() { echo Z; };fn=0",
+        "Stderr": "\u003cshell\u003e: trap: ZERR: bad trap",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "T~done~T~fn=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "trap/wait-cut-short-by-a-signal": {
       "ash": {
         "Stdout": "T~st=138",
@@ -196333,6 +196792,159 @@
       },
       "zsh": {
         "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "trap/zerr-and-err-are-one-condition": {
+      "ash": {
+        "Stdout": "caught~caught~done",
+        "Stderr": "\u003cshell\u003e: trap: line 0: ZERR: invalid signal specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "caught~caught~done",
+        "Stderr": "\u003cshell\u003e: line 1: trap: ZERR: invalid signal specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "caught~caught~done",
+        "Stderr": "\u003cshell\u003e: line 1: trap: ZERR: invalid signal specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "caught~caught~done",
+        "Stderr": "\u003cshell\u003e: line 0: trap: ZERR: invalid signal specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "done",
+        "Stderr": "trap: ERR: bad trap~trap: ZERR: bad trap",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "caught~caught~done",
+        "Stderr": "\u003cshell\u003e: trap: ZERR: bad trap",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "trap/zerr-is-suppressed-where-a-failure-is-tested": {
+      "ash": {
+        "Stdout": "done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "Z~done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "trap/zerr-names-the-err-condition": {
+      "ash": {
+        "Stdout": "done",
+        "Stderr": "\u003cshell\u003e: trap: line 0: ZERR: invalid signal specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "done",
+        "Stderr": "\u003cshell\u003e: line 1: trap: ZERR: invalid signal specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "done",
+        "Stderr": "\u003cshell\u003e: line 1: trap: ZERR: invalid signal specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "done",
+        "Stderr": "\u003cshell\u003e: line 0: trap: ZERR: invalid signal specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "done",
+        "Stderr": "trap: ZERR: bad trap",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "done",
+        "Stderr": "\u003cshell\u003e: trap: ZERR: bad trap",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "caught~done",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

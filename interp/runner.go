@@ -1893,6 +1893,19 @@ type Runner struct {
 	errTrap    *string
 	debugTrap  *string
 	returnTrap *string
+	// errTrapSpelling is the word the ERR trap was last named by, which one
+	// dialect echoes back in its listing rather than canonicalizing: there
+	// the condition answers to both `ERR` and `ZERR`, and `trap … ZERR;
+	// trap` writes ZERR where `trap … ERR; trap` writes ERR. Empty until
+	// something names it, and the canonical name is what a listing prints
+	// then. See Semantics.TrapErrConditionIsAlsoZERR.
+	errTrapSpelling string
+	// trapFuncs is the condition each `TRAP…` function stands for, keyed by
+	// the canonical condition and holding the function's name. Only the
+	// dialect that reads a function name as a trap ever puts anything here
+	// — see trapfunction.go — and the entry is what makes the listing print
+	// the function rather than the action text the firing runs.
+	trapFuncs map[string]string
 	// errTrapFrame and debugTrapFrame are the function frame each trap was
 	// set in, zero for the top level. The dialect that does not carry
 	// these traps into functions suppresses them only inside a function

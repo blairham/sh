@@ -23293,4 +23293,64 @@ echo "st=$?"`,
 		Snippet: "x=(p q) 2>/dev/null\nx[@]=Z 2>&1; echo \"st=$? n=${#x[@]} [${x[*]}]\"\ny=(p q) 2>/dev/null\ny[*]+=Z 2>&1; echo \"st=$? [${y[*]}]\"\ntypeset -A m 2>/dev/null; m[k]=v\nm[@]=Z 2>&1; echo \"st=$? [${m[@]}]\"\necho tail",
 		Why:     "`a[@]=Z` and `a[*]=Z` — the whole-array spelling on the **left** of an assignment, which every shell with arrays reads and no two read alike. zsh replaces the name with the one value (`n=1`) and adds one element for `+=`; bash calls it `x[@]: bad array subscript` at 1 over an indexed array and takes the identical spelling over a *table* as an ordinary key at 0; ksh93 refuses both as `@: invalid subscript in assignment` and ends the input; zsh refuses the table half by name as `attempt to set slice of associative array` and ends the input too. So bash and zsh swap sides between the array question and the table one, which is what says the two are separate axes rather than one. The commands are separated by **newlines** on purpose: bash gives up the rest of a command *list* here, so a `;`-separated probe shows the same cell as ksh93's script-ending refusal and cannot tell the two costs apart -- `tail` is the field that does. This shell answered every array row with `bad math expression: illegal character: @`, which is the arithmetic reader complaining about a subscript nobody meant as arithmetic, and stored a key literally named `@` for the table row, silently, at 0. See Semantics.WholeArraySubscriptAssigningAnArray and WholeArraySubscriptAssigningATable (#2285)",
 	},
+	{
+		ID: "trap/zerr-names-the-err-condition", Category: "traps and exit",
+		Snippet: `trap 'echo caught' ZERR; false; echo done`,
+		Why:     "the condition zsh's own documentation calls ZERR, which is the name a zsh startup file writes. zsh takes it and fires the handler after the failing command; the other columns have no such word and refuse it the way each refuses any word naming no signal, dash included, which has no ERR condition under either name. This shell answered `undefined signal: ZERR` in the zsh column too, so a real `~/.zshrc` line was refused by the shell claiming to be zsh (#2771)",
+	},
+	{
+		ID: "trap/zerr-and-err-are-one-condition", Category: "traps and exit",
+		Snippet: `trap 'echo caught' ERR; trap - ZERR; false; echo done`,
+		Why:     "the two names are one slot rather than two conditions: a handler set under ERR is taken away by a reset naming ZERR, so nothing fires. Written this way round because the opposite order proves nothing -- a shell holding two independent conditions would also print nothing if the reset happened to clear the one that was set. The columns without the second name refuse the reset and keep firing, which is the visible difference",
+	},
+	{
+		ID: "trap/the-listing-echoes-the-name-the-condition-was-given", Category: "traps and exit",
+		Snippet: `trap 'echo E' ZERR; trap; trap 'echo E' ERR; trap`,
+		Why:     "and the listing says which of the two names the script used rather than canonicalizing to one: zsh writes ZERR after the first setting and ERR after the second, for a condition that is the same slot throughout. A shell that stored a canonical name would print the same word twice, which is what this one did",
+	},
+	{
+		ID: "trap/a-function-named-for-a-condition-is-the-handler", Category: "traps and exit",
+		Snippet: `TRAPZERR() { echo caught; }; false; echo done`,
+		Why:     "the spelling that fails **silently** everywhere it is not implemented, which is why it is worth a row of its own: a function declaration parses in every column, so a shell without the convention defines TRAPZERR, never calls it, and carries on as though the handler were installed. zsh calls it after the failing command. The other columns print `done` alone -- correctly there, since none of them reads a function name as a condition -- and this shell printed `done` in the zsh column too (#2771)",
+	},
+	{
+		ID: "trap/a-trap-function-lists-as-the-function", Category: "traps and exit",
+		Snippet: `TRAPZERR() { echo Z; }; trap`,
+		Why:     "what `trap` prints for a handler spelled as a function: the function itself, in the words a function listing uses, rather than a `trap -- action CONDITION` line. There is no action text to print, and the shell says so. The columns without the convention have nothing trapped and print nothing",
+	},
+	{
+		ID: "trap/the-trap-command-takes-the-trap-function-away", Category: "traps and exit",
+		Snippet: `TRAPZERR() { echo Z; }; trap 'echo T' ZERR; false; echo done; functions TRAPZERR 2>&1; echo "fn=$?"`,
+		Why:     "one condition holds one handler, so naming it to `trap` replaces the function spelling rather than sitting beside it: T fires and the function is gone, which the `functions` lookup failing at 1 is what shows. That lookup failing is itself a non-zero status, so the trap it just set fires again before the `fn=` line -- the second T is the row confirming the new handler really is installed. Only one column has either spelling or the builtin that asks",
+	},
+	{
+		ID: "trap/a-reset-takes-the-trap-function-away", Category: "traps and exit",
+		Snippet: `TRAPZERR() { echo Z; }; trap - ZERR; false; echo done`,
+		Why:     "the same slot read from the other side: a reset naming the condition removes the function that stood for it, so the failing command fires nothing. A shell that kept the two in separate tables would still fire here, which is what makes this the discriminating half of the pair above",
+	},
+	{
+		ID: "trap/removing-the-trap-function-untraps-the-condition", Category: "traps and exit",
+		Snippet: `TRAPZERR() { echo Z; }; unset -f TRAPZERR; false; echo done`,
+		Why:     "and the last direction of the same slot: the function is the handler, so taking the function away untraps the condition. Three rows are needed because each removal reaches it by a different route and a shell can get any one of them right on its own",
+	},
+	{
+		ID: "trap/a-trap-function-name-is-read-case-sensitively", Category: "traps and exit",
+		Snippet: `trapzerr() { echo z; }; TRAPFOO() { echo f; }; false; TRAPFOO; echo done`,
+		Why:     "the two controls the convention needs, so that it is about the name and not about the four letters: a lower-case spelling is an ordinary function and fires nothing, and TRAPFOO -- four right letters and a suffix naming no condition -- is an ordinary function that is still callable by that name. A reading that took every TRAP-prefixed name would swallow the second and leave a script unable to call its own function",
+	},
+	{
+		ID: "trap/a-trap-function-is-handed-the-condition-number", Category: "traps and exit",
+		Snippet: `TRAPEXIT() { echo "E:$1"; }; echo body`,
+		Why:     "the handler is called as the function it is, so the condition arrives as a positional parameter the way it does for a signal. EXIT rather than ZERR because EXIT's number is zero in every column that has any of this, where a pseudo-condition is counted on past the last signal the host has and would record one machine's signal table",
+	},
+	{
+		ID: "trap/zerr-is-suppressed-where-a-failure-is-tested", Category: "traps and exit",
+		Snippet: `TRAPZERR() { echo Z; }; if false; then :; fi; false && echo a; ! true; false | true; true | false; echo done`,
+		Why:     "where the condition does **not** fire, which is the half a handler that fired on every non-zero status would fail: an `if` condition, an `&&` operand, a negated command and a pipeline whose last element succeeded are all statuses being tested rather than failures, and only the pipeline that really failed fires. The same gate `set -e` uses, measured rather than assumed -- the five suppressed shapes are written in one row because a shell getting four of them right and one wrong is the likely defect",
+	},
+	{
+		ID: "trap/the-err-trap-fires-once-for-a-nested-failure", Category: "traps and exit",
+		Snippet: `trap 'echo E' ERR; { true; false; }; g() { false; }; g; echo done`,
+		Why:     "how many times one failure fires the condition when the command that failed is inside something. Every column that has ERR fires **once** per failure: the group reports the status its last command left and the call reports the status its body left, and neither is a second failure. This shell fired twice for the group in every dialect that has the condition, and twice again for the call in the two that carry the trap into a function -- a handler running twice for one event (#2793). Not the same question as the subshell rows -- a `( … )` really is a second boundary and zsh does fire on both sides of one",
+	},
 }

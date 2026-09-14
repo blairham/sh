@@ -161,6 +161,11 @@ func (c *Runner) ownTables(r *Runner) {
 	// made a definition made in a subshell the parent's, and a removal made
 	// in one the parent's too, at status 0 with nothing said either way.
 	c.funcs = maps.Clone(r.funcs)
+	// And which of those functions stand for a trapped condition, on the same
+	// terms: a `TRAPZERR` defined inside a subshell is not the parent's
+	// handler afterwards. inheritTraps prunes what the subshell does not
+	// keep — see trapfunction.go.
+	c.trapFuncs = maps.Clone(r.trapFuncs)
 	// And the math-function registrations, which are the same kind of table
 	// under a second name: a `functions -M` made inside a subshell is not
 	// the parent's afterwards, and one the parent made is the subshell's to

@@ -70,6 +70,18 @@ func (c *Runner) inheritTraps(r *Runner) {
 		}
 	}
 	c.exitTrap = nil
+	// A handler spelled as a function goes with the trap it stood for: the
+	// conditions a subshell starts with back at their defaults are EXIT and
+	// the signals, so a `TRAPEXIT` or a `TRAPUSR1` no longer names a handler
+	// in here. The pseudo-conditions come across with their actions and keep
+	// theirs — see trapfunction.go, and the axes below for where each still
+	// fires. The *function* is still defined either way; what goes is the
+	// binding, which is what the listing reads.
+	for cond := range c.trapFuncs {
+		if c.pseudoTrapSlot(cond) == nil {
+			delete(c.trapFuncs, cond)
+		}
+	}
 	c.errTrapInherited = c.errTrap != nil
 	c.debugTrapInherited = c.debugTrap != nil
 	c.returnTrapInherited = c.returnTrap != nil

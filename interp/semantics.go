@@ -10349,6 +10349,47 @@ type Semantics struct {
 	// same words it refuses any other word that names no signal.
 	TrapHasErrCondition Answer
 
+	// TrapErrConditionIsAlsoZERR gives the ERR condition its second name.
+	// zsh alone: there the manual's name for it is `ZERR` and `ERR` is the
+	// alias, and the two are one slot rather than two conditions —
+	// measured, `trap 'echo E' ERR; trap - ZERR; false` fires nothing, and
+	// so does the pair written the other way round. bash, ksh93 and ash have
+	// the condition under `ERR` only and refuse `ZERR` as a word naming no
+	// signal; dash has neither.
+	//
+	// A second name rather than a second condition, so nothing about when
+	// the trap fires is written down twice. What the extra name does change
+	// is the *listing*: the word the script used is the word `trap` prints
+	// back, so `trap 'echo E' ZERR; trap` writes ZERR where the same command
+	// spelled ERR writes ERR.
+	//
+	// It matters out of proportion to how narrow it reads, because `ZERR` is
+	// the spelling a zsh startup file uses — the name a reader of zsh's own
+	// documentation reaches for — so a shell without it refuses the line the
+	// real one takes (#2771).
+	TrapErrConditionIsAlsoZERR Answer
+
+	// TrapIsNamedByAFunction makes a function whose name is `TRAP` followed
+	// by a condition that condition's handler, with no `trap` command
+	// anywhere. zsh alone; the other four define an ordinary function of
+	// that name and call it only when something names it.
+	//
+	// The two spellings are one slot, in both directions: `trap` naming the
+	// condition takes the function away, and removing the function untraps
+	// the condition. The handler is called as the function it is — its
+	// `local` is local, its `return` returns from it, and `$1` is the number
+	// the condition is known by — and `trap` lists it by printing the
+	// function rather than as an action line. See interp/trapfunction.go for
+	// the measurements.
+	//
+	// This is the axis where a No is the *dangerous* answer rather than the
+	// narrow one, which is why it is here rather than left undone. A
+	// declaration parses in every dialect, so a shell that does not read the
+	// name accepts `TRAPZERR() { … }`, defines it, never calls it, and says
+	// nothing — the silent wrong answer, on the spelling a real startup file
+	// uses (#2771).
+	TrapIsNamedByAFunction Answer
+
 	// TrapHasDebugCondition makes `trap … DEBUG` run the action before each
 	// simple command. dash alone refuses the name.
 	TrapHasDebugCondition Answer
@@ -12417,6 +12458,11 @@ func PosixSemantics() Semantics {
 		TrapHasErrCondition:    No,
 		TrapHasDebugCondition:  No,
 		TrapHasReturnCondition: No,
+		// And it gives `trap` its conditions by name on the command line,
+		// so neither the second name for ERR nor the function spelling of a
+		// handler is POSIX's — both are one shell's own.
+		TrapErrConditionIsAlsoZERR: No,
+		TrapIsNamedByAFunction:     No,
 		// POSIX resets a subshell's handled traps to their defaults, so the
 		// listing shows what survived: the ignored signals, which the
 		// standard still counts as traps in effect. The allowance for

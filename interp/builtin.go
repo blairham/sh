@@ -1535,6 +1535,19 @@ func (r *Runner) unsetFunction(name string) int {
 // by hand, because a dialect written as shell has one table where they have
 // two.
 func (r *Runner) removeFunction(name string) {
+	// A `TRAP…` function *is* a trap in the dialect that reads names that
+	// way, so removing it untraps the condition — measured, `TRAPZERR(){ … };
+	// unset -f TRAPZERR; false` fires nothing. Here rather than at `unset`'s
+	// own site so that every spelling of a removal reaches it, which is the
+	// reason this function exists at all.
+	r.unbindTrapFunction(name)
+	r.removeFunctionQuietly(name)
+}
+
+// removeFunctionQuietly is removeFunction without the trap it may have
+// stood for, for the callers that are already changing that condition and
+// would otherwise undo their own work on the way past.
+func (r *Runner) removeFunctionQuietly(name string) {
 	delete(r.funcs, name)
 	delete(r.funcOrigins, name)
 	delete(r.exportedFuncs, name)
@@ -4944,8 +4957,11 @@ func biTrap(r *Runner, _ context.Context, args []string) int {
 	type target struct {
 		name   string
 		pseudo string
-		sig    syscall.Signal
-		exit   bool
+		// spelled is the word the script wrote, kept for the one condition
+		// that answers to two names and lists back the one it was given.
+		spelled string
+		sig     syscall.Signal
+		exit    bool
 	}
 	targets := make([]target, 0, len(conds))
 	for _, c := range conds {
@@ -4958,7 +4974,7 @@ func biTrap(r *Runner, _ context.Context, args []string) int {
 		// that does not falls through and refuses it as the unknown name it
 		// is there.
 		if name, ok := r.pseudoCondition(c); ok {
-			targets = append(targets, target{pseudo: name})
+			targets = append(targets, target{pseudo: name, spelled: strings.ToUpper(c)})
 			continue
 		}
 		if r.unspecified {
@@ -5006,8 +5022,26 @@ func biTrap(r *Runner, _ context.Context, args []string) int {
 		default:
 			r.localizeTrap(tg.name, tg.sig)
 		}
+		// A `trap` command naming a condition is the whole of that
+		// condition's handler afterwards, so the function form of it — where
+		// the dialect has one — goes with the action it replaces. Measured:
+		// after `TRAPZERR(){ … }; trap 'echo T' ZERR`, `functions TRAPZERR`
+		// finds nothing. See trapfunction.go.
 		switch {
 		case tg.pseudo != "":
+			r.releaseTrapFunction(tg.pseudo)
+		case tg.exit:
+			r.releaseTrapFunction("EXIT")
+		default:
+			r.releaseTrapFunction(tg.name)
+		}
+		switch {
+		case tg.pseudo != "":
+			// The word this condition was named by, which the dialect with
+			// two names for it echoes back in its listing.
+			if tg.pseudo == "ERR" {
+				r.errTrapSpelling = tg.spelled
+			}
 			r.setPseudoTrap(tg.pseudo, body)
 		case tg.exit:
 			if body == "-" {

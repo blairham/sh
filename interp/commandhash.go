@@ -35,12 +35,11 @@ import (
 // not: `type ls >/dev/null; hash` leaves bash's table empty and fills the
 // other three.
 //
-// One measurement here has no field and is prose in docs/spec/semantics.md
-// instead: bash and dash empty the table *again* when a `PATH=… cmd` prefix
-// is taken back, and zsh and ksh93 do not. It is a real 2-2 split and it
-// cannot be asked yet, because a prefix does not reach this shell's own PATH
-// for an external command at all (#2626) — the branch would be one no run
-// could take.
+// A third is what a `PATH=… cmd` prefix leaves behind, which is a 4-3 split
+// and is Semantics.APrefixedPathEmptiesTheCommandHash. It could not be asked
+// until #2626, because a prefix did not reach this shell's own PATH for an
+// external command at all and the branch was one no run could take. See
+// interp/prefixedpath.go.
 type hashedCommand struct {
 	// path is what the name resolved to.
 	path string

@@ -5625,19 +5625,59 @@ command exactly as `hash -p` does, at zero hits, and an `unset` of one element
 does **not** take the entry away. Both are bash's answers rather than
 omissions here. `dialect/bash/bashcmds.go` carries the measurements.
 
+### A `PATH=… cmd` prefix: the axis
+
+A prefix in front of an external command supplies the PATH the *search* is
+made with, and not only the PATH the child is handed. That is unanimous —
+`PATH=/nowhere ls` is 127 in all seven columns — and this shell did the second
+half alone for long enough that the first was filed as its own defect (#2626):
+the child saw `/nowhere` and the shell went on looking where it had been
+looking, so a prefix could change what a command saw and never what was found.
+
+What the table holds **afterwards** is where the panel parts, and the
+arrangement that shows it is two copies of one name with the first already
+hashed:
+
+    mkdir -p d1 d2
+    ...a zzc in each, d1 first on PATH...
+    zzc                 → V1, and d1's copy is in the table
+    PATH=$PWD/d2 zzc    → V2 in every column
+    hash
+
+| | the table afterwards |
+| --- | --- |
+| bash 5.3.15, bash-as-`sh` | empty |
+| dash, BusyBox ash | empty |
+| bash 3.2.57 | `zzc`, still d1's copy, at its old hit count |
+| ksh93, zsh 5.9.2 | `zzc`, still d1's copy |
+
+Four of them let the prefix reach the shell's own PATH: that empties the table
+by the ordinary rule above, and putting the old value back does not refill it.
+The other three keep the prefix out of the shell entirely — the new PATH goes
+to the child and to the search and nowhere else — so the table they had is the
+table they still have. That is
+`Semantics.APrefixedPathEmptiesTheCommandHash`, and it is one of the few
+places the two bash columns give different answers.
+
+A prefix in front of a **builtin** is not this question. It is visible to the
+builtin while it runs — that is what `IFS=: read x y` is — so it really is an
+assignment, and every column but bash 3.2 empties the table for
+`PATH=/nowhere true`, including the two that keep it for an external command.
+`command` goes the other way and answers as the external route does, because a
+precommand word's prefix belongs to what it runs.
+
+The axis is **read rather than asked**, which the substrate does rarely and
+for a stated reason: the command prints what it prints under either answer,
+and only a later `hash` can tell them apart, so refusing the command where no
+dialect has chosen would be an over-refusal. `ALookupRemembersThePath` above
+is read for the same reason.
+
 ### What is measured and not built
 
-Three things, recorded here rather than modeled: two because each would be a
-branch no run could take or a bug to imitate, and one because it is a feature
-of its own now that there is a table for it to be a view of.
+Two things, recorded here rather than modeled: one because it is a bug to
+imitate, and one because it is a feature of its own now that there is a table
+for it to be a view of.
 
-- **A `PATH=… cmd` prefix taken back.** All four empty the table when the
-  prefix goes on; bash and dash empty it *again* when the old value is put
-  back, and zsh and ksh93 do not. That is a real 2-2 split and it has no axis,
-  because this shell cannot reach the question yet: a command prefix does not
-  reach its own PATH for an **external** command at all — `PATH=/nowhere ls`
-  still runs `ls` here where every column in the panel reports 127. The
-  prefix is a defect of its own (#2626) and the axis waits on it.
 - **`hash -p ./name`.** bash stores an entry whose path begins with `./` and
   then reports `not found` for `hash -t` on it, while `hash -p ../name` and
   `hash -p name` both read back. This shell reads every `-p` path back.

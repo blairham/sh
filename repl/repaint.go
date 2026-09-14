@@ -133,7 +133,11 @@ func (e *editor) repaint(prompt drawnPrompt, cols int) bool {
 		// state the terminal is actually in is the one the last whole draw
 		// left.
 		b.WriteString(styleInForce(styled, at))
-		b.WriteString(tail)
+		// Spelled for the terminal rather than for the line: a newline in the
+		// line, which only a paste puts there, is a line feed on its own and
+		// leaves the cursor in the column it was in. See onScreen, and place,
+		// which counts the rows this makes.
+		b.WriteString(onScreen(tail))
 		row, col = endRow, endCol
 		if endCol == cols {
 			// The content ends exactly at the right-hand edge, where a

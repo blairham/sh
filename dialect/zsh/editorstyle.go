@@ -20,6 +20,14 @@ func EditorStyle() repl.EditorStyle {
 		// no second asking.
 		ListQuery:             "zsh: do you wish to see all %[1]d possibilities (%[2]d lines)? ",
 		ListQueryEchoesTheKey: true,
+		// Measured 2026-09-14 through a pseudo-terminal: this shell writes
+		// `\e[?2004h` after the prompt and `\e[?2004l\r` after the line it
+		// read, and draws a paste that arrives in reverse video until the
+		// next keystroke. ksh93 does neither, which is what makes these
+		// questions a dialect answers (#2775).
+		BracketedPaste:     true,
+		PastedTextStyle:    "\x1b[7m",
+		PastedTextStyleEnd: "\x1b[27m",
 		// What this shell calls typing, so a widget put in front of it actually
 		// intercepts a printable key. See repl's EditorStyle.SelfInsertWidget
 		// and #2485.

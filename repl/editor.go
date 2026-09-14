@@ -73,6 +73,18 @@ type editor struct {
 	// which is what two of the four dialects do.
 	interrupt string
 
+	// bracketedPaste says this dialect asks the terminal to wrap pasted text
+	// in markers, and pastedStyle and pastedStyleEnd are what a run that
+	// arrived that way is drawn in. pastedFrom and pastedTo are the run
+	// itself, in positions in the line, and are equal when the line holds no
+	// paste — which is every line until one arrives and again from the next
+	// keystroke on. See paste.go.
+	bracketedPaste bool
+	pastedStyle    string
+	pastedStyleEnd string
+	pastedFrom     int
+	pastedTo       int
+
 	// killed is what the last kill took off the line, and ^Y puts it back.
 	// Kills that follow one another go into it together, which is what
 	// killing and killedBefore keep track of. It outlives the line: measured,
@@ -241,6 +253,19 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 	// was marked before the prompt hooks ran; this is the return and the
 	// erase that follow them. See groundForPrompt and markUnfinished.
 	e.groundForPrompt()
+	// Nothing is pasted on a line that has not started.
+	e.forgetPaste()
+	if e.bracketedPaste {
+		// The terminal is asked to mark pasted text for the length of this
+		// read, and the request is taken back on the way out — where the
+		// command about to run wants its own answer, and would otherwise be
+		// handed markers it never asked for. Deferred rather than written at
+		// each of the ways out, because there are four of them and one of
+		// them is the input failing. See paste.go for what the two sequences
+		// are and what was measured.
+		e.write(pasteModeOn)
+		defer e.write(pasteModeOff)
+	}
 	// The leading rows first and once — every redraw after this rewrites only
 	// the last row. See drawnPrompt.
 	e.write(prompt.lead + prompt.text)
@@ -289,6 +314,11 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 		// line the first Up walks plainly, and so must the second, though by
 		// then the line holds an entry with a first word of its own.
 		e.search.before, e.search.now = e.search.now, false
+		// And the run the last paste left marked, which comes off on the next
+		// keystroke whatever that keystroke is — measured in both shells that
+		// mark one. Before the key acts, so that whatever this key draws
+		// draws it plainly; a paste is the only thing that sets it again.
+		e.forgetPaste()
 		// What a person rebound comes first, and only for a byte that starts
 		// something they bound: a session with no bindings reaches the switch
 		// having asked one question of an empty map. It is after the bookkeeping
@@ -675,7 +705,7 @@ func (e *editor) redraw(prompt drawnPrompt) {
 		var b strings.Builder
 		b.WriteString("\r\x1b[K")
 		b.WriteString(prompt.text)
-		b.WriteString(e.styled())
+		b.WriteString(onScreen(e.styled()))
 		// Cells to come back over, not characters: the cursor moves by
 		// columns, and one `日` to the right of it is two of them.
 		if back := cells(e.line[e.pos:]); back > 0 {
@@ -709,7 +739,7 @@ func (e *editor) redraw(prompt drawnPrompt) {
 	b.WriteString("\x1b[J")
 	b.WriteString(prompt.text)
 	styled := e.styled()
-	b.WriteString(styled)
+	b.WriteString(onScreen(styled))
 
 	curRow, curCol, endRow, endCol := place(prompt.cells, e.line, e.pos, cols)
 	if endCol == cols {
@@ -868,6 +898,15 @@ func place(promptWidth int, line []rune, pos, cols int) (curRow, curCol, endRow,
 	for i, r := range line {
 		if i == pos {
 			curRow, curCol = row, col
+		}
+		if r == '\n' {
+			// A line ending inside the line itself, which only a bracketed
+			// paste puts there (see paste.go). It occupies no cell and ends
+			// the row: everything after it starts at the left margin of the
+			// row below, and a draw spells it `\r\n` for exactly that
+			// reason — see onScreen.
+			row, col = row+1, 0
+			continue
 		}
 		w := runeWidth(r)
 		if col+w > cols {

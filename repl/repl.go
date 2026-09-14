@@ -1768,7 +1768,12 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		interrupt:       s.Editor.Interrupt,
 		listQuery:       s.Editor.ListQuery,
 		listQueryEchoes: s.Editor.ListQueryEchoesTheKey,
-		selfInsert:      s.Editor.SelfInsertWidget,
+		// Whether to ask the terminal to mark a paste, and how a marked one
+		// is drawn. Two of the four ask and ksh93 does not; see paste.go.
+		bracketedPaste: s.Editor.BracketedPaste,
+		pastedStyle:    s.Editor.PastedTextStyle,
+		pastedStyleEnd: s.Editor.PastedTextStyleEnd,
+		selfInsert:     s.Editor.SelfInsertWidget,
 		// What to do about output that never ended its line. Read through the
 		// options rather than taken as values, because both are options a
 		// person turns off — and the return is the outer of the two, so a

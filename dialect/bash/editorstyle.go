@@ -18,6 +18,14 @@ func EditorStyle() repl.EditorStyle {
 		// that is not `y` or `n` rather than taking it as an answer.
 		ListQuery:                   "Display all %[1]d possibilities? (y or n)",
 		ListQueryAcceptsOnlyYesOrNo: true,
+		// Measured 2026-09-14 through a pseudo-terminal: this shell writes
+		// `\e[?2004h` before the prompt and `\e[?2004l\r` after the line it
+		// read, and draws a paste that arrives in reverse video until the
+		// next keystroke. ksh93 does neither, which is what makes these
+		// questions a dialect answers (#2775).
+		BracketedPaste:     true,
+		PastedTextStyle:    "\x1b[7m",
+		PastedTextStyleEnd: "\x1b[27m",
 		// Every field about words is left at its zero value on purpose, and
 		// they are bash's measured answers rather than an absence of one: a
 		// word is letters and digits, `^U` kills only what is before the

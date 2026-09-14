@@ -191,7 +191,13 @@ func TestAnUnknownKeyIsNeverTypedIntoTheLine(t *testing.T) {
 		// leading `?` makes it something else entirely, and reading the
 		// number out of it would turn a terminal's own chatter into a Home.
 		{"a private-use sequence numbered like Home", "\x1b[?1~"},
-		{"a bracketed paste opening", "\x1b[200~"},
+		// The opening marker is not here, because it is no longer a key this
+		// does not act on: it opens a paste, and everything up to the closing
+		// marker is text. What it must not do is put `^[[200~` in the line,
+		// which is what ksh93 does with it — see paste_test.go, which asserts
+		// that and the rest of #2775. A *closing* marker on its own stays
+		// here: a terminal another program left in the mode can send one with
+		// no paste in front of it.
 		{"a bracketed paste closing", "\x1b[201~"},
 		{"a cursor position report", "\x1b[24;80R"},
 		{"an unbound meta letter", "\x1bz"},

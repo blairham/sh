@@ -125,6 +125,16 @@ func (e *editor) controlSequence(prompt drawnPrompt) keyRead {
 		case 3:
 			e.change(false, e.deleteForward)
 			e.redraw(prompt)
+		case pasteBegins:
+			// Not a key at all: a terminal that was asked to bracket pastes
+			// says so with a sequence shaped exactly like one, and everything
+			// up to the closing marker is text rather than keystrokes. See
+			// paste.go.
+			return e.insertPaste(prompt)
+		case pasteEnds:
+			// A closing marker with no paste in front of it — a terminal
+			// answering a request some other program made and then left on.
+			// Dropped, like every other sequence this does not act on.
 		}
 		return keyContinues
 	}

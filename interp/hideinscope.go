@@ -433,6 +433,25 @@ func (r *Runner) MarkHideInScope(name string) {
 // the shell's own. A letter written on *this* declaration is applied after
 // the shadow, so the freeze is lifted there rather than here — see
 // setHideInScope.
+//
+// **Only where a shadow stands.** The letter detaches a *shadow* — that is
+// the second fact in this file's opening table, and `typeset -h ARGC` at the
+// top level is the row that says so: the freeze is untouched there and
+// `ARGC=5` on the next line is still `read-only variable: ARGC`. Reading the
+// attribute without asking whether there was a shadow at all made the letter
+// lift a freeze nothing had displaced, and the lift went the wrong way: the
+// empty a valueless declaration writes met the ordinary refusal, so
+// `typeset -h ARGC` was `read-only variable: ARGC` where zsh 5.9.2 answers 0
+// and goes on to describe the name as `integer-readonly-hide-special` — the
+// attribute added and the freeze intact. `typeset -g -h ARGC` inside a
+// function is the same case for the same reason, since `-g` is the other way
+// to take no shadow (#2734).
 func (r *Runner) freezeSurvivesAShadow(name string) bool {
-	return r.readonly[name] && r.DynamicParameter(name) && !r.hideInScope[name]
+	if !r.readonly[name] || !r.DynamicParameter(name) {
+		return false
+	}
+	if !r.localInTheInnermostScope(name) {
+		return true
+	}
+	return !r.hideInScope[name]
 }

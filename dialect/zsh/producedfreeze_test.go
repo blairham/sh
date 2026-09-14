@@ -92,3 +92,75 @@ func TestAProducedParameterStaysFrozenBehindAShadow(t *testing.T) {
 		})
 	}
 }
+
+// TestTheHideLetterOverAProducedNameWithNoShadowIsTaken is `typeset -h ARGC`
+// where no shadow stands: at the top level, and under `-g` inside a function.
+//
+// The letter detaches a *shadow*, so where there is none it adds an attribute
+// and changes nothing else. Measured against zsh 5.9.2, `env -i
+// PATH=/usr/bin:/bin`, 2026-09-14: the declaration is taken at 0, the type
+// word gains `hide` and keeps `readonly` and `special`, the name goes on
+// answering the shell's own value, and an assignment on the next line is
+// still refused. This engine read the attribute without asking whether a
+// shadow had been taken, so the letter thawed a freeze nothing had displaced
+// — and the thaw went the wrong way, since what the valueless declaration
+// writes is an empty the frozen name then refused (#2734).
+//
+// Row four is the discriminator against "the letter is simply ignored here":
+// `+h` has to be able to take it off again, which only means something if
+// `-h` put it on.
+func TestTheHideLetterOverAProducedNameWithNoShadowIsTaken(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct {
+		name, src, want string
+		status          int
+	}{
+		{
+			name:   "the declaration is taken and the attribute lands",
+			src:    `typeset -h ARGC; print "st=$?"; print "${(t)ARGC}"`,
+			want:   "st=0\ninteger-readonly-hide-special\n",
+			status: 0,
+		},
+		{
+			name:   "the producer is untouched",
+			src:    `typeset -h ARGC; print "a=$ARGC"; set -- x y; print "b=$ARGC"`,
+			want:   "a=0\nb=2\n",
+			status: 0,
+		},
+		{
+			name:   "and so is the freeze",
+			src:    `typeset -h ARGC; ARGC=5`,
+			want:   "zsh:1: read-only variable: ARGC\n",
+			status: 1,
+		},
+		{
+			name:   "the plus form takes it off again",
+			src:    `typeset -h ARGC; typeset +h ARGC; print "${(t)ARGC}"`,
+			want:   "integer-readonly-special\n",
+			status: 0,
+		},
+		{
+			name:   "a global declaration inside a function takes no shadow either",
+			src:    `f() { typeset -g -h ARGC; print "st=$?"; }; f`,
+			want:   "st=0\n",
+			status: 0,
+		},
+		{
+			// The control on the other side: where a shadow *does* stand the
+			// letter still detaches it, which is the row the guard must not
+			// have taken away.
+			name:   "a shadow is still detached by it",
+			src:    `f() { typeset -h ARGC; print "${(t)ARGC}"; ARGC=5; print "a=$ARGC"; }; f`,
+			want:   "scalar-local-hide\na=5\n",
+			status: 0,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runZsh(t, dir, tc.src)
+			if out != tc.want || st != tc.status {
+				t.Errorf("out = %q (status %d), want %q (status %d)",
+					out, st, tc.want, tc.status)
+			}
+		})
+	}
+}

@@ -181,7 +181,13 @@ func (r *Runner) patternOf(w *syntax.Word) string {
 // character is ordinary already, and an escape would be a difference nothing
 // could observe.
 func (r *Runner) markWrittenBars(pattern string, valueAt [][2]int) string {
-	if !strings.Contains(pattern, "|") || !r.dialect().PatternTopLevelAlternation {
+	if !strings.Contains(pattern, "|") || !r.dialect().PatternTopLevelAlternation.ReadsATopLevelBar(false) {
+		return pattern
+	}
+	// A dialect that reads a written bar has no provenance rule to arrange,
+	// so there is nothing to escape: ksh93 answers `bc` to `${v#a|ab}` and
+	// to `${v#$L}` alike (#2528).
+	if r.dialect().PatternTopLevelAlternation.ReadsAWrittenBar() {
 		return pattern
 	}
 	written := func(i int) bool {
@@ -2049,7 +2055,7 @@ func (r *Runner) patternOpts(pattern string, subjects ...string) patternOpts {
 		unknownClass: r.unknownClassPolicy(pattern),
 		chars:        r.patternCountsCharacters(append([]string{pattern}, subjects...)...),
 		group:        r.dialect().PatternAlternation,
-		topGroup:     r.dialect().PatternTopLevelAlternation,
+		topGroup:     r.dialect().PatternTopLevelAlternation.ReadsATopLevelBar(false),
 		quantified:   r.readsQuantifiedGroups(false),
 		numericRange: r.dialect().NumericRangePattern,
 		escapes:      r.sem().PatternEscapeReaches,

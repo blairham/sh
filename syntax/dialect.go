@@ -2964,7 +2964,11 @@ type Dialect struct {
 	// independently: a dialect with bare groups need not read a bar outside
 	// one, and #1331 fixed the group while leaving this — the two were
 	// measured together and only one of them was about groups (#1497).
-	PatternTopLevelAlternation bool
+	//
+	// It is a three-way rather than a bool because **two shells have the
+	// reading and they do not have the same one** (#2528). See
+	// [TopLevelAlternation] for the two, and for the contexts each reaches.
+	PatternTopLevelAlternation TopLevelAlternation
 
 	// BackgroundAndDisown reads `&!` and `&|` as terminators that start a
 	// statement in the background and then let go of the job: nothing lists
@@ -4303,4 +4307,90 @@ func (p BraceQuotePolicy) String() string {
 		return "every operand"
 	}
 	return "a pattern only"
+}
+
+// TopLevelAlternation is how a dialect reads a `|` standing outside every
+// group and bracket — see [Dialect.PatternTopLevelAlternation].
+//
+// Two shells have the reading and they do not have the same one, which is why
+// this is not a bool. Measured 2026-09-13 on ksh93u+ 2012-08-01 and zsh 5.9.2,
+// `env -i PATH=/usr/bin:/bin` over a script file, with `v=abc` and `L='a|ab'`:
+//
+//	probe                        ksh93        zsh
+//	${v#a|ab}   written bar      bc           abc
+//	${v#$L}     value bar        bc           abc  (bc under ${~L})
+//	case via a value             matches      does not
+//	$P with P='a|b', files a b   one field    two fields under globsubst
+//	[[ ab == $L ]]               no           no
+//
+// Two rows carry the argument. The **fourth** is what keeps the readings
+// apart in the same direction they differ everywhere else, and it is measured
+// against a control: in that same run ksh93 expands `a*` and `a?` out of a
+// value to two fields each, so it is the *bar* that does not reach pathname
+// expansion there and not the value failing to be a pattern. And `w='a|b';
+// ${w#a|b}` answers `|b` in ksh93 where zsh answers empty — the value stops
+// matching its own text, which is what says the bar is syntax there rather
+// than one more character.
+type TopLevelAlternation uint8
+
+const (
+	// NoTopLevelAlternation reads the bar as an ordinary character. The
+	// zero value, and what four of the panel's seven columns do.
+	NoTopLevelAlternation TopLevelAlternation = iota
+
+	// TopLevelAlternationFromAValue is zsh's: the bar is an alternation
+	// only where a **value** supplied it, so a written one is an ordinary
+	// character and the provenance has to be arranged — see
+	// interp's markWrittenBars (#2168). It reaches pathname expansion,
+	// where a value under `globsubst` becomes a pattern in its own right.
+	TopLevelAlternationFromAValue
+
+	// TopLevelAlternationWhereverWritten is ksh93's, and is wider in one
+	// direction and narrower in another. Wider: provenance is not asked, so
+	// a bar the script wrote is an alternation exactly as one out of a value
+	// is. Narrower: it does **not** reach pathname expansion, and it does
+	// not reach `[[ ]]`.
+	//
+	// So neither reading contains the other, which is the shape this whole
+	// vector exists for — turning the old bool on for ksh would have given
+	// it zsh's provenance rule, which is the wrong one (#2528).
+	TopLevelAlternationWhereverWritten
+)
+
+// ReadsATopLevelBar reports whether a bar outside every group is an
+// alternation, in the contexts that ask about pattern text rather than about
+// file names. condition says the pattern stands inside `[[ ]]`.
+//
+// The two readings part company there, and **the simpler rule is wrong**:
+// both shells answer `n` to `L='a|ab'; [[ ab == $L ]]`, which reads as "no
+// dialect reads a bar in a condition" — but turning it off for both takes
+// zsh's `setopt globsubst; [[ ab == $L ]]` from matching to not, because
+// there the value has become a pattern in its own right and the bar inside it
+// is live. ksh93 has no such option and answers `n` either way. Measured
+// 2026-09-13; the globsubst row is what distinguishes the two rules, and a
+// table without it would have justified the wrong one.
+func (t TopLevelAlternation) ReadsATopLevelBar(condition bool) bool {
+	if condition {
+		return t == TopLevelAlternationFromAValue
+	}
+	return t != NoTopLevelAlternation
+}
+
+// ReachesPathnameExpansion reports whether a top-level bar makes a field a
+// pattern against the filesystem.
+//
+// Only zsh's reading does. Stated as a method rather than derived at the call
+// site because the two facts are independent — a dialect could have ksh's
+// provenance rule and zsh's reach — and because the one caller is a hundred
+// lines from the flag.
+func (t TopLevelAlternation) ReachesPathnameExpansion() bool {
+	return t == TopLevelAlternationFromAValue
+}
+
+// ReadsAWrittenBar reports whether the bar is an alternation however it
+// arrived, which is the question markWrittenBars asks: where it is false and
+// the reading is on, a written bar has to be escaped so only a value's
+// survives.
+func (t TopLevelAlternation) ReadsAWrittenBar() bool {
+	return t == TopLevelAlternationWhereverWritten
 }

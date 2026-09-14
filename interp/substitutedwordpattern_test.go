@@ -109,7 +109,7 @@ func TestASubstitutedWordInAPatternIsNotFatalWhereAMissWouldBe(t *testing.T) {
 		// pattern is assembled, and it is a live one only where the dialect
 		// reads it that way — which is the reading #1929 added and the one
 		// that sent this word to the filesystem in the first place.
-		d.PatternTopLevelAlternation = true
+		d.PatternTopLevelAlternation = syntax.TopLevelAlternationFromAValue
 	}
 	src := `cmds=zzq; [[ load == (load${cmds:+|$cmds}) ]] && printf yes || printf no; printf after`
 	out, st := runGrammar(t, src, grammar, func(r *Runner) { r.Dir = dir; r.Semantics = &fatal })

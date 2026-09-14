@@ -519,7 +519,12 @@ func (r *Runner) describesRatherThanSpells(s string) bool {
 		r.MatchOption(ExtendedPatternOperators)) {
 		return true
 	}
-	return r.dialect().PatternTopLevelAlternation && hasUnescapedByte(s, '|')
+	// Only one of the two readings reaches the filesystem. ksh93 expands
+	// `a*` and `a?` out of a value to two fields each in a directory where
+	// a bar from the same value stays one field, so this is the bar and not
+	// the value (#2528).
+	return r.dialect().PatternTopLevelAlternation.ReachesPathnameExpansion() &&
+		hasUnescapedByte(s, '|')
 }
 
 func (r *Runner) glob(field string) ([]string, bool) {

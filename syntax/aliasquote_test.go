@@ -197,7 +197,7 @@ func TestABlankInsideAnOpenConstructMakesNoNextWordEligible(t *testing.T) {
 // *input's*. A body expanded from inside another body's expansion has that
 // body's remaining tokens in front of it, and a token keeps no text to be
 // read again — so the carry is declined there rather than reading past
-// tokens that stand between. See #2705, which has the panel rows for the
+// tokens that stand between. See #2709, which has the panel rows for the
 // nested arrangement.
 func TestTheCarryIsDeclinedWhereTheRestIsAnotherBodysTokens(t *testing.T) {
 	got := parsed(t, table("a", "b x", "b", `echo "`), "a\necho after")

@@ -705,7 +705,7 @@ of their own:
 The seam is crossed only where the text after the alias word is the
 **input's**. A body expanded from inside another body's expansion has that
 body's remaining tokens in front of it, and a token keeps no text to be
-read again, so the carry is declined there; see #2705 for the panel rows
+read again, so the carry is declined there; see #2709 for the panel rows
 on the nested arrangement.
 
 ### The table reaches every text this shell reads, and the *option* is its only gate

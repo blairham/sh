@@ -389,7 +389,7 @@ func (p *Parser) carryOpenWord(last *Token, tail string) {
 		// keeps its tokens, not the offsets they came from. So the seam this
 		// walks over is the outermost one only, and a body opening a quote
 		// from *inside* another body's expansion is left as it was — see
-		// #2705, which has the panel rows for it.
+		// #2709, which has the panel rows for it.
 		return
 	}
 	rest := p.lex.src[p.lex.off:]

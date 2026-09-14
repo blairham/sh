@@ -316,3 +316,71 @@ typeset -p cu
 cv=(a=1 b=2)
 cw=cv
 typeset -p cw
+
+# A write through a subscript takes the compound *reading* away and leaves the
+# members, where a whole-name write takes them with it. The compound's text is
+# never what the write builds on — nothing lands at subscript 0 — and the base
+# is still occupied, which is why a `+=` list starts at 1.
+cx=(a=1)
+cx[0]=z
+typeset -p cx
+printf '[%s][%s]\n' "${cx.a}" "${!cx.@}"
+cy=(a=1)
+cy[1]=z
+typeset -p cy
+printf '[%s]\n' "${cy.a}"
+cz=(a=1)
+cz+=(x y)
+typeset -p cz
+printf '[%s]\n' "${cz.a}"
+
+# A scalar append is a whole-name write, so the members go — and the tree's
+# rendering is not what it joins.
+da=(a=1)
+da+=z
+typeset -p da
+printf '[%s]\n' "${da.a}"
+
+# The subtree still goes with the parent once the parent is an array.
+db=(a=1)
+db[0]=z
+unset db
+printf '[%s]\n' "${db.a}"
+
+# An empty literal is a compound too, which moves the spelling every script
+# uses to start an array: `${#c[@]}` answers 1, `${c[0]}` is the tree, and a
+# later `+=` list starts at subscript 1. A prior declaration of the other kind
+# does not change it.
+dc=()
+typeset -p dc
+printf '%s\n' "$dc"
+printf '%s %s\n' "${#dc[@]}" "${!dc[@]}"
+dd=()
+dd.a=1
+typeset -p dd
+de=()
+de+=(x y)
+typeset -p de
+typeset -a df
+df=()
+typeset -p df
+
+# The declaration's own letters settle it ahead of the word, and they reach
+# the parse rather than the store — an empty pair of parentheses has no word in
+# it to decide with.
+typeset -C dg=()
+typeset -p dg
+typeset -A dh=()
+printf 'n=%s\n' "${#dh[@]}"
+typeset -a di=(a=1 b=2)
+printf 'n=%s\n' "${#di[@]}"
+printf '%s\n' "${di[0]}"
+
+# `+=` with an empty body adds nothing to a name that is already a container,
+# and declares the kind over anything else.
+dj=(x y)
+dj+=()
+typeset -p dj
+dk=1
+dk+=()
+typeset -p dk

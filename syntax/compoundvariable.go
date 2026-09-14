@@ -3,20 +3,120 @@
 
 package syntax
 
-// opensACompoundVariableBody reports whether the token standing just inside a
-// literal's `(` makes the parentheses a compound variable's body rather than a
-// list of array elements.
+// compoundLiteralReading is what a declaration command's own letters have
+// already settled about the parentheses of its operand's literal, before the
+// first word inside them is looked at.
+//
+// The letters reach the *parse* and not only the store, which is measured
+// rather than reasoned — ksh93u+ 2012-08-01, 2026-09-13:
+//
+//	written                       typeset -p c
+//	c=(a=1 b=2)                   typeset -C c=(a=1;b=2)
+//	typeset -a c=(a=1 b=2)        typeset -a c=(a\=1 b\=2)
+//	typeset -A c=(a=1 b=2)        typeset -A c=([0]=(a=1;b=2))
+//	typeset -a c=(a=1; b=2)       syntax error: `b=2' unexpected
+//	typeset -C c=(x y)            syntax error: `x' unexpected
+//	typeset -a c=()               typeset -a c
+//	typeset -C c=()               typeset -C c=()
+//	c=()                          typeset -C c=()
+//
+// The last three rows are the whole of why this is a parse question: the two
+// readings take a `;` differently and an *empty* literal has no word in it to
+// decide with, so what the reading is has to be known before the parentheses
+// are read rather than after.
+type compoundLiteralReading uint8
+
+const (
+	// literalWordDecides is the ordinary case: nothing has settled the
+	// reading, so the first word inside the parentheses does — and an empty
+	// pair of them is a compound where the dialect has the construct.
+	literalWordDecides compoundLiteralReading = iota
+	// literalIsAnArray is an `-a` or `-A` letter on the declaration, which
+	// takes the compound reading off the table whatever is written inside.
+	literalIsAnArray
+	// literalIsACompound is a `-C` letter, which puts it on and leaves the
+	// body with nothing else it may hold.
+	literalIsACompound
+)
+
+// declarationLiteralReading reads the container letters off the words a
+// declaration command has been given so far.
+//
+// `-C` wins over `-a` and `-A` where a line writes both, which is arbitrary
+// only in the shape `typeset -C -A d=c` — measured `typeset -C -A d=()`
+// there, a name with both letters and no value, which is neither reading's
+// answer and is not a shape worth an axis. Every letter is read from a word
+// that is literal, unquoted and begins with `-` or `+`, and the scan stops at
+// the first word that is not: an operand's own value may hold any character,
+// and reading letters out of it would let `typeset q=-a` change a grammar.
+func declarationLiteralReading(args []*Word) compoundLiteralReading {
+	reading := literalWordDecides
+	for _, w := range args[1:] {
+		if len(w.Spans) != 1 || w.Spans[0].Kind != Literal ||
+			w.Spans[0].Quoting != Unquoted {
+			return reading
+		}
+		text := w.Spans[0].Value
+		if len(text) < 2 || (text[0] != '-' && text[0] != '+') {
+			return reading
+		}
+		if text == "--" {
+			return reading
+		}
+		for i := 1; i < len(text); i++ {
+			switch text[i] {
+			case 'C':
+				return literalIsACompound
+			case 'a', 'A':
+				reading = literalIsAnArray
+			}
+		}
+	}
+	return reading
+}
+
+// opensACompoundVariableBody reports whether the parentheses a literal has
+// just opened hold a compound variable's body rather than a list of array
+// elements.
 //
 // A pure lookahead: nothing is consumed, because the answer no is the array
 // reading and that reading starts from this same token.
 //
-// The first word decides, and it decides on what was *written*. A quoted
-// assignment is not one — `c=("a=1")` is an array of the one string — and
-// neither is one that arrives from an expansion, which is why this asks
-// isAssign rather than looking for an `=` in the expanded value. See
+// Three things can decide it, in this order. The declaration's own letters,
+// where there are any — see [compoundLiteralReading]. Then an **empty** pair
+// of parentheses, which is a compound wherever the dialect has the construct:
+// `c=()` is `typeset -C c=()` on ksh93u+, `${#c[@]}` answers 1 and a later
+// `c+=(x y)` starts at subscript 1, and a prior `typeset -a c` does not change
+// it. And otherwise the first word, on what was *written*: a quoted assignment
+// is not one — `c=("a=1")` is an array of the one string — and neither is one
+// that arrives from an expansion, which is why this asks isAssign rather than
+// looking for an `=` in the expanded value. See
 // [Dialect.CompoundVariableDeclarators] for the measured rows.
-func (p *Parser) opensACompoundVariableBody() bool {
-	if len(p.dialect.CompoundVariableDeclarators) == 0 || p.tok.Kind != TokWord {
+func (p *Parser) opensACompoundVariableBody(reading compoundLiteralReading) bool {
+	if len(p.dialect.CompoundVariableDeclarators) == 0 {
+		return false
+	}
+	switch reading {
+	case literalIsAnArray:
+		return false
+	case literalIsACompound:
+		return true
+	}
+	if p.at(TokRightParen) {
+		return true
+	}
+	return p.atACompoundBodyItem()
+}
+
+// atACompoundBodyItem reports whether the current token may begin one
+// declaration of a compound variable's body: an assignment, or a declarator
+// word.
+//
+// The raw test, with no declaration letters in it — which is what keeps
+// `typeset -C c=(x y)` a syntax error rather than a body whose first item is
+// the word `x`. See [Parser.compoundVariableItem], its only other caller.
+func (p *Parser) atACompoundBodyItem() bool {
+	if p.tok.Kind != TokWord {
 		return false
 	}
 	if _, ok := p.isAssign(p.tok); ok {
@@ -43,7 +143,11 @@ func (p *Parser) opensACompoundVariableBody() bool {
 // in front of it — `c=(; a=1)` and `c=(a=1; ; b=2)` are both “ `;' unexpected “
 // — and a `;` after the last is allowed and separates nothing.
 func (p *Parser) compoundVariableBody() []*SimpleCmd {
-	var body []*SimpleCmd
+	// Empty and not nil, because an empty compound is a compound: `c=()` is
+	// `typeset -C c=()` there and an array with nothing in it is a different
+	// value. [Assign.Members] being nil is what says the literal was read as
+	// an array, so a body with no items in it must still be a slice.
+	body := []*SimpleCmd{}
 	for p.err == nil {
 		p.skipNewlines()
 		if p.at(TokRightParen) {
@@ -93,7 +197,7 @@ func (p *Parser) compoundVariableItem() *SimpleCmd {
 			// the body holds declarations and this is not one. Named rather
 			// than described, which is the shell's own wording —
 			// `c=(a=1; echo mid)` is `` `echo' unexpected ``.
-			if !p.opensACompoundVariableBody() {
+			if !p.atACompoundBodyItem() {
 				p.failUnexpected("")
 				return nil
 			}

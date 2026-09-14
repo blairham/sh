@@ -48,9 +48,28 @@ func (r *Runner) compoundVariables() map[string]bool {
 	return r.compoundVariable
 }
 
-// isCompoundVariable reports whether the name was declared or assigned as one.
+// isCompoundVariable reports whether the name *reads* as one.
+//
+// Two conditions and the second is what makes the set one table rather than
+// two: the name is marked, and it is holding no value of its own. A name that
+// has been written through a subscript is holding an array, so it stops
+// reading as a compound the moment the array is stored — while the mark stays,
+// because the members under it are still there and `unset` still has to take
+// them. See compoundVariableSubscripted.
 func (r *Runner) isCompoundVariable(name string) bool {
-	return r.compoundVariable[name] && !r.removed[name]
+	if !r.compoundVariable[name] || r.removed[name] {
+		return false
+	}
+	if _, ok := r.Vars[name]; ok {
+		return false
+	}
+	if _, ok := r.Arrays[name]; ok {
+		return false
+	}
+	if _, ok := r.AssocArrays[name]; ok {
+		return false
+	}
+	return true
 }
 
 // markCompoundVariable makes the name a compound variable, taking away
@@ -90,17 +109,59 @@ func (r *Runner) markCompoundVariable(name string) {
 // reason, and it is why `unset`, `read`, `+=` and a subscripted write need no
 // line of their own: every one of them arrives through one of the five.
 //
-// The one measured row this does *not* match is a subscripted write —
-// `c=(a=1); c[0]=z` lists as `typeset -a c=(z)` there and still answers `1` to
-// `${c.a}`, where this drops the members with the mark. The listing is right
-// either way and the surviving member is not, so the disagreement is left
-// rather than bought with a flag threaded through storeArray (#2620).
+// A **subscripted** write is not one of these and is the other half of the
+// rule — see compoundVariableSubscripted, which is what asking
+// isCompoundVariable rather than the raw mark is for: that path gives the name
+// a value before the store is reached, so by the time this runs the name is no
+// longer reading as a compound and the members stay.
 func (r *Runner) compoundVariableRetyped(name string) {
-	if !r.compoundVariable[name] {
+	if !r.isCompoundVariable(name) {
 		return
 	}
 	delete(r.compoundVariable, name)
 	r.unsetCompoundMembers(name)
+}
+
+// compoundVariableSubscripted is what a write *through a subscript* does to a
+// compound, and it is a different answer from the whole-name write above.
+//
+// Measured on ksh93u+ 2012-08-01, 2026-09-13. The left column is what the
+// second line of each row does to `c=(a=1)`:
+//
+//	written      typeset -p c                ${c.a}   ${!c.@}
+//	c[0]=z       typeset -a c=(z)            1        c.a
+//	c[1]=z       typeset -a c=([1]=z)        1        c.a
+//	c+=(x y)     typeset -a c=([1]=x [2]=y)  1        c.a
+//	c=(x y)      typeset -a c=(x y)          empty    empty
+//	c=hello      c=hello                     empty    empty
+//	c+=z         c=z                         empty    empty
+//
+// So the members survive a write that reaches *into* the name and go with one
+// that replaces it. Two further facts the rows carry, and neither follows from
+// the other:
+//
+//   - **The compound's text is never what the write builds on.** Element 0 is
+//     absent after `c[1]=z`, and `c+=z` is `c=z` rather than the tree's
+//     rendering with a `z` after it. A compound answers a value to `$c` and it
+//     is not a value another kind's write joins.
+//   - **The compound still occupies the base**, which is what `${#c[@]}`
+//     answering 1 already says: `c+=(x y)` starts at subscript 1 and leaves
+//     nothing at 0.
+//
+// Giving the name an empty array is the whole of the implementation, and that
+// is the point rather than a trick: the name now holds a value, so
+// isCompoundVariable answers no, the store that follows leaves the members
+// alone, and `unset c` still finds them through the mark. A flag threaded
+// through storeArray — which is what #2706 declined to buy for one row — would
+// have been the same rule with a second home.
+func (r *Runner) compoundVariableSubscripted(name string) {
+	if !r.isCompoundVariable(name) {
+		return
+	}
+	if r.Arrays == nil {
+		r.Arrays = map[string]Array{}
+	}
+	r.Arrays[name] = Array{}
 }
 
 // compoundMemberPrefix is what a member's name begins with.
@@ -187,6 +248,20 @@ func (r *Runner) unsetCompoundMembers(name string) {
 // `c=(a=1 b=(y=2))` — reaches this function again under the name `c.b`.
 func (r *Runner) assignCompoundVariable(ctx context.Context, a *syntax.Assign) {
 	name := a.Name
+	if a.Append && len(a.Members) == 0 && r.nameHoldsAContainer(name) {
+		// `name+=()` over a name that is already an array or a table adds
+		// nothing and changes nothing — measured, `a=(x y); a+=()` is
+		// `typeset -a a=(x y)` there and `typeset -A h=([k]=v); h+=()` keeps
+		// its element. Only an *empty* body: what a body with members in it
+		// does to an array is a different row and a different answer
+		// (`a=(x y); a+=(p=1)` appends the string `p=1` there), which is
+		// #2620's and is not modeled.
+		//
+		// Everything else takes the declaration: `a=1; a+=()` and
+		// `unset a; a+=()` are both `typeset -C a=()`, so a scalar is
+		// discarded by it where a container is not.
+		return
+	}
 	if !a.Append {
 		// A literal replaces the whole compound rather than merging into it:
 		// `c=(a=1 b=2); c=(d=3)` is `typeset -C c=(d=3)` there, with no `a`
@@ -311,9 +386,23 @@ func (r *Runner) assignCompoundMember(ctx context.Context, prefix string, m *syn
 // member of `c` as much as `c.a` is. A dotted name whose head is *not* a
 // compound is not one — `a=1; a.b=2` leaves two ordinary scalars, which is the
 // shell's own reading — so this asks the store rather than the spelling.
+//
+// The **mark** rather than isCompoundVariable, and the pair of rows that says
+// so is measured: after `a=1; a.b=2; a=(x y)` the whole listing writes
+// `a.b=2` beside the array, and after `c=(a=1); c[0]=z` it writes the array
+// alone — the same shape twice, and what tells them apart is only that `c` was
+// a compound once. A subscripted write takes the compound *reading* away and
+// leaves the subtree; a name inside that subtree is still listed inside its
+// parent and so nowhere, which is what the filter is for.
+//
+// One row in the same family is left disagreeing and is not this function's:
+// a dotted name *named* on a listing is written nowhere at all when its head
+// holds an array — `a=1; a.b=2; a=(x y); typeset -p a.b` is silent there and
+// writes `a.b=2` here — which predates the compound and holds for a head that
+// was never one.
 func (r *Runner) memberOfACompoundVariable(name string) bool {
 	for i := strings.Index(name, memberSep); i >= 0; {
-		if r.isCompoundVariable(name[:i]) {
+		if r.compoundVariable[name[:i]] && !r.removed[name[:i]] {
 			return true
 		}
 		next := strings.Index(name[i+1:], memberSep)
@@ -461,4 +550,18 @@ func (r *Runner) compoundTreeInto(b *strings.Builder, name string, depth int) {
 		}
 		b.WriteString(pad + r.bareAssignmentDeclaration(d) + "\n")
 	}
+}
+
+// nameHoldsAContainer reports whether the name is holding an array or a table
+// — the two kinds an empty compound body adds nothing to. See
+// assignCompoundVariable.
+func (r *Runner) nameHoldsAContainer(name string) bool {
+	if r.removed[name] {
+		return false
+	}
+	if _, ok := r.Arrays[name]; ok {
+		return true
+	}
+	_, ok := r.AssocArrays[name]
+	return ok
 }

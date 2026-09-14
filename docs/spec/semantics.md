@@ -10964,9 +10964,12 @@ so bash 3.2 is a column in the golden record and not a dialect.
   in ksh93. It is neither an assignment nor an `unset`.
 - ksh93's `a=()` is a **compound variable**, `typeset -C a=()`, and not an
   empty indexed array: `${#a[@]}` is 1 for it and `unset "a[-1]"` says
-  nothing. We model `a=()` as an empty array, so our ksh refuses that one
-  spelling where ksh93 does not. The difference is what `a=()` builds
-  rather than where the boundary is. The same fact retired an axis —
+  nothing. **Modeled since #2620**, in the parser rather than at the
+  boundary — the empty parentheses have no word in them to decide the
+  reading, so what decides is whether the dialect has compound variables at
+  all, and the set that says so is empty in every other column. So our ksh
+  no longer refuses that spelling, and `a=()` under every other dialect is
+  the empty array it always was. The same fact retired an axis —
   `UnsetNameAtIsOneEmptyField` below, which was `EmptyArrayAtIsOneEmptyField`
   and was measured from `a=()` counting one field in ksh93 (#1379). This
   entry and the table in `grammar/commands.md` were each enough to refuse

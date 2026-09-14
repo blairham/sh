@@ -6569,6 +6569,16 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 			// storedVar, and Semantics.CaseAttributeFoldsWhenRead for the
 			// shell where that is not what a read answers.
 			old, _ := r.storedVar(a.Name)
+			if r.isCompoundVariable(a.Name) {
+				// A compound answers a value — its whole tree as text — and
+				// it is not one a scalar append joins: measured,
+				// `c=(a=1); c+=z` is `c=z` there and not the rendering with
+				// a `z` after it. The whole-name write below then takes the
+				// members, which is the other half of the same row. See
+				// compoundVariableSubscripted for the subscripted shapes,
+				// which keep them.
+				old = ""
+			}
 			// The operator is not the whole of what `+=` means — see
 			// appendedValue. An attributed name adds here, and the string
 			// join is what is left when the name carries no attribute.

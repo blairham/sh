@@ -193,6 +193,18 @@ func (r *Runner) assignArrayLiteral(name string, elems []*syntax.Word, appendTo 
 // mutant changes is already covered: `unset` reaches the environment through
 // inheritedEnv, so the two spellings agree there.
 func (r *Runner) appendedOverAScalar(name string) (Array, int) {
+	if r.isCompoundVariable(name) {
+		// ksh93's fourth kind is holding a value and it is not one an
+		// element write builds on: the base is occupied — `${#c[@]}` is 1 —
+		// but nothing lands there. `c=(a=1); c+=(x y)` is
+		// `typeset -a c=([1]=x [2]=y)` with element 0 absent, and
+		// `c=(a=1); c[1]=z` is `typeset -a c=([1]=z)` rather than the tree's
+		// rendering in front of it. The one place both routes pass through,
+		// so the transition is stated once — see compoundVariableSubscripted
+		// for what the members do and why the call belongs here.
+		r.compoundVariableSubscripted(name)
+		return Array{}, 1
+	}
 	v, held := r.getVar(name)
 	if !held {
 		return Array{}, 0

@@ -945,10 +945,14 @@ func (r *Runner) bareAssignmentElements(d declaration) ([]string, bool) {
 			// Subscripts appear only where they carry information: an array
 			// that is contiguous from zero lists its values alone.
 			//
-			// Measured aside: the real engine lists an *empty* indexed array
-			// as `typeset -C arr=()`, retyping it as a compound variable.
-			// That is a fact about its type system, not about `-p`, and it
-			// is deliberately not followed — an empty array keeps `-a` here.
+			// Measured aside: one engine reads an *empty literal* as a
+			// compound variable rather than as an empty array, so
+			// `a=(x y); a=()` lists there as `typeset -C a=()`. That is a
+			// fact about the literal and is answered where the literal is
+			// read — see syntax.Dialect.CompoundVariableDeclarators. An
+			// array that became empty by another route keeps `-a` here, and
+			// so does one the letter declared: `typeset -a c=()` is an
+			// empty array in that shell too.
 			if r.arrayHasGaps(d.arr) {
 				elems = append(elems, fmt.Sprintf("[%d]=%s", i, r.listedElement(d.arr[i])))
 			} else {

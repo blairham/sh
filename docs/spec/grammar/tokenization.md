@@ -679,13 +679,14 @@ Measured 2026-09-13 from a script file, because zsh expands no alias under
 BusyBox ash. The first is `0` everywhere, with bash 3.2 writing the blank
 twice; the second is a refusal everywhere, at 2 in five columns, 1 in zsh
 and 3 in ksh93, and the line each names is the alias word's in four of them
-and the end of the input in zsh and dash.
+— bash 5.3, that binary as `sh`, bash 3.2 and ksh93 — and the end of the
+input in the other three.
 
 **Not a rule about quotes.** It is the lexer crossing the seam, so it holds
 for everything the lexer can be inside: both spellings of a command
 substitution carry the same way, and `alias q='echo $('` used as
 `q echo hi)` prints `hi` in all seven. The second direction is the reason
-it matters beyond the construct — a shell that runs `alias a='echo "x'; a`
+it matters beyond the construct — a shell that runs the second script above
 is closing a quote the script never closed and running a command the author
 did not write.
 

@@ -4345,6 +4345,19 @@ echo "reached-after st=$?"`,
 		Why:     "zsh names the script and line, and the function and 0 inside one, where the others print a bare plus",
 	},
 	{
+		ID: "set/a-bare-dash-or-plus-as-an-option-word", Category: "shell options",
+		Snippet: `exec 2>/dev/null
+set - a b; printf "[n=%d:%s]" "$#" "$1"
+set --
+set -v -; d=$-; set +v
+case $d in *v*) printf "[dash=on]";; *) printf "[dash=off]";; esac
+set -v +; p=$-; set +v
+case $p in *v*) printf "[plus=on]";; *) printf "[plus=off]";; esac
+echo`,
+		Script: true,
+		Why:    "a word that is exactly `-` or exactly `+`, in the two halves that answer differently. The first probe is **unanimous** and is here as the control rather than as the finding: every column consumes the word, so `set - a b` leaves two parameters, and this shell leaving three with `-` as the first was a plain defect (#2699) rather than a dialect reading. The other two are the split, and it is three-way: `-` turns `-v` off in four columns and `+` turns it off in one, so no single flag holds both — `interp.BareOptionWordReading` is an enum for that reason. `exec 2>/dev/null` is deliberate: `-v` writes each line back as it is read, and without it the row would be mostly an echo of its own source and would compare *that* rather than the option state. Reading `$-` into a parameter before turning verbose back off is what keeps the window to one line",
+	},
+	{
 		ID: "xtrace/ps4-draws-the-user-escape", Category: "shell options",
 		Snippet: `exec 3>&2 2>trace; PS4='<\u>'; set -x; :; set +x; exec 2>&3; grep -qF "<$(id -un)>" trace && echo names-the-login-name || echo differs`,
 		Why:     "`PS4` goes through the prompt language, which makes the trace prefix the only route to a prompt escape that needs no terminal — every other one has to be typed at a session. Written as a comparison against `id -un` rather than as a name, so the record is a fact about the escape and not about the machine that made it: a row holding a login name passes on one laptop and rots everywhere else. bash draws the password database's answer in both its versions and under `sh`, so the escape survives the argv[0] that costs it process substitution; dash and ksh93 have no user escape, zsh reads `%` there instead, and the three of them draw the two characters or drop the backslash. The redirection is what keeps the drawn name out of the record while still letting the shell see it. This shell answered `differs` for a reason that was not #1446 and was not fixed by it — it did not read `PS4` at all. #1454 gave the trace prefix the parameter and the dialect's prompt language together, which is what this row wanted: `-dialect bash` now draws the login name here",

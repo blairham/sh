@@ -11370,6 +11370,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `xtrace/an-interior-closing-bracket-is-not-the-closer` | **2>** `+ [ -n ] ]~+ [ 1 -lt 2 x~<shell>: 1: [: missing ]` *(status 2)* | **2>** `+ '[' -n ']' ']'~+ '[' 1 -lt 2 x~<shell>: line 1: [: missing `]'` *(status 2)* | **2>** `+ '[' -n ']' ']'~+ '[' 1 -lt 2 x~<shell>: line 1: [: missing `]'` *(status 2)* | **2>** `+ '[' -n ']' ']'~+ '[' 1 -lt 2 x~<shell>: line 0: [: missing `]'` *(status 2)* | **2>** `+ [ -n ']' ]~+ [ 1 -lt 2 x~<shell>: [: ']' missing` *(status 2)* | **2>** `+<shell>:1> [ -n ']' ']'~+<shell>:1> [ 1 -lt 2 x~<shell>:[:1: ']' expected` *(status 2)* | **2>** `+ '[' -n ] ]~+ '[' 1 -lt 2 x~<shell>: missing ]` *(status 2)* |
 | `xtrace/embedded-quote-diverges` | `it's` **2>** `+ x=it's~+ echo it's` | `it's` **2>** `+ x='it'\''s'~+ echo 'it'\''s'` | `it's` **2>** `+ x='it'\''s'~+ echo 'it'\''s'` | `it's` **2>** `+ x='it'\''s'~+ echo 'it'\''s'` | `it's` **2>** `+ x=$'it\'s'~+ echo $'it\'s'` | `it's` **2>** `+<shell>:1> x='it'\''s' ~+<shell>:1> echo 'it'\''s'` | `it's` **2>** `+ x='it'"'"'s'~+ echo 'it'"'"'s'` |
 | `xtrace/prefix-diverges` | `in` **2>** `+ f~+ echo in` | `in` **2>** `+ f~+ echo in` | `in` **2>** `+ f~+ echo in` | `in` **2>** `+ f~+ echo in` | `in` **2>** `+ f~+ echo in` | `in` **2>** `+<shell>:1> f~+f:0> echo in` | `in` **2>** `+ f~+ echo 'in'` |
+| `set/a-bare-dash-or-plus-as-an-option-word` | `[n=2:a][dash=off][plus=on]` | `[n=2:a][dash=off][plus=on]` | `[n=2:a][dash=off][plus=on]` | `[n=2:a][dash=off][plus=on]` | `[n=2:a][dash=off][plus=off]` | `[n=2:a][dash=on][plus=on]` | `[n=2:a][dash=off][plus=on]` |
 | `xtrace/ps4-draws-the-user-escape` | `differs` | `names-the-login-name` | `names-the-login-name` | `names-the-login-name` | `differs` | `differs` | `differs` |
 | `xtrace/ps4-user-escape-is-not-a-variable` | `differs~[impostor]` | `names-the-login-name~[impostor]` | `names-the-login-name~[impostor]` | `names-the-login-name~[impostor]` | `differs~[impostor]` | `differs~[impostor]` | `differs~[impostor]` |
 | `xtrace/ps4-decides-the-prefix` | **2>** `XX :` | **2>** `XX :` | **2>** `XX :` | **2>** `XX :` | **2>** `XX :` | **2>** `XX :` | **2>** `XX :` |
@@ -11606,6 +11607,17 @@ grades it and nothing drift-checks it either, for the same reason.
 - `xtrace/prefix-diverges` — zsh names the script and line, and the function and 0 inside one, where the others print a bare plus
   ```sh
   set -x; f() { echo in; }; f
+  ```
+- `set/a-bare-dash-or-plus-as-an-option-word` — a word that is exactly `-` or exactly `+`, in the two halves that answer differently. The first probe is **unanimous** and is here as the control rather than as the finding: every column consumes the word, so `set - a b` leaves two parameters, and this shell leaving three with `-` as the first was a plain defect (#2699) rather than a dialect reading. The other two are the split, and it is three-way: `-` turns `-v` off in four columns and `+` turns it off in one, so no single flag holds both — `interp.BareOptionWordReading` is an enum for that reason. `exec 2>/dev/null` is deliberate: `-v` writes each line back as it is read, and without it the row would be mostly an echo of its own source and would compare *that* rather than the option state. Reading `$-` into a parameter before turning verbose back off is what keeps the window to one line
+  ```sh
+  exec 2>/dev/null
+  set - a b; printf "[n=%d:%s]" "$#" "$1"
+  set --
+  set -v -; d=$-; set +v
+  case $d in *v*) printf "[dash=on]";; *) printf "[dash=off]";; esac
+  set -v +; p=$-; set +v
+  case $p in *v*) printf "[plus=on]";; *) printf "[plus=off]";; esac
+  echo
   ```
 - `xtrace/ps4-draws-the-user-escape` — `PS4` goes through the prompt language, which makes the trace prefix the only route to a prompt escape that needs no terminal — every other one has to be typed at a session. Written as a comparison against `id -un` rather than as a name, so the record is a fact about the escape and not about the machine that made it: a row holding a login name passes on one laptop and rots everywhere else. bash draws the password database's answer in both its versions and under `sh`, so the escape survives the argv[0] that costs it process substitution; dash and ksh93 have no user escape, zsh reads `%` there instead, and the three of them draw the two characters or drop the backslash. The redirection is what keeps the drawn name out of the record while still letting the shell see it. This shell answered `differs` for a reason that was not #1446 and was not fixed by it — it did not read `PS4` at all. #1454 gave the trace prefix the parameter and the dialect's prompt language together, which is what this row wanted: `-dialect bash` now draws the login name here
   ```sh

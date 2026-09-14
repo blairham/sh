@@ -5995,6 +5995,30 @@ type Semantics struct {
 	//     with the ten measured shapes.
 	SetODeclinesADashWord Answer
 
+	// BareOptionWord is what `set` does with a word that is exactly `-` or
+	// exactly `+`.
+	//
+	// Every column **consumes** it — `set - a b` leaves two positional
+	// parameters in all five, where this shell used to leave three with `-`
+	// as the first (#2699). That much is unanimous and is not this axis. What
+	// splits is whether consuming it also turns `-x` and `-v` off, and the
+	// panel gives three answers rather than two, measured 2026-09-13 over
+	// script files under `env -i PATH=/usr/bin:/bin`:
+	//
+	//	                       set -v -    set -v +
+	//	bash 5.3, dash, ash    verbose off verbose on
+	//	ksh93                  verbose off verbose off
+	//	zsh 5.9.2              verbose on  verbose on
+	//
+	// So `-` clears in four columns and `+` clears in one, and no single
+	// boolean holds both. `set +v -` leaves verbose off everywhere, which is
+	// what says the rule clears rather than toggles.
+	//
+	// The shape that makes it worth having is `set -x -`: a script using the
+	// classic word to stop tracing keeps tracing under the inert reading, and
+	// is handed a positional parameter it never asked for under the old bug.
+	BareOptionWord BareOptionWordReading
+
 	// SetValidatesOptionLettersFirst makes the `set` builtin read the option
 	// letters of every word it was given before it applies any of them, so
 	// that one bad letter anywhere leaves the shell exactly as it was.
@@ -14569,5 +14593,44 @@ func (r *Runner) ask(a Answer, axis string) bool {
 	r.diagf("%s\n", r.unanswered(axis))
 	r.status = 2
 	r.unspecified = true
+	return false
+}
+
+// BareOptionWordReading is what `set` does with a word that is exactly `-` or
+// exactly `+` — see [Semantics.BareOptionWord].
+//
+// Consuming the word is not one of the choices: every column does that, and
+// this shell not doing it was the defect #2699 fixed. What these name is
+// whether the word also clears `-x` and `-v`.
+type BareOptionWordReading uint8
+
+const (
+	// BareOptionWordIsInert consumes the word and changes nothing.
+	//
+	// The zero value, so a dialect that has never been asked reads a bare
+	// `-` the way the narrowest column does rather than the widest — and
+	// one column really does answer this way, so it is a measurement and
+	// not only a safe default.
+	BareOptionWordIsInert BareOptionWordReading = iota
+
+	// BareDashClearsTraceAndVerbose is the classic reading: `-` turns `-x`
+	// and `-v` off, and `+` is consumed with no effect.
+	BareDashClearsTraceAndVerbose
+
+	// BareEitherSignClearsTraceAndVerbose gives `+` the same meaning as `-`,
+	// which one column does and the other four do not. It is the reason this
+	// is an enum rather than a bool on the dash alone.
+	BareEitherSignClearsTraceAndVerbose
+)
+
+// clearsTraceAndVerbose reports whether a bare option word spelled with this
+// sign turns `-x` and `-v` off.
+func (b BareOptionWordReading) clearsTraceAndVerbose(minus bool) bool {
+	switch b {
+	case BareDashClearsTraceAndVerbose:
+		return minus
+	case BareEitherSignClearsTraceAndVerbose:
+		return true
+	}
 	return false
 }

@@ -469,6 +469,15 @@ func (r *Runner) setOptionsAndOperands(_ context.Context, args []string) int {
 			break
 		}
 		on := a[0] == '-'
+		if len(a) == 1 {
+			// A bare `-` or `+`. Consumed by every column; whether it also
+			// turns `-x` and `-v` off is the dialect's, and one column
+			// answers no to both signs. See Semantics.BareOptionWord.
+			if r.sem().BareOptionWord.clearsTraceAndVerbose(on) {
+				r.setLetters("xv", false)
+			}
+			continue
+		}
 		// The long spelling, whose name is the next word. Every option this
 		// shell has can be written either way, and every shell in the panel
 		// uses the same names for them — which is what makes the long form
@@ -622,13 +631,17 @@ func (r *Runner) setOptionsAndOperands(_ context.Context, args []string) int {
 // free to drift from the first. `--` satisfies it and is handled a line
 // earlier, where it ends the options rather than beginning a word of them.
 //
-// A one-character `-` or `+` is not one of these, which is measured and is
-// wrong: `set - a b` leaves three positional parameters here and two in every
-// column that has been asked. Left alone on purpose — see the corners under
-// Semantics.SetODeclinesADashWord, and #2699 — so that the two questions are
-// fixed separately and this one follows that one for free.
+// A one-character `-` or `+` **is** one of these, since #2699. It used not to
+// be, which left `set - a b` with three positional parameters and `-` as the
+// first where every column of the panel leaves two — the word is consumed
+// everywhere, unanimously. What the word then *means* is
+// Semantics.BareOptionWord, which is a three-way and not part of this
+// predicate.
+//
+// `setODeclinedWord` shares this, so `set -o -` now declines the `-` and
+// lists, which is what bash and ksh93 do and is the row #2698 was holding.
 func setOptionWord(a string) bool {
-	return len(a) >= 2 && (a[0] == '-' || a[0] == '+')
+	return len(a) >= 1 && (a[0] == '-' || a[0] == '+')
 }
 
 // setODeclinedWord reports whether a bare `-o` will not take this word as its

@@ -1618,6 +1618,16 @@ type Runner struct {
 	// and not the option's. Set for the length of one call in
 	// ApplyNamedOption; see endOnSetRefusal for the measurement.
 	outsideSetBuiltin bool
+	// throughCommandWord marks the builtin `command` is running right now,
+	// whose specialness that word takes away. POSIX names this as the whole
+	// reason `command` exists — a special builtin's failure is survivable in
+	// front of it — and Runner.takeSpecialBuiltinFailure is the one place it
+	// is read.
+	//
+	// Cleared by Runner.stmt, so it covers the builtin `command` named and
+	// nothing that builtin goes on to run. See takeSpecialBuiltinFailure for
+	// the measurement that draws the line there.
+	throughCommandWord bool
 	// allexport marks every assignment for the environment: `set -a`.
 	allexport bool
 	// extraOptions are the `set -o` names this dialect has beyond the ones
@@ -3340,6 +3350,12 @@ func (r *Runner) stmt(ctx context.Context, st *syntax.Stmt) error {
 	if r.ctl != controlNone {
 		return nil
 	}
+	// A statement is text the shell is running, so whatever `command` made
+	// survivable is behind us: the word covers the builtin it named and not
+	// the commands that builtin goes on to run. Cleared rather than saved,
+	// because runWithoutFunctions is the only setter and it puts back what
+	// it found.
+	r.throughCommandWord = false
 	r.statusBefore = r.status
 	if st.Coprocess {
 		// Before Background, because a coprocess is a background job with

@@ -228,3 +228,57 @@ func TestABareOptionWordMeansThreeDifferentThings(t *testing.T) {
 		})
 	}
 }
+
+// A bare `-` is also where the option parse *stops*, which is the half the
+// consumption row above cannot ask.
+//
+// `set - a b` breaks the loop on `a` whatever the `-` did, so a reading that
+// carries on past the word and one that stops at it score alike there. `set
+// -e - -Z` tells them apart: carrying on reads `-Z` as option letters and
+// refuses it, stopping makes it the one positional parameter. Measured
+// 2026-09-13 from a script file under `env -i` — all seven columns are
+// errexit **on**, silent about `-Z`, and `$1` is `-Z`. Unanimous, so it is
+// asked of no dialect and holds under every reading of what the word *means*.
+func TestABareOptionWordEndsTheOptionParse(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		reading BareOptionWordReading
+	}{
+		{"inert", BareOptionWordIsInert},
+		{"the dash alone", BareDashClearsTraceAndVerbose},
+		{"either sign", BareEitherSignClearsTraceAndVerbose},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := dashWordSem(Yes)
+			sem.BareOptionWord = tc.reading
+			probe := func(src string) (string, int) {
+				return run(t, src, func(r *Runner) { r.Semantics = &sem })
+			}
+
+			out, st := probe("set -e - -Z\n" +
+				"case $- in *e*) echo e=on;; *) echo e=off;; esac\n" +
+				`echo "n=$# 1=[$1]"` + "\n")
+			if out != "e=on\nn=1 1=[-Z]\n" || st != 0 {
+				t.Errorf("`set -e - -Z` gave %q at %d, want errexit on with `-Z` as the one parameter", out, st)
+			}
+
+			// And the spelling that takes a word of its own: an `-o` behind
+			// the `-` is not an `-o`, it is a parameter, and so is the name
+			// that would have followed it.
+			out, st = probe("set -u - -o zzznosuch\n" +
+				"case $- in *u*) echo u=on;; *) echo u=off;; esac\n" +
+				`echo "n=$# 1=[$1] 2=[$2]"` + "\n")
+			if out != "u=on\nn=2 1=[-o] 2=[zzznosuch]\n" || st != 0 {
+				t.Errorf("`set -u - -o zzznosuch` gave %q at %d, want nounset on with two parameters", out, st)
+			}
+
+			// A `--` behind the word is a parameter too, which is what says
+			// the parse really ended rather than merely skipping a word: a
+			// loop still reading options would have taken it as the marker.
+			out, st = probe("set -e - -- x\n" + `echo "n=$# 1=[$1] 2=[$2]"` + "\n")
+			if out != "n=2 1=[--] 2=[x]\n" || st != 0 {
+				t.Errorf("`set -e - -- x` gave %q at %d, want `--` kept as a parameter", out, st)
+			}
+		})
+	}
+}

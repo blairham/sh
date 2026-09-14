@@ -4450,6 +4450,27 @@ echo`,
 		Why:    "a word that is exactly `-` or exactly `+`, in the two halves that answer differently. The first probe is **unanimous** and is here as the control rather than as the finding: every column consumes the word, so `set - a b` leaves two parameters, and this shell leaving three with `-` as the first was a plain defect (#2699) rather than a dialect reading. The other two are the split, and it is three-way: `-` turns `-v` off in four columns and `+` turns it off in one, so no single flag holds both — `interp.BareOptionWordReading` is an enum for that reason. `exec 2>/dev/null` is deliberate: `-v` writes each line back as it is read, and without it the row would be mostly an echo of its own source and would compare *that* rather than the option state. Reading `$-` into a parameter before turning verbose back off is what keeps the window to one line",
 	},
 	{
+		ID: "set/a-bare-dash-ends-the-option-parse", Category: "shell options",
+		Snippet: `set -e - -Z
+case $- in *e*) printf "[e=on]";; *) printf "[e=off]";; esac
+printf "[n=%d:%s]" "$#" "$1"
+set -u - -o zzznosuch
+case $- in *u*) printf "[u=on]";; *) printf "[u=off]";; esac
+printf "[n=%d:%s:%s]\n" "$#" "$1" "$2"`,
+		Script: true,
+		Why:    "where the option parse stops, which is the half the row above could not ask. `set - a b` is the word being *consumed* and breaks the loop on `a` anyway, so it cannot tell a reading that carries on past the `-` from one that stops at it; `set -e - -Z` can, because one of them refuses `-Z` and the other makes it `$1`. All seven columns stop: errexit is on, nothing is said about `-Z`, and it is the one positional parameter. The second half asks the same thing of the spelling that takes a word of its own — `set -u - -o zzznosuch` is nounset on with `-o` and `zzznosuch` as two parameters, so the `-o` behind a bare `-` is not an `-o` at all. Unanimous, so it wants no axis and ours was simply wrong in every dialect: #2699 made the word an option word and had the applying loop `continue` past it, where the reading pass beside it had always returned on a word shorter than two characters (#2742)",
+	},
+	{
+		ID: "opt/command-makes-a-special-builtins-failure-survivable", Category: "shell options",
+		Snippet: `( set -Z; printf "[bare-alive]" ); printf "[bare-sub=%d]" "$?"
+command set -Z; printf "[cmd-st=%d]" "$?"
+( export -q; printf "[exp-alive]" ); printf "[exp-sub=%d]" "$?"
+command export -q; printf "[cmd-exp=%d]" "$?"
+printf "[alive]\n"`,
+		Script: true,
+		Why:    "POSIX's stated reason for the word, and the half of `Semantics.CommandReachesABuiltin` that was implemented nowhere: reaching the builtin worked and surviving it did not. Each refusal is written twice, once bare in a subshell and once behind `command`, so the row is about the word rather than about the refusal — in bash invoked as `sh`, ksh93, dash and BusyBox ash the bare subshell prints no `alive` and reports 2, and the same refusal behind `command` reports 2 with the script carrying on to `[alive]`. bash under its own name never stops here either way and zsh's `command` does not reach a builtin at all, so those two columns say nothing and the four that speak are unanimous: no axis. `set -Z` and `export -q` are both here because the fatality is decided in two different places — `set`'s refusal has an axis per spelling and every other builtin's goes through `BadOptionToSpecialBuiltinFatal` — and a fix in one of them would leave the other where it was. Ours stopped dead on both in three dialects, which is what kept every fact about *state left behind by a fatal refusal* out of the corpus (#2741)",
+	},
+	{
 		ID: "xtrace/ps4-draws-the-user-escape", Category: "shell options",
 		Snippet: `exec 3>&2 2>trace; PS4='<\u>'; set -x; :; set +x; exec 2>&3; grep -qF "<$(id -un)>" trace && echo names-the-login-name || echo differs`,
 		Why:     "`PS4` goes through the prompt language, which makes the trace prefix the only route to a prompt escape that needs no terminal — every other one has to be typed at a session. Written as a comparison against `id -un` rather than as a name, so the record is a fact about the escape and not about the machine that made it: a row holding a login name passes on one laptop and rots everywhere else. bash draws the password database's answer in both its versions and under `sh`, so the escape survives the argv[0] that costs it process substitution; dash and ksh93 have no user escape, zsh reads `%` there instead, and the three of them draw the two characters or drop the backslash. The redirection is what keeps the drawn name out of the record while still letting the shell see it. This shell answered `differs` for a reason that was not #1446 and was not fixed by it — it did not read `PS4` at all. #1454 gave the trace prefix the parameter and the dialect's prompt language together, which is what this row wanted: `-dialect bash` now draws the login name here",
@@ -8964,6 +8985,45 @@ body
 EOF
 ); echo "[$x]"`,
 		Why: "a delimiter that does arrive, as the control for the one below it — and with standard error no longer discarded, that nobody warns when it does",
+	},
+	{
+		ID: "heredoc/a-body-lands-on-the-descriptor-it-was-written-for", Category: "redirection",
+		Snippet: `printf "[A:"; { cat <&3; } 3<<X
+three
+X
+printf "][B:"; cat 3<<Y
+four
+Y
+printf "][C:"; cat <<P 3<<Q
+pee
+P
+queue
+Q
+printf "]\n"`,
+		Script: true,
+		Why:    "the number in front of `<<` is the descriptor the document is opened on, and every column of the panel agrees — so this is a correction and not an axis. Three probes, because the failure is silent in two of them and loud in the third: with the body on 3, the command's standard input is untouched, so `cat 3<<Y` prints **nothing** at status 0 with nothing on standard error, and `cat <<P 3<<Q` prints P's body rather than Q's. `{ cat <&3; } 3<<X` is the loud half — it is the shape `while read -r l <&3; do … done 3<<X` is written with, and a shell that ignored the number answers `3: Bad file descriptor` there. Ours ignored it: `interp/redirect.go` computed the descriptor for every redirection and the here-document branch threw it away, so a body always became standard input (#2743)",
+	},
+	{
+		ID: "heredoc/a-body-on-a-descriptor-outlives-the-exec-that-opened-it", Category: "redirection",
+		Snippet: `exec 3<<X
+kept
+X
+printf "[E:"; cat <&3
+printf "][F:"
+exec {v}<<Y
+named
+Y
+cat <&"$v"
+printf "][v=$v]\n"`,
+		Script: true,
+		Why:    "the other half of the descriptor: a document opened by `exec` is still there at the next command, and `{v}<<Y` allocates a number and hands it to the name. The first is unanimous across all seven columns; the second is only asked of the four that have the `{v}` spelling at all, and it is where the allocation base shows — bash answers 10, ksh93 and zsh answer 11, and dash, BusyBox ash and bash 3.2 have no such form and report `exec: {v}: not found` at 127. Ours left `exec 3<<X` with nothing behind it and `{v}<<Y` with nothing allocated, so `$v` was unset and the `cat` read a descriptor that was never opened. The ksh column still answers 10 here where ksh93 answers 11, which is `FirstAllocatedDescriptor` and is #2756 rather than this",
+	},
+	{
+		ID: "heredoc/a-here-string-lands-on-its-descriptor-too", Category: "redirection",
+		Snippet: `printf "[D:"; { cat <&3; } 3<<<'string'
+printf "]\n"`,
+		Script: true,
+		Why:    "the same rule for the one-line spelling, which shares the branch and so shared the defect. bash, ksh93 and zsh put the line on 3; dash and BusyBox ash have no here-string and stop at `Syntax error: redirection unexpected`, which is why it is a case of its own rather than a fourth probe in the row above — a syntax error at the end of that script would have buried three facts it had already established",
 	},
 	{
 		ID: "heredoc/the-delimiter-is-the-whole-line", Category: "redirection",

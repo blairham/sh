@@ -228,11 +228,19 @@ func (r *Runner) runWithoutFunctions(ctx context.Context, args []string) int {
 		r.ask(r.sem().CommandReachesABuiltin, "`command` in front of a builtin running that builtin") {
 		outer := r.inBuiltin
 		r.inBuiltin = args[0]
+		// And the word takes this builtin's specialness away for the length
+		// of the call, which is what makes its failure survivable. Saved and
+		// put back rather than cleared, because a builtin can run another
+		// one: `command eval 'command set -Z'` is two of these nested.
+		outerCommand := r.throughCommandWord
+		r.throughCommandWord = true
 		// callBuiltin folds a failed write here as well as at the outer
 		// dispatch, so it is blamed on the builtin that wrote:
 		// `command echo hi >&-` names `echo`, not `command`. Measured —
 		// bash words it identically with and without the wrapper.
 		st := r.callBuiltin(ctx, args[0], fn, args[1:])
+		r.takeSpecialBuiltinFailure()
+		r.throughCommandWord = outerCommand
 		r.inBuiltin = outer
 		return st
 	}
@@ -241,4 +249,62 @@ func (r *Runner) runWithoutFunctions(ctx context.Context, args []string) int {
 		return 1
 	}
 	return r.status
+}
+
+// takeSpecialBuiltinFailure ends a special builtin's failure at the `command`
+// that ran it, instead of letting it end the script.
+//
+// POSIX gives this as the reason the word exists, and it is the half of
+// Semantics.CommandReachesABuiltin that was never written: reaching the
+// builtin was implemented and surviving it was not, so `command set -Z` — the
+// only spelling a script has for catching a fatal `set` refusal — ended the
+// script in every dialect that calls such a refusal fatal (#2741).
+//
+// Measured 2026-09-13 from a script file under `env -i`, `command set -Z`
+// followed by an `echo`, against the same two lines with the `command` taken
+// off. The control is what makes the row about the word rather than about the
+// refusal: dash, ksh93, BusyBox ash and bash invoked as `sh` all print the
+// refusal and stop without it, and all four print the refusal, report 2 and
+// carry on with it. bash under its own name never stops here either way, and
+// zsh's `command` does not reach a builtin at all — so those two columns say
+// nothing, and the four that speak are unanimous. Asked of no dialect for
+// that reason.
+//
+// **Here rather than at each fatality**, because a special builtin has many
+// ways to fail and they are decided in as many places: `set`'s refusal has an
+// axis per spelling, an unknown option letter goes through
+// badOptionEndsTheScript, a `shift` past the end and a `shift` whose count is
+// not a number have two more, and `.` on a file that will not open has
+// another. Every one of them is survivable in front of `command`, measured in
+// the same run — `command shift 99`, `command shift -1`, `command shift abc`,
+// `command readonly 1bad=x`, `command unset 1bad`, `command export 1bad=x`,
+// `command . /nonexistent/file` and `command return abc` each report and
+// carry on in bash 5.3, bash as `sh`, ksh93, dash and BusyBox ash. bash 3.2
+// parts from them on exactly one, `command shift abc`, which it stops for;
+// no dialect here claims that build, and it is the same column that answers
+// BadOptionToSpecialBuiltinFatalInPosixMode per builtin. A check at each site
+// would be eight copies of one rule, and the ninth failure added later would
+// not have it.
+//
+// **It takes an error and never a request to stop**, which is the same line
+// abandonKind draws for `.` and `eval`. Measured in the same run: `command
+// exec /nonexistent/prog` ends the shell in every column but zsh — 127, and
+// 126 in bash 3.2 — `command eval 'exit 5'` exits 5, and `set -e; command
+// eval false` stops. None of them is a failure `command` is meant to swallow,
+// and zsh is silent on all three for the reason it is silent above.
+//
+// **And only the builtin's own**, which is what Runner.throughCommandWord
+// still being set says: Runner.stmt clears it, so a flag that survived the
+// call means nothing this builtin ran raised the error. That is where the
+// panel parts and the narrow reading is the one taken here — bash invoked as
+// `sh` ends the script for `command eval 'export -q'`, while ksh93, dash and
+// BusyBox ash end only the `eval`'s text. Those three catch *any* fatal error
+// raised inside a `command`, an unset parameter under `set -u` and a readonly
+// reassignment included, which is a second mechanism rather than a wider
+// reading of this one. It is measured and asked in #2755 rather than guessed
+// at here.
+func (r *Runner) takeSpecialBuiltinFailure() {
+	if r.throughCommandWord && r.pendingFileError() {
+		r.takeFileError()
+	}
 }

@@ -31,14 +31,14 @@ const pathMax = 4096
 // everywhere would refuse paths this kernel resolves.
 const maxSymlinks = 40
 
-func openat(dirfd int, name string, flags int, perm uint32) (int, error) {
+func openatOnce(dirfd int, name string, flags int, perm uint32) (int, error) {
 	return syscall.Openat(dirfd, name, flags, perm)
 }
 
 // readlinkat is reached by number because the standard library does not export
 // it for Linux either, where it exports Openat. The constant is the kernel's
 // own, so this is the same arrangement as the Darwin file.
-func readlinkat(dirfd int, name string, buf []byte) (int, error) {
+func readlinkatOnce(dirfd int, name string, buf []byte) (int, error) {
 	p, err := syscall.BytePtrFromString(name)
 	if err != nil {
 		return 0, err

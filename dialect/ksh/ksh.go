@@ -30,6 +30,11 @@ func Dialect() syntax.Dialect {
 	// bash, against zsh 5.9.2, which refuses the text. See
 	// [syntax.Dialect.SubscriptSpansSeparators].
 	d.SubscriptSpansSeparators = true
+	// A backslash the input ends immediately after is kept only where it is
+	// the first thing in the word: `printf "[%s]" \` is `[\]` here and
+	// `printf "[%s]" x\` is `[x]`, where bash 5.3 keeps both and zsh drops
+	// both. Measured 2026-09-13; see [syntax.EndOfInputBackslash] (#2680).
+	d.BackslashAtEndOfInput = syntax.EndOfInputBackslashIsLiteralOnlyAtAWordStart
 	// And in a redirection's target, where the panel splits three-to-one
 	// against it: `> m[foo bar] echo hi` writes one file here and two words
 	// in every bash. Measured 2026-09-13 on 93u+; see

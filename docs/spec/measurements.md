@@ -6467,6 +6467,12 @@ grades it and nothing drift-checks it either, for the same reason.
 | `core/the-older-substitution-spelling-brings-its-own-quoting-too` | `[e"f]` | `[e"f]` | `[e"f]` | `[e"f]` | `[e"f]` | `[e"f]` | `[e"f]` |
 | `core/a-backslash-quote-inside-backquotes-inside-double-quotes` | `[a b]["c][d"]["e f"]` | `[a b]["c][d"]["e f"]` | `[a b]["c][d"]["e f"]` | `[a b]["c][d"]["e f"]` | `[a b]["c][d"]["e f"]` | `[a b]["c][d"]["e f"]` | `[a b]["c][d"]["e f"]` |
 | `core/the-three-the-older-spelling-always-unescaped` | `[V][a\qb]` | `[V][a\qb]` | `[V][a\qb]` | `[V][a\qb]` | `[V][a\qb]` | `[V][a\qb]` | `[V][a\qb]` |
+| `core/a-backslash-the-input-ends-after` | `[x\]` | `[x\]` | `[x\]` | `[x]` | `[x]` | `[x]` | `[x\]` |
+| `core/a-backslash-that-is-a-word-of-its-own-at-the-end-of-input` | `[a][\]` | `[a][\]` | `[a][\]` | `[a]` | `[a][\]` | `[a][]` | `[a][\]` |
+| `core/a-backslash-at-the-end-of-a-line-rather-than-the-input` | `[a]` | `[a]` | `[a]` | `[a]` | `[a]` | `[a]` | `[a]` |
+| `core/the-older-substitution-nesting-into-the-end-of-input` | `[\echo n\][\][n][`echo n`]` | `[\echo n\][\][n][`echo n`]` | `[\echo n\][\][n][`echo n`]` | `[echo n\][][n][`echo n`]` | `[\echo n\][\][n][`echo n`]` | `[echo n\][][n][`echo n`]` | `[\echo n\][\][n][`echo n`]` |
+| `core/the-older-substitution-nested-three-deep` | `[n][n]` | `[n][n]` | `[n][n]` | `[n][n]` | `[n][n]` | `[n][n]` | `[n][n]` |
+| `core/an-unbalanced-nested-backquote` | **2>** `<shell>: 1: Syntax error: EOF in backquote substitution` *(status 2)* | `A~~B` **2>** `<shell>: command substitution: line 1: unexpected EOF while looking for matching ``'` | `A~~B` **2>** `<shell>: command substitution: line 1: unexpected EOF while looking for matching ``'` | `A~~B` **2>** `<shell>: command substitution: line 0: unexpected EOF while looking for matching ``'~<shell>: command substitution: line 1: syntax error: unexpected end of file` | `A~n~B` | `A` **2>** `<shell>:1: unmatched `~<shell>:1: parse error in command substitution` *(status 1)* | **2>** `<shell>: syntax error: EOF in backquote substitution` *(status 2)* |
 | `core/single-quotes-in-a-quoted-expansion-body` | `['VAL']['']` | `['VAL']['']` | `['VAL']['']` | `['VAL']['']` | `['VAL']['']` | `['VAL']['']` | `['VAL']['']` |
 | `core/a-substitution-inside-those-quotes-is-performed` | `['hi']['bq']` | `['hi']['bq']` | `['hi']['bq']` | `['hi']['bq']` | `['hi']['bq']` | `['hi']['bq']` | `['hi']['bq']` |
 | `core/an-unbalanced-substitution-inside-those-quotes` | **2>** `<shell>: 1: Syntax error: Unterminated quoted string` *(status 2)* | **2>** `<shell>: command substitution: line 2: unexpected EOF while looking for matching `''` *(status 1)* | **2>** `<shell>: -c: line 1: unexpected EOF while looking for matching `''` *(status 2)* | **2>** `<shell>: bad substitution: no closing `)' in 'a$(b'` *(status 1)* | **2>** `<shell>: syntax error at line 1: `(' unmatched` *(status 3)* | **2>** `<shell>:1: unmatched '~<shell>:1: unmatched "` *(status 1)* | **2>** `<shell>: syntax error: unterminated quoted string` *(status 2)* |
@@ -6593,6 +6599,30 @@ grades it and nothing drift-checks it either, for the same reason.
 - `core/the-three-the-older-spelling-always-unescaped` — the guard on the rule the row above extends. `$`, a backquote and a backslash are unescaped in a backquoted body wherever it stands, and a backslash before anything else stays literal — so `\\$v` reaches the inner shell as `$v` and expands, and `a\\qb` keeps its backslash. Unanimous. A change that widened the set by position had to leave these three where they were, and a change that widened it by character would have moved neither
   ```sh
   v=V; printf '[%s]' "`echo \$v`" "`echo 'a\qb'`"; echo
+  ```
+- `core/a-backslash-the-input-ends-after` — a line continuation with no line to continue, and the shape that made a *word* rule into a refusal of the whole script: this shell answered `input ends after a backslash` at status 2, where all seven columns run the line at 0. Nothing refuses, so that half is a correction; what the backslash becomes splits them, and this is the row where ksh93 sides with zsh and drops it. The route is not the variable — a script file with no trailing newline answers exactly as `-c` does — and the row below with a newline after the same backslash is the control that says so
+  ```sh
+  printf '[%s]' x\
+  ```
+- `core/a-backslash-that-is-a-word-of-its-own-at-the-end-of-input` — the same backslash where it is the first thing in the word, and the row that separates ksh93 from zsh: `[a][\]` there against `[a][]`, where the row above has them agreeing. One conversion and two operands rather than two conversions, deliberately — `printf '[%s][%s]'` cannot tell an empty second field from a missing one, and bash 3.2 is the column that loses the *word* along with the backslash where zsh keeps an empty field. That fourth reading is recorded and given no dialect: no preset is bash 3.2
+  ```sh
+  printf '[%s]' a \
+  ```
+- `core/a-backslash-at-the-end-of-a-line-rather-than-the-input` — the control on the two rows above, and the same text: a file ends with a newline, so the backslash is an ordinary line continuation and joins the word to nothing. Unanimous `[a]` across all seven — the operand is gone in every column, including the four that would have kept a backslash. So it is the newline that decides this and not the route, which is what keeps the rule off [syntax.Dialect.CloseQuotesAtEOF]'s axis
+  ```sh
+  printf '[%s]' a \
+  ```
+- `core/the-older-substitution-nesting-into-the-end-of-input` — the nesting the older spelling exists for, written the way that runs into the end of the input, with its three controls beside it. The body is unescaped and re-lexed, so `` `echo \\` `` hands the inner parse `echo \` — a backslash the *inner* input ends after — and the refusal came back out as the outer line's (#2680). The second field is that reduction on its own. The third is the same nesting written so it never runs out, `` `echo \`echo n\`` ``, which is `n` in all seven and moves with nothing; the fourth is the `$( )` spelling, which needs no escaping to nest and hands its body on unchanged, so both backslashes survive. A change to the word rule that reached either control would show here
+  ```sh
+  printf "[%s]" "`echo \\`echo n\\``" "`echo \\`" "`echo \`echo n\``" "$(echo \`echo n\`)"; echo
+  ```
+- `core/the-older-substitution-nested-three-deep` — the same nesting one layer further, because a rule that holds at depth two usually breaks at depth three: each layer doubles the backslashes the backquotes under it have to survive, so the innermost pair is written `\\\`` and the middle one `\``. Unanimous `[n]` — the depth is not an axis, and neither is the spelling. The second field is the same depth in `$( )`, which needs no escaping at any depth; it is the guard that says a change to the older form's unescaping did not reach the newer one's, which takes its body whole
+  ```sh
+  printf "[%s]" "`echo \`echo \\\`echo n\\\`\``" "$(echo $(echo $(echo n)))"; echo
+  ```
+- `core/an-unbalanced-nested-backquote` — the nesting written wrong: the escaped backquote opens an inner body that nothing closes, so the unescaped text the outer substitution hands on runs out mid-substitution. A refusal is a legitimate answer and most of the panel gives one, but status, what reaches standard output and what reaches standard error move independently here and the row records all three. dash and BusyBox ash refuse at 2 having printed nothing — they read the whole line before running any of it; zsh refuses at 1 with `A` already out; bash 5.3, bash as `sh` and bash 3.2 complain on standard error and carry on at **0**, so `A`, an empty line and `B` are all printed; and ksh93 does not object at all and prints `n`. The four answers are four different places to put the boundary of a substitution's parse failure, and ours is zsh's and dash's: `B` is never reached, which is where the `bash` dialect parts from bash (#2703)
+  ```sh
+  echo A; echo "`echo \`echo n`"; echo B
   ```
 - `core/single-quotes-in-a-quoted-expansion-body` — a `${ }` body written inside double quotes is double-quoted *content*, so a single quote in it is an ordinary character rather than a quote: all seven shells keep the two quote characters and substitute the `$v` between them. The empty pair is the guard on the same fact — `''` is two characters here where a quoting reading makes it nothing
   ```sh

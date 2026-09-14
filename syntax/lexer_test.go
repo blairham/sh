@@ -277,7 +277,14 @@ func TestDialectGatesOtherConstructs(t *testing.T) {
 func TestIncompleteIsNotInvalid(t *testing.T) {
 	// A half-typed line is the normal case at a prompt. The caller needs to
 	// tell "ask for another line" from "this is wrong".
-	for _, src := range []string{`"abc`, `'abc`, `$'abc`, `abc\`} {
+	//
+	// `abc\` was in this list and is not an open quote. A quote left open is
+	// refused on every route by every shell in the panel; a backslash the
+	// input ends after is *run* by all eight of them, so it is a finished
+	// word and belongs in endinputbackslash_test.go. The prompt still asks
+	// for another line, from [EndsWithContinuation], which reads the text —
+	// whether more is coming is the reader's question and not the lexer's.
+	for _, src := range []string{`"abc`, `'abc`, `$'abc`} {
 		l := NewLexer(src, Core())
 		l.Tokens()
 		if !l.Incomplete() {

@@ -27,6 +27,11 @@ func Dialect() syntax.Dialect {
 	// `ABC` document. dash and BusyBox ash take only a join that began at
 	// the start of a line, and ksh93 takes neither (#2430).
 	d.HeredocDelimiterAcrossAContinuation = syntax.HeredocDelimiterOnTheJoinedLine
+	// A backslash the input ends immediately after is dropped and the word
+	// it was in stays: `printf "[%s][%s]" a \` prints `[a][]` here and
+	// `[a][\]` in bash 5.3, dash and BusyBox ash. Measured 2026-09-13; see
+	// [syntax.EndOfInputBackslash] (#2680).
+	d.BackslashAtEndOfInput = syntax.EndOfInputBackslashIsDropped
 	// `exec {1}>&-` closes the descriptor a *positional parameter* holds,
 	// which is how a prompt theme's scheduler closes the one it was handed.
 	// zsh alone — see the flag for what bash and ksh93 answer instead.

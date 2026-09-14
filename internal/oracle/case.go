@@ -1725,6 +1725,36 @@ var Corpus = []Case{
 		Why:     "the guard on the rule the row above extends. `$`, a backquote and a backslash are unescaped in a backquoted body wherever it stands, and a backslash before anything else stays literal — so `\\\\$v` reaches the inner shell as `$v` and expands, and `a\\\\qb` keeps its backslash. Unanimous. A change that widened the set by position had to leave these three where they were, and a change that widened it by character would have moved neither",
 	},
 	{
+		ID: "core/a-backslash-the-input-ends-after", Category: "quoting",
+		Snippet: "printf '[%s]' x\\",
+		Why:     "a line continuation with no line to continue, and the shape that made a *word* rule into a refusal of the whole script: this shell answered `input ends after a backslash` at status 2, where all seven columns run the line at 0. Nothing refuses, so that half is a correction; what the backslash becomes splits them, and this is the row where ksh93 sides with zsh and drops it. The route is not the variable — a script file with no trailing newline answers exactly as `-c` does — and the row below with a newline after the same backslash is the control that says so",
+	},
+	{
+		ID: "core/a-backslash-that-is-a-word-of-its-own-at-the-end-of-input", Category: "quoting",
+		Snippet: "printf '[%s]' a \\",
+		Why:     "the same backslash where it is the first thing in the word, and the row that separates ksh93 from zsh: `[a][\\]` there against `[a][]`, where the row above has them agreeing. One conversion and two operands rather than two conversions, deliberately — `printf '[%s][%s]'` cannot tell an empty second field from a missing one, and bash 3.2 is the column that loses the *word* along with the backslash where zsh keeps an empty field. That fourth reading is recorded and given no dialect: no preset is bash 3.2",
+	},
+	{
+		ID: "core/a-backslash-at-the-end-of-a-line-rather-than-the-input", Script: true, Category: "quoting",
+		Snippet: "printf '[%s]' a \\",
+		Why:     "the control on the two rows above, and the same text: a file ends with a newline, so the backslash is an ordinary line continuation and joins the word to nothing. Unanimous `[a]` across all seven — the operand is gone in every column, including the four that would have kept a backslash. So it is the newline that decides this and not the route, which is what keeps the rule off [syntax.Dialect.CloseQuotesAtEOF]'s axis",
+	},
+	{
+		ID: "core/the-older-substitution-nesting-into-the-end-of-input", Category: "quoting",
+		Snippet: "printf \"[%s]\" \"`echo \\\\`echo n\\\\``\" \"`echo \\\\`\" \"`echo \\`echo n\\``\" \"$(echo \\`echo n\\`)\"; echo",
+		Why:     "the nesting the older spelling exists for, written the way that runs into the end of the input, with its three controls beside it. The body is unescaped and re-lexed, so `` `echo \\\\` `` hands the inner parse `echo \\` — a backslash the *inner* input ends after — and the refusal came back out as the outer line's (#2680). The second field is that reduction on its own. The third is the same nesting written so it never runs out, `` `echo \\`echo n\\`` ``, which is `n` in all seven and moves with nothing; the fourth is the `$( )` spelling, which needs no escaping to nest and hands its body on unchanged, so both backslashes survive. A change to the word rule that reached either control would show here",
+	},
+	{
+		ID: "core/the-older-substitution-nested-three-deep", Category: "quoting",
+		Snippet: "printf \"[%s]\" \"`echo \\`echo \\\\\\`echo n\\\\\\`\\``\" \"$(echo $(echo $(echo n)))\"; echo",
+		Why:     "the same nesting one layer further, because a rule that holds at depth two usually breaks at depth three: each layer doubles the backslashes the backquotes under it have to survive, so the innermost pair is written `\\\\\\`` and the middle one `\\``. Unanimous `[n]` — the depth is not an axis, and neither is the spelling. The second field is the same depth in `$( )`, which needs no escaping at any depth; it is the guard that says a change to the older form's unescaping did not reach the newer one's, which takes its body whole",
+	},
+	{
+		ID: "core/an-unbalanced-nested-backquote", Category: "quoting",
+		Snippet: "echo A; echo \"`echo \\`echo n`\"; echo B",
+		Why:     "the nesting written wrong: the escaped backquote opens an inner body that nothing closes, so the unescaped text the outer substitution hands on runs out mid-substitution. A refusal is a legitimate answer and most of the panel gives one, but status, what reaches standard output and what reaches standard error move independently here and the row records all three. dash and BusyBox ash refuse at 2 having printed nothing — they read the whole line before running any of it; zsh refuses at 1 with `A` already out; bash 5.3, bash as `sh` and bash 3.2 complain on standard error and carry on at **0**, so `A`, an empty line and `B` are all printed; and ksh93 does not object at all and prints `n`. The four answers are four different places to put the boundary of a substitution's parse failure, and ours is zsh's and dash's: `B` is never reached, which is where the `bash` dialect parts from bash (#2703)",
+	},
+	{
 		ID: "core/single-quotes-in-a-quoted-expansion-body", Category: "quoting",
 		Snippet: `v=VAL; printf '[%s]' "${u:-'$v'}" "${w:-''}"; echo`,
 		Why:     "a `${ }` body written inside double quotes is double-quoted *content*, so a single quote in it is an ordinary character rather than a quote: all seven shells keep the two quote characters and substitute the `$v` between them. The empty pair is the guard on the same fact — `''` is two characters here where a quoting reading makes it nothing",

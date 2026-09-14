@@ -6530,6 +6530,15 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 		r.setArrayElem(a.Name, idx, subject, r.assignValue(a))
 	default:
 		value := r.assignValue(a)
+		if r.compoundAssignedFromAName(a.Name, value, a.Append) {
+			// A bare *name* on the right of an assignment whose target is
+			// already a compound copies that variable rather than storing
+			// the four characters: `c=(a=1 b=2); d=(a=9); d=c` is
+			// `typeset -C d=(a=1;b=2)` there. Only a compound source is read
+			// that way, which is why this asks and does not always take the
+			// line. See interp/compoundcopy.go.
+			return
+		}
 		if r.assocDeclared(a.Name) && a.Append {
 			// `m+=x` over a declared table joins the element whose key is
 			// `0`. The plain spelling is not here: what a scalar does to a

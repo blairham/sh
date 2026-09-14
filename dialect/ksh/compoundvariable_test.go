@@ -220,3 +220,63 @@ func TestTheCompoundLetterIsNoLongerRefused(t *testing.T) {
 		t.Errorf("IntegerOptions = %q, want the C letter", s.IntegerOptions)
 	}
 }
+
+// Copying a compound is a bare **name** on the right of an assignment, not
+// the value the name reads back as — `d=$c` renders the tree as text and
+// leaves a scalar. Two spellings read the right-hand side that way and they
+// differ in one measured place: a `-C` declaration takes a name of *any*
+// kind, where a bare assignment to a target that is already a compound takes
+// only another compound and otherwise stores the text.
+//
+// Measured on ksh93u+ 2012-08-01, 2026-09-13. See interp/compoundcopy.go.
+func TestACompoundIsCopiedByName(t *testing.T) {
+	for _, c := range []struct{ src, want string }{
+		{`c=(a=1 b=2); typeset -C d=c; typeset -p d`, "typeset -C d=(a=1;b=2)\n"},
+		{`c=(a=1 b=2); d=(a=9); d=c; typeset -p d`, "typeset -C d=(a=1;b=2)\n"},
+		// The copy is independent afterwards, which is what makes it a copy
+		// rather than another name for the same tree.
+		{`c=(a=1); typeset -C d=c; d.a=9; printf '[%s]' "${c.a}" "${d.a}"`, "[1][9]"},
+		// The right-hand name decides the *kind*, so a scalar source leaves
+		// a scalar and an array source an array — the `-C` letter says how
+		// the value is read and not what the target ends up being.
+		{`x=5; typeset -C d=x; typeset -p d`, "d=5\n"},
+		{`a=(x y); typeset -C d=a; typeset -p d`, "typeset -a d=(x y)\n"},
+		{`typeset -A h=([k]=v); typeset -C d=h; typeset -p d`, "typeset -A d=([k]=v)\n"},
+		// A member is a name, so it is a source like any other.
+		{`c=(a=(p=1)); typeset -C d=c.a; typeset -p d`, "typeset -C d=(p=1)\n"},
+		{`c=(a=1); typeset -C d=c.a; typeset -p d`, "d=1\n"},
+		// A source nobody set takes the target with it rather than leaving
+		// an empty compound behind, which is the same statement
+		// Runner.moveParameter makes about a move with nothing to move.
+		{`d=hello; typeset -C d=nosuch; printf '[%s]' "$d"; [[ -v d ]] || echo unset`, "[]unset\n"},
+		// Text that is not a name at all is not a source, so the letter's
+		// own empty compound is what stands.
+		{`typeset -C d="not a name"; typeset -p d`, "typeset -C d=()\n"},
+		{`c=(a=1 b=2); typeset -C d=${c}; typeset -p d`, "typeset -C d=()\n"},
+		// The target is emptied before the source is read, which is the rule
+		// a self-copy states on its own.
+		{`c=(a=1); typeset -C d=(z=2); typeset -C d=c; typeset -p d`, "typeset -C d=(a=1)\n"},
+		{`c=(a=1); typeset -C c=c; typeset -p c`, "typeset -C c=()\n"},
+		// `+=` merges instead, with the source standing over the target.
+		{`c=(a=1); typeset -C d=(z=2); d+=c; typeset -p d`, "typeset -C d=(a=1;z=2)\n"},
+		{`c=(a=1 z=3); typeset -C d=(z=2); d+=c; typeset -p d`, "typeset -C d=(a=1;z=3)\n"},
+		// A member's attributes travel, because they are part of the
+		// compound's value; the root's do not, because they belong to the
+		// name holding it. Both rows measured.
+		{`c=(typeset -i n=5); typeset -C d=c; typeset -p d.n`, "typeset -i d.n=5\n"},
+		{`typeset -i x=7; typeset -C d=x; typeset -p d`, "d=7\n"},
+		// The nesting travels whole.
+		{`c=(a=1 b=(y=2)); typeset -C d=c; printf '[%s]' "${d.b.y}" "${!d.@}"`, "[2][d.a][d.b][d.b.y]"},
+		// The bare spelling reads only a compound out of the name: every
+		// other kind is the text it was written as, and a target that was
+		// not a compound is never a copy at all.
+		{`x=5; d=(a=9); d=x; typeset -p d`, "d=x\n"},
+		{`a=(p q); d=(a=9); d=a; typeset -p d`, "d=a\n"},
+		{`c=(a=1 b=2); d=c; typeset -p d`, "d=c\n"},
+		{`c=(a=1); typeset -C d=(z=2); d=nosuchname; typeset -p d`, "d=nosuchname\n"},
+	} {
+		if out, st := kshOut(t, c.src); out != c.want || st != 0 {
+			t.Errorf("%s\n got %q at %d\nwant %q at 0", c.src, out, st, c.want)
+		}
+	}
+}

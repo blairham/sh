@@ -266,3 +266,53 @@ cg=1
 cg.b=2
 typeset -p cg
 printf '%s\n' "${cg.b}"
+
+# Copying a compound is a bare *name* on the right of an assignment, and the
+# spelling that reads it that way is a `-C` declaration or an assignment whose
+# target is already one. The right-hand name decides the kind, so a scalar
+# source leaves a scalar.
+ch=(a=1 b=2)
+typeset -C ci=ch
+typeset -p ci
+ci.a=9
+printf '[%s][%s]\n' "${ch.a}" "${ci.a}"
+cj=(a=9)
+cj=ch
+typeset -p cj
+ck=5
+typeset -C cl=ck
+typeset -p cl
+
+# A source nobody set takes the target with it; text that is not a name at all
+# leaves the empty compound the letter declared.
+cm=hello
+typeset -C cm=nosuchnameanywhere
+printf '[%s]\n' "$cm"
+typeset -C cn="not a name"
+typeset -p cn
+
+# The target is emptied before the source is read, and `+=` merges instead of
+# replacing — with the source's members standing over the target's own.
+co=(a=1 z=3)
+typeset -C cp=(z=2)
+typeset -C cp=co
+typeset -p cp
+typeset -C cq=(z=2)
+cq+=co
+typeset -p cq
+
+# A member's attributes travel with the copy, because they are part of the
+# compound's value rather than of the name holding it.
+cr=(typeset -i n=5)
+typeset -C cs=cr
+typeset -p cs.n
+
+# The bare spelling reads only a compound out of the name: every other kind is
+# the text it was written as, and so is a target that was not a compound.
+ct=5
+cu=(a=9)
+cu=ct
+typeset -p cu
+cv=(a=1 b=2)
+cw=cv
+typeset -p cw

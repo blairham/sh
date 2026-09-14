@@ -255,6 +255,12 @@ func Semantics() interp.Semantics {
 	// `typeset: not found` at 127, so neither the tie nor the type reading
 	// of the letter can be put to this shell (#2419).
 	// unanswered DeclareHideValueLetter: the same, for `typeset -H q=1`.
+	// unanswered ProducedParameterListing: the axis is what a listing with no
+	// operands writes for a produced parameter, and there is no listing.
+	// Measured 2026-09-13 in the pinned image, `typeset -p` and `declare -p`
+	// are both `not found` at 127 — and unlike dash this shell *does* have a
+	// `$RANDOM`, so the wall is the missing builtin and not the missing
+	// parameter (#2518).
 	// unanswered ExpansionResultSuppliesGroupSyntax: BusyBox ash has no
 	// pattern groups either, for the same reason dash has none.
 	// unanswered TableLetterReachesItsOwnOperandsSubscript: BusyBox ash has

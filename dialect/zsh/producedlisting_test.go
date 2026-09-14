@@ -56,3 +56,40 @@ func TestTheClockParametersListWithTheirLetters(t *testing.T) {
 		}
 	}
 }
+
+// And the listing with **no operands** carries the readings, where bash's
+// writes the names alone. Measured 2026-09-13, zsh 5.9.2, `env -i
+// PATH=/usr/bin:/bin` with a scratch HOME, over a script file, with nothing
+// having read the parameters first:
+//
+//	typeset -p | grep RANDOM    typeset -i10 RANDOM=11798
+//	typeset -p | grep SECONDS   typeset -i10 SECONDS=0
+//	typeset -p | grep LINENO    nothing
+//
+// `LINENO` stays out because it is silent to the `-p` word, which is a fact
+// of the parameter and not of this listing — so the two rules meet here, and
+// the row asserting its absence is what says the bare listing goes through
+// the same silence the named form does (#2518).
+//
+// The reading is re-drawn on each listing, as ksh93's is: two of them a line
+// apart hold `RANDOM=22537` and then `RANDOM=21677`. That has to be measured
+// with a redirection rather than a pipe, because `typeset -p | grep` forks
+// the listing and two forks off one state draw the same number.
+func TestABareListingCarriesTheProducedReadings(t *testing.T) {
+	dir := t.TempDir()
+	out, st := runZsh(t, dir, "typeset -p")
+	if st != 0 {
+		t.Fatalf("typeset -p answered %d, want 0: %q", st, out)
+	}
+	for _, want := range []string{
+		`(?m)^typeset -i10 RANDOM=[0-9]+$`,
+		`(?m)^typeset -i10 SECONDS=[0-9]+$`,
+	} {
+		if !regexp.MustCompile(want).MatchString(out) {
+			t.Errorf("typeset -p = %q, want a row matching %q", out, want)
+		}
+	}
+	if regexp.MustCompile(`(?m)^\S.*\bLINENO\b`).MatchString(out) {
+		t.Errorf("typeset -p = %q, want no LINENO row — it is silent to `-p`", out)
+	}
+}

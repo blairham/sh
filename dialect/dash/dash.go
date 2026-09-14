@@ -264,6 +264,12 @@ func Semantics() interp.Semantics {
 	// found` at 127, so there is no builtin here to read the letter either
 	// way (#2419).
 	// unanswered DeclareHideValueLetter: the same, for `typeset -H h=hid`.
+	// unanswered ProducedParameterListing: the axis is what a listing with no
+	// operands writes for a produced parameter, and there is no listing.
+	// Measured 2026-09-13, `env -i PATH=/usr/bin:/bin` with a scratch HOME:
+	// `typeset -p` and `declare -p` are both `not found` at 127, and this
+	// dialect registers no producer with SetDynamicDeclaration for one to
+	// name anyway — it has neither RANDOM nor SECONDS (#2518).
 	// unanswered ExpansionResultSuppliesGroupSyntax: dash has no pattern
 	// groups at all, so `(`, `)` and `|` out of a value are text here
 	// however they arrived and there is nothing for the axis to choose.

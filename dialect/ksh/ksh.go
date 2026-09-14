@@ -478,6 +478,19 @@ func Semantics() interp.Semantics {
 	// with no attributes as a bare `v=1`; a missing name is passed over in
 	// silence, status 0, which is measured rather than a shortcut.
 	s.DeclareListing = interp.DeclareListingBareAssignments
+	// A listing with no operands writes the produced parameters with their
+	// readings, and re-reads the producer to get them. Measured 2026-09-13,
+	// ksh93u+ 2012-08-01, `env -i PATH=/usr/bin:/bin` with a scratch HOME,
+	// over a script file: `typeset -i LINENO=1`, `typeset -i RANDOM=18168`,
+	// `typeset -F 3 SECONDS=0.003`, with no reference to any of them first.
+	//
+	// It re-reads rather than repeating a stored one, and that is observable
+	// rather than inferred — two listings a line apart in the same shell hold
+	// `RANDOM=9218` then `RANDOM=14475`, and `SECONDS=0.009` then
+	// `SECONDS=0.011`. So a listing here differs from itself, which is the
+	// hazard interp/localbuiltin.go warns about and is this column's real
+	// behavior rather than a defect to design around (#2518).
+	s.ProducedParameterListing = interp.ProducedListingWithValue
 	s.DeclareValueQuoting = interp.ListingQuoteWhenNeededDollar
 	// And a `#` in a listed value is left bare unless a name stands in front
 	// of the first one: `16#ff`, `99#zz` and `1a#b` all list unquoted here

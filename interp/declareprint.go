@@ -434,9 +434,39 @@ func (r *Runner) declarePrintForm(names []string, form DeclarationListingForm, d
 	}
 	status := 0
 	filtered := false
+	// The produced parameters this listing added on top of the walk, and
+	// whether the dialect wants their reading written. See
+	// Semantics.ProducedParameterListing: the value is a per-dialect fact
+	// and the *names* are the registering dialect's, so a shell that has
+	// registered none reaches none of this and is never asked the axis.
+	var produced map[string]bool
+	nameOnly := false
 	if len(names) == 0 {
 		names = r.declarableNames()
 		filtered = keep != nil
+		if !filtered {
+			// The unfiltered `-p` alone. `export -p` and `readonly -p` come
+			// through here with a filter, and no produced parameter carries
+			// either attribute in any column of the panel — so they are left
+			// out rather than admitted and then rejected, which would make
+			// the axis a question those two builtins ask and never use.
+			if add := r.producedListingNames(names); len(add) > 0 {
+				listing := r.producedListing()
+				if r.unspecified {
+					return r.status
+				}
+				nameOnly = listing == ProducedListingNameOnly
+				produced = make(map[string]bool, len(add))
+				seen := make(map[string]bool, len(names)+len(add))
+				for _, name := range names {
+					seen[name] = true
+				}
+				for _, name := range add {
+					seen[name], produced[name] = true, true
+				}
+				names = sortedNames(seen)
+			}
+		}
 	}
 	for _, name := range names {
 		d, known := r.declarationOf(name)
@@ -479,6 +509,14 @@ func (r *Runner) declarePrintForm(names []string, form DeclarationListingForm, d
 			// is still in the listing the bare word writes, and the
 			// bare-assignment form is the one this engine renders those with.
 			continue
+		}
+		if produced[name] && nameOnly {
+			// The row and its letters, and no reading. Done by taking the
+			// value off the declaration rather than by a branch in each
+			// renderer: every form already writes the bare name for a name
+			// that has none, which is the same row this wants and is
+			// measured to be bash's — `declare -i RANDOM`.
+			d.value, d.hasValue = "", false
 		}
 		r.printf("%s\n", r.listedDeclaration(form, d))
 	}

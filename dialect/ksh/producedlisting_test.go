@@ -36,3 +36,27 @@ func TestAProducedParameterListsBack(t *testing.T) {
 		}
 	}
 }
+
+// And the listing with **no operands** carries the reading, where bash's
+// writes the name alone. Measured 2026-09-13 on ksh93u+ 2012-08-01, `env -i
+// PATH=/usr/bin:/bin` with a scratch HOME, over a script file, with nothing
+// having read the parameter first:
+//
+//	typeset -p | grep RANDOM   typeset -i RANDOM=18168
+//
+// It re-reads the producer to get it, which is observable: two listings a
+// line apart hold `RANDOM=32035` and then `RANDOM=1241`. Measure that with a
+// redirection and not a pipe — `typeset -p | grep` forks the listing, and two
+// forks off one state draw the same number (#2518).
+func TestABareListingCarriesTheProducedReading(t *testing.T) {
+	dir := t.TempDir()
+	out, st := runKsh(t, dir, "typeset -p")
+	if want := regexp.MustCompile(`(?m)^typeset -i RANDOM=[0-9]+$`); !want.MatchString(out) || st != 0 {
+		t.Errorf("typeset -p = %q at %d, want a `typeset -i RANDOM=<n>` row at 0", out, st)
+	}
+	// `LINENO` beside it, because a row keyed off `RANDOM` alone would pass
+	// on a listing that had reached one producer and stopped.
+	if want := regexp.MustCompile(`(?m)^typeset -i LINENO=[0-9]+$`); !want.MatchString(out) {
+		t.Errorf("typeset -p = %q, want a `typeset -i LINENO=<n>` row too", out)
+	}
+}

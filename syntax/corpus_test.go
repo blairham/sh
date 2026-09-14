@@ -72,6 +72,19 @@ func TestCorpusParses(t *testing.T) {
 				}
 				return
 			}
+			// A snippet that is only a program once an alias body has been
+			// substituted into it must be refused here, for the reason the
+			// reference shells' own static read refuses it: nothing has run,
+			// so the name is still a name. Asserted rather than skipped —
+			// the mark says what the static read does, so it is checkable,
+			// and a case that quietly started parsing would mean the mark is
+			// wrong or the parser is expanding aliases it was never handed.
+			if c.ExpansionCompletes {
+				if p.Err() == nil {
+					t.Fatalf("parsed a snippet that is only a program after an alias expands\n  snippet: %s", c.Snippet)
+				}
+				return
+			}
 			if err := p.Err(); err != nil {
 				t.Fatalf("did not parse: %v\n  snippet: %s", err, c.Snippet)
 			}

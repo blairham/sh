@@ -282,6 +282,32 @@ type Case struct {
 	// flag answerable; naming the panel would not.
 	SyntaxError bool
 
+	// ExpansionCompletes marks a case whose text is a complete program only
+	// after the shell has substituted something into it at run time. So far
+	// that is one shape: an alias body carrying part of a construct whose
+	// rest is written in the input.
+	//
+	// A static read of such a snippet refuses it, and is **right** to. Until
+	// `alias fn='f()'` has run, `fn { echo hi; }` is a command followed by a
+	// brace group and there is no grammar under which that is a function
+	// definition — a reader that never runs anything cannot know what the
+	// name will turn into. bash's own `-n` refuses the same text for the same
+	// reason, measured.
+	//
+	// It is not [SyntaxError], and keeping the two apart is the point rather
+	// than a nicety. A SyntaxError case is one the reference shells reject
+	// and this parser must reject too; this is one every column in the panel
+	// *runs*, and whose static refusal is correct rather than a finding.
+	// Marking one as the other would have the parser's conformance test
+	// assert a rejection that the row three columns to the right contradicts.
+	//
+	// What it excuses is exactly the static read, and only where a static
+	// read is all there is: the printer's three promises, the round trip, and
+	// the parse the corpus otherwise requires of every snippet. The case is
+	// still run, graded and drift-checked in all seven columns like any
+	// other, which is where its evidence was always going to come from.
+	ExpansionCompletes bool
+
 	// ReferenceRaces marks a case whose *reference* output is not stable,
 	// because the shell being measured races with itself.
 	//
@@ -18237,6 +18263,46 @@ t
 echo end`,
 		Why:    "the same fault at the other question that reads the input between two tokens: a loop variable is compared against the source text to see whether it was written plainly, and for a spliced token that text is the alias's own name — so every loop in a body was refused for a variable it did not have. A different construct and a different check, which is what makes it a second row rather than a restatement (#2299)",
 		Script: true,
+	},
+	{
+		ID: "alias/a-body-may-open-a-function-definition", Category: "alias",
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias fn='f() {'
+fn
+ echo hi
+}
+f`,
+		Why:                "the third question the grammar answers by looking at the *input* rather than at what the parser is about to read. `name` and `name()` are the same word until the parenthesis, so a word at command position is a command right up to the lookahead — and the lookahead asked the lexer, which after an alias expansion is standing past the alias word on text that has nothing to do with the definition. Every column defines the function and answers `hi`: dash, bash 5.3, that binary as `sh`, bash 3.2, ksh93, zsh and BusyBox ash. We answered a syntax error at 2. It was found while deriving the `2 / 0` row of #2299 and, measured, it is **not** that row: the fix moves the burndown figure and leaves that file ending where it ended, and the row's cause is #2685",
+		ExpansionCompletes: true,
+		Script:             true,
+	},
+	{
+		ID: "alias/a-body-may-end-at-the-parens-of-a-definition", Category: "alias",
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias fn='f()'
+fn { echo hi; }
+f`,
+		Why:                "the same seam one token earlier, which is a branch of its own rather than a restatement: the body ends at the `)` and the brace that opens the body is the input's. It is the row that says the lookahead is answered from *both* sides of the seam — a fix that only read the pending tokens when the whole pair was there would leave this one refused, and a fix that only handled this one would leave the row above refused. Unanimous across the panel",
+		ExpansionCompletes: true,
+		Script:             true,
+	},
+	{
+		ID: "alias/a-body-may-end-at-an-anonymous-functions-parens", Category: "alias",
+		Snippet: `alias af='()'
+af { echo hi; }`,
+		Why:                "the same seam read from the *inside*, where the `(` is already the current token and what is asked is the `)` after it. Only zsh has an anonymous function to ask it of, and zsh takes it through an alias: `hi` at 0, where the other six read the parentheses as something they refuse. It is here because the inside reading is a second helper asking the same question, and a fix to the outside one alone would leave it looking at the wrong text",
+		ExpansionCompletes: true,
+		Script:             true,
+	},
+	{
+		ID: "alias/a-body-may-end-at-the-parens-of-two-names", Category: "alias",
+		Snippet: `alias ab='a b ()'
+ab { echo "[$0]"; }
+a
+b`,
+		Why:                "the second inside reading, and the one that needs both halves of the seam at once: the names and the `(` come from the body and the `)` is the last token of it, with the brace in the input. zsh defines both names and prints `[a]` and `[b]`; nothing else in the panel has a definition that takes more than one name at all",
+		ExpansionCompletes: true,
+		Script:             true,
 	},
 	{
 		ID: "alias/nested-text-expands-where-the-command-string-did-not", Category: "alias",

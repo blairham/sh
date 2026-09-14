@@ -1753,7 +1753,7 @@ func (p *Parser) parseCommand() Command {
 	switch {
 	case p.at(TokEOF), p.at(TokNewline), p.atStopWord():
 		return nil
-	case p.at(TokLeftParen) && p.dialect.AnonymousFunction && p.lex.peekIsRightParen():
+	case p.at(TokLeftParen) && p.dialect.AnonymousFunction && p.peekIsRightParen():
 		// `()` where a command begins is an empty parameter list rather than
 		// a subshell with nothing in it — which every dialect refuses, so
 		// nothing is taken away by reading it this way.
@@ -2601,7 +2601,7 @@ func (p *Parser) parseSimple() Command {
 			if len(c.Assigns) == 0 && seenArg && p.dialect.FunctionMultipleNames &&
 				p.argsCanBeFuncNames(c.Args) &&
 				p.canBeFuncName(p.tok.Spans, p.tok.Literal()) &&
-				p.lex.peekIsFuncParens() {
+				p.peekIsFuncParens() {
 				return p.parseFuncPosixNames(c)
 			}
 			seenArg = true
@@ -2613,7 +2613,7 @@ func (p *Parser) parseSimple() Command {
 			c.Args = append(c.Args, p.word())
 		case p.at(TokLeftParen) && len(c.Assigns) == 0 && len(c.Redirs) > 0 &&
 			p.dialect.FunctionMultipleNames && p.argsCanBeFuncNames(c.Args) &&
-			p.lex.peekIsRightParen():
+			p.peekIsRightParen():
 			// A redirection written *between* the names and the parentheses,
 			// which is a definition too and whose redirection is the body's:
 			// `a b >out () { echo "[$0]"; }` sends both calls to the file.
@@ -2943,7 +2943,7 @@ func (p *Parser) looksLikeFuncDef() bool {
 		//
 		// `=` is still excluded, and for the reason below: an assignment of an
 		// array is a parenthesis after a word too.
-		return !strings.Contains(p.tok.Literal(), "=") && p.lex.peekIsLeftParen()
+		return !strings.Contains(p.tok.Literal(), "=") && p.peekIsLeftParen()
 	}
 	// A function name is a name — plus the punctuation the dialect allows —
 	// so it cannot contain `=`. Without this, `a=()` — an empty array — was
@@ -2966,12 +2966,12 @@ func (p *Parser) looksLikeFuncDef() bool {
 		if _, isAssign := p.isAssign(p.tok); isAssign {
 			return false
 		}
-		return p.lex.peekIsFuncParens()
+		return p.peekIsFuncParens()
 	}
 	if !isFuncName(p.tok.Literal(), p.dialect.FunctionNamePunctuation) {
 		return false
 	}
-	return p.lex.peekIsFuncParens()
+	return p.peekIsFuncParens()
 }
 
 // tokenIsPlainText reports whether t holds text and nothing the shell would
@@ -3025,7 +3025,46 @@ func (p *Parser) anyWordFuncDef() bool {
 		// before this flag existed stands still.
 		return false
 	}
-	return p.lex.peekIsFuncParens()
+	return p.peekIsFuncParens()
+}
+
+// peekIsLeftParen and peekIsRightParen are peekIsFuncParens' one-parenthesis
+// halves, asked the same way and for the same reason. The right-hand one is
+// asked where the `(` is already the current token, which is the other side of
+// the same seam: a body ending in `(` leaves the `)` pending behind it.
+func (p *Parser) peekIsLeftParen() bool {
+	if len(p.pending) > 0 {
+		return p.pending[0].Kind == TokLeftParen
+	}
+	return p.lex.peekIsLeftParen()
+}
+
+func (p *Parser) peekIsRightParen() bool {
+	if len(p.pending) > 0 {
+		return p.pending[0].Kind == TokRightParen
+	}
+	return p.lex.peekIsRightParen()
+}
+
+// peekIsFuncParens is the `()` lookahead of a function definition, asked of
+// whatever this parser reads next — which is not always the lexer.
+//
+// An alias expansion puts its body's tokens in front of the lexer rather than
+// splicing its text into the input (see alias.go), so after `alias fn='f() {'`
+// the parenthesis pair is in p.pending while the lexer stands *past* the alias
+// word, on input that has nothing to do with the definition. Asking the lexer
+// there reads the wrong text and the definition is refused — measured on
+// `main`, where every other shell in the panel defines the function.
+func (p *Parser) peekIsFuncParens() bool {
+	switch len(p.pending) {
+	case 0:
+		return p.lex.peekIsFuncParens()
+	case 1:
+		// The body ended between the two, so the `)` is the lexer's.
+		return p.pending[0].Kind == TokLeftParen && p.lex.peekIsRightParen()
+	default:
+		return p.pending[0].Kind == TokLeftParen && p.pending[1].Kind == TokRightParen
+	}
 }
 
 func (p *Parser) parseFuncPosix() Command {

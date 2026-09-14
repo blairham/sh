@@ -35,6 +35,12 @@ func TestPrintedSourceStillMeansTheSameThing(t *testing.T) {
 		if c.SyntaxError {
 			continue
 		}
+		if c.ExpansionCompletes {
+			// There is no tree to print: the snippet becomes a program only
+			// when an alias body is substituted into it, and this test parses
+			// the text as written.
+			continue
+		}
 		if c.LayoutSensitive {
 			// What this case pins is where a diagnostic points, which is a
 			// fact about the source's layout. The printer promises meaning,

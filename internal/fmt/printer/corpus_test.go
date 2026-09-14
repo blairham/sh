@@ -43,6 +43,13 @@ func TestFormattingTheCorpusKeepsItsPromises(t *testing.T) {
 					// the reference shells reject them.
 					continue
 				}
+				if c.ExpansionCompletes {
+					// Nothing to lay out either, for the opposite reason:
+					// the shells run these, and the text is a program only
+					// once an alias body is substituted into it. A formatter
+					// reads and never runs, so it has no tree here.
+					continue
+				}
 				in, err := syntax.Parse(c.Snippet, d)
 				if err != nil {
 					t.Errorf("%s: did not parse: %v\n  snippet: %s", c.ID, err, c.Snippet)

@@ -284,3 +284,38 @@ func TestTheTieLetterIsTheDialectsToGive(t *testing.T) {
 		t.Errorf("typeset -T without the letter = %q (status %d), want %q with 2", errs, st, want)
 	}
 }
+
+// A prefix is taken back from **both** halves, which is the same rule as the
+// two above read from the far end: writing either name moves the other, so a
+// prefix on one of them has changed two cells and giving one back is giving
+// half of it back.
+//
+// It was half of it. `S=x:y true` left `s` holding the prefix's fields with
+// `S` back at what it had — two names for one value disagreeing, which is the
+// one state a tie does not have. Measured against the shell with the letter:
+// the array half holds what it held before the command.
+func TestAPrefixOnATiedNameIsTakenBackFromBothHalves(t *testing.T) {
+	out, errs, st := declRun(t, `typeset -T S s
+S=a:b
+S=x:y true
+echo "S=[$S] s=[${s[@]}]"`, withTies, Diagnostics{})
+	want := "S=[a:b] s=[a b]\n"
+	if out != want || st != 0 || errs != "" {
+		t.Errorf("a prefix over a tie = %q (stderr %q, status %d), want %q", out, errs, st, want)
+	}
+}
+
+// And what comes back is whatever the *array* half last made it, which is the
+// direction that says the take-back follows the tie rather than replaying the
+// scalar the prefix happened to name.
+func TestAPrefixOverATieGivesBackWhatTheArrayHalfLeft(t *testing.T) {
+	out, errs, st := declRun(t, `typeset -T S s
+S=a:b
+s=(c d)
+S=x:y true
+echo "S=[$S] s=[${s[@]}]"`, withTies, Diagnostics{})
+	want := "S=[c:d] s=[c d]\n"
+	if out != want || st != 0 || errs != "" {
+		t.Errorf("a prefix over a tie = %q (stderr %q, status %d), want %q", out, errs, st, want)
+	}
+}

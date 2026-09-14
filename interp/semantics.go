@@ -8149,6 +8149,51 @@ type Semantics struct {
 	// `hash` can tell them apart.
 	ALookupRemembersThePath Answer
 
+	// APrefixedPathEmptiesTheCommandHash lets a `PATH=… cmd` prefix reach
+	// this shell's own PATH, which empties the command hash the way any
+	// other assignment to the name does — and putting the old value back
+	// does not refill it, so the table is empty once the command is over.
+	//
+	// A 4-3 split, and the four are not the columns a reader would guess.
+	// Measured 2026-09-13 with `zzc` in two directories, d1 first on PATH
+	// and hashed by a run, then `PATH=$PWD/d2 zzc` and a listing:
+	//
+	//	bash 5.3.15   the table is empty
+	//	bash-as-sh    empty
+	//	dash          empty
+	//	BusyBox ash   empty
+	//	bash 3.2.57   zzc, still d1's copy, at its old hit count
+	//	ksh93         zzc, still d1's copy
+	//	zsh 5.9.2     zzc, still d1's copy
+	//
+	// So the question underneath is whether the prefix reaches the shell at
+	// all for a command that is not a builtin: the four that empty apply it
+	// and take the value back, and the three that keep the table never
+	// applied it — the new PATH went to the child and to the search and
+	// nowhere else. bash 3.2 is on the other side from bash 5.3, which is
+	// why the panel column is worth having; the dialect follows 5.3.
+	//
+	// **Only where the prefix stands in front of something that is not a
+	// builtin.** A prefix to a builtin is visible to the builtin while it
+	// runs — that is what `IFS=: read x y` is — so it really is an
+	// assignment, and every column but bash 3.2 empties the table for one:
+	// measured, `PATH=/nowhere true` and `PATH=/nowhere :` both leave an
+	// empty table in bash, ksh93, zsh, dash and ash alike. `command` goes
+	// with the external route rather than the builtin one, because a
+	// precommand word's prefix belongs to what it runs.
+	//
+	// The one arrangement that discriminates is two copies of a name on
+	// PATH with the first hashed: with one copy every column fails the
+	// prefixed run, and with no hashed entry every column re-searches, so
+	// neither tells the readings apart.
+	//
+	// **Read rather than asked** — see holdCommandHashAcrossAPrefixedPath.
+	// The command prints what it prints either way and only a later `hash`
+	// can see the difference, so refusing the command where no dialect has
+	// answered would be an over-refusal, the same judgement
+	// ALookupRemembersThePath makes.
+	APrefixedPathEmptiesTheCommandHash Answer
+
 	// HashObeysCommandTracking stops filling the command hash when command
 	// tracking is turned off — bash's `hashall` and `set +h`, zsh's
 	// `hashcmds`, ksh93's `trackall`.
@@ -12220,6 +12265,14 @@ func PosixSemantics() Semantics {
 		// what it was only asked about; so do zsh and ksh93, and bash
 		// overrides.
 		ALookupRemembersThePath: Yes,
+		// The standard says a prefix to a command that is not a special
+		// builtin or a function does not affect the current execution
+		// environment, which reads as the table surviving; dash is its
+		// closest reading and empties the table anyway, and so does the
+		// majority of the panel. A remembered path is not a variable, so the
+		// text does not reach as far as it looks, and the preset follows the
+		// shells.
+		APrefixedPathEmptiesTheCommandHash: Yes,
 		// POSIX has no such names; refusal is one shell's own answer.
 		PunctuatedFunctionNameIsRefused: No,
 		SetHasTraceLetters:              No,

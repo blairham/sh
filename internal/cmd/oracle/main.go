@@ -41,6 +41,7 @@ func main() {
 		bargs  = flag.String("binargs", "", "space-separated flags the binary needs, before -c")
 		gated  = flag.Bool("gated", false, "run the corpus twice through -bin, with and without a sandbox policy, and report what the policy changed")
 		pol    = flag.String("policy", "", "the policy file -gated uses; empty generates one confining writes to the scratch directory")
+		drop   = flag.Bool("allow-losing-measurements", false, "write the record even though a column has lost measurements the record already holds")
 	)
 	flag.Parse()
 
@@ -70,13 +71,13 @@ func main() {
 		return
 	}
 
-	if err := run(*check, *golden, *doc); err != nil {
+	if err := run(*check, *golden, *doc, *drop); err != nil {
 		fmt.Fprintln(os.Stderr, "oracle:", err)
 		os.Exit(exitFailure)
 	}
 }
 
-func run(check bool, goldenPath, docPath string) error {
+func run(check bool, goldenPath, docPath string, allowLoss bool) error {
 	// Asked first, and before a shell is run, because it is the half that
 	// gives the same answer on every machine: the corpus, the record and the
 	// rendered document either agree with each other or they do not. The
@@ -157,7 +158,12 @@ func run(check bool, goldenPath, docPath string) error {
 		if err != nil {
 			return err
 		}
-		if err := got.Record(prev, oracle.Corpus, docPath, goldenPath); err != nil {
+		// Record refuses, before it writes either artifact, if this run
+		// would give up a measurement the record already holds — see
+		// Run.LostMeasurements. The NOT MEASURED block above has already
+		// printed the cells; what that block could not do is stop the
+		// write, and printing alone was not enough twice in one day.
+		if err := got.Record(prev, oracle.Corpus, docPath, goldenPath, allowLoss); err != nil {
 			return err
 		}
 		fmt.Printf("wrote %s and %s\n\n%s", docPath, goldenPath, oracle.CellChangeReport(held, dropped))

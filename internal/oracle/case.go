@@ -1727,7 +1727,7 @@ var Corpus = []Case{
 	{
 		ID: "core/a-backslash-the-input-ends-after", Category: "quoting",
 		Snippet: "printf '[%s]' x\\",
-		Why:     "a line continuation with no line to continue, and the shape that made a *word* rule into a refusal of the whole script: this shell answered `input ends after a backslash` at status 2, where all eight columns run the line at 0. Nothing refuses, so that half is a correction; what the backslash becomes splits them, and this is the row where ksh93 sides with zsh and drops it. The route is not the variable — a script file with no trailing newline answers exactly as `-c` does — and the row below with a newline after the same backslash is the control that says so",
+		Why:     "a line continuation with no line to continue, and the shape that made a *word* rule into a refusal of the whole script: this shell answered `input ends after a backslash` at status 2, where all seven columns run the line at 0. Nothing refuses, so that half is a correction; what the backslash becomes splits them, and this is the row where ksh93 sides with zsh and drops it. The route is not the variable — a script file with no trailing newline answers exactly as `-c` does — and the row below with a newline after the same backslash is the control that says so",
 	},
 	{
 		ID: "core/a-backslash-that-is-a-word-of-its-own-at-the-end-of-input", Category: "quoting",
@@ -1737,12 +1737,12 @@ var Corpus = []Case{
 	{
 		ID: "core/a-backslash-at-the-end-of-a-line-rather-than-the-input", Script: true, Category: "quoting",
 		Snippet: "printf '[%s]' a \\",
-		Why:     "the control on the two rows above, and the same text: a file ends with a newline, so the backslash is an ordinary line continuation and joins the word to nothing. Unanimous `[a]` across all eight — the operand is gone in every column, including the four that would have kept a backslash. So it is the newline that decides this and not the route, which is what keeps the rule off [syntax.Dialect.CloseQuotesAtEOF]'s axis",
+		Why:     "the control on the two rows above, and the same text: a file ends with a newline, so the backslash is an ordinary line continuation and joins the word to nothing. Unanimous `[a]` across all seven — the operand is gone in every column, including the four that would have kept a backslash. So it is the newline that decides this and not the route, which is what keeps the rule off [syntax.Dialect.CloseQuotesAtEOF]'s axis",
 	},
 	{
 		ID: "core/the-older-substitution-nesting-into-the-end-of-input", Category: "quoting",
 		Snippet: "printf \"[%s]\" \"`echo \\\\`echo n\\\\``\" \"`echo \\\\`\" \"`echo \\`echo n\\``\" \"$(echo \\`echo n\\`)\"; echo",
-		Why:     "the nesting the older spelling exists for, written the way that runs into the end of the input, with its three controls beside it. The body is unescaped and re-lexed, so `` `echo \\\\` `` hands the inner parse `echo \\` — a backslash the *inner* input ends after — and the refusal came back out as the outer line's (#2680). The second field is that reduction on its own. The third is the same nesting written so it never runs out, `` `echo \\`echo n\\`` ``, which is `n` in all eight and moves with nothing; the fourth is the `$( )` spelling, which needs no escaping to nest and hands its body on unchanged, so both backslashes survive. A change to the word rule that reached either control would show here",
+		Why:     "the nesting the older spelling exists for, written the way that runs into the end of the input, with its three controls beside it. The body is unescaped and re-lexed, so `` `echo \\\\` `` hands the inner parse `echo \\` — a backslash the *inner* input ends after — and the refusal came back out as the outer line's (#2680). The second field is that reduction on its own. The third is the same nesting written so it never runs out, `` `echo \\`echo n\\`` ``, which is `n` in all seven and moves with nothing; the fourth is the `$( )` spelling, which needs no escaping to nest and hands its body on unchanged, so both backslashes survive. A change to the word rule that reached either control would show here",
 	},
 	{
 		ID: "core/the-older-substitution-nested-three-deep", Category: "quoting",

@@ -14047,7 +14047,7 @@ func (r *Runner) matchPatternR(pattern, s string, condition bool) bool {
 	o := patternOpts{
 		caret:        r.caretNegates(pattern),
 		group:        r.dialect().PatternAlternation,
-		topGroup:     r.dialect().PatternTopLevelAlternation,
+		topGroup:     r.dialect().PatternTopLevelAlternation.ReadsATopLevelBar(condition),
 		quantified:   r.readsQuantifiedGroups(condition),
 		numericRange: r.dialect().NumericRangePattern,
 		// The run-time option folds exactly the two consumers this function

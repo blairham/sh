@@ -254,6 +254,22 @@ func Dialect() syntax.Dialect {
 	d.ExtendedPattern = true
 	// And inside `[[ ]]`, which is the only place bash reads them.
 	d.ExtendedPatternInCondition = true
+	// And a `|` standing outside every group is an alternation of the whole
+	// pattern, **however it arrived** — which is a different reading from
+	// the one zsh has, not a wider setting of the same one (#2528).
+	//
+	// Measured 2026-09-13, ksh93u+ 2012-08-01, `env -i PATH=/usr/bin:/bin`
+	// over a script file, `v=abc` and `L='a|ab'`. `${v#a|ab}` and `${v#$L}`
+	// both answer `bc`, so provenance is not asked; `w='a|b'; ${w#a|b}`
+	// answers `|b`, the value declining to match its own text, which is what
+	// says the bar is syntax here rather than one more character.
+	//
+	// It does not reach the filesystem, and that is measured against a
+	// control rather than assumed: in a directory holding `aa` and `ab`,
+	// `S='a*'` and `B='a?'` each expand to two fields while `P='aa|b'` stays
+	// one, so it is the bar that stops at pathname expansion and not the
+	// value failing to be a pattern. `[[ ab == $L ]]` is also `n`.
+	d.PatternTopLevelAlternation = syntax.TopLevelAlternationWhereverWritten
 	// A **bare** group is not one of them, and in an expansion's pattern
 	// operand it is refused while reading: `${v#(a)}` is `syntax error at
 	// line 1: ` + "`" + `(' unexpected` here and takes the script with it, where

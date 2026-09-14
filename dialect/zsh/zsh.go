@@ -236,7 +236,7 @@ func Dialect() syntax.Dialect {
 	// globsubst` and in a glob alike (#1497). A bar *written* in a `${…}`
 	// operand is an ordinary character here — `v=abc; ${v#a|ab}` is `abc`
 	// (#2168) — which is not the parse error the other two spellings are.
-	d.PatternTopLevelAlternation = true
+	d.PatternTopLevelAlternation = syntax.TopLevelAlternationFromAValue
 	// The same alternation reaching the `case` arm's own pattern list, where
 	// one of the alternatives may be written as nothing: `(|https|git|ftp)`
 	// matches one of those schemes or none at all. `~/.zi/bin/lib/zsh/install.zsh`

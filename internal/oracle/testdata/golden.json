@@ -142689,6 +142689,57 @@
         "TimedOut": false
       }
     },
+    "pattern/a-top-level-bar-against-the-filesystem": {
+      "ash": {
+        "Stdout": "[bar=1:aa|ab][star=2]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[bar=1:aa|ab][star=2]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[bar=1:aa|ab][star=2]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[bar=1:aa|ab][star=2]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[bar=1:aa|ab][star=2]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[bar=1:aa|ab][star=2]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[bar=2:aa ab][star=2]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "pattern/a-written-bar-is-an-ordinary-character": {
       "ash": {
         "Stdout": "[written=abc][value=abc]",

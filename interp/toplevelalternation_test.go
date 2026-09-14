@@ -6,6 +6,8 @@ package interp_test
 import (
 	"bytes"
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -33,7 +35,7 @@ import (
 // the *provenance* is the question: the arm's bar has to have arrived from a
 // value, and an expansion result is only a live pattern where the vector says
 // so.
-func topLevelMatch(t *testing.T, subject, value string, topLevel bool) string {
+func topLevelMatch(t *testing.T, subject, value string, topLevel syntax.TopLevelAlternation) string {
 	t.Helper()
 	d := syntax.Core()
 	d.PatternAlternation, d.PatternTopLevelAlternation = true, topLevel
@@ -92,10 +94,10 @@ func TestATopLevelBarFromAValueIsAnAlternation(t *testing.T) {
 		},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			if got := topLevelMatch(t, c.subject, c.value, true); got != c.on {
+			if got := topLevelMatch(t, c.subject, c.value, syntax.TopLevelAlternationFromAValue); got != c.on {
 				t.Errorf("with the flag: %q against %q = %s, want %s", c.subject, c.value, got, c.on)
 			}
-			if got := topLevelMatch(t, c.subject, c.value, false); got != c.off {
+			if got := topLevelMatch(t, c.subject, c.value, syntax.NoTopLevelAlternation); got != c.off {
 				t.Errorf("without it: %q against %q = %s, want %s", c.subject, c.value, got, c.off)
 			}
 		})
@@ -107,7 +109,7 @@ func TestATopLevelBarFromAValueIsAnAlternation(t *testing.T) {
 // from by the time the matcher has the pattern.
 func TestAQuotedBarIsNotAnAlternation(t *testing.T) {
 	d := syntax.Core()
-	d.PatternAlternation, d.PatternTopLevelAlternation = true, true
+	d.PatternAlternation, d.PatternTopLevelAlternation = true, syntax.TopLevelAlternationFromAValue
 	sem := permissive()
 	sem.GlobExpansionResults = Yes
 	for _, tc := range []struct{ name, src, want string }{
@@ -146,7 +148,7 @@ func TestAQuotedBarIsNotAnAlternation(t *testing.T) {
 // arm's bar is the grammar's separator and never reaches the matcher at all.
 func TestAWrittenBarIsNotAnAlternation(t *testing.T) {
 	d := syntax.Core()
-	d.PatternAlternation, d.PatternTopLevelAlternation = true, true
+	d.PatternAlternation, d.PatternTopLevelAlternation = true, syntax.TopLevelAlternationFromAValue
 	sem := permissive()
 	sem.GlobExpansionResults = Yes
 	for _, tc := range []struct{ name, src, want string }{
@@ -185,6 +187,125 @@ func TestAWrittenBarIsNotAnAlternation(t *testing.T) {
 			}
 			if got := out.String(); got != tc.want {
 				t.Errorf("%s = %q, want %q", tc.src, got, tc.want)
+			}
+		})
+	}
+}
+
+// The other reading: a bar outside every group is an alternation **however it
+// arrived**, so the provenance rule the tests above pin does not apply to it.
+//
+// Two readings rather than one setting of the same one, which is the whole
+// reason [syntax.TopLevelAlternation] is not a bool. Neither contains the
+// other: this one takes a written bar where the other leaves it ordinary, and
+// leaves a bar out of pathname expansion where the other reads it there.
+// Measured 2026-09-13 on the two shells that have them (#2528); the values are
+// named here rather than the shells, as everything under interp is.
+func TestTheOtherReadingTakesAWrittenBarToo(t *testing.T) {
+	for _, tc := range []struct{ name, src, fromAValue, wherever string }{
+		{
+			// The row the two readings split on, and the reason a bool
+			// could not carry both.
+			name: "a written bar", src: `v=abc; printf "%s" "${v#a|ab}"`,
+			fromAValue: "abc", wherever: "bc",
+		},
+		{
+			// The value stops matching its own text, which is what says
+			// the bar became syntax rather than one more character.
+			name: "and the value no longer matches itself", src: `w='a|b'; printf "%s" "${w#a|b}"`,
+			fromAValue: "", wherever: "|b",
+		},
+		{
+			// Where they agree. A bar out of a value splits under both, so
+			// a table of only this row would report one reading.
+			name: "a bar from a value splits under both", src: `v=abc; L='a|ab'; printf "%s" "${v#$L}"`,
+			fromAValue: "bc", wherever: "bc",
+		},
+		{
+			// And the control that says neither reading is simply "the
+			// character is special": escaped, it is text again in both.
+			name: "an escaped bar is text under both", src: `w='a|b'; printf "%s" "${w#a\|b}"`,
+			fromAValue: "", wherever: "",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, r := range []struct {
+				name string
+				v    syntax.TopLevelAlternation
+				want string
+			}{
+				{"from a value", syntax.TopLevelAlternationFromAValue, tc.fromAValue},
+				{"wherever written", syntax.TopLevelAlternationWhereverWritten, tc.wherever},
+			} {
+				d := syntax.Core()
+				d.PatternAlternation, d.PatternTopLevelAlternation = true, r.v
+				sem := permissive()
+				sem.GlobExpansionResults = Yes
+				f, err := syntax.Parse(tc.src, d)
+				if err != nil {
+					t.Fatalf("%s: parse: %v", r.name, err)
+				}
+				var out bytes.Buffer
+				run := newTestRunner(t, &Runner{Stdout: &out, Stderr: &out, Dialect: &d, Semantics: &sem, Env: testPATH()})
+				if _, err := run.Run(context.Background(), f); err != nil {
+					t.Fatalf("%s: %v", r.name, err)
+				}
+				if got := out.String(); got != r.want {
+					t.Errorf("%s under %s = %q, want %q", tc.src, r.name, got, r.want)
+				}
+			}
+		})
+	}
+}
+
+// A top-level bar reaches pathname expansion under one reading and not the
+// other, which is the second axis the two differ on and the one a matcher test
+// cannot see. Measured 2026-09-13 against a control in the same run: the
+// reading that leaves the bar out of globbing still expands `a*` from the same
+// value to two fields, so it is the bar that stops here and not the value
+// failing to be a pattern (#2528).
+func TestOnlyOneReadingReachesPathnameExpansion(t *testing.T) {
+	for _, r := range []struct {
+		name   string
+		v      syntax.TopLevelAlternation
+		barGot string
+	}{
+		{"from a value", syntax.TopLevelAlternationFromAValue, "2 aa b"},
+		{"wherever written", syntax.TopLevelAlternationWhereverWritten, "1 aa|b"},
+	} {
+		t.Run(r.name, func(t *testing.T) {
+			dir := t.TempDir()
+			for _, n := range []string{"aa", "ab", "b"} {
+				if err := os.WriteFile(filepath.Join(dir, n), nil, 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			d := syntax.Core()
+			d.PatternAlternation, d.PatternTopLevelAlternation = true, r.v
+			sem := permissive()
+			sem.GlobExpansionResults = Yes
+			// The other half of "a value may carry pattern syntax", and it
+			// has to be answered or the run stops on an unchosen axis
+			// rather than on this one (#2474).
+			sem.ExpansionResultSuppliesGroupSyntax = Yes
+			for _, probe := range []struct{ src, want string }{
+				{`P='aa|b'; set -- $P; printf "%d %s" "$#" "$*"`, r.barGot},
+				// The control. Both readings glob a `*` out of the same
+				// kind of value, so a bar that does not is the bar.
+				{`S='a*'; set -- $S; printf "%d %s" "$#" "$*"`, "2 aa ab"},
+			} {
+				f, err := syntax.Parse(probe.src, d)
+				if err != nil {
+					t.Fatalf("parse: %v", err)
+				}
+				var out bytes.Buffer
+				run := newTestRunner(t, &Runner{Stdout: &out, Stderr: &out, Dialect: &d, Semantics: &sem, Env: testPATH(), Dir: dir})
+				if _, err := run.Run(context.Background(), f); err != nil {
+					t.Fatalf("%v", err)
+				}
+				if got := out.String(); got != probe.want {
+					t.Errorf("%s under %s = %q, want %q", probe.src, r.name, got, probe.want)
+				}
 			}
 		})
 	}

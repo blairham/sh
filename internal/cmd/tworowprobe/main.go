@@ -14,9 +14,17 @@
 // zsh does not, so a zsh run never reaches the prompt this waits for.
 //
 // -paste asks the other half, which is what the two-row run turned up on the
-// way past: ours writes no bracketed-paste mode around its prompt at all, so
-// the markers below are injected by hand rather than by a terminal. That is
-// #2775, and this is the reproducer it was filed from.
+// way past: ours wrote no bracketed-paste mode around its prompt at all, so the
+// markers below were injected by hand rather than by a terminal. That was
+// #2775, and this is the reproducer it was filed from — the mode is written
+// now, and both halves of a run against a built binary should read as real
+// bash's do:
+//
+//	\x1b[?2004hUPPERROW\r\nREADY> echo one\r\n\x1b[?2004l\rone\r\n…
+//	READY> \x1b[7mecho PASTED\x1b[27m
+//
+// The markers still go in by hand here, because the terminal on the other end
+// of this pty is a Go program and not one that pastes.
 package main
 
 import (

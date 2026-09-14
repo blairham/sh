@@ -260,6 +260,69 @@ arrow with Alt or Ctrl held moves by a word, which is bash's answer for both
 `q` puts nothing in the line in either shell. The only sequence behind it that
 means anything here is `^X^U`.
 
+### Pasted text, which the shell has to ask to be told about
+
+A terminal cannot tell typing from pasting on its own, and neither can the
+program reading from it: both arrive as bytes on one descriptor. So the
+terminal offers to say which is which, and **it says it only to an application
+that asked**. `\e[?2004h` turns the offer on, and from then on pasted text
+arrives wrapped in `\e[200~` and `\e[201~`.
+
+Not asking is not a neutral choice. Newlines inside an unbracketed paste are
+keystrokes like any other, so every line of it runs as it arrives: a paste of
+five commands runs five commands, and a paste meant to be read before it ran
+has already run.
+
+Measured 2026-09-14 through a pseudo-terminal, each shell driven with the
+prompt handed over from outside:
+
+| | asks for bracketing | when | draws a paste as |
+| --- | --- | --- | --- |
+| bash 5.3.3 | yes | `\e[?2004h` before the prompt, `\e[?2004l\r` after the line | `\e[7m`…`\e[27m` |
+| zsh 5.9.2 | yes | the same two, the first written after the prompt | `\e[7m`…`\e[27m` |
+| ksh93 | no | — | the markers typed into the line as `^[[200~` |
+
+So there are two answers a dialect gives — whether it asks, and what a pasted
+run is drawn in — and the shells that ask agree on the bytes of both. The
+reverse video comes off on the next keystroke, whatever that keystroke is: the
+line is drawn again plainly. It marks the text as *pasted*, not as anything
+about what the text says.
+
+What a paste does with a line ending, measured against bash 5.3.3:
+
+| pasted | drawn | run |
+| --- | --- | --- |
+| `echo AAA\recho BBB` | two rows | nothing, until Return |
+| the same, then Return | — | both commands, in order |
+| `a\r\nb` | three rows — each of the two is a break of its own | — |
+
+**This implementation gives the same three answers.** A line ending inside a
+paste is a newline in the line: it ends the row and does not submit, and the
+Return that follows submits all of it at once.
+
+A control character inside a paste is where the two part company. Measured, a
+paste is drawn with the terminal's own rendering of one — `\e` comes out as
+`^[` and `^A` as `^A`, in caret notation, and a tab as spaces to the next tab
+stop:
+
+	pasted `echo \e[31mAAA`   drawn `echo ^[[31mAAA`
+	pasted `echo \x01AAA`     drawn `echo ^AAAA`
+	pasted `echo\tAAA`        drawn `echo    AAA`
+
+**This implementation drops them.** Caret notation is a way of drawing a
+character that has no width of its own, and this editor has none — it refuses a
+*typed* control character for the same reason, that a raw byte in the line is
+something nobody typed and hands the parser a word they cannot have meant.
+Writing them as themselves instead would be worse than dropping them: a tab
+moves the cursor to a stop no column count here knows about, and an escape
+hands the terminal instructions somebody pasted. Caret notation in the drawn
+line, which would let them be kept, is on the missing list below.
+
+The markers are never typed into the line, whatever the dialect answers. A
+terminal another program left in the mode can send them to a shell that never
+asked, and `^[[200~` in the middle of a command is the worst of the three
+things to do with them.
+
 ### There is no timeout after a bare Escape, in any of them
 
 This was written down here as a gap on the assumption that both shells wait a
@@ -871,6 +934,12 @@ was on this list and is not any more — `^R` is `repl/search.go` and
   expects it to follow the text can. Needs the editor to report *what* changed
   and not only the line that resulted, which is a wider seam than the redraw
   has now.
+- **Caret notation in the drawn line.** Measured, both shells draw a control
+  character in the line as `^` and a letter — which is what lets them keep one
+  a paste brought in. Here a pasted control character is dropped instead; see
+  the paste section above for why dropping is the safer of the two until the
+  drawing knows that a character can occupy a different number of cells than
+  it has bytes.
 - **`M-y`** — walk back through earlier kills. This keeps one kill rather
   than a ring, so there is nothing to walk.
 - **Case and other word operators** — `M-u`, `M-l`, `M-c`.

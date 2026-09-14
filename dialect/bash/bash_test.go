@@ -401,6 +401,11 @@ func TestPrintfAnswers(t *testing.T) {
 		// An infinity goes through the conversion that named it: `%G` of
 		// one is `INF` and `%10f` of one is `[       inf]` (#2707).
 		{"PrintfNonFiniteIsConverted", s.PrintfNonFiniteIsConverted, interp.Yes},
+		// The number C's reader finds at the front, with the tail
+		// complained about: `printf '%d' 1.5` is 1 and `printf '%d' 1e3`
+		// is 1, because `strtoimax` stops at the `.` and at the `e`
+		// (#2731). Measured 2026-09-14 on bash 5.3.15.
+		{"PrintfNumberOperand", s.PrintfNumberOperand, interp.PrintfNumberLeadingNumber},
 		// bash: an operand present and empty is an error. An operand that
 		// is *missing* is not — which is the pair below, and the two cross,
 		// because ash says yes to both (#2648).

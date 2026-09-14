@@ -11738,6 +11738,24 @@ action when the trap is set, so by the time a trap fires the whole body
 has parsed and there is no partial run to have. The two answers cannot
 be told apart there.
 
+**`TrapErrConditionIsAlsoZERR`** — bash no · dash no · ksh93 no · zsh yes
+
+Gives the ERR condition its second name. zsh alone: there the manual's
+name for it is `ZERR` and `ERR` is the alias, and the two are one slot
+rather than two conditions — measured, `trap 'echo E' ERR; trap - ZERR;
+false` fires nothing, and so does the pair written the other way round.
+bash, ksh93 and BusyBox ash have the condition under `ERR` only and
+refuse `ZERR` as a word naming no signal; dash has neither name.
+
+A second name rather than a second condition, so nothing about *when*
+the trap fires is written down twice. What the extra name does change is
+the listing: the word the script used is the word `trap` prints back, so
+`trap 'echo E' ZERR; trap` writes ZERR where the same command spelled
+ERR writes ERR.
+
+`ZERR` is the spelling a zsh startup file reaches for, so a shell
+without it refuses a line the real one takes (#2771).
+
 **`TrapHasDebugCondition`** — bash yes · dash no · ksh93 yes · zsh yes
 
 Makes `trap … DEBUG` run the action before each simple command. dash
@@ -11757,6 +11775,35 @@ Makes `trap … RETURN` a condition that fires when a sourced file
 finishes, and when a function whose own body set the trap returns. bash
 alone; the other three refuse the name the way they refuse any word that
 names no signal.
+
+**`TrapIsNamedByAFunction`** — bash no · dash no · ksh93 no · zsh yes
+
+Makes a function whose name is `TRAP` followed by a condition that
+condition's handler, with no `trap` command anywhere. zsh alone;
+`TRAPZERR() { … }` installs the ZERR handler, and `TRAPINT`, `TRAPEXIT`
+and `TRAPDEBUG` do the same for theirs. The other four define an
+ordinary function of that name and call it only when something names it.
+
+The two spellings are **one slot**, in both directions: naming the
+condition to `trap` takes the function away — after `TRAPZERR() { … };
+trap 'echo T' ZERR`, `functions TRAPZERR` finds nothing — and removing
+the function untraps the condition. The handler is called as the
+function it is: its `local` is local, its `return` returns from it, and
+`$1` is the number the condition is known by, which is 0 for EXIT, the
+signal's own number for a signal, and one past the last signal the host
+has for ZERR with DEBUG after it. `trap` lists it by printing the
+function rather than as an action line, because there is no action text:
+the function is the whole of the handler.
+
+The name is read case-sensitively and only for a suffix that names a
+condition this shell has, so `trapzerr` and `TRAPFOO` are ordinary
+functions and `TRAPFOO` is callable by that name.
+
+This is the axis where **no** is the dangerous answer rather than the
+narrow one. A declaration parses in every dialect, so a shell that does
+not read the name accepts `TRAPZERR() { … }`, defines it, never calls it,
+and says nothing — the silent wrong answer, on the spelling a real
+startup file uses (#2771).
 
 **`TrapListsSignalsWithL`** — bash yes · dash no · ksh93 no · zsh unspecified
 

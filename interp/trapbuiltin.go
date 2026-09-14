@@ -127,7 +127,7 @@ func (r *Runner) printTraps(conds []string, bare bool) int {
 				if action == nil {
 					continue
 				}
-				r.printf("trap -- %s %s\n", r.quotedTrapAction(*action), r.printedSignalName(e.cond))
+				r.printTrapEntry(e.cond, *action)
 			}
 			return 0
 		}
@@ -136,7 +136,7 @@ func (r *Runner) printTraps(conds []string, bare bool) int {
 		hideInherited, askedHide := false, false
 		for _, name := range r.listedTrapOrder() {
 			if name == "EXIT" {
-				r.printf("trap -- %s EXIT\n", r.quotedTrapAction(*r.exitTrap))
+				r.printTrapEntry("EXIT", *r.exitTrap)
 				continue
 			}
 			if r.inheritedIgnored[name] {
@@ -152,7 +152,7 @@ func (r *Runner) printTraps(conds []string, bare bool) int {
 					continue
 				}
 			}
-			r.printf("trap -- %s %s\n", r.quotedTrapAction(r.trapTable()[name]), r.printedSignalName(name))
+			r.printTrapEntry(name, r.trapTable()[name])
 		}
 		// The pseudo-conditions come after the signals, which is where all
 		// three shells that have any put them. An inherited one is listed
@@ -172,7 +172,7 @@ func (r *Runner) printTraps(conds []string, bare bool) int {
 					continue
 				}
 			}
-			r.printf("trap -- %s %s\n", r.quotedTrapAction(*action), name)
+			r.printTrapEntry(name, *action)
 		}
 		return 0
 	}
@@ -211,9 +211,24 @@ func (r *Runner) printTraps(conds []string, bare bool) int {
 			r.printf("%s\n", *action)
 			continue
 		}
-		r.printf("trap -- %s %s\n", r.quotedTrapAction(*action), r.printedSignalName(name))
+		r.printTrapEntry(name, *action)
 	}
 	return 0
+}
+
+// printTrapEntry writes one row of a listing.
+//
+// Ordinarily that is the `trap -- action CONDITION` line every shell in the
+// panel prints. Where the handler is a *function* — the dialect that reads a
+// `TRAP…` name as a trap, see trapfunction.go — it is the function itself,
+// printed the way a function listing prints it, because there is no action
+// text: the function is the whole of the handler and the shell says so.
+func (r *Runner) printTrapEntry(cond, action string) {
+	if listing := r.trapFunctionListing(cond); listing != "" {
+		r.printf("%s", listing)
+		return
+	}
+	r.printf("trap -- %s %s\n", r.quotedTrapAction(action), r.printedSignalName(cond))
 }
 
 // trapFor is what a condition is currently trapped to, and whether the
@@ -271,6 +286,10 @@ func (r *Runner) trapSingleArgument(cond string) int {
 	// A reset is a modification like any other, so a listing this subshell
 	// inherited stops standing in for its own state.
 	r.trapsModified()
+	// A reset takes the function form of the handler with it, the same way
+	// setting an action does — measured, `TRAPZERR(){ … }; trap - ZERR`
+	// leaves no TRAPZERR function behind. See trapfunction.go.
+	r.releaseTrapFunction(name)
 	if name == "EXIT" {
 		r.exitTrap = nil
 		return 0
@@ -389,6 +408,12 @@ func (r *Runner) quotedTrapAction(action string) string {
 // not a signal and never takes the prefix in any of them — and neither do
 // the pseudo-conditions, in the one dialect that prefixes at all.
 func (r *Runner) printedSignalName(name string) string {
+	if name == "ERR" && r.errTrapSpelling != "" {
+		// The one condition with two names, listed back under the one the
+		// script used: measured, `trap 'echo E' ZERR; trap` writes ZERR and
+		// the same command spelled ERR writes ERR.
+		return r.errTrapSpelling
+	}
 	if name == "EXIT" || r.pseudoTrapSlot(name) != nil {
 		return name
 	}

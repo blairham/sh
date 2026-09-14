@@ -881,6 +881,16 @@ func (r *Runner) funcDecl(c *syntax.FuncDecl) error {
 	// from was running at, which its body goes on being numbered from when
 	// it is called later. See funcOrigin.
 	r.recordFunctionOrigin(c.Name, r.currentFile(), r.lineBase)
+	// And, in the dialect that reads a function name as a condition, the
+	// definition *is* the trap — see trapfunction.go. After the tables
+	// above, because binding it looks the function up by name.
+	r.bindTrapFunction(c.Name)
+	if r.unspecified {
+		// The dialect has not said whether a `TRAP…` name is a handler, and
+		// the definition is exactly the thing that turns on the answer.
+		r.status = 2
+		return nil
+	}
 	r.status = 0
 	return nil
 }

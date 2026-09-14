@@ -1718,6 +1718,17 @@ func Semantics() interp.Semantics {
 	s.TrapHasErrCondition = interp.Yes
 	s.TrapHasDebugCondition = interp.Yes
 	s.TrapHasReturnCondition = interp.No
+	// And ERR answers to `ZERR` as well, which is the name zsh's own
+	// documentation gives it and the one a startup file writes. One slot
+	// under two names: `trap 'echo E' ERR; trap - ZERR; false` fires nothing
+	// (#2771).
+	s.TrapErrConditionIsAlsoZERR = interp.Yes
+	// zsh alone reads a *function* name as a condition: `TRAPZERR() { … }`
+	// installs the ZERR handler with no `trap` command anywhere, and
+	// `TRAPINT`, `TRAPEXIT` and `TRAPDEBUG` do the same for theirs. It is
+	// the spelling that fails silently in a shell without it, because a
+	// declaration parses everywhere — see interp/trapfunction.go.
+	s.TrapIsNamedByAFunction = interp.Yes
 	s.ErrTrapRunsInsideFunctions = interp.Yes
 	s.ErrTrapRunsInSubshells = interp.Yes
 	s.DebugTrapRunsInsideCalls = interp.Yes

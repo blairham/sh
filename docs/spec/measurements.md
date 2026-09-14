@@ -7654,6 +7654,18 @@ grades it and nothing drift-checks it either, for the same reason.
 | `trap/a-trap-action-does-not-move-the-running-command` | `one` **2>** `trap: DEBUG: bad trap` | `D:[echo one]~one` | `D:[echo one]~one` | `D:[echo one]~one` | `D:[]~one` | `D:[]~one` | `one` **2>** `<shell>: trap: line 0: DEBUG: invalid signal specification` |
 | `trap/an-exit-action-names-the-command-the-script-reached` | `one~X:[]` | `one~X:[echo one]` | `one~X:[echo one]` | `one~X:[echo one]` | `one~X:[]` | `one~X:[]` | `one~X:[]` |
 | `trap/a-debug-action-names-a-compound-head` | **2>** `trap: DEBUG: bad trap` | `D:[for w in a b]~D:[:]~D:[for w in a b]~D:[:]` | `D:[for w in a b]~D:[:]~D:[for w in a b]~D:[:]` | `D:[for w in a b]~D:[:]~D:[for w in a b]~D:[:]` | `D:[]~D:[]~D:[]~D:[]` | `D:[]~D:[]~D:[]` | **2>** `<shell>: trap: line 0: DEBUG: invalid signal specification` |
+| `trap/zerr-names-the-err-condition` | `done` **2>** `trap: ZERR: bad trap` | `done` **2>** `<shell>: line 1: trap: ZERR: invalid signal specification` | `done` **2>** `<shell>: line 1: trap: ZERR: invalid signal specification` | `done` **2>** `<shell>: line 0: trap: ZERR: invalid signal specification` | `done` **2>** `<shell>: trap: ZERR: bad trap` | `caught~done` | `done` **2>** `<shell>: trap: line 0: ZERR: invalid signal specification` |
+| `trap/zerr-and-err-are-one-condition` | `done` **2>** `trap: ERR: bad trap~trap: ZERR: bad trap` | `caught~caught~done` **2>** `<shell>: line 1: trap: ZERR: invalid signal specification` | `caught~caught~done` **2>** `<shell>: line 1: trap: ZERR: invalid signal specification` | `caught~caught~done` **2>** `<shell>: line 0: trap: ZERR: invalid signal specification` | `caught~caught~done` **2>** `<shell>: trap: ZERR: bad trap` | `done` | `caught~caught~done` **2>** `<shell>: trap: line 0: ZERR: invalid signal specification` |
+| `trap/the-listing-echoes-the-name-the-condition-was-given` | **2>** `trap: ZERR: bad trap~trap: ERR: bad trap` | `trap -- 'echo E' ERR` **2>** `<shell>: line 1: trap: ZERR: invalid signal specification` | `trap -- 'echo E' ERR` **2>** `<shell>: line 1: trap: ZERR: invalid signal specification` | `trap -- 'echo E' ERR` **2>** `<shell>: line 0: trap: ZERR: invalid signal specification` | `trap -- 'echo E' ERR` **2>** `<shell>: trap: ZERR: bad trap` | `trap -- 'echo E' ZERR~trap -- 'echo E' ERR` | `trap -- 'echo E' ERR` **2>** `<shell>: trap: line 0: ZERR: invalid signal specification` |
+| `trap/a-function-named-for-a-condition-is-the-handler` | `done` | `done` | `done` | `done` | `done` | `caught~done` | `done` |
+| `trap/a-trap-function-lists-as-the-function` | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | `TRAPZERR () {~	echo Z~}` | *(no output, status 0)* |
+| `trap/the-trap-command-takes-the-trap-function-away` | `done~<shell>: 1: functions: not found~fn=127` **2>** `trap: ZERR: bad trap` | `done~<shell>: line 1: functions: command not found~fn=127` **2>** `<shell>: line 1: trap: ZERR: invalid signal specification` | `done~<shell>: line 1: functions: command not found~fn=127` **2>** `<shell>: line 1: trap: ZERR: invalid signal specification` | `done~<shell>: functions: command not found~fn=127` **2>** `<shell>: line 0: trap: ZERR: invalid signal specification` | `done~TRAPZERR() { echo Z; };fn=0` **2>** `<shell>: trap: ZERR: bad trap` | `T~done~T~fn=1` | `done~<shell>: functions: not found~fn=127` **2>** `<shell>: trap: line 0: ZERR: invalid signal specification` |
+| `trap/a-reset-takes-the-trap-function-away` | `done` **2>** `trap: ZERR: bad trap` | `done` **2>** `<shell>: line 1: trap: ZERR: invalid signal specification` | `done` **2>** `<shell>: line 1: trap: ZERR: invalid signal specification` | `done` **2>** `<shell>: line 0: trap: ZERR: invalid signal specification` | `done` **2>** `<shell>: trap: ZERR: bad trap` | `done` | `done` **2>** `<shell>: trap: line 0: ZERR: invalid signal specification` |
+| `trap/removing-the-trap-function-untraps-the-condition` | `done` | `done` | `done` | `done` | `done` | `done` | `done` |
+| `trap/a-trap-function-name-is-read-case-sensitively` | `f~done` | `f~done` | `f~done` | `f~done` | `f~done` | `f~done` | `f~done` |
+| `trap/a-trap-function-is-handed-the-condition-number` | `body` | `body` | `body` | `body` | `body` | `body~E:0` | `body` |
+| `trap/zerr-is-suppressed-where-a-failure-is-tested` | `done` | `done` | `done` | `done` | `done` | `Z~done` | `done` |
+| `trap/the-err-trap-fires-once-for-a-nested-failure` | `done` **2>** `trap: ERR: bad trap` | `E~E~done` | `E~E~done` | `E~E~done` | `E~E~E~done` | `E~E~done` | `E~E~done` |
 
 - `trap/the-return-trap-is-not-carried-into-a-debug-body` — `set -T` carries the RETURN trap into a function that did not set it, and not into one called from the **DEBUG** body: every bash column runs `act` and writes no RET for it. It is worth pinning because the cost is per command rather than per script — a DEBUG body runs before everything, so a shell that fired here wrote two extra lines for every command of a traced run. ksh93, dash and ash refuse `set -T` and end the script; zsh takes the letter and refuses the RETURN condition, so bash's three columns are the only ones that can answer
   ```sh
@@ -8158,6 +8170,54 @@ grades it and nothing drift-checks it either, for the same reason.
 - `trap/a-debug-action-names-a-compound-head` — a head is named as the head and not as the whole construct — `for w in a b` rather than the loop with its body — and it is named again on the second pass, beside the body it announces. The name is this shell printing the head back rather than quoting the script, so the words keep their quoting and lose the script's spacing; ksh93 and zsh fire heads of their own here and have no parameter to put one in
   ```sh
   trap 'echo "D:[$BASH_COMMAND]"' DEBUG; for w in a b; do :; done
+  ```
+- `trap/zerr-names-the-err-condition` — the condition zsh's own documentation calls ZERR, which is the name a zsh startup file writes. zsh takes it and fires the handler after the failing command; the other columns have no such word and refuse it the way each refuses any word naming no signal, dash included, which has no ERR condition under either name. This shell answered `undefined signal: ZERR` in the zsh column too, so a real `~/.zshrc` line was refused by the shell claiming to be zsh (#2771)
+  ```sh
+  trap 'echo caught' ZERR; false; echo done
+  ```
+- `trap/zerr-and-err-are-one-condition` — the two names are one slot rather than two conditions: a handler set under ERR is taken away by a reset naming ZERR, so nothing fires. Written this way round because the opposite order proves nothing -- a shell holding two independent conditions would also print nothing if the reset happened to clear the one that was set. The columns without the second name refuse the reset and keep firing, which is the visible difference
+  ```sh
+  trap 'echo caught' ERR; trap - ZERR; false; echo done
+  ```
+- `trap/the-listing-echoes-the-name-the-condition-was-given` — and the listing says which of the two names the script used rather than canonicalizing to one: zsh writes ZERR after the first setting and ERR after the second, for a condition that is the same slot throughout. A shell that stored a canonical name would print the same word twice, which is what this one did
+  ```sh
+  trap 'echo E' ZERR; trap; trap 'echo E' ERR; trap
+  ```
+- `trap/a-function-named-for-a-condition-is-the-handler` — the spelling that fails **silently** everywhere it is not implemented, which is why it is worth a row of its own: a function declaration parses in every column, so a shell without the convention defines TRAPZERR, never calls it, and carries on as though the handler were installed. zsh calls it after the failing command. The other columns print `done` alone -- correctly there, since none of them reads a function name as a condition -- and this shell printed `done` in the zsh column too (#2771)
+  ```sh
+  TRAPZERR() { echo caught; }; false; echo done
+  ```
+- `trap/a-trap-function-lists-as-the-function` — what `trap` prints for a handler spelled as a function: the function itself, in the words a function listing uses, rather than a `trap -- action CONDITION` line. There is no action text to print, and the shell says so. The columns without the convention have nothing trapped and print nothing
+  ```sh
+  TRAPZERR() { echo Z; }; trap
+  ```
+- `trap/the-trap-command-takes-the-trap-function-away` — one condition holds one handler, so naming it to `trap` replaces the function spelling rather than sitting beside it: T fires and the function is gone, which the `functions` lookup failing at 1 is what shows. That lookup failing is itself a non-zero status, so the trap it just set fires again before the `fn=` line -- the second T is the row confirming the new handler really is installed. Only one column has either spelling or the builtin that asks
+  ```sh
+  TRAPZERR() { echo Z; }; trap 'echo T' ZERR; false; echo done; functions TRAPZERR 2>&1; echo "fn=$?"
+  ```
+- `trap/a-reset-takes-the-trap-function-away` — the same slot read from the other side: a reset naming the condition removes the function that stood for it, so the failing command fires nothing. A shell that kept the two in separate tables would still fire here, which is what makes this the discriminating half of the pair above
+  ```sh
+  TRAPZERR() { echo Z; }; trap - ZERR; false; echo done
+  ```
+- `trap/removing-the-trap-function-untraps-the-condition` — and the last direction of the same slot: the function is the handler, so taking the function away untraps the condition. Three rows are needed because each removal reaches it by a different route and a shell can get any one of them right on its own
+  ```sh
+  TRAPZERR() { echo Z; }; unset -f TRAPZERR; false; echo done
+  ```
+- `trap/a-trap-function-name-is-read-case-sensitively` — the two controls the convention needs, so that it is about the name and not about the four letters: a lower-case spelling is an ordinary function and fires nothing, and TRAPFOO -- four right letters and a suffix naming no condition -- is an ordinary function that is still callable by that name. A reading that took every TRAP-prefixed name would swallow the second and leave a script unable to call its own function
+  ```sh
+  trapzerr() { echo z; }; TRAPFOO() { echo f; }; false; TRAPFOO; echo done
+  ```
+- `trap/a-trap-function-is-handed-the-condition-number` — the handler is called as the function it is, so the condition arrives as a positional parameter the way it does for a signal. EXIT rather than ZERR because EXIT's number is zero in every column that has any of this, where a pseudo-condition is counted on past the last signal the host has and would record one machine's signal table
+  ```sh
+  TRAPEXIT() { echo "E:$1"; }; echo body
+  ```
+- `trap/zerr-is-suppressed-where-a-failure-is-tested` — where the condition does **not** fire, which is the half a handler that fired on every non-zero status would fail: an `if` condition, an `&&` operand, a negated command and a pipeline whose last element succeeded are all statuses being tested rather than failures, and only the pipeline that really failed fires. The same gate `set -e` uses, measured rather than assumed -- the five suppressed shapes are written in one row because a shell getting four of them right and one wrong is the likely defect
+  ```sh
+  TRAPZERR() { echo Z; }; if false; then :; fi; false && echo a; ! true; false | true; true | false; echo done
+  ```
+- `trap/the-err-trap-fires-once-for-a-nested-failure` — how many times one failure fires the condition when the command that failed is inside something. Every column that has ERR fires **once** per failure: the group reports the status its last command left and the call reports the status its body left, and neither is a second failure. This shell fired twice for the group in every dialect that has the condition, and twice again for the call in the two that carry the trap into a function -- a handler running twice for one event (#2793). Not the same question as the subshell rows -- a `( … )` really is a second boundary and zsh does fire on both sides of one
+  ```sh
+  trap 'echo E' ERR; { true; false; }; g() { false; }; g; echo done
   ```
 
 ## tokenization

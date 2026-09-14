@@ -50,6 +50,26 @@ func (r *Runner) pseudoCondition(cond string) (string, bool) {
 	var have Answer
 	var what string
 	switch up {
+	case "ZERR":
+		// One dialect's own name for the ERR condition, and its *first*
+		// name: there the manual writes ZERR and `ERR` is the second
+		// spelling. One slot, measured both ways — `trap 'echo E' ERR; trap
+		// - ZERR; false` fires nothing, and so does the pair the other way
+		// round — so this resolves to ERR rather than to a condition of its
+		// own, and everything the ERR trap does follows without a second
+		// copy of it.
+		//
+		// The dialects without the name fall through to the signal table and
+		// complain about ZERR the way they complain about any word that
+		// names no signal, which is measured to be what they do.
+		if !r.ask(r.sem().TrapErrConditionIsAlsoZERR, "`trap … ZERR` naming the ERR condition") {
+			return "", false
+		}
+		have, what = r.sem().TrapHasErrCondition, "`trap … ZERR`"
+		if !r.ask(have, what) {
+			return "", false
+		}
+		return "ERR", true
 	case "ERR":
 		have, what = r.sem().TrapHasErrCondition, "`trap … ERR`"
 	case "DEBUG":

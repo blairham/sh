@@ -217,27 +217,18 @@ func standInFor(s string, stand *standIns) (string, []int) {
 	for i := 0; i < len(s); {
 		w := characterWidth(s[i:])
 		unit := s[i : i+w]
-		c, size := utf8.DecodeRuneInString(unit)
-		if size != w || c < utf8.RuneSelf || unicode.SimpleFold(c) == c {
-			b.WriteString(unit)
-			for j := 0; j < w; j++ {
-				back = append(back, i)
+		out := unit
+		// A character with no case of its own is written through, and that
+		// is where an undecodable byte lands as well as CJK and punctuation:
+		// it decodes to U+FFFD, which folds to itself, so it keeps its bytes
+		// and its offsets and every bad byte stays distinct from every other.
+		if c, _ := utf8.DecodeRuneInString(unit); c >= utf8.RuneSelf && unicode.SimpleFold(c) != c {
+			if in, ok := stand.pick(unit); ok {
+				out, rewrote = string(in), true
 			}
-			i += w
-			continue
 		}
-		in, ok := stand.pick(unit)
-		if !ok {
-			b.WriteString(unit)
-			for j := 0; j < w; j++ {
-				back = append(back, i)
-			}
-			i += w
-			continue
-		}
-		rewrote = true
 		n := b.Len()
-		b.WriteRune(in)
+		b.WriteString(out)
 		for j := n; j < b.Len(); j++ {
 			back = append(back, i)
 		}

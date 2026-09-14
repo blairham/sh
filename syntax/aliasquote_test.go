@@ -61,6 +61,13 @@ func TestAConstructAnAliasBodyOpensReachesTheRestOfTheLine(t *testing.T) {
 			table("q", "echo `"), "q echo hi`", "echo ` echo hi`",
 		},
 		{
+			// An arithmetic substitution, which is a third scanner again —
+			// its closer is two characters and its body is an expression
+			// rather than a program.
+			"an arithmetic substitution",
+			table("q", "echo $(("), "q 1+1 ))", "echo $(( 1+1 ))",
+		},
+		{
 			"dollar-single quotes",
 			table("q", `echo $'`), `q a'`, `echo $' a'`,
 		},
@@ -173,6 +180,31 @@ func TestTheUnterminatedBodyIsBlamedAtTheAliasWordAndAtTheEnd(t *testing.T) {
 	}
 	if se.EofLine != 6 {
 		t.Errorf("EofLine %d, want 6 — the line the input ran out on", se.EofLine)
+	}
+}
+
+// The input goes on being the input after the seam: what the joined reading
+// took is skipped in the input's own lexer, lines and columns and all, so
+// everything read afterwards is at its real position.
+//
+// Asked with a refusal three lines past the carry, because a position is only
+// checkable where something names it. A carry that consumed the right number
+// of *bytes* and lost the newlines inside them passes every test above and
+// fails this one.
+func TestAfterTheSeamTheInputIsReadAtItsRealPosition(t *testing.T) {
+	const src = "alias q='echo \"'\nq one\ntwo\"\nthree\n)\n"
+	p := syntax.NewParser(src, syntax.Core())
+	p.Aliases = table("q", `echo "`)
+	p.Parse()
+	var se *syntax.Error
+	if !errors.As(p.Err(), &se) {
+		t.Fatalf("err %v, want the stray parenthesis refused", p.Err())
+	}
+	if se.Pos.Line != 5 {
+		t.Errorf("blamed line %d, want 5 — the line the `)` is written on", se.Pos.Line)
+	}
+	if se.Pos.Col != 1 {
+		t.Errorf("blamed column %d, want 1", se.Pos.Col)
 	}
 }
 

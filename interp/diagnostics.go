@@ -3349,8 +3349,74 @@ type Diagnostics struct {
 	FdNumberOverLimit string
 
 	// NoJobControl is `bg` or `fg` in a shell with none, for the dialects
-	// that say so before anything else. One verb: the builtin's name.
+	// that say so before anything else — see
+	// Semantics.JobControlAbsenceIsReportedFirst, which is what decides
+	// whether the refusal comes before the operand is read. One verb: the
+	// builtin's name. The status is 1 in every member that speaks here.
+	//
+	// Empty says nothing, which is a real answer and not a gap: measured
+	// 2026-09-13 from a script with no terminal, `sleep 0 & fg`,
+	//
+	//	bash 5.3.15   fg: no job control
+	//	bash 3.2.57   fg: no job control
+	//	ksh93u+       nothing at all, at status 1
+	//	zsh 5.9.2     fg: no job control in this shell.
+	//
+	// ksh93 refuses here rather than after the operand, silence and all:
+	// `fg %2` naming no job is silent too, where its own `jobs %2` on the
+	// same line says `jobs: no such job`. That probe is what tells the two
+	// halves of the axis apart for a shell that prints nothing.
+	//
+	// dash is the fourth and is not here: it reads the operand first and
+	// says JobNotUnderJobControl afterwards.
 	NoJobControl string
+
+	// JobNotUnderJobControl is the other half of the same refusal: `fg` or
+	// `bg` in a shell with no job control, for the dialect that reads its
+	// operand *first* and reaches this only once the spec has resolved to a
+	// job it holds. Two verbs: the builtin's name and the spec as written.
+	//
+	// No shell in the panel resumes a job without job control, so this is a
+	// difference of wording and timing rather than of whether the job runs.
+	// Measured 2026-09-13 from a script with no terminal:
+	//
+	//	dash          fg: job %1 not created under job control    status 2
+	//	dash, no spec fg: job (null) not created under job control  status 2
+	//
+	// The empty fallback is the same sentence NoJobControl's speakers use,
+	// which is what the bare shell says: refusing without saying why is the
+	// one answer no member gives on this route.
+	JobNotUnderJobControl string
+
+	// JobNotUnderJobControlStatus is what that reports. Zero means 1, which
+	// is what every other refusal on this route costs; dash reports 2.
+	JobNotUnderJobControlStatus int
+
+	// AbsentJobSpec is what goes in that message's spec verb when `fg` or
+	// `bg` was given no operand at all.
+	//
+	// dash writes `(null)`: the message runs the operand through its own
+	// formatter and there is no operand, so its C library prints the null
+	// pointer that way. It is not a job spec any script could write, and
+	// reproducing it is the difference between matching dash's line and
+	// printing one with a hole in it.
+	//
+	// Empty leaves the verb empty, which is every other member — none of
+	// them has a message that shows the spec of a builtin given none.
+	AbsentJobSpec string
+
+	// NoCurrentJob is a bare `fg` or `bg` with no job in the table at all,
+	// for a dialect that gets that far. One verb: the builtin's name.
+	//
+	// Reached only where JobControlAbsenceIsReportedFirst is No — the other
+	// three members refuse before they look — so dash is the only measured
+	// column: `fg: No current job`, at status 2. A separate sentence from
+	// NoSuchJob, and it has to be: dash's NoSuchJob names the spec, and a
+	// builtin with no operand has none to name.
+	NoCurrentJob string
+
+	// NoCurrentJobStatus is what that reports. Zero means 1; dash reports 2.
+	NoCurrentJobStatus int
 
 	// NoJobControlAtStartup is what an *interactive* shell says because it
 	// wanted the monitor and had no terminal to run one on. No verbs.

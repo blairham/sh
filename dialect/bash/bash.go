@@ -2051,10 +2051,16 @@ func Diagnostics() interp.Diagnostics {
 			{Prefix: "max user processes                  (-u) ", Res: interp.ResourceProcesses, Scale: 1},
 			{Prefix: "virtual memory              (kbytes, -v) ", Res: interp.ResourceAddressSpace, Scale: 1024},
 		},
-		UlimitBadNumber:    "ulimit: %[1]s: invalid number",
-		BuiltinBadOption:   "%[1]s: %[2]s: invalid option",
-		WaitBadJob:         "wait: `%[1]s': not a pid or valid job spec",
-		WaitNoSuchJob:      "wait: %[1]s: no such job",
+		UlimitBadNumber:  "ulimit: %[1]s: invalid number",
+		BuiltinBadOption: "%[1]s: %[2]s: invalid option",
+		WaitBadJob:       "wait: `%[1]s': not a pid or valid job spec",
+		WaitNoSuchJob:    "wait: %[1]s: no such job",
+		// `fg` and `bg` in a script, which has no job control: bash refuses
+		// before it reads the operand and words it the same for both. Spelled
+		// out rather than left to the shared fallback because empty here
+		// means silence — see Diagnostics.NoJobControl, which is ksh93's
+		// answer.
+		NoJobControl:       "%[1]s: no job control",
 		AmbiguousJobSpec:   "%[1]s: %[2]s: ambiguous job spec",
 		KillNoSuchJob:      "kill: %[1]s: no such job",
 		DisownNoCurrentJob: "disown: current: no such job",

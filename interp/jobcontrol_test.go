@@ -147,6 +147,21 @@ func (f *fakeJobs) poll() (Wait, bool) {
 // thirty lines with one line changed, and the copy is what drifts.
 func jobRun(t *testing.T, f *fakeJobs, src string, tweak ...func(*Semantics)) (string, int, *Runner) {
 	t.Helper()
+	return jobRunShaped(t, f, src, false, tweak...)
+}
+
+// jobRunAtAPrompt is the same shell with somebody to tell about its jobs,
+// which is what `fg` and `bg` need: since #2657 they resume nothing in a
+// shell that has no job control, because no shell in the panel does. The
+// price of saying so is that the stops are announced too, so a caller here
+// reads the last line rather than the whole of the output.
+func jobRunAtAPrompt(t *testing.T, f *fakeJobs, src string, tweak ...func(*Semantics)) (string, int, *Runner) {
+	t.Helper()
+	return jobRunShaped(t, f, src, true, tweak...)
+}
+
+func jobRunShaped(t *testing.T, f *fakeJobs, src string, atAPrompt bool, tweak ...func(*Semantics)) (string, int, *Runner) {
+	t.Helper()
 	file, err := syntax.Parse(src, syntax.Core())
 	if err != nil {
 		t.Fatalf("parse %q: %v", src, err)
@@ -171,7 +186,10 @@ func jobRun(t *testing.T, f *fakeJobs, src string, tweak ...func(*Semantics)) (s
 		f(&sem)
 	}
 	dg := Diagnostics{}
-	r := newTestRunner(t, &Runner{Stdout: out, Stderr: out, Semantics: &sem, Diagnostics: &dg, Name: "testsh"})
+	r := newTestRunner(t, &Runner{
+		Stdout: out, Stderr: out, Semantics: &sem, Diagnostics: &dg, Name: "testsh",
+		JobControl: atAPrompt,
+	})
 	if f != nil {
 		t.Cleanup(func() { f.reapSaidStopped(t) })
 		// A shell that is told its commands *stopped* is a shell running the
@@ -311,15 +329,19 @@ func TestFgAndBg(t *testing.T) {
 		{Signal: syscall.SIGTSTP, Stopped: true}, // the command stops
 		{Status: 7},                              // and then fg waits for it
 	}}
-	out, st, r := jobRun(t, f, echoCmd+"\nfg")
+	// At a prompt, which is the only shell either of them resumes anything
+	// in: a script's `fg` is a refusal in every column of the panel (#2657).
+	// So the stop is announced above the resume notice, and the notice is
+	// the last line rather than the whole of it.
+	out, st, r := jobRunAtAPrompt(t, f, echoCmd+"\nfg")
 	if st != 7 {
 		t.Errorf("fg reported %d, want the resumed command's 7", st)
 	}
 	if len(r.Jobs()) != 0 {
 		t.Error("the job was not forgotten after it finished")
 	}
-	if !strings.Contains(out, echoCmd) {
-		t.Errorf("fg said %q, want the command named", out)
+	if lastLine(out) != echoCmd {
+		t.Errorf("fg said %q, want the command named on the last line", out)
 	}
 	if len(f.signals) != 1 || f.signals[0].sig != syscall.SIGCONT {
 		t.Errorf("signals were %+v, want one SIGCONT", f.signals)
@@ -327,14 +349,14 @@ func TestFgAndBg(t *testing.T) {
 
 	// bg resumes and returns without waiting, so the job stays.
 	f = &fakeJobs{waits: []Wait{{Signal: syscall.SIGTSTP, Stopped: true}}}
-	out, st, r = jobRun(t, f, echoCmd+"\nbg")
+	out, st, r = jobRunAtAPrompt(t, f, echoCmd+"\nbg")
 	if st != 0 {
 		t.Errorf("bg reported %d, want 0", st)
 	}
 	if len(r.Jobs()) != 1 || r.Jobs()[0].Stopped {
 		t.Error("bg should leave a job that is no longer stopped")
 	}
-	if !strings.Contains(out, "&") {
+	if !strings.HasSuffix(lastLine(out), "&") {
 		t.Errorf("bg said %q, want the & that says it is not waiting", out)
 	}
 }

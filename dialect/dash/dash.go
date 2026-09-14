@@ -1008,7 +1008,21 @@ func Diagnostics() interp.Diagnostics {
 		NoSuchJob: "%[1]s: No such job: %[2]s",
 		// And dash's usage number rather than a plain failure, which is what
 		// it reports for every one of the three.
-		NoSuchJobStatus:       2,
+		NoSuchJobStatus: 2,
+		// dash is the one member that reads `fg` and `bg`'s operand before
+		// noticing it has no job control, so it is the one that reaches a
+		// resolved job and has to say why it will not resume it. Measured
+		// 2026-09-13 from a script with no terminal, `sleep 0 & fg %1`.
+		JobNotUnderJobControl:       "%[1]s: job %[2]s not created under job control",
+		JobNotUnderJobControlStatus: 2,
+		// A bare `fg` has no operand, and dash's message shows the null
+		// pointer its formatter was handed rather than leaving a hole.
+		AbsentJobSpec: "(null)",
+		// And with nothing in the table to resolve to, a different sentence
+		// again — measured on `fg` and `bg` alike in a script that started
+		// no job.
+		NoCurrentJob:          "%[1]s: No current job",
+		NoCurrentJobStatus:    2,
 		LocalOutsideAFunction: "local: not in a function",
 		// One wording for all three, naming the part in front of any `=`.
 		BuiltinBadName: map[string]string{

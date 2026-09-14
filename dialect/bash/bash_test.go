@@ -872,3 +872,20 @@ func TestTheKindLetterIsAmongTypesLetters(t *testing.T) {
 		t.Errorf("TypeOptions = %q, want the kind letter among them", got)
 	}
 }
+
+// `fg` and `bg` in a script name themselves and say there is no job control,
+// and the sentence is spelled out here rather than left to the substrate's
+// fallback: empty means silence on that field, which is ksh93's answer (see
+// interp.Diagnostics.NoJobControl and #2657).
+//
+// Measured 2026-09-13 from a script with no terminal, on 5.3.15 and 3.2.57
+// alike: `sleep 0 & fg` is `fg: no job control` at 1, and so is `fg %1` and
+// `fg %2` — the operand is never read, which is the axis above it.
+func TestFgAndBgSayThereIsNoJobControl(t *testing.T) {
+	if got := bash.Semantics().JobControlAbsenceIsReportedFirst; got != interp.Yes {
+		t.Errorf("JobControlAbsenceIsReportedFirst = %v, want Yes", got)
+	}
+	if got, want := bash.Diagnostics().NoJobControl, "%[1]s: no job control"; got != want {
+		t.Errorf("NoJobControl = %q, want %q", got, want)
+	}
+}

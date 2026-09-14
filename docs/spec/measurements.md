@@ -21038,6 +21038,13 @@ grades it and nothing drift-checks it either, for the same reason.
 | `alias/a-body-may-end-at-the-parens-of-a-definition` | `hi` | `hi` | `hi` | `hi` | `hi` | `hi` | `hi` |
 | `alias/a-body-may-end-at-an-anonymous-functions-parens` | **2>** `<script>: 2: Syntax error: ")" unexpected` *(status 2)* | **2>** `<script>: line 2: syntax error near unexpected token `}'~<script>: line 2: `af { echo hi; }'` *(status 2)* | **2>** `<script>: line 2: syntax error near unexpected token `)'~<script>: line 2: `af { echo hi; }'` *(status 2)* | **2>** `<script>: line 2: syntax error near unexpected token `}'~<script>: line 2: `af { echo hi; }'` *(status 2)* | **2>** `<script>: syntax error at line 2: `)' unexpected` *(status 3)* | `hi` | **2>** `<script>: line 2: syntax error: unexpected ")"` *(status 2)* |
 | `alias/a-body-may-end-at-the-parens-of-two-names` | **2>** `<script>: 2: Syntax error: "(" unexpected` *(status 2)* | **2>** `<script>: line 2: syntax error near unexpected token `}'~<script>: line 2: `ab { echo "[$0]"; }'` *(status 2)* | **2>** `<script>: line 2: syntax error near unexpected token `('~<script>: line 2: `a b ()'` *(status 2)* | **2>** `<script>: line 2: syntax error near unexpected token `}'~<script>: line 2: `ab { echo "[$0]"; }'` *(status 2)* | **2>** `<script>: syntax error at line 2: `(' unexpected` *(status 3)* | `[a]~[b]` | **2>** `<script>: line 2: syntax error: unexpected "("` *(status 2)* |
+| `alias/a-quote-a-body-opens-reaches-the-rest-of-the-line` | `one~ hello~two` | `one~ hello~two` | `one~ hello~two` | `one~  hello~two` | `one~ hello~two` | `one~ hello~two` | `one~ hello~two` |
+| `alias/a-single-quote-a-body-opens-reaches-it-too` | `one~ hello~two` | `one~ hello~two` | `one~ hello~two` | `one~  hello~two` | `one~ hello~two` | `one~ hello~two` | `one~ hello~two` |
+| `alias/a-substitution-a-body-opens-reaches-it-as-well` | `one~hi~two` | `one~hi~two` | `one~hi~two` | `one~hi~two` | `one~hi~two` | `one~hi~two` | `one~hi~two` |
+| `alias/a-quote-a-body-leaves-open-is-unterminated` | `one` **2>** `<script>: 6: Syntax error: Unterminated quoted string` *(status 2)* | `one` **2>** `<script>: line 4: unexpected EOF while looking for matching `"'` *(status 2)* | `one` **2>** `<script>: line 4: unexpected EOF while looking for matching `"'` *(status 2)* | `one` **2>** `<script>: line 4: unexpected EOF while looking for matching `"'~<script>: line 6: syntax error: unexpected end of file` *(status 2)* | `one` **2>** `<script>: line 3: syntax error at line 4: `"' unmatched` *(status 3)* | `one` **2>** `<script>:6: unmatched "` *(status 1)* | `one` **2>** `<script>: line 6: syntax error: unterminated quoted string` *(status 2)* |
+| `alias/a-body-that-closes-its-own-quotes-takes-nothing` | `one~a b~two` | `one~a b~two` | `one~a b~two` | `one~a b~two` | `one~a b~two` | `one~a b~two` | `one~a b~two` |
+| `alias/a-blank-inside-an-open-quote-is-not-the-trailing-blank` | `one~x  b~two` | `one~x  b~two` | `one~x  b~two` | `one~x  b~two` | `one~x  b~two` | `one~x  b~two` | `one~x  b~two` |
+| `alias/the-blank-past-an-open-quote-splits-the-panel` | `one~x  b c~two` | `one~x  b CEE~two` | `one~x  b CEE~two` | `one~x  b CEE~two` | `one~x  b c~two` | `one~x  b c~two` | `one~x  b c~two` |
 | `alias/nested-text-expands-where-the-command-string-did-not` | `E~v=` **2>** `<shell>: 1: t: not found` | `v=` **2>** `<shell>: line 1: t: command not found~<shell>: line 1: t: command not found` | `E~v=` **2>** `<shell>: line 1: t: command not found` | `v=` **2>** `<shell>: t: command not found~<shell>: t: command not found` | `E~v=S` | `E~v=S` | `E~v=` **2>** `<shell>: t: not found` |
 | `alias/a-trap-body-under-a-command-string-expands-too` | `end~TRAP` | `end` **2>** `<shell>: line 1: t: command not found` | `end~TRAP` | `end` **2>** `<shell>: t: command not found` | `end~TRAP` | `end~TRAP` | `end~TRAP` |
 | `alias/neither-kind-is-accepted-where-the-shell-has-not-got-it` | `ag=1~as=1~us=2` | `ag=2~as=2~us=2` | `ag=2~as=2~us=2` | `ag=2~as=2~us=2` | `ag=2~as=2~us=2` | `ag=0~as=0~us=1` | `ag=1~as=1~us=2` |
@@ -21365,6 +21372,64 @@ grades it and nothing drift-checks it either, for the same reason.
   ab { echo "[$0]"; }
   a
   b
+  ```
+- `alias/a-quote-a-body-opens-reaches-the-rest-of-the-line` — substitution replaces the alias word with the alias *text* in the input the shell is reading, and lexing carries on over the join — so a quote the body opens is still open when the rest of the line is read. Every column prints ` hello` between `one` and `two` and exits 0; bash 3.2 writes the blank twice, which is the same reading with its own spacing. Here the body was lexed on its own, so the quote could not leave it, and the `"` left in the input was an unterminated quote at 2. Written from a file, because zsh expands no alias under `-c` (#2685)
+  ```sh
+  shopt -s expand_aliases 2>/dev/null
+  alias q='echo "'
+  echo one
+  q hello"
+  echo two
+  ```
+- `alias/a-single-quote-a-body-opens-reaches-it-too` — the other quote, and a different scanner: single quotes protect everything and have no escape inside them, so nothing about the first row's reading carries over to this one by construction. Unanimous ` hello` at 0 across the panel, with bash 3.2's second blank again
+  ```sh
+  shopt -s expand_aliases 2>/dev/null
+  alias q="echo '"
+  echo one
+  q hello'
+  echo two
+  ```
+- `alias/a-substitution-a-body-opens-reaches-it-as-well` — the seam is the lexer's rather than quoting's, and this is the row that says so: a body ending inside `$(` takes the rest of its command from the input in all seven columns, printing `hi`. It is also the row that would move if the carry were written for quote characters alone — the two quotes above would pass a fix that reads a quote table, and this would not
+  ```sh
+  shopt -s expand_aliases 2>/dev/null
+  alias q='echo $('
+  echo one
+  q echo hi)
+  echo two
+  ```
+- `alias/a-quote-a-body-leaves-open-is-unterminated` — the other direction of the same rule, and the worse half: a quote the body leaves open runs to the end of the input and is an unterminated quote. `one` and then a refusal in every column — 2 in bash 5.3, that binary as `sh`, bash 3.2, dash and BusyBox ash, 1 in zsh, 3 in ksh93 — and `two` is inside the quote and never runs. Here it exited 0 having printed `x` and `two`, which is this shell closing a quote the script never closed and running a command the author did not write. The four diagnostics are four sentences at three statuses and the lines they name split four to two, the opener's against the end of the input; that spread belongs to #2324
+  ```sh
+  shopt -s expand_aliases 2>/dev/null
+  alias a='echo "x'
+  echo one
+  a
+  echo two
+  ```
+- `alias/a-body-that-closes-its-own-quotes-takes-nothing` — the control on the three rows above, and it is what keeps the carry from being a fix that over-reaches: a body whose quoting closes inside it leaves the input alone, so `b` is a word of its own and not part of a quoted one. `one`, `a b`, `two` at 0 everywhere
+  ```sh
+  shopt -s expand_aliases 2>/dev/null
+  alias q='echo "a"'
+  echo one
+  q b
+  echo two
+  ```
+- `alias/a-blank-inside-an-open-quote-is-not-the-trailing-blank` — the two rules of this family meeting: a value ending in a blank makes the next word eligible for expansion in turn, and a blank *inside* a quote the body opened is not that blank. Every column prints `x  b` rather than `x  BEE`, so the word after the alias word is inside the quote and was never a word. The sibling row `alias/a-body-that-closes-its-own-quotes-takes-nothing` is the same shape with the quote closed, where the trailing blank does its usual work
+  ```sh
+  shopt -s expand_aliases 2>/dev/null
+  alias b='BEE'
+  alias q='echo "x '
+  echo one
+  q b"
+  echo two
+  ```
+- `alias/the-blank-past-an-open-quote-splits-the-panel` — the one question inside the quote seam that is not unanimous, and the row `Dialect.AliasTrailingBlankReachesPastAnOpenConstruct` is decided at. The value ends in a blank, which makes the next word eligible for expansion in turn — and the blank is inside the quote the body opened. bash 5.3, that binary as `sh`, and bash 3.2 print `x  b CEE`: they offer the next *word* of the resulting line, which is the one after the quote closes. dash, ksh93, zsh and BusyBox ash print `x  b c`, offering the text immediately after the value, which is inside the quote and is no word at all. The sibling row `alias/a-blank-inside-an-open-quote-is-not-the-trailing-blank` is the half that does not split — the word the quote swallows is never a candidate anywhere (#2685)
+  ```sh
+  shopt -s expand_aliases 2>/dev/null
+  alias c='CEE'
+  alias q='echo "x '
+  echo one
+  q b" c
+  echo two
   ```
 - `alias/nested-text-expands-where-the-command-string-did-not` — zsh expands no alias in a `-c` string and expands one in `eval` and in a substitution reached from that same string. So its refusal under `-c` is not a rule about aliases: the option is the only gate on a nested text, and a `-c` string simply being read whole is what stops a definition on one line reaching the next. This is the row #2109 split `Dialect.ExpandAliases` in two for — one field held both the option's default and the route rule, and the front end derived the nested texts' answer from the route, which turned the table off for every `eval` and `$( )` under a zsh command string. The dash column is a *different* fault and still misses: that shell parses a substitution with the line that holds it, so its `$( )` here is read before the `alias` beside it has run — #2357
   ```sh

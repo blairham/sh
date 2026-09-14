@@ -199194,6 +199194,57 @@
         "TimedOut": false
       }
     },
+    "xtrace/a-quote-at-either-end-of-a-word": {
+      "ash": {
+        "Stdout": "'~ab'~'ab",
+        "Stderr": "+ a=''\"'\"~+ b='ab'\"'\"~+ c=''\"'\"'ab'~+ echo ''\"'\"~+ echo 'ab'\"'\"~+ echo ''\"'\"'ab'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "'~ab'~'ab",
+        "Stderr": "+ a=\\'~+ b='ab'\\'''~+ c=''\\''ab'~+ echo \\'~+ echo 'ab'\\'''~+ echo ''\\''ab'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "'~ab'~'ab",
+        "Stderr": "+ a=\\'~+ b='ab'\\'''~+ c=''\\''ab'~+ echo \\'~+ echo 'ab'\\'''~+ echo ''\\''ab'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "'~ab'~'ab",
+        "Stderr": "+ a=''\\'''~+ b='ab'\\'''~+ c=''\\''ab'~+ echo ''\\'''~+ echo 'ab'\\'''~+ echo ''\\''ab'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "'~ab'~'ab",
+        "Stderr": "+ a='~+ b=ab'~+ c='ab~+ echo '~+ echo ab'~+ echo 'ab",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "'~ab'~'ab",
+        "Stderr": "+ a=$'\\''~+ b=$'ab\\''~+ c=$'\\'ab'~+ echo $'\\''~+ echo $'ab\\''~+ echo $'\\'ab'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "'~ab'~'ab",
+        "Stderr": "+\u003cshell\u003e:1\u003e a=\\' ~+\u003cshell\u003e:1\u003e b='ab'\\' ~+\u003cshell\u003e:1\u003e c=\\''ab' ~+\u003cshell\u003e:1\u003e echo \\'~+\u003cshell\u003e:1\u003e echo 'ab'\\'~+\u003cshell\u003e:1\u003e echo \\''ab'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "xtrace/a-tilde-or-hash-is-quoted-by-position": {
       "ash": {
         "Stdout": "~a a~b #a a#b",

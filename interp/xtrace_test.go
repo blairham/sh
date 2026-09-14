@@ -560,3 +560,94 @@ func TestQuoteSingleOnlyReopensLazily(t *testing.T) {
 		}
 	}
 }
+
+// The two shells that spell an embedded quote `'\”` do not agree about the
+// empty segments closing and reopening leaves, and one shape hides it.
+//
+// `it's` — a quote in the middle of a word — is spelled identically by both,
+// and it was the only shape the corpus had, so the two shared one value until
+// #2695. They part wherever a quote touches an **end**: the eager reading
+// writes the empty `”` pairs and the lazy one drops them, at the front, at
+// the end, and between two adjacent quotes.
+//
+// Measured 2026-09-13, bash 5.3.15 and zsh 5.9.2, `env -i PATH=/usr/bin:/bin`
+// over a script file. Values are named here rather than shells, as everywhere
+// under interp.
+func TestTheTwoQuotingReadingsPartAtTheEndsOfAWord(t *testing.T) {
+	for _, tc := range []struct{ name, word, eager, lazy string }{
+		// The shape that hid the split, and the reason a row using it
+		// could not have found this.
+		{"a quote in the middle", "a'b", `'a'\''b'`, `'a'\''b'`},
+		{"a quote at the end", "ab'", `'ab'\'''`, `'ab'\'`},
+		{"a quote at the front", "'ab", `''\''ab'`, `\''ab'`},
+		{"two adjacent quotes", "a''b", `'a'\'''\''b'`, `'a'\'\''b'`},
+		// A word that is nothing but quotes, where the eager reading is
+		// all empty pairs. The lone-quote case is deliberately not here:
+		// it is a special case in one shell rather than this rule, and it
+		// is pinned by TestALoneQuoteIsASpecialCaseAndNotTheLazyRule.
+		{"two quotes alone", "''", `''\'''\'''`, `\'\'`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, r := range []struct {
+				name string
+				q    TraceQuoting
+				want string
+			}{
+				{"eager", QuoteShell, tc.eager},
+				{"lazy", QuoteShellLazy, tc.lazy},
+			} {
+				src := "set -x; x=" + shellSingleQuoted(tc.word) + `; echo "$x"`
+				got := tracedEcho(t, traceOf(t, src, permissive(), Diagnostics{TraceQuoting: r.q}))
+				if got != r.want {
+					t.Errorf("%q under %s = %s, want %s", tc.word, r.name, got, r.want)
+				}
+			}
+		})
+	}
+}
+
+// A lone quote is `\'` under the eager reading too, and that is a special case
+// rather than the lazy rule leaking in: the word `”` keeps its empty pairs
+// there. Measured 2026-09-13 — bash 5.3.15 traces `'` as `\'` and `”` as
+// `”\”'\”'`, while bash 3.2.57 writes `”\”'` for the first, so the newer
+// shell grew the case and the general rule is still visible in the older
+// column (#2695).
+func TestALoneQuoteIsASpecialCaseAndNotTheLazyRule(t *testing.T) {
+	for _, r := range []struct {
+		name string
+		q    TraceQuoting
+		one  string
+		two  string
+	}{
+		{"eager", QuoteShell, `\'`, `''\'''\'''`},
+		{"lazy", QuoteShellLazy, `\'`, `\'\'`},
+	} {
+		t.Run(r.name, func(t *testing.T) {
+			for _, tc := range []struct{ word, want string }{
+				{"'", r.one},
+				{"''", r.two},
+			} {
+				src := "set -x; x=" + shellSingleQuoted(tc.word) + `; echo "$x"`
+				got := tracedEcho(t, traceOf(t, src, permissive(), Diagnostics{TraceQuoting: r.q}))
+				if got != tc.want {
+					t.Errorf("%q under %s = %s, want %s", tc.word, r.name, got, tc.want)
+				}
+			}
+		})
+	}
+}
+
+// tracedEcho is the `echo` line of a trace that also traced the assignment
+// setting the word up. Taking the whole output would compare two lines and
+// report a mismatch whose text is the answer wanted, which is a confusing way
+// to be told the extraction is wrong.
+func tracedEcho(t *testing.T, out string) string {
+	t.Helper()
+	for _, line := range strings.Split(out, "\n") {
+		if after, ok := strings.CutPrefix(line, "+ echo "); ok {
+			return strings.TrimSpace(after)
+		}
+	}
+	t.Fatalf("no `+ echo` line in %q", out)
+	return ""
+}

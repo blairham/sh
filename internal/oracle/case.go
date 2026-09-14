@@ -4314,6 +4314,11 @@ echo "reached-after st=$?"`,
 		Why:     "the spelling once something has decided a word needs quoting, and it is a four-way answer: bash and zsh close the quote, backslash-escape one and reopen — `'it'\\''s'` — ksh93 reaches for `$'it\\'s'`, ash closes the quote and puts the run inside *double* quotes, `'it'\"'\"'s'`, and dash quotes nothing at all. ash's is the reading interp.QuoteSingleOnly was added for: that shell has no `$'…'` in its trace anywhere, which is also why a control character and an empty field diverge two rows up",
 	},
 	{
+		ID: "xtrace/a-quote-at-either-end-of-a-word", Category: "shell options",
+		Snippet: `set -x; a="'"; b="ab'"; c="'ab"; echo "$a"; echo "$b"; echo "$c"`,
+		Why:     "where a quote *touches an end* of the word, which is the half the row above cannot ask: `it's` has its quote in the middle and bash and zsh spell that identically, so a rule tested only on it reads as one behavior and is two. They part on the outer segments — bash writes the empty pairs that closing and reopening leaves and zsh drops them, so `ab'` is `'ab'\\'''` there and `'ab'\\'` here. The first probe is the one that agrees for different reasons: a lone quote is `\\'` in both, by a special case in bash 5.3 that its own 3.2 column does not have — that column writes `''\\'''` and is the only place the general rule stays visible in bash. ksh93 answers all three with `$'…'` and dash quotes nothing (#2695)",
+	},
+	{
 		ID: "xtrace/prefix-diverges", Category: "shell options",
 		Snippet: `set -x; f() { echo in; }; f`,
 		Why:     "zsh names the script and line, and the function and 0 inside one, where the others print a bare plus",

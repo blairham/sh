@@ -139,7 +139,12 @@ func TestPlusSignedCommandStringNaming(t *testing.T) {
 
 func TestDiagnosticAnswersTheInterpTestsRelyOn(t *testing.T) {
 	d := zsh.Diagnostics()
-	if got, want := d.TraceQuoting, interp.QuoteShell; got != want {
+	// Lazy rather than QuoteShell since #2695. This shell drops the empty
+	// `''` segments that closing and reopening a quoted run leaves, so
+	// `ab'` traces as `'ab'\\'` where bash writes `'ab'\\'''`. It shared the
+	// eager value until then because the only corpus row used `it's`, whose
+	// quote is in the middle — the one shape the two shells agree on.
+	if got, want := d.TraceQuoting, interp.QuoteShellLazy; got != want {
 		t.Errorf("TraceQuoting = %v, want %v", got, want)
 	}
 	// The character sets are the whole of #2141: which words the quoting

@@ -188,7 +188,14 @@ const (
 	// traces as `+ echo a b`, which cannot be told from two arguments.
 	QuoteNever TraceQuoting = iota
 	// QuoteShell single-quotes anything with a space or a quote in it, and
-	// falls back to `$'…'` for a control character: bash and zsh.
+	// falls back to `$'…'` for a control character: bash.
+	//
+	// It writes the empty `''` segments that closing and reopening leaves —
+	// `''\'''` for the word `'` — with one exception measured 2026-09-13 on
+	// bash 5.3.15 and **not** present in 3.2.57: a word that is exactly one
+	// quote traces as `\'`. The word `''` keeps its pairs in both, so that
+	// is a special case in the newer shell rather than the lazy rule
+	// QuoteShellLazy names.
 	QuoteShell
 	// QuoteDollar is ksh93, which reaches for `$'…'` for an embedded quote
 	// where bash and zsh write `'it'\''s'`.
@@ -209,6 +216,25 @@ const (
 	// quote and puts the run inside *double* quotes. See traceSingleQuote
 	// for why a run and not one at a time.
 	QuoteSingleOnly
+	// QuoteShellLazy is zsh: the same `'…'`-and-`\'` spelling as QuoteShell,
+	// with every empty `''` segment dropped — at the front of a word, at the
+	// end, and between two adjacent quotes.
+	//
+	// It shared QuoteShell until #2695, on a corpus row using `it's`, which
+	// is the one shape the two agree on: both write `'it'\''s'`. They part
+	// wherever a quote touches an end. Measured 2026-09-13, bash 5.3.15 and
+	// zsh 5.9.2, `env -i` over a script file:
+	//
+	//	word    bash            zsh
+	//	'       \'              \'          agree, for different reasons
+	//	ab'     'ab'\'''        'ab'\'
+	//	'ab     ''\''ab'        \''ab'
+	//	a''b    'a'\'''\''b'    'a'\'\''b'
+	//
+	// The first row agrees by coincidence: it is a special case in bash and
+	// falls out of the general rule in zsh, which is why the second and
+	// third rows are the ones that pin this value.
+	QuoteShellLazy
 )
 
 // TraceMetacharacters is the characters that make an expanded word need
@@ -802,7 +828,74 @@ func traceQuote(s string, q TraceQuoting, meta TraceMetacharacters) string {
 	}
 	// A single quote cannot appear inside single quotes, so it is closed,
 	// escaped and reopened — which is what `'it'\''s'` is.
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+	if q == QuoteShellLazy {
+		return traceShellQuote(s, true)
+	}
+	// One shell writes a lone quote bare rather than between two empty
+	// pairs, and **only** a lone one: measured 2026-09-13, bash 5.3.15
+	// traces the word `'` as `\'` and the word `''` as `''\'''\'''`, so this
+	// is a special case in that shell and not the lazy rule below. bash
+	// 3.2.57 writes `''\'''` for both, which is what the general walk gives
+	// (#2695).
+	if s == "'" {
+		return `\'`
+	}
+	return traceShellQuote(s, false)
+}
+
+// traceShellQuote renders a word for a shell that escapes an embedded quote
+// as `'\”` — closing the single-quoted run, writing an escaped quote, and
+// reopening.
+//
+// lazy says the empty `”` segments that leaves are dropped: at the front, at
+// the end, and between two adjacent quotes. That is the whole of the
+// difference between the two shells sharing this spelling, measured
+// 2026-09-13 (#2695):
+//
+//	word    eager           lazy
+//	'       ''\'''          \'
+//	ab'     'ab'\'''        'ab'\'
+//	'ab     ''\''ab'        \''ab'
+//	a''b    'a'\'''\''b'    'a'\'\''b'
+//	a'b     'a'\''b'        'a'\''b'      the common case, which both agree on
+//
+// The last row is why a rule tested only on `it's` cannot tell them apart,
+// and it is the only shape the corpus had before this.
+func traceShellQuote(s string, lazy bool) string {
+	var b strings.Builder
+	open := false
+	openRun := func() {
+		if !open {
+			b.WriteByte('\'')
+			open = true
+		}
+	}
+	closeRun := func() {
+		if open {
+			b.WriteByte('\'')
+			open = false
+		}
+	}
+	if !lazy {
+		openRun()
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\'' {
+			closeRun()
+			b.WriteString(`\'`)
+			if !lazy {
+				openRun()
+			}
+			continue
+		}
+		openRun()
+		b.WriteByte(s[i])
+	}
+	if !lazy {
+		openRun()
+	}
+	closeRun()
+	return b.String()
 }
 
 // traceSingleQuote renders a word the way a shell with no `$'…'` does: single

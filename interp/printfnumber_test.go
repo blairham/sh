@@ -348,3 +348,81 @@ func TestPrintfRangeErrorSaysAndCostsSeparately(t *testing.T) {
 		}
 	})
 }
+
+// One column names the *base* the operand was spelled in, where the rest of
+// the panel has one sentence for every bad number.
+//
+// The question is the operand's spelling and nothing else: the value, the
+// status and the conversion are the general sentence's in every row, so a
+// test that read the wording off the value would pass on rows that never
+// reach the choice. Each row below is paired with one the other way — `08`
+// against `0z`, `0x1z` against `0X1z` — because the two halves of the rule
+// are what a single positive row cannot state. See
+// Diagnostics.PrintfBadHexNumber for the measurement (#2764).
+func TestPrintfBadNumberCanNameTheBase(t *testing.T) {
+	diag := Diagnostics{
+		PrintfBadNumber:      "printf: %[1]s: invalid number",
+		PrintfBadHexNumber:   "printf: %[1]s: invalid hex number",
+		PrintfBadOctalNumber: "printf: %[1]s: invalid octal number",
+	}
+	for _, tc := range []struct {
+		name string
+		src  string
+		want string
+	}{
+		{"a written 0x is hexadecimal", `printf '[%d]' 0x10zz`, "invalid hex number"},
+		{"however little follows it", `printf '[%d]' 0x`, "invalid hex number"},
+		{"a leading zero and a digit is octal", `printf '[%d]' 08`, "invalid octal number"},
+		{"even where the octal run is only the zero", `printf '[%d]' 00z`, "invalid octal number"},
+		{"a capital X is neither", `printf '[%d]' 0X1z`, "invalid number"},
+		{"nor is a zero followed by anything else", `printf '[%d]' 0z`, "invalid number"},
+		{"nor a zero and a point", `printf '[%d]' 0.5zz`, "invalid number"},
+		{"a sign in front takes the base away", `printf '[%d]' +0x10zz`, "invalid number"},
+		{"and so does a blank", `printf '[%d]' ' 08'`, "invalid number"},
+		{"the float conversions ask the same question", `printf '[%f]' 0x1.8p3zz`, "invalid hex number"},
+		{"and get the same answer for an operand with no base", `printf '[%f]' 0.5zz`, "invalid number"},
+		{"an octal spelling reaches a float conversion too", `printf '[%f]' 08zz`, "invalid octal number"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := printfSem()
+			sem.PrintfReportsBadNumber = Yes
+			out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem; r.Diagnostics = &diag })
+			line, _, _ := strings.Cut(out, "\n")
+			if !strings.HasSuffix(line, tc.want) || st != 1 {
+				t.Errorf("got %q status %d, want a first line ending %q and 1", out, st, tc.want)
+			}
+		})
+	}
+}
+
+// A dialect with no base-named sentence keeps the general one, which is what
+// every column but the one that has them says for the same operands.
+func TestPrintfBadNumberKeepsOneSentenceWithoutTheBaseWordings(t *testing.T) {
+	diag := Diagnostics{PrintfBadNumber: "printf: %[1]s: invalid number"}
+	for _, src := range []string{`printf '[%d]' 0x10zz`, `printf '[%d]' 08`, `printf '[%d]' abc`} {
+		sem := printfSem()
+		sem.PrintfReportsBadNumber = Yes
+		out, st := run(t, src, func(r *Runner) { r.Semantics = &sem; r.Diagnostics = &diag })
+		line, _, _ := strings.Cut(out, "\n")
+		if !strings.HasSuffix(line, "invalid number") || st != 1 {
+			t.Errorf("%s: got %q status %d, want the general sentence and 1", src, out, st)
+		}
+	}
+}
+
+// An operand C read as a number and could not hold is a range error and keeps
+// the range sentence, base or no base — the base wording is the *general*
+// sentence's refinement and not a reading of the operand's front.
+func TestPrintfRangeErrorIsNotBaseNamed(t *testing.T) {
+	diag := Diagnostics{
+		PrintfBadNumber:        "printf: %[1]s: invalid number",
+		PrintfBadHexNumber:     "printf: %[1]s: invalid hex number",
+		PrintfNumberOutOfRange: "printf: %[1]s: Result too large",
+	}
+	sem := printfSem()
+	sem.PrintfReportsBadNumber = Yes
+	out, st := run(t, `printf '[%d]' 0xFFFFFFFFFFFFFFFFFF`, func(r *Runner) { r.Semantics = &sem; r.Diagnostics = &diag })
+	if !strings.Contains(out, "Result too large") || strings.Contains(out, "hex") || st != 1 {
+		t.Errorf("got %q status %d, want the range sentence and 1", out, st)
+	}
+}

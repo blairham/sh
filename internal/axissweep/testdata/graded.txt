@@ -38,8 +38,10 @@ ash    LastPipelineElementInCurrentShell                    No
 ash    LocalOutsideAFunctionIsAnError                       Yes
 ash    LocalOutsideAFunctionIsFatal                         Yes
 ash    PrefixToAFunctionIsExported                          Yes
+ash    PrintfC99FloatConversions                            No
 ash    PrintfGroupingFlag                                   No
 ash    PrintfGroupingFlagAfterTheWidth                      -
+ash    PrintfHexFloatDefaultIsTwelveDigits                  -
 ash    PrintfNonFiniteIsConverted                           Yes
 ash    PrintfNumberOperand                                  PrintfNumberWholeOperand
 ash    PrintfRefusedOperandKeepsItsLeadingNumber            -
@@ -72,8 +74,10 @@ bash   LastPipelineElementInCurrentShell                    No
 bash   LocalOutsideAFunctionIsAnError                       Yes
 bash   LocalOutsideAFunctionIsFatal                         No
 bash   PrefixToAFunctionIsExported                          Yes
+bash   PrintfC99FloatConversions                            Yes
 bash   PrintfGroupingFlag                                   Yes
 bash   PrintfGroupingFlagAfterTheWidth                      No
+bash   PrintfHexFloatDefaultIsTwelveDigits                  No
 bash   PrintfNonFiniteIsConverted                           Yes
 bash   PrintfNumberOperand                                  PrintfNumberLeadingNumber
 bash   PrintfRefusedOperandKeepsItsLeadingNumber            -
@@ -106,8 +110,10 @@ dash   LastPipelineElementInCurrentShell                    No
 dash   LocalOutsideAFunctionIsAnError                       Yes
 dash   LocalOutsideAFunctionIsFatal                         Yes
 dash   PrefixToAFunctionIsExported                          Yes
+dash   PrintfC99FloatConversions                            Yes
 dash   PrintfGroupingFlag                                   No
 dash   PrintfGroupingFlagAfterTheWidth                      -
+dash   PrintfHexFloatDefaultIsTwelveDigits                  No
 dash   PrintfNonFiniteIsConverted                           Yes
 dash   PrintfNumberOperand                                  PrintfNumberLeadingNumber
 dash   PrintfRefusedOperandKeepsItsLeadingNumber            -
@@ -140,8 +146,10 @@ ksh    LastPipelineElementInCurrentShell                    Yes
 ksh    LocalOutsideAFunctionIsAnError                       -
 ksh    LocalOutsideAFunctionIsFatal                         -
 ksh    PrefixToAFunctionIsExported                          No
+ksh    PrintfC99FloatConversions                            Yes
 ksh    PrintfGroupingFlag                                   Yes
 ksh    PrintfGroupingFlagAfterTheWidth                      Yes
+ksh    PrintfHexFloatDefaultIsTwelveDigits                  Yes
 ksh    PrintfNonFiniteIsConverted                           -
 ksh    PrintfNumberOperand                                  PrintfNumberArithmetic
 ksh    PrintfRefusedOperandKeepsItsLeadingNumber            Yes
@@ -174,8 +182,10 @@ zsh    LastPipelineElementInCurrentShell                    Yes
 zsh    LocalOutsideAFunctionIsAnError                       No
 zsh    LocalOutsideAFunctionIsFatal                         No
 zsh    PrefixToAFunctionIsExported                          Yes
+zsh    PrintfC99FloatConversions                            No
 zsh    PrintfGroupingFlag                                   Yes
 zsh    PrintfGroupingFlagAfterTheWidth                      No
+zsh    PrintfHexFloatDefaultIsTwelveDigits                  -
 zsh    PrintfNonFiniteIsConverted                           No
 zsh    PrintfNumberOperand                                  PrintfNumberArithmetic
 zsh    PrintfRefusedOperandKeepsItsLeadingNumber            No

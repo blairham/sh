@@ -4,6 +4,7 @@
 package interp
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -456,6 +457,39 @@ func printfWideField(spec string) (narrow, flags string, width int, wide bool) {
 	return spec[:i] + spec[j:], spec[1:i], n, true
 }
 
+// printfWithoutPrecision answers the spec with its precision taken out, the
+// flags and the width left where they were.
+//
+// It exists for `%c`, the one conversion C gives no precision at all and Go
+// does: the character is written through `%s`, which truncates. Five of the
+// six references ignore a precision there outright — `printf '[%.0c]' abc` is
+// `[a]` in bash 5.3, zsh, ksh93, dash and BusyBox ash — and the sixth is bash
+// 3.2, which writes `[]`. That is the same company #2647 kept and for the
+// same reason: an old bash rather than a language, and a dialect is not an
+// age.
+//
+// ksh93 is the one column that does something *with* a precision here rather
+// than ignoring it — `printf '[%.3c]' abc` is `[aaa]` there, the character
+// repeated — and that is a reading of its own, measured but not reproduced.
+// It is recorded in docs/spec/semantics.md beside this, so an axis for it
+// starts from the evidence rather than from the four easy cases.
+//
+// Every `*` has been replaced by the operand it took before this is reached,
+// so printfFieldRun sees only digits — but it is the one that knows what a
+// field is, and a second scanner beside it is how a fix reaches one and not
+// the other.
+func printfWithoutPrecision(spec string) string {
+	i := 1 // past the %
+	i += runOfBytes(spec, i, "-+ #0'")
+	i += printfFieldRun(spec, i)
+	if i >= len(spec) || spec[i] != '.' {
+		return spec
+	}
+	j := i + 1
+	j += printfFieldRun(spec, j)
+	return spec[:i] + spec[j:]
+}
+
 // printfPadToWidth lays a rendered field out to a width `fmt` refused.
 //
 // Only the space and zero paddings are modeled, which is the whole of what a
@@ -538,7 +572,13 @@ func (r *Runner) printfConvert(spec string, verb byte, timeFmt string, next func
 		// The NUL above goes through the same field, because that is what
 		// the references do with it: `printf '[%3c]' ''` is two spaces and
 		// then the NUL in all five, and `%-3c` the NUL and then two spaces.
-		return fmt.Sprintf(spec+"s", arg[:1]), 0, false
+		//
+		// The *precision* is taken back out, because C's `%c` has none and
+		// Go's `%s` does. `printf '[%.0c]' abc` is `[a]` in bash 5.3, zsh,
+		// ksh93, dash and BusyBox ash alike, and handing the one-byte string
+		// to `%.0s` wrote nothing at all (#2714). The width is untouched: it
+		// is the half of the field a `%c` really has.
+		return fmt.Sprintf(printfWithoutPrecision(spec)+"s", arg[:1]), 0, false
 	case 'q':
 		return r.printfQuote(spec, arg)
 	case 'd', 'i':
@@ -556,7 +596,7 @@ func (r *Runner) printfConvert(spec string, verb byte, timeFmt string, next func
 			verb = 'd'
 		}
 		return fmt.Sprintf(spec+string(verb), n), code, false
-	case 'f', 'e', 'E', 'g', 'G':
+	case 'f', 'e', 'E', 'g', 'G', 'F', 'a', 'A':
 		f, code, stopped := r.printfFloat(arg, present)
 		if stopped {
 			return "", code, true
@@ -564,12 +604,239 @@ func (r *Runner) printfConvert(spec string, verb byte, timeFmt string, next func
 		if text, ok, stop := r.printfNonFinite(spec, verb, f); ok {
 			return text, code, stop
 		}
+		if verb == 'a' || verb == 'A' {
+			text, stop := r.printfHexFloat(spec, verb, f)
+			return text, code, stop
+		}
 		if verb == 'g' || verb == 'G' {
 			spec = printfSignificantDigits(spec)
+		}
+		if verb == 'F' {
+			// Go has no `%F`. The only thing C's capital changes is the
+			// spelling of a non-finite value, and printfNonFinite above has
+			// already written that one.
+			verb = 'f'
 		}
 		return fmt.Sprintf(spec+string(verb), f), code, false
 	}
 	return "", 0, false
+}
+
+// printfHexFloat is C's `%a`: the value in hexadecimal, with a binary
+// exponent, laid out here rather than handed to Go.
+//
+// Go's `%x` on a float is close and is not the same. It writes a *two-digit*
+// exponent where C writes the shortest one — `fmt.Sprintf("%x", 1.5)` is
+// `0x1.8p+00` against C's `0x1.8p+0` — so handing the verb through would
+// write a digit no reference writes, which is the family of bug `%g`'s
+// default precision was (#2687). Its `#` flag pads the significand rather
+// than forcing the point, and its zero padding lands *inside* the `0x`:
+// `fmt.Sprintf("%020x", 1.5)` is `000000000000x1.8p+00`. So the digits come
+// from strconv and everything around them is built here.
+//
+// The layout is measured, bash 5.3.15 and dash agreeing on every row
+// 2026-09-14 under `LC_ALL=C`:
+//
+//	%a 1.5      0x1.8p+0     the shortest run of digits that names the value
+//	%.2a 1.5    0x1.80p+0    a stated precision is digits after the point
+//	%#.0a 1.5   0x1.p+0      `#` forces the point and nothing else
+//	%+a 1.5     +0x1.8p+0    the sign flags are C's
+//	% a 0       ` 0x0p+0`
+//	%a -0.0     -0x0p+0      the sign of a negative zero is the value's
+//	%-14a 1.5   `0x1.8p+0   ` the `-` flag pads on the right with blanks
+//	%014a 1.5   0x0000001.8p+0 and the `0` flag pads *after* the `0x`
+//	%A 1.5      0X1.8P+0     the capital reaches the prefix and the `p`
+//
+// The digits are not strconv's either, and that is the second half of why
+// this is written out. `strconv.FormatFloat(f, 'x', p, 64)` rounds a tie away
+// from zero and *renormalizes* when the rounding carries, so `%.0a 1.5` comes
+// out `0x1p+1` and `%.1a 255` comes out `0x1.0p+8`. bash and dash write
+// `0x1p+0` and `0x2.0p+7`: the tie goes toward zero, and a carry out of the
+// leading digit makes that digit a 2 and leaves the exponent where it was.
+// Both are measured — `%.1a 1.09375` is `0x1.1p+0` and `%.1a 1.15625` is
+// `0x1.2p+0`, which is a tie rounded down twice and not to-even — and both
+// are invisible until a precision is written small enough to round, which is
+// exactly how a renderer that was wrong on them would have looked right.
+// ksh93u+ rounds as strconv does on both rows and is the recorded divergence
+// here; see docs/spec/semantics.md.
+func (r *Runner) printfHexFloat(spec string, verb byte, f float64) (string, bool) {
+	i := 1 // past the %
+	i += runOfBytes(spec, i, "-+ #0'")
+	flags := spec[1:i]
+	i += printfFieldRun(spec, i)
+	width, _ := strconv.Atoi(spec[1+len(flags) : i])
+	prec := -1
+	if i < len(spec) && spec[i] == '.' {
+		i++
+		prec, _ = strconv.Atoi(spec[i : i+printfFieldRun(spec, i)])
+	} else if r.ask(r.sem().PrintfHexFloatDefaultIsTwelveDigits,
+		"`printf '%a'` with no precision writing twelve digits of significand rather than the shortest run that names the value") {
+		// One column's default, and a precision rather than a minimum: the
+		// thirteenth digit of `0.1` is rounded away there.
+		prec = 12
+	} else if r.unspecified {
+		return "", true
+	}
+
+	body := printfHexFloatDigits(math.Abs(f), prec)
+	if strings.ContainsRune(flags, '#') && !strings.ContainsRune(body, '.') {
+		// C's `#` forces the point and adds no digits. It is visible only
+		// where there are none to separate — `%#a 1.5` is `0x1.8p+0`, the
+		// same as `%a`, and `%#.0a 1.5` is `0x1.p+0`.
+		if p := strings.IndexByte(body, 'p'); p >= 0 {
+			body = body[:p] + "." + body[p:]
+		}
+	}
+	if verb == 'A' {
+		body = strings.ToUpper(body)
+	}
+
+	sign := ""
+	switch {
+	case math.Signbit(f):
+		// The value's own, and a negative zero has one: `printf '%a' -0.0`
+		// is `-0x0p+0` in bash and dash alike.
+		sign = "-"
+	case strings.ContainsRune(flags, '+'):
+		sign = "+"
+	case strings.ContainsRune(flags, ' '):
+		sign = " "
+	}
+	field := sign + body
+	if len(field) >= width {
+		return field, false
+	}
+	fill := strings.Repeat(" ", width-len(field))
+	switch {
+	case strings.ContainsRune(flags, '-'):
+		return field + fill, false
+	case !strings.ContainsRune(flags, '0'):
+		return fill + field, false
+	}
+	// The zero flag pads between the `0x` and the digits, which is where C
+	// puts it and is the one place Go's own `%x` gets the position wrong.
+	return sign + body[:2] + strings.Repeat("0", width-len(field)) + body[2:], false
+}
+
+// printfHexFloatDigits is the unsigned significand and exponent of a `%a`,
+// written C's way: `0x`, the leading digit, the fraction a precision of -1
+// makes as short as names the value exactly, and `p` with the shortest run of
+// exponent digits.
+//
+// f is finite and not negative — printfNonFinite has already taken the
+// infinities and the not-a-numbers, and the sign is the caller's, because a
+// negative zero has one and `math.Abs` has thrown it away by here.
+//
+// The significand is normalized to a leading 1, which is what every column
+// measured writes and is a choice C leaves open: `printf '%a' 5e-324` is
+// `0x1p-1074` in bash and dash, so a subnormal is shifted up rather than
+// written with the leading 0 its bits hold.
+//
+// Rounding is bash's and dash's, and is the reason strconv is not used: a tie
+// goes toward zero, and a carry out of the leading digit makes it a 2 rather
+// than renormalizing. See printfHexFloat for the measurements.
+func printfHexFloatDigits(f float64, prec int) string {
+	const fracDigits = 13 // 52 bits of significand, four bits to the digit
+	bits := math.Float64bits(f)
+	exp := int(bits>>52) & 0x7FF
+	mant := bits & (1<<52 - 1)
+	lead := byte('1')
+	switch {
+	case exp == 0 && mant == 0:
+		lead, exp = '0', 0
+	case exp == 0:
+		// A subnormal, shifted up until the leading bit is where a normal
+		// number keeps it. The exponent of the smallest normal is -1022, and
+		// each shift takes one off it.
+		exp = -1022
+		for mant&(1<<52) == 0 {
+			mant <<= 1
+			exp--
+		}
+		mant &= 1<<52 - 1
+	default:
+		exp -= 1023
+	}
+	frac := []byte(fmt.Sprintf("%0*x", fracDigits, mant))
+
+	if prec < 0 {
+		// The shortest run that names the value exactly, which is the digits
+		// with their trailing zeros taken off.
+		n := len(frac)
+		for n > 0 && frac[n-1] == '0' {
+			n--
+		}
+		frac = frac[:n]
+	} else if prec < len(frac) {
+		if printfHexRoundsUp(frac, prec) {
+			lead = printfHexCarry(frac[:prec], lead)
+		}
+		frac = frac[:prec]
+	} else {
+		frac = append(frac, bytes.Repeat([]byte("0"), prec-len(frac))...)
+	}
+
+	var b strings.Builder
+	b.WriteString("0x")
+	b.WriteByte(lead)
+	if len(frac) > 0 {
+		b.WriteByte('.')
+		b.Write(frac)
+	}
+	b.WriteByte('p')
+	if exp < 0 {
+		b.WriteByte('-')
+		exp = -exp
+	} else {
+		b.WriteByte('+')
+	}
+	b.WriteString(strconv.Itoa(exp))
+	return b.String()
+}
+
+// printfHexRoundsUp reports whether dropping everything past prec digits
+// rounds the digit before them up.
+//
+// Half goes *down*, which is the rule the panel's two columns share and the
+// one nothing but an exact tie can show: `%.1a 1.09375` is `0x1.1p+0` and
+// `%.1a 1.15625` is `0x1.2p+0` in bash 5.3.15 and dash, so it is toward zero
+// and not to-even.
+func printfHexRoundsUp(frac []byte, prec int) bool {
+	first := printfHexValue(frac[prec])
+	if first != 8 {
+		return first > 8
+	}
+	for _, c := range frac[prec+1:] {
+		if c != '0' {
+			return true
+		}
+	}
+	return false
+}
+
+// printfHexCarry adds one to the last of the kept digits, carrying leftwards
+// and finally into the leading digit — which becomes a 2 and leaves the
+// exponent alone, where renormalizing would have moved it.
+func printfHexCarry(kept []byte, lead byte) byte {
+	for i := len(kept) - 1; i >= 0; i-- {
+		if v := printfHexValue(kept[i]) + 1; v < 16 {
+			kept[i] = "0123456789abcdef"[v]
+			return lead
+		}
+		kept[i] = '0'
+	}
+	if lead == '0' {
+		return '1'
+	}
+	return lead + 1
+}
+
+// printfHexValue is one lower-case hexadecimal digit's value.
+func printfHexValue(c byte) int {
+	if c >= 'a' {
+		return int(c-'a') + 10
+	}
+	return int(c - '0')
 }
 
 // printfNonFinite writes an infinity or a not-a-number, and reports whether
@@ -638,7 +905,7 @@ func (r *Runner) printfNonFinite(spec string, verb byte, f float64) (string, boo
 // sees only digits here — but it is the one that knows what a field is, and a
 // second scanner beside it is how a fix reaches one and not the other.
 func printfNonFiniteField(spec string, verb byte, f float64, word string) string {
-	if verb == 'E' || verb == 'G' {
+	if verb == 'E' || verb == 'G' || verb == 'F' || verb == 'A' {
 		word = strings.ToUpper(word)
 	}
 	i := 1 // past the %
@@ -854,6 +1121,21 @@ func (r *Runner) scanPrintfSpec(s string) (string, byte, string, int, int) {
 		if r.ask(r.sem().PrintfTimeConversion, "`printf '%(…)T'` writing a date") &&
 			r.ask(r.sem().PrintfTimeOperandIsADateString, "`printf '%T'` taking a date string") {
 			return spec, 'T', "", i + 1, 0
+		}
+		if r.unspecified {
+			return "", 0, "", i + 1, r.status
+		}
+		return spec, 0, "", i + 1, 0
+	}
+	if strings.IndexByte("FaA", verb) >= 0 {
+		// The three C99 added. Asked here rather than at the top, so a
+		// dialect is questioned only where one of the letters is actually
+		// written — `%f` never raises it. A dialect without them wants the
+		// letter *not* taken, so that it arrives below as the conversion
+		// character it is and is refused the way any unknown one is; that is
+		// the shape #2646 had, and the reason both halves live here.
+		if r.ask(r.sem().PrintfC99FloatConversions, "`printf` having C99's `%F`, `%a` and `%A` float conversions") {
+			return spec, verb, "", i + 1, 0
 		}
 		if r.unspecified {
 			return "", 0, "", i + 1, r.status

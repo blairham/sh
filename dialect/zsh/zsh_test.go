@@ -607,6 +607,11 @@ func TestPrintfAnswers(t *testing.T) {
 	if got, want := s.PrintfNumberOperand, interp.PrintfNumberArithmetic; got != want {
 		t.Errorf("PrintfNumberOperand = %v, want %v", got, want)
 	}
+	// None of C99's three: `printf '%F' 1.5` is `%F: invalid directive` at 1
+	// in zsh 5.9.2, and `%a` and `%A` the same (#2726).
+	if got, want := s.PrintfC99FloatConversions, interp.No; got != want {
+		t.Errorf("PrintfC99FloatConversions = %v, want %v", got, want)
+	}
 	if got, want := s.PrintfRefusedOperandKeepsItsLeadingNumber, interp.No; got != want {
 		t.Errorf("PrintfRefusedOperandKeepsItsLeadingNumber = %v, want %v", got, want)
 	}

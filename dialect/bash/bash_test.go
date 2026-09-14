@@ -415,6 +415,19 @@ func TestPrintfAnswers(t *testing.T) {
 		// and `printf '%d' abc` are both `invalid number` here, where
 		// dash has two.
 		{"PrintfIncompleteNumber", bash.Diagnostics().PrintfIncompleteNumber, ""},
+		// It has two others all the same, and they are chosen by the
+		// operand's *spelling* rather than by what failed to read:
+		// `printf '%d' 0x10zz` is `invalid hex number` and
+		// `printf '%d' 08` is `invalid octal number`, both beside the
+		// value and the status the general sentence carries (#2764).
+		// Measured 2026-09-14 on bash 5.3.15.
+		{"PrintfBadHexNumber", bash.Diagnostics().PrintfBadHexNumber, "printf: %[1]s: invalid hex number"},
+		{"PrintfBadOctalNumber", bash.Diagnostics().PrintfBadOctalNumber, "printf: %[1]s: invalid octal number"},
+		// C99's three float conversions, with C's own default precision
+		// for `%a`: `printf '%a' 0.1` is `0x1.999999999999ap-4` here and
+		// twelve digits in ksh93 (#2726).
+		{"PrintfC99FloatConversions", s.PrintfC99FloatConversions, interp.Yes},
+		{"PrintfHexFloatDefaultIsTwelveDigits", s.PrintfHexFloatDefaultIsTwelveDigits, interp.No},
 		// bash: an operand present and empty is an error. An operand that
 		// is *missing* is not — which is the pair below, and the two cross,
 		// because ash says yes to both (#2648).

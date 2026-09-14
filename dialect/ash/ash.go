@@ -464,6 +464,11 @@ func Semantics() interp.Semantics {
 	s.PrintfGroupingFlagAfterTheWidth = interp.No
 	s.PrintfReportsBadNumber = interp.Yes
 	s.PrintfNumberOperand = interp.PrintfNumberWholeOperand
+	// None of C99's three: `printf '%F' 1.5` is `%F]: invalid format` at 1
+	// in BusyBox ash 1.37.
+	s.PrintfC99FloatConversions = interp.No
+	// unanswered PrintfHexFloatDefaultIsTwelveDigits: there is no `%a` here
+	// to have a default precision.
 	// unanswered PrintfRefusedOperandKeepsItsLeadingNumber: this shell keeps
 	// no partial number at all — an operand its reader cannot finish is a
 	// zero — and it evaluates nothing, so the question has no site here.

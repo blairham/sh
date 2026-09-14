@@ -277,6 +277,11 @@ func TestPrintfStarComplaintCostsTheStatus(t *testing.T) {
 	if got, want := s.PrintfNumberOperand, interp.PrintfNumberWholeOperand; got != want {
 		t.Errorf("PrintfNumberOperand = %v, want %v", got, want)
 	}
+	// None of C99's three: `printf '%F' 1.5` is `%F]: invalid format` at 1
+	// in BusyBox ash 1.37 (#2726).
+	if got, want := s.PrintfC99FloatConversions, interp.No; got != want {
+		t.Errorf("PrintfC99FloatConversions = %v, want %v", got, want)
+	}
 	// And an absent star operand is a silent zero even here, which is what
 	// keeps it a separate question from the absent *conversion* operand
 	// above: `printf 'a%*db'` writes one complaint in BusyBox and not two.

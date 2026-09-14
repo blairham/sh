@@ -673,6 +673,56 @@ func Probes() []Probe {
 			},
 		},
 		{
+			Field: "PrintfC99FloatConversions",
+			Cases: []string{"axis/printf-c99-float-conversions"},
+			// The first line only, and read as a prefix rather than as a
+			// whole string: the column that has the conversions and writes
+			// twelve digits of significand answers the same question `yes`
+			// as the ones that write the shortest run, and a reading that
+			// demanded `[0x1.8p+0]` would have scored it as a shell without
+			// the conversion at all.
+			Reading: "`printf '[%F][%a][%A]' 1.5 1.5 1.5` writes `[1.500000]` and a hexadecimal float in a shell that has C99's three, and refuses each letter in one that does not",
+			Read: func(cells map[string]oracle.Result) (string, string) {
+				first, _, _ := strings.Cut(cells["axis/printf-c99-float-conversions"].Stdout, "~")
+				switch {
+				case strings.HasPrefix(first, "[1.500000][0x1.8"):
+					return "Yes", ""
+				case !strings.Contains(first, "0x") && strings.TrimSpace(cells["axis/printf-c99-float-conversions"].Stderr) != "":
+					return "No", ""
+				}
+				return "", "the row neither converted the three letters nor refused them, so it did not answer this one way"
+			},
+		},
+		{
+			Field: "PrintfHexFloatDefaultIsTwelveDigits",
+			Cases: []string{"axis/printf-c99-float-conversions"},
+			// The row's **third** line, and it carries its own control. `0.1`
+			// alone would say only that two columns write different numbers
+			// of digits; `255` beside it is what says the difference is a
+			// precision and not a minimum width, since a width would have
+			// left `0x1.fep+7` alone and a precision pads it to
+			// `0x1.fe0000000000p+7`. A column with no `%a` at all is not
+			// asked, which is why the first line is read first.
+			Reading: "in a column that has `%a`, `printf '[%a][%a]' 0.1 255` is `[0x1.999999999999ap-4][0x1.fep+7]` where the default precision is the shortest run that names the value and `[0x1.99999999999ap-4][0x1.fe0000000000p+7]` where it is twelve digits",
+			Read: func(cells map[string]oracle.Result) (string, string) {
+				out := cells["axis/printf-c99-float-conversions"].Stdout
+				if first, _, _ := strings.Cut(out, "~"); !strings.HasPrefix(first, "[1.500000][0x1.8") {
+					return "", "this shell has no `%a` at all, so nothing here can say what its default precision would have been"
+				}
+				lines := strings.Split(out, "~")
+				if len(lines) < 3 {
+					return "", "the row stopped before the line that carries the default precision"
+				}
+				switch lines[2] {
+				case "[0x1.999999999999ap-4][0x1.fep+7]":
+					return "No", ""
+				case "[0x1.99999999999ap-4][0x1.fe0000000000p+7]":
+					return "Yes", ""
+				}
+				return "", "the row wrote a significand neither default produces, so it did not answer this one way"
+			},
+		},
+		{
 			Field: "WaitRemembersAReapedJob",
 			Cases: []string{"axis/wait-remembers-a-reaped-job"},
 			// The first status is the control and is why this row cannot be

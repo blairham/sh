@@ -524,6 +524,39 @@ type Diagnostics struct {
 	// the one column with two sentences: `not completely converted` for the
 	// first and `expected numeric value` for the second.
 	PrintfIncompleteNumber string
+	// PrintfBadHexNumber is that complaint where the operand was written
+	// with a `0x` in front of it. One verb: the operand.
+	//
+	// bash has three bad-number sentences where the rest of the panel has
+	// one or two, and the third one *names the base the leading read was
+	// taken in*: `printf '%d' 0x10zz` is `invalid hex number` there against
+	// the `invalid number` it gives `1.5` and `abc` (#2764). The value and
+	// the status are the general sentence's in every row — only the wording
+	// moves — which is why this is a diagnostic and not an axis.
+	//
+	// Measured 2026-09-14 against bash 5.3.15, and the condition is the
+	// operand's *spelling* rather than the conversion or the value it
+	// produced: it is asked of the operand as written, so ` 0x1z` and
+	// `+0x10zz` and `-0x10zz` all take the general sentence, and `0X1z` does
+	// too — the capital is not recognized, though the value 1 says the
+	// number itself was read as hexadecimal. It reaches the float
+	// conversions on the same terms: `printf '%f' 0x1.8p3zz` is
+	// `invalid hex number` and `printf '%f' 0.5zz` is `invalid number`.
+	//
+	// Empty is the general sentence, which is what every column but bash
+	// says for these operands.
+	PrintfBadHexNumber string
+	// PrintfBadOctalNumber is the same complaint for an operand written with
+	// a leading zero. One verb: the operand.
+	//
+	// See PrintfBadHexNumber, whose measurement this shares. The condition is
+	// a `0` followed by a decimal digit and nothing narrower: `08`, `09`,
+	// `018`, `0778` and `00z` are all `invalid octal number` in bash 5.3.15,
+	// and `0z`, `0_8`, `0.5` and `0+` are `invalid number` — so it is not
+	// "the octal reading failed" but "the operand is spelled like an octal
+	// number". `08` at `%f` is a perfectly good 8 and earns no complaint at
+	// all; `08zz` there earns this one.
+	PrintfBadOctalNumber string
 	// PrintfNumberOutOfRange is an operand that is a number C cannot hold —
 	// `1e400` at `%f`, `99999999999999999999` at `%d`, and `1e-320`, which
 	// underflows. One verb: the operand.

@@ -229,6 +229,14 @@ func (r *Runner) printfIncomplete(arg, text string) int {
 		return 0
 	}
 	d := r.diag()
+	if w := printfBadNumberBase(d, arg); w != "" {
+		// One column names the base the operand was *spelled* in — `invalid
+		// hex number` for `0x10zz`, `invalid octal number` for `08` — and
+		// asks it of the operand rather than of the conversion or of the
+		// reading that failed. See Diagnostics.PrintfBadHexNumber.
+		r.diagf("%s\n", Wording(w, "printf: %[1]s: invalid number", arg))
+		return orDefault(d.PrintfBadNumberStatus, 1)
+	}
 	if w := d.PrintfIncompleteNumber; w != "" && cIntegerRun(text) > 0 {
 		// The one column with two sentences keeps them apart by whether
 		// anything was read at all: dash says `not completely converted` for
@@ -237,6 +245,29 @@ func (r *Runner) printfIncomplete(arg, text string) int {
 		return orDefault(d.PrintfBadNumberStatus, 1)
 	}
 	return r.printfReport(printfBadNumber, arg)
+}
+
+// printfBadNumberBase is the bad-number sentence a dialect keeps for an
+// operand written with a radix prefix, or empty where it has none.
+//
+// The question is the operand's spelling and not the value: `0x` in lower
+// case at the very front is hexadecimal, a `0` followed by a decimal digit is
+// octal, and everything else — a sign, a leading blank, `0X`, `0b11`, `0z`,
+// `0.5` — is neither. All of that is measured; see
+// Diagnostics.PrintfBadHexNumber for the rows.
+//
+// It is asked only where the *general* sentence would have gone out. An
+// operand C read as a number and could not hold is a range error and keeps
+// its own sentence: `printf '%d' 0xFFFFFFFFFFFFFFFFFF` is `Result too large`
+// in bash and not `invalid hex number`.
+func printfBadNumberBase(d Diagnostics, arg string) string {
+	switch {
+	case strings.HasPrefix(arg, "0x"):
+		return d.PrintfBadHexNumber
+	case len(arg) > 1 && arg[0] == '0' && arg[1] >= '0' && arg[1] <= '9':
+		return d.PrintfBadOctalNumber
+	}
+	return ""
 }
 
 // printfOutOfRange reports an operand that is a number C cannot hold, in

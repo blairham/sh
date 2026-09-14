@@ -1637,6 +1637,11 @@ func Semantics() interp.Semantics {
 	s.PrintfGroupingFlagAfterTheWidth = interp.No
 	s.PrintfReportsBadNumber = interp.No
 	s.PrintfNumberOperand = interp.PrintfNumberArithmetic
+	// None of C99's three: `printf '%F' 1.5` is `%F: invalid directive` at
+	// 1 in zsh 5.9.2, and `%a` and `%A` the same.
+	s.PrintfC99FloatConversions = interp.No
+	// unanswered PrintfHexFloatDefaultIsTwelveDigits: there is no `%a` here
+	// to have a default precision.
 	s.PrintfRefusedOperandKeepsItsLeadingNumber = interp.No
 	s.PrintfBackslashC = interp.PrintfBackslashCStops
 	s.PrintfUnfinishedConversionIsAPercent = interp.No

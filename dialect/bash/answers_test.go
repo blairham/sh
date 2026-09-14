@@ -205,6 +205,12 @@ func TestDiagnosticAnswersTheInterpTestsRelyOn(t *testing.T) {
 	if got, want := d.TraceArithForPart, interp.TraceArithSpaced; got != want {
 		t.Errorf("TraceArithForPart = %v, want %v", got, want)
 	}
+	// The part entire, blanks and all — the leading ones come off in the
+	// trace's own spelling and in ArithErrorSkipsLeadingSpace, which are
+	// separate questions. See interp/arithforpart.go.
+	if got, want := d.ArithForPartText, interp.ArithForPartTextAsWritten; got != want {
+		t.Errorf("ArithForPartText = %v, want %v", got, want)
+	}
 	if got, want := d.Location, interp.LocationLineWord; got != want {
 		t.Errorf("Location = %v, want %v", got, want)
 	}

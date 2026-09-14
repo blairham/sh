@@ -381,7 +381,15 @@ func (r *Runner) forArithClause(ctx context.Context, c *syntax.ForArithClause) e
 		// The three parts as the script wrote them, blanks and all: what a
 		// complaint quotes back is the text of the part, and the fields are
 		// trimmed for the printer's sake. See ForArithClause.PartsAsWritten.
+		//
+		// Then as this dialect *keeps* them, which is one dialect's answer
+		// and one trim here rather than a rule each consumer remembers: the
+		// trace and the complaint quote the same string, and taking blanks
+		// off either end of an expression changes nothing the evaluator can
+		// see. Before the expansions, which is measured — see
+		// interp/arithforpart.go.
 		initText, condText, postText := c.PartsAsWritten()
+		initText, condText, postText = r.diag().arithForPartsKept(initText, condText, postText)
 		// Each part is a head of its own, counted one evaluation at a time:
 		// a two-pass loop writes the initializer, three conditions, two
 		// steps and two bodies. The initializer and the step are the two a
@@ -464,13 +472,15 @@ func (r *Runner) forArithPart(tree syntax.ArithExpr, text string) (int, bool) {
 	// nobody, which is what makes `for ((;;))` silent between its iterations.
 	if strings.TrimSpace(expanded) != "" {
 		// Traced with the blanks *after* it and not the ones before, which
-		// is what both shells that trace a header part do: measured
+		// is what both shells that keep the part whole do: measured
 		// 2026-09-12 on `set -x; for (( i=0 ; i<1 ; i++ ))`, bash 5.3.15
 		// writes `+ (( i=0  ))` — two blanks before the close, one after the
-		// open — and zsh 5.9.2 `+zsh:1> i=0 `. ksh93 is a third answer that
-		// no reading of the parts reproduces: it keeps the leading blank on
-		// the first two parts and the trailing one on the third.
-		r.traceArithCommand(strings.TrimLeft(expanded, " \t"), r.diag().TraceArithForPart)
+		// open — and zsh 5.9.2 `+zsh:1> i=0 `. ksh93 is the third answer,
+		// and it is not a third trimming: the part it kept has already given
+		// up one end, so nothing is taken off here and `((  i=0))` and
+		// `((i++  ))` fall out of the same loop. See
+		// Diagnostics.ArithForPartText.
+		r.traceArithCommand(r.diag().arithForPartTraced(expanded), r.diag().TraceArithForPart)
 	}
 	if perr != nil {
 		r.diagf("%s\n", r.diag().arithConstructFailure("((", r.diag().ParseFailure(perr)))

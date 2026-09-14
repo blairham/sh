@@ -98,6 +98,12 @@ func (r *Runner) holdCommandHashAcrossAPrefixedPath() func() {
 // numbered name is a positional parameter and never reaches the variable
 // table, and a frozen name keeps what it holds. A prefix that assigns PATH in
 // none of those ways is not one that supplies the path to search.
+//
+// It is the same question the external route answers from inside its own loop,
+// where it has the expanded value to keep as well — and it is asked here
+// because the builtin route needs the answer *before* its loop runs: that loop
+// is where the assignment happens, and the assignment is what empties the
+// table this has to take aside first.
 func (r *Runner) aPrefixSuppliesThePath(assigns []*syntax.Assign) bool {
 	for _, a := range assigns {
 		if a.Name != "PATH" || a.Operand || r.readonly[a.Name] {

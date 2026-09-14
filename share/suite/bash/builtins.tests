@@ -141,3 +141,54 @@ help -s '*pt'
 # A topic nobody has is a complaint at 1.
 help -s nosuchtopicanywhere
 printf 'status: %s\n' "$?"
+
+# `shopt -s extdebug` and the DEBUG trap: with extended debugging on, the
+# action's own *status* decides what runs next. Three rules, and a probe whose
+# action refuses every command cannot tell any of them apart — with everything
+# skipped nothing is printed whichever rule is in force — so each block below
+# refuses exactly one firing, counted.
+shopt -s extdebug
+n=0
+d() { n=$((n+1)); [ $n = "$stop" ] && return "$code"; return 0; }
+trap d DEBUG
+
+# Any non-zero status skips the command it fired for, and the next command
+# sees 0 rather than the action's status. 1, 2 and 5 all do it.
+stop=2 code=1; n=0; echo one; echo two; echo three
+stop=2 code=2; n=0; echo one; echo two; echo three
+stop=2 code=5; n=0; echo one; echo two; echo three
+stop=2 code=0; n=0; echo one; echo two; echo three
+
+# A status of exactly 2 *inside a call* also returns from it, at 2. The
+# firings for a call are the call itself, the frame being entered, then the
+# body's own commands — so 4 is the middle command of a three-command body.
+g() { echo g1; echo g2; echo g3; }
+stop=4 code=2; n=0; g; printf 'two returned: %s\n' "$?"
+stop=4 code=1; n=0; g; printf 'one skipped: %s\n' "$?"
+stop=4 code=5; n=0; g; printf 'five skipped: %s\n' "$?"
+
+# At the entry firing — the second one a call makes — any non-zero returns
+# from the call carrying the action's own status, which is the rule that
+# differs from the one above rather than restating it.
+h() { echo in; }
+stop=2 code=1; n=0; h; printf 'entry one: %s\n' "$?"
+stop=2 code=5; n=0; h; printf 'entry five: %s\n' "$?"
+stop=1 code=5; n=0; h; printf 'the call firing is only a skip: %s\n' "$?"
+
+# How far a refusal reaches is the firing site's answer. A loop's per-pass
+# head costs that pass and the loop carries on; three passes rather than two,
+# because refusing the last pass looks the same either way.
+stop=3 code=1; n=0; for i in 1 2 3; do echo b$i; done
+
+# The arithmetic loop splits three ways over its own three parts: a refused
+# initializer or step is not evaluated and the loop runs on, where a refused
+# condition ends it.
+stop=1 code=1; n=0; for ((i=0;i<3;i++)); do echo a$i; done
+stop=2 code=1; n=0; for ((i=0;i<3;i++)); do echo c$i; done
+stop=4 code=1; n=0; for ((i=0;i<3;i++)); do echo s$i; done
+
+# And the rule belongs to the option, so turning it off puts the status back
+# to being discarded.
+shopt -u extdebug
+stop=2 code=5; n=0; echo one; echo two; echo three
+trap - DEBUG

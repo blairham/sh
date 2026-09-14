@@ -12071,13 +12071,62 @@ shell itself. `interp.Runner.LocatesFunctions` is the capability, a
 switch over the core's listing rather than anything in the dialect, for
 the reason the two tracing bits are.
 
+**The fourth state is the DEBUG action's own status**, which without the
+option is discarded like every other pseudo-trap's. With it on the status
+decides what runs next, and it is three rules rather than the two #2476
+first described. Measured on bash 5.3.15, 2026-09-14, `env -i
+PATH=/usr/bin:/bin`:
+
+| where the action refuses | status | what happens |
+| --- | --- | --- |
+| any ordinary firing | any non-zero | the command does not run, and 0 is what the next one sees |
+| inside a call | exactly 2 | *and* the call returns, reporting 2 |
+| the entry firing of a call | any non-zero | the body does not run and the call reports the action's own status |
+
+The third is the one no probe in the issue could see. The entry firing is
+the second of the two a call makes once tracing carries the trap inside,
+so it is one command away from the first rule and answers differently —
+`g-st=1` where the firing a step earlier gives `g-st=0`.
+
+The reason the issue has the first two the other way round is worth
+keeping, because it is a shape rather than a slip: an action that refuses
+*every* command prints nothing under any of these readings, and nothing
+under a shell with no rule at all. Only an action that fires once, for one
+named command, inside a function tells them apart.
+
+**How far a refusal reaches is the firing site's answer and not the
+rule's.** A simple command, and a compound head that stands for its whole
+construct, lose the construct — a refused `case` head costs the branch. A
+loop's per-pass head costs that pass and the loop carries on: `for i in 1
+2 3` with its second head refused writes `b1` and `b3`. The arithmetic
+loop splits again over its own three parts — a refused initializer or step
+is simply not evaluated and the loop runs on, where a refused condition
+ends it. A menu loop's per-pass head is the one site with no measurement
+behind it, and the code says so in place: bash writes no such head, and
+the reading that does is ksh93's, which has no `shopt` to turn the rule on
+with.
+
+One combination is deliberately not reproduced. With a RETURN trap also
+set, the rule that returns from a call **hangs bash 5.3.15** — one line of
+output and then nothing, where the same script with the action returning 1
+finishes. That is the reference wedging itself rather than an answer to
+copy, so this shell runs the return and carries on, and the divergence is
+recorded in #2778 rather than left to read as our bug. It also keeps the
+pair out of the corpus, since a column that never exits would hang the
+record.
+
+`interp.Runner.DebugActionDecides` is the capability, a switch over the
+core's trap firing rather than anything in the dialect, for the reason the
+two tracing bits and the listing are.
+
 What bash's extended debugging *also* names is still not provided here:
-a DEBUG action's status skipping the next command or simulating a
-`return`, and the BASH_ARGC/BASH_ARGV record. The name is taken for what
-it moves rather than refused for what it does not, which is the same
-partial honesty `set -o posix` keeps — and the remainder is itemized and
-measured in #2476 rather than left as this paragraph, so it is
-countable.
+the BASH_ARGC/BASH_ARGV record. `$BASH_COMMAND` is a second gap beside it
+and not part of this option at all — it is empty in every DEBUG action
+here, which is what makes a breakpoint unwritable (#2779). The name is
+taken for what it moves rather than refused for what it does not, which is
+the same partial honesty `set -o posix` keeps — and the remainder is
+itemized and measured in #2476 rather than left as this paragraph, so it
+is countable.
 
 **`ExitTrapFiresPastTheEnd`** — bash unspecified · dash unspecified · ksh93 no · zsh yes
 

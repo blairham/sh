@@ -110,7 +110,19 @@ func (r *Runner) selectClause(ctx context.Context, c *syntax.SelectClause) error
 			// two-reply `select` writes two heads there and no third one
 			// when the input runs out.
 			r.debugSelectPass(ctx, c.Pos())
-			if r.ctl != controlNone {
+			// The skip half of this test cannot arrive, and the reason is
+			// worth writing down rather than leaving as an accident: a
+			// refused firing is bash's rule alone and bash does not write a
+			// per-pass head for a menu loop — measured 2026-09-14, a
+			// two-reply `select` fires once for the construct where a
+			// two-pass `for` fires once per pass. The reading that repeats
+			// this head is ksh93's, which has no `shopt -s extdebug` to turn
+			// the rule on with. So this is here to *take the flag away*, not
+			// because `return nil` is a measured answer for a refusal; if a
+			// column ever reaches it, the list loop's head next door is the
+			// one that was measured and it costs a pass rather than the
+			// loop.
+			if r.debugTrapStopped() {
 				return nil
 			}
 			// REPLY is the line as typed and the name is the item it chose,

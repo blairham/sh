@@ -41,6 +41,8 @@ ash    PrefixToAFunctionIsExported                          Yes
 ash    PrintfGroupingFlag                                   No
 ash    PrintfGroupingFlagAfterTheWidth                      -
 ash    PrintfNonFiniteIsConverted                           Yes
+ash    PrintfNumberOperand                                  PrintfNumberWholeOperand
+ash    PrintfRefusedOperandKeepsItsLeadingNumber            -
 ash    QuitIgnoredWhenNotInteractive                        Yes
 ash    QuitResetRestoresTheDefault                          No
 ash    ReadonlyReassignmentFatal                            Yes
@@ -73,6 +75,8 @@ bash   PrefixToAFunctionIsExported                          Yes
 bash   PrintfGroupingFlag                                   Yes
 bash   PrintfGroupingFlagAfterTheWidth                      No
 bash   PrintfNonFiniteIsConverted                           Yes
+bash   PrintfNumberOperand                                  PrintfNumberLeadingNumber
+bash   PrintfRefusedOperandKeepsItsLeadingNumber            -
 bash   QuitIgnoredWhenNotInteractive                        Yes
 bash   QuitResetRestoresTheDefault                          No
 bash   ReadonlyReassignmentFatal                            No
@@ -105,6 +109,8 @@ dash   PrefixToAFunctionIsExported                          Yes
 dash   PrintfGroupingFlag                                   No
 dash   PrintfGroupingFlagAfterTheWidth                      -
 dash   PrintfNonFiniteIsConverted                           Yes
+dash   PrintfNumberOperand                                  PrintfNumberLeadingNumber
+dash   PrintfRefusedOperandKeepsItsLeadingNumber            -
 dash   QuitIgnoredWhenNotInteractive                        No
 dash   QuitResetRestoresTheDefault                          -
 dash   ReadonlyReassignmentFatal                            Yes
@@ -137,6 +143,8 @@ ksh    PrefixToAFunctionIsExported                          No
 ksh    PrintfGroupingFlag                                   Yes
 ksh    PrintfGroupingFlagAfterTheWidth                      Yes
 ksh    PrintfNonFiniteIsConverted                           -
+ksh    PrintfNumberOperand                                  PrintfNumberArithmetic
+ksh    PrintfRefusedOperandKeepsItsLeadingNumber            Yes
 ksh    QuitIgnoredWhenNotInteractive                        No
 ksh    QuitResetRestoresTheDefault                          -
 ksh    ReadonlyReassignmentFatal                            Yes
@@ -169,6 +177,8 @@ zsh    PrefixToAFunctionIsExported                          Yes
 zsh    PrintfGroupingFlag                                   Yes
 zsh    PrintfGroupingFlagAfterTheWidth                      No
 zsh    PrintfNonFiniteIsConverted                           No
+zsh    PrintfNumberOperand                                  PrintfNumberArithmetic
+zsh    PrintfRefusedOperandKeepsItsLeadingNumber            No
 zsh    QuitIgnoredWhenNotInteractive                        Yes
 zsh    QuitResetRestoresTheDefault                          Yes
 zsh    ReadonlyReassignmentFatal                            Yes

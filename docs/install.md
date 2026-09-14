@@ -139,6 +139,24 @@ The formula installs into the keg's `libexec` and links **nothing** into
 `bin`, for the reason above. `brew --prefix sh` names the keg; the shells
 are in `$(brew --prefix sh)/libexec`.
 
+**Use the path `brew --prefix` prints, not the one `ls` shows you.** Those
+are two spellings of the same directory today, and only one of them keeps
+working:
+
+    /opt/homebrew/opt/sh/libexec/zsh             the opt path — follows upgrades
+    /opt/homebrew/Cellar/sh/0.0.0/libexec/zsh    the keg path — names a version
+
+A Cellar path has a version number in it and goes away when that version
+does: `brew upgrade sh` installs beside it and `brew cleanup` removes it.
+That is survivable in a shebang you can edit. It is not survivable in
+`/etc/shells`, because the section below makes that path the one `login`
+runs, and a login shell that is not there is a login that fails.
+
+The same hazard has a Homebrew spelling: **`brew uninstall sh` while one of
+these is your login shell locks you out.** The warning under *Install*
+above is about `make uninstall`; this is the route a tap user has. Change
+your shell back first.
+
 ## Using it without changing your login shell
 
 The three routes that need no `chsh`, in increasing order of commitment:
@@ -240,6 +258,13 @@ Then change the shell:
 
     chsh -s /usr/local/libexec/sh/bash
 
+**From the tap the path is a different one.** Register the `opt` path and
+pass that same path, for the reason under *Homebrew* above:
+
+    brew --prefix sh                                       # names the keg
+    echo "$(brew --prefix sh)/libexec/zsh" | sudo tee -a /etc/shells
+    chsh -s "$(brew --prefix sh)/libexec/zsh"
+
 `chsh` with no `-s` opens an editor on the same field. It asks for your
 password, and the change applies to **new** sessions — the shell you ran
 it from is still the old one, which is what makes the next step possible.
@@ -313,5 +338,55 @@ Two smaller differences worth knowing before you live in it:
   shell is, not which binary is running. `$0` is the one that answers
   that.
 
+## What a real startup file gets
+
+Reading the files is not the same as surviving them. The grid above is
+what a session *reads*; this is what happens next on a real `~/.zshrc`,
+and it is the half worth knowing **before** you `chsh` rather than after.
+
+Measured on macOS 25.5, 2026-09-14, against this machine's own rc —
+Powerlevel10k, `zi` with turbo-mode plugins. Ours is `5.9.2-blairham` from
+the tap; the reference is `/bin/zsh`. Two routes, and which one produced a
+row matters: the counts below are from `zsh -i -c`, where the rc runs and
+no terminal is involved, and the Tab rows are from a pty, which is the only
+route that can press a key.
+
+**Most of the file arrives.** Ours finishes the rc with 1926 functions
+defined against the reference's 2079, 43 aliases against 45, the same 18
+directories on `$fpath`, `zi` loaded, and the same seven `precmd` hooks
+registered. The completion *tables* load identically: `_comps` holds 2020
+entries in both, `_comps[git]` is `_git` in both, and both read the same
+`.zcompdump`.
+
+**Completion still does not work, and the rc is the reason.** Under `-f`,
+with no startup file, this shell's own completer answers Tab and completes
+a filename. A real rc runs `compinit`, which binds zsh's `_main_complete`
+as the completion widget in its place — and that widget needs the
+`zsh/complete` module, which is not here:
+
+| shell | rc | Tab on `cat uniquef` |
+| --- | --- | --- |
+| ours | `-f` | completes to `uniquefile_marker.txt` |
+| ours | the real rc | nothing completes, and the two lines below |
+| `/bin/zsh` | the real rc | completes to `uniquefile_marker.txt` |
+
+    _main_complete:94: command not found: compset
+    _setup:37: compstate: assignment to invalid subscript range
+
+That is [#2770][2770], and it is the gap a person meets first, because it
+is on every command line: the rc does not merely fail to add completion,
+it takes away the completer that worked without it. [#2771][2771] is on the
+same output line — `ZERR` is not a trap this shell knows, and the
+`TRAPZERR` spelling is accepted and never fires.
+
+**`${+functions[name]}` is not evidence that a function loaded.**
+`autoload -Uz` marks a name, and the parameter answers 1 for a name whose
+file does not exist — in both shells alike. `${#_comps}` and `whence -w`
+discriminate; the first pass at the measurement above concluded
+"completion is identical" from the parameter that cannot tell the two
+apart, and the pty run is what corrected it.
+
 [1717]: https://github.com/blairham/sh/issues/1717
 [807]: https://github.com/blairham/sh/issues/807
+[2770]: https://github.com/blairham/sh/issues/2770
+[2771]: https://github.com/blairham/sh/issues/2771

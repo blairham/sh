@@ -60,6 +60,18 @@ machine's own rc the four files take the startup from 14 complaints to 3,
 and the three are `compinit` twice and `vcs_info` once. See *What is not
 shipped, and why* at the end of this file.
 
+**Every sentence in that paragraph is conditioned on the default search**,
+which is how it was measured: `FPATH` out of the environment, so the two
+directories this shell derives are what answers. A real rc does not leave
+it that way — it puts the system zsh's `fpath` in front — and under that
+condition, as of 2026-09-14, `compinit` is **found and runs**: the dump is
+read and `_comps` fills with the same 2020 entries the reference shell
+holds. What is refused has moved one link down the chain, to `zmodload
+zsh/complete` and the `compset`/`compstate` the widget then calls. The
+outcome is unchanged and the mechanism and the message are not. #2770 has
+the measurement; `docs/install.md` has what it means for somebody deciding
+whether to live in this shell.
+
 ## Provenance
 
 Every behavior below was learned two ways, and **neither of them was
@@ -338,9 +350,11 @@ alias row and the `=~` capture parameters come back **byte-identical**, and
 `compinit` — and with it `compdef`, `compdump` and the completion system
 it initializes — is **out of scope on purpose**. It is an order of
 magnitude larger than the four above put together, and it exists to drive
-a completion system this shell does not have yet. A real startup file that
-calls it still gets `compinit: function definition file not found`, and
-that is an honest gap rather than a silent one.
+a completion system this shell does not have yet. A startup file that calls
+it on the default search still gets `compinit: function definition file not
+found`, and that is an honest gap rather than a silent one. A startup file
+that has put another zsh's `fpath` in front gets further and fails later,
+at `zsh/complete` — #2770.
 
 `vcs_info` is the same answer for the same reason, and it turned up in the
 measurement rather than in the issue: it is a VCS status subsystem with a

@@ -5,12 +5,13 @@ package interp_test
 
 import (
 	"context"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	. "github.com/blairham/sh/interp"
+
+	"github.com/blairham/sh/internal/testenv"
 
 	"github.com/blairham/sh/syntax"
 )
@@ -29,7 +30,7 @@ func resolveRunner(t *testing.T) (*Runner, string) {
 	t.Helper()
 	dir := t.TempDir()
 	tool := filepath.Join(dir, "tool431")
-	if err := os.WriteFile(tool, []byte("#!/bin/sh\n"), 0o700); err != nil {
+	if err := testenv.WriteExecutable(tool, []byte("#!/bin/sh\n"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	f, err := syntax.Parse("f() { :; }\n", syntax.Core())
@@ -86,7 +87,7 @@ func TestResolveNameFollowsTheResolutionOrder(t *testing.T) {
 func TestResolveNameDoesNotHandOutAReservedBuiltinsFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "umask")
-	if err := os.WriteFile(path, []byte("#!/bin/sh\n"), 0o700); err != nil {
+	if err := testenv.WriteExecutable(path, []byte("#!/bin/sh\n"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	sem := permissive()
@@ -135,7 +136,7 @@ func TestFunctionTextIsTheDefinition(t *testing.T) {
 func TestLookPathAllListsEveryHit(t *testing.T) {
 	first, second := t.TempDir(), t.TempDir()
 	for _, dir := range []string{first, second} {
-		if err := os.WriteFile(filepath.Join(dir, "tool431"), []byte("#!/bin/sh\n"), 0o700); err != nil {
+		if err := testenv.WriteExecutable(filepath.Join(dir, "tool431"), []byte("#!/bin/sh\n"), 0o700); err != nil {
 			t.Fatal(err)
 		}
 	}

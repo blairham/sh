@@ -14,6 +14,8 @@ import (
 	"time"
 
 	. "github.com/blairham/sh/interp"
+
+	"github.com/blairham/sh/internal/testenv"
 	"github.com/blairham/sh/syntax"
 )
 
@@ -86,7 +88,7 @@ func TestARefusedOpenStopsTheCommand(t *testing.T) {
 func TestADeniedStatReadsAsAMissingPath(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "present")
-	if err := os.WriteFile(file, []byte(":\n"), 0o700); err != nil {
+	if err := testenv.WriteExecutable(file, []byte(":\n"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	denyStats := GateFunc(func(_ context.Context, a Action) Decision {

@@ -6,12 +6,13 @@ package interp_test
 import (
 	"bytes"
 	"context"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	. "github.com/blairham/sh/interp"
+
+	"github.com/blairham/sh/internal/testenv"
 	"github.com/blairham/sh/syntax"
 )
 
@@ -44,7 +45,7 @@ func reservedRun(t *testing.T, dir, src string, setup func(*Runner)) (string, in
 // /usr/bin/umask and nine others.
 func shadow(t *testing.T, dir, name, body string) {
 	t.Helper()
-	if err := os.WriteFile(filepath.Join(dir, name), []byte("#!/bin/sh\n"+body+"\n"), 0o755); err != nil {
+	if err := testenv.WriteExecutable(filepath.Join(dir, name), []byte("#!/bin/sh\n"+body+"\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 }

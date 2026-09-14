@@ -4,12 +4,13 @@
 package interp_test
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	. "github.com/blairham/sh/interp"
+
+	"github.com/blairham/sh/internal/testenv"
 )
 
 // `command -v` says what would run without running it.
@@ -39,7 +40,7 @@ func TestCommandVSaysWhatWouldRun(t *testing.T) {
 func TestCommandVNamesAnExternalByItsPath(t *testing.T) {
 	dir := t.TempDir()
 	exe := filepath.Join(dir, "onlyhere")
-	if err := os.WriteFile(exe, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+	if err := testenv.WriteExecutable(exe, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	setup := func(r *Runner) { r.Env = []string{"PATH=" + dir} }

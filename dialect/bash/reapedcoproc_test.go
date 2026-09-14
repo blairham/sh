@@ -54,10 +54,38 @@ func TestReadingACoprocessThatHasJustEnded(t *testing.T) {
 
 // And a subshell delivers the notice with no `wait` written anywhere, which is
 // what makes it asynchronous rather than something `wait` performs.
+//
+// # Why the two reads are here
+//
+// A notice about a coprocess that has ended needs a coprocess that has ended,
+// and `coproc CP { echo hi; }; ( : )` does not say that anywhere: it assumes
+// the body got there first. Nothing in either shell orders the two. Here the
+// body is a goroutine and the subshell costs microseconds, so on a loaded
+// runner the subshell arrived with nothing to reap and the array was still
+// there — `n=2` where the row wanted `n=0`, three times in one day on three
+// unrelated diffs, green on every rerun (#2661). Real bash loses the same race
+// for the same reason, measured: `coproc CP { echo hi; sleep 0.2; }; ( : )`
+// answers 2 in bash 5.3.15 and answers 2 here.
+//
+// So the ordering is written down instead of hoped for. Reading the near end
+// to end-of-file is the one fact about the coprocess a script can establish
+// without `wait`, and startCoproc finishes the job before it closes that end,
+// which makes the end-of-file mean the job has ended rather than merely that
+// it is nearly done. The `n=2` in the middle is the other half: it says the
+// reads did not deliver the notice, so the subshell after them is still the
+// only thing that could have — and TestEndOfFileDoesNotTakeBackTheArray is the
+// same claim pinned on its own.
+//
+// Measured on bash 5.3.15, 2026-09-14: `b=1 n=2` then `after=0`, five runs.
 func TestASubshellDeliversTheReapNotice(t *testing.T) {
 	out, st := runBash(t, t.TempDir(),
-		`coproc CP { echo hi; }; ( : ); echo "n=${#CP[@]}"`)
-	if want := "n=0\n"; st != 0 || out != want {
+		`coproc CP { echo hi; }
+read -r a <&${CP[0]}
+read -r b <&${CP[0]}
+echo "b=$? n=${#CP[@]}"
+( : )
+echo "after=${#CP[@]}"`)
+	if want := "b=1 n=2\nafter=0\n"; st != 0 || out != want {
 		t.Errorf("out %q status %d, want %q at 0", out, st, want)
 	}
 }

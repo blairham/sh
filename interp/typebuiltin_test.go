@@ -4,12 +4,13 @@
 package interp_test
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	. "github.com/blairham/sh/interp"
+
+	"github.com/blairham/sh/internal/testenv"
 	"github.com/blairham/sh/syntax"
 )
 
@@ -160,7 +161,7 @@ func TestTypeWillNotNameAReservedBuiltinOnPath(t *testing.T) {
 	// `hash` rather than `alias`, which is a builtin now and would be named
 	// as one — correctly. The guard needs a name that is still reserved and
 	// still unimplemented.
-	if err := os.WriteFile(filepath.Join(dir, "hash"), []byte("#!/bin/sh\n"), 0o700); err != nil {
+	if err := testenv.WriteExecutable(filepath.Join(dir, "hash"), []byte("#!/bin/sh\n"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	out, st := run(t, `type hash`, func(r *Runner) {

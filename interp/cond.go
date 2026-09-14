@@ -297,7 +297,14 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 			"an empty =~ right operand being an error") {
 			return false, arithError{msg: "invalid regular expression: empty (sub)expression"}
 		}
-		re, err := regexp.Compile(r.regexFold() + pat)
+		// The expression and the subject as the *engine* must see them,
+		// which is not always as the script wrote them: the case fold is
+		// narrowed to ASCII under a C or POSIX locale, and the only way to
+		// narrow the engine's is to write the characters it must not fold
+		// out of its reach. back maps an offset in the subject it matched
+		// against back to an offset in the script's own. See regexmatch.go.
+		expr, subject, back := r.regexOperands(pat, left)
+		re, err := regexp.Compile(expr)
 		if err != nil {
 			// The pattern as the script wrote it, never the folded spelling:
 			// a script that never asked for `(?i)` must not read about one.
@@ -312,7 +319,7 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 		// match: the dense array wants the strings, and the reporting
 		// parameters want where each span began and ended. Matching twice to
 		// get both would be two answers to one question.
-		loc := re.FindStringSubmatchIndex(left)
+		loc := scriptOffsets(re.FindStringSubmatchIndex(subject), back)
 		var m []string
 		if loc != nil {
 			m = make([]string, len(loc)/2)

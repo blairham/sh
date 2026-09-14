@@ -350,6 +350,41 @@ func characterCount(v string) int {
 	return n
 }
 
+// caseFoldReachesBeyondASCII is the locale question behind every site that
+// treats two letters as one: an explicit C or POSIX locale narrows the fold to
+// ASCII, and any other locale folds Unicode. docs/spec/semantics.md records
+// the policy; the panel agrees on it, so it is a correction rather than an
+// axis.
+//
+// One question for the sites that *convert* a value and the sites that
+// *match* one, because they are the same question and were drifting apart.
+// #2027 was the converting half of that drift — the attribute and the `:u`
+// modifier kept calling strings.ToUpper after the operators had been brought
+// under the policy — and #2644 is the matching half, where the two operators
+// of `[[ ]]` missed in opposite directions: `=~` handed the fold to a regex
+// engine that folds Unicode and has no locale to be told about, so it was too
+// permissive under `C`, while `==` folded with an ASCII byte swap under every
+// locale, so it was too strict under UTF-8. Measured 2026-09-13 on bash
+// 5.3.15, with `nocasematch` on: `[[ ÉTÉ =~ ^été$ ]]` and `[[ ÉTÉ == été ]]`
+// both match under `en_US.UTF-8` and neither matches under `LC_ALL=C`.
+//
+// The ASCII guard in front of localeIsC keeps the question unasked for every
+// value a script usually holds, since case mapping below 0x80 is the same map
+// in every locale — which is what keeps a shell with no locale named, and no
+// answer to UnsetLocaleIsUnicodeAware, from refusing `[[ ABC == abc ]]`.
+//
+// Several texts rather than one because a match has two sides: a pattern of
+// ASCII against a subject that is not is exactly the case a caller naming one
+// of them would leave unasked.
+func (r *Runner) caseFoldReachesBeyondASCII(texts ...string) bool {
+	for _, t := range texts {
+		if !isASCII(t) {
+			return !r.localeIsC()
+		}
+	}
+	return true
+}
+
 // caseMapper is the case map to apply to a value, under the locale policy:
 // an explicit C or POSIX locale narrows a case change to ASCII, and any other
 // locale is Unicode-aware. docs/spec/semantics.md records the policy; the
@@ -363,11 +398,11 @@ func characterCount(v string) int {
 // under LC_ALL=C where all three reference shells answer CAFé. See #2027.
 // A narrowing every caller has to remember is one some caller will not.
 //
-// The ASCII guard in front of localeIsC keeps the question unasked for every
-// value a script usually holds, since case mapping below 0x80 is the same map
-// in every locale.
+// The locale question is caseFoldReachesBeyondASCII above, shared with the
+// sites that match rather than convert; what is left here is what to do with
+// its answer.
 func (r *Runner) caseMapper(value string, convert func(rune) rune) func(rune) rune {
-	if isASCII(value) || !r.localeIsC() {
+	if r.caseFoldReachesBeyondASCII(value) {
 		return convert
 	}
 	wide := convert

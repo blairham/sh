@@ -3395,6 +3395,7 @@ func (r *Runner) emptyPatternFires(value string) bool {
 func (r *Runner) replacementPatternOpts(pattern string, subjects ...string) patternOpts {
 	o := r.patternOpts(pattern, subjects...)
 	o.fold = r.MatchOption(MatchFoldsCase)
+	o.foldWide = o.fold && r.caseFoldReachesBeyondASCII(append([]string{pattern}, subjects...)...)
 	return o
 }
 

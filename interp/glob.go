@@ -834,6 +834,12 @@ func (r *Runner) glob(field string) ([]string, bool) {
 		} else {
 			o := r.patternOpts(part)
 			o.fold = r.MatchOption(GlobFoldsCase)
+			// The subjects are the names in each directory, which are not
+			// read yet; the pattern is what there is to ask about, and a
+			// pattern of ASCII against a name that is not is the case the
+			// narrowing leaves alone anyway — an ASCII letter folds the same
+			// way in every locale.
+			o.foldWide = o.fold && r.caseFoldReachesBeyondASCII(part)
 			for _, dir := range dirs {
 				next = append(next, r.matchIn(dir, part, o, seeHidden)...)
 			}
@@ -1025,6 +1031,7 @@ func (r *Runner) excludedBy(word string, rights []string) bool {
 	for _, x := range rights {
 		o := r.patternOpts(x, word)
 		o.fold = r.MatchOption(GlobFoldsCase)
+		o.foldWide = o.fold && r.caseFoldReachesBeyondASCII(x, word)
 		if matchPattern(x, word, o) {
 			return true
 		}

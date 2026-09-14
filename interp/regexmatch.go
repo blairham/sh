@@ -3,6 +3,12 @@
 
 package interp
 
+import (
+	"strings"
+	"unicode"
+	"unicode/utf8"
+)
+
 // What the last `=~` captured.
 //
 // A successful match is worth more than its status: the whole match and every
@@ -52,22 +58,160 @@ func (r *Runner) SetRegexMatch(name string) { r.regexMatchName = name }
 // of the **subject** as the script wrote it, so `BASH_REMATCH` holds `A` and
 // not `a`.
 //
-// Locale is the one cell this does not yet answer. An explicit C or POSIX
-// locale narrows the fold to ASCII in the panel — measured, `LC_ALL=C` makes
-// `[[ ÉTÉ =~ ^été$ ]]` fail in bash 5.3.15 and in zsh 5.9.2 where the same
-// line under a UTF-8 locale matches — and `(?i)` has no locale to be told
-// about, so ours folds it either way. The narrowing is the policy
-// Runner.caseMapper holds for the sites that convert a whole value; this one
-// hands the question to an engine that cannot take it. #2622 records the
-// measurement rather than leaving it unwritten, and the glob side of `[[ ]]`
-// has the same gap pointing the other way: its fold is a byte-wise ASCII one,
-// so `[[ ÉTÉ == été ]]` fails here under every locale and matches in bash
-// under a UTF-8 one. #2644 is the pair.
+// Locale is the other half of what the prefix means, and `(?i)` has no locale
+// to be told about: an explicit C or POSIX locale narrows the fold to ASCII in
+// the panel — measured 2026-09-13, `LC_ALL=C` makes `[[ ÉTÉ =~ ^été$ ]]` fail
+// in bash 5.3.15 and in zsh 5.9.2 where the same line under a UTF-8 locale
+// matches — and the engine's flag folds Unicode either way. regexOperands
+// below is where the narrowing happens, by taking the characters the engine
+// must not fold out of its reach rather than by asking it for a fold it does
+// not offer. #2644.
 func (r *Runner) regexFold() string {
 	if r.MatchOption(RegexFoldsCase) {
 		return "(?i)"
 	}
 	return ""
+}
+
+// The block of characters the narrowing borrows to stand in for the ones the
+// engine must not fold. Plane 15 is private use throughout, so nothing in it
+// is a letter, nothing in it has a case, and `(?i)` leaves every one of them
+// alone.
+const caselessStandInBase = 0xF0000
+
+// regexOperands resolves the pair a `=~` evaluation hands to the engine: the
+// expression to compile, the subject to match it against, and — where the two
+// are not the script's own text — the map from an offset in that subject back
+// to an offset in the script's.
+//
+// Everything below exists for one cell of the fold. With `nocasematch` on and
+// an explicit C or POSIX locale, the fold reaches ASCII and no further, so
+// `[[ ÉTÉ =~ ^été$ ]]` is a miss and `[[ ABCé =~ ^abcé$ ]]` is still a match —
+// the ASCII letters beside the accented one go on folding. That rules out
+// both of the cheap answers: dropping the prefix loses the second cell, and
+// keeping it loses the first.
+//
+// It also cannot be done after the parse. `regexp/syntax` folds a bracket
+// expression **before** it complements one, which is the behavior
+// `[[ A =~ ^[^a]$ ]]` measures and the reason the prefix is a prefix; by the
+// time a parsed class is in hand, `[^a]` and `[^é]` are both plain sets of
+// ranges and nothing says which runes a fold put there or took away. So the
+// narrowing has to be in force *at* the parse, and the only lever the engine
+// leaves is which characters the expression is written in.
+//
+// Hence the stand-ins: every character above ASCII that has a case at all is
+// swapped, in the expression and in the subject alike, for a private-use
+// character that has none. `(?i)` then folds exactly the ASCII letters, the
+// parse sees a bracket expression whose members are caseless and complements
+// it correctly, and two characters that were distinct stay distinct. Only
+// cased characters are swapped, so a subject of CJK or punctuation is handed
+// over untouched and keeps its offsets; and an undecodable byte is untouched
+// too, since U+FFFD has no case and every bad byte would otherwise collapse
+// onto the same stand-in.
+//
+// What it does not reach either is *which* characters the engine calls the
+// same letter where the fold is wide. `(?i)` folds a full simple-fold orbit,
+// and the panel folds with the C library's towlower: measured under
+// `en_US.UTF-8`, bash 5.3.15 misses `[[ ſ =~ ^s$ ]]` where this matches,
+// because U+017F is in Go's fold orbit for `s` and is not the lower case of
+// anything. The glob side folds by the lower-case map for that reason — see
+// eqRuneFolded — and the operator that hands its fold to an engine cannot.
+// That is the engine's reading rather than the locale's, so it is #2643's
+// question and not this one's.
+//
+// What this does **not** change is how much of the subject a character is.
+// A stand-in is one character where the character it stands in for was one,
+// so `.` passes over the same ground either way — which is the byte-or-
+// character question the glob side answers with patternOpts.chars and this
+// operator has never asked. Leaving it unasked is deliberate: it would make
+// the operator read the subject by one measure with the fold on and another
+// with it off, and it is a wider question than the fold. It is also visible.
+// Measured under `LC_ALL=C`, bash 5.3.15 misses `[[ ÉTÉ =~ ^...$ ]]` and
+// `[[ É =~ ^[^é]$ ]]` because `É` is two bytes there and neither `.` nor a
+// bracket matches either of them, where this counts one character and answers
+// the second the other way. Both are that axis rather than this one — under a
+// UTF-8 locale, where the fold is the only thing in play, the bracket agrees.
+func (r *Runner) regexOperands(pat, subject string) (expr, subj string, back []int) {
+	fold := r.regexFold()
+	if fold == "" || r.caseFoldReachesBeyondASCII(pat, subject) {
+		return fold + pat, subject, nil
+	}
+	stand := map[string]rune{}
+	subj, back = standInFor(subject, stand)
+	expr, _ = standInFor(pat, stand)
+	return fold + expr, subj, back
+}
+
+// standInFor rewrites the cased characters above ASCII of s into private-use
+// characters that have no case, giving the same stand-in to the same
+// character every time it is asked — which is what lets an expression and a
+// subject be rewritten one after the other and still be about each other.
+//
+// back is the offset of each byte of the result in s, with the length on the
+// end so that the end of a match maps as well as its start. It is nil when
+// nothing was rewritten, which is the answer for every subject that holds no
+// cased character above ASCII.
+//
+// The block cannot run out. A stand-in is asked for once per *distinct*
+// character, only characters with a simple case mapping are asked about, and
+// Unicode has some thousands of those against plane 15's 65,534 — so there is
+// no exhaustion branch here, because one could not be reached to be tested.
+func standInFor(s string, stand map[string]rune) (string, []int) {
+	if isASCII(s) {
+		return s, nil
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	back := make([]int, 0, len(s)+1)
+	rewrote := false
+	for i := 0; i < len(s); {
+		w := characterWidth(s[i:])
+		unit := s[i : i+w]
+		c, size := utf8.DecodeRuneInString(unit)
+		if size != w || c < utf8.RuneSelf || unicode.SimpleFold(c) == c {
+			b.WriteString(unit)
+			for j := 0; j < w; j++ {
+				back = append(back, i)
+			}
+			i += w
+			continue
+		}
+		rewrote = true
+		in, ok := stand[unit]
+		if !ok {
+			in = rune(caselessStandInBase + len(stand))
+			stand[unit] = in
+		}
+		n := b.Len()
+		b.WriteRune(in)
+		for j := n; j < b.Len(); j++ {
+			back = append(back, i)
+		}
+		i += w
+	}
+	if !rewrote {
+		return s, nil
+	}
+	back = append(back, len(s))
+	return b.String(), back
+}
+
+// scriptOffsets maps what the engine reported about a rewritten subject onto
+// the script's own text. A group that did not participate is -1 and stays
+// there.
+func scriptOffsets(loc, back []int) []int {
+	if loc == nil || back == nil {
+		return loc
+	}
+	out := make([]int, len(loc))
+	for i, off := range loc {
+		if off < 0 {
+			out[i] = off
+			continue
+		}
+		out[i] = back[off]
+	}
+	return out
 }
 
 // recordRegexMatch stores what a `=~` evaluation captured.

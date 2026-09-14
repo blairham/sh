@@ -705,17 +705,21 @@ func cNotANumber(s string) (float64, bool) {
 		// `-nan` or `+nan`: the sign is the only thing Go objected to.
 		return math.NaN(), true
 	}
-	// `nan(…)`, whose characters C leaves to the implementation and every
-	// column here ignores. The closing parenthesis has to be the last byte,
-	// so `nan(1)x` stays the bad operand it is in every column.
+	// `nan(…)`, whose characters C leaves to the implementation. The closing
+	// parenthesis has to be the last byte, so `nan(1)x` stays the bad
+	// operand it is in bash 3.2, zsh and ash — and what is between the
+	// parentheses is not read at all.
+	//
+	// Not read, rather than read and checked against C's n-char-sequence,
+	// and that is measured. bash 5.3, bash as sh, bash 3.2, zsh and dash
+	// take `nan(a-b)`, `nan(a b)` and `nan(*)` and answer `nan` at 0;
+	// BusyBox ash refuses all three and takes `nan(1)`, `nan()`, `nan(abc)`
+	// and `nan(_1)`, which is exactly C's letters, digits and underscores.
+	// That is BSD's strtod against musl's — the same C library split as the
+	// sign a not-a-number gets under `%+f` — so this takes the five, and the
+	// characters cannot change the value either way.
 	if rest[0] != '(' || rest[len(rest)-1] != ')' {
 		return 0, false
-	}
-	for _, c := range rest[1 : len(rest)-1] {
-		// C's n-char-sequence: digits, letters and underscores.
-		if !(c == '_' || (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) {
-			return 0, false
-		}
 	}
 	return math.NaN(), true
 }

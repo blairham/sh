@@ -1546,6 +1546,12 @@ func TestPrintfWritesAnInfinityAndANotANumberCsWay(t *testing.T) {
 		{"with letters in it", `printf '[%f]' 'nan(abc)'`, "[nan]"},
 		{"with nothing in it", `printf '[%f]' 'nan()'`, "[nan]"},
 		{"and with a sign as well", `printf '[%f]' '-nan(_1)'`, "[nan]"},
+		// What is between the parentheses is not read. Five columns take
+		// these three and BusyBox ash refuses all three, which is BSD's
+		// strtod against musl's rather than a language — see cNotANumber.
+		{"characters C leaves to the implementation", `printf '[%f]' 'nan(a-b)'`, "[nan]"},
+		{"including a space", `printf '[%f]' 'nan(a b)'`, "[nan]"},
+		{"and a glob character", `printf '[%f]' 'nan(*)'`, "[nan]"},
 		// The controls. A finite float must not go near any of this, and
 		// the words are only numbers where a *number* was asked for.
 		{"a finite value is untouched", `printf '[%f]' 1.5`, "[1.500000]"},

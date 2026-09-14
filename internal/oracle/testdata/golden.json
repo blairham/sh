@@ -154013,49 +154013,49 @@
     },
     "printf/non-finite-is-spelled-c-s-way": {
       "ash": {
-        "Stdout": "[inf][inf][inf]~[-inf][nan][nan]~[inf][nan]~[inf][nan][inf][inf]~[nan][nan][nan]~st=0",
-        "Stderr": "",
+        "Stdout": "[inf][inf][inf]~[-inf][nan][nan]~[inf][nan]~[inf][nan][inf][inf]~[nan][nan][nan]~[0.000000][0.000000]~st=1",
+        "Stderr": "\u003cshell\u003e: invalid number 'nan(a-b)'~\u003cshell\u003e: invalid number 'nan(*)'",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "bash": {
-        "Stdout": "[inf][inf][inf]~[-inf][nan][nan]~[inf][nan]~[inf][nan][inf][inf]~[nan][nan][nan]~st=0",
+        "Stdout": "[inf][inf][inf]~[-inf][nan][nan]~[inf][nan]~[inf][nan][inf][inf]~[nan][nan][nan]~[nan][nan]~st=0",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "[inf][inf][inf]~[-inf][nan][nan]~[inf][nan]~[inf][nan][inf][inf]~[nan][nan][nan]~st=0",
+        "Stdout": "[inf][inf][inf]~[-inf][nan][nan]~[inf][nan]~[inf][nan][inf][inf]~[nan][nan][nan]~[nan][nan]~st=0",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "bash32": {
-        "Stdout": "[inf][inf][inf]~[-inf][nan][nan]~[inf][nan]~[inf][nan][inf][inf]~[nan][nan][nan]~st=0",
+        "Stdout": "[inf][inf][inf]~[-inf][nan][nan]~[inf][nan]~[inf][nan][inf][inf]~[nan][nan][nan]~[nan][nan]~st=0",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "dash": {
-        "Stdout": "[inf][inf][inf]~[-inf][nan][nan]~[inf][nan]~[inf][nan][inf][inf]~[nan][nan][nan]~st=0",
+        "Stdout": "[inf][inf][inf]~[-inf][nan][nan]~[inf][nan]~[inf][nan][inf][inf]~[nan][nan][nan]~[nan][nan]~st=0",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "ksh93": {
-        "Stdout": "[-0.000000][-0.000000e+00][-0]~[0.000000][-2.000000][2.000000]~[-0.00][-2e+00]~[-0.000000][-2.000000][0.000000][-0.000000]~[0.000000][0.000000][0.000000]~st=1",
-        "Stderr": "\u003cshell\u003e: printf: nan(1): unknown function~\u003cshell\u003e: printf: nan(1): unknown function~\u003cshell\u003e: printf: warning: invalid argument of type f~\u003cshell\u003e: printf: nan(): unknown function~\u003cshell\u003e: printf: nan(): unknown function~\u003cshell\u003e: printf: warning: invalid argument of type f~\u003cshell\u003e: printf: nan(abc): unknown function~\u003cshell\u003e: printf: nan(abc): unknown function~\u003cshell\u003e: printf: warning: invalid argument of type f",
+        "Stdout": "[-0.000000][-0.000000e+00][-0]~[0.000000][-2.000000][2.000000]~[-0.00][-2e+00]~[-0.000000][-2.000000][0.000000][-0.000000]~[0.000000][0.000000][0.000000]~[0.000000][0.000000]~st=1",
+        "Stderr": "\u003cshell\u003e: printf: nan(1): unknown function~\u003cshell\u003e: printf: nan(1): unknown function~\u003cshell\u003e: printf: warning: invalid argument of type f~\u003cshell\u003e: printf: nan(): unknown function~\u003cshell\u003e: printf: nan(): unknown function~\u003cshell\u003e: printf: warning: invalid argument of type f~\u003cshell\u003e: printf: nan(abc): unknown function~\u003cshell\u003e: printf: nan(abc): unknown function~\u003cshell\u003e: printf: warning: invalid argument of type f~\u003cshell\u003e: printf: nan(a-b): unknown function~\u003cshell\u003e: printf: nan(a-b): unknown function~\u003cshell\u003e: printf: warning: invalid argument of type f~\u003cshell\u003e: printf: nan(*): unknown function~\u003cshell\u003e: printf: nan(*): unknown function~\u003cshell\u003e: printf: warning: invalid argument of type f",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "zsh": {
-        "Stdout": "[inf][inf][inf]~[-inf][nan][nan]~[inf][nan]~[inf][nan][inf][inf]~[nan][nan][nan]~st=0",
+        "Stdout": "[inf][inf][inf]~[-inf][nan][nan]~[inf][nan]~[inf][nan][inf][inf]~[nan][nan][nan]~[nan][nan]~st=0",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

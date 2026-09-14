@@ -47,6 +47,46 @@ type EditorStyle struct {
 	// told nothing does.
 	ListQuery string
 
+	// BracketedPaste asks the terminal to wrap pasted text in markers, for
+	// the length of each line read.
+	//
+	// A terminal marks a paste only for an application that asked, so this
+	// decides whether a paste reaches the shell as text to look at or as a
+	// burst of typing — and a burst of typing carries the newlines that run
+	// it. Measured 2026-09-14 through a pseudo-terminal:
+	//
+	//	bash 5.3.3   \e[?2004h before the prompt, \e[?2004l\r after the line
+	//	zsh 5.9.2    the same two, the first written after the prompt
+	//	ksh93        neither; the markers are typed into the line as `^[[200~`
+	//
+	// The two that ask agree on the bytes, so the field is whether rather than
+	// what. ksh93 is the disagreement that makes it a dialect's answer at all,
+	// and a front end that has not said gets no bracketing — which is also
+	// what a dialect with no line editor of its own wants.
+	//
+	// The markers are never typed into the line whatever this says: a shell
+	// that did not ask for them can still be sent them by a terminal another
+	// program left in the mode, and putting `^[[200~` in a command is the
+	// worst of the three things to do with it.
+	BracketedPaste bool
+
+	// PastedTextStyle is written before a run of text that arrived as a
+	// paste, and PastedTextStyleEnd after it. Empty draws the text like any
+	// other, which is what a dialect that does not mark a paste does.
+	//
+	// Measured 2026-09-14 on a paste of `echo PASTED`: bash 5.3.3 and zsh
+	// 5.9.2 both draw it as `\e[7mecho PASTED\e[27m` — reverse video, ended
+	// by turning reverse video off rather than by resetting everything — and
+	// both draw the line again without it on the next keystroke, whatever
+	// that keystroke is.
+	//
+	// Two fields rather than one and a reset, because the ending is the half
+	// that was measured: a run that reset everything would also drop whatever
+	// the prompt or a highlighter had left in force around it. Text rather
+	// than a flag, for the reason Interrupt above is.
+	PastedTextStyle    string
+	PastedTextStyleEnd string
+
 	// ListQueryEchoesTheKey writes the key that answered the question back
 	// to the screen. zsh does; bash does not.
 	ListQueryEchoesTheKey bool

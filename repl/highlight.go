@@ -88,6 +88,19 @@ func (f HighlighterFunc) Highlight(line string) []Highlight { return f(line) }
 // back to the terminal's default.
 const highlightReset = "\x1b[0m"
 
+// styleRun is one run of the line drawn differently: where it is, in bytes,
+// and what is written on each side of it.
+//
+// Both sides, because the two things that produce one end it differently. A
+// highlighter's run ends in a full reset, which is this package's choice and
+// documented on Highlight.Style. A run that arrived as a paste ends by turning
+// off the one attribute it turned on — measured, that is what both shells that
+// mark a paste write, and matching them is the whole point of asking.
+type styleRun struct {
+	start, end int
+	on, off    string
+}
+
 // styled is the line as it goes to the terminal.
 //
 // The runs are applied in order of where they start, and a run overlapping one
@@ -100,33 +113,62 @@ const highlightReset = "\x1b[0m"
 // *runes* of the line, and what this adds occupies no cells.
 func (e *editor) styled() string {
 	line := string(e.line)
-	if e.highlighter == nil {
-		return line
-	}
-	runs := e.highlighter.Highlight(line)
+	runs := e.styleRuns(line)
 	if len(runs) == 0 {
 		return line
 	}
-	runs = append([]Highlight(nil), runs...)
-	sort.SliceStable(runs, func(i, j int) bool { return runs[i].Start < runs[j].Start })
+	sort.SliceStable(runs, func(i, j int) bool { return runs[i].start < runs[j].start })
 
 	var b []byte
 	at := 0
 	for _, r := range runs {
-		if r.Start < at || r.End <= r.Start || r.End > len(line) || r.Style == "" {
+		if r.start < at || r.end <= r.start || r.end > len(line) || r.on == "" {
 			continue
 		}
-		b = append(b, line[at:r.Start]...)
-		b = append(b, r.Style...)
-		b = append(b, line[r.Start:r.End]...)
-		b = append(b, highlightReset...)
-		at = r.End
+		b = append(b, line[at:r.start]...)
+		b = append(b, r.on...)
+		b = append(b, line[r.start:r.end]...)
+		b = append(b, r.off...)
+		at = r.end
 	}
 	if at == 0 {
 		// Nothing was applied, so nothing was copied.
 		return line
 	}
 	return string(append(b, line[at:]...))
+}
+
+// styleRuns is every run to be drawn differently: what the paste left marked,
+// and what the highlighter asked for.
+//
+// The paste first, so that a tie in where two runs start goes to it — the sort
+// above is stable. A highlighter run and a paste over the same text is a
+// terminal being told two things about one cell, and the rule for that is the
+// one styled already states.
+//
+// It returns nil for the case that is every keystroke of every ordinary
+// session: no highlighter, and nothing pasted on the line.
+func (e *editor) styleRuns(line string) []styleRun {
+	var runs []styleRun
+	if e.pastedTo > e.pastedFrom && e.pastedTo <= len(e.line) && e.pastedStyle != "" {
+		// Positions in the line are runes and a run is bytes, which is the
+		// same conversion Highlight documents for a highlighter working in
+		// runes — done here rather than asked of the caller, because the
+		// caller is this package.
+		runs = append(runs, styleRun{
+			start: len(string(e.line[:e.pastedFrom])),
+			end:   len(string(e.line[:e.pastedTo])),
+			on:    e.pastedStyle,
+			off:   e.pastedStyleEnd,
+		})
+	}
+	if e.highlighter == nil {
+		return runs
+	}
+	for _, r := range e.highlighter.Highlight(line) {
+		runs = append(runs, styleRun{start: r.Start, end: r.End, on: r.Style, off: highlightReset})
+	}
+	return runs
 }
 
 // UnclosedQuote colors the part of a line that is inside a quotation which has

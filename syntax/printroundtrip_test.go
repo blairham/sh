@@ -135,6 +135,12 @@ func TestPrintingTheCorpusRoundTripsToTheSameProgram(t *testing.T) {
 					// reference shells reject them.
 					continue
 				}
+				if c.ExpansionCompletes {
+					// Nothing to print: the shells run these, but the text
+					// is a program only once an alias body is substituted
+					// into it, and this route never runs anything.
+					continue
+				}
 				// No skip for "not this grammar": every snippet parses under
 				// the corpus dialect, which TestCorpusParses asserts, so a
 				// parse failure here is a failure and not a case to pass

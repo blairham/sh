@@ -1185,6 +1185,32 @@ func TestSyntaxErrorCasesAreGraded(t *testing.T) {
 	}
 }
 
+// A mark that excuses a case from the static read must not excuse it from
+// anything else. ExpansionCompletes says a snippet is a program only after an
+// alias body is substituted into it — which is a fact about reading, and the
+// reason such a case exists at all is the seven columns that *run* it. So the
+// one thing it may never do is take a case out of the evidence, and the one
+// thing it may never be is a second spelling of SyntaxError: those cases are
+// rejected by the panel, and these are run by every member of it.
+func TestExpansionCompletesCasesAreStillGraded(t *testing.T) {
+	var marked int
+	for _, c := range Corpus {
+		if !c.ExpansionCompletes {
+			continue
+		}
+		marked++
+		if !graded(c) {
+			t.Errorf("%s is not graded, but the shells run it — the mark excuses the static read and nothing else", c.ID)
+		}
+		if c.SyntaxError {
+			t.Errorf("%s is marked both ExpansionCompletes and SyntaxError, which are opposite claims about the panel", c.ID)
+		}
+	}
+	if marked == 0 {
+		t.Fatal("no ExpansionCompletes cases in the corpus, so this proves nothing")
+	}
+}
+
 // TestRegeneratingKeepsARacingRow is the whole of the fix: a marked row is
 // exempt from grading and from drift, and was exempt from neither of the two
 // things that actually wrote to the record. Regeneration rewrote it with

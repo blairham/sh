@@ -20927,6 +20927,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `alias/a-trap-body-uses-the-shells-aliases` | `end~TRAP` | `end` **2>** `<script>: line 1: t: command not found` | `end~TRAP` | `end` **2>** `<script>: line 4: t: command not found` | `end~TRAP` | `end~TRAP` | `end~TRAP` |
 | `alias/a-body-may-be-a-compound-assignment` | **2>** `<script>: 3: Syntax error: "(" unexpected` *(status 2)* | `[x][y]` | `[x][y]` | `[x][y]` | `[x][y]` | `[][x]` | **2>** `<script>: line 3: syntax error: unexpected "("` *(status 2)* |
 | `alias/a-body-may-be-a-loop` | `hi1~hi2~end` | `hi1~hi2~end` | `hi1~hi2~end` | `hi1~hi2~end` | `hi1~hi2~end` | `hi1~hi2~end` | `hi1~hi2~end` |
+| `alias/a-body-may-open-a-function-definition` | `hi` | `hi` | `hi` | `hi` | `hi` | `hi` | `hi` |
+| `alias/a-body-may-end-at-the-parens-of-a-definition` | `hi` | `hi` | `hi` | `hi` | `hi` | `hi` | `hi` |
+| `alias/a-body-may-end-at-an-anonymous-functions-parens` | **2>** `<script>: 2: Syntax error: ")" unexpected` *(status 2)* | **2>** `<script>: line 2: syntax error near unexpected token `}'~<script>: line 2: `af { echo hi; }'` *(status 2)* | **2>** `<script>: line 2: syntax error near unexpected token `)'~<script>: line 2: `af { echo hi; }'` *(status 2)* | **2>** `<script>: line 2: syntax error near unexpected token `}'~<script>: line 2: `af { echo hi; }'` *(status 2)* | **2>** `<script>: syntax error at line 2: `)' unexpected` *(status 3)* | `hi` | **2>** `<script>: line 2: syntax error: unexpected ")"` *(status 2)* |
+| `alias/a-body-may-end-at-the-parens-of-two-names` | **2>** `<script>: 2: Syntax error: "(" unexpected` *(status 2)* | **2>** `<script>: line 2: syntax error near unexpected token `}'~<script>: line 2: `ab { echo "[$0]"; }'` *(status 2)* | **2>** `<script>: line 2: syntax error near unexpected token `('~<script>: line 2: `a b ()'` *(status 2)* | **2>** `<script>: line 2: syntax error near unexpected token `}'~<script>: line 2: `ab { echo "[$0]"; }'` *(status 2)* | **2>** `<script>: syntax error at line 2: `(' unexpected` *(status 3)* | `[a]~[b]` | **2>** `<script>: line 2: syntax error: unexpected "("` *(status 2)* |
 | `alias/nested-text-expands-where-the-command-string-did-not` | `E~v=` **2>** `<shell>: 1: t: not found` | `v=` **2>** `<shell>: line 1: t: command not found~<shell>: line 1: t: command not found` | `E~v=` **2>** `<shell>: line 1: t: command not found` | `v=` **2>** `<shell>: t: command not found~<shell>: t: command not found` | `E~v=S` | `E~v=S` | `E~v=` **2>** `<shell>: t: not found` |
 | `alias/a-trap-body-under-a-command-string-expands-too` | `end~TRAP` | `end` **2>** `<shell>: line 1: t: command not found` | `end~TRAP` | `end` **2>** `<shell>: t: command not found` | `end~TRAP` | `end~TRAP` | `end~TRAP` |
 | `alias/neither-kind-is-accepted-where-the-shell-has-not-got-it` | `ag=1~as=1~us=2` | `ag=2~as=2~us=2` | `ag=2~as=2~us=2` | `ag=2~as=2~us=2` | `ag=2~as=2~us=2` | `ag=0~as=0~us=1` | `ag=1~as=1~us=2` |
@@ -21226,6 +21230,34 @@ grades it and nothing drift-checks it either, for the same reason.
   alias t='for i in 1 2; do echo hi$i; done'
   t
   echo end
+  ```
+- `alias/a-body-may-open-a-function-definition` — the third question the grammar answers by looking at the *input* rather than at what the parser is about to read. `name` and `name()` are the same word until the parenthesis, so a word at command position is a command right up to the lookahead — and the lookahead asked the lexer, which after an alias expansion is standing past the alias word on text that has nothing to do with the definition. Every column defines the function and answers `hi`: dash, bash 5.3, that binary as `sh`, bash 3.2, ksh93, zsh and BusyBox ash. We answered a syntax error at 2. It was found while deriving the `2 / 0` row of #2299 and, measured, it is **not** that row: the fix moves the burndown figure and leaves that file ending where it ended, and the row's cause is #2685
+  ```sh
+  shopt -s expand_aliases 2>/dev/null
+  alias fn='f() {'
+  fn
+   echo hi
+  }
+  f
+  ```
+- `alias/a-body-may-end-at-the-parens-of-a-definition` — the same seam one token earlier, which is a branch of its own rather than a restatement: the body ends at the `)` and the brace that opens the body is the input's. It is the row that says the lookahead is answered from *both* sides of the seam — a fix that only read the pending tokens when the whole pair was there would leave this one refused, and a fix that only handled this one would leave the row above refused. Unanimous across the panel
+  ```sh
+  shopt -s expand_aliases 2>/dev/null
+  alias fn='f()'
+  fn { echo hi; }
+  f
+  ```
+- `alias/a-body-may-end-at-an-anonymous-functions-parens` — the same seam read from the *inside*, where the `(` is already the current token and what is asked is the `)` after it. Only zsh has an anonymous function to ask it of, and zsh takes it through an alias: `hi` at 0, where the other six read the parentheses as something they refuse. It is here because the inside reading is a second helper asking the same question, and a fix to the outside one alone would leave it looking at the wrong text
+  ```sh
+  alias af='()'
+  af { echo hi; }
+  ```
+- `alias/a-body-may-end-at-the-parens-of-two-names` — the second inside reading, and the one that needs both halves of the seam at once: the names and the `(` come from the body and the `)` is the last token of it, with the brace in the input. zsh defines both names and prints `[a]` and `[b]`; nothing else in the panel has a definition that takes more than one name at all
+  ```sh
+  alias ab='a b ()'
+  ab { echo "[$0]"; }
+  a
+  b
   ```
 - `alias/nested-text-expands-where-the-command-string-did-not` — zsh expands no alias in a `-c` string and expands one in `eval` and in a substitution reached from that same string. So its refusal under `-c` is not a rule about aliases: the option is the only gate on a nested text, and a `-c` string simply being read whole is what stops a definition on one line reaching the next. This is the row #2109 split `Dialect.ExpandAliases` in two for — one field held both the option's default and the route rule, and the front end derived the nested texts' answer from the route, which turned the table off for every `eval` and `$( )` under a zsh command string. The dash column is a *different* fault and still misses: that shell parses a substitution with the line that holds it, so its `$( )` here is read before the `alias` beside it has run — #2357
   ```sh

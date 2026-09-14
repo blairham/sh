@@ -15089,6 +15089,31 @@ printf 'TWO=still-running\n'`,
 		Why:     "an assignment prefix written as an append joins what the name already holds, and unanimously: every column shows the child `v=145` and leaves the shell's own `v` at `14`. The operator is on the assignment either way, so a route that expands the value and stores it loses the append without failing anything — we handed the child the tail alone, which for the idiom the construct exists for, `PATH+=:/x cmd`, is a PATH of one entry (#2299)",
 	},
 	{
+		ID: "prefix/a-path-prefix-is-the-path-searched", Category: "commands",
+		Snippet: `mkdir -p d1 d2; printf '#!/bin/sh\necho V1\n' > d1/zzc; printf '#!/bin/sh\necho V2\n' > d2/zzc; chmod +x d1/zzc d2/zzc; PATH=$PWD/d1:$PATH; zzc; PATH=$PWD/d2 zzc; echo "st=$?"; zzc`,
+		Why:     "a `PATH=… cmd` prefix decides what the *search* finds and not only what the child is shown, and unanimously: every column runs d2's copy under the prefix and d1's again afterwards. Two copies with the first already hashed is the arrangement that discriminates — with one copy the prefixed run fails in every reading, and with nothing hashed every reading walks PATH again. This shell handed the child the new PATH and went on searching with the old one, so the prefix could change what a command saw and never what was found (#2626)",
+	},
+	{
+		ID: "prefix/a-path-prefix-that-holds-nothing", Category: "commands",
+		Snippet: `PATH=/nowhere-zz env >/dev/null 2>&1; echo "st=$?"; env >/dev/null 2>&1; echo "after=$?"`,
+		Why:     "the form the defect was filed as, and the one a script relies on to wall a command off: a PATH with nothing on it finds nothing, at 127 in all seven columns, and the shell's own PATH is back for the next command. We answered 0 — the command ran, from a PATH the prefix had replaced",
+	},
+	{
+		ID: "hash/a-path-prefix-empties-the-table-or-not", Category: "builtins",
+		Snippet: `mkdir -p d1 d2; printf '#!/bin/sh\necho V1\n' > d1/zzc; printf '#!/bin/sh\necho V2\n' > d2/zzc; chmod +x d1/zzc d2/zzc; PATH=$PWD/d1:$PATH; zzc; PATH=$PWD/d2 zzc; hash 2>&1 | sed "s|$PWD/||"`,
+		Why:     "what the table holds once a prefixed PATH has been taken back, which is a 4-3 split: bash 5.3, bash-as-sh, dash and ash end with an empty table, and bash 3.2, ksh93 and zsh still hold d1's copy at its old hit count. The question underneath is whether the prefix reached the shell's own PATH at all — an assignment to the name empties the table, and putting the old value back does not refill it. Semantics.APrefixedPathEmptiesTheCommandHash; the two bash columns part here, which is why the panel carries both",
+	},
+	{
+		ID: "hash/a-path-prefix-through-command-answers-the-same-way", Category: "builtins",
+		Snippet: `mkdir -p d1 d2; printf '#!/bin/sh\necho V1\n' > d1/zzc; printf '#!/bin/sh\necho V2\n' > d2/zzc; chmod +x d1/zzc d2/zzc; PATH=$PWD/d1:$PATH; zzc; PATH=$PWD/d2 command zzc; hash 2>&1 | sed "s|$PWD/||"`,
+		Why:     "`command` is a precommand word, so a PATH in front of it is a PATH in front of what it runs — and every column answers the table exactly as it does for the bare external command above. A fix reaching only the bare route leaves this one holding the path the prefixed search found, which is an answer no column gives",
+	},
+	{
+		ID: "hash/a-path-prefix-to-a-builtin-is-an-assignment", Category: "builtins",
+		Snippet: `mkdir -p d1; printf '#!/bin/sh\necho V1\n' > d1/zzc; chmod +x d1/zzc; PATH=$PWD/d1:$PATH; zzc; PATH=/nowhere-zz true; hash 2>&1 | sed "s|$PWD/d1/||"`,
+		Why:     "the control beside the two rows above, and the reason the axis is about a command that is not a builtin: a prefix to a builtin is visible to the builtin while it runs — that is what `IFS=: read x y` is — so it really is an assignment, and every column but bash 3.2 empties the table for one. ksh93 and zsh empty it here and keep it there, which is the pair of cells that says the two questions are not one",
+	},
+	{
 		ID: "set/listed-value-with-a-quote-at-an-end", Category: "builtins",
 		Snippet: `v1="x'"; v2="'x"; v3="'"; set | grep "^v[123]"; echo "st=$?"`,
 		Why:     "where the two single-quoting listings part, and the only place they can: a quote at an *end* of the value. bash wraps the whole value in one pair and keeps the empty run its escape leaves behind, zsh cuts the value at each quote and wraps only the non-empty pieces, and bash 5 writes the lone-quote value with no quotes at all where 3.2 wraps it. All of them read back as the value, which is why a spelling belonging to neither survived here until a listing was compared byte for byte (#2299)",

@@ -31,6 +31,18 @@ import (
 // `[ -z "$PS1" ] && return` at the top of a person's `~/.bashrc` fired at a
 // prompt and skipped the whole file (#1421). Every probe that watches the
 // screen passes on that bug.
+// The prompt this file's sessions draw, and its continuation.
+//
+// One pair of constants for the style, for the wait that says the session is
+// reading, and for the assertion on what the rc file saw — so that the text
+// waited on cannot drift from the text drawn. Nothing about it resembles a
+// shell, which is the point: a driver that had hard-coded a real default would
+// pass here by accident.
+const (
+	ptyPrompt    = "ptyPS1$ "
+	ptyContinued = "ptyPS2> "
+)
+
 func TestAnInteractiveSessionHasTheDefaultPromptInPS1(t *testing.T) {
 	home := t.TempDir()
 	// Never the person's own home: this session reads startup files and
@@ -54,14 +66,16 @@ func TestAnInteractiveSessionHasTheDefaultPromptInPS1(t *testing.T) {
 	// one — and because a driver that had hard-coded a real default would
 	// pass here by accident. What the real tables hold is asserted in
 	// dialect/bash/prompt_test.go and graded by the corpus.
-	// It ends in `$ ` because that is the anchor endSession waits on, and
-	// nothing else about it resembles a shell.
-	sh.PromptStyle = repl.PromptStyle{Default: "ptyPS1$ ", DefaultContinued: "ptyPS2> "}
+	sh.PromptStyle = repl.PromptStyle{Default: ptyPrompt, DefaultContinued: ptyContinued}
 	sh.Stdin, sh.Stdout, sh.Stderr = tty, tty, tty
 
 	t.Setenv("ENV", rc)
 
-	drawn := watch(t, control)
+	// The prompt is handed over rather than assumed, and it is the whole of
+	// it: this session's own rc output holds `ptyPS1$ ` — and so also the
+	// `$ ` that used to be the mark — before the first prompt is drawn. See
+	// screen.seekPrompt and #2760.
+	drawn := watch(t, control, ptyPrompt)
 	done := make(chan int, 1)
 	go func() { done <- driver.MainArgs(sh, []string{"testsh"}) }()
 
@@ -86,7 +100,7 @@ func TestAnInteractiveSessionHasTheDefaultPromptInPS1(t *testing.T) {
 	// eight characters, and a Contains on the payload alone cannot see a
 	// prefix somebody added — the brackets are there to make the assertion
 	// an equality on the parameter.
-	for _, want := range []string{"SAW-PS1[ptyPS1$ ]", "SAW-PS2[ptyPS2> ]"} {
+	for _, want := range []string{"SAW-PS1[" + ptyPrompt + "]", "SAW-PS2[" + ptyContinued + "]"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("the rc file did not see %s; drawn: %q", want, got)
 		}
@@ -122,13 +136,13 @@ func TestTheStandardRcGuardDoesNotFireAtAPrompt(t *testing.T) {
 
 	control, tty := terminal(t)
 	sh := shell()
-	sh.PromptStyle = repl.PromptStyle{Default: "ptyPS1$ ", DefaultContinued: "ptyPS2> "}
+	sh.PromptStyle = repl.PromptStyle{Default: ptyPrompt, DefaultContinued: ptyContinued}
 	// Asked because the file returns on the other route, so the axis has to
 	// have an answer for this shell to be one at all.
 	sh.Semantics.StartupFileReturnCarriesItsArgument = interp.Yes
 	sh.Stdin, sh.Stdout, sh.Stderr = tty, tty, tty
 
-	drawn := watch(t, control)
+	drawn := watch(t, control, ptyPrompt)
 	done := make(chan int, 1)
 	go func() { done <- driver.MainArgs(sh, []string{"testsh"}) }()
 	drawn.endSession(t, control)
@@ -177,7 +191,7 @@ func TestTheStandardRcGuardStillFiresForAScript(t *testing.T) {
 	t.Setenv("SHELL_ENV", rc)
 
 	sh := shell()
-	sh.PromptStyle = repl.PromptStyle{Default: "ptyPS1$ ", DefaultContinued: "ptyPS2> "}
+	sh.PromptStyle = repl.PromptStyle{Default: ptyPrompt, DefaultContinued: ptyContinued}
 	sh.Semantics.StartupFileReturnCarriesItsArgument = interp.Yes
 	sh.Semantics.NonInteractiveStartupVariable = "SHELL_ENV"
 	out, errs, code := runArgs(t, sh, "testsh", "-c", "echo main")

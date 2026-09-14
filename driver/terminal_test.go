@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -131,7 +132,7 @@ func TestAPromptAtATerminalReadsAndRunsALine(t *testing.T) {
 	// what lets this wait on what the shell drew rather than on a clock.
 	sh.Stdin, sh.Stdout, sh.Stderr = tty, tty, tty
 
-	drawn := watch(t, control)
+	drawn := watch(t, control, defaultPrompt)
 	done := make(chan int, 1)
 	go func() { done <- driver.MainArgs(sh, []string{"testsh"}) }()
 
@@ -191,7 +192,7 @@ func TestAColoredPromptDrawsColorAndNoMarkers(t *testing.T) {
 	}
 	sh.Stdin, sh.Stdout, sh.Stderr = tty, tty, tty
 
-	drawn := watch(t, control)
+	drawn := watch(t, control, defaultPrompt)
 	done := make(chan int, 1)
 	go func() { done <- driver.MainArgs(sh, []string{"testsh"}) }()
 
@@ -276,13 +277,27 @@ type screen struct {
 	mu   sync.Mutex
 	buf  strings.Builder
 	seen int
+	// prompt is the whole text the session under test draws when it is
+	// ready to be typed at. It is a property of that session and not of
+	// this file, which is why watch is handed it — see seekPrompt.
+	prompt string
 }
 
+// defaultPrompt is what repl draws when the style names no default, so it is
+// the prompt of every session here that leaves PromptStyle.Default empty. A
+// session that sets one hands watch that one instead.
+const defaultPrompt = "$ "
+
 // watch drains a stream into a screen. It takes an io.Reader rather than the
-// pseudo-terminal itself so that the waiting can be tested without one.
-func watch(t *testing.T, control io.Reader) *screen {
+// pseudo-terminal itself so that the waiting can be tested without one, and
+// the session's prompt because a wait for "the shell is reading" has to be a
+// wait for the text that session actually draws.
+func watch(t *testing.T, control io.Reader, prompt string) *screen {
 	t.Helper()
-	s := &screen{}
+	if prompt == "" {
+		t.Fatal("a screen needs the prompt its session draws")
+	}
+	s := &screen{prompt: prompt}
 	go func() {
 		b := make([]byte, 4096)
 		for {
@@ -326,18 +341,73 @@ func (s *screen) seek(mark string) bool {
 	return true
 }
 
+// seekPrompt reports whether the prompt has been drawn since the cursor last
+// moved, and moves the cursor past it if so.
+//
+// It is seek with one more condition — the prompt must *begin a line* — and
+// that condition is the whole of #2760. The mark used to be a bare "$ ", which
+// a session's own output holds as readily as its prompt does: the rc file in
+// promptdefaultspty_test.go prints `SAW-PS1[${PS1-unset}]`, so the screen
+// carries
+//
+//	SAW-PS1[ptyPS1$ ]
+//
+// before the first prompt exists. A wait answered there returns while the
+// shell is still reading its startup file, and the ^D that follows is written
+// into a terminal nobody is reading yet — which the kernel drops when the line
+// discipline changes back, so the session never ends and the test fails at its
+// deadline. On an idle machine the shell has usually reached its read by then
+// and it passes, which is what made this look like a flake.
+//
+// Waiting for the prompt's *whole* text is not enough by itself, and that is
+// worth writing down because it is the obvious fix: `ptyPS1$ ` appears
+// verbatim inside `SAW-PS1[ptyPS1$ ]` too. What separates the prompt from an
+// echo of its text is position. A shell draws its prompt at column zero and
+// nothing it echoes can put text there, so "at the start of a line" is a
+// property of being a prompt rather than of the characters in one, and it
+// holds for every prompt any session here draws. Measured through the
+// pseudo-terminal: the first prompt is the first thing on the screen, and
+// every later one follows a "\r\n" with nothing in between.
+func (s *screen) seekPrompt() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	drawn := s.buf.String()
+	for at := s.seen; at <= len(drawn); {
+		i := strings.Index(drawn[at:], s.prompt)
+		if i < 0 {
+			return false
+		}
+		start := at + i
+		// A terminal returns to column zero on either byte of "\r\n", so
+		// either one means what follows it begins a line.
+		if start == 0 || drawn[start-1] == '\n' || drawn[start-1] == '\r' {
+			s.seen = start + len(s.prompt)
+			return true
+		}
+		at = start + 1
+	}
+	return false
+}
+
 // await blocks until the mark has been drawn, and fails rather than hanging
 // if it never is.
 func (s *screen) await(t *testing.T, mark string) {
 	t.Helper()
+	s.waitFor(t, strconv.Quote(mark), func() bool { return s.seek(mark) })
+}
+
+// waitFor polls one of the seeks until it finds what it is after, so that both
+// kinds of wait share a deadline and a diagnostic rather than drifting apart.
+func (s *screen) waitFor(t *testing.T, what string, found func() bool) {
+	t.Helper()
 	deadline := time.Now().Add(sessionBudget)
 	for time.Now().Before(deadline) {
-		if s.seek(mark) {
+		if found() {
 			return
 		}
 		time.Sleep(2 * time.Millisecond)
 	}
-	t.Fatalf("waited for %q; drawn so far: %q", mark, s.text())
+	t.Fatalf("waited for %s; drawn so far: %q", what, s.text())
 }
 
 // awaitReadyForInput waits until the session is back at a prompt, which is
@@ -355,9 +425,14 @@ func (s *screen) await(t *testing.T, mark string) {
 // The prompt is the mark to wait on because the shell draws it after raw mode
 // is restored and immediately before it reads — the two events cannot be
 // reordered, which is what makes this a synchronization rather than a guess.
+//
+// Which is only true of the prompt itself. The mark has to be the session's
+// own prompt, whole, at the start of a line; a mark that some other output can
+// also satisfy is answered by that output and synchronizes with nothing. See
+// seekPrompt, and #2760 for the session this was wrong for.
 func (s *screen) awaitReadyForInput(t *testing.T) {
 	t.Helper()
-	s.await(t, "$ ")
+	s.waitFor(t, "the prompt "+strconv.Quote(s.prompt)+" at the start of a line", s.seekPrompt)
 }
 
 // endSession types the ^D that ends a session, once the shell is reading.
@@ -401,7 +476,7 @@ func (s *screen) endSession(t *testing.T, control *os.File) {
 // the discipline changes back. That is how ^D went missing on the runner, and
 // it is why this is about a cursor rather than about a longer deadline.
 func TestAWaitIsNotSatisfiedByAMarkItAlreadySaw(t *testing.T) {
-	drawn := &screen{}
+	drawn := &screen{prompt: defaultPrompt}
 	drawn.buf.WriteString("$ ")
 
 	if !drawn.seek("$ ") {
@@ -433,12 +508,63 @@ func TestAWaitIsNotSatisfiedByAMarkItAlreadySaw(t *testing.T) {
 	}
 }
 
+// TestAPromptWaitIsNotAnsweredByOutputHoldingThePromptsText is #2760, stated
+// where it can be checked without a race.
+//
+// The session in promptdefaultspty_test.go echoes its own `$PS1` from an rc
+// file, so the prompt's text is on the screen before any prompt is. A wait
+// answered there returns while the shell is still reading its startup file,
+// and endSession then writes ^D into a terminal nobody is reading — which the
+// kernel drops when the line discipline changes back. The session never ends
+// and the test fails at its deadline, on a loaded runner, looking like a flake.
+//
+// The bytes below are what that session draws, read off the pseudo-terminal.
+func TestAPromptWaitIsNotAnsweredByOutputHoldingThePromptsText(t *testing.T) {
+	const rcOutput = "SAW-INTERACTIVE\r\nSAW-PS1[" + ptyPrompt + "]\r\nSAW-PS2[" + ptyContinued + "]\r\n"
+
+	// Both of the marks this could have waited on are in there: the bare
+	// `$ ` it did wait on, and the whole prompt that is the obvious fix for
+	// it. Neither is the prompt, because neither begins a line — which is
+	// what the assertion below is actually about, so it is worth failing
+	// loudly if a later edit to that rc file takes the collision away.
+	if !strings.Contains(rcOutput, "$ ") || !strings.Contains(rcOutput, ptyPrompt) {
+		t.Fatal("the rc output no longer holds the prompt's text, so this proves nothing")
+	}
+
+	drawn := &screen{prompt: ptyPrompt}
+	drawn.buf.WriteString(rcOutput)
+	if drawn.seekPrompt() {
+		t.Error("the session's own output answered a wait for its prompt, so ^D would be typed at a shell that is not reading")
+	}
+
+	// And the prompt, drawn where a shell draws one, does answer it — once.
+	drawn.buf.WriteString(ptyPrompt)
+	if !drawn.seekPrompt() {
+		t.Fatal("the prompt was drawn and the wait did not see it")
+	}
+	if drawn.seekPrompt() {
+		t.Error("the same prompt answered twice, so a later wait would not wait")
+	}
+}
+
+// TestTheFirstPromptOnAScreenBeginsALine: the start of the screen is a line
+// start, which an implementation written as a search for a newline and then
+// the prompt would miss — and it would miss it in every session that says
+// nothing before prompting, which is most of them here.
+func TestTheFirstPromptOnAScreenBeginsALine(t *testing.T) {
+	drawn := &screen{prompt: defaultPrompt}
+	drawn.buf.WriteString(defaultPrompt)
+	if !drawn.seekPrompt() {
+		t.Error("a session whose first prompt is the first thing it drew never becomes ready")
+	}
+}
+
 // TestAWaitReadsWhatArrivesAfterIt: the cursor must not make a wait miss text
 // that had not been drawn when the wait began, which is every real use of it.
 func TestAWaitReadsWhatArrivesAfterIt(t *testing.T) {
 	pr, pw := io.Pipe()
 	t.Cleanup(func() { _ = pw.Close() })
-	drawn := watch(t, pr)
+	drawn := watch(t, pr, defaultPrompt)
 
 	go func() {
 		for _, part := range []string{"$ ", "echo mark-42\r\n", "mark-42\r\n", "$ "} {
@@ -465,7 +591,7 @@ func TestAWaitReadsWhatArrivesAfterIt(t *testing.T) {
 func TestAWaitBlocksUntilTheMarkIsDrawnAgain(t *testing.T) {
 	const late = 50 * time.Millisecond
 
-	drawn := &screen{}
+	drawn := &screen{prompt: defaultPrompt}
 	drawn.buf.WriteString("$ ")
 	drawn.awaitReadyForInput(t)
 
@@ -512,7 +638,7 @@ func TestAColorCodesArgumentReachesTheTerminalAsBytes(t *testing.T) {
 	}
 	sh.Stdin, sh.Stdout, sh.Stderr = tty, tty, tty
 
-	drawn := watch(t, control)
+	drawn := watch(t, control, defaultPrompt)
 	done := make(chan int, 1)
 	go func() { done <- driver.MainArgs(sh, []string{"testsh"}) }()
 

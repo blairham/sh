@@ -7649,6 +7649,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | `exit/from-inside-a-for-loop` | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* |
 | `exit/from-inside-a-nested-loop` | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* |
 | `exit/break-still-counts-its-loops` | `after` | `after` | `after` | `after` | `after` | `after` | `after` |
+| `trap/a-debug-action-names-the-command-it-fired-for` | `one~two` **2>** `trap: DEBUG: bad trap` | `D:[echo one]~one~D:[echo two]~two` | `D:[echo one]~one~D:[echo two]~two` | `D:[echo one]~one~D:[echo two]~two` | `D:[]~one~D:[]~two` | `D:[]~one~D:[]~two` | `one~two` **2>** `<shell>: trap: line 0: DEBUG: invalid signal specification` |
+| `trap/the-running-command-is-named-with-no-trap-set` | `[]~[]` | `[echo "[$BASH_COMMAND]"]~[echo "[$BASH_COMMAND]"]` | `[echo "[$BASH_COMMAND]"]~[echo "[$BASH_COMMAND]"]` | `[echo "[$BASH_COMMAND]"]~[echo "[$BASH_COMMAND]"]` | `[]~[]` | `[]~[]` | `[]~[]` |
+| `trap/a-trap-action-does-not-move-the-running-command` | `one` **2>** `trap: DEBUG: bad trap` | `D:[echo one]~one` | `D:[echo one]~one` | `D:[echo one]~one` | `D:[]~one` | `D:[]~one` | `one` **2>** `<shell>: trap: line 0: DEBUG: invalid signal specification` |
+| `trap/an-exit-action-names-the-command-the-script-reached` | `one~X:[]` | `one~X:[echo one]` | `one~X:[echo one]` | `one~X:[echo one]` | `one~X:[]` | `one~X:[]` | `one~X:[]` |
+| `trap/a-debug-action-names-a-compound-head` | **2>** `trap: DEBUG: bad trap` | `D:[for w in a b]~D:[:]~D:[for w in a b]~D:[:]` | `D:[for w in a b]~D:[:]~D:[for w in a b]~D:[:]` | `D:[for w in a b]~D:[:]~D:[for w in a b]~D:[:]` | `D:[]~D:[]~D:[]~D:[]` | `D:[]~D:[]~D:[]` | **2>** `<shell>: trap: line 0: DEBUG: invalid signal specification` |
 
 - `trap/the-return-trap-is-not-carried-into-a-debug-body` — `set -T` carries the RETURN trap into a function that did not set it, and not into one called from the **DEBUG** body: every bash column runs `act` and writes no RET for it. It is worth pinning because the cost is per command rather than per script — a DEBUG body runs before everything, so a shell that fired here wrote two extra lines for every command of a traced run. ksh93, dash and ash refuse `set -T` and end the script; zsh takes the letter and refuses the RETURN condition, so bash's three columns are the only ones that can answer
   ```sh
@@ -8133,6 +8138,26 @@ grades it and nothing drift-checks it either, for the same reason.
 - `exit/break-still-counts-its-loops` — the counter-case: `break` still stops only as many loops as it was asked to, which is what an exit must not be confused with
   ```sh
   while :; do while :; do break 2; done; echo inner; done; echo after
+  ```
+- `trap/a-debug-action-names-the-command-it-fired-for` — the parameter a DEBUG action reads to find out *which* command it fired for, without which an action can only do something unconditional: a breakpoint is `[[ $BASH_COMMAND == … ]]` and there is no other way to write one, since `set -x` prints the expanded command and this is the unexpanded one. All three bash columns name each command in turn; ksh93 and zsh have the condition and not the parameter, so they fire in the right places and write an empty name; dash and ash refuse the condition. Ours fired in the right places and wrote nothing at all (#2779)
+  ```sh
+  trap 'echo "D:[$BASH_COMMAND]"' DEBUG; echo one; echo two
+  ```
+- `trap/the-running-command-is-named-with-no-trap-set` — the parameter is not the trap's: it is recorded before each command's own words are expanded, whether a trap is set or not, so a command reading it reads itself — both `echo` lines write their own text in the bash columns rather than the `true` between them. It is what says the record is kept by the shell running commands rather than by the trap machinery, and a shell that filled the name in only while an action ran would pass the row above and fail this one
+  ```sh
+  echo "[$BASH_COMMAND]"; true; echo "[$BASH_COMMAND]"
+  ```
+- `trap/a-trap-action-does-not-move-the-running-command` — the other half of the rule above, and the half that makes the parameter usable: the action runs a command of its own before reading it, and still reads the command it fired for rather than that one. A record updated by every command would name `true` here, which would leave an action unable to say anything about what it was announcing
+  ```sh
+  trap 'true; echo "D:[$BASH_COMMAND]"' DEBUG; echo one
+  ```
+- `trap/an-exit-action-names-the-command-the-script-reached` — the same suspension reaches every trap body and not only DEBUG's, which is what makes an EXIT action able to say where the script had got to. It is also the row that reaches the three shells with no DEBUG condition, since EXIT is a condition all six have
+  ```sh
+  trap 'echo "X:[$BASH_COMMAND]"' EXIT; echo one
+  ```
+- `trap/a-debug-action-names-a-compound-head` — a head is named as the head and not as the whole construct — `for w in a b` rather than the loop with its body — and it is named again on the second pass, beside the body it announces. The name is this shell printing the head back rather than quoting the script, so the words keep their quoting and lose the script's spacing; ksh93 and zsh fire heads of their own here and have no parameter to put one in
+  ```sh
+  trap 'echo "D:[$BASH_COMMAND]"' DEBUG; for w in a b; do :; done
   ```
 
 ## tokenization

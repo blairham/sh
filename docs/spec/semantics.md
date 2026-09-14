@@ -12120,13 +12120,17 @@ core's trap firing rather than anything in the dialect, for the reason the
 two tracing bits and the listing are.
 
 What bash's extended debugging *also* names is still not provided here:
-the BASH_ARGC/BASH_ARGV record. `$BASH_COMMAND` is a second gap beside it
-and not part of this option at all — it is empty in every DEBUG action
-here, which is what makes a breakpoint unwritable (#2779). The name is
-taken for what it moves rather than refused for what it does not, which is
-the same partial honesty `set -o posix` keeps — and the remainder is
-itemized and measured in #2476 rather than left as this paragraph, so it
-is countable.
+the BASH_ARGC/BASH_ARGV record. `$BASH_COMMAND` was a second gap beside
+it and is not part of this option at all — it is the command the shell is
+running, recorded whether any trap is set or not, and without it a DEBUG
+action could only ever do something unconditional, since a breakpoint is
+`[[ $BASH_COMMAND == … ]]` and there is no other way to write one. It
+landed in #2779; the sites it is recorded at are the sites the DEBUG trap
+fires at, measured rather than assumed, and `interp.RunningCommand` holds
+the probes that say so. The name is taken for what it moves rather than
+refused for what it does not, which is the same partial honesty `set -o
+posix` keeps — and the remainder is itemized and measured in #2476 rather
+than left as this paragraph, so it is countable.
 
 **`ExitTrapFiresPastTheEnd`** — bash unspecified · dash unspecified · ksh93 no · zsh yes
 

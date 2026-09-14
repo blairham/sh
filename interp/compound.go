@@ -313,7 +313,7 @@ func (r *Runner) forClause(ctx context.Context, c *syntax.ForClause) error {
 			// loop over no items writes none, which is what an empty list
 			// measures to in both of them: the head is the pass and not the
 			// construct.
-			r.debugPass(ctx, c.Pos())
+			r.debugPass(ctx, c)
 			// The two answers part here. An action that unwound ends the
 			// loop, and one that merely refused this head costs this pass
 			// and no more — measured on bash 5.3.15, 2026-09-14, an action
@@ -405,7 +405,7 @@ func (r *Runner) forArithClause(ctx context.Context, c *syntax.ForArithClause) e
 		// steps and two bodies. The initializer and the step are the two a
 		// reading may skip when the script did not write one; the condition
 		// is written or not and fires either way — see debugArithPart.
-		r.debugArithPart(ctx, c.Pos(), arithPartWritten(c.Init, initText))
+		r.debugArithPart(ctx, c, ArithInit, arithPartWritten(c.Init, initText))
 		// A refused initializer is not *evaluated*, and that is all it is:
 		// the loop runs on with whatever the name held before. Measured on
 		// bash 5.3.15, 2026-09-14 — an action refusing the first firing of
@@ -423,7 +423,7 @@ func (r *Runner) forArithClause(ctx context.Context, c *syntax.ForArithClause) e
 		}
 		defer r.enteringLoop()()
 		for {
-			r.debugPass(ctx, c.Pos())
+			r.debugPassOf(ctx, c, ArithCond)
 			// The condition is the one of the three parts a refusal ends the
 			// loop at rather than skipping past, which is why it keeps the
 			// combined test where the initializer and the step above do not.
@@ -461,7 +461,7 @@ func (r *Runner) forArithClause(ctx context.Context, c *syntax.ForArithClause) e
 			// it, so a step that fails does not decide whether the job
 			// settled.
 			r.settleBackgroundJobAtALoopsBackEdge()
-			r.debugArithPart(ctx, c.Pos(), arithPartWritten(c.Post, postText))
+			r.debugArithPart(ctx, c, ArithPost, arithPartWritten(c.Post, postText))
 			// And a refused step is the same shape as the refused
 			// initializer above: not evaluated, loop carries on. Measured
 			// the same day on the same loop — an action refusing the fourth

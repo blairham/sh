@@ -19,10 +19,12 @@ import "testing"
 // changes the output.
 //
 // The discriminator is a counter rather than `$BASH_COMMAND`, which would be
-// the natural way to name one command: that parameter is empty in this shell
-// (#2779). A counter is sensitive to firing order in a way the name is not,
-// so the row above each group pins the order the later rows index into — a
-// count that moved would otherwise silently re-aim every refusal.
+// the natural way to name one command: that parameter was empty in this shell
+// when these rows were written, and #2779 filled it in afterwards. They are
+// left as they are rather than rewritten — a counter is sensitive to firing
+// *order* in a way the name is not, so the row above each group pins the
+// order the later rows index into, and a count that moved would otherwise
+// silently re-aim every refusal.
 
 // countingAction is a DEBUG action that refuses the nth firing with the given
 // status and lets every other firing through. Written as shell rather than as

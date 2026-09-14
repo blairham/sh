@@ -72,6 +72,14 @@ func Dialect() syntax.Dialect {
 	// seven matches it and the other six call the line a syntax error, and
 	// the corpus records both.
 	d.CasePatternListSpansBlanks = true
+	// `~(i)[[:lower:]]` — the pattern-modifier prefix, whose `(` would
+	// otherwise end the word. One of the seven columns takes it and the
+	// other six refuse the line at the paren or read the `~` as something
+	// else entirely, and the corpus records both answers; the grammar that
+	// has to *read* every case is the one that takes the construct, which is
+	// the same argument as DollarBracketArith above. The `(` is claimed only
+	// directly behind a `~`, so no case without one is read differently.
+	d.TildeGroup = true
 	// `function f() { …; }`, both markers at once.
 	d.FunctionKeywordParens = true
 	// `function _p_${w} { … }` — a keyword name that is not a name, carried

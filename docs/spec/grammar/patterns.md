@@ -1659,6 +1659,36 @@ bash 3.2 does not fold the substitution, which is where the panel's two
 bash columns part company; this shell follows the version its bash
 dialect is measured against.
 
+**The fold stops at a POSIX character class inside a glob bracket**, and
+that is a class-versus-range seam rather than "the option does not reach
+brackets". Measured 2026-09-14 under `LC_ALL=C`:
+
+| written, with `nocasematch` on | bash 5.3.15 | bash 3.2.57 |
+| --- | --- | --- |
+| `[[ A == [[:lower:]] ]]` | exact | fold |
+| `[[ a == [[:upper:]] ]]` | exact | exact |
+| `[[ A == [a-z] ]]` | fold | fold |
+| `case A in [[:lower:]])` | exact | fold |
+| `v=ABC; ${v//[[:lower:]]/X}` | `ABC` | `ABC` |
+| `[[ A =~ ^[[:lower:]]$ ]]` | fold | fold |
+
+The range row folds in every column, so a reading that simply left
+brackets alone matches nobody. The `=~` row folds because there the fold
+belongs to the compiled expression and never reaches this matcher at all.
+bash 3.2 is asymmetric with *itself* on the first two rows — no single
+rule about the option explains it — and no preset here is bash 3.2, so
+5.3 is the column followed and the older one is recorded.
+
+`nocaseglob` answers the same way on the same seam: with `A` and `b` in
+the directory, `[[:lower:]]` yields `b` and `[a-z]` yields `A b`.
+
+Which fold is asking decides it, which is the reason the two are separate
+fields in the matcher rather than one. ksh93's inline `~(i)` flag — the
+table under *Pattern modifiers* below — folds the class as well as the
+range, so an implementation with one switch has to pick a side and will
+be wrong for one of the two shells. This one folded the class for every
+caller until #2716, which is ksh93's answer given to bash.
+
 ### `**` is two questions, and the panel splits on the second
 
 `globstar` above answers both of them at once, which hid the fact that
@@ -2062,7 +2092,7 @@ whole-string one.
 | `L` | a literal string as well, and no probe here separates it from `F` |
 | `K` | the ksh glob, which is what a pattern with no prefix already is |
 | `M` `N` `O` `S` `U` `a` `g` `m` `p` `s` `x` | accepted, and no probe here makes any of them change an answer |
-| `i` | case-insensitive, and the fold reaches a bracket and a character class as well as a literal |
+| `i` | case-insensitive, and the fold reaches a bracket and a character class as well as a literal — one place further than `nocasematch` reaches, which is measured and is the pairing #2716 is about |
 | `l` `r` | left and right anchors, which only a substring flavor can show |
 | `+` `-` | turn the letters after them on and off |
 

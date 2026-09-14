@@ -131,6 +131,10 @@ func corpusGrammar() syntax.Dialect {
 	d.CasePatternListSpansBlanks = true
 	d.Coproc = true
 	d.CoprocName = true
+	// `~(i)…`, the pattern-modifier prefix. A thirteenth thing the corpus
+	// cannot be read without: one case writes one, and the `(` ends the word
+	// without it. See oracle.Dialect, which makes the same argument.
+	d.TildeGroup = true
 	d.CurrentShellSubstitution = true
 	d.DollarDoubleQuote = true
 	d.ExtendedPatternInCondition = true

@@ -631,6 +631,34 @@ type patternOpts struct {
 	// negation and the `~` exclusion. Off, all four are ordinary characters,
 	// which is measured — see interp/patternflags.go.
 	extended bool
+	// foldClass says the fold above also reaches a POSIX character class
+	// inside a bracket expression. It is a narrowing of fold rather than a
+	// second one — never set with fold off — and the two are separate
+	// because the fold's *source* decides it.
+	//
+	// Measured 2026-09-14, `LC_ALL=C`, with each shell's own switch on:
+	//
+	//	                            bash 5.3.15   ksh93u+   ours before
+	//	[[ A == [[:lower:]] ]]      exact         —         fold
+	//	[[ a == [[:upper:]] ]]      exact         —         fold
+	//	[[ A == [a-z] ]]            fold          —         fold
+	//	case A in [[:lower:]])      exact         —         fold
+	//	v=ABC; ${v//[[:lower:]]/X}  ABC           —          XXX
+	//	[[ A == ~(i)[[:lower:]] ]]  —             fold      fold
+	//	[[ A == ~(i)[a-z] ]]        —             fold      fold
+	//
+	// So an *option* — `nocasematch`, `nocaseglob` — folds a literal and a
+	// range inside a bracket and stops at a class, while the inline `~(i)`
+	// flag folds all three. bash 3.2.57 folds the class one way and not the
+	// other — `A` into `[[:lower:]]` but not `a` into `[[:upper:]]` — which
+	// no single rule explains and which no preset here claims, so 5.3 is the
+	// column followed. zsh's `(#i)` reaches no bracket at all and is litFold
+	// below rather than either of these. #2716.
+	//
+	// A `=~` expression is a different mechanism again: the fold is a
+	// property of the compiled regular expression, so a class inside one
+	// folds in every column and never reaches this matcher.
+	foldClass bool
 	// litFold is the case comparison a `(#i)`, `(#I)` or `(#l)` flag asked
 	// for. It reaches only the literal characters of a pattern, which is
 	// what keeps it apart from fold above.
@@ -1702,23 +1730,21 @@ func matchBracket(p string, c string, o *patternOpts) (rest string, ok bool) {
 					// the scan carries on past it.
 					continue
 				}
-				// The fold here stays ASCII whatever the locale says,
-				// because widening it would spread a divergence rather than
-				// close one: measured 2026-09-13 on bash 5.3.15 with
-				// `nocasematch` on, `[[ A == [[:lower:]] ]]` is a **miss** —
-				// the option does not reach a POSIX class inside a *glob*
-				// bracket at all, where it does reach a range beside it and
-				// does reach a class inside a `=~` expression. This
-				// implementation folds it, which is its own measurement and
-				// its own defect; taking that past ASCII would only make it
-				// bigger. #2716 has the table, including the two `/bin/bash`
-				// columns disagreeing with each other about it. A range is
-				// the neighbor that does fold, and folds
-				// wide — `[[ K == [a-z] ]]` matches, the Kelvin sign by way
-				// of its ASCII lower case.
+				// foldClass and not fold, because the option that folds a
+				// literal and the range beside it stops here and only the
+				// inline `~(i)` flag carries on — see foldClass for the
+				// table. A range is the neighbor that does fold under both,
+				// and folds wide: `[[ K == [a-z] ]]` matches, the Kelvin
+				// sign by way of its ASCII lower case.
+				//
+				// The fold here stays ASCII whatever the locale says. The
+				// one shell that reaches this arm folds a class by the same
+				// C-library predicate it folds a literal with, and widening
+				// it on the strength of that would be reading a locale
+				// question nobody measured (#2644).
 				if !frozen &&
 					(inClass(name, c, o.classes) ||
-						(o.fold && inClass(name, swapUnitCase(c, false), o.classes))) {
+						(o.foldClass && inClass(name, swapUnitCase(c, false), o.classes))) {
 					matched = true
 				}
 				continue

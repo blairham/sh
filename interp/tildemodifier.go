@@ -217,8 +217,13 @@ func matchTilde(m tildeModifier, pattern, piece, subject string, base int, o pat
 	if m.flavor == tildeGlob {
 		// The default, and the one flavor that is this shell's own matcher:
 		// the letters left to honor here are `i`, which is the same fold the
-		// run-time options ask for and folds a bracket and a class with it.
+		// run-time options ask for and reaches one place further than they
+		// do. Measured 2026-09-14 on ksh93u+, `~(i)[[:lower:]]` matches `A`
+		// and `~(i)[a-z]` matches it too, where bash's `nocasematch` folds
+		// only the range — so this is the one caller that sets foldClass,
+		// and patternOpts.foldClass has the table (#2716).
 		o.fold = o.fold || m.fold
+		o.foldClass = o.foldClass || m.fold
 		return matchPatternIn(pattern, piece, subject, base, o)
 	}
 	re, ok := m.tildeRegex(pattern, o.whole)

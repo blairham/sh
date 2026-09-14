@@ -261,6 +261,14 @@ func Dialect() syntax.Dialect {
 	d.TimesIsReserved = true
 	// Floating point, which POSIX has not and these two do.
 	d.ArithFloat = true
+	// `name(args)` inside an expression is a call to a math function, and
+	// this shell needs nothing registered for it: it ships sixty-one of them
+	// built in, which is what mathfunc.go holds. Measured 2026-09-13 on
+	// ksh93u+ 2012-08-01, `$(( sqrt(4) ))` is 2 and `$(( pow(2,10) ))` is
+	// 1024, where a name it does not know is `nosuchmf(1) : unknown
+	// function` — never a syntax complaint. The grammar and the table are
+	// one change, because either alone answers worse than neither.
+	d.ArithFunctionCall = true
 	// A double quote inside an arithmetic expression is stepped over
 	// wherever a token may begin. Measured 2026-09-10 on ksh93u+: with
 	// `n=5`, `$(( "1" + 1 ))` is 2, `$(( "n" + 1 ))` is 6 and
@@ -2057,6 +2065,32 @@ func Diagnostics() interp.Diagnostics {
 		// ` 1#0 : arithmetic syntax error` here, as everything else is.
 		ArithInvalidBase:    "arithmetic syntax error",
 		ArithRecursionLimit: "recursion too deep",
+		// The two math-function sentences, and they blame different extents
+		// — which is the whole of why each takes the verb it does. Measured
+		// 2026-09-13 on ksh93u+ 2012-08-01:
+		//
+		//	$(( nosuchmf(1) ))           nosuchmf(1) : unknown function
+		//	$(( 1 + nosuchmf(1) + 2 ))   nosuchmf(1) + 2 : unknown function
+		//	$((nosuchmf(1)))             nosuchmf(1): unknown function
+		//	$(( 1 ? nosuchmf(1) : 2 ))   nosuchmf(1) : 2 : unknown function
+		//	$(( atan(1,2) ))              atan(1,2) : function has wrong
+		//	                             number of arguments
+		//	$((atan(1,2)))               atan(1,2): function has wrong number
+		//	                             of arguments
+		//
+		// A name it does not know is blamed from that name to the *end of
+		// the expression*, so what stands in front of the call is cut off
+		// and the blank before the `))` is kept. A count it will not take is
+		// blamed on the expression entire, blanks at both ends included.
+		// Both are complete sentences of their own: the `: ` here is this
+		// shell's, not ArithError's, because neither reaches that wrapper.
+		//
+		// Every other math complaint this shell makes goes the ordinary way
+		// — ` sqrt() : arithmetic syntax error`, ` sqrt(1/0) : divide by
+		// zero` — so the pair above is the exception and not the rule.
+		MathFunctionUnknown:                  "%[2]s: unknown function",
+		MathFunctionArgumentCount:            "%[2]s: function has wrong number of arguments",
+		MathFunctionNoArgumentIsASyntaxError: true,
 		// Except for the `@` operator family, the one bad substitution ksh93
 		// defers to run time — measured, `${x@Q}` in a branch never taken is
 		// silent — and when reached it is reported as a bad substitution
@@ -2664,6 +2698,11 @@ func Apply(r *interp.Runner) {
 	// function's result. An embedder who applies this dialect to a Runner of
 	// their own never builds a Shell, and is the caller this is for.
 	r.SetPromptStyle(PromptStyle())
+	// The C math library under the names arithmetic calls it by, all
+	// sixty-nine of them. This shell has no `zmodload` and nothing to load:
+	// they are simply there, which is what `$(( sqrt(4) ))` needing no
+	// preamble means. See mathfunc.go.
+	registerMathFuncs(r)
 	// The `set -o` names beyond the ones every shell has.
 	r.AddSetOptions(
 		"braceexpand",

@@ -3876,25 +3876,62 @@ type Diagnostics struct {
 	// Semantics.EmptySubscriptTextIsAMathError; this is only the wording.
 	EmptySubscriptTextExpanded string
 
-	// The math-function sentences: `functions -M` registers a shell function
-	// under a name arithmetic can call, and one shell in the panel has the
-	// facility, so the other five leave all seven of these empty. See
+	// The math-function sentences: a name arithmetic can call, which
+	// `functions -M` registers in one shell and a built-in table supplies in
+	// another, so the other four leave all seven of these empty. See
 	// interp/mathfunc.go, where each was measured.
 	//
 	// The three at the call are *complete* sentences and are not wrapped by
 	// ArithError — measured, `zsh:1: unknown function: nosuchmf` where an
 	// ordinary failure in the same place is `zsh:1: bad math expression:
-	// operand expected at end of string`. The four at the registration are a
-	// builtin's and carry its name in the location the way every other
-	// builtin complaint here does.
+	// operand expected at end of string`, and `ksh: nosuchmf(1) : unknown
+	// function` where an ordinary one is `ksh:  nosuchmf(1) : arithmetic
+	// syntax error`. Complete in both, which is why each dialect's format
+	// carries whatever separator its own shell writes. The four at the
+	// registration are a builtin's and carry its name in the location the way
+	// every other builtin complaint here does.
+	//
+	// The first two take a second verb because the two shells blame
+	// **different extents** and neither sentence can be written from the
+	// other's. Measured 2026-09-13 on zsh 5.9.2 and ksh93u+ 2012-08-01:
+	//
+	//	$(( 1 + nosuchmf(1) + 2 ))
+	//	  zsh    unknown function: nosuchmf
+	//	  ksh93  nosuchmf(1) + 2 : unknown function
+	//	$(( atan(1,2) ))
+	//	  zsh    wrong number of arguments: atan(1,2)
+	//	  ksh93   atan(1,2) : function has wrong number of arguments
 
 	// MathFunctionUnknown is a name arithmetic called that no registration
-	// answers for. One verb: the name.
+	// answers for. Two verbs: %[1]s the name, and %[2]s the text from the
+	// first byte of the call to the *end of the expression* it stands in —
+	// trailing blanks and all, and a subscript being an expression of its
+	// own. See [syntax.ArithCall].Within.
 	MathFunctionUnknown string
 	// MathFunctionArgumentCount is a call with too few or too many
-	// arguments. One verb: the call *as written*, source text and all — so
-	// `mf( 5 , 6 )` keeps its spaces.
+	// arguments. Two verbs: %[1]s the call *as written*, source text and all
+	// — so `mf( 5 , 6 )` keeps its spaces — and %[2]s the whole expression
+	// as written, which is the wider of the two and keeps the blanks at both
+	// ends that `$(( ))` put there.
 	MathFunctionArgumentCount string
+	// MathFunctionNoArgumentIsASyntaxError says a call to a name the shell
+	// *knows*, written with an empty argument list where it wants at least
+	// one, is the expression's ordinary operand complaint rather than the
+	// count sentence above.
+	//
+	// Measured 2026-09-13 on ksh93u+ 2012-08-01, where the two are a byte
+	// apart and word differently:
+	//
+	//	$(( sqrt() ))       sqrt() : arithmetic syntax error
+	//	$(( sqrt(1,2) ))    sqrt(1,2) : function has wrong number of arguments
+	//	$(( nosuchmf() ))   nosuchmf(): unknown function
+	//
+	// So it is the *known* name with nothing between the parentheses, and the
+	// unknown one is still unknown — the name is looked up before the
+	// argument list is weighed at all, which the third line is what pins.
+	// zsh takes `mf()` as a call of no arguments and answers the count
+	// sentence when its registration wants one, so this is off there.
+	MathFunctionNoArgumentIsASyntaxError bool
 	// MathFunctionMissingImpl is a registration whose implementation is not
 	// a function when the call arrives. One verb: the implementation's name,
 	// not the registered one. Registration itself never checks, so this is

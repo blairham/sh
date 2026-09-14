@@ -3920,13 +3920,16 @@ type Dialect struct {
 	//	echo $(( atan(1,2) ))       atan(1,2) : function has wrong number of
 	//	                           arguments
 	//
-	// So it has the grammar *and* both sentences, and the flag is off for it
-	// here only because the built-in table is not implemented — a name it
-	// knows would come back `unknown function` from us, which is worse than
-	// the syntax error we give now. What the flag is **not** is a fact about
-	// that shell's grammar, and it was read as one: #2420 grouped five corpus
-	// rows as a wording difference over a syntax error when they are a shell
-	// that parsed a call we did not.
+	// So it has the grammar *and* both sentences, and the flag is on for it
+	// since 2026-09-13, when the built-in table arrived beside it — see
+	// dialect/ksh/mathfunc.go, which is that shell's sixty-one. Turning the
+	// grammar on without the table would have been worse than the syntax
+	// error it replaced, because a name that shell *knows* would have come
+	// back `unknown function`; the two go together and landed together.
+	// What the flag is **not** is a fact about that shell's grammar, and it
+	// was read as one: #2420 grouped five corpus rows as a wording difference
+	// over a syntax error when they are a shell that parsed a call we did
+	// not.
 	//
 	// bash 5.3, bash 3.2, bash as `sh`, dash and ash have neither the
 	// registration nor a table, and read `mf(5)` as a name followed by a

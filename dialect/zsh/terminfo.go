@@ -115,13 +115,27 @@ type capabilityTables struct {
 // repl reads them.
 var terminfoEnvironment = []string{"TERM", "TERMINFO", "TERMINFO_DIRS", "HOME"}
 
-// load returns the two tables, reading the database if the environment has
-// moved since the last read.
-func (c *capabilityTables) load(r *interp.Runner) (
-	interp.AssocArray, interp.AssocArray, map[string]repl.TerminalCapabilityKind,
+// terminfoTable is every capability by its terminfo name — the *readable*
+// set, extended section included — and which section each came from, for
+// `echoti`, whose answer has to be the parameter's.
+func (c *capabilityTables) terminfoTable(r *interp.Runner) (
+	interp.AssocArray, map[string]repl.TerminalCapabilityKind,
 ) {
 	found, _, _, kinds := c.tables(r)
-	return found, c.termcapTable(r), kinds
+	return found, kinds
+}
+
+// listedTable is the enumerated subset: the same names without the
+// description's extended section. See registerCapabilityParameter.
+func (c *capabilityTables) listedTable(r *interp.Runner) interp.AssocArray {
+	_, listed, _, _ := c.tables(r)
+	return listed
+}
+
+// readTable is the readable set alone, which is what one key is looked up in.
+func (c *capabilityTables) readTable(r *interp.Runner) interp.AssocArray {
+	found, _, _, _ := c.tables(r)
+	return found
 }
 
 // termcapTable is the `$termcap` half, read through the same cache.
@@ -187,14 +201,7 @@ func (c *capabilityTables) tables(r *interp.Runner) (
 func registerTerminfoModules(r *interp.Runner) {
 	tables := &capabilityTables{}
 	registerCapabilityParameter(r, "terminfo", "cols", "lines",
-		func(r *interp.Runner) interp.AssocArray {
-			_, listed, _, _ := tables.tables(r)
-			return listed
-		},
-		func(r *interp.Runner) interp.AssocArray {
-			found, _, _, _ := tables.tables(r)
-			return found
-		})
+		tables.listedTable, tables.readTable)
 	// The same two names under termcap's spelling, and there the two readings
 	// are one table: an extended capability has no two-letter code, so the
 	// section that makes them differ is already absent from this half.

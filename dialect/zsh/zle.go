@@ -176,10 +176,15 @@ import (
 // for any of it to describe; `zsh/complete` and `zsh/computil` are both in
 // zmodload.go's roster of modules it declines. So a completion widget defined
 // here registers, lists, aliases, deletes and runs its function, and the
-// function can read the line; it cannot yet offer a completion. The editor's
-// own completion is untouched, because a key left on its default binding never
-// reaches the widget table at all — see bindkey.go's KeyBindings, which
-// reports only what somebody rebound.
+// function can read the line; it cannot yet offer a completion.
+//
+// **The editor's own completion is untouched either way**, and that took two
+// rules rather than one. A key left on its default binding never reaches the
+// widget table at all — KeyBindings reports only what somebody rebound. A key
+// a startup file *did* rebind to such a widget is answered by the widget's
+// completer instead of its function, which is what keeps Tab working when
+// `compinit` puts `_main_complete` on it (#2770). Both live in bindkey.go;
+// completionBinding carries the argument.
 //
 // ## What refuses by name, and why that is the point
 //

@@ -339,7 +339,7 @@ func KeyBindings(r *interp.Runner, km repl.Keymap) map[string]repl.Binding {
 // what a key bound to `menu-complete` or `list-choices` does in this shell
 // today with no completion widget involved: nothing, in the open, rather than
 // a diagnostic per keystroke. Menu completion and a listing widget are the
-// editor's to grow, and #2771 is where the rest of this lives.
+// editor's to grow, and #2776 is where the rest of this lives.
 //
 // # What this does not do
 //
@@ -348,7 +348,15 @@ func KeyBindings(r *interp.Runner, km repl.Keymap) map[string]repl.Binding {
 // this shell's own completion of files and commands, which is what they get
 // with no rc at all. The gap is the completion system itself — `zsh/complete`
 // and `zsh/computil`, some sixty builtins and parameters between them — and it
-// is not this issue.
+// is #2776 rather than this issue.
+//
+// Nor is it the module table, and that is worth saying because the issue was
+// filed as though it were. `zmodload zsh/complete` is refused here, before
+// this change and after it, and Tab completes anyway: `compinit` tolerates
+// the refusal and binds the widget regardless, so **the loader is not the
+// surface that gates the keystroke** — the missing `compset` builtin is the
+// one the widget reaches first. Registering the module would have moved the
+// diagnostic, not removed it.
 func completionBinding(completer string) repl.Binding {
 	return repl.Binding{Widget: bindkeyWidgets[strings.TrimPrefix(completer, ".")]}
 }

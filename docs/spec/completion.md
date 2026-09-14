@@ -223,3 +223,22 @@ per-command rules built on them are a language rather than a behavior,
 and none of the above depends on them: every measurement above was taken
 from a shell started with no startup files, so no completion system was
 loaded in either shell.
+
+What a real startup file does is worth stating, because it is what a
+person actually runs. zsh's `compinit` ends by putting a completion
+widget on the Tab key — `zle -C complete-word .complete-word
+_main_complete` — and that widget's function is the whole of the
+per-command language above. **The core answers such a key with its own
+completion rather than with the widget's function**, so Tab goes on
+completing filenames and command names exactly as specified here, and
+the rc's per-command rules do not run: `git che<TAB>` offers nothing
+where zsh offers seven subcommands with a description against each —
+`check-attr`, `check-ignore`, `check-mailmap`, `checkout`,
+`checkout-index`, `cherry` and `cherry-pick`. Measured 2026-09-14
+through a pseudo-terminal against a real `~/.zshrc`.
+
+Answering with the function instead is not the alternative it looks
+like. The function needs `compadd`, `compset` and `$compstate`, which
+the core does not have, so it fails on every keystroke — and a shell
+whose Tab key broke the moment a startup file was read would be worse
+off than one with no completion system at all.

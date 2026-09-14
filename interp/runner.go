@@ -2000,6 +2000,19 @@ type Runner struct {
 	// behavior behind it never ran (#1862).
 	matchOptions matchOptionSet
 
+	// ignoredNamesLive says something has *assigned* the parameter named by
+	// Semantics.IgnoredNamesVariable, which is what makes its patterns reach
+	// a pathname expansion at all.
+	//
+	// A state rather than a lookup, because the parameter's own value does
+	// not say it: a value arriving from the environment is carried, is
+	// readable, and is not read — measured, `env GLOBIGNORE='*.txt' bash -c
+	// 'echo *'` lists the `.txt` files. Assigning the parameter its own
+	// value is what starts it, and unsetting it is what stops it. A plain
+	// value, so a subshell carries the state its parent had and its own
+	// assignments stay its own.
+	ignoredNamesLive bool
+
 	// pipefail is `set -o pipefail`: a pipeline reports its last *failing*
 	// element instead of its last one. Not every dialect has the option, so
 	// the field is only ever set through an axis.
@@ -6029,6 +6042,11 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 		// mention.
 		r.forgetEveryHashedCommand()
 	}
+	// The parameter that takes names out of a pathname expansion starts
+	// where it is assigned rather than where it has a value, and the
+	// hidden-name switch a non-null value writes goes with it. See
+	// interp/ignorednames.go.
+	r.ignoredNamesAssigned(name, value)
 	// An assignment gives the name a value of its own, whatever a
 	// declaration had left there. declareEmpty records the flag *after*
 	// calling here, which is what lets one function do both.

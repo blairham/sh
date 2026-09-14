@@ -1982,6 +1982,10 @@ func (r *Runner) unsetName(name string) {
 		// `ls >/dev/null; unset PATH; hash` reports an empty table in bash.
 		r.forgetEveryHashedCommand()
 	}
+	// And the parameter whose patterns take names out of a pathname
+	// expansion stops where it is unset — taking the hidden-name switch back
+	// off with it, whoever turned that on. See interp/ignorednames.go.
+	r.ignoredNamesUnset(name)
 	if t, tied := r.tieOf(name); tied {
 		// Half a tie is not a state this shell has: `unset SCA` leaves `sca`
 		// with no elements *and* unset, and `unset sca` leaves `$SCA` unset.

@@ -3076,6 +3076,13 @@ func (r *Runner) declareEmpty(name string, fresh, keepsTheEnvironmentEntry, name
 	if !fresh {
 		return
 	}
+	// The cell this declaration made holds no value, so the parameter that
+	// takes names out of a pathname expansion stops here exactly as `unset`
+	// stops it. A *null* value assigned is a different state and leaves it
+	// alone — measured, `GLOBIGNORE=a; GLOBIGNORE=` keeps hidden names
+	// visible where `f(){ local GLOBIGNORE; echo *; }` does not see one.
+	// See interp/ignorednames.go.
+	r.ignoredNamesUnset(name)
 	if r.ask(r.sem().ValuelessDeclarationHidesTheOuterValue, "a declaration without a value hiding the outer value") {
 		r.hideVar(name)
 	}

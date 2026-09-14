@@ -16471,6 +16471,62 @@ printf "[%s]" .@(hid); echo`,
 		Why:         "whether a trailing parenthesized group on a pattern is a glob qualifier list, and what turning that reading *off* leaves. One shell reads a list there and has an option for it: with the option off `x(N)` is an ordinary pattern and lists `xN`, and with it on the `(N)` is the qualifier that empties a miss, so nothing is listed. The other five cannot parse a bare group after a word at all — three wordings of `syntax error near unexpected token` and three different statuses — which is the other half of the same fact and is why the construct reaches the parser rather than only the matcher. The off state matters beyond a script that opts in: the preamble an agent harness puts in front of every command it runs sets `NO_BARE_GLOB_QUAL`, so it is the state every command under one is expanded in (#1729)",
 	},
 	{
+		ID: "pat/a-parameter-that-takes-names-out-of-an-expansion", Category: "pattern matching",
+		Snippet: `mkdir -p gi && cd gi && : > a.txt && : > b.txt && : > c.log && : > .dot && ` +
+			`GLOBIGNORE='*.txt'; echo *`,
+		Why: "one shell has a parameter whose patterns take names back out of a " +
+			"pathname expansion, and the assignment does two things at once: `a.txt` " +
+			"and `b.txt` go, and `.dot` arrives — because a non-null value also turns " +
+			"hidden names on. The other five have no such parameter and list the three " +
+			"visible names. The hidden name is what makes this one row rather than two: " +
+			"a filter alone would answer `c.log`",
+	},
+	{
+		ID: "pat/the-ignore-parameter-is-a-colon-separated-list", Category: "pattern matching",
+		Snippet: `mkdir -p gi && cd gi && : > a.txt && : > b.txt && : > c.log && ` +
+			`GLOBIGNORE='a.txt:c.log'; echo *`,
+		Why: "the value is a list and not one pattern: `b.txt` is what is left in the " +
+			"shell that has the parameter. Read as a single pattern the colon is an " +
+			"ordinary character, nothing matches it and all three names stay — which is " +
+			"what the other five answer for want of the parameter, so the row " +
+			"discriminates in both directions",
+	},
+	{
+		ID: "pat/the-ignore-parameter-matches-a-separator-literally", Category: "pattern matching",
+		Snippet: `mkdir -p gi/sub && cd gi && : > sub/x.txt && : > sub/y.log && ` +
+			`GLOBIGNORE='*x.txt'; echo */*`,
+		Why: "a `*` in one of those patterns stops at a `/` exactly as one in the " +
+			"expansion's own pattern does, so a pattern with no separator in it cannot " +
+			"reach a name with one: `sub/x.txt` stays. It is the one row of these five " +
+			"where the two bash builds part — 3.2.57 lets the `*` cross the separator " +
+			"and answers `sub/y.log`, which is its *sibling* row's answer — so the rule " +
+			"is 5.x's rather than bash's, and a claim recorded against one build here " +
+			"would have been wrong for the other. That sibling is also what makes this " +
+			"falsifiable: with the separator written into the pattern the name goes in " +
+			"every column that has the parameter, this one included",
+	},
+	{
+		ID: "pat/the-ignore-parameter-with-the-separator-written-in", Category: "pattern matching",
+		Snippet: `mkdir -p gi/sub && cd gi && : > sub/x.txt && : > sub/y.log && ` +
+			`GLOBIGNORE='*/x.txt'; echo */*`,
+		Why: "the other half of the row above, and the one that moves: with the `/` in " +
+			"the pattern the name is taken out and `sub/y.log` is the whole answer in " +
+			"the shell with the parameter, against both names everywhere else. It is " +
+			"where the two bash builds agree, which is what places their disagreement " +
+			"above on the *separator* and not on the parameter — a pair that differed " +
+			"on both rows would say only that 3.2 had it and read it differently",
+	},
+	{
+		ID: "pat/everything-ignored-is-a-pattern-that-matched-nothing", Category: "pattern matching",
+		Snippet: `mkdir -p gi && cd gi && : > a.txt && : > b.txt && ` +
+			`GLOBIGNORE='*.txt'; echo *.txt`,
+		Why: "a word the patterns left with nothing is a word that matched nothing, so " +
+			"the pattern stands where no option says otherwise: `*.txt` in the shell " +
+			"that has the parameter, against the two names in the five that do not. The " +
+			"operand matched both files before the filter ran, which is what makes this " +
+			"the parameter's miss and not the expansion's",
+	},
+	{
 		ID: "exec/lines-run-as-they-are-read", Category: "command language", SyntaxError: true,
 		Script:  true,
 		Snippet: "echo one\n{ fi; }\necho three\n",

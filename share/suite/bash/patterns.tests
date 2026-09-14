@@ -112,4 +112,52 @@ shopt -s nocaseglob
 printf 'nocaseglob: %s\n' g/ONE
 shopt -u nocaseglob
 
+# GLOBIGNORE is not an option but a parameter, and its patterns take names
+# back out of what a pathname expansion produced. The assignment does two
+# things at once: the pattern removes a name and the non-null value brings
+# the hidden ones in, which is why `g/.hidden` arrives on the line that takes
+# `g/one` away.
+#
+# The fixture above is what makes each line discriminate. `g/.hidden` is
+# there so the reveal is visible; `g/one` is a directory so a pattern with no
+# separator in it has something with one to fail to reach; and the last line
+# leaves the parameter unset rather than null, because those are different
+# states — an assignment of nothing leaves the hidden names on.
+GLOBIGNORE='g/one'
+printf 'ignore: [%s]\n' g/*
+GLOBIGNORE='g/one:g/.hidden'
+printf 'list: [%s]\n' g/*
+GLOBIGNORE='g/one:'
+printf 'empty element: [%s]\n' g/*
+GLOBIGNORE='*one'
+printf 'separator: [%s]\n' g/*
+GLOBIGNORE='g/*'
+printf 'all ignored: [%s]\n' g/*
+unset GLOBIGNORE
+printf 'unset: [%s]\n' g/*
+
+# Two lines the block above cannot supply, because each needs a state it does
+# not leave behind.
+#
+# A null assignment made where the hidden-name switch is already **on** is a
+# line both readings of it answer alike — leaving the switch where it was and
+# turning it on are the same answer there — so such a line says only that the
+# assignment was seen. The `unset` above leaves the switch off, which is the
+# state where the two part.
+GLOBIGNORE=
+printf 'null: [%s]\n' g/*
+unset GLOBIGNORE
+
+# And the fold, which is one question and not two: these patterns are
+# compared under whatever fold the expansion itself is under rather than
+# under one of their own. Both lines are the measurement — a filter that
+# always folded answers the first and a filter that never folded answers the
+# second, so either alone says nothing.
+shopt -s nocaseglob
+GLOBIGNORE='G/ONE'
+printf 'fold: [%s]\n' g/*
+shopt -u nocaseglob
+printf 'no fold: [%s]\n' g/*
+unset GLOBIGNORE
+
 rm -rf g

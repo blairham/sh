@@ -536,6 +536,12 @@ func Semantics() interp.Semantics {
 	// hash is an alias for `alias -t` here, and a name that resolves to
 	// nothing is a silent success.
 	s.HashReportsAMissingName = interp.No
+	// And a `PATH=… cmd` prefix leaves the table alone: the new PATH goes
+	// to the child and to the search this shell makes, and never to the
+	// shell's own PATH, so nothing empties the table. Measured 2026-09-13
+	// with two copies of one name on PATH, the first hashed: the prefixed
+	// run takes the second copy and the table still holds the first.
+	s.APrefixedPathEmptiesTheCommandHash = interp.No
 	s.TildePlusMinusExpands = interp.Yes
 	// A defined f-g stops the script; a.b is an invalid discipline function.
 	s.PunctuatedFunctionNameIsRefused = interp.Yes

@@ -4068,6 +4068,15 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		if stop {
 			return nil
 		}
+		if kind.throughCommand && r.aPrefixSuppliesThePath(c.Assigns) {
+			// `command` is a precommand word, so a PATH in front of it is a
+			// PATH in front of whatever it runs — and the command hash
+			// answers that the same way it answers a bare external command.
+			// Before the loop below, because the loop is where the
+			// assignment empties the table. See
+			// holdCommandHashAcrossAPrefixedPath.
+			defer r.holdCommandHashAcrossAPrefixedPath()()
+		}
 		var undo []savedVar
 		for _, a := range c.Assigns {
 			if a.Operand {
@@ -4222,6 +4231,9 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 	// question and not this one's.
 	external := prefixCommand{kind: prefixBeforeExternal}
 	env := r.environ()
+	// The PATH the prefix supplies, if it supplies one, held so that the
+	// search below is made with it — see reachPrefixedPath.
+	prefixPath, pathFromPrefix := "", false
 	for _, a := range c.Assigns {
 		if a.Operand {
 			// Unreachable as things stand — every name that takes an operand
@@ -4265,10 +4277,27 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 			// hands the refused value on is not a refusal.
 			continue
 		}
+		if a.Name == "PATH" {
+			// The last one wins, the same way the child's environment
+			// resolves `PATH=/a PATH=/b cmd`: what is appended last is what
+			// reaches it.
+			prefixPath, pathFromPrefix = value, true
+		}
 		env = append(env, a.Name+"="+value)
 	}
 	if _, stop := r.refusePrefixes(c.Assigns, external, !r.expandErr); stop {
 		return nil
+	}
+	if pathFromPrefix {
+		// **And the search is made with it**, which is the half that was
+		// missing: the child was handed the new PATH and this shell went on
+		// looking with the old one, so `PATH=/nowhere ls` ran `ls` where
+		// every column in the panel reports 127 (#2626). Applied to the
+		// shell rather than threaded into the search as a second PATH, so
+		// that lookPath goes on having one answer to "which PATH is this" —
+		// which is the same reason it reads this Runner's rather than the
+		// process's.
+		defer r.reachPrefixedPath(prefixPath)()
 	}
 	return r.exec(ctx, argv, env)
 }
@@ -5308,6 +5337,12 @@ type savedVar struct {
 	// different things to the shell that inherited it. See Runner.isExported.
 	exported     bool
 	exportSpoken bool
+	// partner is the other half of a tie, saved alongside, and nil for the
+	// overwhelming majority of names that are not tied to anything. See
+	// saveVar: a tie is two names for one value and writing either moves
+	// both, so a prefix on one of them has changed two cells and giving one
+	// back is giving half of it back.
+	partner *savedVar
 }
 
 // saveVar takes the whole of a name's state, for a prefix that will give it
@@ -5319,7 +5354,33 @@ type savedVar struct {
 // the array it had already changed. `a=(p q); a=x true` came back
 // `([0]="x" [1]="q")` in the dialects that write the first element, which is
 // the value the prefix was supposed to have taken with it.
+//
+// **A tie is two cells and both are saved.** Writing the scalar half of
+// `typeset -T PATH path` splits it into the array half, so a prefix on one
+// name moves the other one too — and this saved only the name that was
+// written. Measured against zsh 5.9.2 with a scratch HOME, where the two are
+// the shell's own pair: `PATH=/nowhere true; echo $path` leaves `path` holding
+// what it held, and ours left it holding `/nowhere` — the value the prefix was
+// supposed to have taken with it, in the other half of the same tie. The
+// partner is saved *alone* so that saving it does not walk back to this name
+// and never stop.
 func (r *Runner) saveVar(name string) savedVar {
+	u := r.saveVarAlone(name)
+	if t, tied := r.tieOf(name); tied {
+		other := t.scalar
+		if other == name {
+			other = t.array
+		}
+		if other != name {
+			p := r.saveVarAlone(other)
+			u.partner = &p
+		}
+	}
+	return u
+}
+
+// saveVarAlone is saveVar for one cell, with no tie followed.
+func (r *Runner) saveVarAlone(name string) savedVar {
 	old, present := r.Vars[name]
 	a, inArray := r.Arrays[name]
 	m, inTable := r.AssocArrays[name]
@@ -5350,41 +5411,56 @@ func (u savedVar) wasExported(r *Runner) bool {
 // restoreVars takes back transient assignments, most recent first.
 func (r *Runner) restoreVars(undo []savedVar) {
 	for i := len(undo) - 1; i >= 0; i-- {
-		u := undo[i]
-		if u.present {
-			r.Vars[u.name] = u.value
-		} else {
-			delete(r.Vars, u.name)
+		r.restoreVar(undo[i])
+	}
+}
+
+// restoreVar puts one name — and the other half of its tie, if it has one —
+// back the way it was saved.
+func (r *Runner) restoreVar(u savedVar) {
+	if u.partner != nil {
+		// First, so that a mirror driven by the restore below writes over
+		// the partner rather than the partner writing over it. Nothing here
+		// goes through setVarAs, so no mirror runs at all — but the order is
+		// the one that stays right if one ever does.
+		r.restoreVar(*u.partner)
+	}
+	if u.present {
+		r.Vars[u.name] = u.value
+	} else {
+		delete(r.Vars, u.name)
+	}
+	if u.inArray {
+		if r.Arrays == nil {
+			r.Arrays = map[string]Array{}
 		}
-		if u.inArray {
-			if r.Arrays == nil {
-				r.Arrays = map[string]Array{}
-			}
-			r.Arrays[u.name] = u.array
-		} else {
-			delete(r.Arrays, u.name)
+		r.Arrays[u.name] = u.array
+	} else {
+		delete(r.Arrays, u.name)
+	}
+	if u.inTable {
+		if r.AssocArrays == nil {
+			r.AssocArrays = map[string]AssocArray{}
 		}
-		if u.inTable {
-			if r.AssocArrays == nil {
-				r.AssocArrays = map[string]AssocArray{}
-			}
-			r.AssocArrays[u.name] = u.table
-		} else {
-			delete(r.AssocArrays, u.name)
+		r.AssocArrays[u.name] = u.table
+	} else {
+		delete(r.AssocArrays, u.name)
+	}
+	if u.removed {
+		if r.removed == nil {
+			r.removed = map[string]bool{}
 		}
-		if u.removed {
-			r.removed[u.name] = true
-		} else {
-			delete(r.removed, u.name)
+		r.removed[u.name] = true
+	} else {
+		delete(r.removed, u.name)
+	}
+	if u.exportSpoken {
+		if r.exported == nil {
+			r.exported = map[string]bool{}
 		}
-		if u.exportSpoken {
-			if r.exported == nil {
-				r.exported = map[string]bool{}
-			}
-			r.exported[u.name] = u.exported
-		} else {
-			delete(r.exported, u.name)
-		}
+		r.exported[u.name] = u.exported
+	} else {
+		delete(r.exported, u.name)
 	}
 }
 

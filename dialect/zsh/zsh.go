@@ -1241,6 +1241,13 @@ func Semantics() interp.Semantics {
 	// ksh93 with `set +o trackall` goes on hashing. The letter `-h` is a
 	// different option in this shell and does not reach it.
 	s.HashObeysCommandTracking = interp.Yes
+	// A `PATH=… cmd` prefix leaves the table alone, the way ksh93's does
+	// and bash 5.3's, dash's and ash's do not: the new PATH reaches the
+	// child and the search and never this shell's own PATH, so there is no
+	// assignment to empty the table. Measured 2026-09-13 with two copies of
+	// one name on PATH, the first hashed — the prefixed run takes the
+	// second copy and the table still holds the first.
+	s.APrefixedPathEmptiesTheCommandHash = interp.No
 	s.TildePlusMinusExpands = interp.Yes
 	s.UnderscoreTracksTheLastArgument = interp.Yes
 	// And starts it empty regardless, alone in the panel: an exported `_`

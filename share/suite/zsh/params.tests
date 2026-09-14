@@ -80,3 +80,22 @@ printf '%s\n' "${p:t}"
 printf '%s\n' "${p:h}"
 printf '%s\n' "${p:r}"
 printf '%s\n' "${p:e}"
+
+# `-h` makes a local of a parameter the shell *produces* an ordinary
+# parameter rather than a second view of the producer, so the value the
+# declaration was given is the value it holds. Without the letter the freeze
+# on a produced name survives its shadow and `local ARGC` reads the shell's
+# own count back, which is the control the pair needs: a shell that took the
+# letter and ignored it prints the same number twice.
+plainargc() { local ARGC; printf '%s\n' "$ARGC"; }
+plainargc
+hiddenargc() { local -h ARGC=5; printf '%s %s\n' "$ARGC" "${(t)ARGC}"; }
+hiddenargc
+
+# Every module parameter carries the attribute from its registration, so a
+# plain `local` of one is that same ordinary parameter with no letter written
+# anywhere — which is the shape a real script hits. The count is deliberately
+# not printed: it is a fact about how many parameters the shell has.
+zmodload zsh/parameter
+localmodule() { local parameters; printf '[%s]\n' "$parameters"; }
+localmodule

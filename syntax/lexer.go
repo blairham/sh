@@ -3284,6 +3284,48 @@ func closers(k SpanKind) int {
 	return 1
 }
 
+// scanSubshellSubstitution reads `${(list)}`, the spelling whose body is a
+// parenthesized subshell. See Dialect.SubshellSubstitution for the panel and
+// for why the extent is the parenthesis rather than a command list.
+//
+// It is asked before the blank form's opener and answered with the parser
+// rather than by counting, through the same parseToClose the two parenthesis
+// scanners use: what closes a subshell is where a list stops, and a `)`
+// written in a `case` arm or inside quotes closes nothing.
+//
+// A word the rule does not fit is left alone rather than refused — the `${`
+// goes on to be read as it was before this flag, which for the `${(flags)x}`
+// an expansion written for another shell reaches is the parameter form and
+// the diagnostic Error.FlagGroupWordTail spells. That is ksh93's own order
+// and not a fallback invented here: `ksh -n` refuses `${(echo a);}` while
+// reading and passes `${(echo a)b}` to the run, so the paren-and-brace shape
+// is settled first and everything else is somebody else's word.
+func (l *Lexer) scanSubshellSubstitution(open Pos, start int, q Quoting) (Span, bool) {
+	if !l.dialect.SubshellSubstitution || start >= len(l.src) || l.src[start] != '(' {
+		return Span{}, false
+	}
+	if start+1 < len(l.src) && l.src[start+1] == '(' {
+		// `${((expr))}` is ksh93's braced arithmetic and not a subshell —
+		// `${((echo hi))}` is an arithmetic syntax error there. Two adjacent
+		// parens are the whole of the discriminator, so `${( (1+2) )}` is a
+		// subshell running a command called `1+2`. The arithmetic spelling
+		// is not implemented; leaving it here would read it as a subshell
+		// and answer nothing where ksh93 answers a number.
+		return Span{}, false
+	}
+	end, remarks, ok := l.parseToClose(start + 1)
+	if !ok || end+1 >= len(l.src) || l.src[end+1] != '}' {
+		return Span{}, false
+	}
+	l.remarks = append(l.remarks, remarks...)
+	for l.off <= end {
+		l.advance() // through the )
+	}
+	value := l.src[start:l.off]
+	l.advance() // the }
+	return Span{Kind: CommandSubst, CurrentShell: true, Value: value, Quoting: q, Pos: open, Comments: l.bodyComments(CommandSubst)}, true
+}
+
 // scanBraces reads ${ … }. Same rule as scanParens: a `}` inside quotes does
 // not close it. What the operators inside mean is a separate specification;
 // this only finds the end.
@@ -3308,6 +3350,9 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 	// syntax error in the shell that has both. See Dialect.ReplySubstitution
 	// for the five rows.
 	reply := l.dialect.ReplySubstitution && start < len(l.src) && l.src[start] == '|'
+	if span, ok := l.scanSubshellSubstitution(open, start, q); ok {
+		return span
+	}
 	brace := reply ||
 		(l.dialect.CurrentShellSubstitution && start < len(l.src) && isBraceCommandStart(l.src[start]))
 	depth := 1
@@ -3509,15 +3554,16 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 // This used to add "and nothing else can — a parameter name may not begin
 // with any of them", which had the right premise and the wrong conclusion: a
 // `(` cannot begin a name either, and ksh93 takes it, so `echo ${(echo hi)}`
-// prints `hi` there and is a bad substitution in every other column. That is
-// #2615, and it is **deliberately not implemented here** — see the issue for
-// the measured price. ksh93 does not extract a body at the matching `}` the
-// way this scanner does; it lexes the list inline from the outer input, which
-// is why `echo "AA${(U)a}BB"` blames the word `a}BB`. Opening on the paren
-// without that second half routes every `${(flags)…}` case through a body
-// that stops at the first `}`, which loses the diagnostic #2374 spells for
-// them: measured 2026-09-13, 109 corpus rows in the ksh column regress and
-// none improves.
+// prints `hi` there and is a bad substitution in every other column.
+//
+// That is #2615 and it **is** implemented — one scanner over, in
+// scanSubshellSubstitution, rather than by widening this test. Which is the
+// measurement that settled the shape: `${(list)}` is not this construct with
+// a `(` for an opener, because its extent is the parenthesis and not a list.
+// `${(echo a); echo b;}` is refused there, blaming the `}`, and the blank
+// form's `${ (echo a); echo b;}` runs both, so a `(` admitted here would
+// accept a body ksh93 refuses while reading it. See
+// Dialect.SubshellSubstitution for the six rows.
 func isBraceCommandStart(c byte) bool {
 	return c == ' ' || c == '\t' || c == '\n'
 }

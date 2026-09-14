@@ -230,6 +230,12 @@ func Dialect() syntax.Dialect {
 	// so that what it assigns survives. The space after the brace is the
 	// whole of the grammar: `${x}` is a parameter and `${ x}` is not.
 	d.CurrentShellSubstitution = true
+	// `${(list)}`, whose body is the parenthesized subshell and whose `}` has
+	// to sit directly behind the matching `)`. Not the form above with a `(`
+	// for an opener: `${(echo a); echo b;}` is refused while reading here and
+	// the blank spelling of the same body runs both commands. See
+	// syntax.Dialect.SubshellSubstitution for the six rows (#2615).
+	d.SubshellSubstitution = true
 	// A here-document inside parentheses that hold a program ends at the
 	// closing one: `v=$(cat <<EOF` / `a` / `EOF)` is accepted and `v` is `a`.
 	// dash and zsh read the body from the whole input instead, so the `)`

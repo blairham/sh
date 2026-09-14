@@ -263,10 +263,84 @@ rather than by trying to read a name and failing — which is possible
 because a parameter name may not begin with a blank. Measured, the
 characters that make it a command are exactly space, tab and newline.
 
-The body is delimited exactly as the parameter form is: a `}` inside
-quotes does not close either, and both nest. Grammar flag:
+The body is delimited here as the parameter form is: a `}` inside quotes
+does not close either, and both nest. Grammar flag:
 `CurrentShellSubstitution`, on for bash and ksh, off elsewhere including
 the core.
+
+**That last sentence is what this shell does and not what the two shells
+do**, measured 2026-09-13 and filed as #2724. Their rules differ from
+each other: bash ends the body where `{ list; }` ends, at a `}` in
+command position, so `${ echo } ;}` passes a literal brace to `echo`
+there; ksh93 ends it at a `}` that begins a **token**, argument position
+included, and refuses that same line. Ours takes the first unquoted `}`
+wherever it stands, which agrees with neither on `${ echo a}b;}` — `a}b`
+in both shells and a syntax error here — or on `${ echo hi}`, which both
+shells refuse and this shell runs.
+
+## `${(list)}` — the parenthesized body
+
+A `(` adjacent to the brace is a spelling of its own, and it belongs to
+one shell:
+
+    echo "A${(echo hi)}B"     →  AhiB   in ksh93
+                                        bad substitution in bash 5.3,
+                                        bash 3.2, dash and ash;
+                                        zsh reads the parenthesis as its
+                                        own expansion flags
+
+Measured 2026-09-13 on ksh93u+ 2012-08-01. What runs is the parenthesis,
+so nothing it assigns survives and nowhere it goes is anywhere the caller
+went — `v=1; echo ${(v=2; echo x)}` leaves `v` at 1, and
+`${(cd /tmp; pwd)}` leaves the caller's directory alone.
+
+**Its extent is the parenthesis and not a command list**, which is the
+whole reason it is a spelling of its own rather than the form above with
+a `(` for an opener. The isolation invites the other reading — a body
+whose first command happens to fork would answer both rows above
+identically — and these are what rule it out, run from a script so that
+`ksh -n` can say which stage refused:
+
+| written | ksh93 | refused |
+| --- | --- | --- |
+| `${(echo a)}` | `a` | — |
+| `${(echo a);}` | `` `}' unexpected `` | while reading |
+| `${(echo a) ;}` | `` `}' unexpected `` | while reading |
+| `${(echo a); echo b;}` | `` `}' unexpected `` | while reading |
+| `${(echo a)b}` | `` `b}' unexpected `` | at the run |
+| `${(echo a}` | `` `(' unmatched `` | while reading |
+
+So the `}` has to sit directly behind the matching `)` with nothing
+between them, not even a blank. The blank form is the contrast and it
+*is* a list: `${ (echo a); echo b;}` runs both commands in ksh93 and in
+bash 5.3.
+
+The end of the parenthesis is found by reading a list and stopping where
+it stops — the same `parseToClose` the two parenthesis scanners use — so
+a `)` inside quotes or in a `case` arm closes nothing, and a nested
+subshell is stepped over. Grammar flag: `SubshellSubstitution`, on for
+ksh alone.
+
+A word the rule does not fit is left alone rather than refused, and that
+is ksh93's own order rather than a fallback: its `-n` refuses
+`${(echo a);}` while reading and passes `${(U)a}` to the run. So the
+`${(flags)word}` an expansion written for zsh reaches this parser with is
+still the parameter form, and still names the rest of the word —
+`echo "AA${(U)a}BB"` is `` `a}BB' unexpected `` in ksh93 and here, the
+blamed token running *past* the brace that would have closed a
+substitution.
+
+`${((expr))}` is **not** this construct: two adjacent parentheses are
+ksh93's braced arithmetic, `${((1+2))}` is 3 there and `${((echo hi))}`
+an arithmetic syntax error, where one space apart `${( (1+2) )}` is a
+subshell running a command called `1+2`. That spelling is not implemented
+and is #2725.
+
+Measured: `subst/a-paren-opens-a-current-shell-body-too`,
+`subst/a-paren-body-does-not-share-what-it-assigns`,
+`subst/a-paren-body-is-the-parenthesis-and-not-a-list`,
+`subst/a-blank-opened-body-holding-a-subshell-is-a-list` and
+`subst/a-brace-body-opens-on-a-blank-or-a-paren-and-nothing-else`.
 
 ## `${| cmd;}` — the same body, valued from `$REPLY`
 

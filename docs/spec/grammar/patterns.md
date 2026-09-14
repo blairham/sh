@@ -1842,11 +1842,111 @@ it switches.
 
 These are run-time states rather than semantics axes, which is why the
 core holds them as `interp.MatchOption` values and only the bash dialect
-maps names onto them. `failglob` is recorded here and deliberately not
-implemented: its miss aborts the rest of the current *line* and then
-carries on (measured: `shopt -s failglob` then `echo zz*zz; echo after`
-on one line prints neither, and `echo after` on the next line prints),
-which is a control-flow shape nothing else needs yet.
+maps names onto them. `failglob` is one of them — `interp.UnmatchedPatternIsError`
+— and its miss abandons the rest of the current *statement* and then carries
+on, which is what `interp.Semantics.FailedExpansionAbandonsTheLine` answers:
+measured, `shopt -s failglob` then `echo zz*zz; echo after` on one line
+prints neither, and `echo after` on the next line prints.
+
+## A parameter that takes names back out of an expansion
+
+bash has one, spelled `GLOBIGNORE`, and it is not a pattern switch: it is
+a parameter whose value is a **colon-separated list of patterns**, and
+every word a pathname expansion produced that one of them matches is
+taken back out.
+
+Measured on bash 5.3.15 and bash 3.2.57, 2026-09-13, in a directory
+holding `a.txt`, `b.txt`, `c.log`, `.dot`, `.hid.txt` and a directory
+`sub` that holds `x.txt` and `.y`. The two builds answer alike
+throughout.
+
+| written | answer |
+| --- | --- |
+| `GLOBIGNORE='*.txt'; echo *` | `.dot c.log sub` |
+| `GLOBIGNORE='a.txt:c.log'; echo *` | `.dot .hid.txt b.txt sub` |
+| `GLOBIGNORE='a.txt:'; echo *` | `.dot .hid.txt b.txt c.log sub` |
+| `GLOBIGNORE='*.txt'; echo *.txt` | `*.txt` |
+| `GLOBIGNORE='*x.txt'; echo */*` | `sub/.y sub/x.txt` |
+| `GLOBIGNORE='*/x.txt'; echo */*` | `sub/.y` |
+| `GLOBIGNORE='sub/*'; echo */*` | `*/*` |
+| `GLOBIGNORE='sub'; echo */` | `sub/` |
+| `GLOBIGNORE='sub/'; echo */` | `*/` |
+| `GLOBIGNORE='./a.txt'; echo ./*.txt` | `./.hid.txt ./b.txt` |
+| `GLOBIGNORE='a.txt'; echo ./*.txt` | `./.hid.txt ./a.txt ./b.txt` |
+
+Five rules come out of those rows.
+
+**The list is split on colons and an empty element is no pattern**, so a
+leading or trailing colon ignores nothing rather than everything.
+
+**Each pattern is matched against the word the expansion produced,
+spelled the way the expansion spelled it.** The `./` a pattern wrote in
+front of a name is part of the word and has to be part of the ignore
+pattern; so is the `/` a trailing-slash pattern wrote behind it.
+
+**A separator in the word has to be matched by a separator in the
+pattern.** A `*` here stops at a `/` exactly as one in the expansion's own
+pattern does, which is why `*x.txt` does not reach `sub/x.txt`. There is
+**no leading-period rule** to go with it — `sub/*` does take `sub/.y` out
+— so only one half of the rule the walk itself follows survives here.
+
+**A word the patterns left with nothing is a word that matched nothing.**
+The pattern stands where no option says otherwise, `nullglob` deletes the
+word, and `failglob` refuses it. The operand in those rows matched every
+`.txt` name before the filter ran, so this is the parameter's miss and not
+the expansion's.
+
+**It reaches pathname expansion alone.** `case`, `[[ ]]` and the pattern
+operators of parameter expansion are untouched with it set.
+
+The comparison is under the same fold the expansion is under: with
+`nocaseglob` on, an ignore pattern of `*.TXT` takes `a.txt` out, and with
+it off it does not.
+
+### The switch the assignment writes, and why this follows the assignment
+
+A non-null assignment also turns `dotglob` on — the option itself, not a
+behavior beside it, which is what these measurements say together:
+
+| written | answer |
+| --- | --- |
+| `GLOBIGNORE=a; shopt dotglob` | `on` |
+| `GLOBIGNORE=a; shopt -u dotglob; echo *` | no hidden names |
+| `GLOBIGNORE=a; GLOBIGNORE=; shopt dotglob` | `on` |
+| `GLOBIGNORE=a; unset GLOBIGNORE; shopt dotglob` | `off` |
+| `shopt -s dotglob; unset GLOBIGNORE; shopt dotglob` | `off` |
+
+So the assignment writes the switch and a script may write it back; the
+*unset* writes it the other way whoever set it; and an assignment of
+nothing writes neither, which is why a null value is not the same state as
+no value at all.
+
+**A value inherited from the environment does none of this and is not read
+at all.** `env GLOBIGNORE='*.txt' bash -c 'echo *'` lists the `.txt`
+files and reports `dotglob` off, and assigning the parameter its own value
+starts both halves. The facility follows the *assignment* rather than the
+value, which is the one place this is a state and not a lookup, and
+`interp.Runner.ignoredNamesLive` is that state.
+
+A binding change is an assignment for this purpose: a `local` of the
+parameter lasts exactly as long as the call, and the caller's patterns —
+and the caller's `dotglob` — come back at the return. A declaration with
+**no value** is the unset half rather than the null one, since it leaves
+the name unset.
+
+### ksh93 spells it `FIGNORE` and does not answer alike
+
+The facility is two dialects' and not one, which is why the core names it
+for what it does — `interp.Semantics.IgnoredNamesVariable`, empty where a
+dialect has no such parameter — rather than for bash's spelling.
+
+Measured on ksh93u+ in the same fixture: `FIGNORE='*.txt'; echo *` answers
+`. .. .dot c.log sub`, so that shell's parameter reveals hidden names as
+bash's does **and keeps `.` and `..` among them**, which bash never does.
+`GLOBIGNORE` does nothing there and `FIGNORE` does nothing in bash. zsh and
+dash have neither. Filed rather than guessed at: wiring ksh93's half is
+what turns the `.`/`..` difference into an axis, and writing the axis first
+would be writing a branch no run can take.
 
 ## The ampersand in a replacement, and the option that gates it
 

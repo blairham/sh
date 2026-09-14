@@ -132,7 +132,8 @@ func TestADeclinedWordIsSeenByTheValidatingPass(t *testing.T) {
 // `set -o errexit` and a bare `set -o`.
 func TestAnUnansweredDeclineIsAskedOnlyWhereItMatters(t *testing.T) {
 	out, st := runDashWord(t, "set -o -e\necho after\n", Unspecified)
-	if !strings.Contains(out, "SetODeclinesADashWord") {
+	if !strings.Contains(out, "declining a next word that begins with a dash") ||
+		!strings.Contains(out, "no dialect was chosen") {
 		t.Errorf("got %q at %d, want the axis refused by name", out, st)
 	}
 

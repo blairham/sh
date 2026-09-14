@@ -40,7 +40,7 @@ func traceOf(t *testing.T, src string, sem Semantics, diag Diagnostics) string {
 // "Compound commands are not traced" is what this used to say, and it was
 // wrong — see TestTraceConditionIsATwoWayAnswer and its neighbors, and #2126.
 func TestXtraceStructureIsUnanimous(t *testing.T) {
-	for _, q := range []TraceQuoting{QuoteNever, QuoteShell, QuoteDollar} {
+	for _, q := range []TraceQuoting{QuoteNever, QuoteShell, QuoteDollar, QuoteSingleOnly} {
 		diag := Diagnostics{TraceQuoting: q}
 		sem := permissive()
 		// Each simple command, expanded, before it runs — and nothing on
@@ -59,9 +59,11 @@ func TestXtraceStructureIsUnanimous(t *testing.T) {
 	}
 }
 
-// TestTraceQuotingIsAThreeWayAnswer names the TraceQuoting values rather than
+// TestTraceQuotingIsAFourWayAnswer names the TraceQuoting values rather than
 // the shells that picked them; the presets' picks are asserted in dialect/.
-func TestTraceQuotingIsAThreeWayAnswer(t *testing.T) {
+// The fourth spelling has a test of its own below, because it parts from the
+// other two quoting values in three separate places rather than one.
+func TestTraceQuotingIsAFourWayAnswer(t *testing.T) {
 	const src = `set -x; x="hello wor"; echo "$x"`
 	sem := permissive()
 	// QuoteNever prints an expanded field with a space unquoted, so one
@@ -69,13 +71,14 @@ func TestTraceQuotingIsAThreeWayAnswer(t *testing.T) {
 	if got := traceOf(t, src, sem, Diagnostics{TraceQuoting: QuoteNever}); !strings.Contains(got, "+ echo hello wor\n") {
 		t.Errorf("QuoteNever: got %q", got)
 	}
-	for _, q := range []TraceQuoting{QuoteShell, QuoteDollar} {
+	for _, q := range []TraceQuoting{QuoteShell, QuoteDollar, QuoteSingleOnly} {
 		if got := traceOf(t, src, sem, Diagnostics{TraceQuoting: q}); !strings.Contains(got, `+ echo 'hello wor'`) {
 			t.Errorf("%v: got %q", q, got)
 		}
 	}
-	// An embedded quote is where the two quoting styles part: one closes,
-	// escapes and reopens, the other reaches for $'…'.
+	// An embedded quote is where the three quoting styles part: one closes,
+	// escapes and reopens, one reaches for $'…', and one closes and puts the
+	// quote inside double quotes.
 	const q = `set -x; x="it's"; echo "$x"`
 	if got := traceOf(t, q, sem, Diagnostics{TraceQuoting: QuoteShell}); !strings.Contains(got, `'it'\''s'`) {
 		t.Errorf("QuoteShell: got %q", got)
@@ -383,9 +386,10 @@ func TestTraceConditionQuotingIsNotTheCommandQuoting(t *testing.T) {
 	if !strings.Contains(got, `+ [[ 'a b' == a b ]]`) {
 		t.Errorf("QuoteShell operands: got %q", got)
 	}
-	// An empty operand is quoted under every answer, including the one that
-	// quotes nothing else: `[[ -z ]]` is a condition no shell would accept.
-	for _, q := range []TraceQuoting{QuoteNever, QuoteShell, QuoteDollar} {
+	// An empty operand is quoted under every answer, including the two that
+	// render an empty *word* as nothing at all: `[[ -z ]]` is a condition no
+	// shell would accept.
+	for _, q := range []TraceQuoting{QuoteNever, QuoteShell, QuoteDollar, QuoteSingleOnly} {
 		got := traceOf(t, `set -x; [[ -z "" ]]`, sem, Diagnostics{TraceConditionQuoting: q})
 		if got != "+ [[ -z '' ]]\n" {
 			t.Errorf("%v: empty operand: got %q", q, got)
@@ -496,6 +500,63 @@ func TestTraceSkipsWhatNoShellPrints(t *testing.T) {
 	for _, word := range []string{"while", "until", "if", "then", "(", "{"} {
 		if strings.Contains(got, "+ "+word) {
 			t.Errorf("traced a header no shell writes (%q): got %q", word, got)
+		}
+	}
+}
+
+// TestQuoteSingleOnlyIsTheFourthSpelling names the value rather than the shell
+// that picked it; dialect/ash asserts the pick. Every expectation is a cell of
+// the committed record — see `xtrace/embedded-quote-diverges`,
+// `xtrace/a-control-character-diverges` and `xtrace/an-empty-field-diverges`.
+//
+// The three assertions are three separate measurements and not one restated:
+// a shell could smuggle a quote through double quotes and still keep a `$'…'`
+// for a control character, and either of those could still write `”` for an
+// empty field. The panel's other quoting shells do all three the other way.
+func TestQuoteSingleOnlyIsTheFourthSpelling(t *testing.T) {
+	sem := permissive()
+	diag := Diagnostics{TraceQuoting: QuoteSingleOnly}
+	// The run of quotes goes inside double quotes, where QuoteShell
+	// backslash-escapes one and QuoteDollar abandons single quotes entirely.
+	if got := traceOf(t, `set -x; x="it's"; echo "$x"`, sem, diag); !strings.Contains(got, `+ echo 'it'"'"'s'`+"\n") {
+		t.Errorf("embedded quote: got %q", got)
+	}
+	// No `$'…'` anywhere, so a control character is written as the byte it
+	// is, inside plain single quotes.
+	if got := traceOf(t, "set -x; x=\"$(printf 'a\\tb')\"; echo \"$x\"", sem, diag); !strings.Contains(got, "+ echo 'a\tb'\n") {
+		t.Errorf("control character: got %q", got)
+	}
+	// And an empty field leaves no mark at all, where the other three write
+	// `''`. The trailing `a` is what says the field is still counted.
+	if got := traceOf(t, `set -x; echo '' a`, sem, diag); !strings.Contains(got, "+ echo  a\n") {
+		t.Errorf("empty field: got %q", got)
+	}
+}
+
+// TestQuoteSingleOnlyReopensLazily is the half a fixed replacement string
+// cannot express, and the reason traceSingleQuote walks runs rather than
+// calling strings.ReplaceAll. Measured 2026-09-13 on BusyBox v1.37.0.
+func TestQuoteSingleOnlyReopensLazily(t *testing.T) {
+	sem := permissive()
+	diag := Diagnostics{TraceQuoting: QuoteSingleOnly}
+	for _, tc := range []struct{ word, want string }{
+		// Two quotes in a row share one pair of double quotes, so a
+		// per-character replacement would write `'"'"'"'"'` here.
+		{`a''b`, `'a'"''"'b'`},
+		// Nothing reopens after a trailing run.
+		{`ab'`, `'ab'"'"`},
+		// But the first segment is opened even when it is empty.
+		{`'ab`, `''"'"'ab'`},
+		// Both of those at once, for a word that is one quote.
+		{`'`, `''"'"`},
+		// And the ordinary interior case, which either rule gets right.
+		{`a'b'c`, `'a'"'"'b'"'"'c'`},
+	} {
+		// None of the words holds a `"`, a `$`, a backquote or a
+		// backslash, so double quotes carry each one through unchanged.
+		src := `set -x; x="` + tc.word + `"; echo "$x"`
+		if got := traceOf(t, src, sem, diag); !strings.Contains(got, "+ echo "+tc.want+"\n") {
+			t.Errorf("%q: got %q, want it traced as %s", tc.word, got, tc.want)
 		}
 	}
 }

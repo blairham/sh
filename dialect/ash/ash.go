@@ -1141,6 +1141,44 @@ func Diagnostics() interp.Diagnostics {
 		// where dash writes `Current option settings` over its own.
 		OptionListingWidth: 16,
 
+		// `set -x`. This shell **quotes**, which is the one place it parts
+		// from its sibling on a question dash answers with a flat no: dash
+		// traces `x=hello wor` where this writes `x='hello wor'`. The record
+		// has said so since ash joined the panel, and `dialect/ash` said
+		// nothing and took QuoteNever with it (#2443).
+		//
+		// The spelling is a fourth answer and not bash's — see
+		// interp.QuoteSingleOnly for the three measurements behind it.
+		TraceQuoting: interp.QuoteSingleOnly,
+		// And a fourth alphabet, measured 2026-09-13 over every printable
+		// ASCII punctuation character in three positions — 96 words, one
+		// `echo` per word, from a script file under `env -i
+		// PATH=/usr/bin:/bin`. Beyond interp's always-quoted set this shell
+		// adds `*?[{}~#!=%`, and two of those characters are the whole of
+		// what separates it from the other three:
+		//
+		//	`%` is quoted here and in no other panel member
+		//	`]` is quoted in the other three and bare here
+		//	`^` is quoted by bash and zsh and bare here
+		//
+		// No Leading, and that is measured rather than left out: `~a` and
+		// `a~b` are both quoted, and so are `#a`/`a#b` and `=ab`/`ab=`/`a=b`,
+		// so this shell has no position rule at all and sides with ksh93 and
+		// zsh against bash. `+,-./:@_` are bare wherever they sit.
+		TraceMetacharacters: interp.TraceMetacharacters{
+			Anywhere: "*?[{}~#!=%",
+		},
+		// A fourth reading of the bracket line, and it needs no exemption to
+		// express: `[ 1 -lt 2 ]` traces as `'[' 1 -lt 2 ]`, with the opening
+		// `[` quoted like any other word and the closer bare only because
+		// `]` is not in the alphabet above. `echo ] '[' 'a[b'` is the same
+		// two facts away from a test, and `[ -n ']' ]` leaves both brackets
+		// bare for the same reason ksh93 leaves only the last one. So the
+		// zero value says it; it is written out because a reader who has met
+		// interp.TraceBracketPairBare would otherwise take this shell's
+		// bare `]` for that answer.
+		TraceBareBracket: interp.TraceBracketQuotedLikeAnyWord,
+
 		ParamNullOrNotSet: "parameter not set or null",
 		// Silent for a count above `$#`, as bash is — there is no
 		// ShiftTooMany here. BusyBox writes nothing and returns 1; the

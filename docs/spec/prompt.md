@@ -657,37 +657,56 @@ rule. `Diagnostics.TraceMetacharacters` is the field.
 Every quoting shell agrees on whitespace, the quote characters, `$`, a
 backquote, a backslash and the operators `| & ; < > ( )`. Past that, measured
 2026-09-12 over 36 words handed to `echo` under `set -x`, from a script file,
-`env -i PATH=/usr/bin:/bin`. Q means the shell single-quoted it; dash prints
-every row bare and is left out. bash 3.2.57 agrees with 5.3.15 on every row.
+`env -i PATH=/usr/bin:/bin`, and extended on 2026-09-13 to ash over every
+printable ASCII punctuation character in three positions — 96 words, one
+`echo` each, by the same route. Q means the shell single-quoted it; dash
+prints every row bare and is left out. bash 3.2.57 agrees with 5.3.15 on
+every row.
 
-| word | bash | ksh93 | zsh |
-| --- | --- | --- | --- |
-| `a*b`, `a?b`, `a[b`, `a]b`, `[1]`, `a{b`, `a}b`, `{a,b}` | Q | Q | Q |
-| `~a`, `#a` | Q | Q | Q |
-| `a~b`, `a#b` | — | Q | Q |
-| `^ab`, `ab^` | Q | — | Q |
-| `!ab`, `ab!`, `a!b` | Q | — | — |
-| `=ab` | — | Q | Q |
-| `ab=`, `a=b` | — | — | Q |
-| `a@b`, `a%b`, `a+b`, `a-b`, `a,b`, `a/b`, `a:b`, `-ab`, `a-` | — | — | — |
+| word | bash | ksh93 | zsh | ash |
+| --- | --- | --- | --- | --- |
+| `a*b`, `a?b`, `a[b`, `[1]`, `a{b`, `a}b`, `{a,b}` | Q | Q | Q | Q |
+| `a]b` | Q | Q | Q | — |
+| `~a`, `#a` | Q | Q | Q | Q |
+| `a~b`, `a#b` | — | Q | Q | Q |
+| `^ab`, `ab^` | Q | — | Q | — |
+| `!ab`, `ab!`, `a!b` | Q | — | — | Q |
+| `=ab` | — | Q | Q | Q |
+| `ab=`, `a=b` | — | — | Q | Q |
+| `a%b` | — | — | — | Q |
+| `a@b`, `a+b`, `a-b`, `a,b`, `a.b`, `a/b`, `a:b`, `a_b`, `-ab`, `a-` | — | — | — | — |
 
-Three facts come out of that, and the first is why one character set cannot
+Four facts come out of that, and the first is why one character set cannot
 hold it:
 
-- **`~` and `#` are positional in bash and not in the other two.** bash quotes
-  them where they would have begun an expansion or a comment and nowhere else.
-  So bash's answer is not a smaller alphabet, it is the same characters under a
-  leading-only rule — which is why the field is two strings, `Anywhere` and
-  `Leading`, rather than one.
+- **`~` and `#` are positional in bash and not in the other three.** bash
+  quotes them where they would have begun an expansion or a comment and
+  nowhere else. So bash's answer is not a smaller alphabet, it is the same
+  characters under a leading-only rule — which is why the field is two
+  strings, `Anywhere` and `Leading`, rather than one, and bash is the only
+  member that needs the second.
 - **`=` is three different answers**: never in bash, leading only in ksh93,
-  anywhere in zsh.
+  anywhere in zsh and ash.
 - **`^` and `!` split the panel again**, and differently: bash quotes both, zsh
-  quotes `^` and not `!`, ksh93 quotes neither.
+  quotes `^` and not `!`, ksh93 quotes neither, ash quotes `!` and not `^`.
+- **ash is a fourth alphabet and not a subset of anyone's**, on two rows that
+  are its alone. `%` is quoted here and by no other member, and `]` is bare
+  here and quoted by every other member — which is also what makes its
+  bracket line read the way it does, two sections down.
 
 ### The brackets of a test are the one exemption
 
 `[ 1 -lt 2 ]` traces as `'[' 1 -lt 2 ']'` in bash, `[ 1 -lt 2 ]` in ksh93 and
 `[ 1 -lt 2 ']'` in zsh. `Diagnostics.TraceBareBracket` is the answer.
+
+**ash reads the line a fourth way and needs none of those three values.** It
+traces `'[' 1 -lt 2 ]`, and both halves fall out of the alphabet above: `[` is
+in its set and is quoted like any other word, and `]` is not in its set and is
+bare wherever it appears — `echo ']' '[' 'a[b'` is `echo ] '[' 'a[b'`, nowhere
+near a test, and `[ -n ']' ]` leaves both of them bare. So `TraceBareBracket`
+stays at `TraceBracketQuotedLikeAnyWord` there, and a bare closing bracket in
+this panel means two unrelated things: an exemption in ksh93, and an ordinary
+character in ash.
 
 It is **not** "a command word is never quoted", and the rows that say so are
 worth keeping because each rules out a simpler rule that fits some of the
@@ -704,3 +723,47 @@ evidence:
 Writing the brackets already quoted in the source changes nothing in any of the
 three, which is the same fact from the other side: the trace is rendered from
 the word the shell arrived at.
+
+### How the quoting is spelled, once something needs it
+
+`Diagnostics.TraceQuoting` is the other half, and the panel answers it four
+ways. Measured 2026-09-13, same route:
+
+| | `x="it's"` | a tab in the word | an empty field |
+| --- | --- | --- | --- |
+| dash | `it's` | the byte, bare | nothing |
+| bash 5.3 | `'it'\''s'` | `$'a\tb'` | `''` |
+| bash 3.2 | `'it'\''s'` | `'a<TAB>b'` | `''` |
+| ksh93 | `$'it\'s'` | `$'a\tb'` | `''` |
+| zsh | `'it'\''s'` | `$'a\tb'` | `''` |
+| ash | `'it'"'"'s'` | `'a<TAB>b'` | nothing |
+
+Three readings of one value, and each column is a separate measurement rather
+than a restatement: a shell could smuggle the quote through double quotes and
+still keep a `$'…'` for the tab, and either of those could still write `''`
+for the empty field.
+
+- **`QuoteNever`** is dash: the expanded word as it is, so two arguments and
+  one are indistinguishable.
+- **`QuoteShell`** is bash and zsh: close the quote, backslash-escape one,
+  reopen — with `$'…'` where single quotes cannot spell the value.
+- **`QuoteDollar`** is ksh93, which reaches for `$'…'` for the quote as well.
+- **`QuoteSingleOnly`** is ash, which has no `$'…'` in its trace anywhere.
+  The quote goes inside *double* quotes, a control character is written as the
+  byte it is, and an empty field is written as nothing at all.
+
+bash 3.2 is a fifth reading on the middle column and has no dialect here to
+hold it: it writes the tab literally like ash and `$'a\001b'` for a byte with
+no letter for it, so it is not "no `$'…'`" but "no `$'…'` for what is
+printable".
+
+**The segments are reopened lazily, and a fixed replacement string cannot say
+that.** `strings.ReplaceAll(s, "'", …)` gets `it's` right in every column and
+gets these wrong, so `traceSingleQuote` walks runs instead:
+
+| word | ash |
+| --- | --- |
+| `a''b` | `'a'"''"'b'` — two quotes share one pair of double quotes |
+| `ab'` | `'ab'"'"` — nothing reopens after a trailing run |
+| `'ab` | `''"'"'ab'` — but the first segment is opened even when empty |
+| `'` | `''"'"` — both of those at once |

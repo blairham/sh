@@ -215,16 +215,80 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 		// input in all four, never an ambiguous redirect.
 		if rd.Op.IsHeredoc() || rd.Op == syntax.TokTLess {
 			body := r.heredocBody(rd)
-			// A body joins the set as an opened file does: `cat <f <<<hi` is the
-			// file and then the line, measured, so the source need not be a file
-			// to be one of several.
-			r.Stdin = r.eachSource(0, strings.NewReader(body), sources)
 			if r.redirErr {
 				// The body could not be expanded, and the process the
 				// redirection was for is where that happened — so the
 				// command is what was given up, not the shell. See
 				// giveUpTheCommand.
 				return closers, nil
+			}
+			// The descriptor it was written for, which this branch used to
+			// throw away: the body went to standard input whatever number
+			// stood in front of the operator, so `cat 3<<X` fed the document
+			// to the command, `exec 3<<X` left nothing behind, `{v}<<X`
+			// allocated nothing, and `cat <<X 3<<Y` read Y. Unanimous across
+			// bash 5.3, ksh93, zsh and dash — and a correction rather than an
+			// axis, because every column answers all four the same way
+			// (#2743).
+			//
+			// A here-document has a *direction* the operator fixes, so an
+			// unwritten number is 0 here where the loop's own default is 1.
+			hfd := 0
+			if rd.N != nil {
+				hfd = fd
+			}
+			// And `{v}<<X` picks a descriptor the same way `{v}<file` does,
+			// with the same axis deciding whether it outlives the command.
+			persists := false
+			if fdVar != "" {
+				persists = r.ask(r.sem().FdVariableOutlivesTheCommand,
+					"a variable-named descriptor outliving its command")
+				if r.unspecified {
+					r.redirErr = true
+					return closers, nil
+				}
+				hfd = r.nextFreeFd(-1)
+			}
+			if r.refuseFdOverLimit(hfd) || r.unspecified {
+				r.redirErr = true
+				return closers, nil
+			}
+			// A body joins the set as an opened file does: `cat <f <<<hi` is the
+			// file and then the line, measured, so the source need not be a file
+			// to be one of several.
+			held := r.eachSource(hfd, strings.NewReader(body), sources)
+			switch hfd {
+			case 0:
+				r.Stdin = held
+			case 1, 2:
+				// The document is readable and the number is not writable,
+				// which is what a descriptor opened for reading is. Measured
+				// on `echo hi 1<<R`: bash reports `write error: Bad file
+				// descriptor`, and ksh93 and zsh lose the text in silence —
+				// the same two answers they give a stream closed with `>&-`,
+				// which is the axis that already decides it.
+				w := readOnlyStream{Reader: held}
+				if hfd == 1 {
+					r.Stdout = w
+					// And it is *this command's own* redirection that made
+					// the stream unwritable, which is the question the one
+					// dialect that words a failed write asks — measured, it
+					// says nothing when the writing command wrote the
+					// redirection itself and complains when something else
+					// did. See Runner.outputClosedByThisCommand.
+					r.outputClosedByThisCommand = true
+				} else {
+					r.Stderr = w
+				}
+			default:
+				if !persists {
+					saveFds()
+				}
+				r.setFd(hfd, held)
+				r.redirWrote(hfd)
+				if fdVar != "" {
+					r.setFdVar(fdVar, itoa(hfd))
+				}
 			}
 			continue
 		}
@@ -1475,6 +1539,17 @@ type closedFd struct{}
 
 func (closedFd) Write([]byte) (int, error) { return 0, syscall.EBADF }
 func (closedFd) Read([]byte) (int, error)  { return 0, syscall.EBADF }
+
+// readOnlyStream is a named stream a here-document was written to, which is
+// open for reading and not for writing.
+//
+// It exists for `1<<X` and `2<<X` alone — a document aimed at a number the
+// shell keeps as a writer. Everywhere else a read-only descriptor is an
+// *os.File the kernel refuses the write on, and there is no file here: the
+// body is text this process holds, so the refusal has to be written down.
+type readOnlyStream struct{ io.Reader }
+
+func (readOnlyStream) Write([]byte) (int, error) { return 0, syscall.EBADF }
 
 // closedInChild is the value that says *closed there* to a process this shell
 // starts, and it is a nil *os.File because that is the only spelling there is:

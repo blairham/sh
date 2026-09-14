@@ -11467,6 +11467,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `xtrace/a-quote-at-either-end-of-a-word` | `'~ab'~'ab` **2>** `+ a='~+ b=ab'~+ c='ab~+ echo '~+ echo ab'~+ echo 'ab` | `'~ab'~'ab` **2>** `+ a=\'~+ b='ab'\'''~+ c=''\''ab'~+ echo \'~+ echo 'ab'\'''~+ echo ''\''ab'` | `'~ab'~'ab` **2>** `+ a=\'~+ b='ab'\'''~+ c=''\''ab'~+ echo \'~+ echo 'ab'\'''~+ echo ''\''ab'` | `'~ab'~'ab` **2>** `+ a=''\'''~+ b='ab'\'''~+ c=''\''ab'~+ echo ''\'''~+ echo 'ab'\'''~+ echo ''\''ab'` | `'~ab'~'ab` **2>** `+ a=$'\''~+ b=$'ab\''~+ c=$'\'ab'~+ echo $'\''~+ echo $'ab\''~+ echo $'\'ab'` | `'~ab'~'ab` **2>** `+<shell>:1> a=\' ~+<shell>:1> b='ab'\' ~+<shell>:1> c=\''ab' ~+<shell>:1> echo \'~+<shell>:1> echo 'ab'\'~+<shell>:1> echo \''ab'` | `'~ab'~'ab` **2>** `+ a=''"'"~+ b='ab'"'"~+ c=''"'"'ab'~+ echo ''"'"~+ echo 'ab'"'"~+ echo ''"'"'ab'` |
 | `xtrace/prefix-diverges` | `in` **2>** `+ f~+ echo in` | `in` **2>** `+ f~+ echo in` | `in` **2>** `+ f~+ echo in` | `in` **2>** `+ f~+ echo in` | `in` **2>** `+ f~+ echo in` | `in` **2>** `+<shell>:1> f~+f:0> echo in` | `in` **2>** `+ f~+ echo 'in'` |
 | `set/a-bare-dash-or-plus-as-an-option-word` | `[n=2:a][dash=off][plus=on]` | `[n=2:a][dash=off][plus=on]` | `[n=2:a][dash=off][plus=on]` | `[n=2:a][dash=off][plus=on]` | `[n=2:a][dash=off][plus=off]` | `[n=2:a][dash=on][plus=on]` | `[n=2:a][dash=off][plus=on]` |
+| `set/a-bare-dash-ends-the-option-parse` | `[e=on][n=1:-Z][u=on][n=2:-o:zzznosuch]` | `[e=on][n=1:-Z][u=on][n=2:-o:zzznosuch]` | `[e=on][n=1:-Z][u=on][n=2:-o:zzznosuch]` | `[e=on][n=1:-Z][u=on][n=2:-o:zzznosuch]` | `[e=on][n=1:-Z][u=on][n=2:-o:zzznosuch]` | `[e=on][n=1:-Z][u=on][n=2:-o:zzznosuch]` | `[e=on][n=1:-Z][u=on][n=2:-o:zzznosuch]` |
+| `opt/command-makes-a-special-builtins-failure-survivable` | `[bare-sub=2][cmd-st=2][exp-sub=2][cmd-exp=2][alive]` **2>** `<script>: 1: set: Illegal option -Z~<script>: 2: set: Illegal option -Z~<script>: 3: export: Illegal option -q~<script>: 4: export: Illegal option -q` | `[bare-alive][bare-sub=0][cmd-st=2][exp-alive][exp-sub=0][cmd-exp=2][alive]` **2>** `<script>: line 1: set: -Z: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]~<script>: line 2: set: -Z: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]~<script>: line 3: export: -q: invalid option~export: usage: export [-fn] [name[=value] ...] or export -p [-f]~<script>: line 4: export: -q: invalid option~export: usage: export [-fn] [name[=value] ...] or export -p [-f]` | `[bare-sub=2][cmd-st=2][exp-sub=2][cmd-exp=2][alive]` **2>** `<script>: line 1: set: -Z: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]~<script>: line 2: set: -Z: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]~<script>: line 3: export: -q: invalid option~export: usage: export [-fn] [name[=value] ...] or export -p [-f]~<script>: line 4: export: -q: invalid option~export: usage: export [-fn] [name[=value] ...] or export -p [-f]` | `[bare-alive][bare-sub=0][cmd-st=2][exp-alive][exp-sub=0][cmd-exp=2][alive]` **2>** `<script>: line 1: set: -Z: invalid option~set: usage: set [--abefhkmnptuvxBCHP] [-o option] [arg ...]~<script>: line 2: set: -Z: invalid option~set: usage: set [--abefhkmnptuvxBCHP] [-o option] [arg ...]~<script>: line 3: export: -q: invalid option~export: usage: export [-nf] [name[=value] ...] or export -p~<script>: line 4: export: -q: invalid option~export: usage: export [-nf] [name[=value] ...] or export -p` | `[bare-sub=2][cmd-st=2][exp-sub=2][cmd-exp=2][alive]` **2>** `<script>[1]: set: -Z: unknown option~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]~<script>[2]: set: -Z: unknown option~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]~<script>[3]: export: -q: unknown option~Usage: export [-p] [name[=value]...]~<script>[4]: export: -q: unknown option~Usage: export [-p] [name[=value]...]` | `[bare-sub=1][cmd-st=127][exp-alive][exp-sub=0][cmd-exp=127][alive]` **2>** `<script>:set:1: can't change option: -Z~<script>:2: command not found: set~<script>:export:3: bad option: -q~<script>:4: command not found: export` | `[bare-sub=2][cmd-st=2][exp-sub=2][cmd-exp=2][alive]` **2>** `<script>: set: line 1: illegal option -Z~<script>: set: line 2: illegal option -Z~<script>: export: line 3: illegal option -q~<script>: export: line 4: illegal option -q` |
 | `xtrace/ps4-draws-the-user-escape` | `differs` | `names-the-login-name` | `names-the-login-name` | `names-the-login-name` | `differs` | `differs` | `differs` |
 | `xtrace/ps4-user-escape-is-not-a-variable` | `differs~[impostor]` | `names-the-login-name~[impostor]` | `names-the-login-name~[impostor]` | `names-the-login-name~[impostor]` | `differs~[impostor]` | `differs~[impostor]` | `differs~[impostor]` |
 | `xtrace/ps4-decides-the-prefix` | **2>** `XX :` | **2>** `XX :` | **2>** `XX :` | **2>** `XX :` | **2>** `XX :` | **2>** `XX :` | **2>** `XX :` |
@@ -11720,6 +11722,23 @@ grades it and nothing drift-checks it either, for the same reason.
   set -v +; p=$-; set +v
   case $p in *v*) printf "[plus=on]";; *) printf "[plus=off]";; esac
   echo
+  ```
+- `set/a-bare-dash-ends-the-option-parse` — where the option parse stops, which is the half the row above could not ask. `set - a b` is the word being *consumed* and breaks the loop on `a` anyway, so it cannot tell a reading that carries on past the `-` from one that stops at it; `set -e - -Z` can, because one of them refuses `-Z` and the other makes it `$1`. All seven columns stop: errexit is on, nothing is said about `-Z`, and it is the one positional parameter. The second half asks the same thing of the spelling that takes a word of its own — `set -u - -o zzznosuch` is nounset on with `-o` and `zzznosuch` as two parameters, so the `-o` behind a bare `-` is not an `-o` at all. Unanimous, so it wants no axis and ours was simply wrong in every dialect: #2699 made the word an option word and had the applying loop `continue` past it, where the reading pass beside it had always returned on a word shorter than two characters (#2742)
+  ```sh
+  set -e - -Z
+  case $- in *e*) printf "[e=on]";; *) printf "[e=off]";; esac
+  printf "[n=%d:%s]" "$#" "$1"
+  set -u - -o zzznosuch
+  case $- in *u*) printf "[u=on]";; *) printf "[u=off]";; esac
+  printf "[n=%d:%s:%s]\n" "$#" "$1" "$2"
+  ```
+- `opt/command-makes-a-special-builtins-failure-survivable` — POSIX's stated reason for the word, and the half of `Semantics.CommandReachesABuiltin` that was implemented nowhere: reaching the builtin worked and surviving it did not. Each refusal is written twice, once bare in a subshell and once behind `command`, so the row is about the word rather than about the refusal — in bash invoked as `sh`, ksh93, dash and BusyBox ash the bare subshell prints no `alive` and reports 2, and the same refusal behind `command` reports 2 with the script carrying on to `[alive]`. bash under its own name never stops here either way and zsh's `command` does not reach a builtin at all, so those two columns say nothing and the four that speak are unanimous: no axis. `set -Z` and `export -q` are both here because the fatality is decided in two different places — `set`'s refusal has an axis per spelling and every other builtin's goes through `BadOptionToSpecialBuiltinFatal` — and a fix in one of them would leave the other where it was. Ours stopped dead on both in three dialects, which is what kept every fact about *state left behind by a fatal refusal* out of the corpus (#2741)
+  ```sh
+  ( set -Z; printf "[bare-alive]" ); printf "[bare-sub=%d]" "$?"
+  command set -Z; printf "[cmd-st=%d]" "$?"
+  ( export -q; printf "[exp-alive]" ); printf "[exp-sub=%d]" "$?"
+  command export -q; printf "[cmd-exp=%d]" "$?"
+  printf "[alive]\n"
   ```
 - `xtrace/ps4-draws-the-user-escape` — `PS4` goes through the prompt language, which makes the trace prefix the only route to a prompt escape that needs no terminal — every other one has to be typed at a session. Written as a comparison against `id -un` rather than as a name, so the record is a fact about the escape and not about the machine that made it: a row holding a login name passes on one laptop and rots everywhere else. bash draws the password database's answer in both its versions and under `sh`, so the escape survives the argv[0] that costs it process substitution; dash and ksh93 have no user escape, zsh reads `%` there instead, and the three of them draw the two characters or drop the backslash. The redirection is what keeps the drawn name out of the record while still letting the shell see it. This shell answered `differs` for a reason that was not #1446 and was not fixed by it — it did not read `PS4` at all. #1454 gave the trace prefix the parameter and the dialect's prompt language together, which is what this row wanted: `-dialect bash` now draws the login name here
   ```sh
@@ -14127,6 +14146,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `heredoc/no-delimiter-and-a-warning` | `body` | `body` **2>** `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `X')` | `body` **2>** `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `X')` | `body` | `body` | `body` | `body` |
 | `heredoc/no-delimiter-and-no-body` | *(no output, status 0)* | **2>** `<script>: line 2: warning: here-document at line 1 delimited by end-of-file (wanted `X')` | **2>** `<script>: line 2: warning: here-document at line 1 delimited by end-of-file (wanted `X')` | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* |
 | `heredoc/a-body-that-runs-to-the-end` | `[body]` | `[body]` | `[body]` | `[body]` | `[body]` | `[body]` | `[body]` |
+| `heredoc/a-body-lands-on-the-descriptor-it-was-written-for` | `[A:three~][B:][C:pee~]` | `[A:three~][B:][C:pee~]` | `[A:three~][B:][C:pee~]` | `[A:three~][B:][C:pee~]` | `[A:three~][B:][C:pee~]` | `[A:three~][B:][C:pee~]` | `[A:three~][B:][C:pee~]` |
+| `heredoc/a-body-on-a-descriptor-outlives-the-exec-that-opened-it` | `[E:kept~][F:` **2>** `<script>: 6: exec: {v}: not found` *(status 127)* | `[E:kept~][F:named~][v=10]` | `[E:kept~][F:named~][v=10]` | `[E:kept~][F:` **2>** `<script>: line 6: exec: {v}: not found` *(status 127)* | `[E:kept~][F:named~][v=11]` | `[E:kept~][F:named~][v=11]` | `[E:kept~][F:` **2>** `<script>: exec: line 6: {v}: not found` *(status 127)* |
+| `heredoc/a-here-string-lands-on-its-descriptor-too` | **2>** `<script>: 1: Syntax error: redirection unexpected` *(status 2)* | `[D:string~]` | `[D:string~]` | `[D:string~]` | `[D:string~]` | `[D:string~]` | **2>** `<script>: line 1: syntax error: unexpected redirection` *(status 2)* |
 | `heredoc/the-delimiter-is-the-whole-line` | `line~EOF x~echo "st=0"` | `line~EOF x~echo "st=0"` **2>** `<script>: line 5: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')` | `line~EOF x~echo "st=0"` **2>** `<script>: line 5: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')` | `line~EOF x~echo "st=0"` | `line~EOF x~echo "st=0"` | `line~EOF x~echo "st=0"` | `line~EOF x~echo "st=0"` |
 | `heredoc/a-continued-body-line-is-joined-before-the-delimiter-is-looked-for` | `AEOF~B~done` | `AEOF~B~done` | `AEOF~B~done` | `AEOF~B~done` | `AEOF~B~done` | `AEOF~B~done` | `AEOF~B~done` |
 | `heredoc/a-quoted-delimiter-joins-no-lines` | `A\~done` | `A\~done` | `A\~done` | `A\~done` | `A\~done` | `A\~done` | `A\~done` |
@@ -14537,6 +14559,39 @@ grades it and nothing drift-checks it either, for the same reason.
   body
   EOF
   ); echo "[$x]"
+  ```
+- `heredoc/a-body-lands-on-the-descriptor-it-was-written-for` — the number in front of `<<` is the descriptor the document is opened on, and every column of the panel agrees — so this is a correction and not an axis. Three probes, because the failure is silent in two of them and loud in the third: with the body on 3, the command's standard input is untouched, so `cat 3<<Y` prints **nothing** at status 0 with nothing on standard error, and `cat <<P 3<<Q` prints P's body rather than Q's. `{ cat <&3; } 3<<X` is the loud half — it is the shape `while read -r l <&3; do … done 3<<X` is written with, and a shell that ignored the number answers `3: Bad file descriptor` there. Ours ignored it: `interp/redirect.go` computed the descriptor for every redirection and the here-document branch threw it away, so a body always became standard input (#2743)
+  ```sh
+  printf "[A:"; { cat <&3; } 3<<X
+  three
+  X
+  printf "][B:"; cat 3<<Y
+  four
+  Y
+  printf "][C:"; cat <<P 3<<Q
+  pee
+  P
+  queue
+  Q
+  printf "]\n"
+  ```
+- `heredoc/a-body-on-a-descriptor-outlives-the-exec-that-opened-it` — the other half of the descriptor: a document opened by `exec` is still there at the next command, and `{v}<<Y` allocates a number and hands it to the name. The first is unanimous across all seven columns; the second is only asked of the four that have the `{v}` spelling at all, and it is where the allocation base shows — bash answers 10, ksh93 and zsh answer 11, and dash, BusyBox ash and bash 3.2 have no such form and report `exec: {v}: not found` at 127. Ours left `exec 3<<X` with nothing behind it and `{v}<<Y` with nothing allocated, so `$v` was unset and the `cat` read a descriptor that was never opened. The ksh column still answers 10 here where ksh93 answers 11, which is `FirstAllocatedDescriptor` and is #2756 rather than this
+  ```sh
+  exec 3<<X
+  kept
+  X
+  printf "[E:"; cat <&3
+  printf "][F:"
+  exec {v}<<Y
+  named
+  Y
+  cat <&"$v"
+  printf "][v=$v]\n"
+  ```
+- `heredoc/a-here-string-lands-on-its-descriptor-too` — the same rule for the one-line spelling, which shares the branch and so shared the defect. bash, ksh93 and zsh put the line on 3; dash and BusyBox ash have no here-string and stop at `Syntax error: redirection unexpected`, which is why it is a case of its own rather than a fourth probe in the row above — a syntax error at the end of that script would have buried three facts it had already established
+  ```sh
+  printf "[D:"; { cat <&3; } 3<<<'string'
+  printf "]\n"
   ```
 - `heredoc/the-delimiter-is-the-whole-line` — the delimiter is compared against the *physical line as written*, so `EOF x` is body and not a terminator — unanimously, in a shape that would read as a terminator to anything matching a prefix. The body then runs to the end of the input, which is why the last line is printed rather than run, and bash 5.3 alone remarks that the document ended at end of file where bash 3.2 says nothing. Prior work of our own had this as a rule about prefixes, and the prefix reading is exactly what is false
   ```sh

@@ -476,7 +476,22 @@ func (r *Runner) setOptionsAndOperands(_ context.Context, args []string) int {
 			if r.sem().BareOptionWord.clearsTraceAndVerbose(on) {
 				r.setLetters("xv", false)
 			}
-			continue
+			// And it ends the option parse, exactly as `--` does: measured
+			// unanimous 2026-09-13, `set -e - -Z` is errexit on with `-Z`
+			// as the one positional parameter in all seven columns, and
+			// `set -u - -o zzznosuch` is nounset on with two. Nobody reads
+			// the words behind it as options, so there is no axis here.
+			//
+			// A `continue` here read them, which is the same word this
+			// consumes and a different place to stop. The two are
+			// indistinguishable on the row that motivated #2699 — `set - a
+			// b`, where the next word is no option word and the loop breaks
+			// on it anyway — so the reading was never chosen, only
+			// inherited. The reading pass in refuseBeforeApplyingSetOptions
+			// has always stopped here, since it returns on any word shorter
+			// than two characters.
+			i++
+			break
 		}
 		// The long spelling, whose name is the next word. Every option this
 		// shell has can be written either way, and every shell in the panel

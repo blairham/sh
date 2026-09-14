@@ -1778,6 +1778,46 @@ to a child the table rebuild does not start.
 cannot join a set on one side without modeling half of the pair, so
 `exec 3<>a 3<>b` keeps `b` under either answer.
 
+**A here-document is opened on the descriptor it was written for**, which is
+unanimous and was a plain defect here rather than an axis. `interp/redirect.go`
+computes a number and a `{name}` for every redirection, and the here-document
+branch used to throw both away and put the body on standard input. Measured
+2026-09-13 across bash 5.3.15, bash 3.2.57, bash as `sh`, ksh93u+, zsh 5.9.2,
+dash and BusyBox ash — every column agrees on every row it has:
+
+| written | the panel | this shell, before |
+| --- | --- | --- |
+| `cat 3<<X` | nothing | **the document** |
+| `exec 3<<X` then `cat <&3` | the document | **`3: Bad file descriptor`** |
+| `{ cat <&3; } 3<<X` | the document | **`3: Bad file descriptor`** |
+| `exec {v}<<X` then `echo $v` | 10 in bash, 11 in ksh93 and zsh | **unset** |
+| `cat <<X 3<<Y` | X's body | **Y's body** |
+| `{ cat <&3; } 3<<<'s'` | `s` | **`3: Bad file descriptor`** |
+
+Two of the rows are *silent*: document text nobody asked for, at status 0,
+with nothing on standard error. The rest are loud and wrong in the shape
+`while read -r l <&3; do … done 3<<X` is written with. dash and BusyBox ash
+agree on every row they have; neither has the `{v}` form (#2743).
+
+**A body has a direction the operator fixes**, so the number it defaults to is
+0 where the redirection loop's own default is 1 — and 1 or 2 written out is a
+number the shell keeps as a *writer* with a document behind it. Measured on
+`echo hi 1<<R`: bash reports `write error: Bad file descriptor` and ksh93 and
+zsh lose the text in silence, which is the pair of answers those shells give a
+stream closed with `>&-` and is decided by that axis already. Everywhere else
+a read-only descriptor is a file the kernel refuses the write on; here the
+body is text this process holds, so `interp.readOnlyStream` writes the refusal
+down.
+
+**Only this process can read it.** A here-document's body is not a file, so
+`childFiles` has no number to hand a child for it — the entry answers nil,
+which closes the number there. `{ cat <&3; } 3<<X` still works, because that
+moves the body onto standard input and os/exec builds a pipe for any input
+stream that is not a file; `sh -c 'cat <&3' 3<<X` does not. That is the same
+boundary an embedder's buffer and a coprocess's near end are already on, and
+reaching past it means a pipe and a copier per descriptor with a lifetime tied
+to a child the table rebuild does not start. Filed as #2759.
+
 **A target that comes to several words is several redirections**, under
 the reading that does not split one, and the fan is what joins them.
 Measured 2026-09-12 on zsh 5.9.2, with `printf 'a\n' >f; printf 'b\n'
@@ -13009,12 +13049,16 @@ not, which is the wrinkle `SetValidatesOptionLettersFirst` records above.
 Two corners are deliberately outside it, both measured:
 
 - **A bare `-` or `+`.** bash declines both; ksh93 declines `-` and takes `+`
-  as the name. Neither is read here, because a one-character `-` is not an
-  option word to this loop at all: `set - a b` leaves three positional
-  parameters here where bash and ksh93 leave two, and `set -x -` leaves
-  xtrace on where both turn it off. That is a divergence of its own, and the
-  predicate is the loop's own reading of a word, so the day it is fixed this
-  follows it. Filed as #2699.
+  as the name — and a one-character word shares this predicate now, so
+  `set -o -` declines and lists in those two columns. What the word then
+  *means* is its own three-way (#2699) and where the option parse stops is a
+  third question, unanimous: a bare `-` ends the parse exactly as `--` does,
+  so `set -e - -Z` is errexit on with `-Z` as the one positional parameter in
+  all seven columns, and `set -u - -o zzznosuch` is nounset on with two. Ours
+  read on past the word and refused what it found, in every dialect, because
+  #2699 made it an option word and had the applying loop carry on past it —
+  a reading `set - a b` cannot tell from stopping, since the loop breaks on
+  `a` either way (#2742).
 - **ksh93's listing.** It defers to the end of the option parse and prints
   once, in a form the last `-o`/`+o` decides: `set -o -e` is the `+o`
   re-input form, `set -o -e -o` and `set +o -o` are the two-column one and
@@ -16827,6 +16871,56 @@ builtin's failure is fatal; bash and zsh report it and carry on.
 A different question from BuiltinSyntaxErrorFatal, which is about text
 that would not *parse* and is true for dash alone. Measured across
 `export`, `readonly` and `unset`.
+
+**`command` takes the fatality away**, and that is not an axis: it is
+POSIX's stated reason for the word, and the four columns that can answer
+agree. Measured 2026-09-13 from a script file under `env -i`, each refusal
+written twice — bare in a subshell and behind `command`:
+
+| | `set -Z` | `command set -Z` |
+| --- | --- | --- |
+| bash 5.3 | complains, alive, 2 | complains, alive, 2 |
+| bash 5.3 as `sh` | complains, **stops**, 2 | complains, alive, 2 |
+| bash 3.2 | complains, alive, 2 | complains, alive, 2 |
+| ksh93 | complains, **stops**, 2 | complains, alive, 2 |
+| zsh | complains, **stops**, 1 | `command not found: set`, 127 |
+| dash | complains, **stops**, 2 | complains, alive, 2 |
+| BusyBox ash | complains, **stops**, 2 | complains, alive, 2 |
+
+bash under its own name never stops here either way and zsh's `command`
+does not reach a builtin at all — `CommandReachesABuiltin` — so those two
+columns say nothing and the four that speak are unanimous. The same holds
+for `command export -q`, `command shift 99`, `command unset -q x`,
+`command readonly -q`, `command trap -q`, `command . /nonexistent/file`
+and `command return abc`, and for ksh93's longer list with them:
+`command alias -Z` is alive there where the bare `alias -Z` is not. bash
+3.2 parts from the other six on exactly one of these — `command shift
+abc` stops it — which is the same column that answers
+`BadOptionToSpecialBuiltinFatalInPosixMode` per builtin rather than per
+shell, and no dialect here claims that build.
+
+So the catch is at the `command` and not at each refusal. A special
+builtin has many ways to fail and they are decided in as many places —
+`set`'s refusal has an axis per spelling, an unknown option letter goes
+through this one, a `shift` past the end and a `shift` whose count is not
+a number have two more — and a check written at each of them would be the
+same rule eight times, with the ninth failure added later not carrying it.
+Reaching the builtin was implemented long before surviving it was, which
+is what kept every fact about *state left behind by a fatal refusal* out
+of the corpus: the script did not outlive the refusal to be asked (#2741).
+
+What `command` does **not** catch is a request to *stop*, which is the
+line `abandonKind` already draws for `.` and `eval`: `command eval 'exit
+5'` exits 5, `command exec /nonexistent/prog` ends the shell at 127 — 126
+in bash 3.2 — and `set -e; command eval false` stops; every column but
+zsh, which says nothing about any of them for the reason above. Nor does it
+reach past the builtin it named, and that is where the panel parts:
+`command eval 'export -q'` ends the script in bash invoked as `sh` and
+ends only the `eval`'s text in ksh93, dash and BusyBox ash. Those three
+catch *any* fatal error raised inside a `command` — an unset parameter
+under `set -u` and a readonly reassignment included — which is a second
+mechanism rather than a wider reading of this one. The narrow reading is
+what is implemented; the other is measured in #2755.
 
 **`BadOptionToSpecialBuiltinFatalInPosixMode`** — bash yes · dash yes ·
 ksh93 yes · zsh **no**

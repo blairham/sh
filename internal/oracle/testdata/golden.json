@@ -98209,6 +98209,57 @@
         "TimedOut": false
       }
     },
+    "heredoc/a-body-lands-on-the-descriptor-it-was-written-for": {
+      "ash": {
+        "Stdout": "[A:three~][B:][C:pee~]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[A:three~][B:][C:pee~]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[A:three~][B:][C:pee~]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[A:three~][B:][C:pee~]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[A:three~][B:][C:pee~]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[A:three~][B:][C:pee~]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[A:three~][B:][C:pee~]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "heredoc/a-body-line-opening-with-the-delimiters-own-letters": {
       "ash": {
         "Stdout": "ABX~tail",
@@ -98254,6 +98305,57 @@
       },
       "zsh": {
         "Stdout": "ABX~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "heredoc/a-body-on-a-descriptor-outlives-the-exec-that-opened-it": {
+      "ash": {
+        "Stdout": "[E:kept~][F:",
+        "Stderr": "\u003cscript\u003e: exec: line 6: {v}: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[E:kept~][F:named~][v=10]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[E:kept~][F:named~][v=10]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[E:kept~][F:",
+        "Stderr": "\u003cscript\u003e: line 6: exec: {v}: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[E:kept~][F:",
+        "Stderr": "\u003cscript\u003e: 6: exec: {v}: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[E:kept~][F:named~][v=11]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[E:kept~][F:named~][v=11]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -98765,6 +98867,57 @@
       "zsh": {
         "Stdout": "st=1 alive",
         "Stderr": "\u003cshell\u003e:1: NOPE_H: parameter not set",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "heredoc/a-here-string-lands-on-its-descriptor-too": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error: unexpected redirection",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[D:string~]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[D:string~]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[D:string~]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: Syntax error: redirection unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[D:string~]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[D:string~]",
+        "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
@@ -114738,6 +114891,57 @@
         "Stdout": "",
         "Stderr": "\u003cshell\u003e:set:1: no such option: zzznosuch",
         "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "opt/command-makes-a-special-builtins-failure-survivable": {
+      "ash": {
+        "Stdout": "[bare-sub=2][cmd-st=2][exp-sub=2][cmd-exp=2][alive]",
+        "Stderr": "\u003cscript\u003e: set: line 1: illegal option -Z~\u003cscript\u003e: set: line 2: illegal option -Z~\u003cscript\u003e: export: line 3: illegal option -q~\u003cscript\u003e: export: line 4: illegal option -q",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[bare-alive][bare-sub=0][cmd-st=2][exp-alive][exp-sub=0][cmd-exp=2][alive]",
+        "Stderr": "\u003cscript\u003e: line 1: set: -Z: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]~\u003cscript\u003e: line 2: set: -Z: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]~\u003cscript\u003e: line 3: export: -q: invalid option~export: usage: export [-fn] [name[=value] ...] or export -p [-f]~\u003cscript\u003e: line 4: export: -q: invalid option~export: usage: export [-fn] [name[=value] ...] or export -p [-f]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[bare-sub=2][cmd-st=2][exp-sub=2][cmd-exp=2][alive]",
+        "Stderr": "\u003cscript\u003e: line 1: set: -Z: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]~\u003cscript\u003e: line 2: set: -Z: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]~\u003cscript\u003e: line 3: export: -q: invalid option~export: usage: export [-fn] [name[=value] ...] or export -p [-f]~\u003cscript\u003e: line 4: export: -q: invalid option~export: usage: export [-fn] [name[=value] ...] or export -p [-f]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[bare-alive][bare-sub=0][cmd-st=2][exp-alive][exp-sub=0][cmd-exp=2][alive]",
+        "Stderr": "\u003cscript\u003e: line 1: set: -Z: invalid option~set: usage: set [--abefhkmnptuvxBCHP] [-o option] [arg ...]~\u003cscript\u003e: line 2: set: -Z: invalid option~set: usage: set [--abefhkmnptuvxBCHP] [-o option] [arg ...]~\u003cscript\u003e: line 3: export: -q: invalid option~export: usage: export [-nf] [name[=value] ...] or export -p~\u003cscript\u003e: line 4: export: -q: invalid option~export: usage: export [-nf] [name[=value] ...] or export -p",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[bare-sub=2][cmd-st=2][exp-sub=2][cmd-exp=2][alive]",
+        "Stderr": "\u003cscript\u003e: 1: set: Illegal option -Z~\u003cscript\u003e: 2: set: Illegal option -Z~\u003cscript\u003e: 3: export: Illegal option -q~\u003cscript\u003e: 4: export: Illegal option -q",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[bare-sub=2][cmd-st=2][exp-sub=2][cmd-exp=2][alive]",
+        "Stderr": "\u003cscript\u003e[1]: set: -Z: unknown option~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]~\u003cscript\u003e[2]: set: -Z: unknown option~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]~\u003cscript\u003e[3]: export: -q: unknown option~Usage: export [-p] [name[=value]...]~\u003cscript\u003e[4]: export: -q: unknown option~Usage: export [-p] [name[=value]...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[bare-sub=1][cmd-st=127][exp-alive][exp-sub=0][cmd-exp=127][alive]",
+        "Stderr": "\u003cscript\u003e:set:1: can't change option: -Z~\u003cscript\u003e:2: command not found: set~\u003cscript\u003e:export:3: bad option: -q~\u003cscript\u003e:4: command not found: export",
+        "Status": 0,
         "Signal": 0,
         "TimedOut": false
       }
@@ -170990,6 +171194,57 @@
       "zsh": {
         "Stdout": "got=b rep=2",
         "Stderr": "1) a  2) b  ~?# ",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "set/a-bare-dash-ends-the-option-parse": {
+      "ash": {
+        "Stdout": "[e=on][n=1:-Z][u=on][n=2:-o:zzznosuch]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[e=on][n=1:-Z][u=on][n=2:-o:zzznosuch]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[e=on][n=1:-Z][u=on][n=2:-o:zzznosuch]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[e=on][n=1:-Z][u=on][n=2:-o:zzznosuch]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[e=on][n=1:-Z][u=on][n=2:-o:zzznosuch]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[e=on][n=1:-Z][u=on][n=2:-o:zzznosuch]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[e=on][n=1:-Z][u=on][n=2:-o:zzznosuch]",
+        "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

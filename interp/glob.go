@@ -970,10 +970,30 @@ func (r *Runner) glob(field string) ([]string, bool) {
 		}
 	}
 
+	// The names the dialect's ignore parameter takes back out, matched
+	// against the word rather than against the path the walk is holding —
+	// the same subject the `~` exclusions above are matched against, and for
+	// the same reason: `GLOBIGNORE='./a.txt'` takes `./a.txt` out where
+	// `GLOBIGNORE='a.txt'` does not, so it is the word as the pattern
+	// spelled it. See interp/ignorednames.go.
+	//
+	// Read once for the whole expansion rather than per word, because the
+	// parameter cannot change while one runs.
+	//
+	// Where it stands against the qualifiers below is not observable and is
+	// not claimed to be: the one dialect with this parameter has no
+	// qualifiers and the one with qualifiers has no such parameter. A
+	// mutation that moves this block past them survives, which is recorded
+	// here so the next reader does not go hunting for the row that would
+	// kill it.
+	ignore := r.ignoredNamePatterns()
 	out := make([]string, 0, len(dirs))
 	for _, d := range dirs {
 		w, ok := render(d)
 		if !ok {
+			continue
+		}
+		if len(ignore) > 0 && r.ignoredName(w, ignore) {
 			continue
 		}
 		out = append(out, w)

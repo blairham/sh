@@ -240,6 +240,15 @@ func Semantics() interp.Semantics {
 	// own name take over, and not read in POSIX mode — `bash --posix` and
 	// bash invoked as `sh` read neither this nor `$ENV`.
 	s.NonInteractiveStartupVariable = "BASH_ENV"
+	// The parameter whose patterns take names back out of a pathname
+	// expansion, and the hidden-name switch an assignment to it writes. Both
+	// measured on bash 5.3.15 and bash 3.2.57, 2026-09-13 — the run is in
+	// Semantics.IgnoredNamesVariable, which also records why this follows
+	// the assignment rather than the value. ksh93's `FIGNORE` is the same
+	// facility under another name and does not answer alike; it is filed
+	// rather than guessed at.
+	s.IgnoredNamesVariable = "GLOBIGNORE"
+	s.IgnoredNamesRevealHiddenNames = true
 	// And the files it reads by name. Measured 2026-09-05 through a
 	// pseudo-terminal with a scratch home directory holding a marker for
 	// every name any shell in the panel reads.

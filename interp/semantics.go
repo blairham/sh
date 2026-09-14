@@ -348,6 +348,88 @@ type Semantics struct {
 	// passing it through. True only in zsh.
 	GlobNoMatchIsError Answer
 
+	// IgnoredNamesVariable names the parameter whose patterns take names
+	// back out of a pathname expansion, and it is empty in every dialect
+	// that has no such parameter.
+	//
+	// A name rather than a value, for the reason NullCommandVariable is one:
+	// the parameter is a script's to reassign at any moment, so the answer
+	// has to be read where the expansion runs.
+	//
+	// The facility is bash's `GLOBIGNORE`, and what it does is measured
+	// rather than taken from the manual, because the two do not agree about
+	// the case below. Measured on bash 5.3.15 and bash 3.2.57, 2026-09-13,
+	// in a directory holding `a.txt`, `b.txt`, `c.log`, `.dot`, `.hid.txt`
+	// and a directory `sub`:
+	//
+	//	GLOBIGNORE='*.txt'; echo *       .dot c.log sub
+	//	GLOBIGNORE='a.txt:c.log'; echo * .dot .hid.txt b.txt sub
+	//	GLOBIGNORE='*.txt'; echo *.txt   *.txt
+	//	GLOBIGNORE='sub/'; echo */       */
+	//	GLOBIGNORE='sub'; echo */        sub/
+	//
+	// Four rules come out of those rows and each is pinned:
+	//
+	// **The value is a colon-separated list of patterns and an empty element
+	// is no pattern at all**, so a leading or trailing colon ignores nothing.
+	//
+	// **Each pattern is matched against the word the expansion produced**,
+	// spelled the way the expansion spelled it — with the `./` a pattern
+	// wrote in front of it and the `/` a trailing-slash pattern wrote behind
+	// it, since those are part of the word. `GLOBIGNORE='a.txt'` does not
+	// take `./a.txt` out and `GLOBIGNORE='./a.txt'` does.
+	//
+	// **A separator in the word has to be matched by a separator in the
+	// pattern**: `*x.txt` does not take `sub/x.txt` out where `sub/?.txt`
+	// does, so a `*` here stops at a `/` exactly as one in the expansion's
+	// own pattern does. There is no leading-period rule to go with it —
+	// `sub/*` takes `sub/.y` out — which is the half that separates this
+	// from the pattern the walk itself uses.
+	//
+	// **A word left with nothing is a pattern that matched nothing**, so the
+	// options that decide a miss decide this too: the pattern stands where
+	// nothing is set, the word is deleted under `nullglob`, and `failglob`
+	// refuses it.
+	//
+	// It reaches pathname expansion alone. `case`, `[[ ]]` and the pattern
+	// operators of parameter expansion are untouched with it set, measured
+	// on the same build.
+	//
+	// ksh93 has a parameter of the same kind spelled `FIGNORE` and does not
+	// answer alike — it keeps `.` and `..` in what a `*` then matches, where
+	// bash keeps neither — so this is a facility two dialects hold rather
+	// than one, and the second is filed rather than guessed at. See
+	// IgnoredNamesRevealHiddenNames for the half they agree on.
+	IgnoredNamesVariable string
+
+	// IgnoredNamesRevealHiddenNames says an assignment of a non-null value
+	// to IgnoredNamesVariable also turns hidden names on, so a `*` sees the
+	// names beginning with a period that it otherwise would not.
+	//
+	// It is the same switch a script reaches by name — bash's `dotglob` —
+	// and not a second one beside it, which is measured and is what makes
+	// this a hook on the assignment rather than a second question the
+	// expansion asks. On bash 5.3.15, 2026-09-13:
+	//
+	//	GLOBIGNORE=a; shopt dotglob                   on
+	//	GLOBIGNORE=a; shopt -u dotglob; echo *        no hidden names
+	//	GLOBIGNORE=a; GLOBIGNORE=; shopt dotglob      on
+	//	GLOBIGNORE=a; unset GLOBIGNORE; shopt dotglob off
+	//	shopt -s dotglob; unset GLOBIGNORE            off
+	//
+	// So the assignment writes the switch and a script may write it back;
+	// the *unset* writes it the other way whoever set it; and an assignment
+	// of nothing writes neither, which is why a null value is not the same
+	// state as no value at all.
+	//
+	// **A value inherited from the environment does none of this and is not
+	// read at all** — measured, `env GLOBIGNORE='*.txt' bash -c 'echo *'`
+	// lists the `.txt` files and reports `dotglob` off, and assigning the
+	// parameter its own value activates both halves. So the facility follows
+	// the *assignment* rather than the value, which is the one place this
+	// shell's model of it is a state and not a lookup.
+	IgnoredNamesRevealHiddenNames bool
+
 	// AssignmentPrefixPersistsOnSpecialBuiltin keeps `x=1 shift` set
 	// afterwards. POSIX requires it.
 	//

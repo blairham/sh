@@ -1004,6 +1004,11 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 		// the declaration it was told to no child at all. Putting the
 		// record back instead kept it silent, which no shell does.
 		delete(r.declaredEmpty, name)
+		// And the parameter that takes names out of a pathname expansion
+		// follows the value the restore put back, which is what makes a
+		// `local` of it last exactly as long as the call. See
+		// interp/ignorednames.go.
+		r.ignoredNamesRestored(name)
 	}
 	for name, old := range sc.savedArrays {
 		if sc.arrayExisted[name] {

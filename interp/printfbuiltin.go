@@ -509,19 +509,25 @@ func (r *Runner) printfConvert(spec string, verb byte, timeFmt string, next func
 // A not-a-number never carries a sign here. See
 // Semantics.PrintfNonFiniteIsConverted for the axis, for why the sign of a
 // not-a-number is not one, and for the measurement behind both.
+//
+// The three results are the text, whether this was a non-finite value at all,
+// and whether an unanswered axis stopped the format — the same three the rest
+// of this file's conversions return.
 func (r *Runner) printfNonFinite(spec string, verb byte, f float64) (string, bool, bool) {
 	if !math.IsInf(f, 0) && !math.IsNaN(f) {
 		return "", false, false
 	}
-	bare := "nan"
-	switch {
-	case math.IsNaN(f):
-	case math.IsInf(f, -1):
-		bare = "-inf"
-	default:
-		bare = "inf"
+	word := "nan"
+	if math.IsInf(f, 0) {
+		word = "inf"
 	}
-	full := printfNonFiniteField(spec, verb, f, bare)
+	bare := word
+	if math.IsInf(f, -1) {
+		// The sign the *value* carries, which both readings write. It is
+		// not a flag, which is why it survives zsh's bare word.
+		bare = "-" + word
+	}
+	full := printfNonFiniteField(spec, verb, f, word)
 	if full == bare {
 		// The two readings agree, so there is nothing to ask. That covers
 		// the whole of `printf '%f' inf` — the common case, and one no
@@ -540,21 +546,20 @@ func (r *Runner) printfNonFinite(spec string, verb byte, f float64) (string, boo
 // printfNonFiniteField is the converted reading: the word capitalized to
 // match the verb, the sign a flag or the value asked for, and the whole put
 // through the width.
-func printfNonFiniteField(spec string, verb byte, f float64, bare string) string {
-	word := strings.TrimPrefix(bare, "-")
+//
+// The prefix is read with the same two helpers printfSpecPrefixAt reads it
+// with, rather than a third copy of the grammar. Every `*` has been replaced
+// with the operand it took by the time this is reached, so printfFieldRun
+// sees only digits here — but it is the one that knows what a field is, and a
+// second scanner beside it is how a fix reaches one and not the other.
+func printfNonFiniteField(spec string, verb byte, f float64, word string) string {
 	if verb == 'E' || verb == 'G' {
 		word = strings.ToUpper(word)
 	}
 	i := 1 // past the %
-	for i < len(spec) && strings.IndexByte("-+ #0", spec[i]) >= 0 {
-		i++
-	}
+	i += runOfBytes(spec, i, "-+ #0")
 	flags := spec[1:i]
-	start := i
-	for i < len(spec) && spec[i] >= '0' && spec[i] <= '9' {
-		i++
-	}
-	width := spec[start:i]
+	width := spec[i : i+printfFieldRun(spec, i)]
 
 	sign := ""
 	switch {

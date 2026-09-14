@@ -30,6 +30,14 @@ func Dialect() syntax.Dialect {
 	// bash, against zsh 5.9.2, which refuses the text. See
 	// [syntax.Dialect.SubscriptSpansSeparators].
 	d.SubscriptSpansSeparators = true
+	// And a compound literal is one shape or the other rather than a
+	// mixture, which is what says where a subscript may be read at all here:
+	// `a=([1]=A [2]=B)` is subscripted throughout, `a=(p [1]=A)` is a word
+	// list and keeps the brackets, and `a=([1]=A p)` is a syntax error
+	// naming `p`. The first element decides. Measured 2026-09-14 on 93u+;
+	// see [syntax.Dialect.ArrayLiteralShapeFollowsTheFirstElement] for the
+	// whole table and for the store rule that rides beside it (#2505).
+	d.ArrayLiteralShapeFollowsTheFirstElement = true
 	// A backslash the input ends immediately after is kept only where it is
 	// the first thing in the word: `printf "[%s]" \` is `[\]` here and
 	// `printf "[%s]" x\` is `[x]`, where bash 5.3 keeps both and zsh drops

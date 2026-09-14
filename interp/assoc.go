@@ -470,7 +470,7 @@ func (r *Runner) assocScalar(a AssocArray) (string, bool) {
 // assignAssocLiteral is `m=([k]=v …)` on a declared name — and `m+=(…)`,
 // which keeps the elements already there where `=` starts over.
 func (r *Runner) assignAssocLiteral(name string, elems []*syntax.Word, appendTo bool) {
-	parsed, ok := r.literalElems(elems)
+	parsed, ok := r.literalElems(elems, r.literalShapeReadsSubscripts(elems))
 	if !ok {
 		// A failed element list costs the whole table, exactly as it costs
 		// the whole indexed array — see literalElems.
@@ -672,6 +672,15 @@ func (r *Runner) keyedLiteralAppend(name, key, add string, replaced map[string]s
 // literal text between the brackets; the value expands as an assignment's,
 // which is what keeps `[k]=$x` whole and `[k]=*` a star.
 //
+// The split itself is [syntax.ElementSubscript]'s rather than this
+// function's, and that is the point of the seam. The parser asks the same
+// question of the same word — one dialect decides a literal's whole shape on
+// whether its *first* element is subscripted — and a second scan here is how
+// the two would come to disagree about what a subscripted element is: a
+// literal would then parse under one reading and store under the other. What
+// is left here is the expansion, which is the half the parser has no business
+// doing.
+//
 // The append spelling is read in exactly the places the plain one is, which
 // is what every shell in the panel that reads either does. It was not read at
 // all, so `a=(p q r); a+=( [1]+=Z )` left a fourth element holding the seven
@@ -681,70 +690,11 @@ func (r *Runner) keyedLiteralAppend(name, key, add string, replaced map[string]s
 // keys the same word went in as a *key* spelled `[1]+=Z`, which is worse: the
 // table grows an entry nothing will ever read.
 func (r *Runner) assocElem(w *syntax.Word) (key, value string, appendValue, ok bool) {
-	if w == nil || len(w.Spans) == 0 {
+	sub, val, appends, ok := syntax.ElementSubscript(w)
+	if !ok {
 		return "", "", false, false
 	}
-	head := w.Spans[0]
-	if head.Kind != syntax.Literal || head.Quoting != syntax.Unquoted ||
-		!strings.HasPrefix(head.Value, "[") {
-		return "", "", false, false
-	}
-	// The `]=` that closes the key is looked for across the spans, not only
-	// in the first: `["c d"]=v` and `[$k]=v` put quoting or an expansion
-	// between the brackets, so the key is a word of its own that ends where
-	// an *unquoted* `]=` appears — a quoted one is part of the key.
-	for i, s := range w.Spans {
-		if s.Kind != syntax.Literal || s.Quoting != syntax.Unquoted {
-			continue
-		}
-		text := s.Value
-		if i == 0 {
-			text = text[1:]
-		}
-		j, width, appends := elemTerminator(text)
-		if j < 0 {
-			continue
-		}
-		keyWord := syntax.Word{Spans: append([]syntax.Span(nil), w.Spans[:i]...)}
-		if i == 0 {
-			keyWord.Spans = nil
-		} else {
-			keyWord.Spans[0].Value = strings.TrimPrefix(keyWord.Spans[0].Value, "[")
-		}
-		keyWord.Spans = append(keyWord.Spans, syntax.Span{
-			Kind: syntax.Literal, Value: text[:j], Quoting: s.Quoting, Pos: s.Pos,
-		})
-		valueWord := syntax.Word{Spans: append([]syntax.Span{{
-			Kind: syntax.Literal, Value: text[j+width:], Quoting: s.Quoting, Pos: s.Pos,
-		}}, w.Spans[i+1:]...)}
-		return r.expandAssignValue(&keyWord), r.expandAssignValue(&valueWord), appends, true
-	}
-	return "", "", false, false
-}
-
-// elemTerminator finds where a literal element's subscript ends: the first
-// `]` that an `=` or a `+=` follows. It reports the offset, how many
-// characters the terminator takes, and whether it is the append spelling.
-//
-// One scan for both spellings rather than two searches compared, because the
-// two starts are the same character: at any given `]` only one of them can
-// match, so "the first `]=`" and "the first `]+=`" are never in a race and
-// the earlier terminator is simply the earlier `]`. Searching for `]=` alone
-// and then for `]+=` would read `[a]=b]+=c` as an append, since the second
-// pattern occurs in the *value* the first one already delimited.
-func elemTerminator(text string) (at, width int, appendValue bool) {
-	for i := 0; i < len(text); i++ {
-		if text[i] != ']' {
-			continue
-		}
-		switch {
-		case strings.HasPrefix(text[i+1:], "="):
-			return i, 2, false
-		case strings.HasPrefix(text[i+1:], "+="):
-			return i, 3, true
-		}
-	}
-	return -1, 0, false
+	return r.expandAssignValue(sub), r.expandAssignValue(val), appends, true
 }
 
 // SetDynamicAssoc registers an associative array whose contents are produced

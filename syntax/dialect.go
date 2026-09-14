@@ -3708,6 +3708,60 @@ type Dialect struct {
 	// differently tomorrow.
 	SubscriptSpansSeparators bool
 
+	// ArrayLiteralShapeFollowsTheFirstElement makes a compound literal one
+	// shape or the other rather than a mixture: **either** every element
+	// names a subscript — `[sub]=value`, or `[sub]+=value` — **or** none of
+	// them does and a bracket in front of an element is text. The first
+	// element decides which, and a bare element after a subscripted one is a
+	// *parse* error rather than a word.
+	//
+	// Measured 2026-09-14 on ksh93u+ 2012-08-01 (`/bin/ksh`), against bash
+	// 5.3.15, bash 3.2.57 and zsh 5.9.2, each row read back with
+	// `typeset -p a`:
+	//
+	//	a=([1]=A [2]=B)   typeset -A a=([1]=A [2]=B)      subscripted throughout
+	//	a=(p [1]=A)       typeset -a a=(p '[1]=A')        a word list, brackets and all
+	//	a=(p q [1]=A)     typeset -a a=(p q '[1]=A')      and however far along it stands
+	//	a=("[1]=A" p)     typeset -a a=('[1]=A' p)        a quoted head was never a subscript
+	//	a=([1]=A p)       syntax error at line 1: `p' unexpected
+	//	a=([1]=A "b")     syntax error at line 1: `b' unexpected
+	//	a=([1]=A $x)      syntax error at line 1: `$x' unexpected
+	//
+	// The refusal is the grammar's and not the store's, which the last two
+	// rows are what say: the offending element is named as it was *written*,
+	// with `$x` unexpanded and the quotes off `"b"`, and it is refused
+	// whatever `x` holds and whatever the name held before the assignment.
+	// `a=([1]=A` + newline + `p)` is refused too, at the line the bare
+	// element stands on, so the literal's own newlines do not end the rule.
+	//
+	// **The appending spelling is shaped by the same rule and not exempt**,
+	// which is where #2505 as filed was wrong. `a+=([1]=A p)` is the same
+	// syntax error, and `unset a; a+=([1]=Z [2]=Y)` is
+	// `typeset -A a=([1]=Z [2]=Y)` — a subscripted literal, read as one.
+	// What is separately true of `+=` is a *store* rule rather than a
+	// grammar one: an append whose name is already holding an indexed array
+	// cannot become a keyed one, and there the subscripted reading is given
+	// up and the elements go in as the words they were written as. That half
+	// is [interp.Runner.literalReadsSubscripts]'s and is measured there.
+	//
+	// Nothing else in the panel reads a literal this way. bash and zsh place
+	// a subscripted element wherever it stands and continue the bare ones
+	// from it, so `a=(x [3]=y z)` is three elements there and three *words*
+	// here; dash and BusyBox ash have no array literal to shape.
+	//
+	// The word-list shape reaches the lexer too, because the blanks inside a
+	// bracket are only characters while a subscript is being read:
+	// `a=(p [1 2]=A)` is the three words `p`, `[1` and `2]=A` here, where
+	// `a=([1 2]=A)` is the single key `1 2`. See
+	// [Dialect.SubscriptSpansSeparators], which is the flag that spans them,
+	// and Parser.arrayLiteral, which stops asking it once a bare first
+	// element has settled the shape.
+	//
+	// It is a grammar flag and not a semantics axis because the two readings
+	// are not two meanings for one parse: one of them is a parse error, and
+	// the other changes where the word boundaries fall.
+	ArrayLiteralShapeFollowsTheFirstElement bool
+
 	// SubscriptSpansSeparatorsInRedirect extends the reading above to a
 	// redirection's target, so `> m[foo bar] echo hi` writes one file named
 	// `m[foo bar]` where a grammar without the flag writes `m[foo` and then

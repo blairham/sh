@@ -1512,6 +1512,14 @@ func Semantics() interp.Semantics {
 	// an option *name* rather than reading it as a letter. Its own usage
 	// line spells the form, `[-o[option]]`.
 	s.SetOLetterAttachesItsName = interp.Yes
+	// Where the `-o` does stand alone, the word behind it is taken only if
+	// it does not look like options: `set -o -e` lists and turns errexit
+	// on, which is bash's reading and not zsh's. What this column still
+	// does differently is *when* it lists — once, at the end of the option
+	// parse, in a form the last `-o`/`+o` decides — and that is a listing
+	// mechanism rather than another answer here, #2698. Measured on the
+	// field.
+	s.SetODeclinesADashWord = interp.Yes
 	// unanswered SetValidatesOptionLettersFirst: this column does agree with
 	// bash about what a refusal leaves behind — `command set -e -Z` is
 	// errexit off, and `set -o -Z`, where a bare `-o` takes no next word,

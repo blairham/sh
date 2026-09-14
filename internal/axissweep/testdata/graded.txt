@@ -43,6 +43,7 @@ ash    PrintfGroupingFlagAfterTheWidth                      -
 ash    QuitIgnoredWhenNotInteractive                        Yes
 ash    QuitResetRestoresTheDefault                          No
 ash    ReadonlyReassignmentFatal                            Yes
+ash    SetODeclinesADashWord                                No
 ash    SetOLetterAttachesItsName                            No
 ash    SetValidatesOptionLettersFirst                       No
 ash    ShiftPastEndFatal                                    No
@@ -73,6 +74,7 @@ bash   PrintfGroupingFlagAfterTheWidth                      No
 bash   QuitIgnoredWhenNotInteractive                        Yes
 bash   QuitResetRestoresTheDefault                          No
 bash   ReadonlyReassignmentFatal                            No
+bash   SetODeclinesADashWord                                Yes
 bash   SetOLetterAttachesItsName                            No
 bash   SetValidatesOptionLettersFirst                       Yes
 bash   ShiftPastEndFatal                                    No
@@ -103,6 +105,7 @@ dash   PrintfGroupingFlagAfterTheWidth                      -
 dash   QuitIgnoredWhenNotInteractive                        No
 dash   QuitResetRestoresTheDefault                          -
 dash   ReadonlyReassignmentFatal                            Yes
+dash   SetODeclinesADashWord                                No
 dash   SetOLetterAttachesItsName                            No
 dash   SetValidatesOptionLettersFirst                       No
 dash   ShiftPastEndFatal                                    Yes
@@ -133,6 +136,7 @@ ksh    PrintfGroupingFlagAfterTheWidth                      Yes
 ksh    QuitIgnoredWhenNotInteractive                        No
 ksh    QuitResetRestoresTheDefault                          -
 ksh    ReadonlyReassignmentFatal                            Yes
+ksh    SetODeclinesADashWord                                Yes
 ksh    SetOLetterAttachesItsName                            Yes
 ksh    SetValidatesOptionLettersFirst                       -
 ksh    ShiftPastEndFatal                                    Yes
@@ -163,6 +167,7 @@ zsh    PrintfGroupingFlagAfterTheWidth                      No
 zsh    QuitIgnoredWhenNotInteractive                        Yes
 zsh    QuitResetRestoresTheDefault                          Yes
 zsh    ReadonlyReassignmentFatal                            Yes
+zsh    SetODeclinesADashWord                                No
 zsh    SetOLetterAttachesItsName                            Yes
 zsh    SetValidatesOptionLettersFirst                       No
 zsh    ShiftPastEndFatal                                    No

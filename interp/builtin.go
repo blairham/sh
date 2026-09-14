@@ -465,7 +465,7 @@ func (r *Runner) setOptionsAndOperands(_ context.Context, args []string) int {
 			i++
 			break
 		}
-		if len(a) < 2 || (a[0] != '-' && a[0] != '+') {
+		if !setOptionWord(a) {
 			break
 		}
 		on := a[0] == '-'
@@ -506,19 +506,38 @@ func (r *Runner) setOptionsAndOperands(_ context.Context, args []string) int {
 					return r.status
 				}
 			}
-			if i+1 >= len(args) {
+			// The word behind a bare `-o` is not always its name: in bash
+			// and ksh93 a word this loop would itself read as options is
+			// not taken at all, so the `-o` stays a bare one and the word
+			// is read as option letters after the listing.
+			// Semantics.SetODeclinesADashWord, asked only where there is
+			// such a word to decline.
+			declined := false
+			if i+1 < len(args) && setODeclinedWord(args[i+1]) {
+				declined = r.ask(r.sem().SetODeclinesADashWord,
+					"`set -o` declining a next word that begins with a dash")
+				if r.unspecified {
+					return r.status
+				}
+			}
+			if declined || i+1 >= len(args) {
 				// With no name to set, `-o` lists the options and `+o`
 				// writes them back as input — four shapes, each the
 				// dialect's own.
 				st := r.listOptions(!on)
-				if after == "" {
-					return st
-				}
 				// And in the shells that do not weld, what follows the `o`
 				// is more option letters, read after the listing rather than
 				// instead of it.
-				if !r.setWeldedLetters(after, on) {
+				if after != "" && !r.setWeldedLetters(after, on) {
 					return r.setOptionFailure()
+				}
+				if declined {
+					// The word the `-o` would not take is left to the loop,
+					// which reads it as what it looks like.
+					continue
+				}
+				if after == "" {
+					return st
 				}
 				continue
 			}
@@ -592,6 +611,37 @@ func (r *Runner) setOptionsAndOperands(_ context.Context, args []string) int {
 		r.Params = append([]string(nil), args[i:]...)
 	}
 	return 0
+}
+
+// setOptionWord reports whether a word is one `set`'s loop reads as options
+// rather than as the first of the operands.
+//
+// One definition rather than two, because a bare `-o` asks the same question
+// about the word behind it: what a dialect declines there is exactly what the
+// loop would have gone on to read as letters, and a second predicate would be
+// free to drift from the first. `--` satisfies it and is handled a line
+// earlier, where it ends the options rather than beginning a word of them.
+//
+// A one-character `-` or `+` is not one of these, which is measured and is
+// wrong: `set - a b` leaves three positional parameters here and two in every
+// column that has been asked. Left alone on purpose — see the corners under
+// Semantics.SetODeclinesADashWord, and #2699 — so that the two questions are
+// fixed separately and this one follows that one for free.
+func setOptionWord(a string) bool {
+	return len(a) >= 2 && (a[0] == '-' || a[0] == '+')
+}
+
+// setODeclinedWord reports whether a bare `-o` will not take this word as its
+// long option name — in the dialects that decline one at all, which is
+// Semantics.SetODeclinesADashWord.
+//
+// The empty word is here beside the option words and not behind an axis of
+// its own, because the panel splits over it in exactly the same place:
+// `set -o ""` lists in the three bash columns and in ksh93 and is refused as
+// a name — `Illegal option -o `, `no such option: ` — in dash, BusyBox ash
+// and zsh. Two fields could only ever have agreed.
+func setODeclinedWord(a string) bool {
+	return a == "" || setOptionWord(a)
 }
 
 // refuseBeforeApplyingSetOptions is the pass bash makes over every option
@@ -688,7 +738,14 @@ func (r *Runner) unknownSetLetter(args []string, report bool) (bad rune, on, pre
 		letters, read, stop := a[1:], false, false
 		if before, after, ok := strings.Cut(letters, "o"); ok {
 			letters, read = before, true
-			if after == "" && i+1 < len(args) {
+			// A word the `-o` will not take is not the `-o`'s operand, so
+			// this pass reads it as the letters it is — which is the whole
+			// of why bash's `set -o -Z` refuses `Z` with no listing written.
+			// Read rather than asked, for the reason hasSetLetter is: a pass
+			// that applies nothing must not be the one that refuses a
+			// dialect for an unanswered axis.
+			if after == "" && i+1 < len(args) &&
+				(!setODeclinedWord(args[i+1]) || r.sem().SetODeclinesADashWord != Yes) {
 				i++
 			}
 		} else if cut, ok := strings.CutSuffix(letters, "A"); ok && r.setArrayLetter() {

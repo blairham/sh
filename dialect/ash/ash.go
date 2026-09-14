@@ -359,6 +359,9 @@ func Semantics() interp.Semantics {
 	// also the probe that showed the seam above is the *spelling* refused
 	// rather than the `-o` route (#2629).
 	s.SetOLetterAttachesItsName = interp.No
+	// And as in dash the next word is taken whatever it looks like:
+	// `set -o -e` is `illegal option -o -e` at 1, errexit left off.
+	s.SetODeclinesADashWord = interp.No
 	// And as in dash it applies as it goes: `command set -e -Z` leaves
 	// errexit on, and the unguarded form ends the script for that reason
 	// rather than because the refusal is fatal on its own.

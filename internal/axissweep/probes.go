@@ -474,6 +474,36 @@ func Probes() []Probe {
 			},
 		},
 		{
+			Field: "SetODeclinesADashWord",
+			Cases: []string{"opt/a-set-o-name-that-begins-with-a-dash"},
+			// Read from what the shell was left holding rather than from
+			// the wording, because the two readings part on behavior:
+			// errexit is on in a column that declined the word and off in
+			// one that refused it as a name. The row's `-e` spells a letter
+			// every column has for exactly that reason.
+			//
+			// The two controls point in opposite directions. A cell that
+			// said nothing and did not turn errexit on has answered
+			// neither reading, and scoring it would make silence agree with
+			// whatever the preset already held. A cell that refused *and*
+			// turned errexit on is not a shape either reading produces.
+			Reading: "`set -o -e >/dev/null; …; case $- in *e*)` leaves errexit **on** and says nothing in a shell that will not take a dash word as the `-o` name, and refuses `-e` as a name with errexit still off in one that takes it",
+			Read: func(cells map[string]oracle.Result) (string, string) {
+				r := cells["opt/a-set-o-name-that-begins-with-a-dash"]
+				on := strings.Contains(r.Stdout, "e=on")
+				if strings.TrimSpace(r.Stderr) == "" {
+					if on {
+						return "Yes", ""
+					}
+					return "", "this shell refused nothing and turned errexit on for nothing — the recorded cell holds neither reading"
+				}
+				if on {
+					return "", "the cell holds a refusal *and* errexit on, which neither reading produces"
+				}
+				return "No", ""
+			},
+		},
+		{
 			Field: "SetValidatesOptionLettersFirst",
 			Cases: []string{"opt/a-refusable-letter-behind-a-refusable-name"},
 			// Read from *which word was complained about* rather than from

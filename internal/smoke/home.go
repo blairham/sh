@@ -150,6 +150,14 @@ func home(root string, d Dialect) (string, error) {
 // `alias-42-ok` from typing `smokealias`. A mark that is also in the typed
 // line is answered by the terminal echoing the keystrokes, so a suite built
 // that way passes for a shell that runs nothing at all.
+//
+// **The last line is a completion system, and it is here to make an existing
+// row able to fail.** See Dialect.CompletionWidget: a file with no `compinit`
+// in it leaves Tab on the editor's own binding, which is not the arrangement
+// anybody runs, and the completion rows graded a case that could not break
+// (#2770). It goes after the key rebindings for the reason they are ordered
+// at all — the editing mode is already current, so the binding lands in the
+// keymap the prompt is in.
 func rcText(d Dialect) string {
 	return fmt.Sprintf(`# Written by the smoke suite. Not a person's file.
 SMOKE_RC=yes
@@ -165,9 +173,10 @@ PS2='%s'
 %s
 %s
 %s
+%s
 `, rcPromptPrefix, d.CwdEscape, promptFieldSep, d.UserEscape, promptAnchor, continuationPrompt,
 		d.PromptHook, d.AutoCdOption, d.CdSpellOption, strings.Join(d.DirSpellOption, "\n"),
-		d.CheckJobsOption, strings.Join(d.RebindKeyInViMode, "\n"), d.RebindKey)
+		d.CheckJobsOption, strings.Join(d.RebindKeyInViMode, "\n"), d.RebindKey, d.CompletionWidget)
 }
 
 // The foreground job the suspend checks use.

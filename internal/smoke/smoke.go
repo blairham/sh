@@ -196,6 +196,24 @@ type Dialect struct {
 	// output would report a working `jobs` as broken.
 	JobRunning string
 	JobStopped string
+
+	// CompletionWidget is the rc-file line that puts a *completion widget* on
+	// the Tab key, which is what a real startup file's completion system does
+	// and what #2770 was.
+	//
+	// It matters because the row it arms is the one already here — "Tab
+	// completes a filename" — and that row passed throughout the bug. The
+	// suite's rc had no completion system in it, so Tab stayed on the
+	// editor's own binding and completed; on a person's machine `compinit`
+	// had moved it to a widget whose function cannot complete, and every Tab
+	// printed two diagnostics instead. **The components were each right and
+	// the composition was broken**, which no row could see until the rc
+	// contained the thing that breaks it.
+	//
+	// zsh only. bash's completion system does not rebind Tab away from
+	// readline's own `complete`, so there is no equivalent line and the field
+	// is empty — see rcText, which writes nothing for it.
+	CompletionWidget string
 }
 
 // Bash and Zsh are the two the suite drives. Both are measured facts about the
@@ -246,6 +264,15 @@ func Zsh() Dialect {
 		RunningJobsAtExit: "you have running jobs.",
 		ListsJobsAtExit:   false,
 		JobRunning:        "running", JobStopped: "suspended",
+		// `compinit`'s own two lines, in its own order: it redefines the
+		// standard completion widget against the completion driver, then puts
+		// it on Tab. The function is named and deliberately *not* defined,
+		// which is the case exactly — `_main_complete` is defined on a real
+		// machine and still cannot complete, so a shell that completes here
+		// only because the function is missing would be passing for the wrong
+		// reason. What the row asks is that the *completer* answers the key.
+		CompletionWidget: "zle -C complete-word .complete-word _smoke_main_complete\n" +
+			"bindkey '^I' complete-word",
 	}
 }
 

@@ -1039,11 +1039,17 @@ type Semantics struct {
 	// FunctionNameWhenTheDefinitionRuns is what a `function` definition does
 	// when it is reached and the word standing where its name belongs is not
 	// a name. Asked only where the grammar carried the word this far —
-	// syntax.Dialect.FunctionNameCheckedWhenTheDefinitionRuns — which is bash
-	// and ksh93; zsh reads such a name as a word and defines what it comes
-	// to, and dash has no keyword to reach the question with. Three answers
-	// among those two, and POSIX mode is the third; see FuncNameRunForm
-	// (#1296).
+	// syntax.Dialect.FunctionNameCheckedWhenTheDefinitionRuns — which is
+	// bash, ksh93 and ash; zsh reads such a name as a word and defines what
+	// it comes to, and dash has no keyword to reach the question with. Four
+	// answers among those three, and POSIX mode is the third; see
+	// FuncNameRunForm (#1296, #2590).
+	//
+	// ash arrives here by a different test from the other two, which is the
+	// one thing to know before reading a value off this axis: for bash and
+	// ksh93 the word's *text* is not a name, and for ash the word was not
+	// written **bare** — see syntax.Dialect.FunctionNameIsAnyBareWord, where
+	// `'f'` is carried this far and a bare `a*b` is defined.
 	//
 	// unexhibited FuncNameEndsTheScriptAsASyntaxError: bash in POSIX mode,
 	// reached through [Runner.SetPosixMode] and held by no preset, for the

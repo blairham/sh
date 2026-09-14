@@ -139,7 +139,8 @@ func TestEachDialectEndsAWordOnATrailingBackslash(t *testing.T) {
 // bash's: `B` is never reached here. That divergence is older than this fix
 // and unmoved by it — the same lines come out of the merge base — and it is
 // about where a substitution's parse failure stops, not about the word rule
-// above. Pinned rather than corrected, so matching bash has to be deliberate.
+// above. Pinned rather than corrected, so matching bash has to be deliberate;
+// #2703 is where that decision is owed.
 //
 // The wording is the half that is #2680's: the same end of input inside the
 // same re-lexed body used to come back out as `input ends after a backslash`,

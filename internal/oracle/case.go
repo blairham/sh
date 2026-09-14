@@ -20747,6 +20747,11 @@ echo "st=$?"`,
 		Why:     "`%c` is `%~` with one difference and this row is the whole of it: an absent count means **one component** here where it means the whole path there, and a nought means one as well. Everything else is shared — `%2c` is `%2~`, `%5c` past the units is the whole path with its marker back, and a negative count is the leading components. `%C` is the same code against the unabbreviated path and `%.` is a second spelling of `%c`. This shell drew the basename for all fourteen, which is right for bash's `\\W` and is a different question: in a directory one below the root `\\W` is `tmp` where `%c` is `/tmp`, because a single leading component keeps the slash in front of it (#1699)",
 	},
 	{
+		ID: "print/the-host-codes-read-the-host-parameter", Category: "builtins",
+		Snippet: `HOST=a.b.c.d; print -rP -- "[%m][%1m][%2m][%3m][%9m][%-m][%-2m][%M][%2M]"; unset HOST; print -rP -- "[%m][%M]"; echo "st=$?"`,
+		Why:     "the third counting family, and the row that is only recordable because the count reads a **parameter**. `%m` and `%M` draw the machine's name, which is not the same string twice and cannot go in a record; `$HOST` is what they read, so a name assigned on the line before makes every field exact on any machine. It points the opposite way from a path — `%2m` is the *leading* two components where `%2~` is the trailing two — and `%M` takes no count at all, which is what says this is one counting code beside one that is not rather than a pair. The tail is the other half of reading a parameter: with it unset both codes draw nothing and report 0, where a shell that asked the system would still name the machine it was built on. This shell had no `$HOST` and asked the system for both codes until #2576, so it answered its own name to all nine of the first line. zsh alone has `print -P`; ksh93 has `print` and not the letter, and bash and dash have no `print`",
+	},
+	{
 		ID: "print/a-negative-count-in-front-of-a-color-is-no-color", Category: "builtins",
 		Env:     []string{"TERM=xterm-256color"},
 		Snippet: `print -rnP -- "%-2Fx%-1F%-F%-0F%-2F{red}" | od -An -c | tr -s ' '; print -rnP -- "%F{red}a%-2Fb%b" | od -An -c | tr -s ' '; echo "st=$?"`,
@@ -21508,6 +21513,13 @@ echo "st=$?"`,
 		Snippet: `echo "[${PS1+set}][${PS1-unset}]"`,
 		Why:     "the other side of the same guard, and the direction it is easy to break by getting the value right: three answers here where the row above is unanimous. bash 5.3.15, bash 3.2.57, bash under argv[0] `sh` and ksh93 leave PS1 *unset* with nobody to prompt — which is exactly what the guard detects — dash assigns the same `$ ` it prompts with, and zsh assigns the empty string. Set-and-empty is a third answer rather than a spelling of unset, which is why the row prints both `+` and `-`",
 	},
+	{
+		ID: "prompt/the-host-name-is-a-parameter", Category: "invocation",
+		Args:    []string{"-c", ArgSnippet},
+		Snippet: `echo "[${HOST+set}][${HOST:+nonempty}]"`,
+		Why:     "zsh alone puts the machine's name in a parameter, and the shape is recorded rather than the name because a record holding this machine's host name would be wrong on the next one. Six columns leave `HOST` unset — `HOSTNAME` is bash's own and a different question — and zsh has it set and non-empty before the first command of a `-c` run, prompt or no prompt. It is what `%m` and `%M` read, so the two facts arrive together: a prompt theme that branches on `[[ $HOST == … ]]` reads this parameter, and an empty one takes the wrong arm without saying so",
+	},
+
 	// --- `return` in a startup file (#1422) ---------------------------
 	//
 	// A startup file *is* a sourced script, so a `return` in one is accepted,

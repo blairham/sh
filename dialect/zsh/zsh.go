@@ -3417,9 +3417,48 @@ func Apply(r *interp.Runner) {
 	// `$USER` — which is empty under `env -i` and names the wrong person under
 	// `env USER=someone-else`. One question, every asker.
 	r.SetPromptUserFunc(interp.LoginName)
-	// The machine's name, for `%m` and `%M`, asked the same way and from the
-	// same place.
-	r.SetPromptHostFunc(interp.MachineName)
+	// The machine's name, for `%m` and `%M`, from the same place — but by a
+	// different road, because this shell puts it in a *parameter* first.
+	//
+	// Measured 2026-09-13 on zsh 5.9.2, `env -i PATH=/usr/bin:/bin`, `-c`:
+	// `$HOST` is the machine's name at startup, and `HOST=a.b.c.d; print -rP
+	// '%m|%2m|%M'` writes `a|a.b|a.b.c.d`. So the escapes read the parameter
+	// rather than asking the system each time, and the two facts are
+	// separable: a shell that set `$HOST` and still asked the system would
+	// answer the machine's own name to all three of those. That is what
+	// SetPromptHostParameter says and what SetPromptHostFunc could not —
+	// the latter keeps its first answer, which an assignable name must not.
+	//
+	// An inherited `HOST` wins, which is the half `SetSpecial` alone does not
+	// give: it guards on the *stored* table, and the environment is a layer
+	// under that one, so the name it found unstored was a name the shell had
+	// been handed. Measured, `env HOST=injected.example zsh -c 'print -rP
+	// "$HOST|%m"'` writes `injected.example|injected`, and this shell wrote
+	// the machine's own name for both until the guard read the environment
+	// too. It is an ordinary exported scalar then and an ordinary unexported
+	// one otherwise — `export HOST=…` against `typeset HOST=…` — and
+	// `${(t)HOST}` is a bare `scalar` in both, with none of the `special`
+	// that `$UID` and `$IFS` carry. `unset HOST` therefore removes it
+	// outright and `%m` draws nothing at 0.
+	//
+	// Not folded into SetSpecial, because the other users of that hook want
+	// what it does: measured, `env UID=999 zsh -c 'print $UID'` writes this
+	// uid and not 999, so `$UID` is precisely the parameter the environment
+	// may not name. `HOST` is the one that may.
+	//
+	// Asked eagerly, where the login name beside it is deferred, and the
+	// asymmetry is the point rather than an oversight. A parameter has to
+	// exist before the first `$HOST` is read and there is no `%m` to hang the
+	// question on, so the choice is between paying it and not having the
+	// parameter. It is affordable where `user.Current` was not: `os.Hostname`
+	// measures 1.5 µs on this machine against 0.83-1.10 ms for the login
+	// name, three orders of magnitude apart, and #1403's zsh column was about
+	// the millisecond. The issue that asked for this (#2576) quoted the
+	// millisecond for the host name too; that figure is the login name's.
+	if _, inherited := r.GetVar("HOST"); !inherited {
+		r.SetSpecial("HOST", interp.MachineName())
+	}
+	r.SetPromptHostParameter("HOST")
 	// And the prompt-escape table, which is the *same* value the prompt
 	// drawer is handed — repl.PromptStyle is an alias for interp.PromptStyle,
 	// not a copy. This is what makes `print -P '%F{196}…'` and a drawn prompt

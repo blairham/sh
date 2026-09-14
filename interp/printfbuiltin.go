@@ -401,7 +401,10 @@ func (r *Runner) printfStarOperand(next func() (string, bool)) (int64, int, bool
 		}
 		return 0, 0, false
 	}
-	n, code := r.printfNumber(arg, true)
+	n, code, stop := r.printfNumber(arg, true)
+	if stop {
+		return n, code, true
+	}
 	if code != 0 && !r.ask(r.sem().PrintfStarComplaintCostsTheStatus, "a `printf` complaint about a `*` operand reporting failure") {
 		// ash alone writes the complaint and reports success anyway:
 		// `printf '%*s' abc hi` is `hi` on stderr's evidence and 0 on the
@@ -466,16 +469,25 @@ func (r *Runner) printfConvert(spec string, verb byte, timeFmt string, next func
 	case 'q':
 		return r.printfQuote(spec, arg)
 	case 'd', 'i':
-		n, code := r.printfNumber(arg, present)
+		n, code, stop := r.printfNumber(arg, present)
+		if stop {
+			return "", code, true
+		}
 		return fmt.Sprintf(spec+"d", n), code, false
 	case 'o', 'u', 'x', 'X':
-		n, code := r.printfNumber(arg, present)
+		n, code, stop := r.printfNumber(arg, present)
+		if stop {
+			return "", code, true
+		}
 		if verb == 'u' {
 			verb = 'd'
 		}
 		return fmt.Sprintf(spec+string(verb), n), code, false
 	case 'f', 'e', 'E', 'g', 'G':
-		f, code := r.printfFloat(arg, present)
+		f, code, stopped := r.printfFloat(arg, present)
+		if stopped {
+			return "", code, true
+		}
 		if text, ok, stop := r.printfNonFinite(spec, verb, f); ok {
 			return text, code, stop
 		}
@@ -610,36 +622,6 @@ func printfSignificantDigits(spec string) string {
 	return spec + ".6"
 }
 
-// printfNumber reads an integer operand, complaining where the dialect does.
-//
-// The zero is printed either way: the shells that report this still write the
-// zero the conversion would have produced, so the complaint is beside the
-// output rather than instead of it.
-func (r *Runner) printfNumber(arg string, present bool) (int64, int) {
-	if arg == "" && !r.printfEmptyNumberIsAnError(present) {
-		return 0, 0
-	}
-	if n, ok := r.charConstant(arg); ok {
-		return n, 0
-	}
-	if n, err := strconv.ParseInt(strings.TrimSpace(arg), 0, 64); err == nil {
-		return n, 0
-	}
-	if !r.ask(r.sem().PrintfReportsBadNumber, "`printf` complaining about an operand that is not a number") {
-		return 0, 0
-	}
-	return 0, r.printfReport(printfBadNumber, arg)
-}
-
-// printfEmptyNumberIsAnError is whether a numeric conversion left with no
-// text to read should complain, which is two questions and not one.
-//
-// The operand being *absent* and the operand being present and *empty* are
-// separate facts, and the dialects cross on them: bash complains about the
-// empty one and not the absent one, ash complains about both, and the other
-// three complain about neither. So the absent case is asked first, and the
-// dialect that folds it into the empty one goes on to ask the empty one's
-// question — which is what BusyBox does (#2648).
 func (r *Runner) printfEmptyNumberIsAnError(present bool) bool {
 	if !present {
 		// Read rather than asked, and that is the point: every dialect that
@@ -654,27 +636,6 @@ func (r *Runner) printfEmptyNumberIsAnError(present bool) bool {
 		return r.ask(r.sem().PrintfAbsentNumberIsAnEmptyOne, "`printf` reading a numeric conversion with no operand left as an empty one")
 	}
 	return r.ask(r.sem().PrintfEmptyIsNotANumber, "`printf` complaining about an empty operand where a number belongs")
-}
-
-func (r *Runner) printfFloat(arg string, present bool) (float64, int) {
-	if arg == "" && !r.printfEmptyNumberIsAnError(present) {
-		return 0, 0
-	}
-	if n, ok := r.charConstant(arg); ok {
-		// The same operand a `%d` would read, widened: `printf '%f' "'A"` is
-		// `65.000000` in every column.
-		return float64(n), 0
-	}
-	if f, err := strconv.ParseFloat(strings.TrimSpace(arg), 64); err == nil {
-		return f, 0
-	}
-	if f, ok := cNotANumber(strings.TrimSpace(arg)); ok {
-		return f, 0
-	}
-	if !r.ask(r.sem().PrintfReportsBadNumber, "`printf` complaining about an operand that is not a number") {
-		return 0, 0
-	}
-	return 0, r.printfReport(printfBadNumber, arg)
 }
 
 // cNotANumber reads the not-a-number operands C's `strtod` takes and Go's
@@ -1022,7 +983,11 @@ func (r *Runner) printfTime(spec, format, arg string, present bool) (string, int
 		t = r.StartedAt()
 	default:
 		var n int64
-		n, code = r.printfNumber(arg, present)
+		var stop bool
+		n, code, stop = r.printfNumber(arg, present)
+		if stop {
+			return "", code, true
+		}
 		t = time.Unix(n, 0)
 	}
 	t = t.In(r.timeZone())

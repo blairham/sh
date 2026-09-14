@@ -1014,6 +1014,7 @@ func Semantics() interp.Semantics {
 	s.PrintfGroupingFlag = interp.Yes
 	s.PrintfGroupingFlagAfterTheWidth = interp.No
 	s.PrintfReportsBadNumber = interp.Yes
+	s.PrintfNumberOperand = interp.PrintfNumberLeadingNumber
 	s.PrintfBackslashC = interp.PrintfBackslashCLiteral
 	// A format that ends inside a conversion is an error here, with a
 	// second wording of its own — see PrintfMissingVerb.
@@ -2067,6 +2068,7 @@ func Diagnostics() interp.Diagnostics {
 		CdTooManyOperandsStatus:     2,
 		CdOldpwdNotSet:              "cd: OLDPWD not set",
 		PrintfBadNumber:             "printf: %[1]s: invalid number",
+		PrintfNumberOutOfRange:      "printf: %[1]s: Result too large",
 		PrintfBadVerb:               "printf: `%[1]s': invalid format character",
 		PrintfMissingVerb:           "printf: `%[1]s': missing format character",
 		PrintfMissingHexDigit:       `printf: missing hex digit for \x`,

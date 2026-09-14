@@ -1117,6 +1117,8 @@ func Semantics() interp.Semantics {
 	s.PrintfGroupingFlag = interp.Yes
 	s.PrintfGroupingFlagAfterTheWidth = interp.Yes
 	s.PrintfReportsBadNumber = interp.No
+	s.PrintfNumberOperand = interp.PrintfNumberArithmetic
+	s.PrintfRefusedOperandKeepsItsLeadingNumber = interp.Yes
 	s.PrintfBackslashC = interp.PrintfBackslashCControl
 	// `printf 'a%5'` is `a%` here and reports success: the unfinished
 	// conversion becomes one literal character and the prefix is dropped.
@@ -2169,6 +2171,7 @@ func Diagnostics() interp.Diagnostics {
 		// after it, and only the status says anything went wrong.
 		PrintfBadDateOperand:      "printf: warning: invalid argument of type T",
 		PrintfBadVerb:             "printf: %[1]s: unknown format specifier",
+		PrintfArithOperandFailure: "printf: %[1]s",
 		PrintfBadOption:           "printf: %[1]s: unknown option",
 		TrapConditionRequired:     "trap: condition(s) required",
 		PrintfBadOptionShowsUsage: true,

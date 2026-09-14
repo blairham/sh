@@ -1636,6 +1636,8 @@ func Semantics() interp.Semantics {
 	s.PrintfGroupingFlag = interp.Yes
 	s.PrintfGroupingFlagAfterTheWidth = interp.No
 	s.PrintfReportsBadNumber = interp.No
+	s.PrintfNumberOperand = interp.PrintfNumberArithmetic
+	s.PrintfRefusedOperandKeepsItsLeadingNumber = interp.No
 	s.PrintfBackslashC = interp.PrintfBackslashCStops
 	s.PrintfUnfinishedConversionIsAPercent = interp.No
 	// The same two digits bash reads, and an empty digit run is a zero

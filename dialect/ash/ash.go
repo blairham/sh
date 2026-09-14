@@ -453,6 +453,7 @@ func Semantics() interp.Semantics {
 	s.PrintfGroupingFlag = interp.No
 	s.PrintfGroupingFlagAfterTheWidth = interp.No
 	s.PrintfReportsBadNumber = interp.Yes
+	s.PrintfNumberOperand = interp.PrintfNumberWholeOperand
 	s.PrintfUnfinishedConversionIsAPercent = interp.No
 	// `printf -v x '%s' hi` assigns nothing: `-v` is read as the format.
 	s.PrintfAssignsWithV = interp.No

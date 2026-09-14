@@ -745,7 +745,7 @@ func (r *Runner) unknownSetLetter(args []string, report bool) (bad rune, on, pre
 			// that applies nothing must not be the one that refuses a
 			// dialect for an unanswered axis.
 			if after == "" && i+1 < len(args) &&
-				!(setODeclinedWord(args[i+1]) && r.sem().SetODeclinesADashWord == Yes) {
+				(!setODeclinedWord(args[i+1]) || r.sem().SetODeclinesADashWord != Yes) {
 				i++
 			}
 		} else if cut, ok := strings.CutSuffix(letters, "A"); ok && r.setArrayLetter() {

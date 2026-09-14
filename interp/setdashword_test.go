@@ -22,7 +22,7 @@ import (
 // directions from the same script: a run that only ever answers Yes passes
 // under an implementation that ignores the field entirely.
 
-// dashWordSem is a vector with the two neighbouring `set` axes pinned, so
+// dashWordSem is a vector with the two neighboring `set` axes pinned, so
 // that what moves in these tests is only the one under test. Welding is off,
 // which is the reading the three bash columns and the two ash-family columns
 // share, and the validating pass is off except where a test turns it on.

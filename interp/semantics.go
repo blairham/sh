@@ -5429,6 +5429,17 @@ type Semantics struct {
 	// See DeclareMappingLetterPolicy.
 	DeclareMappingLetter DeclareMappingLetterPolicy
 
+	// DeclareTypeLetter is the same question about the `T` letter, which is
+	// the third of the three: zsh ties a scalar to an array and ksh93 names
+	// a type. See DeclareTypeLetterPolicy.
+	DeclareTypeLetter DeclareTypeLetterPolicy
+
+	// DeclareHideValueLetter is the same question about the `H` letter, the
+	// fourth of them: zsh withholds a name's value from a listing and ksh93
+	// records an attribute that lists with its letter and its value. See
+	// DeclareHideValueLetterPolicy.
+	DeclareHideValueLetter DeclareHideValueLetterPolicy
+
 	// DeclareOptionsWithoutEffect names letters out of DeclareOptions that
 	// this engine models as doing nothing: accepted, silent, and 0.
 	//

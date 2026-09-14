@@ -94,6 +94,7 @@ func seedStacks(r *Runner) {
 	r.pipeStatus = append(make([]int, 0, 4), 0)
 	r.freezeAfter = append(make([]string, 0, 4), "seed")
 	r.mathOrder = append(make([]string, 0, 4), "seed")
+	r.declaredTypes = append(make([]string, 0, 4), "seed")
 	r.cmdHashOrder = append(make([]string, 0, 4), "seed")
 	r.optionLists = append(make([]optionList, 0, 4), optionList{})
 }

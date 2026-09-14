@@ -67,10 +67,12 @@ ash   DebugTrapRunsInSubshells
 ash   DebugTrapRunsInsideCalls
 ash   DeclarationListingFilter
 ash   DeclareGlobalReachesPastALocal
+ash   DeclareHideValueLetter
 ash   DeclareListing
 ash   DeclareMappingLetter
 ash   DeclareMatchingLetter
 ash   DeclarePrintReportsAMissingName
+ash   DeclareTypeLetter
 ash   DisownRemovesTheJob
 ash   EarlierDeclarationLetterBlocksALaterPlus
 ash   EmptyArithSubscript
@@ -169,8 +171,10 @@ ash   WholeArraySubscriptAssigningAnArray
 bash  ArithIntegerOperatorRefusesFloat
 bash  ArithSubscriptSkippedWhenNameUnset
 bash  BareSubscriptIsASubscript
+bash  DeclareHideValueLetter
 bash  DeclareMappingLetter
 bash  DeclareMatchingLetter
+bash  DeclareTypeLetter
 bash  ExitTrapFiresPastTheEnd
 bash  ImmovableOptionsSetAtInvocation
 bash  IntegerPlusFormTakesAttributesOff
@@ -222,10 +226,12 @@ dash  DebugTrapRunsInSubshells
 dash  DebugTrapRunsInsideCalls
 dash  DeclarationListingFilter
 dash  DeclareGlobalReachesPastALocal
+dash  DeclareHideValueLetter
 dash  DeclareListing
 dash  DeclareMappingLetter
 dash  DeclareMatchingLetter
 dash  DeclarePrintReportsAMissingName
+dash  DeclareTypeLetter
 dash  DisownRemovesTheJob
 dash  DollarSingleBackslashC
 dash  DollarSingleCaretMeta

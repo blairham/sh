@@ -102,6 +102,10 @@ func (c *Runner) ownTables(r *Runner) {
 	c.unique = maps.Clone(r.unique)
 	c.hideInScope = maps.Clone(r.hideInScope)
 	c.tied = maps.Clone(r.tied)
+	// The type names `typeset -T` registered — see interp/declaretype.go.
+	// A slice rather than a map, so it is copied outright: a subshell that
+	// declares a type must not append into the array its parent is holding.
+	c.declaredTypes = slices.Clone(r.declaredTypes)
 	// freezing, literalOperands and declaring are only ever *replaced* as a
 	// whole, which makes sharing them harmless today and makes cloning them
 	// free. They are here because the rule is the struct field and not the

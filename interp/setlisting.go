@@ -68,10 +68,13 @@ func (r *Runner) setListing() int {
 			// variable, and no shell lists it here.
 			continue
 		}
-		if d.hidden {
-			// `typeset -H` reaches this listing too: measured, a bare `set`
-			// writes the hidden name with no `=` and no value where an
-			// ordinary one writes `name=value`.
+		if d.hidesTheValue {
+			// `typeset -H` reaches this listing too, in the dialect whose
+			// letter withholds a value: measured, a bare `set` writes the
+			// hidden name with no `=` and no value where an ordinary one
+			// writes `name=value`. The dialect whose `-H` is inert writes
+			// `zzh=hid` here like any other name, which is the same row
+			// measured in the other column.
 			r.printf("%s\n", name)
 			continue
 		}

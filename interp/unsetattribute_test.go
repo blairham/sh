@@ -25,6 +25,7 @@ import (
 func withEveryAttributeLetter(s *Semantics) {
 	s.DeclareOptions = "aAgHilprUux"
 	s.LocalOptions = "aAHilprUux"
+	s.DeclareHideValueLetter = DeclareHideValueLetterHidesTheValue
 }
 
 // The integer attribute, which is the one that changes what an assignment

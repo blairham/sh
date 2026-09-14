@@ -1560,7 +1560,7 @@ func Semantics() interp.Semantics {
 	// declares a local in a keyword body here and the global in the other,
 	// so a listing that dropped the word would hand back a program whose
 	// variables leak — and the source text keeps it because it was written.
-	s.DeclareOptions = "aAfilmMprux"
+	s.DeclareOptions = "aAfHilmMprTux"
 	// `-m` is here now, and it is not the letter zsh spells the same way:
 	// it *moves* a parameter — `typeset -m new=old` — where the other
 	// shell selects several by pattern. Measured 2026-09-13 on ksh93u+;
@@ -1584,6 +1584,23 @@ func Semantics() interp.Semantics {
 	// `typeset -l v` — where zsh's `functions -M` registers a math function.
 	// Measured 2026-09-13; interp/declaremapping.go holds it.
 	s.DeclareMappingLetter = interp.DeclareMappingLetterNamesACharacterMapping
+	// `-T` is the third letter of that shape: it names a **type** here —
+	// `typeset -T Pt=(…)` — where zsh's ties a scalar to an array, and the
+	// two share no operand grammar. Measured 2026-09-13;
+	// interp/declaretype.go holds the whole measurement and
+	// interp.DeclareTypeLetterPolicy is the axis. A type is a compound value
+	// and this engine has none, so every form but the definition is the
+	// silence that shell answers with and the definition goes on saying the
+	// letter is missing (#2620).
+	s.DeclareTypeLetter = interp.DeclareTypeLetterNamesAType
+	// `-H` is the fourth of that shape, and the cheapest: it is an inert
+	// attribute here — recorded, and written back as `typeset -H h=hid` with
+	// the value and all — where zsh's letter of the same spelling is what
+	// *withholds* a value from a listing. On a UNIX ksh93 it maps nothing and
+	// changes nothing a script can see but the listing. Measured 2026-09-13;
+	// interp/declarehide.go holds the whole measurement and
+	// interp.DeclareHideValueLetterPolicy is the axis.
+	s.DeclareHideValueLetter = interp.DeclareHideValueLetterIsAnInertAttribute
 	// A lone `-` or `+` is an option word to *this* builtin: measured
 	// 2026-09-10, `typeset +` names every parameter and `typeset -` writes
 	// the same table with values, where bash calls the sign an identifier
@@ -1628,7 +1645,7 @@ func Semantics() interp.Semantics {
 	// fatally, since these are special builtins there — where `typeset -f
 	// nm` on the same line lists. The word carries a type and a function
 	// has none.
-	s.IntegerOptions = "aAilmMprux"
+	s.IntegerOptions = "aAHilmMprTux"
 	// `-i16` and `-i 16` are an output base here — `integer -i 16 b=255` is
 	// `16#ff` — and this engine has no base to keep, so it refuses by name.
 	s.IntegerAttributeTakesABase = interp.Yes
@@ -2091,7 +2108,24 @@ func Diagnostics() interp.Diagnostics {
 			// `-f` line* is missing — there it marks a name to be read from
 			// `$FPATH`. It is refused in that position alone, through
 			// UnimplementedOptionLettersOnAFunctionLine below.
-			"typeset": "-bFhnstCEHLRSTXZ",
+			//
+			// `-T` has left this list too, and only half of it is built:
+			// the letter names a type here, and every form of it but the
+			// *definition* is the silence that shell answers with — see
+			// Semantics.DeclareTypeLetter. The definition is a compound
+			// value (#2620), and interp/declaretype.go goes on saying the
+			// letter is missing for that one shape, in this table's own
+			// sentence.
+			//
+			// `-H` has left it outright, and it is *not* the letter zsh
+			// spells the same way: here it is an inert attribute that is
+			// recorded and said back — `typeset -H h=hid` lists as `typeset
+			// -H h=hid`, value and all — where zsh's withholds the value.
+			// See Semantics.DeclareHideValueLetter and
+			// interp/declarehide.go. The lower-case `-h` stays: it takes a
+			// *string* argument here (`[-h string]` in the usage block) and
+			// is neither zsh's hide-in-scope nor anything this shell does.
+			"typeset": "-bFhnstCELRSXZ",
 			// `functions` is `typeset -f` under a second name, so the
 			// letters it is missing are read off its own set: `-t` traces a
 			// function and `-u` marks one to be read from `$FPATH`, both of
@@ -2120,7 +2154,21 @@ func Diagnostics() interp.Diagnostics {
 			// takes. Measured 2026-09-12, `integer -f w=1` is the only
 			// letter of typeset's grammar that ksh93u+ refuses under the
 			// second name, and it refuses it with the usage line alone.
-			"integer": "-bFhnstCEHLRSTXZ",
+			//
+			// `-T` is the second of those, found when the letter was
+			// measured for `typeset`: `integer -T TS ts` is that same usage
+			// block at 2 where `typeset -T TS ts` is a silent 0, because the
+			// word already carries a type and the letter has nothing left to
+			// name. So it is not *unimplemented* under this name and leaves
+			// this list with the one above it.
+			//
+			// `-H` leaves it with the one above too, and by the same route:
+			// the letter is built, and `integer -H n=5` is the usage block
+			// at 2 because the word already carries the integer attribute
+			// and the two are exclusive — measured, `typeset -iH n=5` is
+			// that same block. Refused for the conflict rather than for the
+			// letter, which is what interp/declarehide.go says.
+			"integer": "-bFhnstCELRSXZ",
 		},
 		// `-u` on a `-f` line, which is the one letter that cannot go in
 		// the list above: it is also the upper-case attribute, and this

@@ -1,0 +1,42 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# `-f` on the command line — #2315's zsh/ half, and the letter a portable
+# script is most likely to reach for without checking.
+#
+# In bash, ksh93 and dash, `-f` is noglob: `sh -f -c 'printf "[%s]\n" *'`
+# prints the pattern. In zsh the letter is `NO_RCS` — "read no startup files"
+# — and globbing is untouched, so the same command line prints the file names.
+# zsh spells noglob `-F`.
+#
+# zsh/options.tests records the same split for `set -f` *inside* a running
+# shell. This file is the other route, and the route is the point: `zsh -f` is
+# how a script asks for a shell with no startup files, and it is written into
+# shebangs and into `#!/usr/bin/env` lines where the writer usually means one
+# of the two things and gets the other.
+#
+# `-o noglob`, which every column shares, is what core/invocation.tests uses
+# and is asked here too — beside the letter, so the file says the option
+# exists and the *letter* is what moved.
+#
+# `$SUITE_SHELL` is the shell of this run; see suite.OurShellVar.
+
+: > aaa.txt
+: > bbb.txt
+
+# The letter, three ways of writing it, and the option's long name beside it.
+"$SUITE_SHELL" -f -c 'printf "dash f: [%s]\n" *.txt'
+"$SUITE_SHELL" -fc 'printf "bundled: [%s]\n" *.txt'
+"$SUITE_SHELL" -o noglob -c 'printf "the option name: [%s]\n" *.txt'
+
+# And with no option at all, so the three lines above are read against
+# something rather than against an assumption.
+"$SUITE_SHELL" -c 'printf "no option: [%s]\n" *.txt'
+
+# `$0` read inside a function of a `-c` command string is the *function's*
+# name here and the shell's `$0` in the other three — the same rule
+# zsh/functions.tests records for a function called from a script, seen on the
+# route where a script is one string on the command line.
+"$SUITE_SHELL" -c 'f() { printf "in a function [%s]\n" "$0"; }
+f' givenname
+"$SUITE_SHELL" -c 'printf "outside a function [%s]\n" "$0"' givenname

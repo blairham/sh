@@ -235,7 +235,7 @@ func (r *Runner) reportBorrowedParseFailure(err error, s sourced, src string) {
 		// after it: the message this shell writes already carries `at line
 		// N`, and it does not say the number twice. See
 		// Diagnostics.BorrowedTextRendersTheCallStack — the run-time half is
-		// Runner.locationPrefix, and the two render one rule from the two
+		// Runner.locationPrefixNamed, and the two render one rule from the two
 		// places a diagnostic about borrowed text is written.
 		chain, innermost := r.borrowedStack(d, r.locationFileOrName())
 		r.errf("%s%s: %s\n", chain, innermost, d.ParseFailure(err))

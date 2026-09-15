@@ -50,7 +50,7 @@ type Frame struct {
 
 	// outerFunc and outerFuncLine are the function the frame was entered
 	// from and the line that function was written on — the pair
-	// locationPrefix counts a message's line against, as it stood one frame
+	// locationPrefixNamed counts a message's line against, as it stood one frame
 	// down. They are Line's companions and are filled in beside it: Line
 	// alone says where the call was made and not what it was made *inside*,
 	// and a diagnostic located at the call needs both. See

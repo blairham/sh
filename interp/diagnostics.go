@@ -4968,12 +4968,12 @@ func (d Diagnostics) forBorrowed() Diagnostics {
 // It takes no builtin because the two names are *alternatives* rather than a
 // pair: the one dialect that both names borrowed text here and names the
 // builtin that is speaking writes the builtin in this very slot, so the
-// caller hands it over in place of the source. See Runner.locationPrefix,
+// caller hands it over in place of the source. See Runner.locationPrefixNamed,
 // and Runner.borrowedName for the same rule in the dialect that writes the
 // name after the location instead (#2532).
 //
 // The caller is expected to have applied [Diagnostics.forBorrowed] already —
-// SourceReport does it for the parse path, and Runner.locationPrefix for the
+// SourceReport does it for the parse path, and Runner.locationPrefixNamed for the
 // run-time one.
 func (d Diagnostics) borrowedPrefix(shell, source string, line int) string {
 	if shell == "" {

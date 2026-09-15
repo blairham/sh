@@ -2742,17 +2742,17 @@ func (r *Runner) locationNameAndLine(functionCounts bool) (name string, line int
 	return name, r.line, false
 }
 
-// locationPrefix is what goes in front of a diagnostic: the location above,
-// with the builtin that is speaking where this dialect puts one.
-func (r *Runner) locationPrefix() string { return r.locationPrefixNamed("") }
-
-// locationPrefixNamed is locationPrefix with a construct named between the
-// shell's name and the line, `<script>: command substitution: line 2: `.
+// locationPrefixNamed is what goes in front of a diagnostic: the location
+// above, with the builtin that is speaking where this dialect puts one, and
+// with a construct named between the shell's name and the line where the
+// message belongs to one — `<script>: command substitution: line 2: `.
 //
-// A parameter rather than a field on the runner, because it is true of one
-// message and not of a stretch of the run: the name rides on the shell's the
-// way a speaking builtin's does — see Diagnostics.withBuiltinInLocation —
-// and nothing else in the same statement is inside the construct. See
+// The construct is a parameter rather than a field on the runner, because it
+// is true of one message and not of a stretch of the run: the name rides on
+// the shell's the way a speaking builtin's does — see
+// Diagnostics.withBuiltinInLocation — and nothing else in the same statement
+// is inside the construct. Empty for every message that belongs to the script
+// itself, which is nearly all of them. See
 // Diagnostics.SubstitutionParseFailureNamesTheConstruct for the one dialect
 // that asks for it and for what it is measured against.
 func (r *Runner) locationPrefixNamed(construct string) string {

@@ -4,6 +4,7 @@
 package interp_test
 
 import (
+	"strings"
 	"testing"
 
 	. "github.com/blairham/sh/interp"
@@ -137,4 +138,50 @@ func TestABareArrayNameComesBackWhenItsBaseElementIsWrittenAgain(t *testing.T) {
 	if st != 0 {
 		t.Errorf("status = %d, want 0", st)
 	}
+}
+
+// And what the `set -u` refusal *names*, which is where the two columns that
+// refuse it part: ksh93u+ names the element the bare form stands for and bash
+// 5.3 names the array. Measured 2026-09-15 with
+// `a=(x y z); unset "a[0]"; set -u; echo "[$a]"` — `a[0]: parameter not set`
+// against `a: unbound variable` (#2818).
+//
+// The last two rows are what keeps it about the *element*: a name with no
+// array behind it is named plainly under the same flag, so the sentence is
+// not simply a suffix.
+func TestAnUnboundBareArrayNameCanNameItsFirstElement(t *testing.T) {
+	run := func(t *testing.T, names bool, src string) string {
+		t.Helper()
+		out, _ := runGrammar(t, src, nil, func(r *Runner) {
+			sem := *r.Semantics
+			sem.ArrayScalarIsTheWholeArray = No
+			sem.ArrayLengthWithoutSubscriptIsCount = No
+			sem.ArrayBaseIsZero = Yes
+			sem.UnsetArraySpan = UnsetArraySpanRemovesTheElements
+			sem.ArraysAreSparse = Yes
+			r.Semantics = &sem
+			diag := Diagnostics{UnboundVariable: "%s: parameter not set"}
+			diag.UnboundBareArrayNamesElementZero = names
+			r.Diagnostics = &diag
+		})
+		return out
+	}
+	for _, tc := range []struct{ name, src, want string }{
+		{"the element the bare name stands for", `a=(x y z); unset "a[0]"; set -u; echo "[$a]"`, "a[0]: parameter not set"},
+		{"an array with nothing left in it", `a=(x); unset "a[0]"; set -u; echo "[$a]"`, "a[0]: parameter not set"},
+		{"a name with no array behind it", `unset a; set -u; echo "[$a]"`, "a: parameter not set"},
+		{"and a plain scalar", `unset s; set -u; echo "[$s]"`, "s: parameter not set"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if out := run(t, true, tc.src); !strings.Contains(out, tc.want) {
+				t.Errorf("got %q, want %q in it", out, tc.want)
+			}
+		})
+	}
+	t.Run("the other column names the array", func(t *testing.T) {
+		out := run(t, false, `a=(x y z); unset "a[0]"; set -u; echo "[$a]"`)
+		if !strings.Contains(out, "a: parameter not set") || strings.Contains(out, "a[0]") {
+			t.Errorf("got %q, want the array named", out)
+		}
+	})
 }

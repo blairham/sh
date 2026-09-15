@@ -28080,6 +28080,57 @@
         "TimedOut": false
       }
     },
+    "axis/a-case-subject-reads-the-previous-line": {
+      "ash": {
+        "Stdout": "a~b~three~a~AO~B8",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "a~b~three~a~AO~B8",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "a~b~three~a~AO~B8",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "a~b~three~a~AO~B8",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "a~b~three~a~AO~B8",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "a~b~two~a~A4~BO",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "a~b~three~a~AO~B8",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "axis/a-failed-case-subject": {
       "ash": {
         "Stdout": "pre",
@@ -28433,6 +28484,57 @@
         "Stdout": "[absent]",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/a-substring-offset-takes-a-leading-colon": {
+      "ash": {
+        "Stdout": "[ol]|0~[]|0",
+        "Stderr": "\u003cshell\u003e: malformed ?: operator",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[ol]|0~[]|0",
+        "Stderr": "\u003cshell\u003e: line 1: v: 1:2: arithmetic syntax error in expression (error token is \":2\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[ol]|0~[]|0",
+        "Stderr": "\u003cshell\u003e: line 1: v: 1:2: arithmetic syntax error in expression (error token is \":2\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[ol]|0~[]|0",
+        "Stderr": "\u003cshell\u003e: v: 1:2: syntax error in expression (error token is \":2\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: :2: arithmetic syntax error",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[ol]|0",
+        "Stderr": "\u003cshell\u003e:1: unrecognized modifier",
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       }
@@ -70868,6 +70970,57 @@
       "zsh": {
         "Stdout": "",
         "Stderr": "\u003cshell\u003e:integer:1: not an identifier: 1x",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/an-integer-element-is-evaluated-once": {
+      "ash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: typeset: not found~\u003cshell\u003e: a[0]=/x/y.z: not found~\u003cshell\u003e: typeset: not found~\u003cshell\u003e: b[0]=2+3: not found~\u003cshell\u003e: syntax error: bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: /x/y.z: arithmetic syntax error: operand expected (error token is \"/x/y.z\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: /x/y.z: arithmetic syntax error: operand expected (error token is \"/x/y.z\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: /x/y.z: syntax error: operand expected (error token is \"/x/y.z\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: a[0]=/x/y.z: not found~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: b[0]=2+3: not found~\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: /x/y.z: arithmetic syntax error",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: a: assignment to invalid subscript range",
         "Status": 1,
         "Signal": 0,
         "TimedOut": false
@@ -127442,6 +127595,57 @@
         "TimedOut": false
       }
     },
+    "param/a-substring-range-blames-what-the-script-wrote": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: arithmetic syntax error",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: x: '\u0026\u0026': arithmetic syntax error: operand expected (error token is \"'\u0026\u0026'\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: x: '\u0026\u0026': arithmetic syntax error: operand expected (error token is \"'\u0026\u0026'\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: x: '\u0026\u0026': syntax error: operand expected (error token is \"'\u0026\u0026'\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: '\\\u0026\\\u0026': arithmetic syntax error",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: bad math expression: illegal character: '",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "param/a-substring-range-keeps-the-characters-nothing-protects": {
       "ash": {
         "Stdout": "[bcdef] [bcdef] [cdef]~after",
@@ -131772,6 +131976,57 @@
       "zsh": {
         "Stdout": "",
         "Stderr": "\u003cshell\u003e:1: not an identifier: ",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "param/one-complaint-per-substring-range": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: arithmetic syntax error",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: x: \u0026\u0026: arithmetic syntax error: operand expected (error token is \"\u0026\u0026\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: x: \u0026\u0026: arithmetic syntax error: operand expected (error token is \"\u0026\u0026\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: x: \u0026\u0026: syntax error: operand expected (error token is \"\u0026\u0026\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: \\\u0026\\\u0026:\\\u0026\\\u0026: arithmetic syntax error",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: unrecognized modifier",
         "Status": 1,
         "Signal": 0,
         "TimedOut": false

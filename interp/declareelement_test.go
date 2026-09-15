@@ -448,3 +448,41 @@ func TestAnOperandWhoseNameHoldsAnExpansionIsSplitToo(t *testing.T) {
 		t.Errorf("typeset a$n=$y = %q (status %d), want %q at 0", out, status, want)
 	}
 }
+
+// An element assigned to a name the integer letter has typed is evaluated as
+// an expression, and **once**.
+//
+// The scalar view of an array is written from an element the name's attributes
+// have already folded, and folding it again is a second evaluation of the same
+// characters. Invisible where the fold succeeds and a duplicated complaint
+// where it does not: `typeset -i a; a[0]=/x/y.z` wrote the arithmetic refusal
+// twice where ksh93u+ writes it once (#2818).
+//
+// The second half is the control that says the fix is not simply dropping the
+// second fold: the view still has to read back as the number.
+func TestAnIntegerElementIsEvaluatedOnce(t *testing.T) {
+	diags := func(r *Runner) {
+		d := Diagnostics{ArithError: "%[1]s: %[2]s", ArithOperandExpected: "arithmetic syntax error"}
+		r.Diagnostics = &d
+	}
+	out, _ := run(t, `typeset -i a; a[0]=/x/y.z`, func(r *Runner) {
+		s := declareElementSemantics()
+		r.Semantics = &s
+		diags(r)
+	})
+	if n := strings.Count(out, "arithmetic syntax error"); n != 1 {
+		t.Errorf("got %q — %d complaints, want one", out, n)
+	}
+	out, _ = run(t, `typeset -i b; b[0]=2+3; echo "[$b][${b[0]}]"`, func(r *Runner) {
+		s := declareElementSemantics()
+		r.Semantics = &s
+		diags(r)
+	})
+	if out != "[5][5]\n" {
+		t.Errorf("got %q, want both views to read the number", out)
+	}
+	// An array with *nothing* in it is the other side of the rule and is not
+	// this vector's to show: there are no elements to have been folded, so
+	// the view's own fold is the only one and it is what makes a bare
+	// `integer k` read back as a zero. dialect/zsh's own suite pins that.
+}

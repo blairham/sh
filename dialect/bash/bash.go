@@ -1107,6 +1107,8 @@ func Semantics() interp.Semantics {
 	// A `*` beside a width's own digits is refused here too: `printf '%5*d' 4 42`
 	// is a conversion character this shell does not have (#2824).
 	s.PrintfStarBesideTheFieldDigits = interp.No
+	s.CaseSubjectKeepsThePreviousLine = interp.No
+	s.SubstringRangeThirdColonIsABadSubstitution = interp.No
 	s.PrintfReportsBadNumber = interp.Yes
 	s.PrintfNumberOperand = interp.PrintfNumberLeadingNumber
 	// C99's three: `%F` is `1.500000`, `%a` is `0x1.8p+0` and `%A` is

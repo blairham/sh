@@ -2029,6 +2029,36 @@ type Dialect struct {
 	// ParamSubstring enables `${x:off:len}`. Absent from dash.
 	ParamSubstring bool
 
+	// ParamSubstringOffsetTakesALeadingColon puts a `:` written immediately
+	// after the substring's own into the **offset expression**, so the range
+	// has no separator there and `${x::2}` is an expression reading `:2`.
+	//
+	// The other reading — the zero value, and bash's — is that the offset is
+	// simply empty and the range is `0:2`. Measured 2026-09-15 under `env -i
+	// PATH=/usr/bin:/bin` with `v=oldoldold`:
+	//
+	//	                bash 5.3.15   ksh93u+
+	//	${v::2}         `ol`          `:2: arithmetic syntax error`
+	//	${v::}          empty         `:: arithmetic syntax error`
+	//	${v::-D}        empty         `:-D: arithmetic syntax error`
+	//	${v::1:2}       `o`           `:1:2: arithmetic syntax error`
+	//
+	// zsh reads `${v::…}` as a modifier list and dash has no substring at
+	// all, so the panel is one column against one and two that are asked
+	// something else.
+	//
+	// A grammar flag and not a wording, because it decides where the range
+	// is *cut*: the same characters are one expression under it and two
+	// under the other reading, and what the shell then says about them
+	// follows from that. `${v::=A}` is the shape that made it worth having —
+	// it is the always-assign operator in zsh, an offset of nothing and a
+	// length of `=A` in bash's reading, and the single expression `:=A` here
+	// (#2818).
+	//
+	// It cannot collide with the colon-prefixed conditionals: `${v:-D}` has
+	// one colon and is read as the default-value operator before any of this.
+	ParamSubstringOffsetTakesALeadingColon bool
+
 	// ParamCaseChange enables `${x^^}` and `${x,,}`. **bash alone**: ksh93
 	// reports a syntax error and zsh a bad substitution, so a construct one
 	// panel shell supports is not a common denominator and this is off for

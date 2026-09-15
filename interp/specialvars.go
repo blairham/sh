@@ -92,11 +92,16 @@ func (r *Runner) ensureSpecials() {
 			// diagnostic's location. A file the function sourced counts from
 			// itself: measured on zsh 5.9.2, `$LINENO` on the first line of
 			// such a file is 1 and not the offset into the function (#2037).
+			//
+			// lineNow rather than r.line, for the one construct that has
+			// not advanced it yet: see
+			// Semantics.CaseSubjectKeepsThePreviousLine.
+			at := r.lineNow()
 			if r.locationIsInsideAFunctionBody() && r.funcLine > 0 &&
 				r.ask(r.sem().LinenoCountsFromTheFunction, "`$LINENO` inside a function counting from it") {
-				return strconv.Itoa(r.line - r.funcLine)
+				return strconv.Itoa(at - r.funcLine)
 			}
-			return strconv.Itoa(r.line)
+			return strconv.Itoa(at)
 		}
 	}
 	if _, ok := r.Dynamic["-"]; !ok && !r.endedProducers["-"] {

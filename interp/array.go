@@ -294,7 +294,13 @@ func (r *Runner) storeArray(name string, a Array) {
 	// form this write would ask that question of the array it is the view of,
 	// and the answer that keeps the array would send it back through here.
 	if lo, _, any := a.bounds(); any {
+		// Already folded, a few lines above, and folding it again would
+		// evaluate the same text twice — which shows as a duplicated
+		// complaint when the fold is an integer attribute that failed. See
+		// Runner.viewIsAlreadyFolded.
+		r.viewIsAlreadyFolded = true
 		r.setVarAs(name, a[lo].scalar(), assignedAsTheCompoundView)
+		r.viewIsAlreadyFolded = false
 	} else {
 		r.setVarAs(name, "", assignedAsTheCompoundView)
 	}

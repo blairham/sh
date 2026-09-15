@@ -1721,6 +1721,31 @@ type Runner struct {
 	// Real shells report the line of the command that failed, so this is
 	// updated per statement rather than per token.
 	line int
+	// prevLine is where the line stood before the command now running set
+	// it: the line of the last command that actually ran, and 0 before
+	// anything has.
+	//
+	// One construct reads it rather than its own line — a `case` subject
+	// there is expanded before the line advances, so `$LINENO` in it is the
+	// line of the command in front of the `case` and so is the location of
+	// any complaint the subject makes. See
+	// Semantics.CaseSubjectKeepsThePreviousLine.
+	prevLine int
+	// caseSubjectPrev is that line while a `case` subject is being expanded,
+	// and zero everywhere else. Runner.lineNow is where it is taken up; it
+	// is held here rather than written into line so that a subject reading
+	// nothing about the line never raises the axis at all.
+	caseSubjectPrev int
+	// rangeRefused says the offset of the substring range being evaluated
+	// was refused, so its length is not evaluated at all. One complaint per
+	// range is unanimous — `${x:&&:&&}` is one line in bash 5.3 and one in
+	// ksh93u+ — and we wrote the offset's and then the length's (#2818).
+	rangeRefused bool
+	// viewIsAlreadyFolded says the scalar view of an array is being written
+	// from an element this name's attributes have already folded, so the
+	// store does not fold it a second time. Set by storeArray around that
+	// one call; see setVarAs.
+	viewIsAlreadyFolded bool
 	// setOptionStatus is what the last refused `set -o` name reports, which
 	// is one of the four dialects' answers rather than a constant.
 	setOptionStatus int
@@ -2860,11 +2885,14 @@ func (r *Runner) locationIsInsideEvalText() bool {
 // the diagnostic leaves a nought out.
 func (r *Runner) locationNameAndLine(functionCounts bool) (name string, line int, inBody bool) {
 	d := r.diag()
+	// lineNow and not line: a `case` subject is expanded before the line
+	// advances in one dialect, and a complaint it makes carries that line.
+	at := r.lineNow()
 	if d.LocationNamesTheEvalText && d.EvalSourceName != "" && r.locationIsInsideEvalText() {
-		return d.EvalSourceName, r.line, false
+		return d.EvalSourceName, at, false
 	}
 	if functionCounts && d.LocationNamesTheFunction && r.locationIsInsideAFunctionBody() {
-		return r.inFunc, r.line - r.funcLine, true
+		return r.inFunc, at - r.funcLine, true
 	}
 	name = r.name()
 	if d.LocationNamesTheCurrentFile {
@@ -2877,7 +2905,33 @@ func (r *Runner) locationNameAndLine(functionCounts bool) (name string, line int
 			name = f
 		}
 	}
-	return name, r.line, false
+	return name, at, false
+}
+
+// lineNow is the line to report or to hand `$LINENO`, which is r.line except
+// inside a `case` subject in the one dialect that has not advanced the line to
+// the `case` yet — see Semantics.CaseSubjectKeepsThePreviousLine and
+// Runner.caseSubjectLine.
+//
+// The axis is consulted here and nowhere else, which is what keeps it off the
+// common path: a `case $- in …` never reads the line and never raises it.
+//
+// The offer is taken down around the question, so an *unanswered* axis — whose
+// refusal is itself a diagnostic, and so comes straight back through this
+// function — asks once rather than forever.
+func (r *Runner) lineNow() int {
+	prev := r.caseSubjectPrev
+	if prev == 0 || prev == r.line {
+		return r.line
+	}
+	r.caseSubjectPrev = 0
+	yes := r.ask(r.sem().CaseSubjectKeepsThePreviousLine,
+		"a `case` subject reading the line of the command before it")
+	r.caseSubjectPrev = prev
+	if !yes {
+		return r.line
+	}
+	return prev
 }
 
 // locationPrefixNamed is what goes in front of a diagnostic: the location
@@ -3889,7 +3943,7 @@ func (r *Runner) command(ctx context.Context, c syntax.Command) error {
 		// crashing. Our own parser never produces one, so no test can see
 		// the difference; an embedder building a tree by hand can, and this
 		// package is a library.
-		r.line = r.lineOf(c.Pos())
+		r.prevLine, r.line = r.line, r.lineOf(c.Pos())
 	}
 	// And this door is where an interrupt has to be noticed, because for a
 	// loop of the shell's own commands there is no other: nothing in `while
@@ -6494,9 +6548,22 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 	if r.Vars == nil {
 		r.Vars = map[string]string{}
 	}
-	value, ok := r.attributeFolded(name, value)
-	if !ok {
-		return
+	if !r.viewIsAlreadyFolded {
+		// The compound view of an array that *has* elements is written from
+		// text this name's attributes have already folded — see storeArray,
+		// which folds every element and then writes the lowest one here — so
+		// folding it again is a second evaluation of the same characters. It
+		// is invisible where the attribute succeeds and a duplicated
+		// complaint where it does not: `typeset -i a; a[0]=/x/y.z` wrote the
+		// arithmetic refusal twice where ksh93 writes it once (#2818).
+		//
+		// An *empty* array is not that case and does not set the flag: there
+		// are no elements to have been folded, and the view's own fold is
+		// what makes `integer k` read back as `0`.
+		var ok bool
+		if value, ok = r.attributeFolded(name, value); !ok {
+			return
+		}
 	}
 	if _, dynamic := r.Dynamic[name]; dynamic && r.producerEndedByUnset(name) {
 		// The `unset` ended the parameter in this dialect, so what the

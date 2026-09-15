@@ -1705,7 +1705,7 @@ func (p *Parser) fillParamArgs(e *ParamExpr, rest string, start Pos, q Quoting) 
 		// modifier list reads its own text and a substring's offset reads a
 		// value, and the same characters are both until the run decides.
 		// See ParamExpr.ArgText.
-		if i := indexUnquoted(rest, ':'); i >= 0 {
+		if i := p.rangeSeparator(rest); i >= 0 {
 			e.Arg = p.wordFrom(rest[:i], start, Unquoted)
 			e.Arg2 = p.wordFrom(rest[i+1:], start, Unquoted)
 			e.ArgText, e.Arg2Text = rest[:i], rest[i+1:]
@@ -1791,6 +1791,28 @@ func replacementReadingsCanDiffer(text string) bool {
 		i++
 	}
 	return false
+}
+
+// rangeSeparator is where a substring's range is cut into an offset and a
+// length, or -1 where the whole of it is the offset.
+//
+// The first unquoted colon, except that one dialect does not count a colon at
+// the very *front*: there it belongs to the offset's own expression and
+// `${x::2}` reads `:2` rather than an empty offset and a length of two. See
+// [Dialect.ParamSubstringOffsetTakesALeadingColon].
+//
+// Looking past a leading colon is safe without carrying the quoting state
+// with it, because the character being skipped is itself an unquoted colon —
+// nothing about the quoting at index one depends on it.
+func (p *Parser) rangeSeparator(rest string) int {
+	i := indexUnquoted(rest, ':')
+	if i != 0 || !p.dialect.ParamSubstringOffsetTakesALeadingColon {
+		return i
+	}
+	if j := indexUnquoted(rest[1:], ':'); j >= 0 {
+		return j + 1
+	}
+	return -1
 }
 
 // indexUnquoted finds c outside quotes and not backslash-escaped.

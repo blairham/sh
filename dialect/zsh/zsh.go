@@ -1751,6 +1751,10 @@ func Semantics() interp.Semantics {
 	// A `*` beside a width's own digits is refused here too: `printf '%5*d' 4 42`
 	// is a conversion character this shell does not have (#2824).
 	s.PrintfStarBesideTheFieldDigits = interp.No
+	s.CaseSubjectKeepsThePreviousLine = interp.No
+	// unanswered SubstringRangeThirdColonIsABadSubstitution: a third segment
+	// is a *modifier list* here — `${x:1:5:t}` is `D` — so the question of
+	// what to call the refusal never arises.
 	s.PrintfReportsBadNumber = interp.No
 	s.PrintfNumberOperand = interp.PrintfNumberArithmetic
 	// None of C99's three: `printf '%F' 1.5` is `%F: invalid directive` at

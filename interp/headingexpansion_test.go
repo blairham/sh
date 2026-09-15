@@ -212,3 +212,107 @@ func TestAGoodHeadingIsUnaffected(t *testing.T) {
 		})
 	}
 }
+
+// Which line a `case` subject reads, which is one column against the panel:
+// there the line has not advanced to the `case` yet, so the subject reads the
+// line of the command that ran before it (#2818).
+//
+// Two observations and one number. `$LINENO` written in the subject is the
+// direct one; the location of a complaint the subject's expansion makes is
+// the one three corpus rows were already failing on.
+//
+// The blank-line row is what says it is the previous *command's* line rather
+// than the `case`'s own line less one, and the first-line row is the floor:
+// before anything has run the counter reads 1 and not 0.
+func TestCaseSubjectKeepsThePreviousLine(t *testing.T) {
+	run := func(t *testing.T, src string, keeps Answer) (string, string) {
+		t.Helper()
+		f, err := syntax.Parse(src, syntax.Core())
+		if err != nil {
+			t.Fatalf("parse %q: %v", src, err)
+		}
+		sem := permissive()
+		sem.CaseSubjectKeepsThePreviousLine = keeps
+		var out, errs bytes.Buffer
+		dir := t.TempDir()
+		r := newTestRunner(t, &Runner{
+			Stdout: &out, Stderr: &errs, Semantics: &sem,
+			Diagnostics: &Diagnostics{Location: LocationLineWord},
+			Dir:         dir, Name: "testsh", Vars: map[string]string{"PATH": dir},
+		})
+		if _, rerr := r.Run(context.Background(), f); rerr != nil {
+			t.Fatalf("run %q: %v", src, rerr)
+		}
+		return out.String(), errs.String()
+	}
+	for _, tc := range []struct {
+		name  string
+		src   string
+		keeps Answer
+		out   string
+		errs  string
+	}{
+		{
+			"the previous command's line", "echo a\necho b\ncase $LINENO in *) echo \"n=$LINENO\";; esac\n",
+			Yes, "a\nb\nn=3\n", "",
+		},
+		{
+			"against the case's own", "echo a\necho b\ncase $LINENO in *) echo \"n=$LINENO\";; esac\n",
+			No, "a\nb\nn=3\n", "",
+		},
+		{
+			// The arm's body is not the subject: `$LINENO` there is the
+			// line it is written on under both answers, which is what keeps
+			// the row above honest about *where* the difference is.
+			"and the subject is where the difference is", "echo a\necho b\ncase A$LINENO in A2) echo two;; A3) echo three;; *) echo other;; esac\n",
+			Yes, "a\nb\ntwo\n", "",
+		},
+		{
+			"the other columns read the case's line", "echo a\necho b\ncase A$LINENO in A2) echo two;; A3) echo three;; *) echo other;; esac\n",
+			No, "a\nb\nthree\n", "",
+		},
+		{
+			// Blank lines in between, so "the line before the `case`" and
+			// "the line the last command ran on" are different numbers.
+			"the last command that ran, not the line above", "echo a\n\n\ncase A$LINENO in A1) echo one;; A3) echo three;; A4) echo four;; *) echo other;; esac\n",
+			Yes, "a\none\n", "",
+		},
+		{
+			// Nothing has run, and the counter reads 1 rather than 0.
+			"before anything has run it is 1", "case A$LINENO in A0) echo zero;; A1) echo one;; *) echo other;; esac\n",
+			Yes, "one\n", "",
+		},
+		{
+			"and a complaint the subject makes carries that line", "echo a\necho b\ncase $((1/0)) in *) :;; esac\n",
+			Yes, "a\nb\n", "testsh: line 2: division by zero\n",
+		},
+		{
+			"where the others carry the case's", "echo a\necho b\ncase $((1/0)) in *) :;; esac\n",
+			No, "a\nb\n", "testsh: line 3: division by zero\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, errs := run(t, tc.src, tc.keeps)
+			if out != tc.out || errs != tc.errs {
+				t.Errorf("got out %q errs %q, want %q and %q", out, errs, tc.out, tc.errs)
+			}
+		})
+	}
+
+	// And the axis is consulted only where the line is actually read. A
+	// subject that looks at neither `$LINENO` nor a failure raises nothing,
+	// which is what keeps an unanswered vector from refusing every `case` in
+	// every multi-line script.
+	t.Run("a subject that reads no line asks nothing", func(t *testing.T) {
+		out, errs := run(t, "echo a\ncase b in b) echo hit;; esac\n", Unspecified)
+		if out != "a\nhit\n" || errs != "" {
+			t.Errorf("got out %q errs %q, want the hit in silence", out, errs)
+		}
+	})
+	t.Run("and one that does asks", func(t *testing.T) {
+		_, errs := run(t, "echo a\necho b\ncase $LINENO in *) :;; esac\n", Unspecified)
+		if !strings.Contains(errs, "the line of the command before it") {
+			t.Errorf("got %q, want the axis named", errs)
+		}
+	})
+}

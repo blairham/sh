@@ -1527,6 +1527,12 @@ var Corpus = []Case{
 		Why:     "a failed expansion in a compound command's *heading* rather than in one of its commands, which is the same axis reaching a place that never asked it: the word list is what the loop iterates, so a failure in it costs the loop and not the one pass it would have been. Every column stops before the body — bash then runs `after` and the other three do not — and ours ran the body three times and exited 0. Good words on either side of the bad one, because a rule that abandoned only when the whole list failed would pass a single-word row (#1215)",
 	},
 	{
+		ID: "axis/a-case-subject-reads-the-previous-line", Category: "semantics axes",
+		Script:  true,
+		Snippet: "echo a\necho b\ncase $LINENO in 1) echo one;; 2) echo two;; 3) echo three;; *) echo other;; esac\necho a\n\n\ncase $LINENO in 1) echo A1;; 4) echo A4;; *) echo AO;; esac\ncase $LINENO in 1) echo B1;; 8) echo B8;; *) echo BO;; esac\n",
+		Why:     "which line a `case` **subject** reads, directly rather than through a complaint's location. ksh93 has not advanced the line to the `case` when the subject is expanded, so `$LINENO` there is the line of the command that ran before it — `two` on the third line where the other five columns answer `three` (#2818). The second `case` is what says it is the last command that *ran* and not the `case`'s own line less one: two blank lines stand between it and the `echo a` above, and the answer is still that `echo`'s line. The third is the floor from the other side — the previous command is the second `case`, whose own arm ran — so a rule that simply subtracted one would answer differently for all three. The arms print words rather than the number so that a column answering some fourth line is visible as `other` rather than as a number a reader has to check by hand",
+	},
+	{
 		ID: "axis/a-failed-case-subject", Category: "semantics axes",
 		Script:  true,
 		Snippet: "echo pre\ncase $((1/0)) in \"\") echo E;; *) echo A;; esac\necho after\n",
@@ -7691,6 +7697,21 @@ echo "st=$?"`,
 		ID: "param/a-substring-modifier-reads-its-own-quotes", Category: "parameter expansion",
 		Snippet: `x="a'.'b"; y=a.b; w=aQb; a=X; z='a$ab'; echo "[${x:s/'.'/:/}][${y:s/'.'/:/}][${w:s/'Q'/X/}][${z:s/'$a'/Q/}][${y:s/\./:/}]"; echo "st=$?"`,
 		Why:     "the other half of the backslash row above, and the half that is not the same fix: a brace's body is read raw in the shell with modifiers, so a quote inside it is an ordinary character of the operand that reads its own text. Fields one and two are each other's control — the pattern the quotes are part of matches the value that holds them and misses the one that does not — and field three says it with no metacharacter anywhere, so nothing about patterns can be what is being measured. Field four is the sharper claim: the text is not *expanded* either, so a `$a` between quotes is three characters and not the value of `a`, which a word joined from spans cannot say. Field five is the workaround a script would write and the row that must not move. The other three read the whole range as arithmetic and refuse it, which is why the status is the last line (#1860)",
+	},
+	{
+		ID: "param/a-substring-range-blames-what-the-script-wrote", Category: "parameter expansion",
+		Snippet: `x=abc; echo "[${x:'&&'}]"; echo "st=$?"`,
+		Why:     "which characters a refused range is quoted back with, and it is **not** the ones the reader saw: bash and ksh93 both name `'&&'` with the quotes still on it, so the complaint shows the source before quote removal rather than the text that was evaluated. We named `&&`, the quote-removed form, which reads as a script that never wrote a quote. zsh names a single character and dash has no range at all, so the row is two columns agreeing against two that are asked something else",
+	},
+	{
+		ID: "param/one-complaint-per-substring-range", Category: "parameter expansion",
+		Snippet: `x=abc; echo "[${x:&&:&&}]"; echo "st=$?"`,
+		Why:     "a range whose **offset** was refused, which evaluates no length: bash and ksh93 each write one line for this and we wrote two — the offset's and then the length's, an invented second failure for text the shell never read. The two columns still word and scope it differently, bash naming the parameter in front of the sentence and ksh93 blaming the offset together with everything after it, which is what makes the *count* the thing this row is about",
+	},
+	{
+		ID: "axis/a-substring-offset-takes-a-leading-colon", Category: "semantics axes",
+		Snippet: `v=oldoldold; printf "[%s]" "${v::2}"; echo "|$?"; printf "[%s]" "${v::}"; echo "|$?"; printf "[%s]" "${v::1:2}"; echo "|$?"`,
+		Why:     "where a substring's range is cut. bash reads the colon straight after the parameter's own as a separator, so `${v::2}` is an offset of nothing and a length of two — `ol`. ksh93 does not: the colon belongs to the *offset's expression*, so the same text is the expression `:2` and a refusal (#2818). It is a grammar and not a wording, which the third line is what shows — `${v::1:2}` is `o` under the separator reading and one refused expression `:1:2` under the other. `${v::=A}` is the shape that made it worth pinning and is not here, because it is the always-assign operator in a third column and so asks two questions at once; the rows in `param/` carry that one. zsh reads `${v::…}` as a modifier list and dash has no substring at all",
 	},
 	{
 		ID: "param/a-substring-modifier-after-an-offset-and-a-length", Category: "parameter expansion",
@@ -14679,6 +14700,11 @@ printf 'TWO=still-running\n'`,
 		Script:  true,
 		Snippet: "typeset -i n=5\nf() { typeset n; n=3+4; echo \"in=[$n]\"; }\nf\necho \"after=[$n]\"\n",
 		Why:     "the same rule read from the other side, and the half a fix aimed only at the *return* would leave wrong: the declaration names an outer name that already carries the letter, and the local it makes carries none of it — `in=[3+4]`, stored as written — while the caller's `5` and its letter are both back afterwards. Both halves are needed or the rule reads as being about the unwind alone. ksh93 answers `[7]` twice for the reason the row above gives, which is the same axis rather than a disagreement here",
+	},
+	{
+		ID: "declare/an-integer-element-is-evaluated-once", Category: "declarations",
+		Snippet: `typeset -i a; a[0]=/x/y.z; echo "st=$?"; typeset -i b; b[0]=2+3; echo "[$b][${b[0]}]"`,
+		Why:     "an element assigned to a name the integer letter has typed, which is evaluated as an expression — and **once**. ksh93 writes one complaint for a value its arithmetic will not read and we wrote two, because the element was folded and then the scalar view of the array was folded again from the same characters (#2818). The second line is the control that says the fix is not simply dropping the second fold: the view still has to read back as the number, so `$b` and `${b[0]}` are both `5`. bash and zsh have the letter and take the path without complaint here; dash has neither the letter nor the array",
 	},
 	{
 		ID: "declare/a-numeric-letter-does-not-reach-a-later-local-array", Category: "declarations",

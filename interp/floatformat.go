@@ -117,3 +117,55 @@ func (r *Runner) markFloatExponent(name string, on bool) {
 	}
 	r.floatExponent[name] = true
 }
+
+// NumericTypeLetterPrecedencePolicy is how a declaration carrying more than
+// one of `E`, `F` and `i` decides which of them the name ends up with.
+//
+// Two readings, and neither is a relaxation of the other: one is about where
+// the letters were *written* and the other about what they *are*, so the same
+// line comes out a different kind under each.
+type NumericTypeLetterPrecedencePolicy int
+
+const (
+	// NumericLetterPrecedenceUnspecified is no answer, which the three
+	// shells with no numeric letter beyond `i` hold and never reach: a
+	// declaration cannot write two of them there.
+	NumericLetterPrecedenceUnspecified NumericTypeLetterPrecedencePolicy = iota
+	// NumericLetterFirstWrittenWins is zsh's, and it is the reading the
+	// parse falls into on its own: the letter read first sets the attribute
+	// and the ones behind it find it already set. Measured 2026-09-14 on zsh
+	// 5.9.2 — `typeset -iF 3 a=1.5` lists `typeset -i3 a=1`, `-Fi 3` lists
+	// `typeset -F a=1.500`, `-EF 3` lists `typeset -E a=1.50e+00` and
+	// `-FE 3` lists `typeset -F a=1.500`. Four lines, four answers, and the
+	// order is the whole of what decides.
+	NumericLetterFirstWrittenWins
+	// NumericLetterFloatOutranksTheInteger is ksh93's: the letters have a
+	// fixed rank — `E` over `F` over `i` — and the order they were written
+	// in decides nothing. Measured in the same run, each read back with
+	// `typeset -p`:
+	//
+	//	typeset -iF 3 a=1.5     typeset -F 3 a=1.500
+	//	typeset -Fi 3 a=1.5     typeset -F 3 a=1.500
+	//	typeset -i -F 3 a=1.5   typeset -F 3 a=1.500
+	//	typeset -EF 3 a=1.5     typeset -E 3 a=1.5
+	//	typeset -FE 3 a=1.5     typeset -E 3 a=1.5
+	//
+	// The third row is what says the rank holds across *words* as well as
+	// inside one, which the order reading cannot do: there both letters are
+	// really read, and the integer one still loses.
+	//
+	// `-iE` is not among them because that pair is refused in this column
+	// before the rank is reached — see NumericTypeLettersAreExclusive, which
+	// is the same shell's answer to the one combination it will not take.
+	NumericLetterFloatOutranksTheInteger
+)
+
+func (p NumericTypeLetterPrecedencePolicy) String() string {
+	switch p {
+	case NumericLetterFirstWrittenWins:
+		return "the first letter written"
+	case NumericLetterFloatOutranksTheInteger:
+		return "E over F over i, whatever the order"
+	}
+	return "unspecified"
+}

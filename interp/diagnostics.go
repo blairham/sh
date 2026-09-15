@@ -1023,6 +1023,16 @@ type Diagnostics struct {
 	// reaches it.
 	AliasIllegalOptionCombination string
 
+	// DeclareHideStringMissing is what a declaration says when its `-h`
+	// letter has no string behind it, in the dialect where that letter takes
+	// one. One verb: %[1]s the builtin's own name. Measured 2026-09-14 on
+	// ksh93u+ 2012-08-01, `typeset -h` is `typeset: -h: string argument
+	// expected` followed by that shell's usage block, at 2 and fatally.
+	//
+	// Empty is every other dialect, where the letter takes no argument and
+	// this cannot be reached — see Semantics.DeclareHideInScopeLetter.
+	DeclareHideStringMissing string
+
 	// UnimplementedOptionLetters are, per builtin, the option letters this
 	// dialect has and this shell does not.
 	//
@@ -1311,6 +1321,28 @@ type Diagnostics struct {
 	// variable name`, and zsh writes the reason before the operand for
 	// `export` and `readonly` and after it for `unset`.
 	BuiltinBadName map[string]string
+
+	// ExportLetterTakesExportsBadName gives a declaration carrying `-x` the
+	// sentence [BuiltinBadName] holds for `export`, in place of the one it
+	// holds for the word the line was written with.
+	//
+	// One dialect, and it is the letter and not the word: measured
+	// 2026-09-14 on ksh93u+ 2012-08-01,
+	//
+	//	typeset -x 3   typeset: 3: is not an identifier
+	//	typeset -r 3   typeset: 3: invalid variable name
+	//	typeset -l 3   typeset: 3: invalid variable name
+	//	typeset 3      typeset: 3: invalid variable name
+	//	export 3       export: 3: is not an identifier
+	//
+	// The builtin still names itself in all five, so only the reason moves.
+	// Reachable more often than it looks: `typeset -Fx 3 a=1.5` puts a `3`
+	// where a name belongs in the dialect that will not read a detached
+	// number behind a letter, which is how it was found (#2419).
+	//
+	// False everywhere else, which is every dialect with one sentence for a
+	// bad name whatever letters the line carried.
+	ExportLetterTakesExportsBadName bool
 
 	// BuiltinBadNameNumeric is that wording where the operand begins with a
 	// digit, for the one dialect that tells the two apart: zsh says `not an

@@ -74,6 +74,7 @@ ash   DebugTrapRunsInSubshells
 ash   DebugTrapRunsInsideCalls
 ash   DeclarationListingFilter
 ash   DeclareGlobalReachesPastALocal
+ash   DeclareHideInScopeLetter
 ash   DeclareHideValueLetter
 ash   DeclareListing
 ash   DeclareMappingLetter
@@ -123,6 +124,7 @@ ash   NegativeSubscriptCountsOverAPromotedScalar
 ash   NegativeSubscriptPastTheStartInserts
 ash   NumericAttributeReplacesTheArrayAttribute
 ash   NumericAttributeReplacesTheCaseAttribute
+ash   NumericTypeLetterPrecedence
 ash   NumericTypeLetterRetypesAFrozenName
 ash   NumericTypeLettersAreExclusive
 ash   NumericTypeWithNoValueReachesAChildAsZero
@@ -194,6 +196,7 @@ bash  ArithIntegerOperatorRefusesFloat
 bash  ArithSubscriptSkippedWhenNameUnset
 bash  BareFloatLetterResetsThePrecision
 bash  BareSubscriptIsASubscript
+bash  DeclareHideInScopeLetter
 bash  DeclareHideValueLetter
 bash  DeclareMappingLetter
 bash  DeclareMatchingLetter
@@ -203,6 +206,7 @@ bash  ExitTrapFiresPastTheEnd
 bash  FloatFormatLetterE
 bash  ImmovableOptionsSetAtInvocation
 bash  IntegerPlusFormTakesAttributesOff
+bash  NumericTypeLetterPrecedence
 bash  NumericTypeLettersAreExclusive
 bash  PrintfOutputPrecedesComplaint
 bash  PrintfFloatOperandIsEvaluatedTwice
@@ -261,6 +265,7 @@ dash  DebugTrapRunsInSubshells
 dash  DebugTrapRunsInsideCalls
 dash  DeclarationListingFilter
 dash  DeclareGlobalReachesPastALocal
+dash  DeclareHideInScopeLetter
 dash  DeclareHideValueLetter
 dash  DeclareListing
 dash  DeclareMappingLetter
@@ -321,6 +326,7 @@ dash  NegativeSubscriptCountsOverAPromotedScalar
 dash  NegativeSubscriptPastTheStartInserts
 dash  NumericAttributeReplacesTheArrayAttribute
 dash  NumericAttributeReplacesTheCaseAttribute
+dash  NumericTypeLetterPrecedence
 dash  NumericTypeLetterRetypesAFrozenName
 dash  NumericTypeLettersAreExclusive
 dash  NumericTypeWithNoValueReachesAChildAsZero

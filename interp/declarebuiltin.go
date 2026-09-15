@@ -81,7 +81,14 @@ type declareFlags struct {
 	// See hideinscope.go.
 	hide      bool
 	hideNamed bool
-	unique    bool
+	// hideString and hideStringNamed are the *other* reading of the same
+	// letter: a string argument this shell records nowhere, which may ride
+	// on the letter or arrive as the next word. hideString says the letter
+	// was written under that reading and hideStringNamed says its argument
+	// has already been found. See Semantics.DeclareHideInScopeLetter.
+	hideString      bool
+	hideStringNamed bool
+	unique          bool
 	// nameref is the `n` letter: the name being declared is a **reference**
 	// to another parameter rather than a parameter of its own, and the value
 	// on the operand is the name it points at. Its own field rather than a
@@ -479,6 +486,21 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 				// recorded and consulted by every later write.
 				f.unique = true
 			case 'h':
+				if r.sem().DeclareHideInScopeLetter == DeclareHideInScopeLetterTakesAString {
+					// The other reading: a string argument this shell
+					// records nowhere. It may ride on the letter, and where
+					// it does the rest of the word is that string and not
+					// more letters — `typeset -hx s q=1` leaves `q`
+					// *unexported*, the `x` having been the argument. Same
+					// shape the `M` letter's mapping name has, and the same
+					// reason this is one of the cases that stop the walk.
+					f.hideString = true
+					if rest := a[at+2:]; rest != "" {
+						f.hideStringNamed = true
+						break letters
+					}
+					break
+				}
 				// Hide *in scope*: a local declaration of a name with this
 				// attribute is an ordinary parameter rather than the special
 				// one it is spelled like, and the tie the name is half of
@@ -616,6 +638,7 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 		}
 	}
 	r.blockALaterPlus(&f)
+	r.rankTheNumericLetters(&f)
 	rest = args[i:]
 	if code := r.refuseAFunctionLineLetter(name, f, rest); code != 0 {
 		return nil, f, code
@@ -657,6 +680,76 @@ func (r *Runner) refuseAFunctionLineLetter(name string, f declareFlags, rest []s
 	r.complainAboutOption(name, "%s: -%c is not implemented yet\n",
 		r.builtinComplaintName(name), c)
 	return orDefault(r.diag().BuiltinBadOptionStatus, 2)
+}
+
+// rankTheNumericLetters settles a declaration that wrote more than one of the
+// three numeric type letters, where the dialect ranks them rather than taking
+// the first one written.
+//
+// Measured 2026-09-14 on ksh93u+ 2012-08-01, each read back with `typeset -p`:
+//
+//	typeset -iF 3 a=1.5     typeset -F 3 a=1.500
+//	typeset -Fi 3 a=1.5     typeset -F 3 a=1.500
+//	typeset -i -F 3 a=1.5   typeset -F 3 a=1.500
+//	typeset -F -i a=1.5     typeset -F a=1.5000000000
+//	typeset -EF 3 a=1.5     typeset -E 3 a=1.5
+//	typeset -FE 3 a=1.5     typeset -E 3 a=1.5
+//
+// So the rank is `E` over `F` over `i`, whichever order they stand in and
+// whether they share a word or not — where zsh takes the first letter written
+// and answers the pairs four different ways. See
+// Semantics.NumericTypeLetterPrecedence.
+//
+// `-iE` is not one of these and never reaches here: that pair is refused
+// outright in the column that ranks, which is
+// NumericTypeLettersAreExclusive's question and is asked later.
+//
+// Read off the letters as written for the reason numericTypeLetterCompany is:
+// the loop above has already discarded a loser by *order*, so the flags can no
+// longer say what the line held. And gated on more than one of them being
+// written, so a declaration with a single numeric letter meets no question at
+// all.
+func (r *Runner) rankTheNumericLetters(f *declareFlags) {
+	if numericLetterCount(f.letters) < 2 {
+		return
+	}
+	if r.sem().NumericTypeLetterPrecedence != NumericLetterFloatOutranksTheInteger {
+		return
+	}
+	switch {
+	case strings.ContainsRune(f.letters, 'E') && r.declareOptionTakesANumber('E'):
+		f.float, f.floatExponent = true, true
+	case strings.ContainsRune(f.letters, 'F') && r.declareOptionTakesANumber('F'):
+		f.float, f.floatExponent = true, false
+	default:
+		return
+	}
+	if f.integer {
+		f.integer = false
+		// The number goes with the attribute. Whichever numeric letter the
+		// word's *last* one was, it read the following digits as its own —
+		// `typeset -Fi 3 a=1.5` is the `i` taking a base and `typeset -iF 16
+		// a=255` is the `F` taking a precision — and the rank then hands the
+		// name to the float letter. Measured on ksh93u+ 2012-08-01: the
+		// first lists `typeset -F 3 a=1.500` and the second `typeset -F 16
+		// a=255.0000000000000000`, so the number the losing letter read is
+		// the winner's, at whatever it means there.
+		if f.baseNamed && !f.precisionNamed {
+			f.precision, f.precisionNamed = f.base, true
+		}
+		f.base, f.baseNamed = 0, false
+	}
+}
+
+// numericLetterCount is how many of the three a declaration's letters hold.
+func numericLetterCount(letters string) int {
+	n := 0
+	for _, c := range "EFi" {
+		if strings.ContainsRune(letters, c) {
+			n++
+		}
+	}
+	return n
 }
 
 // blockALaterPlus is one dialect's reading of a declaration that writes both
@@ -790,6 +883,19 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 			r.status, r.unspecified = 2, true
 			return r.status
 		}
+	}
+	if f.hideString && !f.hideStringNamed {
+		// The string arrives as the next word where it did not ride on the
+		// letter, and a letter with nothing behind it at all is refused with
+		// this shell's own sentence and its usage block. Ahead of every
+		// reading below because the word is consumed either way: a line read
+		// without taking it would declare a name that shell never saw.
+		if len(args) == 0 {
+			r.diagf("%s\n", Wording(r.diag().DeclareHideStringMissing,
+				"%[1]s: -h: string argument expected", r.builtinComplaintName(name)))
+			return r.refuseWithUsage(name)
+		}
+		args = args[1:]
 	}
 	if f.matching {
 		switch r.sem().DeclareMatchingLetter {
@@ -1051,6 +1157,19 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 	// refusal that has to say which word was written cannot reach the
 	// parameter any more once the shadowing begins.
 	complaintName := r.builtinComplaintName(name)
+	if f.export && r.diag().ExportLetterTakesExportsBadName {
+		// The export letter brings `export`'s own sentence about a bad name
+		// with it: measured 2026-09-14 on ksh93u+ 2012-08-01, `typeset -x 3`
+		// is `typeset: 3: is not an identifier` where `typeset -r 3`,
+		// `typeset -l 3` and a bare `typeset 3` are all `invalid variable
+		// name`. The builtin still names *itself* in every one of them, so
+		// only the reason moves — which is why this re-keys the wording and
+		// does not rename the builtin. See
+		// Diagnostics.ExportLetterTakesExportsBadName.
+		outer := r.badNameWordedAs
+		r.badNameWordedAs = "export"
+		defer func() { r.badNameWordedAs = outer }()
+	}
 	args, code, ended := r.builtinNames(complaintName, args, false)
 	if r.unspecified {
 		// An unanswered axis inside the name check is not a refusal to carry
@@ -4205,13 +4324,28 @@ func (r *Runner) functionDefinitionFile(name string) string {
 }
 
 // numericTypeLetterCompany reports whether a declaration wrote the integer
-// letter and a float letter both.
+// letter and the **exponent** float letter both.
 //
 // Read off the letters as written rather than off the flags, because the
 // flags are where the parse has already discarded the loser: `-iE` leaves
 // f.float false and `-Ei` leaves both set, so a test on the flags would
 // answer the two orders differently where the shell that refuses them does
 // not.
+//
+// `F` is deliberately not here, and that is measured rather than an
+// oversight. The refusal is the `E` letter's alone: measured 2026-09-14 on
+// ksh93u+ 2012-08-01, `typeset -iE 3 a=1.5` and `typeset -Ei 3 a=1.5` are
+// both typeset's usage block at 2, where `typeset -iF 3 a=1.5`,
+// `typeset -Fi 3 a=1.5` and `typeset -i -F 3 a=1.5` all declare a float and
+// list `typeset -F 3 a=1.500`. Reading the pair as "the integer letter and
+// *a* float letter" was right for the only float letter that column had
+// when the axis was written, and refuses a line it runs now that it has two
+// (#2419).
+//
+// Which letter wins where the pair *is* taken is the parse's and not this
+// function's, and it is the same answer either way round: the same run has
+// `typeset -EF 3 a=1.5` and `-FE 3 a=1.5` both listing `typeset -E 3 a=1.5`,
+// so the exponent letter wins over the other two wherever it stands.
 func numericTypeLetterCompany(f declareFlags) bool {
-	return strings.ContainsRune(f.letters, 'i') && strings.ContainsAny(f.letters, "EF")
+	return strings.ContainsRune(f.letters, 'i') && strings.ContainsRune(f.letters, 'E')
 }

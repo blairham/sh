@@ -364,6 +364,10 @@ func Semantics() interp.Semantics {
 	// end of.
 	// unanswered BareFloatLetterResetsThePrecision: nor any float attribute
 	// to have a precision.
+	// unanswered NumericTypeLetterPrecedence: nor a rank between them, the
+	// declaration utility being absent entirely (#2419).
+	// unanswered DeclareHideInScopeLetter: the same wall, for `typeset -h s
+	// q=1`, which is `typeset: not found` at 127.
 	// unanswered NumericTypeLettersAreExclusive: nor a pair of numeric
 	// letters to write together.
 	// unanswered NamerefCycleIsRefused: there are no name references to make

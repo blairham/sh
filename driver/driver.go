@@ -1545,6 +1545,10 @@ func (sh Shell) newRunner(name string, params []string, dg interp.Diagnostics, r
 		// And the limits it runs under, for the same reason again — a limit
 		// outlives the command that set it.
 		r.GetRlimit, r.SetRlimit = getRlimit, setRlimit
+		// And it says which limits this kernel has at all, so that
+		// `ulimit -a` lists the rows that exist here rather than failing on
+		// the first one that does not.
+		r.HasRlimit = hasRlimit
 		// And it waits for its own children, which is the only way to be
 		// told that one *stopped* rather than finished.
 		r.WaitForCommand = waitForCommand

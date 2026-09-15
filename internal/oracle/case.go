@@ -4136,6 +4136,16 @@ echo "reached-after st=$?"`,
 		Why:     "the process-count letter, read by bash, ksh93 and zsh where dash refuses it at 2 and carries on — the UlimitHasProcessCount axis, and the other half of the pair above: neither absence is a subset of the other, which is what makes them two axes",
 	},
 	{
+		ID: "ulimit/the-listings-own-row-for-a-limit-just-set", Category: "traps and exit",
+		Snippet: `(ulimit -f 12345; ulimit -a) | grep '12345$'`,
+		Why:     "`ulimit -a` is a table and no two shells lay it out alike, so the row is the only part of it a golden record can hold: the value is this machine's, but a limit the snippet *set* is the shell's own and reads back the same everywhere. One line pins the label, the unit's spelling, the column the number lands in and whether the letter appears at all — dash names no letter, zsh puts it first, ksh93 and ash put it last in its own parenthesis, and bash writes it inside the unit's. It also pins the block scale, since 12345 comes back as 12345 only where the write and the read agree. The two bash columns differ from each other on the width alone, which is the kind of thing a single-value probe cannot see. This is the line #2278 was filed on, where it read `no dialect was chosen`",
+	},
+	{
+		ID: "ulimit/the-listings-row-for-a-limit-with-no-unit", Category: "traps and exit",
+		Snippet: `(ulimit -n 1357; ulimit -a) | grep '1357$'`,
+		Why:     "the other half of the row above, and a second sample of the same column: a count has no unit to name, so the label is bare and the padding is all that holds the number in place — which is what a table rebuilt around the rows that happen to be present would move. Four different labels for one limit (`nofiles`, `open files`, `nofile`, `file descriptors`) say this is the dialect's wording and not a shared one",
+	},
+	{
 		ID: "builtin/an-option-it-does-not-have", Category: "traps and exit",
 		Snippet: `export -Q x; echo "st=$?"; echo after`,
 		Why:     "four wordings, two statuses and a divergence about whether the script survives: bash and zsh report it and carry on — with 2 and 1 — while dash and ksh93 stop there, which is the POSIX rule that a special builtin's failure is fatal. bash and ksh93 print a usage line after it and word that per builtin",

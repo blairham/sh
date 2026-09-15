@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/blairham/sh/dialect/ash"
 	"github.com/blairham/sh/internal/dialecttest"
 	"github.com/blairham/sh/interp"
 )
@@ -34,8 +33,10 @@ import (
 // the binary and collected each refusal: nineteen axes, not the one that was
 // reported, and a twentieth uncovered by answering the first — a refusal early
 // on a path hides the next question along it, so it was re-run until it
-// stopped moving. Three remain unanswered on purpose and are named in
-// ash.go and in docs/spec/ash.md: #2276, #2277 and #2278.
+// stopped moving. Two remain unanswered on purpose and are named in
+// ash.go and in docs/spec/ash.md: #2276 and #2277. The third, #2278, was
+// closed by measuring the *rule* a platform without a limit follows rather
+// than by finding a second platform to run BusyBox on — see ulimit_test.go.
 // runIn is run() with a working directory of its own. Two of the snippets
 // below write a file — a `read -t 0` has to have a stream that is always
 // ready, which is what a file is and a pipe is not — and run() leaves the
@@ -216,16 +217,10 @@ func TestWhatThisDialectStillCannotSay(t *testing.T) {
 			"shell cannot be asked must be closed at the option and not by "+
 			"choosing one of the answers for it (#2277)", strings.TrimSpace(out))
 	}
-	// The remaining one is asked of the vector rather than of a run, because the
-	// test harness gives the runner no resource limits at all and `ulimit
-	// -a` stops on *that* first — a refusal that would pass this test while
-	// saying nothing about the table.
-	if rows := ash.Diagnostics().UlimitListing; len(rows) != 0 {
-		t.Errorf("UlimitListing has %d rows (#2278). Measured in full and left "+
-			"empty on purpose: five of BusyBox's fifteen rows name resources no "+
-			"interp.Resource constant does, and they were measured on Linux, "+
-			"where those limits exist.", len(rows))
-	}
+	// #2278 used to be asserted here, as an empty Diagnostics.UlimitListing.
+	// It is now a table, and what guards it is a run rather than a field —
+	// see ulimit_test.go, which grades the layout on a pretend kernel with
+	// the five Linux limits and on one without them.
 }
 
 // The three-way axis behind a `<&word` that names no descriptor. ash refuses

@@ -61,6 +61,12 @@ func (r *Runner) ulimitListing(hard bool) int {
 			r.printf("%s%s\n", row.Prefix, row.Fixed)
 			continue
 		}
+		// A limit this kernel does not have is not a row that reads zero —
+		// it is a row that is not there. See Runner.HasRlimit for the
+		// three shells that were measured saying so.
+		if r.HasRlimit != nil && !r.HasRlimit(row.Res) {
+			continue
+		}
 		unit := row.Scale
 		if unit == 0 {
 			unit = blockUnit

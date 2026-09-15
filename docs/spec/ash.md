@@ -21,11 +21,14 @@ diff is the lists a new binary has to appear in — `Makefile`'s `SHELLS`,
 `cmd/sh`'s `-dialect`, `cmd/shfmt`'s `-dialect`, `.goreleaser.yaml`, and
 two counts in prose.
 
-That is not a claim that every measured behavior fits. Four do not, and
-they are listed under *What could not be said* below. Two more used to be
-there and have gone, one each way: #2276 widened an axis so a reading
-that had no value could have one, and #2277 moved a refusal from an axis
-to the option that raises it. It is a claim about
+That is not a claim that every measured behavior fits. Three do not, and
+they are listed under *What could not be said* below. Three more used to
+be there and have gone, each a different way: #2276 widened an axis so a
+reading that had no value could have one, #2277 moved a refusal from an
+axis to the option that raises it, and #2278 — `ulimit -a` — turned out
+not to need the second platform it was waiting for, because what a shell
+does about a limit its kernel lacks is a rule the shells that *do* run on
+both platforms could be measured for. It is a claim about
 the shape of the work: every answer this shell needed was a **value on an
 existing axis**, and no axis anywhere acquired a branch on a shell's name.
 
@@ -160,9 +163,13 @@ The fix was not one value. Running every `oracle.Corpus` snippet through
 the `ash` binary and collecting each `no dialect was chosen` found
 **nineteen** unanswered axes reachable in this shell, not one — and
 answering them uncovered a twentieth, because a refusal early on a path
-hides the next question along it. Sixteen are answered in
-`dialect/ash/ash.go`, each against a BusyBox probe; the remaining three
-are items 4, 5 and 6 under *What could not be said*.
+hides the next question along it. Sixteen were answered in
+`dialect/ash/ash.go`, each against a BusyBox probe, and the remaining
+three were left refusing with the measurement written down beside them.
+All three have since closed, and none of them closed by picking one of
+the answers: #2276 widened an axis, #2277 moved the refusal to the option
+that raises it, and #2278 found that the fact it was missing was a
+platform's and not a shell's.
 
 That sweep is worth re-running whenever an axis is added, and it is three
 lines over `oracle.Corpus` and a built binary. It does not need a
@@ -410,7 +417,7 @@ complaint, declines to run the command string, and exits **0** (#2639).
 
 ## What could not be said
 
-Four measured behaviors have no value on any existing axis. They are
+Three measured behaviors have no value on any existing axis. They are
 recorded here rather than approximated in code, because an invented
 answer is indistinguishable from a measured one in a file that holds both.
 
@@ -456,13 +463,6 @@ nothing to do with naming, exactly as it would have in
 substrate's own string (`division by zero`); this shell writes `divide by
 zero`. There is no `Diagnostics` field for it, and adding one for a
 single word was not worth a substrate edit.
-
-**4. `ulimit -a`.** Measured in full — fifteen rows, `core file size
-(blocks)         (-c) unlimited` and its fellows, the letter in its own
-parenthesis at the end. Five of them (`-e`, `-i`, `-q`, `-r`, `-x`) name
-resources no `interp.Resource` constant does, and they were measured on
-Linux, where those limits exist; what a macOS build of this shell should
-print for them is a second measurement and not this one. #2278.
 
 A seventh is a difference in kind rather than in wording: **`[[ ]]` here is
 a builtin, not a keyword.** `type '[['` answers `[[ is a shell builtin`,

@@ -2801,7 +2801,7 @@ func arrayLiteralOperands(c *syntax.SimpleCmd) map[string]bool {
 // belongs here — `a=()` is a compound in that shell, not an empty array, which
 // is what its own `typeset -p a` says.
 //
-// Two neighbours are the control, and both are taken at 0 there: `typeset -x
+// Two neighbors are the control, and both are taken at 0 there: `typeset -x
 // a=(p q)` exports an index array and `typeset -Ax m` a table. So it is the
 // compound alone and not every parenthesized value, which is what keeps this
 // from being a refusal of arrays wearing a compound's name.

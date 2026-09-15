@@ -102,6 +102,15 @@ type declaration struct {
 	// interp/compoundvariable.go.
 	compoundVar bool
 	integer     bool
+	// floatExponent says the float attribute came from the `E` letter and
+	// not from `F`, which is what the listing writes back. See
+	// interp/floatformat.go.
+	floatExponent bool
+	// precision is the number that came with the float letter, which the
+	// listing form that writes a number as a word of its own needs — ksh93's
+	// `typeset -E 3 a=3.14`. Zero is the letter's default and is written by
+	// nobody, the same shape the integer base has.
+	precision int
 	// isNameref says the name is a **reference** to another parameter, and
 	// nameref is the name it points at. What the listing writes is the
 	// reference itself and never what it reaches — `declare -n r="v"` — so
@@ -238,6 +247,8 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 	d.nameref, d.isNameref = r.nameref[name]
 	d.compoundVar = r.isCompoundVariable(name)
 	_, d.float = r.floatPrecision[name]
+	d.floatExponent = r.floatExponent[name]
+	d.precision = r.floatPrecision[name]
 	d.width, d.hasWidth = r.fieldWidth[name]
 	d.tied, d.hasTie = r.tieOf(name)
 	// Which of the two things `-H` is here. The attribute is recorded the
@@ -835,7 +846,7 @@ func (r *Runner) exportSpelledDeclaration(d declaration) string {
 	// `typeset -L3 -r a=abcd` and `typeset -lL 4 d=ABCD` is
 	// `typeset -L4 -l d=ABCD`. A name carries one of the three, so their
 	// order among themselves decides nothing.
-	flags := d.letters("naAiFLRZlurxUT")
+	flags := d.letters("naAiEFLRZlurxUT")
 	numbered := 0
 	if d.base != 0 {
 		// The base rides on the letter here — `typeset -i16 h=255` — where
@@ -1123,6 +1134,21 @@ func bareAssignmentFlags(d declaration) []string {
 	if d.upper {
 		flags = append(flags, "-u")
 	}
+	if d.float {
+		// The float letter and its number as a word of its own —
+		// `typeset -E 3 a=3.14` — which is where the integer base sits too
+		// and is measured from the same state: `typeset -xE 3 a=1.5` lists
+		// as `typeset -x -E 3 a=1.5`, so the letter follows export and
+		// readonly and carries its number behind it.
+		if d.floatExponent {
+			flags = append(flags, "-E")
+		} else {
+			flags = append(flags, "-F")
+		}
+		if d.precision != 0 {
+			flags = append(flags, itoa(d.precision))
+		}
+	}
 	if d.integer {
 		flags = append(flags, "-i")
 		if d.base != 0 {
@@ -1205,7 +1231,9 @@ func (d declaration) letters(order string) string {
 		case 'i':
 			on = d.integer
 		case 'F':
-			on = d.float
+			on = d.float && !d.floatExponent
+		case 'E':
+			on = d.float && d.floatExponent
 		case 'L', 'R', 'Z':
 			on = d.hasWidth && d.width.letter == byte(c)
 		case 'r':

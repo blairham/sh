@@ -1717,6 +1717,21 @@ func Semantics() interp.Semantics {
 	// this shell also has still rides in
 	// Diagnostics.UnimplementedOptionLetters.
 	s.DeclareOptions = "aAfFgilnprux"
+	// unanswered FloatFormatLetterE: this shell has no `-E` on a declaration
+	// to give a rendering to. Measured 2026-09-15 on 5.3.15 and 3.2.57
+	// alike, `declare -E 3 a=1.5` is `declare: -E: invalid option` (#2559).
+	// unanswered DeclareNumberDetachedOnlyAtTheWordEnd: no letter here takes
+	// a detached number at all — DeclareOptionsTakingANumber is empty and
+	// `-i` takes no base, so `declare -i 8 n=64` is `8: not a valid
+	// identifier` — and there is no position for the rule to be about.
+	// unanswered BareFloatLetterResetsThePrecision: there is no float
+	// precision here to keep or reset; `-F` is the *function* listing under
+	// this name, and `declare -F 3 a=1.5` is ``cannot use `-f' to make
+	// functions``.
+	// unanswered NumericTypeLettersAreExclusive: the pair cannot be written.
+	// `-E` is not a letter at all and `-F` is the function listing, so
+	// `declare -iF a=1` is that same refusal in 3.2 and `-i: invalid option`
+	// in 5.3 — neither of them the question this asks.
 	// unanswered DeclareMatchingLetter: bash has no `m` letter under either
 	// reading. Measured 2026-09-13 on 5.3 and 3.2 alike, `declare -m q=1` is
 	// `declare: -m: invalid option` followed by the usage line, so the

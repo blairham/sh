@@ -81,6 +81,17 @@ func biInteger(r *Runner, _ context.Context, args []string) int {
 	// letters were written: `integer +x n` is still an integer declaration in
 	// both shells, because the plus belongs to the export letter.
 	f.integer = true
+	// And the letter it asked for, which is what the *company* rules read:
+	// this word is `typeset -i` under another name, so a float letter
+	// written beside it is the pair one dialect refuses — measured,
+	// `integer -E 3 a=1.5` is typeset's usage block in ksh93u+. Recorded
+	// here rather than in the parse because the letter was never written;
+	// without it the pair is invisible under this spelling and visible under
+	// the other, which is one rule with two answers.
+	if !strings.ContainsRune(f.letters, 'i') {
+		f.letters += "i"
+		f.letterSigns += "-"
+	}
 	if f.remove {
 		// A plus word is the one place the two readings part company, and it
 		// is the *word* rather than the `i` in it: in the shell where the

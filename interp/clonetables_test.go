@@ -298,6 +298,7 @@ func seedTables(r *Runner) {
 	r.traps = map[string]string{"seed": "v"}
 	r.unique = map[string]bool{"seed": true}
 	r.nameref = map[string]string{"seed": "target"}
+	r.floatExponent = map[string]bool{"seed": true}
 	r.uppered = map[string]bool{"seed": true}
 }
 

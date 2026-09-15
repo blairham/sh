@@ -291,16 +291,14 @@ func TestTheFloatAttributeReachesACountedParameter(t *testing.T) {
 }
 
 // `-E` is the same float family spelled for scientific notation, and it is
-// deliberately still refused: nothing measured asks for it, and the case for
-// silence rests on `-F` being the letter a *function* listing is spelled with
-// somewhere else.
-func TestTypesetCapitalEIsStillUnimplemented(t *testing.T) {
-	out, _ := runZsh(t, t.TempDir(), `typeset -E v 2>&1; echo st=$?`)
-	// The builtin's name is in the location prefix here, as it is for every
-	// message this shell writes.
-	wantWholeLines(t, out, "zsh:typeset:1: -E is not implemented yet")
-	if !strings.Contains(out, "st=2") {
-		t.Errorf("got %q, want status 2", out)
+// built since #2559 — see floatformat_test.go for the whole of it. The row
+// that used to stand here asserted the refusal; this one asserts the
+// declaration, so the file does not go on claiming a letter is missing.
+func TestTypesetCapitalEDeclaresAFloat(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `typeset -E v; typeset -p v; echo st=$?`)
+	wantWholeLines(t, out, "typeset -E v=0.000000000e+00", "st=0")
+	if st != 0 {
+		t.Errorf("got %q, want status 0", out)
 	}
 }
 

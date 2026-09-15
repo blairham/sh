@@ -42,7 +42,12 @@ type declareFlags struct {
 	// all. Three digits and no digits are different declarations and zero is
 	// a number a script may write, so the two cannot be one field, the same
 	// way base and baseNamed cannot.
-	float          bool
+	float bool
+	// floatExponent is which of the two float letters was written: `E`
+	// rather than `F`. A field of its own because the letter chooses a
+	// *format* and not only a number — see interp/floatformat.go — and the
+	// two letters otherwise declare the same attribute.
+	floatExponent  bool
 	precision      int
 	precisionNamed bool
 	// widthLetter is `L`, `R` or `Z` where the dialect gives those letters a
@@ -522,6 +527,24 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 					f.mappingName, f.mappingNamed = rest, true
 					break letters
 				}
+			case 'E':
+				if r.declareOptionTakesANumber('E') {
+					// The float attribute again, under the letter that
+					// carries a *format* with it. Guarded against an
+					// integer letter already read for the reason `F` is,
+					// and the two float letters settle between themselves
+					// the same way: the first written wins, so `-EF 3` is
+					// the exponent form and `-FE 3` the plain one.
+					if !f.integer && !f.float {
+						f.float, f.floatExponent = true, true
+					}
+					break
+				}
+				// The dialect spells the letter and not as a float format,
+				// so it is whatever else it is there — today, nothing this
+				// engine models, which DeclareOptions and
+				// UnimplementedOptionLetters have already settled between
+				// them before the loop reached here.
 			case 'F':
 				if r.declareOptionTakesANumber('F') {
 					// The letter is a float's precision in this dialect
@@ -696,7 +719,20 @@ func (r *Runner) numberEndsTheWord(c byte, rest string, later []string) bool {
 	if len(later) == 0 || !isAllDigits(later[0]) {
 		return false
 	}
-	return r.declareOptionTakesANumber(c)
+	if !r.declareOptionTakesANumber(c) {
+		return false
+	}
+	if rest == "" {
+		// The letter ends its word, which every dialect with a
+		// number-taking letter reads as taking the number.
+		return true
+	}
+	// A letter with more word behind it. One dialect takes the number here
+	// and discards the rest of the word; the other leaves the number an
+	// operand. Asked last, so a dialect whose letter takes no number at all
+	// — and a word with no following digits — never meets the question.
+	return !r.ask(r.sem().DeclareNumberDetachedOnlyAtTheWordEnd,
+		"a detached number reaching a letter that does not end its option word")
 }
 
 func biDeclare(r *Runner, _ context.Context, args []string) int {
@@ -914,6 +950,18 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		}
 	}
 
+	if numericTypeLetterCompany(f) &&
+		r.ask(r.sem().NumericTypeLettersAreExclusive, "the integer and float letters on one declaration") {
+		// The two numeric type letters cannot both stand here, and the
+		// refusal is the builtin's usage block rather than a complaint about
+		// either letter — measured, both orders answer the same way. See the
+		// axis; the other reading lets the first letter written win, which
+		// the parse has already settled by the time this is reached.
+		return r.refuseWithUsage(name)
+	}
+	if r.unspecified {
+		return r.status
+	}
 	if f.hidden {
 		switch r.sem().DeclareHideValueLetter {
 		case DeclareHideValueLetterUnspecified:
@@ -1895,6 +1943,7 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 			// See the float branch below: the later declaration speaks, and
 			// `typeset -F 3 x=1.5; typeset -i x` reads `1`.
 			delete(r.floatPrecision, name)
+			r.markFloatExponent(name, false)
 			r.numericLetterReplacesTheCase(name)
 			switch {
 			case f.baseNamed && f.base == 10 && r.integerBaseTenIsNone():
@@ -1987,19 +2036,33 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 			// x=1.500`. What the plus form takes off is the rendering of
 			// what comes next, the same as `+i`.
 			delete(r.floatPrecision, name)
+			// And the letter beside it, which is the format rather than the
+			// places: `typeset +E x` leaves a plain name and not one that
+			// renders as `F`.
+			r.markFloatExponent(name, false)
 		} else {
 			if r.floatPrecision == nil {
 				r.floatPrecision = map[string]int{}
 			}
-			// A bare `-F` over a name that already has a precision keeps it
-			// — measured, `typeset -F 3 x=1.5; typeset -F x` is `1.500` —
-			// so only a number written down replaces one. ksh93 is the other
-			// way and resets to the default, `1.5000000000`; this follows
-			// zsh, which is the only dialect given the attribute, and the
-			// disagreement is in the corpus rather than in an axis nothing
-			// else could answer — see #1461.
-			if f.precisionNamed || r.floatPrecision[name] == 0 {
+			// Which of the two letters declared it. Written whichever way
+			// round, so `typeset -E 3 x; typeset -F 3 x` really is the plain
+			// rendering afterwards and the attribute is not half of each.
+			r.markFloatExponent(name, f.floatExponent)
+			// A bare `-F` or `-E` over a name that already has a precision
+			// keeps it in one shell and resets it to the letter's default in
+			// the other — measured, `typeset -F 3 x=1.5; typeset -F x` is
+			// `1.500` in zsh 5.9.2 and `typeset -E 3 a=1.23456789; typeset
+			// -E a` reads `1.23` and then `1.23456789` in ksh93u+. That was
+			// a note here while zsh was the only dialect given the attribute
+			// and is Semantics.BareFloatLetterResetsThePrecision since
+			// ksh93 gained the `E` letter (#2559).
+			if f.precisionNamed || r.floatPrecision[name] == 0 ||
+				r.ask(r.sem().BareFloatLetterResetsThePrecision,
+					"a bare float letter resetting a precision the name already had") {
 				r.floatPrecision[name] = f.precision
+			}
+			if r.unspecified {
+				return
 			}
 			// The two attributes cannot both stand and the later
 			// *declaration* speaks: measured, `typeset -i x=5; typeset -F 3
@@ -3533,7 +3596,7 @@ func (r *Runner) rereadStandingValue(name string) (startedOver bool) {
 // `bar`, an empty string — reads differently under the two shells whether it
 // evaluates or not.
 func (r *Runner) attributeWouldChange(name, value string) bool {
-	if prec, ok := r.floatPrecision[name]; ok {
+	if _, ok := r.floatPrecision[name]; ok {
 		// The cheap half, the same shape the integer letter's is: a value
 		// already written at the name's precision is one the fold would
 		// return unchanged, and anything else — a plain `5`, a based
@@ -3542,7 +3605,15 @@ func (r *Runner) attributeWouldChange(name, value string) bool {
 		// question that only asks whether to bother, and which complains
 		// where this must only answer.
 		v, err := strconv.ParseFloat(value, 64)
-		if err != nil || strconv.FormatFloat(v, 'f', floatPlaces(prec), 64) != value {
+		if err != nil {
+			return true
+		}
+		// The rendering may itself refuse — a dialect that spells the `E`
+		// letter and has not said what it means — and an unanswered axis is
+		// not "the value would not change": the caller has to reach the
+		// refusal rather than skip past it.
+		text, ok := r.floatFormatted(name, v)
+		if !ok || text != value {
 			return true
 		}
 	}
@@ -4121,4 +4192,16 @@ func (r *Runner) functionDefinitionFile(name string) string {
 		return file
 	}
 	return r.name()
+}
+
+// numericTypeLetterCompany reports whether a declaration wrote the integer
+// letter and a float letter both.
+//
+// Read off the letters as written rather than off the flags, because the
+// flags are where the parse has already discarded the loser: `-iE` leaves
+// f.float false and `-Ei` leaves both set, so a test on the flags would
+// answer the two orders differently where the shell that refuses them does
+// not.
+func numericTypeLetterCompany(f declareFlags) bool {
+	return strings.ContainsRune(f.letters, 'i') && strings.ContainsAny(f.letters, "EF")
 }

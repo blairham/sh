@@ -345,6 +345,16 @@ func Semantics() interp.Semantics {
 	// declaration command to write the letter on. `typeset` is not a
 	// builtin here and `integer` is not a word, so neither sign of `-i`
 	// can be put to this shell at all (#2345).
+	// unanswered FloatFormatLetterE: there is no declaration command to write
+	// the letter on. Measured 2026-09-15, `typeset -E 3 a=1.5` is `typeset:
+	// not found` at 127 (#2559).
+	// unanswered DeclareNumberDetachedOnlyAtTheWordEnd: the same wall — no
+	// declaration builtin, so no option word for a number to stand at the
+	// end of.
+	// unanswered BareFloatLetterResetsThePrecision: nor any float attribute
+	// to have a precision.
+	// unanswered NumericTypeLettersAreExclusive: nor a pair of numeric
+	// letters to write together.
 	// unanswered NamerefCycleIsRefused: there are no name references to make
 	// a cycle of. Measured 2026-09-15, `typeset` is not a builtin here —
 	// `typeset: not found` at 127 — so the declaration that would build one

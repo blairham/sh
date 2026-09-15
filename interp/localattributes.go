@@ -60,6 +60,10 @@ type nameAttributes struct {
 	// table *is* the attribute; the value is the places it renders in.
 	precision int
 	isFloat   bool
+	// floatExponent is which of the two float letters gave it — `E` rather
+	// than `F` — which is a format and not a number. See
+	// interp/floatformat.go.
+	floatExponent bool
 	// width and hasWidth are the width attribute, the same shape: absent as
 	// often as present, and the letter travels with the number.
 	width    fieldWidth
@@ -95,6 +99,7 @@ func (r *Runner) captureAttributes(name string) nameAttributes {
 	}
 	a.base, a.baseSet = r.integerBase[name]
 	a.precision, a.isFloat = r.floatPrecision[name]
+	a.floatExponent = r.floatExponent[name]
 	a.width, a.hasWidth = r.fieldWidth[name]
 	a.nameref, a.isNameref = r.nameref[name]
 	return a
@@ -117,6 +122,7 @@ func (r *Runner) dropNameAttributes(name string) {
 	delete(r.integer, name)
 	delete(r.integerBase, name)
 	delete(r.floatPrecision, name)
+	delete(r.floatExponent, name)
 	delete(r.fieldWidth, name)
 	delete(r.lowered, name)
 	delete(r.uppered, name)
@@ -138,6 +144,7 @@ func (r *Runner) restoreAttributes(name string, a nameAttributes) {
 	setBool(&r.hidden, name, a.hidden)
 	setInt(&r.integerBase, name, a.base, a.baseSet)
 	setInt(&r.floatPrecision, name, a.precision, a.isFloat)
+	setBool(&r.floatExponent, name, a.floatExponent)
 	if !a.hasWidth {
 		delete(r.fieldWidth, name)
 	} else {

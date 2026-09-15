@@ -515,6 +515,17 @@ func biFg(r *Runner, _ context.Context, args []string) int {
 			defer func() { _ = r.Foreground(0) }()
 		}
 	}
+	if !j.polled || j.PID == 0 {
+		// A job somebody is already waiting on, which is every `&` job and
+		// every job with no process of its own. Waiting on the pid a second
+		// time here is not a second answer, it is an error: the job's own
+		// goroutine has the child, so this reaped nothing and reported `fg:
+		// no child processes` where the panel runs the job and reports its
+		// status (#2720). Before `set -m` reached this builtin the only job
+		// that could be resumed was one ^Z had left behind, which is polled
+		// and has nobody waiting on it, so the shape never came up.
+		return r.finishResumed(j)
+	}
 	w, err := r.WaitForCommand(j.PID)
 	if err != nil {
 		r.diagf("fg: %v\n", err)
@@ -542,6 +553,54 @@ func biFg(r *Runner, _ context.Context, args []string) int {
 		r.announceStopped(j)
 		return status
 	}
+	r.Forget(j)
+	return status
+}
+
+// finishResumed waits out a job `fg` put back in front that this shell is not
+// the waiter for, and reports what it left.
+//
+// The channel and not the front end's wait hook, for the reason biFg gives at
+// the call: the job's own goroutine holds the child. It is the same pair of
+// channels `wait` selects over — see Runner.waitFor — minus the axis, because
+// giving up on a stopped job is a question about `wait` and not about `fg`: a
+// job that stops again under `fg` is announced and handed back in every shell
+// that has the builtin at all.
+//
+// What it does not carry is Runner.diedOfSig. The signal that ended the job
+// was seen on the job's own runner, which is a copy of this one and is gone by
+// the time the channel closes, so a job killed while in front does not start
+// the next prompt on a fresh line the way a foreground command does. The
+// polled path above still does, which is why it is still there; recorded here
+// rather than guessed at from the status, since 130 is also what `exit 130`
+// leaves.
+func (r *Runner) finishResumed(j *Job) int {
+	note := j.stopNote
+	if !r.monitor || j.PID == 0 {
+		// Nothing that can stop, or no monitor to stop it with — the same
+		// pair of conditions stoppedJobEndsAWait reads, and for the same
+		// reason. A nil channel is never ready, so the select below becomes
+		// a plain wait.
+		note = nil
+	}
+	select {
+	case <-j.done:
+	case <-note:
+		// Ended and stopped at once is ended, which is the rule awaitOrTrap
+		// states for the same pair.
+		select {
+		case <-j.done:
+		default:
+			if r.noticeStoppedJob(j) {
+				r.setLastJob(j)
+				r.becomeCurrentJob(j)
+				r.announceStopped(j)
+				return r.stoppedWaitStatus(j)
+			}
+			<-j.done
+		}
+	}
+	status := j.Status
 	r.Forget(j)
 	return status
 }
@@ -585,7 +644,7 @@ func biBg(r *Runner, _ context.Context, args []string) int {
 // `fg 2>/dev/null` precisely so there would be none (#2657).
 func (r *Runner) resume(args []string, name string) (*Job, int) {
 	first := false
-	if !r.JobControl {
+	if !r.canResume() {
 		first = r.ask(r.sem().JobControlAbsenceIsReportedFirst, "`bg` with no job control refusing before reading its operand")
 	}
 	if r.unspecified {
@@ -605,7 +664,7 @@ func (r *Runner) resume(args []string, name string) (*Job, int) {
 	if j == nil {
 		return nil, code
 	}
-	if !r.JobControl {
+	if !r.canResume() {
 		// The operand read first and nothing wrong with it, which leaves the
 		// refusal this shell had all along. dash names the spec here, and
 		// names it `(null)` where there was none.
@@ -618,6 +677,21 @@ func (r *Runner) resume(args []string, name string) (*Job, int) {
 		return nil, orDefault(d.JobNotUnderJobControlStatus, 1)
 	}
 	return j, 0
+}
+
+// canResume reports whether this shell will run a job for `fg` or `bg`.
+//
+// The monitor and having somebody to announce jobs to are different states,
+// and four of the five columns resume on the first alone — see
+// Semantics.MonitorAloneResumesAJob for the table and for the one that does
+// not. This gate used to be Runner.JobControl in every dialect, which is a
+// prompt and nothing else, so `set -m` in a script granted the monitor and
+// `fg` still refused (#2720).
+func (r *Runner) canResume() bool {
+	if r.sem().MonitorAloneResumesAJob == Yes {
+		return r.monitor
+	}
+	return r.JobControl
 }
 
 // pickJob is the operand half of resume: the job an argument names, or the

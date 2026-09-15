@@ -708,6 +708,13 @@ func TestFgAndBgRefuseAfterReadingTheOperand(t *testing.T) {
 	if got := dash.Semantics().JobControlAbsenceIsReportedFirst; got != interp.No {
 		t.Errorf("JobControlAbsenceIsReportedFirst = %v, want No", got)
 	}
+	// And whether the monitor alone lets `fg` run a job. Measured 2026-09-15
+	// on a pseudo-terminal, which is what this column needs to be asked at
+	// all: `set -m` without a terminal is denied here, so the resume is
+	// refused through that and not through this (#2720).
+	if got := dash.Semantics().MonitorAloneResumesAJob; got != interp.Yes {
+		t.Errorf("MonitorAloneResumesAJob = %v, want Yes", got)
+	}
 	d := dash.Diagnostics()
 	if got, want := d.JobNotUnderJobControl, "%[1]s: job %[2]s not created under job control"; got != want {
 		t.Errorf("JobNotUnderJobControl = %q, want %q", got, want)

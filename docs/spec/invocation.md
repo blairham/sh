@@ -355,6 +355,39 @@ one binary: `bash -c 'set -m'` with no terminal turns the monitor on, and
 script and the automatic one an interactive shell makes for itself are two
 questions, and one shell answers them differently.
 
+#### What the monitor is enough for
+
+Having a monitor and having somebody to announce jobs to are different
+states, and a script that writes `set -m` has the first and never the
+second. What `fg` and `bg` need is the **monitor**, in four of the five.
+
+Measured 2026-09-15, `env -i PATH=/usr/bin:/bin`, from a script file, with
+`set -m`, `sleep 0 &` and then `fg`, run twice — once with no terminal on
+any stream and once on a pseudo-terminal:
+
+| shell | no terminal | through a pseudo-terminal |
+| --- | --- | --- |
+| bash 5.3.15 | `sleep 0`, status **0** | `sleep 0`, status **0** |
+| ksh93u+ | nothing, status 1 | nothing, status 1 |
+| dash | the monitor is denied, status 2 | `sleep 0`, status **0** |
+| zsh 5.9.2 | `set -m` is fatal | the job line, status **0** |
+| BusyBox ash | the monitor is denied, status 2 | `sleep 0`, status **0** |
+
+So the terminal is not the gate. It decides whether the *monitor* is
+granted, which is `MonitorNeedsATerminal` above, and bash resumes without
+one. ksh93 is the column that grants the monitor either way and still
+will not resume — measured on the pseudo-terminal precisely to tell "needs
+a terminal" from "needs to be interactive", and it is the second.
+
+That is `Semantics.MonitorAloneResumesAJob`: bash yes · dash yes · ksh93
+**no** · zsh yes · ash yes. The control is the same script without `set
+-m`, where every column refuses on both routes, which is what makes the
+monitor the gate rather than something `fg` decided for itself.
+
+This shell had one gate for both states — `Runner.JobControl`, which is a
+prompt and nothing else — so `set -m` in a script was granted and `fg`
+refused anyway (#2720). Two corpus rows hold the pair.
+
 #### Which terminal counts
 
 **A terminal on any one of the three standard streams**, and that is measured

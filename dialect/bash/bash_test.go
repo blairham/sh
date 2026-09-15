@@ -911,9 +911,17 @@ func TestTheKindLetterIsAmongTypesLetters(t *testing.T) {
 // Measured 2026-09-13 from a script with no terminal, on 5.3.15 and 3.2.57
 // alike: `sleep 0 & fg` is `fg: no job control` at 1, and so is `fg %1` and
 // `fg %2` — the operand is never read, which is the axis above it.
+//
+// With `set -m` in front of it that stops being true, which is the second
+// axis below: this shell grants the monitor with no terminal and then runs
+// the job. The refusal above is what a script that did not ask for the
+// monitor gets (#2720).
 func TestFgAndBgSayThereIsNoJobControl(t *testing.T) {
 	if got := bash.Semantics().JobControlAbsenceIsReportedFirst; got != interp.Yes {
 		t.Errorf("JobControlAbsenceIsReportedFirst = %v, want Yes", got)
+	}
+	if got := bash.Semantics().MonitorAloneResumesAJob; got != interp.Yes {
+		t.Errorf("MonitorAloneResumesAJob = %v, want Yes", got)
 	}
 	if got, want := bash.Diagnostics().NoJobControl, "%[1]s: no job control"; got != want {
 		t.Errorf("NoJobControl = %q, want %q", got, want)

@@ -951,6 +951,13 @@ func TestFgAndBgRefuseBeforeTheOperandAndSayNothing(t *testing.T) {
 	if got := ksh.Semantics().JobControlAbsenceIsReportedFirst; got != interp.Yes {
 		t.Errorf("JobControlAbsenceIsReportedFirst = %v, want Yes", got)
 	}
+	// And whether the monitor alone lets `fg` run a job. This is the column
+	// that says no: `set -m` is granted in a script with no terminal and
+	// `fg` still answers 1 without a word, on a pseudo-terminal too — so
+	// what is missing is a person and not a terminal (#2720).
+	if got := ksh.Semantics().MonitorAloneResumesAJob; got != interp.No {
+		t.Errorf("MonitorAloneResumesAJob = %v, want No", got)
+	}
 	if got := ksh.Diagnostics().NoJobControl; got != "" {
 		t.Errorf("NoJobControl = %q, want empty — this shell refuses without a word", got)
 	}

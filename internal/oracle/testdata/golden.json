@@ -110042,6 +110042,108 @@
         "TimedOut": false
       }
     },
+    "jobs/fg-with-no-monitor-in-a-script": {
+      "ash": {
+        "Stdout": "rc=2",
+        "Stderr": "\u003cscript\u003e: fg: line 2: job (null) not created under job control",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "rc=1",
+        "Stderr": "\u003cscript\u003e: line 2: fg: no job control",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "rc=1",
+        "Stderr": "\u003cscript\u003e: line 2: fg: no job control",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "rc=1",
+        "Stderr": "\u003cscript\u003e: line 2: fg: no job control",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "rc=2",
+        "Stderr": "\u003cscript\u003e: 2: fg: job (null) not created under job control",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "rc=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "rc=1",
+        "Stderr": "\u003cscript\u003e:fg:2: no job control in this shell.",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "jobs/set-m-in-a-script-then-fg": {
+      "ash": {
+        "Stdout": "rc=2",
+        "Stderr": "\u003cscript\u003e: set: line 1: can't access tty; job control turned off~\u003cscript\u003e: fg: line 3: job (null) not created under job control",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "sleep 0~rc=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "sleep 0~rc=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "sleep 0~rc=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "rc=2",
+        "Stderr": "\u003cscript\u003e: 1: set: can't access tty; job control turned off~\u003cscript\u003e: 3: fg: job (null) not created under job control",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "rc=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:set:1: can't change option: -m",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "jobs/slot-a-running-job-occupies-its-slot": {
       "ash": {
         "Stdout": "one=0~two=0~three=2",

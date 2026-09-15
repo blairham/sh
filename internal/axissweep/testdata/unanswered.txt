@@ -49,6 +49,7 @@ ash   AttributeOverAFrozenNameIsRefused
 ash   AttributeRereadsTheValueItFinds
 ash   AutoCdAnnouncesTheSubstitution
 ash   BadSubscriptToUnsetFatal
+ash   BareFloatLetterResetsThePrecision
 ash   BareSubscriptIsASubscript
 ash   BareTypesetListing
 ash   BlankArithSubscriptIsTheEmptyExpression
@@ -77,6 +78,7 @@ ash   DeclareHideValueLetter
 ash   DeclareListing
 ash   DeclareMappingLetter
 ash   DeclareMatchingLetter
+ash   DeclareNumberDetachedOnlyAtTheWordEnd
 ash   DeclarePrintReportsAMissingName
 ash   DeclareTypeLetter
 ash   DisownRemovesTheJob
@@ -93,6 +95,7 @@ ash   ExitTrapFiresPastTheEnd
 ash   ExpansionResultSuppliesGroupSyntax
 ash   ExportLetterDeclaresAGlobal
 ash   ExportedCompoundReachesAChildAsItsFirstValue
+ash   FloatFormatLetterE
 ash   ForNameWhenTheLoopRuns
 ash   FunctionNamesUnderPlus
 ash   HeldExitListsTheJobs
@@ -121,6 +124,7 @@ ash   NegativeSubscriptPastTheStartInserts
 ash   NumericAttributeReplacesTheArrayAttribute
 ash   NumericAttributeReplacesTheCaseAttribute
 ash   NumericTypeLetterRetypesAFrozenName
+ash   NumericTypeLettersAreExclusive
 ash   NumericTypeWithNoValueReachesAChildAsZero
 ash   OneCommandStopsACommandString
 ash   OperatorDistributesOverStarSubscript
@@ -185,14 +189,18 @@ ash   WritingSubstitutionIsWaitedForAtTheCommand
 bash  ArithFloatOverflowIsZero
 bash  ArithIntegerOperatorRefusesFloat
 bash  ArithSubscriptSkippedWhenNameUnset
+bash  BareFloatLetterResetsThePrecision
 bash  BareSubscriptIsASubscript
 bash  DeclareHideValueLetter
 bash  DeclareMappingLetter
 bash  DeclareMatchingLetter
+bash  DeclareNumberDetachedOnlyAtTheWordEnd
 bash  DeclareTypeLetter
 bash  ExitTrapFiresPastTheEnd
+bash  FloatFormatLetterE
 bash  ImmovableOptionsSetAtInvocation
 bash  IntegerPlusFormTakesAttributesOff
+bash  NumericTypeLettersAreExclusive
 bash  PrintfOutputPrecedesComplaint
 bash  PrintfRefusedOperandKeepsItsLeadingNumber
 bash  SetArrayBadNameLeavesZeroFromCommandString
@@ -224,6 +232,7 @@ dash  AttributeOverAFrozenNameIsRefused
 dash  AttributeRereadsTheValueItFinds
 dash  AutoCdAnnouncesTheSubstitution
 dash  BadSubscriptToUnsetFatal
+dash  BareFloatLetterResetsThePrecision
 dash  BareSubscriptIsASubscript
 dash  BareTypesetListing
 dash  BlankArithSubscriptIsTheEmptyExpression
@@ -252,6 +261,7 @@ dash  DeclareHideValueLetter
 dash  DeclareListing
 dash  DeclareMappingLetter
 dash  DeclareMatchingLetter
+dash  DeclareNumberDetachedOnlyAtTheWordEnd
 dash  DeclarePrintReportsAMissingName
 dash  DeclareTypeLetter
 dash  DisownRemovesTheJob
@@ -278,6 +288,7 @@ dash  ExitTrapFiresPastTheEnd
 dash  ExpansionResultSuppliesGroupSyntax
 dash  ExportLetterDeclaresAGlobal
 dash  ExportedCompoundReachesAChildAsItsFirstValue
+dash  FloatFormatLetterE
 dash  ForNameWhenTheLoopRuns
 dash  FunctionNameWhenTheDefinitionRuns
 dash  FunctionNamesUnderPlus
@@ -307,6 +318,7 @@ dash  NegativeSubscriptPastTheStartInserts
 dash  NumericAttributeReplacesTheArrayAttribute
 dash  NumericAttributeReplacesTheCaseAttribute
 dash  NumericTypeLetterRetypesAFrozenName
+dash  NumericTypeLettersAreExclusive
 dash  NumericTypeWithNoValueReachesAChildAsZero
 dash  OneCommandStopsACommandString
 dash  OperatorDistributesOverStarSubscript

@@ -2346,7 +2346,7 @@ func Semantics() interp.Semantics {
 	// 2026-09-10, `local -z`, `integer -z`, `float -z`, `export -z` and
 	// `readonly -z` are each `bad option: -z` in zsh 5.9.2, so the letter
 	// belongs to this table and to none of the other four (#1576).
-	s.DeclareOptions = "aAfFgHhiLlmpRruUTxZz"
+	s.DeclareOptions = "aAEfFgHhiLlmpRruUTxZz"
 	// And what the `m` of that set *means*: the operands are patterns and
 	// every other letter on the line decides what a match is then used
 	// for. ksh93 spells the same letter and moves a parameter with it, so
@@ -2439,7 +2439,27 @@ func Semantics() interp.Semantics {
 	// detached spelling and the attached one alike — `typeset -L 5 a=ab` and
 	// `typeset -L5 a=ab` are both `[ab   ]`. See interp/fieldwidth.go for
 	// the rule and for why ksh93 does not have them here (#1461).
-	s.DeclareOptionsTakingANumber = "FLRZ"
+	// `-E` joins the four here rather than standing apart: it takes a number
+	// in exactly the shape `-F` does, attached or detached, and what it does
+	// with the number is FloatFormatLetterE's question and not this one.
+	s.DeclareOptionsTakingANumber = "EFLRZ"
+	// And the letter is a **format**: `%.*e` with n−1 places, so `typeset -E
+	// 3 a=3.14159` is `3.14e+00` where ksh93's same line is `3.14`. See
+	// interp/floatformat.go for the measurements (#2559).
+	s.FloatFormatLetterE = interp.FloatFormatExponentWithPlaces
+	// The two numeric type letters may stand together here and the **first
+	// written** wins, which the parse settles: measured 2026-09-15,
+	// `typeset -iE 3 a=1.5` lists as `typeset -i3 a=1` and `typeset -Ei 3
+	// a=1.5` as `typeset -E a=1.50e+00`. ksh93 refuses the pair outright.
+	s.NumericTypeLettersAreExclusive = interp.No
+	// A bare `-F` or `-E` over a name that already has a precision keeps it
+	// here — measured, `typeset -F 3 x=1.5; typeset -F x` still reads
+	// `1.500` — where ksh93 resets to the letter's default.
+	s.BareFloatLetterResetsThePrecision = interp.No
+	// And a detached number reaches its letter wherever the letter stands:
+	// `typeset -El 3 a=1.5` is `1.50e+00` here and `3: invalid variable
+	// name` in ksh93, which is where the two part.
+	s.DeclareNumberDetachedOnlyAtTheWordEnd = interp.No
 	// `functions` takes none of the letters this engine acts on. Its own
 	// set — -c -k -m -s -t -u -x -z -M -T -U -W, measured 2026-09-08 by
 	// sweeping the alphabet in both cases — is autoloading, tracing, the
@@ -2924,7 +2944,7 @@ func Diagnostics() interp.Diagnostics {
 			// `-n` is the one that was load-bearing: #2553 built the name
 			// reference for bash and ksh93 on the premise that this shell
 			// spelled it too, and it does not.
-			"typeset": "Ekt",
+			"typeset": "kt",
 			// `w` has left this list and joined TypeOptions above, in the same
 			// change: a letter in both is refused as missing while it works,
 			// and a letter in neither is `bad option` for something this
@@ -2935,7 +2955,7 @@ func Diagnostics() interp.Diagnostics {
 			// job was started in, and -z and -Z are about the process
 			// title rather than about the job table.
 			"jobs":    "dzZ",
-			"declare": "Ekt",
+			"declare": "kt",
 			// The same list as `typeset` and `declare`, which is the point:
 			// `-F` is one attribute and the three names declare it alike.
 			// It was here and in neither of theirs, which is the same split
@@ -2953,7 +2973,7 @@ func Diagnostics() interp.Diagnostics {
 			// `bad option: -k` where `typeset -k` and `declare -k` are taken
 			// — so this list is one letter shorter than theirs and not the
 			// same list after all.
-			"local": "Et",
+			"local": "t",
 			// `integer`'s own short list, and it is not typeset's: the
 			// letters typeset is missing that `integer` refuses outright —
 			// b, c, E and m — are bad options under this name and belong in

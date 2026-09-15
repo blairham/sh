@@ -53,8 +53,10 @@ func TestLocalTakesTheFloatAttribute(t *testing.T) {
 // from the letter to nowhere at all.
 //
 // `-L` and `-R` have left this list, with `-Z`: they are the width attributes
-// and are built now (#1461). `-E` stays because it is a *format* rather than
-// a width and the two shells that spell it do not share one.
+// and are built now (#1461). `-E` has left it too — it is a *format* rather
+// than a width and the two shells that spell it do not share one, which is
+// what took it a separate axis and #2559 rather than a place in that change.
+// `-t` is what is left.
 func TestLocalStillRefusesTheLettersItHasNoAttributeFor(t *testing.T) {
 	if s := zsh.Semantics(); strings.ContainsAny(s.LocalOptions, "fg") {
 		t.Errorf("LocalOptions %q claims -f or -g, which a local cannot be", s.LocalOptions)
@@ -67,8 +69,8 @@ func TestLocalStillRefusesTheLettersItHasNoAttributeFor(t *testing.T) {
 		}
 	}
 	// Built under the other word is the test for `F`; not built at all is the
-	// test for these, and the refusal names the letter.
-	for _, letter := range []string{"E", "t"} {
+	// test for this one, and the refusal names the letter.
+	for _, letter := range []string{"t"} {
 		out, _ := runZsh(t, dir, `typeset -`+letter+` x=1`)
 		if !strings.Contains(out, "-"+letter+" is not implemented yet") {
 			t.Errorf("typeset -%s = %q, want it still refused by name", letter, out)

@@ -62,6 +62,15 @@ func withFloatLetter(s *Semantics) {
 	// what it finds — `typeset -F 3 v=1.5; typeset -i v` is `1` — which is a
 	// question of its own and not this letter's to answer.
 	s.AttributeRereadsTheValueItFinds = Yes
+	// The three questions a number-taking letter raises once a dialect has
+	// one, answered here as the majority of these rows assume: the number
+	// reaches its letter wherever the letter stands, a bare letter keeps a
+	// precision the name already has, and the two numeric letters may stand
+	// together with the first written winning. Each has its own rows below
+	// under the other answer. See interp/floatformat.go.
+	s.DeclareNumberDetachedOnlyAtTheWordEnd = No
+	s.BareFloatLetterResetsThePrecision = No
+	s.NumericTypeLettersAreExclusive = No
 }
 
 // The number behind the letter is its argument and not a second name, under

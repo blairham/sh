@@ -6457,6 +6457,79 @@ type Semantics struct {
 	// #1461 for implementing them.
 	DeclareOptionsTakingANumber string
 
+	// FloatFormatLetterE is what the `E` letter of a declaration renders a
+	// float with, in the dialect that spells it — see
+	// [FloatFormatPolicy] and interp/floatformat.go, where the measurements
+	// are.
+	//
+	// It is an axis and not a number because the two shells that have the
+	// letter disagree about the *rendering* as well as about what the number
+	// counts: `typeset -E 3 f=100` is `1.00e+02` in zsh 5.9.2 and `100` in
+	// ksh93u+. Neither is a special case of the other.
+	//
+	// Separate from DeclareOptionsTakingANumber above, which answers whether
+	// the letter takes a number at all. A dialect has to say both, and the
+	// two are different questions: `-F` takes a number in both shells and
+	// means one thing, `-E` takes a number in both and means two.
+	FloatFormatLetterE FloatFormatPolicy
+
+	// DeclareNumberDetachedOnlyAtTheWordEnd is the per-spelling half of
+	// DeclareOptionsTakingANumber: whether the next *word* is a
+	// number-taking letter's argument only when that letter is the last
+	// character of its own option word.
+	//
+	// Measured 2026-09-15, `env -i` with a scratch HOME and no startup
+	// files. zsh 5.9.2 reads the number wherever the letter stands and
+	// discards whatever else the word carried — `typeset -Fx 3 v=1.5` is a
+	// float at three places and `v` unexported. ksh93u+ reads it only where
+	// the letter ends the word: `typeset -Ex 3 a=3.14159` is `typeset: 3: is
+	// not an identifier` there, and `typeset -xE 3 a=3.14159` — the same two
+	// letters the other way round — is the float.
+	//
+	// So the number belongs to a letter in one shell and to a *position* in
+	// the other, and a shell that guessed would either refuse a line zsh runs
+	// or read an operand ksh93 refuses as a name. #1461 and #2559 both
+	// deferred this; it is what makes any number-taking letter reachable
+	// under ksh93's name.
+	//
+	// Asked only where a number-taking letter really has a following word of
+	// digits, so a dialect that never meets the shape is never asked.
+	DeclareNumberDetachedOnlyAtTheWordEnd Answer
+
+	// BareFloatLetterResetsThePrecision decides what `-F` or `-E` with no
+	// number does to a name that already has one.
+	//
+	// Measured 2026-09-15: zsh 5.9.2 keeps it — `typeset -F 3 x=1.5;
+	// typeset -F x` still reads `1.500` — and ksh93u+ resets to the letter's
+	// default, `typeset -E 3 a=1.23456789; typeset -E a` reading `1.23` and
+	// then `1.23456789`. Both are complete readings of the same line and
+	// neither is a subset of the other.
+	//
+	// It was a comment in applyAttributes while zsh was the only dialect
+	// given the attribute at all. #2559 gave ksh93 the `E` letter, which is
+	// what turned a recorded difference into a question two presets reach.
+	BareFloatLetterResetsThePrecision Answer
+
+	// NumericTypeLettersAreExclusive refuses a declaration carrying both the
+	// integer letter and a float one, with the builtin's usage block.
+	//
+	// Measured 2026-09-15. ksh93u+ answers `typeset -iE 3 a=1.5` and
+	// `typeset -Ei 3 a=1.5` alike with typeset's whole usage block at 2, and
+	// `typeset` being one of its special builtins the script ends there.
+	// zsh 5.9.2 takes both and lets the **first letter written** win —
+	// `typeset -iE 3 a=1.5` lists as `typeset -i3 a=1` and `-Ei` as
+	// `typeset -E a=1.50e+00`.
+	//
+	// Both are complete readings and neither is a subset of the other, which
+	// is what makes it a field: a shell that refused the pair would refuse a
+	// line zsh runs, and one that let a letter win would run a line ksh93
+	// stops on.
+	//
+	// The *rule* about which letter wins where they are taken is not this
+	// axis and stays where it is — in the parse, which discards the later of
+	// the two. This asks only whether the pair is taken at all.
+	NumericTypeLettersAreExclusive Answer
+
 	// TypesetBadOptionFatal ends the script over an option `typeset` does
 	// not have. ksh93 counts `typeset` among its special builtins and stops
 	// there; bash and zsh report it and carry on. Asked only when the

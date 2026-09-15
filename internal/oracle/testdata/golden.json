@@ -64192,6 +64192,57 @@
         "TimedOut": false
       }
     },
+    "declare/a-bare-float-letter-over-a-precision": {
+      "ash": {
+        "Stdout": "[1.23456789]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[1.23456789]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[1.23456789]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[1.23456789]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[1.23456789]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[1.23456789]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[1.23e+00]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "declare/a-bare-integer-letter-and-what-base-ten-is": {
       "ash": {
         "Stdout": "1[]~2[]~3[]",
@@ -76534,6 +76585,57 @@
         "TimedOut": false
       }
     },
+    "declare/the-float-format-letter": {
+      "ash": {
+        "Stdout": "a=[]~f=[]~g=[]~c=[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "a=[]~f=[]~g=[]~c=[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "a=[]~f=[]~g=[]~c=[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "a=[]~f=[]~g=[]~c=[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "a=[]~f=[]~g=[]~c=[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "a=[3.14]~f=[100]~g=[3]~c=[1.5]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "a=[3.14e+00]~f=[1.00e+02]~g=[3e+00]~c=[1.500000000e+00]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "declare/the-float-letter-takes-a-precision": {
       "ash": {
         "Stdout": "1[]~2[]~3[]~4[]~5[]",
@@ -76885,6 +76987,57 @@
       },
       "zsh": {
         "Stdout": "[ABC] st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/the-two-numeric-type-letters-together": {
+      "ash": {
+        "Stdout": "\u003cshell\u003e: typeset: not found~one=0~\u003cshell\u003e: typeset: not found~two=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "\u003cshell\u003e: line 1: typeset: -E: invalid option~one=0~\u003cshell\u003e: line 1: typeset: -E: invalid option~two=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "\u003cshell\u003e: line 1: typeset: -E: invalid option~one=0~\u003cshell\u003e: line 1: typeset: -E: invalid option~two=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "\u003cshell\u003e: line 0: typeset: -E: invalid option~one=0~\u003cshell\u003e: line 0: typeset: -E: invalid option~two=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "\u003cshell\u003e: 1: typeset: not found~one=0~\u003cshell\u003e: 1: typeset: not found~two=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]~one=0~Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]~two=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one=0~two=0",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -78976,6 +79129,57 @@
       },
       "zsh": {
         "Stdout": "typeset -l lo=AB~typeset -u up=ab~[ab][AB]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/where-a-detached-number-may-be-written": {
+      "ash": {
+        "Stdout": "\u003cshell\u003e: typeset: not found~end=[]~\u003cshell\u003e: typeset: not found~front=[]~\u003cshell\u003e: typeset: not found~behind=[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "\u003cshell\u003e: line 1: typeset: -E: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~end=[]~\u003cshell\u003e: line 1: typeset: -E: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~front=[]~\u003cshell\u003e: line 1: typeset: -E: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~behind=[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "\u003cshell\u003e: line 1: typeset: -E: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~end=[]~\u003cshell\u003e: line 1: typeset: -E: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~front=[]~\u003cshell\u003e: line 1: typeset: -E: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~behind=[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "\u003cshell\u003e: line 0: typeset: -E: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~end=[]~\u003cshell\u003e: line 0: typeset: -E: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~front=[]~\u003cshell\u003e: line 0: typeset: -E: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~behind=[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "\u003cshell\u003e: 1: typeset: not found~end=[]~\u003cshell\u003e: 1: typeset: not found~front=[]~\u003cshell\u003e: 1: typeset: not found~behind=[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "end=[1.5]~front=[1.5]~\u003cshell\u003e: typeset: 3: invalid variable name",
+        "Stderr": "",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "end=[1.50e+00]~front=[1.50e+00]~behind=[1.50e+00]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

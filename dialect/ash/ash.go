@@ -317,6 +317,15 @@ func Semantics() interp.Semantics {
 	// unanswered KeyedLiteralAppendJoinsTheReplacedValue: no keyed table and
 	// no literal here either. Measured 2026-09-12 on BusyBox v1.37.0,
 	// `m=([k]+=x)` is `syntax error: unexpected "("` (#2405).
+	// unanswered FloatFormatLetterE: there is no declaration command to write
+	// the letter on. Measured 2026-09-15 on BusyBox v1.37.0 in a container,
+	// `typeset` is `not found` — the same wall dash meets (#2559).
+	// unanswered DeclareNumberDetachedOnlyAtTheWordEnd: the same wall, so no
+	// option word for a number to stand at the end of.
+	// unanswered BareFloatLetterResetsThePrecision: nor any float attribute
+	// to have a precision.
+	// unanswered NumericTypeLettersAreExclusive: nor a pair of numeric
+	// letters to write together.
 	// unanswered NamerefCycleIsRefused: there are no name references to make
 	// a cycle of. Measured 2026-09-15 on BusyBox v1.37.0, `typeset` is not a
 	// command here at all — `typeset: not found` at 127 — so neither

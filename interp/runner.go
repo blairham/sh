@@ -11,7 +11,6 @@ import (
 	"os"
 	"os/exec"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -2362,6 +2361,10 @@ type Runner struct {
 	// default both shells with the attribute print, rather than no places at
 	// all. Measured 2026-09-07: `typeset -F x=1.5` is `1.5000000000`.
 	floatPrecision map[string]int
+	// floatExponent names the float parameters whose attribute came from the
+	// `E` letter rather than from `F` — a **format** and not a width. See
+	// interp/floatformat.go, where the two renderings are.
+	floatExponent map[string]bool
 	// fieldWidth is the width attribute a name carries — `typeset -L 5 s`
 	// and its two neighbors. Presence is the attribute, the way it is for
 	// floatPrecision; see fieldwidth.go, which holds the measurements and
@@ -6087,7 +6090,7 @@ func (f assignForm) declaresRatherThanAssigns() bool {
 // declareEmpty — and that is not an assignment, so it must not meet the
 // readonly refusal or anything else setVarAs does around it.
 func (r *Runner) attributeFolded(name, value string) (string, bool) {
-	if prec, ok := r.floatPrecision[name]; ok {
+	if _, ok := r.floatPrecision[name]; ok {
 		// The name was declared float, so what is assigned to it is an
 		// expression too — `typeset -F 3 x=1+2` is `3.000` — and the places
 		// it is written in are the name's rather than the value's.
@@ -6103,7 +6106,10 @@ func (r *Runner) attributeFolded(name, value string) (string, bool) {
 		// The rendered text is what is *stored*, exactly as an integer
 		// name's base is: `${#x}` counts the five characters of `1.500`, a
 		// child is told `x=1.500`, and arithmetic reads them back.
-		value = strconv.FormatFloat(v, 'f', floatPlaces(prec), 64)
+		value, ok = r.floatFormatted(name, v)
+		if !ok {
+			return "", false
+		}
 	} else if r.integer[name] {
 		// The name was declared integer, so what is assigned to it is an
 		// expression rather than text.
@@ -6261,7 +6267,7 @@ func (r *Runner) readCaseFolded(name, value string) string {
 // the same reason: the failure ends the script and a half-written name would
 // outlive it.
 func (r *Runner) appendedValue(name, old, add string) (string, bool) {
-	prec, isFloat := r.floatPrecision[name]
+	_, isFloat := r.floatPrecision[name]
 	switch {
 	case isFloat:
 		// Ahead of the integer branch for attributeFolded's reason: the two
@@ -6275,7 +6281,7 @@ func (r *Runner) appendedValue(name, old, add string) (string, bool) {
 		if !ok {
 			return "", false
 		}
-		return strconv.FormatFloat(lhs+rhs, 'f', floatPlaces(prec), 64), true
+		return r.floatFormatted(name, lhs+rhs)
 	case r.integer[name]:
 		r.learnIntegerBase(name, add)
 		if r.unspecified {

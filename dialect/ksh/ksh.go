@@ -1809,7 +1809,27 @@ func Semantics() interp.Semantics {
 	// declares a local in a keyword body here and the global in the other,
 	// so a listing that dropped the word would hand back a program whose
 	// variables leak — and the source text keeps it because it was written.
-	s.DeclareOptions = "aACfHilmMnprTux"
+	// `-E` is here since #2559: it is the float **format**, `%.*g` with n
+	// significant digits, where zsh's same letter is `%.*e` with n−1 places.
+	// See interp/floatformat.go.
+	s.DeclareOptions = "aACEfHilmMnprTux"
+	// And the number it takes, under this shell's own rule for a detached
+	// one: only where the letter ends its option word. `typeset -Ex 3
+	// a=3.14159` is `3: is not an identifier` here and the float in zsh.
+	// That rule is what #1461 and #2559 both deferred; it is the axis below.
+	s.DeclareOptionsTakingANumber = "E"
+	s.DeclareNumberDetachedOnlyAtTheWordEnd = interp.Yes
+	s.FloatFormatLetterE = interp.FloatFormatSignificantDigits
+	// And a bare `-E` over a name that already has a precision resets it to
+	// the letter's default here, where zsh keeps it: measured 2026-09-15,
+	// `typeset -E 3 a=1.23456789; typeset -E a` reads `1.23` and then
+	// `1.23456789`.
+	s.BareFloatLetterResetsThePrecision = interp.Yes
+	// And the integer letter cannot stand beside a float one: measured,
+	// `typeset -iE 3 a=1.5` and `typeset -Ei 3 a=1.5` are both typeset's
+	// usage block at 2, and the script ends there. zsh takes the pair and
+	// lets the first letter written win.
+	s.NumericTypeLettersAreExclusive = interp.Yes
 	// `-m` is here now, and it is not the letter zsh spells the same way:
 	// it *moves* a parameter — `typeset -m new=old` — where the other
 	// shell selects several by pattern. Measured 2026-09-13 on ksh93u+;
@@ -1894,7 +1914,7 @@ func Semantics() interp.Semantics {
 	// fatally, since these are special builtins there — where `typeset -f
 	// nm` on the same line lists. The word carries a type and a function
 	// has none.
-	s.IntegerOptions = "aACHilmMnprTux"
+	s.IntegerOptions = "aACEHilmMnprTux"
 	// `-i16` and `-i 16` are an output base here — `integer -i 16 b=255` is
 	// `16#ff` — and this engine has no base to keep, so it refuses by name.
 	s.IntegerAttributeTakesABase = interp.Yes
@@ -2471,7 +2491,7 @@ func Diagnostics() interp.Diagnostics {
 			// `-C` has left it as well: the compound-variable letter is
 			// built, and it is the declaration half of the kind `c=(a=1)`
 			// makes — see interp/compoundvariable.go (#2620).
-			"typeset": "-bFhstELRSXZ",
+			"typeset": "-bFhstLRSXZ",
 			// `functions` is `typeset -f` under a second name, so the
 			// letters it is missing are read off its own set: `-t` traces a
 			// function and `-u` marks one to be read from `$FPATH`, both of
@@ -2518,7 +2538,7 @@ func Diagnostics() interp.Diagnostics {
 			// `-C` leaves this list with the one above it, for the reason
 			// every letter here shares one: `integer` reads typeset's whole
 			// grammar.
-			"integer": "-bFhstELRSXZ",
+			"integer": "-bFhstLRSXZ",
 		},
 		// `-u` on a `-f` line, which is the one letter that cannot go in
 		// the list above: it is also the upper-case attribute, and this

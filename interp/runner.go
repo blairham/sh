@@ -1000,6 +1000,25 @@ type Runner struct {
 	aliasExpansion     bool
 	aliasExpansionBase bool
 
+	// arithPrecedence is the order the binary arithmetic operators bind in,
+	// where a dialect's option has moved it away from the one this shell
+	// parses its own program text with. arithPrecedenceMoved is whether
+	// anything has moved it at all, which cannot be read off the value:
+	// the zero value is a real answer — C's order — and not an absence.
+	//
+	// It is here rather than only on syntax.Dialect because the option that
+	// moves it is a *run-time* one. Measured 2026-09-15 on zsh 5.9.2:
+	// `setopt c_precedences` changes what `$(( 1 << 2 + 1 ))` answers on a
+	// line already read, and changes it inside a function whose body was
+	// parsed before the option was touched. So the expression's tree is not
+	// fixed at the time the file is read, and this is what tells the
+	// evaluator to build it again — see Runner.arithTreeOver.
+	//
+	// Plain values, so a subshell clone carries its own copy, the same as
+	// every other option here.
+	arithPrecedence      syntax.ArithPrecedencePolicy
+	arithPrecedenceMoved bool
+
 	// killedBy is the signal this shell sent itself and had no handler for,
 	// with the number kept beside it so the death does not have to look the
 	// name up again.

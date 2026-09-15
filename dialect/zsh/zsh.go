@@ -218,6 +218,30 @@ func Dialect() syntax.Dialect {
 	// And the binary radix prefix, which this shell alone has: `0b101` is 5
 	// here and an octal constant carrying a `b` everywhere else.
 	d.ArithBinaryLiteral = true
+	// And the operators do not bind in C's order. This shell's manual calls
+	// the order below its *native mode* and documents C's beside it, with an
+	// option — `c_precedences` — that picks between the two, which is as
+	// explicit as a disagreement between shells gets.
+	//
+	// Measured 2026-09-15 from a script file, `env -i` with a scratch HOME,
+	// against bash 5.3.15, ksh93u+ and dash, which agree with each other:
+	//
+	//	                 here   the other three
+	//	1 << 2 + 1         5           8
+	//	1 + 2 << 1         5           6
+	//	1 << 2 * 2         8          16
+	//	1 < 2 & 1          0           1
+	//	6 | 1 + 1          8           6
+	//	2 ** 1 | 3         8           3
+	//
+	// The last row is the one a reading of the first four would miss: `**`
+	// is *looser* than the bitwise operators here, so `2 ** 1 | 3` is `2 **
+	// (1 | 3)`. Parenthesized, every column agrees, which is what says this
+	// is precedence and not a broken operator.
+	//
+	// See syntax.ArithPrecedenceShiftsAndBitwiseBindTighter for the whole
+	// ladder.
+	d.ArithPrecedence = syntax.ArithPrecedenceShiftsAndBitwiseBindTighter
 	// A double quote inside an arithmetic expression is stepped over
 	// wherever a token may begin. Measured 2026-09-10 on zsh 5.9.2: with
 	// `n=5`, `$(( "1" + 1 ))` is 2, `$(( "n" + 1 ))` is 6 and

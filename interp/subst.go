@@ -321,8 +321,37 @@ func (r *Runner) bodyDialect(span syntax.Span) syntax.Dialect {
 // rather than a field so the default is the core rather than the zero value,
 // which would be posix and would refuse constructs the outer parse accepted.
 func (r *Runner) dialect() syntax.Dialect {
+	d := syntax.Core()
 	if r.Dialect != nil {
-		return *r.Dialect
+		d = *r.Dialect
 	}
-	return syntax.Core()
+	if r.arithPrecedenceMoved {
+		// A dialect's run-time option has moved where the arithmetic
+		// operators bind, and everything parsed from here on has to be
+		// read that way — see Runner.arithPrecedence. Applied to the
+		// dialect rather than kept beside it, so the one parser this
+		// runner builds nested input with is told once.
+		d.ArithPrecedence = r.arithPrecedence
+	}
+	return d
+}
+
+// ArithPrecedence is the order the binary arithmetic operators bind in for
+// this runner right now: the dialect's, unless a dialect's own option has
+// moved it.
+func (r *Runner) ArithPrecedence() syntax.ArithPrecedencePolicy {
+	return r.dialect().ArithPrecedence
+}
+
+// SetArithPrecedence moves it, for a dialect whose option namespace has a
+// name for the other order — zsh's `c_precedences` is the one in this tree,
+// and it is the reason the order cannot live on syntax.Dialect alone.
+//
+// Asking for the order the dialect already parses with still counts as
+// having moved it, and that is deliberate rather than an oversight: what the
+// flag records is that an option is now in charge, so turning it back off
+// puts the dialect's own answer back rather than leaving the last request
+// standing.
+func (r *Runner) SetArithPrecedence(p syntax.ArithPrecedencePolicy) {
+	r.arithPrecedence, r.arithPrecedenceMoved = p, true
 }

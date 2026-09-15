@@ -12911,7 +12911,32 @@ echo unreachable`,
 	{
 		ID: "arith/precedence-follows-c", Category: "arithmetic",
 		Snippet: `printf "[%s]" "$((1+2*3))" "$(((1+2)*3))" "$((2*3%4))"`,
-		Why:     "POSIX defers the operator set and precedence to ISO C",
+		Why:     "POSIX defers the operator set and precedence to ISO C. This row asks the part of the ladder every column agrees about — `*` and `%` against `+` — and it is unanimous. The rows below ask the part one column does not, so the two together say the disagreement is confined to where the shifts and the bitwise operators sit rather than being a different ladder",
+	},
+	{
+		ID: "arith/the-shifts-against-a-sum", Category: "arithmetic",
+		Snippet: `printf "[%s]" "$(( 1 << 2 + 1 ))" "$(( 1 + 2 << 1 ))" "$(( 16 >> 1 + 1 ))"`,
+		Why:     "where `<<` and `>>` sit. In C's order they are below `+`, so the sum happens first; one shell puts them at the tightest binary level instead and shifts first. Both directions are asked because a shell that had simply lost one side of the operator would move only one of them, and the `>>` row says the same about the other spelling",
+	},
+	{
+		ID: "arith/the-shifts-against-a-product", Category: "arithmetic",
+		Snippet: `printf "[%s]" "$(( 1 << 2 * 2 ))" "$(( 8 >> 1 * 2 ))"`,
+		Why:     "the same question one rung further up, and it is not implied by the sum: a ladder that put the shifts between `+` and `*` would answer the sum rows the divergent way and these two the C way. Only the pair says the shifts are above both",
+	},
+	{
+		ID: "arith/the-shifts-parenthesized", Category: "arithmetic",
+		Snippet: `printf "[%s]" "$(( 1 << (2 + 1) ))" "$(( (1 + 2) << 1 ))"`,
+		Why:     "the control that makes the two rows above readable as precedence rather than as a broken operator: told which grouping to use, every column agrees, so each shell can shift and can add and they differ only about which to do first",
+	},
+	{
+		ID: "arith/a-bitwise-operator-against-a-comparison", Category: "arithmetic",
+		Snippet: `printf "[%s]" "$(( 1 < 2 & 1 ))" "$(( (1 < 2) & 1 ))"`,
+		Why:     "the second reordering, one level down: `&` is below `<` in C's order and above it in one shell's, so the same three tokens are `(1 < 2) & 1` and true there and `1 < (2 & 1)` and false here. The parenthesized half is the control again, and it is the half that says the operators themselves agree",
+	},
+	{
+		ID: "arith/the-exponent-against-a-bitwise-or", Category: "arithmetic",
+		Snippet: `printf "[%s]" "$(( 2 ** 1 | 3 ))" "$(( 2 | 1 ** 3 ))" "$(( 6 | 1 + 1 ))"`,
+		Why:     "the corner a reading of the shift rows alone would miss, and the one that says `**` moves too. Where the bitwise operators bind tighter they bind tighter than exponentiation as well, so `2 ** 1 | 3` is `2 ** (1|3)` and 8 rather than 3, and `2 | 1 ** 3` is `(2|1) ** 3` and 27 rather than 3. The third expression asks the same of `+` without needing the operator at all, which is what gives the two shells with no `**` a cell that is about precedence rather than about a missing operator",
 	},
 	{
 		ID: "arith/division-truncates", Category: "arithmetic",

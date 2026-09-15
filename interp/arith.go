@@ -2269,7 +2269,7 @@ func (r *Runner) arithTree(tree syntax.ArithExpr, text string) (syntax.ArithExpr
 // recomputed: expanding it a second time to find an offset would run a command
 // substitution on the right-hand side twice, which is the mistake #1915 was.
 func (r *Runner) arithTreeOver(tree syntax.ArithExpr, text string) (syntax.ArithExpr, string, error) {
-	if tree != nil {
+	if tree != nil && !r.arithPrecedenceOptionInCharge() {
 		return tree, text, nil
 	}
 	expanded := r.expandArithText(text)
@@ -2280,6 +2280,24 @@ func (r *Runner) arithTreeOver(tree syntax.ArithExpr, text string) (syntax.Arith
 	}
 	return out, expanded, nil
 }
+
+// arithPrecedenceOptionInCharge reports whether a dialect's run-time option is
+// deciding where the arithmetic operators bind, in which case the tree the
+// file's own read built is not the tree this expression has now.
+//
+// Measured 2026-09-15 on zsh 5.9.2, which is the shell with the option:
+// `setopt c_precedences` changes what `$(( 1 << 2 + 1 ))` answers on a line
+// the parser has already read, and changes it inside a function whose body
+// was read before the option was touched. So an expression is read again when
+// it runs, which is the same thing that already happens to one with a `$` in
+// it — see [Runner.expandArithText] — and this is the second reason for it.
+//
+// It is the *option being in charge* rather than the order differing, so a
+// `setopt c_precedences` in a shell whose dialect already binds C's way still
+// re-reads. Comparing the two orders instead would make the cost depend on
+// which dialect a script happens to run under, and the answer is the same
+// either way; nothing outside the one shell with the option ever asks.
+func (r *Runner) arithPrecedenceOptionInCharge() bool { return r.arithPrecedenceMoved }
 
 // expandArithText substitutes into an arithmetic expression before it is read.
 //

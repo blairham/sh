@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/blairham/sh/interp"
+	"github.com/blairham/sh/syntax"
 )
 
 // `setopt` and `unsetopt` are how zsh scripts change options — far more often
@@ -293,7 +294,13 @@ var zshOptions = []zshOption{
 	recorded("continueonerror", false),
 	recorded("correct", false),
 	recorded("correctall", false),
-	recorded("cprecedences", false),
+	// Implemented rather than recorded since #2883, and it could not be
+	// implemented before: while this dialect bound the operators C's way by
+	// default, the option had nothing to switch *to* and moving it either
+	// direction answered the same numbers. See
+	// syntax.ArithPrecedenceShiftsAndBitwiseBindTighter for the two ladders
+	// and zsh.go for the measurement that put this shell on the other one.
+	switchBacked("cprecedences", false, cPrecedences, setCPrecedences),
 	recorded("cshjunkiehistory", false),
 	recorded("cshjunkieloops", false),
 	recorded("cshjunkiequotes", false),
@@ -823,6 +830,25 @@ func switchBacked(base string, def bool, get func(*interp.Runner) bool, set func
 		get: get,
 		set: func(r *interp.Runner, on bool) int { set(r, on); return 0 },
 	}
+}
+
+// cPrecedences reads zsh's `c_precedences`: on when the arithmetic operators
+// bind the way they do in C and in the rest of the panel.
+//
+// The state is the parser's order rather than a flag of its own, so the
+// listings cannot drift from what an expression actually answers.
+func cPrecedences(r *interp.Runner) bool {
+	return r.ArithPrecedence() == syntax.ArithPrecedenceAsInC
+}
+
+// setCPrecedences moves it. Off is this shell's native order, which is the
+// dialect's own answer and not a third state — see Dialect.
+func setCPrecedences(r *interp.Runner, on bool) {
+	if on {
+		r.SetArithPrecedence(syntax.ArithPrecedenceAsInC)
+		return
+	}
+	r.SetArithPrecedence(syntax.ArithPrecedenceShiftsAndBitwiseBindTighter)
 }
 
 // checkJobsOption is zsh's `checkjobs`: the master over both halves of

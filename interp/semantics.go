@@ -2980,6 +2980,40 @@ type Semantics struct {
 	// is not already the whole number C asked for — see PrintfNumberReading.
 	PrintfNumberOperand PrintfNumberReading
 
+	// PrintfFlagAfterTheField takes a flag written **past** a field in a
+	// conversion's prefix, restarting the scan at the flags the way the `'`
+	// already does — see PrintfGroupingFlagAfterTheWidth, whose grammar this
+	// is the rest of.
+	//
+	// One column, ksh93u+ 2012-08-01, measured 2026-09-15 under `LC_ALL=C`
+	// with the value 42. bash, zsh and dash refuse every row, each in its own
+	// wording, and BusyBox ash has no flag past a field either.
+	//
+	//	%5-d      42       the `-` is a flag and the width stands
+	//	%5-3d     42       and a run after it replaces the width
+	//	%5-3-4d   42       every flag accumulating, every run replacing
+	//	%5+d        +42    `+`, ` ` and `#` restart as the `-` does
+	//	%*-5d     42       a star the restart replaced still took its
+	//	                   operand, exactly as a quote's restart does
+	//
+	// **The precision is the rule that disagrees, and it is the same axis.**
+	// A `-` past a precision throws the precision away and is *not* taken as
+	// a flag — `%.3-5d` is `   42`, width five and right-justified, and
+	// `%5.3-d` is `   42`, the width already read surviving — while `+` and
+	// ` ` past a precision *are* flags and leave the precision standing:
+	// `%.3+5d` is `+00042`, the 5 having replaced the 3. `%.3--5d` is
+	// `42   `, which is what says the first `-` returns the scan to the
+	// width section and the second is then an ordinary flag.
+	//
+	// `#` past a precision is deliberately not here. That shell reads it as
+	// something else — `%.3#.4d` of 42 is `4#222` and `%.2#d` of 255 is
+	// `25` — which is neither a flag nor a field and does not answer the
+	// same way twice, so it is left refused rather than guessed at.
+	//
+	// Asked only where a flag actually stands past a field, so `%-5d` and
+	// `%-5.3d` never reach it.
+	PrintfFlagAfterTheField Answer
+
 	// PrintfIntegerOperandGoesThroughTheFloatingType reads an integer
 	// operand of an integer conversion through the shell's floating type, so
 	// an operand a double cannot hold exactly comes out rounded.

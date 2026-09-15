@@ -506,6 +506,9 @@ func Semantics() interp.Semantics {
 	s.PrintfNumberOperand = interp.PrintfNumberLeadingNumber
 	// Exact, as in bash: `printf '%d' 1000000000000000001` keeps its last
 	// digit (#2907).
+	// A flag past a field is no flag at all: the prefix ends there and the
+	// byte arrives at the scan as the conversion character (#2910).
+	s.PrintfFlagAfterTheField = interp.No
 	s.PrintfIntegerOperandGoesThroughTheFloatingType = interp.No
 	// C99's three, answering exactly as bash does on every row measured
 	// 2026-09-14 — `%a` of 1.5 is `0x1.8p+0` and of 0.1 is

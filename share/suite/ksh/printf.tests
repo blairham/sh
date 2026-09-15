@@ -50,3 +50,14 @@ printf '[%d]\n' 9007199254740993
 printf '[%d]\n' 9223372036854775807
 printf '[%d]\n' -9223372036854775807
 printf 'and an ordinary one [%d]\n' 42
+
+# A flag written past a field. The other three refuse every one of these, so
+# the file redirects nothing and asks the values: a flag after the width is a
+# flag and the width already read stands, a run after it replaces the width,
+# and a `-` after a *precision* throws the precision away without becoming a
+# flag -- which is why the third line is right-justified.
+printf '[%5-d][%5+d][%5 d]\n' 42 42 42
+printf '[%5-3d][%5-+d][%5-3-4d]\n' 42 42 42
+printf '[%.5-d][%.3-5d][%5.3-d]\n' 42 42 42
+printf '[%.5+d][%.3+5d][%.3--5d]\n' 42 42 42
+printf 'a star the restart replaced [%*-5d]\n' 4 42

@@ -35,6 +35,7 @@ func printfSem() Semantics {
 	s.PrintfGroupingFlag = Yes
 	s.PrintfGroupingFlagAfterTheWidth = No
 	s.PrintfStarBesideTheFieldDigits = No
+	s.PrintfFlagAfterTheField = No
 	s.PrintfNumberOperand = PrintfNumberLeadingNumber
 	s.PrintfRefusedOperandKeepsItsLeadingNumber = No
 	s.PrintfFloatOperandIsEvaluatedTwice = No
@@ -2043,5 +2044,77 @@ func TestPrintfGroupingFlagEndsTheFieldRunItIsIn(t *testing.T) {
 		if out != tc.want || st != 0 {
 			t.Errorf("%s: got %q status %d, want %q and 0", tc.src, out, st, tc.want)
 		}
+	}
+}
+
+// A flag written past a field restarts the scan, the way the `'` already
+// does — and the precision is the rule that disagrees with the width's
+// (#2910).
+func TestPrintfFlagAfterTheFieldIsAnAxis(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		flag   Answer
+		src    string
+		want   string
+		status int
+	}{
+		{"a flag past the width is a flag", Yes, `printf "[%5-d]" 42`, "[42   ]", 0},
+		{"and refused where the scan ends at it", No, `printf "[%5-d]" 42`, "sh: printf: %5-: invalid directive\n[", 1},
+		{"a run after it replaces the width", Yes, `printf "[%5-3d]" 42`, "[42 ]", 0},
+		{"the other three flags restart too", Yes, `printf "[%5+d][%5 d][%5#d]" 42 42 42`, "[  +42][   42][   42]", 0},
+		{"the flags accumulate across restarts", Yes, `printf "[%5-+d]" 42`, "[+42  ]", 0},
+		{"and every run replaces the last", Yes, `printf "[%5-3-4d]" 42`, "[42  ]", 0},
+		{"a zero after a width is still a digit", Yes, `printf "[%50d]" 42`, "[" + strings.Repeat(" ", 48) + "42]", 0},
+		{"a star the restart replaced still took its operand", Yes, `printf "[%*-5d]" 4 42`, "[42   ]", 0},
+		{"and a star after the restart takes one", Yes, `printf "[%5-*d]" 4 42`, "[42  ]", 0},
+
+		{"a minus past a precision throws the precision away", Yes, `printf "[%.5-d]" 42`, "[42]", 0},
+		{"and is not itself a flag: this is right-justified", Yes, `printf "[%.3-5d]" 42`, "[   42]", 0},
+		{"the width already read survives it", Yes, `printf "[%5.3-d]" 42`, "[   42]", 0},
+		{"what follows is read as a width again", Yes, `printf "[%5.3-2d]" 42`, "[42]", 0},
+		{"and a second minus there is an ordinary flag", Yes, `printf "[%.3--5d]" 42`, "[42   ]", 0},
+		{"a new point opens a new precision", Yes, `printf "[%.3-.4d]" 42`, "[0042]", 0},
+		{"a plus past a precision leaves it standing", Yes, `printf "[%.5+d]" 42`, "[+00042]", 0},
+		{"and the run after it replaces the precision", Yes, `printf "[%.3+5d]" 42`, "[+00042]", 0},
+		{"a blank past a precision reads the same way", Yes, `printf "[%.3 5d]" 42`, "[ 00042]", 0},
+		{"the two rules meet", Yes, `printf "[%.3+-5d][%.3-+5d]" 42 42`, "[  +42][  +42]", 0},
+		{"a losing precision star is still read", Yes, `printf "[%.*-5d]" 4 42`, "[   42]", 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := printfSem()
+			sem.PrintfFlagAfterTheField = tc.flag
+			sem.PrintfStarBesideTheFieldDigits = Yes
+			out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+			if out != tc.want || st != tc.status {
+				t.Errorf("got %q status %d, want %q and %d", out, st, tc.want, tc.status)
+			}
+		})
+	}
+}
+
+// And it is asked where a flag actually stands past a field and nowhere else.
+func TestPrintfFlagAfterTheFieldIsAskedOnlyAtItsOwnDisagreement(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		src     string
+		refused bool
+	}{
+		{"a flag past a width", `printf "[%5-d]" 42`, true},
+		{"a flag past a precision", `printf "[%.5-d]" 42`, true},
+		{"a flag past a star", `printf "[%*-d]" 4 42`, true},
+		{"a flag in front settles nothing", `printf "[%-5d]" 42`, false},
+		{"nor one in front of a precision", `printf "[%-5.3d]" 42`, false},
+		{"nor a width with no flag at all", `printf "[%5d]" 42`, false},
+		{"nor a bare conversion", `printf "[%d]" 42`, false},
+		{"and a hash past a precision is left alone", `printf "[%.3#d]" 42`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := printfSem()
+			sem.PrintfFlagAfterTheField = Unspecified
+			out, _ := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+			if got := strings.Contains(out, "past a field"); got != tc.refused {
+				t.Errorf("got %q, want the axis consulted = %v", out, tc.refused)
+			}
+		})
 	}
 }

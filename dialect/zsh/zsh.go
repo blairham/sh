@@ -1792,6 +1792,9 @@ func Semantics() interp.Semantics {
 	// Exact, though the reading is an expression: this shell's arithmetic is
 	// an integer one and `printf '%d' 123456789012345678` is the operand
 	// (#2907). It is ksh93 alone that rounds.
+	// A flag past a field is no flag at all: the prefix ends there and the
+	// byte arrives at the scan as the conversion character (#2910).
+	s.PrintfFlagAfterTheField = interp.No
 	s.PrintfIntegerOperandGoesThroughTheFloatingType = interp.No
 	// None of C99's three: `printf '%F' 1.5` is `%F: invalid directive` at
 	// 1 in zsh 5.9.2, and `%a` and `%A` the same.

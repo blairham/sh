@@ -545,6 +545,9 @@ func Semantics() interp.Semantics {
 	s.PrintfNumberOperand = interp.PrintfNumberWholeOperand
 	// Exact: `printf '%d' 9007199254740993` is itself in BusyBox v1.37.0,
 	// so the reader behind it is an integer one (#2907).
+	// A flag past a field is no flag at all: the prefix ends there and the
+	// byte arrives at the scan as the conversion character (#2910).
+	s.PrintfFlagAfterTheField = interp.No
 	s.PrintfIntegerOperandGoesThroughTheFloatingType = interp.No
 	// None of C99's three: `printf '%F' 1.5` is `%F]: invalid format` at 1
 	// in BusyBox ash 1.37.

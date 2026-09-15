@@ -1303,6 +1303,10 @@ func Semantics() interp.Semantics {
 	// An integer operand is carried in this shell's floating type, so one
 	// past 2^53 comes back rounded: `printf '%d' 123456789012345678` is
 	// `123456789012345680` (#2907).
+	// A flag written past a field restarts the scan, the same grammar the
+	// `'` already has here -- and a `-` past a *precision* clears the
+	// precision instead of becoming a flag (#2910).
+	s.PrintfFlagAfterTheField = interp.Yes
 	s.PrintfIntegerOperandGoesThroughTheFloatingType = interp.Yes
 	s.PrintfRefusedOperandKeepsItsLeadingNumber = interp.Yes
 	// A floating conversion evaluates its operand twice and the complaint

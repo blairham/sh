@@ -380,8 +380,13 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 		// the shell's own number — measured, that is what real zsh answers
 		// there, because that element really is the shell.
 		releaseAnchor := sub.anchorForkedBody()
+		// And the mask a fork would have given it, on the same lifetime:
+		// `umask 002 | cat` is an element setting the mask of the shell it
+		// is a piece of, and it stayed set afterwards. See umaskscope.go
+		// (#2898).
+		releaseMask := sub.forkMask()
 		release := releaseFds[i]
-		releaseFds[i] = func() { release(); releaseAnchor() }
+		releaseFds[i] = func() { release(); releaseAnchor(); releaseMask() }
 		// A pipeline element is a subshell whose trap listing survives in a
 		// different pair of shells than `( … )` does, so the boundary says
 		// what kind it is.

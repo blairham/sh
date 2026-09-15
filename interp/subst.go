@@ -184,6 +184,10 @@ func (r *Runner) commandSubst(ctx context.Context, span syntax.Span) string {
 	// The same group a subshell gets, and the same lifetime: the expansion
 	// does not finish until the body has. See Runner.anchorForkedBody.
 	defer sub.anchorForkedBody()()
+	// And the mask, on the same boundary: `x=$( umask 002 )` is a fork in
+	// every shell of the panel, so what it sets does not come back out. See
+	// umaskscope.go (#2898).
+	defer sub.forkMask()()
 	if _, err := sub.Run(ctx, f); err != nil {
 		r.diagf("%v\n", err)
 		return ""

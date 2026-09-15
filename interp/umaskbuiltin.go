@@ -86,7 +86,9 @@ func biUmask(r *Runner, _ context.Context, args []string) int {
 	if code != 0 {
 		return code
 	}
-	if _, err := r.SetUmask(mask); err != nil {
+	// Through setMask rather than the hook, so that a forked body's change
+	// is put back when the body ends. See umaskscope.go.
+	if err := r.setMask(mask); err != nil {
 		r.diagf("umask: %v\n", err)
 		return 1
 	}

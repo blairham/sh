@@ -1741,6 +1741,56 @@ than the one it registered against. Nothing needs to re-register on a clone,
 which is the point — a clone that had to be told about each seam would lose
 one every time a seam was added.
 
+### The same corollary where the state is in the kernel
+
+Every case above is state this shell holds, so reconstructing the boundary
+is a matter of deciding what a clone copies. The file-creation mask is not:
+it lives in the process, the kernel applies it to every file the process
+creates, and there is exactly one of it. A clone cannot be given a copy.
+
+So `umask` in a subshell set the mask of the shell that started it and left
+it set, in all five dialects and on all three routes. Measured 2026-09-15
+against bash 5.3.15, zsh 5.9.2, ksh93, dash and BusyBox ash:
+
+```sh
+umask 077
+( umask 002 )
+: > g           # -rw-rw-r-- ours, -rw------- in every column
+```
+
+**The direction is what made it worth a P1 rather than a curiosity.** A
+script doing its private work in `( umask 077; … )` is the harmless case —
+it tightens, and the leak makes later files *more* private than intended.
+The case above loosens, so every file the script writes afterwards is
+world-readable, and nothing in the script says so. Every enclosure leaked,
+because every one of them is a fork in a real shell: `x=$( umask 002 )` and
+`umask 002 | cat` were measured leaking too.
+
+**The boundary is reconstructed by putting the mask back, and the line is
+drawn at whether the caller is blocked on the body.** A subshell, a command
+substitution, a pipeline element and a shebang-less script each hold their
+caller still: the runner that started the body cannot reach another command
+until the body has ended, so handing the mask back at that moment is exactly
+what the fork did, with no window in between for anything to observe.
+
+A background job, a coprocess and a process substitution run *beside* their
+caller, and for them this mechanism is not merely incomplete — it is the
+wrong one. The process has one mask, so it is the shell's mask too for as
+long as such a body holds one, whatever happens at the end; and what the
+body found is stale by the time it could be handed back. Measured with the
+release wired into all seven bodies, `cat <(umask 002) >/dev/null` left our
+zsh answering `077` for the rest of the script where real zsh answers `002`
+— a mask restored over a change the shell had made itself, three commands
+later. **A stale value put back over a live one is a worse failure than the
+leak**, so those three keep the leak until the mask can be applied per open
+and per spawn rather than held in the process. See #2949.
+
+This is the sharpest instance of the corollary so far, and the one that says
+what its limit is: a boundary can be reconstructed only where the thing on
+either side of it is ours to hold. Where it is the kernel's, the
+reconstruction is an ordering argument about who is running, and it holds
+exactly as far as that ordering does.
+
 ## A prediction that measurement contradicted
 
 `set -e` was expected to produce axes. Its exemptions are where shells are

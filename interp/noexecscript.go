@@ -320,31 +320,23 @@ func (r *Runner) runImageAsScript(ctx context.Context, name, path string, argv, 
 		//	                the shell afterwards, and a lowered hard limit
 		//	                cannot be raised again by anybody.
 		//
-		// `umask` is the fourth of that shape and is the one exception,
-		// below: it has to reach the process, because the files the script
-		// creates really are created by it.
-		SetUmask: nil,
+		// `umask` is the fourth of that shape and is the one exception: it
+		// has to reach the process, because the files the script creates
+		// really are created by it. What the fork would have done for free
+		// — taking the mask back when the script ends — is forkMask below.
+		// Without the hook a `umask 077` in such a script does nothing at
+		// all and the file it then writes is world-readable; without the
+		// release, every later command in the *caller* inherits a mask the
+		// caller never set.
+		SetUmask: r.SetUmask,
 	}
-	// The umask the script sets, applied to this process and taken back when
-	// the script ends — which is what the fork would have done for free.
-	// Without it a `umask 077` in such a script does nothing at all, and a
-	// file it then writes is world-readable; with it left standing, every
-	// later command in the *caller* inherits a mask the caller never set.
-	if r.SetUmask != nil {
-		moved, first := false, 0
-		child.SetUmask = func(mask int) (int, error) {
-			old, err := r.SetUmask(mask)
-			if err == nil && !moved {
-				moved, first = true, old
-			}
-			return old, err
-		}
-		defer func() {
-			if moved {
-				_, _ = r.SetUmask(first)
-			}
-		}()
-	}
+	// One mechanism with the other bodies whose caller waits for them rather
+	// than a save and a restore written out here, which is what this was: a
+	// second copy of a boundary's ending is where the next fix goes missing,
+	// and the next fix was #2898 — a subshell, a command substitution and a
+	// pipeline element each leaked for as long as this file held the only
+	// answer. See umaskscope.go.
+	defer child.forkMask()()
 	// Everything the front end does to a Runner past its fields — the
 	// dialect's builtins, its ties, its prompt table. Carried on as well as
 	// applied, so that a shebang-less script which itself runs one gets the

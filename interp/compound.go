@@ -132,6 +132,10 @@ func (r *Runner) subshell(ctx context.Context, c *syntax.Subshell) error {
 		// is nothing left of the subshell to hold it open. See
 		// Runner.anchorForkedBody.
 		defer sub.anchorForkedBody()()
+		// And the mask a fork would have given it, put back at the same
+		// boundary and for the same reason: `umask` reaches the process, and
+		// the body is not one. See umaskscope.go (#2898).
+		defer sub.forkMask()()
 		err := sub.runList(ctx, c.List)
 		// The subshell is over, which for a real shell is a process exit: its
 		// own EXIT trap runs here, before the status is read, so a handler

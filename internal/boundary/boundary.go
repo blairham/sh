@@ -314,6 +314,74 @@ func (b Boundary) ReadDir(ctx context.Context, path string) ([]os.DirEntry, erro
 	return entries, err
 }
 
+// Stat asks whether the front end may learn about a path, and answers as a
+// path that is not there when it may not.
+//
+// It is the seam #1824 named as missing, and the asymmetry is what made it
+// worth having: the interpreter has raised ActionStat for every `test -f`,
+// every PATH candidate and every glob descent since fsgate.go, and a dialect's
+// builtin has [interp.Runner.AllowProbe] to ask with — while the front end,
+// which also asks about paths, had nothing and went to the os package
+// directly. `repl`'s completion of a symbolic link was the call that found it:
+// the entry came out of a ReadDir the gate had already allowed, and one
+// further bit — does this link point at a directory, which decides the
+// trailing slash — was learned without asking.
+//
+// **A refused probe answers exactly as an absent path does**, which is the
+// rule every other probe in this tree keeps and is the reason this returns an
+// error the caller cannot tell apart from the kernel's. A refusal that
+// identified itself would let Tab map a hidden tree by watching which prefixes
+// refuse differently from which are missing, which is the thing the policy
+// exists to prevent — see interp.ActionStat, where the same sentence is.
+//
+// The errno is the kernel's for a path that is not there rather than
+// fs.ErrNotExist, for the same reason: a caller that prints the reason must
+// print the same sentence for both.
+func (b Boundary) Stat(ctx context.Context, path string) (os.FileInfo, error) {
+	if b.Gate == nil && b.Events == nil {
+		return os.Stat(path)
+	}
+	a := interp.Action{ID: b.id(), Kind: interp.ActionStat, Path: path}
+	if b.Gate != nil && b.Gate.Allow(ctx, a) == interp.Deny {
+		b.emit(ctx, interp.Event{Kind: interp.EventDenied, Action: a})
+		return nil, &fs.PathError{Op: "stat", Path: path, Err: syscall.ENOENT}
+	}
+	b.emit(ctx, interp.Event{Kind: interp.EventAccess, Action: a})
+	return os.Stat(path)
+}
+
+// Modify asks whether the front end may change a path in place — unlink it,
+// rename it, create a directory at it — and reports the answer.
+//
+// The other half of #1824, and the counterpart of [interp.Runner.AllowModify],
+// whose whole argument applies here unchanged and is not repeated: the action
+// is an ActionOpen with Write set rather than a kind of its own, because a
+// policy author who writes `deny write` and is then handed `rm` has been given
+// a policy that does not mean what it says. What it costs is a record that
+// says `open` for something that opens no descriptor, which is the honest
+// reading of it — a write to this path was permitted, and that is what
+// happened.
+//
+// `repl`'s history rewrite is the caller: it writes a temporary beside the
+// history file and renames it over, and both the removal and the rename were
+// exempt as the shell's own scaffolding. They are not scaffolding by this
+// package's own rule — `HISTFILE` is a variable a line of script can set, so
+// the path was chosen by whoever the policy is about — and the neighbouring
+// *open* of the same file has gone through the gate since this package
+// existed.
+//
+// There is no verify half, for the reason AllowModify gives: these verbs act
+// on the **name**, never on what it points at, so a name the gate permits is
+// the right thing to have checked.
+//
+// A refusal is *not* silent the way a probe's is. There is no honest way to
+// carry on — a rename that was refused has not happened — so the caller
+// reports it, which is the same split interp draws between AllowProbe and
+// AllowModify.
+func (b Boundary) Modify(ctx context.Context, path string) bool {
+	return b.ask(ctx, interp.Action{ID: b.id(), Kind: interp.ActionOpen, Path: path, Write: true})
+}
+
 // Exec reports whether the front end may run a program, recording it either
 // way. Argv is the whole vector, argv[0] included, as interp builds one.
 //

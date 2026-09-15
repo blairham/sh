@@ -32,6 +32,36 @@ func (c *CondUnary) Pos() Pos  { return c.Start }
 func (c *CondUnary) End() Pos  { return c.X.End() }
 func (c *CondUnary) condNode() {}
 
+// CondArity is a known conditional operator standing with the wrong number of
+// operands, accepted by the grammar and left for the interpreter to refuse.
+//
+// One dialect does that and the rest refuse while reading — see
+// [Dialect.ConditionArityIsCheckedWhenItRuns] for the measurement. The
+// operator and every word that stood with it are kept, because what a shell
+// says about this names the operator and a printer has to write the line back
+// as it was.
+type CondArity struct {
+	// Op is the operator that had the wrong number of operands.
+	Op string
+	// Words is what stood after it, which is none of them for `[[ -n ]]` and
+	// two or more for `[[ -n x y ]]`. Exactly one is an ordinary CondUnary
+	// and never reaches here.
+	Words []*Word
+	Start Pos
+	// Stop is the end of the operator itself, so a node with no words at all
+	// still has an end.
+	Stop Pos
+}
+
+func (c *CondArity) Pos() Pos { return c.Start }
+func (c *CondArity) End() Pos {
+	if len(c.Words) == 0 {
+		return c.Stop
+	}
+	return c.Words[len(c.Words)-1].End()
+}
+func (c *CondArity) condNode() {}
+
 // CondBinary is a two-operand test.
 //
 // The right operand is a *word* rather than a string because what it means
@@ -379,12 +409,23 @@ func (p *Parser) condPrimary() CondExpr {
 
 	case p.tok.Kind == TokWord && !p.tok.IsQuoted() && p.condUnaryOp(p.tok.Literal()) &&
 		p.condOperatorHasItsOperand(p.tok.Literal()):
-		op, start := p.tok.Literal(), p.tok.Pos
+		op, start, stop := p.tok.Literal(), p.tok.Pos, p.tok.End
 		p.next()
 		x := p.condWord()
 		if x == nil {
+			if p.dialect.ConditionArityIsCheckedWhenItRuns && p.err == nil {
+				// No operand at all, which this dialect accepts and refuses
+				// when it runs. p.err is checked because condWord answers
+				// nil for a refusal of its own as well — a process
+				// substitution out of place — and that one is a real parse
+				// failure rather than an arity.
+				return &CondArity{Op: op, Start: start, Stop: stop}
+			}
 			p.failCondOperand(op, "unary")
 			return nil
+		}
+		if surplus := p.condSurplusOperands(x); surplus != nil {
+			return &CondArity{Op: op, Words: surplus, Start: start, Stop: stop}
 		}
 		return &CondUnary{Op: op, X: x, Start: start}
 	}
@@ -404,6 +445,54 @@ func (p *Parser) condPrimary() CondExpr {
 		return nil
 	}
 	return &CondBinary{Op: op, X: left, Y: right}
+}
+
+// condSurplusOperands reads the words standing after a one-operand test that
+// already has its operand, for the dialect that accepts them — or nil where
+// there are none, where the dialect refuses them, or where the operand is
+// itself an operator.
+//
+// The last of those is the row that makes this a rule rather than "everything
+// after the operand is surplus". Measured on zsh 5.9.2: `[[ -n -z x ]]` is
+// “ parse error near `x' “ and `[[ -n -n ]]` is 0, so an operator-shaped
+// operand is read as beginning something of its own and the word after it is
+// simply unexpected — where `[[ -n x y ]]`, whose operand is an ordinary
+// word, is the run-time refusal this collects for.
+//
+// The words are returned with the operand in front of them, because what the
+// refusal names is the operator and what a printer writes back is the line.
+func (p *Parser) condSurplusOperands(operand *Word) []*Word {
+	if !p.dialect.ConditionArityIsCheckedWhenItRuns || p.err != nil {
+		return nil
+	}
+	if lit, ok := unquotedLiteralWord(operand); ok && p.condUnaryOp(lit) {
+		return nil
+	}
+	var extra []*Word
+	for p.err == nil && p.tok.Kind == TokWord && !p.atWord("]]") {
+		w := p.condWord()
+		if w == nil {
+			break
+		}
+		extra = append(extra, w)
+	}
+	if len(extra) == 0 {
+		return nil
+	}
+	return append([]*Word{operand}, extra...)
+}
+
+// unquotedLiteralWord is a word's text where the word is one unquoted literal
+// span, which is what an operator has to be written as.
+func unquotedLiteralWord(w *Word) (string, bool) {
+	if w == nil || len(w.Spans) != 1 {
+		return "", false
+	}
+	s := w.Spans[0]
+	if s.Kind != Literal || s.Quoting != Unquoted {
+		return "", false
+	}
+	return s.Value, true
 }
 
 // failCondOperand records a token standing where a conditional operator

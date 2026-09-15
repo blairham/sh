@@ -2373,6 +2373,22 @@ type Diagnostics struct {
 	// the whole of how the third value is visible from outside.
 	UnknownConditionOptionStatus int
 
+	// UnknownCondition is `[[ … ]]` given a known conditional operator with
+	// the wrong number of operands, in the dialect whose grammar accepts
+	// that and refuses it when it runs — see
+	// syntax.Dialect.ConditionArityIsCheckedWhenItRuns. One verb: the
+	// operator, which is what the refusal names and is not the surplus word.
+	//
+	// zsh 5.9.2 alone, measured 2026-09-14: `unknown condition: -n` for
+	// `[[ -n ]]`, for `[[ -n x y ]]` and for `[[ -n x -z "" ]]` alike. Empty
+	// everywhere else, and empty in the base, because no other column
+	// accepts the construct far enough to say anything about it (#965).
+	UnknownCondition string
+	// UnknownConditionStatus is what the shell ends at when that refusal
+	// happens. Zero means 2, which is what the one dialect that reaches it
+	// answers — and it is not that shell's generic fatal status, which is 1.
+	UnknownConditionStatus int
+
 	// CompletionConditionOutsideCompletion is `[[ -prefix … ]]` or
 	// `[[ -suffix … ]]` reached anywhere but a completion function, for the
 	// one dialect whose grammar has them (syntax.Dialect.CompletionConditions).

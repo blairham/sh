@@ -326,6 +326,12 @@ func Dialect() syntax.Dialect {
 	// that will not parse never gets as far as the restriction. Two files in
 	// an ordinary `~/.zi` tree reach it (#1879).
 	d.CompletionConditions = true
+	// And a known conditional operator standing with the wrong number of
+	// operands parses here and is refused when it runs: `echo pre; [[ -n x y
+	// ]]` writes `pre` and then `unknown condition: -n`, where bash and
+	// ksh93 name the offending token while reading and never run the `echo`
+	// (#965).
+	d.ConditionArityIsCheckedWhenItRuns = true
 	// A function definition's name is a *word*, so an expansion in one names
 	// the function the expansion produces: `w=foo; _p_${w}() { … }` defines
 	// `_p_foo`. This shell's alone — the other five refuse both spellings,
@@ -2713,7 +2719,12 @@ func Diagnostics() interp.Diagnostics {
 		// mistake, and measured to be: one message, said at the condition's
 		// own location rather than a builtin's. The status is 3, which is
 		// neither of the two a condition otherwise gives.
-		UnknownConditionOption:       "no such option: %[1]s",
+		UnknownConditionOption: "no such option: %[1]s",
+		// A known conditional operator with the wrong number of operands,
+		// which this shell's grammar accepts and this refuses when it runs.
+		// The operator is named and the surplus word is not — `[[ -n ]]`,
+		// `[[ -n x y ]]` and `[[ -n x -z "" ]]` are one sentence (#965).
+		UnknownCondition:             "unknown condition: %[1]s",
 		UnknownConditionOptionStatus: 3,
 		// `[[ -prefix … ]]` and `[[ -suffix … ]]` reached outside a
 		// completion function. No verbs: the sentence names neither the

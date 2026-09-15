@@ -48586,6 +48586,57 @@
         "TimedOut": false
       }
     },
+    "cond/a-surplus-operand-is-refused-when-it-runs": {
+      "ash": {
+        "Stdout": "pre~post",
+        "Stderr": "\u003cshell\u003e: y: unknown operand",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error in conditional expression: unexpected token `y'~\u003cshell\u003e: -c: line 1: syntax error near `y'~\u003cshell\u003e: -c: line 1: `echo pre; [[ -n x y ]]; echo post'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error in conditional expression: unexpected token `y'~\u003cshell\u003e: -c: line 1: syntax error near `y'~\u003cshell\u003e: -c: line 1: `echo pre; [[ -n x y ]]; echo post'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error in conditional expression~\u003cshell\u003e: -c: line 0: syntax error near `y'~\u003cshell\u003e: -c: line 0: `echo pre; [[ -n x y ]]; echo post'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "pre~post",
+        "Stderr": "\u003cshell\u003e: 1: [[: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `y' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "pre",
+        "Stderr": "\u003cshell\u003e:1: unknown condition: -n",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "cond/an-empty-group-is-not-a-pattern": {
       "ash": {
         "Stdout": "",
@@ -48786,6 +48837,108 @@
         "Stdout": "set~unset~set",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "cond/an-operator-shaped-operand-is-an-operand": {
+      "ash": {
+        "Stdout": "pre~post",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "pre~post",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "pre~post",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "pre~post",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "pre~post",
+        "Stderr": "\u003cshell\u003e: 1: [[: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "pre~post",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "pre~post",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "cond/an-operator-with-no-operand-at-all": {
+      "ash": {
+        "Stdout": "pre~post",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: unexpected argument `]]' to conditional unary operator~\u003cshell\u003e: -c: line 1: syntax error near `;'~\u003cshell\u003e: -c: line 1: `echo pre; [[ -n ]]; echo post'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: unexpected argument `]]' to conditional unary operator~\u003cshell\u003e: -c: line 1: syntax error near `;'~\u003cshell\u003e: -c: line 1: `echo pre; [[ -n ]]; echo post'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: unexpected argument `]]' to conditional unary operator~\u003cshell\u003e: -c: line 0: syntax error near `;'~\u003cshell\u003e: -c: line 0: `echo pre; [[ -n ]]; echo post'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "pre~post",
+        "Stderr": "\u003cshell\u003e: 1: [[: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `]]' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "pre",
+        "Stderr": "\u003cshell\u003e:1: unknown condition: -n",
+        "Status": 2,
         "Signal": 0,
         "TimedOut": false
       }

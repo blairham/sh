@@ -3971,6 +3971,38 @@ type Diagnostics struct {
 	// says JobNotUnderJobControl afterwards.
 	NoJobControl string
 
+	// JobStartedWithoutJobControl is `fg` or `bg` on a job that was started
+	// while the monitor was off, in a shell that has since turned it on.
+	//
+	// Such a job runs in the shell's own process group rather than one of its
+	// own — see Job.ownGroup — so there is no group to put in front of the
+	// terminal, and every column that can reach the question refuses rather
+	// than resuming it. Two verbs: the builtin's name and the job's number.
+	//
+	//	sleep 4 & set -m; fg
+	//	  bash 5.3   fg: job 1 started without job control, 1
+	//	  bash 3.2   fg: job 1 started without job control, 1
+	//	  ksh93      nothing at all, 1
+	//
+	// Three columns are recorded rather than modeled, and for one reason:
+	// none of them reaches this state. zsh and dash refuse `set -m` outright
+	// without a terminal, and BusyBox ash turns the monitor off and says so
+	// — so in all three the monitor is still off when the resume is asked
+	// for, and the refusal they give is the no-job-control one above rather
+	// than this. ash words that refusal `job (null) not created under job
+	// control` at 2, which reads like this question and is an answer to the
+	// other. Filling this in for them from those lines would be inventing a
+	// wording for a state the shell cannot be in.
+	//
+	// This is the refusal #3020 was filed for. Without it this shell resumed
+	// the job and waited it out, so a file of bash's own suite that bash
+	// finishes in 11 ms took us 30 seconds — the length of the `sleep` no
+	// reference ever waited for.
+	JobStartedWithoutJobControl string
+	// JobStartedWithoutJobControlStatus is what that reports. Zero means 1,
+	// which is bash's and ksh93's; ash sets 2.
+	JobStartedWithoutJobControlStatus int
+
 	// JobNotUnderJobControl is the other half of the same refusal: `fg` or
 	// `bg` in a shell with no job control, for the dialect that reads its
 	// operand *first* and reaches this only once the spec has resolved to a

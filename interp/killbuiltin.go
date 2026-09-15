@@ -293,6 +293,16 @@ func (r *Runner) killTargets(name string, sig syscall.Signal, targets []string) 
 		case killTargetNotAPid:
 			return r.killReport(killNotAPid, t)
 		}
+		if len(aims) == 0 {
+			// A target that is there with nothing left to reach: a job that
+			// has ended and that the script has not waited for, which is a
+			// child a real shell has not reaped yet. `kill` succeeds at it
+			// and nothing receives anything — see Runner.jobProcesses. Every
+			// other route out of killTarget names at least one process, so
+			// this is that case and not an empty list from anywhere else.
+			sent++
+			continue
+		}
 		// One operand, however many processes it named: the operand is what
 		// `kill` reports on, so a job whose pipeline has already lost a
 		// member is a job that was signaled and not a target that failed.
@@ -407,8 +417,30 @@ func (r *Runner) killTarget(t string) (targets []jobProcess, bad int) {
 func (r *Runner) jobProcesses(j *Job) (targets []jobProcess, bad int) {
 	targets = j.processes()
 	if len(targets) == 0 {
-		// A job with no process of its own — nothing to signal, reported as
-		// the missing job it behaves as.
+		if j.Finished() {
+			// The job is over and the script has not waited for it, which on
+			// every reference is a child that has exited and not been reaped
+			// — still a process, and still something `kill` succeeds at
+			// aiming a signal nothing will receive. `cmd & p=$!;
+			// kill -0 "$p"` is how a script asks whether a job it started is
+			// still its own to wait for, and this shell answered no for
+			// every job made of builtins or of a compound command, where a
+			// real shell has forked and has a body to leave behind (#2938).
+			//
+			// Nothing is signaled, which is the same as the reference: a
+			// signal sent to a child that has already exited reaches nothing
+			// either. What changes is only that the target is *there*, which
+			// is what it is on every shell until `wait` collects it — and
+			// what stops being true here the moment `wait` does, because
+			// that takes the job out of the table and the lookups above
+			// never reach this.
+			return nil, jobFound
+		}
+		// A job still running with no process of its own — a background
+		// builtin or compound command that has not ended. There is nothing
+		// to signal and nothing that has exited either, so it is reported as
+		// the missing job it behaves as. Reconstructing *that* boundary is a
+		// process this shell does not have; see Runner.background.
 		return nil, jobMissing
 	}
 	return targets, jobFound

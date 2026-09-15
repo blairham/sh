@@ -189,3 +189,56 @@ wait %1 >/dev/null 2>&1; echo "spec=$?"
 		t.Errorf("out = %q, want `%%1` to name nothing; stderr %q", out, errOut)
 	}
 }
+
+// A background job that has ended and has not been waited for still answers
+// `kill`, because on every reference it is a child that has exited and that
+// the shell has not reaped.
+//
+// `cmd & p=$!; kill -0 "$p"` is how a script asks whether a job it started is
+// still its own to collect, and this shell answered no for every job made of
+// builtins or of a compound command: a real shell forks there and has a body
+// to leave behind, and here there is nothing to aim at, so the number came
+// back as a job with no process and `kill` reported it missing (#2938).
+//
+// Both spellings, because they are one decision: `$!` is read back as the job
+// it names, so `kill "$!"` and `kill %1` have to reach the same answer. The
+// second line is what stops it being "the table forgot the job": after `wait`
+// the job is out of the table and the invented id goes to the kernel, where
+// it is out above every process id one can issue and finds nothing.
+//
+// Held against the panel — bash 5.3.15, zsh 5.9.2, ksh93u+ 2012-08-01 and
+// dash — all four answer the same two ways round on
+// `( exit 0 ) & p=$!; kill -0 "$p"; …; wait; kill -0 "$p"`. What they do
+// *not* do is hold the answer until `wait`: each reaps the child from its own
+// SIGCHLD handler, so a busy loop of builtins between the `&` and the `kill`
+// turns all four to a failure. That is a window rather than a state, and a
+// window is not something a shell can implement — so this shell holds the job
+// until the script collects it, which is the rule the idiom is written
+// against and is right at the instant a script actually asks.
+//
+// The gate is there for what a mutant would do, for the reason
+// runGatedJobScript gives: nothing is signaled on the passing path, so a gate
+// that refuses everything changes nothing about it.
+func TestAnEndedJobStillAnswersKillUntilItIsWaitedFor(t *testing.T) {
+	const src = `( exit 0 ) & p=$!
+kill -0 "$p" 2>/dev/null; echo "byid=$?"
+kill -0 %1 2>/dev/null; echo "byspec=$?"
+wait
+kill -0 "$p" 2>/dev/null; echo "after=$(( $? != 0 ))"
+`
+	out, errOut := runGatedJobScript(t, src, nil, GateFunc(func(_ context.Context, a Action) Decision {
+		if a.Kind == ActionSignal {
+			return Deny
+		}
+		return Allow
+	}))
+	if !strings.Contains(out, "byid=0") {
+		t.Errorf("out = %q, want `kill -0 $!` to find the job this shell has not been asked to collect; stderr %q", out, errOut)
+	}
+	if !strings.Contains(out, "byspec=0") {
+		t.Errorf("out = %q, want `%%1` to answer where `$!` does — one job, one answer; stderr %q", out, errOut)
+	}
+	if !strings.Contains(out, "after=1") {
+		t.Errorf("out = %q, want the answer to stop once `wait` has collected the job; stderr %q", out, errOut)
+	}
+}

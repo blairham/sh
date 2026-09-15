@@ -9,12 +9,15 @@
 # `set -u` at the top and `$1` read before `$#` is looked at — and it means
 # the check fires in three shells and passes silently in the fourth.
 #
-# Held out until #2925 lands: the `set -o` listing is 33 rows in ksh93 and 21
-# in ours, and five of the rows we have are the negative spelling of a name
-# ksh93 lists positive. `set +o` shows the same gap in one line.
+# And the `set -o` roster, which is this shell's alone twice over: it is
+# thirty-two rows where the other three write about twenty, and five of them
+# — `clobber`, `exec`, `glob`, `log` and `unset` — are the *positive*
+# spelling of a name the rest list negative. Same state, opposite row.
 #
-#   set -o
-#   set +o
+# `set +o` is the other half and is asked here too, because the two are not
+# the same question in this shell: that line names the states it **stores**,
+# so a negated row appears under the `no…` spelling and only when it is off,
+# and a row the shell will not take is left out of it altogether.
 
 ( set -u; set --; printf 'the first positional [%s]\n' "$1" ) 2> /dev/null
 printf 'an absent positional -> %s\n' "$?"
@@ -24,3 +27,20 @@ printf 'the list itself -> %s\n' "$?"
 printf 'a positional that is set -> %s\n' "$?"
 ( set -u; printf '[%s]' "$NOSUCH_ZZ" ) 2> /dev/null
 printf 'and an ordinary name is still unset -> %s\n' "$?"
+
+# The whole roster, and the states a script starts in.
+set -o
+
+# The same thing as a command that could be read back in. Twice more with one
+# option moved each way, which is what says the line follows the state rather
+# than being a constant — and the second of them moves a *negated* row, where
+# the spelling on the line is not the spelling in the listing above.
+set +o
+( set -o errexit; set +o )
+( set +o clobber; set +o )
+
+# A row this shell lists and will not take, in both directions. The complaint
+# is the one a name it has never heard of gets, and it ends the shell — so
+# each is asked in a subshell of its own.
+( set -o interactive ) 2> /dev/null; printf 'set -o interactive -> %s\n' "$?"
+( set +o rc ) 2> /dev/null; printf 'set +o rc -> %s\n' "$?"

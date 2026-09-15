@@ -352,6 +352,45 @@ var extraSetOptions = map[string]setOption{
 		apply: func(r *Runner, on bool) { r.debugOption = on },
 		get:   func(r *Runner) bool { return r.debugOption },
 	},
+
+	// The names one shell in the panel has and the rest do not, beyond the
+	// three above. Measured 2026-09-15 on ksh93u+ over `-c`, over `-i` with
+	// no terminal, and over a login invocation by both `-l` and an `argv[0]`
+	// of `-ksh`, which is what tells a state apart from a constant.
+	//
+	// Three of them are facts about the *invocation* and read live state
+	// here rather than a default: `bgnice` and `rc` are off in a script and
+	// on at a prompt, which is the same fact `interactive` above reports,
+	// and `login_shell` is on under both login routes and off otherwise. A
+	// constant written for any of the three would have been wrong on one of
+	// the two runs that produced it.
+	"bgnice": {get: func(r *Runner) bool { return r.Interactive }},
+	"rc":     {get: func(r *Runner) bool { return r.Interactive }},
+	// login_shell reads the field the front end filled in, the same one
+	// `$-`'s `l` is drawn from where a dialect shows the letter.
+	"login_shell": {get: func(r *Runner) bool { return r.LoginShell }},
+
+	// And the rest are states, listed with the state this shell is in. Two
+	// of them are on, and both describe how a *line* is read and drawn
+	// rather than how a script runs: this editor reads raw keystrokes and
+	// redraws a line that outgrows the terminal in place rather than
+	// scrolling it sideways, which is what the two names ask for. The shell
+	// that has them reports both on in every route measured.
+	"multiline": {on: true},
+	"viraw":     {on: true},
+	// The rest are off here and off there. None of them is acted on: `**`
+	// has no switch in the dialect that spells it this way (see glob.go),
+	// there is no third editing mode, `let` reads no octal, a glob marks no
+	// directory, nothing is withheld for `showme`, and this shell has no
+	// restricted mode. Listing them is what a script reading `set -o` asks
+	// for; turning one *on* is a promise this shell cannot keep, so it is
+	// refused out loud — which is the rule at the top of this file.
+	"globstar":   {},
+	"gmacs":      {},
+	"letoctal":   {},
+	"markdirs":   {},
+	"restricted": {},
+	"showme":     {},
 }
 
 // SetPosixMode enters or leaves POSIX mode, which is what the `posix` entry
@@ -1009,16 +1048,45 @@ func (r *Runner) setCommandTracking(on bool) {
 
 // lookupSetOption finds a name this shell has, if it has it.
 func (r *Runner) lookupSetOption(name string) (setOption, bool) {
-	if o, ok := commonSetOptions[name]; ok {
-		return o, true
+	if base, ok := r.negatedOptions[name]; ok {
+		// A name this dialect spells as the opposite of one the substrate
+		// holds. The state behind it is the substrate's, read and written
+		// upside down; see AddNegatedSetOptions. The base is never itself a
+		// negated name, so this does not recur.
+		o, known := r.lookupSetOption(base)
+		if !known {
+			return setOption{}, false
+		}
+		return negatedOption(o), true
 	}
-	if !r.extraOptions[name] {
-		return setOption{}, false
+	o, ok := commonSetOptions[name]
+	if !ok {
+		if !r.extraOptions[name] {
+			return setOption{}, false
+		}
+		// A name the dialect declared. Anything not described above is
+		// something we do not do, which is the safe reading: it can be
+		// turned off and not on.
+		o = extraSetOptions[name]
 	}
-	// A name the dialect declared. Anything not described above is something
-	// we do not do, which is the safe reading: it can be turned off and not
-	// on.
-	return extraSetOptions[name], true
+	return o, true
+}
+
+// negatedOption is one option read and written upside down, which is the whole
+// of what a negated spelling is: `clobber` is `noclobber` inverted, and
+// nothing else about the state moves.
+func negatedOption(o setOption) setOption {
+	n := setOption{on: !o.on}
+	if o.get != nil {
+		n.get = func(r *Runner) bool { return !o.get(r) }
+	}
+	if o.apply != nil {
+		n.apply = func(r *Runner, on bool) { o.apply(r, !on) }
+	}
+	if o.try != nil {
+		n.try = func(r *Runner, on bool, spelling string) bool { return o.try(r, !on, spelling) }
+	}
+	return n
 }
 
 // setOptionFailure is what a refused `set -o` reports, and resets it.
@@ -1060,7 +1128,7 @@ func (r *Runner) listedOptions() []ListedOption {
 	rows := make([]ListedOption, 0, len(names))
 	for _, n := range names {
 		o, _ := r.lookupSetOption(n)
-		rows = append(rows, ListedOption{Name: n, On: o.state(r)})
+		rows = append(rows, ListedOption{Name: n, On: o.state(r), NegatedName: r.negatedOptions[n]})
 	}
 	return rows
 }
@@ -1081,10 +1149,25 @@ func (r *Runner) listedOptions() []ListedOption {
 // when somebody looked, and a name added later must still come out somewhere.
 func (r *Runner) listedOptionNames() []string {
 	names := make([]string, 0, len(commonSetOptions)+len(r.extraOptions))
+	// A name this dialect lists under a negated spelling is not listed under
+	// the substrate's own: ksh93 writes `clobber on` and never `noclobber`,
+	// while still *taking* both spellings. So the set is dropped from the
+	// roster and the negated names take its place.
+	negated := make(map[string]bool, len(r.negatedOptions))
+	for _, base := range r.negatedOptions {
+		negated[base] = true
+	}
 	for n := range commonSetOptions {
-		names = append(names, n)
+		if !negated[n] {
+			names = append(names, n)
+		}
 	}
 	for n := range r.extraOptions {
+		if !negated[n] {
+			names = append(names, n)
+		}
+	}
+	for n := range r.negatedOptions {
 		names = append(names, n)
 	}
 	sort.Strings(names)
@@ -1119,7 +1202,26 @@ func (r *Runner) listOptions(plus bool) int {
 		if r.diag().PlusOListsActive {
 			line := "set --default"
 			for _, row := range rows {
-				if row.On {
+				switch {
+				case r.immovableOptions[row.Name]:
+					// This line is a *command*, so a name `set` will not
+					// take has no business in it. Measured on ksh93u+: an
+					// interactive login shell reports `interactive`,
+					// `login_shell` and `rc` in its listing and names none
+					// of the three here, while `monitor` — on for the same
+					// reason and movable — is on the line. See
+					// AddImmovableSetOptions.
+				case row.NegatedName != "":
+					// A row the shell lists as the opposite of a state it
+					// stores. This line names the *stored* states, so the
+					// negated spelling appears when the row is off and the
+					// row being on says nothing: measured on ksh93u+,
+					// `set +o clobber` puts `--noclobber` on the line and a
+					// stock shell names neither. See AddNegatedSetOptions.
+					if !row.On {
+						line += " --" + row.NegatedName
+					}
+				case row.On:
 					line += " --" + row.Name
 				}
 			}

@@ -1631,6 +1631,16 @@ func (r *Runner) setOption(name string, on bool) bool {
 	if !ok {
 		return r.badSetOptionName(name)
 	}
+	if r.immovableOptions[name] {
+		// A name this shell lists and will not take, in either direction —
+		// see Runner.AddImmovableSetOptions. Refused exactly as a name it
+		// does not have, which is what makes this one line rather than a
+		// wording of its own: measured, the shell this is for says
+		// `bad option(s)` and prints its usage for `interactive` word for
+		// word as it does for a name it has never heard of, while the row
+		// stays in its listing and still reports which state it is in.
+		return r.badSetOptionName(name)
+	}
 	if o.try != nil {
 		// A request the dialect may refuse, handed the spelling it was asked
 		// with — the refusal echoes it back.

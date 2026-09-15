@@ -130,6 +130,8 @@ func (c *Runner) ownTables(r *Runner) {
 
 	// The option table, on the same terms: `(setopt …)` is the subshell's.
 	c.extraOptions = maps.Clone(r.extraOptions)
+	c.negatedOptions = maps.Clone(r.negatedOptions)
+	c.immovableOptions = maps.Clone(r.immovableOptions)
 
 	// The descriptor tables are copied and the streams in them are shared: a
 	// subshell's `exec 7>&1` must not appear in the parent, and its writes

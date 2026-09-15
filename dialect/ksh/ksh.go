@@ -3157,15 +3157,51 @@ func Apply(r *interp.Runner) {
 	// they are simply there, which is what `$(( sqrt(4) ))` needing no
 	// preamble means. See mathfunc.go.
 	registerMathFuncs(r)
-	// The `set -o` names beyond the ones every shell has.
+	// The `set -o` names beyond the ones every shell has. Measured 2026-09-15
+	// against ksh93u+ 2012-08-01 by diffing the whole listing: 32 rows there
+	// against 20 here, and five of the twenty spelled the other way round
+	// (#2925). The listing is a capture surface — a script saves and
+	// restores option state with `eval "$(set +o)"` — so a name missing from
+	// it is a state that save cannot carry.
 	r.AddSetOptions(
+		"bgnice",
 		"braceexpand",
+		"globstar",
+		"gmacs",
 		"histexpand",
+		"interactive",
 		"keyword",
+		"letoctal",
+		"login_shell",
+		"markdirs",
+		"multiline",
 		"pipefail",
 		"privileged",
+		"rc",
+		"restricted",
+		"showme",
 		"trackall",
+		"viraw",
 	)
+	// And the five this shell spells as the positive. `set -o` here writes
+	// `clobber on` where the other four columns write `noclobber off`; both
+	// spellings are still taken, and only the roster changes. See
+	// interp.Runner.AddNegatedSetOptions for the three measurements that
+	// shape it.
+	r.AddNegatedSetOptions(map[string]string{
+		"clobber": "noclobber",
+		"exec":    "noexec",
+		"glob":    "noglob",
+		"log":     "nolog",
+		"unset":   "nounset",
+	})
+	// Three of the names above are listed and refused: `set -o interactive`,
+	// `set -o login_shell` and `set -o rc` are `bad option(s)` in both
+	// directions here, word for word with a name this shell has never heard
+	// of, while all three rows move with how the shell was started. The
+	// substrate has `interactive` as a movable name for the shell that does
+	// let a script write it, so this says otherwise for this one.
+	r.AddImmovableSetOptions("interactive", "login_shell", "rc")
 	// ksh93 has a `builtin` of its own and it is a different command: it
 	// *registers* builtins rather than running one. With no operands it
 	// lists the table; each operand is a name to add, and one that is not

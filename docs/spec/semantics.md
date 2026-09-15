@@ -12544,6 +12544,31 @@ Fires an EXIT trap set inside a function when that function returns,
 rather than when the script ends. zsh alone; a trap set at the top level
 behaves the same everywhere.
 
+**The call's status survives the trap**, and that is not a second axis:
+only one shell fires the trap here, so there is nothing for a second
+shell to disagree with. It is what the `yes` answer means, and it is the
+reason the construct is written at all — `f() { trap cleanup EXIT; …;
+return 1 }` exists so that `f || die` still works. Measured 2026-09-15 on
+zsh 5.9.2 over a script file:
+
+    g() { trap ':' EXIT; return 2; }; g          g -> 2
+    h() { trap ':' EXIT; false; }; h             h -> 1
+    m() { trap 'false' EXIT; return 0; }; m      m -> 0
+    n() { trap 'echo "[$?]"' EXIT; return 7; }   [7], then n -> 7
+
+So the trap's own result is discarded in **both** directions: a cleanup
+that fails does not spoil a call that succeeded, and one that succeeds
+does not hide a call that failed. A shell keeping the worse of the two
+would pass the first two rows and fail the third. The body reads the
+call's status as `$?`, which is what lets a cleanup report what went
+wrong, and the caller reads the same status again afterwards.
+
+The limit is a body that names a status outright: `p() { trap 'exit 4'
+EXIT; return 3; }` ends the shell at 4, because an `exit` in a trap body
+is already the shell's last word — the corpus row
+`trap/exit-trap-can-override-the-status` is the same rule at the top
+level, where every shell in the panel agrees about it.
+
 **`ExitTrapRunsOnSignalDeath`** — bash yes · dash no · ksh93 yes · zsh no
 
 Fires the EXIT trap when the shell is ending because a signal it had no

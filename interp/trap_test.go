@@ -136,6 +136,47 @@ func TestExitTrapIsFunctionLocalIsAnAxis(t *testing.T) {
 	}
 }
 
+// And the status the call returns with survives the trap, which is the half a
+// caller branches on. The trap's own result is discarded in both directions:
+// a cleanup that fails does not spoil a call that succeeded, and one that
+// succeeds does not hide a call that failed.
+//
+// Written against the axis rather than against a shell, and asked on the
+// `Yes` side only — the `No` side never runs a trap at the return, so there
+// is nothing there for a status to survive.
+func TestAFunctionLocalExitTrapKeepsTheCallSStatus(t *testing.T) {
+	local := permissive()
+	local.ExitTrapIsFunctionLocal = Yes
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"a failing call is still a failing call",
+			`g() { trap ':' EXIT; return 2; }; g; echo "g -> $?"`,
+			"g -> 2\n",
+		},
+		{
+			"and a succeeding one is still succeeding",
+			`m() { trap 'false' EXIT; return 0; }; m; echo "m -> $?"`,
+			"m -> 0\n",
+		},
+		{
+			"the body reads the call's status and the caller reads it again",
+			`n() { trap 'echo "sees [$?]"' EXIT; return 7; }; n; echo "n -> $?"`,
+			"sees [7]\nn -> 7\n",
+		},
+		{
+			"a body naming a status outright keeps that one",
+			`p() { trap 'exit 4' EXIT; return 3; }; p; echo unreached`,
+			"",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got, _ := run(t, tc.src, withSem(local)); got != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 // TestTrapTakesTheSignalsNobodyCanCatch pins both halves of #2919, which are
 // two facts rather than one: the word is accepted, and the action never runs.
 //

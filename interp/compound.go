@@ -1280,9 +1280,29 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 		r.exitTrap, r.trapDepth = outerTrap, outerDepth
 		ctl := r.ctl
 		r.ctl = controlNone
+		// The status the call is returning with, which the trap body reads
+		// as `$?` and then hands back. It is the reason the construct
+		// exists: `f() { trap cleanup EXIT; …; return 1 }` is written so
+		// that `f || die` still works, and a cleanup that reports its own
+		// result instead makes every call look like a success — silently,
+		// since a branch not taken prints nothing.
+		//
+		// Measured 2026-09-15 on zsh 5.9.2, the one shell that fires an
+		// EXIT trap at a function's return at all, over a script file:
+		// `g() { trap ':' EXIT; return 2; }; g` is 2, `h() { trap 'false'
+		// EXIT; return 0; }; h` is 0, and a body reading `$?` sees the
+		// call's status rather than the trap's. So the trap's own result
+		// is discarded in both directions, which is what makes this a
+		// restore rather than a "keep the worse of the two".
+		returned := r.status
 		r.runTrapBody(ctx, "EXIT", body)
 		if r.ctl == controlNone {
 			r.ctl = ctl
+			// Only where the body ran to its end. A body that says `exit
+			// 4` or `return 9` is naming a status outright, and that one
+			// is the shell's — measured, `f() { trap 'exit 4' EXIT;
+			// return 3; }; f` ends the script at 4.
+			r.status = returned
 		}
 	}
 	r.Params, r.inFunc, r.funcLine = saved, savedIn, savedLine

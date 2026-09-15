@@ -8011,6 +8011,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `trap/wait-is-not-cut-short-by-an-ignored-signal` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
 | `trap/exit-runs-at-the-end` | `hi~bye` | `hi~bye` | `hi~bye` | `hi~bye` | `hi~bye` | `hi~bye` | `hi~bye` |
 | `trap/exit-sees-the-last-status` | `st=1` *(status 1)* | `st=1` *(status 1)* | `st=1` *(status 1)* | `st=1` *(status 1)* | `st=1` *(status 1)* | `st=1` *(status 1)* | `st=1` *(status 1)* |
+| `trap/a-function-s-own-exit-trap-hands-back-the-call-s-status` | `g -> 2` | `g -> 2` | `g -> 2` | `g -> 2` | `g -> 2` | `g -> 2` | `g -> 2` |
+| `trap/a-function-s-own-exit-trap-does-not-raise-a-zero-either` | `m -> 0` | `m -> 0` | `m -> 0` | `m -> 0` | `m -> 0` | `m -> 0` | `m -> 0` |
+| `trap/a-function-s-own-exit-trap-reads-the-call-s-status` | `n -> 7~sees [0]` | `n -> 7~sees [0]` | `n -> 7~sees [0]` | `n -> 7~sees [0]` | `n -> 7~sees [0]` | `sees [7]~n -> 7` | `n -> 7~sees [0]` |
+| `trap/a-function-s-own-exit-trap-may-name-a-status-outright` | `after` *(status 4)* | `after` *(status 4)* | `after` *(status 4)* | `after` *(status 4)* | `after` *(status 4)* | *(no output, status 4)* | `after` *(status 4)* |
 | `trap/exit-trap-can-override-the-status` | `bye` *(status 7)* | `bye` *(status 7)* | `bye` *(status 7)* | `bye` *(status 7)* | `bye` *(status 7)* | `bye` *(status 7)* | `bye` *(status 7)* |
 | `exit-hook/the-named-function-and-its-list` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | *(no output, status 4)* | *(no output, status 4)* | *(no output, status 4)* | *(no output, status 4)* | `named st=4~z2 st=4~z3 st=4` *(status 4)* | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
 | `exit-hook/runs-after-the-exit-trap` | `trap` *(status 3)* | `trap` *(status 3)* | `trap` *(status 3)* | `trap` *(status 3)* | `trap` *(status 3)* | `trap~hook` *(status 3)* | `trap` *(status 3)* |
@@ -8429,6 +8433,22 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   trap 'echo st=$?' EXIT
   false
+  ```
+- `trap/a-function-s-own-exit-trap-hands-back-the-call-s-status` — one shell fires an EXIT trap set inside a function when that **function** returns, and this is the half of it a caller branches on. All seven columns answer `g -> 2`, and the unanimity is the point rather than a weakness: six of them never run the trap at the return at all, so the status is the call's there by having nothing to replace it, while the one that does run it there hands the same number back. So a shell taking the trap's own result disagrees with every column at once — which is what ours did, answering 0. `f() { trap cleanup EXIT; …; return 1 }` is written so that `f || die` still works, and the failure is silent: no diagnostic, only a branch not taken. The body is `:` rather than an `echo`, so the row is about the status alone
+  ```sh
+  g() { trap ':' EXIT; return 2; }; g; printf 'g -> %s\n' "$?"
+  ```
+- `trap/a-function-s-own-exit-trap-does-not-raise-a-zero-either` — the other direction, and what makes the row above a restore rather than a rule about failures surviving. A cleanup that fails does not turn a call that succeeded into one that did not, so a shell keeping the worse of the two answers 1 here and matches the row above. Unanimous for the same reason that one is, and against the same alternative
+  ```sh
+  m() { trap 'false' EXIT; return 0; }; m; printf 'm -> %s\n' "$?"
+  ```
+- `trap/a-function-s-own-exit-trap-reads-the-call-s-status` — what the body is told, against what the caller is told afterwards — the two ends of the same status, and a shell can get either one alone. This is the row that splits the panel, because the *order* of the two lines is where the trap fired: one shell prints `sees [7]` first and then `n -> 7`, and the other six print `n -> 7` and run the trap at the end of the script, where the status it reads is 0. So the same three lines say which shell fires it at the return and that the body is told the call's status when it does
+  ```sh
+  n() { trap 'printf "sees [%s]\n" "$?"' EXIT; return 7; }; n; printf 'n -> %s\n' "$?"
+  ```
+- `trap/a-function-s-own-exit-trap-may-name-a-status-outright` — the limit of the restore, and the row that keeps it from being read as "the call's status always wins". An `exit` in the body is the shell's last word wherever the body runs, so the status is 4 in every column — and the shell that fires the trap at the *return* never reaches the `printf`, while the six that fire it at the end of the script print `after` first. One number and two outputs
+  ```sh
+  p() { trap 'exit 4' EXIT; return 3; }; p; printf 'after\n'
   ```
 - `trap/exit-trap-can-override-the-status` — the trap's own exit wins over the one that triggered it
   ```sh

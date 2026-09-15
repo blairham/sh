@@ -1605,6 +1605,12 @@ func Semantics() interp.Semantics {
 	// a word — on a pseudo-terminal too, which is what says the missing
 	// thing is a person and not a terminal (#2720).
 	s.MonitorAloneResumesAJob = interp.No
+	// And it does not announce one on the monitor alone either, which is the
+	// same answer for a different reason: this column will not resume a job
+	// without a person, and it will not report one starting without a person
+	// either. Measured 2026-09-15 on a pseudo-terminal, a script file
+	// (#2838).
+	s.MonitorAloneAnnouncesAJob = interp.No
 	// The panel's lone dissent on the current-job marker: it goes to the
 	// newest job here rather than staying with one that stopped. Measured
 	// 2026-09-12 through a pseudo-terminal, `sleep 40` stopped with ^Z and

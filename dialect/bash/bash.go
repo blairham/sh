@@ -681,6 +681,12 @@ func Semantics() interp.Semantics {
 	// Measured 2026-09-15 with and without a pseudo-terminal, and the answer
 	// is the same both times (#2720).
 	s.MonitorAloneResumesAJob = interp.Yes
+	// The start notice is the other half of the same seam, and it answers
+	// the other way: with the monitor on and nobody at a prompt, `sleep 1 &`
+	// says nothing here. Measured 2026-09-15 on a pseudo-terminal, a script
+	// file — the one route the shell that does announce can be asked on
+	// (#2838).
+	s.MonitorAloneAnnouncesAJob = interp.No
 	// A stopped job holds the exit back: the shell says so and stays,
 	// and the next attempt leaves. Measured through a pseudo-terminal for
 	// `exit` and for ^D alike.
@@ -1947,6 +1953,13 @@ func Diagnostics() interp.Diagnostics {
 		// `[1]- sleep 40 &`, with one space after the marker rather than the
 		// two a listing row has.
 		JobResumedInBackground: "[%[1]d]%[2]s %[3]s &",
+		// `bg` on a job that is not stopped: the builtin is named in the
+		// sentence and the job by number, and the status is **0** — the
+		// shell complains and reports success, where zsh complains and
+		// reports 1. Measured 2026-09-15 from a script with `set -m` on a
+		// pseudo-terminal and again at an interactive prompt, the same both
+		// times (#2838).
+		JobAlreadyInBackground: "%[1]s: job %[2]d already in background",
 		// No name and no punctuation before it, and the held `exit` reports
 		// 1 — measured through a pseudo-terminal: `echo $?` after the
 		// refusal says 1, where the ^D that was refused leaves the status

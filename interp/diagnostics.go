@@ -1680,12 +1680,21 @@ type Diagnostics struct {
 	JobStoppedNoticeOnANewLine bool
 
 	// JobResumedInForeground is how `fg` names the job it put back in front.
-	// Three verbs: the number, the marker and the command.
+	// Four verbs: the number, the marker, the command, and the state word —
+	// see Runner.resumeState, which is what the fourth one is for.
 	//
 	// Empty prints the command alone, which is what three of the four do.
-	// zsh prints a listing row with a state of its own — `[1]  + continued
-	// sleep 3` — and that word appears nowhere else, which is why this is a
-	// format rather than a fourth entry beside JobRunning and JobStopped.
+	// zsh prints a listing row, and the state in it is **not** always the
+	// same word. Measured 2026-09-15 through a pseudo-terminal, zsh 5.9.2:
+	//
+	//	fg on a job stopped by a signal   [1]  + continued  sleep 5
+	//	fg on a job that is running       [1]  + running    sleep 1
+	//
+	// The second is the job's ordinary listing row, `running` and all. So
+	// this is JobLine's shape with the state supplied rather than a sentence
+	// with `continued` in it, which is what it was until the running job was
+	// measured: the comment here recorded one row and read it as a word that
+	// "appears nowhere else" (#2838).
 	JobResumedInForeground string
 
 	// JobResumedInBackground is the same for `bg`, and here all four differ:
@@ -1693,8 +1702,53 @@ type Diagnostics struct {
 	// the number and the command, ksh93 a tab between them and no space
 	// before the `&`, and zsh the same `continued` row it prints for `fg`.
 	//
+	// The state verb is offered here too, and zsh's wording does not take it:
+	// the only job `bg` reaches is one that was stopped, because the shell
+	// whose row carries a state is also the one that refuses `bg` for a job
+	// that is already running — see JobAlreadyInBackground.
+	//
 	// Empty prints the command with ` &` after it.
 	JobResumedInBackground string
+
+	// JobContinued is the state word a resume notice carries for a job that
+	// was actually continued, in the one dialect whose notice is a listing
+	// row. `continued` in zsh, and it is the state column of that row rather
+	// than a sentence — which is why it sits here beside JobRunning and
+	// JobStopped now that the running case has been measured.
+	//
+	// Empty means `continued`, which is the only spelling in the panel.
+	JobContinued string
+
+	// JobAlreadyInBackground is `bg` given a job that is not stopped. Two
+	// verbs: the builtin and the job's number.
+	//
+	// Empty is a dialect that does not check, and that is the ordinary case
+	// rather than an omission — it resumes the job it was given and prints
+	// the usual notice. Measured 2026-09-15, `env -i`, a script file with
+	// `set -m` on a pseudo-terminal and again at an interactive prompt, both
+	// giving the same answers:
+	//
+	//	bash 5.3.15   bg: job 1 already in background   status 0
+	//	zsh 5.9.2     bg: job already in background     status 1
+	//	ksh93u+       [1]	sleep 3 &                     status 0
+	//	dash          [1] sleep 3                       status 0
+	//	BusyBox ash   [1] sleep 1                       status 0
+	//
+	// Each complaint is written with the dialect's own location prefix, so
+	// bash's names the builtin in the sentence and zsh's does not: zsh's
+	// prefix already carries it.
+	//
+	// The two that complain print no resume notice and send no continue, and
+	// they differ over the status — which is why the status is a field of its
+	// own rather than the 1 a refusal usually is.
+	JobAlreadyInBackground string
+
+	// JobAlreadyInBackgroundStatus is what that reports, and zero means zero.
+	//
+	// Read only where JobAlreadyInBackground is set, so there is no default
+	// to reserve: bash complains and still reports success, zsh complains and
+	// reports 1, and a dialect that says nothing never reaches either.
+	JobAlreadyInBackgroundStatus int
 
 	// StoppedJobsAtExit is the warning an interactive shell gives when
 	// leaving would abandon a stopped job — see

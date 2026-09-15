@@ -722,7 +722,7 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 // that `$!` on the next line is not racing the goroutine that sets it, and the
 // announcement wants the same number.
 func (r *Runner) announceJob(job *Job) {
-	if !r.JobControl {
+	if !r.canAnnounce() {
 		return
 	}
 	if !r.ask(r.sem().AnnouncesBackgroundJob, "a background job being announced") {
@@ -737,6 +737,17 @@ func (r *Runner) announceJob(job *Job) {
 		return
 	}
 	r.errf("%s\n", Wording(r.diag().JobStarted, "[%[1]d] %[2]d", job.num, job.Ident()))
+}
+
+// canAnnounce reports whether this shell has anybody to tell that a job
+// started.
+//
+// A prompt is that somebody in every dialect, and one dialect also counts the
+// monitor on its own — see Semantics.MonitorAloneAnnouncesAJob, which is the
+// same seam canResume reads one notice over and which the panel divides
+// differently. Read and not asked, for the reason the axis gives.
+func (r *Runner) canAnnounce() bool {
+	return r.JobControl || (r.monitor && r.sem().MonitorAloneAnnouncesAJob == Yes)
 }
 
 // FinishedJobNotices is what to say about the jobs that have ended since it

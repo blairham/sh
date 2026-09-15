@@ -370,6 +370,19 @@ func Semantics() interp.Semantics {
 	// `v="quo'te"; set` writes `v='quo'"'"'te'`, and `alias` writes its
 	// bodies the same way.
 	s.DeclareValueQuoting = interp.ListingQuoteAlwaysDoubled
+	// unanswered ListedBangIsOrdinary: every listing style this shell uses
+	// quotes whatever it is given, so `'!'`, `'^'`, `'a=b'` and `'é'` say
+	// nothing about which bytes a listing may leave bare. Measured
+	// 2026-09-14 with a bare `set` over all four (#2820).
+	// unanswered ListedCaretIsOrdinary: the same always-quoting style.
+	// unanswered ListedEqualsIsOrdinary: the same always-quoting style.
+	// unanswered ListedNonAsciiIsOrdinary: the same always-quoting style,
+	// and no `$'...'` listing here for the escaped half of the question.
+	// unanswered ListedAssignmentPrefixIsBare: a bare head is only visible
+	// in a listing that leaves anything bare, and this one leaves nothing.
+	// unanswered OperatorAfterTheSubscriptListingIsBad: `${!name[@]}` is a
+	// bad substitution here in the *bare* form too, so there is no listing
+	// for an operator to come after. Measured 2026-09-14 (#2821).
 	s.SetListing = interp.SetListingAssignments
 	s.SetListingQuoting = interp.ListingQuoteAlwaysDoubled
 	s.AliasQuoting = interp.ListingQuoteAlwaysDoubled

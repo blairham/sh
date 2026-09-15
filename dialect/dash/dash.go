@@ -400,6 +400,19 @@ func Semantics() interp.Semantics {
 	// dash single-quotes every listed value; it has no declare, so this
 	// style exists for the two -p listings alone.
 	s.DeclareValueQuoting = interp.ListingQuoteAlwaysEscaped
+	// unanswered ListedBangIsOrdinary: every listing style this shell uses
+	// quotes whatever it is given, so `'!'`, `'^'`, `'a=b'` and `'é'` say
+	// nothing about which bytes a listing may leave bare. Measured
+	// 2026-09-14 with a bare `set` over all four (#2820).
+	// unanswered ListedCaretIsOrdinary: the same always-quoting style.
+	// unanswered ListedEqualsIsOrdinary: the same always-quoting style.
+	// unanswered ListedNonAsciiIsOrdinary: the same always-quoting style,
+	// and no `$'...'` listing here for the escaped half of the question.
+	// unanswered ListedAssignmentPrefixIsBare: a bare head is only visible
+	// in a listing that leaves anything bare, and this one leaves nothing.
+	// unanswered OperatorAfterTheSubscriptListingIsBad: `${!name[@]}` is a
+	// bad substitution here in the *bare* form too, so there is no listing
+	// for an operator to come after. Measured 2026-09-14 (#2821).
 	s.EchoInterpretsEscapes = interp.Yes
 	// Neither spelling of the escape character: this shell's set is the XSI
 	// list alone, so `\e` and `\E` are the two characters they are written

@@ -118,6 +118,11 @@ ash   JobsStateFiltersAccumulate
 ash   KeptTrapListingIncludesExit
 ash   KeyedLiteralAppendJoinsTheReplacedValue
 ash   KeyedTableScalarIsTheFirstValue
+ash   ListedAssignmentPrefixIsBare
+ash   ListedBangIsOrdinary
+ash   ListedCaretIsOrdinary
+ash   ListedEqualsIsOrdinary
+ash   ListedNonAsciiIsOrdinary
 ash   LongestMatchTakesTheWrittenArm
 ash   NamerefCycleIsRefused
 ash   NegatedTestRecordsThePostNegationStatus
@@ -130,6 +135,7 @@ ash   NumericTypeLetterRetypesAFrozenName
 ash   NumericTypeLettersAreExclusive
 ash   NumericTypeWithNoValueReachesAChildAsZero
 ash   OneCommandStopsACommandString
+ash   OperatorAfterTheSubscriptListingIsBad
 ash   OperatorDistributesOverStarSubscript
 ash   PrefixRefusalCostsTheCommand
 ash   PrintfHexFloatDefaultIsTwelveDigits
@@ -321,6 +327,11 @@ dash  JobsStateFiltersAccumulate
 dash  KeptTrapListingIncludesExit
 dash  KeyedLiteralAppendJoinsTheReplacedValue
 dash  KeyedTableScalarIsTheFirstValue
+dash  ListedAssignmentPrefixIsBare
+dash  ListedBangIsOrdinary
+dash  ListedCaretIsOrdinary
+dash  ListedEqualsIsOrdinary
+dash  ListedNonAsciiIsOrdinary
 dash  LongestMatchTakesTheWrittenArm
 dash  NamerefCycleIsRefused
 dash  NegatedTestRecordsThePostNegationStatus
@@ -333,6 +344,7 @@ dash  NumericTypeLetterRetypesAFrozenName
 dash  NumericTypeLettersAreExclusive
 dash  NumericTypeWithNoValueReachesAChildAsZero
 dash  OneCommandStopsACommandString
+dash  OperatorAfterTheSubscriptListingIsBad
 dash  OperatorDistributesOverStarSubscript
 dash  PipefailSubstitutesTheBareSignal
 dash  PrefixRefusalCostsTheCommand
@@ -438,6 +450,7 @@ zsh   IntegerAssignmentReadsALeadingZeroAsDecimal
 zsh   LocalOutsideAFunctionIsFatal
 zsh   NamerefCycleIsRefused
 zsh   NegativeSubscriptCountsOverAPromotedScalar
+zsh   OperatorAfterTheSubscriptListingIsBad
 zsh   PrintfHexFloatDefaultIsTwelveDigits
 zsh   PrintfOutputPrecedesComplaint
 zsh   ReadCountJudgesTheNamesAfterTheFirst

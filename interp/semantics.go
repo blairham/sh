@@ -6306,6 +6306,70 @@ type Semantics struct {
 	// this question.
 	ListedHashIsBareAfterANonName Answer
 
+	// ListedBangIsOrdinary leaves a `!` in a listed word unquoted.
+	//
+	// ksh93 and zsh both do — `v1=!`, `v2=a!b`, `v3=!lead`, `v4=tail!` and
+	// the keys `[!]` and `[a!b]` all bare — and bash quotes every one of
+	// them. A different pairing from the `^` below, which is ksh93 alone,
+	// and from `=`, which is bash alone: no two of the four bytes group the
+	// same way, which is what makes each of them a question (#2820).
+	ListedBangIsOrdinary Answer
+
+	// ListedCaretIsOrdinary leaves a `^` in a listed word unquoted.
+	//
+	// One of the three bytes the panel does not agree about; see
+	// Runner.listedByteIsOrdinary for the table and for the other two. ksh93
+	// alone leaves it bare — measured 2026-09-14 over `set`, a keyed
+	// `typeset -p` and an alias listing, which agree within each column —
+	// where bash 5.3.15 and zsh 5.9.2 both write `'^'` and `'a^b'`. dash and
+	// BusyBox ash quote every listed value whatever is in it, so they are not
+	// asked and do not answer.
+	//
+	// Read and not asked, and unanswered quotes: see listedByteIsOrdinary,
+	// which is where the rule that a listing may not stop to complain lives
+	// (#2820).
+	ListedCaretIsOrdinary Answer
+
+	// ListedEqualsIsOrdinary leaves an `=` in a listed word unquoted,
+	// wherever it stands in the word.
+	//
+	// bash alone — `v3=a=b`, `v4=x=y=z` and the keys `[a=b]`, `[=x]`,
+	// `[1=2]`, `[x=y=z]` all bare — against zsh, which quotes every one of
+	// them. ksh93 is neither: a leading `name=` is bare there and the rest is
+	// quoted on its own, which is ListedAssignmentPrefixIsBare and not this.
+	// dash and BusyBox ash always quote and are not asked (#2820).
+	ListedEqualsIsOrdinary Answer
+
+	// ListedNonAsciiIsOrdinary leaves a byte above ASCII in a listed word
+	// unquoted, and decides the same question inside `$'...'`.
+	//
+	// bash and zsh write the character itself — `v5=é`, the key `[é]` — and
+	// leave it as itself inside a `$'...'` a control byte put them in:
+	// `$'a\téb'` in both. ksh93 spells it out
+	// byte by byte, `$'\xc3\xa9'`, for a value, a key and an alias body
+	// alike — a third answer rather than the other side of a switch, and the
+	// reason this one field decides both whether such a byte is bare and
+	// whether it is escaped (#2820).
+	ListedNonAsciiIsOrdinary Answer
+
+	// ListedAssignmentPrefixIsBare writes a listed value's leading `name=`
+	// without quotes and quotes what follows on its own.
+	//
+	// ksh93's answer to `=`, and it is a rule rather than a character class:
+	// `a=b` lists as `a=b`, `a=b c` as `a='b c'`, `x=y=z` as `x='y=z'` and a
+	// tail with a tab in it as `a=$'b\tc'` — the same three answers the
+	// style gives a whole value, applied to the tail. It fires once and at
+	// the front: `a=b=c` is `a='b=c'` and not `a=b=c`. It does not fire where
+	// there is no name in front of the first `=`, so `=x` is `'=x'` and
+	// `1=2` is `'1=2'`.
+	//
+	// Keys take it too, measured: the same shell lists `[a=b]` and
+	// `[x='y=z']` in a `typeset -p` of a table.
+	//
+	// A doubled `=` is measured and not reproduced; see
+	// Runner.bareAssignmentHead (#2820).
+	ListedAssignmentPrefixIsBare Answer
+
 	// ListedHashIsBareUnlessItOpensTheValue leaves a `#` in a listed value
 	// unquoted wherever it stands except as the value's first byte. bash
 	// alone, and a weaker rule than the one above rather than a different

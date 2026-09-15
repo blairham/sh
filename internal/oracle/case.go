@@ -16017,6 +16017,26 @@ printf 'TWO=still-running\n'`,
 		Why:     "three shells and three rules for one character: bash quotes a `#` only where a comment could begin, so only the last of these is quoted; ksh93 quotes one a name stands in front of, so `1#b` joins it in staying bare and `ab#cd` does not; zsh quotes every one. We had bash on zsh's answer and listed `ab#cd` quoted where the shell lists it bare (#2299)",
 	},
 	{
+		ID: "set/listed-value-with-a-caret-or-a-bang", Category: "builtins",
+		Snippet: `v1=^; v2=a^b; v3='!'; v4='a!b'; set | grep "^v[1-4]"; echo "st=$?"`,
+		Why:     "two of the four bytes the panel does not agree about in a listed word, in one row because they are what separates the three columns: ksh93 leaves both bare, zsh leaves `!` bare and quotes `^`, and bash quotes both. No two of the four bytes group the same way — `=` below is bash alone — so each is an axis rather than one strictness dial. dash and BusyBox ash quote whatever they are given and the row records their habit rather than an answer. We had ksh93's reading of `^` in every dialect and bash's reading of `!` in every dialect, so no column was right about the pair (#2820)",
+	},
+	{
+		ID: "set/listed-value-with-an-equals", Category: "builtins",
+		Snippet: `v1=a=b; v2=x=y=z; v3='=x'; v4='1=2'; v5='a=b c'; set | grep "^v[1-5]"; echo "st=$?"`,
+		Why:     "the same question about `=`, and here bash is the one column that calls it ordinary — all five of these list bare there. ksh93 is a third answer rather than the other side of the switch: a leading `name=` is bare and what follows is quoted on its own, so `a=b` is bare, `x=y=z` is `x='y=z'`, `a=b c` is `a='b c'`, and the two with no name in front of the first `=` are quoted whole. zsh quotes every one. The five spellings are what separate the three readings — a row carrying only `a=b` has bash and ksh93 agreeing by accident (#2820)",
+	},
+	{
+		ID: "set/listed-value-with-a-byte-above-ascii", Category: "builtins",
+		Snippet: `v1=$(printf '\303\251'); v2=$(printf 'a\tb\303\251'); set | grep "^v[12]"; echo "st=$?"`,
+		Why:     "the third byte, and the only one of the three where a column answers with a *spelling* rather than with quotes: ksh93 writes `$'\xc3\xa9'`, byte by byte, where bash and zsh write the character itself. The second value is what says it is one question and not two — a control byte puts all three shells into `$'...'`, and the non-ASCII byte inside it is spelled out in the same column that quotes it outside and left as itself in the two that do not (#2820)",
+	},
+	{
+		ID: "declare/a-keyed-table-spells-its-keys", Category: "declarations",
+		Snippet: `k='^'; b='!'; typeset -A w 2>/dev/null; w[a=b]=1; w[$k]=2; w[$b]=3; w[plain]=4; typeset -p w 2>&1; echo "st=$?"`,
+		Why:     "the same rules as the `set` rows above, asked where a listing is meant to be read back: the key is the word being quoted rather than the value. bash leaves `a=b` bare and quotes `^` and `!`, ksh93 leaves all three bare, and zsh quotes `a=b` and `^` and leaves `!` bare — three columns, three groupings, one table. The caret and the bang arrive through parameters because one column keeps the quotes of a literal subscript as part of the key, which would otherwise make the three shells spell different keys. Together these are the difference between a `typeset -p` that can be sourced back and one that cannot (#2820)",
+	},
+	{
 		ID: "set/bare-set-and-the-functions", Category: "builtins",
 		Snippet: `myfn() { echo hi; }; set | grep -c '^myfn'; echo "st=$?"`,
 		Why:     "exactly one shell follows the variables with every defined function; counted rather than shown, so the answer is 1 against three 0s whatever the body's layout",

@@ -111,6 +111,53 @@ func (a ListingQuotingStyle) String() string {
 // style the calling builtin uses. What is being listed is named so the
 // refusal can say which question went unanswered.
 func (r *Runner) quoteListedValue(style ListingQuotingStyle, what, v string) string {
+	// A value that opens with `name=` is written with that much bare and the
+	// rest quoted on its own, in the one dialect that does it. Ahead of the
+	// styles rather than inside one, because the split is about the *value*
+	// and the tail then takes whichever style the caller asked for — measured
+	// on ksh93u+, `a=b` lists as `a=b`, `a=b c` as `a='b c'`, and a tail with
+	// a tab in it as `a=$'b\tc'`, which is the same three answers the style
+	// gives a whole value. See Semantics.ListedAssignmentPrefixIsBare.
+	if head, tail, split := r.bareAssignmentHead(v); split {
+		if tail == "" {
+			return head
+		}
+		return head + r.quoteListedValueBody(style, what, tail)
+	}
+	return r.quoteListedValueBody(style, what, v)
+}
+
+// bareAssignmentHead splits a listed value after a leading `name=`, where the
+// dialect writes that much without quotes, and reports whether it did.
+//
+// Once, at the front, and never again on what is left: measured, ksh93u+
+// writes `a=b=c` as `a='b=c'` and not as `a=b=c`, so the second `=` is inside
+// the quoted tail rather than starting another bare head.
+//
+// Two shapes it does not fire on, both measured: a value beginning with `=`,
+// which has no name in front of it — `=x` lists as `'=x'` — and one whose
+// text before the first `=` is not a name, so `1=2` lists as `'1=2'` and
+// `a.b=c` as `'a.b=c'`.
+//
+// **A doubled `=` is measured and not reproduced.** ksh93u+ writes `a==b`
+// bare and `a==` as `a==”`, where this gives `a='=b'` and `a='='`. Both read
+// back as the value, which is what the listing is for; the rule that produces
+// the shell's own spelling there is not one three probes could state, and the
+// shapes it covers are keys and values no script writes.
+func (r *Runner) bareAssignmentHead(v string) (head, tail string, split bool) {
+	if r.sem().ListedAssignmentPrefixIsBare != Yes {
+		return "", "", false
+	}
+	eq := strings.IndexByte(v, '=')
+	if eq <= 0 || !isNameLike(v[:eq]) {
+		return "", "", false
+	}
+	return v[:eq+1], v[eq+1:], true
+}
+
+// quoteListedValueBody is the style's own answer, with no assignment head
+// taken off the front.
+func (r *Runner) quoteListedValueBody(style ListingQuotingStyle, what, v string) string {
 	switch style {
 	case ListingQuoteAlwaysEscaped:
 		return singleQuotedEscaped(v)
@@ -118,7 +165,7 @@ func (r *Runner) quoteListedValue(style ListingQuotingStyle, what, v string) str
 		return singleQuoted(v, `'"'"'`, true)
 	case ListingQuoteWhenNeededDollar:
 		switch {
-		case hasControl(v):
+		case r.listedNeedsDollar(v):
 			return r.dollarQuoted(v)
 		case strings.ContainsRune(v, '\''):
 			return r.dollarQuoted(v)
@@ -128,7 +175,7 @@ func (r *Runner) quoteListedValue(style ListingQuotingStyle, what, v string) str
 		return singleQuoted(v, `'\''`, true)
 	case ListingQuoteWhenNeededEscaped:
 		switch {
-		case hasControl(v):
+		case r.listedNeedsDollar(v):
 			return r.dollarQuoted(v)
 		case r.valueListsBare(v):
 			return v
@@ -136,7 +183,7 @@ func (r *Runner) quoteListedValue(style ListingQuotingStyle, what, v string) str
 		return singleQuotedEscaped(v)
 	case ListingQuoteWhenNeededRuns:
 		switch {
-		case hasControl(v):
+		case r.listedNeedsDollar(v):
 			return r.dollarQuoted(v)
 		case r.valueListsBare(v):
 			return v
@@ -148,7 +195,7 @@ func (r *Runner) quoteListedValue(style ListingQuotingStyle, what, v string) str
 		}
 		return singleQuoted(v, `'\''`, true)
 	case ListingQuoteAlwaysDouble:
-		if hasControl(v) {
+		if r.listedNeedsDollar(v) {
 			return r.dollarQuoted(v)
 		}
 		return doubleQuoted(v)
@@ -162,12 +209,12 @@ func (r *Runner) quoteListedValue(style ListingQuotingStyle, what, v string) str
 // listedValueIsBare reports whether a value can be listed with no quotes at
 // all, which the styles that ask only do for a value made of ordinary
 // characters.
-func listedValueIsBare(v string) bool {
+func (r *Runner) listedValueIsBare(v string) bool {
 	if v == "" {
 		return false
 	}
 	for i := 0; i < len(v); i++ {
-		if !listedByteIsOrdinary(v[i]) {
+		if !r.listedByteIsOrdinary(v[i]) {
 			return false
 		}
 	}
@@ -176,8 +223,70 @@ func listedValueIsBare(v string) bool {
 
 // listedByteIsOrdinary is one character a listing may leave unquoted whatever
 // stands around it.
-func listedByteIsOrdinary(c byte) bool {
-	return isLetter(c) || isDigit(c) || strings.IndexByte("_-./:@+,%^", c) >= 0
+//
+// Most of the set is unanimous — letters, digits, `_ - . / : @ + , %`, and
+// every shell metacharacter quoted — and three bytes are not. Measured
+// 2026-09-14, `env -i` with a scratch HOME, over `set`, a keyed `typeset -p`
+// and an alias listing alike, which agree within each column:
+//
+//	              ! bare   ^ bare   = bare   a non-ASCII byte bare
+//	bash 5.3.15   no       no       yes      yes
+//	ksh93u+       yes      yes      *        no — `$'\xNN'`, byte by byte
+//	zsh 5.9.2     yes      no       no       yes
+//
+// No two columns group the same way, and no two *bytes* group the same way
+// either — which is why these are four questions and not one. ksh93's `=` is a fourth answer rather than the other side of a
+// switch — a leading `name=` is bare and the rest is quoted on its own — and
+// is ListedAssignmentPrefixIsBare, asked before the style (#2820).
+//
+// dash and BusyBox ash are not in the table because they are not asked: every
+// listing style either of them uses quotes whatever it is given, so `'^'`,
+// `'a=b'` and `'é'` there say nothing about this set. Their answers are left
+// unanswered rather than guessed from a neighbor.
+//
+// Read rather than asked, and the answer a dialect has not given is the one
+// that quotes: a listing that quotes more than it must still reads back, and
+// a listing that stopped to say the shells disagree would be a `set` with a
+// complaint in the middle of it.
+func (r *Runner) listedByteIsOrdinary(c byte) bool {
+	switch {
+	case isLetter(c) || isDigit(c) || strings.IndexByte("_-./:@+,%", c) >= 0:
+		return true
+	case c == '!':
+		return r.sem().ListedBangIsOrdinary == Yes
+	case c == '^':
+		return r.sem().ListedCaretIsOrdinary == Yes
+	case c == '=':
+		return r.sem().ListedEqualsIsOrdinary == Yes
+	case c >= 0x80:
+		return r.sem().ListedNonAsciiIsOrdinary == Yes
+	}
+	return false
+}
+
+// listedNeedsDollar reports whether a value has to be written in `$'...'`
+// rather than in quotes the shell can carry as themselves.
+//
+// A control byte, always — every style that reaches for the form does it for
+// one. And a non-ASCII byte in the one dialect that spells those out too:
+// measured, ksh93u+ writes `$'\xc3\xa9'` for a value, for a key and for an
+// alias body, where bash and zsh write the character itself and leave it
+// inside `$'...'` when a control byte put them there — `$'a\téb'` in both.
+// So the same answer decides whether such a byte is bare and whether it is
+// escaped, and there is one question rather than two.
+func (r *Runner) listedNeedsDollar(v string) bool {
+	if hasControl(v) {
+		return true
+	}
+	if r.sem().ListedNonAsciiIsOrdinary == Yes {
+		return false
+	}
+	for i := 0; i < len(v); i++ {
+		if v[i] >= 0x80 {
+			return true
+		}
+	}
+	return false
 }
 
 // valueListsBare is listedValueIsBare for the value of a *declaration*, where
@@ -187,14 +296,14 @@ func listedByteIsOrdinary(c byte) bool {
 // Asked only where the two answers differ: a value with no `#` in it, and one
 // whose `#` follows a name, are the same either way.
 func (r *Runner) valueListsBare(v string) bool {
-	if listedValueIsBare(v) {
+	if r.listedValueIsBare(v) {
 		return true
 	}
-	if hashDoesNotOpenTheValue(v) && r.ask(r.sem().ListedHashIsBareUnlessItOpensTheValue,
+	if r.hashDoesNotOpenTheValue(v) && r.ask(r.sem().ListedHashIsBareUnlessItOpensTheValue,
 		"a `#` in a listed value that does not open it") {
 		return true
 	}
-	if !hashIsAllThatNeedsQuoting(v) {
+	if !r.hashIsAllThatNeedsQuoting(v) {
 		return false
 	}
 	return r.ask(r.sem().ListedHashIsBareAfterANonName,
@@ -208,13 +317,13 @@ func (r *Runner) valueListsBare(v string) bool {
 // below asks what stands in front of the first `#`, and this one asks only
 // whether anything does. `a#b` is quoted under that rule and bare under this
 // one, which is exactly where the two shells part.
-func hashDoesNotOpenTheValue(v string) bool {
+func (r *Runner) hashDoesNotOpenTheValue(v string) bool {
 	hash := strings.IndexByte(v, '#')
 	if hash <= 0 {
 		return false
 	}
 	for i := 0; i < len(v); i++ {
-		if v[i] != '#' && !listedByteIsOrdinary(v[i]) {
+		if v[i] != '#' && !r.listedByteIsOrdinary(v[i]) {
 			return false
 		}
 	}
@@ -238,13 +347,13 @@ func hashDoesNotOpenTheValue(v string) bool {
 // this proposed: `99#zz` names no base and `16#gg` has no digits for the one
 // it names, and both are bare. What is quoted is a `#` that a *name* stands
 // in front of, or one that opens the value — where a comment would begin.
-func hashIsAllThatNeedsQuoting(v string) bool {
+func (r *Runner) hashIsAllThatNeedsQuoting(v string) bool {
 	hash := strings.IndexByte(v, '#')
 	if hash <= 0 || isNameLike(v[:hash]) {
 		return false
 	}
 	for i := 0; i < len(v); i++ {
-		if v[i] != '#' && !listedByteIsOrdinary(v[i]) {
+		if v[i] != '#' && !r.listedByteIsOrdinary(v[i]) {
 			return false
 		}
 	}
@@ -337,7 +446,7 @@ func (r *Runner) dollarQuoted(v string) string {
 			b.WriteString(`\'`)
 		case c == '\\':
 			b.WriteString(`\\`)
-		case c >= 0x20 && c != 0x7f:
+		case c >= 0x20 && c != 0x7f && (c < 0x80 || r.sem().ListedNonAsciiIsOrdinary == Yes):
 			b.WriteByte(c)
 		default:
 			b.WriteString(controlEscaped(style, c))

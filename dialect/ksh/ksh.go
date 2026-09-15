@@ -600,6 +600,23 @@ func Semantics() interp.Semantics {
 	// which is what says the leading text is judged and not the offset.
 	s.ListedHashIsBareUnlessItOpensTheValue = interp.No
 	s.ListingControlEscape = interp.ControlEscapeHex
+	// The column that leaves `^` bare, and the only one: `v=^` and `v=a^b`
+	// list unquoted here where bash and zsh write `'^'` and `'a^b'`.
+	// Measured 2026-09-14 over `set`, a keyed `typeset -p` and an alias
+	// listing, which agree (#2820).
+	// And `!`, which zsh leaves bare too and bash does not.
+	s.ListedBangIsOrdinary = interp.Yes
+	s.ListedCaretIsOrdinary = interp.Yes
+	// And the column that spells a byte above ASCII out: `$'\xc3\xa9'` for
+	// a value, for a key and for an alias body alike, where bash and zsh
+	// write the character. The same answer decides both halves — whether
+	// such a byte is bare, and whether it survives inside `$'...'`.
+	s.ListedNonAsciiIsOrdinary = interp.No
+	// `=` is not an ordinary byte here. What is bare is a leading `name=`,
+	// with the rest quoted on its own: `a=b` bare, `a='b c'`, `x='y=z'`,
+	// `'=x'` and `'1=2'`, keys included — `[a=b]` and `[x='y=z']`.
+	s.ListedEqualsIsOrdinary = interp.No
+	s.ListedAssignmentPrefixIsBare = interp.Yes
 	s.ExportListing = interp.DeclareListingCommandWord
 	s.ReadonlyListing = interp.DeclareListingCommandWord
 	// And the bare form is not the `-p` form here: the command word goes and

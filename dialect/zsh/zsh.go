@@ -936,6 +936,22 @@ func Semantics() interp.Semantics {
 	s.ProducedParameterListing = interp.ProducedListingWithValue
 	s.DeclareValueQuoting = interp.ListingQuoteWhenNeededRuns
 	s.ListingControlEscape = interp.ControlEscapeCaret
+	// A byte above ASCII is written as itself — `v=é`, the key `[é]`, and
+	// `$'a\téb'` where a control byte opened the form — and `^` and `=` are
+	// not: `'^'`, `'a^b'`, `'a=b'`, `'x=y=z'`. Measured 2026-09-14 over
+	// `set`, a keyed `typeset -p` and an alias listing. This engine left `^`
+	// bare and quoted the non-ASCII byte, which is ksh93's answer to both
+	// and this shell's to neither (#2820).
+	// `!` is bare here and in ksh93 and quoted in bash, which is a third
+	// pairing again: `v=!`, `v=a!b` and the key `[!]` all unquoted.
+	s.ListedBangIsOrdinary = interp.Yes
+	s.ListedCaretIsOrdinary = interp.No
+	s.ListedEqualsIsOrdinary = interp.No
+	s.ListedNonAsciiIsOrdinary = interp.Yes
+	s.ListedAssignmentPrefixIsBare = interp.No
+	// unanswered OperatorAfterTheSubscriptListingIsBad: `${!name[@]}` is a
+	// bad substitution here in the *bare* form too, so there is no listing
+	// for an operator to come after. Measured 2026-09-14 (#2821).
 	// `export -p` is that same form narrowed to the exported names, not a
 	// listing that repeats its own command word: it writes the attribute
 	// letters, and it picks `typeset` where `export` will not carry the

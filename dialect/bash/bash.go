@@ -515,6 +515,20 @@ func Semantics() interp.Semantics {
 	// `#abcd` does not. It shows in `set` and not in `declare -p`, whose
 	// values are double-quoted whatever is in them (#2299).
 	s.ListedHashIsBareUnlessItOpensTheValue = interp.Yes
+	// The three bytes the panel does not agree about in a listed word.
+	// Measured 2026-09-14 over `set` and over a keyed `typeset -p`, which
+	// agree: `=` is ordinary here — `v=a=b` and the keys `[a=b]`, `[=x]`,
+	// `[1=2]`, `[x=y=z]` all bare — and so is a byte above ASCII, `v=é` and
+	// `[é]`, which stays itself inside a `$'...'` a control byte opened:
+	// `$'a\téb'`. `^` is not: `'^'` and `'a^b'`, where ksh93 leaves both
+	// bare. This engine had the ksh93 answer to all three (#2820).
+	s.ListedBangIsOrdinary = interp.No
+	s.ListedCaretIsOrdinary = interp.No
+	s.ListedEqualsIsOrdinary = interp.Yes
+	s.ListedNonAsciiIsOrdinary = interp.Yes
+	// And no bare assignment head: the `=` rule here is the character, not
+	// a prefix, so `x=y=z` is bare rather than `x='y=z'`.
+	s.ListedAssignmentPrefixIsBare = interp.No
 	s.ExportListing = interp.DeclareListingClustered
 	s.ReadonlyListing = interp.DeclareListingClustered
 	// The bare form is this shell's `-p` form exactly, in both builds and in

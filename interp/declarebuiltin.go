@@ -827,7 +827,7 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 			return r.declareMatching(name, args, f)
 		}
 	}
-	if f.function && !f.remove && len(args) > 0 && r.markingLetters(f.letters) {
+	if f.function && len(args) > 0 && r.markingLetters(f.letters) {
 		// Not a listing at all: this line *makes* the names functions whose
 		// bodies are read the first time they are called. See
 		// Runner.SetFunctionMarkedUndefined for the seam and
@@ -839,12 +839,14 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		// waiting, where this engine answered with a silent listing of a
 		// function that did not exist (#1753).
 		//
-		// The minus sign is required, and measured: `typeset +fu nm` is
-		// `invalid option(s)` in the shell that has the spelling, so the
-		// plus form is certainly not a marking. It is left to the
-		// names-only listing it already reached rather than refused here,
-		// which is a divergence of its own and not this one's to fix.
-		return r.markUndefinedFunctions(r, args, f.letters)
+		// Both signs come here and the hook is told which, because the two
+		// are the same record written and unwritten: `typeset +ft f` takes
+		// the tracing mark off in ksh93u+, measured, where `typeset +fu nm`
+		// is `invalid option(s)` in zsh. The refusing dialect never reaches
+		// this line — Diagnostics.MarkingUnderPlusRefusal is raised at the
+		// top of this function — so routing the plus form here costs it
+		// nothing and gives the shell that has one somewhere to put it.
+		return r.markUndefinedFunctions(r, args, f.letters, f.remove)
 	}
 	if f.function || f.funcNames {
 		// The function table rather than the variables, and the *sign* of
@@ -2670,6 +2672,15 @@ func (r *Runner) listedFunctionLine(name string, fn *syntax.FuncDecl) string {
 // goes through the printer, so the printer's fix does not reach it.
 // Measured 2026-09-08 on bash 5.3.15, bash 3.2.57, zsh 5.9.2 and ksh93u+.
 func (r *Runner) listedFunction(name string, fn *syntax.FuncDecl) string {
+	if _, ok := r.undefinedFunction(name); ok {
+		if row := r.diag().UndefinedFunctionListing; row != "" {
+			// A shell whose rendering of a name still waiting is a
+			// *declaration* rather than a body — no header, no braces, and
+			// so nowhere for the block form below to go. See
+			// Diagnostics.UndefinedFunctionListing.
+			return Wording(row, "", listedFunctionName(name))
+		}
+	}
 	body := syntax.PrintWith(fn.Body, r.functionLayout)
 	if text, ok := r.undefinedFunction(name); ok {
 		// A function whose body has not been read yet does not print its

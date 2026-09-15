@@ -203,7 +203,7 @@ func (r *Runner) optionLetters() string {
 	if r.nounset {
 		b.WriteByte('u')
 	}
-	if r.xtrace {
+	if r.tracing() {
 		b.WriteByte('x')
 	}
 	if r.noclobber {

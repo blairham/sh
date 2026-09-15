@@ -1827,7 +1827,11 @@ func Semantics() interp.Semantics {
 	// `-E` is here since #2559: it is the float **format**, `%.*g` with n
 	// significant digits, where zsh's same letter is `%.*e` with n−1 places.
 	// See interp/floatformat.go.
-	s.DeclareOptions = "aACEfHilmMnprTux"
+	// `-t` is here since #2192: on a `-f` line it traces the function, and
+	// on a variable line this shell has no meaning for it — which is why it
+	// stays in Diagnostics.UnimplementedOptionLettersOnAFunctionLine's
+	// opposite number rather than here alone. See fpath.go.
+	s.DeclareOptions = "aACEfHilmMnprtTux"
 	// And the number it takes, under this shell's own rule for a detached
 	// one: only where the letter ends its option word. `typeset -Ex 3
 	// a=3.14159` is `3: is not an identifier` here and the float in zsh.
@@ -1845,6 +1849,13 @@ func Semantics() interp.Semantics {
 	// usage block at 2, and the script ends there. zsh takes the pair and
 	// lets the first letter written win.
 	s.NumericTypeLettersAreExclusive = interp.Yes
+	// The letters a `-f` line marks a function with, both built since #2192:
+	// `-u` says the body is read from `$FPATH` at the first call and `-t`
+	// traces the function. See dialect/ksh/fpath.go, where the measurements
+	// are, and note that `t` names a mark that is not "undefined" — which is
+	// why interp.Runner.SetFunctionMarkedUndefined is handed the letters and
+	// not a digested request.
+	s.FunctionLettersThatMarkUndefined = "tu"
 	// `-m` is here now, and it is not the letter zsh spells the same way:
 	// it *moves* a parameter — `typeset -m new=old` — where the other
 	// shell selects several by pattern. Measured 2026-09-13 on ksh93u+;
@@ -1909,13 +1920,11 @@ func Semantics() interp.Semantics {
 	// `functions` is a word here as well as in zsh, and it is `typeset -f`
 	// under a second name — same listing, same status, same silence for a
 	// name nobody defined. The letters are narrower than `typeset`'s: this
-	// engine implements `-f` and `-p`, which are the two that reach the
-	// listing. Measured 2026-09-12, ksh93u+ also takes `-t` and `-u` there
-	// — tracing and autoloading from FPATH, neither of which this shell
-	// does — and answers the usage line for `-F`, `-m` and `-M`, which is
-	// what an unimplemented letter gets here too. See #2192 for the two
-	// that are missing.
-	s.FunctionsOptions = "fMp"
+	// engine implements `-f` and `-p`, which reach the listing, and `-t`
+	// and `-u`, which are the two marks a `-f` line puts on a function
+	// (#2192). ksh93u+ answers the usage line for `-F`, `-m` and `-M`,
+	// which is what an unimplemented letter gets here too.
+	s.FunctionsOptions = "fMptu"
 	// `integer` is the same declaration under a second name, and this shell
 	// hands it typeset's whole letter grammar — measured 2026-09-06, every
 	// letter typeset takes is either accepted by `integer` or refused by it
@@ -1929,7 +1938,7 @@ func Semantics() interp.Semantics {
 	// fatally, since these are special builtins there — where `typeset -f
 	// nm` on the same line lists. The word carries a type and a function
 	// has none.
-	s.IntegerOptions = "aACEHilmMnprTux"
+	s.IntegerOptions = "aACEHilmMnprtTux"
 	// `-i16` and `-i 16` are an output base here — `integer -i 16 b=255` is
 	// `16#ff` — and this engine has no base to keep, so it refuses by name.
 	s.IntegerAttributeTakesABase = interp.Yes
@@ -2506,7 +2515,7 @@ func Diagnostics() interp.Diagnostics {
 			// `-C` has left it as well: the compound-variable letter is
 			// built, and it is the declaration half of the kind `c=(a=1)`
 			// makes — see interp/compoundvariable.go (#2620).
-			"typeset": "-bFhstLRSXZ",
+			"typeset": "-bFhsLRSXZ",
 			// `functions` is `typeset -f` under a second name, so the
 			// letters it is missing are read off its own set: `-t` traces a
 			// function and `-u` marks one to be read from `$FPATH`, both of
@@ -2524,7 +2533,11 @@ func Diagnostics() interp.Diagnostics {
 			// and `functions -m` are the usage line on ksh93u+, so that
 			// shell has not got them either and "unknown" is the truth.
 			// See #2192.
-			"functions": "-tu",
+			// `-t` and `-u` have left this list: they are the two marks a
+			// `-f` line puts on a function and are built since #2192 — see
+			// fpath.go. `-M` is a character mapping rather than zsh's math
+			// facility and is what is left, along with the letters below.
+			"functions": "",
 			// `integer` reads typeset's letters, so it is missing exactly
 			// the ones typeset is missing — including the `--version` this
 			// shell answers on both names.
@@ -2553,7 +2566,7 @@ func Diagnostics() interp.Diagnostics {
 			// `-C` leaves this list with the one above it, for the reason
 			// every letter here shares one: `integer` reads typeset's whole
 			// grammar.
-			"integer": "-bFhstLRSXZ",
+			"integer": "-bFhsLRSXZ",
 		},
 		// `-u` on a `-f` line, which is the one letter that cannot go in
 		// the list above: it is also the upper-case attribute, and this
@@ -2579,9 +2592,12 @@ func Diagnostics() interp.Diagnostics {
 		// the ksh93 rendering of a marked name — `typeset -f nm` writes
 		// `typeset -fu nm`, a declaration with no body, where the
 		// Runner.SetUndefinedFunctions seam hands back a *block*.
-		UnimplementedOptionLettersOnAFunctionLine: map[string]string{
-			"typeset": "u",
-		},
+		// Nothing is left here: `-u` reads a body from `$FPATH` and `-t`
+		// traces, and both are built since #2192. The table stays because
+		// the *position* is the distinction it exists for — a letter this
+		// shell has on a variable line and not on a function one — and the
+		// next such letter goes here rather than into a second table.
+		UnimplementedOptionLettersOnAFunctionLine: map[string]string{},
 		// ksh93's one sentence for a dead -u descriptor, the number not
 		// named; the non-number wordings per letter are not modeled yet, so
 		// those fall back to the substrate's.
@@ -2624,6 +2640,14 @@ func Diagnostics() interp.Diagnostics {
 		// give back the one it was handed (#1494, #1406).
 		FunctionListingHeader:        "%[1]s()%[2]s",
 		FunctionListingKeywordHeader: "function %[1]s %[2]s",
+		// And `whence -v` says what a name still waiting for its body is,
+		// which is neither a function nor nothing: measured, `typeset -fu
+		// zz; whence -v zz` is `zz is an undefined function`.
+		TypeUndefinedFunction: "%[1]s is an undefined function",
+		// And a name still waiting for a body is a *declaration* and not a
+		// listing at all: measured, `typeset -fu nm; typeset -f nm` is
+		// `typeset -fu nm` with no header and no braces. See fpath.go.
+		UndefinedFunctionListing: "typeset -fu %[1]s",
 		// Both headers are the fallback rather than the ordinary path now:
 		// what this shell really writes is the definition's own source text,
 		// terminator and all, and the parser keeps it — see
@@ -3128,6 +3152,9 @@ func Apply(r *interp.Runner) {
 	// And `nameref` is `typeset -n` under a second word, on the same terms
 	// and for the same reason. See interp/namerefbuiltin.go.
 	r.Register("nameref", interp.NamerefBuiltin())
+	// The two marks a `-f` line puts on a function: `-u` reads the body from
+	// `$FPATH` at the first call, and `-t` traces it. See fpath.go.
+	registerFPath(r)
 	// The assignment rule follows this name too: `nameref r=v` is a
 	// declaration's operand and not a word to split.
 	r.SetDeclaring("nameref")

@@ -68374,6 +68374,108 @@
         "TimedOut": false
       }
     },
+    "declare/a-traced-function-does-not-trace-what-it-calls": {
+      "ash": {
+        "Stdout": "g~f~out",
+        "Stderr": "\u003cshell\u003e: typeset: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "g~f~out",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "g~f~out",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "g~f~out",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"}\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "g~f~out",
+        "Stderr": "+ g~+ echo f",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "g~f~out",
+        "Stderr": "+f:0\u003e g~+g:0\u003e echo g~+f:0\u003e echo f",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/a-traced-function-is-a-keyword-one": {
+      "ash": {
+        "Stdout": "in~mid~two~out",
+        "Stderr": "\u003cshell\u003e: typeset: not found~\u003cshell\u003e: typeset: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "in~mid~two~out",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "in~mid~two~out",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "in~mid~two~out",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"}\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "in~mid~two~out",
+        "Stderr": "+ echo in",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "in~mid~two~out",
+        "Stderr": "+f:0\u003e echo in~+g:0\u003e echo two",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "declare/a-type-letter-beside-an-array-literal": {
       "ash": {
         "Stdout": "",
@@ -70255,6 +70357,57 @@
       },
       "zsh": {
         "Stdout": "st=0 [v]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/an-fpath-file-that-defines-nothing": {
+      "ash": {
+        "Stdout": "\u003cshell\u003e: bb: not found~after=127",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "\u003cshell\u003e: line 1: bb: command not found~after=127",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "\u003cshell\u003e: line 1: bb: command not found~after=127",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "\u003cshell\u003e: bb: command not found~after=127",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "\u003cshell\u003e: 1: bb: not found~after=127",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "bare body",
+        "Stderr": "\u003cshell\u003e: function, built-in or type definition for bb not found in \u003ctmp\u003e/fns/bb",
+        "Status": 126,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "bare body~after=0",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -75763,6 +75916,57 @@
       },
       "zsh": {
         "Stdout": "typeset -a arr=( x y )~typeset -A m=( [k]='a b' )",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/reading-a-function-body-out-of-fpath": {
+      "ash": {
+        "Stdout": "mark=127~\u003cshell\u003e: typeset: not found~\u003cshell\u003e: zz: not found~call=127",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "mark=1~\u003cshell\u003e: line 1: zz: command not found~call=127",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "mark=1~\u003cshell\u003e: line 1: zz: command not found~call=127",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "mark=2~\u003cshell\u003e: zz: command not found~call=127",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "mark=127~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: zz: not found~call=127",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "mark=0~typeset -fu zz~zz def hello~call=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "mark=0~zz () {~\t# undefined~\tbuiltin autoload -X~}~zz def hello~call=0",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

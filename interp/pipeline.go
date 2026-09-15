@@ -345,7 +345,7 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 	// One gate per element, so element i prints after i-1 has. Only the
 	// trace point is ordered; the commands still run at the same time.
 	var gates []chan struct{}
-	if r.xtrace {
+	if r.tracing() {
 		gates = make([]chan struct{}, n)
 		for i := range gates {
 			gates[i] = make(chan struct{})

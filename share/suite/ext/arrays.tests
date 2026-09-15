@@ -10,13 +10,33 @@
 # the per-dialect directories with the answer each shell actually gives.
 # What is common is construction, length, iteration, the two joins and
 # appending.
+#
+# It is also every associative array in the tier, which the first version of
+# this file had none of. A key is a *string*, so nothing about the base index
+# reaches it: `m[one]` is `m[one]` in all three, and the whole construct is
+# askable where a numeric subscript is not. The one thing that is not is the
+# order a shell keeps its keys in — bash hands back a three-key map's values
+# in the reverse of the order zsh and ksh93 do — so every case below that
+# iterates establishes the order itself, by naming the keys or by sorting what
+# comes out.
+#
+# Held out, and each is somebody's own answer rather than a shared one:
+# `${!m[@]}`, which bash and ksh93 answer with the keys and zsh with nothing;
+# `${m[*]}` joined, for the ordering above; `declare`, which ksh93 does not
+# have at all; `readonly -a`, which ksh93 refuses and ends the script over;
+# and a sparse index or an `unset` of one element, where zsh has a list and
+# the other two have a map (zsh/arrays.tests).
 
 a=(one two three)
 printf '%s\n' "count: ${#a[@]}"
 printf '[%s]\n' "${a[@]}"
 
-# Unquoted [@] splits on IFS after expansion; quoted [@] is one word per
-# element however the elements are spelled.
+# Quoted [@] is one word per element however the elements are spelled. The
+# unquoted form is not asked and the comment here used to claim it splits on
+# IFS: measured, `printf '[%s]\n' ${a[@]}` on `a=("x y" z)` prints three
+# words in bash and ksh93 and two in zsh, because zsh does not split an
+# unquoted expansion. That is the word-splitting axis wearing an array as a
+# costume, and it belongs where the axis is.
 b=("has space" "two words" plain)
 printf 'quoted:\n'
 printf '  [%s]\n' "${b[@]}"
@@ -72,3 +92,115 @@ printf 'two empties: %s\n' "${#d[@]}"
 # unset removes the whole array.
 unset a
 printf 'after unset: %s\n' "${#a[@]}"
+
+# ---- the operators that apply to a whole array ----
+
+# A pattern operator written on `[@]` is applied to every element and yields
+# one word per element, not one joined word with the pattern removed once.
+# Printed through a format that repeats, so the count is visible as lines.
+w=(alpha beta gamma)
+printf 'count @ %s, count * %s\n' "${#w[@]}" "${#w[*]}"
+printf 'prefix [%s]\n' "${w[@]#a}"
+printf 'suffix [%s]\n' "${w[@]%a}"
+printf 'substitute [%s]\n' "${w[@]/a/A}"
+printf 'default [%s]\n' "${w[@]:-would be one word}"
+
+# A slice by offset is the one positional thing about an array that is *not*
+# the base question. `${w[@]:1}` drops the first element in all three, zsh
+# included — which is worth a case precisely because `w[1]` is the first
+# element there and the second in the ksh family.
+printf 'from one [%s]\n' "${w[@]:1}"
+printf 'one of them [%s]\n' "${w[@]:1:1}"
+printf 'star slice [%s]\n' "${w[*]:1}"
+
+# An array through a function's argument list, which is where "$@" and
+# "${a[@]}" meet: one word per element, spaces and all.
+q=(one "two words" three)
+count() { printf 'argc %s\n' "$#"; for x in "$@"; do printf '  [%s]\n' "$x"; done; }
+count "${q[@]}"
+printf 'through a substitution [%s]\n' "$(printf '<%s>' "${q[@]}")"
+
+# ---- declaring one ----
+
+# `typeset -a` names an array before it has elements, and takes a value on the
+# same line. `declare` is not asked: ksh93 has no such builtin, so the two
+# spellings are not one question. Nor is `readonly -a`, which ksh93 refuses
+# outright and ends the script over.
+typeset -a t
+t=(x y)
+printf 'declared, then assigned: %s [%s]\n' "${#t[@]}" "${t[*]}"
+typeset -a u=(m n o)
+printf 'declared with a value: %s [%s]\n' "${#u[@]}" "${u[*]}"
+
+# ---- associative arrays ----
+
+# The construct the whole ext tier is supposed to cover and which nothing in
+# it asked. A key is a string, so none of the base-index trouble that keeps
+# numeric subscripts out of this file applies: `m[one]` is `m[one]` in every
+# shell that has one.
+typeset -A m
+m[one]=1
+m[two]=2
+printf 'one=[%s] two=[%s] count=%s\n' "${m[one]}" "${m[two]}" "${#m[@]}"
+
+# A key held in a variable, and a key with a blank in it — which needs the
+# quoting, because an unquoted subscript is a pattern in zsh and `m[with
+# space]` is a parse error there.
+k='with space'
+m[$k]=spaced
+printf 'via a variable=[%s]\n' "${m[$k]}"
+m['single quoted key']=sq
+m["double quoted key"]=dq
+printf 'single=[%s] double=[%s]\n' "${m['single quoted key']}" "${m["double quoted key"]}"
+printf 'count now=%s\n' "${#m[@]}"
+
+# Assignment replaces rather than adds, and the count says so.
+m[one]=replaced
+printf 'replaced=[%s] count=%s\n' "${m[one]}" "${#m[@]}"
+
+# A key that was never set is unset rather than empty, and the two expansions
+# that tell those apart work on an element.
+printf 'absent default=[%s]\n' "${m[nokey]-fallback}"
+printf 'absent set?=[%s]\n' "${m[nokey]+yes}"
+printf 'present set?=[%s]\n' "${m[two]+yes}"
+
+# The operators that apply to a scalar apply to an element.
+m[digits]=12345
+printf 'element length=%s\n' "${#m[digits]}"
+printf 'element strip=[%s]\n' "${m[digits]#1}"
+printf 'element colon-default=[%s]\n' "${m[zz]:-none}"
+
+# The literal form, and `+=` adding a key to what is already there.
+typeset -A lit
+lit=([k1]=v1 [k2]=v2)
+printf 'literal count=%s k1=[%s] k2=[%s]\n' "${#lit[@]}" "${lit[k1]}" "${lit[k2]}"
+lit+=([k3]=v3)
+printf 'after += count=%s k3=[%s]\n' "${#lit[@]}" "${lit[k3]}"
+
+# Iterating. The *order* a shell keeps its keys in is the shell's own — bash
+# hands back the values of a three-key map in the reverse of the order zsh and
+# ksh93 do — so a case that iterates has to establish the order itself. Two
+# ways: name the keys, or sort what comes out. `${m[*]}` joined is held out
+# for the same reason, and `${!m[@]}` with it, which bash and ksh93 answer
+# with the keys and zsh with nothing at all.
+typeset -A it
+it[x]=1
+it[y]=2
+it[z]=3
+out=
+for key in x y z; do out="$out<$key=${it[$key]}>"; done
+printf 'named order: %s\n' "$out"
+printf 'sorted values: [%s]\n' "$(printf '%s\n' "${it[@]}" | sort | tr '\n' ' ')"
+printf 'element count: %s\n' "$(printf '%s\n' "${it[@]}" | wc -l | tr -d ' ')"
+
+# An element set inside a function is set afterwards: an associative array is
+# the shell's, like any other variable, unless something made it local.
+typeset -A fn
+fn[before]=yes
+setter() { fn[inside]=set; printf 'from the function [%s]\n' "${fn[inside]}"; }
+setter
+printf 'after the function [%s] count=%s\n' "${fn[inside]}" "${#fn[@]}"
+
+# `unset` on the whole name takes the map with it.
+unset m
+printf 'after unset [%s] count=%s\n' "${m[one]-gone}" "${#m[@]}"

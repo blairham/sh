@@ -8,6 +8,13 @@
 # zsh counts from one. This file is the rest: the base, the slices, the
 # search subscripts, and the whole-array-as-a-word rule that follows from
 # zsh not splitting.
+#
+# And the length, which is the same difference one step on. zsh has no sparse
+# array: an index is a position in a list rather than a key in a map, so a gap
+# is filled with empty elements and removing one leaves the slot behind. bash
+# and ksh93 keep a set of indices and the count follows what is in it. That is
+# at the end of the file, and it is the half a script notices — `${#a[@]}` is
+# what a loop bound is written from.
 
 a=(one two three four)
 
@@ -73,3 +80,23 @@ m[two]=2
 printf '%s\n' "$m[one]"
 printf '%s\n' "${#m}"
 printf '%s\n' "${(k)m[(r)2]}"
+
+# ---- a gap, and a hole ----
+
+# Assigning past the end is asked above; what is not is the *count*. zsh has no
+# sparse array: the indices in between become elements, so a four-element array
+# with something at seven has seven elements and three of them are empty. bash
+# and ksh93 keep four and remember which indices they were.
+g=(one two three)
+g[7]=seven
+printf 'count after a gap: %s\n' "${#g[@]}"
+printf 'the gap is elements: [%s][%s][%s]\n' "$g[4]" "$g[5]" "$g[6]"
+printf 'sorted contents: [%s]\n' "$(printf '%s\n' "${g[@]}" | sort | tr '\n' ' ')"
+
+# The same rule read from the other end: `unset` on an element empties the slot
+# and leaves the array the length it was. bash and ksh93 take the element out
+# and the count drops.
+h=(p q r)
+unset 'h[1]'
+printf 'count after removing one: %s\n' "${#h[@]}"
+printf 'the slot is still there: [%s][%s][%s]\n' "$h[1]" "$h[2]" "$h[3]"

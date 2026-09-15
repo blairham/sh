@@ -21350,6 +21350,16 @@ echo "st=$?"`,
 		Why:     "a directory is `is a directory` and 1 until `-r` asks for it, and then everything below goes before the directory does. The `-p` on the way in is the other half of the same module and is what makes the tree deeper than one level",
 	},
 	{
+		ID: "vared/editing-a-variable-without-a-terminal", Category: "builtins",
+		Snippet: `v=x; vared v 2>&1; echo "set=$?"; vared nosuch 2>&1; echo "missing=$?"; vared 2>&1; echo "none=$?"; vared 1bad 2>&1; echo "name=$?"`,
+		Why:     "`vared` edits a variable's value with the line editor, and **every run without a terminal ends at `can't access terminal`** — measured with standard input closed and again with a pipe on it, which is what makes the refusals beside it the whole of the builtin for a script rather than a subset of it. The three that come first are its own: no operand, a name nothing has set, and a word starting with a digit. One shell has the word; bash, dash and BusyBox ash record `command not found`, which is what this engine said until #1405",
+	},
+	{
+		ID: "vared/the-kind-letters-mean-nothing-without-the-create-letter", Category: "builtins",
+		Snippet: `v=x; vared -a v 2>&1; echo "alone=$?"; vared -c -a nosuch 2>&1; echo "creating=$?"; vared -aA v 2>&1; echo "both=$?"`,
+		Why:     "`-a` and `-A` say what *kind* of variable to create, so they mean something only beside `-c`: without it the letter is `-a ignored` and the line goes on, and with it there is no warning at all. The pair is the discrimination — a shell that took the letter and said nothing would pass the second field and lose the first — and the third is the one shape that refuses the line outright",
+	},
+	{
 		ID: "files/a-link-on-the-way-to-the-name", Category: "builtins",
 		Snippet: `cd "$(pwd -P)"; zmodload zsh/files; zf_mkdir real; printf x > real/passwd; zf_ln -s "$PWD/real" link; zf_rm -s link/passwd; echo "paranoid=$?"; [ -e real/passwd ] && echo kept; zf_rm link/passwd; echo "plain=$?"; [ -e real/passwd ] || echo gone`,
 		Why:     "the manual's own example of what `-s` is for, and the whole of what the letter is measured to change: `rm /tmp/foo/passwd` must not remove what `foo` points at. The link here is `link` and not `passwd` — the letter is about the components *on the way to* a name — and the pair is the discrimination, because the same line without it removes the file. The `cd \"$(pwd -P)\"` is not decoration: a temporary directory is under `/var` on this machine and `/var` is a link to `/private/var`, so every operand under one is reached through a link and `-s` refuses the lot, in the real shell as much as here. This engine refused the letter by name until #1669",

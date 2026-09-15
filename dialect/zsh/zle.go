@@ -209,9 +209,11 @@ import (
 //     repl.Actions and callBuiltinWidget below. Which two are refused is
 //     repl's answer and not this file's — see repl's performable.
 //
-// `vared` is left out entirely, and so are `zcompile` and `zregexparse`: the
-// first two are separate features and the third belongs with the completion
-// system, which this shell has not got.
+// `vared`, `zcompile` and `zregexparse` are not here, and the three took
+// three different answers rather than one (#1405): `zcompile` is built and is
+// in zcompile.go, `vared` is built as far as a script can see it and is in
+// vared.go, and `zregexparse` belongs with the completion system, which this
+// shell has not got.
 
 // zleStore is the widget table: a flat array of triples, widget name, then
 // the function behind it, then the builtin completion widget a `-C`

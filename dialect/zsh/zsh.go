@@ -3605,6 +3605,14 @@ func Apply(r *interp.Runner) {
 	// absent — and `zmodload zsh/zutil` loads anyway, because a missing
 	// builtin refuses by name at the word that runs it. See zparseopts.go,
 	// zformat.go and the rule at the top of zmodload.go.
+	//
+	// #1405 asked for it beside `vared` and `zcompile` and said to order the
+	// three by evidence. Swept over `~/.zi` and the installed function
+	// directories on this machine: `zcompile` in 25 files, `vared` in 3,
+	// `zregexparse` in **none**. It is absent because the rest of completion
+	// is — #1282 recorded that `compinit` is not close, the file being
+	// refused and `zmodload zsh/complete` refusing by name — so the one
+	// parser would be reachable by nothing.
 	registerZparseopts(r)
 	registerZformat(r)
 	// And the line editor's key table, which a real rc file also reaches for.
@@ -3623,6 +3631,9 @@ func Apply(r *interp.Runner) {
 	// builtin under the same spelling — job control decides nothing here and
 	// the statuses differ. See suspend.go.
 	registerSuspend(r)
+	// Editing a variable with the line editor: everything a script outside a
+	// session sees, which is all of it without a terminal. See vared.go.
+	registerVared(r)
 	// The module loader, which answers per module rather than pretending to
 	// load anything. See zmodload.go.
 	registerZmodload(r)

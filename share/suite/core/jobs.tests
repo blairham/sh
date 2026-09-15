@@ -69,7 +69,9 @@
 #     `head -n 1 gate` is a job that is a process with a pid as soon as it
 #     starts; `head -n 1 < gate` is a job whose redirection is opened first,
 #     so `$!` names something that is not there to be signalled yet — which
-#     is the pid the `kill -0` case below needs rather than the job.
+#     is the pid the `kill -0` case below needs rather than the job. Every
+#     reference forks first and opens in the child, so this spelling costs
+#     them nothing; it is ours that needs it (#2994).
 #
 # Still held out, and now with the file each went to: `kill` on a job
 # specification, which dash refuses entirely (dash/jobs.tests); `disown`,
@@ -140,8 +142,8 @@ wait "$a"; printf 'older by pid -> %s\n' "$?"
 #
 # The third job is held open on a fifo rather than allowed to finish, and the
 # question is asked of `jobs` rather than of `wait`, because `wait %1` on a
-# job that has already ended is not a question any reference repeats — see
-# the note at the end of this file (#2974). Held open, the job is certainly
+# job that has already ended is not a question any reference repeats — the
+# header says what that costs and why (#2974). Held open, the job is certainly
 # in the table, and what `%1` names is then a fact rather than a window:
 # either the number came back to the new job or it is still on one of the two
 # this file has already waited for, and the two listings are not the same
@@ -249,8 +251,8 @@ printf 'the outer shell -> %s\n' "$?"
 #
 # The statuses come from `wait` on the pids. `wait %%` is what these two
 # lines used to be, and it is not askable: it needs the job to have ended
-# first, and by then whether the shell still has it is wall-clock — see the
-# note at the end of this file (#2974).
+# first, and by then whether the shell still has it is wall-clock. The
+# header holds that one out and says what it would have measured (#2974).
 mkfifo older newer
 { head -n 1 older > /dev/null; exit 7; } &
 o=$!
@@ -329,7 +331,8 @@ nohup false > /dev/null 2>&1; printf 'nohup false -> %s\n' "$?"
 # is released with a line rather than with an end of file. Both are the
 # file's house spelling and both are explained in the header; this is the
 # case the first of them exists for, because it is the one that asks about
-# the pid rather than about the job.
+# the pid rather than about the job, and this shell is the only column that
+# needs it that way round (#2994).
 mkfifo held
 { head -n 1 held > /dev/null; exit 0; } &
 p=$!

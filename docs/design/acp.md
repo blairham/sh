@@ -327,11 +327,15 @@ Three things follow, and each is a rule rather than a preference:
    other way round: the agent named the choices, so a choice it did not name is
    not one.
 
-Measured against Gemini CLI 0.58.0, `authenticate` with `gemini-api-key` is
-answered `{"result":{}}` and `session/new` then still answers `-32000` —
-because the machine has no Gemini credential, which is a human action rather
-than code. The end-to-end verification is **#729**; the client-side method is
-this.
+Measured against Gemini CLI 0.58.0, `authenticate` with `gemini-api-key` was
+answered `{"result":{}}` and `session/new` then still answered `-32000` —
+because the machine had no Gemini credential, which is a human action rather
+than code.
+
+**That is no longer the state.** With a `GEMINI_API_KEY` in the environment,
+0.59.0 completes the whole thing: `authenticate` with `gemini-api-key`, then
+`session/new`, then a turn that answers. The end-to-end verification was #729
+and it is done; see *The fifth stage, as amended* below for the transcript.
 
 The shapes for all of this were taken from the machine-readable schema shipped
 with `@agentclientprotocol/sdk`, which is where `AuthMethodTerminal`,
@@ -999,10 +1003,12 @@ The lesson is still sound — Gemini's `-32601` for every optional method
 is the same shape — but the Claude half of its evidence is historical and
 is marked as such there.
 
-Gemini CLI is still unmeasured and #729 is still the reason: this machine
-has a `~/.gemini` with no credential in it. That is worth stating plainly
-rather than leaving as an old row, because Gemini is the one agent whose
-behavior the client-side thesis most wants to know.
+Gemini CLI **is** measured now (#729). It was not for as long as it was
+because this machine had a `~/.gemini` with no credential in it, which is a
+human action rather than code; a key was supplied on 2026-09-15 and the round
+trip completed the same day. Gemini is the one agent whose behavior the
+client-side thesis most wants to know, so the rows below are its own rather
+than an extrapolation from the other two.
 
 Four things a client has to be built around, none of which is visible
 from the specification alone:
@@ -1057,8 +1063,18 @@ from the specification alone:
    agent *asks* for, and an adapter that shells out for itself asks for
    nothing. `terminal/*` is what makes the honest route exist, and
    whether an agent takes it is the agent's. Gemini CLI is native ACP
-   rather than an adapter and is the one most likely to; measuring that
-   needs a credential and is **#729**.
+   rather than an adapter and is the one most likely to.
+
+   **That is still unmeasured, and the reason has changed.** It used to
+   need a credential, which is what #729 was; the credential exists now
+   and the file half is measured (see the client-side section). The
+   terminal half is not, because every attempt on 2026-09-15 was refused
+   by the model rather than by the protocol -- five consecutive `503
+   UNAVAILABLE`, "this model is currently experiencing high demand", on
+   the turn that would have asked for a command. So what is missing is a
+   quiet hour, not a key. Worth re-running rather than re-deriving: the
+   question is whether Gemini asks us through `terminal/*` or forks for
+   itself, and only the first leaves an argv any gate can see.
 
    The consequence for a person is worth stating plainly, and the
    re-measurement turned it around: against the two adapters measured
@@ -1223,10 +1239,12 @@ genuinely the maintainer's.
 ### The fifth stage, as amended
 
 That last line said "against all three agents", and read literally it meant
-three completed round trips. Two of them complete; the third needs a Gemini
-credential, which is a human action nobody working on this repository can
-perform on somebody else's account — so the initiative was blocked on
-something that is not code and would have held the first tag with it.
+three completed round trips. For a long time two of them completed and the
+third needed a Gemini credential, which is a human action nobody working on
+this repository can perform on somebody else's account — so the initiative was
+blocked on something that is not code and would have held the first tag with
+it. **All three complete now**; what follows is the amended bar, which was met
+before the credential arrived, and then the round trip itself.
 
 **Decided by the maintainer, 2026-09-06: Gemini's credential is #729 at P2 and
 does not block v0.0.0.** The criterion becomes:
@@ -1256,6 +1274,56 @@ sh: the method was settled, so what is missing is the credential behind it
 sh: rather than the choice of method — supply it outside this shell.
 sh:   gemini-api-key [agent] (Gemini API key): Use an API key with Gemini Developer API   <- the one -acp-auth named
 ```
+
+### And then the credential arrived
+
+Measured 2026-09-15 against **Gemini CLI 0.59.0**, with a `GEMINI_API_KEY` in
+the environment and the prompt on standard input:
+
+```
+$ printf 'Reply with exactly: ACP_ROUND_TRIP_OK\n' \
+    | sh -acp-allow -acp-auth gemini-api-key \
+         -acp-connect npx -y @google/gemini-cli --acp -m gemini-2.5-flash
+sh: connected to gemini-cli 0.59.0, protocol 1
+sh: agent available_commands_update
+ACP_ROUND_TRIP_OK
+```
+
+`initialize`, `authenticate`, `session/new` and a turn that answers — the same
+four steps Claude Agent and Codex already completed, on the one agent that
+speaks ACP natively rather than through an adapter.
+
+**The gated half works too, which is the claim `-acp-connect` exists to make.**
+Asked to read a file, the agent asks *this shell* for it and the answer comes
+back through our gate:
+
+```
+$ echo the-secret-marker-42 > note.txt
+$ printf 'Read the file note.txt in this directory and reply with exactly its contents, nothing else.\n' \
+    | sh -acp-allow -acp-auth gemini-api-key \
+         -acp-connect npx -y @google/gemini-cli --acp --skip-trust -m gemini-2.5-flash
+sh: connected to gemini-cli 0.59.0, protocol 1
+sh: agent agent_thought_chunk
+the-secret-marker-42
+```
+
+Three things measured on the way in are worth carrying, because each cost a
+run and none is in the specification:
+
+1. **`~/.gemini/.env` is not read.** 0.59.0's own diagnostic says "no reload
+   needed if using .env", but a key written there was not picked up and the
+   agent still refused with `GEMINI_API_KEY` unset. The environment variable
+   is what works. Worth knowing before concluding a key is bad.
+2. **A 503 from the model is not an authentication failure and does not look
+   like one.** The first completed handshake still failed the turn with
+   `"This model is currently experiencing high demand"` after two backoff
+   retries — on the default model. Naming a lighter one with `-m
+   gemini-2.5-flash` answered immediately. A client author reading only the
+   turn's failure would reasonably blame the credential.
+3. **Tool use needs the workspace trusted.** Without `--skip-trust` the agent
+   prints `Skipping project agents due to untrusted folder`, and a turn that
+   needs to read a file produces a thought and then nothing. The round trip
+   itself does not need it; anything that asks us for a file does.
 
 **Why that second one was work rather than wording.** Gemini answers
 `authenticate` with `{}` and then refuses `session/new` anyway, so the old

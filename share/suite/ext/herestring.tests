@@ -63,3 +63,55 @@ takes <<< 'passed in'
 # several arguments to the redirection, which is a syntax error rather than a
 # concatenation, so the portable spelling is the quoted one.
 cat <<< "$(printf 'a b c')"
+
+# --- what the word is --------------------------------------------------------
+#
+# The word is expanded exactly once and is not split, so a value holding
+# blanks arrives as one line rather than as several. That is the difference
+# between `<<< $v` and `<<< $(printf '%s' "$v")` in a shell that splits, and
+# it is worth pinning rather than assuming.
+
+v='a b  c'
+cat <<< $v
+cat <<< "$v"
+printf 'read into one name: '
+read -r whole <<< $v
+printf '[%s]\n' "$whole"
+
+# An expansion operator on the word works the way it would anywhere else.
+p=/one/two/three
+cat <<< "${p##*/}"
+cat <<< "${p%/*}"
+cat <<< "$(( 6 * 7 ))"
+
+# --- ordering against the command's other redirections ----------------------
+#
+# A herestring beside another redirection of the standard input is
+# deliberately not asked. In bash and ksh93 the later one replaces the
+# earlier, in either order; zsh's MULTIOS turns a second redirection of one
+# descriptor into a second *source* and concatenates them, so `cat < src <<<
+# word` reads both. That is share/suite/zsh/redirect.tests' rule reaching this
+# operator, and it is two against one rather than an ext claim.
+#
+# What is common is the narrower statement: the redirection applies to the
+# command it is written on and to no other.
+cat <<< 'only this command'
+printf 'the next command reads its own input: [%s]\n' "$(printf 'own' | cat)"
+
+# --- what it is not ----------------------------------------------------------
+#
+# The word is one word: `<<<` takes exactly one, so the portable way to feed
+# several lines is to quote a value that holds newlines rather than to write
+# several operands.
+
+nl='first
+second'
+printf 'lines from one word: '
+count=0
+while read -r discard; do count=$((count + 1)); done <<< "$nl"
+printf '%s\n' "$count"
+
+# And it is not a here-document: no delimiter, no expansion of a body over
+# several lines, and the `<<-` tab stripping has no counterpart here — a
+# leading blank in the word is data.
+cat <<< '   three leading blanks'

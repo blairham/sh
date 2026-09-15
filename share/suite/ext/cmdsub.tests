@@ -1,0 +1,46 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# `$(<file)` — the substitution that reads a file without running a command.
+# The ksh family and zsh all have it; dash parses it and yields nothing, which
+# is the worst of the three possible answers and the reason this is ext/
+# rather than core/: a script that uses it under dash gets an empty string and
+# status 0 rather than a diagnostic.
+#
+# core/cmdsub.tests asks `$(cat file)`, which is the portable spelling and
+# means the same thing at the cost of a process. The pair is the point.
+
+printf 'one\ntwo\n' > fc
+
+printf 'read with no command: [%s]\n' "$(<fc)"
+printf 'a blank after the operator: [%s]\n' "$(< fc)"
+printf 'the backtick spelling: [%s]\n' "`<fc`"
+printf 'the portable spelling, for comparison: [%s]\n' "$(cat fc)"
+
+# The trailing newline is stripped the way it is for any substitution, and an
+# interior one is not.
+printf 'x\n\n\n' > trail
+printf 'trailing newlines go: [%s]\n' "$(<trail)"
+printf 'a\n\nb\n' > gap
+printf 'an interior blank line stays: [%s]\n' "$(<gap)"
+: > empty
+printf 'an empty file: [%s]\n' "$(<empty)"
+
+# It is a word like any other, so it stands where one stands and quoting
+# decides whether the result is split.
+v=$(<fc)
+printf 'through an assignment: [%s]\n' "$v"
+set -- $(<fc)
+printf 'unquoted, split: n=%s [%s] [%s]\n' "$#" "$1" "$2"
+set -- "$(<fc)"
+printf 'quoted, one word: n=%s\n' "$#"
+printf 'joined to text: [%s]\n' "pre-$(<fc)"
+
+# A file that is not there is a failure, and the status comes out through an
+# assignment exactly as a command's would. The diagnostic is each shell's own
+# wording, so it goes to the null device.
+( v=$(<nosuchfile) ) 2>/dev/null
+rc=$?
+v=
+printf 'a missing file: [%s] status nonzero: ' "$v"
+if [ "$rc" -ne 0 ]; then printf 'yes\n'; else printf 'no\n'; fi

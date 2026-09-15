@@ -364,29 +364,73 @@ func TestABareSubscriptsTextKeepsTheExpansionsQuoting(t *testing.T) {
 }
 
 // A subscript a substitution leaves unbalanced is no subscript, and the
-// characters go back to the word.
+// characters come back as **one quoted literal** rather than as a word to be
+// expanded again.
 //
 // The substitution suspends the word-end test and not the bracket count, so
 // a `[` written inside it still has to be closed and a `]` written inside it
 // still closes — and where either leaves the brackets unusable, the scan gives
-// them up rather than committing. Measured on zsh 5.9.2 with
-// `a=(one two three)`: both of these come back as the array joined with the
-// brackets behind it as text, where `x=$a[$(echo 2; : [ ])]` — the same shape
-// with the bracket closed — is the second element.
+// them up rather than committing. What it gives back is the whole bracket run
+// as written: measured on zsh 5.9.2, 2026-09-14, `a=(xx yy zz)` and `setopt
+// noglob`, `$a[$(: ]; echo 2)]` is `xx yy zz[$(: ]; echo 2)]` — the
+// substitution between the brackets is never run (#2786) — where
+// `$a[$(echo 2; : [ ])]`, the same shape with the bracket closed, is the
+// second element.
+//
+// The extent is the `]` that closes the `[` with each `$( )` stepped over
+// whole, which is a second scan and not the one that decided there was no
+// subscript: that one counts a bracket written inside a substitution and this
+// one does not. A backtick is not stepped over at all, and the word is
+// refused instead — see TestABacktickInABareSubscriptIsNotKept.
 func TestAnUnbalancedSubstitutionGivesTheBracketsBack(t *testing.T) {
-	for _, src := range []string{
-		`echo $a[$(: ]; echo 2)]`, // the `]` inside closes the subscript
-		`echo $a[$(echo 2; : [)]`, // the `[` inside is never closed
+	for _, tc := range []struct{ src, kept string }{
+		// The `]` inside closes the subscript.
+		{`echo $a[$(: ]; echo 2)]`, `[$(: ]; echo 2)]`},
+		// The `[` inside is never closed.
+		{`echo $a[$(echo 2; : [)]`, `[$(echo 2; : [)]`},
+		// And what stands behind the closing bracket is a word like any
+		// other, so only the run itself comes back quoted.
+		{`echo $a[$(: ]; echo 2)]$(echo Q)`, `[$(: ]; echo 2)]`},
 	} {
-		spans := spansOf(t, src, bare())
+		spans := spansOf(t, tc.src, bare())
 		if len(spans) == 0 || spans[0].Kind != syntax.ParamExp {
-			t.Fatalf("%q: first span is not an expansion: %+v", src, spans)
+			t.Fatalf("%q: first span is not an expansion: %+v", tc.src, spans)
 		}
 		if spans[0].Value != "a" {
-			t.Errorf("%q: expansion is %q, want %q — the brackets are not a subscript here", src, spans[0].Value, "a")
+			t.Errorf("%q: expansion is %q, want %q — the brackets are not a subscript here", tc.src, spans[0].Value, "a")
 		}
-		if len(spans) < 2 || spans[1].Kind != syntax.Literal || spans[1].Value != "[" {
-			t.Errorf("%q: after the expansion comes %+v, want the literal `[`", src, spans[1:])
+		if len(spans) < 2 || spans[1].Kind != syntax.Literal || spans[1].Value != tc.kept {
+			t.Errorf("%q: after the expansion comes %+v, want the literal %q", tc.src, spans[1:], tc.kept)
+		} else if spans[1].Quoting != syntax.SingleQuoted {
+			t.Errorf("%q: the kept run is %v, want it quoted — its `*` is a character and its blanks do not split",
+				tc.src, spans[1].Quoting)
 		}
+	}
+}
+
+// A backtick is where the two spellings of a substitution part, and the
+// difference is measured rather than inherited from the code's shape.
+//
+// zsh 5.9.2, 2026-09-14: `$a[`: ]; echo 2`]` is `invalid subscript` where
+// `$a[$(: ]; echo 2)]` is kept as text, and a backtick *inside* a `$( )` is
+// no different from any other character there — `$a[$(: ]; echo `echo 2`)]`
+// is kept. So the run is not kept when a backtick stands in it, and the
+// unclosed-subscript refusal is what the word gets instead.
+func TestABacktickInABareSubscriptIsNotKept(t *testing.T) {
+	spans := spansOf(t, "echo $a[`: ]; echo 2`]", bare())
+	if len(spans) == 0 || spans[0].Kind != syntax.ParamExp || spans[0].Value != "a" {
+		t.Fatalf("first span is not the bare expansion: %+v", spans)
+	}
+	if len(spans) < 2 || spans[1].Kind != syntax.Literal || spans[1].Value != "[" {
+		t.Errorf("after the expansion comes %+v, want the bare literal `[`", spans[1:])
+	}
+	if !spans[0].Param.BareIndexUnclosed {
+		t.Error("the subscript is not marked unclosed, so the word would be expanded rather than refused")
+	}
+	// And the `$( )` spelling of the same word is kept, which is what makes
+	// the row above a statement about the backtick.
+	kept := spansOf(t, "echo $a[$(: ]; echo 2)]", bare())
+	if len(kept) < 2 || kept[1].Value != "[$(: ]; echo 2)]" {
+		t.Errorf("the `$( )` spelling came back as %+v, want the run kept", kept[1:])
 	}
 }

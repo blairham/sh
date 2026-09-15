@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/blairham/sh/syntax"
+
 	. "github.com/blairham/sh/interp"
 )
 
@@ -31,7 +33,8 @@ func TestPrintfReadsTheNumberCReads(t *testing.T) {
 		// and not by spotting the leading zero.
 		{"a leading zero the readings agree about", `printf '[%d]' 007`, "[7]"},
 		{"and one that is only zeros", `printf '[%d]' 00`, "[0]"},
-		{"blanks around it", `printf '[%d]' ' 42 '`, "[42]"},
+		{"a blank in front of it", `printf '[%d]' ' 42'`, "[42]"},
+		{"and a tab", "printf '[%d]' '\t42'", "[42]"},
 		{"a float at a float conversion", `printf '[%f]' 1.5`, "[1.500000]"},
 		// C's `strtod` takes a hexadecimal float where Go's ParseFloat wants
 		// a binary exponent. All six columns answer 16.
@@ -714,4 +717,339 @@ func TestPrintfUnsignedConversionsWriteTheBitPattern(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A blank in front of a number is part of the grammar; one after it is not.
+//
+// C's readers skip leading whitespace, so ` 7` is a whole 7 under every
+// reading in the panel. What follows the number is the caller's problem, and
+// the three readings answer it as they answer any other tail: the one that
+// keeps a leading number keeps the 7 and complains, the one that wants the
+// whole operand keeps nothing and complains, and the one that evaluates takes
+// a trailing blank the way an expression takes one and says nothing (#2905).
+func TestPrintfTrailingBlankIsNotPartOfTheNumber(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		reading PrintfNumberReading
+		src     string
+		want    string
+		status  int
+	}{
+		{"a leading blank is read through", PrintfNumberLeadingNumber, `printf '[%d]' ' 7'`, "[7]", 0},
+		{"a leading tab too", PrintfNumberLeadingNumber, "printf '[%d]' '\t7'", "[7]", 0},
+		{"a trailing blank is a tail", PrintfNumberLeadingNumber, `printf '[%d]' '7 '`, "sh: printf: 7 : invalid number\n[7]", 1},
+		{"a trailing tab is the same tail", PrintfNumberLeadingNumber, "printf '[%d]' '7\t'", "sh: printf: 7\t: invalid number\n[7]", 1},
+		{"blanks on both ends still have a tail", PrintfNumberLeadingNumber, `printf '[%d]' '  7  '`, "sh: printf:   7  : invalid number\n[7]", 1},
+		{"the whole-operand reading keeps nothing", PrintfNumberWholeOperand, `printf '[%d]' '7 '`, "sh: printf: 7 : invalid number\n[0]", 1},
+		{"and reads a leading blank through as well", PrintfNumberWholeOperand, `printf '[%d]' ' 7'`, "[7]", 0},
+		{"the evaluating reading takes the tail", PrintfNumberArithmetic, `printf '[%d]' '7 '`, "[7]", 0},
+		{"and a blank-only operand is its empty expression", PrintfNumberArithmetic, `printf '[%d]' ' '`, "[0]", 0},
+		{"a float conversion asks the same question", PrintfNumberLeadingNumber, `printf '[%.1f]' '1.5 '`, "sh: printf: 1.5 : invalid number\n[1.5]", 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := printfSem()
+			sem.PrintfReportsBadNumber = Yes
+			sem.PrintfNumberOperand = tc.reading
+			out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+			if out != tc.want || st != tc.status {
+				t.Errorf("got %q status %d, want %q and %d", out, st, tc.want, tc.status)
+			}
+		})
+	}
+}
+
+// One dialect quotes the refused operand back from its first non-blank byte.
+//
+// Only the leading blanks go: the tail is still there, which is what says the
+// echo is of the reader's cursor rather than of a trimmed operand.
+func TestPrintfBadNumberEchoesPastTheBlanks(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		past bool
+		src  string
+		want string
+	}{
+		{"as written", false, `printf '[%d]' '  7  '`, "sh: printf:   7  : invalid number"},
+		{"past the blanks", true, `printf '[%d]' '  7  '`, "sh: printf: 7  : invalid number"},
+		{"a tail with no number in front of it", true, `printf '[%d]' '  x'`, "sh: printf: x: invalid number"},
+		{"an operand that was all blanks", true, `printf '[%d]' '  '`, "sh: printf: : invalid number"},
+		{"and the empty string, which has none to skip", true, `printf '[%d]' ''`, "sh: printf: : invalid number"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := printfSem()
+			sem.PrintfReportsBadNumber = Yes
+			sem.PrintfEmptyIsNotANumber = Yes
+			sem.PrintfNumberOperand = PrintfNumberWholeOperand
+			diag := Diagnostics{PrintfBadNumberEchoesPastTheBlanks: tc.past}
+			out, _ := run(t, tc.src, func(r *Runner) { r.Semantics = &sem; r.Diagnostics = &diag })
+			line, _, _ := strings.Cut(out, "\n")
+			if line != tc.want {
+				t.Errorf("got %q, want a first line %q", line, tc.want)
+			}
+		})
+	}
+}
+
+// An integer operand may be carried through the shell's floating type, which
+// rounds it once it is past what a double holds exactly (#2907).
+func TestPrintfIntegerOperandGoesThroughTheFloatingType(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		through Answer
+		src     string
+		want    string
+	}{
+		{"exact keeps every digit", No, `printf '[%d]' 123456789012345678`, "[123456789012345678]"},
+		{"through a double rounds it", Yes, `printf '[%d]' 123456789012345678`, "[123456789012345680]"},
+		{"the digit that moves is the last", Yes, `printf '[%d]' 1000000000000000001`, "[1000000000000000000]"},
+		{"one past 2^53 is the first that can", Yes, `printf '[%d]' 9007199254740993`, "[9007199254740992]"},
+		{"and 2^53 itself does not move", Yes, `printf '[%d]' 9007199254740992`, "[9007199254740992]"},
+		{"the maximum saturates back to itself", Yes, `printf '[%d]' 9223372036854775807`, "[9223372036854775807]"},
+		{"one short of the negative end does not", Yes, `printf '[%d]' -9223372036854775807`, "[-9223372036854775808]"},
+		{"an ordinary operand is untouched", Yes, `printf '[%d]' 42`, "[42]"},
+		{"hexadecimal is read first and rounded after", Yes, `printf '[%d]' 0x1fffffffffffff1`, "[144115188075855856]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := printfSem()
+			sem.PrintfIntegerOperandGoesThroughTheFloatingType = tc.through
+			out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q status %d, want %q and 0", out, st, tc.want)
+			}
+		})
+	}
+}
+
+// And the axis is asked only where the two readings disagree, which is an
+// operand past 2^53: the ordinary one never meets it.
+func TestPrintfFloatingIntegerIsAskedOnlyAtItsOwnDisagreement(t *testing.T) {
+	t.Run("an operand a double holds exactly asks nothing", func(t *testing.T) {
+		for _, src := range []string{
+			`printf '[%d]' 42`,
+			`printf '[%d]' 0x10`,
+			`printf '[%d]' -42`,
+			`printf '[%d]' 9007199254740992`,
+			`printf '[%d]' 9223372036854775807`,
+		} {
+			sem := printfSem()
+			sem.PrintfIntegerOperandGoesThroughTheFloatingType = Unspecified
+			out, st := run(t, src, func(r *Runner) { r.Semantics = &sem })
+			if strings.Contains(out, "no dialect") || st == 2 {
+				t.Errorf("%s: got %q status %d, want no question", src, out, st)
+			}
+		}
+	})
+
+	t.Run("one it does not is refused where the axis is unanswered", func(t *testing.T) {
+		sem := printfSem()
+		sem.PrintfIntegerOperandGoesThroughTheFloatingType = Unspecified
+		out, st := run(t, `printf '[%d]' 123456789012345678`, func(r *Runner) { r.Semantics = &sem })
+		if !strings.Contains(out, "no dialect") || st != 2 {
+			t.Errorf("got %q status %d, want the unanswered refusal", out, st)
+		}
+	})
+}
+
+// An arithmetic complaint raised over a printf operand is the evaluator's
+// rather than the builtin's, and the dialect that names a builtin in the
+// *location* leaves it out here (#2906).
+func TestPrintfArithComplaintLeavesTheBuiltinOutOfTheLocation(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		names bool
+		want  string
+	}{
+		{"the location names the builtin for its own refusals", true, "sh:printf:1: "},
+		{"and not for the evaluator's", false, "sh:1: "},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := printfSem()
+			sem.PrintfNumberOperand = PrintfNumberArithmetic
+			sem.PrintfRefusedOperandKeepsItsLeadingNumber = No
+			diag := Diagnostics{
+				NamesBuiltinInLocation:    true,
+				Location:                  LocationTightLine,
+				ArithErrorNamesTheBuiltin: tc.names,
+			}
+			out, _ := run(t, `printf '[%d]' 12x`, func(r *Runner) { r.Semantics = &sem; r.Diagnostics = &diag })
+			line, _, _ := strings.Cut(out, "\n")
+			if !strings.HasPrefix(line, tc.want) {
+				t.Errorf("got %q, want a first line opening %q", line, tc.want)
+			}
+		})
+	}
+}
+
+// One builtin in one dialect reports as the shell itself: the basename the
+// shell was invoked by, and no script, no line and no builtin name (#2913).
+func TestBuiltinCanNameTheShellAlone(t *testing.T) {
+	sem := printfSem()
+	sem.PrintfReportsBadNumber = Yes
+	sem.PrintfNumberOperand = PrintfNumberWholeOperand
+
+	t.Run("the shell's basename and nothing else", func(t *testing.T) {
+		diag := Diagnostics{
+			PrintfBadNumber:           "invalid number '%[1]s'",
+			Location:                  LocationLineWord,
+			NamesBuiltinInLocation:    true,
+			BuiltinNamesTheShellAlone: map[string]bool{"printf": true},
+		}
+		out, st := run(t, `printf '[%d]' 12x`, func(r *Runner) {
+			r.Semantics = &sem
+			r.Diagnostics = &diag
+			r.Name = "/tmp/script.sh"
+			r.Invocation = "/bin/ash"
+		})
+		if want := "ash: invalid number '12x'\n[0]"; out != want || st != 1 {
+			t.Errorf("got %q status %d, want %q and 1", out, st, want)
+		}
+	})
+
+	t.Run("a builtin outside the set keeps the ordinary location", func(t *testing.T) {
+		diag := Diagnostics{
+			PrintfBadNumber:           "invalid number '%[1]s'",
+			Location:                  LocationLineWord,
+			NamesBuiltinInLocation:    true,
+			BuiltinNamesTheShellAlone: map[string]bool{"shift": true},
+		}
+		out, _ := run(t, `printf '[%d]' 12x`, func(r *Runner) {
+			r.Semantics = &sem
+			r.Diagnostics = &diag
+			r.Name = "/tmp/script.sh"
+			r.Invocation = "/bin/ash"
+		})
+		line, _, _ := strings.Cut(out, "\n")
+		if !strings.HasPrefix(line, "/tmp/script.sh:") {
+			t.Errorf("got %q, want a first line opening with the script's name", line)
+		}
+	})
+
+	t.Run("with no argv the diagnostic name stands in", func(t *testing.T) {
+		diag := Diagnostics{
+			PrintfBadNumber:           "invalid number '%[1]s'",
+			BuiltinNamesTheShellAlone: map[string]bool{"printf": true},
+		}
+		out, _ := run(t, `printf '[%d]' 12x`, func(r *Runner) {
+			r.Semantics = &sem
+			r.Diagnostics = &diag
+			r.Name = "myshell"
+		})
+		line, _, _ := strings.Cut(out, "\n")
+		if line != "myshell: invalid number '12x'" {
+			t.Errorf("got %q, want the diagnostic name alone", line)
+		}
+	})
+}
+
+// A division by zero may leave a value behind and the evaluation carry on
+// with it (#2912).
+//
+// The operand's *whole* expression is what the conversion writes, which is
+// the half a rule fitted to `1/0` alone cannot produce: `1/0+9` is 9 and
+// `8%0*2` is 16, and neither number is anywhere in the operand.
+func TestArithDivisionByZeroCanYieldAValue(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		yield Answer
+		src   string
+		want  string
+	}{
+		{"a division gives zero", Yes, `printf '[%d]' 1/0`, "[0]"},
+		{"whatever the dividend was", Yes, `printf '[%d]' 5/0`, "[0]"},
+		{"a remainder gives the dividend", Yes, `printf '[%d]' 1%0`, "[1]"},
+		{"and keeps its sign", Yes, `printf '[%d]' -7%0`, "[-7]"},
+		{"a zero divisor the evaluation produced counts too", Yes, `printf '[%d]' '7/(3-3)'`, "[0]"},
+		{"the evaluation carries on past a division", Yes, `printf '[%d]' 1/0+9`, "[9]"},
+		{"and past a remainder", Yes, `printf '[%d]' 1%0+9`, "[10]"},
+		{"the value reaches an operator to its left", Yes, `printf '[%d]' 3+1%0`, "[4]"},
+		{"and one to its right", Yes, `printf '[%d]' '8%0*2'`, "[16]"},
+		{"without it, the leading number stands", No, `printf '[%d]' 1/0`, "[1]"},
+		{"and the tail is never reached", No, `printf '[%d]' 1/0+9`, "[1]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := printfSem()
+			sem.PrintfNumberOperand = PrintfNumberArithmetic
+			sem.PrintfRefusedOperandKeepsItsLeadingNumber = Yes
+			sem.ArithDivisionByZeroYieldsAValue = tc.yield
+			diag := Diagnostics{DivisionByZero: "divide by zero"}
+			out, _ := run(t, tc.src, func(r *Runner) { r.Semantics = &sem; r.Diagnostics = &diag })
+			_, value, _ := strings.Cut(out, "\n")
+			if value != tc.want {
+				t.Errorf("got %q, want the value %q", out, tc.want)
+			}
+		})
+	}
+
+	t.Run("every other site still abandons the command", func(t *testing.T) {
+		// The value is only ever reached through a printf operand. An
+		// expression written anywhere else fails as it always did, which is
+		// what keeps this a reading of one builtin rather than of the
+		// evaluator.
+		sem := printfSem()
+		sem.ArithDivisionByZeroYieldsAValue = Yes
+		diag := Diagnostics{DivisionByZero: "divide by zero"}
+		out, _ := run(t, `echo $((1/0)); echo after`, func(r *Runner) { r.Semantics = &sem; r.Diagnostics = &diag })
+		if strings.Contains(out, "0\n") || !strings.Contains(out, "divide by zero") {
+			t.Errorf("got %q, want the failure and no value", out)
+		}
+	})
+
+	t.Run("and the axis is asked only where a divisor was zero", func(t *testing.T) {
+		for _, src := range []string{
+			`printf '[%d]' 1/2`,
+			`printf '[%d]' 7%3`,
+			`printf '[%d]' 1+1`,
+			`printf '[%d]' 42abc`,
+		} {
+			sem := printfSem()
+			sem.PrintfNumberOperand = PrintfNumberArithmetic
+			sem.PrintfRefusedOperandKeepsItsLeadingNumber = Yes
+			sem.ArithDivisionByZeroYieldsAValue = Unspecified
+			out, _ := run(t, src, func(r *Runner) { r.Semantics = &sem })
+			if strings.Contains(out, "past a division") {
+				t.Errorf("%s: got %q, want no question", src, out)
+			}
+		}
+	})
+}
+
+// An infinity the *evaluator* produced is a value the integer conversion
+// cannot hold, and the column that reports an overflow reports this one too.
+func TestPrintfEvaluatedInfinityIsAnOverflow(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		src  string
+		want string
+	}{
+		{"a float divided by zero", `printf '[%d]' 1.0/0`, "[9223372036854775807]"},
+		{"in the other direction", `printf '[%d]' -1.0/0`, "[-9223372036854775808]"},
+		{"an exponent driven past the type", `printf '[%d]' '1e308*10'`, "[9223372036854775807]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := printfSem()
+			sem.PrintfNumberOperand = PrintfNumberArithmetic
+			sem.PrintfRefusedOperandKeepsItsLeadingNumber = Yes
+			sem.ArithDivisionByZeroYieldsAValue = Yes
+			diag := Diagnostics{PrintfIntegerOverflow: "printf: warning: %[1]s: overflow exception"}
+			out, st := runGrammar(t, tc.src, func(d *syntax.Dialect) { d.ArithFloat = true },
+				func(r *Runner) { r.Semantics = &sem; r.Diagnostics = &diag })
+			line, value, _ := strings.Cut(out, "\n")
+			if !strings.Contains(line, "overflow exception") || value != tc.want || st != 1 {
+				t.Errorf("got %q status %d, want the overflow line and %q at 1", out, st, tc.want)
+			}
+		})
+	}
+
+	t.Run("a not-a-number is not one", func(t *testing.T) {
+		sem := printfSem()
+		sem.PrintfNumberOperand = PrintfNumberArithmetic
+		sem.PrintfRefusedOperandKeepsItsLeadingNumber = Yes
+		sem.ArithDivisionByZeroYieldsAValue = Yes
+		diag := Diagnostics{PrintfIntegerOverflow: "printf: warning: %[1]s: overflow exception"}
+		out, st := runGrammar(t, `printf '[%d]' 0.0/0`, func(d *syntax.Dialect) { d.ArithFloat = true },
+			func(r *Runner) { r.Semantics = &sem; r.Diagnostics = &diag })
+		if out != "[0]" || st != 0 {
+			t.Errorf("got %q status %d, want [0] and 0", out, st)
+		}
+	})
 }

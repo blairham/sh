@@ -592,6 +592,21 @@ type Diagnostics struct {
 	// the one column with two sentences: `not completely converted` for the
 	// first and `expected numeric value` for the second.
 	PrintfIncompleteNumber string
+	// PrintfBadNumberEchoesPastTheBlanks quotes the refused operand back
+	// from its first non-blank byte rather than as it was written.
+	//
+	// One column does: `printf '%d' "  7  "` is `invalid number '7  '` in
+	// BusyBox v1.37.0, against bash's `printf:   7  : invalid number` and
+	// dash's `printf:   7  : not completely converted`, which both keep the
+	// blanks they were handed. Only the *leading* ones go — `'7  '` still
+	// has its tail — which is the same asymmetry afterLeadingBlanks reads
+	// the number by, and is what says the echo is of the reader's cursor
+	// rather than of a trimmed operand.
+	//
+	// Measured in the pinned image on 2026-09-15 with `  x`, ` 1.5 `, ` `
+	// and `  `: the first is `'x'`, the second `'1.5 '`, and the last two
+	// are both `''`.
+	PrintfBadNumberEchoesPastTheBlanks bool
 	// PrintfBadHexNumber is that complaint where the operand was written
 	// with a `0x` in front of it. One verb: the operand.
 	//
@@ -1166,6 +1181,30 @@ type Diagnostics struct {
 	// of its own — one about the subscript naming the base, one about array
 	// elements naming the operand — and they are not its bad-name wording.
 	BuiltinBadSubscript map[string]string
+	// BuiltinNamesTheShellAlone is the set of builtins whose complaints carry
+	// the shell's own name and nothing else — no script, no line, no builtin
+	// name — where every other failure in the same shell names all three.
+	//
+	// One column and one builtin: BusyBox's `printf` is the applet's code
+	// reached as a builtin, and it reports the way an applet does. Measured
+	// in the pinned image, BusyBox v1.37.0, 2026-09-15:
+	//
+	//	/bin/ash p.sh, `printf '%d' 12x`   ash: invalid number '12x'
+	//	the same under -c and on stdin      ash: invalid number '12x'
+	//	/bin/sh p.sh, the same line         sh: invalid number '12x'
+	//	p.sh doing `shift -1`               /tmp/p.sh: shift: line 1: Illegal number: -1
+	//
+	// So it is the *basename the shell was invoked by* rather than a fixed
+	// word — which is why this is not SelfName — and the last row is the
+	// control saying the shell's other builtins name the script and the
+	// line as usual. The whole of that builtin's complaints move together:
+	// `printf '%z' 1` is `ash: %: invalid format` and `printf` with no
+	// format is `ash: usage: …`, both with the same bare prefix (#2913).
+	//
+	// A map rather than a flag for the reason SubscriptRefusalNamesBuiltin
+	// is one: it is a fact about a builtin and not about the dialect.
+	BuiltinNamesTheShellAlone map[string]bool
+
 	// SubscriptRefusalNamesBuiltin is which of those name the builtin in the
 	// *location*. One does and one does not, in the same shell, which is why
 	// this is a set rather than following NamesBuiltinInLocation.

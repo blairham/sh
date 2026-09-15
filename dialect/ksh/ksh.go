@@ -1312,6 +1312,17 @@ func Semantics() interp.Semantics {
 	// digits, the thirteenth rounded away rather than padded.
 	s.PrintfC99FloatConversions = interp.Yes
 	s.PrintfHexFloatDefaultIsTwelveDigits = interp.Yes
+	// An integer operand is carried in this shell's floating type, so one
+	// past 2^53 comes back rounded: `printf '%d' 123456789012345678` is
+	// `123456789012345680` (#2907).
+	// A flag written past a field restarts the scan, the same grammar the
+	// `'` already has here -- and a `-` past a *precision* clears the
+	// precision instead of becoming a flag (#2910).
+	// A division by zero leaves a value behind and the evaluation carries
+	// on with it: 0 for `/`, the dividend for `%` (#2912).
+	s.ArithDivisionByZeroYieldsAValue = interp.Yes
+	s.PrintfFlagAfterTheField = interp.Yes
+	s.PrintfIntegerOperandGoesThroughTheFloatingType = interp.Yes
 	s.PrintfRefusedOperandKeepsItsLeadingNumber = interp.Yes
 	// A floating conversion evaluates its operand twice and the complaint
 	// escapes both times: `printf '%f' 42abc` writes the arithmetic line

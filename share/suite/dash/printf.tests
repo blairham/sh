@@ -21,3 +21,16 @@ printf 'hex in a %%b operand [%b]\n' '\x41\x42'
 printf 'octal in the format [\101\102]\n'
 printf 'octal in a %%b operand [%b]\n' '\0101\0102'
 printf 'a tab [\t] and a backslash [\\]\n'
+
+# A numeric operand with a trailing blank. dash writes the number it read and
+# calls the operand "not completely converted", which is its own sentence for
+# a tail and not the one it gives an operand with no number in it at all --
+# that is "expected numeric value", which the blank-only operand earns. bash
+# has one sentence for both; zsh and ksh93 take the trailing blank silently.
+# A leading blank is accepted everywhere and is the control.
+printf '[%d]\n' ' 7'
+printf 'a leading blank -> %s\n' "$?"
+printf '[%d]\n' '7 '
+printf 'a trailing blank -> %s\n' "$?"
+printf '[%d]\n' ' '
+printf 'a blank on its own -> %s\n' "$?"

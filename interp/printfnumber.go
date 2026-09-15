@@ -55,16 +55,32 @@ func (r *Runner) printfNumber(arg string, present bool) (int64, int, bool) {
 	if n, ok := r.charConstant(arg); ok {
 		return n, 0, false
 	}
-	text := strings.TrimSpace(arg)
+	text := afterLeadingBlanks(arg)
 	if v, ok := cAgreedInteger(text); ok {
 		// The operand is an integer every reading in the panel agrees about,
 		// so no dialect is consulted: `printf '%d' 42` and `printf '%d' 0x10`
 		// are the same in all seven columns.
+		if rounded := floatToInt64(float64(v)); rounded != v {
+			// Except one, and only for the operands where the two readings
+			// actually differ — see
+			// Semantics.PrintfIntegerOperandGoesThroughTheFloatingType. The
+			// test is the disagreement itself rather than a digit count, so
+			// `printf '%d' 42` still asks nothing and neither does the
+			// int64 maximum, which rounds to 2^63 and saturates back to
+			// itself.
+			if r.ask(r.sem().PrintfIntegerOperandGoesThroughTheFloatingType,
+				"`printf` reading an integer operand too large for a double through the floating type") {
+				return rounded, 0, false
+			}
+			if r.unspecified {
+				return 0, r.status, true
+			}
+		}
 		return v, 0, false
 	}
 	f, code, stop := r.printfPartialNumber(arg, text, false)
 	if code == 0 && !stop {
-		code = r.printfIntegerOverflow(arg, f)
+		code = r.printfIntegerOverflow(arg, f, false)
 	}
 	return floatToInt64(f), code, stop
 }
@@ -84,20 +100,32 @@ func (r *Runner) printfNumber(arg string, present bool) (int64, int, bool) {
 // answers `0` in that column rather than an infinity — its evaluator reads
 // `1e400` as zero, which is #2766 and not this — and it says nothing at all
 // about it, so a complaint here would be one the reference does not make.
-func (r *Runner) printfIntegerOverflow(arg string, f float64) int {
+func (r *Runner) printfIntegerOverflow(arg string, f float64, evaluated bool) int {
 	w := r.diag().PrintfIntegerOverflow
-	if w == "" || !inRangeForOverflowReport(f) {
+	if w == "" || !inRangeForOverflowReport(f, evaluated) {
 		return 0
 	}
 	r.diagf("%s\n", Wording(w, "printf: warning: %[1]s: overflow exception", arg))
 	return orDefault(r.diag().PrintfBadNumberStatus, 1)
 }
 
-// inRangeForOverflowReport reports whether f is a finite number outside what
-// an int64 holds, which is the one shape the complaint above is made about.
-func inRangeForOverflowReport(f float64) bool {
-	if math.IsInf(f, 0) || math.IsNaN(f) {
+// inRangeForOverflowReport reports whether f is a value the complaint above is
+// made about, which is a finite number outside what an int64 holds — and,
+// where the value came out of the *evaluator*, an infinity as well.
+//
+// The two are one question and not two, which is what folds this into the
+// caller above rather than a second helper beside it: `printf '%d' 1.0/0` is
+// `overflow exception` and the clamped maximum at 1 in ksh93u+, and so are
+// `1e2/0` and `1e308*10`, while `printf '%d' 1e400` — an infinity a *numeral*
+// would have produced — is a silent zero there, that shell's reader answering
+// zero for a numeral it cannot hold (#2766). A not-a-number is neither, in
+// either direction.
+func inRangeForOverflowReport(f float64, evaluated bool) bool {
+	if math.IsNaN(f) {
 		return false
+	}
+	if math.IsInf(f, 0) {
+		return evaluated
 	}
 	return f >= math.MaxInt64 || f <= math.MinInt64
 }
@@ -113,7 +141,7 @@ func (r *Runner) printfFloat(arg string, present bool) (float64, int, bool) {
 		// `65.000000` in every column.
 		return float64(n), 0, false
 	}
-	text := strings.TrimSpace(arg)
+	text := afterLeadingBlanks(arg)
 	if f, ranged, whole := cWholeNumber(text, true); whole {
 		// Every reading agrees about a float C can read whole, the reading
 		// that evaluates included: it reads a numeral as a numeral before it
@@ -185,9 +213,30 @@ func (r *Runner) printfPartialNumber(arg, text string, float bool) (float64, int
 		}
 		n, err, reading := r.printfArithValue(text)
 		if err == nil {
-			return n.asFloat(), 0, false
+			f := n.asFloat()
+			if !float && math.IsInf(f, 0) {
+				// An infinity the *evaluator* produced, which is a value the
+				// integer conversion cannot hold and which one column
+				// reports: `printf '%d' 1.0/0` is `overflow exception` and
+				// the clamped maximum at 1 in ksh93u+, and so are `1e2/0`
+				// and `1e308*10`. An infinity a *numeral* produced is not
+				// the same row and not reported — `1e400` is a silent 0
+				// there, which is #2766 — so the question is asked here,
+				// where the value is known to have been computed, rather
+				// than of every value the reading returns.
+				return f, r.printfIntegerOverflow(arg, f, true), false
+			}
+			return f, 0, false
 		}
 		code := r.printfArithFailure(err, reading, float)
+		if ae, ok := err.(arithError); ok && ae.keptTheValue {
+			// The evaluation ran to the end past a division by zero and the
+			// number it came to is the operand's — see
+			// Semantics.ArithDivisionByZeroYieldsAValue. The complaint has
+			// already gone out; only the value is decided here, and it is
+			// not the leading-number reading below.
+			return n.asFloat(), code, false
+		}
 		if r.unspecified {
 			// The count is an axis of its own and it is asked before the
 			// sentence goes out, so a dialect that has not answered it stops
@@ -249,7 +298,21 @@ func (r *Runner) printfArithValue(text string) (arithNum, error, bool) {
 		left := errors.As(err, &se) && se.Kind == syntax.ErrArithOperator
 		return intNum(0), arithError{msg: r.subscriptFailure(text, err), complete: true}, left
 	}
+	outer, held := r.arithValueSurvivesTheDivision, r.arithDivisionFailure
+	r.arithValueSurvivesTheDivision, r.arithDivisionFailure = true, nil
 	n, err := r.evalNum(tree)
+	kept := r.arithDivisionFailure
+	r.arithValueSurvivesTheDivision, r.arithDivisionFailure = outer, held
+	if err == nil && kept != nil {
+		// The evaluation carried on past a division by zero and reached the
+		// end. The complaint is the one that was held, and the value beside
+		// it is the whole expression's.
+		ae, _ := kept.(arithError)
+		return n, arithError{
+			msg: r.arithFailure(text, kept), complete: true, keptTheValue: true,
+			badNumeral: ae.badNumeral,
+		}, ae.badNumeral
+	}
 	if err != nil {
 		ae, _ := err.(arithError)
 		return intNum(0), arithError{msg: r.arithFailure(text, err), complete: true}, ae.badNumeral
@@ -275,6 +338,40 @@ func (r *Runner) leadingNumber(text string, float bool) float64 {
 	return 0
 }
 
+// afterLeadingBlanks is the operand with the blanks C's readers skip taken
+// off the front, and **nothing taken off the back**.
+//
+// The two ends are not the same question and trimming both got one of them
+// wrong for every dialect at once. C's `strtol` and `strtod` skip leading
+// whitespace as part of the grammar, so ` 7` is a whole number everywhere.
+// What is left after the number is the caller's problem, and four of the
+// seven columns say so: `printf '%d' "7 "` is `printf: 7 : invalid number`
+// at 1 in bash 5.3, `not completely converted` at 1 in dash, `invalid number
+// '7 '` at 1 in BusyBox ash — where the value is `0` rather than the 7 the
+// other two write — and silent at 0 in zsh and ksh93, whose reading is an
+// expression and takes a trailing blank the way any expression does.
+// Measured 2026-09-15 on the `-c`, file and standard-input routes (#2905).
+//
+// The set is C's, not Go's: `strings.TrimSpace` also trims the Unicode
+// spaces, and no `strtol` in the panel does.
+func afterLeadingBlanks(s string) string {
+	i := 0
+	for i < len(s) && isCBlank(s[i]) {
+		i++
+	}
+	return s[i:]
+}
+
+// isCBlank is C's `isspace` in the C locale, which is what a numeric reader
+// skips in front of a number.
+func isCBlank(c byte) bool {
+	switch c {
+	case ' ', '\t', '\n', '\v', '\f', '\r':
+		return true
+	}
+	return false
+}
+
 // printfIncomplete reports an operand that was not a number, or not all of
 // one, where the dialect reports it at all.
 func (r *Runner) printfIncomplete(arg, text string) int {
@@ -282,6 +379,13 @@ func (r *Runner) printfIncomplete(arg, text string) int {
 		return 0
 	}
 	d := r.diag()
+	if d.PrintfBadNumberEchoesPastTheBlanks {
+		// One column quotes the operand back from its first non-blank byte:
+		// `printf '%d' "  7  "` is `invalid number '7  '` in BusyBox ash,
+		// where bash and dash echo the leading blanks they were given.
+		// Measured in the pinned image, BusyBox v1.37.0, 2026-09-15.
+		arg = text
+	}
 	if w := printfBadNumberBase(d, arg); w != "" {
 		// One column names the base the operand was *spelled* in — `invalid
 		// hex number` for `0x10zz`, `invalid octal number` for `08` — and
@@ -363,7 +467,10 @@ func (r *Runner) printfArithFailure(err error, reading, float bool) int {
 		return r.status
 	}
 	for range lines {
-		r.diagf("%s\n", msg)
+		// arithDiagf rather than diagf: this is the evaluator's sentence and
+		// not the builtin's, and one column says so by leaving the builtin
+		// out of the location it otherwise always writes. See #2906.
+		r.arithDiagf("%s\n", msg)
 	}
 	if w := r.diag().PrintfArithArgumentType; w != "" {
 		if !reading {

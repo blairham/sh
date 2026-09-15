@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path"
 	"sort"
 	"strings"
 	"sync"
@@ -1720,6 +1721,25 @@ type Runner struct {
 	// through keeps its output ahead of the message and a refusal can still
 	// take the pass back; and the star reader is what takes it back (#2664).
 	printfOut *printfWriter
+	// arithValueSurvivesTheDivision turns on the reading in which a division
+	// by zero leaves a value behind and the evaluation carries on with it.
+	//
+	// A mode rather than a plain dialect answer because the value can only be
+	// *seen* in one place. Every other site an expression is written in
+	// abandons the command over the failure — `echo $(( 1/0 ))`, `x=$((1/0))`
+	// and `${a[1/0]}` all end the line in ksh93 as they do everywhere else —
+	// so a rule applied there would change nothing observable and would risk
+	// letting a failure through. A `printf` operand is the exception: the
+	// complaint goes out, the conversion still runs, and the number it writes
+	// is the one the evaluator was holding. See
+	// Semantics.ArithDivisionByZeroYieldsAValue for the rows.
+	arithValueSurvivesTheDivision bool
+
+	// arithDivisionFailure is the first such failure held while that mode is
+	// on, for the caller to raise once the expression has been read to the
+	// end. Nil when none has happened.
+	arithDivisionFailure error
+
 	// printfConversionName is the conversion character being formatted, or
 	// `.` where what is being read is a `*` operand. One column's `printf`
 	// names it in a second complaint line about an operand its arithmetic
@@ -2826,6 +2846,14 @@ func (r *Runner) diagLine(format string, args ...any) string {
 // Runner.locationPrefixNamed.
 func (r *Runner) diagLineNamed(construct, format string, args ...any) string {
 	msg := fmt.Sprintf(format, args...)
+	if name := r.speaking(); name != "" && r.diag().BuiltinNamesTheShellAlone[name] {
+		// A builtin that reports as the shell itself rather than as a line of
+		// a script. See Diagnostics.BuiltinNamesTheShellAlone: the name is
+		// the basename the shell was invoked by, on every route, and the
+		// location the rest of this function would build is written by that
+		// builtin nowhere.
+		return path.Base(r.invokedAs()) + ": " + strings.TrimPrefix(msg, name+": ")
+	}
 	if r.speaker != "" && r.inBuiltin != "" && r.inBuiltin != r.speaker {
 		// A builtin the dialect's own function called. The complaint reaches
 		// the script as that function's — `pushd /nope` is `pushd: /nope: …`
@@ -3287,6 +3315,17 @@ func (r *Runner) name() string {
 		return "sh"
 	}
 	return r.Name
+}
+
+// invokedAs is argv[0] — what the process was executed as, which is a
+// different fact from Runner.name and is what one dialect's applet-backed
+// builtins report under. Falls back to the diagnostic name where nothing
+// carried an argv, which is a library Runner and a test.
+func (r *Runner) invokedAs() string {
+	if r.Invocation != "" {
+		return r.Invocation
+	}
+	return r.name()
 }
 
 func (r *Runner) emit(ctx context.Context, e Event) {

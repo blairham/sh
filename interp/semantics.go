@@ -2980,6 +2980,105 @@ type Semantics struct {
 	// is not already the whole number C asked for — see PrintfNumberReading.
 	PrintfNumberOperand PrintfNumberReading
 
+	// ArithDivisionByZeroYieldsAValue goes on evaluating past a division by
+	// zero, with **0** for a division and the **dividend** for a remainder,
+	// and reports the failure once the whole expression has been read.
+	//
+	// One column, ksh93u+ 2012-08-01, and it can only be seen through a
+	// `printf` operand: every other place an expression is written abandons
+	// the command over the failure, there as everywhere else. Measured
+	// 2026-09-15 with `printf '[%d]' OPERAND`, each row also writing
+	// `divide by zero` and reporting 0:
+	//
+	//	1/0      0     5/0   0     7/(3-3)   0     2*3/0   0
+	//	1%0      1     7%0   7     100%0   100     -7%0   -7
+	//	3+1/0    3     1/0+9   9    8%0*2   16     5+7%0  12
+	//	3+1%0    4     1%0+9  10
+	//
+	// The first two rows are the two operators' own answers and the last two
+	// are what say the evaluation **continues**: a value that stopped at the
+	// failure could not have reached the `+9` or been doubled. `3+1/0` and
+	// `3+1%0` differing by one is the same fact read from in front.
+	//
+	// This is what #2912 was filed as having no rule for. The three points it
+	// had — `1/0`→0, `1%0`→1, `foo(1)`→102 — are two different questions:
+	// the first two are this axis and the third is an *unknown function*,
+	// which stops the evaluation and leaves the first byte of the operand
+	// read as a character. That reading is real and measured —
+	// `bar(1)`→98, `#foo(1)`→35, `$x`→36, `@foo`→64, `]`→93, and `ä(1)`→-61,
+	// a signed char — but it holds only where the byte is not one the
+	// arithmetic lexer consumes (`&&`, `||`, `*3`, `^`, `|`, `=`, `,`, `<`,
+	// `>` and `)` are all 0), so it is an account of an evaluator's state
+	// rather than a rule, and it is recorded rather than reproduced.
+	//
+	// Asked only where a divisor really was zero, and only from the one
+	// caller that can see the value — see Runner.arithValueSurvivesTheDivision.
+	ArithDivisionByZeroYieldsAValue Answer
+
+	// PrintfFlagAfterTheField takes a flag written **past** a field in a
+	// conversion's prefix, restarting the scan at the flags the way the `'`
+	// already does — see PrintfGroupingFlagAfterTheWidth, whose grammar this
+	// is the rest of.
+	//
+	// One column, ksh93u+ 2012-08-01, measured 2026-09-15 under `LC_ALL=C`
+	// with the value 42. bash, zsh and dash refuse every row, each in its own
+	// wording, and BusyBox ash has no flag past a field either.
+	//
+	//	%5-d      42       the `-` is a flag and the width stands
+	//	%5-3d     42       and a run after it replaces the width
+	//	%5-3-4d   42       every flag accumulating, every run replacing
+	//	%5+d        +42    `+`, ` ` and `#` restart as the `-` does
+	//	%*-5d     42       a star the restart replaced still took its
+	//	                   operand, exactly as a quote's restart does
+	//
+	// **The precision is the rule that disagrees, and it is the same axis.**
+	// A `-` past a precision throws the precision away and is *not* taken as
+	// a flag — `%.3-5d` is `   42`, width five and right-justified, and
+	// `%5.3-d` is `   42`, the width already read surviving — while `+` and
+	// ` ` past a precision *are* flags and leave the precision standing:
+	// `%.3+5d` is `+00042`, the 5 having replaced the 3. `%.3--5d` is
+	// `42   `, which is what says the first `-` returns the scan to the
+	// width section and the second is then an ordinary flag.
+	//
+	// `#` past a precision is deliberately not here. That shell reads it as
+	// something else — `%.3#.4d` of 42 is `4#222` and `%.2#d` of 255 is
+	// `25` — which is neither a flag nor a field and does not answer the
+	// same way twice, so it is left refused rather than guessed at.
+	//
+	// Asked only where a flag actually stands past a field, so `%-5d` and
+	// `%-5.3d` never reach it.
+	PrintfFlagAfterTheField Answer
+
+	// PrintfIntegerOperandGoesThroughTheFloatingType reads an integer
+	// operand of an integer conversion through the shell's floating type, so
+	// an operand a double cannot hold exactly comes out rounded.
+	//
+	// One column does, and it is the shell whose whole arithmetic is carried
+	// in a floating type: `printf '%d' 123456789012345678` is
+	// `123456789012345680` in ksh93u+ 2012-08-01 and
+	// `printf '%d' 1000000000000000001` is `1000000000000000000`, where
+	// bash 5.3, zsh 5.9.2, dash and BusyBox ash all write the digits back
+	// unchanged. `echo $(( 123456789012345678 ))` there is the same rounded
+	// number, which says the conversion is not printf's own — but printf is
+	// where the panel can be asked about it without an evaluator, so this is
+	// scoped to the operand and the arithmetic is left as it stands.
+	//
+	// Asked only where the two readings actually disagree, which is an
+	// operand past 2^53: `printf '%d' 42` and `printf '%d' 0x10` never reach
+	// it. Nor does the int64 maximum, and that is the measurement that hides
+	// the divergence behind the obvious probe — `9223372036854775807` rounds
+	// to 2^63 and saturates back to itself, so it comes out exact in ksh93
+	// too, while `-9223372036854775807` one below the negative end is
+	// `-9223372036854775808` there.
+	//
+	// Measured 2026-09-15 on the `-c`, file and standard-input routes
+	// (#2907). The width that survives is the machine's: this ksh93 carries
+	// its arithmetic in `long double`, which on Apple silicon is the same 64
+	// bits as a double, so a panel on a host where `long double` is wider
+	// would keep more digits. The golden record is this machine's, and that
+	// is what this answers to.
+	PrintfIntegerOperandGoesThroughTheFloatingType Answer
+
 	// PrintfRefusedOperandKeepsItsLeadingNumber writes the number the front
 	// of the operand held when the arithmetic behind it would not evaluate.
 	//

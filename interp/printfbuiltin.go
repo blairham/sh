@@ -1404,27 +1404,36 @@ func (r *Runner) printfSpecPrefix(s string) (int, string, int) {
 	if inFlags, pastFlags := printfGroupingFlagPositions(s); inFlags || pastFlags {
 		group = r.ask(r.sem().PrintfGroupingFlag, "`printf` taking `'` as the flag that groups a number's digits")
 		if r.unspecified {
-			end, spec, _ := printfSpecPrefixAt(s, true, true, true)
+			end, spec, _ := printfSpecPrefixAt(s, true, true, true, true)
 			return end, spec, r.status
 		}
 		if group && pastFlags {
 			after = r.ask(r.sem().PrintfGroupingFlagAfterTheWidth, "`printf` taking the `'` flag written past the flags")
 			if r.unspecified {
-				end, spec, _ := printfSpecPrefixAt(s, true, true, true)
+				end, spec, _ := printfSpecPrefixAt(s, true, true, true, true)
 				return end, spec, r.status
 			}
 		}
 	}
-	mixed := false
-	if printfStarBesideDigits(s, group, after) {
-		mixed = r.ask(r.sem().PrintfStarBesideTheFieldDigits,
-			"`printf` taking a `*` written beside a width's own digits")
+	restart := false
+	if printfFlagAfterTheField(s, group) {
+		restart = r.ask(r.sem().PrintfFlagAfterTheField,
+			"`printf` taking a flag written past a field")
 		if r.unspecified {
-			end, spec, _ := printfSpecPrefixAt(s, true, true, true)
+			end, spec, _ := printfSpecPrefixAt(s, true, true, true, true)
 			return end, spec, r.status
 		}
 	}
-	end, spec, lost := printfSpecPrefixAt(s, group, after, mixed)
+	mixed := false
+	if printfStarBesideDigits(s, group, after, restart) {
+		mixed = r.ask(r.sem().PrintfStarBesideTheFieldDigits,
+			"`printf` taking a `*` written beside a width's own digits")
+		if r.unspecified {
+			end, spec, _ := printfSpecPrefixAt(s, true, true, true, true)
+			return end, spec, r.status
+		}
+	}
+	end, spec, lost := printfSpecPrefixAt(s, group, after, mixed, restart)
 	// Carried on the runner rather than out of the scan: the operands a lost
 	// star takes are read by printfStars, several returns below, and adding a
 	// sixth result to scanPrintfSpec for a shape one dialect can write would
@@ -1442,13 +1451,50 @@ func (r *Runner) printfSpecPrefix(s string) (int, string, int) {
 // that reading stops is the verb, so a byte there that could have gone on
 // being part of the field is exactly the disagreement. `%*.*d` and `%50d`
 // stop at their conversion character and are never questioned.
-func printfStarBesideDigits(s string, group, after bool) bool {
-	end, _, _ := printfSpecPrefixAt(s, group, after, false)
+func printfStarBesideDigits(s string, group, after, restart bool) bool {
+	end, _, _ := printfSpecPrefixAt(s, group, after, false, restart)
 	if end >= len(s) {
 		return false
 	}
 	c := s[end]
 	return c == '*' || (c >= '0' && c <= '9')
+}
+
+// printfFlagAfterTheField reports whether the prefix at s holds a flag
+// written **past** a field, which is the one place the restart above can be
+// seen and so the one place Semantics.PrintfFlagAfterTheField is asked.
+//
+// Read off C's own grammar — flags, a field, a `.` and a field — because that
+// is the reading the question is about: a flag byte standing where that scan
+// has already finished with the flags is exactly the disagreement. `%-5d` and
+// `%-5.3d` stop at their conversion character and are never questioned.
+//
+// The `0` is not in either set. After a width it has already been taken as a
+// digit, so it can never stand here; after a precision the same. And `#` is
+// asked about only past a *width*: past a precision that shell reads it as
+// something else entirely — `%.3#.4d` of 42 is `4#222`, a base rather than a
+// field — which is a feature of its own and not this one.
+func printfFlagAfterTheField(s string, group bool) bool {
+	flags := "-+ #0"
+	if group {
+		flags += "'"
+	}
+	i := 1 // past the %
+	i += runOfBytes(s, i, flags)
+	if n := printfFieldRun(s, i); n > 0 {
+		i += n
+		if i < len(s) && strings.IndexByte("-+ #", s[i]) >= 0 {
+			return true
+		}
+	}
+	if i < len(s) && s[i] == '.' {
+		i++
+		i += printfFieldRun(s, i)
+		if i < len(s) && strings.IndexByte("-+ ", s[i]) >= 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // printfSpecPrefixAt is printfSpecPrefix once the two questions are settled:
@@ -1458,9 +1504,9 @@ func printfStarBesideDigits(s string, group, after bool) bool {
 // One grammar and not two. printfGroupingFlagPositions calls this with both
 // readings open to find out what a conversion is even asking, so the widest
 // reading and the dialect's reading can never drift apart.
-func printfSpecPrefixAt(s string, group, after, mixed bool) (int, string, printfLostStars) {
-	if after || mixed {
-		return printfKshPrefix(s, after, mixed)
+func printfSpecPrefixAt(s string, group, after, mixed, restart bool) (int, string, printfLostStars) {
+	if after || mixed || restart {
+		return printfKshPrefix(s, after, mixed, restart)
 	}
 	flags := "-+ #0"
 	if group {
@@ -1509,31 +1555,43 @@ func printfSpecPrefixAt(s string, group, after, mixed bool) (int, string, printf
 // consumed one operand instead of two, reused the format and written a second
 // field nobody asked for. So the losing stars are counted out of here as
 // printfLostStars and read by printfStars in the place they were written.
-func printfKshPrefix(s string, quote, mixed bool) (int, string, printfLostStars) {
+func printfKshPrefix(s string, quote, mixed, restart bool) (int, string, printfLostStars) {
 	i := 1 // past the %
 	flags, width, prec := "", "", ""
 	widthStars, precStars := 0, 0
 	for {
-		if n := runOfBytes(s, i, "-+ #0"); n > 0 {
-			flags += s[i : i+n]
-			i += n
+		for {
+			if n := runOfBytes(s, i, "-+ #0"); n > 0 {
+				flags += s[i : i+n]
+				i += n
+			}
+			if n, stars, text := printfKshFieldRun(s, i, mixed); n > 0 {
+				widthStars += stars
+				width = text
+				i += n
+			}
+			if quote && i < len(s) && s[i] == '\'' {
+				i++
+				continue
+			}
+			if restart && i < len(s) && strings.IndexByte("-+ #", s[i]) >= 0 {
+				// A flag past the field restarts the scan the same way the
+				// quote does, and the run above takes the flag on the next
+				// turn — so the loop always moves on. `0` is not in this set
+				// and cannot be: the field run has already taken it, which
+				// is what makes `%50d` a width of fifty.
+				continue
+			}
+			break
 		}
-		if n, stars, text := printfKshFieldRun(s, i, mixed); n > 0 {
-			widthStars += stars
-			width = text
-			i += n
+		if i == len(s) || s[i] != '.' {
+			break
 		}
-		if quote && i < len(s) && s[i] == '\'' {
-			i++
-			continue
-		}
-		break
-	}
-	if i < len(s) && s[i] == '.' {
 		i++
 		// Precision 0 until a run says otherwise, which is what a bare `.`
 		// means and what an empty run after a quote leaves behind.
 		prec = "."
+		back := false
 		for {
 			if n, stars, text := printfKshFieldRun(s, i, mixed); n > 0 {
 				precStars += stars
@@ -1544,6 +1602,27 @@ func printfKshPrefix(s string, quote, mixed bool) (int, string, printfLostStars)
 				i++
 				continue
 			}
+			if restart && i < len(s) && (s[i] == '+' || s[i] == ' ') {
+				// Taken as a flag, and the precision goes on being read: the
+				// run after it replaces the one before, exactly as a quote's
+				// does. `%.3+5d` is `+00042`.
+				flags += string(s[i])
+				i++
+				continue
+			}
+			if restart && i < len(s) && s[i] == '-' {
+				// And this one is the rule that disagrees with the width's.
+				// A `-` past a precision **throws the precision away** and
+				// is not itself a flag: `%.3-5d` is `   42`, width five and
+				// right-justified, where a `-` past a *width* left-justifies
+				// (#2910). What follows it is read as a width again, which
+				// is why the scan goes back around rather than ending here.
+				i++
+				prec, back = "", true
+			}
+			break
+		}
+		if !back {
 			break
 		}
 	}
@@ -1648,7 +1727,7 @@ func dedupFlags(flags string) string {
 // answers. Narrowing it to the dialect first would ask the flag axis only
 // where the dialect already had the flag, which is the wrong way round.
 func printfGroupingFlagPositions(s string) (inFlags, pastFlags bool) {
-	end, _, _ := printfSpecPrefixAt(s, true, true, true)
+	end, _, _ := printfSpecPrefixAt(s, true, true, true, true)
 	flagEnd := 1 + runOfBytes(s, 1, "-+ #0'")
 	for i := 1; i < end && i < len(s); i++ {
 		switch {

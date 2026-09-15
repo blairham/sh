@@ -1,0 +1,108 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Diagnostic wording in zsh — #2324.
+#
+# core/diagnostics.tests asks the half a script can depend on: every
+# diagnostic is on stderr, nothing leaks to stdout, and each arrives between
+# the output before it and the output after it. This file asks the half a
+# *person* depends on, and zsh's is the most structured of the four.
+#
+# The prefix is `<file>:N: ` with no space after the file and no word `line`
+# — and where the diagnostic came from a builtin, the builtin's name is
+# inserted between them: `<file>:cd:11: `. No other shell on the panel puts
+# the utility in the prefix, and zsh does not do it for every diagnostic
+# either, which is what makes the two shapes worth having side by side.
+#
+# The sentence itself is usually reversed from everybody else's. bash writes
+# `nosuchcommand_zz: command not found`; zsh writes `command not found:
+# nosuchcommand_zz`, the complaint first and the thing complained about
+# after the colon. Nothing here is normalized, because a row graded on its
+# status reads as a match when the text is wrong.
+
+# Every case is a subshell with stdout dropped and stderr kept, so what is
+# compared is the diagnostic and nothing else. The subshell is not decoration:
+# several of these are fatal in at least one shell on the panel, and a file
+# that stopped at the first of them would measure one line.
+
+say() { printf -- '--- %s\n' "$1"; }
+
+say 'a command that is not there'
+( nosuchcommand_zz ) 2>&1 > /dev/null
+
+say 'a file that cannot be executed'
+: > ne; chmod 644 ne
+( ./ne ) 2>&1 > /dev/null
+
+say 'a directory where a command was expected'
+mkdir -p adir
+( ./adir ) 2>&1 > /dev/null
+
+say 'cd to a directory that is not there'
+( cd /nosuchdir_zz ) 2>&1 > /dev/null
+
+say 'an unset name under -u'
+( set -u; printf '%s' "$UNSET_ZZ" ) 2>&1 > /dev/null
+
+say 'a redirection from a file that is not there'
+( read x < /nosuchfile_zz ) 2>&1 > /dev/null
+
+say 'a redirection into a directory that is not there'
+( printf x > /nosuchdir_zz/f ) 2>&1 > /dev/null
+
+say 'a signal name nobody has'
+( kill -s NOSUCHSIG_ZZ 1 ) 2>&1 > /dev/null
+
+say 'the same name given to trap'
+( trap : NOSUCHSIG_ZZ ) 2>&1 > /dev/null
+
+say 'an option the builtin does not have'
+( unset -Z x ) 2>&1 > /dev/null
+
+say 'an option name set does not have'
+( set -o nosuchoption_zz ) 2>&1 > /dev/null
+
+say 'shift past the end'
+( set -- a; shift 5 ) 2>&1 > /dev/null
+
+say 'arithmetic that will not parse'
+( : $((1 +)) ) 2>&1 > /dev/null
+
+say 'division by zero'
+( : $((1 / 0)) ) 2>&1 > /dev/null
+
+say 'assigning to a readonly'
+( readonly rv=1; rv=2 ) 2>&1 > /dev/null
+
+say 'unsetting a readonly'
+( readonly rr=1; unset rr ) 2>&1 > /dev/null
+
+say 'a dot file that is not there'
+( . ./nosuchfile_zz ) 2>&1 > /dev/null
+
+say 'exec of a program that is not there'
+( exec ./nosuchprog_zz ) 2>&1 > /dev/null
+
+say 'a name that is not an identifier'
+( read 1bad < /dev/null ) 2>&1 > /dev/null
+( export 1bad=1 ) 2>&1 > /dev/null
+
+say 'printf given a number that is not one'
+( printf '%d\n' abc ) 2>&1 > /dev/null
+
+say 'test given an operand too many'
+( test a = b = c ) 2>&1 > /dev/null
+
+say 'waiting for a pid that is not a child'
+( wait 999999 ) 2>&1 > /dev/null
+
+say 'signaling a pid nobody has'
+( kill -0 999999 ) 2>&1 > /dev/null
+
+say 'text that will not parse, through eval'
+( eval 'for' ) 2>&1 > /dev/null
+
+printf -- '--- and the ordering, with the sentences replaced\n'
+mark() { sed -e 's/.*nosuchcommand_zz.*/<a diagnostic>/' -e 's/.*nosuchdir_zz.*/<a diagnostic>/'; }
+( printf 'before\n'; nosuchcommand_zz; printf 'after\n' ) 2>&1 | mark
+( printf 'one\n'; nosuchcommand_zz; printf 'two\n'; cd /nosuchdir_zz; printf 'three\n' ) 2>&1 | mark

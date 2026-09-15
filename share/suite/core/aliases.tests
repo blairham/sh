@@ -97,15 +97,25 @@ alias c3='C'
 c1 c2 c3
 
 # The body may be a keyword, or a whole compound command.
+#
+# The two keyword cases are written inside `eval`, and the reason is worth
+# recording rather than working around silently. A reserved word that arrives
+# from an alias cannot be read by any *static* pass over the file: the table
+# only exists while the script runs, so `loop false; do :; done` is a `do`
+# with no loop in front of it to every reader that is not executing. Measured
+# 2026-09-15: `bash -n`, `zsh -n`, `ksh -n` and `dash -n` each refuse that
+# line, in their own words and each naming the `do`. Under `eval` the same
+# alias expands at the same point in the same way, and the file stays
+# readable by a formatter, an editor and `-n`.
 alias loop='while'
-loop false; do :; done; printf 'keyword while -> %s\n' "$?"
+eval 'loop false; do :; done'; printf 'keyword while -> %s\n' "$?"
 alias whole='if true; then printf "compound\n"; fi'
 whole
 
 # And the blank-suffix rule feeds a keyword its operand.
 alias kw='while '
 alias cond='false'
-kw cond; do :; done; printf 'keyword chain -> %s\n' "$?"
+eval 'kw cond; do :; done'; printf 'keyword chain -> %s\n' "$?"
 
 # Recursion stops: a body whose first word is the alias's own name expands
 # once and then runs the command underneath.

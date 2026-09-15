@@ -18520,6 +18520,32 @@ echo "st=$? alive"`,
 		Why:     "the same position with a word that *is* a number, and the one row where the panel parts over more than a sentence: bash gives it a complaint of its own — `loop count out of range` — takes the count as 1 and lets the script carry on, so `after` runs at status 0 with no `tail`. The other four write the sentence they wrote for `abc` above and end the script. So the second sentence and the surviving script are the same column, which is why one field carries both",
 	},
 	{
+		ID: "loop-control/a-marker-in-front-of-the-count", Category: "commands",
+		Snippet: `for i in 1 2; do break -- 1; echo body; done; echo "st=$?"`,
+		Why:     "the end-of-options marker in front of a count, which five columns take and two do not: both bashes, bash as `sh`, ksh93 and zsh consume the `--`, read the 1 as the count and end the loop at 0, and dash and BusyBox ash read `--` as the count itself, call it an illegal number and end the script at 2. Ours was in the second group for these four builtins while `shift` had taken the marker since its first day, so this was one reader disagreeing with another in the same shell (#2299)",
+	},
+	{
+		ID: "loop-control/a-marker-alone-still-counts-one", Category: "commands",
+		Snippet: `for i in 1 2; do break --; echo body; done; echo "st=$?"`,
+		Why:     "the marker with nothing behind it, which says it is consumed rather than skipped over: the count falls back to its default of one in the five that have a marker, so the loop ends once and nothing is printed. dash and ash give it the same complaint they give it anywhere",
+	},
+	{
+		ID: "loop-control/a-dash-word-behind-the-marker-is-the-count", Category: "commands",
+		Snippet: `for i in 1 2; do break -- -1; echo body; done; echo "st=$?"`,
+		Why:     "what the marker is for: past it a word beginning with `-` is the count and not an option, so bash 5.3 answers `-1: loop count out of range`, ksh93 and zsh write their own sentences about the same number and none of them refuses an option. bash 3.2 is the row's own oddity — it quotes the marker rather than the count it read — and dash and ash never reach the question",
+	},
+	{
+		ID: "return/a-marker-in-front-of-the-status", Category: "builtins",
+		Snippet: `f() { return -- 3; }; f; echo "st=$?"`,
+		Why:     "the same marker through `return`, whose operand is a status rather than a count, and the row that says one reader serves the family: the five that take it return 3 and the two that do not refuse `--` as a number. A fix written into the loop builtins alone would leave this at 2",
+	},
+	{
+		ID: "exit/a-marker-in-front-of-the-status", Category: "traps and exit",
+		Script:  true,
+		Snippet: `echo a; exit -- 3`,
+		Why:     "and through `exit`, where the operand is the shell's own status: five columns leave 3 and dash and ash leave 2 after complaining about the marker. A script file rather than `-c` because the status is the whole of the answer here and `a` is only the control that the line before it ran",
+	},
+	{
 		ID: "exit/break-still-counts-its-loops", Category: "traps and exit",
 		Snippet: `while :; do while :; do break 2; done; echo inner; done; echo after`,
 		Why:     "the counter-case: `break` still stops only as many loops as it was asked to, which is what an exit must not be confused with",

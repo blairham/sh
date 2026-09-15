@@ -665,6 +665,10 @@ func Semantics() interp.Semantics {
 	// numbers this shell calls illegal, which is the one wording it has here.
 	s.ShiftOptionWords = interp.ShiftOptionWordsNone
 	s.ShiftDoubleDashEndsOptions = interp.No
+	// No marker in front of a numeric operand either: `break -- 1` is
+	// `break: Illegal number: --` and the script ends there, which is the
+	// same answer this shell gives `shift --`.
+	s.NumericOperandDoubleDashEndsOptions = interp.No
 	s.ShiftNamesAreArrays = interp.No
 	s.ShiftNegativeIsOutOfRange = interp.No
 	s.WaitReadsOptions = interp.Yes

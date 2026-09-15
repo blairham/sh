@@ -607,6 +607,9 @@ func Semantics() interp.Semantics {
 	// count and there is no `--` to end options with.
 	s.ShiftOptionWords = interp.ShiftOptionWordsNone
 	s.ShiftDoubleDashEndsOptions = interp.No
+	// BusyBox answers as dash does: `break -- 1` is
+	// `break: Illegal number: --`, measured in the pinned alpine image.
+	s.NumericOperandDoubleDashEndsOptions = interp.No
 	s.ShiftNamesAreArrays = interp.No
 	s.ShiftNegativeIsOutOfRange = interp.No
 	s.ShiftCountIsArithmetic = interp.No

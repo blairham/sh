@@ -571,6 +571,10 @@ func Semantics() interp.Semantics {
 	// `shift -1` is a count out of range. The marker is honored all the same.
 	s.ShiftOptionWords = interp.ShiftOptionWordsNone
 	s.ShiftDoubleDashEndsOptions = interp.Yes
+	// `--` in front of a numeric operand is taken and the number behind it
+	// read: `break -- 1` ends the loop, `exit -- 3` exits 3. Identical in
+	// 3.2 and in the same binary called as `sh`.
+	s.NumericOperandDoubleDashEndsOptions = interp.Yes
 	s.ShiftNamesAreArrays = interp.No
 	s.ShiftNegativeIsOutOfRange = interp.Yes
 	s.WaitReadsOptions = interp.Yes

@@ -681,6 +681,9 @@ func Semantics() interp.Semantics {
 	// is why a negative count is only reachable after the marker.
 	s.ShiftOptionWords = interp.ShiftOptionWordsAny
 	s.ShiftDoubleDashEndsOptions = interp.Yes
+	// The marker is taken in front of a numeric operand too, so
+	// `break -- 1` ends the loop and `return -- 3` returns 3.
+	s.NumericOperandDoubleDashEndsOptions = interp.Yes
 	s.ShiftNamesAreArrays = interp.No
 	s.ShiftNegativeIsOutOfRange = interp.Yes
 	s.WaitReadsOptions = interp.Yes

@@ -1012,6 +1012,9 @@ func Semantics() interp.Semantics {
 	// a count it refuses for being below zero.
 	s.ShiftOptionWords = interp.ShiftOptionWordsNonNumeric
 	s.ShiftDoubleDashEndsOptions = interp.Yes
+	// The marker is taken in front of a numeric operand too, so
+	// `break -- 1` ends the loop and `exit -- 3` exits 3.
+	s.NumericOperandDoubleDashEndsOptions = interp.Yes
 	s.ShiftNamesAreArrays = interp.Yes
 	s.ShiftNegativeIsOutOfRange = interp.Yes
 	s.WaitReadsOptions = interp.No

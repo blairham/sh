@@ -259,16 +259,26 @@ var shoptSwitches = map[string]struct {
 	// this is 5.3's answer.
 	//
 	// `declare -F` reporting a definition's line and file joined the two in
-	// #2476, and it is the one of the three that is not a `set` option under
-	// another name — see interp.Runner.LocatesFunctions. What bash's extended
-	// debugging *also* does is still not here: a DEBUG action's status
-	// skipping the next command or simulating a `return`, and the
-	// BASH_ARGC/BASH_ARGV record — measured and itemized in #2476, so the
-	// remainder is a count rather than a paragraph. The entry keeps the same
-	// partial honesty `set -o posix` does — it moves what was measured to
-	// move with it and promises nothing else — rather than refusing the name
-	// outright, which is what left a debugging script with the option off,
-	// `$?` at 1 and a trap that saw only the call (#2426).
+	// #2476, and it is the one of the five that is not a `set` option under
+	// another name — see interp.Runner.LocatesFunctions. A DEBUG action's
+	// status deciding what runs next joined them after it, and the
+	// BASH_ARGC/BASH_ARGV record closes #2476's list: the arguments of each
+	// call, kept while the option is on and read back under two names by
+	// registerCallStack. See interp.Runner.SetRecordsCallArguments, which is
+	// where turning the record on records the frame it was turned on in.
+	//
+	// What is still not here is what a *sourced file* does to that record,
+	// and it is two rules of its own rather than a smaller version of this
+	// one: measured 2026-09-14, `. ./s.sh x y` pushes a frame of two even
+	// with extended debugging **off**, and `. ./s.sh` with no operands
+	// pushes a frame of one holding the file's own name. Neither follows
+	// from the option, so neither is modeled here.
+	//
+	// The entry keeps the same partial honesty `set -o posix` does — it
+	// moves what was measured to move with it and promises nothing else —
+	// rather than refusing the name outright, which is what left a debugging
+	// script with the option off, `$?` at 1 and a trap that saw only the
+	// call (#2426).
 	"extdebug": {
 		get: func(r *interp.Runner) bool { return shoptStoredState(r, "extdebug", false) },
 		set: func(r *interp.Runner, on bool) {
@@ -277,6 +287,7 @@ var shoptSwitches = map[string]struct {
 			r.SetFunctionTracing(on)
 			r.SetLocatesFunctions(on)
 			r.SetDebugActionDecides(on)
+			r.SetRecordsCallArguments(on)
 		},
 	},
 	// The one name in this table that moves a *semantics axis* rather than a

@@ -37,6 +37,12 @@ func dashWordSem(declines Answer) Semantics {
 	// tests read.
 	sem.BadSetOptionNameFatal = No
 	sem.BadSetOptionLetterFatal = No
+	// And the listing these tests read is the immediate one, which is the
+	// five-column answer: a declined word is where the deferred reading and
+	// this one part company, so leaving it unanswered would refuse every row
+	// here by name rather than list. See SetListsOptionsOnceAtTheEnd, which
+	// has a pair of tests of its own under dialect/.
+	sem.SetListsOptionsOnceAtTheEnd = No
 	return sem
 }
 

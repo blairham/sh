@@ -932,6 +932,14 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	// caller.
 	r.pushFrame(Frame{File: r.functionFile(fn.Name), Name: name})
 	defer r.popFrame()
+	// And the arguments, where a debugger has asked for them. After the
+	// frame, because the entry records the depth it was taken at. Only a
+	// call that pushed pops: a call entered while the record was off is not
+	// in it, and one the record was turned on *inside* left an entry that
+	// outlives the call. See Runner.pushCallArguments.
+	if r.pushCallArguments(args) {
+		defer r.popCallArguments()
+	}
 	r.Params, r.inFunc = args, fn.Name
 	// Where the loops were when the call was made, for the dialects that do
 	// not let a `break` in the body reach them — see Runner.loopControlFloor.

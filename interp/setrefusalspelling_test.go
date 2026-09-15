@@ -38,6 +38,11 @@ func ashLike() (Semantics, Diagnostics) {
 	// fatality. This is the column bash parts from; see
 	// TestAWeldedLetterIsRefusedByTheApplyingPass.
 	sem.SetValidatesOptionLettersFirst = No
+	// And it lists where the `-o` stands, which is what every column but
+	// ksh93 does. Reached here because the letters welded behind the `-o`
+	// are read *after* the listing, which is the other place the deferred
+	// reading would differ.
+	sem.SetListsOptionsOnceAtTheEnd = No
 	return sem, Diagnostics{
 		Location:                     LocationNone,
 		SetInvalidOptionName:         "set: illegal option -o %[1]s",
@@ -207,6 +212,9 @@ func TestAWeldedLetterIsRefusedByTheApplyingPass(t *testing.T) {
 			sem.BadSetOptionLetterFatal = No
 			sem.SetOLetterAttachesItsName = No
 			sem.SetValidatesOptionLettersFirst = c.answer
+			// The `-o` here lists before the welded letter is read, which
+			// is one of the two places the deferred listing differs.
+			sem.SetListsOptionsOnceAtTheEnd = No
 			out, _ := run(t, `set -oZ >/dev/null; echo "st=$?"`+"\n",
 				func(r *Runner) { r.Semantics = &sem })
 			if !strings.Contains(out, fmt.Sprintf("st=%d", c.want)) {

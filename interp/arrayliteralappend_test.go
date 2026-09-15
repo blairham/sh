@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	. "github.com/blairham/sh/interp"
+	"github.com/blairham/sh/syntax"
 )
 
 // A `[sub]+=value` element of a literal joins what that element already
@@ -174,5 +175,85 @@ func TestTheFirstTerminatorWinsInALiteralElement(t *testing.T) {
 	out, _ := runArray(t, `a=([1]=b]+=c); echo "1=[${a[1]}] n=${#a[@]}"`)
 	if strings.TrimSpace(out) != "1=[b]+=c] n=1" {
 		t.Errorf("got %q, want the later `]+=` kept as part of the value", strings.TrimSpace(out))
+	}
+}
+
+// An append over a scalar keeps the value the name was holding, and the
+// *keyed* spelling of the literal is the same rule as the plain one.
+//
+// It was not: `a=one; a+=([1]=Z)` left `typeset -A a=([1]=Z)` and `one` was
+// gone at status 0, because the keyed branch went to markAssoc without ever
+// asking what the name held. The plain spelling beside it — `a=one; a+=(2)` —
+// was already right, so the two readings of one operator disagreed about the
+// same scalar (#2785).
+func TestAKeyedLiteralAppendKeepsTheScalar(t *testing.T) {
+	sem := permissive()
+	sem.ArrayLiteralSubscriptIsAKey = Yes
+	sem.ScalarUnderATableDeclaration = ScalarUnderACompoundBecomesTheFirstElement
+	for _, c := range []struct{ src, want string }{
+		// The headline, and the same literal with a key that is not a number
+		// — the promotion is about the scalar and not about what the
+		// subscript spells.
+		{`a=one; a+=([1]=Z); echo "[${a[0]}][${a[1]}] n=${#a[@]}"`, "[one][Z] n=2"},
+		{`a=one; a+=([k]=Z); echo "[${a[0]}][${a[k]}] n=${#a[@]}"`, "[one][Z] n=2"},
+		// An empty scalar is a value the name is holding and an unset name is
+		// not, which is the distinction getVar draws and the one a fix that
+		// seeded the base unconditionally would lose.
+		{`a=; a+=([1]=Z); echo "keys=${!a[@]} n=${#a[@]}"`, "keys=0 1 n=2"},
+		{`unset a; a+=([1]=Z); echo "keys=${!a[@]} n=${#a[@]}"`, "keys=1 n=1"},
+		// A name already holding a table has no scalar under it, and one
+		// holding an indexed array is being appended to rather than over.
+		{`typeset -A a=([k]=v); a+=([1]=Z); echo "keys=${!a[@]} n=${#a[@]}"`, "keys=1 k n=2"},
+		{`typeset -A a; a+=([1]=Z); echo "keys=${!a[@]} n=${#a[@]}"`, "keys=1 n=1"},
+	} {
+		out, st := runGrammar(t, c.src, func(d *syntax.Dialect) { d.ParamIndirection = true }, withSem(sem))
+		if strings.TrimSpace(out) != c.want {
+			t.Errorf("%s gave %q, want %q", c.src, strings.TrimSpace(out), c.want)
+		}
+		if st != 0 {
+			t.Errorf("%s status = %d, want 0", c.src, st)
+		}
+	}
+}
+
+// The two spellings of the operator are pinned together, because the fault
+// was exactly that they had come apart: whatever an append does to a scalar,
+// it does under a subscripted element too.
+func TestTheKeyedAndPlainLiteralAppendsAgreeAboutTheScalar(t *testing.T) {
+	sem := permissive()
+	sem.ArrayLiteralSubscriptIsAKey = Yes
+	sem.ScalarUnderATableDeclaration = ScalarUnderACompoundBecomesTheFirstElement
+	//
+	// What is compared is the *base*, not the whole value: the two spellings
+	// put the literal's own element in different places by construction — a
+	// key of 1 against the next free position — so comparing the arrays
+	// wholesale would fail for a reason that is not this one.
+	for _, src := range []struct{ keyed, plain string }{
+		{`a=one; a+=([1]=Z); echo "[${a[0]}]"`, `a=one; a+=(Z); echo "[${a[0]}]"`},
+		{`a=; a+=([1]=Z); echo "[${a[0]}]"`, `a=; a+=(Z); echo "[${a[0]}]"`},
+	} {
+		keyed, _ := run(t, src.keyed, withSem(sem))
+		plain, _ := run(t, src.plain, withSem(sem))
+		if keyed != plain {
+			t.Errorf("%s gave %q and %s gave %q, want one answer about the base",
+				src.keyed, keyed, src.plain, plain)
+		}
+	}
+}
+
+// The promotion reads ScalarUnderATableDeclaration rather than an axis of its
+// own, and this is what says so: the dialect that discards a scalar under a
+// table declaration discards it here too, at the same status.
+func TestAKeyedLiteralAppendFollowsTheTableDeclarationAnswer(t *testing.T) {
+	sem := permissive()
+	sem.ArrayLiteralSubscriptIsAKey = Yes
+	sem.ScalarUnderATableDeclaration = ScalarUnderACompoundDiscardsIt
+	src := `a=one; a+=([1]=Z); echo "keys=${!a[@]} n=${#a[@]}"`
+	out, st := runGrammar(t, src, func(d *syntax.Dialect) { d.ParamIndirection = true }, withSem(sem))
+	if strings.TrimSpace(out) != "keys=1 n=1" {
+		t.Errorf("got %q, want the scalar discarded under the discarding answer", strings.TrimSpace(out))
+	}
+	if st != 0 {
+		t.Errorf("status = %d, want 0", st)
 	}
 }

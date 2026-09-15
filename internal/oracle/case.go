@@ -23572,4 +23572,18 @@ echo "st=$?"`,
 		Snippet: `trap 'echo E' ERR; { true; false; }; g() { false; }; g; echo done`,
 		Why:     "how many times one failure fires the condition when the command that failed is inside something. Every column that has ERR fires **once** per failure: the group reports the status its last command left and the call reports the status its body left, and neither is a second failure. This shell fired twice for the group in every dialect that has the condition, and twice again for the call in the two that carry the trap into a function -- a handler running twice for one event (#2793). Not the same question as the subshell rows -- a `( … )` really is a second boundary and zsh does fire on both sides of one",
 	},
+	{
+		ID:       "arrays/an-appended-literal-over-a-scalar-under-both-spellings",
+		Category: "arrays",
+		Script:   true,
+		Snippet:  "a=one\na+=([1]=Z) 2>&1\ntypeset -p a 2>&1\necho \"a0=[${a[0]}] n=${#a[@]}\"\nb=one\nb+=(2) 2>&1\ntypeset -p b 2>&1\necho \"b0=[${b[0]}]\"\necho tail\n",
+		Why:      "the same operator over the same scalar, written twice: a **subscripted** literal and a bare one. The scalar the name was holding becomes the base element in every column that has arrays at all -- `a0=[one]` -- and the two spellings must not part over it, which is what the `b` half is the control for. They parted here: ksh93 is the one column whose literal subscripts are keys, so `a+=([1]=Z)` took the keyed route, went straight to an empty table and dropped `one` at status 0, while `b+=(2)` beside it was already right (#2785). bash reads the same brackets as an arithmetic index and answers `declare -a a=([0]=\"one\" [1]=\"Z\")`; zsh reads neither bracket as a subscript at all and keeps only the literal's own word; dash has no array literal and stops at the parenthesis. `tail` is what says a column carried on",
+	},
+	{
+		ID:       "arrays/an-empty-scalar-and-an-unset-name-under-a-keyed-append",
+		Category: "arrays",
+		Script:   true,
+		Snippet:  "unset u\nu+=([1]=Z) 2>&1\ntypeset -p u 2>&1\ne=\ne+=([1]=Z) 2>&1\ntypeset -p e 2>&1\necho tail\n",
+		Why:      "the boundary the row above rests on, and the one a fix that seeded the base unconditionally would lose: an **empty** scalar is a value the name is holding and an **unset** name is not. ksh93 answers `typeset -A u=([1]=Z)` with no base and `typeset -A e=([0]='' [1]=Z)` with one, so the two lines differ by the single character that assigned nothing. It is the same distinction the bare spelling already draws -- `a=; a+=(2)` is two elements and `unset a; a+=(2)` is one -- which is why the promotion asks getVar rather than counting what is stored (#2785)",
+	},
 }

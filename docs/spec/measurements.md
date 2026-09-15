@@ -11938,6 +11938,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `xtrace/array-literal-spelling-diverges` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `+ a=(1 2)` | **2>** `+ a=(1 2)` | **2>** `+ a=(1 2)` | **2>** `+ a=( 1 2 )` | **2>** `+<shell>:1> a=( 1 2 ) ` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
 | `xtrace/array-literal-is-rebuilt-from-its-elements` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `+ a=(1 2 3)` | **2>** `+ a=(1 2 3)` | **2>** `+ a=(1 2 3)` | **2>** `+ a=( 1 2 3 )` | **2>** `+<shell>:1> a=( 1 2 3 ) ` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
 | `xtrace/array-literal-elements-diverge` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `+ x='p q'~+ a=("$x" r)` | **2>** `+ x='p q'~+ a=("$x" r)` | **2>** `+ x='p q'~+ a=("$x" r)` | **2>** `+ x='p q'~+ a=( 'p q' r )` | **2>** `+<shell>:1> x='p q' ~+<shell>:1> a=( 'p q' r ) ` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
+| `xtrace/a-compound-literal-traces-its-members` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `after` **2>** `+ c=(a=1 b=2)~+ echo after` | `after` **2>** `+ c=(a=1 b=2)~+ echo after` | `after` **2>** `+ c=(a=1 b=2)~+ echo after` | `after` **2>** `+ c.a=1~+ c.b=2~+ echo after` | `after` **2>** `+<shell>:1> c=( 'a=1' 'b=2' ) ~+<shell>:1> echo after` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
 | `xtrace/empty-array-literal-diverges` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `after` **2>** `+ b=()~+ echo after` | `after` **2>** `+ b=()~+ echo after` | `after` **2>** `+ b=()~+ echo after` | `after` **2>** `+ echo after` | `after` **2>** `+<shell>:1> b=( ) ~+<shell>:1> echo after` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
 | `xtrace/element-assignment-keeps-its-subscript` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `+ a=(x y)~+ a[1]=z` | **2>** `+ a=(x y)~+ a[1]=z` | **2>** `+ a=(x y)~+ a[1]=z` | **2>** `+ a=( x y )~+ a[1]=z` | **2>** `+<shell>:1> a=( x y ) ~+<shell>:1> a[1]=z ` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
 | `xtrace/element-subscript-spelling-diverges` | **2>** `+ i=2~+ a[2]=v~<shell>: 1: a[2]=v: not found` *(status 127)* | **2>** `+ i=2~+ a[$i]=v` | **2>** `+ i=2~+ a[$i]=v` | **2>** `+ i=2~+ a[$i]=v` | **2>** `+ i=2~+ a[2]=v` | **2>** `+<shell>:1> i=2 ~+<shell>:1> a[$i]=v ` | **2>** `+ i=2~+ 'a[2]=v'~<shell>: a[2]=v: not found` *(status 127)* |
@@ -12270,11 +12271,15 @@ grades it and nothing drift-checks it either, for the same reason.
   set -x; a=(1    2
   3)
   ```
-- `xtrace/array-literal-elements-diverge` — the deeper half of the same split: bash prints the element words as written, quotes and all, where ksh93 and zsh print what they expanded to. It follows from *when* each traces — bash writes the line before the expansion and the other two after it, which `set -x; a=($(echo x))` shows by the order of the two lines. Recorded and not modeled: expanding the elements to print them would expand them twice, with both sets of side effects, which is the double run #1915 fixed for a scalar's value (#1959)
+- `xtrace/array-literal-elements-diverge` — the deeper half of the same split: bash prints the element words as written, quotes and all, where ksh93 and zsh print what they expanded to. It follows from *when* each traces — bash writes the line before the expansion and the other two after it, which `set -x; a=($(echo x))` shows by the order of the two lines. So the elements have to be expanded **once**, by whoever is about to store them, and handed to the trace the way a scalar's value already is; expanding them again to print would run both sets of side effects, which is the double run #1915 fixed. See Semantics.TraceArrayLiteralShowsTheExpandedElements (#1959)
   ```sh
   set -x; x="p q"; a=("$x" r)
   ```
-- `xtrace/empty-array-literal-diverges` — ksh93 traces nothing at all for an empty literal — not `b=()` and not `b=( )` — where bash and zsh each trace it in their own spelling. A third answer on the same construct, recorded rather than modeled (#1959)
+- `xtrace/a-compound-literal-traces-its-members` — the row that explains the one below it. ksh93 traces a compound literal as the assignments its body performs — `+ c.a=1` and `+ c.b=2`, two lines — rather than as the parentheses it was written with, which is why the *empty* one beside it traces nothing: an empty body performs no assignments. The other four columns have no compound at all and read the same parentheses as an array literal of the two strings `a=1` and `b=2`, tracing it as one line in each column's own spelling. So the pair is what says the empty literal's silence is a fact about the fourth kind and not a third answer about array literals (#1959)
+  ```sh
+  set -x; c=(a=1 b=2); echo after
+  ```
+- `xtrace/empty-array-literal-diverges` — ksh93 traces nothing at all for an empty literal — not `b=()` and not `b=( )` — where bash and zsh each trace it in their own spelling. It is **not** a third answer about array literals, which is what this row was filed as: `b=()` is an empty *compound variable* in that shell, and a compound literal is traced as the assignments its body performs — `c=(a=1 b=2)` is two lines there, `+ c.a=1` and `+ c.b=2`. An empty body performs none, so there is nothing to write. A reading that special-cased the empty literal would have passed this row and written one line for the row beside it (#1959)
   ```sh
   set -x; b=(); echo after
   ```
@@ -12282,7 +12287,7 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   set -x; a=(x y); a[1]=z
   ```
-- `xtrace/element-subscript-spelling-diverges` — two against one on which subscript is printed: bash and zsh print what was written and ksh93 prints what it came to. The majority reading is what this shell does, and it is also the only one that costs nothing — evaluating the subscript to print it would evaluate it twice, so `a[$((i++))]=v` would increment twice (#1959)
+- `xtrace/element-subscript-spelling-diverges` — two against one on which subscript is printed: bash and zsh print what was written and ksh93 prints what it came to. The split is not the one above it — zsh prints its *elements* expanded and its subscript as written — which is what makes them two axes. The resolved reading takes the number the **store** worked out rather than making one of its own, so `a[$((i++))]=v` still increments once; the consequence is that the line waits for the assignment, and a refused one leaves no line at all. See Semantics.TraceElementSubscriptIsEvaluated (#1959)
   ```sh
   set -x; i=2; a[$i]=v
   ```

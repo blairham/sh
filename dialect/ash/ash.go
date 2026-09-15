@@ -905,6 +905,12 @@ func Semantics() interp.Semantics {
 	// bash's side of the split (#2272).
 	s.ArithNegativeExponentIsError = interp.Yes
 
+	// unanswered TraceArrayLiteralShowsTheExpandedElements: no array literal
+	// here either — `a=(1 2)` is a syntax error — so nothing of this shape
+	// is ever traced (#1959).
+	// unanswered TraceElementSubscriptIsEvaluated: and no subscript, so
+	// `a[1]=v` names a variable spelled `a[1]` and there is nothing to
+	// resolve.
 	// unanswered ArithFloatOverflowIsZero: no floats here either, so
 	// `$((1e400))` is a syntax error rather than a number out of range and
 	// the axis is unreachable.

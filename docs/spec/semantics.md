@@ -17563,6 +17563,71 @@ written on: zsh; the other three count from the file.
 Gives each assignment of `a=1 b=2` its own trace line. True in bash and
 ksh93; dash and zsh put them on one.
 
+**`TraceArrayLiteralShowsTheExpandedElements`** — bash no · dash unspecified · ksh93 yes · zsh yes
+
+Prints what an array literal's elements came to rather than the words the
+script wrote. Measured 2026-09-14, `set -x; x="p q"; a=("$x" r)`:
+
+    bash 5.3.15, bash 3.2   a=("$x" r)      the words as written
+    ksh93u+, zsh 5.9.2      a=( 'p q' r )   the elements, quoted
+
+Each column shows its **own** expansion, which is what makes this one
+axis and not a rendering rule: `x="p q"; a=($x)` unquoted is `a=( p q )`
+in ksh93, where the field splitting made two elements, and `a=( 'p q' )`
+in zsh, where nothing splits an unquoted parameter.
+
+The **ordering** moves with it, and that is why this cannot be done in
+the printing. `set -x; a=($(echo x))` in bash traces `a=($(echo x))` and
+*then* runs the substitution; ksh93 runs it first and traces `a=( x )`.
+So the shell that prints the values has expanded them before it writes
+the line — which is where the element list is expanded, once, by whoever
+is about to store it. Expanding again to print would run the substitution
+twice with both sets of side effects, the double run #1915 fixed for a
+scalar's value (#1959).
+
+dash and ash have no array literal at all, so neither can be asked.
+
+**`TraceElementSubscriptIsEvaluated`** — bash no · dash unspecified · ksh93 yes · zsh no
+
+Prints the subscript of `a[$i]=v` as the number or the key it resolved
+to, rather than as the text. It splits the panel **differently** from the
+axis above, which is what makes it a second question rather than a
+reading of the same one:
+
+    written                  bash 5.3, bash 3.2, zsh 5.9.2   ksh93u+
+    i=2; a[$i]=v             a[$i]=v                         a[2]=v
+    i=2; a[i]=v              a[i]=v                          a[2]=v
+    i=2; a[$i+1]=v           a[$i+1]=v                       a[3]=v
+    typeset -A m; m[k$x]=v   m[k$x]=v                        m[k]=v
+
+zsh expands its elements and does not resolve its subscript — the pair
+that says the two axes are independent. The last row is why the value is
+"what the assignment resolved" rather than "the arithmetic": a table's
+subscript is a key, and the key is the expanded text.
+
+Resolved **once**, and the trace takes the store's resolution rather than
+making its own: `set -x; i=0; a[i++]=v; echo "i=$i"` leaves `i` at 1 in
+ksh93, and `set -x; a[$(echo 1)]=v` runs `echo 1` before the trace line
+rather than after it. So the line waits for the assignment — and a
+*refused* assignment therefore leaves no line at all, which is measured
+and is the same shape from the other side: `readonly a=(1); set -x;
+a=(2 3)` and `set -x; a[1/0]=v` both write only the complaint there,
+where bash and zsh write the trace line first and the complaint under it.
+
+**a compound literal is traced as its members**, and that is a correction
+rather than an axis — one dialect has the fourth kind. `set -x;
+c=(a=1 b=2)` is two lines in ksh93, `+ c.a=1` and `+ c.b=2`. It is the
+explanation of what #1959 recorded as a third answer about *empty* array
+literals: `b=()` is an empty compound there, so it performs no
+assignments and writes no line. A reading that special-cased the empty
+literal would have written one line for `c=(a=1 b=2)` and passed the row
+it was measured from.
+
+A **subscripted** literal is a third shape and is deliberately not
+modeled: `set -x; a=([2]=c [0]=a)` is `+ a[2]=c` and `+ a[0]=a` in ksh93,
+one line per element, and `typeset -A m=([k]=v)` is `+ m[k]=v` then
+`+ typeset -A m`. See #2866.
+
 **`TraceShowsItsOwnDisabling`** — bash yes · dash yes · ksh93 no · zsh yes
 
 Prints `set +x` before acting on it. True in dash, bash and zsh; ksh93

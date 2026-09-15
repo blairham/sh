@@ -1147,6 +1147,15 @@ func Semantics() interp.Semantics {
 	s.StatusArgument = interp.StatusArgLeadingDigits
 	s.UnsetPositionalIsAllowed = interp.Yes
 	s.TraceShowsItsOwnDisabling = interp.No
+	// A traced array literal shows what its elements came to: `x="p q";
+	// a=("$x" r)` is `a=( 'p q' r )` here, and the unquoted `a=($x)` is
+	// `a=( p q )` — this column's own field splitting, visible in its own
+	// trace.
+	s.TraceArrayLiteralShowsTheExpandedElements = interp.Yes
+	// And the subscript is the one the assignment resolved: `i=2; a[$i]=v`
+	// is `a[2]=v`, `a[i]=v` is too, and a table's `m[k$x]=v` is `m[k]=v`.
+	// The only column that does.
+	s.TraceElementSubscriptIsEvaluated = interp.Yes
 	s.TraceAssignmentsSeparately = interp.Yes
 	// An unparseable `eval` is reported and survived here, unlike dash, but a
 	// file `.` cannot open still ends the script — so the two halves of the

@@ -983,6 +983,11 @@ func (r *Runner) assignAssocElement(a *syntax.Assign) {
 	if !ok {
 		return
 	}
+	// A table's subscript resolves to a *key* rather than to a number, and
+	// the column that traces what a subscript came to writes that key:
+	// `typeset -A m; m[k$x]=v` is `m[k]=v` there. See
+	// Semantics.TraceElementSubscriptIsEvaluated.
+	r.resolvedSubscript(key)
 	value := r.assignValue(a)
 	if a.Append {
 		// `m[k]+=v` joins the element it names, the same operation the

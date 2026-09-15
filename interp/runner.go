@@ -6903,16 +6903,65 @@ func (r *Runner) assignAll(ctx context.Context, assigns []*syntax.Assign) {
 	separately := r.ask(r.sem().TraceAssignmentsSeparately,
 		"each assignment getting its own trace line")
 	values := make([]string, len(assigns))
+	prepared := make([]*expandedAssign, len(assigns))
 	for i, a := range assigns {
 		values[i] = r.expandAssignValue(a.Value)
-		if separately {
-			r.traceAssignments(assigns[i:i+1], values[i:i+1])
+		prepared[i] = r.prepareTracedAssign(a, values[i])
+		// The subscript is the one thing a trace can show that only the
+		// *store* knows, because resolving it here as well would resolve it
+		// twice — `a[i++]=v` steps `i` once in the column that prints the
+		// number. So that column's line waits for the assignment, which is
+		// also why a refused one leaves no line at all there.
+		after := prepared[i].tracesAfterTheStore
+		if separately && !after {
+			r.traceAssignments(assigns[i:i+1], values[i:i+1], prepared[i:i+1])
 		}
-		r.withExpandedValue(ctx, a, values[i])
+		r.withPreparedValue(ctx, prepared[i])
+		if separately && after {
+			r.traceAssignments(assigns[i:i+1], values[i:i+1], prepared[i:i+1])
+		}
 	}
 	if !separately {
-		r.traceAssignments(assigns, values)
+		r.traceAssignments(assigns, values, prepared)
 	}
+}
+
+// prepareTracedAssign expands, ahead of the trace, whatever this dialect's
+// trace prints the *value* of rather than the text of.
+//
+// Nothing here is a second expansion: what it produces is handed to the store
+// through Runner.expanded, which is the same arrangement assignValue has used
+// for a scalar since #1915. What is new is that an array literal's elements
+// and an element write's subscript are two more things a trace can print the
+// value of, and two more things that must therefore be expanded exactly once.
+//
+// Asked only where the construct is written, so a dialect that answers neither
+// axis is never questioned about a line that has no literal and no subscript
+// in it.
+func (r *Runner) prepareTracedAssign(a *syntax.Assign, value string) *expandedAssign {
+	e := &expandedAssign{assign: a, value: value}
+	if a.IsArray && a.Members == nil && a.Index == nil && len(a.Elems) > 0 &&
+		r.ask(r.sem().TraceArrayLiteralShowsTheExpandedElements,
+			"an array literal traced as what its elements expanded to") {
+		if parsed, ok := r.literalElems(a.Elems,
+			r.literalReadsSubscripts(a.Name, a.Elems, a.Append)); ok {
+			e.elems, e.elemsSet = parsed, true
+		}
+	}
+	if a.Index != nil && r.ask(r.sem().TraceElementSubscriptIsEvaluated,
+		"a traced subscript written as what it resolved to") {
+		e.tracesAfterTheStore = true
+	}
+	return e
+}
+
+// withPreparedValue performs one assignment from what prepareTracedAssign
+// expanded for it.
+func (r *Runner) withPreparedValue(ctx context.Context, e *expandedAssign) {
+	saved := r.expanded
+	r.expanded = e
+	defer func() { r.expanded = saved }()
+	r.assign(ctx, e.assign)
 }
 
 // expandedAssign is one assignment's right-hand side, expanded once by
@@ -6920,6 +6969,46 @@ func (r *Runner) assignAll(ctx context.Context, assigns []*syntax.Assign) {
 type expandedAssign struct {
 	assign *syntax.Assign
 	value  string
+
+	// elems is the array literal's element list, expanded once for the
+	// dialect whose trace prints what the elements came to rather than what
+	// the script wrote. Held here for the same reason value is: expanding a
+	// second time to print it would run the second time's side effects, which
+	// is the double run #1915 fixed for a scalar.
+	//
+	// Consumed once, by the store that is about to use it — see
+	// Runner.takeExpandedElements. Single use rather than "while this
+	// assignment is under way", because a *nested* literal expanded during
+	// the same assignment is a different element list and must not be handed
+	// the outer one's.
+	elems      []literalElem
+	elemsSet   bool
+	elemsTaken bool
+
+	// subscript is what the store resolved this assignment's subscript to,
+	// for the dialect whose trace prints that rather than the text: the
+	// number for an index array, the key for a table. Recorded by the store
+	// on its way past, which is why the trace for such an assignment is
+	// written *after* it has been performed — see Runner.assignAll.
+	//
+	// Empty where nothing resolved one, which is also what a refused
+	// assignment leaves: that column writes no trace line at all for
+	// `readonly a=(1); a=(2 3)` or for `a[1/0]=v`, and this is why.
+	subscript    string
+	subscriptSet bool
+
+	// tracesAfterTheStore says this assignment's line is written once it has
+	// been performed, which is the arrangement the subscript above needs.
+	tracesAfterTheStore bool
+}
+
+// resolvedSubscript records what an assignment's subscript came to, for the
+// dialect that traces it. Nothing keeps it where no trace is waiting.
+func (r *Runner) resolvedSubscript(text string) {
+	if r.expanded == nil || !r.expanded.tracesAfterTheStore {
+		return
+	}
+	r.expanded.subscript, r.expanded.subscriptSet = text, true
 }
 
 // assignValue is the value an assignment stores, expanded.
@@ -6939,14 +7028,6 @@ func (r *Runner) assignValue(a *syntax.Assign) string {
 		return r.expanded.value
 	}
 	return r.expandAssignValue(a.Value)
-}
-
-// withExpandedValue performs one assignment from a value already expanded.
-func (r *Runner) withExpandedValue(ctx context.Context, a *syntax.Assign, value string) {
-	saved := r.expanded
-	r.expanded = &expandedAssign{assign: a, value: value}
-	defer func() { r.expanded = saved }()
-	r.assign(ctx, a)
 }
 
 // assign performs one assignment, which is three different things wearing the
@@ -7130,6 +7211,11 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 			r.fatal("%s\n", r.subscriptFailure(text, err))
 			return
 		}
+		// The number, for the trace that writes it — see
+		// Semantics.TraceElementSubscriptIsEvaluated. Here rather than at the
+		// store below because both the plain write and the append pass
+		// through it, and because the value is this one whichever they do.
+		r.resolvedSubscript(itoa(idx))
 		if a.Append {
 			// `a[0]+=Q` appends to element 0. Distinct from `a+=(Q)`, which
 			// adds an element after the last: the subscript is what says

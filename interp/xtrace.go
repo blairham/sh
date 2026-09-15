@@ -313,17 +313,38 @@ func (r *Runner) traceCommand(words []string) {
 // one line each writes it as soon as that value is known, so the split is about
 // *when* as much as about how many, and only the caller performing them knows
 // when — see Runner.assignAll.
-func (r *Runner) traceAssignments(assigns []*syntax.Assign, values []string) {
+func (r *Runner) traceAssignments(assigns []*syntax.Assign, values []string, prepared []*expandedAssign) {
 	if !r.xtrace || len(assigns) == 0 {
+		return
+	}
+	d := r.diag()
+	words := make([]string, 0, len(assigns))
+	for i, a := range assigns {
+		if p := prepared[i]; p != nil && p.tracesAfterTheStore && !p.subscriptSet {
+			// The line waits for the store to resolve its subscript, and
+			// nothing resolved one: the assignment was refused. That column
+			// writes no line for it — `a[1/0]=v` and a frozen name are both
+			// silent there — which is what having nothing to put in the
+			// brackets comes to.
+			continue
+		}
+		if a.Members != nil {
+			// A compound literal writes no word here: it is traced as the
+			// member assignments its body performs, one line each, which is
+			// what the shell that has the construct does — see
+			// Runner.assignCompoundMember. So `c=(a=1 b=2)` is two lines and
+			// not one, and `b=()` is none at all.
+			continue
+		}
+		words = append(words, r.traceAssign(a, values[i], prepared[i], d))
+	}
+	if len(words) == 0 {
+		// Every assignment on the line wrote its own lines, or wrote none.
+		// A `+ ` with nothing after it is not what the shell writes.
 		return
 	}
 	r.awaitTraceTurn()
 	defer r.releaseTraceTurn()
-	d := r.diag()
-	words := make([]string, len(assigns))
-	for i, a := range assigns {
-		words[i] = traceAssign(a, values[i], d)
-	}
 	r.traceLine(strings.Join(words, " "), d)
 }
 
@@ -346,12 +367,18 @@ func (r *Runner) traceAssignments(assigns []*syntax.Assign, values []string) {
 // deliberately not modeled: evaluating the subscript here would evaluate it a
 // second time, with `a[$((i++))]=v` incrementing twice, which is exactly the
 // double run #1915 fixed for a scalar's value. Tracked as #1959.
-func traceAssign(a *syntax.Assign, value string, d Diagnostics) string {
+func (r *Runner) traceAssign(a *syntax.Assign, value string, e *expandedAssign, d Diagnostics) string {
 	var b strings.Builder
 	b.WriteString(a.Name)
 	if a.Index != nil {
 		b.WriteString("[")
-		b.WriteString(syntax.PrintWord(a.Index))
+		if e != nil && e.subscriptSet {
+			// What the store resolved it to, in the one column that writes
+			// that — see Semantics.TraceElementSubscriptIsEvaluated.
+			b.WriteString(e.subscript)
+		} else {
+			b.WriteString(syntax.PrintWord(a.Index))
+		}
 		b.WriteString("]")
 	}
 	if a.Append {
@@ -359,7 +386,7 @@ func traceAssign(a *syntax.Assign, value string, d Diagnostics) string {
 	}
 	b.WriteString("=")
 	if a.IsArray {
-		b.WriteString(traceArrayLiteral(a.Elems, d.TraceArrayLiteral))
+		b.WriteString(traceArrayLiteral(a.Elems, expandedElemsOf(e), d.TraceArrayLiteral, d))
 		return b.String()
 	}
 	b.WriteString(traceQuote(value, d.TraceQuoting, d.TraceMetacharacters))
@@ -378,10 +405,23 @@ func traceAssign(a *syntax.Assign, value string, d Diagnostics) string {
 // modeled here, for the reason traceAssign gives about the subscript:
 // expanding the elements to print them would expand them twice. Tracked as
 // #1959.
-func traceArrayLiteral(elems []*syntax.Word, style TraceArrayLiteral) string {
-	words := make([]string, len(elems))
+func traceArrayLiteral(elems []*syntax.Word, parsed []literalElem, style TraceArrayLiteral, d Diagnostics) string {
+	var words []string
 	for i, w := range elems {
-		words[i] = syntax.PrintWord(w)
+		if parsed == nil || parsed[i].subscripted {
+			// The words as written, which is one dialect's whole answer —
+			// and, in the dialect that prints the values, the fallback for a
+			// `[sub]=value` element, whose own shape is #2866's.
+			words = append(words, syntax.PrintWord(w))
+			continue
+		}
+		// A bare element is however many *fields* it expanded to, which is
+		// why this is not one word each: `x="p q"; a=($x)` is two elements in
+		// the column that splits and one in the column that does not, and
+		// each of them traces its own count.
+		for _, f := range parsed[i].fields {
+			words = append(words, traceQuote(f, d.TraceQuoting, d.TraceMetacharacters))
+		}
 	}
 	joined := strings.Join(words, " ")
 	if style != TraceArraySpaced {
@@ -391,6 +431,15 @@ func traceArrayLiteral(elems []*syntax.Word, style TraceArrayLiteral) string {
 		return "( )"
 	}
 	return "( " + joined + " )"
+}
+
+// expandedElemsOf is the element list prepareTracedAssign expanded, or nil
+// where this dialect's trace prints the words as written.
+func expandedElemsOf(e *expandedAssign) []literalElem {
+	if e == nil || !e.elemsSet {
+		return nil
+	}
+	return e.elems
 }
 
 // traceLine writes one trace line.

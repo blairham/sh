@@ -210722,6 +210722,57 @@
         "TimedOut": false
       }
     },
+    "xtrace/a-compound-literal-traces-its-members": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected \"(\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "after",
+        "Stderr": "+ c=(a=1 b=2)~+ echo after",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "after",
+        "Stderr": "+ c=(a=1 b=2)~+ echo after",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "after",
+        "Stderr": "+ c=(a=1 b=2)~+ echo after",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "after",
+        "Stderr": "+ c.a=1~+ c.b=2~+ echo after",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "after",
+        "Stderr": "+\u003cshell\u003e:1\u003e c=( 'a=1' 'b=2' ) ~+\u003cshell\u003e:1\u003e echo after",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "xtrace/a-control-character-diverges": {
       "ash": {
         "Stdout": "a\tb",

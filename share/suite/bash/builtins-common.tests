@@ -1,0 +1,35 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# `hash` with no operand: bash writes a table with a header and a hit count,
+# and it is the only shell on the panel that writes anything of the sort.
+#
+# The four listings are four formats — zsh and ksh93 write `name=/path`, dash
+# writes the bare path, bash writes columns under `hits command` — so this is
+# a case that could only ever have lived in a dialect file. What is asked is
+# the whole listing rather than a status, because the format *is* the answer.
+#
+# The commands are run first so that the table has something in it, and they
+# are run in an order this file chose: a hash table is a table and the order
+# it lists in is the shell's, not the order the names were typed.
+
+hash
+printf 'nothing hashed yet -> %s\n' "$?"
+
+ls > /dev/null 2>&1
+cat /dev/null
+hash
+printf 'two commands later -> %s\n' "$?"
+
+# A second run of the same command moves the count rather than adding a row.
+ls > /dev/null 2>&1
+hash
+
+# -r empties it, and the empty listing is a sentence rather than nothing.
+hash -r
+hash
+printf 'after -r -> %s\n' "$?"
+
+# A name given to `hash` is looked up and remembered without running it.
+hash cat
+hash

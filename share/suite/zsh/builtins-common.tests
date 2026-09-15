@@ -1,0 +1,38 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Four small answers that are zsh's alone among the regular builtins, and
+# each of them is the kind a script reads with `case` or a comparison rather
+# than by eye — which is what makes them worth a case rather than a note.
+#
+#   `umask` writes three octal digits where bash, ksh93 and dash write four
+#   `read -n` is not "this many characters" — zsh spells that `-k`
+#   a `cd` found through CDPATH is not echoed
+#   `kill` with no operand at all is a usage error at 1, not at 2
+
+umask 022
+printf 'umask [%s]\n' "$(umask)"
+umask 077
+printf 'umask [%s]\n' "$(umask)"
+umask u=rwx,g=rx,o=
+printf 'set symbolically, read back numerically [%s]\n' "$(umask)"
+umask 022
+
+# -S is the same in every shell, and is here so that the lines above are
+# about the numeric form rather than about the mask.
+printf 'umask -S [%s]\n' "$(umask -S)"
+
+# `read -n 3` takes no characters here. The status is success either way, so
+# what tells the shells apart is the value.
+printf 'abcdef\n' > f
+read -n 3 n3 < f 2> /dev/null
+printf 'read -n 3 -> %s [%s]\n' "$?" "${n3-unset}"
+
+# CDPATH, whose whole visible effect elsewhere is the line the shell writes.
+mkdir -p real/inner
+here=$(pwd)
+( CDPATH=$here/real; cd inner; printf 'and it did land on [%s]\n' "${PWD##*/}" )
+
+# `kill` with nothing to kill.
+kill 2> /dev/null
+printf 'kill with no operand -> %s\n' "$?"

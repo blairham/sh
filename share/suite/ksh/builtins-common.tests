@@ -1,0 +1,39 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# `hash` is not a builtin in ksh93: it is a preset alias for `alias -t --`,
+# which is to say the remembered-path table and the alias table are the same
+# table. The listing is `name=/path` in the order the names were added, where
+# zsh writes the same shape sorted, dash writes bare paths and bash writes
+# columns under a header.
+#
+# `echo -E` is the second answer here that is ksh93's alone: `-e` is an
+# option in bash, zsh and ksh93 and a word in dash, but `-E` is an option in
+# bash and zsh, a word in dash — and in ksh93 a word that is written out
+# while the escapes still are not processed.
+#
+# Held out until #2896 lands: a `cd` whose operand is not found in CDPATH
+# does not fall back to the current directory in ksh93, where the other three
+# and ours all do.
+#
+#   mkdir -p elsewhere target
+#   CDPATH=$PWD/elsewhere
+#   cd target
+
+hash
+printf 'nothing hashed yet -> %s\n' "$?"
+
+ls > /dev/null 2>&1
+cat /dev/null
+hash
+printf 'two commands later -> %s\n' "$?"
+
+# The alias table is the same table, so the tracked entries are there under
+# the option that names them.
+alias -t
+printf 'alias -t -> %s\n' "$?"
+
+# And `echo`, which writes its own flags out.
+echo -E 'with -E: a\tb'
+echo -e 'with -e: a\tb'
+echo 'plain: a\tb'

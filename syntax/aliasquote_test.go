@@ -284,15 +284,78 @@ func TestTheAxisDecidesWhetherTheBlankReachesPastTheConstruct(t *testing.T) {
 	}
 }
 
-// The seam is crossed only where the text after the alias word is the
-// *input's*. A body expanded from inside another body's expansion has that
-// body's remaining tokens in front of it, and a token keeps no text to be
-// read again — so the carry is declined there rather than reading past
-// tokens that stand between. See #2709, which has the panel rows for the
-// nested arrangement.
-func TestTheCarryIsDeclinedWhereTheRestIsAnotherBodysTokens(t *testing.T) {
+// The seam is crossed at every level, and the text after the alias word is
+// the enclosing body's before it is the input's (#2709).
+//
+// This row is the one that used to say the opposite. A quote `b` opens, with
+// `x` behind it in `a`'s body and nothing after that to close it, is an
+// unterminated quote in all seven columns — and the carry being declined one
+// level in made it a closed one, so `echo after` ran where no shell runs it.
+func TestAQuoteAnInnerBodyOpensAndNothingClosesIsUnterminated(t *testing.T) {
 	got := parsed(t, table("a", "b x", "b", `echo "`), "a\necho after")
-	if !strings.Contains(got, "echo after") {
-		t.Errorf("came to %q: the input after the expansion was swallowed, so the pending token was read as if it were the input", got)
+	if !strings.Contains(got, "unterminated") {
+		t.Errorf("came to %q, want the quote reported unterminated", got)
+	}
+}
+
+// A construct an inner body opens reaches the enclosing body's remaining text
+// before it reaches the input, which is the level the token model could not
+// reach until the pending queue started carrying the text each token came
+// from (#2709).
+//
+// Measured 2026-09-15 from a script file, because zsh expands no alias under
+// `-c`, with `alias b='echo "'` and `echo one` / `echo two` around the line.
+// Unanimous in all seven columns, both arrangements.
+//
+//	alias a='b x'   then  a y"    one, ` x y`, two
+//	alias a='b x"'  then  a       one, ` x`, two
+func TestAConstructAnInnerBodyOpensReachesTheEnclosingBody(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		alias syntax.Aliases
+		src   string
+		want  string
+	}{
+		{
+			// The inner body opens the quote and the *input* closes it, so
+			// the construct crosses two seams: the enclosing body's ` x`
+			// first and then ` y"` of the line.
+			"the input closes it",
+			table("b", `echo "`, "a", "b x"), "a y\"\necho two",
+			"echo \" x y\"\necho two",
+		},
+		{
+			// The inner body opens it and the *enclosing body* closes it, so
+			// nothing of the input is taken at all and the line after stands
+			// as it was written.
+			"the enclosing body closes it",
+			table("b", `echo "`, "a", `b x"`), "a\necho two",
+			"echo \" x\"\necho two",
+		},
+		{
+			// Three levels, to say the tail is a chain rather than one body:
+			// the quote `c` opens is closed by the input, past what is left
+			// of `b`'s body and then of `a`'s.
+			"three bodies deep",
+			table("c", `echo "`, "b", "c y", "a", "b z"), "a w\"\necho two",
+			"echo \" y z w\"\necho two",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			if got := parsed(t, c.alias, c.src); got != c.want {
+				t.Errorf("came to %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
+// And the tokens the construct swallowed stop being words of their own. The
+// guard is the word *after* them: with `x` inside the quote, what follows is
+// read from the input at the position the input is really at.
+func TestTokensASwallowedConstructTookAreNoLongerWords(t *testing.T) {
+	got := parsed(t, table("b", `echo "`, "a", "b x"), "a y\" z\necho two")
+	want := "echo \" x y\" z\necho two"
+	if got != want {
+		t.Errorf("came to %q, want %q", got, want)
 	}
 }

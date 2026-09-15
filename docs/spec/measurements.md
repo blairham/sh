@@ -22095,6 +22095,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `alias/a-body-that-closes-its-own-quotes-takes-nothing` | `one~a b~two` | `one~a b~two` | `one~a b~two` | `one~a b~two` | `one~a b~two` | `one~a b~two` | `one~a b~two` |
 | `alias/a-blank-inside-an-open-quote-is-not-the-trailing-blank` | `one~x  b~two` | `one~x  b~two` | `one~x  b~two` | `one~x  b~two` | `one~x  b~two` | `one~x  b~two` | `one~x  b~two` |
 | `alias/the-blank-past-an-open-quote-splits-the-panel` | `one~x  b c~two` | `one~x  b CEE~two` | `one~x  b CEE~two` | `one~x  b CEE~two` | `one~x  b c~two` | `one~x  b c~two` | `one~x  b c~two` |
+| `alias/an-inner-body-opens-a-quote-the-input-closes` | `one~ x y~two` | `one~ x y~two` | `one~ x y~two` | `one~  x  y~two` | `one~ x y~two` | `one~ x y~two` | `one~ x y~two` |
+| `alias/an-inner-body-opens-a-quote-the-enclosing-body-closes` | `one~ x~two` | `one~ x~two` | `one~ x~two` | `one~  x~two` | `one~ x~two` | `one~ x~two` | `one~ x~two` |
+| `alias/an-inner-body-opens-a-quote-nothing-closes` | `one` **2>** `<script>: 7: Syntax error: Unterminated quoted string` *(status 2)* | `one` **2>** `<script>: line 5: unexpected EOF while looking for matching `"'` *(status 2)* | `one` **2>** `<script>: line 5: unexpected EOF while looking for matching `"'` *(status 2)* | `one` **2>** `<script>: line 5: unexpected EOF while looking for matching `"'~<script>: line 7: syntax error: unexpected end of file` *(status 2)* | `one` **2>** `<script>: line 4: syntax error at line 5: `"' unmatched` *(status 3)* | `one` **2>** `<script>:7: unmatched "` *(status 1)* | `one` **2>** `<script>: line 7: syntax error: unterminated quoted string` *(status 2)* |
+| `alias/three-bodies-deep-and-the-quote-still-carries` | `one~ y z w~two` | `one~ y z w~two` | `one~ y z w~two` | `one~  y  z  w~two` | `one~ y z w~two` | `one~ y z w~two` | `one~ y z w~two` |
 | `alias/a-backslash-the-body-ends-with-reaches-the-input` | `one~[a b]two` | `one~[a b]two` | `one~[a b]two` | `one~[a ][b]two` | `one~[a b]two` | `one~[a b]two` | `one~[a b]two` |
 | `alias/a-backslash-the-body-ends-with-and-nothing-after-it` | `one~[aecho][two]` | `one~[aecho][two]` | `one~[aecho][two]` | `one~[a ]two` | `one~[aecho][two]` | `one~[a ]two` | `one~[aecho][two]` |
 | `alias/nested-text-expands-where-the-command-string-did-not` | `E~v=` **2>** `<shell>: 1: t: not found` | `v=` **2>** `<shell>: line 1: t: command not found~<shell>: line 1: t: command not found` | `E~v=` **2>** `<shell>: line 1: t: command not found` | `v=` **2>** `<shell>: t: command not found~<shell>: t: command not found` | `E~v=S` | `E~v=S` | `E~v=` **2>** `<shell>: t: not found` |
@@ -22481,6 +22485,43 @@ grades it and nothing drift-checks it either, for the same reason.
   alias q='echo "x '
   echo one
   q b" c
+  echo two
+  ```
+- `alias/an-inner-body-opens-a-quote-the-input-closes` — the seam one level in, which the token model could not reach: the quote is opened by a body that was itself expanded from another body's, so what the construct has to cross is the enclosing body's remaining text — ` x` — before it crosses the input's ` y"`. Unanimous ` x y` in all seven columns, bash 3.2 with its extra blank. This shell refused the line, because the carry was declined outright whenever anything was pending (#2709)
+  ```sh
+  shopt -s expand_aliases 2>/dev/null
+  alias b='echo "'
+  alias a='b x'
+  echo one
+  a y"
+  echo two
+  ```
+- `alias/an-inner-body-opens-a-quote-the-enclosing-body-closes` — the same seam with nothing of the input taken at all: the quote is opened by the inner body and closed by the *enclosing* one, so ` x` is the whole of it and the line after stands as written. Unanimous ` x`. It is also the row that says when the carry may happen — `b x"` lexes as a word and a quote nothing closes, and the quote that closes it is the one `b` has yet to contribute, so a carry performed while the body is spliced reads that open quote over the input and swallows the rest of the file
+  ```sh
+  shopt -s expand_aliases 2>/dev/null
+  alias b='echo "'
+  alias a='b x"'
+  echo one
+  a
+  echo two
+  ```
+- `alias/an-inner-body-opens-a-quote-nothing-closes` — the direction that matters, and the pair's control: with nothing after the alias word, the quote the inner body opened is closed by nobody and every column refuses the file — at 2 in the three bash columns, dash and ash, 1 in zsh and 3 in ksh93. Declining the carry one level in made it a *closed* quote here and ran `echo after`, which no shell runs: a quote the script never closed, closed, and a command the author did not write, run
+  ```sh
+  shopt -s expand_aliases 2>/dev/null
+  alias b='echo "'
+  alias a='b x'
+  echo one
+  a
+  echo after
+  ```
+- `alias/three-bodies-deep-and-the-quote-still-carries` — the row that says the text a construct crosses is a chain rather than one body: the quote `c` opens has what is left of `b`'s body, then what is left of `a`'s, then the input in front of it, and all seven columns answer ` y z w`. A carry that reached one level rather than every level passes the two rows above at depth two and truncates this one
+  ```sh
+  shopt -s expand_aliases 2>/dev/null
+  alias c='echo "'
+  alias b='c y'
+  alias a='b z'
+  echo one
+  a w"
   echo two
   ```
 - `alias/a-backslash-the-body-ends-with-reaches-the-input` — the same seam as the quote rows above with a backslash for the open construct, and six columns to one: the body's last token ends at the body's own edge with a backslash still in it, the blank in the input is what that backslash escapes, and `a` and `b` are one word — `[a b]`. bash 3.2 is alone in printing two fields. Since #2704 a backslash the input ends after is read as part of the word rather than as input that ran out, so the body's own lexer calls it finished and the seam was never reached: this shell printed a field with the backslash still in it, or one without it, which is nobody's (#2710). One conversion reused, so a field that is gone prints no brackets at all

@@ -26,9 +26,16 @@ import "strings"
 // column in the panel answers that question textually: a quote the body
 // opens is still open when the rest of the line is read, and one nothing
 // closes is an unterminated quote (#2685). So the body's unfinished tail is
-// read again joined to the input, and what that reading took of the input is
-// skipped in the input's own lexer — one construct spanning the seam,
-// without the positions moving.
+// read again joined to what follows it, and what that reading took is spent
+// — pending tokens dropped, the input's own lexer moved — one construct
+// spanning the seam, without the positions moving.
+//
+// What follows it is not only the input. Where the alias word was itself a
+// token of another body's expansion, the text after it is that body's
+// remainder and then the remainder of every body that one was spliced into,
+// and only then the input. That is [Parser.pendingTails], the one thing the
+// queue carries that is text rather than tokens, and it is what lets the
+// seam be crossed at every level rather than at the outermost only (#2709).
 //
 // The one place the two models are visible from outside is a body containing
 // a newline, and [Dialect.AliasBodyCountsLines] is the axis. Where it is on,
@@ -304,6 +311,15 @@ func (p *Parser) spliceAlias(name, value string) {
 	// them with the alias word's. See Parser.pendingTouches for the one
 	// question in the grammar that has no other way to ask.
 	var touches []bool
+	// The text that still follows each token: the rest of this body, and
+	// then the rest of every body this one was spliced into. See
+	// Parser.pendingTails.
+	var tails []string
+	// What stood after the alias word being replaced, across every body it
+	// was inside. Read before the splice overwrites it, because that is the
+	// text a construct this body leaves open has to reach before it reaches
+	// the input.
+	outer := p.tokTail
 	lastEnd := -1
 	// Where the body's last token began, in the body's own offsets, for the
 	// one that may still be running when the body ends. See carryOpenWord.
@@ -316,6 +332,7 @@ func (p *Parser) spliceAlias(name, value string) {
 		touches = append(touches, int(t.Pos.Offset) == lastEnd)
 		lastEnd = int(t.End.Offset)
 		lastStart = int(t.Pos.Offset)
+		tails = append(tails, value[lastEnd:]+outer)
 		pos, stop := at, end
 		if counts {
 			pos.Line += t.Pos.Line - 1
@@ -335,27 +352,30 @@ func (p *Parser) spliceAlias(name, value string) {
 		p.next()
 		return
 	}
+	// The body's last token ended at the body's own edge, so whatever it was
+	// may still have more to read. Which is a wider test than "the body's
+	// lexer said it ran out", and deliberately: since #2704 a backslash the
+	// input ends after is read as *part of the word* rather than as input
+	// that ran out, so a body ending in one is complete by that lexer's
+	// reckoning and still has a character that has escaped nothing (#2710).
+	//
+	// Whether there is a seam to cross at all is carryOpenWord's own
+	// question, and it answers it by reading the join: a body whose last
+	// token is finished takes none of the input and is left exactly as it
+	// was lexed.
+	carries := make([]string, len(toks))
 	if lastEnd == len(value) {
-		// The body's last token ended at the body's own edge, so whatever it
-		// was may still have more to read. Which is a wider test than "the
-		// body's lexer said it ran out", and deliberately: since #2704 a
-		// backslash the input ends after is read as *part of the word*
-		// rather than as input that ran out, so a body ending in one is
-		// complete by that lexer's reckoning and still has a character that
-		// has escaped nothing (#2710).
-		//
-		// Whether there is a seam to cross at all is carryOpenWord's own
-		// question, and it answers it by reading the join: a body whose last
-		// token is finished takes none of the input and is left exactly as
-		// it was lexed.
-		p.carryOpenWord(&toks[len(toks)-1], value[lastStart:])
+		carries[len(toks)-1] = value[lastStart:]
 	}
+	p.aliasSource = value
 	// The body itself, for the diagnostic that echoes the borrowed text
 	// rather than the line the alias word was written on. Cleared by next()
-	// once the last of these tokens has been handed out.
-	p.aliasSource = value
+	// once the last of these tokens has been handed out. (Assigned above,
+	// before the carry, because a carry that fails reports through it.)
 	p.pending = append(toks[1:], p.pending...)
 	p.pendingTouches = append(touches[1:], p.pendingTouches...)
+	p.pendingTails = append(tails[1:], p.pendingTails...)
+	p.pendingCarries = append(carries[1:], p.pendingCarries...)
 	chains := make([]map[string]bool, len(toks)-1)
 	for i := range chains {
 		chains[i] = chain
@@ -364,13 +384,19 @@ func (p *Parser) spliceAlias(name, value string) {
 	p.aliasChain = chain
 	p.aliasSpliced = len(toks)
 	p.tok = toks[0]
+	p.tokTail = tails[0]
+	if carries[0] != "" {
+		// A one-token body, whose only token is the one that may still be
+		// reading: it is current now, so there is nothing to defer.
+		p.carryOpenWord(&p.tok, carries[0])
+	}
 	// The first token of a body replaces the alias word, which stood where
 	// it stood: nothing about the body says it touches what came before.
 	p.tokTouches = false
 }
 
 // carryOpenWord continues a construct the alias body opened and did not close
-// over the input the body was substituted into.
+// over the text the body was substituted into.
 //
 // This is the one place the token model and the textual one part company, and
 // the measurement says the text wins. Substitution replaces the alias word
@@ -385,26 +411,29 @@ func (p *Parser) spliceAlias(name, value string) {
 // leave it, and the second half is the worse one — closing a quote the script
 // never closed runs a command the author did not write.
 //
-// The join is read by a lexer over the body's unfinished tail and the rest of
-// the input, which is the only arrangement in which one construct can span the
-// two. What it consumed of the input is then skipped in the input's own lexer,
-// so every token after this one is read from the real text at the real
-// position, and the carried token keeps the alias word's start — the position
-// every spliced token carries — and ends where the input's lexer now stands.
+// The join is read by a lexer over the body's unfinished tail and everything
+// that follows it, which is the only arrangement in which one construct can
+// span the two. What it consumed is then spent: text that belonged to an
+// enclosing body is spent by dropping the pending tokens it stands for, and
+// text of the input by skipping it in the input's own lexer. So every token
+// after this one is read from the real text at the real position, and the
+// carried token keeps the alias word's start — the position every spliced
+// token carries — and ends where the input's lexer now stands.
+//
+// It is called when the token is *handed out* rather than when the body is
+// spliced, because a body's own tokenization is not final while an alias word
+// stands earlier in it. See [Parser.pendingCarries].
 //
 // tail is the body's last token, which is the one that was still being read
 // when the body ran out; last is where it has been put in the splice.
 func (p *Parser) carryOpenWord(last *Token, tail string) {
-	if len(p.pending) > 0 {
-		// The text after the alias word is another body's tokens rather than
-		// the input's, and those have no text left to read: an expansion
-		// keeps its tokens, not the offsets they came from. So the seam this
-		// walks over is the outermost one only, and a body opening a quote
-		// from *inside* another body's expansion is left as it was — see
-		// #2709, which has the panel rows for it.
-		return
-	}
-	rest := p.lex.src[p.lex.off:]
+	// What follows the token, across every body it is inside and then the
+	// input. The two halves are kept apart because what is done with them
+	// differs: text of a body is spent by dropping the pending tokens it
+	// stands for, and text of the input is spent by moving the input's own
+	// lexer. See Parser.pendingTails.
+	outer := p.tokTail
+	rest := outer + p.lex.src[p.lex.off:]
 	if !p.dialect.AliasBodyBackslashJoinsTheNextLine &&
 		endsInLoneBackslash(tail) && strings.HasPrefix(rest, "\n") {
 		// A backslash the body ends with, with nothing after the alias word
@@ -433,14 +462,39 @@ func (p *Parser) carryOpenWord(last *Token, tail string) {
 	if !p.dialect.AliasTrailingBlankReachesPastAnOpenConstruct {
 		p.aliasNextWord = false
 	}
+	// How much of what followed the token the joined reading took.
+	took := len(rest)
+	if !join.Incomplete() {
+		took = int(t.End.Offset) - len(tail)
+	}
+	// The part of it that was another body's text is spent by dropping the
+	// pending tokens that text stands for — they are inside the construct
+	// now and are no longer words of their own. pendingTails[0] is what
+	// follows the first of them, so what it *is* runs from there back to the
+	// end of outer.
+	for len(p.pending) > 0 && took >= len(outer)-len(p.pendingTails[0]) {
+		p.pending = p.pending[1:]
+		p.pendingTouches = p.pendingTouches[1:]
+		p.pendingChains = p.pendingChains[1:]
+		p.pendingTails = p.pendingTails[1:]
+		p.pendingCarries = p.pendingCarries[1:]
+		if p.aliasSpliced > 0 {
+			p.aliasSpliced--
+		}
+	}
+	if took > len(outer) {
+		// And it reached the input, so the input's own lexer moves over what
+		// was taken there. The construct crossed both seams; p.tokTail is
+		// spent either way, because nothing of it is left to follow this
+		// token.
+		p.lex.skipOver(took - len(outer))
+	}
+	p.tokTail = outer[min(took, len(outer)):]
 	if join.Incomplete() {
 		// Nothing in the input closes it either. The construct has swallowed
 		// the rest of the file, which is what every column reports and is the
 		// whole of the second half of #2685.
-		p.lex.skipOver(len(rest))
 		p.lex.adoptOpenConstruct(join, len(tail), last.Pos)
-	} else {
-		p.lex.skipOver(int(t.End.Offset) - len(tail))
 	}
 	t.Pos, t.End = last.Pos, p.lex.pos()
 	*last = t

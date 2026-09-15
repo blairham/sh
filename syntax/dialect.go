@@ -2226,6 +2226,36 @@ type Dialect struct {
 	// construct for a blank to be inside of otherwise (#2685).
 	AliasTrailingBlankReachesPastAnOpenConstruct bool
 
+	// AliasBodyBackslashJoinsTheNextLine lets a backslash an alias body ends
+	// with reach the *newline* that follows the alias word, where it is an
+	// ordinary line continuation and joins the next line to the word.
+	//
+	// The backslash reaching the input at all is not this axis and is not
+	// split: with anything else after the alias word the panel is six to one
+	// that the backslash escapes the character it meets. Measured 2026-09-15
+	// from a script file, because zsh expands no alias under `-c`, with
+	// `alias q='printf "[%s]" a'` and one conversion reused so an empty
+	// field is visible as a field:
+	//
+	//	written  dash       bash 5.3   bash as sh  bash 3.2   ksh93      zsh      ash
+	//	q b      [a b]      [a b]      [a b]       [a ][b]    [a b]      [a b]    [a b]
+	//	q        [aecho]    [aecho]    [aecho]     [a ]two    [aecho]    [a ]two  [aecho]
+	//	         [two]      [two]      [two]                  [two]
+	//
+	// The first row is #2710's defect and needs no flag — the body's last
+	// token ends at the body's edge with a backslash still in it, and the
+	// blank in the input is what it escapes. The second is the split this
+	// answers: five columns join `echo` to the word and print two fields,
+	// and zsh and bash 3.2 do not.
+	//
+	// Off in the core, which is the reading that joins nothing: the line
+	// after the alias word is left as a line of its own, which is what the
+	// text says without the continuation. bash 3.2's `[a ]` — a word with a
+	// blank in it — is a difference of its own that this does not carry; it
+	// is the extra blank that whole family shows and no dialect preset is
+	// that build.
+	AliasBodyBackslashJoinsTheNextLine bool
+
 	// ParamExpansionFlags enables the parenthesized flag group that may open
 	// an expansion: `${(U)x}`, `${(s.:.)x}`, `${(%):-%x}`. One shell in the
 	// panel parses it; to the rest the whole expansion is a bad substitution,

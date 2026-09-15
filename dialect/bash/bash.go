@@ -61,6 +61,11 @@ func Dialect() syntax.Dialect {
 	// the quote and is no word. `alias c='CEE'; alias q='echo "x '` used as
 	// `q b" c` is `x  b CEE` here and `x  b c` in those four (#2685).
 	d.AliasTrailingBlankReachesPastAnOpenConstruct = true
+	// A backslash an alias body ends with reaches the newline after the
+	// alias word, where it is an ordinary line continuation and joins the
+	// next line to the word. zsh and bash 3.2 are the columns that do not.
+	// See syntax.Dialect.AliasBodyBackslashJoinsTheNextLine (#2710).
+	d.AliasBodyBackslashJoinsTheNextLine = true
 	// The utilities that take an array assignment as an operand. bash has
 	// all five.
 	d.DeclarationUtilities = map[string]bool{

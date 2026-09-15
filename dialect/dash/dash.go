@@ -27,6 +27,11 @@ func Dialect() syntax.Dialect {
 	// Set here rather than inherited because this dialect starts from the
 	// bare POSIX vector rather than from the core.
 	d.AliasBodyCountsLines = true
+	// A backslash an alias body ends with reaches the newline after the
+	// alias word, where it is an ordinary line continuation and joins the
+	// next line to the word. zsh and bash 3.2 are the columns that do not.
+	// See syntax.Dialect.AliasBodyBackslashJoinsTheNextLine (#2710).
+	d.AliasBodyBackslashJoinsTheNextLine = true
 	// Not a construct it adds but how it reads one it already has: a name
 	// followed by `(` is a function definition here, whether or not the `)`
 	// comes next, which is what decides the token a malformed one is blamed

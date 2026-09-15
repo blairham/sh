@@ -21976,6 +21976,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `alias/a-body-that-closes-its-own-quotes-takes-nothing` | `one~a b~two` | `one~a b~two` | `one~a b~two` | `one~a b~two` | `one~a b~two` | `one~a b~two` | `one~a b~two` |
 | `alias/a-blank-inside-an-open-quote-is-not-the-trailing-blank` | `one~x  b~two` | `one~x  b~two` | `one~x  b~two` | `one~x  b~two` | `one~x  b~two` | `one~x  b~two` | `one~x  b~two` |
 | `alias/the-blank-past-an-open-quote-splits-the-panel` | `one~x  b c~two` | `one~x  b CEE~two` | `one~x  b CEE~two` | `one~x  b CEE~two` | `one~x  b c~two` | `one~x  b c~two` | `one~x  b c~two` |
+| `alias/a-backslash-the-body-ends-with-reaches-the-input` | `one~[a b]two` | `one~[a b]two` | `one~[a b]two` | `one~[a ][b]two` | `one~[a b]two` | `one~[a b]two` | `one~[a b]two` |
+| `alias/a-backslash-the-body-ends-with-and-nothing-after-it` | `one~[aecho][two]` | `one~[aecho][two]` | `one~[aecho][two]` | `one~[a ]two` | `one~[aecho][two]` | `one~[a ]two` | `one~[aecho][two]` |
 | `alias/nested-text-expands-where-the-command-string-did-not` | `E~v=` **2>** `<shell>: 1: t: not found` | `v=` **2>** `<shell>: line 1: t: command not found~<shell>: line 1: t: command not found` | `E~v=` **2>** `<shell>: line 1: t: command not found` | `v=` **2>** `<shell>: t: command not found~<shell>: t: command not found` | `E~v=S` | `E~v=S` | `E~v=` **2>** `<shell>: t: not found` |
 | `alias/a-trap-body-under-a-command-string-expands-too` | `end~TRAP` | `end` **2>** `<shell>: line 1: t: command not found` | `end~TRAP` | `end` **2>** `<shell>: t: command not found` | `end~TRAP` | `end~TRAP` | `end~TRAP` |
 | `alias/neither-kind-is-accepted-where-the-shell-has-not-got-it` | `ag=1~as=1~us=2` | `ag=2~as=2~us=2` | `ag=2~as=2~us=2` | `ag=2~as=2~us=2` | `ag=2~as=2~us=2` | `ag=0~as=0~us=1` | `ag=1~as=1~us=2` |
@@ -22360,6 +22362,22 @@ grades it and nothing drift-checks it either, for the same reason.
   alias q='echo "x '
   echo one
   q b" c
+  echo two
+  ```
+- `alias/a-backslash-the-body-ends-with-reaches-the-input` — the same seam as the quote rows above with a backslash for the open construct, and six columns to one: the body's last token ends at the body's own edge with a backslash still in it, the blank in the input is what that backslash escapes, and `a` and `b` are one word — `[a b]`. bash 3.2 is alone in printing two fields. Since #2704 a backslash the input ends after is read as part of the word rather than as input that ran out, so the body's own lexer calls it finished and the seam was never reached: this shell printed a field with the backslash still in it, or one without it, which is nobody's (#2710). One conversion reused, so a field that is gone prints no brackets at all
+  ```sh
+  shopt -s expand_aliases 2>/dev/null
+  alias q='printf "[%s]" a\'
+  echo one
+  q b
+  echo two
+  ```
+- `alias/a-backslash-the-body-ends-with-and-nothing-after-it` — the other half of that seam, and the half that splits: with nothing written after the alias word, the backslash meets the *newline* and is an ordinary line continuation. dash, bash 5.3, bash as `sh`, ksh93 and BusyBox ash join the next line to the word and print `[aecho][two]`; zsh and bash 3.2 do not and print `[a ]two`. The row `syntax.Dialect.AliasBodyBackslashJoinsTheNextLine` is decided at, and the reason the row above needs no flag — that one is not split. zsh's and bash 3.2's field carries the extra blank this whole family shows in those two columns, which is a difference of its own and not this one
+  ```sh
+  shopt -s expand_aliases 2>/dev/null
+  alias q='printf "[%s]" a\'
+  echo one
+  q
   echo two
   ```
 - `alias/nested-text-expands-where-the-command-string-did-not` — zsh expands no alias in a `-c` string and expands one in `eval` and in a substitution reached from that same string. So its refusal under `-c` is not a rule about aliases: the option is the only gate on a nested text, and a `-c` string simply being read whole is what stops a definition on one line reaching the next. This is the row #2109 split `Dialect.ExpandAliases` in two for — one field held both the option's default and the route rule, and the front end derived the nested texts' answer from the route, which turned the table off for every `eval` and `$( )` under a zsh command string. The dash column is a *different* fault and still misses: that shell parses a substitution with the line that holds it, so its `$( )` here is read before the `alias` beside it has run — #2357

@@ -19428,6 +19428,26 @@ echo two`,
 		Script:             true,
 	},
 	{
+		ID: "alias/a-backslash-the-body-ends-with-reaches-the-input", Category: "alias",
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias q='printf "[%s]" a\'
+echo one
+q b
+echo two`,
+		Why:    "the same seam as the quote rows above with a backslash for the open construct, and six columns to one: the body's last token ends at the body's own edge with a backslash still in it, the blank in the input is what that backslash escapes, and `a` and `b` are one word — `[a b]`. bash 3.2 is alone in printing two fields. Since #2704 a backslash the input ends after is read as part of the word rather than as input that ran out, so the body's own lexer calls it finished and the seam was never reached: this shell printed a field with the backslash still in it, or one without it, which is nobody's (#2710). One conversion reused, so a field that is gone prints no brackets at all",
+		Script: true,
+	},
+	{
+		ID: "alias/a-backslash-the-body-ends-with-and-nothing-after-it", Category: "alias",
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias q='printf "[%s]" a\'
+echo one
+q
+echo two`,
+		Why:    "the other half of that seam, and the half that splits: with nothing written after the alias word, the backslash meets the *newline* and is an ordinary line continuation. dash, bash 5.3, bash as `sh`, ksh93 and BusyBox ash join the next line to the word and print `[aecho][two]`; zsh and bash 3.2 do not and print `[a ]two`. The row `syntax.Dialect.AliasBodyBackslashJoinsTheNextLine` is decided at, and the reason the row above needs no flag — that one is not split. zsh's and bash 3.2's field carries the extra blank this whole family shows in those two columns, which is a difference of its own and not this one",
+		Script: true,
+	},
+	{
 		ID: "alias/nested-text-expands-where-the-command-string-did-not", Category: "alias",
 		Snippet: `alias t=echo; eval "t E"; v=$(t S); echo "v=$v"`,
 		Why:     "zsh expands no alias in a `-c` string and expands one in `eval` and in a substitution reached from that same string. So its refusal under `-c` is not a rule about aliases: the option is the only gate on a nested text, and a `-c` string simply being read whole is what stops a definition on one line reaching the next. This is the row #2109 split `Dialect.ExpandAliases` in two for — one field held both the option's default and the route rule, and the front end derived the nested texts' answer from the route, which turned the table off for every `eval` and `$( )` under a zsh command string. The dash column is a *different* fault and still misses: that shell parses a substitution with the line that holds it, so its `$( )` here is read before the `alias` beside it has run — #2357",

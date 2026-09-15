@@ -335,7 +335,19 @@ func (p *Parser) spliceAlias(name, value string) {
 		p.next()
 		return
 	}
-	if sub.Incomplete() && lastEnd == len(value) {
+	if lastEnd == len(value) {
+		// The body's last token ended at the body's own edge, so whatever it
+		// was may still have more to read. Which is a wider test than "the
+		// body's lexer said it ran out", and deliberately: since #2704 a
+		// backslash the input ends after is read as *part of the word*
+		// rather than as input that ran out, so a body ending in one is
+		// complete by that lexer's reckoning and still has a character that
+		// has escaped nothing (#2710).
+		//
+		// Whether there is a seam to cross at all is carryOpenWord's own
+		// question, and it answers it by reading the join: a body whose last
+		// token is finished takes none of the input and is left exactly as
+		// it was lexed.
 		p.carryOpenWord(&toks[len(toks)-1], value[lastStart:])
 	}
 	// The body itself, for the diagnostic that echoes the borrowed text
@@ -393,6 +405,16 @@ func (p *Parser) carryOpenWord(last *Token, tail string) {
 		return
 	}
 	rest := p.lex.src[p.lex.off:]
+	if !p.dialect.AliasBodyBackslashJoinsTheNextLine &&
+		endsInLoneBackslash(tail) && strings.HasPrefix(rest, "\n") {
+		// A backslash the body ends with, with nothing after the alias word
+		// for it to escape but the newline. That is an ordinary line
+		// continuation where the dialect takes it and nothing where it does
+		// not, and the panel splits five to two. See
+		// [Dialect.AliasBodyBackslashJoinsTheNextLine]; the carry below is
+		// the same backslash meeting anything else, which is not split.
+		return
+	}
 	join := NewLexer(tail+rest, p.dialect)
 	t := join.Next()
 	if !join.Incomplete() && int(t.End.Offset) <= len(tail) {
@@ -422,6 +444,19 @@ func (p *Parser) carryOpenWord(last *Token, tail string) {
 	}
 	t.Pos, t.End = last.Pos, p.lex.pos()
 	*last = t
+}
+
+// endsInLoneBackslash reports whether s ends with a backslash that escapes
+// whatever comes next rather than one that is itself escaped.
+//
+// Counted rather than tested, because `a\\` ends in a backslash and that
+// backslash is a character the pair in front of it already spent.
+func endsInLoneBackslash(s string) bool {
+	n := 0
+	for n < len(s) && s[len(s)-1-n] == '\\' {
+		n++
+	}
+	return n%2 == 1
 }
 
 // endsInBlank reports whether an alias value ends in a space or a tab, which

@@ -124,6 +124,11 @@ func Dialect() syntax.Dialect {
 	// And a body's newlines are input lines, the answer three of the four
 	// existing dialects give.
 	d.AliasBodyCountsLines = true
+	// A backslash an alias body ends with reaches the newline after the
+	// alias word, where it is an ordinary line continuation and joins the
+	// next line to the word. zsh and bash 3.2 are the columns that do not.
+	// See syntax.Dialect.AliasBodyBackslashJoinsTheNextLine (#2710).
+	d.AliasBodyBackslashJoinsTheNextLine = true
 	// Deliberately absent, each refused when run: arrays (`a=(1 2 3)` is
 	// `unexpected "("`, `${a[0]}` is `bad substitution`), the C-style `for`,
 	// `select`, `<<<`, `(( ))`, `$[…]`, floating-point arithmetic, `${v^^}`,

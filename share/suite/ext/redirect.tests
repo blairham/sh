@@ -1,0 +1,64 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# `exec {name}> file` — the descriptor the shell picks and hands back in a
+# variable. bash, ksh93 and zsh all have it and dash has nothing of the kind:
+# there `{w}` is an ordinary word and `exec` tries to run a command called
+# `{w}`.
+#
+# It is the answer to the problem every numbered descriptor has, which is that
+# 3 through 9 are a shared namespace with no registry: two libraries that both
+# picked 3 collide silently. What this asks is the part a script depends on —
+# that the number handed back is above the nine a script may write by hand, and
+# that two of them are different.
+#
+# Only the `exec` form is asked. `{g}> file` on a simple command is bash and
+# ksh93 and a parse error in zsh, which is two against one rather than an ext
+# claim.
+
+exec {w}> named
+printf 'through the named descriptor\n' >&$w
+exec {w}>&-
+printf 'wrote: [%s]\n' "$(cat named)"
+
+exec {r}< named
+IFS= read -r line <&$r
+exec {r}<&-
+printf 'read back: [%s]\n' "$line"
+
+# The number is the shell's to choose, so it is never printed — what is
+# printed is the shape of it. Above nine is the whole point: a script that
+# writes `9>` by hand cannot collide with one of these.
+exec {n}> picked
+printf 'the number has: '
+case $n in
+[0-9]) printf 'one digit\n' ;;
+[0-9][0-9]*) printf 'two or more digits\n' ;;
+*) printf 'something that is not a number: %s\n' "$n" ;;
+esac
+exec {n}>&-
+
+# Two of them are two descriptors.
+exec {a}> two_a
+exec {b}> two_b
+printf 'two are distinct: '
+if [ "$a" -ne "$b" ]; then printf 'yes\n'; else printf 'no\n'; fi
+printf 'to a\n' >&$a
+printf 'to b\n' >&$b
+exec {a}>&-
+exec {b}>&-
+printf 'and they went to their own files: [%s] [%s]\n' "$(cat two_a)" "$(cat two_b)"
+
+# The appending form, and the reading form beside it, so the operator after
+# the brace is shown to be the ordinary one rather than a fixed spelling.
+exec {ap}>> named
+printf 'appended\n' >&$ap
+exec {ap}>&-
+printf 'after the append: [%s]\n' "$(cat named | tr '\n' '-')"
+
+# Closing is written the same way — `exec {c}>&-`, the ordinary closing
+# operator behind the brace — and every case above uses it. What happens when
+# something *writes* to the name afterwards is deliberately not a case: bash
+# and zsh refuse, ksh93 writes through, so it is two against one. The claim
+# this file makes is that the close is accepted and that the file is finished,
+# which every case above already rests on.

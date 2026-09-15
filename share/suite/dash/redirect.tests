@@ -1,0 +1,49 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Redirection, the answer only dash gives: the number a refused redirection
+# leaves behind.
+#
+# core/redirect.tests asks whether the redirection failed, because that much
+# is common to all four shells and to BusyBox. It cannot ask what status it
+# failed with: dash leaves 2 where bash, zsh and ksh93 all leave 1. This is
+# the same split dash/params.tests and dash/arith.tests record for a failed
+# expansion, which is what says it is one decision about how this shell
+# reports a failure rather than three separate quirks.
+#
+# Every case is a subshell with the diagnostic discarded. The wording is each
+# shell's own and would make this file unique for the wrong reason; the number
+# is the claim.
+
+# noclobber refusing to truncate a file that exists.
+set -C
+printf 'kept\n' > nc
+( printf 'overwritten\n' > nc ) 2>/dev/null
+printf 'noclobber refused with:      %s\n' "$?"
+printf 'and the file is untouched:   [%s]\n' "$(cat nc)"
+
+# The three ways past it still succeed, so what is measured is the refusal.
+( printf 'appended\n' >> nc ) 2>/dev/null
+printf 'append:                      %s\n' "$?"
+( printf 'forced\n' >| nc ) 2>/dev/null
+printf 'the override:                %s\n' "$?"
+( printf 'fresh\n' > brandnew ) 2>/dev/null
+printf 'a file that did not exist:   %s\n' "$?"
+set +C
+
+# An input that is not there.
+( cat < nosuchfile ) 2>/dev/null
+printf 'a missing input:             %s\n' "$?"
+
+# A directory where a file was wanted, in each direction.
+mkdir -p adir
+( printf 'x\n' > adir ) 2>/dev/null
+printf 'writing to a directory:      %s\n' "$?"
+
+# Reading a descriptor nobody opened.
+( cat <&7 ) 2>/dev/null
+printf 'an unopened descriptor:      %s\n' "$?"
+
+# The control: a redirection that works leaves the status alone.
+( printf 'fine\n' > works ) 2>/dev/null
+printf 'a redirection that works:    %s\n' "$?"

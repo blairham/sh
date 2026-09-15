@@ -1,0 +1,200 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# The regular built-ins — `cd`, `pwd`, `read`, `umask`, `kill`, `hash` — asked
+# for the work they do rather than for how they announce it.
+#
+# `echo` is not here and never can be: the four shells give four answers to
+# `echo 'a\tb'` and to the flags. bash and ksh93 write the backslash out,
+# zsh and dash read it as a tab; `-e` is an option in three of them and a
+# word in dash; `-E` is an option in two, a word in dash and a word ksh93
+# writes out while still not escaping. It is asked in dash/ and ash/ already
+# and in ksh/ here. `printf` is the portable spelling and is what every case
+# in this suite uses.
+#
+# `times` is not here for the same reason one layer down: all four print four
+# numbers and no two agree on the shape of them — ksh93 labels its two lines
+# `user` and `sys`, the others write two numbers per line, and the digits
+# after the point run from two to six. There is nothing to compare that is
+# not the clock.
+#
+# Held out, each because one shell is alone and each asked in that shell's
+# own file:
+#   `umask` with no operand   zsh alone drops the leading zero
+#   `read -n`, `-d`, `-t`     dash alone refuses all three
+#   `read` with no name       dash alone makes it an error rather than REPLY
+#   `kill -s SIGUSR1`         dash alone refuses the SIG prefix
+#   `kill` with no operand    zsh alone says 1 where the others say 2
+#   the `hash` listing        four formats, one per shell
+#   a `cd` that used CDPATH   prints the directory in three and not in zsh
+#
+# CDPATH is used inside a subshell below and nowhere else in this file. That
+# is deliberate: in ksh93 a `cd` that misses in CDPATH does not fall back to
+# the current directory (#2896), and the refusal outlives `unset CDPATH`, so
+# a CDPATH left set at the top of a file changes the meaning of every
+# relative `cd` after it.
+
+# `cd` follows the path it was given rather than the one on disk: the logical
+# directory is what PWD and `pwd` report, and `..` goes back up the path that
+# was walked rather than to the physical parent.
+mkdir -p real/inner
+ln -s real link
+here=$(pwd)
+cd link || exit 1
+printf 'PWD is the logical path [%s]\n' "${PWD##*/}"
+printf 'pwd agrees [%s]\n' "$(pwd | sed 's|.*/||')"
+printf 'pwd -L agrees [%s]\n' "$(pwd -L | sed 's|.*/||')"
+printf 'pwd -P does not [%s]\n' "$(pwd -P | sed 's|.*/||')"
+cd inner || exit 1
+printf 'one level down [%s]\n' "$(pwd | sed 's|.*/||')"
+cd ..
+printf 'and back up the path walked [%s]\n' "$(pwd | sed 's|.*/||')"
+cd "$here" || exit 1
+
+# -P and -L say which of the two a single `cd` uses, and neither changes
+# where the shell actually is: `pwd -P` is the same either way.
+cd -P link || exit 1
+printf 'cd -P landed on [%s], physically [%s]\n' "$(pwd | sed 's|.*/||')" "$(pwd -P | sed 's|.*/||')"
+cd "$here" || exit 1
+cd -L link || exit 1
+printf 'cd -L landed on [%s], physically [%s]\n' "$(pwd | sed 's|.*/||')" "$(pwd -P | sed 's|.*/||')"
+cd "$here" || exit 1
+
+# `cd -` returns to OLDPWD. Every shell here writes the directory out when it
+# does, so the line is taken off stdout and the answer read from `pwd`.
+cd real || exit 1
+cd - > /dev/null || exit 1
+printf 'cd - came back [%s]\n' "$( [ "$(pwd)" = "$here" ] && printf yes || printf no )"
+printf 'OLDPWD is set [%s]\n' "${OLDPWD:+yes}"
+
+# A `cd` that fails changes nothing, and the shell is where it was. The
+# status is not printed: three shells say 1 and dash says 2.
+cd nosuchdir 2> /dev/null
+printf 'cd to nothing failed [%s] and left us at [%s]\n' \
+	"$( [ $? -ne 0 ] && printf yes || printf no )" \
+	"$( [ "$(pwd)" = "$here" ] && printf yes || printf no )"
+
+# With no operand at all `cd` goes to HOME, which the harness points at the
+# run's own directory.
+cd 2> /dev/null
+printf 'bare cd went home [%s]\n' "$( [ "$(pwd)" = "$HOME" ] && printf yes || printf no )"
+cd "$here" || exit 1
+
+# CDPATH names the directories a relative operand is looked for in — in a
+# subshell, for the reason in the header.
+( CDPATH=$here/real; cd inner > /dev/null 2>&1; printf 'CDPATH found [%s]\n' "$(pwd | sed 's|.*/||')" )
+printf 'and the parent did not move [%s]\n' "$( [ "$(pwd)" = "$here" ] && printf yes || printf no )"
+
+# `read` splits the line on IFS into the names given. The last name takes
+# what is left, separators and all, and a name with nothing left for it is
+# empty rather than unset.
+printf 'one two three\n' > f
+read a b < f
+printf 'two names [%s][%s]\n' "$a" "$b"
+read a b c d < f
+printf 'four names [%s][%s][%s][%s]\n' "$a" "$b" "$c" "$d"
+printf '   spaced   out   \n' > f
+read s1 s2 < f
+printf 'runs of blanks collapse [%s][%s]\n' "$s1" "$s2"
+printf 'a:b:c\n' > f
+IFS=: read i1 i2 i3 < f
+printf 'IFS is read from the environment of the read [%s][%s][%s]\n' "$i1" "$i2" "$i3"
+IFS=: read i1 i2 < f
+printf 'and the last name keeps the rest [%s][%s]\n' "$i1" "$i2"
+
+# -r is about the backslash, and it is the difference between a line read as
+# text and a line read as shell input.
+printf 'a\\b\n' > f
+read x < f
+printf 'without -r [%s]\n' "$x"
+read -r x < f
+printf 'with -r [%s]\n' "$x"
+printf 'first\\\nsecond\n' > f
+read j < f
+printf 'a continued line joins [%s]\n' "$j"
+read -r j < f
+printf 'and with -r it does not [%s]\n' "$j"
+
+# Reads carry on down the file, and the end of input is a non-zero status
+# with whatever was read still assigned.
+printf 'line one\nline two\n' > f
+{ read p; read q; } < f
+printf 'two reads [%s][%s]\n' "$p" "$q"
+printf 'no newline at the end' > f
+read z < f
+printf 'an unterminated last line -> nonzero [%s] and [%s]\n' \
+	"$( [ $? -ne 0 ] && printf yes || printf no )" "$z"
+: > f
+read z < f
+printf 'end of input -> nonzero [%s] and [%s]\n' \
+	"$( [ $? -ne 0 ] && printf yes || printf no )" "$z"
+
+# `umask` in both notations. The numeric readback is asked in zsh/, which is
+# the shell that writes three digits where the others write four, so the mask
+# is read here through -S — which all four spell the same way.
+umask 022
+printf 'umask -S [%s]\n' "$(umask -S)"
+umask 077
+printf 'umask -S [%s]\n' "$(umask -S)"
+umask u=rwx,g=rx,o=
+printf 'set symbolically, read back [%s]\n' "$(umask -S)"
+
+# And the mask is what it is for: the permissions of something newly made.
+umask 022
+: > made
+mkdir -p madedir
+printf 'a new file [%s] and a new directory [%s]\n' \
+	"$(ls -l made | cut -c1-10)" "$(ls -ld madedir | cut -c1-10)"
+umask 077
+: > made2
+printf 'under 077 [%s]\n' "$(ls -l made2 | cut -c1-10)"
+
+# A subshell has a mask of its own, and a file it writes gets it.
+( umask 002; : > made3 )
+printf 'made in a subshell [%s]\n' "$(ls -l made3 | cut -c1-10)"
+
+# That the subshell's mask does not come back out is held out until #2898
+# lands. It is the one line of this file every column failed when it was
+# written: ours reaches the process mask directly, so the parent is left with
+# the subshell's mask and every file written afterwards has it.
+#
+#   printf 'and the mask here is still [%s]\n' "$(umask -S)"
+umask 022
+
+# `kill` names a signal three ways and they are the same signal. The shell
+# signals itself, which is why the trap is what reports rather than a pid.
+trap 'printf "USR1 arrived\n"' USR1
+kill -USR1 $$
+printf 'by -NAME -> %s\n' "$?"
+kill -s USR1 $$
+printf 'by -s NAME -> %s\n' "$?"
+kill -s usr1 $$
+printf 'by a lower case name -> %s\n' "$?"
+trap - USR1
+
+# A number is the third way, and 15 is TERM on every system this runs on.
+trap 'printf "TERM arrived\n"' TERM
+kill -15 $$
+printf 'by number -> %s\n' "$?"
+trap - TERM
+
+# Signal 0 sends nothing and asks whether the process could be signalled.
+kill -0 $$
+printf 'kill -0 on ourselves -> %s\n' "$?"
+kill -0 99999 2> /dev/null
+printf 'kill -0 on nobody -> %s\n' "$( [ $? -ne 0 ] && printf nonzero || printf zero )"
+
+# -l turns a number into the name. The whole list is not asked: the four
+# shells report between 31 and 45 signals and no two agree.
+printf 'kill -l 9 [%s]\n' "$(kill -l 9)"
+
+# `hash` remembers where a command was found. What it prints when it lists is
+# four different things and is asked per dialect; that it takes a name, takes
+# -r, and answers zero to both is common.
+hash ls
+printf 'hash on a name -> %s\n' "$?"
+hash -r
+printf 'hash -r -> %s\n' "$?"
+ls > /dev/null 2>&1
+hash -r
+printf 'and again after a lookup -> %s\n' "$?"

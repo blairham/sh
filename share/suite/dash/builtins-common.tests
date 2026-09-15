@@ -1,0 +1,45 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# dash's `read` and `kill` are the POSIX ones and nothing besides, and that
+# is this shell's alone on the panel in four places at once.
+#
+# `read` takes -r and a list of names. The options bash, zsh and ksh93 have
+# grown — a character count, a delimiter, a timeout — are all usage errors
+# here, and so is `read` with no name at all, where the other three fall back
+# to REPLY. A script that reads `read -t 5 line` as portable is writing for
+# three shells out of four.
+#
+# Held out until #2897 lands: the `hash` listing is dash's alone as well —
+# bare paths, one per line — but ours prints them in the order the commands
+# were run where dash prints them in the order of its own hash table.
+#
+#   ls > /dev/null 2>&1; cat /dev/null; hash
+
+printf 'abcdef\n' > f
+read -n 3 n3 < f 2> /dev/null
+printf 'read -n -> %s [%s]\n' "$?" "${n3-unset}"
+printf 'a;b\n' > f
+read -d ';' dd < f 2> /dev/null
+printf 'read -d -> %s [%s]\n' "$?" "${dd-unset}"
+read -t 1 tt < f 2> /dev/null
+printf 'read -t -> %s [%s]\n' "$?" "${tt-unset}"
+read < f 2> /dev/null
+printf 'read with no name -> %s [%s]\n' "$?" "${REPLY-unset}"
+
+# -r and a name are the two it does have, and they work the way the core file
+# says they do — which is what makes the lines above about the options rather
+# than about `read`.
+printf 'a\\b c\n' > f
+read -r r1 r2 < f
+printf 'read -r [%s][%s]\n' "$r1" "$r2"
+
+# `kill` takes a name or a number and not a name with the SIG on the front,
+# and `kill -l` maps a number to a name but not a name to a number.
+trap 'printf "USR1 arrived\n"' USR1
+kill -s USR1 $$
+printf 'by -s USR1 -> %s\n' "$?"
+kill -s SIGUSR1 $$ 2> /dev/null
+printf 'by -s SIGUSR1 -> %s\n' "$?"
+trap - USR1
+printf 'kill -l 9 [%s] and kill -l KILL [%s]\n' "$(kill -l 9)" "$(kill -l KILL 2> /dev/null)"

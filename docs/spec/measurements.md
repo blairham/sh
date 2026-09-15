@@ -13617,11 +13617,11 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   v=abc; echo "[${${${v}}}][${${${v}#a}%c}][${${v#a}}]"
   ```
-- `param/a-dollar-that-opens-no-brace-in-the-name-position` — the neighbour that keeps `${${…}}`'s refusal honest in the one column that refuses it while *reading*. ksh93 blames a nested expansion on a `!` the input does not contain anywhere (#2418), and the rule for that has to be the pair `${` standing where the name belongs: here the `$` parameter is followed by a second `$` that opens no brace, and that column names the `$` it really read. Four columns answer `bad substitution` at the run instead, each in its own words, so the row is also where the two moments are recorded side by side
+- `param/a-dollar-that-opens-no-brace-in-the-name-position` — the neighbor that keeps `${${…}}`'s refusal honest in the one column that refuses it while *reading*. ksh93 blames a nested expansion on a `!` the input does not contain anywhere (#2418), and the rule for that has to be the pair `${` standing where the name belongs: here the `$` parameter is followed by a second `$` that opens no brace, and that column names the `$` it really read. Four columns answer `bad substitution` at the run instead, each in its own words, so the row is also where the two moments are recorded side by side
   ```sh
   echo ${$$}; echo "st=$?"
   ```
-- `param/a-nested-expansion-behind-a-name-is-not-in-the-name-position` — the second neighbour, and the one a rule written as "a `${` anywhere inside the braces" would get wrong: the characters are the nested expansion's exactly, and they stand *behind* a name rather than where the name belongs. ksh93 names the `$` here where `${${v}}` is blamed on a `!`, so the two differ by position alone. The shells with the construct refuse it too — a name is not an expansion's result there either — which is what makes the row about where the parser was rather than about the feature
+- `param/a-nested-expansion-behind-a-name-is-not-in-the-name-position` — the second neighbor, and the one a rule written as "a `${` anywhere inside the braces" would get wrong: the characters are the nested expansion's exactly, and they stand *behind* a name rather than where the name belongs. ksh93 names the `$` here where `${${v}}` is blamed on a `!`, so the two differ by position alone. The shells with the construct refuse it too — a name is not an expansion's result there either — which is what makes the row about where the parser was rather than about the feature
   ```sh
   echo ${x${v}}; echo "st=$?"
   ```

@@ -45,7 +45,7 @@ func TestASecondExpansionInTheNamePositionIsBlamedOnABang(t *testing.T) {
 }
 
 // The `!` is the `${` standing in the name position and nothing wider. Every
-// neighbour here holds the same characters somewhere else and is blamed on
+// neighbor here holds the same characters somewhere else and is blamed on
 // the character that really stood there, measured in the same run — so a rule
 // written over "a `$` in a `${…}`" would have been wrong three ways.
 func TestTheBangIsTheNamePositionAndNotAnyNestedDollar(t *testing.T) {

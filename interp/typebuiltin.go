@@ -216,7 +216,7 @@ func (r *Runner) typePath(name string, m typeMode) int {
 		if _, ok := r.lookupBuiltin(name); ok {
 			return 0
 		}
-		if reservedWord(name) {
+		if r.reservedWord(name) {
 			return 0
 		}
 	}
@@ -349,7 +349,7 @@ func (r *Runner) typeAll(name string, m typeMode) int {
 		if !r.sayKind(m.asked(), name, "builtin", NamedKindWord(NameBuiltin)) {
 			r.printf("%s\n", Wording(dg.TypeBuiltin, "%[1]s is a shell builtin", name))
 		}
-	case reservedWord(name):
+	case r.reservedWord(name):
 		found = true
 		if !r.sayKind(m.asked(), name, "keyword", NamedKindWord(NameReserved)) {
 			r.printf("%s\n", Wording(dg.TypeKeyword, "%[1]s is a shell keyword", name))
@@ -457,7 +457,7 @@ func (r *Runner) describeName(name string, kind typeKind, skipFuncs bool, notFou
 		r.printf("%s\n", Wording(dg.TypeBuiltin, "%[1]s is a shell builtin", name))
 		return 0
 	}
-	if reservedWord(name) {
+	if r.reservedWord(name) {
 		if r.sayKind(kind, name, "keyword", NamedKindWord(NameReserved)) {
 			return 0
 		}

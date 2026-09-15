@@ -5238,3 +5238,60 @@ const (
 	// a position where `if | ; then :; fi` names the keyword.
 	BlameTheKeywordAfterIt
 )
+
+// Reserves reports whether name is part of *this* dialect's grammar rather
+// than a name a command could have.
+//
+// It exists because the question is asked from outside the parser. A shell's
+// `command -v` and `type` answer "reserved word" for a name the grammar
+// claims, and an interpreter holding a written-out list of them answers for a
+// grammar that is not the one it is running: ours told a dash script that
+// `[[`, `]]`, `select` and `function` were runnable words, and answered
+// `time` with the keyword where dash has none and a script reaching for
+// `command -v time` wants the path of `/usr/bin/time` (#2918). The list is
+// here, beside the flags that decide it, so there is one of it.
+//
+// Measured 2026-09-15 with `command -v` and with `type`, on bash 5.3.15,
+// zsh 5.9.2, ksh93 93u+, dash 0.5.12 and BusyBox ash: every shell claims
+// exactly the constructs it has, and a word it does not have falls through to
+// the ordinary search — which is what makes `command -v time` a path in dash
+// and a keyword everywhere else.
+//
+// Two rows of that measurement are **not** the grammar, and are deliberately
+// not here: `]]` is named by bash alone among the four shells that have the
+// construct, and `in` is named by everyone but zsh. Both shells *have* what
+// the word is part of and decline to report it, so the answer is a fact about
+// the report rather than about what parses. See #2981.
+//
+// Two of its members are spelled as operators rather than words and so are
+// not in [reservedWords] at all. `[[` and `]]` are the conditional command's
+// two ends, and `coproc` opens a construct a dialect either has or does not;
+// each is claimed by the same flag the grammar reads.
+func (d Dialect) Reserves(name string) bool {
+	switch name {
+	case "[[", "]]":
+		return d.DoubleBracket
+	case "coproc":
+		return d.Coproc
+	}
+	return d.reservesWord(name)
+}
+
+// reservesWord is [Dialect.Reserves] over the words the *lexer* classes as
+// reserved, which is the narrower question an alias expansion asks.
+//
+// The two part company on the three spellings above: they are constructs a
+// dialect has, so a report about what is runnable must name them, and they
+// are not words the lexer reserves, so the rule about which words an alias
+// may shadow has never been about them. See [Parser.reservedInDialect].
+func (d Dialect) reservesWord(name string) bool {
+	switch name {
+	case "select":
+		return d.Select
+	case "function":
+		return d.FunctionKeyword
+	case "time":
+		return d.TimeKeyword
+	}
+	return reservedWords[name]
+}

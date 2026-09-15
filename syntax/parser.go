@@ -566,15 +566,7 @@ var reservedWords = map[string]bool{
 // and dash, which has none of the three, takes an alias for all three where
 // ksh93 takes none. See [Dialect.AliasesExpandReservedWords] for the panel.
 func (p *Parser) reservedInDialect(name string) bool {
-	switch name {
-	case "select":
-		return p.dialect.Select
-	case "function":
-		return p.dialect.FunctionKeyword
-	case "time":
-		return p.dialect.TimeKeyword
-	}
-	return reservedWords[name]
+	return p.dialect.reservesWord(name)
 }
 
 // atReservedWord reports whether the current token is one of the words the

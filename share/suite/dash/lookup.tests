@@ -39,6 +39,24 @@ command -v true > /dev/null 2>&1; printf 'command -v a builtin -> %s\n' "$?"
 ( hash -t prog ) > /dev/null 2>&1; printf 'hash -t -> %s\n' "$?"
 ( hash -l ) > /dev/null 2>&1; printf 'hash -l -> %s\n' "$?"
 
+# `command -v` answers for the grammar *this* shell has. `select`, `function`,
+# `[[` and `]]` are constructs dash does not have, so they are ordinary names
+# it cannot find; `time` is a keyword in the other three and is the program of
+# that name here, which is what a script writing `command -v time` is looking
+# for. Ours answered all five as words of the grammar until #2918.
+command -v select > /dev/null 2>&1; printf 'command -v select -> %s\n' "$?"
+command -v function > /dev/null 2>&1; printf 'command -v function -> %s\n' "$?"
+command -v ']]' > /dev/null 2>&1; printf "command -v ']]' -> %s\n" "$?"
+printf 'command -v time -> [%s]\n' "$(command -v time 2>/dev/null)"
+( type time ) 2>&1
+
+# The control: a word dash *does* reserve is still one, so the lines above are
+# about the constructs dash has not got rather than about this shell having
+# stopped answering for the grammar at all.
+printf 'command -v if -> [%s]\n' "$(command -v if)"
+printf 'command -v for -> [%s]\n' "$(command -v for)"
+( type until ) 2>&1
+
 # A function may not be *named* after a special builtin. The refusal is a
 # syntax error made while the input is **read**, so nothing at all in this
 # file runs past it — which is why it is the last thing in the file. The top

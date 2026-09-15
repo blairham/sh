@@ -499,7 +499,7 @@ func (r *Runner) ResolveName(name string) (NameKind, string) {
 	if _, ok := r.lookupBuiltin(name); ok {
 		return NameBuiltin, ""
 	}
-	if reservedWord(name) {
+	if r.reservedWord(name) {
 		return NameReserved, ""
 	}
 	if r.reservedBuiltin(name) {

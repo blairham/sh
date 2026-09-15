@@ -10,14 +10,8 @@
 #
 # Each is run in a subshell so that the file carries on past it.
 #
-# Held out until #2918 lands: `command -v '[['` answers 127 in dash and 0 in
-# ours, and the same for `]]`, `select` and `function`, while `command -v
-# time` is `/usr/bin/time` in dash and the bare word in ours.
-#
-#   command -v '[[' ; printf 'command -v -> %s\n' "$?"
-#
-# And until #2917 lands: a two-word `test` ending in `-a` or `-o` is answered
-# by dash and refused by ours.
+# Held out until #2917 lands: a two-word `test` ending in `-a` or `-o` is
+# answered by dash and refused by ours.
 #
 #   test x -a ; printf 'test x -a -> %s\n' "$?"
 
@@ -29,6 +23,12 @@ printf 'with a unary operator -> %s\n' "$?"
 printf 'a double paren -> %s\n' "$?"
 ( (( 1 + 1 )) ) 2> /dev/null
 printf 'with arithmetic in it -> %s\n' "$?"
+
+# And the same fact said the way a portable script says it: `command -v` is
+# the test for a construct, and it answers for the grammar this shell has
+# rather than for a grammar written down somewhere else (#2918).
+command -v '[[' > /dev/null 2>&1
+printf "command -v '[[' -> %s\n" "$?"
 
 # The single-bracket condition is the one dash has, and it behaves the way
 # core/test.tests says it does — which is what makes the lines above about

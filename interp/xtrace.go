@@ -280,7 +280,7 @@ const (
 
 // traceCommand writes one command's trace line.
 func (r *Runner) traceCommand(words []string) {
-	if !r.xtrace || len(words) == 0 {
+	if !r.tracing() || len(words) == 0 {
 		return
 	}
 	r.awaitTraceTurn()
@@ -314,7 +314,7 @@ func (r *Runner) traceCommand(words []string) {
 // *when* as much as about how many, and only the caller performing them knows
 // when — see Runner.assignAll.
 func (r *Runner) traceAssignments(assigns []*syntax.Assign, values []string, prepared []*expandedAssign) {
-	if !r.xtrace || len(assigns) == 0 {
+	if !r.tracing() || len(assigns) == 0 {
 		return
 	}
 	d := r.diag()
@@ -459,7 +459,7 @@ func expandedElemsOf(e *expandedAssign) []literalElem {
 // 1 2 3 4 ) { : }` in zsh 5.9.2 gives `a=1`, `b=2`, `:`, `a=3`, `b=4`, `:`.
 // Calling the single-name form per name would have repeated the header.
 func (r *Runner) traceForNames(header string, names, items []string, at int) {
-	if !r.xtrace {
+	if !r.tracing() {
 		return
 	}
 	if r.diag().TraceForHeader == TraceForSource {
@@ -476,7 +476,7 @@ func (r *Runner) traceForNames(header string, names, items []string, at int) {
 }
 
 func (r *Runner) traceForIteration(header, name, value string) {
-	if !r.xtrace {
+	if !r.tracing() {
 		return
 	}
 	d := r.diag()
@@ -532,7 +532,7 @@ type condTrace struct {
 // $(f) ]]` where `f` tests something is a condition inside a condition, and
 // the inner one must not flush its primaries into the outer one's line.
 func (r *Runner) beginConditionTrace() func() {
-	if !r.xtrace {
+	if !r.tracing() {
 		return func() {}
 	}
 	prev := r.condTrace
@@ -617,7 +617,7 @@ func (r *Runner) traceCondOperand(s string) string {
 // source — because that is what the shells print and because it is already in
 // hand: expanding it again to print it would run a substitution in it twice.
 func (r *Runner) traceArithCommand(text string, spelling TraceArithSpelling) {
-	if !r.xtrace {
+	if !r.tracing() {
 		return
 	}
 	r.awaitTraceTurn()
@@ -636,7 +636,7 @@ func (r *Runner) traceArithCommand(text string, spelling TraceArithSpelling) {
 
 // traceCaseHeader writes what `case` prints before it tries its arms.
 func (r *Runner) traceCaseHeader(header string) {
-	if !r.xtrace || r.diag().TraceCaseHeader != TraceCaseSource || header == "" {
+	if !r.tracing() || r.diag().TraceCaseHeader != TraceCaseSource || header == "" {
 		return
 	}
 	r.awaitTraceTurn()
@@ -652,7 +652,7 @@ func (r *Runner) traceCaseHeader(header string) {
 // where the same two characters written out trace `(a*)`. Taken from the very
 // strings the match used, so that nothing is expanded twice.
 func (r *Runner) traceCaseArm(subject string, patterns []string) {
-	if !r.xtrace || r.diag().TraceCaseHeader != TraceCaseArm {
+	if !r.tracing() || r.diag().TraceCaseHeader != TraceCaseArm {
 		return
 	}
 	r.awaitTraceTurn()
@@ -1051,3 +1051,16 @@ func (r *Runner) releaseTraceTurn() {
 	}
 	r.traceOnce.Do(func() { close(r.traceDone) })
 }
+
+// tracing is whether this command is written out as it runs, which is the
+// `set -x` option **or** the mark on the function the shell is standing in.
+//
+// One reader for the two, because they are one answer with two sources and a
+// site that asked only the option would trace nothing inside a marked
+// function. They are separate *fields* because they are not one state: the
+// option is the shell's and outlives every call, and the mark is one body's
+// and does not reach what that body calls — measured on ksh93u+, `function g
+// { echo g; }; function f { g; echo f; }; typeset -ft f; f` writes `+ g` for
+// the call in f's body and nothing for g's own. See
+// Runner.SetTracedFunctions.
+func (r *Runner) tracing() bool { return r.xtrace || r.xtraceByMark }

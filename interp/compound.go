@@ -772,7 +772,7 @@ func (r *Runner) caseItemMatches(item *syntax.CaseItem, subject string) bool {
 	// the first substitution, where the arm `ab|abc` against `abc` traces
 	// `case abc (ab | abc)`. So the list is built as the loop goes rather
 	// than up front, and nothing is expanded that the match did not need.
-	tracing := r.xtrace && r.diag().TraceCaseHeader == TraceCaseArm
+	tracing := r.tracing() && r.diag().TraceCaseHeader == TraceCaseArm
 	var tried []string
 	for _, p := range item.Patterns {
 		// A pattern is a word: unquoted it is a pattern, quoted a literal,
@@ -1039,6 +1039,19 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	r.runDebugTrapOnFunctionEntry(ctx)
 	r.line = enteredAt
 
+	// A function this shell has been asked to **trace** runs its body with
+	// the trace on and gives it back at the return, whatever the caller had.
+	// See Runner.SetTracedFunctions, and note that this is a property of the
+	// call rather than of the option: a function the mark is on traces
+	// wherever it is called from, and the function it calls in turn does
+	// not.
+	// Set for **every** call and not only for a marked one, which is what
+	// makes the mark stop at the body it is on: entering an unmarked
+	// function clears it, so the function a traced one calls is traced only
+	// in the caller's line that calls it.
+	wasMarked := r.xtraceByMark
+	r.xtraceByMark = r.tracesFunction(name, fn.Keyword)
+	defer func() { r.xtraceByMark = wasMarked }()
 	// And the body itself is never a head, in any column, however it is
 	// written — measured, though the column that writes a head for a `{ }`
 	// standing on its own writes none here. See Runner.suppressedHead.

@@ -116,7 +116,15 @@ func registerAutoload(r *interp.Runner) {
 	// `typeset -f` with `-u` or `-U` is this same declaration under the
 	// declaration builtin's word — see autoloadFromDeclaration, and
 	// Semantics.FunctionLettersThatMarkUndefined for which letters say so.
-	r.SetFunctionMarkedUndefined(func(_ *interp.Runner, names []string, letters string) int {
+	r.SetFunctionMarkedUndefined(func(_ *interp.Runner, names []string, letters string, remove bool) int {
+		if remove {
+			// Unreachable here and answered anyway: `typeset +fu nm` is
+			// `invalid option(s)` in this shell, and the refusal is raised
+			// in front of this hook — see Diagnostics.MarkingUnderPlusRefusal.
+			// A silent 0 rather than a mark being taken off, because this
+			// shell has no plus form for one to be taken off by.
+			return 0
+		}
 		return autoloadFromDeclaration(r, names, letters)
 	})
 	r.SetUndefinedFunctions(func(name string) (string, bool) {

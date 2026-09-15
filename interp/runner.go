@@ -471,10 +471,22 @@ type Runner struct {
 	// SetUndefinedFunctions. Nil in a shell with no such thing, which is two
 	// of the four.
 	undefinedFunctions func(name string) (string, bool)
+	// tracedFunctions is the dialect's answer to whether a function runs with
+	// the trace on — see [Runner.SetTracedFunctions].
+	tracedFunctions func(r *Runner, name string, keyword bool) bool
+	// xtraceByMark is the trace a *function's own mark* turned on, which is
+	// not the `set -x` option and does not behave like it: it lasts for one
+	// body and does not reach a function that body calls. See
+	// Runner.tracing, which is what every reader asks instead of reading the
+	// option directly.
+	xtraceByMark bool
+	// loadUndefined is how the dialect reads the body of a name the shell is
+	// still waiting for — see [Runner.SetUndefinedFunctionLoader].
+	loadUndefined func(r *Runner, name string) bool
 	// markUndefinedFunctions is the write half of the same seam: how this
 	// shell marks a name to be defined later. Nil in a shell with no such
 	// thing — see SetFunctionMarkedUndefined.
-	markUndefinedFunctions func(r *Runner, names []string, letters string) int
+	markUndefinedFunctions func(r *Runner, names []string, letters string, remove bool) int
 	// markedFunctions is the third of the same seam: which names hold the
 	// marks a set of letters spells, which is what narrows a listing that
 	// carried them and no operands. Nil in a shell with no such thing — see
@@ -4368,6 +4380,20 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 
 	// A function shadows a builtin and an external command alike.
 	if fn, ok := r.funcs[argv[0]]; ok {
+		// A name the shell is still waiting to read a body for is read now,
+		// and the definition the file leaves is what runs. Here rather than
+		// inside the call, because the call is handed the declaration it
+		// found and the load replaces it. See Runner.SetUndefinedFunctionLoader.
+		if r.loadUndefinedFunction(ctx, argv[0]) {
+			reloaded, still := r.funcs[argv[0]]
+			if !still {
+				// The loader took the name away — a file that did not
+				// define it, which the dialect has already complained
+				// about. There is nothing left to call.
+				return nil
+			}
+			fn = reloaded
+		}
 		// A prefix to a frozen name is refused here, because the call below
 		// is where this command ends: only the builtin path assigns through
 		// setVarAs, so only that path ever met the refusal, and a prefix to
@@ -6894,7 +6920,7 @@ func (r *Runner) clearTypeAttributes(name string) {
 // doing so ran the command substitution on a right-hand side twice with both
 // sets of side effects (#1915).
 func (r *Runner) assignAll(ctx context.Context, assigns []*syntax.Assign) {
-	if !r.xtrace {
+	if !r.tracing() {
 		for _, a := range assigns {
 			r.assign(ctx, a)
 		}

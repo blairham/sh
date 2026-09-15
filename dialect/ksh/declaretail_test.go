@@ -30,28 +30,26 @@ echo after`)
 
 // `typeset -f` lists the functions here — #1494 built it, and
 // dialect/ksh/functionlisting_test.go is where the listing itself is
-// asserted. What is left in this file is the letter beside it: `-t` traces a
-// function, which this shell does not do, so it is named as missing and the
-// failure is fatal the way every typeset failure is here.
-func TestTypesetFTracingIsUnimplemented(t *testing.T) {
+// asserted. The letter beside it, `-t`, is built too since #2192: it traces
+// the function, and dialect/ksh/fpath_test.go holds that.
+//
+// What is left here is the **control** the row asserting the refusal used to
+// carry, and it is worth keeping on its own: with the letter gone the same
+// line is a listing, so a shell that took `-t` and ignored it would write the
+// body where this one writes nothing. The body comes back with the blanks the
+// definition was written with, which is what that listing is.
+func TestTypesetFWithoutTheTracingLetterIsAListing(t *testing.T) {
 	out, st := runKsh(t, t.TempDir(), `f() { echo hi; }
-typeset -ft f
-echo after`)
-	if !strings.Contains(out, "typeset: -t is not implemented yet") {
-		t.Errorf("got %q, want the letter named as missing", out)
-	}
-	if strings.Contains(out, "after") || st != 2 {
-		t.Errorf("got %q (status %d), want the script ended with 2", out, st)
-	}
-	// The control, and the reason the letter is refused rather than dropped:
-	// with it gone the same line is a listing, so a shell that accepted `-t`
-	// and ignored it would write the body where this shell writes nothing.
-	// The body comes back with the blanks the definition was written with,
-	// which is what that listing is — see functionlisting_test.go.
-	out, st = runKsh(t, t.TempDir(), `f() { echo hi; }
 typeset -f f`)
 	if out != "f() { echo hi; }\n" || st != 0 {
 		t.Errorf("got %q (status %d), want the listing", out, st)
+	}
+	// And with the letter it writes nothing at all, which is the pair.
+	out, st = runKsh(t, t.TempDir(), `f() { echo hi; }
+typeset -ft f
+echo after`)
+	if out != "after\n" || st != 0 {
+		t.Errorf("got %q (status %d), want the mark to be silent", out, st)
 	}
 }
 

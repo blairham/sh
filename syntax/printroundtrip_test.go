@@ -108,7 +108,12 @@ import (
 // word is what says so — the row beside it uses the parenthesis form and they
 // answer alike. Here it is one more ordinary keyword definition, printed under
 // the default header spelling, which keeps the word.
-const keywordFunctionsInTheCorpus = 35
+// Thirty-seven since #2192, which gave one shell's `typeset -ft` its tracing
+// mark: the letter is measured to trace **only** a keyword-defined body
+// there, so the two rows about it are written with the word and the one that
+// says the parenthesis form is not traced carries both spellings on one line.
+// Here they are two more ordinary keyword definitions.
+const keywordFunctionsInTheCorpus = 37
 
 func TestPrintingTheCorpusRoundTripsToTheSameProgram(t *testing.T) {
 	// The arrangement a formatter asks for, alongside the zero value that a

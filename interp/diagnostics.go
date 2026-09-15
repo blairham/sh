@@ -1513,6 +1513,22 @@ type Diagnostics struct {
 	// `typeset` declares a local in both bodies there.
 	FunctionListingKeywordHeader string
 
+	// UndefinedFunctionListing is the **whole row** a `-f` listing writes for
+	// a name the shell is still waiting to read a body for, in the dialect
+	// whose rendering has no header and no braces to put a body in. One
+	// verb: the name.
+	//
+	// Measured 2026-09-15 on ksh93u+ 2012-08-01: `typeset -fu nm; typeset -f
+	// nm` writes `typeset -fu nm` — a declaration, and nothing else on the
+	// line. zsh writes a body with `# undefined` in it instead, which is the
+	// header-and-block shape [Runner.SetUndefinedFunctions] already answers,
+	// so that dialect leaves this empty and the block form stands.
+	//
+	// Both halves are needed and neither subsumes the other: the hook says
+	// *which* names are still waiting, and this says what a shell with no
+	// block to write puts on the line for one.
+	UndefinedFunctionListing string
+
 	// FunctionNameListing is how a **names-only** function listing spells
 	// one name — `typeset +f`, `declare -F` with an operand. One verb, the
 	// name. Empty is the bare name, which is what two of the three shells

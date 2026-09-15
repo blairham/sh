@@ -24072,7 +24072,7 @@ echo "st=$?"`,
 	{
 		ID: "declare/a-function-line-marking-letter-with-names", Category: "declarations",
 		Snippet: `typeset -fu nm 2>&1; echo "st=$?"; typeset -f nm 2>&1; echo "then=$?"`,
-		Why:     "ksh93's `-u` on a `-f` line: the operands are names whose bodies are read from `$FPATH` the first time they are called, so the line is silent at 0 and `typeset -f nm` afterwards writes `typeset -fu nm` — a declaration with no body, which is that shell's whole rendering of a function still waiting to be defined. zsh has the same spelling and renders it as a body with `# undefined` in it; the two bashes have no `-u` on `declare` and refuse the letter; dash has no `typeset`. This shell has no `$FPATH` search, so the letter is refused by name in that position — the row is here to say what the refusal is standing in for (#2192)",
+		Why:     "ksh93's `-u` on a `-f` line: the operands are names whose bodies are read from `$FPATH` the first time they are called, so the line is silent at 0 and `typeset -f nm` afterwards writes `typeset -fu nm` — a declaration with no body, which is that shell's whole rendering of a function still waiting to be defined. zsh has the same spelling and renders it as a body with `# undefined` in it; the two bashes have no `-u` on `declare` and refuse the letter; dash has no `typeset`. This shell refused the letter in that position until #2192 built the `$FPATH` search — the row was filed to say what the refusal was standing in for, and is kept as the two renderings side by side",
 	},
 	{
 		ID: "declare/the-same-function-line-letter-with-no-names", Category: "declarations",
@@ -24087,7 +24087,7 @@ echo "st=$?"`,
 	{
 		ID: "declare/a-function-line-tracing-letter", Category: "declarations",
 		Snippet: `f(){ :; }; typeset -ft f 2>&1; echo "st=$?"; typeset -f f 2>&1`,
-		Why:     "the sibling letter, and the control that says the two are refused in the same words for different reasons: ksh93's `-t` marks a function for tracing, is silent at 0, and writes **no** listing — which is what makes accepting-and-dropping it worse than refusing it, since a dropped letter would leave `typeset -ft f` printing the body where that shell prints nothing. It is refused by name today from the wider table, `-t` being absent on a variable line too",
+		Why:     "the sibling letter: ksh93's `-t` marks a function for tracing, is silent at 0, and writes **no** listing — which is what makes accepting-and-dropping it worse than refusing it, since a dropped letter would leave `typeset -ft f` printing the body where that shell prints nothing. The snippet's function is the *parenthesised* spelling, which is why nothing is traced when it runs: only a `function`-word body traces there, and `declare/a-traced-function-is-a-keyword-one` is the pair that says so. Built since #2192; zsh spells `-t` too and traces either form, and the two bashes have no `-t` on `declare` at all",
 	},
 	{
 		ID: "declare/a-name-reference-reads-and-writes-through", Category: "declarations",
@@ -24138,6 +24138,26 @@ echo "st=$?"`,
 		ID: "declare/the-two-numeric-type-letters-together", Category: "declarations",
 		Snippet: `typeset -iE 3 a=1.5 2>&1 | head -1; echo "one=$?"; typeset -Ei 3 b=1.5 2>&1 | head -1; echo "two=$?"`,
 		Why:     "whether the integer letter and a float letter may stand on one declaration. zsh takes the pair in either order and lets the **first letter written** win — `typeset -iE 3` is an integer in base 3 and `-Ei 3` a float — where ksh93 answers both with typeset's whole usage block and ends the script. Both orders because they are settled by different halves: one is the parse discarding the later letter and the other is the refusal, and a row with one order could be passed by a shell that had only the parse. The statuses come through a pipeline so the usage block's own status does not end the case in the column that is fatal about it. Semantics.NumericTypeLettersAreExclusive",
+	},
+	{
+		ID: "declare/a-traced-function-is-a-keyword-one", Category: "declarations",
+		Snippet: `function f { echo in; }; typeset -ft f; f; echo mid; g(){ echo two; }; typeset -ft g; g; echo out`,
+		Why:     "the rule that makes ksh93's tracing letter look unimplementable until it is measured twice: **only a function written with the `function` word traces there**. The same mark on the parenthesised spelling below it produces no trace at all, so the two halves of this row are `+ echo in` and then a bare `two`. It is that shell's standing split between the two function forms — `typeset` declares a local in a keyword body and assigns the global in a parenthesised one — reaching one more feature, and it is why the trace seam is handed the keyword flag rather than only the name. zsh has the letter and traces both forms in its own format; bash has no `-t` on `declare`; dash has no `typeset`. The trailing `out` says the mark costs the script nothing either way. No redirection anywhere in the line, and that is the correction the first draft needed: a `2>/dev/null` written to quiet the columns without the letter was attached to the *definition*, which is a redirection the body then runs under — so the trace it was meant to show went to the same place (#2192)",
+	},
+	{
+		ID: "declare/a-traced-function-does-not-trace-what-it-calls", Category: "declarations",
+		Snippet: `function g { echo g; }; function f { g; echo f; }; typeset -ft f; f; echo out`,
+		Why:     "the mark is **one body's** and is not the `set -x` option: the call to `g` is traced because that command is in the traced body, and `g`'s own body is not. ksh93u+ writes `+ g`, `g`, `+ echo f`, `f` — four lines where a shell that let the trace propagate would write five. That is the row that separates the two states this engine now keeps apart, the option and the mark, and a shell that kept one field for both would pass the row above and fail this one. zsh is the other way in the same run — `+f:0> g`, `+g:0> echo g`, `+f:0> echo f`, the trace reaching into the callee's body — so the two shells with the letter disagree about its *reach* as well as about its format, and neither reading falls out of the other",
+	},
+	{
+		ID: "declare/reading-a-function-body-out-of-fpath", Category: "declarations",
+		Snippet: `mkdir -p fns && printf 'zz(){ echo "zz def $1"; }\n' > fns/zz && FPATH=$PWD/fns; typeset -fu zz 2>/dev/null; echo "mark=$?"; typeset -f zz 2>&1; zz hello 2>&1; echo "call=$?"`,
+		Why:     "the whole of ksh93's `-u`, from the mark to the call: the name is marked silently, `typeset -f zz` writes `typeset -fu zz` — a declaration with no body, which is that shell's rendering of a name still waiting — and the call reads `$FPATH/zz` and runs what it defines. The file is **sourced** rather than read as a body, which is where this parts from zsh's autoloading: that shell reads the file *as* the function and answers the same snippet with its own `# undefined` rendering and a body loaded from the file's whole text. The two bashes and dash have neither the letter nor the search and record their refusals; the `mark=` and `call=` fields are what a script branches on",
+	},
+	{
+		ID: "declare/an-fpath-file-that-defines-nothing", Category: "declarations",
+		Snippet: `mkdir -p fns && printf 'echo "bare body"\n' > fns/bb && FPATH=$PWD/fns; typeset -fu bb 2>/dev/null; bb 2>&1; echo "after=$?"`,
+		Why:     "the discriminating half of the row above, and the reason the file cannot simply be read as a body: ksh93 **runs** it and then requires it to have defined the name. `bare body` is printed — the file's own command really ran — and the failure that follows is `function, built-in or type definition for bb not found in <path>` at 126, which ends the script, so no `after=` field is written. zsh reads the same file as the body and answers `bare body` with nothing wrong at all. A shell that only defined, or only sourced, would pass one of the two columns and lose the other's whole meaning",
 	},
 	{
 		ID: "declare/a-local-over-a-produced-readonly-parameter", Category: "declarations",

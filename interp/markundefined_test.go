@@ -29,8 +29,12 @@ func markRun(t *testing.T, src, letters string) (string, int) {
 		sem.FunctionLettersThatMarkUndefined = letters
 		sem.FunctionNamesUnderPlus = No
 		r.Semantics = &sem
-		r.SetFunctionMarkedUndefined(func(_ *Runner, names []string, got string) int {
-			_, _ = fmt.Fprintf(r.Out(), "marked [%s] with [%s]\n", strings.Join(names, " "), got)
+		r.SetFunctionMarkedUndefined(func(_ *Runner, names []string, got string, remove bool) int {
+			sign := "-"
+			if remove {
+				sign = "+"
+			}
+			_, _ = fmt.Fprintf(r.Out(), "marked [%s] with [%s%s]\n", strings.Join(names, " "), sign, got)
 			return 0
 		})
 	})
@@ -41,7 +45,7 @@ func markRun(t *testing.T, src, letters string) (string, int) {
 func TestTheLettersThatMarkAnUndefinedFunctionAreAnAxis(t *testing.T) {
 	const src = `f(){ :; }; typeset -fu f`
 	out, st := markRun(t, src, "uU")
-	if want := "marked [f] with [u]\n"; out != want || st != 0 {
+	if want := "marked [f] with [-u]\n"; out != want || st != 0 {
 		t.Errorf("marking: got %q/%d, want %q", out, st, want)
 	}
 	out, st = markRun(t, src, "")
@@ -55,12 +59,12 @@ func TestTheLettersThatMarkAnUndefinedFunctionAreAnAxis(t *testing.T) {
 // writes without this package knowing what any of them mean.
 func TestTheMarkingSeamIsHandedTheLettersAsWritten(t *testing.T) {
 	for _, tc := range []struct{ src, want string }{
-		{`typeset -fu nm`, "marked [nm] with [u]\n"},
-		{`typeset -fU nm`, "marked [nm] with [U]\n"},
-		{`typeset -fuz nm`, "marked [nm] with [uz]\n"},
-		{`typeset -fzu nm`, "marked [nm] with [zu]\n"},
-		{`typeset -f -u -z nm`, "marked [nm] with [uz]\n"},
-		{`typeset -fu a b`, "marked [a b] with [u]\n"},
+		{`typeset -fu nm`, "marked [nm] with [-u]\n"},
+		{`typeset -fU nm`, "marked [nm] with [-U]\n"},
+		{`typeset -fuz nm`, "marked [nm] with [-uz]\n"},
+		{`typeset -fzu nm`, "marked [nm] with [-zu]\n"},
+		{`typeset -f -u -z nm`, "marked [nm] with [-uz]\n"},
+		{`typeset -fu a b`, "marked [a b] with [-u]\n"},
 	} {
 		out, st := markRun(t, tc.src, "uU")
 		if out != tc.want || st != 0 {
@@ -79,19 +83,32 @@ func TestADecoratingLetterAloneIsStillAListing(t *testing.T) {
 	}
 }
 
-// Two lines that look like markings and are not. Operands are required —
-// a `-f` line with none is the listing it has always been — and so is the
-// minus sign, because the plus spelling is measured to be a refusal in the
-// shell that has the letters rather than a marking under another name.
-func TestOnlyAMinusSignedLineWithOperandsMarks(t *testing.T) {
-	for _, src := range []string{
-		`f(){ :; }; typeset -fu`,
-		`f(){ :; }; typeset +fu f`,
-	} {
-		out, st := markRun(t, src, "uU")
-		if strings.Contains(out, "marked") || st != 0 {
-			t.Errorf("%s: got %q/%d, want no marking", src, out, st)
-		}
+// **Operands are required.** A `-f` line with none is the listing it has
+// always been, whatever letters it carries: one shell's `typeset -fu` with no
+// names is a listing narrowed to the marked functions, and refusing the bare
+// word would have replaced a right answer with a complaint.
+func TestOnlyALineWithOperandsMarks(t *testing.T) {
+	out, st := markRun(t, `f(){ :; }; typeset -fu`, "uU")
+	if strings.Contains(out, "marked") || st != 0 {
+		t.Errorf("got %q/%d, want no marking", out, st)
+	}
+}
+
+// **The sign reaches the hook rather than gating the route**, which is what
+// lets the two shells with marking letters disagree about the plus form: one
+// takes the mark off with it and the other refuses the line outright, in
+// front of this, through Diagnostics.MarkingUnderPlusRefusal.
+//
+// It used to be the route that was gated, on the reasoning that the plus
+// spelling is a refusal in "the shell that has the letters" — true of one of
+// the two, and false the moment a second shell gained them: ksh93u+'s
+// `typeset +ft f` takes the tracing mark off and the function runs untraced
+// afterwards, where the gated route left the line falling through to a
+// *listing* (#2192).
+func TestTheSignReachesTheHook(t *testing.T) {
+	out, st := markRun(t, `f(){ :; }; typeset +fu f`, "uU")
+	if want := "marked [f] with [+u]\n"; out != want || st != 0 {
+		t.Errorf("got %q/%d, want %q", out, st, want)
 	}
 }
 

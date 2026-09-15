@@ -705,9 +705,18 @@ func (r *Runner) undefinedFunction(name string) (string, bool) {
 // pre-digested set of options — an option struct crossing the seam would be
 // one shell's vocabulary in the substrate.
 //
+// remove is the *sign* the letters were written with: `typeset +ft f` takes
+// the mark off in the shell that has a plus form for it, where the same line
+// is `invalid option(s)` in the other. It is a parameter rather than a second
+// hook because the two signs reach the same record — a mark being put on and
+// the same mark being taken off — and the dialect that refuses the plus form
+// never arrives here at all, its refusal being raised in front of this by
+// Diagnostics.MarkingUnderPlusRefusal.
+//
 // The status is the hook's, because marking can fail: a name that is not a
-// name has nowhere to put the stub.
-func (r *Runner) SetFunctionMarkedUndefined(mark func(r *Runner, names []string, letters string) int) {
+// name has nowhere to put the stub, and one dialect's tracing mark refuses a
+// name that is not a function at all.
+func (r *Runner) SetFunctionMarkedUndefined(mark func(r *Runner, names []string, letters string, remove bool) int) {
 	r.markUndefinedFunctions = mark
 }
 
@@ -1751,4 +1760,103 @@ func (r *Runner) ShellContext() context.Context {
 		return context.Background()
 	}
 	return r.ctx
+}
+
+// SetTracedFunctions installs the dialect's answer to "does this function run
+// with the trace on".
+//
+// A shell that spells `typeset -ft f` marks a *function* for tracing, which
+// is `set -x` for the length of one call and for no other: measured
+// 2026-09-15 on ksh93u+ 2012-08-01, `function f { echo in; }; typeset -ft f;
+// f; echo out` writes `+ echo in` and then `in` and then a plain `out`, and a
+// function the traced one calls has its call traced and its own body not.
+//
+// The hook is asked per call rather than consulted once, because the mark is
+// a fact about the *name* and a name can gain and lose it between two calls.
+//
+// **keyword is handed over rather than left to be looked up**, and it is the
+// whole of why this is a hook and not an axis. In the one shell with the
+// feature only a function defined with the `function` word traces: measured
+// in the same run, `f(){ echo hi; }; typeset -ft f; f` writes `hi` with no
+// trace at all, where `function f { echo hi; }` beside it traces. Whether
+// that rule belongs to the shell or to the letter is the dialect's to say,
+// and a dialect cannot reach syntax.FuncDecl.Keyword from where it records
+// the mark.
+func (r *Runner) SetTracedFunctions(traced func(r *Runner, name string, keyword bool) bool) {
+	r.tracedFunctions = traced
+}
+
+// tracesFunction is that hook asked, for a shell that installed one.
+func (r *Runner) tracesFunction(name string, keyword bool) bool {
+	if r.tracedFunctions == nil {
+		return false
+	}
+	return r.tracedFunctions(r, name, keyword)
+}
+
+// SetUndefinedFunctionLoader installs how this shell reads the body of a name
+// it is still waiting for, at the moment that name is called.
+//
+// The shell with this shape is ksh93: `typeset -fu nm` marks the name, and
+// the first call reads `$FPATH/nm` and runs whatever the file defines.
+// Measured 2026-09-15 on ksh93u+ 2012-08-01 with a file holding
+// `zz(){ echo "zz def $1"; }`: `typeset -fu zz; typeset -f zz` writes
+// `typeset -fu zz`, `zz hello` writes `zz def hello`, and `typeset -f zz`
+// afterwards writes the body.
+//
+// The hook reports whether it *tried*, not whether it succeeded. A file that
+// does not define the name is the dialect's own complaint — measured,
+// `function, built-in or type definition for other not found in <path>` — and
+// the caller's job afterwards is only to notice that there is no longer a
+// function to call.
+//
+// It is called **before** the declaration is handed to the call, which is the
+// whole of why it is here rather than inside callFuncAs: the load replaces the
+// declaration, and a call already holding the old one would run the stub.
+//
+// The other shell with autoloading does not use this and must not. zsh's stub
+// is a real body that calls `autoload -X` itself, and that body is *visible to
+// scripts* — `$functions[f]` reads it back — so the loading has to be a
+// command the shell runs and not a step this package takes around it. See
+// dialect/zsh/autoload.go.
+func (r *Runner) SetUndefinedFunctionLoader(load func(r *Runner, name string) bool) {
+	r.loadUndefined = load
+}
+
+// loadUndefinedFunction is that hook asked, for a shell that installed one.
+func (r *Runner) loadUndefinedFunction(ctx context.Context, name string) bool {
+	if r.loadUndefined == nil {
+		return false
+	}
+	r.ctx = ctx
+	return r.loadUndefined(r, name)
+}
+
+// StopTheScript ends the input from a dialect's own code, with the status it
+// names, the way a fatal error raised inside this package ends it.
+//
+// It exists for the failures a dialect owns and the substrate cannot word. The
+// shell that reads a function body out of `$FPATH` is the case it was added
+// for: a file that is there and defines no function of that name is
+// `function, built-in or type definition for nm not found in <path>` at
+// **126**, and the script stops — measured 2026-09-15 on ksh93u+, where
+// `typeset -fu other; other; echo st=$?` writes the complaint and never
+// reaches the `echo`. Neither the wording nor the status nor the giving-up is
+// anything this package could have decided.
+//
+// The status is the caller's rather than the dialect's fatal-error status,
+// because it is not a fatal *error*: 126 is "found and could not be run",
+// which is the same number this shell gives a file it cannot execute, and a
+// dialect that reused its generic number would report something else.
+//
+// It gives up the *input* and not the process. A `( … )` around the failure
+// ends the subshell and the script carries on, which is what the same
+// unwinding already does for every fatal error the substrate raises.
+//
+// Deliberately narrow: this is not a way to exit, which is `exit`'s, and not
+// a way to report a refusal, which is Diagnosef's. Reach for it only where
+// the shell being modeled really abandons what it was reading.
+func (r *Runner) StopTheScript(status int) {
+	r.status = status
+	r.ctl, r.abandon, r.errexitStopped = controlExit, abandonError, false
 }

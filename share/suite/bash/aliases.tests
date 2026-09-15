@@ -10,7 +10,7 @@
 # that wants it says so — `shopt -s expand_aliases` — which is why
 # core/aliases.tests opens with that line guarded by `command -v shopt`.
 #
-# The option is a bash spelling as much as the gate is a bash behaviour:
+# The option is a bash spelling as much as the gate is a bash behavior:
 # `shopt` is not a command in the other three, so every line here that names
 # it answers 127 there.
 #

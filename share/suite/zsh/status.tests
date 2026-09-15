@@ -12,7 +12,7 @@
 #
 # The second half is where the stages run. zsh runs the *last* stage of a
 # pipeline in the current shell, so `printf x | read v` leaves `v` set — the
-# behaviour ksh93 shares and bash and dash do not, and the one that makes
+# behavior ksh93 shares and bash and dash do not, and the one that makes
 # `something | read a b c` a working idiom here and a silent no-op there.
 #
 # The array is read on the line after the pipeline, before anything else has

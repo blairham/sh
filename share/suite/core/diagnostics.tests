@@ -58,3 +58,42 @@ saw 'kill -s NOSUCHSIG_ZZ 1' 'a signal name nobody has'
 saw 'true' 'a command that works' exact
 saw 'printf "to stdout\n"' 'plain output' exact
 saw 'printf "to stderr\n" >&2' 'explicit stderr' exact
+
+printf -- '--- where a diagnostic falls in the stream ---\n'
+
+# Destination is half the claim; the other half is *when*. A diagnostic that
+# arrived after the output of the next command would still be on stderr and
+# would still be useless — the line a person blames would be the wrong one.
+#
+# stdout and stderr are the same stream here, and the wording is replaced by
+# a marker so the ordering can be compared without the sentence, which is
+# each shell's own. Every shell's sentence for these two names the name, and
+# that is all the substitution needs.
+mark() {
+  sed -e 's/.*nosuchcommand_zz.*/<a diagnostic>/' -e 's/.*nosuchdir_zz.*/<a diagnostic>/'
+}
+
+# Between the output before it and the output after it.
+( printf 'before\n'; nosuchcommand_zz; printf 'after\n' ) 2>&1 | mark
+
+# Dropping stderr drops it and leaves both outputs.
+( printf 'before\n'; nosuchcommand_zz; printf 'after\n' ) 2>/dev/null | mark
+
+# Two of them keep their order relative to each other and to the output
+# between them.
+( printf 'one\n'; nosuchcommand_zz; printf 'two\n'; cd /nosuchdir_zz; printf 'three\n' ) 2>&1 | mark
+
+# A redirection that cannot be made is diagnosed before the command it was
+# attached to would have written anything — the command does not run at all.
+( printf 'before\n'; printf 'never\n' > /nosuchdir_zz/f; printf 'after\n' ) 2>&1 | mark
+
+# A diagnostic from inside a function, and from inside a subshell, arrives
+# where the call is rather than being held to the end.
+f() { nosuchcommand_zz; }
+( printf 'before\n'; f; printf 'after\n' ) 2>&1 | mark
+( printf 'before\n'; ( nosuchcommand_zz ); printf 'after\n' ) 2>&1 | mark
+
+# `2>&1 > /dev/null`, which keeps only stderr everywhere but zsh, is not
+# asked: zsh's multios send stdout to both destinations rather than to the
+# last one, so that line measures a zsh feature rather than a diagnostic.
+# zsh/redirect.tests is where multios belong.

@@ -55,11 +55,27 @@ func (r *Runner) printfNumber(arg string, present bool) (int64, int, bool) {
 	if n, ok := r.charConstant(arg); ok {
 		return n, 0, false
 	}
-	text := strings.TrimSpace(arg)
+	text := afterLeadingBlanks(arg)
 	if v, ok := cAgreedInteger(text); ok {
 		// The operand is an integer every reading in the panel agrees about,
 		// so no dialect is consulted: `printf '%d' 42` and `printf '%d' 0x10`
 		// are the same in all seven columns.
+		if rounded := floatToInt64(float64(v)); rounded != v {
+			// Except one, and only for the operands where the two readings
+			// actually differ — see
+			// Semantics.PrintfIntegerOperandGoesThroughTheFloatingType. The
+			// test is the disagreement itself rather than a digit count, so
+			// `printf '%d' 42` still asks nothing and neither does the
+			// int64 maximum, which rounds to 2^63 and saturates back to
+			// itself.
+			if r.ask(r.sem().PrintfIntegerOperandGoesThroughTheFloatingType,
+				"`printf` reading an integer operand too large for a double through the floating type") {
+				return rounded, 0, false
+			}
+			if r.unspecified {
+				return 0, r.status, true
+			}
+		}
 		return v, 0, false
 	}
 	f, code, stop := r.printfPartialNumber(arg, text, false)
@@ -113,7 +129,7 @@ func (r *Runner) printfFloat(arg string, present bool) (float64, int, bool) {
 		// `65.000000` in every column.
 		return float64(n), 0, false
 	}
-	text := strings.TrimSpace(arg)
+	text := afterLeadingBlanks(arg)
 	if f, ranged, whole := cWholeNumber(text, true); whole {
 		// Every reading agrees about a float C can read whole, the reading
 		// that evaluates included: it reads a numeral as a numeral before it
@@ -275,6 +291,40 @@ func (r *Runner) leadingNumber(text string, float bool) float64 {
 	return 0
 }
 
+// afterLeadingBlanks is the operand with the blanks C's readers skip taken
+// off the front, and **nothing taken off the back**.
+//
+// The two ends are not the same question and trimming both got one of them
+// wrong for every dialect at once. C's `strtol` and `strtod` skip leading
+// whitespace as part of the grammar, so ` 7` is a whole number everywhere.
+// What is left after the number is the caller's problem, and four of the
+// seven columns say so: `printf '%d' "7 "` is `printf: 7 : invalid number`
+// at 1 in bash 5.3, `not completely converted` at 1 in dash, `invalid number
+// '7 '` at 1 in BusyBox ash — where the value is `0` rather than the 7 the
+// other two write — and silent at 0 in zsh and ksh93, whose reading is an
+// expression and takes a trailing blank the way any expression does.
+// Measured 2026-09-15 on the `-c`, file and standard-input routes (#2905).
+//
+// The set is C's, not Go's: `strings.TrimSpace` also trims the Unicode
+// spaces, and no `strtol` in the panel does.
+func afterLeadingBlanks(s string) string {
+	i := 0
+	for i < len(s) && isCBlank(s[i]) {
+		i++
+	}
+	return s[i:]
+}
+
+// isCBlank is C's `isspace` in the C locale, which is what a numeric reader
+// skips in front of a number.
+func isCBlank(c byte) bool {
+	switch c {
+	case ' ', '\t', '\n', '\v', '\f', '\r':
+		return true
+	}
+	return false
+}
+
 // printfIncomplete reports an operand that was not a number, or not all of
 // one, where the dialect reports it at all.
 func (r *Runner) printfIncomplete(arg, text string) int {
@@ -282,6 +332,13 @@ func (r *Runner) printfIncomplete(arg, text string) int {
 		return 0
 	}
 	d := r.diag()
+	if d.PrintfBadNumberEchoesPastTheBlanks {
+		// One column quotes the operand back from its first non-blank byte:
+		// `printf '%d' "  7  "` is `invalid number '7  '` in BusyBox ash,
+		// where bash and dash echo the leading blanks they were given.
+		// Measured in the pinned image, BusyBox v1.37.0, 2026-09-15.
+		arg = text
+	}
 	if w := printfBadNumberBase(d, arg); w != "" {
 		// One column names the base the operand was *spelled* in — `invalid
 		// hex number` for `0x10zz`, `invalid octal number` for `08` — and
@@ -363,7 +420,10 @@ func (r *Runner) printfArithFailure(err error, reading, float bool) int {
 		return r.status
 	}
 	for range lines {
-		r.diagf("%s\n", msg)
+		// arithDiagf rather than diagf: this is the evaluator's sentence and
+		// not the builtin's, and one column says so by leaving the builtin
+		// out of the location it otherwise always writes. See #2906.
+		r.arithDiagf("%s\n", msg)
 	}
 	if w := r.diag().PrintfArithArgumentType; w != "" {
 		if !reading {

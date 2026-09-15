@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path"
 	"sort"
 	"strings"
 	"sync"
@@ -2817,6 +2818,14 @@ func (r *Runner) diagLine(format string, args ...any) string {
 // Runner.locationPrefixNamed.
 func (r *Runner) diagLineNamed(construct, format string, args ...any) string {
 	msg := fmt.Sprintf(format, args...)
+	if name := r.speaking(); name != "" && r.diag().BuiltinNamesTheShellAlone[name] {
+		// A builtin that reports as the shell itself rather than as a line of
+		// a script. See Diagnostics.BuiltinNamesTheShellAlone: the name is
+		// the basename the shell was invoked by, on every route, and the
+		// location the rest of this function would build is written by that
+		// builtin nowhere.
+		return path.Base(r.invokedAs()) + ": " + strings.TrimPrefix(msg, name+": ")
+	}
 	if r.speaker != "" && r.inBuiltin != "" && r.inBuiltin != r.speaker {
 		// A builtin the dialect's own function called. The complaint reaches
 		// the script as that function's — `pushd /nope` is `pushd: /nope: …`
@@ -3278,6 +3287,17 @@ func (r *Runner) name() string {
 		return "sh"
 	}
 	return r.Name
+}
+
+// invokedAs is argv[0] — what the process was executed as, which is a
+// different fact from Runner.name and is what one dialect's applet-backed
+// builtins report under. Falls back to the diagnostic name where nothing
+// carried an argv, which is a library Runner and a test.
+func (r *Runner) invokedAs() string {
+	if r.Invocation != "" {
+		return r.Invocation
+	}
+	return r.name()
 }
 
 func (r *Runner) emit(ctx context.Context, e Event) {

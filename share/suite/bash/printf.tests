@@ -13,11 +13,6 @@
 # case that suppressed it would be asking whether bash writes a zero, which
 # every shell does.
 #
-# Held out until #2905 lands: a trailing blank on an otherwise good operand
-# is an invalid number in bash and a silent 7 in ours.
-#
-#   printf '[%d]\n' '7 '
-
 printf '[%d]\n' abc
 printf 'abc -> %s\n' "$?"
 printf '[%d]\n' ''
@@ -37,3 +32,15 @@ printf 'two of them -> %s\n' "$?"
 # whitespace.
 printf '[%d]\n' ' 7'
 printf 'a leading blank -> %s\n' "$?"
+
+# A *trailing* blank is a tail like any other, and bash says so: the number it
+# read is still written, and the complaint and the 1 go with it. zsh and ksh93
+# take the same operand silently at 0, their reading being an expression, so
+# this is bash's and dash's row rather than a shared one. The tab is what says
+# the set is C's whitespace and not the space alone.
+printf '[%d]\n' '7 '
+printf 'a trailing blank -> %s\n' "$?"
+printf '[%d]\n' '7	'
+printf 'a trailing tab -> %s\n' "$?"
+printf '[%d]\n' '  7  '
+printf 'blanks at both ends -> %s\n' "$?"

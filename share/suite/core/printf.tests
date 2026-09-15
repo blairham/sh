@@ -130,15 +130,11 @@ printf 'and this is a separate command]\n'
 # The format is reused until the operands run out, and a final pass with
 # fewer operands than conversions fills the rest in as empty.
 #
-# A *numeric* conversion left without an operand is held out until #2913
-# lands. The four references here write the zero silently; BusyBox writes it
-# with a complaint, which #2648 gave us, and what is left is the prefix on
-# that complaint — ours names the script and the line where BusyBox names
-# only the shell. The rows are `core/` the moment the ash column can take
-# them:
-#
-#   printf '%d-%d\n' 1 2 3
-#   printf '[%s][%d]\n' a
+# A *numeric* conversion left without an operand fills in as a zero. The four
+# references here write it silently and BusyBox writes it with a complaint, so
+# the diagnostics go to /dev/null and the rows ask the value and the reuse.
+printf '%d-%d\n' 1 2 3 2> /dev/null
+printf '[%s][%d]\n' a 2> /dev/null
 printf '%s=%s\n' a 1 b 2
 printf '%s|%s|%s|\n' a b c d e f
 printf '%s-%s;' a b c d e; printf '\n'

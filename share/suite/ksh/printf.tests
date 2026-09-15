@@ -16,8 +16,6 @@
 #          `printf '%.0f %.0f' 2.5 4.5` is `3 5` in ksh93 and `2 4` in ours
 #   #2904  an escape the format does not define loses its backslash:
 #          `printf '[\q]\n'` is `[q]` in ksh93 and `[\q]` in ours
-#   #2907  an integer operand past 17 digits is rounded through a floating
-#          type: `printf '%d' 123456789012345678` is …680 in ksh93
 
 printf '[%q]\n' 'a b'
 printf '[%q]\n' "it's"
@@ -39,3 +37,16 @@ printf 'that was %s\n' "$( [ $? -ne 0 ] && printf nonzero || printf zero )"
 # report a failure; ksh93 writes the percent out and succeeds.
 ( printf 'a bare percent [%' ) 2> /dev/null
 printf '\nand that was %s\n' "$( [ $? -ne 0 ] && printf nonzero || printf zero )"
+
+# An integer operand is carried through this shell's floating type, so one
+# past what a double holds exactly comes back rounded: bash, zsh, dash and
+# BusyBox ash all write the digits unchanged. The int64 maximum is the operand
+# that hides it -- it rounds to 2^63 and saturates back to itself, so it is
+# exact here too -- and one short of the negative end is where the same
+# rounding shows with nothing to hide it.
+printf '[%d]\n' 123456789012345678
+printf '[%d]\n' 1000000000000000001
+printf '[%d]\n' 9007199254740993
+printf '[%d]\n' 9223372036854775807
+printf '[%d]\n' -9223372036854775807
+printf 'and an ordinary one [%d]\n' 42

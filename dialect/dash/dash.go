@@ -504,6 +504,9 @@ func Semantics() interp.Semantics {
 	// range at all here, so there is no third segment to refuse.
 	s.PrintfReportsBadNumber = interp.Yes
 	s.PrintfNumberOperand = interp.PrintfNumberLeadingNumber
+	// Exact, as in bash: `printf '%d' 1000000000000000001` keeps its last
+	// digit (#2907).
+	s.PrintfIntegerOperandGoesThroughTheFloatingType = interp.No
 	// C99's three, answering exactly as bash does on every row measured
 	// 2026-09-14 — `%a` of 1.5 is `0x1.8p+0` and of 0.1 is
 	// `0x1.999999999999ap-4`, the shortest run that names the value.

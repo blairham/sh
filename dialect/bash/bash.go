@@ -1142,6 +1142,9 @@ func Semantics() interp.Semantics {
 	s.SubstringRangeThirdColonIsABadSubstitution = interp.No
 	s.PrintfReportsBadNumber = interp.Yes
 	s.PrintfNumberOperand = interp.PrintfNumberLeadingNumber
+	// The digits are written back exactly: `printf '%d' 123456789012345678`
+	// is the operand, not a double's nearest neighbour (#2907).
+	s.PrintfIntegerOperandGoesThroughTheFloatingType = interp.No
 	// C99's three: `%F` is `1.500000`, `%a` is `0x1.8p+0` and `%A` is
 	// `0X1.8P+0`, all measured 2026-09-14 on bash 5.3.15 under `LC_ALL=C`.
 	s.PrintfC99FloatConversions = interp.Yes

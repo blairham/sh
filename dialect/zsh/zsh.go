@@ -1789,6 +1789,10 @@ func Semantics() interp.Semantics {
 	// what to call the refusal never arises.
 	s.PrintfReportsBadNumber = interp.No
 	s.PrintfNumberOperand = interp.PrintfNumberArithmetic
+	// Exact, though the reading is an expression: this shell's arithmetic is
+	// an integer one and `printf '%d' 123456789012345678` is the operand
+	// (#2907). It is ksh93 alone that rounds.
+	s.PrintfIntegerOperandGoesThroughTheFloatingType = interp.No
 	// None of C99's three: `printf '%F' 1.5` is `%F: invalid directive` at
 	// 1 in zsh 5.9.2, and `%a` and `%A` the same.
 	s.PrintfC99FloatConversions = interp.No

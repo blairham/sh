@@ -2980,6 +2980,36 @@ type Semantics struct {
 	// is not already the whole number C asked for — see PrintfNumberReading.
 	PrintfNumberOperand PrintfNumberReading
 
+	// PrintfIntegerOperandGoesThroughTheFloatingType reads an integer
+	// operand of an integer conversion through the shell's floating type, so
+	// an operand a double cannot hold exactly comes out rounded.
+	//
+	// One column does, and it is the shell whose whole arithmetic is carried
+	// in a floating type: `printf '%d' 123456789012345678` is
+	// `123456789012345680` in ksh93u+ 2012-08-01 and
+	// `printf '%d' 1000000000000000001` is `1000000000000000000`, where
+	// bash 5.3, zsh 5.9.2, dash and BusyBox ash all write the digits back
+	// unchanged. `echo $(( 123456789012345678 ))` there is the same rounded
+	// number, which says the conversion is not printf's own — but printf is
+	// where the panel can be asked about it without an evaluator, so this is
+	// scoped to the operand and the arithmetic is left as it stands.
+	//
+	// Asked only where the two readings actually disagree, which is an
+	// operand past 2^53: `printf '%d' 42` and `printf '%d' 0x10` never reach
+	// it. Nor does the int64 maximum, and that is the measurement that hides
+	// the divergence behind the obvious probe — `9223372036854775807` rounds
+	// to 2^63 and saturates back to itself, so it comes out exact in ksh93
+	// too, while `-9223372036854775807` one below the negative end is
+	// `-9223372036854775808` there.
+	//
+	// Measured 2026-09-15 on the `-c`, file and standard-input routes
+	// (#2907). The width that survives is the machine's: this ksh93 carries
+	// its arithmetic in `long double`, which on Apple silicon is the same 64
+	// bits as a double, so a panel on a host where `long double` is wider
+	// would keep more digits. The golden record is this machine's, and that
+	// is what this answers to.
+	PrintfIntegerOperandGoesThroughTheFloatingType Answer
+
 	// PrintfRefusedOperandKeepsItsLeadingNumber writes the number the front
 	// of the operand held when the arithmetic behind it would not evaluate.
 	//

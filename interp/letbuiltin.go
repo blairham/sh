@@ -108,17 +108,34 @@ func biLet(r *Runner, _ context.Context, args []string) int {
 // which is how every other builtin's complaint already works.
 func (r *Runner) mathDiagf(format string, args ...any) {
 	if !r.diag().ArithErrorNamesTheBuiltin {
-		// The shell's own failure rather than the builtin's, which is what
-		// the dialect that names builtins in the location is saying by not
-		// naming one here. Cleared rather than trimmed afterwards, because
-		// the location is built from this field.
-		outer := r.inBuiltin
-		r.inBuiltin = ""
-		defer func() { r.inBuiltin = outer }()
-		r.diagf(format+"\n", args...)
+		r.arithDiagf(format+"\n", args...)
 		return
 	}
 	r.diagf("%s: "+format+"\n", append([]any{r.speaking()}, args...)...)
+}
+
+// arithDiagf writes an arithmetic complaint raised from inside a builtin with
+// the builtin taken out of the *location*, where the dialect does not read
+// the failure as the builtin's.
+//
+// The same answer ArithErrorNamesTheBuiltin gives for the front of the
+// sentence, applied to the other place a name can appear: zsh 5.9.2 writes
+// `zsh:printf:1: no such option` for `printf`'s own refusal and `zsh:1: bad
+// math expression: operator expected at `x'` for `printf '%d' 12x`, which is
+// the identical line `let '12x'` and `echo $((12x))` write there. Measured
+// 2026-09-15 on the `-c` and file routes (#2906); on the file route both are
+// the script's name, `/tmp/zz.sh:1:`, so it is the builtin segment that goes
+// and not the location.
+//
+// Cleared rather than trimmed afterwards, because the location is built from
+// this field.
+func (r *Runner) arithDiagf(format string, args ...any) {
+	if !r.diag().ArithErrorNamesTheBuiltin {
+		outer := r.inBuiltin
+		r.inBuiltin = ""
+		defer func() { r.inBuiltin = outer }()
+	}
+	r.diagf(format, args...)
 }
 
 // valueBeforeAnIllegalByte is what an expression comes to when the reader

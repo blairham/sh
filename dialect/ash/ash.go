@@ -543,6 +543,9 @@ func Semantics() interp.Semantics {
 	s.SubstringRangeThirdColonIsABadSubstitution = interp.No
 	s.PrintfReportsBadNumber = interp.Yes
 	s.PrintfNumberOperand = interp.PrintfNumberWholeOperand
+	// Exact: `printf '%d' 9007199254740993` is itself in BusyBox v1.37.0,
+	// so the reader behind it is an integer one (#2907).
+	s.PrintfIntegerOperandGoesThroughTheFloatingType = interp.No
 	// None of C99's three: `printf '%F' 1.5` is `%F]: invalid format` at 1
 	// in BusyBox ash 1.37.
 	s.PrintfC99FloatConversions = interp.No
@@ -1508,13 +1511,23 @@ func Diagnostics() interp.Diagnostics {
 		// ShiftTooMany here. BusyBox writes nothing and returns 1; the
 		// sentence that used to sit on this line is dash's, and it was
 		// unreachable while ShiftPastEndFatal was dash's too.
-		TimesDecimals:     3,
-		JobRunning:        "Running",
-		JobDone:           "Done",
-		JobExited:         "Done(%[1]d)",
-		PrintfBadNumber:   "invalid number '%[1]s'",
-		PrintfBadVerb:     "%[2]s: invalid format",
-		PrintfMissingVerb: "%[1]s: invalid format",
+		TimesDecimals:   3,
+		JobRunning:      "Running",
+		JobDone:         "Done",
+		JobExited:       "Done(%[1]d)",
+		PrintfBadNumber: "invalid number '%[1]s'",
+		// And the operand is quoted back from its first non-blank byte:
+		// `printf '%d' "  7  "` is `invalid number '7  '` here, where bash
+		// and dash echo the blanks they were handed (#2905).
+		PrintfBadNumberEchoesPastTheBlanks: true,
+		// `printf` is the BusyBox applet reached as a builtin and reports
+		// the way an applet does — the shell's own basename and nothing
+		// else, on every route. See BuiltinNamesTheShellAlone for the rows
+		// and for the `shift` control that says the rest of this shell's
+		// builtins still name the script and the line (#2913).
+		BuiltinNamesTheShellAlone: map[string]bool{"printf": true},
+		PrintfBadVerb:             "%[2]s: invalid format",
+		PrintfMissingVerb:         "%[1]s: invalid format",
 	}
 }
 

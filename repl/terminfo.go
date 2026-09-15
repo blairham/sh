@@ -83,12 +83,13 @@ package repl
 //     answer is the one that arrived:
 //
 //     The behaviour **is** there. `${+terminfo[rs2]}` is 0 for `screen`,
-//     `vt100`, `sun`, `aixterm` and `putty` and 1 for `xterm-256color`,
-//     exactly as on this machine, and the same compiled two-line
-//     descriptions reproduce the rule in both places: `rs2=\EQQ` alone reads
-//     absent, `rs1=\EWW, rs2=\EQQ` and `rs2=\EQQ, rs3=\EGG` both read, and
-//     `rep=\EDD, rs2=\EQQ` does not. So it is not an artifact of one
-//     machine's curses library.
+//     `vt100`, `sun` and `putty` and 1 for `xterm-256color`, exactly as on
+//     this machine, and the same compiled two-line descriptions reproduce
+//     the rule in both places: `rs2=\EQQ` alone reads absent, `rs1=\EWW,
+//     rs2=\EQQ` and `rs2=\EQQ, rs3=\EGG` both read, and `rep=\EDD,
+//     rs2=\EQQ` does not. So it is not an artifact of one machine's curses
+//     library. (`aixterm` is in the list above and not in this one: that
+//     image carries no such description, so its 0 there says nothing.)
 //
 //     And it is not the curses *lookup* either, which is the half that
 //     settles what to do about it: `tput rs2` prints the bytes on both

@@ -273,6 +273,38 @@ Each field produced by stage 6 is matched against the filesystem.
 | `cd /; x='et*'; set -- $x` | `[etc]` | `[etc]` | `[etc]` | **`[et*]`** |
 | `cd /; echo /zzz_no_such*` | pattern | pattern | pattern | **error** |
 
+### The order the matches come back in
+
+**Byte order**, which is a decision and not the absence of one. Measured
+2026-09-15, each shell started with `env -i` and nothing but the row's
+own variables, in a directory holding `1digit`, `A_upper`, `Cherry`,
+`Z`, `_under`, `a`, `b`, `banana` and `date`:
+
+| set | bash 5.3 | ksh93 | zsh | dash |
+| --- | --- | --- | --- | --- |
+| nothing at all | collates | bytes | bytes | bytes |
+| `LC_ALL=C`, `LANG=C` | bytes | bytes | bytes | bytes |
+| `LANG`/`LC_ALL`/`LC_COLLATE` = `en_US.UTF-8` | collates | collates | collates | bytes |
+| `LC_COLLATE=C LANG=en_US.UTF-8` | bytes | bytes | bytes | bytes |
+
+So it is a **locale** question and a dialect one at once — dash is the
+holdout in every row that has one — `LC_COLLATE=C` is byte order
+everywhere, and an **unset locale is not unanimous**: bash reads it as
+the system's default and collates where the other three read it as C.
+That last row is the one a continuous integration runner is in, so a
+script whose output is a sorted glob can answer two ways on one machine
+depending on which shell ran it.
+
+The collation itself is not attempted, and `interp/order.go` carries the
+three reasons next to the code: the platforms disagree about the same
+locale name, no dependency or generated table settles that, and an
+approximation was tried and is wrong on an ordinary directory. What this
+shell guarantees instead is that the order is decided **once** —
+`shellOrder`, reached by a pathname expansion, by the words a glob
+qualifier list's modifiers produced, and by the `o` and `O` flags of a
+parameter expansion, so the three can never answer differently
+(`glob/one-order-reaches-every-surface`, #1675).
+
 Two separate zsh divergences here, and conflating them is a mistake:
 
 - **zsh does not glob the result of an expansion.** A literal pattern in

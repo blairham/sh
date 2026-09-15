@@ -127,22 +127,23 @@ func orderWords(e *syntax.ParamExpr, words []string) []string {
 	return words
 }
 
-// compareWords orders two words: bytewise, or by the numbers inside them
-// when `n` was written, and either with case folded away or not.
+// compareWords orders two words: by this shell's own order — shellOrder, and
+// see it for what that is and is not — or by the numbers inside them when `n`
+// was written, either with case folded away or not.
 func compareWords(a, b string, fold, numeric, signed bool) int {
 	if !numeric {
 		if fold {
-			return strings.Compare(strings.ToLower(a), strings.ToLower(b))
+			return shellOrderFolded(a, b)
 		}
-		return strings.Compare(a, b)
+		return shellOrder(a, b)
 	}
 	if c := compareNatural(a, b, fold, signed); c != 0 {
 		return c
 	}
 	// Numerically equal and not the same text: `(001 1 01)` comes back
-	// `001 01 1`, which is byte order and not the order they were written
-	// in, so the tie is broken rather than left to the stable sort.
-	return strings.Compare(a, b)
+	// `001 01 1`, which is this shell's order and not the order they were
+	// written in, so the tie is broken rather than left to the stable sort.
+	return shellOrder(a, b)
 }
 
 // compareNatural compares two words with each run of digits read as a number.

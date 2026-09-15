@@ -102,10 +102,17 @@ type declaration struct {
 	// interp/compoundvariable.go.
 	compoundVar bool
 	integer     bool
-	readonly    bool
-	exported    bool
-	lower       bool
-	upper       bool
+	// isNameref says the name is a **reference** to another parameter, and
+	// nameref is the name it points at. What the listing writes is the
+	// reference itself and never what it reaches — `declare -n r="v"` — so
+	// this is gathered from the reference table directly rather than through
+	// the resolution every other reader goes through. See interp/nameref.go.
+	isNameref bool
+	nameref   string
+	readonly  bool
+	exported  bool
+	lower     bool
+	upper     bool
 	// hidden says the `-H` attribute is on the name. What it *does* is the
 	// dialect's — see Semantics.DeclareHideValueLetter — so this field is
 	// the record and hidesTheValue below is one of the two readings of it.
@@ -228,6 +235,7 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 
 		declaredOnly: r.declaredOnlyCompound[name],
 	}
+	d.nameref, d.isNameref = r.nameref[name]
 	d.compoundVar = r.isCompoundVariable(name)
 	_, d.float = r.floatPrecision[name]
 	d.width, d.hasWidth = r.fieldWidth[name]
@@ -240,6 +248,20 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 		r.sem().DeclareHideValueLetter == DeclareHideValueLetterHidesTheValue
 	attributed := d.integer || d.float || d.readonly || d.exported || d.lower ||
 		d.upper || d.hidden || d.unique || d.hasWidth
+	if d.isNameref {
+		// A reference lists as itself — `declare -n r="v"` — and the tables
+		// below are the *target's*, not this name's. Ahead of every one of
+		// them because asking them would resolve: assocFor and the rest go
+		// through the reference, which is right for a read and wrong for a
+		// listing that is supposed to say where the reference points.
+		//
+		// The value is the target's name, and it is written even when the
+		// reference has nothing to point at — `typeset -n r` lists as
+		// `declare -n r` with no `=`, which is what hasValue being false
+		// gives it.
+		d.value, d.hasValue = d.nameref, d.nameref != ""
+		return d, true
+	}
 	if pd, ok := r.producedDeclaration(name); ok {
 		// A produced parameter the dialect has said how to list. Its letters
 		// are stated rather than read off an attribute table, because there
@@ -813,7 +835,7 @@ func (r *Runner) exportSpelledDeclaration(d declaration) string {
 	// `typeset -L3 -r a=abcd` and `typeset -lL 4 d=ABCD` is
 	// `typeset -L4 -l d=ABCD`. A name carries one of the three, so their
 	// order among themselves decides nothing.
-	flags := d.letters("aAiFLRZlurxUT")
+	flags := d.letters("naAiFLRZlurxUT")
 	numbered := 0
 	if d.base != 0 {
 		// The base rides on the letter here — `typeset -i16 h=255` — where
@@ -1047,6 +1069,15 @@ func (r *Runner) bareAssignmentDeclaration(d declaration) string {
 // name, in this engine's own order.
 func bareAssignmentFlags(d declaration) []string {
 	var flags []string
+	if d.isNameref {
+		// A **name reference** lists with the letter and nothing else, and
+		// the value on it is the name it points at: measured 2026-09-15 on
+		// ksh93u+, `v=1; typeset -n r=v; typeset -p r` is `typeset -n r=v`.
+		// Ahead of every letter below because none of them can stand with it
+		// — the attribute says what the name *is*, and a reference carries
+		// none of the target's. See interp/nameref.go.
+		return []string{"-n"}
+	}
 	// Not the clustered order: this engine leads with what the name *is
 	// for* — export first, then readonly — and follows with what it is.
 	if d.exported {
@@ -1123,7 +1154,11 @@ func bareAssignmentHead(flags []string, name string) string {
 // they had before the case attributes arrived, and part ways over where
 // those go — measured, `-irxl` against `-ilr` for the same state — which is
 // why the order is the caller's to spell.
-func (d declaration) flagLetters() string { return d.letters("aAirxlu") }
+// `n` stands first among them, which is measured rather than chosen: a name
+// reference lists as `declare -n r="v"` and it is the one attribute that can
+// stand with none of the others, since the letter says what the name *is*
+// rather than what it holds.
+func (d declaration) flagLetters() string { return d.letters("naAirxlu") }
 
 // letters spells the attributes present in the given order.
 func (d declaration) letters(order string) string {
@@ -1153,6 +1188,8 @@ func (d declaration) letters(order string) string {
 			on = d.unique
 		case 'T':
 			on = d.hasTie
+		case 'n':
+			on = d.isNameref
 		}
 		if on {
 			b.WriteRune(c)

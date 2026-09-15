@@ -337,6 +337,10 @@ func Semantics() interp.Semantics {
 	// declaration command to write the letter on. `typeset` is not a
 	// builtin here and `integer` is not a word, so neither sign of `-i`
 	// can be put to this shell at all (#2345).
+	// unanswered NamerefCycleIsRefused: there are no name references to make
+	// a cycle of. Measured 2026-09-15, `typeset` is not a builtin here —
+	// `typeset: not found` at 127 — so the declaration that would build one
+	// cannot be written (#2553).
 	// unanswered UnsetReferenceLetterRemovesANonReference: this shell has no
 	// `-n` on `unset` to ask it with. Measured 2026-09-12, `unset -n x` is
 	// `unset: Illegal option -n` and the operand is never read, so there is no

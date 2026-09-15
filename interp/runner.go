@@ -2360,6 +2360,16 @@ type Runner struct {
 	// refuses it and ksh93 does not have it, so the dialect decides who may
 	// set it — see Semantics.DeclareOptions.
 	unique map[string]bool
+	// nameref names the parameters that are **references to another
+	// parameter**: the entry is the name — or the name and subscript — that
+	// every read, write and `unset` through this one really lands on. See
+	// interp/nameref.go, which is the whole of the mechanism.
+	//
+	// A table rather than a value on a cell for the reason every other
+	// attribute here is one: the name is what carries it, so a shadowed
+	// binding keeps its own and gets the outer one back on return —
+	// nameAttributes carries it through localattributes.go with the rest.
+	nameref map[string]string
 	// hideInScope names the parameters carrying the hide-in-scope attribute
 	// — `typeset -h`, and `typeset +h` to take it off. It is what makes a
 	// local declaration of a name that is half of a tie an ordinary
@@ -6372,6 +6382,18 @@ func (r *Runner) refuseReadonly(name string, form assignForm) bool {
 }
 
 func (r *Runner) setVarAs(name, value string, form assignForm) {
+	if target, write := r.namerefAssignmentTarget(name, value); !write {
+		// The value **aimed** the reference rather than being written
+		// through it, which is what a reference with nothing to point at
+		// does with its first assignment. See interp/nameref.go.
+		return
+	} else if target != name {
+		if base, sub, element := r.indirectElement(target); element {
+			r.storeThroughNamerefElement(base, sub, value)
+			return
+		}
+		name = target
+	}
 	if r.refuseReadonly(name, form) {
 		return
 	}
@@ -6556,6 +6578,14 @@ func (r *Runner) getVar(name string) (string, bool) { return r.varValue(name, tr
 func (r *Runner) storedVar(name string) (string, bool) { return r.varValue(name, false) }
 
 func (r *Runner) varValue(name string, folded bool) (string, bool) {
+	// A read through a name reference lands on what it points at. Only a
+	// plain-name target here: a reference aimed at an *element* has its
+	// subscript read as arithmetic, and arithmetic reaches command
+	// substitution, which reaches the builtin table this function is
+	// initialized before. So that half is resolved one level up, in
+	// paramSource — see namerefReadsAnElement, which says what a caller that
+	// is not an expansion therefore does not get.
+	name = r.throughNamerefName(name)
 	// A produced array answers a plain `$name` too, and what it answers with
 	// is an axis: the whole array in one shell and its first element in the
 	// others.

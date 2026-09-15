@@ -663,6 +663,14 @@ func (r *Runner) paramSource(e *syntax.ParamExpr) (value string, set, subscript 
 			return r.joinUnsplit(e, elems), elems != nil, true
 		}
 	}
+	// A name reference aimed at an *element* — `typeset -n r="a[2]"` — is
+	// read here rather than at the store, because the subscript is
+	// arithmetic and the store may not reach it. See
+	// Runner.namerefReadsAnElement, where the split is written down. Ahead
+	// of the special parameters because a reference is never one of them.
+	if v, iset, element := r.namerefReadsAnElement(e.Name); element {
+		return v, iset, false
+	}
 	// A special parameter supplies a *value*; it does not skip the operators.
 	// Returning here was a bug: `${1##*/}` left its argument untouched,
 	// because the positional parameter answered and the trim never ran.
@@ -1001,7 +1009,10 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 			//
 			// The subscripts assigned, which is not `0..n-1`: an array
 			// with a gap in it has subscripts the count never reaches.
-			elems = r.subscriptsOf(e.Name, len(elems))
+			// Through a name reference like every other reading of the
+			// name: `typeset -n r=v; v=(1 2)` answers `${!r[@]}` with the
+			// subscripts of `v`. See interp/nameref.go.
+			elems = r.subscriptsOf(r.throughNamerefName(e.Name), len(elems))
 		}
 		if e.Op == syntax.ParamSubstring {
 			elems = r.positionalSliceElems(e, elems)
@@ -2094,6 +2105,21 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 	// the value came from rather than the one written.
 	name := e.Name
 	if e.Indirect {
+		// A **name reference** answers this spelling with the name it points
+		// at, which is not the double read the same spelling means for an
+		// ordinary parameter: `v=1; typeset -n r=v; echo "${!r}"` is `v` in
+		// bash 5.3.15 and ksh93u+ alike, where reading twice would have gone
+		// looking for a parameter called `1`. The chain is followed to the
+		// end — `typeset -n s=r` answers `v` and not `r` — which is what
+		// namerefTarget already does for every reader. See
+		// interp/nameref.go.
+		//
+		// Ahead of the axis below because it is not that question: this is
+		// the same answer in the dialect that reads `${!x}` as the name and
+		// in the one that reads it as an indirection.
+		if target, is := r.namerefTarget(e.Name); is {
+			return target
+		}
 		// `${!x}` reads x, then reads *that* as a name — in bash. ksh93
 		// parses the same text and yields the name itself, so the grammar
 		// having accepted it is not enough to know what it means.
@@ -5331,6 +5357,14 @@ func (r *Runner) namesWithPrefix(prefix string) []string {
 		add(k)
 	}
 	for name := range r.compoundVariable {
+		add(name)
+	}
+	// And the name references, which are in none of the tables above: a
+	// reference is a name the shell has and not a value it stored. Measured
+	// 2026-09-15 on bash 5.3.15, `v=1; declare -n r=v; echo "${!r@}"` writes
+	// `r` — the reference's own name and not the target's — so the listing
+	// is over the names this shell knows rather than over what they reach.
+	for name := range r.nameref {
 		add(name)
 	}
 	sort.Strings(out)

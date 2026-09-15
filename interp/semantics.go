@@ -1009,6 +1009,34 @@ type Semantics struct {
 	// references arrive, the axis stays what it is and the reference case
 	// joins it as the unanimous half.
 	UnsetReferenceLetterRemovesANonReference Answer
+
+	// NamerefCycleIsRefused decides what a declaration does when the name
+	// reference it is making would reach itself — `typeset -n r=r`, and the
+	// pair `typeset -n a=b; typeset -n b=a`.
+	//
+	// A real disagreement and not a missing feature, which is why it is a
+	// field. Measured 2026-09-15, `env -i` with a scratch HOME:
+	//
+	//	typeset -n r=r            bash  nameref variable self references
+	//	                                not allowed, status 1
+	//	                          ksh93 invalid self reference, and the
+	//	                                script ends there
+	//	typeset -n a=b            bash  silent 0 — and `echo "$a"` then
+	//	typeset -n b=a                  writes `warning: a: circular name
+	//	                                reference` and an empty line
+	//	                          ksh93 invalid self reference on the
+	//	                                *second* declaration
+	//
+	// So the two shells agree that a *direct* self reference is refused and
+	// part company over the pair: one refuses it at the declaration, the
+	// other makes it and complains at the read. Yes is the refusing answer,
+	// No is the warning one. Both are complete, neither is a subset of the
+	// other, and a shell that guessed would either refuse a pair one shell
+	// takes or build a cycle the other never allows.
+	//
+	// Asked only where a cycle was really written, so a dialect that never
+	// meets one is never asked for an answer.
+	NamerefCycleIsRefused Answer
 	// ReadZeroTimeout is what `read -t 0` asks of the stream — a poll, a
 	// read of what is already waiting, or a read that commits once it has
 	// begun. Asked only where `-t 0` is actually written; every other

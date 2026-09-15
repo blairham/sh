@@ -114,6 +114,7 @@ ash   KeptTrapListingIncludesExit
 ash   KeyedLiteralAppendJoinsTheReplacedValue
 ash   KeyedTableScalarIsTheFirstValue
 ash   LongestMatchTakesTheWrittenArm
+ash   NamerefCycleIsRefused
 ash   NegatedTestRecordsThePostNegationStatus
 ash   NegativeSubscriptCountsOverAPromotedScalar
 ash   NegativeSubscriptPastTheStartInserts
@@ -298,6 +299,7 @@ dash  KeptTrapListingIncludesExit
 dash  KeyedLiteralAppendJoinsTheReplacedValue
 dash  KeyedTableScalarIsTheFirstValue
 dash  LongestMatchTakesTheWrittenArm
+dash  NamerefCycleIsRefused
 dash  NegatedTestRecordsThePostNegationStatus
 dash  NegativeSubscriptCountsOverAPromotedScalar
 dash  NegativeSubscriptPastTheStartInserts
@@ -404,6 +406,7 @@ zsh   IgnoredNamesValueIsOnePattern
 zsh   IndirectionYieldsName
 zsh   IntegerAssignmentReadsALeadingZeroAsDecimal
 zsh   LocalOutsideAFunctionIsFatal
+zsh   NamerefCycleIsRefused
 zsh   NegativeSubscriptCountsOverAPromotedScalar
 zsh   PrintfHexFloatDefaultIsTwelveDigits
 zsh   PrintfOutputPrecedesComplaint

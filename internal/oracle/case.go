@@ -23943,6 +23943,36 @@ echo "st=$?"`,
 		Why:     "the sibling letter, and the control that says the two are refused in the same words for different reasons: ksh93's `-t` marks a function for tracing, is silent at 0, and writes **no** listing — which is what makes accepting-and-dropping it worse than refusing it, since a dropped letter would leave `typeset -ft f` printing the body where that shell prints nothing. It is refused by name today from the wider table, `-t` being absent on a variable line too",
 	},
 	{
+		ID: "declare/a-name-reference-reads-and-writes-through", Category: "declarations",
+		Snippet: `v=1; typeset -n r=v 2>&1; echo "read=[$r]"; r=2 2>&1; echo "wrote=[$v] st=$?"`,
+		Why:     "a **name reference**: a parameter whose value is another parameter's *name*, through which every read and every write reaches that other parameter. bash 5.3 and ksh93 both have it and agree — `read=[1] wrote=[2]` — and the two halves are one row because a shell that resolved the read and not the write would pass on the first field and leave the second holding `1`. bash 3.2 has no `-n` at all, zsh has not got the letter either (`bad option: -n`, measured, which is what #2553's premise about that shell got wrong) and dash has no `typeset`, so three columns record their own refusal and the parameter keeps whatever the refused line left. This engine refused the letter by name until #2553",
+	},
+	{
+		ID: "declare/a-name-reference-lists-as-itself", Category: "declarations",
+		Snippet: `v=1; typeset -n r=v 2>/dev/null; typeset -p r 2>&1; typeset -p v 2>&1; echo "st=$?"`,
+		Why:     "the listing is the one reader that does **not** go through the reference: it writes where the reference points — `declare -n r=\"v\"` in bash, `typeset -n r=v` in ksh93 — and the target beside it lists as the ordinary parameter it is. The pair is the discrimination: a listing that resolved would write the *value* on the first line and the two lines would be indistinguishable. It is also the row that carries the two shells' spellings of the same state, which is a clustered letter with a quoted value against a bare assignment with the letters in front",
+	},
+	{
+		ID: "declare/unset-through-a-reference-and-unset-of-one", Category: "declarations",
+		Snippet: `v=1; typeset -n r=v 2>/dev/null; unset r 2>&1; echo "through=[${v-GONE}]"; w=2; typeset -n q=w 2>/dev/null; unset -n q 2>&1; echo "letter=[${w-GONE}]"`,
+		Why:     "the whole of what the `-n` letter means to `unset`, and the two fields are one question asked from both sides: the plain spelling takes away what the reference *points at* and the letter takes away the **reference**, leaving the target standing. bash and ksh93 agree on both — `through=[GONE] letter=[2]` — which is what makes this the core's rule rather than an axis, and a shell that resolved `unset -n` like every other reader would answer `letter=[GONE]` and look right on the first field",
+	},
+	{
+		ID: "declare/a-cycle-of-name-references", Category: "declarations",
+		Snippet: `typeset -n a=b 2>&1; echo "one=$?"; typeset -n b=a 2>&1; echo "two=$?"; echo "read=[$a]"`,
+		Why:     "the disagreement, and it is a real one: ksh93 refuses the declaration that **closes** the loop — `typeset: b: invalid self reference`, and `typeset` being special there the script ends, so no field after `one=` is written — where bash 5.3 takes both at 0 and complains only when something reads through, `warning: a: circular name reference` followed by an empty value. Neither reading is a subset of the other, which is Semantics.NamerefCycleIsRefused. The *direct* `typeset -n r=r` is refused in both and is the core's answer instead; it is not this row, because a row that used it could not tell the two apart",
+	},
+	{
+		ID: "declare/a-reference-is-aimed-by-its-first-value", Category: "declarations",
+		Snippet: `v=1; typeset -n r 2>&1; echo "bare=$?"; r=v 2>&1; echo "aimed=[$r]"; typeset -p r 2>&1`,
+		Why:     "a reference with nothing to point at yet is aimed by the first assignment through it rather than written through — `typeset -n r; r=v` leaves `declare -n r=\"v\"` in bash and `typeset -n r=v` in ksh93, and creates no parameter called `r` — where the same assignment over an aimed reference writes to the target. One rule read twice, and it is also what makes `for r in x y` re-point a reference instead of writing through it. The bare declaration's status is the first field because a shell without the letter refuses there and every field after it is that refusal's aftermath",
+	},
+	{
+		ID: "declare/a-function-fills-in-a-variable-by-name", Category: "declarations",
+		Snippet: `f(){ typeset -n o=$1 2>/dev/null; o=filled; }; v=; f v 2>&1; echo "[$v]"`,
+		Why:     "what the letter is *for*, and the shape every real use of it takes: a function is handed the name of a variable and fills it in. It is also the row that says the reference belongs to the call — the declaration is inside `f`, and `o` is gone when it returns while `v` keeps what was written. bash and ksh93 answer `[filled]`; the three columns without the letter run the body anyway and leave `v` empty, because the refused declaration makes `o` an ordinary local and the assignment lands there",
+	},
+	{
 		ID: "declare/a-local-over-a-produced-readonly-parameter", Category: "declarations",
 		Snippet: `g() { local ARGC; printf "g=[%s]" "$ARGC"; }; g; f() { local ARGC=5; printf "f=[%s]" "$ARGC"; }; f; echo " tail"`,
 		Why:     "whether a local declaration thaws a parameter the *shell* produces and has frozen. zsh has `ARGC`, freezes it, and refuses the second function fatally -- `f: read-only variable: ARGC` -- while taking the first: the valueless form shadows the name and reads the producer's `0`, so the declaration is allowed and only a value is refused. That pair is the whole discrimination, and a row with the valued form alone would be passed by a guard aimed at the declaration instead of at the assignment. An ordinary readonly goes the other way in the same shell -- `readonly z=1; f(){ local z=5 }` is `5` there -- so this is not `local` refusing to shadow anything frozen. The other columns have no such parameter and none of them freezes `ARGC`, so all three bash spellings and dash answer `g=[]f=[5] tail`; ksh93 has no `local` at all and says so twice while still running the bodies, which is that shell's standing answer and not this question (#2551)",

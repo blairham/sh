@@ -68,6 +68,19 @@ type nameAttributes struct {
 	upper    bool
 	unique   bool
 	hidden   bool
+	// nameref and isNameref are the name-reference attribute, the same shape
+	// as the two above it: absent as often as present, and what it carries
+	// is a *name* rather than a flag.
+	//
+	// Here rather than in a table of its own so that a local declaration of
+	// a name that is a reference outside is a fresh binding and gives the
+	// reference back on return — the rule every letter in this file follows,
+	// and the one `local -n` leans on hardest: a function whose `local -n
+	// out=$1` left the caller's own `out` aimed at the callee's argument
+	// would be a reference leaking out of the call that made it. See
+	// interp/nameref.go.
+	nameref   string
+	isNameref bool
 }
 
 // captureAttributes reads what the tables hold for a name, so a scope can put
@@ -83,6 +96,7 @@ func (r *Runner) captureAttributes(name string) nameAttributes {
 	a.base, a.baseSet = r.integerBase[name]
 	a.precision, a.isFloat = r.floatPrecision[name]
 	a.width, a.hasWidth = r.fieldWidth[name]
+	a.nameref, a.isNameref = r.nameref[name]
 	return a
 }
 
@@ -108,6 +122,7 @@ func (r *Runner) dropNameAttributes(name string) {
 	delete(r.uppered, name)
 	delete(r.unique, name)
 	delete(r.hidden, name)
+	delete(r.nameref, name)
 }
 
 // restoreAttributes puts back what captureAttributes read.
@@ -130,6 +145,11 @@ func (r *Runner) restoreAttributes(name string, a nameAttributes) {
 			r.fieldWidth = map[string]fieldWidth{}
 		}
 		r.fieldWidth[name] = a.width
+	}
+	if !a.isNameref {
+		delete(r.nameref, name)
+	} else {
+		r.setNameref(name, a.nameref)
 	}
 }
 

@@ -642,6 +642,14 @@ func Semantics() interp.Semantics {
 	// `unset -n 1x` is silent at 0 while plain `unset 1x` refuses the
 	// identifier, though a readonly name is still refused (#932).
 	s.UnsetReferenceLetterRemovesANonReference = interp.No
+	// A name reference that reaches itself through *another* reference is
+	// made here rather than refused, and the complaint arrives when
+	// something reads through it. Measured 2026-09-15 on 5.3.15: `declare -n
+	// a=b; declare -n b=a` is a silent 0, and `echo "$a"` then writes
+	// `warning: a: circular name reference` followed by an empty line. The
+	// direct `declare -n r=r` is refused in both shells and is the core's
+	// answer rather than this axis — see interp/nameref.go.
+	s.NamerefCycleIsRefused = interp.No
 	s.ReadZeroTimeout = interp.ReadZeroTimeoutPolls
 	s.ReadPartialCountSucceeds = interp.No
 	s.ReadExactCountKeepsPartial = interp.Yes
@@ -1692,10 +1700,12 @@ func Semantics() interp.Semantics {
 
 	// The letters `declare` and `local` read — one set under two names
 	// here, with `-F` naming functions rather than setting a float's
-	// precision, which no other engine spells this way. The nameref and
-	// trace letters this shell also has ride in
+	// precision, which no other engine spells this way. `-n` is here since
+	// #2553: it is the **name reference**, a language feature rather than an
+	// attribute, and interp/nameref.go is the whole of it. The trace letter
+	// this shell also has still rides in
 	// Diagnostics.UnimplementedOptionLetters.
-	s.DeclareOptions = "aAfFgilprux"
+	s.DeclareOptions = "aAfFgilnprux"
 	// unanswered DeclareMatchingLetter: bash has no `m` letter under either
 	// reading. Measured 2026-09-13 on 5.3 and 3.2 alike, `declare -m q=1` is
 	// `declare: -m: invalid option` followed by the usage line, so the
@@ -1706,7 +1716,11 @@ func Semantics() interp.Semantics {
 	// `declare: -T: invalid option` at 2 with the usage line under it, so
 	// neither the tie nor the type can be asked for here (#2419).
 	// unanswered DeclareHideValueLetter: the same, for `declare -H q=1`.
-	s.LocalOptions = "aAgilprux"
+	// `local -n` is the common spelling of a reference and not an afterthought
+	// of `declare -n`: a function taking the name of a variable to fill in is
+	// what the letter exists for, and the letter has to be on this word for
+	// the fresh binding to be the function's own.
+	s.LocalOptions = "aAgilnprux"
 	// A bad `declare` option is reported and the script goes on.
 	s.TypesetBadOptionFatal = interp.No
 	// A lone `-` or `+` is a *name* here and not an option word, and not one
@@ -2271,13 +2285,16 @@ func Diagnostics() interp.Diagnostics {
 			// always, printed only to a terminal, which is the measured
 			// whole of it.
 			"read": "Ee",
-			// The nameref and trace attributes, under both of the builtin's
-			// names — and `local`'s extras: the same two, `-I` inheritance,
-			// and the function letters, which this shell takes and ignores
-			// where no operand is a function.
-			"declare": "Int",
-			"typeset": "Int",
-			"local":   "fFInt",
+			// The trace attribute, under both of the builtin's names — and
+			// `local`'s extras: `-I` inheritance, and the function letters,
+			// which this shell takes and ignores where no operand is a
+			// function. `-n` left this list when name references landed
+			// (#2553); the two tables are one table, so a letter named here
+			// while DeclareOptions spells it would refuse what the attribute
+			// grants.
+			"declare": "It",
+			"typeset": "It",
+			"local":   "fFIt",
 		},
 		// bash's own words for the two -u failures it can meet here; the
 		// non-number wordings per letter are not modeled yet, so those fall
@@ -2301,7 +2318,26 @@ func Diagnostics() interp.Diagnostics {
 		},
 		// `declare -p nosuch` — the name it was invoked by is in front,
 		// which declarePrint writes, so the wording carries only the rest.
-		DeclareNoSuchVariable:  "%[1]s: not found",
+		DeclareNoSuchVariable: "%[1]s: not found",
+		// The three sentences a name reference has. Measured 2026-09-15 on
+		// 5.3.15, `env -i` with a scratch HOME:
+		//
+		//	declare -n r=1bad    declare: `1bad': invalid variable name
+		//	                     for name reference                    st 1
+		//	declare -n r=r       declare: r: nameref variable self
+		//	                     references not allowed                st 1
+		//	declare -n a=b       silent 0, and `echo "$a"` then writes
+		//	declare -n b=a       warning: a: circular name reference
+		//
+		// The target is quoted back with bash's own `'` pair, the way every
+		// bad-name refusal on this builtin quotes one — see BuiltinBadName,
+		// which is the sentence this replaces for the `n` letter alone.
+		NamerefBadTarget:     "`%[1]s': invalid variable name for name reference",
+		NamerefSelfReference: "%[1]s: nameref variable self references not allowed",
+		// Spoken as the shell rather than as the builtin, measured: the line
+		// is `bash: line 1: warning: a: circular name reference` with no
+		// `declare:` in it, where the two refusals above carry the name.
+		NamerefCircularWarning: "warning: %[1]s: circular name reference",
 		TrapPrintsSignalPrefix: "SIG",
 		// One wording for all three, and the operand quoted back exactly as
 		// given: `export 1x=v` says `1x=v', not `1x'.

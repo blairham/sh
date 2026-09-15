@@ -1895,13 +1895,16 @@ func Semantics() interp.Semantics {
 	// caller's position — words and the place inside a clustered word alike —
 	// comes back on return. It is what lets this shell's own function
 	// library parse options without resetting OPTIND by hand.
-	s.GetoptsPositionIsFunctionLocal = interp.Yes
+	s.GetoptsFunctionPosition = interp.GetoptsFunctionPositionIsLocal
 	// The same answer by a second route, and recorded rather than left to
 	// the axis above: every call here has its own cursor whether or not
 	// anything was declared, so a declaration inside one cannot be the
 	// thing that loses the caller's place.
 	s.GetoptsLocalOptindRestoresTheCursor = interp.Yes
 	s.GetoptsClearsOptarg = interp.Yes
+	// And the same for an option that simply takes none, which is the other
+	// axis and the one this shell shares with dash and BusyBox ash.
+	s.GetoptsEmptiesOptargForAnArgumentlessOption = interp.Yes
 	// Measured 2026-09-12: `OLDPWD=/usr zsh -c 'echo $OLDPWD'` answers `$PWD`,
 	// so an inherited value never arrives at all — the name is this shell's own
 	// record of where it has been, and it starts where the shell started. That

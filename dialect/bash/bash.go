@@ -1235,6 +1235,12 @@ func Semantics() interp.Semantics {
 	s.DollarSingleCaretMeta = interp.DollarSingleCaretMetaAbsent
 	s.GetoptsAssignmentRestartsWord = interp.Yes
 	s.GetoptsClearsOptarg = interp.No
+	s.GetoptsEmptiesOptargForAnArgumentlessOption = interp.No
+	// The scan position is shared with the caller across a shell function
+	// call, which is why every option-parsing helper here begins with
+	// `local OPTIND=1`: without it a second call starts where the first
+	// stopped and reads nothing.
+	s.GetoptsFunctionPosition = interp.GetoptsFunctionPositionIsShared
 	// A `local OPTIND` gives the call the whole cursor and gives the caller
 	// the whole cursor back — the position inside a clustered word along
 	// with the number. bash 3.2 restores only the number, so a loop whose

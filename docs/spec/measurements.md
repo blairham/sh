@@ -4017,6 +4017,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `alias/the-print-option` | `st=1` **2>** `alias: -p not found` | `alias a='1'~st=0` | `alias a='1'~st=0` | `alias a='1'~st=0` | `alias a=1~st=0` | `st=1` **2>** `<shell>:alias:1: bad option: -p` | `st=1` **2>** `alias: -p not found` |
 | `alias/unalias-all-with-a-name-after-it` | `st=0~after=1` **2>** `alias: a not found` | `st=0~after=1` **2>** `<shell>: line 1: alias: a: not found` | `st=0~after=1` **2>** `<shell>: line 1: alias: a: not found` | `st=0~after=1` **2>** `<shell>: line 0: alias: a: not found` | `st=0~after=1` **2>** `a: alias not found` | `st=1~a=1~after=0` **2>** `<shell>:unalias:1: -a: too many arguments` | `st=0~after=1` **2>** `alias: a not found` |
 | `type/p-on-a-name-the-shell-answers-itself` | `-p: not found~f is a shell function~st=127` | `st=0` | `st=0` | `st=0` | `st=1` | `f not found~st=1` | `f~st=0` |
+| `getopts/optarg-after-an-option-that-takes-none` | `o=[a] optarg=[] set=[yes]` | `o=[a] optarg=[UNSET] set=[]` | `o=[a] optarg=[UNSET] set=[]` | `o=[a] optarg=[UNSET] set=[]` | `o=[a] optarg=[UNSET] set=[]` | `o=[a] optarg=[] set=[yes]` | `o=[a] optarg=[] set=[yes]` |
 | `getopts/optarg-after-a-bad-option` | `o=[?] optarg=[UNSET]` **2>** `Illegal option -x` | `o=[?] optarg=[UNSET]` **2>** `<shell>: illegal option -- x` | `o=[?] optarg=[UNSET]` **2>** `<shell>: illegal option -- x` | `o=[?] optarg=[UNSET]` **2>** `<shell>: illegal option -- x` | `o=[?] optarg=[UNSET]` **2>** `<shell>: -x: unknown option` | `o=[?] optarg=[]` **2>** `<shell>:1: bad option: -x` | `o=[?] optarg=[UNSET]` **2>** `Illegal option -x` |
 
 - `echo/dash-e-and-capital-e` — -e turns escapes on where the shell has the letter and -E off where it has that one: dash has neither and prints them, ksh93 has only -e
@@ -6777,6 +6778,10 @@ grades it and nothing drift-checks it either, for the same reason.
 - `type/p-on-a-name-the-shell-answers-itself` — `-p` on a name the shell would have answered itself. One column's `-p` speaks only when the plain answer would have been a file, so a function is silence at 0; the two that search PATH anyway find nothing under that name and fail, one of them with a sentence. A function rather than a builtin keeps the row machine-independent -- `type -p echo` would have printed whatever path this machine keeps it at (#2057)
   ```sh
   f() { :; }; type -p f; echo "st=$?"
+  ```
+- `getopts/optarg-after-an-option-that-takes-none` — the other half of `getopts/optarg-after-a-bad-option`, and the columns line up differently: dash and BusyBox ash *empty* OPTARG for an option the string has and that takes no argument, where they leave it unset after a bad one. zsh empties it in both and bash and ksh93 unset it in both, so the two rows disagree about exactly two columns — which is what made one axis for both put dash on the wrong side of one of them. The preset value is what says the parameter was touched at all, and `${OPTARG+…}` beside `${OPTARG-…}` is the pair a careful script reads to ask whether the option it just read carried a value (#2944)
+  ```sh
+  OPTARG=PRESET; OPTIND=1; getopts "ab:" o -a; echo "o=[$o] optarg=[${OPTARG-UNSET}] set=[${OPTARG+yes}]"
   ```
 - `getopts/optarg-after-a-bad-option` — what `getopts` leaves in OPTARG when it reports an option the string does not have. One column empties it and the other three leave it unset, which a script reading `${OPTARG-}` can tell apart -- and the `o=[?]` half says the two are agreeing about everything else (#2057)
   ```sh

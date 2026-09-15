@@ -17,6 +17,7 @@ import (
 func getoptsSem() Semantics {
 	s := CoreSemantics()
 	s.GetoptsClearsOptarg = No
+	s.GetoptsEmptiesOptargForAnArgumentlessOption = No
 	s.GetoptsAssignmentRestartsWord = Yes
 	return s
 }

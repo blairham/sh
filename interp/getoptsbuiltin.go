@@ -169,7 +169,7 @@ func (r *Runner) getoptsAt(name, spec string, silent bool, words []string, ind i
 		return 0
 	default:
 		r.advance(word, ind)
-		r.clearOptarg()
+		r.clearOptargForAnArgumentlessOption()
 		r.setVar(name, string(c))
 		return 0
 	}
@@ -242,8 +242,35 @@ func (r *Runner) getoptsBad(name, letter string, silent, missingArg bool) int {
 	return 0
 }
 
-// optIndex reads OPTIND, which is the shell's and which a script may set.
+// optIndex is the word the scan is at, and it reads OPTIND unless a call has
+// a position of its own beside it.
+//
+// The two are the same number everywhere except across a function call in the
+// dialect that gives the call its own cursor and leaves the *parameter* the
+// shell's — see GetoptsFunctionPositionIsTheCallsOwn, which is the only thing
+// that ever sets the override. Where they differ, the scan's own position is
+// the one the shell scans from and OPTIND is what a script reads: that is the
+// whole of the difference a script can see, and it is why the two halves are
+// separate rather than one number.
+//
+// An assignment the *script* made is the exception and outranks both: writing
+// OPTIND is how a scan is restarted, so the number written is the position.
+// The override follows it rather than being dropped, because the call still
+// has a cursor of its own afterwards.
 func (r *Runner) optIndex() int {
+	if r.optWord > 0 && !r.optindAssigned {
+		return r.optWord
+	}
+	n := r.optindValue()
+	if r.optWord > 0 {
+		r.optWord = n
+	}
+	return n
+}
+
+// optindValue is the number OPTIND holds, which is the shell's and which a
+// script may set.
+func (r *Runner) optindValue() int {
 	v, ok := r.getVar("OPTIND")
 	if !ok {
 		return 1
@@ -257,17 +284,37 @@ func (r *Runner) optIndex() int {
 
 func (r *Runner) setOptind(n int) {
 	r.setVar("OPTIND", strconv.Itoa(n))
+	if r.optWord > 0 {
+		// The scan's own position moves with the parameter: they part only
+		// at a call boundary, and this is not one.
+		r.optWord = n
+	}
 	// This builtin's own write is not the script's.
 	r.optindAssigned = false
 }
 
-// clearOptarg takes OPTARG away, or empties it where the dialect empties it.
+// clearOptarg takes OPTARG away after a *bad* option, or empties it where the
+// dialect empties it.
 //
-// Three of the four leave it *unset* and one sets it to the empty string,
-// which a script testing `${OPTARG-}` can tell apart. Asked only here, where
-// there is no argument to put in it.
+// Four of the five leave it unset and zsh sets it to the empty string, which
+// a script testing `${OPTARG-}` can tell apart.
 func (r *Runner) clearOptarg() {
-	if r.ask(r.sem().GetoptsClearsOptarg, "`getopts` emptying OPTARG rather than unsetting it") {
+	r.emptyOrUnsetOptarg(r.ask(r.sem().GetoptsClearsOptarg,
+		"`getopts` emptying OPTARG rather than unsetting it after a bad option"))
+}
+
+// clearOptargForAnArgumentlessOption is the same for an option the string has
+// and that takes no argument, which is a different axis because the columns
+// line up differently — see the axis for the measurement that separates them.
+func (r *Runner) clearOptargForAnArgumentlessOption() {
+	r.emptyOrUnsetOptarg(r.ask(r.sem().GetoptsEmptiesOptargForAnArgumentlessOption,
+		"`getopts` emptying OPTARG rather than unsetting it after an option that takes none"))
+}
+
+// emptyOrUnsetOptarg is what both of them do with their answer, in one place
+// so the two cannot come to mean different things by the same word.
+func (r *Runner) emptyOrUnsetOptarg(empty bool) {
+	if empty {
 		r.setVar("OPTARG", "")
 		return
 	}
@@ -327,23 +374,37 @@ func (r *Runner) localizeGetoptsCursor(sc *scope) {
 	held, inVars := r.Vars["OPTIND"]
 	wasRemoved := r.removed["OPTIND"]
 	char, assigned := r.optChar, r.optindAssigned
+	// The caller's place in words, which is what a call with a cursor of its
+	// own hands back — and which is *not* OPTIND once a call has already made
+	// the two part company. Read before anything here moves it.
+	cursor := r.optIndex()
 
 	// Whether the caller had read anything yet. A cursor at the first
-	// character of the first word is indistinguishable from the fresh one
-	// zsh would install, so only a used cursor makes the entry differ.
-	fresh := held == "1" && inVars && char <= 1
+	// character of the first word is indistinguishable from the fresh one a
+	// call would be handed, so only a used cursor makes the entry differ.
+	fresh := cursor == 1 && char <= 1 && held == "1" && inVars
 	askedIn := false
+	position := GetoptsFunctionPositionIsShared
 	if !fresh {
 		askedIn = true
-		if !r.ask(r.sem().GetoptsPositionIsFunctionLocal, getoptsLocalAxis) {
+		position = r.getoptsFunctionPosition()
+		switch position {
+		case GetoptsFunctionPositionIsLocal:
+			// Quietly, because this is the shell handing the call a cursor
+			// rather than the script assigning one: setVar would record an
+			// assignment the script never made, and the axis that reads that
+			// record drops the position inside a word on the strength of it.
+			r.setVarQuietly("OPTIND", "1")
+			r.optChar, r.optindAssigned = 1, false
+		case GetoptsFunctionPositionIsTheCallsOwn:
+			// The scan starts over and the parameter is left exactly as the
+			// caller had it: a script reading `$OPTIND` on the way in sees
+			// the caller's number, which is what separates this answer from
+			// the one above.
+			r.optWord, r.optChar, r.optindAssigned = 1, 1, false
+		default:
 			return
 		}
-		// Quietly, because this is the shell handing the call a cursor
-		// rather than the script assigning one: setVar would record an
-		// assignment the script never made, and the axis that reads that
-		// record drops the position inside a word on the strength of it.
-		r.setVarQuietly("OPTIND", "1")
-		r.optChar, r.optindAssigned = 1, false
 	}
 
 	sc.onReturn = append(sc.onReturn, func() {
@@ -351,17 +412,28 @@ func (r *Runner) localizeGetoptsCursor(sc *scope) {
 		if !askedIn {
 			// Nothing was reset on the way in, so the call is only
 			// distinguishable if its body moved the cursor.
-			if still && now == held && r.optChar == char && r.optindAssigned == assigned {
+			if still && now == held && r.optChar == char &&
+				r.optindAssigned == assigned && r.optIndex() == cursor {
 				return
 			}
-			if !r.ask(r.sem().GetoptsPositionIsFunctionLocal, getoptsLocalAxis) {
-				return
-			}
+			position = r.getoptsFunctionPosition()
+		}
+		if position == GetoptsFunctionPositionIsShared {
+			return
 		}
 		// The scan position comes back whatever became of the parameter: it
 		// is the caller's place in the caller's words, and a name the call
 		// took away says nothing about that.
 		r.optChar, r.optindAssigned = char, assigned
+		if position == GetoptsFunctionPositionIsTheCallsOwn {
+			// The parameter is the shell's, so only the scan's own position
+			// is put back — and it is put back as an override rather than
+			// written into OPTIND, because the two have now genuinely parted:
+			// `g -a -b` twice leaves OPTIND at 3 and reads the arguments both
+			// times.
+			r.optWord = cursor
+			return
+		}
 		if !still {
 			return
 		}
@@ -379,6 +451,20 @@ func (r *Runner) localizeGetoptsCursor(sc *scope) {
 			delete(r.removed, "OPTIND")
 		}
 	})
+}
+
+// getoptsFunctionPosition resolves the axis, reporting a dialect that has not
+// answered it the way ask does — the call is about to be told apart by it, so
+// a guess would be an invention.
+func (r *Runner) getoptsFunctionPosition() GetoptsFunctionPositionPolicy {
+	p := r.sem().GetoptsFunctionPosition
+	if p == GetoptsFunctionPositionUnspecified {
+		r.diagf("%s\n", r.unanswered(getoptsLocalAxis))
+		r.status = 2
+		r.unspecified = true
+		return GetoptsFunctionPositionIsShared
+	}
+	return p
 }
 
 // getoptsLocalAxis names the axis in a diagnostic, in one place because two

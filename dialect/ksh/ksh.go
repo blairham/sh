@@ -1442,6 +1442,12 @@ func Semantics() interp.Semantics {
 	s.DollarSingleDigitlessEscapeIsAZeroByte = interp.Yes
 	s.GetoptsAssignmentRestartsWord = interp.Yes
 	s.GetoptsClearsOptarg = interp.No
+	s.GetoptsEmptiesOptargForAnArgumentlessOption = interp.No
+	// The scan position is shared with the caller across a shell function
+	// call, which is why an option-parsing helper here has to reset
+	// OPTIND itself: without it a second call starts where the first
+	// stopped and reads nothing.
+	s.GetoptsFunctionPosition = interp.GetoptsFunctionPositionIsShared
 	// Reached through `typeset` in a function defined with the `function`
 	// word, this shell having no `local`: the caller's position inside a
 	// clustered word comes back with the number.

@@ -633,7 +633,21 @@ func Semantics() interp.Semantics {
 	s.FatalErrorEndsAtTheCommandWord = interp.Yes
 	s.GetoptsRejectsUnknownOption = interp.No
 	s.GetoptsAssignmentRestartsWord = interp.Yes
+	// A shell function call gets a `getopts` scan of its own here, while
+	// OPTIND itself stays the shell's: a helper called twice reads its
+	// arguments twice, and `$OPTIND` inside the call is still the caller's
+	// number. Measured 2026-09-15 — `g() { while getopts ab o "$@"; do :;
+	// done; }` called twice on `-a -b` sees both options both times, where
+	// bash 5.3 and ksh93u+ see them once. BusyBox ash answers both of these
+	// exactly as dash does (#2944).
+	s.GetoptsFunctionPosition = interp.GetoptsFunctionPositionIsTheCallsOwn
 	s.GetoptsClearsOptarg = interp.No
+	// But OPTARG is *emptied* rather than unset when the option that was read
+	// is one the string has and takes no argument, which `${OPTARG-…}` and
+	// `${OPTARG+…}` tell apart — the two spellings a careful script uses to
+	// ask whether the option it just read carried a value. zsh agrees here
+	// and disagrees on the row above, which is why the two are two axes.
+	s.GetoptsEmptiesOptargForAnArgumentlessOption = interp.Yes
 	// `alias` reads no options at all, so `-p` is a name it cannot find and
 	// `-g` and `-s` are neither kinds nor letters.
 	s.AliasParsesOptions = interp.No

@@ -16020,14 +16020,20 @@ rather than the value: `set -- -ab; getopts ab o; OPTIND=1` writes the
 number OPTIND already held, and those three still restart and read `a` a
 second time where zsh carries on to `b`.
 
-**`GetoptsPositionIsFunctionLocal`** — bash no · dash no · ksh93 no · zsh yes
+**`GetoptsFunctionPosition`** — bash shared · dash the call's own · ksh93 shared · zsh local
 
-Gives every shell function call its own `getopts` cursor: `OPTIND` starts
-the call at 1 whatever the caller had reached, and the caller's position
-comes back when the call returns.
+What a shell function call does to the `getopts` scan position. The
+position has two halves and only one of them is a parameter: `OPTIND`
+counts words, and how far into a clustered word the letters have been
+read is the builtin's own bookkeeping. The panel splits three ways over
+which of them a call gets to itself.
 
-It is the *parameter* that is local and not only the builtin's
-bookkeeping, which a snippet with no `getopts` in it shows
+*shared* is bash and ksh93: the call scans from where the caller reached
+and the caller gets back whatever the call left. It is why every
+option-parsing helper in those shells begins by resetting `OPTIND`.
+
+*local* is zsh: the **parameter** is the call's, which a snippet with no
+`getopts` in it shows
 (`getopts/an-assignment-to-optind-inside-a-function`):
 
     g() { echo "entry=$OPTIND"; OPTIND=7; }
@@ -16036,22 +16042,38 @@ bookkeeping, which a snippet with no `getopts` in it shows
 answers `entry=1 after=3` in zsh and `entry=3 after=7` in the other five.
 The position *inside* a clustered word travels with the value, which a
 shared cursor cannot express: with `-ab` half read, a function scanning
-its own `-cd` reads both `c` and `d` in zsh and only `d` everywhere else,
-and the caller still finds its `b` on return
+its own `-cd` reads both `c` and `d` in zsh and only `d` in the shared
+columns, and the caller still finds its `b` on return
 (`getopts/a-functions-cursor-inside-a-clustered-word`). Each call has its
 own, so nesting unwinds frame by frame rather than through one saved copy
 (`getopts/a-nested-call-has-its-own-cursor`), and zsh's *anonymous*
 function gets one too — it is the call that localizes, not the `function`
 word (`getopts/an-anonymous-function-has-its-own-cursor`).
 
-dash is the near-miss and has to be told apart deliberately: its
-`getopts` restarts a scan that found no option where it was pointed, so
-it can also reach 1 on a second call
-(`getopts/dash-restarts-a-scan-that-found-nothing`). The signatures
-differ — dash's 1 is visible outside the function as well, where zsh
-reads 2 inside the call and 1 outside, which only a restore produces. A
-fix that reset the cursor whenever a scan came up empty would match
-dash's row and still leave the bug below in place.
+*the call's own* is dash and BusyBox ash, and it is the answer this used
+to be a near-miss of. The **scan** starts over in every call and the
+caller's place comes back on return, while `OPTIND` itself stays the
+shell's: it reads the caller's number inside the call, and an assignment
+to it inside the call is the caller's afterwards, so the `entry=3
+after=7` above is dash's answer as well as bash's. Measured 2026-09-15
+under `env -i PATH=/usr/bin:/bin`, through `-c`:
+
+    g() { while getopts ab o "$@"; do printf '%s ' "$o"; done
+          printf 'end=%s ' "$OPTIND"; }
+    OPTIND=1; g -a -b; g -a -b
+
+is `a b end=3` twice in dash, BusyBox ash and zsh, and `a b end=3` then
+`end=3` in bash and ksh93
+(`getopts/an-option-parsing-function-called-twice`). The other
+discriminator is what the caller comes back to: with the caller half-way
+along, a callee that scans two words of its own leaves `OPTIND` at 3 and
+the caller still reads its own word 2 in dash, where the shared columns
+read word 3. This engine answered dash the shared way, so a helper
+function called twice parsed its options once (#2944), and it answered
+the *first* leg by accident through a reset of its own whenever a scan
+came up empty (`getopts/dash-restarts-a-scan-that-found-nothing`) — a
+reset that dash makes visible outside the function as well, which is what
+told the two apart before the third value existed.
 
 Two limits, both measured, and both silences rather than values. A call
 entered with `OPTIND` *unset* is not handed a cursor at 1
@@ -16102,8 +16124,8 @@ both letters in all of them
 the core's answer and is not asked. Only the way back splits the panel.
 
 zsh reaches yes by a different route: its cursor is local to every call
-whether or not anything was declared, which is
-`GetoptsPositionIsFunctionLocal` above. ksh93 has no `local` at all, and
+whether or not anything was declared, which is `GetoptsFunctionPosition`
+above. ksh93 has no `local` at all, and
 answers this through `typeset` inside a body defined with the `function`
 word, which is the only kind with a scope there
 (`getopts/a-keyword-functions-typeset-optind`); the same word in a
@@ -16130,6 +16152,26 @@ already counted past the word by the time the declaration is made.
 Empties OPTARG when `getopts` reports a bad option rather than leaving
 it unset. zsh alone, and a script testing `${OPTARG-}` can tell the two
 apart.
+
+**`GetoptsEmptiesOptargForAnArgumentlessOption`** — bash no · dash yes · ksh93 no · zsh yes
+
+The same question asked of an option the string *has* and that takes no
+argument, which is not the same question at all: the columns line up
+differently, and one axis for both put dash on bash's side of one row
+and zsh's side of the other. Measured 2026-09-15 with
+`OPTARG=PRESET; OPTIND=1; getopts 'ab:' o -a`, dash, BusyBox ash and zsh
+all leave OPTARG *set and empty* where bash and ksh93 leave it unset —
+against the row above, where only zsh empties it
+(`getopts/optarg-after-an-option-that-takes-none`, beside
+`getopts/optarg-after-a-bad-option`). `${OPTARG-…}` and `${OPTARG+…}` are
+the pair a careful script reads to ask whether the option it just read
+carried a value.
+
+zsh has a third answer this does not reach, recorded rather than
+modeled: it leaves an *earlier* value alone once a `getopts` has already
+run in the same shell, so a `PRESET` assigned on the line before survives
+there if anything scanned before it. The first call in a shell empties it
+as the table says.
 
 **`ShiftPastEndFatal`** — bash no · dash yes · ksh93 yes · zsh no
 

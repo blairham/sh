@@ -29,9 +29,10 @@ import (
 //	typeset -A h; h[a,b]=(x y)   typeset -A h=([a,b]=(x y) )
 //
 // The listing is how the nested words are read back here at all: a second
-// subscript — `${a[1][1]}`, which is `q` on the real shell — is still a parse
-// error, and it is recorded in docs/spec/semantics.md as not modeled rather
-// than left to be rediscovered.
+// subscript in an *expansion* — `${a[1][1]}`, which is `q` on the real shell —
+// is still a parse error, and is #2830. A second subscript on the left of an
+// **assignment** is read, and builds this same value by the other route: see
+// interp/chainassign.go, which is `a[1][2]=v` (#2491).
 //
 // No range reading is asked for and that is not an omission: this dialect
 // reads a subscript's comma as the arithmetic operator whose value is its

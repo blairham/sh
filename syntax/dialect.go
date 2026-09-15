@@ -4019,7 +4019,7 @@ type Dialect struct {
 	//
 	// It is the *write* half alone. What `${a[1][2]}` reads in that shell is
 	// a second question and a different reading from the one
-	// ChainedSubscript enables — see #2828.
+	// ChainedSubscript enables — see #2830.
 	ChainedAssignSubscript bool
 
 	// ArithCharacterCode enables `#name` and `##c` inside an arithmetic

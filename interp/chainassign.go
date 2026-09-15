@@ -52,7 +52,7 @@ import "github.com/blairham/sh/syntax"
 //
 // What `${a[1][2]}` *reads* is a second question and is not this: the grammar
 // for a chained expansion exists and means something else in the shell that
-// has it — see syntax.Dialect.ChainedSubscript, and #2828 for the reading this
+// has it — see syntax.Dialect.ChainedSubscript, and #2830 for the reading this
 // one would need.
 
 // assignChainedElement is `a[i][j]…=v`, where Assign.Leading holds every

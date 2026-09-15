@@ -9425,35 +9425,16 @@ type Semantics struct {
 	// absent there rather than false.
 	KeyedLiteralAppendJoinsTheReplacedValue Answer
 
-	// DollarZeroNamesTheInnermostCall makes `$0` the innermost thing the
-	// shell has been called into rather than the shell's own name: the
-	// function being run, or the file being sourced.
+	// DollarZeroNames is what `$0` answers while the shell is inside a call.
 	//
-	// One concept with two consequences, and one field because no shell
-	// splits them. zsh has both under a single option, and turning that
-	// option off takes both away together — `$0` inside a function goes back
-	// to the script's name in the same breath as `$0` inside a sourced file
-	// does. Every other member of the panel has neither: measured across
-	// dash, bash 5.3, bash-as-sh, bash 3.2 and ksh93, `$0` is the script's
-	// name inside a function, inside a file it sourced, inside a file that
-	// file sourced, and inside a function defined by one of them.
-	//
-	// Innermost is the whole of the rule and is measured rather than
-	// assumed: a function that sources a file reports the *file* while that
-	// file runs and the function's name again afterwards, and a function
-	// defined in a sourced file reports its own name and not the file it
-	// came from. So this is a question about the top of the call stack and
-	// not about whether a function is anywhere on it.
-	//
-	// The file is named as the operand was written — `. ./inc.sh` reports
-	// `./inc.sh` and a bare name found on PATH reports the bare name —
-	// which is the same spelling the call stack and the diagnostics use.
-	//
-	// A shell's startup files are outside this. They are read by the shell
-	// rather than sourced by a script, and `$0` inside one is the shell's
-	// own name in the shell that has this: measured, a `~/.zshrc` printing
-	// `$0` under `zsh -i` prints the path of the zsh binary.
-	DollarZeroNamesTheInnermostCall Answer
+	// Three readings, and the panel holds all three — see [DollarZeroScope]
+	// for what each is and what was measured to reach it. It is an enum
+	// rather than an Answer because it was an Answer, and the two values
+	// could not hold ksh93: its doc asserted that `$0` is the script's name
+	// inside a function there, which is true of `f() { … }` and false of
+	// `function f { … }`, and the axis had only ever been asked in the first
+	// spelling (#2345).
+	DollarZeroNames DollarZeroScope
 
 	// BuiltinSyntaxErrorFatal ends a non-interactive shell when text handed
 	// to a special builtin does not parse — `eval "if"`, or a sourced file
@@ -14047,8 +14028,8 @@ func PosixSemantics() Semantics {
 		// the environment names none leaves it there — so the standard's
 		// preset reads an unset locale as C. It is also what every panel
 		// member but one does.
-		UnsetLocaleIsUnicodeAware:       No,
-		DollarZeroNamesTheInnermostCall: No,
+		UnsetLocaleIsUnicodeAware: No,
+		DollarZeroNames:           DollarZeroIsTheShellsOwnName,
 		// A special builtin's failure is fatal to a non-interactive shell,
 		// which the standard states outright. dash is the only member of the
 		// panel that still does it, and the preset follows the standard
@@ -17011,6 +16992,89 @@ func (r *Runner) shiftOptionWords() ShiftOptionWordPolicy {
 	p := r.sem().ShiftOptionWords
 	if p == ShiftOptionWordsUnspecified {
 		r.diagf("%s\n", r.unanswered("`shift -x` read as an option rather than as a count"))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
+}
+
+// DollarZeroScope is what `$0` names while the shell is inside a call, and
+// the panel splits three ways.
+//
+// The measurement is one script run under each shell: a `function`-keyword
+// function and a `name()` function that each print `$0`, a file sourced from
+// the top level and a file sourced from inside a function, and a `name()`
+// function called from inside a `function`-keyword one.
+//
+//   - bash 5.3, bash 3.2, bash-as-sh, dash and BusyBox ash print the script's
+//     name at every one of those places.
+//   - zsh prints the function's name in both spellings and the sourced file's
+//     operand in both positions, and goes back to the script's name when the
+//     call returns.
+//   - ksh93 prints the function's name for the `function` spelling only. A
+//     `name()` function is the script's name — and a `name()` function called
+//     from inside a `function` one is still the *outer* function's name, and a
+//     file sourced from inside one is too, so this is not "the innermost call"
+//     narrowed to a spelling but a different frame being asked.
+//
+// A shell's startup files are outside all three. They are read by the shell
+// rather than called by a script, and `$0` inside one is the shell's own name
+// even in the shell that moves it everywhere else: measured, a `~/.zshrc`
+// printing `$0` under `zsh -i` prints the path of the zsh binary.
+type DollarZeroScope int
+
+const (
+	// DollarZeroScopeUnspecified is no answer, and is refused like any other.
+	DollarZeroScopeUnspecified DollarZeroScope = iota
+
+	// DollarZeroIsTheShellsOwnName never moves `$0`: the script's path, or
+	// the shell's name where there is no script. bash, dash and ash.
+	DollarZeroIsTheShellsOwnName
+
+	// DollarZeroIsTheInnermostCall makes `$0` the innermost thing the shell
+	// has been called into — the function being run, or the file being
+	// sourced, whichever was entered last. zsh.
+	//
+	// Innermost is the whole of the rule and is measured rather than
+	// assumed: a function that sources a file reports the *file* while that
+	// file runs and the function's name again afterwards, and a function
+	// defined in a sourced file reports its own name and not the file it
+	// came from. So this is a question about the top of the call stack and
+	// not about whether a function is anywhere on it.
+	//
+	// The file is named as the operand was written — `. ./inc.sh` reports
+	// `./inc.sh` and a bare name found on PATH reports the bare name —
+	// which is the same spelling the call stack and the diagnostics use.
+	DollarZeroIsTheInnermostCall
+
+	// DollarZeroIsTheInnermostKeywordFunction makes `$0` the name of the
+	// innermost function that was *defined with the `function` keyword*, and
+	// leaves it alone for every other frame. ksh93.
+	//
+	// The keyword is what carries it, not the call: a `name()` function and a
+	// sourced file do not answer here, and neither do they hide a `function`
+	// one further down, so `$0` inside a file sourced by a keyword function
+	// is still that function's name.
+	DollarZeroIsTheInnermostKeywordFunction
+)
+
+func (s DollarZeroScope) String() string {
+	switch s {
+	case DollarZeroIsTheShellsOwnName:
+		return "the shell's own name"
+	case DollarZeroIsTheInnermostCall:
+		return "the innermost call"
+	case DollarZeroIsTheInnermostKeywordFunction:
+		return "the innermost `function` keyword function"
+	}
+	return "unspecified"
+}
+
+// dollarZeroScope resolves the axis, reporting where no dialect has chosen.
+func (r *Runner) dollarZeroScope() DollarZeroScope {
+	p := r.sem().DollarZeroNames
+	if p == DollarZeroScopeUnspecified {
+		r.diagf("%s\n", r.unanswered("$0 naming the function or sourced file it is inside"))
 		r.status = 2
 		r.unspecified = true
 	}

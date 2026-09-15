@@ -104,18 +104,26 @@ func Probes() []Probe {
 			},
 		},
 		{
-			Field:   "DollarZeroNamesTheInnermostCall",
-			Cases:   []string{"axis/dollar-zero-in-function"},
-			Reading: "`f() { echo \"$0\"; }; f` prints the function's name where `$0` follows the innermost call and the shell's where it does not",
+			Field: "DollarZeroNames",
+			Cases: []string{"axis/dollar-zero-in-function", "cmd/function-keyword-with-several-names"},
+			Reading: "`f() { echo \"$0\"; }; f` prints the function's name where `$0` follows every call; " +
+				"where it does not, `function a b { echo \"[$0]\"; }; a` still prints `[a]` in the shell " +
+				"whose `function` keyword is what carries `$0`, and the shell's own name in the ones that never move it",
 			Read: func(cells map[string]oracle.Result) (string, string) {
-				r := cells["axis/dollar-zero-in-function"]
-				if r.Status != 0 || strings.TrimSpace(r.Stdout) == "" {
+				plain := cells["axis/dollar-zero-in-function"]
+				if plain.Status != 0 || strings.TrimSpace(plain.Stdout) == "" {
 					return "", "the function never ran, so nothing named anything"
 				}
-				if strings.TrimSpace(r.Stdout) == "f" {
-					return "Yes", ""
+				if strings.TrimSpace(plain.Stdout) == "f" {
+					return "DollarZeroIsTheInnermostCall", ""
 				}
-				return "No", ""
+				// The keyword row is asked only once the parenthesis
+				// spelling has said no, so a shell that moves `$0`
+				// everywhere is never read off a row about the keyword.
+				if strings.Contains(cells["cmd/function-keyword-with-several-names"].Stdout, "[a]") {
+					return "DollarZeroIsTheInnermostKeywordFunction", ""
+				}
+				return "DollarZeroIsTheShellsOwnName", ""
 			},
 		},
 		{

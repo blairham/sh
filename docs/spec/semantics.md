@@ -18065,17 +18065,30 @@ does under either reading. That is a further difference inside the
 keeping group rather than a third value of this axis, and no dialect here
 targets that build, so it is recorded in the corpus and not modeled.
 
-**`DollarZeroNamesTheInnermostCall`** — bash no · dash no · ksh93 no · zsh yes
+**`DollarZeroNames`** — bash the shell · dash the shell · ksh93 the innermost
+`function` keyword function · zsh the innermost call
 
-Makes `$0` the innermost thing the shell has been called into rather than the
-shell's own name: the function being run, or the file being sourced. One field
-because no shell splits the two — zsh has both under a single option and
-loses both when it is turned off, and the other four have neither.
+What `$0` answers while the shell is inside a call, and the panel holds three
+readings rather than two. bash, dash and ash never move it. zsh makes it the
+innermost thing the shell has been called into — the function being run, or
+the file being sourced — under a single option that takes both away together.
+ksh93 makes it the nearest function *defined with the `function` keyword*, and
+nothing else.
 
-Innermost, and measured: a function that sources a file reports the *file*
-while that file runs and its own name again afterwards, and a function defined
-in a sourced file reports its own name rather than the file it came from. The
-file is named as the operand was written, so `. ./inc.sh` reports `./inc.sh`.
+Innermost, for zsh, and measured: a function that sources a file reports the
+*file* while that file runs and its own name again afterwards, and a function
+defined in a sourced file reports its own name rather than the file it came
+from. The file is named as the operand was written, so `. ./inc.sh` reports
+`./inc.sh`.
+
+A different frame, for ksh93, and also measured (2026-09-15): a `name()`
+function reports the script, a file sourced from inside a keyword function
+reports the *function* rather than itself, and a `name()` function called from
+inside a keyword one reports the outer keyword function. So the frames that do
+not answer are transparent rather than an answer of their own, which is what
+makes this a third value and not the second one narrowed to a spelling. The
+axis was an `Answer` until #2345 and its `no` for ksh93 came from asking only
+the `name()` spelling.
 
 Startup files are outside it. They are read by the shell rather than sourced
 by a script, and `$0` inside `~/.zshrc` is the path of the zsh binary.

@@ -30,7 +30,7 @@ ash    BadSetOptionNameAtInvocationExitsZero                Yes
 ash    BadSetOptionNameFatal                                No
 ash    DebugTrapPipelines                                   -
 ash    DebugTrapRefiresOnEnteringAFunction                  -
-ash    DollarZeroNamesTheInnermostCall                      No
+ash    DollarZeroNames                                      DollarZeroIsTheShellsOwnName
 ash    EchoInterpretsEscapes                                No
 ash    ExitTrapRunsOnSignalDeath                            No
 ash    FailedExpansionAbandonsTheLine                       No
@@ -71,7 +71,7 @@ bash   BadSetOptionNameAtInvocationExitsZero                No
 bash   BadSetOptionNameFatal                                No
 bash   DebugTrapPipelines                                   DebugTrapPipelinePerSimpleElement
 bash   DebugTrapRefiresOnEnteringAFunction                  Yes
-bash   DollarZeroNamesTheInnermostCall                      No
+bash   DollarZeroNames                                      DollarZeroIsTheShellsOwnName
 bash   EchoInterpretsEscapes                                No
 bash   ExitTrapRunsOnSignalDeath                            Yes
 bash   FailedExpansionAbandonsTheLine                       Yes
@@ -112,7 +112,7 @@ dash   BadSetOptionNameAtInvocationExitsZero                No
 dash   BadSetOptionNameFatal                                Yes
 dash   DebugTrapPipelines                                   -
 dash   DebugTrapRefiresOnEnteringAFunction                  -
-dash   DollarZeroNamesTheInnermostCall                      No
+dash   DollarZeroNames                                      DollarZeroIsTheShellsOwnName
 dash   EchoInterpretsEscapes                                Yes
 dash   ExitTrapRunsOnSignalDeath                            No
 dash   FailedExpansionAbandonsTheLine                       No
@@ -153,7 +153,7 @@ ksh    BadSetOptionNameAtInvocationExitsZero                No
 ksh    BadSetOptionNameFatal                                Yes
 ksh    DebugTrapPipelines                                   DebugTrapPipelineInEachElement
 ksh    DebugTrapRefiresOnEnteringAFunction                  No
-ksh    DollarZeroNamesTheInnermostCall                      No
+ksh    DollarZeroNames                                      DollarZeroIsTheInnermostKeywordFunction
 ksh    EchoInterpretsEscapes                                No
 ksh    ExitTrapRunsOnSignalDeath                            Yes
 ksh    FailedExpansionAbandonsTheLine                       No
@@ -194,7 +194,7 @@ zsh    BadSetOptionNameAtInvocationExitsZero                No
 zsh    BadSetOptionNameFatal                                Yes
 zsh    DebugTrapPipelines                                   DebugTrapPipelineOnceForThePipeline
 zsh    DebugTrapRefiresOnEnteringAFunction                  No
-zsh    DollarZeroNamesTheInnermostCall                      Yes
+zsh    DollarZeroNames                                      DollarZeroIsTheInnermostCall
 zsh    EchoInterpretsEscapes                                Yes
 zsh    ExitTrapRunsOnSignalDeath                            No
 zsh    FailedExpansionAbandonsTheLine                       No

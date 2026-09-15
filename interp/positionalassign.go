@@ -109,7 +109,7 @@ func (r *Runner) assignDollarZero(a *syntax.Assign) {
 	if a.Append {
 		// The shell's own name, which is what `$0` reads at the top level.
 		// A function or a sourced file can be what `$0` *answers* in this
-		// dialect (see Semantics.DollarZeroNamesTheInnermostCall), and the
+		// dialect (see Semantics.DollarZeroNames), and the
 		// assignment does not write that: it replaces the name, and the
 		// innermost call goes on answering ahead of it until it returns.
 		value = r.Name + value

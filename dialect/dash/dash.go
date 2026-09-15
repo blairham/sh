@@ -519,6 +519,16 @@ func Semantics() interp.Semantics {
 	// A `*` beside a width's own digits is refused here too: `printf '%5*d' 4 42`
 	// is a conversion character this shell does not have (#2824).
 	s.PrintfStarBesideTheFieldDigits = interp.No
+
+	// Refused at INT_MAX itself, as bash is, and with a wording and a
+	// status of its own — see Diagnostics. Measured 2026-09-15.
+	s.PrintfFieldBeyondAnInt = interp.PrintfFieldRefused
+
+	// The column that splits the two routes: dash refuses the literal
+	// `%21474836470s` and wraps the same number arriving through a star —
+	// `printf 'A[%*s]B' 21474836470 x` is `A[x         ]B` at 0, the -10 an
+	// int32 leaves. Measured 2026-09-15.
+	s.PrintfStarBeyondAnInt = interp.PrintfStarWrapsToAnInt
 	s.CaseSubjectKeepsThePreviousLine = interp.No
 	// unanswered SubstringRangeThirdColonIsABadSubstitution: no substring
 	// range at all here, so there is no third segment to refuse.
@@ -1188,7 +1198,13 @@ func Diagnostics() interp.Diagnostics {
 		PrintfMissingVerb:       "printf: missing format character",
 		PrintfMissingVerbStatus: 2,
 		PrintfBadOption:         "printf: Illegal option %[1]s",
-		UmaskBadMask:            "umask: Illegal number: %[1]s",
+		// A width or a precision past a C int, which dash reports from the
+		// formatting call that failed rather than naming the number.
+		// Measured 2026-09-15: `printf '[%21474836470s]' x` writes `[` and
+		// then `printf: xvsnprintf failed` at 2.
+		PrintfFieldBeyondAnInt:       "printf: xvsnprintf failed",
+		PrintfFieldBeyondAnIntStatus: 2,
+		UmaskBadMask:                 "umask: Illegal number: %[1]s",
 		// No shell and no line in front of either, which dash does almost
 		// nowhere else.
 		AliasNotFound:             "%[1]s: %[2]s not found",

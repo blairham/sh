@@ -31548,6 +31548,57 @@
         "TimedOut": false
       }
     },
+    "axis/printf-field-beyond-an-int": {
+      "ash": {
+        "Stdout": "[][]|1~[]~[]~1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[|1~[[1",
+        "Stderr": "\u003cshell\u003e: line 1: printf: Value too large to be stored in data type~\u003cshell\u003e: line 1: printf: Value too large to be stored in data type~\u003cshell\u003e: line 1: printf: Value too large to be stored in data type",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[|1~[[1",
+        "Stderr": "\u003cshell\u003e: line 1: printf: Value too large to be stored in data type~\u003cshell\u003e: line 1: printf: Value too large to be stored in data type~\u003cshell\u003e: line 1: printf: Value too large to be stored in data type",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[][]|0~[]~[]~0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[|2~[[2",
+        "Stderr": "\u003cshell\u003e: 1: printf: xvsnprintf failed~\u003cshell\u003e: 1: printf: xvsnprintf failed~\u003cshell\u003e: 1: printf: xvsnprintf failed",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[a         ][b         ]|0~[         x]~[1.000000]~0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[a         ][b         ]|0~[         x]~[1.000000]~0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "axis/printf-flag-after-the-field": {
       "ash": {
         "Stdout": "[st=1~[st=1~[st=1",
@@ -32053,6 +32104,57 @@
       "zsh": {
         "Stdout": "[st=1~[st=1~[st=1",
         "Stderr": "\u003cshell\u003e:printf:1: %5*: invalid directive~\u003cshell\u003e:printf:1: %-5*: invalid directive~\u003cshell\u003e:printf:1: %*8: invalid directive",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/printf-star-beyond-an-int": {
+      "ash": {
+        "Stdout": "A[x]B|0~[1]~0",
+        "Stderr": "\u003cshell\u003e: invalid number '21474836470'~\u003cshell\u003e: invalid number '21474836470'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "A[x]B|1~[1.000000]~1",
+        "Stderr": "\u003cshell\u003e: line 1: printf: 21474836470: Result too large~\u003cshell\u003e: line 1: printf: 21474836470: Result too large",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "A[x]B|1~[1.000000]~1",
+        "Stderr": "\u003cshell\u003e: line 1: printf: 21474836470: Result too large~\u003cshell\u003e: line 1: printf: 21474836470: Result too large",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "A[]B|0~[]~0",
+        "Stderr": "\u003cshell\u003e: line 0: printf: warning: x: Result too large~\u003cshell\u003e: line 0: printf: warning: 1: Result too large",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "A[x         ]B|0~[1.000000]~0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "A[x         ]B|0~[1.000000]~0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "A[x         ]B|0~[1.000000]~0",
+        "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

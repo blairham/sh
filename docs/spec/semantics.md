@@ -2738,6 +2738,69 @@ grammar, so `PrintfTimeConversion` is No there and four corpus rows show
 the ksh93 column diverging, which is the honest record of an unbuilt
 feature rather than a silent one.
 
+### A width nobody lays out
+
+A width and a precision are stored in a C `int`, and **no shell on the panel
+lays one out past that int**. Measured 2026-09-15 with
+`printf '[%21474836470s]' a b` — ten times INT_MAX, two operands so the
+format's reuse is visible — and the panel splits three ways:
+
+    bash 5.3   `[` then `printf: Value too large to be stored in
+               data type` at 1, the builtin over
+    dash       `[` then `printf: xvsnprintf failed` at 2, the
+               builtin over
+    bash 3.2   `[][]` in silence at 0
+    ash        `[][]` in silence at 1
+    zsh        `[a         ][b         ]` at 0
+    ksh93      `[a         ][b         ]` at 0
+
+The two that write ten columns are not padding to ten: they are storing the
+number in the int and using what is left. 21474836470 is -10 as an int32, and
+a negative width is a left-justified one. **The probe that says so is a second
+width rather than a byte count** — `%4294967306s` is +10 exactly, and both
+columns answer `[         a]`, right-justified, where a length would have made
+the two indistinguishable.
+
+This is `Semantics.PrintfFieldBeyondAnInt`. It exists because we honored the
+width as written, which is not a slow answer but a hang: 21 GB of padding,
+found by `make bash-suite` and by nothing else in the tree, because a hang is
+the one failure a bounded corpus cannot show (#3008).
+
+Where each column turns is measured and is not the same place. bash 5.3 and
+dash refuse **at** INT_MAX; ash gives up only **above** it, laying
+`%2147483647s` out in full; the wrapping two have no boundary, since a width
+inside an int is itself. bash 3.2 is the column the modeling is approximate
+for: it goes empty below INT_MAX as well — `%2147483645s` is `[]` where
+`%2000000000s` is two billion characters — and the point it turns moves with
+the length of the text, which reads as the field and the text having to fit in
+an int together. It is not a dialect here, and the band the reading is wrong
+in is widths between two billion and INT_MAX, where a case would be measuring
+an allocation rather than a shell.
+
+#### The same number through a star is a different question
+
+`Semantics.PrintfStarBeyondAnInt` is the second axis, and **dash is the column
+that proves it has to be**: it refuses the literal `%21474836470s` above and
+**wraps** the same number arriving through a `*`. A single answer over both
+routes would have to be wrong about dash once. The difference is where the
+number is read — an operand goes through the shell's own numeric reading
+before it is ever a width, and digits in a format do not.
+
+`printf 'A[%*s]B' 21474836470 x`, measured the same day:
+
+    bash 5.3   `A[x]B` at 1, after `printf: 21474836470: Result too large`
+    ash        `A[x]B` at 0, after `invalid number '21474836470'`
+    dash       `A[x         ]B` at 0
+    zsh        `A[x         ]B` at 0
+    ksh93      `A[x         ]B` at 0
+
+So the complaining columns complain about the operand's **range** rather than
+the field's, and lay the field out anyway with no width at all — where the
+literal route stops the builtin. Both complain with wordings they already
+have: bash's `Diagnostics.PrintfNumberOutOfRange`, and, where that is empty,
+the bad-number sentence ash answers with. The axis picks the reading and never
+the words.
+
 ### The C length modifiers
 
 A conversion may carry a C length modifier between its precision and its

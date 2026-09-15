@@ -1360,6 +1360,13 @@ func Semantics() interp.Semantics {
 	// And a `*` may stand beside a width's own digits, where it wins:
 	// `printf '[%5*d]' 4 42` is `[  42]` here (#2824).
 	s.PrintfStarBesideTheFieldDigits = interp.Yes
+
+	// Wraps into a C int exactly as zsh does, both spellings measured
+	// 2026-09-15.
+	s.PrintfFieldBeyondAnInt = interp.PrintfFieldWrapsToAnInt
+
+	// Wraps on both routes, as zsh does. Measured 2026-09-15.
+	s.PrintfStarBeyondAnInt = interp.PrintfStarWrapsToAnInt
 	// A `case` does not advance the line until its subject is expanded, so
 	// the subject reads the line of the command in front of it (#2818).
 	s.CaseSubjectKeepsThePreviousLine = interp.Yes

@@ -479,6 +479,7 @@ func TestBraceRangeStepSignIsAnAxis(t *testing.T) {
 		out, _ := axisRun(t, tc.src, func(s *Semantics) {
 			s.BraceExpansion = Yes
 			s.BraceRangeStepSignHonored = Yes
+			s.BraceCharRangeSpansAnyCharacter = No
 		})
 		if strings.TrimSpace(out) != tc.honored {
 			t.Errorf("%s honored: got %q, want %q", tc.src, out, tc.honored)
@@ -487,6 +488,7 @@ func TestBraceRangeStepSignIsAnAxis(t *testing.T) {
 			s.BraceExpansion = Yes
 			s.BraceRangeStepSignHonored = No
 			s.BraceRangeNegativeStepReverses = No
+			s.BraceCharRangeSpansAnyCharacter = No
 		})
 		if strings.TrimSpace(out) != tc.ignored {
 			t.Errorf("%s ignored: got %q, want %q", tc.src, out, tc.ignored)
@@ -581,5 +583,151 @@ func TestALocalInheritingTheExportAttributeIsAnAxis(t *testing.T) {
 	// guessed at: the declaration is not made at all.
 	if _, st := axisRun(t, `export FOO=bar; f() { local FOO=baz; }; f`, func(*Semantics) {}); st != 2 {
 		t.Errorf("status %d, want the unanswered axis refused", st)
+	}
+}
+
+// The three readings of a body that is shaped like a numeric range and holds
+// no range, and the two axes that carry them.
+//
+// One word, three answers: `{1..}` is the word as written, or `1 0`, or the
+// braceless text `1..` (#1691). The last is the one that cannot be spelled as
+// "the word" or "the elements", which is why braceOutcome has three members
+// and why an unanswered vector is refused here rather than silently taking
+// whichever reading happened to be first in the code.
+func TestARangeWithAMissingComponentIsAnAxis(t *testing.T) {
+	keeps := func(s *Semantics) {
+		s.BraceExpansion = Yes
+		s.BraceRangeMissingEndCountsFromZero = No
+		s.BraceRangeThatCannotBeCounted = BraceRangeFailureKeepsTheWord
+	}
+	if out, st := axisRun(t, `printf '[%s]' @{1..}@`, keeps); st != 0 || out != "[@{1..}@]" {
+		t.Errorf("got %q status %d, want the word as written", out, st)
+	}
+	drops := func(s *Semantics) {
+		s.BraceExpansion = Yes
+		s.BraceRangeMissingEndCountsFromZero = No
+		s.BraceRangeThatCannotBeCounted = BraceRangeFailureDropsTheBraces
+	}
+	if out, st := axisRun(t, `printf '[%s]' @{1..}@`, drops); st != 0 || out != "[@1..@]" {
+		t.Errorf("got %q status %d, want the braces dropped", out, st)
+	}
+	zero := func(s *Semantics) {
+		s.BraceExpansion = Yes
+		s.BraceRangeMissingEndCountsFromZero = Yes
+		s.BraceRangePadsToEndpointWidth = No
+	}
+	if out, st := axisRun(t, `printf '[%s]' @{1..}@`, zero); st != 0 || out != "[@1@][@0@]" {
+		t.Errorf("got %q status %d, want the missing end counted from zero", out, st)
+	}
+	// Unanswered is refused rather than guessed at, both ways round: the
+	// zero reading is asked first and the collapse reading behind it.
+	if _, st := axisRun(t, `echo @{1..}@`, func(s *Semantics) { s.BraceExpansion = Yes }); st != 2 {
+		t.Errorf("status %d, want the unanswered zero reading refused", st)
+	}
+	if _, st := axisRun(t, `echo @{..3}@`, func(s *Semantics) {
+		s.BraceExpansion = Yes
+		s.BraceRangeMissingEndCountsFromZero = No
+	}); st != 2 {
+		t.Errorf("status %d, want the unanswered collapse reading refused", st)
+	}
+	// And a body with no digit at either end reaches neither question, in
+	// any dialect. Without this the axis would refuse `{..}`, which no shell
+	// treats as a range at all.
+	if out, st := axisRun(t, `printf '[%s]' @{..2..}@`, func(s *Semantics) { s.BraceExpansion = Yes }); st != 0 ||
+		out != "[@{..2..}@]" {
+		t.Errorf("got %q status %d, want the word without a question", out, st)
+	}
+}
+
+// A written step of zero is the same three-way split reached by a different
+// road: bash reads it as one and counts, and the two that decline fall
+// through to the axis above.
+func TestARangeWithAZeroStepIsAnAxis(t *testing.T) {
+	if out, st := axisRun(t, `printf '[%s]' {1..2..0}`, func(s *Semantics) {
+		s.BraceExpansion = Yes
+		s.BraceRangeZeroStepCountsAsOne = Yes
+		s.BraceRangeStepSignHonored = No
+		s.BraceRangeNegativeStepReverses = No
+	}); st != 0 || out != "[1][2]" {
+		t.Errorf("got %q status %d, want the step read as one", out, st)
+	}
+	if out, st := axisRun(t, `printf '[%s]' @{1..2..0}@`, func(s *Semantics) {
+		s.BraceExpansion = Yes
+		s.BraceRangeZeroStepCountsAsOne = No
+		s.BraceRangeThatCannotBeCounted = BraceRangeFailureDropsTheBraces
+	}); st != 0 || out != "[@1..2..0@]" {
+		t.Errorf("got %q status %d, want the braces dropped", out, st)
+	}
+	if _, st := axisRun(t, `echo {1..2..0}`, func(s *Semantics) { s.BraceExpansion = Yes }); st != 2 {
+		t.Errorf("status %d, want the unanswered axis refused", st)
+	}
+	// A step that is not zero never asks.
+	if out, st := axisRun(t, `printf '[%s]' {1..3..2}`, func(s *Semantics) { s.BraceExpansion = Yes }); st != 0 ||
+		out != "[1][3]" {
+		t.Errorf("got %q status %d, want the stride without a question", out, st)
+	}
+}
+
+// What a range between two single characters spans, and the spelling both
+// readings share.
+func TestACharacterRangeIsAnAxis(t *testing.T) {
+	wide := func(s *Semantics) {
+		s.BraceExpansion = Yes
+		s.BraceCharRangeSpansAnyCharacter = Yes
+	}
+	if out, st := axisRun(t, `printf '[%s]' {1...}`, wide); st != 0 || out != "[1][0][/][.]" {
+		t.Errorf("got %q status %d, want the wide reading", out, st)
+	}
+	narrow := func(s *Semantics) {
+		s.BraceExpansion = Yes
+		s.BraceCharRangeSpansAnyCharacter = No
+		s.BraceRangeThatCannotBeCounted = BraceRangeFailureKeepsTheWord
+	}
+	if out, st := axisRun(t, `printf '[%s]' {1...}`, narrow); st != 0 || out != "[{1...}]" {
+		t.Errorf("got %q status %d, want the narrow reading", out, st)
+	}
+	// A step is what the wide reading has not got, and the narrow one has.
+	if out, st := axisRun(t, `printf '[%s]' {a..e..2}`, wide); st != 0 || out != "[{a..e..2}]" {
+		t.Errorf("got %q status %d, want the wide reading to decline a step", out, st)
+	}
+	if out, st := axisRun(t, `printf '[%s]' {a..e..2}`, func(s *Semantics) {
+		narrow(s)
+		s.BraceRangeStepSignHonored = No
+	}); st != 0 || out != "[a][c][e]" {
+		t.Errorf("got %q status %d, want the narrow reading to take a step", out, st)
+	}
+	if _, st := axisRun(t, `echo {1...}`, func(s *Semantics) { s.BraceExpansion = Yes }); st != 2 {
+		t.Errorf("status %d, want the unanswered axis refused", st)
+	}
+	// Two letters with no step are unanimous and must not become a question.
+	if out, st := axisRun(t, `printf '[%s]' {a..c}`, func(s *Semantics) { s.BraceExpansion = Yes }); st != 0 ||
+		out != "[a][b][c]" {
+		t.Errorf("got %q status %d, want the letters without a question", out, st)
+	}
+}
+
+// A `+` in front of a range's number, which Go's own number reader accepts
+// for free and one shell does not.
+func TestAPlusOnARangeNumberIsAnAxis(t *testing.T) {
+	if out, st := axisRun(t, `printf '[%s]' {+1..2}`, func(s *Semantics) {
+		s.BraceExpansion = Yes
+		s.BraceRangeNumberMayCarryAPlus = Yes
+	}); st != 0 || out != "[1][2]" {
+		t.Errorf("got %q status %d, want the plus accepted", out, st)
+	}
+	if out, st := axisRun(t, `printf '[%s]' {+1..2}`, func(s *Semantics) {
+		s.BraceExpansion = Yes
+		s.BraceRangeNumberMayCarryAPlus = No
+		s.BraceRangeThatCannotBeCounted = BraceRangeFailureKeepsTheWord
+	}); st != 0 || out != "[{+1..2}]" {
+		t.Errorf("got %q status %d, want the plus to end the reading", out, st)
+	}
+	if _, st := axisRun(t, `echo {+1..2}`, func(s *Semantics) { s.BraceExpansion = Yes }); st != 2 {
+		t.Errorf("status %d, want the unanswered axis refused", st)
+	}
+	// A minus is not this question: every column counts `-1 0 1`.
+	if out, st := axisRun(t, `printf '[%s]' {-1..1}`, func(s *Semantics) { s.BraceExpansion = Yes }); st != 0 ||
+		out != "[-1][0][1]" {
+		t.Errorf("got %q status %d, want the sign counted without a question", out, st)
 	}
 }

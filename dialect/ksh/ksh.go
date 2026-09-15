@@ -983,6 +983,17 @@ func Semantics() interp.Semantics {
 	// range's endpoints are read after the expansions written in them, so
 	// `n=3; echo {1..$n}` is `1 2 3`.
 	s.BraceRangeEndpointsExpanded = interp.Yes
+	// A character range is letters only here as well, and takes a step. The
+	// two readings past that are ksh93's alone: a *missing second endpoint*
+	// counts from zero, so `{1..}` is `1 0` and `{5..}` is `5 4 3 2 1 0`,
+	// while a missing first endpoint or a missing step is no range at all
+	// and leaves the word as written. A step of zero is not read as one
+	// either — `{1..2..0}` stays whole where bash counts `1 2`.
+	s.BraceCharRangeSpansAnyCharacter = interp.No
+	s.BraceRangeMissingEndCountsFromZero = interp.Yes
+	s.BraceRangeZeroStepCountsAsOne = interp.No
+	s.BraceRangeNumberMayCarryAPlus = interp.Yes
+	s.BraceRangeThatCannotBeCounted = interp.BraceRangeFailureKeepsTheWord
 	s.BracketCaretNegates = interp.Yes
 	s.LastPipelineElementInCurrentShell = interp.Yes
 	// Nor here. ksh93 refuses `[[ $v == <(cmd) ]]` earlier still — while

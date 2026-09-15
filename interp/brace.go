@@ -249,11 +249,14 @@ func (r *Runner) rangeAcross(w *syntax.Word, open, close cursor, endpoints bool)
 	body := sliceSpans(w.Spans, next(open), close)
 	pos := w.Spans[open.span].Pos
 	if text, ok := literalBody(body); ok {
-		alts, ok := r.braceRange(text)
-		if !ok {
-			return nil, false
+		alts, outcome := r.braceRange(text)
+		switch outcome {
+		case braceRangeCounted:
+			return rangeSpans(alts, pos), true
+		case braceRangeCollapsed:
+			return collapsedRange(text, pos), true
 		}
-		return rangeSpans(alts, pos), true
+		return nil, false
 	}
 	if !endpoints || !rangeShaped(body) {
 		return nil, false
@@ -270,14 +273,29 @@ func (r *Runner) rangeAcross(w *syntax.Word, open, close cursor, endpoints bool)
 	text := strings.Join(r.expandWordNoSplit(&syntax.Word{
 		Spans: body, Start: w.Start, Stop: w.Stop,
 	}), "")
-	alts, ok := r.braceRange(text)
-	if !ok {
-		return [][]syntax.Span{{{
-			Kind: syntax.Literal, Quoting: syntax.SingleQuoted,
-			Value: "{" + text + "}", Pos: pos,
-		}}}, true
+	alts, outcome := r.braceRange(text)
+	switch outcome {
+	case braceRangeCounted:
+		return rangeSpans(alts, pos), true
+	case braceRangeCollapsed:
+		return collapsedRange(text, pos), true
 	}
-	return rangeSpans(alts, pos), true
+	return [][]syntax.Span{{{
+		Kind: syntax.Literal, Quoting: syntax.SingleQuoted,
+		Value: "{" + text + "}", Pos: pos,
+	}}}, true
+}
+
+// collapsedRange is the one alternative a range that lost its braces leaves:
+// the body, as ordinary unquoted text.
+//
+// Unquoted, which is measured rather than tidy: with a file named `1..x` in
+// the directory, `echo {1..}*` prints `1..x`, so what the braces left is a
+// word like any other and is still a pattern. It is the half that separates
+// this from the text a failed *expanded* endpoint leaves above, which is
+// neither split nor matched.
+func collapsedRange(text string, pos syntax.Pos) [][]syntax.Span {
+	return [][]syntax.Span{{{Kind: syntax.Literal, Value: text, Pos: pos}}}
 }
 
 // literalBody gives the text of a brace body written entirely as unquoted
@@ -332,10 +350,24 @@ func rangeShaped(body []syntax.Span) bool {
 }
 
 // rangeSpans turns a range's elements into one-span alternatives.
+//
+// Quoted, which is the measured difference between a range and a list and is
+// reached the moment a character range is wider than the letters. On zsh
+// 5.9.2, 2026-09-14, in a directory holding `q` and `z`:
+//
+//	{=..?}   [=][>][?]     a range's `?` is a character
+//	{?,x}    [q][z][x]     a list's `?` is a pattern
+//
+// bash answers the same way about the range it has — `{A..z}` writes the
+// bracket, the backslash and the caret between the cases straight out — so
+// this is not an axis but the rule for both: what a *range* counted is data,
+// and what a list held is text the word still has to expand.
 func rangeSpans(alts []string, pos syntax.Pos) [][]syntax.Span {
 	out := make([][]syntax.Span, 0, len(alts))
 	for _, a := range alts {
-		out = append(out, []syntax.Span{{Kind: syntax.Literal, Value: a, Pos: pos}})
+		out = append(out, []syntax.Span{{
+			Kind: syntax.Literal, Quoting: syntax.SingleQuoted, Value: a, Pos: pos,
+		}})
 	}
 	return out
 }
@@ -375,60 +407,254 @@ func sliceSpans(spans []syntax.Span, from, to cursor) []syntax.Span {
 	return out
 }
 
+// braceOutcome is what a brace body read as a range came to. Three answers
+// rather than two, because one shell takes the braces off a range it could
+// not count and leaves the body standing as text — `{1..}` is `1..` — which
+// is neither "the word as written" nor a list of elements.
+type braceOutcome uint8
+
+const (
+	// braceNotARange leaves the word exactly as it was written.
+	braceNotARange braceOutcome = iota
+	// braceRangeCounted produced the elements below.
+	braceRangeCounted
+	// braceRangeCollapsed produced no elements and took the braces off.
+	braceRangeCollapsed
+)
+
 // braceRange expands `{n..m}` and `{a..z}`, counting either way, with an
-// optional `..step`. A step of zero means one, so a typo cannot hang the
-// shell.
+// optional `..step`.
 //
-// The shells that expand braces at all disagree twice inside a range, and
-// each disagreement is a named axis asked where it is reached: whether an
+// Three readings are tried in the order a shell reaches them, and the order
+// is measured rather than chosen. The **numeric** reading comes first, which
+// is what keeps `{1..2..08}` padded to `01` in the shell that pads: its
+// endpoints are also single characters, so a character range tried first
+// would have answered `1` and lost the width. The **character** reading comes
+// next, which is what makes `{1...}` the range `1` to `.` rather than a body
+// with a component missing. What is left is a body that is shaped like a
+// range and cannot be counted, and that is where the panel parts three ways.
+//
+// The shells that expand braces at all disagree five times inside a range,
+// and each disagreement is a named axis asked where it is reached: whether an
 // endpoint's leading zeros pad the range (BraceRangePadsToEndpointWidth),
-// and what a written step's sign means (BraceRangeStepSignHonored, then
-// BraceRangeNegativeStepReverses). The corpus cases behind the answers are
-// `expand/brace-range-zero-padded` and the step-sign pair.
-func (r *Runner) braceRange(body string) ([]string, bool) {
+// what a written step's sign means (BraceRangeStepSignHonored, then
+// BraceRangeNegativeStepReverses), what a range between two single characters
+// spans (BraceCharRangeSpansAnyCharacter), and what a range that cannot be
+// counted leaves behind (BraceRangeMissingEndCountsFromZero,
+// BraceRangeZeroStepCountsAsOne and BraceRangeThatCannotBeCounted).
+func (r *Runner) braceRange(body string) ([]string, braceOutcome) {
 	lo, rest, ok := strings.Cut(body, "..")
 	if !ok {
-		return nil, false
+		return nil, braceNotARange
 	}
 	hi, stepText, hasStep := strings.Cut(rest, "..")
-	step := 1
-	negStep := false
+
+	if holdsADigit(lo) && holdsADigit(hi) && (!hasStep || holdsADigit(stepText)) {
+		return r.numericRange(lo, hi, stepText, hasStep)
+	}
+	if alts, ok := r.charRange(body, lo, hi, stepText, hasStep); ok {
+		return alts, braceRangeCounted
+	}
+	return r.rangeMissingAComponent(lo, hi, stepText, hasStep)
+}
+
+// numericRange counts between two written numbers.
+func (r *Runner) numericRange(lo, hi, stepText string, hasStep bool) ([]string, braceOutcome) {
+	if strings.ContainsRune(lo+hi+stepText, '+') &&
+		!r.askBrace(r.sem().BraceRangeNumberMayCarryAPlus, "a range's number carrying a leading plus") {
+		return nil, braceNotARange
+	}
+	if r.unspecified {
+		return nil, braceNotARange
+	}
+	from, err1 := strconv.Atoi(lo)
+	to, err2 := strconv.Atoi(hi)
+	if err1 != nil || err2 != nil {
+		return nil, braceNotARange
+	}
+	step, negStep := 1, false
 	if hasStep {
 		n, err := strconv.Atoi(stepText)
 		if err != nil {
-			return nil, false
+			return nil, braceNotARange
 		}
 		negStep = n < 0
 		if n < 0 {
 			n = -n
 		}
-		if n != 0 {
+		switch {
+		case n != 0:
 			step = n
+		case r.askBrace(r.sem().BraceRangeZeroStepCountsAsOne, "a written step of zero counting as one"):
+			// A step of zero is a walk that never arrives, so no shell takes
+			// it at its word. One of them reads it as one and counts the
+			// range anyway; the other two treat the body as a range they
+			// could not count, and part again over what that leaves.
+			negStep = false
+		default:
+			if r.unspecified {
+				return nil, braceNotARange
+			}
+			return r.rangeThatCannotBeCounted()
 		}
-	}
-
-	if len(lo) == 1 && len(hi) == 1 && isRangeLetter(lo[0]) && isRangeLetter(hi[0]) {
-		// A letter range walks bytes, which is also what makes `{a..C}`
-		// produce the punctuation between the cases — measured, not chosen.
-		return r.walkRange(int(lo[0]), int(hi[0]), step, hasStep, negStep,
-			func(i int) string { return string(rune(i)) })
-	}
-
-	from, err1 := strconv.Atoi(lo)
-	to, err2 := strconv.Atoi(hi)
-	if err1 != nil || err2 != nil {
-		return nil, false
+		if r.unspecified {
+			return nil, braceNotARange
+		}
 	}
 	width := 0
 	if paddedEndpoint(lo) || paddedEndpoint(hi) {
 		if r.askBrace(r.sem().BraceRangePadsToEndpointWidth, "an endpoint's leading zeros padding the range") {
 			width = max(len(lo), len(hi))
 		} else if r.unspecified {
-			return nil, false
+			return nil, braceNotARange
 		}
 	}
-	return r.walkRange(from, to, step, hasStep, negStep,
+	alts, ok := r.walkRange(from, to, step, hasStep, negStep,
 		func(i int) string { return padNumber(i, width) })
+	if !ok {
+		return nil, braceNotARange
+	}
+	return alts, braceRangeCounted
+}
+
+// charRange counts between two single characters, which is two different
+// readings rather than one with a wider edge — see
+// Semantics.BraceCharRangeSpansAnyCharacter for the measurements.
+//
+// The two agree about a range between two single *letters* with no step
+// written, which is how nearly every character range in the wild is spelled,
+// so the axis is not asked there: a question whose two answers are the same
+// answer must not be the thing that refuses a script.
+func (r *Runner) charRange(body, lo, hi, stepText string, hasStep bool) ([]string, bool) {
+	letters := len(lo) == 1 && len(hi) == 1 && isRangeLetter(lo[0]) && isRangeLetter(hi[0])
+	loRune, hiRune, twoChars := r.charRangeEndpoints(body)
+	renderRune := func(i int) string { return string(rune(i)) }
+	if letters && !hasStep {
+		// A letter range walks the code points, which is also what makes
+		// `{a..C}` produce the punctuation between the cases — measured, not
+		// chosen.
+		return r.walkRange(int(lo[0]), int(hi[0]), 1, false, false, renderRune)
+	}
+	if !letters && !twoChars {
+		// Neither reading reaches it, so neither has an opinion to ask for.
+		return nil, false
+	}
+	if r.askBrace(r.sem().BraceCharRangeSpansAnyCharacter,
+		"a range counting between two characters that are not both letters") {
+		// The wider reading takes no step: the body is the two characters
+		// and the `..` between them and nothing else, so `{a..z..2}` is not
+		// a character range at all in the shell that reads it this way.
+		if !twoChars {
+			return nil, false
+		}
+		return r.walkRange(int(loRune), int(hiRune), 1, false, false, renderRune)
+	}
+	if r.unspecified || !letters {
+		return nil, false
+	}
+	// The narrower reading is letters only, and it does take a step.
+	n, err := strconv.Atoi(stepText)
+	if err != nil {
+		return nil, false
+	}
+	negStep := n < 0
+	if n < 0 {
+		n = -n
+	}
+	if n == 0 {
+		n = 1
+	}
+	return r.walkRange(int(lo[0]), int(hi[0]), n, true, negStep, renderRune)
+}
+
+// charRangeEndpoints reads a body spelled as exactly one character, `..`, and
+// one more character. Counting the characters rather than cutting at the
+// first `..` is what the measurements say: `{....}` is the range from `.` to
+// `.` and `{.....}` is left alone, which a cut at the first `..` gets the
+// wrong way round.
+//
+// A *character* is the locale's, which is the same question a pattern asks
+// and is asked the same way: on zsh 5.9.2, `{α..γ}` is `α β γ` under a UTF-8
+// locale and the word as written under `LC_ALL=C`, where the endpoints are
+// two bytes each and neither is one character.
+func (r *Runner) charRangeEndpoints(body string) (lo, hi rune, ok bool) {
+	if !isASCII(body) && !r.patternCountsCharacters(body) {
+		return 0, 0, false
+	}
+	rs := []rune(body)
+	if len(rs) != 4 || rs[1] != '.' || rs[2] != '.' {
+		return 0, 0, false
+	}
+	return rs[0], rs[3], true
+}
+
+// rangeMissingAComponent answers a body whose components are not all numbers,
+// which is where a range stops being arithmetic and becomes a question about
+// what the shell leaves behind.
+func (r *Runner) rangeMissingAComponent(lo, hi, stepText string, hasStep bool) ([]string, braceOutcome) {
+	// One shell counts from zero when the *second* endpoint is the missing
+	// one, and only then: a missing first endpoint or a missing step leaves
+	// it with no range at all. Asked only where the first endpoint is a
+	// number, since `{a..}` is left alone in every column.
+	if hi == "" && !(hasStep && stepText == "") {
+		if _, err := strconv.Atoi(lo); err == nil {
+			if r.askBrace(r.sem().BraceRangeMissingEndCountsFromZero, "a missing second endpoint counting from zero") {
+				return r.numericRange(lo, "0", stepText, hasStep)
+			}
+			if r.unspecified {
+				return nil, braceNotARange
+			}
+		}
+	}
+	// What is left is the shape of a range with a gap in it, and the shape
+	// is narrow: the first endpoint is a run of digits with no sign, and the
+	// second endpoint and the step may each carry one. `{+1..2}` and
+	// `{1..2..x}` are outside it and are left alone everywhere.
+	last := hi
+	if hasStep {
+		last = stepText
+	}
+	if !digitRun(lo, false) || !digitRun(hi, true) || (hasStep && !digitRun(stepText, true)) {
+		return nil, braceNotARange
+	}
+	// And a body with no digit at either end is left alone everywhere too,
+	// so the axis is not asked about `{..}`, `{..2..}` or `{......}`.
+	if !holdsADigit(lo) && !holdsADigit(last) {
+		return nil, braceNotARange
+	}
+	return r.rangeThatCannotBeCounted()
+}
+
+// rangeThatCannotBeCounted resolves what a range-shaped body that produced no
+// elements leaves behind.
+func (r *Runner) rangeThatCannotBeCounted() ([]string, braceOutcome) {
+	switch r.braceRangeFailure() {
+	case BraceRangeFailureDropsTheBraces:
+		return nil, braceRangeCollapsed
+	default:
+		return nil, braceNotARange
+	}
+}
+
+// digitRun reports whether a range component is a run of decimal digits,
+// possibly empty, with a leading `-` allowed where signed says so.
+func digitRun(s string, signed bool) bool {
+	if signed {
+		s = strings.TrimPrefix(s, "-")
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// holdsADigit reports whether a range component has a decimal digit in it at
+// all, which is what separates a component that is missing from one that is
+// merely a sign.
+func holdsADigit(s string) bool {
+	return strings.ContainsFunc(s, func(c rune) bool { return c >= '0' && c <= '9' })
 }
 
 // walkRange produces a range's elements from one endpoint to the other. The

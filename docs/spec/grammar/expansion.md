@@ -104,15 +104,16 @@ Numbers are not the whole of it. Each row below is a corpus case under
 on the first two:
 
 - **Letters range too**: `{a..e}` is `a b c d e`, either direction,
-  counted in bytes (`-alphabetic`).
+  counted in code points (`-alphabetic`).
 - **A third number strides the range**: `{1..10..3}` is `1 4 7 10`
   (`-stepped`). The step is a **bash 4** addition — bash 3.2 leaves the
   word alone, dated rather than vetoed per `../core.md` — and this
-  implementation reads one wherever braces expand at all. A *letter*
-  range with a step is narrower still: bash and ksh93 expand
-  `{a..e..2}`, zsh leaves it alone (`-alpha-stepped`) — recorded here
-  rather than modeled, since a shell that leaves a malformed brace
-  alone gives a script nothing to rely on either way.
+  implementation reads one wherever braces expand at all.
+- **A range's elements are data, a list's are text.** zsh's `{=..?}` is
+  the three characters `= > ?` with the `?` never matched against a
+  filename, while its `{?,x}` matches; bash writes the bracket, the
+  backslash and the caret of `{A..z}` out the same way. So a counted
+  element is put back quoted and an alternative is not.
 
 The rest is disagreement, and each row is a semantics axis rather than a
 core answer:
@@ -128,10 +129,38 @@ core answer:
 - **A negative step in zsh** (`-negative-step-reversal`): zsh *reverses
   its result* — `{1..10..-4}` is `9 5 1`, bash's `1 5 9` backwards, not
   a walk from 10. `BraceRangeNegativeStepReverses`.
+- **What a range between two single characters spans**
+  (`-between-any-two-characters`, `-alpha-stepped`): zsh counts between
+  whatever the two characters are — `{1..x}` is seventy-two words,
+  `{α..γ}` is three, `{1...}` is `1 0 / .` — and takes **no step**, so
+  `{a..z..2}` is the word as written there where bash and ksh93 count
+  `a c e …`. The body is counted in characters rather than cut at its
+  first `..`, which is what makes `{....}` the single word `.` and
+  `{.....}` the word as written. `BraceCharRangeSpansAnyCharacter`.
+- **A `+` in front of a number** (`-endpoint-with-a-plus`): bash and
+  ksh93 read `{+1..2}` as `1 2`; zsh takes a `+` anywhere as putting the
+  body outside the reading. `BraceRangeNumberMayCarryAPlus`.
+- **A range with a component missing** (`-missing-endpoint`,
+  `-missing-endpoint-drops-the-braces`, `-zero-step`): three answers to
+  one word. bash leaves `{1..}` alone; ksh93 counts the missing *second*
+  endpoint from zero and answers `1 0`; zsh takes the **braces off** and
+  leaves `1..` standing as ordinary text. The same three part over a
+  written step of zero: bash reads it as one and counts `{1..2..0}` as
+  `1 2`, ksh93 leaves the word, zsh drops the braces.
+  `BraceRangeMissingEndCountsFromZero`, `BraceRangeZeroStepCountsAsOne`
+  and `BraceRangeThatCannotBeCounted`.
+
+  The shape that reaches those axes is narrow, and the narrowness is
+  measured rather than defensive: the first endpoint is an unsigned run
+  of digits and the second and the step may each carry a `-`, so
+  `{-1..}`, `{+1..}` and `{1..2..x}` are the word as written in every
+  column. A body with **no digit at either end** is left alone
+  everywhere too, which is what separates zsh's `{..2..}` — the word —
+  from its `{1..2..}`, which is `1..2..`.
 
 The core expands what is unanimous and asks the vector where the answers
-part; `interp/brace.go` names the same three fields, plus the ordering
-one above.
+part; `interp/brace.go` names the same fields, plus the ordering one
+above.
 
 **Core**: present. Dialect `posix` disables it (matching dash).
 

@@ -2404,6 +2404,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `axis/debug-head-of-an-if` | `yes` **2>** `trap: DEBUG: bad trap~trap: DEBUG: bad trap` *(status 1)* | `D=2~D=4~yes~D=6` | `D=2~D=4~yes~D=6` | `D=2~D=4~yes~D=6` | `D=2~D=4~yes~D=6` | `D=2~D=2~D=4~yes~D=6` | `yes` **2>** `<script>: trap: line 1: DEBUG: invalid signal specification~<script>: trap: line 6: DEBUG: invalid signal specification` *(status 1)* |
 | `axis/debug-head-of-a-case-and-a-condition` | `c` **2>** `trap: DEBUG: bad trap~<script>: 3: [[: not found~trap: DEBUG: bad trap` *(status 1)* | `D=2~D=2~c~D=3~D=4` | `D=2~D=2~c~D=3~D=4` | `D=2~D=2~c~D=3~D=4` | `D=2~D=2~c~D=3~D=4` | `D=2~D=2~c~D=3~D=4` | `c` **2>** `<script>: trap: line 1: DEBUG: invalid signal specification~<script>: trap: line 4: DEBUG: invalid signal specification` *(status 1)* |
 | `axis/debug-head-entering-a-function` | **2>** `<script>: 5: set: Illegal option -T` *(status 2)* | `D=7~D=2~D=3~in-f~D=8` | `D=7~D=2~D=3~in-f~D=8` | `D=7~D=2~D=3~in-f~D=8` | **2>** `<script>[5]: set: -T: unknown option~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | `D=7~D=2~in-f~D=8` | **2>** `<script>: set: line 5: illegal option -T` *(status 2)* |
+| `axis/debug-trap-of-a-pipeline` | `A` **2>** `trap: DEBUG: bad trap~trap: DEBUG: bad trap` *(status 1)* | `d~d~A~d` | `d~d~A~d` | `d~d~A~d` | `d~D~A~d` | `d~A~d` | `A` **2>** `<shell>: trap: line 0: DEBUG: invalid signal specification~<shell>: trap: line 2: DEBUG: invalid signal specification` *(status 1)* |
+| `axis/debug-trap-of-a-longer-pipeline` | `2:1:a` **2>** `trap: DEBUG: bad trap~trap: DEBUG: bad trap` *(status 1)* | `d~d~d~2:1:a~d` | `d~d~d~2:1:a~d` | `d~d~d~2:1:a~d` | `d~2:d~2:1:d~2:1:a~d` | `d~2:1:a~d` | `2:1:a` **2>** `<shell>: trap: line 0: DEBUG: invalid signal specification~<shell>: trap: line 2: DEBUG: invalid signal specification` *(status 1)* |
+| `axis/debug-trap-of-a-pipeline-whose-element-is-compound` | `1:a` **2>** `trap: DEBUG: bad trap~trap: DEBUG: bad trap` *(status 1)* | `d~1:a~d` | `d~1:a~d` | `d~1:a~d` | `d~1:d~1:a~d` | `d~1:d~1:a~d` | `1:a` **2>** `<shell>: trap: line 0: DEBUG: invalid signal specification~<shell>: trap: line 2: DEBUG: invalid signal specification` *(status 1)* |
+| `axis/debug-trap-of-a-pipeline-assigning` | `n=0` **2>** `trap: DEBUG: bad trap~trap: DEBUG: bad trap` | `n=3` | `n=3` | `n=3` | `n=2` | `n=2` | `n=0` **2>** `<shell>: trap: line 1: DEBUG: invalid signal specification~<shell>: trap: line 3: DEBUG: invalid signal specification` |
 | `axis/trap-body-will-not-parse` | `after` **2>** `<script>: 1: Syntax error: end of file unexpected (expecting "then")` *(status 2)* | `after` **2>** `<script>: exit trap: line 2: syntax error: unexpected end of file from `if' command on line 1` | `after` **2>** `<script>: exit trap: line 2: syntax error: unexpected end of file from `if' command on line 1` | `after` **2>** `<script>: exit trap: line 4: syntax error: unexpected end of file` | `after` **2>** `<script>: syntax error at line 1: `if' unmatched` | `after` **2>** `<script>:1: parse error near `if'~<script>:trap:1: couldn't parse trap command` | `after` **2>** `<script>: line 2: syntax error: unexpected end of file (expecting "then")` *(status 2)* |
 | `axis/trap-body-runs-what-parsed` | `one~end~a` **2>** `<script>: 2: Syntax error: end of file unexpected (expecting "then")` *(status 2)* | `one~end~a` **2>** `<script>: exit trap: line 3: syntax error: unexpected end of file from `if' command on line 2` | `one~end~a` **2>** `<script>: exit trap: line 3: syntax error: unexpected end of file from `if' command on line 2` | `one~end~a` **2>** `<script>: exit trap: line 7: syntax error: unexpected end of file` | `one~end` **2>** `<script>: syntax error at line 2: `if' unmatched` | `one~end` **2>** `<script>:2: parse error near `if'~<script>:trap:2: couldn't parse trap command` | `one~end~a` **2>** `<script>: line 4: syntax error: unexpected end of file (expecting "then")` *(status 2)* |
 | `axis/trap-action-read-when-set` | `after` | `after` | `after` | `after` | `after` | `after` **2>** `<script>:1: parse error near `if'~<script>:trap:1: couldn't parse trap command` | `after` |
@@ -2661,6 +2665,32 @@ grades it and nothing drift-checks it either, for the same reason.
   trap 'echo D=$LINENO' DEBUG
   f
   trap - DEBUG
+  ```
+- `axis/debug-trap-of-a-pipeline` — how a **pipeline** fires the DEBUG trap, which the compound-head rows above cannot ask: a pipeline is neither a simple command nor one of the heads that axis enumerates, and this shell fired nothing at all for one, so a traced script skipped every `cmd | cmd` it had (#2797). The panel gives three answers and the uppercasing is what separates them — an action whose output reads `D` went **down the pipe**, so it ran inside the first element with that element's redirections already in place. The bash columns write `d d A`: one firing per element, both in lower case, because they fire in the shell running the pipeline before any element starts. ksh93 writes `d D A`: no rule for the pipeline at all, each element firing wherever it runs, which is inside it. zsh writes `d A`: one firing for the pipeline as a statement and none for an element. The trailing `d` is `trap - DEBUG` firing before it removes itself, which is the control that says the trap was live throughout. dash and BusyBox ash have no DEBUG condition and refuse it twice. The DebugTrapPipelines axis
+  ```sh
+  trap 'echo d' DEBUG
+  echo a | tr a-z A-Z
+  trap - DEBUG
+  ```
+- `axis/debug-trap-of-a-longer-pipeline` — the same question over three elements, which is what says the first two readings count *elements* rather than adding one firing to a pipeline: the bash columns write three `d` lines where the two-element row writes two, ksh93 writes one per element again — `d`, `2:d`, `2:1:d`, each marked by however many elements its output passed through on the way out — and zsh still writes exactly one. A reading that fired once at the top would be indistinguishable from zsh's on the row above and wrong here
+  ```sh
+  trap 'echo d' DEBUG
+  echo a | sed 's/^/1:/' | sed 's/^/2:/'
+  trap - DEBUG
+  ```
+- `axis/debug-trap-of-a-pipeline-whose-element-is-compound` — the element that is not a simple command, and the row that says the bash reading is narrower than one firing per element: the bash columns write `d 1:a d`, the single `d` being the `sed`, so a group element fires nothing there — and neither does a `case`, a `[[` or a `for` element, measured the same way, though each of those writes a head standing on its own. ksh93 and zsh both write `d 1:d 1:a d` and arrive at it differently: ksh93's marked `1:d` is the `echo a` firing inside the group's own subshell, where zsh's is the same command firing while the plain `d` is the pipeline's single firing and the group's head is withheld. That the two agree here is why the row above is in the corpus as well
+  ```sh
+  trap 'echo d' DEBUG
+  { echo a; } | sed 's/^/1:/'
+  trap - DEBUG
+  ```
+- `axis/debug-trap-of-a-pipeline-assigning` — where a pipeline's firing happens, asked without the streams: an action that assigns survives only if it ran in the shell rather than in an element. The bash columns answer `n=3` — two elements and the `trap -` — and ksh93 and zsh answer `n=2`. zsh's 2 is its one firing for the pipeline plus the `trap -`; ksh93's 2 is the `trap -` plus its **last** element alone, which that shell runs in the current shell anyway, so the two elements it fires for contribute one increment between them. dash and ash refuse the condition and answer `n=0`
+  ```sh
+  n=0
+  trap 'n=$((n+1))' DEBUG
+  true | true
+  trap - DEBUG
+  echo n=$n
   ```
 - `axis/trap-body-will-not-parse` — each dialect words it its own way, dash ends the script over it, and zsh refused the trap when it was set
   ```sh

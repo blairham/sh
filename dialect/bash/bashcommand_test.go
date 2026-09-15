@@ -110,6 +110,44 @@ func TestACompoundHeadIsNamedAsItsHead(t *testing.T) {
 	}
 }
 
+// TestAPipelineNamesEachElement is the shape that had nothing to name until
+// #2797, because a pipeline fired no DEBUG trap at all here: this shell fires
+// once per element that is a simple command, in the shell running the
+// pipeline, and each firing names the element it fired for.
+//
+// The element beside a group is the row that says the reading is per *simple*
+// element rather than per element — the group fires nothing, so the whole of
+// `{ :; } | :` is one firing naming the `:`. Measured in bash 5.3.15,
+// 2026-09-14, `env -i PATH=/usr/bin:/bin`.
+func TestAPipelineNamesEachElement(t *testing.T) {
+	const act = `trap 'echo "D:[$BASH_COMMAND]"' DEBUG; `
+	for _, c := range []struct {
+		name, src, want string
+	}{
+		// Written `false | true` rather than the other way round so the
+		// pipeline reports 0 and the row is about the names alone.
+		{"each element in turn", act + `false | true`, "D:[false]\nD:[true]\n"},
+		{
+			"three of them, each named", act + `true | false | true`,
+			"D:[true]\nD:[false]\nD:[true]\n",
+		},
+		// The element's words are kept as written, like any other command's,
+		// and the firing is the shell's — so the action's own output reaches
+		// the shell's stdout rather than the pipe the element writes into.
+		{"an element keeps its quoting", act + `echo "a  b" | :`, `D:[echo "a  b"]` + "\nD:[:]\n"},
+		{"a group element fires nothing", act + `{ :; } | :`, "D:[:]\n"},
+		{"nor does one at the end", act + `: | { :; }`, "D:[:]\n"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, errs, code := runTraced(t, c.src)
+			if out != c.want || errs != "" || code != 0 {
+				t.Errorf("ran %q: out %q errs %q status %d, want %q and nothing said",
+					c.src, out, errs, code, c.want)
+			}
+		})
+	}
+}
+
 // TestTheRunningCommandIsRecordedWithNoTrapSet is the rule that makes the
 // parameter a fact about the shell rather than about the trap: it is written
 // before each command's own words are expanded, so a command reading it reads
@@ -176,6 +214,47 @@ func TestAssigningToTheRunningCommandDoesNothing(t *testing.T) {
 		{
 			"and it lists with no attribute", `declare -p BASH_COMMAND`,
 			`declare -- BASH_COMMAND="declare -p BASH_COMMAND"` + "\n",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, errs, code := runTraced(t, c.src)
+			if out != c.want || errs != "" || code != 0 {
+				t.Errorf("ran %q: out %q errs %q status %d, want %q and nothing said",
+					c.src, out, errs, code, c.want)
+			}
+		})
+	}
+}
+
+// TestAPipelineElementNamesItselfToItself is the other side of the firing a
+// pipeline makes for its elements: the firing is the shell's, but the
+// *record* still belongs to the element, so a command inside one reads its
+// own words and not the words of whichever element the pipeline fired for
+// last.
+//
+// The two are easy to fold into one and wrong folded: the pipeline records
+// each element in turn ahead of the firing it makes for it, so an element
+// that then declined to record itself — on the grounds that its firing was
+// already made — would leave every element reading the last one. Measured in
+// bash 5.3.15, 2026-09-14: the `echo` names the `echo`.
+//
+// No trap is set, which is the rule #2779 landed: the parameter is a fact
+// about the shell rather than about the trap.
+func TestAPipelineElementNamesItselfToItself(t *testing.T) {
+	for _, c := range []struct {
+		name, src, want string
+	}{
+		{
+			"the element reading it is the first",
+			`echo "A:[$BASH_COMMAND]" | cat`,
+			`A:[echo "A:[$BASH_COMMAND]"]` + "\n",
+		},
+		// A compound element writes no firing of its own here, so this is
+		// also the row that says the record does not depend on one.
+		{
+			"a command inside a compound element",
+			`case x in x) echo "A:[$BASH_COMMAND]";; esac | cat`,
+			`A:[echo "A:[$BASH_COMMAND]"]` + "\n",
 		},
 	} {
 		t.Run(c.name, func(t *testing.T) {

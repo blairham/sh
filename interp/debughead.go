@@ -184,3 +184,143 @@ func (r *Runner) debugArithPart(ctx context.Context, c *syntax.ForArithClause, p
 	}
 	r.debugPassOf(ctx, c, part)
 }
+
+// Where a *pipeline* fires the DEBUG trap, which the heads table above says
+// nothing about: a pipeline is neither a simple command nor one of the
+// compound heads it enumerates, and this engine fired nothing for one at all
+// — a traced script skipped every `cmd | cmd` it had (#2797).
+//
+// Measured 2026-09-14, `env -i PATH=/usr/bin:/bin`, counting the firings
+// through a **file**, because an element's own firing writes down the pipe
+// and a count taken from the terminal loses it. `trap 'echo x >>d' DEBUG`
+// over `true | false`, then `trap - DEBUG`, which fires once itself:
+//
+//	pipeline                bash 5.3 / as sh / 3.2   ksh93   zsh
+//	true | false            2                        2       1
+//	true | false | true     3                        3       1
+//	true | false | t | f    4                        4       1
+//
+// So the panel divides two ways on the count, and a third question — *where*
+// the firing happens — divides it again. `trap 'echo d' DEBUG; echo a | tr
+// a-z A-Z` writes `d d A` in the bash columns, `d D A` in ksh93 and `d A` in
+// zsh: the uppercase `D` is an action whose output went **down the pipe**, so
+// ksh93 fires inside each element with that element's redirections already in
+// place, where the bash columns fire in the shell running the pipeline before
+// any element starts. `trap 'n=$((n+1))' DEBUG; true | true` agrees from the
+// other side — bash counts 2 in `$n` afterwards and ksh93 counts 1, the one
+// being the last element, which that shell runs in the current shell anyway.
+//
+// A fourth measurement says the bash reading is narrower than "one per
+// element": an element that is **not a simple command** fires nothing there,
+// even when it is a head the dialect would otherwise fire for. `case x in x)
+// echo hi;; esac | cat` writes one firing in the bash columns — the `cat` —
+// where the same `case` standing alone writes a head, and `[[ 1 == 1 ]] |
+// cat`, `for w in a b; do echo $w; done | cat` and `{ echo A; } | cat` all do
+// the same. ksh93 writes the head, because the head fires wherever the
+// element runs and ksh93 carries the trap into it.
+//
+// zsh's single firing is not a head in the sense above either. It stands for
+// the pipeline as a *statement*, and the element's own firing is gone rather
+// than moved: `echo A | { cat; }` writes one firing for the pipeline and one
+// for the `cat` **inside** the group, and `( echo A; echo B ) | sed …` writes
+// one for the pipeline and one for each `echo`. So commands nested inside an
+// element go on firing normally and only the element's own head is withheld.
+// zsh's `ZSH_DEBUG_CMD` at that firing reads the whole pipeline back — `echo
+// A | sed "s/^/P:/"` — which is the shape a dialect implementing that
+// parameter would have to record; nothing in this tree has one, so the
+// firing records nothing. See RunningCommand.
+//
+// dash and BusyBox ash have no DEBUG condition and never reach the question.
+
+// DebugTrapPipeline is how a pipeline fires the DEBUG trap.
+type DebugTrapPipeline int
+
+const (
+	// DebugTrapPipelineInEachElement gives a pipeline no rule of its own:
+	// each element fires wherever it runs, which is inside the element, with
+	// that element's redirections in place. So it is reached only by a
+	// dialect that carries the trap into a subshell, and a dialect that does
+	// not fires nothing at all. ksh93, and the zero value because it is the
+	// absence of a pipeline rule rather than a reading of one.
+	DebugTrapPipelineInEachElement DebugTrapPipeline = iota
+	// DebugTrapPipelinePerSimpleElement fires once for each element that is
+	// a **simple command**, in the shell running the pipeline, before any
+	// element starts — so the action's output goes to the shell's own stream
+	// and what it assigns survives the pipeline. An element that is not a
+	// simple command fires nothing, whatever head the dialect would fire for
+	// it elsewhere. bash 5.3, that build invoked as `sh`, and bash 3.2.
+	DebugTrapPipelinePerSimpleElement
+	// DebugTrapPipelineOnceForThePipeline fires once, for the pipeline as a
+	// statement, in the shell running it — and no element fires a head of
+	// its own, however many there are and whatever they are. Commands nested
+	// *inside* an element are commands in their own right and fire as usual.
+	// zsh.
+	DebugTrapPipelineOnceForThePipeline
+)
+
+func (d DebugTrapPipeline) String() string {
+	switch d {
+	case DebugTrapPipelinePerSimpleElement:
+		return "DebugTrapPipelinePerSimpleElement"
+	case DebugTrapPipelineOnceForThePipeline:
+		return "DebugTrapPipelineOnceForThePipeline"
+	}
+	return "DebugTrapPipelineInEachElement"
+}
+
+// debugPipeline fires whatever the dialect's reading gives a pipeline of more
+// than one element, before any of them starts.
+//
+// skip is per element and says that element must not run: a DEBUG action
+// whose *status* refuses the firing costs that element alone, and the rest of
+// the pipeline goes on. Measured under `shopt -s extdebug` on bash 5.3.15 —
+// an action refusing `echo A` of `echo A | /bin/sh -c 'echo B'` still writes
+// `B`, and one refusing the second element writes nothing while the first
+// still runs. The refused element leaves **no** entry in the pipeline's
+// status record either: `false | /bin/sh -c 'echo B; exit 7'` with the last
+// element refused answers `st=1 ps=1`, one status rather than two.
+//
+// quiet says the elements fire nothing of their own, which is the other half
+// of both readings that fire here: bash's element firing is *moved* into the
+// shell and zsh's is withheld, and either way a dialect that carries the trap
+// into a subshell would otherwise fire it twice. It is false for the reading
+// that fires nothing here.
+func (r *Runner) debugPipeline(ctx context.Context, p *syntax.Pipeline) (skip []bool, quiet bool) {
+	switch r.sem().DebugTrapPipelines {
+	case DebugTrapPipelineOnceForThePipeline:
+		// One firing for the whole statement. Nothing is recorded as the
+		// running command: the record holds a syntax.Command and a pipeline
+		// is not one, and the only parameter in the panel that would read it
+		// here is a parameter this tree does not have.
+		r.runDebugTrap(ctx)
+		if r.debugTrapSkipped() {
+			// The refusal is the pipeline's, so it costs every element.
+			skip = make([]bool, len(p.Cmds))
+			for i := range skip {
+				skip[i] = true
+			}
+		}
+		return skip, true
+	case DebugTrapPipelinePerSimpleElement:
+		for i, c := range p.Cmds {
+			if _, simple := c.(*syntax.SimpleCmd); !simple {
+				continue
+			}
+			r.recordRunning(c, WholeCommand)
+			r.runDebugTrap(ctx)
+			if r.debugTrapSkipped() {
+				if skip == nil {
+					skip = make([]bool, len(p.Cmds))
+				}
+				skip[i] = true
+			}
+			if r.ctl != controlNone {
+				// An action that unwound has said more than a skip does,
+				// and the elements after it are not fired for either.
+				break
+			}
+		}
+		return skip, true
+	}
+	return nil, false
+}

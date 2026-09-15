@@ -7318,6 +7318,23 @@ type Semantics struct {
 	// fire the DEBUG trap. See DebugTrapHeads, which carries the panel.
 	DebugTrapCompoundHeads DebugTrapHeads
 
+	// DebugTrapPipelines is how a pipeline fires the DEBUG trap: once per
+	// simple element in the shell running it, once for the pipeline as a
+	// statement, or not at all as a pipeline, leaving each element to fire
+	// wherever it runs. See DebugTrapPipeline, which carries the panel.
+	//
+	// A question DebugTrapCompoundHeads cannot answer, because a pipeline is
+	// neither a simple command nor one of the compound heads that table
+	// enumerates — so this engine fired nothing for one and a traced script
+	// skipped every `cmd | cmd` it had (#2797).
+	//
+	// unpinned dash: the shell has no DEBUG condition, so `trap … DEBUG` is
+	// refused before a pipeline can fire one. Pinned instead by
+	// TestADialectWithNoDebugConditionFiresNothingForAPipeline.
+	// unpinned ash: the same — BusyBox ash refuses the condition too, and
+	// the same test covers it.
+	DebugTrapPipelines DebugTrapPipeline
+
 	// ExitTrapFiresPastTheEnd counts the EXIT trap as having fired on the
 	// line after the script's last, rather than on its first.
 	//

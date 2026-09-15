@@ -1868,6 +1868,15 @@ type Runner struct {
 	// by the dispatch it was set for, so nothing deeper inherits it.
 	suppressedHead bool
 
+	// elementFired says the next command dispatched is a pipeline element
+	// whose DEBUG firing the pipeline itself has already made — one per
+	// simple element in the shell, or one for the whole pipeline — so the
+	// element fires nothing of its own, head or simple. Set by runPipeline
+	// for each element and cleared by the dispatch it was set for, so
+	// commands *inside* the element go on firing normally, which is what the
+	// panel does. See Semantics.DebugTrapPipelines.
+	elementFired bool
+
 	// inCommandTrap marks a DEBUG, ERR or RETURN body as running, which is
 	// the one thing enterTrapBody needs that the name of the condition would
 	// tell it: one dialect numbers those three bodies differently from every
@@ -3707,9 +3716,18 @@ func (r *Runner) command(ctx context.Context, c syntax.Command) error {
 	// for one, though the one that writes most of them writes a head for a
 	// `{ }` standing on its own. The caller says so for the one dispatch;
 	// see callFuncAs, which fires the separate entry head itself.
+	//
+	// A pipeline element whose firing the pipeline itself has already made —
+	// or deliberately withheld — is the other exception, and it covers the
+	// simple site below as well as this one, which is why it is read here
+	// and handed down rather than left in the field. Read and cleared at
+	// this one door so that nothing *inside* the element inherits it; those
+	// commands are commands in their own right and fire as usual.
+	fired := r.elementFired
+	r.elementFired = false
 	head := !r.suppressedHead
 	r.suppressedHead = false
-	if head {
+	if head && !fired {
 		r.debugCompoundHead(ctx, c)
 		if r.debugTrapStopped() {
 			return nil
@@ -3724,7 +3742,7 @@ func (r *Runner) command(ctx context.Context, c syntax.Command) error {
 		// of one column's answer, so it is read here, before the command
 		// runs, and not afterwards when the body may have set one.
 		set := r.errTrapIsSet()
-		err := r.simple(ctx, x)
+		err := r.simple(ctx, x, fired)
 		r.reopenErrJudgment(set)
 		return err
 	case *syntax.Group:
@@ -3766,7 +3784,10 @@ func (r *Runner) unsupported(what string) error {
 	return fmt.Errorf("not implemented yet: %s", what)
 }
 
-func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
+// simple runs a simple command. fired says the pipeline this command is an
+// element of has already made — or withheld — its DEBUG firing, so there is
+// none to make here; see Semantics.DebugTrapPipelines and Runner.elementFired.
+func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) error {
 	// The DEBUG trap fires here, before anything about the command is even
 	// expanded. A simple command fires it in every column that has the
 	// condition; which *compound* heads fire it as well is the dialect's
@@ -3778,10 +3799,19 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 	// And this is where the command is recorded as the one the shell is
 	// running, before its own words are expanded — so a command reading the
 	// parameter that names it reads itself. See RunningCommand.
+	//
+	// The record is written whether the firing was made here or by the
+	// pipeline this command is an element of: what a pipeline withholds is
+	// the *firing*, and an element that did not record itself would leave
+	// the parameter reading whichever element the pipeline fired for last.
+	// Measured — `echo "A:[$BASH_COMMAND]" | sed …` names the `echo` in bash
+	// 5.3.15, not the `sed`.
 	r.recordRunning(c, WholeCommand)
-	r.runDebugTrap(ctx)
-	if r.debugTrapStopped() {
-		return nil
+	if !fired {
+		r.runDebugTrap(ctx)
+		if r.debugTrapStopped() {
+			return nil
+		}
 	}
 	r.unspecified, r.expandErr, r.assignFailed = false, false, false
 	// Whatever this command's process substitutions opened is closed when the

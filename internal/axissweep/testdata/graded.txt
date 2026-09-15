@@ -26,6 +26,7 @@ ash    AssignmentPrefixPersistsOnSpecialBuiltin             Yes
 ash    BadSetOptionLetterFatal                              Yes
 ash    BadSetOptionNameAtInvocationExitsZero                Yes
 ash    BadSetOptionNameFatal                                No
+ash    DebugTrapPipelines                                   -
 ash    DebugTrapRefiresOnEnteringAFunction                  -
 ash    DollarZeroNamesTheInnermostCall                      No
 ash    EchoInterpretsEscapes                                No
@@ -63,6 +64,7 @@ bash   AssignmentPrefixPersistsOnSpecialBuiltin             No
 bash   BadSetOptionLetterFatal                              No
 bash   BadSetOptionNameAtInvocationExitsZero                No
 bash   BadSetOptionNameFatal                                No
+bash   DebugTrapPipelines                                   DebugTrapPipelinePerSimpleElement
 bash   DebugTrapRefiresOnEnteringAFunction                  Yes
 bash   DollarZeroNamesTheInnermostCall                      No
 bash   EchoInterpretsEscapes                                No
@@ -100,6 +102,7 @@ dash   AssignmentPrefixPersistsOnSpecialBuiltin             Yes
 dash   BadSetOptionLetterFatal                              Yes
 dash   BadSetOptionNameAtInvocationExitsZero                No
 dash   BadSetOptionNameFatal                                Yes
+dash   DebugTrapPipelines                                   -
 dash   DebugTrapRefiresOnEnteringAFunction                  -
 dash   DollarZeroNamesTheInnermostCall                      No
 dash   EchoInterpretsEscapes                                Yes
@@ -137,6 +140,7 @@ ksh    AssignmentPrefixPersistsOnSpecialBuiltin             Yes
 ksh    BadSetOptionLetterFatal                              Yes
 ksh    BadSetOptionNameAtInvocationExitsZero                No
 ksh    BadSetOptionNameFatal                                Yes
+ksh    DebugTrapPipelines                                   DebugTrapPipelineInEachElement
 ksh    DebugTrapRefiresOnEnteringAFunction                  No
 ksh    DollarZeroNamesTheInnermostCall                      No
 ksh    EchoInterpretsEscapes                                No
@@ -174,6 +178,7 @@ zsh    AssignmentPrefixPersistsOnSpecialBuiltin             No
 zsh    BadSetOptionLetterFatal                              Yes
 zsh    BadSetOptionNameAtInvocationExitsZero                No
 zsh    BadSetOptionNameFatal                                Yes
+zsh    DebugTrapPipelines                                   DebugTrapPipelineOnceForThePipeline
 zsh    DebugTrapRefiresOnEnteringAFunction                  No
 zsh    DollarZeroNamesTheInnermostCall                      Yes
 zsh    EchoInterpretsEscapes                                Yes

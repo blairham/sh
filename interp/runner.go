@@ -1604,6 +1604,11 @@ type Runner struct {
 	// number reader is several calls below the place that knows which
 	// conversion asked.
 	printfConversionName string
+	// printfLostStars is how many `*` the prefix just scanned wrote that a
+	// later run in the same field replaced. Their operands are still taken;
+	// see printfLostStars, and printfSpecPrefix for why the count travels
+	// here rather than out of the scan.
+	printfLostStars printfLostStars
 	// line is where execution currently is, for diagnostics that name it.
 	// Real shells report the line of the command that failed, so this is
 	// updated per statement rather than per token.

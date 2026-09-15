@@ -12871,6 +12871,32 @@ grouping, where a dropped character would not. Asked only where
 `PrintfGroupingFlag` has already said yes and a `'` is actually written
 past the flag run, so neither `%d` nor `%'d` reaches it.
 
+**Yes is a grammar and not a wider acceptance.** The quote may be written
+*inside* either digit run as well, and it **ends the run it is in** —
+before the `.` the scan then starts over at the flags, so the digits
+around it are not the number they look like (#2688).
+
+    printf "[%1'0d]"   42   [42]     width 1, then `0` as the zero flag
+    printf "[%1'2'3d]" 42   [ 42]    each run replaces the width
+    printf "[%5'0d]"   42   [00042]  an empty run leaves the width read
+    printf "[%*'5d]" 3 42   [   42]  a digit run replaces a star's width
+    printf "[%.'5d]"   42   [00042]  after a `.` it does not restart
+    printf "[%.5'3d]"  42   [042]    and there the last run wins too
+
+So deleting the quote cannot serve even once the acceptance is widened: it
+makes `%1'0d` a width of ten and pads to ten where ksh93 writes `42`. The
+prefix is rebuilt from the runs instead, the flags accumulating across the
+restarts and the last non-empty run of each field winning.
+
+A star a later run replaced has still **taken its operand**, and in the
+place it was written — the 3 above went to a width the 5 replaced and the
+42 reached the conversion. Dropping those reads would have made the pass
+consume one operand instead of two and *reuse the format*, so a second
+field nobody asked for would have come out beside the wrong width. Two of
+the eight rows #2688 filed were a refusal where ksh93 prints and the rest
+would have been silently different widths, which is why the value half was
+modeled rather than recorded.
+
 **`PrintfNonFiniteIsConverted`** — bash yes · dash yes · ksh93 yes · zsh **no** · ash yes
 
 Puts an infinity or a not-a-number through the conversion that named it,

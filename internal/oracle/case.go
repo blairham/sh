@@ -7333,6 +7333,11 @@ echo "st=$?"`,
 		Why:     "a point that begins something the reader cannot finish as a number. zsh alone words it as a third refusal — `bad floating point constant`, with no expression quoted and none of the `bad math expression:` its other math failures open with — where bash calls it an operand it expected and ksh93, which has floats too, reads `.foo` as an ordinary unset name and answers 0. So the sentence is one dialect's value and not an axis, and the ksh93 cell is what says so",
 	},
 	{
+		ID: "arithmetic/an-increment-on-something-that-cannot-be-assigned-to", Category: "arithmetic",
+		Snippet: `echo "[$(( 1++ ))]"; echo "st=$?"; echo "[$(( ++1 ))]"; echo "st=$?"`,
+		Why:     "`++` on a literal, which two of the panel call an assignment without an lvalue and two do not treat as an operator at all. ksh93 says `assignment requires lvalue` and zsh `bad math expression: lvalue required`; bash refuses the text while *reading* it, as an operand it expected and did not find, and dash the same way — so the sentence belongs to the two that have a postfix operator to apply. The second pair of the line is what says which half of the panel a column is in without reading its wording: the prefix spelling is **1** in bash and dash, which read two signs, and the same refusal in ksh93 and zsh. Ours wrote the substrate's `++ needs a variable` into all four (#2420)",
+	},
+	{
 		ID: "arithmetic/a-point-where-an-operator-belonged", Category: "arithmetic",
 		Snippet: `echo "[$(( 1..2 ))]"; echo "st=$?"`,
 		Why:     "the same point in the other position, which is what says the *point* decides and not which operand was missing: zsh gives the identical float sentence where it would otherwise have said an operator was expected. The pair is what makes the rule statable — a token beginning with a point commits that reader to a floating literal — and the row below is the control for it",

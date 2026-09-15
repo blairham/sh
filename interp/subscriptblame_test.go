@@ -104,3 +104,54 @@ func runForArithBlame(t *testing.T, src string) string {
 	}
 	return buf.String()
 }
+
+// `++` or `--` on something that cannot be assigned to is the assignment's
+// complaint in the two shells that have the operator to apply, and the
+// operator is not in either sentence (#2420).
+//
+// Measured 2026-09-14: ksh93 writes `assignment requires lvalue` and zsh
+// `bad math expression: lvalue required`, for `$(( 1++ ))`, `$(( 1-- ))` and
+// `$(( ++1 ))` alike. bash and dash refuse the text while reading it and
+// never reach this, which is why the substrate's own wording — the one that
+// does name the operator — has to stay reachable.
+func TestAnIncrementOnSomethingThatCannotBeAssignedTo(t *testing.T) {
+	for _, tc := range []struct{ name, src, wording, want string }{
+		{"the dialect's own sentence", `echo $(( 1++ ))`, "requires a place", "requires a place"},
+		{"the decrement too", `echo $(( 1-- ))`, "requires a place", "requires a place"},
+		{"and the prefix spelling", `echo $(( ++1 ))`, "requires a place", "requires a place"},
+		{"nothing said names the operator", `echo $(( 1++ ))`, "", "++ needs a variable"},
+		{"and the other operator", `echo $(( 1-- ))`, "", "-- needs a variable"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out := runForIncrementBlame(t, tc.wording, tc.src)
+			if !strings.Contains(out, tc.want) {
+				t.Errorf("got %q, want it to contain %q", out, tc.want)
+			}
+		})
+	}
+}
+
+// The control: an operand that *is* a place still increments in silence.
+func TestAnIncrementOnAPlaceIsStillTaken(t *testing.T) {
+	out := runForIncrementBlame(t, "requires a place", `v=1; echo $(( v++ )); echo "[$v]"`)
+	if want := "1\n[2]\n"; out != want {
+		t.Errorf("got %q, want %q", out, want)
+	}
+}
+
+func runForIncrementBlame(t *testing.T, wording, src string) string {
+	t.Helper()
+	d := syntax.Core()
+	d.ArithIncDec = true
+	f, err := syntax.Parse(src, d)
+	if err != nil {
+		t.Fatalf("parse %q: %v", src, err)
+	}
+	var buf bytes.Buffer
+	dg := Diagnostics{ArithError: "%[2]s", ArithIncrementNeedsAPlace: wording}
+	r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Dialect: &d, Diagnostics: &dg})
+	if _, rerr := r.Run(context.Background(), f); rerr != nil {
+		t.Fatalf("run %q: %v", src, rerr)
+	}
+	return buf.String()
+}

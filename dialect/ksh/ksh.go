@@ -2109,9 +2109,15 @@ func Diagnostics() interp.Diagnostics {
 		// An operand failure is two sentences here, and which one is said
 		// turns on whether the expression ran out or found something it
 		// could not use: `$((1+))` against `$((%))`.
-		ArithOperandExpected:  "arithmetic syntax error",
-		ArithExpressionRanOut: "more tokens expected",
-		ArithOperatorExpected: "arithmetic syntax error",
+		ArithOperandExpected: "arithmetic syntax error",
+		// `++` on something that cannot be assigned to is about the
+		// assignment rather than about the operator, and the operator is not
+		// in the sentence. Measured 2026-09-14: `$(( 1++ ))`, `$(( 1-- ))`
+		// and `$(( ++1 ))` all draw it, where bash and dash answer the last
+		// of those with 1 (#2420).
+		ArithIncrementNeedsAPlace: "assignment requires lvalue",
+		ArithExpressionRanOut:     "more tokens expected",
+		ArithOperatorExpected:     "arithmetic syntax error",
 		// A stray `:` is the one construct this shell writes back to front:
 		// the byte, the reason, and then the expression after a ` - `, where
 		// every other math complaint it makes is `<expression>: <reason>`.

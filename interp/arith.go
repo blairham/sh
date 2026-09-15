@@ -1070,7 +1070,10 @@ func (r *Runner) evalUnary(x *syntax.ArithUnary) (arithNum, error) {
 	if x.Op == "++" || x.Op == "--" {
 		place, ok := arithPlaceOf(x.X)
 		if !ok {
-			return intNum(0), arithError{msg: x.Op + " needs a variable"}
+			return intNum(0), arithError{
+				msg: Wording(r.diag().ArithIncrementNeedsAPlace,
+					"%[1]s needs a variable", x.Op),
+			}
 		}
 		old, err := r.readPlace(place)
 		if err != nil {

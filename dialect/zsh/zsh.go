@@ -3001,6 +3001,11 @@ func Diagnostics() interp.Diagnostics {
 		UnrecognizedModifierAlone: "unrecognized modifier",
 		ArithIllegalByte:          "bad math expression: illegal character: %[1]s",
 		ArithOperandExpected:      "bad math expression: operand expected at `%[1]s'",
+		// The same family's sentence for `++` on something that cannot be
+		// assigned to, and it names neither the operator nor the operand:
+		// `$(( 1++ ))` is `bad math expression: lvalue required`. Measured
+		// 2026-09-14 (#2420).
+		ArithIncrementNeedsAPlace: "bad math expression: lvalue required",
 		ArithBadFloatConstant:     "bad floating point constant",
 		ArithExpressionRanOut:     "bad math expression: operand expected at end of string",
 		ArithOperatorExpected:     "bad math expression: operator expected at `%[1]s'",

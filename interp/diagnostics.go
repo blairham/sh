@@ -3890,6 +3890,29 @@ type Diagnostics struct {
 	// Empty falls back to ArithExpressionRanOut, which is what the two
 	// dialects that word the two failures identically want.
 	ArithOperandExpected string
+	// ArithIncrementNeedsAPlace is `++` or `--` on something that cannot be
+	// assigned to — `$(( 1++ ))`. One verb: the operator, which two of the
+	// four shells that reach the failure leave out of the sentence and which
+	// a format is free to ignore.
+	//
+	// Measured 2026-09-14, `-c` under `env -i PATH=/usr/bin:/bin`:
+	//
+	//	ksh93   1++ : assignment requires lvalue
+	//	zsh     bad math expression: lvalue required
+	//	bash    1++ : arithmetic syntax error: operand expected
+	//	                                 (error token is "+ ")
+	//	dash    arithmetic expression: expecting primary: " 1++ "
+	//
+	// Only the first two reach this. bash and dash refuse the text while
+	// *reading* it — neither has a postfix operator to apply to a literal,
+	// so there is no lvalue question for them to answer — and their rows are
+	// recorded rather than held here, because a wording written for them
+	// would put this sentence where the panel writes a reading failure.
+	//
+	// `$(( ++1 ))` parts the same two pairs the other way round: bash and
+	// dash answer **1**, reading the two signs rather than an operator, and
+	// ksh93 and zsh write the sentence above (#2420).
+	ArithIncrementNeedsAPlace string
 	// ArithIllegalByte is the reason when the arithmetic reader met a byte
 	// that is part of no token at all, at a position where the expression
 	// could legally have stopped: `$((@))` and `$((1 @))` are

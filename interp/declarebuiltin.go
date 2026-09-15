@@ -2813,7 +2813,15 @@ func (r *Runner) integerNumber(text string) (int, bool) {
 	}
 	v, err := r.evalArith(e)
 	if err != nil {
-		r.fatal("%v\n", err)
+		// Worded where every other arithmetic failure is worded, so the
+		// value is quoted back the way the dialect quotes an expression:
+		// `typeset -i b; b=0x` is `0x: arithmetic syntax error` in ksh93,
+		// where the raw error said `arithmetic syntax error` with nothing
+		// named at all. The blamed text is the assignment's own value, which
+		// carries no surrounding blanks — `$(( 0x ))` in the same shell is
+		// `` 0x `` with them, from the same wording and a different text
+		// (#2420).
+		r.fatal("%s\n", r.arithFailure(text, err))
 		return 0, false
 	}
 	return v, true

@@ -96374,6 +96374,57 @@
         "TimedOut": false
       }
     },
+    "getopts/too-few-operands": {
+      "ash": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: getopts: line 0: usage: getopts optstring var [arg]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "st=2",
+        "Stderr": "getopts: usage: getopts optstring name [arg ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=2",
+        "Stderr": "getopts: usage: getopts optstring name [arg ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=2",
+        "Stderr": "getopts: usage: getopts optstring name [arg]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: 1: getopts: Usage: getopts optstring var [arg]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=2",
+        "Stderr": "Usage: getopts [-a name] opstring name [args...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e:getopts:1: not enough arguments",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "getopts/unknown-option-diverges": {
       "ash": {
         "Stdout": "st=0 o=[?]",
@@ -112851,6 +112902,159 @@
       "zsh": {
         "Stdout": "t",
         "Stderr": "\u003cshell\u003e:continue:1: not in while, until, select, or repeat loop",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "loop/a-count-break-will-not-read": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: break: line 0: Illegal number: abc",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: break: abc: numeric argument required",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: break: abc: numeric argument required",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 0: break: abc: numeric argument required",
+        "Status": 128,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: break: Illegal number: abc",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: break: abc: label not implemented",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:break:1: argument is not positive: 0",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "loop/a-count-continue-will-not-read": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: continue: line 0: Illegal number: abc",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: continue: abc: numeric argument required",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: continue: abc: numeric argument required",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 0: continue: abc: numeric argument required",
+        "Status": 128,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: continue: Illegal number: abc",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: continue: abc: label not implemented",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:continue:1: argument is not positive: 0",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "loop/a-count-that-is-a-number-and-not-positive": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: break: line 0: Illegal number: 0",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "after",
+        "Stderr": "\u003cshell\u003e: line 1: break: 0: loop count out of range",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "after",
+        "Stderr": "\u003cshell\u003e: line 1: break: 0: loop count out of range",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "after",
+        "Stderr": "\u003cshell\u003e: line 0: break: 0: loop count out of range",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: break: Illegal number: 0",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: break: 0: label not implemented",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:break:1: argument is not positive: 0",
         "Status": 1,
         "Signal": 0,
         "TimedOut": false

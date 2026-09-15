@@ -1,0 +1,58 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# eval and `.` in zsh — #2322. Two answers zsh has alone, and both are about
+# what the shell does when the thing it was asked to run is not there or
+# will not parse.
+#
+# The first is the status. A dot file that cannot be opened is 127 here —
+# the number a shell uses for a command it could not find — where bash and
+# ksh93 answer 1 and dash answers 2. Reading `.` as a command lookup rather
+# than as a file open is a defensible way to number it, and it is zsh's
+# alone: a script testing `. lib.sh || …` on the number gets a different one
+# in every shell on the panel.
+#
+# The second is that a dot file or an `eval` that will not *parse* is a
+# success. bash answers 2, ksh93 3, dash gives the shell up entirely — and
+# zsh answers 0, so the caller cannot tell from the status that nothing ran.
+#
+# And `$0` inside a dot script is the sourced file's name, which no other
+# shell here does: everywhere else `$0` is still the script that ran the `.`.
+
+# --- $0 ---
+
+printf 'printf "zero inside a dot script: [%%s]\\n" "$0"\n' > z.sh
+. ./z.sh
+
+# Not inside an eval, which is the control: `eval` runs text and does not
+# open a file, so there is no name for `$0` to become.
+eval 'printf "zero inside an eval is unchanged\n"'
+
+# --- the statuses of a `.` that could not run ---
+
+# Nothing of that name.
+( . ./nosuchfile_zz ) 2>/dev/null; printf 'missing file -> %s\n' "$?"
+
+# A name with no slash that PATH does not have either.
+( . nosuchfile_zz ) 2>/dev/null; printf 'missing name on PATH -> %s\n' "$?"
+
+# A file that is there and cannot be read.
+printf 'printf "x\\n"\n' > nr.sh; chmod 000 nr.sh
+( . ./nr.sh ) 2>/dev/null; printf 'unreadable -> %s\n' "$?"
+chmod 644 nr.sh
+
+# --- a file and an eval that will not parse ---
+
+printf 'if then fi\n' > bad.sh
+( . ./bad.sh ) 2>/dev/null; printf 'a dot file that will not parse -> %s\n' "$?"
+( eval 'if then fi' ) 2>/dev/null; printf 'an eval that will not parse -> %s\n' "$?"
+
+# And nothing in either of them ran, which is what makes the 0 worth asking
+# about: the file's second line is never reached.
+printf 'printf "first line\\n"\nif then fi\nprintf "third line\\n"\n' > bad2.sh
+( . ./bad2.sh ) 2>/dev/null; printf 'half a dot file -> %s\n' "$?"
+
+# The shell carries on afterwards in either case.
+( . ./bad.sh; printf 'carried on after the dot\n' ) 2>/dev/null
+( eval 'if then fi'; printf 'carried on after the eval\n' ) 2>/dev/null
+printf 'reached the end\n'

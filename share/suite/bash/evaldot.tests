@@ -1,0 +1,50 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# `.` in bash — #2322, and the one place bash looks that nobody else on the
+# panel does.
+#
+# POSIX XCU says `.` searches PATH for a name with no slash in it, and says
+# nothing about what happens when PATH does not have it. bash then tries the
+# working directory. zsh, ksh93 and dash all stop at the end of PATH, so the
+# same script that works here is a missing file everywhere else — which is
+# the shape of most "it works on my machine" reports about a `. lib.sh` that
+# was never given a `./`.
+#
+# The behavior is an option and the option is on by default, so the file
+# measures both ends of it: with `sourcepath` set the working directory is
+# reached, and with it unset bash stops where the other three stop.
+
+printf 'printf "found in the working directory\\n"\n' > cwdlib.sh
+mkdir -p libdir
+printf 'printf "found on PATH\\n"\n' > libdir/pathlib.sh
+PATH="$PWD/libdir:/usr/bin:/bin"
+
+# On PATH, which every shell here does.
+. pathlib.sh; printf 'on PATH -> %s\n' "$?"
+
+# Not on PATH, and found anyway. Every diagnostic is dropped here: what is
+# being compared is which shell found the file, and the sentence the ones
+# that did not write for it is #2324's question.
+. cwdlib.sh 2>/dev/null; printf 'not on PATH -> %s\n' "$?"
+
+# `source` takes the same route.
+source cwdlib.sh 2>/dev/null; printf 'source, not on PATH -> %s\n' "$?"
+
+# The option that decides it.
+shopt -q sourcepath 2>/dev/null; printf 'sourcepath on by default -> %s\n' "$?"
+shopt -u sourcepath 2>/dev/null; printf 'shopt -u -> %s\n' "$?"
+
+# With it off, the name is not found and the status says so — the same 1
+# bash gives for any dot file it could not open.
+( . cwdlib.sh ) 2>/dev/null; printf 'with sourcepath off -> %s\n' "$?"
+
+# And what it turns off is the whole search: even the name PATH *does* have
+# is no longer found, which is the half of the option its name does not say.
+. pathlib.sh 2>/dev/null; printf 'on PATH with it off -> %s\n' "$?"
+
+# A name with a slash was never a search at all, so it is unaffected.
+. ./cwdlib.sh 2>/dev/null; printf 'with a slash -> %s\n' "$?"
+
+shopt -s sourcepath 2>/dev/null
+. cwdlib.sh 2>/dev/null; printf 'back on -> %s\n' "$?"

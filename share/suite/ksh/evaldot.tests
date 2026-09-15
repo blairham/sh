@@ -1,0 +1,56 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# eval and `.` in ksh93 — #2322.
+#
+# ksh93 answers 3 for text that will not parse, which is a number no other
+# shell on the panel uses for anything: bash and dash answer 2 and zsh
+# answers 0. It is the same 3 whether the text came from a file or from an
+# `eval` operand, which says the number belongs to the parse rather than to
+# either builtin.
+#
+# The other answer here is about how far a *fatal* error travels. In ksh93 an
+# unknown option to a builtin ends the shell, and reaching that builtin
+# through `eval` or through a dot script does not soften it — the enclosing
+# subshell is given up with the same status, and nothing after it in the
+# subshell runs. The bare call is kept beside each as the control.
+#
+# `alias -g` is the fatal call used below because it is short and because
+# ksh93's `alias` genuinely has no `-g`: the option is zsh's, and this file
+# is one of the places that gets measured.
+
+# --- the status of text that will not parse ---
+
+printf 'if then fi\n' > bad.sh
+( . ./bad.sh ) 2>/dev/null; printf 'a dot file that will not parse -> %s\n' "$?"
+( eval 'if then fi' ) 2>/dev/null; printf 'an eval that will not parse -> %s\n' "$?"
+
+# A different parse error, to say the number is the parse and not the text.
+printf 'for\n' > bad2.sh
+( . ./bad2.sh ) 2>/dev/null; printf 'another dot file -> %s\n' "$?"
+( eval 'case' ) 2>/dev/null; printf 'another eval -> %s\n' "$?"
+
+# Nothing of the file ran.
+printf 'printf "first line\\n"\nif then fi\nprintf "third line\\n"\n' > bad3.sh
+( . ./bad3.sh ) 2>/dev/null; printf 'half a dot file -> %s\n' "$?"
+
+# --- how far a fatal builtin error travels ---
+
+# The bare call: the subshell is given up with 2 and its second command does
+# not run.
+( alias -g aa=1; printf 'the subshell carried on\n' ) 2>/dev/null
+printf 'bare -> %s\n' "$?"
+
+# The same call through `eval`.
+( eval 'alias -g bb=1'; printf 'the subshell carried on\n' ) 2>/dev/null
+printf 'through eval -> %s\n' "$?"
+
+# And through a dot script, where the rest of the dot script does not run
+# either.
+printf 'alias -g cc=1\nprintf "the dot script carried on\\n"\n' > u.sh
+( . ./u.sh; printf 'after the dot\n' ) 2>/dev/null
+printf 'through a dot script -> %s\n' "$?"
+
+# The outer shell is untouched by any of them, because each was in a
+# subshell of its own.
+printf 'reached the end\n'

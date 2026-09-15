@@ -740,6 +740,12 @@ func Semantics() interp.Semantics {
 	// with two copies of one name on PATH, the first hashed: the prefixed
 	// run takes the second copy and the table still holds the first.
 	s.APrefixedPathEmptiesTheCommandHash = interp.No
+	// And the entry does not stand in front of the search. A copy that has
+	// appeared in a directory earlier on PATH is found on the next call with
+	// no assignment to PATH in between, and the entry is repointed at it —
+	// measured 2026-09-15 and ksh93's alone in a panel of six. See
+	// [interp.Semantics.HashedPathShadowsAnEarlierDirectory] (#2936).
+	s.HashedPathShadowsAnEarlierDirectory = interp.No
 	s.TildePlusMinusExpands = interp.Yes
 	// A defined f-g stops the script; a.b is an invalid discipline function.
 	s.PunctuatedFunctionNameIsRefused = interp.Yes

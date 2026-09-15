@@ -100,6 +100,16 @@ func (r *Runner) lookPath(name string) (string, error) {
 		full := r.absolute(hashed)
 		err := r.runnable(full)
 		if err == nil {
+			if earlier, found := r.executableBeforeTheHashedPath(name, full); found &&
+				!r.ask(r.sem().HashedPathShadowsAnEarlierDirectory,
+					"a remembered location standing in front of a copy that has appeared earlier on PATH") {
+				// The entry does not shadow the search here, so the copy
+				// that has appeared in front of it is the answer and the
+				// table is pointed at it. See
+				// Semantics.HashedPathShadowsAnEarlierDirectory.
+				r.retrackCommand(name, earlier)
+				return earlier, nil
+			}
 			r.hashCommandHit(name)
 			return full, nil
 		}
@@ -157,6 +167,42 @@ func (r *Runner) lookPath(name string) (string, error) {
 		return "", dirDenied
 	}
 	return "", &pathError{name: name, missing: true, err: errNotFound}
+}
+
+// executableBeforeTheHashedPath is the first thing PATH holds by this name in
+// a directory it searches **before** the one the command hash remembered.
+//
+// It answers the one question the panel splits on once an entry is in the
+// table and still runs, and it is called only where that question is live:
+// the dialect that reads its table as the answer is spared the walk, because
+// `Yes` and "nothing found in front" are the same outcome and the walk is
+// exactly the cost the table exists to avoid. That guard is a read of the
+// axis rather than an ask on purpose — this runs in front of every external
+// command a shell has run twice, so an ask here would refuse each one in a
+// Runner that has chosen no dialect, which is the hazard trackingIsOff
+// carries. The *ask* is one caller up, where a copy really has appeared in
+// front and the columns really do disagree.
+//
+// The walk stops at the remembered path rather than at its directory's index,
+// so an entry whose directory has left PATH — `hash -p`, a PATH the table
+// outlived — is searched past rather than treated as position zero.
+func (r *Runner) executableBeforeTheHashedPath(name, hashed string) (string, bool) {
+	if r.sem().HashedPathShadowsAnEarlierDirectory == Yes {
+		return "", false
+	}
+	for _, dir := range r.pathElements(r.commandSearchPath()) {
+		if dir == "" {
+			dir = "."
+		}
+		candidate := r.absolute(filepath.Join(dir, name))
+		if candidate == hashed {
+			return "", false
+		}
+		if r.runnable(candidate) == nil {
+			return candidate, true
+		}
+	}
+	return "", false
 }
 
 // pathElements splits PATH, and the one interesting case is the empty string.

@@ -40,3 +40,20 @@ out=$( ( [[ -suffix x ]] ) 2> /dev/null )
 err=$( ( [[ -suffix x ]] ) 2>&1 > /dev/null )
 if [ -n "$err" ]; then printf 'stderr yes\n'; else printf 'stderr no\n'; fi
 if [ -n "$out" ]; then printf 'stdout yes\n'; else printf 'stdout no\n'; fi
+
+# Two more zsh answers, about the right-hand side of a pattern match rather
+# than about a completion. Neither is a refusal: both are quiet, and both are
+# the opposite of what a script written for bash or ksh93 expects.
+#
+# An **unquoted** parameter on the right of `==` is a pattern in bash and in
+# ksh93 and is literal text here — zsh needs `${~p}` to make it live. And the
+# ksh-family pattern operators `@(…)` and `+(…)` are off unless KSH_GLOB is
+# set, so they are literal text as well.
+p='a*'
+if [[ abc == $p ]]; then printf 'unquoted variable is a pattern\n'; else printf 'unquoted variable is literal\n'; fi
+if [[ abc == "$p" ]]; then printf 'quoted variable is a pattern\n'; else printf 'quoted variable is literal\n'; fi
+if [[ 'a*' == $p ]]; then printf 'and it matches itself as text\n'; else printf 'and does not match itself\n'; fi
+if [[ abc == ${~p} ]]; then printf 'the tilde flag makes it live\n'; else printf 'even with the tilde flag\n'; fi
+if [[ abc == @(abc|xyz) ]]; then printf 'ksh alternation works\n'; else printf 'ksh alternation is literal\n'; fi
+if [[ abc == a+(b)c ]]; then printf 'ksh repetition works\n'; else printf 'ksh repetition is literal\n'; fi
+if [[ abc == a* ]]; then printf 'a written pattern is still a pattern\n'; else printf 'not even a written one\n'; fi

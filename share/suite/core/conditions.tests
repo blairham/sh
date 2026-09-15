@@ -1,0 +1,133 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Conditions as a grammar rather than as a list of operators — #2312.
+#
+# core/test.tests walks the operator table one entry at a time. This file
+# asks the questions that are about how the operands are *read*: a word that
+# spells an operator standing where an operand goes, `-a` and `-o` against
+# `&&` and `||`, a numeric comparison against a string one on the same pair
+# of words, and an empty operand — which is where the one- and two-argument
+# rules of POSIX XCU 4.63 actually show.
+#
+# `[[ ]]` is not here: dash and ash do not have it, so it is ext/ and the
+# three dialect files beside it.
+#
+# Three things are held out and each is a measurement:
+#
+#   `test a '<' b`     bash and dash answer it, zsh and ksh93 call it an
+#                      error, so string ordering has no common spelling in
+#                      `test` at all — `>` splits the same way, with zsh
+#                      alone refusing `test 10 '>' 9`. core/test.tests
+#                      records the same for `<`.
+#   `test x -a`        a two-word test ending in `-a` or `-o`: dash answers
+#                      it, the other three refuse it (#2917), and ours
+#                      refuses it in dash too.
+#   `test 1e2 -eq 100` ksh93 reads the exponent and the other three refuse
+#                      the operand.
+#
+# And one about the machine rather than the shells: **/bin/dash on macOS
+# crashes** on `test x -a` when its standard error is redirected — SIGSEGV,
+# status 139, while `[ x -a ]` with the same redirection is fine. Every
+# helper below redirects stderr, which is how that was found: the whole file
+# came back as a segfault with six lines of output. #2917 records it.
+
+# Three buckets rather than a status, because the statuses do not agree: a
+# false condition is 1 everywhere and a usage error is 2 in three shells and
+# something else in the fourth often enough to be worth not printing.
+chk() {
+	if "$@" 2> /dev/null; then printf 'true   %s\n' "$*"
+	elif [ $? -eq 1 ]; then printf 'false  %s\n' "$*"
+	else printf 'error  %s\n' "$*"; fi
+}
+
+# One operand is the non-emptiness of the word, whatever the word spells. A
+# lone `-n`, `-z`, `=` or `!` is a string of one or two characters here and
+# not an operator, which is the rule that makes `test "$x"` safe to write.
+chk test -n
+chk test -z
+chk test =
+chk test !
+chk test -a
+chk test -o
+chk test ''
+
+# Two operands are an operator and its argument, and the first of the two is
+# where a word is read as an operator. So `-n -n` is the non-emptiness of the
+# string `-n`, and `-z -z` is the emptiness of `-z`.
+chk test -n -n
+chk test -z -z
+chk test -n -z
+chk test ! ''
+chk test ! x
+chk test ! !
+
+# Three operands are a binary operator between two of them, and the operands
+# may spell operators themselves without becoming them.
+chk test -e = -e
+chk test ! = !
+chk test -f = -f
+chk test = = =
+chk test -n = -n
+
+# The negation of a binary operator is four operands, and it negates the
+# whole of it rather than the left operand.
+chk test ! a = a
+chk test ! a = b
+
+# -a and -o join two whole conditions, and -a binds tighter than -o — the
+# same precedence `&&` and `||` have as list operators, which is why the two
+# spellings below agree.
+chk test 1 -eq 1 -a 2 -eq 2
+chk test 1 -eq 1 -a 2 -eq 3
+chk test 1 -eq 1 -o 2 -eq 3
+chk test 1 -eq 2 -o 2 -eq 3
+chk test 1 -eq 2 -a 2 -eq 2 -o 3 -eq 3
+chk test 1 -eq 1 -o 2 -eq 2 -a 3 -eq 4
+chk test ! 1 -eq 1 -a 2 -eq 2
+chk test '' -a x
+chk test x -a ''
+chk test '' -o x
+
+# The same conditions as separate commands joined by the shell's own
+# operators. The answers are the same and the failure mode is not: a usage
+# error inside one `test` makes the whole thing an error, where a list of
+# commands can only be true or false.
+if [ 1 -eq 1 ] && [ 2 -eq 2 ]; then printf 'and: true\n'; else printf 'and: false\n'; fi
+if [ 1 -eq 1 ] && [ 2 -eq 3 ]; then printf 'and: true\n'; else printf 'and: false\n'; fi
+if [ 1 -eq 1 ] || [ 2 -eq 3 ]; then printf 'or: true\n'; else printf 'or: false\n'; fi
+if [ 1 -eq 2 ] && [ 2 -eq 2 ] || [ 3 -eq 3 ]; then printf 'both: true\n'; else printf 'both: false\n'; fi
+
+# A numeric comparison and a string comparison on the same two words, which
+# is the difference a leading zero or a sign makes visible.
+chk test 01 -eq 1
+chk test 01 = 1
+chk test +1 -eq 1
+chk test +1 = 1
+chk test ' 1' -eq 1
+chk test ' 1' = 1
+chk test -1 -lt 0
+chk test -1 = -1
+chk test 10 -gt 9
+
+# An empty operand, quoted and unquoted. Unquoted it is not an operand at
+# all — the word disappears before `test` is called — so the two lines below
+# ask different questions of the same variable, and that is the whole reason
+# a condition is written with the quotes.
+e=
+chk test -n "$e"
+chk test -z "$e"
+chk test "$e" = ''
+chk test "$e" = "$e"
+chk test -n $e
+chk test $e = $e
+
+# `[` is the same utility and needs its closing bracket. Without it the run
+# is an error rather than a false.
+chk [ x = x ]
+chk [ x = y ]
+chk [ ! x = y ]
+chk [ x = x
+chk [ -n x ]
+chk [ ]
+chk [ '' ]

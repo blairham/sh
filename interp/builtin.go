@@ -113,6 +113,35 @@ func biContinue(r *Runner, _ context.Context, args []string) int {
 	return 0
 }
 
+// numericOperandMarker takes a leading `--` off the operands of a builtin
+// whose only operand is a number, reporting whether the reading may go on.
+//
+// One helper for the four builtins that ask it — `break`, `continue`,
+// `return` and `exit` — because a second reader beside the first is what
+// drifts the next time the marker is measured, and it already had: `shift`
+// took the marker from its first day and these four read it as the operand
+// and refused it, so `break -- 1` ended the script where five of the seven
+// columns end the loop. See Semantics.NumericOperandDoubleDashEndsOptions.
+//
+// Only the first word is looked at, which is what makes `break -- --` a
+// count of `--`, and only where it actually is the marker — a dialect is
+// never asked about `break 2`.
+func (r *Runner) numericOperandMarker(args []string) ([]string, bool) {
+	if len(args) == 0 || args[0] != "--" {
+		return args, true
+	}
+	switch {
+	case r.ask(r.sem().NumericOperandDoubleDashEndsOptions, "`--` read as the end of a numeric operand's options"):
+		return args[1:], true
+	case r.unspecified:
+		return args, false
+	}
+	// The two columns with no marker here read the word as the operand, and
+	// it is not one — which is the complaint the caller was going to make
+	// about it anyway.
+	return args, true
+}
+
 // loopControlCount reads the count `break` and `continue` share, and reports
 // the one every shell in the panel refuses and ours took in silence.
 //
@@ -127,6 +156,13 @@ func biContinue(r *Runner, _ context.Context, args []string) int {
 // See Diagnostics.LoopControlCount for the panel's sentences and for why the
 // script's ending is not an axis: all seven end there.
 func (r *Runner) loopControlCount(name string, args []string) (int, int, bool) {
+	args, marked := r.numericOperandMarker(args)
+	if !marked {
+		// The axis went unanswered; ask told the script so and the builtin
+		// stops rather than guessing which of `--` and the word behind it
+		// is the count.
+		return 0, r.status, true
+	}
 	if len(args) == 0 {
 		return 1, 0, false
 	}
@@ -282,6 +318,12 @@ func biReturn(r *Runner, _ context.Context, args []string) int {
 	// arithmetic expression in one dialect and reading one is a step of its
 	// own.
 	seen := r.status
+	args, marked := r.numericOperandMarker(args)
+	if !marked {
+		// Unanswered, and reported by ask: the same 2 the unreadable
+		// operand below leaves, and for the same reason.
+		return 2
+	}
 	operand, haveOperand := 0, false
 	if len(args) > 0 {
 		switch n, ok := r.statusOperand("return", args[0]); {
@@ -5268,6 +5310,14 @@ func biExit(r *Runner, _ context.Context, args []string) int {
 	// bash reports a builtin that failed, zsh reports nothing of the kind.
 	if r.HoldsExitForJobs() {
 		return r.diag().StoppedJobsAtExitStatus
+	}
+	args, marked := r.numericOperandMarker(args)
+	if !marked {
+		// Unanswered: the shell stops rather than leaving with a status it
+		// has just refused to read, which is what the unreadable operand
+		// below does too.
+		r.stopTheShell()
+		return r.status
 	}
 	if len(args) > 0 {
 		switch n, ok := r.statusOperand("exit", args[0]); {

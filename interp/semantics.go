@@ -4150,6 +4150,41 @@ type Semantics struct {
 	// first of those three — see Diagnostics.LoopControlOutsideALoop.
 	LoopControlOutsideALoopIsFatal Answer
 
+	// NumericOperandDoubleDashEndsOptions takes a leading `--` off the four
+	// builtins whose only operand is a number — `break`, `continue`,
+	// `return` and `exit` — and reads what follows as that number.
+	//
+	// Measured 2026-09-15 in a script file:
+	//
+	//	for i in 1 2; do break -- 1; echo body; done; echo "B=$?"
+	//	f(){ return -- 3; }; f; echo "D=$?"
+	//	echo A; exit -- 3
+	//
+	//	bash 5.3, bash 3.2, bash as sh	the marker is taken: the loop ends
+	//	ksh93, zsh                    	at 0, the function returns 3, the
+	//	                              	script exits 3
+	//	dash, BusyBox ash             	the marker *is* the operand:
+	//	                              	`break: Illegal number: --`, and
+	//	                              	the script ends there at 2
+	//
+	// Five against two, so the marker is what the core does and the two
+	// holdouts are the ones that have no option parsing here for a marker to
+	// end — the same pair, and the same reason, as
+	// ShiftDoubleDashEndsOptions. It is a second field rather than that one
+	// because these four builtins read no options at all, where `shift`
+	// reads dash words as options in two columns: the questions are
+	// independent and only happen to have the same answers today.
+	//
+	// Only the *first* `--` is the marker. `break -- --` is a count of `--`
+	// in every column that takes one, which is the row that says the marker
+	// is consumed rather than skipped over, and past it a dash word is an
+	// operand — `break -- -1` is a count of minus one and draws the
+	// out-of-range complaint rather than an option's.
+	//
+	// Asked only where the first operand actually is `--`, so `break 2` and
+	// `exit 3` need no dialect.
+	NumericOperandDoubleDashEndsOptions Answer
+
 	// FunctionCallIsALoopControlBoundary stops a `break` or `continue` in a
 	// function body from reaching the loops the *caller* is inside.
 	//

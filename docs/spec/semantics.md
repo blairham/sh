@@ -16181,6 +16181,37 @@ not an option, which is where ksh93's two answers to `-1` come from.
 Only the *first* `--` is the marker — `shift -- --` complains about the
 second in all three that take one.
 
+**`NumericOperandDoubleDashEndsOptions`** — bash yes · dash no · ksh93 yes
+· zsh yes · ash no
+
+Takes a leading `--` off the four builtins whose only operand is a number
+— `break`, `continue`, `return` and `exit` — and reads what follows as
+that number. Measured 2026-09-15 in a script file:
+
+    for i in 1 2; do break -- 1; done   bash 5.3, bash 3.2, bash as sh,
+                                        ksh93, zsh  the loop ends, 0
+                                        dash, ash `break: Illegal number: --`
+                                        and the script ends at 2
+    f(){ return -- 3; }; f              the same five return 3
+    exit -- 3                           the same five exit 3
+    break --                            the count falls back to one
+    break -- -1                         the count is minus one and draws the
+                                        out-of-range complaint, not an
+                                        option's
+    break -- --                         the second `--` is the count and is
+                                        not one
+
+Five against two, so the marker is the core's answer and the two holdouts
+are the shells with no option parsing here for a marker to end — the same
+pair, for the same reason, as `ShiftDoubleDashEndsOptions`. It is a second
+field rather than that one because these four builtins read no options at
+all, where `shift` reads dash words as options in two columns: the two
+questions are independent and only happen to have the same answers today.
+
+bash 3.2 has one oddity of its own, recorded and not modeled: `break -- -1`
+there quotes the **marker** in the out-of-range complaint rather than the
+count it read.
+
 **`ShiftNamesAreArrays`** — bash no · dash no · ksh93 no · zsh yes
 
 Reads `shift`'s operands as the names of arrays to shift, instead of the

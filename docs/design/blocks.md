@@ -70,8 +70,15 @@ for the record. Nothing reconciles them, because nothing has to.
 ### Where it lives
 
     $SH_BLOCKS_DIR/                 named by a shell variable
-      index.jsonl                   append-only, one record per line
+      index/2026/09/05.jsonl        append-only, one record per line
       body/2026/09/05/<id>.out      one file per block that kept output
+      index.jsonl                   older stores only; read, never written
+
+**Both halves are sharded by date, and both by the date the block
+started**, so a record and its body are always filed together and one
+`rm -rf` takes both. The index was one flat file until #2275; the
+consequences of that, and why the date is the sharding to choose, are
+under *Append-only, and never rewritten* below.
 
 `SH_BLOCKS_DIR` names the store, and **naming it is how a person turns
 it on**. Unset is off; empty is off, exactly as an empty `HISTFILE`
@@ -113,8 +120,9 @@ want the richer thing".
 
 ### Append-only, and never rewritten
 
-`index.jsonl` is opened `O_APPEND` once per session and one record is
-written per block, as a single `Write`. It is never truncated, never
+The day's shard is opened `O_APPEND` — once per session, and again only
+when the date moves under a session that has outlived it — and one record
+is written per block, as a single `Write`. It is never truncated, never
 rewritten, and never compacted by the shell.
 
 That is the discipline the line file already gets right and it is worth
@@ -126,11 +134,63 @@ lose one of them. Appending has no such window.
 `HISTFILESIZE` bounds what a *reader* keeps, not what the file holds —
 again matching the line file, where the trim happens at load. Retention
 of the store is therefore a person's own business, and the layout is
-built so it can be done with `rm`: the bodies are sharded by date, so
-`rm -rf body/2026/08` drops a month and leaves the index intact. A
-record whose body is gone reads as a block with no output kept, which is
-the same state a block recorded with capture off is in. There is one
+built so it can be done with `rm`: `rm -rf index/2026/08 body/2026/08`
+drops a month of both halves and leaves the rest of the store readable.
+A record whose body is gone reads as a block with no output kept, which
+is the same state a block recorded with capture off is in. There is one
 state to handle, not two.
+
+**That sentence was only true of the bodies until #2275, and the half it
+was false about was the half that mattered.** `index.jsonl` was a single
+flat file, so `rm` could not take a slice of it and nothing in the shell
+would — which made the one file that grows without bound the one file the
+documented escape hatch did not work on. Sharding the index the way the
+bodies were already sharded is what makes the paragraph above true rather
+than aspirational. A store written by an older version keeps its flat
+`index.jsonl`; this version reads it as the oldest part of the store and
+never appends to it again, so it stops growing on the first run and the
+part of a store `rm` cannot cut is fixed rather than open-ended.
+
+**The date, rather than a prefix of the id, and by the time the block
+started.** Sharding on the id would be uniform and useless, because the
+front of an id is a timestamp — every block in an eighteen-minute window
+shares its first eight characters. And a session left open overnight
+rolls over on its first command of the new day rather than filing a
+week's work under the Monday it was started on, which would have made the
+sharding useless for exactly the long-lived sessions it is for.
+
+### The read is bounded, because the result always was
+
+`Store.Load(ctx, n)` reads the newest shard backwards and stops as soon
+as it has `n` records; `Find` is built on it. Until #2275 it decoded
+*every* record in the store into a slice and then kept the last `n`, so a
+bounded result came out of an unbounded read — and `cmd/sh`'s comment
+above `blocksLimit`, promising that naming a block costs the same on a
+store somebody has been filling for a year as on one from this morning,
+was false of the code it was written above.
+
+Measured on this machine, `-blocks-list 1` against synthetic stores, page
+cache warm:
+
+| records | on disk | before | after |
+| --- | --- | --- | --- |
+| 13k | 4 MB | 37 ms, 22 MB | 4 ms, 7 MB |
+| 130k | 31 MB | 317 ms, 105 MB | 4 ms, 7 MB |
+| 1.3M | 304 MB | 3064 ms, 1085 MB | 3 ms, 7 MB |
+
+The *after* column is the same at every size because the read is the same
+work at every size. It holds with all 1.3M records in one day's shard as
+well as spread across a year, which is the case worth stating: the
+sharding alone would not have fixed this, because one busy day on a
+machine that runs commands in a loop is still a large file. The backwards
+walk is what makes the number flat, and the sharding is what makes
+retention possible; the two are independent and the issue needed both.
+
+A line that will not parse is skipped rather than ending the read, in
+either direction. A line too long to be a record is dropped instead of
+being accumulated, which is what keeps the walk bounded in memory as well
+as in time — without it a shard with no newline in it would be read whole,
+which is the defect arriving again by another door.
 
 A record is written when the block **closes** — after the accepted line
 has finished running — rather than at exit. A shell that is killed keeps
@@ -612,9 +672,12 @@ substrate, the command belongs to that shell.
   it in would mean the bodies stop being `cat`-able, which is most of
   their value.
 - **Trimming the store.** Nothing in the shell deletes a record. The
-  date-sharded layout exists so `rm -rf` and `find -mtime` are the
-  answer, and a shell that quietly deletes the record of what you did is
-  a worse failure than a directory that grew.
+  date-sharded layout — of the index as well as the bodies, since #2275 —
+  exists so `rm -rf` and `find -mtime` are the answer, and a shell that
+  quietly deletes the record of what you did is a worse failure than a
+  directory that grew. This stays deliberately absent now that the layout
+  makes it true: what #2275 asked for was a store the documented answer
+  works on, not a `blocks --trim`.
 - **Recording blocks for scripts.** A block is a typed line. A script
   has statements, and the thing that wants a record of a script's
   execution is the event stream, which already has one.
@@ -638,10 +701,18 @@ cheap to reverse.
 
    Three things decided it. Nothing consumes the store yet — recall and
    re-run are "deliberately not here" above — so on-by-default was
-   collecting what nobody was reading. Nothing trims it, and the index is
-   the one file the `rm`-based retention story below does not work on.
-   And a default is cheap to loosen later and a regression to tighten,
-   which is the argument for doing this before v0.0.0 rather than after.
+   collecting what nobody was reading. Nothing trims it, and the index
+   was the one file the `rm`-based retention story did not work on. And a
+   default is cheap to loosen later and a regression to tighten, which is
+   the argument for doing this before v0.0.0 rather than after.
+
+   **#2275 has closed the second of those three.** The index is sharded
+   by date like the bodies, so `rm -rf index/2026/08 body/2026/08` is a
+   retention story for the whole store; and the read is bounded, so the
+   feature no longer degrades itself the longer it runs. What remains
+   before on-by-default is the first reason — an interactive surface that
+   reads the store — which is what the counter-argument below asks for
+   anyway.
 
    The counter-argument stands and was not enough: opt-in does risk a
    feature nobody meets. The answer is to turn it on **with** the

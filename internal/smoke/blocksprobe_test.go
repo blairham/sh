@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -318,7 +319,7 @@ func TestNoStoreUnlessOneWasAskedFor(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				if !entry.IsDir() && entry.Name() == blocks.IndexName {
+				if !entry.IsDir() && isIndexFile(path, entry.Name()) {
 					found = append(found, path)
 				}
 				return nil
@@ -330,4 +331,19 @@ func TestNoStoreUnlessOneWasAskedFor(t *testing.T) {
 			}
 		})
 	}
+}
+
+// isIndexFile reports whether a path is an index the store would have written.
+//
+// Two shapes, because a store can hold both: the dated shards written since
+// #2275, and the flat `index.jsonl` an older store left behind. Matching only
+// the flat name would make the assertion above vacuous — no session writes
+// that file any more, so "a session that was told nothing wrote a store" would
+// hold for a session that wrote one.
+func isIndexFile(path, name string) bool {
+	if name == blocks.IndexName {
+		return true
+	}
+	return strings.HasSuffix(name, ".jsonl") &&
+		slices.Contains(strings.Split(filepath.ToSlash(path), "/"), blocks.IndexDir)
 }

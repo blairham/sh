@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -342,9 +343,24 @@ func (s *capturingSession) finish() {
 // order the index records them.
 func (s *capturingSession) bodies(t *testing.T) []string {
 	t.Helper()
-	raw, err := os.ReadFile(filepath.Join(s.dir, "blocks", "index.jsonl"))
+	// Every shard of the index, oldest first. The index is sharded by date
+	// like the bodies are (#2275), so there is no one file to read — and a
+	// session that straddles midnight UTC writes two.
+	shards, err := filepath.Glob(filepath.Join(s.dir, "blocks", "index", "*", "*", "*.jsonl"))
 	if err != nil {
 		t.Fatalf("no block index: %v", err)
+	}
+	if len(shards) == 0 {
+		t.Fatal("no block index: the store wrote no shard")
+	}
+	sort.Strings(shards)
+	var raw []byte
+	for _, shard := range shards {
+		b, err := os.ReadFile(shard)
+		if err != nil {
+			t.Fatalf("no block index: %v", err)
+		}
+		raw = append(raw, b...)
 	}
 	var out []string
 	for _, line := range strings.Split(strings.TrimSpace(string(raw)), "\n") {

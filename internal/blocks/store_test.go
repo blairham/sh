@@ -22,6 +22,17 @@ import (
 
 func at(sec int64) time.Time { return time.Unix(sec, 0).UTC() }
 
+// shardPath is the index file a record starting at t is written to, for a test
+// that wants to read the bytes back or damage them.
+//
+// A test says which day it means rather than reaching for one flat file,
+// because there is no longer a flat file to reach for: the index is sharded by
+// date exactly as the bodies are, which is what makes `rm -rf index/2026/08` a
+// retention story and what makes a bounded read possible (#2275).
+func shardPath(dir string, t time.Time) string {
+	return filepath.Join(dir, filepath.FromSlash(IndexPath(t)))
+}
+
 // newStore is a store in a directory the framework takes away again.
 func newStore(t *testing.T) (*Store, string) {
 	t.Helper()
@@ -99,13 +110,13 @@ func TestTwoSessionsBothKeepTheirBlocks(t *testing.T) {
 func TestLoadKeepsTheTailAndTheFileKeepsEverything(t *testing.T) {
 	s, dir := newStore(t)
 	for i := range 10 {
-		mustAppend(t, s, Record{ID: "X", Command: string(rune('a' + i))})
+		mustAppend(t, s, Record{ID: "X", Command: string(rune('a' + i)), Start: at(1000)})
 	}
 	got := s.Load(t.Context(), 3)
 	if len(got) != 3 || got[0].Command != "h" || got[2].Command != "j" {
 		t.Fatalf("loaded %d records ending %v, want the last three", len(got), got)
 	}
-	b, err := os.ReadFile(filepath.Join(dir, IndexName))
+	b, err := os.ReadFile(shardPath(dir, at(1000)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,11 +129,11 @@ func TestLoadKeepsTheTailAndTheFileKeepsEverything(t *testing.T) {
 // property JSON Lines was chosen for.
 func TestOneUnreadableLineDoesNotLoseTheRest(t *testing.T) {
 	s, dir := newStore(t)
-	mustAppend(t, s, Record{ID: "A", Command: "before"})
+	mustAppend(t, s, Record{ID: "A", Command: "before", Start: at(1000)})
 	if err := s.Close(); err != nil {
 		t.Fatal(err)
 	}
-	f, err := os.OpenFile(filepath.Join(dir, IndexName), os.O_APPEND|os.O_WRONLY, 0o600)
+	f, err := os.OpenFile(shardPath(dir, at(1000)), os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +145,7 @@ func TestOneUnreadableLineDoesNotLoseTheRest(t *testing.T) {
 	}
 	after := Open(dir, boundary.Boundary{}, "AFTER")
 	t.Cleanup(func() { _ = after.Close() })
-	mustAppend(t, after, Record{ID: "B", Command: "after"})
+	mustAppend(t, after, Record{ID: "B", Command: "after", Start: at(1000)})
 
 	got := after.Load(t.Context(), 10)
 	if len(got) != 2 || got[0].Command != "before" || got[1].Command != "after" {
@@ -151,11 +162,11 @@ func TestOneUnreadableLineDoesNotLoseTheRest(t *testing.T) {
 // makes an added field a change nobody has to coordinate.
 func TestAFutureRecordIsSkippedAndAnUnknownFieldIsNot(t *testing.T) {
 	s, dir := newStore(t)
-	mustAppend(t, s, Record{ID: "A", Command: "known"})
+	mustAppend(t, s, Record{ID: "A", Command: "known", Start: at(1000)})
 	if err := s.Close(); err != nil {
 		t.Fatal(err)
 	}
-	f, err := os.OpenFile(filepath.Join(dir, IndexName), os.O_APPEND|os.O_WRONLY, 0o600)
+	f, err := os.OpenFile(shardPath(dir, at(1000)), os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,14 +204,14 @@ func TestAFutureRecordIsSkippedAndAnUnknownFieldIsNot(t *testing.T) {
 // not become the copy of the history that the history file refused to keep.
 func TestACommandWithACredentialIsNotRecorded(t *testing.T) {
 	s, dir := newStore(t)
-	mustAppend(t, s, Record{ID: "A", Command: "export AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE"})
-	mustAppend(t, s, Record{ID: "B", Command: "echo fine"})
+	mustAppend(t, s, Record{ID: "A", Command: "export AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE", Start: at(1000)})
+	mustAppend(t, s, Record{ID: "B", Command: "echo fine", Start: at(1000)})
 	if got := s.Load(t.Context(), 10); len(got) != 1 || got[0].Command != "echo fine" {
 		t.Fatalf("loaded %v, want the credential line dropped and the other kept", got)
 	}
 	// And it is not in the bytes either, which is the property that matters:
 	// the file never held it, rather than a reader declining to show it.
-	b, err := os.ReadFile(filepath.Join(dir, IndexName))
+	b, err := os.ReadFile(shardPath(dir, at(1000)))
 	if err != nil {
 		t.Fatal(err)
 	}

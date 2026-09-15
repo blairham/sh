@@ -22,6 +22,12 @@ import (
 // that directory is a symbolic link, chooses what file the append lands in.
 // Until #942 the gate was asked about the index's path and the append was done
 // on whatever the link reached.
+//
+// The link goes on the *dated shard the record is actually written to*, which
+// is the whole of what keeps this test a test. Aimed at the flat `index.jsonl`
+// older stores used, it would pass on any shell at all — nothing writes there
+// since #2275, so the protected file would be intact because it was never
+// opened rather than because a gate refused.
 func TestABlockIndexThatIsALinkIsCheckedOnWhatItReached(t *testing.T) {
 	if runtime.GOOS != "darwin" && runtime.GOOS != "linux" {
 		t.Skip("no way to ask the kernel what an open reached here")
@@ -38,7 +44,11 @@ func TestABlockIndexThatIsALinkIsCheckedOnWhatItReached(t *testing.T) {
 	if err := os.WriteFile(target, []byte("KEEP THIS\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(target, filepath.Join(store, IndexName)); err != nil {
+	shard := shardPath(store, at(1000))
+	if err := os.MkdirAll(filepath.Dir(shard), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, shard); err != nil {
 		t.Fatal(err)
 	}
 
@@ -53,7 +63,7 @@ func TestABlockIndexThatIsALinkIsCheckedOnWhatItReached(t *testing.T) {
 	// A refused store is silent — a policy that hid it meant for it not to be
 	// written, and there is nobody at the prompt to tell — so the assertion is
 	// on the file rather than on an error.
-	if err := s.Append(t.Context(), Record{Command: "echo hi"}); err != nil {
+	if err := s.Append(t.Context(), Record{Command: "echo hi", Start: at(1000)}); err != nil {
 		t.Fatalf("Append reported %v; a refused store is silent", err)
 	}
 	body, err := os.ReadFile(target)

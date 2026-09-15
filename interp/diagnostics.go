@@ -3184,6 +3184,32 @@ type Diagnostics struct {
 	// word could not be recovered, which is what it said before.
 	FlagGroupNamesTheWordTail bool
 
+	// NestedNameIsBlamedOnTheBang writes `!` as the refused token where a
+	// `${…}` opened with a second `${` in its name position, in place of the
+	// character that really stood there.
+	//
+	// One dialect does, and the `!` is in no part of the input — which is
+	// why this is a flag on the rendering rather than anything the parser
+	// could have read off the text. Measured 2026-09-14 on ksh93u+
+	// 2012-08-01, which has no nested expansions and refuses every one of
+	// them while reading:
+	//
+	//	echo ${${v}}     syntax error at line 1: `!' unexpected
+	//	echo ${#${v}}    the same
+	//	echo ${${v}[2]}  the same
+	//	echo ${$$}       `$' unexpected — a `$` that is not a `${`
+	//	echo ${x${v}}    `$' unexpected — the `${` not in the name position
+	//
+	// The last two rows are why [syntax.Error.NestedInTheNamePosition] is a
+	// fact about *where* the pair stood and not about the characters being
+	// present. Every other dialect either has the construct or names the
+	// character it read, so the zero value is the rest of the panel.
+	//
+	// A flag rather than a wording for the reason FlagGroupNamesTheWordTail
+	// is one: the sentence around it is SyntaxUnexpected's already and only
+	// the text filling it changes.
+	NestedNameIsBlamedOnTheBang bool
+
 	// UnexpectedWordNaming is which spelling of a refused *word* this
 	// dialect echoes back — see [UnexpectedWordNaming], where the panel is.
 	// Zero is the word with its quoting off, which is what the core says and
@@ -5304,6 +5330,12 @@ func (d Diagnostics) ParseFailure(err error) string {
 			// And in that dialect a refused flag group names the rest of
 			// the word instead of the `(` — see FlagGroupNamesTheWordTail.
 			token = se.FlagGroupWordTail
+		}
+		if d.NestedNameIsBlamedOnTheBang && se.NestedInTheNamePosition {
+			// And an expansion standing where the name belonged is blamed
+			// on a character the input never held — see
+			// NestedNameIsBlamedOnTheBang.
+			token = "!"
 		}
 		return Wording(d.BadSubstitution, se.Msg, token, se.Pos.Line)
 	case syntax.ErrArithOperand, syntax.ErrArithOperandEnd, syntax.ErrArithOperator,

@@ -459,6 +459,29 @@ type Error struct {
 	// ParamExpr.FlagsErrTail is: the report then names the `(` as it always
 	// did.
 	FlagGroupWordTail string
+	// NestedInTheNamePosition says the refused `${…}` opened with a second
+	// `${` where its parameter's name belonged — `${${v}}`, `${#${v}}`,
+	// `${${v}[2]}` and `${${v}:-x}` are all this shape, and a `${` with
+	// anything else after it is not.
+	//
+	// Carried because one dialect names a token that is in no part of the
+	// input for it. Measured 2026-09-14 on ksh93u+ 2012-08-01, which has no
+	// nested expansions:
+	//
+	//	echo ${${v}}        syntax error at line 1: `!' unexpected
+	//	echo "${${v}}"      the same
+	//	echo ${#${v}}       the same
+	//	echo ${${v}[2]}     the same
+	//	echo ${${}}         the same
+	//	echo ${$v}          ${$v}: bad substitution — a `$` alone is not it
+	//	echo ${$$}          `$' unexpected
+	//	echo ${x${v}}       `$' unexpected — the `${` has to open the name
+	//
+	// The last three are what make this the *pair* of characters rather than
+	// a `$` in the name position or a `${` anywhere in the expansion. See
+	// interp.Diagnostics.NestedNameIsBlamedOnTheBang, which is what reads
+	// it; every other dialect leaves the token the character it really was.
+	NestedInTheNamePosition bool
 	// EofLine is the line the input actually ran out on, in the lexer's
 	// own count — the same point EndLine names in the next-line
 	// convention. Two dialects report this one for an unmatched quote.

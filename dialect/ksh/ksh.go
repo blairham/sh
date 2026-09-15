@@ -2831,6 +2831,12 @@ func withPromptWordings(d interp.Diagnostics) interp.Diagnostics {
 	// And a refused flag group is quoted back as the rest of the word rather
 	// than as the `(` — see Diagnostics.FlagGroupNamesTheWordTail.
 	d.FlagGroupNamesTheWordTail = true
+	// And a `${` standing where the expansion's name belonged is blamed on a
+	// `!` — a character nothing in the input holds. `echo ${${v}}` is
+	// ``syntax error at line 1: `!' unexpected`` here where `echo ${x${v}}`
+	// with the same characters in it names the `$`. See
+	// Diagnostics.NestedNameIsBlamedOnTheBang, where the measurement is.
+	d.NestedNameIsBlamedOnTheBang = true
 	// A C-style `for` header with fewer than two separators is an unexpected
 	// closer here, whatever the header held: measured 2026-09-12, `for (())`,
 	// `for (( ))`, `for ((1;2))` and `for ((i=0))` are each `syntax error at

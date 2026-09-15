@@ -979,6 +979,14 @@ scan:
 		p.failKind(ErrBadSubstitution, "unknown operator in ${%s}", src)
 		if pe, isErr := p.err.(*Error); isErr {
 			pe.Token = firstRune(s)
+			// And whether what stood in the name position was a second
+			// expansion, which one dialect blames a character of its own
+			// for. Recognized *here* rather than from `src` because the
+			// name scan is what says the `$` was taken as the parameter:
+			// `${${v}}` leaves a `{` where an operator belongs and
+			// `${x${v}}` does not reach this at all with the same two
+			// characters in it. See Error.NestedInTheNamePosition.
+			pe.NestedInTheNamePosition = e.Name == "$" && strings.HasPrefix(s, "{")
 		}
 		return e
 	}

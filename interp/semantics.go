@@ -429,6 +429,99 @@ type Semantics struct {
 	// the *assignment* rather than the value, which is the one place this
 	// shell's model of it is a state and not a lookup.
 	IgnoredNamesRevealHiddenNames bool
+	// IgnoredNamesValueIsOnePattern reads the whole value of
+	// IgnoredNamesVariable as a single pattern rather than as a
+	// colon-separated list of them.
+	//
+	// Measured on ksh93u+ and bash 5.3.15, 2026-09-14, in a directory
+	// holding `a.txt`, `b.txt`, `c.log`, `.dot`, `.hid.txt` and `sub`:
+	//
+	//	                            ksh93        bash
+	//	VAR='*.txt'; echo *         both gone    both gone
+	//	VAR='*.txt:*.log'; echo *   nothing gone both gone
+	//	VAR='@(*.txt|*.log)'        both gone    —
+	//
+	// The middle row is the whole of it: no name here holds a colon, so
+	// ksh93's pattern matches nothing and its value is plainly not a list.
+	// The alternation a script wants there is written with the pattern
+	// grammar, which is the third row and does work.
+	//
+	// Asked only where the parameter is set to something, and only in a
+	// dialect that has one.
+	IgnoredNamesValueIsOnePattern Answer
+	// IgnoredNamesMatchTheLastComponent matches an ignore pattern against
+	// the name the *directory listing* gave rather than against the word
+	// the expansion produced.
+	//
+	// Measured on ksh93u+ and bash 5.3.15, 2026-09-14, with `sub` holding
+	// `x.txt`, `.y` and `inner`:
+	//
+	//	                            ksh93            bash
+	//	VAR='*.txt'; echo sub/*     sub/x.txt gone   nothing gone
+	//	VAR='sub/x.txt'; echo sub/* nothing gone     sub/x.txt gone
+	//	VAR='a.txt'; echo ./*       ./a.txt gone     nothing gone
+	//	VAR='./a.txt'; echo ./*     nothing gone     ./a.txt gone
+	//	VAR='sub'; echo */          sub/ gone        sub/ kept
+	//	VAR='sub/'; echo */         sub/ kept        sub/ gone
+	//
+	// Every row is the same statement from a different side: ksh93's
+	// subject is the entry in the directory, with no `./` in front of it and
+	// no `/` behind it, and bash's is the word as the pattern spelled it.
+	// The last pair is the sharpest, because the two shells are exactly
+	// opposite there.
+	//
+	// Asked only where there is a pattern to match, and only in a dialect
+	// that has the parameter.
+	IgnoredNamesMatchTheLastComponent Answer
+	// IgnoredNamesFollowTheParameter reads the facility off the parameter as
+	// it stands, rather than off a switch an assignment to it latched.
+	//
+	// bash's is a state and not a lookup, which is the surprising half of
+	// its model and is measured: a value inherited from the environment does
+	// nothing at all until something assigns the parameter, and a null value
+	// leaves the hidden-name switch exactly where it was. ksh93 has neither
+	// half. Measured 2026-09-14:
+	//
+	//	                                 ksh93           bash
+	//	VAR='*.txt' sh -c 'echo *'       filtered        no effect
+	//	VAR=''; echo *                   hidden names    no hidden names
+	//	VAR=x; unset VAR; echo *         no hidden names no hidden names
+	//
+	// The first row is the inheritance and the second is the null value, and
+	// they are one question rather than two: ksh93 has no option of its own
+	// for the hidden names, so there is nothing for an assignment to latch
+	// and nothing for a script to write back. The third is the control that
+	// keeps "follows the parameter" from meaning "never goes off".
+	//
+	// Asked only in a dialect that has the parameter at all.
+	IgnoredNamesFollowTheParameter Answer
+	// GlobListsDotAndDotDot puts `.` and `..` in the names a pathname
+	// expansion's component match may reach, beside the entries a directory
+	// holds.
+	//
+	// Measured 2026-09-14 in a directory holding `a.txt`, `.dot` and `sub`:
+	//
+	//	           echo .*      echo .*/
+	//	bash 5.3   .dot         .*/
+	//	zsh        .dot         no matches found
+	//	ksh93      . .. .dot    ../ ./
+	//	dash       . .. .dot    ../ ./
+	//	bash 3.2   . .. .dot    ../ ./
+	//
+	// Three against two, and bash against itself across versions — which is
+	// why the dialect that models bash 5.3 answers no and nothing here
+	// claims to be bash 3.2.
+	//
+	// The leading-period rule is what keeps the two names out of an ordinary
+	// `*`, so this is not a hidden-name option and not the ignore parameter
+	// either. The parameter reaches it only by turning that rule off, which
+	// is how the two came to be filed together: ksh93's `FIGNORE=x; echo *`
+	// lists `.` and `..` where bash's `GLOBIGNORE=x; echo *` never does
+	// (#2748).
+	//
+	// Never the `**` descent: a `..` descended into climbs out of the tree
+	// and does not stop, and no column does that.
+	GlobListsDotAndDotDot Answer
 
 	// AssignmentPrefixPersistsOnSpecialBuiltin keeps `x=1 shift` set
 	// afterwards. POSIX requires it.

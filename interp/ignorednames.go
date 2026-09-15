@@ -24,15 +24,26 @@ import "strings"
 // it, and where what was assigned holds no pattern — three different reasons
 // for the same answer, and none of them reaches the filter.
 func (r *Runner) ignoredNamePatterns() []string {
-	if !r.ignoredNamesLive {
-		return nil
-	}
 	name := r.sem().IgnoredNamesVariable
 	if name == "" {
 		return nil
 	}
-	value, _ := r.getVar(name)
-	if value == "" {
+	if !r.ignoredNamesFollowTheParameter() && !r.ignoredNamesLive {
+		return nil
+	}
+	value, ok := r.getVar(name)
+	if value == "" || !ok {
+		return nil
+	}
+	if r.ask(r.sem().IgnoredNamesValueIsOnePattern,
+		"the ignore parameter's value being one pattern rather than a list") {
+		// One pattern, colons and all. Measured on ksh93u+: `FIGNORE='*.txt'`
+		// takes both `.txt` files out and `FIGNORE='*.txt:*.log'` takes
+		// nothing out at all, because no name holds a colon. The alternation
+		// a script wants there is written `@(*.txt|*.log)`, which does work.
+		return []string{value}
+	}
+	if r.unspecified {
 		return nil
 	}
 	var out []string
@@ -76,12 +87,61 @@ func (r *Runner) ignoredNamePatterns() []string {
 // separators line up before any matching happens.
 func (r *Runner) ignoredName(word string, patterns []string) bool {
 	parts := strings.Split(word, "/")
+	if r.ask(r.sem().IgnoredNamesMatchTheLastComponent,
+		"an ignore pattern being matched against the name in the directory rather than the word") {
+		// The name the directory listing gave, which is the last component
+		// of the word with a trailing slash taken off. Measured on ksh93u+:
+		// `FIGNORE='*.txt'` takes `sub/x.txt` out of `sub/*` where bash's
+		// `GLOBIGNORE` does not, `FIGNORE='a.txt'` takes `./a.txt` out of
+		// `./*` where bash's does not, and `FIGNORE='sub/'` takes nothing
+		// out of `*/` where `FIGNORE='sub'` takes `sub/`. All four say the
+		// subject is the entry rather than the word.
+		last := parts[len(parts)-1]
+		if last == "" && len(parts) > 1 {
+			last = parts[len(parts)-2]
+		}
+		parts = []string{last}
+	}
+	if r.unspecified {
+		return false
+	}
 	for _, p := range patterns {
 		if r.ignoredNameMatches(parts, p) {
 			return true
 		}
 	}
 	return false
+}
+
+// ignoredNamesFollowTheParameter is the axis that says the facility is the
+// parameter's current state rather than a switch an assignment latched.
+//
+// Asked only in a dialect that has the parameter at all, which is what keeps
+// the four with none of it from being refused for an answer they cannot have.
+func (r *Runner) ignoredNamesFollowTheParameter() bool {
+	if r.sem().IgnoredNamesVariable == "" {
+		return false
+	}
+	return r.ask(r.sem().IgnoredNamesFollowTheParameter,
+		"the ignore facility following the parameter rather than an assignment to it")
+}
+
+// ignoredNamesRevealHidden reports whether the ignore facility is what makes
+// a `*` see the names beginning with a period, for a dialect that reads the
+// parameter's state rather than latching it.
+//
+// The bash half of this is a hook on the assignment — see
+// ignoredNamesAssigned — because there the switch is `dotglob` itself and a
+// script may write it back. ksh93 has no such option to write, and answers
+// about the parameter as it stands: measured on ksh93u+, `FIGNORE=”` shows
+// the hidden names where bash's null value shows none, and an inherited
+// value shows them where bash's does nothing at all.
+func (r *Runner) ignoredNamesRevealHidden() bool {
+	if !r.ignoredNamesFollowTheParameter() || !r.sem().IgnoredNamesRevealHiddenNames {
+		return false
+	}
+	_, ok := r.getVar(r.sem().IgnoredNamesVariable)
+	return ok
 }
 
 func (r *Runner) ignoredNameMatches(parts []string, pattern string) bool {
@@ -122,6 +182,11 @@ func (r *Runner) ignoredNamesAssigned(name, value string) {
 	if name == "" || name != r.sem().IgnoredNamesVariable {
 		return
 	}
+	if r.ignoredNamesFollowTheParameter() {
+		// Nothing to latch: the expansion reads the parameter where it
+		// stands, so an assignment is the ordinary one it already was.
+		return
+	}
 	r.ignoredNamesLive = true
 	if value != "" && r.sem().IgnoredNamesRevealHiddenNames {
 		r.SetMatchOption(PatternsMatchHidden, true)
@@ -133,6 +198,9 @@ func (r *Runner) ignoredNamesAssigned(name, value string) {
 // unset GLOBIGNORE` leaves hidden names hidden. Measured.
 func (r *Runner) ignoredNamesUnset(name string) {
 	if name == "" || name != r.sem().IgnoredNamesVariable {
+		return
+	}
+	if r.ignoredNamesFollowTheParameter() {
 		return
 	}
 	r.ignoredNamesLive = false
@@ -152,6 +220,9 @@ func (r *Runner) ignoredNamesUnset(name string) {
 // as an assignment of the restored value would.
 func (r *Runner) ignoredNamesRestored(name string) {
 	if name == "" || name != r.sem().IgnoredNamesVariable {
+		return
+	}
+	if r.ignoredNamesFollowTheParameter() {
 		return
 	}
 	value, ok := r.getVar(name)

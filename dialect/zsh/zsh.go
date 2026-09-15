@@ -1244,6 +1244,20 @@ func Semantics() interp.Semantics {
 	s.ReadNoFieldsIsOneEmptyElement = interp.Yes
 	s.GlobExpansionResults = interp.No
 	s.GlobNoMatchIsError = interp.Yes
+	// No parameter of GLOBIGNORE's kind, and `.` and `..` are not in what a
+	// pattern may match: `echo .*` is `.dot` alone and `echo .*/` matches
+	// nothing at all. Measured 2026-09-14 (#2748).
+	s.GlobListsDotAndDotDot = interp.No
+	// unanswered IgnoredNamesValueIsOnePattern: there is no parameter of
+	// GLOBIGNORE's kind in this shell — measured 2026-09-14, setting
+	// `GLOBIGNORE` and `FIGNORE` alike changes nothing about what `echo *`
+	// produces — so the three questions about *how* its value is read
+	// cannot be put to it. IgnoredNamesMatchTheLastComponent and
+	// IgnoredNamesFollowTheParameter are unanswered beside it for the same
+	// reason, and IgnoredNamesVariable being empty is what keeps any of the
+	// three from ever being reached (#2748).
+	// unanswered IgnoredNamesMatchTheLastComponent: see above.
+	// unanswered IgnoredNamesFollowTheParameter: see above.
 	// The one column that assigns: `set --; printf "<%s>" ${1:=abc}` is
 	// `abc` at status 0 here and `$1` is `abc` afterwards, where the other
 	// five refuse it fatally. `@` and `*` are refused here too — `not an

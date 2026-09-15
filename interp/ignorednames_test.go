@@ -43,6 +43,12 @@ func ignoring(dir string) func(*Runner) {
 	return func(r *Runner) {
 		r.Semantics.IgnoredNamesVariable = "GLOBIGNORE"
 		r.Semantics.IgnoredNamesRevealHiddenNames = true
+		// The three axes the two shells with this facility answer apart,
+		// with the answers of the one these rows were measured on. The
+		// other's are in dialect/ksh (#2748).
+		r.Semantics.IgnoredNamesValueIsOnePattern = No
+		r.Semantics.IgnoredNamesMatchTheLastComponent = No
+		r.Semantics.IgnoredNamesFollowTheParameter = No
 		r.Dir = dir
 	}
 }

@@ -362,6 +362,21 @@ func Semantics() interp.Semantics {
 	s.EchoExpandsCapitalEscEscape = interp.No
 	s.LengthOfSpecialIsCount = interp.No
 	s.UnterminatedBracket = interp.BracketNoMatch
+	// `echo .*` is `. .. .dot` here and `echo .*/` is `../ ./`, which is
+	// ksh93's and bash 3.2's answer rather than bash 5.3's. Measured
+	// 2026-09-14 (#2748). There is no parameter of GLOBIGNORE's kind, so
+	// the four axes beside this one are never asked.
+	s.GlobListsDotAndDotDot = interp.Yes
+	// unanswered IgnoredNamesValueIsOnePattern: there is no parameter of
+	// GLOBIGNORE's kind in this shell — measured 2026-09-14, setting
+	// `GLOBIGNORE` and `FIGNORE` alike changes nothing about what `echo *`
+	// produces — so the three questions about *how* its value is read
+	// cannot be put to it. IgnoredNamesMatchTheLastComponent and
+	// IgnoredNamesFollowTheParameter are unanswered beside it for the same
+	// reason, and IgnoredNamesVariable being empty is what keeps any of the
+	// three from ever being reached (#2748).
+	// unanswered IgnoredNamesMatchTheLastComponent: see above.
+	// unanswered IgnoredNamesFollowTheParameter: see above.
 	s.UnknownCharacterClass = interp.UnknownClassEndsTheScan
 	// The bash column's reading of a value's backslash, measured the same
 	// way and on the same day: `v='a\*'; set -- $v` is `a\*` here, so the

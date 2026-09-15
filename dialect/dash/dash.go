@@ -1005,7 +1005,14 @@ func Diagnostics() interp.Diagnostics {
 		GetoptsMissingArgument: "No arg for -%[1]s option",
 		// Nothing in front of it at all — the only diagnostic in the panel
 		// that names neither the shell nor a line.
-		GetoptsUnprefixed:      true,
+		GetoptsUnprefixed: true,
+		// The usage line does carry a location, unlike the two above, and it
+		// opens with a capital where bash's is lower case. Measured
+		// 2026-09-14: `<script>: 1: getopts: Usage: getopts optstring var
+		// [arg]`, the same `var` BusyBox ash writes (#2801).
+		BuiltinUsage: map[string]string{
+			"getopts": "getopts: Usage: getopts optstring var [arg]",
+		},
 		CdCannotChange:         "cd: can't cd to %[1]s",
 		CdStatus:               2,
 		PrintfBadNumber:        "printf: %[1]s: expected numeric value",

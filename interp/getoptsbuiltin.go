@@ -59,8 +59,20 @@ func biGetopts(r *Runner, _ context.Context, args []string) int {
 		}
 	}
 	if len(args) < 2 {
-		r.diagf("getopts: usage: getopts optstring name [arg]\n")
-		return 2
+		// The same line a bad option earns, and it is the dialect's own —
+		// bash and ksh93 already have one in Diagnostics.BuiltinUsage and
+		// write it with no location in front, which is what
+		// builtinUsageLine does with it. Measured 2026-09-14, `getopts` with
+		// no operands and with one draw the same line in all seven, and only
+		// the word for the slot the shell writes into differs: `var` in dash
+		// and BusyBox ash, `name` in bash. The fallback is the substrate's
+		// own, for a dialect with no usage line at all (#2801).
+		if r.diag().BuiltinUsage["getopts"] != "" {
+			r.builtinUsageLine("getopts")
+		} else {
+			r.diagf("getopts: usage: getopts optstring name [arg]\n")
+		}
+		return orDefault(r.diag().GetoptsUsageStatus, 2)
 	}
 	optstring, name := args[0], args[1]
 	// The operands to scan are the ones given, or the shell's own parameters

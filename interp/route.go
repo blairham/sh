@@ -45,3 +45,21 @@ func (r Route) String() string {
 	}
 	return "an unspecified route"
 }
+
+// ensureLineOrigin sets the number this route calls its first line.
+//
+// Read once per chunk rather than per command: it is a property of the
+// invocation, so it cannot change while the shell runs, and [Runner.lineOf] —
+// which adds it — is on the path of every command there is.
+//
+// Read from the dialect's own value rather than through [Runner.diag], which
+// copies the struct and applies the prompt's route on top. Neither matters
+// here: no route helper touches this field, and a line typed at a prompt is
+// not a command string.
+func (r *Runner) ensureLineOrigin() {
+	r.lineOrigin = 0
+	if r.Route == RouteCommandString && r.Diagnostics != nil &&
+		r.Diagnostics.CommandStringLinesFromZero {
+		r.lineOrigin = -1
+	}
+}

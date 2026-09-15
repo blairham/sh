@@ -3051,6 +3051,11 @@ echo "reached-after st=$?"`,
 
 	// --- getopts: the builtin a borrowed program could not have been ------
 	{
+		ID: "getopts/too-few-operands", Category: "getopts",
+		Snippet: `getopts; echo "st=$?"`,
+		Why:     "the builtin given neither the optstring nor the name to write into, which is the one complaint of its three that carries a location: the two it makes while scanning are written bare in dash and BusyBox ash, and this one is not. Seven answers and six of them are a usage line — bash and ksh93 print theirs with nothing in front of it at all, dash opens with a capital, and dash and BusyBox ash call the slot `var` where bash calls it `name`. zsh writes no usage line, counts the operands instead, and is the one column that reports 1 rather than 2. Ours wrote bash's sentence into all seven and read as a match on the status alone (#2801)",
+	},
+	{
 		ID: "getopts/loop-reads-each-option", Category: "getopts",
 		Snippet: `set -- -a -b x; while getopts "ab:" o; do echo "[$o:${OPTARG-}]"; done; echo "ind=$OPTIND"`,
 		Why:     "the shape every script uses it in, and the one that reported success while running its body zero times when getopts was a separate program that could not reach the shell's variables",

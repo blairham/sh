@@ -1818,6 +1818,21 @@ type Runner struct {
 	// file. So the offset is carried by whatever is running the body, which
 	// is the thing that knows where it came from.
 	lineBase int
+	// lineOrigin is what the route calls its *first* line, less one: nought
+	// where the first line is line 1, and -1 where it is line 0.
+	//
+	// Separate from lineBase and applied on top of it, because the two are
+	// different facts about the same number. lineBase is how far into a
+	// script the text being run starts, and borrowed text resets it — an
+	// `eval`'s program is line 1 of itself. This is the whole route's
+	// numbering and nothing inside the route resets it, which is what the
+	// measurement says: BusyBox ash under `-c` writes `line 0` for its first
+	// line *and* `eval: line 0:` for the first line of an `eval`'s text, so
+	// the offset survives into the borrowed text that reset the other one.
+	//
+	// See Diagnostics.CommandStringLinesFromZero, which is where the value
+	// comes from and which carries the panel's table.
+	lineOrigin int
 	// killed is the command being run, for the notice that a signal ended
 	// it — the only message that has to render a command rather than name
 	// one. Innermost wins, which is what the shell prints: a command inside
@@ -2611,7 +2626,7 @@ func (r *Runner) lineOf(p syntax.Pos) int {
 		// so the node's own line says nothing.
 		return r.linePin
 	}
-	return int(p.Line) + r.lineBase
+	return int(p.Line) + r.lineBase + r.lineOrigin
 }
 
 // builtinIsSpeaking reports whether this diagnostic belongs to a builtin,
@@ -3066,6 +3081,7 @@ func (r *Runner) RunPart(ctx context.Context, f *syntax.File) error {
 	// its stopped jobs is a fact about the line before this one — see the two
 	// fields for what that buys over remembering it forever.
 	r.toldOfJobsAtExit, r.tellingOfJobsAtExit = r.tellingOfJobsAtExit, false
+	r.ensureLineOrigin()
 	r.ensurePWD()
 	r.ensureSpecials()
 	r.ensureImportedFunctions()

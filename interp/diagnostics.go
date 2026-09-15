@@ -445,6 +445,16 @@ type Diagnostics struct {
 	// GetoptsNamesNoLine prints those with the shell's name and no line,
 	// where this dialect gives a line to everything else. bash alone.
 	GetoptsNamesNoLine bool
+	// GetoptsUsageStatus is what `getopts` reports when it was not given
+	// both the optstring and the name to write into. Zero means 2, which is
+	// what dash, both bashes, ksh93 and BusyBox ash report; zsh alone says 1,
+	// and it is the one column that writes no usage line there but counts
+	// the operands instead. Measured 2026-09-14 — the script carries on in
+	// all seven, so only the number differs (#2801).
+	//
+	// The line itself is Diagnostics.BuiltinUsage's `getopts` entry, shared
+	// with the one a bad option earns in the two dialects that refuse one.
+	GetoptsUsageStatus int
 	// GetoptsUnprefixed prints them with neither a name nor a line. dash
 	// alone, and the only diagnostic in the panel with nothing in front of
 	// it at all.
@@ -4470,6 +4480,40 @@ type Diagnostics struct {
 	// where there is no $0 to name — zsh drops the line and keeps only its
 	// name there. Zero means "the same as Location".
 	StdinLocation LocationStyle
+	// CommandStringLinesFromZero numbers the `-c` route's lines from 0
+	// rather than from 1, so the program's first line is line 0.
+	//
+	// The *counter* and not the rendering, which is what the panel says:
+	// `$LINENO` moves with it. Measured 2026-09-14 under `env -i`, and the
+	// two columns that answer yes are BusyBox ash and bash 3.2:
+	//
+	//	                                     ash 1.37  bash 3.2  the rest
+	//	-c 'echo $LINENO'                    0         0         1
+	//	a script file's first line           1         1         1
+	//	-c 'shift -1'                        line 0    —         line 1
+	//	-c '<nl>shift -1'                    line 1    —         line 2
+	//	-c 'echo a<nl>echo b<nl>shift -1'    line 2    —         line 3
+	//	-c 'eval "nosuchcmd"'                eval:     —         eval:
+	//	                                     line 0              line 1
+	//	the same three lines on stdin        line 3    line 3    line 3
+	//	the same three lines in a file       line 3    line 3    line 3
+	//
+	// So it is the `-c` route alone and it is the whole of that route: a
+	// script file and standard input are 1-based in every column. The dash
+	// in bash 3.2's rows is not a disagreement — that shell writes no line
+	// for those complaints at all, so `$LINENO` is the only place its answer
+	// shows, and it is the reason this is a counter rather than a location
+	// style.
+	//
+	// It is invisible for the shell's *own* diagnostics in the dialect that
+	// has it, which carry no line on that route — `ash -c 'nosuchcmd'` is
+	// `ash: nosuchcmd: not found` — so a builtin's location and a borrowed
+	// text's are the only two places it can be read (#2799).
+	//
+	// Applied through Runner.lineOrigin, on top of the offset borrowed text
+	// carries, because an `eval`'s first line is 0 here too.
+	CommandStringLinesFromZero bool
+
 	// StdinBuiltinLocation is BuiltinLocation for the same route: zsh
 	// drops the prefix down to the builtin's own name, and ksh93 moves to
 	// `name[line]:` — a shape it uses nowhere else on this route.

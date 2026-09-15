@@ -1049,6 +1049,12 @@ func Diagnostics() interp.Diagnostics {
 		// the builtin's name nor a line, where `ash -c 'shift -1'` has both.
 		// See interp.Diagnostics.BuiltinLocationIsTheSpeakersOnly.
 		BuiltinLocationIsTheSpeakersOnly: true,
+		// And the `-c` route counts its lines from 0, which the two
+		// locations above are the only way to see: the shell's own
+		// diagnostics carry no line there at all. `$LINENO` moves with it,
+		// so it is the counter and not the rendering — see the field for the
+		// panel's table (#2799).
+		CommandStringLinesFromZero: true,
 		// A sourced file and an `eval` are both named between the shell and
 		// the line, which is bash's and ksh93's placing rather than dash's:
 		// `ash: ./p.sh: line 3: NOPE: parameter not set`, and `ash: eval:
@@ -1109,6 +1115,12 @@ func Diagnostics() interp.Diagnostics {
 		ArithOperatorExpected: "arithmetic syntax error",
 		DigitTooGreatForBase:  "arithmetic syntax error",
 		ArithConditionalColon: "arithmetic syntax error",
+		// The one arithmetic reason that is not `arithmetic syntax error`,
+		// and it is `divide` where the substrate and three of the panel
+		// write `division`. Measured 2026-09-14, `: $((1/0))` and `: $((1%0))`
+		// alike: `/t.sh: line 1: divide by zero`, and the script ends at 2
+		// (#2801).
+		DivisionByZero: "divide by zero",
 
 		// The command-resolution family. Neither a name nor a line in front
 		// of the `not found`, which is the shape ksh93 uses too.
@@ -1281,6 +1293,15 @@ func Diagnostics() interp.Diagnostics {
 		KillNoSuchJob:       "%[1]s: no such job",
 		WaitNoSuchJob:       "%[1]s: no such job",
 		WaitNoSuchJobStatus: 2,
+		// An operand that is no job spec at all is refused by the *number*
+		// reader rather than by the job table, and it is the same sentence
+		// this shell writes for `shift -1`, `exit abc` and `return abc` —
+		// one reader for all of them, where ours had a second one here
+		// saying `abc: not a pid`. Measured 2026-09-14: `/t.sh: wait: line
+		// 1: Illegal number: abc` at 2, beside `%1: no such job` above,
+		// which is the job table answering a word that *is* a spec (#2801).
+		WaitBadJob:       "wait: Illegal number: %[1]s",
+		WaitBadJobStatus: 2,
 
 		// `kill`. The applet-level messages carry neither a line nor a
 		// builtin, which the unprefixed flags say.
@@ -1298,6 +1319,20 @@ func Diagnostics() interp.Diagnostics {
 		GetoptsBadOption:       "Illegal option -%[1]s",
 		GetoptsMissingArgument: "No arg for -%[1]s option",
 		GetoptsUnprefixed:      true,
+		// The usage line is not one of those two: it carries the shell, the
+		// builtin and the line as everything else here does, and only the
+		// word for the slot the shell writes into differs — `var` where the
+		// substrate and bash write `name`. Measured 2026-09-14, with no
+		// operands and with one, which draw the same line: `/t.sh: getopts:
+		// line 1: usage: getopts optstring var [arg]`, status 2, and the
+		// script carries on (#2801).
+		//
+		// Written with the builtin in front as bash's and ksh93's entries
+		// are; NamesBuiltinInLocation takes it back out again, because this
+		// dialect puts the name in the location instead.
+		BuiltinUsage: map[string]string{
+			"getopts": "getopts: usage: getopts optstring var [arg]",
+		},
 
 		// `cd`, with the OS's reason where dash gives none.
 		CdCannotChange: "can't cd to %[1]s: %[2]s",

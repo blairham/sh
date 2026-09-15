@@ -3104,7 +3104,16 @@ func Diagnostics() interp.Diagnostics {
 		// everyone else — and lowercased, which LowercaseReason already says.
 		GetoptsBadOption:       "bad option: -%[1]s",
 		GetoptsMissingArgument: "argument expected after -%[1]s option",
-		CdCannotChange:         "%[2]s: %[1]s",
+		// Not a usage line at all here — this shell counts the operands and
+		// says so, and it is the same sentence several of its builtins write
+		// for too few words. Measured 2026-09-14: `<script>:getopts:1: not
+		// enough arguments`, status 1 rather than the 2 the rest report, and
+		// the script carries on (#2801).
+		BuiltinUsage: map[string]string{
+			"getopts": "getopts: not enough arguments",
+		},
+		GetoptsUsageStatus: 1,
+		CdCannotChange:     "%[2]s: %[1]s",
 		// A third operand to the substitution form, at this shell's ordinary
 		// `cd` status rather than a usage one — which is where it parts
 		// company with bash over the same sentence.

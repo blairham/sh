@@ -1,0 +1,102 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Pattern matching and filename generation, the answer only zsh gives.
+#
+# The first line is the one that matters most to a script: a pattern that
+# matches no file is a *failure* here and is left alone as literal text in
+# bash, ksh93 and dash. core/globbing.tests can therefore ask nothing about a
+# pattern that fails to match, which is why every case in that file matches
+# something, and why this one exists.
+#
+# Past that the file is the glob vocabulary the other three have no spelling
+# for at all: a recursive `**`, the qualifiers in parentheses that filter by
+# what a name *is* rather than by what it is called, and a numeric range.
+
+show() {
+  lbl=$1
+  shift
+  printf '%s n=%s' "$lbl" "$#"
+  for w in "$@"; do printf ' [%s]' "$w"; done
+  printf '\n'
+}
+
+mkdir -p z/sub/deep
+: > z/a.txt
+: > z/b.log
+: > z/sub/c.txt
+: > z/sub/deep/d.txt
+: > z/f1
+: > z/f2
+: > z/f10
+
+# --- a pattern that matches nothing -----------------------------------------
+#
+# The subshell is what keeps the file running past its own first finding, and
+# the diagnostic is folded into the compared output rather than discarded:
+# this is zsh's file, so the wording is part of the claim.
+( set -- z/nosuch*; show nomatch "$@" )
+printf 'the pattern that matched nothing failed: %s\n' "$?"
+
+# `nomatch` is the option behind it, and turning it off is how a script
+# written for sh is run here: the pattern comes back as text, exactly as it
+# would in the other three shells.
+unsetopt nomatch
+set -- z/nosuch*
+show 'without nomatch' "$@"
+setopt nomatch
+
+# `nullglob` is the third answer to the same question — not the text, not a
+# failure, but no word at all.
+setopt nullglob
+set -- z/nosuch*
+show nullglob "$@"
+unsetopt nullglob
+
+# --- `**` walks down ---------------------------------------------------------
+#
+# bash needs `shopt -s globstar` for this and ksh93 and dash have nothing of
+# the kind, so unadorned it is zsh's alone. The `/` after it is what makes it
+# recursive rather than an ordinary two-star pattern.
+set -- z/**/*.txt
+show recursive "$@"
+set -- z/**/*
+show 'every name below' "$@"
+
+# --- the qualifiers ----------------------------------------------------------
+#
+# A parenthesised suffix filters the matches by what the name is on the disk.
+# `(.)` keeps plain files, `(/)` keeps directories, and `(^/)` is the
+# negation of the second — three answers to a question the rest of the panel
+# can only put to `test` one name at a time.
+set -- z/*(.)
+show 'plain files' "$@"
+set -- z/*(/)
+show directories "$@"
+set -- z/*(^/)
+show 'not directories' "$@"
+set -- z/**/*(.)
+show 'plain files below' "$@"
+
+# --- a numeric range ---------------------------------------------------------
+#
+# `<1-10>` matches a decimal number in that range, which is not a thing a
+# character class can express: `z/f<1-2>` takes f1 and f2 and leaves f10,
+# where `z/f[12]` would take the same two for the wrong reason and
+# `z/f[0-9]*` would take all three.
+set -- z/f<1-2>
+show 'numeric range' "$@"
+set -- z/f<1-10>
+show 'the wider range' "$@"
+set -- z/f[12]
+show 'a class is not a range' "$@"
+
+# --- exclusion ---------------------------------------------------------------
+#
+# `a~b` under `extendedglob` matches what a matches and b does not.
+setopt extendedglob
+set -- z/f*~z/f10
+show exclusion "$@"
+set -- z/*~*.log
+show 'excluding a pattern' "$@"
+unsetopt extendedglob

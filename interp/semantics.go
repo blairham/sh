@@ -2513,6 +2513,53 @@ type Semantics struct {
 	// '%d' abc42` is `0`, so what is kept is a prefix and not a search.
 	PrintfRefusedOperandKeepsItsLeadingNumber Answer
 
+	// PrintfC99FloatConversions gives `printf` the three float conversions
+	// C99 added to the five C89 had: `%F`, `%a` and `%A`.
+	//
+	// Measured 2026-09-13 and 2026-09-14 under `LC_ALL=C`. bash 5.3.15, bash
+	// as sh, bash 3.2, dash and ksh93u+ have all three — `printf '%F' 1.5`
+	// is `1.500000`, `printf '%a' 1.5` is `0x1.8p+0` and `printf '%A' 1.5`
+	// is `0X1.8P+0`. zsh 5.9.2 and BusyBox ash 1.37 have none of them and
+	// refuse each letter as a conversion they do not know, `%F: invalid
+	// directive` at 1 and `%F]: invalid format` at 1. Before #2726 this
+	// shell was in the second group in every dialect, including the three
+	// whose reference is in the first (#2726).
+	//
+	// One axis and not three. The two letters split the panel identically
+	// and nothing measured separates "this shell has C99's float
+	// conversions" from "this shell has each of them" — no column takes one
+	// and refuses another. A column that did would part this into two, which
+	// is why the reason is written down rather than left to the grouping.
+	//
+	// `%F` is `%f` in capitals and the only thing it changes is the spelling
+	// of an infinity or a not-a-number: `INF` where `%f` writes `inf`, which
+	// is the same capitalization `%E` and `%G` already do. `%a` and `%A` are
+	// C's hexadecimal float. Go has neither verb — its `%x` on a float is
+	// close and not the same, writing a two-digit exponent where C writes the
+	// shortest — so both are laid out here rather than handed through.
+	//
+	// The default precision of `%a` is a second question and its own axis:
+	// PrintfHexFloatDefaultIsTwelveDigits.
+	PrintfC99FloatConversions Answer
+
+	// PrintfHexFloatDefaultIsTwelveDigits writes twelve hexadecimal digits
+	// of significand for a `%a` with no precision, rather than the shortest
+	// run that names the value exactly.
+	//
+	// Asked only where PrintfC99FloatConversions has already said yes and a
+	// `%a` or `%A` carries no precision, so the four dialects without the
+	// conversion and every conversion that states its precision never reach
+	// it.
+	//
+	// Measured 2026-09-14 under `LC_ALL=C`: `printf '%a' 1.5` is `0x1.8p+0`
+	// in bash 5.3.15 and dash and `0x1.800000000000p+0` in ksh93u+, and
+	// `printf '%a' 0.1` is `0x1.999999999999ap-4` against ksh93's
+	// `0x1.99999999999ap-4` — twelve digits, so the last one is *rounded
+	// away* rather than padded, and this is a precision and not a minimum
+	// width. `printf '%.13a' 0.1` is the same string in all three, which is
+	// what says the difference is the default and not the renderer.
+	PrintfHexFloatDefaultIsTwelveDigits Answer
+
 	// RedirectsUseEveryTarget makes a stream redirected more than once use
 	// *every* file it names rather than only the last, in both directions:
 	// output goes to all of them and input arrives as all of them in the

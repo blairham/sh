@@ -1132,6 +1132,12 @@ func Semantics() interp.Semantics {
 	s.PrintfGroupingFlagAfterTheWidth = interp.Yes
 	s.PrintfReportsBadNumber = interp.No
 	s.PrintfNumberOperand = interp.PrintfNumberArithmetic
+	// C99's three, with a default precision of its own: `printf '%a' 1.5`
+	// is `0x1.800000000000p+0` in ksh93u+ where bash and dash write
+	// `0x1.8p+0`, and `printf '%a' 0.1` is `0x1.99999999999ap-4` — twelve
+	// digits, the thirteenth rounded away rather than padded.
+	s.PrintfC99FloatConversions = interp.Yes
+	s.PrintfHexFloatDefaultIsTwelveDigits = interp.Yes
 	s.PrintfRefusedOperandKeepsItsLeadingNumber = interp.Yes
 	s.PrintfBackslashC = interp.PrintfBackslashCControl
 	// `printf 'a%5'` is `a%` here and reports success: the unfinished

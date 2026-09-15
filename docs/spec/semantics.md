@@ -12948,6 +12948,89 @@ good denormal for a value. The integer conversions part along
 with nothing, which is why BusyBox ash writes `inf` at `%f` and `0` at
 `%d` for the same kind of overflow.
 
+**A precision on a `%c` is ignored, and that is the core's rather than an
+axis.** bash 5.3, zsh, ksh93, dash and BusyBox ash all write the one
+character whatever the precision said, so `printf '[%.0c]' abc` is `[a]` in
+every one of them; this shell wrote nothing, because `%c` is formatted by
+handing the one-byte string to Go's `%s`, where a precision truncates
+(#2714). The *width* is untouched by the fix and is the half of the field a
+`%c` really has — `printf '[%5.0c]' abc` is `[    a]`.
+
+Two columns are not that reading and neither is an axis today. ksh93u+
+repeats the character to the precision, `printf '[%.3c]' abc` being `[aaa]`
+there, which wants its own measurement before anyone implements it — a
+width and a precision then mean two different things in that column. bash
+3.2 writes `[]` at `%.0c`, which is a bash predating the agreement rather
+than a language, the same company #2647 kept.
+
+**`PrintfC99FloatConversions`** — bash **yes** · dash **yes** · ksh93 **yes** · zsh no · ash no
+
+Gives `printf` the three float conversions C99 added to the five C89 had.
+
+    printf '[%F]' 1.5    bash/dash/ksh93 [1.500000]    zsh, ash refused
+    printf '[%a]' 1.5    bash/dash [0x1.8p+0]          zsh, ash refused
+    printf '[%A]' 1.5    bash/dash [0X1.8P+0]          zsh, ash refused
+
+Measured 2026-09-13 and 2026-09-14 under `LC_ALL=C`; zsh 5.9.2 answers
+`%F: invalid directive` at 1 and BusyBox ash 1.37 `%F]: invalid format` at
+1. Before #2726 this shell was in the second group in **every** dialect,
+including the three whose reference is in the first — the same shape #2646
+had, where each dialect's refusal was correctly worded and the answer was
+still wrong.
+
+One axis and not three. `%F` and `%a` split the panel identically and no
+column takes one and refuses another, so nothing measured separates "this
+shell has C99's float conversions" from "this shell has each of them". A
+column that took one would part this in two.
+
+`%F` is `%f` in capitals and the only thing it changes is the spelling of
+an infinity or a not-a-number — `INF` where `%f` writes `inf` — which is
+the capitalization `%E` and `%G` already do.
+
+**`PrintfHexFloatDefaultIsTwelveDigits`** — bash no · dash no · ksh93 **yes**
+
+The default precision of a `%a`, which is the one place the columns that
+have the conversion part.
+
+    printf '[%a]' 0.1    bash/dash [0x1.999999999999ap-4]  ksh93 [0x1.99999999999ap-4]
+    printf '[%a]' 255    bash/dash [0x1.fep+7]             ksh93 [0x1.fe0000000000p+7]
+
+A precision and not a minimum width: the thirteenth digit of `0.1` is
+*rounded away* in ksh93 and `255` is padded out to twelve. `printf '%.13a'
+0.1` is the same string in all three, which is what says the difference is
+the default and not the renderer. Asked only where
+`PrintfC99FloatConversions` has already said yes and the conversion
+carries no precision of its own.
+
+**The digits are laid out here rather than handed to Go, and so is the
+field.** Go's `%x` on a float is close and is not the same: it writes a
+two-digit exponent where C writes the shortest, its `#` pads the
+significand rather than forcing the point, and its zero padding lands
+*inside* the `0x` — `fmt.Sprintf("%020x", 1.5)` is
+`000000000000x1.8p+00`. `strconv.FormatFloat` is no better on the digits:
+it rounds a tie **away** from zero and renormalizes when the rounding
+carries, where bash 5.3.15 and dash round the tie toward zero and let the
+leading digit become a 2.
+
+    printf '[%.0a]' 1.5     bash/dash [0x1p+0]     strconv, ksh93 [0x1p+1]
+    printf '[%.1a]' 255     bash/dash [0x2.0p+7]   strconv, ksh93 [0x1.0p+8]
+    printf '[%.1a]' 1.09375 bash/dash [0x1.1p+0]   — a tie rounded down,
+    printf '[%.1a]' 1.15625 bash/dash [0x1.2p+0]     twice, so not to-even
+
+This shell writes bash's and dash's answer in every dialect, which leaves
+ksh93's rounding as a **stated divergence**: our `ksh` writes `0x1p+0`
+where ksh93u+ writes `0x1p+1`. It is reachable only with a precision small
+enough to round, and it is one question — the rounding — rather than two,
+since the renormalization is what a carry out of the leading digit does.
+
+Two rows of bash's own are not reproduced either, and they are a libc
+quirk rather than a rule: at `%.2a` the operand `0x1.2688p+0` rounds
+**down** in bash and dash to `0x1.26` while `0x1.2681p+0` rounds **up** to
+`0x1.27`, which is the smaller remainder rounding up and the larger one
+down. 680 of the 682 rows swept 2026-09-14 across both references agree
+with what this shell writes; those two and their like do not, and no rule
+that fits the rest of the panel produces them.
+
 **`PrintfQuote`** — bash backslash · dash absent · ksh93 single quoted · zsh backslash
 
 Is how `%q` quotes, which is three answers and an absence rather than a

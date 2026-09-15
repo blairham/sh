@@ -449,6 +449,14 @@ func TestPrintfAnswers(t *testing.T) {
 	if got, want := dash.Diagnostics().PrintfNumberOutOfRange, "printf: %[1]s: Result too large"; got != want {
 		t.Errorf("PrintfNumberOutOfRange = %q, want %q", got, want)
 	}
+	// C99's three float conversions, answering exactly as bash does on every
+	// row measured 2026-09-14 — `%a` of 1.5 is `0x1.8p+0` (#2726).
+	if got, want := dash.Semantics().PrintfC99FloatConversions, interp.Yes; got != want {
+		t.Errorf("PrintfC99FloatConversions = %v, want %v", got, want)
+	}
+	if got, want := dash.Semantics().PrintfHexFloatDefaultIsTwelveDigits, interp.No; got != want {
+		t.Errorf("PrintfHexFloatDefaultIsTwelveDigits = %v, want %v", got, want)
+	}
 	d := dash.Diagnostics()
 	if got, want := d.PrintfBadVerbStatus, 2; got != want {
 		t.Errorf("PrintfBadVerbStatus = %d, want %d", got, want)

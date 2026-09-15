@@ -381,6 +381,40 @@ func TestPrintfWritesBytesAndNotEncodedRunes(t *testing.T) {
 	}
 }
 
+// C's `%c` has no precision and Go's `%s` does, so the precision has to be
+// taken back out — the character is written through `%s`.
+//
+// No dialect is consulted, which is the claim as much as the output is: bash
+// 5.3, zsh, ksh93, dash and BusyBox ash all ignore it, so an implementation
+// that reached an axis here would be asking a question the panel does not
+// have. Run under printfSem's core vector for that reason.
+//
+// The width rows are the other half. A `%c` does have a width, and a fix that
+// dropped the whole field rather than the precision would pass every
+// precision row here and quietly stop padding.
+func TestPrintfCharacterIgnoresItsPrecision(t *testing.T) {
+	sem := printfSem()
+	for _, tc := range []struct{ name, src, want string }{
+		{"a zero precision does not eat the character", `printf '[%.0c]' abc`, "[a]"},
+		{"nor does a one", `printf '[%.1c]' abc`, "[a]"},
+		{"nor does a larger one repeat it", `printf '[%.3c]' abc`, "[a]"},
+		{"a bare point is a zero precision and is ignored too", `printf '[%.c]' abc`, "[a]"},
+		{"a star precision is ignored where its operand is zero", `printf '[%.*c]' 0 abc`, "[a]"},
+		{"and where it is negative", `printf '[%.*c]' -1 abc`, "[a]"},
+		{"the width still pads", `printf '[%5.0c]' abc`, "[    a]"},
+		{"and still pads on the right", `printf '[%-5.2c]' abc`, "[a    ]"},
+		{"a star width still pads", `printf '[%*.0c]' 4 abc`, "[   a]"},
+		{"the empty operand keeps its NUL through a precision", `printf '[%.0c]' ''`, "[\x00]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q status %d, want %q and 0", out, st, tc.want)
+			}
+		})
+	}
+}
+
 // The C length modifiers are a set with three answers, and every one of them
 // reads the letters and throws them away.
 func TestPrintfLengthModifiersAreThreeSets(t *testing.T) {
@@ -1706,6 +1740,123 @@ func TestAFieldWiderThanFmtRendersIsLaidOutHere(t *testing.T) {
 			}
 			if strings.Contains(out, "NOVERB") {
 				t.Error("fmt's own complaint reached the output")
+			}
+		})
+	}
+}
+
+// C99's three float conversions, which two of the panel's columns have not.
+//
+// Gated rather than always on: a dialect without them wants the letter to
+// arrive at the scan as the conversion character it is and be refused the way
+// any unknown one is — which is the shape #2646 had, where the diagnostics
+// looked right and the answer was wrong.
+func TestPrintfC99FloatConversionsAreAnAxis(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"%F is %f in capitals", `printf '[%F]' 1.5`, "[1.500000]"},
+		{"and capitalizes an infinity", `printf '[%F]' inf`, "[INF]"},
+		{"where %f does not", `printf '[%f]' inf`, "[inf]"},
+		{"and a not-a-number", `printf '[%F]' nan`, "[NAN]"},
+		{"%a is C's hexadecimal float", `printf '[%a]' 1.5`, "[0x1.8p+0]"},
+		{"%A is the same in capitals", `printf '[%A]' 1.5`, "[0X1.8P+0]"},
+		{"and capitalizes an infinity too", `printf '[%A]' inf`, "[INF]"},
+		{"but %a does not", `printf '[%a]' inf`, "[inf]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := printfSem()
+			sem.PrintfC99FloatConversions = Yes
+			sem.PrintfHexFloatDefaultIsTwelveDigits = No
+			sem.PrintfNonFiniteIsConverted = Yes
+			out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q status %d, want %q and 0", out, st, tc.want)
+			}
+		})
+	}
+
+	t.Run("a dialect without them refuses the letter", func(t *testing.T) {
+		for _, src := range []string{`printf '[%F]' 1.5`, `printf '[%a]' 1.5`, `printf '[%A]' 1.5`} {
+			sem := printfSem()
+			sem.PrintfC99FloatConversions = No
+			out, st := run(t, src, func(r *Runner) { r.Semantics = &sem })
+			if !strings.Contains(out, "invalid directive") || st == 0 {
+				t.Errorf("%s: got %q status %d, want the refusal a conversion nobody has earns", src, out, st)
+			}
+		}
+	})
+}
+
+// The hexadecimal float's layout, which is C's and not Go's `%x`.
+//
+// Every row is measured against bash 5.3.15 and dash, which agree on all of
+// them; see printfHexFloat for the table. The rows that round are the ones a
+// renderer built on strconv would have got wrong while looking right
+// everywhere else — strconv rounds a tie away from zero and renormalizes when
+// the rounding carries, and these two references do neither.
+func TestPrintfHexFloatIsLaidOutCsWay(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"the exponent is the shortest run of digits", `printf '[%a]' 1.5`, "[0x1.8p+0]"},
+		{"a large exponent keeps all of them", `printf '[%a]' 1e300`, "[0x1.7e43c8800759cp+996]"},
+		{"a negative exponent keeps its sign", `printf '[%a]' 0.1`, "[0x1.999999999999ap-4]"},
+		{"a zero is a zero", `printf '[%a]' 0`, "[0x0p+0]"},
+		{"a negative zero keeps the sign the value carries", `printf '[%a]' -0.0`, "[-0x0p+0]"},
+		{"a subnormal is normalized", `printf '[%a]' 5e-324`, "[0x1p-1074]"},
+		{"a stated precision is digits after the point", `printf '[%.3a]' 1.5`, "[0x1.800p+0]"},
+		{"a precision of zero drops the point", `printf '[%.0a]' 1.5`, "[0x1p+0]"},
+		{"the # flag puts the point back and adds nothing", `printf '[%#.0a]' 1.5`, "[0x1.p+0]"},
+		{"and is invisible where there are digits", `printf '[%#a]' 1.5`, "[0x1.8p+0]"},
+		{"a tie rounds toward zero", `printf '[%.1a]' 1.09375`, "[0x1.1p+0]"},
+		{"in both directions", `printf '[%.1a]' 1.15625`, "[0x1.2p+0]"},
+		{"a carry out of the leading digit keeps the exponent", `printf '[%.1a]' 255`, "[0x2.0p+7]"},
+		{"and does so with no fraction at all", `printf '[%.0a]' 0.1`, "[0x2p-4]"},
+		{"the + flag signs a positive value", `printf '[%+a]' 1.5`, "[+0x1.8p+0]"},
+		{"the space flag does too", `printf '[% a]' 1.5`, "[ 0x1.8p+0]"},
+		{"neither reaches a negative one", `printf '[%+a]' -1.5`, "[-0x1.8p+0]"},
+		{"a width pads on the left", `printf '[%14a]' 1.5`, "[      0x1.8p+0]"},
+		{"the - flag pads on the right", `printf '[%-14a]' 1.5`, "[0x1.8p+0      ]"},
+		{"the 0 flag pads after the 0x", `printf '[%014a]' 1.5`, "[0x0000001.8p+0]"},
+		{"and after the sign as well", `printf '[%014a]' -1.5`, "[-0x000001.8p+0]"},
+		{"a width narrower than the value changes nothing", `printf '[%5a]' 1.5`, "[0x1.8p+0]"},
+		{"the capital reaches the prefix and the p", `printf '[%014A]' 1.5`, "[0X0000001.8P+0]"},
+		{"a star width is the same question", `printf '[%*a]' 14 1.5`, "[      0x1.8p+0]"},
+		{"and a star precision", `printf '[%.*a]' 3 1.5`, "[0x1.800p+0]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := printfSem()
+			sem.PrintfC99FloatConversions = Yes
+			sem.PrintfHexFloatDefaultIsTwelveDigits = No
+			out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q status %d, want %q and 0", out, st, tc.want)
+			}
+		})
+	}
+}
+
+// The default precision of a `%a` is a second axis, and it is a precision
+// rather than a minimum width: the thirteenth digit of `0.1` is rounded away
+// under the twelve-digit answer, and `255` is padded out to twelve.
+func TestPrintfHexFloatDefaultPrecisionIsAnAxis(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		twelve Answer
+		src    string
+		want   string
+	}{
+		{"shortest names the value exactly", No, `printf '[%a]' 0.1`, "[0x1.999999999999ap-4]"},
+		{"twelve rounds the thirteenth away", Yes, `printf '[%a]' 0.1`, "[0x1.99999999999ap-4]"},
+		{"shortest stops where the digits do", No, `printf '[%a]' 255`, "[0x1.fep+7]"},
+		{"twelve pads out to twelve", Yes, `printf '[%a]' 255`, "[0x1.fe0000000000p+7]"},
+		{"a stated precision is not asked", Yes, `printf '[%.3a]' 0.1`, "[0x1.99ap-4]"},
+		{"and neither is one of zero", Yes, `printf '[%.0a]' 1.5`, "[0x1p+0]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := printfSem()
+			sem.PrintfC99FloatConversions = Yes
+			sem.PrintfHexFloatDefaultIsTwelveDigits = tc.twelve
+			out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q status %d, want %q and 0", out, st, tc.want)
 			}
 		})
 	}

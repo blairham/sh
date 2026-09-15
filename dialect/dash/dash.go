@@ -406,6 +406,11 @@ func Semantics() interp.Semantics {
 	s.PrintfGroupingFlagAfterTheWidth = interp.No
 	s.PrintfReportsBadNumber = interp.Yes
 	s.PrintfNumberOperand = interp.PrintfNumberLeadingNumber
+	// C99's three, answering exactly as bash does on every row measured
+	// 2026-09-14 — `%a` of 1.5 is `0x1.8p+0` and of 0.1 is
+	// `0x1.999999999999ap-4`, the shortest run that names the value.
+	s.PrintfC99FloatConversions = interp.Yes
+	s.PrintfHexFloatDefaultIsTwelveDigits = interp.No
 	// unanswered PrintfRefusedOperandKeepsItsLeadingNumber: as in bash — the
 	// reading above never evaluates an operand, so no arithmetic failure ever
 	// reaches this question.

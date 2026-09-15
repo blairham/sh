@@ -472,6 +472,16 @@ func TestPrintfAnswers(t *testing.T) {
 	if got, want := s.PrintfNumberOperand, interp.PrintfNumberArithmetic; got != want {
 		t.Errorf("PrintfNumberOperand = %v, want %v", got, want)
 	}
+	// C99's three float conversions, with a default `%a` precision of its
+	// own: `printf '%a' 0.1` is `0x1.99999999999ap-4` here — twelve digits,
+	// the thirteenth rounded away — against bash's and dash's
+	// `0x1.999999999999ap-4` (#2726).
+	if got, want := s.PrintfC99FloatConversions, interp.Yes; got != want {
+		t.Errorf("PrintfC99FloatConversions = %v, want %v", got, want)
+	}
+	if got, want := s.PrintfHexFloatDefaultIsTwelveDigits, interp.Yes; got != want {
+		t.Errorf("PrintfHexFloatDefaultIsTwelveDigits = %v, want %v", got, want)
+	}
 	// And what a refused operand leaves behind, which is where ksh93 parts
 	// from zsh: `printf '%d' 42abc` is 42 here and 0 there. The number kept
 	// is `strtod`'s — `printf '%d' 1e3abc` is 1000.

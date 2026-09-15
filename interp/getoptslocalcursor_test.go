@@ -40,6 +40,11 @@ func localCursorSem(restores Answer) Semantics {
 	// the other half of "no value": the local starts empty rather than
 	// carrying the outer value in.
 	s.ValuelessDeclarationHidesTheOuterValue = Yes
+	// And a callee sees what its caller declared local, which is the
+	// arrangement these cases are written in: a recursive `f` that declares
+	// `OPTIND` and calls itself has a caller's declaration standing when the
+	// inner call starts. See staticscope.go (#2865).
+	s.CallerLocalsReachTheCallee = Yes
 	return s
 }
 

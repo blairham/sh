@@ -1029,6 +1029,12 @@ func Semantics() interp.Semantics {
 	// local does.
 	s.ValuelessDeclarationHidesTheOuterValue = interp.Yes
 	s.TypesetLocalNeedsKeywordFunction = interp.Yes
+	// And such a body is scoped *statically*: the name it declared is
+	// visible in it and nowhere else, so a function it calls reads the
+	// shell's own name and a write there changes the shell's own. ksh93's
+	// alone in a panel of six. See
+	// [interp.Semantics.CallerLocalsReachTheCallee] (#2865).
+	s.CallerLocalsReachTheCallee = interp.No
 	// There is no `local` here, so this is reached only through `typeset` in
 	// a keyword function — where a child is told nothing about the shadowed
 	// name, as in zsh. This shell arrives at that from further away, and the

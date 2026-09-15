@@ -131,6 +131,12 @@ func testSemantics() Semantics {
 	s.AppendedArrayLiteralOverANameNotDeclaredAnArrayStartsItOver = No
 	s.DeclarePrintReportsAMissingName = Yes
 	s.TypesetLocalNeedsKeywordFunction = No
+	// And who else can see a declaration that *is* local, at the answer five
+	// of the six panel columns give: whatever the function calls sees it. A
+	// suite about a nested local should get the dynamic reading rather than a
+	// refusal, and the suite that is about the axis sets both sides — see
+	// staticscope_test.go (#2865).
+	s.CallerLocalsReachTheCallee = Yes
 	s.ReadonlyReassignmentFatal = No
 	// A here-document body fed to a program is expanded in that program's
 	// process, so what it writes does not come back. bash's answer, and

@@ -48,6 +48,8 @@ several
 # here, and that is a measurement rather than an oversight: bash and zsh scope
 # dynamically and hand it down, ksh93 scopes statically and hands down
 # nothing. Three shells with typeset, two answers — so it is not an ext claim.
+# ksh/typeset.tests is where that answer is asked, as the per-dialect one it
+# is.
 function inner {
   typeset depth=2
   printf 'inner set:  [%s]\n' "$depth"

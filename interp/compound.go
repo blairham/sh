@@ -1051,6 +1051,12 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	// second call starts over, which is why one shell's own function library
 	// is written without the `local OPTIND=1` the others need.
 	r.localizeGetoptsCursor(sc)
+	// And, in the dialect whose bodies read past them, the declarations the
+	// calls below this one made — put aside for the duration. Here rather
+	// than at the first read, because the seal is over the shell's one table
+	// of names and a body that never reads `v` may still write it. See
+	// staticscope.go.
+	r.sealCallerLocals(sc)
 	// And whatever a dialect saves around every call, taken now rather than
 	// when the body asks for it: the option table, in the shell whose
 	// options are function-scoped. See AtEveryFunctionCall for why the
@@ -1269,6 +1275,11 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	// tell whether the call had installed one of its own, and a function's
 	// EXIT trap would stop firing.
 	r.restoreLocalTraps(sc)
+	// And the enclosing calls' declarations, which come back holding
+	// whatever this body wrote to the shell's own names underneath them.
+	// After this scope's own restore above, so the name it declared is the
+	// caller's again before the caller's is put back over it.
+	r.unsealCallerLocals(sc)
 	r.scopes = r.scopes[:len(r.scopes)-1]
 	// zsh runs an EXIT trap set *inside* a function when the function
 	// returns, and then forgets it; the other three keep it for the end of

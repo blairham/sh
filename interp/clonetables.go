@@ -335,6 +335,15 @@ func cloneScopes(scopes []*scope) []*scope {
 		return nil
 	}
 	out := make([]*scope, len(scopes))
+	// Where each of the originals sits, so that a sealed name's holder — a
+	// pointer *into this same stack* — can be repointed at the clone's copy
+	// of it. Left as it was, a subshell's return would write the shell's own
+	// name back into the parent's scope, which is the very sharing this
+	// function exists to end. See staticscope.go.
+	at := make(map[*scope]int, len(scopes))
+	for i, sc := range scopes {
+		at[sc] = i
+	}
 	for i, sc := range scopes {
 		c := *sc
 		c.saved = maps.Clone(sc.saved)
@@ -354,6 +363,7 @@ func cloneScopes(scopes []*scope) []*scope {
 		c.exportedSpoken = maps.Clone(sc.exportedSpoken)
 		c.exportedShadow = maps.Clone(sc.exportedShadow)
 		c.savedTraps = maps.Clone(sc.savedTraps)
+		c.sealed = cloneSealed(sc.sealed, at, out)
 		// The two that hold a container per name, on the same terms as Arrays
 		// and AssocArrays above: cloning the outer map alone would give the
 		// clone its own name table pointing at the parent's elements.
@@ -377,4 +387,30 @@ func cloneScopes(scopes []*scope) []*scope {
 		out[i] = &c
 	}
 	return out
+}
+
+// cloneSealed copies a scope's sealed names, giving the clone its own copy of
+// every container a binding holds and repointing each holder at the clone's
+// own scope.
+//
+// The holder is looked up by position rather than carried across, for the
+// reason the whole file exists: it is a pointer into the stack being cloned,
+// and a clone that kept it would hand a subshell the parent's scope to write.
+// A holder the stack does not contain cannot happen — a seal only ever names
+// a scope below it in the same stack — and is left alone rather than guessed
+// at, since an index that is not there has no clone to point at.
+func cloneSealed(sealed map[string]sealedName, at map[*scope]int, out []*scope) map[string]sealedName {
+	if sealed == nil {
+		return nil
+	}
+	c := make(map[string]sealedName, len(sealed))
+	for name, sn := range sealed {
+		sn.held.array = sn.held.array.clone()
+		sn.held.assoc = sn.held.assoc.clone()
+		if i, ok := at[sn.holder]; ok {
+			sn.holder = out[i]
+		}
+		c[name] = sn
+	}
+	return c
 }

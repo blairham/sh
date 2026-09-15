@@ -1,0 +1,86 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# typeset's scope in ksh93 — #2865, the answer ext/typeset.tests names as the
+# one the three shells with `typeset` do not share.
+#
+# ksh93 scopes a `function`-word body **statically**. A declaration is visible
+# in the body that made it and nowhere else, so a function it calls reads the
+# shell's own name rather than the caller's local. bash and zsh scope
+# dynamically and hand the caller's local down.
+#
+# The `name()` form is not this question: a `typeset` there is not local to
+# begin with, so there is nothing for a callee to be shown or kept from.
+
+function callee { printf '[%s]\n' "${v-UNSET}"; }
+function caller { typeset v=local; callee; }
+v=global
+
+# The callee reads the shell's own name, not the caller's declaration.
+caller
+
+# And reads nothing at all where the shell has no such name.
+function bare { typeset w=local; peek; }
+function peek { printf '[%s]\n' "${w-UNSET}"; }
+bare
+
+# A POSIX-form callee is not a boundary, because its own `typeset` would not
+# have been local either: it shares the caller's scope and sees the local.
+posix() { printf '[%s]\n' "${v-UNSET}"; }
+function shows { typeset v=shown; posix; }
+shows
+
+# Nor is a POSIX-form *caller* one, from the other side: its `typeset` writes
+# the shell's own name, so the callee reads that.
+outer() { typeset v=through; callee; }
+outer
+printf 'and it stayed [%s]\n' "$v"
+
+# It is the shell's own name and not a copy: a write in the callee changes the
+# global and leaves the caller's local alone.
+v=global
+function writes { v=written; }
+function around { typeset v=local; writes; printf 'caller kept [%s]\n' "$v"; }
+around
+printf 'global now  [%s]\n' "$v"
+
+# The parent is the shell's own names rather than where the function was
+# written: a definition made *inside* a body still reads the global.
+v=global
+function nests {
+  typeset v=hidden
+  function within { printf 'nested [%s]\n' "${v-UNSET}"; }
+  within
+}
+nests
+
+# Everything about the name travels, not only its scalar value.
+typeset -a list=(global)
+function listcallee { printf 'array [%s]\n' "${list[0]-UNSET}"; }
+function listcaller { typeset -a list=(local); listcallee; }
+listcaller
+
+typeset -A table=([k]=global)
+function tablecallee { printf 'table [%s]\n' "${table[k]-UNSET}"; }
+function tablecaller { typeset -A table=([k]=local); tablecallee; }
+tablecaller
+
+# A local the caller unset does not make the shell's own name unset.
+v=global
+function unsetcaller { typeset v; unset v; callee; }
+unsetcaller
+
+# The caller's attributes do not travel either: the callee writes a plain
+# string where the caller's local is an integer, and is not refused where the
+# caller's local is frozen.
+function intcallee { v=010; printf 'plain [%s]\n' "$v"; }
+function intcaller { typeset -i v=1; intcallee; }
+intcaller
+
+v=global
+function rocallee { v=assigned; printf 'writable [%s]\n' "$v"; }
+function rocaller { typeset -r v=frozen; rocallee; }
+rocaller
+
+# And the whole arrangement leaves the shell where the writes left it.
+printf 'the end [%s]\n' "$v"

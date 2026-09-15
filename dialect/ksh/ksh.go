@@ -1038,6 +1038,13 @@ func Semantics() interp.Semantics {
 	s.LetReadsALeadingZeroAsDecimal = interp.Yes
 	s.ArithmeticAssignmentDeclaresAnInteger = interp.No
 	s.IndirectionYieldsName = interp.Yes
+	// And an operator after `${!name[@]}` is a bad substitution here rather
+	// than either reading: measured 2026-09-14, `${!w[@]#H}`, `${!w[@]:1:2}`,
+	// `${!w[@]/L/x}` and `${!w[@]+SET}` all end the script at 1 where the
+	// bare `${!w[@]}` answers the key. The written subscript is what is
+	// refused: `${!b#o}` on an array answers `b`, this shell's ordinary
+	// reading of `${!x}` (#2821).
+	s.OperatorAfterTheSubscriptListingIsBad = interp.Yes
 	s.BraceExpansion = interp.Yes
 	// A group that does not expand does not end the word — `@{x}{a,b}@` is
 	// `@{x}a@ @{x}b@` here too — but the scan resumes past that group's

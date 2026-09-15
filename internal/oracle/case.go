@@ -11569,6 +11569,21 @@ echo "st=$?"`,
 		Why:     "bash indirects, dash and zsh reject, and ksh93 yields x — not an error there, a different meaning, which is the &> failure mode inside an expansion",
 	},
 	{
+		ID: "param/subscript-listing-is-the-bare-form-only", Category: "parameter expansion",
+		Snippet: `typeset -A w; w[k]=tgt; tgt=HELLO; printf "[%s]" "${!w[@]}"; printf "[%s]" "${!w[@]#H}"; echo "|$?"`,
+		Why:     "`${!name[@]}` is the subscript listing in the bare form and nothing else. Write an operator after it and bash puts the `!` back to being an ordinary indirection — the operand is `w[@]`, which expands to `tgt`, and `tgt` holds `HELLO`, so `#H` trims it to `ELLO` — where ksh93 calls the whole expansion a bad substitution and ends the script, so the `|$?` never prints. Both halves in one row because the first is the control: a reading that listed the subscripts either way answers `[k]` twice and looks right until the value is one a listing could not have produced. dash, BusyBox ash and zsh have no `${!…}` at all and refuse the bare form too, which is what makes this a question only two columns answer (#2821)",
+	},
+	{
+		ID: "param/an-operator-after-the-listing-indirects-through-the-values", Category: "parameter expansion",
+		Snippet: `a=(p q); printf "[%s]" "${!a[@]}"; printf "[%s]" "${!a[@]/0/Z}"; echo "|$?"`,
+		Why:     "the row that says the previous one is an indirection rather than a listing under a filter. `${a[@]}` on `(p q)` is two words, and bash's complaint quotes them straight back — `p q: invalid variable name` — which is the indirection failing on the text it was handed and could not be anything a subscript listing did. The bare spelling beside it answers `0` and `1`, so the same array gives both readings one character apart. ksh93 refuses the operator form as before; the three shells without `${!…}` refuse both (#2821)",
+	},
+	{
+		ID: "param/one-subscript-under-an-indirection-is-not-a-listing", Category: "parameter expansion",
+		Snippet: `a=(p q); printf "[%s]" "${!a[0]}" "${!a[@]}"`,
+		Why:     "the listing is the *whole-array* subscript's, and one subscript never was it in either column: bash reads `${!a[0]}` as the indirection it is — `a[0]` is `p`, `p` is unset, so the field is empty — and ksh93 answers `a[0]`, the name-with-subscript its `${!x}` yields. Neither answers the subscripts. The `[@]` beside it is what makes the pair a discriminator: a reading that listed on any subscript answers `0 1` twice, which is a plausible pair of fields at status 0 and the wrong one for a script asking what a single element points at (#2821)",
+	},
+	{
 		ID: "param/expansion-flags-are-one-dialects", Category: "parameter expansion",
 		Snippet: `x=abc; echo ${(U)x}`,
 		Why:     "the parenthesized expansion flags are zsh's alone: it uppercases where bash and dash call the expansion a bad substitution at run time and ksh93 refuses it while reading — the same three-way split every unreadable expansion follows",

@@ -1582,6 +1582,48 @@ type Semantics struct {
 	// needed a third state. `semantics.md` records `${!x}` as the axis the
 	// binary table could not express; this is the shape that expresses it.
 	IndirectionYieldsName Answer
+
+	// OperatorAfterTheSubscriptListingIsBad refuses `${!name[@]}` with any
+	// operator written after it, rather than reading the `!` as an ordinary
+	// indirection again.
+	//
+	// `${!name[@]}` is the *subscript listing* in the bare form only. Write
+	// an operator after it and the two shells that have `${!…}` at all part
+	// company: bash reads the `!` as the indirection it means everywhere
+	// else — the operand is `name[@]`, which expands to the array's values,
+	// and the result is taken as a name to look up — and ksh93 calls the
+	// whole expansion a bad substitution and ends the script.
+	//
+	// Measured 2026-09-14, `env -i PATH=/usr/bin:/bin HOME=<scratch>`, a
+	// script file and again under `-c` and on standard input, all three
+	// giving the same answers. With `typeset -A w; w[k]=tgt; tgt=HELLO`:
+	//
+	//	written               bash 5.3.15   ksh93u+
+	//	${!w[@]}              k             k
+	//	${!w[@]#H}            ELLO          bad substitution
+	//	${!w[@]:1:2}          EL            bad substitution
+	//	${!w[@]/L/x}          HExLO         bad substitution
+	//	${!w[@]+SET}          SET           bad substitution
+	//	a=(p q); ${!a[@]#x}   p q: invalid variable name
+	//
+	// The last row is what says it is the indirection rather than a listing
+	// being filtered: `${a[@]}` on `(p q)` is two words, and bash's complaint
+	// quotes them back. The three rows above it are the same mechanism
+	// succeeding quietly — `${w[@]}` is `tgt`, which is set, so the operator
+	// runs on `HELLO`.
+	//
+	// The **written** subscript decides, not the one a dialect supplies for a
+	// bare array name: ksh93 answers `${!b#o}` on an array with `b`, its
+	// ordinary reading of `${!x}`, and refuses only the spelling that carries
+	// `[@]` or `[*]` itself.
+	//
+	// Asked rather than read, and only for that spelling, which is one no
+	// startup file writes: a dialect that has not chosen says so instead of
+	// picking one of two answers that differ by a diagnostic and a dead
+	// script. dash, BusyBox ash and zsh never reach it — `${!name[@]}` is a
+	// bad substitution there in the *bare* form too — so the question is not
+	// theirs to answer (#2821).
+	OperatorAfterTheSubscriptListingIsBad Answer
 	// BraceExpansion expands `{a,b}` and `{1..3}`. Absent from dash, where
 	// the word is a literal.
 	//

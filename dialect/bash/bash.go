@@ -750,6 +750,13 @@ func Semantics() interp.Semantics {
 	// `$((1e400))` is `value too great for base` — so there is no value for
 	// an overflow rule to decide, and the question never reaches the axis.
 	s.IndirectionYieldsName = interp.No
+	// And an operator written after `${!name[@]}` puts the `!` back to being
+	// that indirection: the listing is the bare form only. Measured
+	// 2026-09-14 on a script file, under `-c` and on standard input alike —
+	// `typeset -A w; w[k]=tgt; tgt=HELLO; echo "${!w[@]#H}"` answers `ELLO`,
+	// and `a=(p q); echo "${!a[@]#x}"` says `p q: invalid variable name`,
+	// which is the indirection failing on the text it was handed (#2821).
+	s.OperatorAfterTheSubscriptListingIsBad = interp.No
 	s.BraceExpansion = interp.Yes
 	// A group that does not expand does not end the word, and the scan
 	// resumes one byte past its open brace rather than past its close, so a

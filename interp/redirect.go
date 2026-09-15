@@ -1163,7 +1163,15 @@ func (r *Runner) heredocText(rd *syntax.Redirect) string {
 	// rather than in the lexer because the two shells read the same text and
 	// hand the command different bytes, which is a semantics question and not
 	// a grammar one.
-	if rd.HeredocAtEOF && !strings.HasSuffix(body, "\n") {
+	//
+	// A body with nothing in it is not that shape and never reaches the
+	// question: `cat <<E` with the input ending on the next byte hands the
+	// command no bytes at all in every shell of the panel, bash included.
+	// The axis is about the *last line* of a body having no newline after
+	// it, and an empty body has no last line — supplying one there wrote a
+	// bare newline nobody asked for, at status 0, which is this burndown's
+	// own shape (#2298).
+	if rd.HeredocAtEOF && body != "" && !strings.HasSuffix(body, "\n") {
 		if r.ask(r.sem().UnterminatedHeredocGainsATrailingNewline,
 			"a newline on an unterminated here-document's last line") {
 			body += "\n"

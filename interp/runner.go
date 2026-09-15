@@ -260,6 +260,25 @@ type Runner struct {
 	// getter.
 	SetUmask func(mask int) (old int, err error)
 
+	// StopThisProcess stops this process the way `suspend` does: it does not
+	// return until something sends SIGCONT. Nil — the default — means this
+	// shell is not the process and cannot stop it, and the builtin refuses.
+	//
+	// Opt-in for the reason ReplaceProcess and DieBySignal are, and the
+	// stakes are the same read a third time. A Runner is embedded in other
+	// programs; a line of script that could stop the *host* process until
+	// somebody found it and sent it a signal is a library that can be talked
+	// into hanging its caller by the text it was asked to interpret. So
+	// interp decides *when* — after the builtin has checked everything a
+	// shell checks before stopping — and the caller decides *whether*, in
+	// the caller's own code, where the system call is visible.
+	//
+	// It returns only on failure, and returning nil means the process was
+	// stopped and has since been continued: `suspend` is 0 in a real shell
+	// after a SIGCONT rather than at the moment of the stop, so a hook that
+	// came back immediately would report a success the process never had.
+	StopThisProcess func() error
+
 	// WaitForCommand, when set, waits for a command this shell started and
 	// reports how it ended — including that it *stopped* rather than
 	// finished, which is what ^Z does and what an ordinary wait cannot say.

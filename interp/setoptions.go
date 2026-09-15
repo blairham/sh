@@ -625,6 +625,17 @@ func posixListing(saved DeclarationListingForm) DeclarationListingForm {
 // posix option or invoked as `sh`. See Semantics.NonInteractiveStartupVariable.
 func (r *Runner) PosixMode() bool { return r.posixMode }
 
+// MonitorOn reports whether job control is running — `set -m`, `set -o
+// monitor`, or the interactive shell's own decision.
+//
+// Exported for a dialect builtin that has to know, which today is `suspend`:
+// the shell that refuses to stop without job control is refusing on this, and
+// a dialect cannot reach the field. A reader and no writer, deliberately —
+// turning the monitor on is a request a script or a front end makes through
+// one of the two doors above, both of which have a refusal to word, and a
+// third door that skipped them would be a monitor nothing could decline.
+func (r *Runner) MonitorOn() bool { return r.monitor }
+
 // SetInteractiveMonitor turns the monitor on because this shell is an
 // interactive one, which is what every shell in the panel does for itself.
 //

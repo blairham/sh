@@ -4,58 +4,134 @@
 package zsh_test
 
 import (
+	"context"
 	"strings"
 	"testing"
 
-	"github.com/blairham/sh/dialect/zsh"
-	"github.com/blairham/sh/interp"
+	"github.com/blairham/sh/internal/dialecttest"
 )
 
-// What zsh says about a job it stopped, resumed and was asked to leave
-// behind. Measured through a pseudo-terminal against zsh 5.9.2 on 2026-09-05:
-// `sleep 40`, ^Z, `bg`, `exit`.
-func TestWhatZshSaysAboutASuspendedJob(t *testing.T) {
-	dg := zsh.Diagnostics()
-	// A sentence rather than a listing row, and the only one of the four that
-	// names no job number: `zsh: suspended  sleep 40`, two spaces.
-	if got, want := dg.JobStoppedNotice, "%[3]s: suspended  %[4]s"; got != want {
-		t.Errorf("JobStoppedNotice = %q, want %q", got, want)
+// `suspend`, in the direction a script sees it — and the direction it parts
+// from bash's builtin of the same name.
+//
+// Measured 2026-09-15 against zsh 5.9.2, `env -i` with a scratch HOME and no
+// startup files, every stopping probe in a process group of its own and killed
+// from outside. See dialect/zsh/suspend.go for the table and #2557 for the
+// warning about probing this at all.
+//
+// There is deliberately **no corpus row**, for the reason that issue gives: a
+// bare `suspend` really stops this shell, `make oracle` runs every row in
+// every column, and a stopped process does not answer the harness's SIGTERM.
+func TestSuspendRefusesTheWayZshDoes(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct {
+		name, src, want string
+		status          int
+	}{
+		// One line and status 1 — no usage block, where bash writes one and
+		// reports 2.
+		{
+			name: "a bad option", src: `suspend -q; echo "st=$?"`,
+			want: "zsh:suspend:1: bad option: -q\nst=1\n",
+		},
+		{
+			name: "a bad option after -f", src: `suspend -f -q; echo "st=$?"`,
+			want: "zsh:suspend:1: bad option: -q\nst=1\n",
+		},
+		{
+			name: "an operand", src: `suspend x; echo "st=$?"`,
+			want: "zsh:suspend:1: too many arguments\nst=1\n",
+		},
+		{
+			name: "an operand after --", src: `suspend -- x; echo "st=$?"`,
+			want: "zsh:suspend:1: too many arguments\nst=1\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runZsh(t, dir, tc.src)
+			if out != tc.want || st != tc.status {
+				t.Errorf("%s = %q at %d, want %q at %d", tc.src, out, st, tc.want, tc.status)
+			}
+		})
 	}
-	if !dg.JobStoppedNoticeOnANewLine {
-		t.Error("the notice starts on a line of its own here, as bash's does")
+}
+
+// **Job control decides nothing here**, which is the discriminating pair: this
+// shell's builtin reaches the stop with no monitor running, where bash's
+// refuses. A builtin that had borrowed bash's condition would answer the first
+// row with `cannot suspend: no job control`.
+//
+// The login shell is the one thing this shell does refuse, and `-f` forces
+// past it.
+func TestSuspendAsksOnlyWhetherThisIsALoginShell(t *testing.T) {
+	for _, tc := range []struct {
+		name, src, want string
+		login           bool
+	}{
+		{
+			name: "no monitor is no obstacle", src: `suspend; echo "st=$?"`,
+			want: "zsh:suspend:1: this shell was not given a way to stop this process\nst=1\n",
+		},
+		{
+			name: "a login shell is refused", login: true, src: `suspend; echo "st=$?"`,
+			want: "zsh:suspend:1: can't suspend login shell\nst=1\n",
+		},
+		{
+			name: "and -f forces past it", login: true, src: `suspend -f; echo "st=$?"`,
+			want: "zsh:suspend:1: this shell was not given a way to stop this process\nst=1\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st, err := preset.Combined(t, dialecttest.Base{
+				Dir: t.TempDir(), LoginShell: tc.login,
+			}, tc.src)
+			if err != nil {
+				t.Fatalf("run: %v", err)
+			}
+			if out != tc.want || st != 0 {
+				t.Errorf("%s = %q at %d, want %q at 0", tc.src, out, st, tc.want)
+			}
+		})
 	}
-	// `fg` and `bg` print the same row, with a state no listing ever shows.
-	const row = "[%[1]d]  %[2]s continued  %[3]s"
-	if got := dg.JobResumedInForeground; got != row {
-		t.Errorf("JobResumedInForeground = %q, want %q", got, row)
+}
+
+// And the stop itself. The hook returns rather than stopping anything, which
+// is what makes the row runnable: a test that really stopped would stop the
+// test binary and `go test` would wait for a SIGCONT nobody sends.
+func TestSuspendCallsTheHookWithNoMonitorAtAll(t *testing.T) {
+	var out strings.Builder
+	r := preset.Runner(dialecttest.Base{Dir: t.TempDir(), Stdout: &out, Stderr: &out})
+	calls := 0
+	r.StopThisProcess = func() error { calls++; return nil }
+	f := preset.Parse(t, `suspend; echo "st=$?"`)
+	if _, err := r.Run(context.Background(), f); err != nil {
+		t.Fatalf("run: %v", err)
 	}
-	if got := dg.JobResumedInBackground; got != row {
-		t.Errorf("JobResumedInBackground = %q, want %q", got, row)
+	if calls != 1 {
+		t.Errorf("the hook was called %d times, want once", calls)
 	}
-	// The state column is the listing's, so the two line up under each other.
-	if !strings.Contains(dg.JobLine, "%-11") {
-		t.Errorf("JobLine = %q, want the 11-wide state column the resume row spells out", dg.JobLine)
+	if got, want := out.String(), "st=0\n"; got != want {
+		t.Errorf("output %q, want %q", got, want)
 	}
-	if got, want := dg.StoppedJobsAtExit, "%[1]s: you have suspended jobs."; got != want {
-		t.Errorf("StoppedJobsAtExit = %q, want %q", got, want)
+}
+
+// A login shell never reaches it, which is the other half of the same rule.
+func TestALoginShellNeverReachesTheStop(t *testing.T) {
+	var out strings.Builder
+	r := preset.Runner(dialecttest.Base{
+		Dir: t.TempDir(), Stdout: &out, Stderr: &out, LoginShell: true,
+	})
+	calls := 0
+	r.StopThisProcess = func() error { calls++; return nil }
+	f := preset.Parse(t, `suspend; echo "st=$?"`)
+	if _, err := r.Run(context.Background(), f); err != nil {
+		t.Fatalf("run: %v", err)
 	}
-	// And the held `exit` reports nothing: `echo $?` after the refusal says 0
-	// here, where bash's says 1.
-	if got := dg.StoppedJobsAtExitStatus; got != 0 {
-		t.Errorf("StoppedJobsAtExitStatus = %d, want 0", got)
+	if calls != 0 {
+		t.Errorf("the hook was called %d times for a login shell, want never", calls)
 	}
-	if zsh.Semantics().StoppedJobsHoldTheExit != interp.Yes {
-		t.Error("zsh stays rather than leaving a job stopped")
-	}
-	// The same for a job still going, which this shell checks for unasked.
-	if got, want := dg.RunningJobsAtExit, "%[1]s: you have running jobs."; got != want {
-		t.Errorf("RunningJobsAtExit = %q, want %q", got, want)
-	}
-	// And the sentence is the whole of it here: measured, zsh draws the next
-	// prompt straight after and never the job table, whichever way its own
-	// two option names are set. The absence is the assertion — a shell that
-	// listed would be adding output to somebody's terminal on the way out.
-	if zsh.Semantics().HeldExitListsTheJobs != interp.No {
-		t.Error("zsh says the sentence and nothing else")
+	want := "zsh:suspend:1: can't suspend login shell\nst=1\n"
+	if got := out.String(); got != want {
+		t.Errorf("output %q, want %q", got, want)
 	}
 }

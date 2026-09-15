@@ -2510,6 +2510,10 @@ func Apply(r *interp.Runner) {
 	// anywhere — so this is a builtin rather than something the prompt owns.
 	// See history.go.
 	registerHistory(r)
+	// Stopping the shell itself, which is two halves: a refusal a script sees
+	// and a stop only a binary that owns the process may make. See
+	// suspend.go, and interp.Runner.StopThisProcess for the split.
+	registerSuspend(r)
 	// A function carried to a child through the environment, under the name
 	// bash gives it. The other three do not carry functions at all.
 	r.SetFunctionExport("BASH_FUNC_", "%%")

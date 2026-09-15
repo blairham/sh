@@ -94,6 +94,16 @@ type Base struct {
 	// runs on, and because a runner claiming a terminal it does not have
 	// would grant job control nothing backs.
 	Terminal bool
+	// LoginShell makes the runner one, which a front end reads off `argv[0]`
+	// or `-l` and which two builtins turn on. `suspend` is the case this was
+	// added for: zsh refuses to stop a login shell and stops any other, so a
+	// test that could only build a non-login runner could see the stop and
+	// never the refusal.
+	//
+	// False is the default because it is what every other case here wants:
+	// a login shell reads different startup files and answers `$-` with an
+	// `l` in the dialect that spells one.
+	LoginShell bool
 	// Route is where the program came from, which a front end reads off the
 	// invocation and which two measured behaviors turn on: `set -A` with a
 	// bad name and a declaration whose store refuses its element each leave
@@ -127,6 +137,7 @@ func (p Preset) Runner(b Base) *interp.Runner {
 		Name:    name, Dir: b.Dir, Vars: b.Vars, Env: b.Env,
 		Interactive: b.Interactive,
 		Terminal:    b.Terminal,
+		LoginShell:  b.LoginShell,
 		Route:       b.Route,
 	}
 	p.Apply(r)

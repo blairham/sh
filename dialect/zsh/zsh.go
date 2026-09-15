@@ -3485,6 +3485,11 @@ func Apply(r *interp.Runner) {
 	// built on. Independent of the line editor despite arriving with it. See
 	// sched.go.
 	registerSched(r)
+	// Stopping the shell itself, which is two halves: a refusal a script sees
+	// and a stop only a binary that owns the process may make. Not bash's
+	// builtin under the same spelling — job control decides nothing here and
+	// the statuses differ. See suspend.go.
+	registerSuspend(r)
 	// The module loader, which answers per module rather than pretending to
 	// load anything. See zmodload.go.
 	registerZmodload(r)

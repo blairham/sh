@@ -1,0 +1,53 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Command lookup in ksh93 — #2320.
+#
+# Two answers here are ksh93's alone, and both are about the table of
+# remembered locations rather than about the search.
+#
+# The first is that ksh93 keeps looking. bash, zsh and dash all use the
+# location they remembered until PATH is assigned to; ksh93 finds a program
+# that has appeared *earlier* on PATH since, with no assignment in between.
+# A tracked alias is what the table is called here, which is why `hash` is a
+# preset alias for `alias -t --` rather than a builtin — and why its
+# diagnostics name `alias`.
+#
+# The second is `command -v` on a word with a slash in it. The word is a
+# pathname and is not searched for, so there is nothing to report but the
+# word; bash, zsh and dash report exactly that, and ksh93 resolves it against
+# the working directory instead — joining rather than cleaning, so a `./` in
+# the operand survives in the middle of the answer.
+
+mkdir -p bin1 bin2
+printf '#!/bin/sh\nprintf "bin2 tool2\\n"\n' > bin2/tool2; chmod 755 bin2/tool2
+PATH="$PWD/bin1:$PWD/bin2:/usr/bin:/bin"
+
+# Found in the second directory, because the first does not have it yet.
+tool2
+
+# And found in the first the moment it is there, without PATH being touched.
+printf '#!/bin/sh\nprintf "bin1 tool2\\n"\n' > bin1/tool2; chmod 755 bin1/tool2
+tool2
+
+# Assigning PATH its own value changes nothing here, because nothing was
+# being held on to.
+PATH="$PWD/bin1:$PWD/bin2:/usr/bin:/bin"
+tool2
+
+# With the file gone the search finds the copy in bin2.
+rm -f bin1/tool2
+tool2 2>/dev/null; printf 'after the file went -> %s\n' "$?"
+
+# `hash` is the preset alias. Its flags are `alias`'s, so a flag `alias` does
+# not have is an error from `alias` — and a fatal one, which is why the two
+# calls below are inside subshells.
+alias hash
+( hash -t tool2 ) > /dev/null 2>&1; printf 'hash -t -> %s\n' "$?"
+( hash -p /bin/ls lsalias ) > /dev/null 2>&1; printf 'hash -p -> %s\n' "$?"
+
+# A word with a slash, reported by `command -v`.
+printf '#!/bin/sh\nprintf "tool\\n"\n' > bin1/tool; chmod 755 bin1/tool
+command -v ./bin1/tool; printf 'dot slash -> %s\n' "$?"
+command -v bin1/tool; printf 'relative -> %s\n' "$?"
+command -v /bin/ls; printf 'absolute -> %s\n' "$?"

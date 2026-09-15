@@ -1,0 +1,54 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Command lookup in bash — #2320, and the half of the area that is about what
+# the shell *remembers* rather than what it searches.
+#
+# Every shell on the panel keeps a table of where it last found a command, so
+# the second call does not walk PATH again. What bash does with a stale entry
+# is bash's own: when the remembered file is gone, bash reports the command
+# as not found rather than searching again. zsh, ksh93 and dash all fall back
+# to the next directory that has the name.
+#
+# The flags are bash's too. `hash -t`, `-d`, `-p` and `-l` are all accepted
+# here and rejected by the other three — in ksh93 because `hash` there is a
+# preset alias for `alias -t --` rather than a builtin at all.
+
+mkdir -p bin1 bin2
+printf '#!/bin/sh\nprintf "bin2 tool2\\n"\n' > bin2/tool2; chmod 755 bin2/tool2
+PATH="$PWD/bin1:$PWD/bin2:/usr/bin:/bin"
+
+# Found in the second directory, because the first does not have it yet.
+tool2
+
+# Now it is in the first directory too. The remembered location is used and
+# the new file earlier on PATH is not seen — except by ksh93, which is the
+# other end of this and is in ksh/.
+printf '#!/bin/sh\nprintf "bin1 tool2\\n"\n' > bin1/tool2; chmod 755 bin1/tool2
+tool2
+
+# Assigning to PATH is what clears the memory, even when the value assigned
+# is the value it already had.
+PATH="$PWD/bin1:$PWD/bin2:/usr/bin:/bin"
+tool2
+
+# And with the remembered file removed, bash does not look for another: the
+# entry is used, the file behind it is gone, and the answer is 127 with the
+# copy in bin2 still sitting there unfound.
+rm -f bin1/tool2
+tool2 2>/dev/null; printf 'after the remembered file went -> %s\n' "$?"
+
+# `hash` with a name puts an entry in without running anything, and `hash -r`
+# empties the table — after which the search runs again and finds bin2.
+hash -r
+tool2 2>/dev/null; printf 'after hash -r -> %s\n' "$?"
+
+# The flags. Output is dropped: what is asked is which of them the builtin
+# has, and `-t` on a name that is not in the table is the one that answers
+# nonzero.
+hash -r
+( hash -p /bin/ls lsalias ) > /dev/null 2>&1; printf 'hash -p -> %s\n' "$?"
+( hash -t lsalias ) > /dev/null 2>&1; printf 'hash -t on a name it has -> %s\n' "$?"
+( hash -t nosuch_zz ) > /dev/null 2>&1; printf 'hash -t on a name it has not -> %s\n' "$?"
+( hash -l ) > /dev/null 2>&1; printf 'hash -l -> %s\n' "$?"
+( hash -d lsalias ) > /dev/null 2>&1; printf 'hash -d -> %s\n' "$?"

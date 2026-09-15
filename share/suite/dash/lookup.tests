@@ -1,0 +1,40 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Command lookup in dash — #2320, and the area where dash's answers are
+# smaller rather than different.
+#
+# dash reports a name that is nothing as 127 from `command -v` and from
+# `type`, where bash, zsh and ksh93 all answer 1. 127 is the status a *shell*
+# uses for a command it could not find, and dash reuses it for "the utility
+# you asked about is not there" — so a script testing `command -v foo` sees
+# the same number whether the query failed or the query itself was not
+# found.
+#
+# And there is no `builtin`: the way bash, zsh and ksh93 name a builtin past
+# a function of the same name does not exist here, leaving `command` as the
+# only precommand modifier dash has.
+
+mkdir -p bin1
+printf '#!/bin/sh\nprintf "external prog\\n"\n' > bin1/prog; chmod 755 bin1/prog
+PATH="$PWD/bin1:/usr/bin:/bin"
+
+# The query that fails, twice, for a name nothing has ever defined.
+command -v nosuchthing_zz > /dev/null 2>&1; printf 'command -v missing -> %s\n' "$?"
+( type nosuchthing_zz ) > /dev/null 2>&1; printf 'type missing -> %s\n' "$?"
+
+# The controls: the same two queries on names that *are* something answer 0
+# everywhere, so what is being measured is the failure and not the utility.
+command -v prog > /dev/null 2>&1; printf 'command -v a program -> %s\n' "$?"
+command -v true > /dev/null 2>&1; printf 'command -v a builtin -> %s\n' "$?"
+( type true ) > /dev/null 2>&1; printf 'type a builtin -> %s\n' "$?"
+
+# No `builtin`.
+( eval 'builtin true' ) 2>/dev/null; printf 'builtin -> %s\n' "$?"
+
+# And `hash` has no flags at all: every letter the other three take is an
+# error here, and the bare form and `-r` are the whole of it.
+( hash ) > /dev/null 2>&1; printf 'hash -> %s\n' "$?"
+( hash -r ) > /dev/null 2>&1; printf 'hash -r -> %s\n' "$?"
+( hash -t prog ) > /dev/null 2>&1; printf 'hash -t -> %s\n' "$?"
+( hash -l ) > /dev/null 2>&1; printf 'hash -l -> %s\n' "$?"

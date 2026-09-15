@@ -6967,7 +6967,7 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   s=a}b; printf '[%s]' "${s#'a}'}" "${s%'}b'}"; echo
   ```
-- `core/a-quoted-brace-in-a-word-operand-in-posix-mode` — the mode moves where the expansion *ends*, which is a thing a grammar flag cannot be told at run time: bash 5.3 answers `[Vx}y]` without this line and `[Vx}yb'}]` with it, which is its own `sh` column reached the other way. bash 3.2 answers `[Vx}y]` in both, so the change is 5.x's and not bash's. The three shells with no such name refuse the `set` instead. the mode reaches the flag by replacing the Dialect, which is the door SetPosixMode already used for AliasesExpandReservedWords, and the words read before it moved are divided again when they expand — see syntax.ParamExpr.RawTail (#2604)
+- `core/a-quoted-brace-in-a-word-operand-in-posix-mode` — the mode moves where the expansion *ends*, which is a thing a grammar flag cannot be told at run time: bash 5.3 answers `[Vx}y]` without this line and `[Vx}yb'}]` with it, which is its own `sh` column reached the other way. bash 3.2 answers `[Vx}y]` in both, so the change is 5.x's and not bash's. The three shells with no such name refuse the `set` instead. We move it too, and the mode reaches the flag by replacing the Dialect — the door SetPosixMode already used for AliasesExpandReservedWords. The words read before it moved are divided again when they expand; see syntax.ParamExpr.RawTail (#2604)
   ```sh
   set -o posix; v=Vx}y; printf '[%s]' "${v-'a}b'}"; echo
   ```

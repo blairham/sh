@@ -120,6 +120,15 @@ func (r *Runner) timeClause(ctx context.Context, tc *syntax.TimeClause) error {
 		return nil
 	}
 
+	if tc.Negated {
+		// `! time cmd` tests a status exactly as `! cmd` does, so `set -e`
+		// is suspended for the whole clause and inside whatever it calls.
+		// The same rule as the pipeline's, said here because the `!` of
+		// this spelling is on the clause and never reaches the pipeline.
+		r.tested++
+		defer func() { r.tested-- }()
+	}
+
 	selfBefore, childrenBefore, okBefore := processTimes()
 	var timing *pipelineTiming
 	if d.TimeLayout == TimePerCommand {

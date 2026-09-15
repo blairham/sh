@@ -617,9 +617,60 @@ func (r *Runner) Assigned(name string) (string, bool) {
 	return v, ok
 }
 
-// Randoms is the source `RANDOM` draws from, in the range every shell in the
-// panel uses.
-func Randoms() string { return strconv.Itoa(rand.IntN(32768)) }
+// randomModulus is the range `RANDOM` draws in: 0 to 32767, which every shell
+// in the panel that has the parameter uses.
+const randomModulus = 32768
+
+// Randoms is the source `RANDOM` draws from.
+//
+// Seeded or not, and that is the whole of what this holds. An unseeded shell
+// draws from the process generator and is a different number every run, which
+// is what the parameter is for. A script that has assigned to `RANDOM` gets a
+// sequence that is a function of the seed alone — measured 2026-09-14,
+// `RANDOM=42; echo "$RANDOM $RANDOM"` twice in one shell and then the whole
+// script again:
+//
+//	bash 5.3.15   17772 26794    ksh93u+   22700 13681
+//	zsh 5.9.2     17766 11151
+//
+// every pair repeated, in that run and in the next. So all three seed, and no
+// two of them draw the same numbers — the reproducibility is the shared fact
+// and the sequence is each shell's own, which is why this has a generator of
+// its own rather than a table to match.
+//
+// A method rather than the package function it was, because the seed is the
+// shell's: `interp.Randoms()` took none and kept no state a writer could
+// reach, so the assignment was heard, stored for the producer to find, and
+// never acted on. A seeded script was four unrelated numbers where bash gives
+// two repeated ones — and a seeded generator is also the only way a *test* can
+// say anything about a script that uses `RANDOM` (#2827).
+func (r *Runner) Randoms() string {
+	if !r.randomSeeded {
+		return strconv.Itoa(rand.IntN(randomModulus))
+	}
+	// A fresh generator per draw, keyed on the seed and the count, so that the
+	// whole of the state is two integers a subshell can carry away by value.
+	r.randomDrawn++
+	return strconv.Itoa(rand.New(rand.NewPCG(r.randomSeed, r.randomDrawn)).IntN(randomModulus))
+}
+
+// SeedRandoms is what an assignment to `RANDOM` does.
+//
+// The text rather than a number, because what a shell does with a value that
+// is not one is measured rather than chosen: `RANDOM=abc` gives the same
+// sequence as `RANDOM=0` in bash 5.3.15, ksh93u+ and zsh 5.9.2 alike, so a
+// value this cannot read is a zero seed and not a refusal.
+//
+// The count starts again as well, which is the half that makes the sequence
+// reproducible rather than merely derived: measured, a second `RANDOM=42`
+// after two draws gives the same first number as the first `RANDOM=42` did.
+func (r *Runner) SeedRandoms(value string) {
+	n, err := strconv.ParseInt(strings.TrimSpace(value), 10, 64)
+	if err != nil {
+		n = 0
+	}
+	r.randomSeed, r.randomDrawn, r.randomSeeded = uint64(n), 0, true
+}
 
 // Now is what this shell calls the current time: the Clock hook where one is
 // set, and the wall clock otherwise. Every place in the engine that needs the

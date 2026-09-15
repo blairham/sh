@@ -3164,7 +3164,14 @@ func Apply(r *interp.Runner) {
 	// dynamic; they are left unset rather than pinned to a number that
 	// would be wrong as soon as a script had two lines.
 	r.SetDynamic(".sh.version", func(*interp.Runner) string { return kshVersion })
-	r.SetDynamic("RANDOM", func(*interp.Runner) string { return interp.Randoms() })
+	r.SetDynamic("RANDOM", func(rr *interp.Runner) string { return rr.Randoms() })
+	// And an assignment seeds it, which is what makes a script that uses
+	// `RANDOM` reproducible: measured 2026-09-14, `RANDOM=42` twice in one
+	// shell gives the same pair of numbers both times here, in ksh93u+ and
+	// in zsh 5.9.2. Without the writer the assignment was heard and stored
+	// for the producer to find, and the producer had no state to find it
+	// with (#2827).
+	r.SetDynamicWriter("RANDOM", func(rr *interp.Runner, value string) { rr.SeedRandoms(value) })
 	// `typeset -i RANDOM=7000`, measured — where this shell answered
 	// `RANDOM: not found` from a name it had just expanded a number for
 	// (#2451). `LINENO` lists the same way here and does not in bash 5.3,

@@ -3807,7 +3807,14 @@ func Apply(r *interp.Runner) {
 	// prompt and refused it by name in a script (#1090).
 	r.SetPromptStyle(PromptStyle())
 	r.SetSpecial("EUID", strconv.Itoa(os.Geteuid()))
-	r.SetDynamic("RANDOM", func(*interp.Runner) string { return interp.Randoms() })
+	r.SetDynamic("RANDOM", func(rr *interp.Runner) string { return rr.Randoms() })
+	// And an assignment seeds it, which is what makes a script that uses
+	// `RANDOM` reproducible: measured 2026-09-14, `RANDOM=42` twice in one
+	// shell gives the same pair of numbers both times here, in ksh93u+ and
+	// in zsh 5.9.2. Without the writer the assignment was heard and stored
+	// for the producer to find, and the producer had no state to find it
+	// with (#2827).
+	r.SetDynamicWriter("RANDOM", func(rr *interp.Runner, value string) { rr.SeedRandoms(value) })
 	// `typeset -p RANDOM` is `typeset -i10 RANDOM=13859` here — the base
 	// rides on the letter in this shell's listing form, and both are facts
 	// the parameter has to be told, having no attribute record of its own

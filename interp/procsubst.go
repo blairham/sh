@@ -4,6 +4,7 @@
 package interp
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"os"
@@ -114,6 +115,15 @@ func (r *Runner) procSub(ctx context.Context, span syntax.Span) (string, bool) {
 	// Runner.anchorForkedBody for the other four.
 	sub.bodyAnchor = keep.anchor
 
+	// And where its *output* goes, for the dialect that does not wait for the
+	// body: held rather than written straight through. See
+	// procSubPipe.captured.
+	var captured *capturedBody
+	if kind == syntax.ProcSubstOut && r.sem().WritingSubstitutionIsWaitedForAtTheCommand != Yes {
+		captured = &capturedBody{to: sub.Stdout}
+		sub.Stdout = &captured.buf
+	}
+
 	// `>(cmd)` reads the command's input out of the pipe, and the shell can
 	// take that end without waiting for anybody — so it is taken here, on
 	// this goroutine, and a failure is the shell's own and is reported like
@@ -212,8 +222,37 @@ func (r *Runner) procSub(ctx context.Context, span syntax.Span) (string, bool) {
 	if kind == syntax.ProcSubstOut {
 		body = keep.finished()
 	}
-	r.procSubs = append(r.procSubs, procSubPipe{path: path, hold: hold, body: body, keep: keep})
+	r.procSubs = append(r.procSubs, procSubPipe{
+		path: path, hold: hold, body: body, captured: captured, keep: keep,
+	})
 	return path, true
+}
+
+// capturedBody holds what a writing substitution's body wrote until the join
+// that delivers it. See procSubPipe.captured for why it is held at all.
+type capturedBody struct {
+	buf bytes.Buffer
+	to  io.Writer
+}
+
+// waitAndFlush waits for this pipe's body and delivers what it wrote.
+//
+// One helper rather than a `<-p.body` at each join, because a body that was
+// captured has to be *delivered* wherever it is joined — and there are two
+// joins: the command's own, and the end of whichever scope owns the stream.
+// A second copy of the wait that forgot the flush would lose the output
+// silently, which is the failure this whole area keeps producing.
+func (p procSubPipe) waitAndFlush() {
+	if p.body == nil {
+		return
+	}
+	<-p.body
+	if p.captured == nil {
+		return
+	}
+	// The body has returned, so nothing is writing into the buffer any more
+	// and the channel is the happens-before edge that says so.
+	_, _ = io.Copy(p.captured.to, &p.captured.buf)
 }
 
 // substBody parses a substitution's inner source.
@@ -680,6 +719,21 @@ type procSubPipe struct {
 	// any — see endHeldProcSubs for why they are remembered rather than
 	// looked up again at the end.
 	shellEnds []*os.File
+	// captured is where a `>(cmd)`'s body wrote, for the dialect whose
+	// command does not wait for it — see
+	// Semantics.WritingSubstitutionIsWaitedForAtTheCommand. Nil where the
+	// command waits, and nil for the other two forms.
+	//
+	// **A buffer rather than the stream itself**, and that is the part a real
+	// shell gets for free. There the body is a process and the stream is a
+	// descriptor, so two writers are the kernel's problem; here they are one
+	// `io.Writer` and two goroutines, which is a data race in the Runner's
+	// own terms — `go test -race` catches it on any embedder holding a
+	// bytes.Buffer, which is every test in this package. So the bytes are
+	// held and delivered at the join, which is also what makes the ordering
+	// a fact rather than a race: the body's output lands in one piece after
+	// the command, the way bash's does, instead of interleaving with it.
+	captured *capturedBody
 	// keep is the count on this shell's end of the pipe, carried here for
 	// the one thing the command that named the path decides: when the
 	// reading end a `<(cmd)` holds against the kernel's teardown is let go.
@@ -803,7 +857,14 @@ func (r *Runner) removeProcSubs(pipes []procSubPipe) {
 			// After the placeholder above, which is what delivers the
 			// end-of-file the body is reading until: waiting first would be
 			// waiting for a reader this shell has not finished feeding.
-			<-p.body
+			if r.sem().WritingSubstitutionIsWaitedForAtTheCommand == Yes {
+				p.waitAndFlush()
+			} else {
+				// The other answer: the command does not wait, and the join
+				// moves out to whichever scope owns the stream the body is
+				// writing into. See Runner.deferBody.
+				r.deferBody(p)
+			}
 		}
 		_ = os.Remove(p.path)
 	}
@@ -839,15 +900,24 @@ func (r *Runner) removeProcSubs(pipes []procSubPipe) {
 // than one substitution — `exec 3> >(cat) 4> >(cat)` — so closing and waiting
 // in step would wait for the first body while the second's end is still open.
 func (r *Runner) endHeldProcSubs() {
+	// The bodies no command waited for come first, and the order is measured
+	// rather than tidy: such a body writes into *this shell's* output, and
+	// this shell's output can be a held pipe. `exec > >(cat); printf hi >
+	// >(tr a-z A-Z)` is the shape — closing the held end first left `tr`
+	// writing into a closed descriptor and answering `Bad file descriptor`
+	// where bash writes `HI`. Only where this runner is the one holding the
+	// list; a subshell and a pipeline element share their caller's, because
+	// they write into their caller's stream. See Runner.bodies.
+	if r.ownsBodies {
+		r.joinBodies()
+	}
 	held := r.heldProcSubs
 	r.heldProcSubs = nil
 	for _, p := range held {
 		r.closeShellEnds(p)
 	}
 	for _, p := range held {
-		if p.body != nil {
-			<-p.body
-		}
+		p.waitAndFlush()
 		_ = os.Remove(p.path)
 	}
 }
@@ -1257,4 +1327,80 @@ func (r *Runner) holdPipeEnd() func() {
 	e := r.pipeEnd
 	e.keep()
 	return e.letGo
+}
+
+// pendingBodies is the list of writing-substitution bodies nobody has waited
+// for yet, shared between a runner and the subshells and pipeline elements it
+// clones.
+//
+// A mutex because the sharers run concurrently: a `&` job's runner is a clone,
+// and it appends from its own goroutine.
+type pendingBodies struct {
+	mu   sync.Mutex
+	list []procSubPipe
+}
+
+func (p *pendingBodies) add(pipe procSubPipe) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.list = append(p.list, pipe)
+}
+
+// take empties the list and hands back what was in it.
+func (p *pendingBodies) take() []procSubPipe {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	out := p.list
+	p.list = nil
+	return out
+}
+
+// deferBody records a body this command is not waiting for.
+//
+// The list is made here rather than at startup so that a shell that never
+// writes a `>(cmd)` never has one, and so that a Runner built by hand — which
+// is every embedder — needs to fill in nothing.
+func (r *Runner) deferBody(pipe procSubPipe) {
+	if r.bodies == nil {
+		r.bodies, r.ownsBodies = &pendingBodies{}, true
+	}
+	r.bodies.add(pipe)
+}
+
+// collectBodies gives this runner a list of its own and hands back what puts
+// the caller's back, for the one scope that is a boundary for a body's output:
+// a command substitution, whose value is read the moment it returns.
+//
+// Measured on bash 5.3.15, 2026-09-15: a writing body inside `$( … )` has its
+// bytes in the value, after everything the substitution's own commands wrote —
+// `v=$(printf P | tee >(read -r x; sleep .3; printf "[%s]" "$x") >/dev/null;
+// printf IN)` leaves `IN[PIPE]` in `v`. So the join is the collection, and it
+// is not the subshell: the same body in a plain `( … )` writes after the whole
+// script.
+func (r *Runner) collectBodies() func() {
+	outer, owned := r.bodies, r.ownsBodies
+	r.bodies, r.ownsBodies = &pendingBodies{}, true
+	return func() {
+		r.joinBodies()
+		r.bodies, r.ownsBodies = outer, owned
+	}
+}
+
+// joinBodies waits for every body this runner owns and has not waited for.
+//
+// Looped rather than drained once, because a body can name a substitution of
+// its own: joining the list can add to it.
+func (r *Runner) joinBodies() {
+	if r.bodies == nil {
+		return
+	}
+	for {
+		pending := r.bodies.take()
+		if len(pending) == 0 {
+			return
+		}
+		for _, pipe := range pending {
+			pipe.waitAndFlush()
+		}
+	}
 }

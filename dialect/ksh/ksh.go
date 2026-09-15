@@ -402,6 +402,10 @@ func Dialect() syntax.Dialect {
 // Semantics is what ksh93 means where the shells conflict.
 func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
+	// The command that named a `>(cmd)` does not wait for its body, which is
+	// bash's answer and not zsh's — measured as an ordering, `AFTER[PIPE]`
+	// against zsh's `[PIPE]AFTER` (#2197).
+	s.WritingSubstitutionIsWaitedForAtTheCommand = interp.No
 	// A builtin's write into a pipe nobody is reading, with SIGPIPE
 	// disarmed, leaves the command at status 0 here -- silently, where the
 	// same shell reports 1 just as silently for `echo hi >&-`. The two errnos

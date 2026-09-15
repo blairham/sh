@@ -14602,6 +14602,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `procsub/reads-a-command-as-a-file` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `hi` | `hi` | `hi` | `hi` | `hi` | `hi` |
 | `procsub/two-of-them-in-one-command` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `same` | `same` | `same` | `same` | `same` | `same` |
 | `procsub/a-background-job-outlives-the-body` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `BC` | `BC` | `BC` | `BC` | `BC` | `BC` |
+| `procsub/a-writing-bodys-output-lands-after-the-command` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `AFTER[PIPE]` | `AFTER[PIPE]` | `AFTER[PIPE]` | `AFTER[PIPE]` | `[PIPE]AFTER` | `AFTER[PIPE]` |
+| `procsub/a-writing-body-in-a-subshell-lands-after-the-script` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `AFTER[PIPE]` | `AFTER[PIPE]` | `AFTER[PIPE]` | `AFTER[PIPE]` | `[PIPE]AFTER` | `AFTER[PIPE]` |
+| `procsub/a-writing-body-in-a-command-substitution-is-captured` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[IN[PIPE]]AFTER` | `[IN[PIPE]]AFTER` | `[IN[PIPE]]AFTER` | `[IN]AFTER` | `[[PIPE]IN]AFTER` | `[IN[PIPE]]AFTER` |
 | `procsub/a-background-job-after-the-body-execs` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `BC` | `BC` | `BC` | `BC` | `BC` | `BC` |
 | `procsub/a-background-jobs-output-redirected-away` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `done` | `done` | `done` | `done` | `done` | `done` |
 | `procsub/a-command-started-after-the-body-returned` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `LATE` | `LATE` | `LATE` | `LATE` | `LATE` | `LATE` |
@@ -14839,6 +14842,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `procsub/a-background-job-outlives-the-body` — the pipe belongs to the *process* the shell forked for the substitution, so a job that process backgrounds holds a copy and the reader waits for the job rather than for the body — `BC` in all four shells that have the construct. Ours read `B` and then end-of-file, because a body and a job it backgrounds are two goroutines over one descriptor here and the body's return closed it (#1767)
   ```sh
   cat <( { printf B; sleep 0.2; printf C; } & )
+  ```
+- `procsub/a-writing-bodys-output-lands-after-the-command` — *when* the shell stops for a `>(cmd)` body, written as an ordering rather than as a duration so that it can be recorded at all. The bytes themselves are unanimous — every column with the construct writes `[PIPE]` — and where they sit is not: bash, bash as `sh`, bash 3.2 and ksh93 finish the command and let the body deliver afterwards, where zsh holds the command until the body is done. `Semantics.WritingSubstitutionIsWaitedForAtTheCommand`, and the duration rows it would be natural to write instead (`echo >(sleep 3)` is 0s in bash and 3s in zsh) are not reproducible here under either answer: a real shell's body is a process that outlives it and a goroutine is not, so the join is paid at the end of the script rather than dropped. This shell took zsh's ordering everywhere, which was what was available before #2183's join existed to move (#2197)
+  ```sh
+  printf "PIPE\n" | tee >(read -r v; sleep 0.3; printf "[%s]" "$v") >/dev/null; printf AFTER
+  ```
+- `procsub/a-writing-body-in-a-subshell-lands-after-the-script` — which scope the body's output belongs to, which the row above cannot ask: a subshell is **not** a boundary for it in any column — bash and ksh93 deliver after the whole script exactly as they do without the subshell, and zsh still waits at the command inside it. So a body writes into the stream its caller gave it and the join belongs to whoever owns that stream, which is what `Runner.bodies` shares with a clone rather than copying. The row next to this one is where the answer changes
+  ```sh
+  ( printf "PIPE\n" | tee >(read -r v; sleep 0.3; printf "[%s]" "$v") >/dev/null ); printf AFTER
+  ```
+- `procsub/a-writing-body-in-a-command-substitution-is-captured` — and the scope that **is** a boundary. All three bash columns capture the body's bytes into the value, after everything the substitution's own commands wrote — `[IN[PIPE]]` — so the join happens at the collection even in the shells that do not wait at the command. zsh's ordering follows its own answer to the axis, `[[PIPE]IN]`. ksh93 is a third answer and the one not reproduced: it writes `[IN]`, dropping the bytes altogether, which is the single outcome the unanimous half of this rule says no shell has
+  ```sh
+  v=$( printf "PIPE\n" | tee >(read -r x; sleep 0.3; printf "[%s]" "$x") >/dev/null; printf IN ); printf "[%s]AFTER" "$v"
   ```
 - `procsub/a-background-job-after-the-body-execs` — the shape a prompt theme's asynchronous worker is written in: the body backgrounds its worker and then replaces itself, so what holds the pipe is unambiguously the job and not the body. Same answer as the row above in all four, which is what says the `exec` is not what makes the difference
   ```sh

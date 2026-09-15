@@ -179,6 +179,7 @@ ash   UnsetSubscriptSkippedWhenNameUnset
 ash   UpperCaseLetterBesideANumericTypeLetterRecordsNothing
 ash   WholeArraySubscriptAssigningATable
 ash   WholeArraySubscriptAssigningAnArray
+ash   WritingSubstitutionIsWaitedForAtTheCommand
 
 bash  ArithFloatOverflowIsZero
 bash  ArithIntegerOperatorRefusesFloat
@@ -368,6 +369,7 @@ dash  UpperCaseLetterBesideANumericTypeLetterRecordsNothing
 dash  ValuelessDeclarationOfAHeldNameListsIt
 dash  WholeArraySubscriptAssigningATable
 dash  WholeArraySubscriptAssigningAnArray
+dash  WritingSubstitutionIsWaitedForAtTheCommand
 
 ksh   ArithSubscriptSkippedWhenNameUnset
 ksh   AssignmentUpdatesPipelineStatus

@@ -5679,6 +5679,21 @@ echo "st=$?"`,
 		Why:     "the pipe belongs to the *process* the shell forked for the substitution, so a job that process backgrounds holds a copy and the reader waits for the job rather than for the body — `BC` in all four shells that have the construct. Ours read `B` and then end-of-file, because a body and a job it backgrounds are two goroutines over one descriptor here and the body's return closed it (#1767)",
 	},
 	{
+		ID: "procsub/a-writing-bodys-output-lands-after-the-command", Category: "redirection",
+		Snippet: `printf "PIPE\n" | tee >(read -r v; sleep 0.3; printf "[%s]" "$v") >/dev/null; printf AFTER`,
+		Why:     "*when* the shell stops for a `>(cmd)` body, written as an ordering rather than as a duration so that it can be recorded at all. The bytes themselves are unanimous — every column with the construct writes `[PIPE]` — and where they sit is not: bash, bash as `sh`, bash 3.2 and ksh93 finish the command and let the body deliver afterwards, where zsh holds the command until the body is done. `Semantics.WritingSubstitutionIsWaitedForAtTheCommand`, and the duration rows it would be natural to write instead (`echo >(sleep 3)` is 0s in bash and 3s in zsh) are not reproducible here under either answer: a real shell's body is a process that outlives it and a goroutine is not, so the join is paid at the end of the script rather than dropped. This shell took zsh's ordering everywhere, which was what was available before #2183's join existed to move (#2197)",
+	},
+	{
+		ID: "procsub/a-writing-body-in-a-subshell-lands-after-the-script", Category: "redirection",
+		Snippet: `( printf "PIPE\n" | tee >(read -r v; sleep 0.3; printf "[%s]" "$v") >/dev/null ); printf AFTER`,
+		Why:     "which scope the body's output belongs to, which the row above cannot ask: a subshell is **not** a boundary for it in any column — bash and ksh93 deliver after the whole script exactly as they do without the subshell, and zsh still waits at the command inside it. So a body writes into the stream its caller gave it and the join belongs to whoever owns that stream, which is what `Runner.bodies` shares with a clone rather than copying. The row next to this one is where the answer changes",
+	},
+	{
+		ID: "procsub/a-writing-body-in-a-command-substitution-is-captured", Category: "redirection",
+		Snippet: `v=$( printf "PIPE\n" | tee >(read -r x; sleep 0.3; printf "[%s]" "$x") >/dev/null; printf IN ); printf "[%s]AFTER" "$v"`,
+		Why:     "and the scope that **is** a boundary. All three bash columns capture the body's bytes into the value, after everything the substitution's own commands wrote — `[IN[PIPE]]` — so the join happens at the collection even in the shells that do not wait at the command. zsh's ordering follows its own answer to the axis, `[[PIPE]IN]`. ksh93 is a third answer and the one not reproduced: it writes `[IN]`, dropping the bytes altogether, which is the single outcome the unanimous half of this rule says no shell has",
+	},
+	{
 		ID: "procsub/a-background-job-after-the-body-execs", Category: "redirection",
 		Snippet: `cat <( { printf B; sleep 0.2; printf C; } & exec true )`,
 		Why:     "the shape a prompt theme's asynchronous worker is written in: the body backgrounds its worker and then replaces itself, so what holds the pipe is unambiguously the job and not the body. Same answer as the row above in all four, which is what says the `exec` is not what makes the difference",

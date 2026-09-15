@@ -54,6 +54,9 @@ func Dialect() syntax.Dialect {
 // Semantics is what dash means where the shells conflict.
 func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
+	// unanswered WritingSubstitutionIsWaitedForAtTheCommand: this shell has
+	// no process substitution, so there is no `>(cmd)` body for a command to
+	// wait for or not. `echo >(:)` is the two characters as written (#2197).
 	// `export a+=2` is `a+: bad variable name` here, so the append operator
 	// is not an operand this shell's declarations take.
 	s.DeclarationTakesAnAppendOperand = interp.No

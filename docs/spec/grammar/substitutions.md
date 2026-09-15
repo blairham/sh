@@ -614,16 +614,46 @@ its input, zsh waits for it and bash and ksh93 do not:
 | `exec > >(cat); echo hi` | 0s | 0s | 0s |
 | `…; printf AFTER` after the first row | `AFTER[PIPE]` | `AFTER[PIPE]` | **`[PIPE]AFTER`** |
 
-**This implementation waits, in every dialect**, which is zsh's answer
-and is not a preference: here the body is a goroutine and the output is
-the caller's `io.Writer`, so a body cannot outlive the shell the way
-bash's and ksh93's process does. The choice is between zsh's timing and
-losing the bytes, and the bytes are the part the whole panel agrees on.
-Before the wait this shell answered the empty string in 49 runs in 300
-of the binary under that load, and in 4 of 60 of the test covering it
-(#2183). The ordering the wait costs — `[PIPE]AFTER` where bash and
-ksh93 say `AFTER[PIPE]` — is a real disagreement and is filed as an axis
-to add rather than left unrecorded.
+**The bytes are the part the whole panel agrees on**, and they are what a
+goroutine cannot promise for free: the output is the caller's `io.Writer`,
+which stops being read the moment the shell is done, so the descriptor's
+lifetime has to be reconstructed as a join. Before there was one this
+shell answered the empty string in 49 runs in 300 of the binary under
+that load, and in 4 of 60 of the test covering it (#2183).
+
+**Where that join sits is the axis**, and it is
+`Semantics.WritingSubstitutionIsWaitedForAtTheCommand`: zsh yes · bash
+no · ksh93 no · dash and ash unanswered, having no `>(cmd)` at all. Yes
+holds the command that named the body until the body is done — the
+`[PIPE]AFTER` ordering. No lets the command finish and moves the join
+out to the scope that owns the stream the body is writing into, which
+delivers `AFTER[PIPE]`.
+
+The **duration** rows above are not reproducible under either answer and
+are not what the axis moves. A real shell's body is a process that
+outlives the shell, so `echo >(sleep 3)` costs it nothing; here the
+process cannot leave before the goroutine has written, so the join is
+paid at the end of the script instead of at the command. What moves is
+the **ordering**, which is the row the corpus grades.
+
+**Which scope owns the stream** is a second measurement, and a subshell
+is not it. Measured 2026-09-15 on bash 5.3.15 and ksh93:
+
+| written | bash 5.3 | ksh93 | zsh 5.9.2 |
+| --- | --- | --- | --- |
+| `( printf P \| tee >(slow) >/dev/null ); printf AFTER` | `AFTER` then `[PIPE]` | the same | `[PIPE]AFTER` |
+| `v=$(printf P \| tee >(slow) >/dev/null; printf IN); echo "[$v]"` | `[IN[PIPE]]` | `[IN]` | `[[PIPE]IN]` |
+
+So a **command substitution is a boundary** — the bytes are captured into
+the value, after everything the substitution's own commands wrote — and a
+plain subshell and a pipeline element are not: they write into their
+caller's stream and their bodies are the caller's to join. That is
+`Runner.bodies`, shared with a clone and replaced only by a command
+substitution.
+
+ksh93's second cell is a third answer and is not reproduced: it drops the
+body's bytes rather than capturing them, which is the one outcome the
+first paragraph says no shell has.
 
 **Except where the script is itself still holding the pipe.** `exec >
 >(cat)` hands the shell's output to a body that reads until that end

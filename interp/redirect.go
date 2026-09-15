@@ -13,7 +13,9 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 
 	"github.com/blairham/sh/syntax"
@@ -661,19 +663,19 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			// a temporary file nothing ever renames or removes.
 			renameTo := ""
 			if op == syntax.TokGreatSemi && r.redirectForBuiltin != "exec" {
-				tmp, terr := os.CreateTemp(filepath.Dir(path), ".sh-rename-")
-				if terr != nil {
-					r.emit(ctx, Event{Kind: EventError, Action: action, Err: terr})
-					r.diagf("%s\n", Wording(r.diag().CannotCreate,
-						"cannot create %[1]s: %[2]s",
-						name, r.diag().openReason(terr, true)))
+				renameTo, path = path, renameOnSuccessTemp(path)
+				// Gated as its own open, because it is its own file: the
+				// target's permission was asked about above and this is a
+				// second name in the same directory. Both have to be
+				// allowed for the write to happen, which is the honest
+				// reading — a policy that may see this directory at all
+				// sees both.
+				action = r.act(Action{Kind: ActionOpen, Path: path, Write: true})
+				if !r.allowed(ctx, action) {
 					r.status = r.diag().redirectFailureStatus()
 					r.redirErr = true
 					return closers, nil
 				}
-				_ = tmp.Close()
-				renameTo, path = path, tmp.Name()
-				action.Path = path
 			}
 			// A background job's pid is settled before an open that may never
 			// return, so that `&` can hand the shell back. See
@@ -2242,25 +2244,51 @@ type renameOnSuccess struct {
 
 func (t renameOnSuccess) Close() error {
 	err := t.f.Close()
-	if t.r.status != 0 {
+	finishRenameOnSuccess(t.temp, t.target, t.r.status == 0)
+	return err
+}
+
+// renameOnSuccessTemp names the file a `>;` writes into: a hidden name in the
+// target's **own directory**, because a rename across filesystems is not a
+// rename — it would be a copy with a window in the middle, which is the one
+// thing this operator exists to avoid.
+//
+// Numbered rather than random, the way a process substitution's own files
+// are: the pid keeps two shells apart and the counter keeps one shell's
+// several apart, and both are needed because a loop can reach this twice
+// before the first rename has happened.
+func renameOnSuccessTemp(target string) string {
+	return filepath.Join(filepath.Dir(target),
+		".sh-rename-"+strconv.Itoa(os.Getpid())+"-"+
+			strconv.FormatUint(renameOnSuccessSeq.Add(1), 10))
+}
+
+var renameOnSuccessSeq atomic.Uint64
+
+// finishRenameOnSuccess is the filesystem half of a `>;`, in a function of its
+// own so that what reaches the filesystem is nameable.
+//
+// Outside the gate deliberately, and the reason is the open above it: the
+// target was asked about as an `ActionOpen` with `Write` set and the
+// temporary as a second one, so a policy that refused either never got here.
+// What is left is completing a write two gate consultations have already
+// allowed, on a path this shell chose and a path the script named.
+func finishRenameOnSuccess(temp, target string, succeeded bool) {
+	if !succeeded {
 		// The command failed, so the target is left exactly as it was — and
 		// a target that did not exist is still not there. Removing the
 		// temporary is the whole of that; nothing else happened to the
 		// target at any point.
-		_ = os.Remove(t.temp)
-		return err
+		_ = os.Remove(temp)
+		return
 	}
-	if st, serr := os.Stat(t.target); serr == nil {
+	if st, err := os.Stat(target); err == nil {
 		// Only where the target is there to have a mode. A new file keeps
 		// the temporary's own, which is what a shell creating it with `>`
 		// would have given it.
-		_ = os.Chmod(t.temp, st.Mode().Perm())
+		_ = os.Chmod(temp, st.Mode().Perm())
 	}
-	if rerr := os.Rename(t.temp, t.target); rerr != nil {
-		_ = os.Remove(t.temp)
-		if err == nil {
-			err = rerr
-		}
+	if err := os.Rename(temp, target); err != nil {
+		_ = os.Remove(temp)
 	}
-	return err
 }

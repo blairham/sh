@@ -193,6 +193,21 @@ var exempt = map[string]string{
 	"interp.nudgeFifoEOF":    "the same pipe again, opened to give a waiting reader end-of-file.",
 	"interp.mkfifo":          "the named pipe this shell makes for a substitution, in its own directory.",
 	"interp.procSub":         "the same pipe, removed when the substitution that made it is done.",
+	"interp.heredocReader": "the spool a here-document's or a here-string's body is put on, so " +
+		"that a child naming the descriptor can read it (#2759). The text is this shell's own — " +
+		"a string the parser produced — and there is no path a script named: the file is made " +
+		"with os.CreateTemp under the temporary directory and unlinked before a byte is " +
+		"written, so nothing in the filesystem ever names it and the descriptor already open " +
+		"on it is the only way to it. The other medium is an os.Pipe and reaches no name at " +
+		"all. A refusal here would refuse a construct every shell performs and protect " +
+		"nothing.",
+	"interp.finishRenameOnSuccess": "the rename half of ksh93's `>;` (#918), which completes a " +
+		"write two gate consultations have already allowed: applyRedirs asks about the target " +
+		"as an ActionOpen with Write set and about the temporary beside it as a second one, " +
+		"and a policy refusing either never reaches this. What is left is the move, the mode " +
+		"carried over from the target it replaces, and the removal of this shell's own " +
+		"temporary where the command failed — no path beyond those two, and neither of them " +
+		"new to the gate.",
 	"interp.newSubstFile": "the regular file `=(cmd)` writes instead of a pipe, made in the " +
 		"same directory as the pipes, numbered by the same counter and removed by the same " +
 		"removeProcSubs. The script named the command, never the path — see Runner.ownPipe, " +

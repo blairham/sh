@@ -9408,8 +9408,9 @@ printf "[bad:%s:%s]\n" "$?" "$(cat t)"
 	},
 	{
 		ID: "redirection/a-space-before-the-semicolon-is-not-the-operator", Category: "redirection",
-		Snippet: `echo x > ; f; echo "st=$?"`,
-		Why:     "the `;` is part of the operator and has to be tight against the `>`. ksh93 refuses this exactly as the five shells without `>;` do, so the operator is one spelling rather than a marker that generalizes — the same care `ClobberOverrideMarker` records taking, and the reason `>>;` and `<;` are refused there too",
+		SyntaxError: true,
+		Snippet:     `echo x > ; f; echo "st=$?"`,
+		Why:         "the `;` is part of the operator and has to be tight against the `>`. ksh93 refuses this exactly as the five shells without `>;` do, so the operator is one spelling rather than a marker that generalizes — the same care `ClobberOverrideMarker` records taking, and the reason `>>;` and `<;` are refused there too",
 	},
 	{
 		ID: "heredoc/a-body-reaches-a-child-that-names-its-descriptor", Category: "redirection",
@@ -16772,9 +16773,9 @@ printf "[%s]" .@(hid); echo`,
 		Why:     "the third route into the same scanner, and the one whose answer is not a match: where a group *starts* a word in argument position the shell with bare groups reads its parentheses as glob qualifiers instead, so `v(<5-6>)` is `unknown file attribute` rather than a pattern — while the bare range beside it expands. Recorded because the fix for #1217 has to reach that reading rather than turn it into a parse error, and a silent expansion there would be the wrong answer at status 0",
 	},
 	{
-		ID: "pat/a-numeric-range-against-the-filesystem", Category: "pattern matching", SyntaxError: true,
+		ID: "pat/a-numeric-range-against-the-filesystem", Category: "pattern matching",
 		Snippet: `touch 1 2 10 007 21 22 abc; echo <->; echo <2-9>; echo 2<->; echo <->zzz; echo after`,
-		Why:     "the whole of the expansion half in one row: a range is matched per component and sorted with everything else, the digits in front of one are part of the word rather than a file descriptor — `2<->` names `21` and `22` and is not a redirection of descriptor 2 — and a miss is the ordinary unmatched-pattern answer, which in this shell stops the command, so `after` never runs. ksh93's cell is the second finding here and is not this change's: it *parses* `echo <->` as a redirection from a file called `-` — and then as the `>;` operator it alone has, whose target is the word behind the `;`. So the `echo done` after it is this command's argument rather than the next command, which is why that column reaches nothing. Modeled in the ksh grammar by `Dialect.RenameOnSuccessRedirect` (#918); the rows under `redirection/a-write-that-only-lands-if-the-command-succeeded` are where the operator itself is pinned",
+		Why:     "the whole of the expansion half in one row: a range is matched per component and sorted with everything else, the digits in front of one are part of the word rather than a file descriptor — `2<->` names `21` and `22` and is not a redirection of descriptor 2 — and a miss is the ordinary unmatched-pattern answer, which in this shell stops the command, so `after` never runs. ksh93's cell is the second finding here and is not this change's: it *parses* `echo <->` as a redirection from a file called `-` — and then as the `>;` operator it alone has, whose target is the word behind the `;`. So the `echo done` after it is this command's argument rather than the next command, which is why that column reaches nothing. Modeled in the ksh grammar by `Dialect.RenameOnSuccessRedirect` (#918); `redirection/a-write-that-only-lands-if-the-command-succeeded` is where the operator itself is pinned. This row is no longer marked a syntax error, and that is the change rather than an omission: the corpus grammar is the union of all seven columns, so text one of them parses is text that grammar reads",
 	},
 	{
 		ID: "pat/an-extended-closure-is-behind-an-option", Category: "pattern matching",

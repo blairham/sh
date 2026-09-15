@@ -818,6 +818,10 @@ func Semantics() interp.Semantics {
 	// stream. ksh93 is the mirror image of both rows (#770).
 	s.BrokenPipeWriteErrorFailsTheCommand = interp.Yes
 	s.ArithIntegerOperatorRefusesFloat = interp.No
+	// A numeral a double cannot hold saturates: `$((1e400))` is `Inf` and
+	// `$((-1e400))` is `-Inf`, the same answers the arithmetic gives for a
+	// value that overflowed while being computed.
+	s.ArithFloatOverflowIsZero = interp.No
 	// A negative exponent is a float answer here, not a refusal: `2**-1`
 	// is 0.5.
 	s.ArithNegativeExponentIsError = interp.No

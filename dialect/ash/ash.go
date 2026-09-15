@@ -881,6 +881,10 @@ func Semantics() interp.Semantics {
 	// bash's side of the split (#2272).
 	s.ArithNegativeExponentIsError = interp.Yes
 
+	// unanswered ArithFloatOverflowIsZero: no floats here either, so
+	// `$((1e400))` is a syntax error rather than a number out of range and
+	// the axis is unreachable.
+
 	// The right operand of `&&` and `||` is evaluated even when the left has
 	// already decided the answer, so an assignment written there takes
 	// effect: `x=0; $((0 && (x=9)))` leaves x at 9 and `y=0; $((1 || (y=8)))`

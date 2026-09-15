@@ -248,6 +248,11 @@ func Semantics() interp.Semantics {
 	// counts, -d, -t, -u) is refused as unknown here.
 	s.ReadOptions = "rp:"
 	// dash has the two POSIX letters and calls anything else illegal.
+	// unanswered ArithFloatOverflowIsZero: dash has no floats, so `1e400` is
+	// not a number out of range but a word its arithmetic cannot read at
+	// all. Measured 2026-09-14, `$((1e400))` is `arithmetic expression:
+	// expecting EOF: "1e400"` at 2, which is the same complaint `$((1e4))`
+	// gets — the axis is about a value, and no value is ever read (#2766).
 	// unanswered EmptyAssociativeKeyRefusesTheLength: there is no keyed
 	// table to take the length of an element of. Measured 2026-09-12, `w=;
 	// typeset -A m` is `typeset: not found` and `${#m[$w]}` is `Bad

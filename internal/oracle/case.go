@@ -16374,6 +16374,16 @@ printf 'TWO=still-running\n'`,
 		Why:     "zsh writes a trailing point so a float still reads as one, and ksh93 writes the integer — same arithmetic, two spellings of four",
 	},
 	{
+		ID: "axis/arith-float-overflow", Category: "arithmetic",
+		Snippet: `echo $((1e400)); echo $((-1e400)); echo $((1e300*1e300)); echo "st=$?"`,
+		Why:     "what a float numeral too large for a double comes to, which the two columns with floats answer in opposite directions (#2766). zsh saturates and writes `Inf`; ksh93 loses the value and writes `-0`. The second line is what says the sign belongs to the reading rather than to the numeral: the unary minus is applied to a zero that is already negative, so `-1e400` is `0` where `1e400` is `-0`, and a reading that took the sign as part of the numeral would have answered them alike. The third line is the control that keeps this about the *numeral*: the same magnitude reached by multiplying is `inf` in ksh93 too, so a rule that made every overflow zero would contradict the column it was measured from. The three shells without floats never reach the question and refuse the word while reading it",
+	},
+	{
+		ID: "arith/an-overflowed-numeral-out-of-a-variable", Category: "arithmetic",
+		Snippet: `x=1e400; echo $((x)); echo $((x+1)); echo $((1e-400)); echo "st=$?"`,
+		Why:     "the other reader, and in the shell whose two readers part: ksh93 answers `0` for a numeral that came out of a variable where the identical numeral written in the expression is `-0`, and zsh answers `Inf` at both sites. The second line is the value rather than its spelling — `x+1` is 1 where the value is any zero and `Inf` where it saturated — so the row still discriminates if a column writes its zero without a sign. The third line is the counter-case that keeps this about *overflow*: an underflow is zero in both columns with nothing to choose between, so a fix that took the axis's answer for every out-of-range numeral would be wrong here",
+	},
+	{
 		ID: "arith/float-precision-differs", Category: "arithmetic",
 		Snippet: `echo $((0.1+0.2))`,
 		Why:     "the classic float, and the two shells show it differently: 15 significant digits rounds it to 0.3 and 17 does not, so the precision is a value the dialect supplies",

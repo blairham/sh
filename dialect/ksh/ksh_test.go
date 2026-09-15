@@ -133,6 +133,10 @@ func TestSemantics(t *testing.T) {
 		// attribute's: `$((010))` is 8 and `typeset -i d=010` is 10.
 		{"IntegerAssignmentReadsALeadingZeroAsDecimal", s.IntegerAssignmentReadsALeadingZeroAsDecimal, interp.Yes},
 		{"ArithIntegerOperatorRefusesFloat", s.ArithIntegerOperatorRefusesFloat, interp.Yes},
+		// A numeral a double cannot hold is lost rather than saturated:
+		// `$((1e400))` is `-0` where the same value computed,
+		// `$((1e300*1e300))`, is `inf` (#2766).
+		{"ArithFloatOverflowIsZero", s.ArithFloatOverflowIsZero, interp.Yes},
 		{"LastPipelineElementInCurrentShell", s.LastPipelineElementInCurrentShell, interp.Yes},
 		// A `jobs` listing: which end it starts from, and whether a job that
 		// has already ended appears in it at all. Both split the panel two

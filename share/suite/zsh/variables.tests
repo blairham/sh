@@ -1,0 +1,56 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Two things zsh does with a declaration and one thing it does with IFS —
+# #2316's zsh/ half.
+#
+# The declaration rule is the one that matters: inside a function, zsh's
+# declaration builtins make the name *local by default*. `readonly RF=fixed`
+# in a function is a local readonly here and a shell-wide one in bash, ksh93
+# and dash, so a function that fixes a value for the rest of the script fixes
+# it for itself and nothing else — and the name is unset the moment the call
+# returns.
+#
+# `export` is the exception, and the pair is what makes the rule visible:
+# export from inside a function reaches the shell in every column including
+# this one, so this is not "declarations in functions are local" as a blanket
+# and cannot be learned as one.
+#
+# IFS is the third. Its default is space, tab and newline in the other three
+# and space, tab, newline and NUL here — which is a field separator a script
+# cannot type and will not expect, and is the reason `IFS=` is written at the
+# top of so much portable shell.
+#
+# The file ends with the assignment zsh refuses hardest: writing to a readonly
+# ends a non-interactive shell here, where the other three report the refusal
+# and carry on. It is last because nothing can follow it.
+
+# `readonly` inside a function, and the same line's value after the call.
+rf() { readonly RF=fixed; printf 'inside [%s]\n' "$RF"; }
+rf
+printf 'after the call [%s]\n' "${RF-unset}"
+
+# Twice, to show it is the call and not the name: a second call gets a fresh
+# one rather than tripping over the first.
+rf
+printf 'after a second call [%s]\n' "${RF-unset}"
+
+# `export` from a function, which reaches the shell here as it does anywhere.
+ef() { export EF=exported; }
+ef
+printf 'export from a function [%s]\n' "${EF-unset}"
+
+# And a plain assignment, which has never been scoped anywhere.
+pf() { PF=plain; }
+pf
+printf 'plain from a function [%s]\n' "${PF-unset}"
+
+# The default IFS, by length and then by byte.
+printf 'IFS length %s\n' "${#IFS}"
+printf 'IFS bytes [%s]\n' "$(printf '%s' "$IFS" | od -An -c | tr -s ' ')"
+
+# Writing to a readonly. Nothing runs after this line.
+readonly RO=fixed
+printf 'about to assign\n'
+RO=changed
+printf 'this line is not reached\n'

@@ -64,15 +64,14 @@ import (
 // is — see the `module/rm` route in internal/sandboxcheck. A name made
 // reachable without that would be #2260's escape-the-day-it-works.
 //
-// **`-s` is refused by name.** Four of the commands take it, and it is not a
-// variation on what they do: it asks that no symbolic link be followed *during
-// the descent*, so that a recursive `rm` of a deep tree cannot be walked out of
-// its own subtree by a link or by a directory moved under it while it runs.
-// That is a promise about how each component is opened, and an implementation
-// that only checked the operand would be claiming the guarantee while leaving
-// the hole it exists to close. Named as missing rather than accepted, which is
-// the same call zmodload.go makes for its own letters: a script can tell a
-// shell that lacks one from a typo.
+// **`-s` is the paranoid descent**, built since #1669 and living in
+// filesparanoid.go. Four of the commands take it, and it is not a variation on
+// what they do: it asks that no symbolic link be followed *on the way to* an
+// operand, so that a recursive `rm` of a deep tree cannot be walked out of its
+// own subtree by a link or by a directory moved under it while it runs. It was
+// refused by name until the descent could really be made, because an
+// implementation that only lstat'd the operand would have been claiming the
+// guarantee while leaving the hole it exists to close.
 
 // fileOp is one of the nine, and everything about it that is not its own work:
 // the name it is registered under, the option letters it takes, and how many
@@ -100,8 +99,12 @@ type fileFlags struct {
 	parents     bool // -p
 	recursive   bool // -R and -r
 	symbolic    bool // -s, on `ln` only, where it means a symbolic link
-	mode        string
-	haveMode    bool
+	// paranoid is `-s` on the four commands that are not `ln`: no directory
+	// component of an operand may be a symbolic link, and the descent holds
+	// each directory by descriptor. See filesparanoid.go.
+	paranoid bool
+	mode     string
+	haveMode bool
 }
 
 func registerFilesModule(r *interp.Runner) {
@@ -182,11 +185,7 @@ func fileOptions(r *interp.Runner, op fileOp, args []string) (flags fileFlags, r
 				r.Diagnosef("bad option: -%c\n", letter)
 				return flags, nil, 1
 			}
-			if letter == fileParanoid && op.name != "ln" {
-				r.Diagnosef("-%c is not implemented yet\n", letter)
-				return flags, nil, 1
-			}
-			fileLetter(&flags, letter)
+			fileLetter(&flags, letter, op.name)
 		}
 	}
 	return flags, rest, 0
@@ -206,7 +205,7 @@ func fileLetterValue(word string, rest *[]string, i int) (string, bool) {
 	return value, true
 }
 
-func fileLetter(flags *fileFlags, letter byte) {
+func fileLetter(flags *fileFlags, letter byte, command string) {
 	switch letter {
 	case 'd':
 		flags.dirs = true
@@ -222,8 +221,18 @@ func fileLetter(flags *fileFlags, letter byte) {
 		flags.parents = true
 	case 'R', 'r':
 		flags.recursive = true
-	case 's':
-		flags.symbolic = true
+	case fileParanoid:
+		// The one letter whose meaning is the command's rather than its own:
+		// on `ln` it asks for a symbolic link, which is why anybody calls
+		// that command at all, and on the other four it is the paranoid
+		// descent. The two never meet within one command, which is what
+		// makes the command name enough to tell them apart. See
+		// filesparanoid.go.
+		if command == "ln" {
+			flags.symbolic = true
+			return
+		}
+		flags.paranoid = true
 	}
 }
 
@@ -251,11 +260,11 @@ func fileChown(r *interp.Runner, ctx context.Context, flags fileFlags, args []st
 	}
 	status := 0
 	for _, path := range args[1:] {
-		if !fileWalk(r, ctx, flags, path, func(p string) error {
+		if !fileWalk(r, ctx, flags, path, func(p filePlace) error {
 			if flags.noDeref {
-				return os.Lchown(p, uid, gid)
+				return p.lchown(uid, gid)
 			}
-			return os.Chown(p, uid, gid)
+			return p.chown(uid, gid)
 		}) {
 			status = 1
 		}
@@ -345,7 +354,7 @@ func fileChmod(r *interp.Runner, ctx context.Context, flags fileFlags, args []st
 	}
 	status := 0
 	for _, path := range args[1:] {
-		if !fileWalk(r, ctx, flags, path, func(p string) error { return os.Chmod(p, mode) }) {
+		if !fileWalk(r, ctx, flags, path, func(p filePlace) error { return p.chmod(mode) }) {
 			status = 1
 		}
 	}
@@ -377,39 +386,38 @@ func fileOctalMode(text string) (fs.FileMode, bool) {
 // The directory itself is changed before its contents, which is the order the
 // manual states and the order that matters: a `chmod -R 0` that took the
 // contents first would still be able to read the directory to find them.
-func fileWalk(r *interp.Runner, ctx context.Context, flags fileFlags, path string, apply func(string) error) bool {
-	base := shellPath(r, path)
+func fileWalk(r *interp.Runner, ctx context.Context, flags fileFlags, path string,
+	apply func(filePlace) error,
+) bool {
+	// The operand's own path, resolved the way the letters asked for: by
+	// name, or component by component with each directory held open. See
+	// filesparanoid.go.
+	place, err := operandPlace(r, flags, path)
+	if err != nil {
+		r.Diagnosef("%s\n", fileReason(path, err))
+		return false
+	}
+	defer place.closePlace()
 	// Whether the operation follows a link decides what has to be permitted.
 	// `-h` makes it an `lchown`, which changes the link itself and therefore
 	// asks only about the name; without it the call lands on whatever the
 	// link points at, and the object at the end of the chain is what the
 	// rule is about — see fileMayModifyTarget.
-	allow := func(p string) bool {
+	allow := func(p filePlace) bool {
 		if flags.noDeref {
-			return fileMayModify(r, ctx, p)
+			return fileMayModifyAt(r, ctx, p)
 		}
-		return fileMayModifyTarget(r, ctx, p)
+		return fileMayModifyTargetAt(r, ctx, p)
 	}
 	if !flags.recursive {
-		if !allow(base) {
+		if !allow(place) {
 			return false
 		}
-		if err := apply(base); err != nil {
+		if err := apply(place); err != nil {
 			r.Diagnosef("%s\n", fileReason(path, err))
 			return false
 		}
 		return true
-	}
-	// The walk is over where the name is and every complaint is about the
-	// name as written, so each path the walk hands back is put back under the
-	// operand it came from. A recursive failure that named an absolute path
-	// the script never wrote would be a diagnostic about a different tree.
-	said := func(p string) string {
-		rel, err := filepath.Rel(base, p)
-		if err != nil || rel == "." {
-			return path
-		}
-		return filepath.Join(path, rel)
 	}
 	// The descent is this package's own rather than filepath.WalkDir's,
 	// because WalkDir reads every directory it passes through with the `os`
@@ -421,36 +429,54 @@ func fileWalk(r *interp.Runner, ctx context.Context, flags fileFlags, path strin
 	// Otherwise it is WalkDir's own shape: pre-order, so the directory is
 	// changed before its contents as the manual requires, and a link is never
 	// descended into, because the entry is what Lstat says it is.
+	//
+	// Every complaint names the operand and the path under it, never the
+	// resolved one: a recursive failure that named an absolute path the
+	// script never wrote would be a diagnostic about a different tree. That
+	// is filePlace.said, which the descent carries down with it.
 	ok := true
-	var walk func(p string)
-	walk = func(p string) {
+	var walk func(p filePlace)
+	walk = func(p filePlace) {
 		if !allow(p) {
 			ok = false
 			return
 		}
 		if err := apply(p); err != nil {
-			r.Diagnosef("%s\n", fileReason(said(p), err))
+			r.Diagnosef("%s\n", fileReason(p.said, err))
 			ok = false
 		}
-		info, err := os.Lstat(p)
+		info, err := p.lstat()
 		if err != nil || !info.IsDir() {
 			return
 		}
-		entries, err := fileReadDir(r, ctx, p)
+		entries, err := fileReadDirAt(r, ctx, p)
 		if err != nil {
-			r.Diagnosef("%s\n", fileReason(said(p), err))
+			r.Diagnosef("%s\n", fileReason(p.said, err))
 			ok = false
 			return
 		}
+		// The directory is entered once and every entry under it is named
+		// from *that* descent, which is the half of `-s` a recursive walk
+		// adds: a name resolved from the top again is a name a rename could
+		// have moved under the walk's feet.
+		inside, err := p.enter()
+		if err != nil {
+			r.Diagnosef("%s\n", fileReason(p.said, err))
+			ok = false
+			return
+		}
+		if inside != nil {
+			defer func() { _ = inside.Close() }()
+		}
 		for _, e := range entries {
-			walk(filepath.Join(p, e.Name()))
+			walk(p.child(inside, e.Name()))
 		}
 	}
-	if _, err := fileLstat(r, ctx, base); err != nil {
+	if _, err := fileLstatAt(r, ctx, place); err != nil {
 		r.Diagnosef("%s\n", fileReason(path, err))
 		return false
 	}
-	walk(base)
+	walk(place)
 	return ok
 }
 
@@ -501,7 +527,7 @@ func fileLn(r *interp.Runner, ctx context.Context, flags fileFlags, args []strin
 		// `-i` answered yes are the only two things that clear it, and both
 		// clear it by unlinking first, because the system call itself will
 		// not overwrite.
-		if !fileConfirm(r, ctx, "zf_ln", "replace", flags, target, false) {
+		if !fileConfirm(r, ctx, "zf_ln", "replace", flags, filePlaceOf(r, target), false) {
 			continue
 		}
 		if flags.force || flags.interactive {
@@ -563,7 +589,7 @@ func fileMv(r *interp.Runner, ctx context.Context, flags fileFlags, args []strin
 		// destination that exists and cannot be written to, which is the
 		// manual's default and is what an unguarded `zf_mv` onto a read-only
 		// file stops for.
-		if !fileConfirm(r, ctx, "zf_mv", "replace", flags, target, true) {
+		if !fileConfirm(r, ctx, "zf_mv", "replace", flags, filePlaceOf(r, target), true) {
 			continue
 		}
 		if err := os.Rename(shellPath(r, src), shellPath(r, target)); err != nil {
@@ -729,9 +755,23 @@ func fileRm(r *interp.Runner, ctx context.Context, flags fileFlags, args []strin
 	}
 	status := 0
 	for _, path := range args {
-		if !fileRemove(r, ctx, flags, path) {
+		// The operand's own path, resolved the way the letters asked for.
+		// See filesparanoid.go.
+		place, err := operandPlace(r, flags, path)
+		if err != nil {
+			if flags.force && errors.Is(err, fs.ErrNotExist) {
+				continue
+			}
+			if !flags.force {
+				r.Diagnosef("%s\n", fileReason(path, err))
+				status = 1
+			}
+			continue
+		}
+		if !fileRemove(r, ctx, flags, place) {
 			status = 1
 		}
+		place.closePlace()
 	}
 	return status
 }
@@ -739,8 +779,8 @@ func fileRm(r *interp.Runner, ctx context.Context, flags fileFlags, args []strin
 // fileRemove is one operand of `rm`, and the whole of the letter precedence:
 // `-d` unlinks whatever it is and takes precedence over `-R` and `-r`, and
 // `-f` silences everything and takes precedence over `-i`.
-func fileRemove(r *interp.Runner, ctx context.Context, flags fileFlags, path string) bool {
-	info, err := fileLstat(r, ctx, path)
+func fileRemove(r *interp.Runner, ctx context.Context, flags fileFlags, place filePlace) bool {
+	info, err := fileLstatAt(r, ctx, place)
 	if err != nil {
 		if flags.force && errors.Is(err, fs.ErrNotExist) {
 			// `-f` "suppresses all error indications", and a name that is not
@@ -749,46 +789,65 @@ func fileRemove(r *interp.Runner, ctx context.Context, flags fileFlags, path str
 			// far as writing the file.
 			return true
 		}
-		r.Diagnosef("%s\n", fileReason(path, err))
+		r.Diagnosef("%s\n", fileReason(place.said, err))
 		return false
 	}
 	switch {
 	case flags.dirs:
-		return fileUnlinkOne(r, ctx, flags, path)
+		return fileUnlinkOne(r, ctx, flags, place)
 	case info.IsDir() && !flags.recursive:
-		r.Diagnosef("%s: is a directory\n", path)
+		r.Diagnosef("%s: is a directory\n", place.said)
 		return false
 	case info.IsDir():
-		return fileRemoveTree(r, ctx, flags, path)
+		return fileRemoveTree(r, ctx, flags, place)
 	}
-	return fileUnlinkOne(r, ctx, flags, path)
+	return fileUnlinkOne(r, ctx, flags, place)
 }
 
 // fileRemoveTree empties a directory and then removes it, which is the order
 // the manual states: everything below goes before the directory itself does.
-func fileRemoveTree(r *interp.Runner, ctx context.Context, flags fileFlags, path string) bool {
-	entries, err := fileReadDir(r, ctx, path)
+func fileRemoveTree(r *interp.Runner, ctx context.Context, flags fileFlags, place filePlace) bool {
+	entries, err := fileReadDirAt(r, ctx, place)
 	if err != nil {
 		if flags.force {
 			return true
 		}
-		r.Diagnosef("%s\n", fileReason(path, err))
+		r.Diagnosef("%s\n", fileReason(place.said, err))
 		return false
+	}
+	// Entered once, and every entry below named from *that* descent — which
+	// is the half of `-s` that only a recursive removal has: a name resolved
+	// from the top again is a name a rename could have moved under the walk's
+	// feet, and that is the manual's second promise. Without the letter the
+	// descent hands back nothing and the names join as they always did.
+	inside, err := place.enter()
+	if err != nil {
+		if flags.force {
+			return true
+		}
+		r.Diagnosef("%s\n", fileReason(place.said, err))
+		return false
+	}
+	if inside != nil {
+		defer func() { _ = inside.Close() }()
 	}
 	ok := true
 	for _, e := range entries {
-		if !fileRemove(r, ctx, flags, filepath.Join(path, e.Name())) {
+		if !fileRemove(r, ctx, flags, place.child(inside, e.Name())) {
 			ok = false
 		}
 	}
-	if !fileMayModify(r, ctx, path) {
+	if !fileMayModifyAt(r, ctx, place) {
 		return false
 	}
-	if err := os.Remove(shellPath(r, path)); err != nil {
+	if !fileConfirm(r, ctx, "zf_rm", "remove", flags, place, true) {
+		return ok
+	}
+	if err := place.removeDir(); err != nil {
 		if flags.force {
 			return ok
 		}
-		r.Diagnosef("%s\n", fileReason(path, err))
+		r.Diagnosef("%s\n", fileReason(place.said, err))
 		return false
 	}
 	return ok
@@ -796,21 +855,21 @@ func fileRemoveTree(r *interp.Runner, ctx context.Context, flags fileFlags, path
 
 // fileUnlinkOne removes one name, asking first where asking is what a real
 // shell does.
-func fileUnlinkOne(r *interp.Runner, ctx context.Context, flags fileFlags, path string) bool {
+func fileUnlinkOne(r *interp.Runner, ctx context.Context, flags fileFlags, place filePlace) bool {
 	// Asked before the question is put to the person, not after: a refused
 	// removal must not first prompt about a file the script may not touch,
 	// which would confirm the file is there and name its mode.
-	if !fileMayModify(r, ctx, path) {
+	if !fileMayModifyAt(r, ctx, place) {
 		return false
 	}
-	if !fileConfirm(r, ctx, "zf_rm", "remove", flags, path, true) {
+	if !fileConfirm(r, ctx, "zf_rm", "remove", flags, place, true) {
 		return true
 	}
-	if err := fileUnlink(shellPath(r, path)); err != nil {
+	if err := place.unlinkOnly(); err != nil {
 		if flags.force {
 			return true
 		}
-		r.Diagnosef("%s\n", fileReason(path, err))
+		r.Diagnosef("%s\n", fileReason(place.said, err))
 		return false
 	}
 	return true
@@ -879,9 +938,8 @@ func fileSyncOp(r *interp.Runner, _ context.Context, _ fileFlags, args []string)
 // The question goes to standard error with no newline after it, measured, and
 // end of input is a no: a script whose input came from nowhere is not
 // answering yes by accident.
-func fileConfirm(r *interp.Runner, ctx context.Context, command, verb string, flags fileFlags, path string, unwritable bool) bool {
-	at := shellPath(r, path)
-	info, err := fileLstat(r, ctx, path)
+func fileConfirm(r *interp.Runner, ctx context.Context, command, verb string, flags fileFlags, place filePlace, unwritable bool) bool {
+	info, err := fileLstatAt(r, ctx, place)
 	switch {
 	case err != nil:
 		// Nothing is in the way, so there is nothing to ask about — which is
@@ -891,12 +949,34 @@ func fileConfirm(r *interp.Runner, ctx context.Context, command, verb string, fl
 	case flags.force:
 		return true
 	case flags.interactive:
-		return fileAsk(r, fmt.Sprintf("%s: %s `%s'? ", command, verb, path))
-	case !unwritable || fileWritable(at):
+		return fileAsk(r, fmt.Sprintf("%s: %s `%s'? ", command, verb, place.said))
+	case info.Mode()&fs.ModeSymlink != 0:
+		// **A symbolic link is never asked about.** Measured 2026-09-15 on
+		// zsh 5.9.2: `zf_rm` over a link to a mode-0444 file is a silent 0,
+		// and over a *dangling* link the same, where the file it points at
+		// earns `remove `f', overriding mode 0444?`. The query is about the
+		// thing being removed, and what is being removed here is the link —
+		// whose own mode the system does not honor and whose target may not
+		// be there at all.
+		//
+		// `access` cannot say that, which is how this went wrong: it follows
+		// the link, so a dangling one answered "not writable" and every
+		// `zf_rm -r` over a tree holding one stopped to ask a question no
+		// script could answer and then failed with `directory not empty`.
+		// Found while building `-s` (#1669) over a tree that happened to
+		// hold one, and fixed here rather than filed: the letter's own rows
+		// could not be measured past it.
+		return true
+	case !unwritable || fileWritable(place.full):
+		// The *writability* question is asked of the resolved name, under
+		// `-s` as without it: it is `access`, which takes a path and nothing
+		// else, and it is a question about the caller's credentials rather
+		// than about where the walk has been. The removal that follows is
+		// the one that goes through the descriptor.
 		return true
 	}
 	return fileAsk(r, fmt.Sprintf("%s: %s `%s', overriding mode %s? ",
-		command, verb, path, fileModeDigits(info.Mode())))
+		command, verb, place.said, fileModeDigits(info.Mode())))
 }
 
 // fileModeDigits writes a mode the way the query does: octal, with a leading

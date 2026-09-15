@@ -6,6 +6,7 @@ package zsh_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -192,26 +193,204 @@ zstat -s +mode tree/under/deep`)
 	}
 }
 
-// **The paranoid letter is refused by name rather than accepted**, so a script
-// asking for a guarantee this shell cannot make is told, and a shell that
-// lacks the letter is still distinguishable from a typo. See filesmodule.go
-// for what the letter promises and why half of it is worse than none.
-func TestTheParanoidLetterIsRefusedByNameAndATypoIsNot(t *testing.T) {
-	out, st := runZsh(t, filesTree(t), `zf_rm -s a 2>&1
-print -r -- "paranoid=$? a=$([[ -e a ]] && print yes || print no)"
-zf_chmod -s 600 a 2>&1
-print -r -- "chmod=$?"
-zf_rm -Q a 2>&1
-print -r -- "typo=$?"
-zf_ln -s a slink
-print -r -- "ln-s-is-a-symlink=$?"`)
-	want := "zsh:zf_rm:1: -s is not implemented yet\nparanoid=1 a=yes\n" +
-		"zsh:zf_chmod:3: -s is not implemented yet\nchmod=1\n" +
-		"zsh:zf_rm:5: bad option: -Q\ntypo=1\n" +
-		"ln-s-is-a-symlink=0\n"
-	if out != want || st != 0 {
-		t.Errorf("the -s letter = %q (status %d), want %q", out, st, want)
+// **The paranoid letter refuses a path reached through a symbolic link**, and
+// leaves everything else exactly as it was. See filesparanoid.go for the whole
+// measured table and for why both of the manual's promises are kept by holding
+// each directory open rather than by naming it again.
+func TestTheParanoidLetterRefusesASymlinkedComponent(t *testing.T) {
+	dir := filesParanoidTree(t)
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			// The manual's own example, and the whole of what the letter is
+			// measured to change: the link is `link`, not `passwd`.
+			"a link on the way to the name", `zf_rm -s link/passwd 2>&1
+print -r -- "st=$? passwd=$([[ -e real/passwd ]] && print yes || print no)"`,
+			"zsh:zf_rm:1: link/passwd: not a directory\nst=1 passwd=yes\n",
+		},
+		{
+			// The control, and it is the row that says the letter is doing
+			// something: the same line without it removes the file.
+			"and without the letter it is removed", `zf_rm link/passwd
+print -r -- "st=$? passwd=$([[ -e real/passwd ]] && print yes || print no)"`,
+			"st=0 passwd=no\n",
+		},
+		{
+			// `-f` silences it, as it silences everything.
+			"the force letter silences it", `zf_rm -s -f link/passwd
+print -r -- "st=$? passwd=$([[ -e real/passwd ]] && print yes || print no)"`,
+			"st=0 passwd=yes\n",
+		},
+		{
+			// A path with no link in it is unaffected.
+			"a real path is removed", `zf_rm -s real/passwd
+print -r -- "st=$? passwd=$([[ -e real/passwd ]] && print yes || print no)"`,
+			"st=0 passwd=no\n",
+		},
+		{
+			// The **final** component is followed exactly as it is without
+			// the letter: a link there is unlinked by `rm` and followed by
+			// `chmod`, which is measured and is where `-s` stops.
+			"the last component is the link itself", `zf_rm -s link
+print -r -- "st=$? link=$([[ -L link ]] && print yes || print no) real=$([[ -d real ]] && print yes || print no)"`,
+			"st=0 link=no real=yes\n",
+		},
+		{
+			// The last operand is the discriminating one: it **is** a link,
+			// and `chmod` follows it. A walk that went through the held
+			// directory for this call would answer `path escapes from
+			// parent` — os.Root refuses a link that leaves the root — where
+			// the shell it models changes the mode of what the link points
+			// at.
+			"chmod follows the last component", `zf_chmod -s 700 link/passwd 2>&1
+print -r -- "through=$?"
+zf_chmod -s 700 real/passwd
+print -r -- "direct=$?"
+zf_chmod -s 700 link
+print -r -- "link=$?"`,
+			"zsh:zf_chmod:1: link/passwd: not a directory\nthrough=1\ndirect=0\nlink=0\n",
+		},
+		{
+			"and so do chown and chgrp", `zf_chown -s :0 link/passwd 2>&1
+print -r -- "chown=$?"
+zf_chgrp -s 0 link/passwd 2>&1
+print -r -- "chgrp=$?"`,
+			"zsh:zf_chown:1: link/passwd: not a directory\nchown=1\n" +
+				"zsh:zf_chgrp:3: link/passwd: not a directory\nchgrp=1\n",
+		},
+		{
+			// A recursive removal is unchanged: the link inside the tree is
+			// unlinked rather than descended, which the walk did already,
+			// and what it pointed at survives.
+			"a recursive removal under the letter", `zf_rm -s -r tree
+print -r -- "st=$? tree=$([[ -e tree ]] && print yes || print no) kept=$([[ -e outside/keepme ]] && print yes || print no)"`,
+			"st=0 tree=no kept=yes\n",
+		},
+		{
+			// And `ln`'s own `-s` is untouched: the letter means a symbolic
+			// link there and the paranoid descent nowhere near it.
+			"ln keeps its own -s", `zf_ln -s real/passwd made
+print -r -- "st=$? link=$([[ -L made ]] && print yes || print no)"`,
+			"st=0 link=yes\n",
+		},
+		{
+			// A typo is still a typo.
+			"a letter that is not there", `zf_rm -Q real/passwd 2>&1
+print -r -- "typo=$?"`,
+			"zsh:zf_rm:1: bad option: -Q\ntypo=1\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runZsh(t, filesParanoidCopy(t, dir), tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("%s = %q (status %d), want %q", tc.src, out, st, tc.want)
+			}
+		})
 	}
+}
+
+// **A symbolic link is never asked about**, which is the bug the paranoid
+// rows above could not be measured past.
+//
+// Measured 2026-09-15 on zsh 5.9.2: `zf_rm` over a link to a mode-0444 file is
+// a silent 0 and over a *dangling* link the same, where the file it points at
+// earns the query. `access` follows the link, so a dangling one answered "not
+// writable" and every recursive removal over a tree holding one stopped to ask
+// a question no script could answer — and then failed with `directory not
+// empty`, because the entry it asked about was still there.
+func TestARemovalNeverAsksAboutASymbolicLink(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "target"), []byte("t"), 0o444); err != nil {
+		t.Fatal(err)
+	}
+	for name, at := range map[string]string{"live": "target", "dangling": "no/such/thing"} {
+		if err := os.Symlink(at, filepath.Join(dir, name)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	out, st := runZsh(t, dir, `zf_rm live dangling
+print -r -- "st=$? live=$([[ -L live ]] && print yes || print no) dangling=$([[ -L dangling ]] && print yes || print no)"`)
+	if want := "st=0 live=no dangling=no\n"; out != want || st != 0 {
+		t.Errorf("removing links = %q (status %d), want %q", out, st, want)
+	}
+	// The control: the file the live link pointed at is unwritable and *is*
+	// asked about, so the row above is about links and not about the query
+	// having been taken out.
+	out, _ = runZsh(t, dir, "zf_rm target </dev/null 2>&1")
+	if !strings.Contains(out, "overriding mode 0444") {
+		t.Errorf("removing the file itself = %q, want the query about its mode", out)
+	}
+}
+
+// realTempDir is t.TempDir with the symbolic links taken out of it, which
+// these rows need and nothing else in this file does.
+//
+// On this platform a temporary directory is under `/var`, and `/var` is a link
+// to `/private/var` — so **every** operand under one is a path reached through
+// a symbolic link, and `-s` refuses the lot. That is the letter working, and
+// the real shell does the same: `zf_rm -s /tmp/x` is `not a directory` on this
+// machine because `/tmp` is a link too. It is written down here because the
+// first draft of these rows read the refusal as a bug in the walk.
+func realTempDir(t *testing.T) string {
+	t.Helper()
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+// filesParanoidTree is the tree the paranoid rows are measured over: a real
+// directory, a symbolic link to it, and a tree holding a link that points out
+// of itself.
+func filesParanoidTree(t *testing.T) string {
+	t.Helper()
+	dir := realTempDir(t)
+	for _, sub := range []string{"real", "outside", "tree/sub"} {
+		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, f := range []string{"real/passwd", "outside/keepme", "tree/sub/file"} {
+		if err := os.WriteFile(filepath.Join(dir, f), []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Symlink(filepath.Join(dir, "real"), filepath.Join(dir, "link")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("../outside", filepath.Join(dir, "tree", "esc")); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+// filesParanoidCopy gives each row a tree of its own, because these rows
+// remove things.
+//
+// A copy rather than a fresh build, so every row starts from the one tree the
+// measurements were taken over — and `cp -R`'s own handling of links is not
+// trusted for it: the links are made again by name.
+func filesParanoidCopy(t *testing.T, from string) string {
+	t.Helper()
+	to := realTempDir(t)
+	if err := os.CopyFS(to, os.DirFS(from)); err != nil {
+		// CopyFS follows links, which is exactly why the links are remade
+		// below rather than copied: what it leaves behind for `link` and
+		// `esc` is whatever they pointed at.
+		t.Fatal(err)
+	}
+	for _, name := range []string{"link", filepath.Join("tree", "esc")} {
+		if err := os.RemoveAll(filepath.Join(to, name)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Symlink(filepath.Join(to, "real"), filepath.Join(to, "link")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("../outside", filepath.Join(to, "tree", "esc")); err != nil {
+		t.Fatal(err)
+	}
+	return to
 }
 
 // `chown` and `chgrp` name what they could not find, and `sync` takes nothing

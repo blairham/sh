@@ -3,112 +3,185 @@
 
 package interp
 
-// The file-creation mask a forked body gets, which is its own.
+import (
+	"io/fs"
+	"os/exec"
+	"sync"
+)
+
+// The file-creation mask, held by the Runner rather than by the process.
 //
 // A mask is *process* state and this shell's subshells are not processes, so
 // `umask 002` inside one reached the mask of the shell that started it and
-// stayed there once the body ended. The direction is what made it a P1: a
+// stayed there once the body ended. The direction is what made that a P1: a
 // script doing its private work in `( umask 077; … )` is the harmless case,
 // and any `( umask … )` at all before a later write silently *widened* the
 // permissions of every file the script wrote afterwards (#2898).
 //
 //	umask 077
 //	( umask 002 )
-//	: > g           # -rw-rw-r-- here, -rw------- in all five columns
+//	: > g           # -rw-rw-r-- there, -rw------- in all five columns
 //
-// Every enclosure leaked and not only `( … )`, because every one of them is a
-// fork in a real shell: `x=$( umask 002 )` and `umask 002 | cat` were
-// measured leaking too, and a background job, a coprocess and a process
-// substitution are the same shape.
-//
-// This is that boundary reconstructed by hand, which is what AGENTS.md says a
-// goroutine-for-a-fork costs — the same job Runner.anchorForkedBody does for
-// the process group and Runner.endSubshell does for the EXIT trap. One
-// mechanism for the four bodies that take it rather than a save and a
-// restore written out at each, for the reason endSubshell is one function: a
-// second copy of a boundary's ending is where the next fix goes missing.
-//
-// **The line is drawn at whether the caller is blocked on the body**, and it
-// is drawn there rather than at "every clone" because the other half cannot
-// be done this way at all.
-//
-// A subshell, a command substitution, a pipeline element and a shebang-less
-// script each hold their caller still: the runner that started the body
-// cannot reach another command until the body has ended, so handing the mask
-// back at that moment is exactly what the fork did and there is no window in
-// between for anything to observe. Those four take it.
-//
-// A background job, a coprocess and a process substitution run *beside* their
-// caller, which carries straight on. The process has one mask, so it is the
-// shell's mask too for as long as such a body holds one, whatever this file
-// does — and what the body found is stale by the time it could be handed
-// back. Measured 2026-09-15 with the release wired into all seven:
+// #2898 reconstructed the boundary by hand — a save on the way in and a
+// restore on the way out — and that mechanism could only ever reach the four
+// bodies whose caller is *blocked* on them. A background job, a coprocess and
+// a process substitution run beside their caller, so the one process mask is
+// the shell's mask too for as long as such a body holds one, whatever happens
+// at the end; and what the body found is stale by the time it could be handed
+// back. Measured 2026-09-15 with the release wired into all seven,
 // `cat <(umask 002) >/dev/null` left our zsh answering `077` for the rest of
-// the script where real zsh answers `002`, because the substitution's body
-// ended three commands later and put back a mask the shell had moved off.
-// **A stale value restored over a live one is a worse failure than the leak**
-// — it undoes a change the shell made itself — so those three keep the leak
-// until the mask can be applied per open and per spawn rather than held in
-// the process. See #2949.
+// the script where real zsh answers `002` — a mask restored over a change the
+// shell had made itself, three commands later. **A stale value put back over
+// a live one is worse than the leak**, which is why #2949 is this file and
+// not another caller of the old one.
 //
-// A pipeline inside a background job keeps the restore, because the question
-// is asked of the *caller*: the job's body is blocked on its elements even
-// though the shell is not. What the shell sees while the job runs is the
-// job's gap and not the element's.
+// So the mask stops being held in the process at all. It is an ordinary field
+// on the Runner, copied by clone() with everything else, and it reaches the
+// kernel at the two points the kernel reads a mask:
 //
-// `$(<file)` is the one clone that takes nothing. Nothing is executed there —
-// no command, no builtin, no `umask` — so there is no mask for the body to
-// move. See Runner.readFileSubst.
+//	an open   the mode this shell asks for is already masked, by
+//	          Runner.CreationMode, so the kernel has nothing left to take
+//	          away. See Runner.openGated.
+//	a spawn   the child inherits the process's mask at the moment it is
+//	          forked, so the mask is put on the process for the length of
+//	          cmd.Start and taken straight off again. See startMasked.
+//
+// That dissolves the whole class rather than narrowing it. Two bodies running
+// at once never see each other's mask, because neither of them is looking at
+// the same place; a body's mask cannot outlive the body, because nothing
+// outside the body ever reads it; and there is no window between a body's end
+// and its caller's next command, because nothing is handed back.
+//
+// **The process's own mask is emptied once and stays empty**, which is the
+// price of doing the masking by hand: a mask the kernel is still applying
+// would be a second, invisible floor under every mode computed here, and
+// `umask 002` inside a body could not widen past whatever the shell was
+// started with. Runner.ensureUmask empties it, through the same hook, and
+// keeps what it found as this shell's own starting mask.
+//
+// The consequence is the rule for anything in this tree that creates a file:
+// **the kernel is no longer masking it, so it must be masked here.** Every
+// open a script reaches goes through Runner.openGated, and the handful of
+// builtins that create a file or a directory of their own call
+// Runner.CreationMode. A site that forgets is not a subtle drift — it creates
+// the mode it asked for, which for a directory is 0777.
+//
+// A Runner with no SetUmask hook is untouched by all of this: the process's
+// mask is left exactly as it was, the kernel goes on applying it, and `umask`
+// refuses for the reason it has refused since #117 — a mask this shell cannot
+// change must not look as though it changed.
 
-// forkMask gives a cloned runner the private mask a real shell's fork would
-// have given it, and answers with what ends it.
+// spawnMask serializes the process's mask around a fork.
 //
-// Called on the clone, before it runs, and its release must be called however
-// the body ends — including when it ends by returning an error, which is why
-// every caller either defers it or hangs it on the same release the body's
-// descriptors go out with.
+// The window is the process's and not a Runner's, so the lock is package-wide
+// rather than per-shell: two background jobs with different masks are two
+// goroutines reaching the same kernel field, and a mask left on by one while
+// the other forks is the leak this file exists to remove, reappearing in the
+// one place the mask still has to be real.
+var spawnMask sync.Mutex
+
+// ensureUmask takes this shell's starting mask off the process, once.
 //
-// It clears whatever the clone inherited from the body around it, which is
-// what a nested body wants: in `( umask 002; ( umask 007 ); umask )` the
-// third of those is 002, because the inner parentheses are a fork of their
-// own and put back what *they* found rather than what the outer body found.
+// Reading a mask means setting one — the system call offers no way to ask —
+// so the read that learns the mask is also the write that empties it, which
+// is exactly the state the rest of this file needs the process to be in.
 //
-// Nothing is read or set here, and nothing is allocated. A body that never
-// runs `umask` — which is nearly all of them, on a path as hot as a command
-// substitution — costs this a field it was already copying and a branch that
-// is not taken.
-func (c *Runner) forkMask() func() {
-	c.maskMoved = false
-	return func() {
-		if !c.maskMoved || c.SetUmask == nil {
-			return
-		}
-		// Whatever the body left it at is not this shell's business; what
-		// the body *found* is. A failure here has nowhere to go — the body
-		// is over, its status is already decided, and the hook that just
-		// refused is the same one that accepted the change being undone.
-		_, _ = c.SetUmask(c.maskOuter)
+// Called on the outermost Runner, from RunPart, before anything it might run
+// can create a file; a clone inherits the answer along with every other
+// field, and a shell started by runImageAsScript is handed it by hand. So the
+// hook is reached once per process in a binary that is a shell, which is what
+// makes "what was there before" a question with an answer.
+func (r *Runner) ensureUmask() {
+	if r.maskKnown || r.SetUmask == nil {
+		return
 	}
+	old, err := r.SetUmask(0)
+	if err != nil {
+		// The hook refused, so this shell has no mask to offer and `umask`
+		// says so. Nothing is masked by hand either, which leaves the kernel
+		// doing what it was already doing.
+		return
+	}
+	r.umask, r.maskKnown = old, true
 }
 
-// setMask changes the process's file-creation mask, recording what a forked
-// body found so that forkMask's release can put it back.
+// CreationMode is the permissions a file or a directory created by this shell
+// is really made with: what was asked for, with the mask taken out.
 //
-// Only the *first* change is recorded, which is what makes
-// `( umask 002; umask 007 )` restore the mask the parentheses opened with
-// rather than the 002 the body passed through on its way to 007.
+// Exported because a dialect's builtins create files too, and the kernel is
+// no longer taking the mask out for them — `zmodload zsh/files; mkdir d` asks
+// for 0777 and would make a world-writable directory without this. A shell
+// with no mask of its own answers with the mode unchanged, which is the
+// kernel's own behavior for a process whose mask this shell never emptied.
 //
-// Reading does not come through here. Runner.currentUmask sets to read,
-// because the system call offers no way to ask, but it sets the same value
-// straight back — so a body that only *reports* the mask has moved nothing
-// and leaves nothing to undo.
-func (r *Runner) setMask(mask int) error {
-	old, err := r.SetUmask(mask)
-	if err != nil {
-		return err
+// It is the permission bits only. A mask has nothing to say about the file
+// type or about setuid, setgid and the sticky bit, so those cross untouched —
+// `mkdir -m 1777` keeps its sticky bit and loses whatever of 0777 the mask
+// denies, which is what the kernel does with the same two numbers.
+func (r *Runner) CreationMode(perm fs.FileMode) fs.FileMode {
+	if !r.maskKnown {
+		return perm
 	}
-	if !r.maskMoved {
-		r.maskMoved, r.maskOuter = true, old
+	return perm &^ fs.FileMode(r.umask&0o777)
+}
+
+// createMode is CreationMode for this package's own opens, which speak in the
+// ints os.OpenFile's callers here already hold.
+func (r *Runner) createMode(perm int) fs.FileMode {
+	return r.CreationMode(fs.FileMode(perm))
+}
+
+// startMasked is cmd.Start with this shell's mask on the process for the
+// length of the call.
+//
+// A child does not read the mask, it *inherits* one — copied out of the
+// parent at the fork and applied by the kernel to every file the child
+// creates for the rest of its life. So this is the one place the mask still
+// has to be the process's, and the window is as short as a fork.
+//
+// Every command this shell starts comes through here, which is what makes the
+// window short enough to be held under one lock: the alternative is a mask
+// left on the process between a start and whatever runs next, which is the
+// leak in a smaller room.
+//
+// A shell with no mask of its own does not touch the process at all, so the
+// child inherits whatever the shell itself inherited.
+func (r *Runner) startMasked(cmd *exec.Cmd) error {
+	defer r.holdMaskForFork()()
+	return cmd.Start()
+}
+
+// holdMaskForFork puts this shell's mask on the process and answers with what
+// takes it off again.
+//
+// Split out of startMasked because `exec` needs the same thing around a
+// process *replacement*, where there is no exec.Cmd and the call does not
+// return when it works.
+func (r *Runner) holdMaskForFork() func() {
+	if !r.maskKnown || r.SetUmask == nil {
+		// This shell has no mask of its own, so the process's is whatever it
+		// always was and a child inherits that.
+		return func() {}
 	}
-	return nil
+	spawnMask.Lock()
+	if r.umask == 0 {
+		// Nothing to put on — the process's mask is already the empty one
+		// ensureUmask left, which is what a child of a shell at `umask 0`
+		// should inherit. The lock is still taken, and that is the point: a
+		// body beside this one may be inside its own window, and a fork that
+		// skipped the lock would inherit *that* body's mask.
+		return spawnMask.Unlock
+	}
+	if _, err := r.SetUmask(r.umask); err != nil {
+		// A refusal has nowhere to go: the command is about to start either
+		// way, and the hook that just declined is the one that would be asked
+		// to undo it. The lock is released, because a failed set is not a
+		// mask left on the process.
+		spawnMask.Unlock()
+		return func() {}
+	}
+	return func() {
+		_, _ = r.SetUmask(0)
+		spawnMask.Unlock()
+	}
 }

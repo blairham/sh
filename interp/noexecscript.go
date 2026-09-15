@@ -321,22 +321,20 @@ func (r *Runner) runImageAsScript(ctx context.Context, name, path string, argv, 
 		//	                cannot be raised again by anybody.
 		//
 		// `umask` is the fourth of that shape and is the one exception: it
-		// has to reach the process, because the files the script creates
-		// really are created by it. What the fork would have done for free
-		// — taking the mask back when the script ends — is forkMask below.
-		// Without the hook a `umask 077` in such a script does nothing at
-		// all and the file it then writes is world-readable; without the
-		// release, every later command in the *caller* inherits a mask the
-		// caller never set.
+		// has to be able to reach the process, because the files the script
+		// creates really are created by it — a child it spawns inherits the
+		// mask at the fork, and without the hook a `umask 077` in such a
+		// script would do nothing at all. What the fork would have done for
+		// free — keeping that mask off the caller — is the mask being the
+		// Runner's own rather than the process's. See umaskscope.go.
 		SetUmask: r.SetUmask,
 	}
-	// One mechanism with the other bodies whose caller waits for them rather
-	// than a save and a restore written out here, which is what this was: a
-	// second copy of a boundary's ending is where the next fix goes missing,
-	// and the next fix was #2898 — a subshell, a command substitution and a
-	// pipeline element each leaked for as long as this file held the only
-	// answer. See umaskscope.go.
-	defer child.forkMask()()
+	// The mask itself, handed over rather than read back off the process:
+	// ensureUmask has already emptied the process's, so a fresh shell asking
+	// it what the mask is would be told 0. This is what a fork would have
+	// copied, and the child's own changes stay in the child because the field
+	// is the child's.
+	child.umask, child.maskKnown = r.umask, r.maskKnown
 	// Everything the front end does to a Runner past its fields — the
 	// dialect's builtins, its ties, its prompt table. Carried on as well as
 	// applied, so that a shebang-less script which itself runs one gets the

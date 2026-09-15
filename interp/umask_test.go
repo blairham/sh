@@ -6,6 +6,7 @@ package interp_test
 import (
 	"bytes"
 	"context"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -13,10 +14,54 @@ import (
 	"github.com/blairham/sh/syntax"
 )
 
+// umaskHeld is what the shell answers `umask` with once the script is over.
+//
+// Asked of the shell rather than read off the hook, which is what changed in
+// #2949: the mask is the Runner's own now and the process's is left empty, so
+// a test watching the hook's variable would be watching the wrong place. The
+// probe runs as a chunk of its own with its output caught, so it says nothing
+// about what the script printed.
+func umaskHeld(t *testing.T, r *Runner) int {
+	t.Helper()
+	out := umaskProbe(t, r, "umask")
+	n, err := strconv.ParseInt(out, 8, 32)
+	if err != nil {
+		t.Fatalf("the shell answered %q to `umask`: %v", out, err)
+	}
+	return int(n)
+}
+
+// umaskProbe runs one more chunk through a shell that has already run, with
+// its standard output caught, and answers with what it printed.
+//
+// A chunk of its own rather than a line appended to the script, because the
+// script's own output is what most of these tests assert on and the status it
+// left is what some of them assert on.
+func umaskProbe(t *testing.T, r *Runner, src string) string {
+	t.Helper()
+	f, err := syntax.Parse(src, syntax.Core())
+	if err != nil {
+		t.Fatalf("parse the probe %q: %v", src, err)
+	}
+	var buf bytes.Buffer
+	was := r.Stdout
+	r.Stdout = &buf
+	defer func() { r.Stdout = was }()
+	if err := r.RunPart(context.Background(), f); err != nil {
+		t.Fatalf("run the probe %q: %v", src, err)
+	}
+	return strings.TrimSpace(buf.String())
+}
+
 // umaskRun runs src with a mask kept in a variable rather than in the process,
 // which is the point of the hook: nothing here touches the machine's own mask,
 // so the tests can assert on exact values and can run in parallel with
 // anything else.
+//
+// The third answer is the mask the *shell* holds afterwards, which since
+// #2949 is not the one the hook was last handed: the hook is asked once, to
+// empty the process's mask and say what was there, and after that only around
+// a fork.
 func umaskRun(t *testing.T, start int, tweak func(*Semantics), src string) (string, int, int) {
 	t.Helper()
 	f, err := syntax.Parse(src, syntax.Core())
@@ -38,7 +83,7 @@ func umaskRun(t *testing.T, start int, tweak func(*Semantics), src string) (stri
 	if rerr != nil {
 		t.Fatalf("run %q: %v", src, rerr)
 	}
-	return buf.String(), st, held
+	return buf.String(), st, umaskHeld(t, r)
 }
 
 // umaskSymbolicRun is umaskRun with a Diagnostics of the caller's choosing,
@@ -60,7 +105,7 @@ func umaskSymbolicRun(t *testing.T, start int, dg Diagnostics, src string) (stri
 	if rerr != nil {
 		t.Fatalf("run %q: %v", src, rerr)
 	}
-	return buf.String(), st, held
+	return buf.String(), st, umaskHeld(t, r)
 }
 
 // Reading must not change it — which takes a set and a set-back, the system

@@ -159,6 +159,11 @@ func sysopenBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 	if code != 0 {
 		return code
 	}
+	// The mask taken out here rather than by the kernel, because this shell
+	// holds its mask in a field of its own and the process's is empty. What
+	// the letter asks for is what a `-m` asks for anywhere: the bits before
+	// the mask, not after it. See interp.Runner.CreationMode.
+	perm = r.CreationMode(perm)
 	path := shellPath(r, rest[0])
 	// Through the gate, like every other open the shell makes. This builtin
 	// opened files directly until #1805, so a policy refusing every read and

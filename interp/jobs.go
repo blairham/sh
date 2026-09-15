@@ -2010,7 +2010,7 @@ func (r *Runner) releasedJobProcess(pid int) {
 // startAndWait is exec.Cmd.Run with the pid recorded against the job in
 // between, which is the one thing Run leaves no room for.
 func (r *Runner) startAndWait(cmd *exec.Cmd, ownGroup bool) error {
-	if err := cmd.Start(); err != nil {
+	if err := r.startMasked(cmd); err != nil {
 		return err
 	}
 	pid := cmd.Process.Pid

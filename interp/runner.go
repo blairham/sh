@@ -255,9 +255,14 @@ type Runner struct {
 	//
 	// One hook rather than a reader and a writer, because the system call is
 	// one: it always sets, and returns what was there. Reading without
-	// changing is setting the old value straight back, which is what the
-	// builtin does and why it cannot be done by a caller who only offered a
-	// getter.
+	// changing is setting the old value straight back, and the read that
+	// learns this shell's starting mask is the same call that empties the
+	// process's — which is what a caller is agreeing to here. Offering it
+	// hands the mask over: the shell keeps it in a field of its own, masks
+	// the modes it creates with by hand, and puts it back on the process
+	// only for the length of a fork, so that a child inherits it. See
+	// umaskscope.go, and #2949 for why a mask held in the process could not
+	// be a body's own.
 	SetUmask func(mask int) (old int, err error)
 
 	// StopThisProcess stops this process the way `suspend` does: it does not
@@ -2245,15 +2250,14 @@ type Runner struct {
 	// nothing about a command killed inside `$(…)` and does report one
 	// killed inside `( … )`.
 	inCommandSubst bool
-	// maskMoved and maskOuter are the file-creation mask a forked body
-	// found, kept so that the end of the body can put it back: the mask
-	// lives in the process and a body of this shell is not one, so nothing
-	// else would. Set by setMask, cleared and read by forkMask, and
-	// meaningless on a shell that is not a body — the outermost one, whose
-	// mask outlives it. See umaskscope.go for what the boundary does and
-	// does not reconstruct.
-	maskMoved bool
-	maskOuter int
+	// umask is the file-creation mask this shell holds, and maskKnown says
+	// it holds one. A mask is process state and a body of this shell is not
+	// a process, so it is kept here instead and applied by hand at the two
+	// points the kernel reads one — the mode an open asks for, and the mask
+	// a child inherits at the fork. Copied by clone like any other field,
+	// which is what makes a body's mask the body's own. See umaskscope.go.
+	umask     int
+	maskKnown bool
 	// traceWait and traceDone order the trace lines of a pipeline without
 	// ordering the pipeline itself: an element waits for the one before it
 	// to have printed, then prints, then releases the next. Only the
@@ -3406,6 +3410,11 @@ func (r *Runner) RunPart(ctx context.Context, f *syntax.File) error {
 	r.ensurePWD()
 	r.ensureSpecials()
 	r.ensureImportedFunctions()
+	// Before anything the script runs can create a file, because this is
+	// what takes the mask off the process and puts it in this shell's own
+	// hands. Once per process in a binary that is a shell: a clone inherits
+	// the answer, and a second call does nothing. See umaskscope.go.
+	r.ensureUmask()
 	// Before the descriptors are published, because publishing them is itself
 	// an action and the first one this session records.
 	r.ensureActionIDs()
@@ -5009,8 +5018,10 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 
 	if r.bg != nil {
 		// Started rather than run, so the pid can be recorded before it is
-		// waited for — `$!` has to be answerable immediately.
-		if err := cmd.Start(); err != nil {
+		// waited for — `$!` has to be answerable immediately. Through
+		// startMasked, because a child inherits the file-creation mask at the
+		// fork and this shell's is not the process's. See umaskscope.go.
+		if err := r.startMasked(cmd); err != nil {
 			// A file the kernel will not start may still be a shell script,
 			// which is this shell's to run — see noexecscript.go. Asked at
 			// every door a start can fail at, because a door that did not ask
@@ -5135,7 +5146,7 @@ func (r *Runner) waitForBackgroundProcess(cmd *exec.Cmd) int {
 // waiting — two waits on one child is a race over who reaps it, and the loser
 // gets an error instead of a status.
 func (r *Runner) runWatched(ctx context.Context, cmd *exec.Cmd, argv []string, action Action, ownGroup bool) error {
-	if err := cmd.Start(); err != nil {
+	if err := r.startMasked(cmd); err != nil {
 		if st, ran := r.imageAsScript(ctx, action, cmd.Path, argv, cmd.Env, err); ran {
 			r.status = st
 			return nil

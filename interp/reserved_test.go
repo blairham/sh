@@ -236,15 +236,21 @@ func TestUmaskNeverReachesPath(t *testing.T) {
 	if st == 0 {
 		t.Errorf("status %d, want a failure when there is no umask to set", st)
 	}
-	// And with one, it is used.
+	// And with one, it is used — asked of the shell rather than of the hook,
+	// because since #2949 the mask is the Runner's own and the hook is asked
+	// once, to empty the process's and say what was there.
 	var got int
 	setup := func(r *Runner) {
 		r.SetUmask = func(mask int) (int, error) { old := got; got = mask; return old, nil }
 	}
-	if out, st, err := reservedRun(t, dir, "umask 077", setup); err != nil || st != 0 {
+	out, st, err = reservedRun(t, dir, "umask 077; umask", setup)
+	if err != nil || st != 0 {
 		t.Fatalf("with a hook: %q status %d err %v", out, st, err)
 	}
-	if got != 0o077 {
-		t.Errorf("the hook was given %#o, want 077", got)
+	if !strings.Contains(out, "077") {
+		t.Errorf("the shell answered %q, want the 077 it was just given", out)
+	}
+	if got != 0 {
+		t.Errorf("the process's mask is %#o, want it emptied", got)
 	}
 }

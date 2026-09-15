@@ -24969,6 +24969,57 @@
         "TimedOut": false
       }
     },
+    "arrays/a-chained-read-is-a-walk-of-any-depth": {
+      "ash": {
+        "Stdout": "\u003cscript\u003e: line 1: c[1][2][3]=v: not found",
+        "Stderr": "\u003cscript\u003e: line 2: syntax error: unexpected word (expecting \")\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "\u003cscript\u003e: line 1: c[1][2][3]=v: command not found~tail",
+        "Stderr": "\u003cscript\u003e: line 2: d[1]: cannot assign list to array member~\u003cscript\u003e: line 3: [${c[1][2][3]}][${d[1][1]}][n=${#d[1][@]}]: bad substitution",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "\u003cscript\u003e: line 1: c[1][2][3]=v: command not found",
+        "Stderr": "\u003cscript\u003e: line 2: d[1]: cannot assign list to array member",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "\u003cscript\u003e: line 1: c[1][2][3]=v: command not found~[][][n=0]~tail",
+        "Stderr": "\u003cscript\u003e: line 2: d[1]: cannot assign list to array member",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "\u003cscript\u003e: 1: c[1][2][3]=v: not found",
+        "Stderr": "\u003cscript\u003e: 2: Syntax error: word unexpected (expecting \")\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[v][q][n=2]~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:1: no matches found: c[1][2][3]=v",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "arrays/a-second-subscript-on-a-declaration-operand": {
       "ash": {
         "Stdout": "\u003cscript\u003e: line 1: typeset: not found~\u003cscript\u003e: line 2: typeset: not found",
@@ -25020,6 +25071,57 @@
         "TimedOut": false
       }
     },
+    "arrays/a-second-subscript-on-a-string-element": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error: unexpected \"(\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "tail",
+        "Stderr": "\u003cscript\u003e: line 2: [${a[1][2]}][${a[1][0]}]: bad substitution",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 2: [${a[1][2]}][${a[1][0]}]: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[two][two]~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[][two]~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[n][]~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "arrays/a-second-subscript-on-an-assignment": {
       "ash": {
         "Stdout": "\u003cscript\u003e: line 1: a[1][2]=v: not found~\u003cscript\u003e: line 2: typeset: not found",
@@ -25058,6 +25160,57 @@
       },
       "ksh93": {
         "Stdout": "typeset -a a=([1]=([2]=v) )~n=1~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:1: no matches found: a[1][2]=v",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "arrays/a-second-subscript-reads-the-nested-value": {
+      "ash": {
+        "Stdout": "\u003cscript\u003e: line 1: a[1][2]=v: not found",
+        "Stderr": "\u003cscript\u003e: line 3: syntax error: bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "\u003cscript\u003e: line 1: a[1][2]=v: command not found~tail",
+        "Stderr": "\u003cscript\u003e: line 2: [${a[1][2]}]: bad substitution",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "\u003cscript\u003e: line 1: a[1][2]=v: command not found",
+        "Stderr": "\u003cscript\u003e: line 2: [${a[1][2]}]: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "\u003cscript\u003e: line 1: a[1][2]=v: command not found~[]~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "\u003cscript\u003e: 1: a[1][2]=v: not found",
+        "Stderr": "\u003cscript\u003e: 2: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[v]~tail",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -65871,6 +66024,57 @@
         "Stdout": "",
         "Stderr": "\u003cshell\u003e:1: m: assignment to invalid subscript range",
         "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/a-keyed-table-spells-its-keys": {
+      "ash": {
+        "Stdout": "\u003cshell\u003e: typeset: not found~st=127",
+        "Stderr": "\u003cshell\u003e: w[a=b]=1: not found~\u003cshell\u003e: w[^]=2: not found~\u003cshell\u003e: w[!]=3: not found~\u003cshell\u003e: w[plain]=4: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "declare -A w=([\"!\"]=\"3\" [\"^\"]=\"2\" [a=b]=\"1\" [plain]=\"4\" )~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "declare -A w=([\"!\"]=\"3\" [\"^\"]=\"2\" [a=b]=\"1\" [plain]=\"4\" )~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: !: syntax error: operand expected (error token is \"!\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "\u003cshell\u003e: 1: typeset: not found~st=127",
+        "Stderr": "\u003cshell\u003e: 1: w[a=b]=1: not found~\u003cshell\u003e: 1: w[^]=2: not found~\u003cshell\u003e: 1: w[!]=3: not found~\u003cshell\u003e: 1: w[plain]=4: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "typeset -A w=([!]=3 [^]=2 [a=b]=1 [plain]=4)~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "typeset -A w=( [!]=3 ['^']=2 ['a=b']=1 [plain]=4 )~st=0",
+        "Stderr": "",
+        "Status": 0,
         "Signal": 0,
         "TimedOut": false
       }
@@ -129023,6 +129227,57 @@
         "TimedOut": false
       }
     },
+    "param/an-operator-after-the-listing-indirects-through-the-values": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected \"(\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[0][1]",
+        "Stderr": "\u003cshell\u003e: line 1: p q: invalid variable name",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[0][1]",
+        "Stderr": "\u003cshell\u003e: line 1: p q: invalid variable name",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[0][1][]|0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[0][1]",
+        "Stderr": "\u003cshell\u003e: \"${!a[@]/0/Z}\": bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "param/an-operator-distributes-over-the-elements": {
       "ash": {
         "Stdout": "",
@@ -132491,6 +132746,57 @@
         "TimedOut": false
       }
     },
+    "param/one-subscript-under-an-indirection-is-not-a-listing": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected \"(\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[][0][1]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[][0][1]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[][0][1]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[a[0]][0][1]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "param/only-the-backslash-style-sees-a-branch-that-substituted-nothing": {
       "ash": {
         "Stdout": "",
@@ -133405,6 +133711,57 @@
         "Stdout": "[head][a b][c d]",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "param/subscript-listing-is-the-bare-form-only": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: typeset: not found~\u003cshell\u003e: w[k]=tgt: not found~\u003cshell\u003e: syntax error: bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[k][ELLO]|0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[k][ELLO]|0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[0][ELLO]|0",
+        "Stderr": "\u003cshell\u003e: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: w[k]=tgt: not found~\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[k]",
+        "Stderr": "\u003cshell\u003e: \"${!w[@]#H}\": bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: bad substitution",
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       }
@@ -179309,6 +179666,108 @@
         "TimedOut": false
       }
     },
+    "set/listed-value-with-a-byte-above-ascii": {
+      "ash": {
+        "Stdout": "v1='é'~v2='a\tbé'~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "v1=$'\\303\\251'~v2=$'a\\tb\\303\\251'~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "v1=é~v2='a\tbé'~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "v1=$'\\303\\251'~v2=$'a\\tb\\303\\251'~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "v1='é'~v2='a\tbé'~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "v1=$'\\xc3\\xa9'~v2=$'a\\tb\\xc3\\xa9'~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "v1=é~v2=$'a\\tbé'~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "set/listed-value-with-a-caret-or-a-bang": {
+      "ash": {
+        "Stdout": "v1='^'~v2='a^b'~v3='!'~v4='a!b'~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "v1='^'~v2='a^b'~v3='!'~v4='a!b'~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "v1='^'~v2='a^b'~v3='!'~v4='a!b'~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "v1='^'~v2='a^b'~v3='!'~v4='a!b'~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "v1='^'~v2='a^b'~v3='!'~v4='a!b'~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "v1=^~v2=a^b~v3=!~v4=a!b~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "v1='^'~v2='a^b'~v3=!~v4=a!b~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "set/listed-value-with-a-hash": {
       "ash": {
         "Stdout": "v1='ab#cd'~v2='a#b#c'~v3='1#b'~v4='tail#'~v5='#abcd'~st=0",
@@ -179405,6 +179864,57 @@
       },
       "zsh": {
         "Stdout": "v1='x'\\'~v2=\\''x'~v3=\\'~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "set/listed-value-with-an-equals": {
+      "ash": {
+        "Stdout": "v1='a=b'~v2='x=y=z'~v3='=x'~v4='1=2'~v5='a=b c'~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "v1=a=b~v2=x=y=z~v3==x~v4=1=2~v5='a=b c'~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "v1=a=b~v2=x=y=z~v3==x~v4=1=2~v5='a=b c'~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "v1=a=b~v2=x=y=z~v3==x~v4=1=2~v5='a=b c'~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "v1='a=b'~v2='x=y=z'~v3='=x'~v4='1=2'~v5='a=b c'~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "v1=a=b~v2=x='y=z'~v3='=x'~v4='1=2'~v5=a='b c'~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "v1='a=b'~v2='x=y=z'~v3='=x'~v4='1=2'~v5='a=b c'~st=0",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

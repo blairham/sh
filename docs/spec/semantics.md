@@ -16924,6 +16924,17 @@ reason: the same column that quotes such a byte outside `$'...'` is
 the one that spells it out *inside* it. `v=$'a\t<e-acute>b'` lists as
 `$'a\téb'` in bash and zsh and as `$'a\t\xc3\xa9b'` in ksh93.
 
+**bash's answer here is the locale's**, and the field carries the
+character reading. Measured 2026-09-15 on one binary: with `LC_ALL=C`
+bash writes `$'\303\251'` and the key `[$'\303\251']`; with any
+other locale named, or with none named at all, it writes the
+character. zsh writes the character either way and ksh93 spells it out
+either way, so those two are answering a question about the byte and
+bash is answering one about the encoding. The corpus runs `LC_ALL=C`
+and records bash's other spelling there rather than reproducing it —
+and bash spells out a byte that is not a character in *any* locale,
+`$'\377'`, which this shell writes as itself.
+
 **`ListedAssignmentPrefixIsBare`** — bash no · ksh93 yes · zsh no
 
 Is ksh93's answer to `=`, and it is the `*` in the table above: a rule

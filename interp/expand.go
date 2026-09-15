@@ -961,7 +961,7 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 	// dialect means by it, and the refusal is the written spelling's alone —
 	// measured, ksh93 answers `${!b#o}` on an array with `b` and refuses
 	// `${!b[@]#o}`.
-	if e.Indirect && e.Index != nil && !(r.wholeArrayIndex(e) && e.Op == syntax.ParamNone) {
+	if e.Indirect && e.Index != nil && (!r.wholeArrayIndex(e) || e.Op != syntax.ParamNone) {
 		if r.wholeArrayIndex(e) {
 			// The listing's own spelling with an operator after it, which is
 			// the shape the two shells disagree about.

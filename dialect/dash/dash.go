@@ -400,6 +400,10 @@ func Semantics() interp.Semantics {
 	// dash single-quotes every listed value; it has no declare, so this
 	// style exists for the two -p listings alone.
 	s.DeclareValueQuoting = interp.ListingQuoteAlwaysEscaped
+	// unanswered ChainedSubscriptReadsANestedValue: the grammar for a chained
+	// subscript is not this shell's — `${a[1][2]}` is a bad substitution or
+	// a pattern here — so there is no chain for a reading to be about.
+	// Measured 2026-09-15 (#2830).
 	// unanswered ListedBangIsOrdinary: every listing style this shell uses
 	// quotes whatever it is given, so `'!'`, `'^'`, `'a=b'` and `'é'` say
 	// nothing about which bytes a listing may leave bare. Measured

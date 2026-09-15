@@ -54,6 +54,12 @@ func Dialect() syntax.Dialect {
 	// other columns refuse the operand or declare an empty array under the
 	// base name, and this is the grammar for the one that nests (#2491).
 	d.ChainedAssignSubscript = true
+	// And the read half of the same nesting: `${a[1][2]}` was a parse error
+	// here while the write built a value only `typeset -p` could show. The
+	// grammar is shared with the other shell that writes the text and the
+	// *reading* is not — see Semantics.ChainedSubscriptReadsANestedValue
+	// (#2830).
+	d.ChainedSubscript = true
 	// A backslash the input ends immediately after is kept only where it is
 	// the first thing in the word: `printf "[%s]" \` is `[\]` here and
 	// `printf "[%s]" x\` is `[x]`, where bash 5.3 keeps both and zsh drops
@@ -1657,6 +1663,12 @@ func Semantics() interp.Semantics {
 	// granted in a script with no terminal, and `fg` still answers 1 without
 	// a word — on a pseudo-terminal too, which is what says the missing
 	// thing is a person and not a terminal (#2720).
+	// `${a[1][2]}` reads the nested compound `a[1][2]=v` builds, rather than
+	// counting characters the way the other shell with the grammar does:
+	// measured 2026-09-15, `a=(one two); ${a[0][1]}` is empty here and `n`
+	// there. The write half landed in #2491 and the value it built was
+	// reachable only through `typeset -p` until this (#2830).
+	s.ChainedSubscriptReadsANestedValue = interp.Yes
 	s.MonitorAloneResumesAJob = interp.No
 	// And it does not announce one on the monitor alone either, which is the
 	// same answer for a different reason: this column will not resume a job

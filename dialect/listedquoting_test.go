@@ -111,7 +111,7 @@ func TestHowAListingSpellsTheThreeBytesThePanelSplitsOn(t *testing.T) {
 //
 // A doubled `=` is measured and not reproduced: ksh93u+ writes `a==b` bare
 // where this gives `a='=b'`. Both read back as the value; see
-// Runner.bareAssignmentHead.
+// Runner.listedAssignmentHead.
 func TestTheBareAssignmentHeadIsTakenOnceAndOnlyAfterAName(t *testing.T) {
 	preset := dialecttest.Preset{
 		Name: "ksh", Dialect: ksh.Dialect, Semantics: ksh.Semantics,

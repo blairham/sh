@@ -6343,6 +6343,16 @@ type Semantics struct {
 	// ListedNonAsciiIsOrdinary leaves a byte above ASCII in a listed word
 	// unquoted, and decides the same question inside `$'...'`.
 	//
+	// **bash's answer is the locale's, and this carries the character
+	// reading.** Measured 2026-09-15 on one binary: with `LC_ALL=C` bash
+	// writes `$'\303\251'` for the value and `[$'\303\251']` for the key,
+	// and with any other locale named — or with none named at all — it writes
+	// the character. zsh writes the character in both and ksh93 spells it out
+	// in both, so those two are answering about the byte and bash is
+	// answering about the encoding. The corpus runs `LC_ALL=C` and records
+	// bash's other spelling there; the character is what a person's terminal
+	// sees, and it is also the reading the issue's own table measured.
+	//
 	// bash and zsh write the character itself — `v5=é`, the key `[é]` — and
 	// leave it as itself inside a `$'...'` a control byte put them in:
 	// `$'a\téb'` in both. ksh93 spells it out
@@ -6367,7 +6377,7 @@ type Semantics struct {
 	// `[x='y=z']` in a `typeset -p` of a table.
 	//
 	// A doubled `=` is measured and not reproduced; see
-	// Runner.bareAssignmentHead (#2820).
+	// Runner.listedAssignmentHead (#2820).
 	ListedAssignmentPrefixIsBare Answer
 
 	// ListedHashIsBareUnlessItOpensTheValue leaves a `#` in a listed value
@@ -9852,6 +9862,39 @@ type Semantics struct {
 	// the stricter of the two, so a preset that has not chosen refuses a
 	// resume rather than complaining about an axis in the middle of a
 	// script's job handling (#2720).
+	// ChainedSubscriptReadsANestedValue makes `${a[1][2]}` a walk **into**
+	// the compound an element holds rather than a second count through what
+	// the link before it named.
+	//
+	// The grammar is syntax.Dialect.ChainedSubscript and two shells have the
+	// same text meaning two things. In zsh a subscript counts characters when
+	// it is handed one string and elements when it is handed a list, so
+	// `a=(one two three); ${a[1][2]}` is `n` — the second character of `one`.
+	// ksh93 answers that row with **empty**: element 0 holds the string
+	// `one`, a second subscript on it reaches a nested array that is not
+	// there, and the answer is nothing.
+	//
+	// So it is a second value and not the same flag with a wider grammar.
+	// Turning ChainedSubscript on for ksh93 without this would give it zsh's
+	// reading and a plausible wrong character at status 0, which is the
+	// failure mode the axis mechanism exists for.
+	//
+	// Measured 2026-09-15 on ksh93u+ 2012-08-01, from a script file, with
+	// `a[1]=(p q); a[2]=plain` — the value the write half builds (#2491):
+	//
+	//	${a[1][1]}    q          ${a[1][@]}    p, q as two fields
+	//	${a[1][9]}    unset      ${#a[1][@]}   2
+	//	${a[2][0]}    plain      ${a[2][1]}    unset
+	//	${a[2][@]}    nothing    ${#a[2][@]}   0
+	//
+	// and `c[1][2][3]=v` reading back as `v`, so the walk is any depth. See
+	// interp/nestedchainsub.go for the whole table (#2830).
+	//
+	// Read rather than asked: the grammar is what decides whether the text is
+	// reachable at all, and a dialect that took the grammar without answering
+	// this gets the character reading it already had.
+	ChainedSubscriptReadsANestedValue Answer
+
 	MonitorAloneResumesAJob Answer
 
 	// MonitorAloneAnnouncesAJob says `[1] <pid>` when a job is backgrounded

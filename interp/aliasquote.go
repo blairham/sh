@@ -118,7 +118,7 @@ func (r *Runner) quoteListedValue(style ListingQuotingStyle, what, v string) str
 	// on ksh93u+, `a=b` lists as `a=b`, `a=b c` as `a='b c'`, and a tail with
 	// a tab in it as `a=$'b\tc'`, which is the same three answers the style
 	// gives a whole value. See Semantics.ListedAssignmentPrefixIsBare.
-	if head, tail, split := r.bareAssignmentHead(v); split {
+	if head, tail, split := r.listedAssignmentHead(v); split {
 		if tail == "" {
 			return head
 		}
@@ -127,7 +127,7 @@ func (r *Runner) quoteListedValue(style ListingQuotingStyle, what, v string) str
 	return r.quoteListedValueBody(style, what, v)
 }
 
-// bareAssignmentHead splits a listed value after a leading `name=`, where the
+// listedAssignmentHead splits a listed value after a leading `name=`, where the
 // dialect writes that much without quotes, and reports whether it did.
 //
 // Once, at the front, and never again on what is left: measured, ksh93u+
@@ -144,7 +144,7 @@ func (r *Runner) quoteListedValue(style ListingQuotingStyle, what, v string) str
 // back as the value, which is what the listing is for; the rule that produces
 // the shell's own spelling there is not one three probes could state, and the
 // shapes it covers are keys and values no script writes.
-func (r *Runner) bareAssignmentHead(v string) (head, tail string, split bool) {
+func (r *Runner) listedAssignmentHead(v string) (head, tail string, split bool) {
 	if r.sem().ListedAssignmentPrefixIsBare != Yes {
 		return "", "", false
 	}
@@ -243,6 +243,15 @@ func (r *Runner) listedValueIsBare(v string) bool {
 // listing style either of them uses quotes whatever it is given, so `'^'`,
 // `'a=b'` and `'é'` there say nothing about this set. Their answers are left
 // unanswered rather than guessed from a neighbor.
+//
+// **bash's non-ASCII answer is the locale's.** Measured 2026-09-15 on the
+// same binary: with `LC_ALL=C` it writes `$'\303\251'` and the key
+// `[$'\303\251']`, and with any other locale set — or with none at all —
+// it writes the character. zsh writes the character either way and ksh93
+// spells it out either way, so the two of them answer a question about the
+// byte and bash answers one about the encoding. This axis carries the
+// character reading, which is what a person's terminal sees; the corpus runs
+// `LC_ALL=C` and records bash's other spelling there rather than here.
 //
 // Read rather than asked, and the answer a dialect has not given is the one
 // that quotes: a listing that quotes more than it must still reads back, and

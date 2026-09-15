@@ -1391,6 +1391,12 @@ func Semantics() interp.Semantics {
 	// a terminal here, since `set -m` without one is fatal in this shell —
 	// measured 2026-09-15 on a pseudo-terminal, where the job line is
 	// printed and the status is 0 (#2720).
+	// A chain counts through what the link before it named — characters of
+	// one string, elements of a list — which is the reading
+	// syntax.Dialect.ChainedSubscript was written for and is not ksh93's
+	// walk into a nested compound. This shell has no nested compound to
+	// walk into (#2830).
+	s.ChainedSubscriptReadsANestedValue = interp.No
 	s.MonitorAloneResumesAJob = interp.Yes
 	// And the one column that *announces* on the monitor alone: a script
 	// with `set -m` writes `[1] <pid>` for a `&` job with nobody at a

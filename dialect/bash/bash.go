@@ -525,6 +525,11 @@ func Semantics() interp.Semantics {
 	s.ListedBangIsOrdinary = interp.No
 	s.ListedCaretIsOrdinary = interp.No
 	s.ListedEqualsIsOrdinary = interp.Yes
+	// The character and not the escape, which is bash's answer in every
+	// locale but `C` — measured 2026-09-15 on one binary, `LC_ALL=C`
+	// writing `$'\303\251'` and every other setting, including none at
+	// all, writing `é`. The corpus runs in `C` and records that cell;
+	// this shell carries the reading a person's terminal sees.
 	s.ListedNonAsciiIsOrdinary = interp.Yes
 	// And no bare assignment head: the `=` rule here is the character, not
 	// a prefix, so `x=y=z` is bare rather than `x='y=z'`.
@@ -763,6 +768,10 @@ func Semantics() interp.Semantics {
 	// numeral this shell cannot hold is refused while it is being read —
 	// `$((1e400))` is `value too great for base` — so there is no value for
 	// an overflow rule to decide, and the question never reaches the axis.
+	// unanswered ChainedSubscriptReadsANestedValue: the grammar for a chained
+	// subscript is not this shell's — `${a[1][2]}` is a bad substitution or
+	// a pattern here — so there is no chain for a reading to be about.
+	// Measured 2026-09-15 (#2830).
 	s.IndirectionYieldsName = interp.No
 	// And an operator written after `${!name[@]}` puts the `!` back to being
 	// that indirection: the listing is the bare form only. Measured

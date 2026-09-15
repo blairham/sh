@@ -43,6 +43,12 @@ func ignoring(dir string) func(*Runner) {
 	return func(r *Runner) {
 		r.Semantics.IgnoredNamesVariable = "GLOBIGNORE"
 		r.Semantics.IgnoredNamesRevealHiddenNames = true
+		// The three axes the two shells with this facility answer apart,
+		// with the answers of the one these rows were measured on. The
+		// other's are in dialect/ksh (#2748).
+		r.Semantics.IgnoredNamesValueIsOnePattern = No
+		r.Semantics.IgnoredNamesMatchTheLastComponent = No
+		r.Semantics.IgnoredNamesFollowTheParameter = No
 		r.Dir = dir
 	}
 }
@@ -383,5 +389,109 @@ func TestIgnoredNamesAreOffWhereTheDialectNamesNoParameter(t *testing.T) {
 	const want = `[a.txt][b.txt][c.log][sub]`
 	if out != want {
 		t.Errorf("with no parameter named = %s, want %s", out, want)
+	}
+}
+
+// The three axes the two shells with this facility answer apart, asked of a
+// runner that is neither of them.
+//
+// The rows above are one dialect's whole model; these are the seams, each
+// with both answers and the refusal that says the question has to be asked.
+func TestTheIgnoreFacilityHasThreeAxes(t *testing.T) {
+	dir := ignoreTree(t)
+	// A colon is a separator, or it is a character in one pattern.
+	list := func(r *Runner) {
+		ignoring(dir)(r)
+		r.Semantics.IgnoredNamesValueIsOnePattern = No
+	}
+	one := func(r *Runner) {
+		ignoring(dir)(r)
+		r.Semantics.IgnoredNamesValueIsOnePattern = Yes
+	}
+	src := `GLOBIGNORE='a.txt:c.log'; printf "[%s]" *`
+	if out, _ := run(t, src, list); out != "[.dot][.hid.txt][b.txt][sub]" {
+		t.Errorf("as a list: %q", out)
+	}
+	if out, _ := run(t, src, one); out != "[.dot][.hid.txt][a.txt][b.txt][c.log][sub]" {
+		t.Errorf("as one pattern: %q", out)
+	}
+	// The subject is the word, or it is the entry the listing gave.
+	word := func(r *Runner) {
+		ignoring(dir)(r)
+		r.Semantics.IgnoredNamesMatchTheLastComponent = No
+	}
+	entry := func(r *Runner) {
+		ignoring(dir)(r)
+		r.Semantics.IgnoredNamesMatchTheLastComponent = Yes
+	}
+	src = `GLOBIGNORE='x.txt'; printf "[%s]" sub/*`
+	if out, _ := run(t, src, word); out != "[sub/.y][sub/x.txt]" {
+		t.Errorf("against the word: %q", out)
+	}
+	if out, _ := run(t, src, entry); out != "[sub/.y]" {
+		t.Errorf("against the entry: %q", out)
+	}
+	// And the facility is a state an assignment latched, or the parameter as
+	// it stands. An inherited value is where the two part without a script
+	// being able to see it.
+	latched := func(r *Runner) {
+		ignoring(dir)(r)
+		r.Semantics.IgnoredNamesFollowTheParameter = No
+		r.Env = []string{"GLOBIGNORE=*.txt"}
+	}
+	follows := func(r *Runner) {
+		ignoring(dir)(r)
+		r.Semantics.IgnoredNamesFollowTheParameter = Yes
+		r.Env = []string{"GLOBIGNORE=*.txt"}
+	}
+	src = `printf "[%s]" *`
+	if out, _ := run(t, src, latched); out != "[a.txt][b.txt][c.log][sub]" {
+		t.Errorf("latched: %q", out)
+	}
+	if out, _ := run(t, src, follows); out != "[.dot][c.log][sub]" {
+		t.Errorf("following the parameter: %q", out)
+	}
+	// A null value is the other half of the same axis: it shows the hidden
+	// names where a latched assignment leaves the switch alone.
+	nullValue := `GLOBIGNORE=''; printf "[%s]" *`
+	if out, _ := run(t, nullValue, func(r *Runner) {
+		ignoring(dir)(r)
+		r.Semantics.IgnoredNamesFollowTheParameter = Yes
+	}); out != "[.dot][.hid.txt][a.txt][b.txt][c.log][sub]" {
+		t.Errorf("a null value following the parameter: %q", out)
+	}
+	if out, _ := run(t, nullValue, func(r *Runner) {
+		ignoring(dir)(r)
+		r.Semantics.IgnoredNamesFollowTheParameter = No
+	}); out != "[a.txt][b.txt][c.log][sub]" {
+		t.Errorf("a null value latched: %q", out)
+	}
+}
+
+// And the same for the listing, which is not the facility's question at all:
+// three of the six columns put `.` and `..` beside the entries a directory
+// holds and three do not.
+func TestTheListingHasDotAndDotDotOrItDoesNot(t *testing.T) {
+	dir := ignoreTree(t)
+	with := func(r *Runner) {
+		r.Dir = dir
+		r.Semantics.GlobListsDotAndDotDot = Yes
+	}
+	without := func(r *Runner) {
+		r.Dir = dir
+		r.Semantics.GlobListsDotAndDotDot = No
+	}
+	if out, _ := run(t, `printf "[%s]" .*`, with); out != "[.][..][.dot][.hid.txt]" {
+		t.Errorf("with: %q", out)
+	}
+	if out, _ := run(t, `printf "[%s]" .*`, without); out != "[.dot][.hid.txt]" {
+		t.Errorf("without: %q", out)
+	}
+	// The leading-period rule is what keeps them out of an ordinary `*`, so
+	// the axis changes nothing there.
+	for _, set := range []func(*Runner){with, without} {
+		if out, _ := run(t, `printf "[%s]" *`, set); out != "[a.txt][b.txt][c.log][sub]" {
+			t.Errorf("an ordinary star: %q", out)
+		}
 	}
 }

@@ -678,6 +678,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `prompt/the-error-operator-ends-the-shell-at-a-rendering` | **2>** `<shell>: 1: setopt: not found~<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: ${(%%)s}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: ${(%%)s}: bad substitution` *(status 127)* | **2>** `<shell>: setopt: command not found~<shell>: ${(%%)s}: bad substitution` *(status 1)* | **2>** `<shell>: setopt: not found~<shell>: syntax error at line 1: `s}' unexpected` *(status 3)* | **2>** `<shell>:1: NOPEV: gone` *(status 1)* | **2>** `<shell>: setopt: not found~<shell>: syntax error: bad substitution` *(status 2)* |
 | `prompt/print-P-is-the-same-boundary` | `TWO=still-running` **2>** `<shell>: 1: setopt: not found~<shell>: 1: print: not found` | `TWO=still-running` **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: print: command not found` | `TWO=still-running` **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: print: command not found` | `TWO=still-running` **2>** `<shell>: setopt: command not found~<shell>: print: command not found` | `TWO=still-running` **2>** `<shell>: setopt: not found~<shell>: print: -P: unknown option~Usage: print [-enprsvC] [-f format] [-u fd] [string ...]` | `PRE-~TWO=still-running` **2>** `<shell>:1: unknown function: nofunc` | `TWO=still-running` **2>** `<shell>: setopt: not found~<shell>: print: not found` |
 | `prompt/at-P-keeps-the-text-a-given-up-rendering-was-handed` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `ONE=[PRE-$((nofunc()))-POST]~TWO=still-running` **2>** `<shell>: line 1: nofunc(): arithmetic syntax error in expression (error token is "()")` | `ONE=[PRE-$((nofunc()))-POST]~TWO=still-running` **2>** `<shell>: line 1: nofunc(): arithmetic syntax error in expression (error token is "()")` | **2>** `<shell>: ${v@P}: bad substitution` *(status 1)* | **2>** `<shell>: "${v@P}": bad substitution` *(status 1)* | **2>** `<shell>:1: bad substitution` *(status 1)* | **2>** `<shell>: syntax error: bad substitution` *(status 2)* |
+| `glob/dot-and-dotdot-in-a-listing` | `. .. .dot~../ ./~a.txt sub` | `.dot~.*/~a.txt sub` | `.dot~.*/~a.txt sub` | `. .. .dot~../ ./~a.txt sub` | `. .. .dot~../ ./~a.txt sub` | `.dot` **2>** `<shell>:1: no matches found: .*/` *(status 1)* | `. .. .dot~../ ./~a.txt sub` |
 | `glob/matches-are-in-order` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` |
 | `glob/a-trailing-slash-stays-on-every-match` | `[ax_dir/][cx/][sym/]` | `[ax_dir/][cx/][sym/]` | `[ax_dir/][cx/][sym/]` | `[ax_dir/][cx/][sym/]` | `[ax_dir/][cx/][sym/]` | `[ax_dir/][cx/][sym/]` | `[ax_dir/][cx/][sym/]` |
 | `glob/a-trailing-slash-without-the-slash` | `[ax][ax_dir][cx][sym][symf]` | `[ax][ax_dir][cx][sym][symf]` | `[ax][ax_dir][cx][sym][symf]` | `[ax][ax_dir][cx][sym][symf]` | `[ax][ax_dir][cx][sym][symf]` | `[ax][ax_dir][cx][sym][symf]` | `[ax][ax_dir][cx][sym][symf]` |
@@ -2314,6 +2315,10 @@ grades it and nothing drift-checks it either, for the same reason.
 - `prompt/at-P-keeps-the-text-a-given-up-rendering-was-handed` — the same boundary in the other shell that has a prompt language, and the row that makes what a given-up rendering is worth an *answer* rather than a rule: bash reports the arithmetic failure and hands back `PRE-$((nofunc()))-POST`, the text as it stood with the substitutions simply not performed, where zsh hands back what it drew. Both carry on and both exit 0, so the boundary is unanimous and only its value divides them
   ```sh
   v='PRE-$((nofunc()))-POST'; printf 'ONE=[%s]\n' "${v@P}"; printf 'TWO=still-running\n'
+  ```
+- `glob/dot-and-dotdot-in-a-listing` — whether `.` and `..` are in the names a pathname expansion may match. ksh93, dash, BusyBox ash and bash 3.2 list them; bash 5.3, that build as `sh`, and zsh do not — bash against itself across versions, which is why the preset that models 5.3 answers no. The third line is the control: the leading-period rule keeps them out of an ordinary `*` in every column, so this is the *listing* and not a hidden-name option. It is where the ignore parameter's `.`/`..` row comes from and is its own axis rather than a second rule about that parameter (#2748)
+  ```sh
+  mkdir -p gd/sub && cd gd && : > a.txt && : > .dot && echo .*; echo .*/; echo *
   ```
 - `glob/matches-are-in-order` — byte order, which every shell in the panel gives under the LC_ALL=C both sweeps run in. Outside that locale three of the four collate and dash does not, and the two platforms disagree about where punctuation goes — none of which this can record, which is exactly why the ordering it does record is worth pinning
   ```sh
@@ -17201,6 +17206,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `pat/the-ignore-parameter-matches-a-separator-literally` | `sub/x.txt sub/y.log` | `sub/x.txt sub/y.log` | `sub/x.txt sub/y.log` | `sub/y.log` | `sub/x.txt sub/y.log` | `sub/x.txt sub/y.log` | `sub/x.txt sub/y.log` |
 | `pat/the-ignore-parameter-with-the-separator-written-in` | `sub/x.txt sub/y.log` | `sub/y.log` | `sub/y.log` | `sub/y.log` | `sub/x.txt sub/y.log` | `sub/x.txt sub/y.log` | `sub/x.txt sub/y.log` |
 | `pat/everything-ignored-is-a-pattern-that-matched-nothing` | `a.txt b.txt` | `*.txt` | `*.txt` | `*.txt` | `a.txt b.txt` | `a.txt b.txt` | `a.txt b.txt` |
+| `pat/the-ignore-parameter-under-the-other-name` | `a.txt b.txt c.log` | `.dot c.log` | `.dot c.log` | `.dot c.log` | `. .. .dot c.log` | `a.txt b.txt c.log` | `a.txt b.txt c.log` |
+| `pat/the-ignore-parameter-value-is-one-pattern-or-a-list` | `a.txt b.txt c.log~a.txt b.txt c.log` | `*~a.txt b.txt c.log` | `*~a.txt b.txt c.log` | `*~a.txt b.txt c.log` | `. .. a.txt b.txt c.log~. ..` | `a.txt b.txt c.log~a.txt b.txt c.log` | `a.txt b.txt c.log~a.txt b.txt c.log` |
+| `pat/an-ignore-pattern-matches-the-entry-or-the-word` | `sub/x.txt sub/y.log~sub/x.txt sub/y.log` | `sub/x.txt sub/y.log~sub/y.log` | `sub/x.txt sub/y.log~sub/y.log` | `sub/y.log~sub/y.log` | `../. ../.. ../gi ./. ./.. ./sub sub/. sub/.. sub/y.log~../. ../.. ../gi ./. ./.. ./sub sub/. sub/.. sub/x.txt sub/y.log` | `sub/x.txt sub/y.log~sub/x.txt sub/y.log` | `sub/x.txt sub/y.log~sub/x.txt sub/y.log` |
+| `pat/an-ignore-value-inherited-from-the-environment` | `a.txt c.log~a.txt c.log` | `a.txt c.log~a.txt c.log` | `a.txt c.log~a.txt c.log` | `a.txt c.log~a.txt c.log` | `. .. .dot c.log~. .. .dot a.txt c.log` | `a.txt c.log~a.txt c.log` | `a.txt c.log~a.txt c.log` |
 
 - `pat/a-live-bar-outside-a-group-is-an-alternation` — the same alternation one level out, and the half #1331 left behind: a `|` that arrived from a value is an alternation at the *top* of a pattern in the shell that has bare groups, not only inside `( … )`. The second arm is the discriminating one — under the character reading the value matches its own text and answers `whole`, and under the split reading it cannot, which is what this shell answered before #1497. The written spelling is a parse error in every column, so a value is the only way to say it
   ```sh
@@ -17998,6 +18007,22 @@ grades it and nothing drift-checks it either, for the same reason.
 - `pat/everything-ignored-is-a-pattern-that-matched-nothing` — a word the patterns left with nothing is a word that matched nothing, so the pattern stands where no option says otherwise: `*.txt` in the shell that has the parameter, against the two names in the five that do not. The operand matched both files before the filter ran, which is what makes this the parameter's miss and not the expansion's
   ```sh
   mkdir -p gi && cd gi && : > a.txt && : > b.txt && GLOBIGNORE='*.txt'; echo *.txt
+  ```
+- `pat/the-ignore-parameter-under-the-other-name` — the same facility under two spellings, set in one line so each shell reads its own and the other four read neither. bash takes the two `.txt` names out and brings `.dot` in; ksh93 does the same and lists `.` and `..` beside it, which is the one rule the two do not share and is the row #2748 was filed on. This shell had no `FIGNORE` at all, so the ksh93 column was the three visible names
+  ```sh
+  mkdir -p gi && cd gi && : > a.txt && : > b.txt && : > c.log && : > .dot && FIGNORE='*.txt'; GLOBIGNORE='*.txt'; echo *
+  ```
+- `pat/the-ignore-parameter-value-is-one-pattern-or-a-list` — bash splits the value on colons and takes all three names out; ksh93 reads the whole value as **one pattern**, no name holds a colon, and nothing is taken out at all. The second line is what keeps that from reading as "ksh93's parameter is broken": written as an alternation in the pattern grammar the same two kinds go, so the value really is a pattern rather than a list of them
+  ```sh
+  mkdir -p gi && cd gi && : > a.txt && : > b.txt && : > c.log && FIGNORE='*.txt:*.log'; GLOBIGNORE='*.txt:*.log'; echo *; FIGNORE='@(*.txt|*.log)'; GLOBIGNORE='@(*.txt|*.log)'; echo *
+  ```
+- `pat/an-ignore-pattern-matches-the-entry-or-the-word` — what the pattern is matched against, and the two shells are exactly opposite. ksh93 matches the **entry the directory listing gave**, so `*.txt` reaches `sub/x.txt` on the first line and `sub/x.txt` reaches nothing on the second; bash matches the word the expansion produced and answers the other way round on both. The pair is the discriminating shape — one line alone is answered by a filter that matched everything or nothing
+  ```sh
+  mkdir -p gi/sub && cd gi && : > sub/x.txt && : > sub/y.log && FIGNORE='*.txt'; GLOBIGNORE='*.txt'; echo */*; FIGNORE='sub/x.txt'; GLOBIGNORE='sub/x.txt'; echo */*
+  ```
+- `pat/an-ignore-value-inherited-from-the-environment` — whether the facility is a state an assignment latched or the parameter as it stands. bash reads nothing from the environment — the first line is the two visible names — and ksh93 filters straight away. The second line is the same seam from the null side: assigning an empty value leaves bash's hidden-name switch where it was and turns ksh93's on, because that shell has no option of its own for a script to write back
+  ```sh
+  mkdir -p gi && cd gi && : > a.txt && : > c.log && : > .dot && echo *; FIGNORE=''; GLOBIGNORE=''; echo *
   ```
 
 ## variables

@@ -662,7 +662,8 @@ func (r *Runner) glob(field string) ([]string, bool) {
 	}
 	// `D` is `glob_dots` for one pattern, and the option is the other way
 	// into the same question.
-	seeHidden := r.MatchOption(PatternsMatchHidden) || quals.seeHidden
+	seeHidden := r.MatchOption(PatternsMatchHidden) || quals.seeHidden ||
+		r.ignoredNamesRevealHidden()
 	starstar := r.MatchOption(StarStarCrossesDirectories)
 	starstarAlone := r.MatchOption(StarStarAloneCrossesDirectories)
 	parts := strings.Split(field, "/")
@@ -1251,8 +1252,7 @@ func (r *Runner) matchIn(dir, pattern string, o patternOpts, seeHidden bool) []s
 	o.chars = r.patternCountsCharacters(append(entryNames(entries), pattern)...)
 
 	var out []string
-	for _, e := range entries {
-		name := e.Name()
+	for _, name := range r.listedNames(entries) {
 		// Only a *leading* period is special, and only in pathname
 		// expansion: `*.b` matches `a.b`, and `.hid` needs `.*id`.
 		if strings.HasPrefix(name, ".") && !hidden {
@@ -1263,6 +1263,46 @@ func (r *Runner) matchIn(dir, pattern string, o patternOpts, seeHidden bool) []s
 		}
 	}
 	return out
+}
+
+// listedNames is the names a component match may reach in one directory,
+// which is not quite the names a directory holds: three of the six columns
+// list `.` and `..` beside them and three do not.
+//
+// Measured 2026-09-14 in a directory holding `a.txt`, `.dot` and `sub`:
+//
+//	           echo .*            echo .*/
+//	bash 5.3   .dot               .*/
+//	zsh        .dot               no matches found
+//	ksh93      . .. .dot          ../ ./
+//	dash       . .. .dot          ../ ./
+//	bash 3.2   . .. .dot          ../ ./
+//
+// So it is not the ignore parameter's doing and not a hidden-name option's
+// either — it is what the listing holds, and the leading-period rule is what
+// keeps the two names out of an ordinary `*`. The parameter reaches it only
+// by turning that rule off: ksh93's `FIGNORE=x; echo *` lists `.` and `..`
+// where bash's `GLOBIGNORE=x; echo *` never does, which is the row #2748 was
+// filed on and is this axis rather than a second rule about the parameter.
+//
+// The names go in front, which is where a listing that holds them puts them
+// and is invisible anyway: every column sorts what it matched.
+//
+// The component match only. A `..` the walk *descended into* would climb out
+// of the tree and never stop, and no column does that — ksh93's `**` lists
+// the tree below and nothing above it. Whether the descent also *lists* the
+// two names beside the entries it finds is a question no dialect here can
+// reach: ksh93 does (`**` under `set -o globstar` writes `sub/.` and
+// `sub/..`), and this preset has no `globstar` to turn its `**` on with.
+func (r *Runner) listedNames(entries []os.DirEntry) []string {
+	names := make([]string, 0, len(entries)+2)
+	if r.sem().GlobListsDotAndDotDot == Yes {
+		names = append(names, ".", "..")
+	}
+	for _, e := range entries {
+		names = append(names, e.Name())
+	}
+	return names
 }
 
 // globJoin appends one name to a directory the walk is holding, and — unlike

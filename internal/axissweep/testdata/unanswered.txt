@@ -95,6 +95,9 @@ ash   ExportedCompoundReachesAChildAsItsFirstValue
 ash   ForNameWhenTheLoopRuns
 ash   FunctionNamesUnderPlus
 ash   HeldExitListsTheJobs
+ash   IgnoredNamesFollowTheParameter
+ash   IgnoredNamesMatchTheLastComponent
+ash   IgnoredNamesValueIsOnePattern
 ash   ImmovableOptionsSetAtInvocation
 ash   IndirectionYieldsName
 ash   InheritedValueSurvivesADeclaredType
@@ -274,6 +277,9 @@ dash  ForNameWhenTheLoopRuns
 dash  FunctionNameWhenTheDefinitionRuns
 dash  FunctionNamesUnderPlus
 dash  HeldExitListsTheJobs
+dash  IgnoredNamesFollowTheParameter
+dash  IgnoredNamesMatchTheLastComponent
+dash  IgnoredNamesValueIsOnePattern
 dash  ImmovableOptionsSetAtInvocation
 dash  IndirectionYieldsName
 dash  InheritedValueSurvivesADeclaredType
@@ -389,6 +395,9 @@ zsh   AliasNameCheckReachesALookup
 zsh   ExpansionResultSuppliesGroupSyntax
 zsh   ForNameWhenTheLoopRuns
 zsh   FunctionNameWhenTheDefinitionRuns
+zsh   IgnoredNamesFollowTheParameter
+zsh   IgnoredNamesMatchTheLastComponent
+zsh   IgnoredNamesValueIsOnePattern
 zsh   IndirectionYieldsName
 zsh   IntegerAssignmentReadsALeadingZeroAsDecimal
 zsh   LocalOutsideAFunctionIsFatal

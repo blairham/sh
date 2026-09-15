@@ -1061,6 +1061,31 @@ func Semantics() interp.Semantics {
 	// `(( ))` — see [interp.Semantics.ForHeaderArithmeticErrorIsFatal].
 	s.ForHeaderArithmeticErrorIsFatal = interp.Yes
 	s.UnterminatedBracket = interp.BracketLiteral
+	// The parameter whose patterns take names back out of a pathname
+	// expansion, spelled `FIGNORE` here and `GLOBIGNORE` in bash. The
+	// facility is the same and the model is not: measured on ksh93u+,
+	// 2026-09-14, in a directory holding `a.txt`, `b.txt`, `c.log`, `.dot`,
+	// `.hid.txt` and `sub`, it is **one pattern** rather than a
+	// colon-separated list — `FIGNORE='*.txt:*.log'` takes nothing out —
+	// matched against the *entry in the directory* rather than the word, so
+	// `FIGNORE='*.txt'` reaches `sub/x.txt` through `sub/*`; and it is read
+	// off the parameter where it stands, so a value inherited from the
+	// environment works and a null value still shows the hidden names.
+	//
+	// The hidden names it shows include `.` and `..`, which is the row
+	// #2748 was filed on — and that is GlobListsDotAndDotDot below rather
+	// than a second rule about this parameter: this shell lists the two
+	// names whether or not `FIGNORE` is set, and the leading-period rule is
+	// what keeps them out of an ordinary `*`.
+	s.IgnoredNamesVariable = "FIGNORE"
+	s.IgnoredNamesRevealHiddenNames = true
+	s.IgnoredNamesValueIsOnePattern = interp.Yes
+	s.IgnoredNamesMatchTheLastComponent = interp.Yes
+	s.IgnoredNamesFollowTheParameter = interp.Yes
+	// `echo .*` is `. .. .dot` here, where bash 5.3 and zsh answer `.dot`.
+	// bash 3.2 and dash agree with this shell, so it is three of the panel
+	// against two.
+	s.GlobListsDotAndDotDot = interp.Yes
 	s.UnknownCharacterClass = interp.UnknownClassEmptiesTheBracket
 	// A value's backslash is **data**, and the metacharacter behind it stays
 	// live — this shell against the other five. Measured 2026-09-12 in a

@@ -98720,6 +98720,57 @@
         "TimedOut": false
       }
     },
+    "glob/dot-and-dotdot-in-a-listing": {
+      "ash": {
+        "Stdout": ". .. .dot~../ ./~a.txt sub",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": ".dot~.*/~a.txt sub",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": ".dot~.*/~a.txt sub",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": ". .. .dot~../ ./~a.txt sub",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": ". .. .dot~../ ./~a.txt sub",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": ". .. .dot~../ ./~a.txt sub",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": ".dot",
+        "Stderr": "\u003cshell\u003e:1: no matches found: .*/",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "glob/matches-are-in-order": {
       "ash": {
         "Stdout": "1digit Apple Cherry _under banana",
@@ -144221,6 +144272,108 @@
         "TimedOut": false
       }
     },
+    "pat/an-ignore-pattern-matches-the-entry-or-the-word": {
+      "ash": {
+        "Stdout": "sub/x.txt sub/y.log~sub/x.txt sub/y.log",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "sub/x.txt sub/y.log~sub/y.log",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "sub/x.txt sub/y.log~sub/y.log",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "sub/y.log~sub/y.log",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "sub/x.txt sub/y.log~sub/x.txt sub/y.log",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "../. ../.. ../gi ./. ./.. ./sub sub/. sub/.. sub/y.log~../. ../.. ../gi ./. ./.. ./sub sub/. sub/.. sub/x.txt sub/y.log",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "sub/x.txt sub/y.log~sub/x.txt sub/y.log",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "pat/an-ignore-value-inherited-from-the-environment": {
+      "ash": {
+        "Stdout": "a.txt c.log~a.txt c.log",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "a.txt c.log~a.txt c.log",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "a.txt c.log~a.txt c.log",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "a.txt c.log~a.txt c.log",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "a.txt c.log~a.txt c.log",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": ". .. .dot c.log~. .. .dot a.txt c.log",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "a.txt c.log~a.txt c.log",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "pat/an-operand-expands-once-for-a-whole-array": {
       "ash": {
         "Stdout": "",
@@ -146204,6 +146357,108 @@
       },
       "zsh": {
         "Stdout": "sub/x.txt sub/y.log",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "pat/the-ignore-parameter-under-the-other-name": {
+      "ash": {
+        "Stdout": "a.txt b.txt c.log",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": ".dot c.log",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": ".dot c.log",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": ".dot c.log",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "a.txt b.txt c.log",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": ". .. .dot c.log",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "a.txt b.txt c.log",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "pat/the-ignore-parameter-value-is-one-pattern-or-a-list": {
+      "ash": {
+        "Stdout": "a.txt b.txt c.log~a.txt b.txt c.log",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "*~a.txt b.txt c.log",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "*~a.txt b.txt c.log",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "*~a.txt b.txt c.log",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "a.txt b.txt c.log~a.txt b.txt c.log",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": ". .. a.txt b.txt c.log~. ..",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "a.txt b.txt c.log~a.txt b.txt c.log",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

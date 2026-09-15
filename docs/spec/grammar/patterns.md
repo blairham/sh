@@ -1989,13 +1989,43 @@ The facility is two dialects' and not one, which is why the core names it
 for what it does — `interp.Semantics.IgnoredNamesVariable`, empty where a
 dialect has no such parameter — rather than for bash's spelling.
 
-Measured on ksh93u+ in the same fixture: `FIGNORE='*.txt'; echo *` answers
-`. .. .dot c.log sub`, so that shell's parameter reveals hidden names as
-bash's does **and keeps `.` and `..` among them**, which bash never does.
-`GLOBIGNORE` does nothing there and `FIGNORE` does nothing in bash. zsh and
-dash have neither. Filed rather than guessed at: wiring ksh93's half is
-what turns the `.`/`..` difference into an axis, and writing the axis first
-would be writing a branch no run can take.
+`GLOBIGNORE` does nothing in ksh93 and `FIGNORE` does nothing in bash; zsh
+and dash have neither. Measured on ksh93u+ 2026-09-14 in the same fixture,
+the two shells part in **three** places, and each is an axis:
+
+| written | ksh93 | bash 5.3 |
+| --- | --- | --- |
+| `VAR='*.txt'; echo *` | `. .. .dot c.log sub` | `.dot c.log sub` |
+| `VAR='*.txt:*.log'; echo *` | nothing taken out | both kinds gone |
+| `VAR='@(*.txt\|*.log)'; echo *` | both kinds gone | — |
+| `VAR='*.txt'; echo sub/*` | `sub/x.txt` gone | nothing gone |
+| `VAR='sub/x.txt'; echo sub/*` | nothing gone | `sub/x.txt` gone |
+| `VAR='sub'; echo */` | `sub/` gone | `sub/` kept |
+| `VAR='sub/'; echo */` | `sub/` kept | `sub/` gone |
+| `VAR='*.txt' sh -c 'echo *'` | filtered | no effect |
+| `VAR=''; echo *` | hidden names shown | no hidden names |
+
+- **The value is one pattern, not a colon-separated list.** No name holds a
+  colon, so ksh93's second row takes nothing out; the alternation a script
+  wants there is written in the pattern grammar, which is the third row and
+  does work. `IgnoredNamesValueIsOnePattern`.
+- **The subject is the entry the directory listing gave**, not the word the
+  expansion produced: no `./` in front of it and no `/` behind it. The four
+  middle rows are the same statement from four sides, and the `sub` / `sub/`
+  pair is the sharpest — the two shells are exactly opposite there.
+  `IgnoredNamesMatchTheLastComponent`.
+- **The facility follows the parameter** rather than latching on an
+  assignment: an inherited value works, and a null one still shows the
+  hidden names. bash has neither half, because there the hidden-name switch
+  is `dotglob` itself and a script may write it back; ksh93 has no such
+  option to write. `IgnoredNamesFollowTheParameter`.
+
+The first row's `.` and `..` are **not** this parameter's doing and are a
+separate axis: ksh93 lists those two names in every pathname expansion, and
+the leading-period rule is what keeps them out of an ordinary `*`. See
+`GlobListsDotAndDotDot` in `../grammar/expansion.md` — three columns list
+them and three do not, bash disagreeing with itself across versions
+(#2748).
 
 ## The ampersand in a replacement, and the option that gates it
 

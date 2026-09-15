@@ -187,6 +187,22 @@ func Semantics() interp.Semantics {
 	// read as a literal: `case a in [a) echo one;; *) echo def;; esac`
 	// reaches the default arm.
 	s.UnterminatedBracket = interp.BracketNoMatch
+	// `echo .*` lists `.` and `..` beside the hidden names, which is the
+	// answer dash and ksh93 give and bash 5.3 does not. Recorded from the
+	// corpus run inside the container rather than guessed at, since there
+	// is no BusyBox on this machine — see `glob/dot-and-dotdot-in-a-listing`
+	// (#2748).
+	s.GlobListsDotAndDotDot = interp.Yes
+	// unanswered IgnoredNamesValueIsOnePattern: there is no parameter of
+	// GLOBIGNORE's kind in this shell — measured 2026-09-14, setting
+	// `GLOBIGNORE` and `FIGNORE` alike changes nothing about what `echo *`
+	// produces — so the three questions about *how* its value is read
+	// cannot be put to it. IgnoredNamesMatchTheLastComponent and
+	// IgnoredNamesFollowTheParameter are unanswered beside it for the same
+	// reason, and IgnoredNamesVariable being empty is what keeps any of the
+	// three from ever being reached (#2748).
+	// unanswered IgnoredNamesMatchTheLastComponent: see above.
+	// unanswered IgnoredNamesFollowTheParameter: see above.
 	s.UnknownCharacterClass = interp.UnknownClassIsInert
 	// `$(( ))` with nothing in it is 0 at status 0, where dash wants a
 	// primary and stops the script.

@@ -256,6 +256,18 @@ func Semantics() interp.Semantics {
 	// rather than guessed at.
 	s.IgnoredNamesVariable = "GLOBIGNORE"
 	s.IgnoredNamesRevealHiddenNames = true
+	// A colon-separated list, matched against the *word* the expansion
+	// produced, and a state an assignment latches rather than the
+	// parameter's own: an inherited value does nothing until something
+	// assigns it. ksh93's parameter of the same kind answers the other way
+	// to all three.
+	s.IgnoredNamesValueIsOnePattern = interp.No
+	s.IgnoredNamesMatchTheLastComponent = interp.No
+	s.IgnoredNamesFollowTheParameter = interp.No
+	// `.` and `..` are not in what a pattern may match. bash 3.2 lists them
+	// and 5.3 does not, so this is the version's answer and not bash's; no
+	// preset here is bash 3.2.
+	s.GlobListsDotAndDotDot = interp.No
 	// And the files it reads by name. Measured 2026-09-05 through a
 	// pseudo-terminal with a scratch home directory holding a marker for
 	// every name any shell in the panel reads.

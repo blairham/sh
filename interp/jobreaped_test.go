@@ -242,3 +242,68 @@ kill -0 "$p" 2>/dev/null; echo "after=$(( $? != 0 ))"
 		t.Errorf("out = %q, want the answer to stop once `wait` has collected the job; stderr %q", out, errOut)
 	}
 }
+
+// A background job the shell is still running answers `kill` too, and it does
+// so however the job came to be blocked.
+//
+// `cmd & p=$!; kill -0 "$p"` is the question a script asks before it signals
+// a job, and the answer on every reference is yes for the whole of the job's
+// life: they fork before they open anything, so the child exists from the
+// moment `&` returns. Measured 2026-09-15 on bash 5.3.15, zsh 5.9.2, ksh93u+
+// 2012-08-01 and dash, on a job blocked opening a fifo as a redirection, as
+// an operand, and made only of builtins — `kill -0 "$!"` is 0 in all four for
+// every shape (#2994).
+//
+// This shell answered no. A job whose *first* act is a blocking open has its
+// pid settled at zero so that `&` can return at all — see
+// Runner.settleBackgroundJobBeforeABlockingOpen — and the number `$!` gave
+// for it was then read back as a job with no process and reported missing.
+// So the window between `&` and the open completing, which on a loaded
+// machine is not small, was a window in which a running job read as a job
+// that was gone.
+//
+// The redirection is the discriminating spelling and the operand is the
+// control: `head -n 1 gate &` opens the fifo inside `head`, so the job has a
+// process from the start and answered even before this, while
+// `head -n 1 < gate &` opens it in the shell and did not. A test written only
+// the second way passes on the shell that has the defect.
+//
+// The gate is there for what a mutant would do, for the reason
+// runGatedJobScript gives, and it lets signal **0** through where the tests
+// above refuse everything. It has to: the operand line is the control, and it
+// is only a control if `kill -0` really asks the kernel there — refused, it
+// answers no on every shell, defect or not, and the test passes on the
+// mutant. Signal 0 is the one that is safe to allow, because it is defined to
+// send nothing: the hazard runGatedJobScript names is a *real* signal reaching
+// pid 0, which is every process in this binary's group, and that is still
+// refused here.
+func TestARunningJobAnswersKillWhileItsOwnRedirectionIsStillOpening(t *testing.T) {
+	const src = `mkfifo gate
+head -n 1 < gate >/dev/null &
+p=$!
+kill -0 "$p" 2>/dev/null; echo "redirected=$?"
+mkfifo other
+head -n 1 other >/dev/null &
+q=$!
+kill -0 "$q" 2>/dev/null; echo "operand=$?"
+printf 'go\n' > gate
+printf 'go\n' > other
+wait
+kill -0 "$p" 2>/dev/null; echo "after=$(( $? != 0 ))"
+`
+	out, errOut := runGatedJobScript(t, src, nil, GateFunc(func(_ context.Context, a Action) Decision {
+		if a.Kind == ActionSignal && a.Signal != 0 {
+			return Deny
+		}
+		return Allow
+	}))
+	if !strings.Contains(out, "redirected=0") {
+		t.Errorf("out = %q, want `kill -0 $!` to find a job that is running and blocked in its own redirection; stderr %q", out, errOut)
+	}
+	if !strings.Contains(out, "operand=0") {
+		t.Errorf("out = %q, want the same answer where the job opens the fifo itself — the gate's grammar is not the answer; stderr %q", out, errOut)
+	}
+	if !strings.Contains(out, "after=1") {
+		t.Errorf("out = %q, want the answer to stop once `wait` has collected the job; stderr %q", out, errOut)
+	}
+}

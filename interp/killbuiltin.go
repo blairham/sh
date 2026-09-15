@@ -294,12 +294,15 @@ func (r *Runner) killTargets(name string, sig syscall.Signal, targets []string) 
 			return r.killReport(killNotAPid, t)
 		}
 		if len(aims) == 0 {
-			// A target that is there with nothing left to reach: a job that
-			// has ended and that the script has not waited for, which is a
-			// child a real shell has not reaped yet. `kill` succeeds at it
-			// and nothing receives anything — see Runner.jobProcesses. Every
-			// other route out of killTarget names at least one process, so
-			// this is that case and not an empty list from anywhere else.
+			// A target that is there with nothing to reach, which is a job
+			// either way: one that has ended and that the script has not
+			// waited for — a child a real shell has not reaped yet — or one
+			// still running that this shell has no process for. `kill`
+			// succeeds at both and nothing receives anything; see
+			// Runner.jobProcesses for why the panel says the target is
+			// there in each. Every other route out of killTarget names at
+			// least one process, so an empty list is one of those two and
+			// not a list from anywhere else.
 			sent++
 			continue
 		}
@@ -436,12 +439,36 @@ func (r *Runner) jobProcesses(j *Job) (targets []jobProcess, bad int) {
 			// never reach this.
 			return nil, jobFound
 		}
-		// A job still running with no process of its own — a background
-		// builtin or compound command that has not ended. There is nothing
-		// to signal and nothing that has exited either, so it is reported as
-		// the missing job it behaves as. Reconstructing *that* boundary is a
-		// process this shell does not have; see Runner.background.
-		return nil, jobMissing
+		// A job still running with no process of its own, which is two
+		// shapes and not one: a background builtin or compound command that
+		// will never have a process, and an ordinary external command whose
+		// *redirection* is still blocked on an open — `cat < fifo &` — so
+		// the process is a moment away rather than never coming. This shell
+		// settles a pid of zero at a blocking open so that `&` returns at
+		// all, and the job stands here in between; see
+		// Runner.settleBackgroundJobBeforeABlockingOpen.
+		//
+		// It is a target that is *there*, for the reason the finished job
+		// above is: every reference forks before it opens anything, so the
+		// child exists from the moment `&` returns and answers `kill -0` for
+		// the whole of the job's life. Measured 2026-09-15 on bash 5.3.15,
+		// zsh 5.9.2, ksh93u+ 2012-08-01 and dash, on a job blocked opening a
+		// fifo as a redirection, as an operand, and made only of builtins:
+		// `kill -0 "$!"` is 0 in all four for every shape (#2994). This
+		// shell answered no to all of them, so the question a script asks
+		// before it signals a job read as "that job is gone" while the job
+		// was running.
+		//
+		// What is still not right, and is the same gap #2938 named rather
+		// than a new one: nothing is signaled. A job this shell has no
+		// process for cannot receive one, so `kill -TERM "$!"` reports the 0
+		// the panel reports and the job runs on, where a real shell's fork
+		// would have taken it. The number is not spent on anything else —
+		// it is read back as the job here rather than handed to the kernel,
+		// which is what jobident.go puts it above every issuable pid for —
+		// so the failure is a signal that reaches nothing, never a signal
+		// that reaches something the script did not name.
+		return nil, jobFound
 	}
 	return targets, jobFound
 }

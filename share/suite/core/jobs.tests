@@ -68,10 +68,14 @@
 #   the fifo is the reader's *operand* and not a redirection on the job.
 #     `head -n 1 gate` is a job that is a process with a pid as soon as it
 #     starts; `head -n 1 < gate` is a job whose redirection is opened first,
-#     so `$!` names something that is not there to be signalled yet — which
-#     is the pid the `kill -0` case below needs rather than the job. Every
-#     reference forks first and opens in the child, so this spelling costs
-#     them nothing; it is ours that needs it (#2994).
+#     so `$!` named something that was not there to be signalled yet — which
+#     is the pid the `kill -0` cases below need rather than the job. Every
+#     reference forks first and opens in the child; this shell settles a pid
+#     of zero at the blocking open so that `&` returns at all, and a job
+#     standing there is now a target that is *there* like the reference's
+#     fork is (#2994). The spelling is kept because it is the one the file
+#     was measured on, and the redirection form is asked beside it rather
+#     than instead of it.
 #
 # Still held out, and now with the file each went to: `kill` on a job
 # specification, which dash refuses entirely (dash/jobs.tests); `disown`,
@@ -339,10 +343,7 @@ nohup false > /dev/null 2>&1; printf 'nohup false -> %s\n' "$?"
 #
 # The fifo is `head`'s operand rather than a redirection on the job, and it
 # is released with a line rather than with an end of file. Both are the
-# file's house spelling and both are explained in the header; this is the
-# case the first of them exists for, because it is the one that asks about
-# the pid rather than about the job, and this shell is the only column that
-# needs it that way round (#2994).
+# file's house spelling and both are explained in the header.
 mkfifo held
 { head -n 1 held > /dev/null; exit 0; } &
 p=$!
@@ -353,6 +354,26 @@ wait
 kill -0 "$p" 2> /dev/null
 printf 'and stops once it is waited for -> %s\n' "$(( $? == 0 ))"
 rm -f held
+
+# And it answers however the job came to be blocked. The one above is held by
+# the *reader*, which has a process from the moment it starts; this one is
+# held by a **redirection on the job**, which every reference opens after it
+# has already forked and this shell opens before the job is a process at all.
+# That gap was visible from a script: `$!` named something `kill` could not
+# reach yet, so the question a script asks before it signals a job answered
+# "gone" about a job that was running (#2994). Both spellings, because the
+# grammar of the gate is not supposed to be part of the answer — and this is
+# the case the other one used to have to be spelled around.
+mkfifo redirected
+head -n 1 < redirected > /dev/null &
+q=$!
+kill -0 "$q" 2> /dev/null
+printf 'a job blocked in its own redirection answers -> %s\n' "$(( $? == 0 ))"
+printf 'go\n' > redirected
+wait
+kill -0 "$q" 2> /dev/null
+printf 'and stops once that one is waited for -> %s\n' "$(( $? == 0 ))"
+rm -f redirected
 
 # `kill` on a job specification is not asked: dash refuses every spelling of
 # it, which is dash/jobs.tests and is the whole of the difference — ksh93 was

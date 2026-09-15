@@ -1542,6 +1542,12 @@ func (sh Shell) newRunner(name string, params []string, dg interp.Diagnostics, r
 		// program would be changing *its* mask for everything it writes
 		// afterwards, so the decision belongs here rather than in interp.
 		r.SetUmask = setUmask
+		// And for the same reason again, `suspend` may really stop it. A
+		// Runner embedded in some other program that could stop that program
+		// until somebody found it and continued it is a library that can be
+		// told to hang its caller; a binary that *is* a shell is the one
+		// place the system call is right. See stop.go.
+		r.StopThisProcess = stopThisProcess
 		// And the limits it runs under, for the same reason again — a limit
 		// outlives the command that set it.
 		r.GetRlimit, r.SetRlimit = getRlimit, setRlimit

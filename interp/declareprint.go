@@ -325,14 +325,19 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 	// no attribute, so no listing reaches it and no listing draws a number
 	// from it that the next read would not repeat.
 	//
-	// The guard has a cost and it is on record rather than overlooked. A
-	// listing that *names* an unattributed producer finds nothing either, so
-	// `typeset -p SECONDS` is `no such variable` here where zsh writes
-	// `typeset -i10 SECONDS=0` — and zsh draws a fresh number for
-	// `typeset -p RANDOM`, so the rule above is ours and not its. Lifting the
-	// guard is a word and does not finish the job: the `-i10` is an integer
-	// attribute and a base that a produced parameter has no way to carry yet.
-	// The two together are #1687.
+	// The guard had a cost and it was on record here for a while: a listing
+	// that *named* an unattributed producer found nothing either, so
+	// `typeset -p SECONDS` was `no such variable` where zsh writes
+	// `typeset -i10 SECONDS=0`. That was #1687, and the note is kept because
+	// the way out of it is the thing to reach for next time rather than the
+	// obvious one. Lifting the guard was never the answer — it would have let
+	// a bare listing draw a number out of every producer on the runner, and
+	// it still could not have written the `-i10`, which is an integer
+	// attribute and a base. What closed it instead was giving a producer
+	// something to *carry*: SetDynamicDeclaration and ProducedDeclaration
+	// (#2510, #2552, #2728), after which `SECONDS` and `RANDOM` are
+	// attributed like any other name and reach this branch through the guard
+	// rather than around it.
 	if produce, ok := r.Dynamic[name]; ok && attributed && !r.listingDrawsNoReading {
 		d.value, d.hasValue = produce(r), true
 		return d, true

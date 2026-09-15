@@ -141,10 +141,13 @@ func helpTopics(r *interp.Runner) map[string]string {
 	for name, synopsis := range helpKeywordSynopses() {
 		topics[name] = synopsis
 	}
-	// This one is not gated on Builtin, deliberately: four of its names —
-	// `dirs`, `popd`, `pushd` and `suspend` — are functions this dialect's
-	// prelude defines rather than Go builtins, so asking the builtin registry
-	// about them would drop four topics the shell really has.
+	// This one is not gated on Builtin, deliberately: three of its names —
+	// `dirs`, `popd` and `pushd` — are functions this dialect's prelude
+	// defines rather than Go builtins, so asking the builtin registry about
+	// them would drop three topics the shell really has. `suspend` sits here
+	// beside them rather than in builtinHelp because its entry is a synopsis
+	// and not a help block; it is a Go builtin since #2557, so the gate would
+	// pass either way.
 	for name, synopsis := range helpOtherSynopses() {
 		topics[name] = synopsis
 	}

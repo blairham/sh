@@ -233,6 +233,13 @@ nohup false > /dev/null 2>&1; printf 'nohup false -> %s\n' "$?"
 # pid answers `kill -0`, because nothing has reaped it, and stops answering
 # once `wait` has — which is why `kill -0 "$pid"` is not a test for "is it
 # still running" in a shell script, and is the same in all four columns.
+#
+# "Nothing has reaped it" is a *window* rather than a state, and the case
+# repeats only because nothing slow happens between the two lines. Every
+# reference reaps a background child from its own SIGCHLD handler and not at
+# `wait`: put a builtin-only busy loop between the `&` and the `kill -0` and
+# all four answer 0 instead. Measured 2026-09-15, and it is why zsh answers
+# this line two ways under load — #2974, which is this file's half of #2938.
 ( exit 0 ) &
 p=$!
 kill -0 "$p" 2> /dev/null

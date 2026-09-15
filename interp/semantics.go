@@ -6265,6 +6265,74 @@ type Semantics struct {
 	// makes it local in a function defined either way.
 	TypesetLocalNeedsKeywordFunction Answer
 
+	// CallerLocalsReachTheCallee lets a function body read and write the
+	// name one of its *callers* declared local, which is the dynamic scoping
+	// every shell in the panel but one has.
+	//
+	// ksh93 answers No. A `function`-word body there is scoped **statically**:
+	// the declaration is visible in the body that made it and nowhere else,
+	// so a function it calls reads the shell's own name. Measured 2026-09-15
+	// against ksh93u+ 2012-08-01 and ours on all three routes:
+	//
+	//	function callee { printf '[%s]\n' "${v-UNSET}"; }
+	//	function caller { typeset v=local; callee; }
+	//	v=global
+	//	caller
+	//
+	//	ksh93                        [global]
+	//	bash 5.3, zsh 5.9.2          [local]
+	//	dash, BusyBox ash            [local], asked with `local`
+	//
+	// dash and ash have no `typeset` and are asked through `local`, which
+	// they do have — `callee() { printf '[%s]\n' "${v-UNSET}"; }; caller() {
+	// local v=L; callee; }; v=G; caller` writes `[L]` in both — so the axis
+	// is answerable by every dialect rather than only by the one that
+	// departs.
+	//
+	// This is not TypesetLocalNeedsKeywordFunction, which already models
+	// *whether* the declaration is local. It is the question one level over:
+	// given that it is, who else can see it.
+	//
+	// Four measured facts shape how it is asked:
+	//
+	//	It is the **callee's** definition form that decides, not the
+	//	caller's. `function caller { typeset v=local; p; }` with `p()`
+	//	written POSIX-style prints `local` in ksh93 — a POSIX-form body there
+	//	takes no scope of its own, so it is not a boundary. That is why the
+	//	seal is skipped for such a call.
+	//
+	//	The parent is the **shell's own** names and not the lexical
+	//	definition site: a `function` defined *inside* another function still
+	//	reads the global, measured with `function outer { typeset v=OUT;
+	//	function inner { printf '[%s]' "$v"; }; inner; }`.
+	//
+	//	It is a swap and not a hiding. `function callee { v=written; }` called
+	//	under `typeset v=local` leaves the caller's local alone and changes
+	//	the **global**, so what the body wrote has to survive the return.
+	//
+	//	Everything about the name travels, not only its value: the callee
+	//	sees the global array, the global table, the global `unset`-ness,
+	//	and none of the caller's local attributes — measured one at a time
+	//	with `typeset -a`, `typeset -A`, `unset`, `typeset -r` and
+	//	`typeset -i`, each of which answers from the global in ksh93.
+	//
+	// Two stores are deliberately outside the seal, because no column can
+	// put a question to them: a shell-*produced* parameter hidden by a
+	// declaration (Semantics.DeclareHideInScopeLetter, which ksh93 has no letter
+	// for) and the message such a parameter's producer was last handed.
+	//
+	// unpinned bash: the corpus cannot reach the pair — a row needs two
+	// function definitions and a call between them, and every corpus case
+	// about declaration scope stops at whether the caller's value survives
+	// the return. The same holds for zsh, dash and ash.
+	// unpinned zsh: as bash.
+	// unpinned dash: as bash.
+	// unpinned ash: as bash.
+	// unpinned ksh: as bash. TestACalleeSeesTheCallerLocalOrTheGlobal pins it
+	// in Go, both ways, and share/suite/ksh/typeset.tests grades the ksh93
+	// half against the shell itself.
+	CallerLocalsReachTheCallee Answer
+
 	// ReadonlyDeclaresALocal gives `readonly` inside a function a scope of
 	// its own, the way every other declaration word has one.
 	//
@@ -13920,7 +13988,12 @@ func PosixSemantics() Semantics {
 		// ReadonlyDeclaresALocal for the measurement, including the ksh93
 		// row that keeps this apart from TypesetLocalNeedsKeywordFunction.
 		ReadonlyDeclaresALocal: No,
-		ArrayBaseIsZero:        Yes,
+		// XCU has no local scope at all, so it has nothing to say about who
+		// can see one. The preset follows every panel member but ksh93, and
+		// follows the reading a shell without scopes already behaves as: a
+		// name a function set is the name the function it calls reads.
+		CallerLocalsReachTheCallee: Yes,
+		ArrayBaseIsZero:            Yes,
 		// The standard has no subscript, and the nearest reading it does
 		// have is its arithmetic: a comma there is the operator whose value
 		// is its right operand, and a string is not a sequence a subscript

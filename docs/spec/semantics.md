@@ -3436,6 +3436,73 @@ is not there. It was named that way first, and the core stopped running
 It is asked only where the two answers differ. Inside a keyword-defined
 function they do not, so that case needs no dialect.
 
+## And the axis one level over: who can see a local
+
+Given that a declaration *is* local, who else can see it. Every shell in
+the panel but one scopes it **dynamically** — the name a function declared
+is the name every function it calls reads. ksh93 scopes a `function`-word
+body **statically**.
+
+Measured 2026-09-15 against ksh93u+ 2012-08-01, on all three routes:
+
+    function callee { printf '[%s]\n' "${v-UNSET}"; }
+    function caller { typeset v=local; callee; }
+    v=global
+    caller
+
+| | answer |
+| --- | --- |
+| bash 5.3, zsh 5.9.2 | `[local]` |
+| dash, BusyBox ash | `[local]`, asked with `local` |
+| ksh93 | **`[global]`** |
+
+dash and ash have no `typeset` and are asked through `local`, which they
+do have, so the axis is answerable by every dialect rather than only by the
+one that departs. `CallerLocalsReachTheCallee` is the field.
+
+Four further measurements shape how it is asked and what it costs.
+
+**It is the callee's definition form that decides, not the caller's.** A
+`name()`-form body in ksh93 prints `local` under the same caller, because a
+`typeset` there would not have been local either: that body takes no scope
+of its own, so it is not a boundary. A call with no scope of its own is
+therefore skipped.
+
+**The parent is the shell's own names and not the definition site.** A
+`function` defined *inside* another function still reads the global, so
+this is not lexical scoping in the usual sense — there is one outer
+environment and it is the shell's.
+
+**It is a swap and not a hiding.** `function callee { v=written; }` called
+under `typeset v=local` writes the **global**: ksh93 leaves the caller's
+local at `local` and the shell's own `v` at `written` after the call. A
+seal that merely hid the caller's local and threw the callee's writes away
+would get the first half right and the second wrong.
+
+**Everything about the name travels.** Measured one at a time, the sealed
+body sees the global array, the global table and the global unset-ness, and
+carries none of the caller's attributes: under `typeset -i v=1` a callee's
+`v=010` stores the string `010`, and under `typeset -r v=frozen` a callee
+assigns without being refused.
+
+A local in this interpreter is a save-and-restore over one table of names
+rather than a second store, so the seal is built the way the shell's own
+answer describes it: the enclosing calls' declarations are put aside on the
+way in and put back at the return, with the shell's own name left holding
+whatever the sealed body wrote. `interp/staticscope.go` is the whole of it.
+Two stores are deliberately outside it, because no column can put a
+question to them — a shell-*produced* parameter hidden by a declaration,
+which is a letter ksh93 does not have, and the message such a parameter's
+producer was last handed.
+
+The axis is asked at the disagreement: a call with nothing declared below
+it has no question to put, and neither has a call that takes no scope of
+its own. Whether it takes one is read from
+`TypesetLocalNeedsKeywordFunction` rather than asked of it, for the reason
+the section above gives — that axis is asked over a declaration, where its
+two answers are observable, and asking it again here would refuse a call
+whose body may never declare anything.
+
 ## And an axis that is only about `readonly`
 
 The neighboring question, and it divides the panel somewhere else again:

@@ -5764,6 +5764,11 @@ type scope struct {
 	// rather than with parentheses. ksh93 gives only those functions a local
 	// scope, so `typeset` needs to know which kind it is standing in.
 	keyword bool
+	// sealed is what the enclosing calls' declarations were, in the dialect
+	// whose bodies do not see them — put aside on the way in and put back on
+	// the way out. Nil in every other dialect, and in this one for a call
+	// with nothing declared below it. See staticscope.go.
+	sealed map[string]sealedName
 	// owner is the runner whose call pushed this scope.
 	//
 	// A subshell is a clone that shares the stack, so a scope reached from

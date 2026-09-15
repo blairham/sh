@@ -121,6 +121,11 @@ func permissive() Semantics {
 	// about it answers the axis itself; see
 	// interp/frozenattribute_test.go (#2561).
 	s.AttributeOverAFrozenNameIsRefused = No
+	// And who can see a name a caller declared local, at the answer five of
+	// the six panel columns give. A test that nests two calls on the way to
+	// something else should see the dynamic reading, and the suite that is
+	// about the axis sets both sides — see staticscope_test.go (#2865).
+	s.CallerLocalsReachTheCallee = Yes
 	return s
 }
 

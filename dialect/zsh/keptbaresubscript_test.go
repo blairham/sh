@@ -64,6 +64,11 @@ func TestABareSubscriptClosedOnlyInsideASubstitutionIsRefused(t *testing.T) {
 		{"text after it", `printf "<%s>" $a[$(: ]; echo 2)x`},
 		{"a backtick holding the only `]`", "printf \"<%s>\" $a[`: ]; echo 2`]"},
 		{"a backtick whose `]` is quoted inside it", "printf \"<%s>\" $a[`echo \"]\"`]"},
+		// The word ends before the bracket does, so the `]` in the *next*
+		// word closes nothing. Without this row a scan that ran past the
+		// word's end would keep `[$(echo 2) 1]` as text and print it.
+		{"the word ends before the bracket", `printf "<%s>" $a[$(echo 2) 1]`},
+		{"and with the substitution unbalanced too", `printf "<%s>" $a[$(: ]; echo 2) 1]`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, st := answersRun(t, arr+tc.src)

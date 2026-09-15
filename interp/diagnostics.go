@@ -6093,8 +6093,20 @@ func (d Diagnostics) condPreamble(name, input string, err error) string {
 		return ""
 	}
 	form, verb := d.CondSyntaxPreamble, se.Token
+	line := se.ConstructLine
 	if se.Kind == syntax.ErrUnterminated {
 		form, verb = d.CondUnterminatedPreamble, se.Expected
+		if se.CondTermMissing && d.CondCommandPreamble != "" {
+			// The input ran out where the condition was to *begin*, which
+			// this dialect words as the token-in-a-conditional-command line
+			// with `EOF` for a token — and at the line the input ran out on
+			// rather than the `[[`'s. Measured 2026-09-15: `[[` alone under
+			// `-c` is `line 2: unexpected token `EOF' in conditional
+			// command`, where `[[ -n x` — a condition that *was* read — is
+			// `line 1: unexpected EOF while looking for `]]' `.
+			form, verb = d.CondCommandPreamble, "EOF"
+			line = se.EndLine
+		}
 	} else if se.Kind != syntax.ErrUnexpected {
 		return ""
 	} else if se.CondTermMissing {
@@ -6106,7 +6118,6 @@ func (d Diagnostics) condPreamble(name, input string, err error) string {
 			form = ""
 		}
 	}
-	line := se.ConstructLine
 	if line < 1 {
 		line = 1
 	}
@@ -6117,8 +6128,12 @@ func (d Diagnostics) condPreamble(name, input string, err error) string {
 	if w := d.CondGroupUnclosed; w != "" {
 		// One line per group still open, after the sentence about the token
 		// and before the ordinary one. Measured; see CondGroupUnclosed.
+		group := se.ConstructLine
+		if group < 1 {
+			group = 1
+		}
 		for range se.CondGroupsOpen {
-			out += d.ReportFrom(name, input, line, Wording(w, "expected `%[1]s'", ")")+"\n")
+			out += d.ReportFrom(name, input, group, Wording(w, "expected `%[1]s'", ")")+"\n")
 		}
 	}
 	return out

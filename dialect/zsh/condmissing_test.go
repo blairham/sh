@@ -41,3 +41,26 @@ func TestAMissingConditionNamesTheTokenItStoppedOn(t *testing.T) {
 		})
 	}
 }
+
+// And with the input ending where the condition was to begin, which this
+// dialect names by the last token it read rather than by the closer it was
+// waiting for. Measured the same day, same shell.
+func TestACondtionThatNeverBeganAndRanOut(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{"[[ ", "zsh:1: parse error near `[['\n"},
+		{"[[ !", "zsh:1: parse error near `!'\n"},
+		{"[[ a &&", "zsh:1: parse error near `&&'\n"},
+		{"[[ (", "zsh:1: parse error near `('\n"},
+	} {
+		t.Run(tc.src, func(t *testing.T) {
+			_, err := syntax.Parse(tc.src, zsh.Dialect())
+			if err == nil {
+				t.Fatalf("%s: parsed, want a refusal", tc.src)
+			}
+			got := zsh.Diagnostics().ParseDiagnostic("zsh", "-c", err, tc.src)
+			if got != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}

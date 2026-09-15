@@ -186,3 +186,65 @@ func TestAMissingConditionNamesTheTokenItStoppedOn(t *testing.T) {
 		t.Errorf("out %q, want no group line where no group was open", out)
 	}
 }
+
+// TestACondtionThatNeverBeganAndRanOut — the same five sites with the input
+// ending there rather than a token standing in the way.
+//
+// bash has two sentences for a `[[` the input ran out inside, and they are
+// parted by the same question as the two above: a condition that was read
+// earns `unexpected EOF while looking for `]]'` at the `[[`'s line, and one
+// that never began earns the conditional-command line with `EOF` for a token,
+// at the line the input ran out on. Measured 2026-09-15 on bash 5.3.15.
+func TestACondtionThatNeverBeganAndRanOut(t *testing.T) {
+	for _, tc := range []struct {
+		src  string
+		want []string
+	}{
+		{"[[ ", []string{
+			"line 2: unexpected token `EOF' in conditional command",
+			"line 2: syntax error: unexpected end of file from `[[' command on line 1",
+		}},
+		{"[[ !", []string{
+			"line 2: unexpected token `EOF' in conditional command",
+			"line 2: syntax error: unexpected end of file from `[[' command on line 1",
+		}},
+		{"[[ a &&", []string{
+			"line 2: unexpected token `EOF' in conditional command",
+			"line 2: syntax error: unexpected end of file from `[[' command on line 1",
+		}},
+		// The group line stays at the `[[`'s own line while the sentence
+		// above it names the line the input ran out on, which is what says
+		// the two carry their locations separately.
+		{"[[ (", []string{
+			"line 2: unexpected token `EOF' in conditional command",
+			"line 1: expected `)'",
+			"line 2: syntax error: unexpected end of file from `[[' command on line 1",
+		}},
+		{"[[ ( (", []string{
+			"line 2: unexpected token `EOF' in conditional command",
+			"line 1: expected `)'",
+			"line 1: expected `)'",
+			"line 2: syntax error: unexpected end of file from `[[' command on line 1",
+		}},
+		// And a condition that *was* read keeps the other sentence, at the
+		// other line. This is the control, and without it a fix that used
+		// one wording for both would pass every row above.
+		{"[[ -n x", []string{
+			"line 1: unexpected EOF while looking for `]]'",
+			"line 2: syntax error: unexpected end of file from `[[' command on line 1",
+		}},
+	} {
+		t.Run(tc.src, func(t *testing.T) {
+			out := condDiagnostic(t, tc.src)
+			got := strings.Split(strings.TrimRight(out, "\n"), "\n")
+			if len(got) != len(tc.want) {
+				t.Fatalf("got %d lines, want %d:\n%s", len(got), len(tc.want), out)
+			}
+			for i := range tc.want {
+				if !strings.HasSuffix(got[i], tc.want[i]) {
+					t.Errorf("line %d = %q, want it to end %q", i+1, got[i], tc.want[i])
+				}
+			}
+		})
+	}
+}

@@ -48,8 +48,8 @@ func TestATildeModifierReads(t *testing.T) {
 		{`[[ xabcx == ~(F)abc ]]`, "", 0},
 		{`[[ xabcx == ~(L)abc ]]`, "", 0},
 		// The fold reaches a bracket and a class as well as a literal, which
-		// is measured and is why it is the option's fold rather than the
-		// narrower one a `(#i)` group asks for.
+		// is measured and is one place further than an *option* of the same
+		// meaning reaches — see TestAnInlineFoldFlagReachesAPosixClass.
 		{`[[ ABC == ~(i)[abc][abc][abc] ]]`, "", 0},
 		{`[[ ABC == ~(i)[[:lower:]][[:lower:]][[:lower:]] ]]`, "", 0},
 		{`[[ ABC == ~(i)@(abc|x) ]]`, "", 0},
@@ -147,5 +147,40 @@ func TestATildeGroupIsKshsAlone(t *testing.T) {
 	}
 	if zsh.Dialect().TildeGroup {
 		t.Errorf("zsh: TildeGroup is on, want it off")
+	}
+}
+
+// The paired half of interp's TestTheOptionFoldStopsAtAPosixClassInABracket:
+// the `i` letter of a `~(…)` group folds a POSIX class inside a bracket,
+// where a fold an *option* asked for does not.
+//
+// Both halves are needed, and one alone reads as the opposite finding. The
+// matcher folded a class for every caller until #2716 — which is bash 5.3.15's
+// answer for `shopt -s nocasematch` and is not ksh93's for this flag — and a
+// fix that simply stopped folding classes would have taken these rows with it.
+//
+// Measured 2026-09-14 on ksh93u+ 2012-08-01: `[[ A == ~(i)[[:lower:]] ]]` and
+// `[[ A == ~(i)[a-z] ]]` both match, and so do the negated and the
+// lower-against-upper spellings.
+func TestAnInlineFoldFlagReachesAPosixClass(t *testing.T) {
+	for _, c := range []struct {
+		src    string
+		status int
+	}{
+		{`[[ A == ~(i)[[:lower:]] ]]`, 0},
+		{`[[ a == ~(i)[[:upper:]] ]]`, 0},
+		{`[[ A == ~(i)[a-z] ]]`, 0},
+		// Without the letter the same bracket is exact, so the rows above
+		// are evidence about the flag rather than about the class.
+		{`[[ A == [[:lower:]] ]]`, 1},
+		{`[[ A == [a-z] ]]`, 1},
+	} {
+		out, st, err := preset.Combined(t, dialecttest.Base{}, c.src)
+		if err != nil {
+			t.Fatalf("run %q: %v", c.src, err)
+		}
+		if out != "" || st != c.status {
+			t.Errorf("%s\n got %q at %d\nwant %q at %d", c.src, out, st, "", c.status)
+		}
 	}
 }

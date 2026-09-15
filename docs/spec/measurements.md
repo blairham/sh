@@ -7593,7 +7593,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `ulimit/reads-the-file-size-limit` | `unlimited~unlimited` | `unlimited~unlimited` | `unlimited~unlimited` | `unlimited~unlimited` | `unlimited~unlimited` | `unlimited~unlimited` | `unlimited~unlimited` |
 | `ulimit/hard-and-soft` | `unlimited~unlimited~unlimited` | `unlimited~unlimited~unlimited` | `unlimited~unlimited~unlimited` | `unlimited~unlimited~unlimited` | `unlimited~unlimited~unlimited` | `unlimited~unlimited~unlimited` | `unlimited~unlimited~unlimited` |
 | `ulimit/setting-with-neither-letter-moves-both` | `s=100 hard_moved=yes` | `s=100 hard_moved=yes` | `s=100 hard_moved=yes` | `s=100 hard_moved=yes` | `s=100 hard_moved=yes` | `s=100 hard_moved=no` | `s=100 hard_moved=yes` |
-| `ulimit/the-file-size-block` | `size=512` **2>** `Filesize limit exceeded: 25` | `size=600` | `size=512` | `size=600` | `size=512` | `size=512` | `size=512` **2>** `File size limit exceeded` |
+| `ulimit/the-file-size-block` | `size=512` **2>** `Filesize limit exceeded: 25` | `size=600` | `size=512` | `size=600` | `size=512` | `size=512` | `size=512` **2>** `File size limit exceeded (core dumped)` |
 | `ulimit/unlimited-is-a-word` | `unlimited` | `unlimited` | `unlimited` | `unlimited` | `unlimited` | `unlimited` | `unlimited` |
 | `ulimit/setting-then-reading` | `3600~3600` | `3600~3600` | `3600~3600` | `3600~3600` | `3600~3600` | `3600~unlimited` | `3600~3600` |
 | `ulimit/a-limit-it-cannot-read` | `st=2` **2>** `<shell>: 1: ulimit: bad number` | `st=1` **2>** `<shell>: line 1: ulimit: abc: invalid number` | `st=1` **2>** `<shell>: line 1: ulimit: abc: invalid number` | `st=1` **2>** `<shell>: line 0: ulimit: abc: invalid number` | `st=1` **2>** `<shell>: ulimit: abc: parameter not set` | `st=1` **2>** `<shell>:ulimit:1: invalid number: abc` | `st=1` **2>** `<shell>: invalid number 'abc'` |
@@ -11647,6 +11647,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | `shopt/nocasematch-folds-the-regex-operator` | `exact` **2>** `<shell>: 1: [[: not found` | `fold` | `fold` | `fold` | `exact` | `exact` | `exact` |
 | `shopt/nocasematch-folds-a-regex-character-class` | `exact` **2>** `<shell>: 1: [[: not found` | `fold` | `fold` | `fold` | `exact` | `exact` | `exact` |
 | `shopt/nocasematch-folds-a-regex-before-it-negates` | `no-match` **2>** `<shell>: 1: [[: not found` | `no-match` | `no-match` | `no-match` | `match` | `match` | `match` |
+| `shopt/nocasematch-leaves-a-glob-class-exact` | `exact` | `exact` | `exact` | `fold` | `exact` | `exact` | `exact` |
+| `shopt/nocasematch-leaves-a-glob-class-exact-reversed` | `exact` | `exact` | `exact` | `exact` | `exact` | `exact` | `exact` |
+| `shopt/nocasematch-folds-a-glob-range` | `exact` | `fold` | `fold` | `fold` | `exact` | `exact` | `exact` |
+| `shopt/nocasematch-leaves-a-class-in-a-substitution-exact` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `ABC YYY Z` | `ABC YYY Z` | `ABC ABC ABC` | `ABC ABC ABC` | `ABC ABC ABC` | `ABC ABC ABC` |
+| `shopt/globasciiranges-is-a-request-already-granted` | `st=127~p=127` | `st=0~shopt -s globasciiranges~p=0` | `st=0~shopt -s globasciiranges~p=0` | `st=1~p=1` | `st=127~p=127` | `st=127~p=127` | `st=127~p=127` |
 | `shopt/query-answers-by-status` | `q=127~q=127` | `q=1~q=0` | `q=1~q=0` | `q=1~q=0` | `q=127~q=127` | `q=127~q=127` | `q=127~q=127` |
 | `shopt/expand-aliases-is-a-live-switch` | `hit~hit~st=0` | `hit~st=127` **2>** `<script>: line 5: a: command not found` | `hit~st=127` **2>** `<script>: line 5: a: command not found` | `hit~st=127` **2>** `<script>: line 5: a: command not found` | `hit~hit~st=0` | `hit~hit~st=0` | `hit~hit~st=0` |
 | `shopt/expand-aliases-is-off-until-it-is-asked-for` | `hit~st=0` | `st=127` **2>** `<script>: line 2: a: command not found` | `hit~st=0` | `st=127` **2>** `<script>: line 2: a: command not found` | `hit~st=0` | `hit~st=0` | `hit~st=0` |
@@ -12113,6 +12118,26 @@ grades it and nothing drift-checks it either, for the same reason.
 - `shopt/nocasematch-folds-a-regex-before-it-negates` — the order of the two operations, which is the one cell a fold bolted on after the match cannot get right: bash folds first and complements second, so `[^a]` excludes `A` as well and the subject fails. zsh and ksh93 match, having no option set. dash agrees with bash by accident — its `[[: not found` is a failure and the `||` arm runs — which is why the diagnostic beside the word is part of the cell
   ```sh
   shopt -s nocasematch 2>/dev/null; [[ A =~ ^[^a]$ ]] && echo match || echo no-match
+  ```
+- `shopt/nocasematch-leaves-a-glob-class-exact` — how far the option reaches into a *glob* bracket, and the answer is not the one the `=~` row above gives: bash 5.3.15 leaves a POSIX class in a glob bracket exact while folding the class inside a regular expression, so the two rows together are what say the fold belongs to the compiled expression on one side and to this matcher on the other. bash 3.2.57 folds here and disagrees with itself on the reversed spelling below, which is why the panel's 5.3 column is the one followed. zsh, ksh93, dash and ash have no such option and answer `exact` with the name unrecognized (#2716)
+  ```sh
+  shopt -s nocasematch 2>/dev/null; case A in [[:lower:]]) echo fold;; *) echo exact;; esac
+  ```
+- `shopt/nocasematch-leaves-a-glob-class-exact-reversed` — the same question with the cases swapped, which is the row that says the answer above is a rule rather than a coincidence of which class was named. It is also the cell where bash 3.2.57 parts company with itself: it folds `A` into `[[:lower:]]` and does not fold `a` into `[[:upper:]]`, so no single statement about the option covers that column and a row written only one way round could not see it
+  ```sh
+  shopt -s nocasematch 2>/dev/null; case a in [[:upper:]]) echo fold;; *) echo exact;; esac
+  ```
+- `shopt/nocasematch-folds-a-glob-range` — the neighbor inside the same bracket, and the reason the class rows are a class-versus-range seam rather than "the option does not reach brackets": every bash column folds here. A shell that answered the class rows by not folding inside a bracket at all would answer `exact` in this cell and match nobody
+  ```sh
+  shopt -s nocasematch 2>/dev/null; case A in [a-z]) echo fold;; *) echo exact;; esac
+  ```
+- `shopt/nocasematch-leaves-a-class-in-a-substitution-exact` — the same seam on the operator a script actually reaches for, with the three shapes in one cell so a fold applied at the wrong layer cannot hide: bash folds the literal and the range and leaves the class alone, so the cell reads `ABC YYY Z`. A matcher folding the class with them answers `XXX YYY Z`, which is what this shell wrote for two releases and is invisible to any row that asks only about `[[ ]]`
+  ```sh
+  shopt -s nocasematch 2>/dev/null; v=ABC; echo ${v//[[:lower:]]/X} ${v//[a-z]/Y} ${v//abc/Z}
+  ```
+- `shopt/globasciiranges-is-a-request-already-granted` — a name bash lists and this shell records rather than implements, asked in the direction a script asks it: `globasciiranges` says a bracket range is ordered by byte, which is what this matcher already does, so the request is granted quietly and `shopt -p` reads `-s` back. The pair matters more than either half — a shell that refused the request and then listed it as set would report a state it does not hold, and `shopt -p` is a capture surface whose output is sourced back into a later shell (#2746). The other three columns have no such builtin
+  ```sh
+  shopt -s globasciiranges 2>/dev/null; echo st=$?; shopt -p globasciiranges 2>/dev/null; echo p=$?
   ```
 - `shopt/query-answers-by-status` — -q answers by status alone — 1 while the option is off and 0 once -s has set it; the shells without the builtin answer 127 twice, which records what a probing script would see there
   ```sh
@@ -16032,6 +16057,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `pattern/an-escape-before-an-ordinary-character` | `strips~no` | `strips~no` | `strips~no` | `strips~no` | `strips~no` | `keeps~literal` | `strips~no` |
 | `pattern/a-written-bar-is-an-ordinary-character` | `[written=abc][value=abc]` | `[written=abc][value=abc]` | `[written=abc][value=abc]` | `[written=abc][value=abc]` | `[written=bc][value=bc]` | `[written=abc][value=bc]` | `[written=abc][value=abc]` |
 | `pattern/a-live-bar-splits-the-whole-pattern` | `[tail=abc][head=abc]` | `[tail=abc][head=abc]` | `[tail=abc][head=abc]` | `[tail=abc][head=abc]` | `[tail=c][head=]` | `[tail=c][head=]` | `[tail=abc][head=abc]` |
+| `pattern/an-inline-fold-flag-reaches-a-glob-class` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error in conditional expression: unexpected token `('~<shell>: -c: line 1: syntax error near `~(i'~<shell>: -c: line 1: `[[ A == ~(i)[[:lower:]] ]] && echo fold \|\| echo exact'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error in conditional expression: unexpected token `('~<shell>: -c: line 1: syntax error near `~(i'~<shell>: -c: line 1: `[[ A == ~(i)[[:lower:]] ]] && echo fold \|\| echo exact'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error in conditional expression: unexpected token `('~<shell>: -c: line 0: syntax error near `~(i'~<shell>: -c: line 0: `[[ A == ~(i)[[:lower:]] ]] && echo fold \|\| echo exact'` *(status 2)* | `fold` | `exact` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
 | `pattern/a-top-level-bar-against-the-filesystem` | `[bar=1:aa\|ab][star=2]` | `[bar=1:aa\|ab][star=2]` | `[bar=1:aa\|ab][star=2]` | `[bar=1:aa\|ab][star=2]` | `[bar=1:aa\|ab][star=2]` | `[bar=2:aa ab][star=2]` | `[bar=1:aa\|ab][star=2]` |
 
 - `pattern/a-tilde-at-the-front-of-a-pattern-expands` — a tilde is expanded before the word becomes a pattern, and every shell in the panel does it — in a `case` arm and in a trim alike. Neither half prints a path, so the row says the same thing on every machine. This implementation expanded the tilde in every *word* position and in none of the pattern ones, so a `case $HOME in ~)` arm was never taken; powerlevel10k tells a global tool version from a local override with exactly `[[ ${files[1]:h} == ~ ]]` and drew five segments the real shell does not (#2181)
@@ -16053,6 +16079,10 @@ grades it and nothing drift-checks it either, for the same reason.
 - `pattern/a-live-bar-splits-the-whole-pattern` — the arms of a live bar are not confined to the value it arrived in — the written text on either side joins the arm beside it. `ab|x` followed by a written `z` is `ab` or `xz` rather than `(ab|x)z`, so the first column trims `ab`; a written `a` in front of `x|abc` is `ax` or `abc` rather than `a(x|abc)`, so the second matches the whole subject and comes back empty. Read as concatenation both would answer `abc`, which is what the five shells without the reading answer
   ```sh
   setopt globsubst 2>/dev/null; v=abc; I='ab|x'; N='x|abc'; printf "[tail=%s]" "${v#${I}z}"; printf "[head=%s]" "${v#a$N}"; echo
+  ```
+- `pattern/an-inline-fold-flag-reaches-a-glob-class` — the paired half of the `nocasematch` class rows, and the pairing is the finding: ksh93's inline `~(i)` flag folds a POSIX class inside a glob bracket where bash's option of the same meaning does not, so one matcher has to answer the question two ways depending on where the fold came from. Recorded together because a fix that simply stopped folding classes passes every `nocasematch` row and silently breaks this one. The other columns have no `~(…)` at all: bash refuses it at the paren and zsh reads `~` as its exclusion operator (#2716)
+  ```sh
+  [[ A == ~(i)[[:lower:]] ]] && echo fold || echo exact
   ```
 - `pattern/a-top-level-bar-against-the-filesystem` — whether a top-level bar out of a value reaches *pathname expansion*, which the two rows above cannot ask because a strip operator never touches the filesystem. `globsubst` is set for the same reason it is set there, and the reason is a mistake this row made first: **without it the row was unanimous**, every column answering `bar=1`, which reads as a fact about the bar and was really a fact about a column that treats no bare value as a pattern at all. The `star` probe is the control that keeps the fixed form honest — a column expanding `a*` to two names while `aa|ab` stays one is a column where the *bar* stops here, not one where the value failed to be a pattern. That is the second direction the two readings part in: one reaches the filesystem and the other does not, which is why they are two values of one enum rather than one flag two dialects share (#2528)
   ```sh

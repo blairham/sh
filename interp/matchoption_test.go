@@ -332,3 +332,61 @@ func TestMatchOptionsReachASubshell(t *testing.T) {
 		t.Errorf("the subshell lost the inherited option: %q", out)
 	}
 }
+
+// The fold an *option* asks for reaches a literal and a range inside a
+// bracket expression and stops at a POSIX character class.
+//
+// The three rows are one seam seen from both sides: a class stays exact
+// whichever way round the cases are written, and the range beside it folds,
+// so an implementation that simply stopped folding inside brackets fails the
+// range row and one that folds the whole bracket fails the two class rows.
+// Both readings were live here — the second of them for two releases (#2716).
+//
+// The class arm is reachable and does fold; what decides it is where the fold
+// came from, which is patternOpts.foldClass and is pinned by
+// TestAnInlineFoldFlagReachesAPosixClass in dialect/ksh.
+func TestTheOptionFoldStopsAtAPosixClassInABracket(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"a class is exact", `case A in [[:lower:]]) echo fold;; *) echo exact;; esac`, "exact"},
+		{
+			"a class is exact the other way round",
+			`case a in [[:upper:]]) echo fold;; *) echo exact;; esac`, "exact",
+		},
+		{"a range folds", `case A in [a-z]) echo fold;; *) echo exact;; esac`, "fold"},
+		{"a literal member folds", `case A in [a]) echo fold;; *) echo exact;; esac`, "fold"},
+		{
+			"a class beside a folded range is still exact",
+			`case A in [[:lower:]]) echo cls;; [a-z]) echo rng;; *) echo exact;; esac`, "rng",
+		},
+		{"a condition reads the class the same way", `[[ A == [[:lower:]] ]] && echo fold || echo exact`, "exact"},
+		{"a substitution reads it the same way", `v=ABC; echo ${v//[[:lower:]]/X}`, "ABC"},
+		{"and folds the range in one", `v=ABC; echo ${v//[a-z]/X}`, "XXX"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, _ := run(t, tc.src, withOption(MatchFoldsCase, true, nil))
+			if got := strings.TrimSpace(out); got != tc.want {
+				t.Errorf("%s = %q, want %q", tc.src, got, tc.want)
+			}
+		})
+	}
+}
+
+// Pathname expansion's own fold is the same seam, and it is a separate
+// option: a class in a bracket stays exact there too, while the range beside
+// it folds. One option answering and the other not would be the shape this
+// implementation already had once, where the matcher folded a class for
+// everybody.
+func TestThePathnameFoldStopsAtAPosixClassToo(t *testing.T) {
+	dir := fileDir(t, "A", "b")
+	for _, tc := range []struct{ name, src, want string }{
+		{"a class is exact", `echo [[:lower:]]`, "b"},
+		{"a range folds", `echo [a-z]`, "A b"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, _ := run(t, tc.src, withOption(GlobFoldsCase, true, inDir(dir)))
+			if got := strings.TrimSpace(out); got != tc.want {
+				t.Errorf("%s = %q, want %q", tc.src, got, tc.want)
+			}
+		})
+	}
+}

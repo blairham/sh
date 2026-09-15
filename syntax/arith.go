@@ -1671,12 +1671,33 @@ func baseDigits(s string, base, max int) int {
 	return n
 }
 
+// name reads a parameter's name, or reports that what stands here is not one.
+//
+// The point is a name byte in one dialect — `${.sh.version}` and a compound
+// variable's members are the same lexical rule, see [Dialect.DottedName] — and
+// it reaches arithmetic too: `$(( .sh.version ))` is that shell's version
+// number, `$(( .k ))` is an unset parameter and so zero, and `$(( x.y ))` is a
+// member of `x`. Measured 2026-09-15 on ksh93u+ 2012-08-01.
+//
+// A leading point is a name only where a *digit* does not follow it, which is
+// the one place the two readings collide: `$(( .5 ))` is a half there and
+// `$(( .k ))` is a parameter, so the byte after the point is what decides.
 func (a *arithParser) name() (string, bool) {
-	if a.off >= len(a.src) || !isNameStart(a.src[a.off]) {
+	if a.off >= len(a.src) {
+		return "", false
+	}
+	dot := a.dial.DottedName
+	if !nameByte(a.src[a.off], 0, dot) {
+		return "", false
+	}
+	if a.src[a.off] == '.' && a.off+1 < len(a.src) &&
+		a.src[a.off+1] >= '0' && a.src[a.off+1] <= '9' {
+		// A floating literal written without its whole part, which the
+		// numeral reader takes.
 		return "", false
 	}
 	begin := a.off
-	for a.off < len(a.src) && isNameByte(a.src[a.off], a.off-begin) {
+	for a.off < len(a.src) && nameByte(a.src[a.off], a.off-begin, dot) {
 		a.off++
 	}
 	return a.src[begin:a.off], true

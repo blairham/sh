@@ -1494,6 +1494,7 @@ func Semantics() interp.Semantics {
 	// `x=abc; $((x+1))` is 1 and the script runs on. Measured 2026-09-11 —
 	// ksh93 is the panel's holdout, where it is a fatal `parameter not set`.
 	s.ArithRecursedNameMustBeSet = interp.No
+	s.ArithSubscriptNameMustBeSet = interp.No
 	s.BraceExpansion = interp.Yes
 	// Agrees with bash on where the scan resumes after a group that did not
 	// expand: one byte past its open brace, so `{a{b,c}}` is `{ab} {ac}`

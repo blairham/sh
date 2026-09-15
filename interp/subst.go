@@ -149,6 +149,11 @@ func (r *Runner) commandSubst(ctx context.Context, span syntax.Span) string {
 
 	var out bytes.Buffer
 	sub := r.clone()
+	// A command substitution is a boundary for a writing body's output where
+	// a subshell is not: the value is read the moment this returns, so a body
+	// still writing into it has to be joined first. See Runner.collectBodies
+	// for the measurement.
+	defer sub.collectBodies()()
 	sub.inheritJobs(jobBoundarySubstitution)
 	sub.inCommandSubst = true
 	// And the third level of indirection, beside `eval` and a sourced file:

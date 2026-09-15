@@ -381,7 +381,34 @@ type Runner struct {
 	// `exec > >(cmd)` is the shape. They keep until the shell itself ends,
 	// which is the descriptor's real lifetime; see endHeldProcSubs.
 	heldProcSubs []procSubPipe
-	procSubHome  *procSubDirs
+
+	// bodies holds the writing substitutions' bodies no command waited for,
+	// in the dialect that does not wait at the command that named one — see
+	// Semantics.WritingSubstitutionIsWaitedForAtTheCommand. Their pipes and
+	// names are already gone; what is left is a goroutine still writing into
+	// a stream, and the join has to happen before whoever is reading that
+	// stream stops reading it.
+	//
+	// **Shared with a clone rather than copied, and that is the measurement.**
+	// A body writes into the stream it was given, and the question is which
+	// scope owns that stream. Measured 2026-09-15 on bash 5.3.15 and ksh93,
+	// with a body that outlives its input:
+	//
+	//	( printf P | tee >(read -r x; sleep .3; printf "[%s]" "$x") >/dev/null )
+	//	printf AFTER
+	//
+	// writes `AFTER` and then `[PIPE]`, so a subshell and a pipeline element
+	// are *not* the boundary: the bytes arrive after the whole script. The
+	// same body inside a command substitution is a different answer — bash
+	// captures it into the value, after everything the substitution's own
+	// commands wrote — so that one *is* a boundary, and ownsBodies is what
+	// says which runner is holding a list of its own.
+	//
+	// ksh93 loses those bytes instead of capturing them, which is a third
+	// answer and not one worth reproducing: it is a dropped write.
+	bodies      *pendingBodies
+	ownsBodies  bool
+	procSubHome *procSubDirs
 	// pipeEnd is set on the runner that is a process substitution's *body*,
 	// and is the end of that substitution's pipe the shell holds. It is
 	// there so a job the body backgrounds can keep the pipe open past the
@@ -2549,6 +2576,20 @@ func (r *Runner) clone() *Runner {
 	// going to wait for itself. `( exec > >(cat) )` gets its own entry here
 	// and joins it at its own end — see endHeldProcSubs.
 	c.heldProcSubs = nil
+	// The list is made here, on the *parent*, rather than where a body is
+	// first deferred: made lazily on whoever needed it first, a pipeline
+	// element would have made one of its own and owned it, and joining it at
+	// the element's end is the answer this is not.
+	if r.bodies == nil {
+		r.bodies, r.ownsBodies = &pendingBodies{}, true
+	}
+	c.bodies = r.bodies
+	// bodies is deliberately *not* cleared: a subshell and a pipeline element
+	// write into the stream their caller gave them, so an unwaited-for body
+	// they started is the caller's to join. A command substitution takes a
+	// list of its own — see Runner.collectBodies, which is the one caller
+	// that asks for one.
+	c.ownsBodies = false
 	// Every table the clone must own rather than share. One list, in one
 	// place, with a test that fails when a new one is added — see
 	// clonetables.go for why that is a check rather than a convention.

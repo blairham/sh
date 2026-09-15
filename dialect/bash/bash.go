@@ -944,6 +944,12 @@ func Semantics() interp.Semantics {
 	// substitution, a division by zero, a bad subscript and an arithmetic
 	// expression the parser refused.
 	s.FailedExpansionAbandonsTheLine = interp.Yes
+	// And the command that named a `>(cmd)` does not wait for its body: the
+	// body is a process holding this shell's standard output, so its bytes
+	// land afterwards rather than before. Measured as an ordering — `printf
+	// "PIPE\n" | tee >(read -r v; sleep 0.3; printf "[%s]" "$v") >/dev/null;
+	// printf AFTER` is `AFTER[PIPE]` here and `[PIPE]AFTER` in zsh (#2197).
+	s.WritingSubstitutionIsWaitedForAtTheCommand = interp.No
 	s.ReadonlyReassignmentByDeclarationFatal = interp.No
 	// A frozen name refuses a declaration's array literal here as much as it
 	// refuses anything else: measured in 5.3 and in 3.2, `readonly q=1;

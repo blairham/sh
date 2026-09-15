@@ -146,6 +146,9 @@ func Dialect() syntax.Dialect {
 // behavior.
 func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
+	// unanswered WritingSubstitutionIsWaitedForAtTheCommand: this shell has
+	// no process substitution, so there is no `>(cmd)` body for a command to
+	// wait for or not. `echo >(:)` is the two characters as written (#2197).
 
 	// ---- expansion and words ----
 

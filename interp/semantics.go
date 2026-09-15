@@ -4738,6 +4738,46 @@ type Semantics struct {
 	// rather than picking one.
 	FailedExpansionAbandonsTheLine Answer
 
+	// WritingSubstitutionIsWaitedForAtTheCommand holds the command that named
+	// a `>(cmd)` until that body has finished writing, rather than letting it
+	// go on writing after the command is over.
+	//
+	// What a writing body writes reaches the shell's output in every shell
+	// that has the construct, and that half is unanimous. *When the shell
+	// stops for it* is not. Measured 2026-09-12 and again 2026-09-15:
+	//
+	//	probe                                     bash 5.3  ksh93  zsh 5.9
+	//	printf x | tee >(sleep 3) >/dev/null      0s        0s     3s
+	//	echo >(sleep 3)                           0s        0s     3s
+	//	echo hi > >(sleep 3)                      0s        0s     3s
+	//	exec > >(cat); echo hi                    0s        0s     0s
+	//
+	// and the row the corpus can grade, which is an *ordering* rather than a
+	// duration:
+	//
+	//	printf "PIPE\n" | tee >(read -r v; sleep 0.3; printf "[%s]" "$v") >/dev/null; printf AFTER
+	//
+	//	bash 5.3, ksh93   AFTER[PIPE]
+	//	zsh 5.9.2         [PIPE]AFTER
+	//
+	// The fourth row is unanimous and is not this axis: there the script
+	// itself holds the pipe's writing end, so a shell waiting for the body
+	// would be waiting for its own descriptor to be closed. It is the held
+	// case — see Runner.endHeldProcSubs — and both answers reach it the same
+	// way.
+	//
+	// Yes is zsh's and was this shell's everywhere, because it was what was
+	// available: the body is a goroutine writing into the caller's io.Writer,
+	// so the descriptor's lifetime has to be reconstructed as a wait. No
+	// moves that wait out to the end of the shell rather than dropping it —
+	// the same join `exec > >(cat)` already needed, which is why there is an
+	// answer to switch to at all (#2197, after #2183).
+	//
+	// Read rather than asked, and the answer it reads as is No: the wait is
+	// the narrower claim, and a preset with no process substitution at all
+	// never reaches this.
+	WritingSubstitutionIsWaitedForAtTheCommand Answer
+
 	// AssignThroughExpansionMayNameAPositional lets `${1:=word}` assign to a
 	// positional parameter. zsh alone, and it is a real disagreement rather
 	// than a wording one — the other five refuse the expansion fatally.

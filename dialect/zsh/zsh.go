@@ -592,6 +592,10 @@ func Dialect() syntax.Dialect {
 func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
 	s.CommandNotFoundStatusIsNotFound = interp.No
+	// The command that named a `>(cmd)` waits for its body here, which is
+	// what makes `printf x | tee >(sleep 3) >/dev/null` take three seconds
+	// in this shell and none in bash and ksh93 (#2197).
+	s.WritingSubstitutionIsWaitedForAtTheCommand = interp.Yes
 	s.SetFTurnsOffGlobbing = interp.No
 	// Neither editing mode is selected on its own. Measured 2026-09-11 in a
 	// session at a real terminal: `[[ -o emacs ]]` and `[[ -o vi ]]` both

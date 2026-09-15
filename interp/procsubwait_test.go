@@ -42,11 +42,14 @@ import (
 //
 // The ordering is asserted as well as the presence, because the presence
 // alone would pass a shell that collected the output at its very end. What
-// the panel disagrees about is exactly that: zsh waits at the command —
-// `[PIPE]AFTER` — while bash and ksh93 do not wait at all and their surviving
-// process delivers `AFTER[PIPE]`. This takes zsh's side because a goroutine
-// cannot outlive the shell the way their process does; the row says which
-// side was taken, so a later axis has to move it deliberately.
+// the panel disagrees about is exactly that, and it is
+// Semantics.WritingSubstitutionIsWaitedForAtTheCommand: zsh waits at the
+// command — `[PIPE]AFTER` — while bash and ksh93 do not wait at all and
+// their surviving process delivers `AFTER[PIPE]`.
+//
+// Both answers land the bytes, which is the half the panel agrees on and the
+// half a row asserting only the ordering would let go: every `want` below
+// holds `[PIPE]`, and the axis moves where it sits (#2197).
 func TestAWritingSubstitutionsBodyIsWaitedForByTheCommandThatNamedIt(t *testing.T) {
 	for _, tc := range []struct {
 		name, src string
@@ -60,10 +63,66 @@ func TestAWritingSubstitutionsBodyIsWaitedForByTheCommandThatNamedIt(t *testing.
 			`printf "PIPE\n" > >(read -r v; sleep 0.2; printf "[%s]" "$v"); printf "AFTER"`,
 		},
 	} {
+		for _, a := range []struct {
+			name   string
+			answer Answer
+			want   string
+		}{
+			{"waiting at the command", Yes, "[PIPE]AFTER"},
+			{"not waiting", No, "AFTER[PIPE]"},
+			// Unanswered reads as the shell that does not wait, which is the
+			// narrower claim and the one a preset with no process
+			// substitution at all never reaches.
+			{"unanswered", Unspecified, "AFTER[PIPE]"},
+		} {
+			t.Run(tc.name+", "+a.name, func(t *testing.T) {
+				out, st := run(t, tc.src, func(r *Runner) {
+					sem := *r.Semantics
+					sem.WritingSubstitutionIsWaitedForAtTheCommand = a.answer
+					r.Semantics = &sem
+				})
+				if out != a.want || st != 0 {
+					t.Errorf("got %q (status %d), want %q at 0", out, st, a.want)
+				}
+				if !strings.Contains(out, "[PIPE]") {
+					t.Errorf("got %q — the body's bytes were lost, which no answer to this axis does", out)
+				}
+			})
+		}
+	}
+}
+
+// And the scope the join moves *out to* is the one that owns the stream the
+// body writes into, which is not the subshell.
+//
+// Measured 2026-09-15 on bash 5.3.15 and ksh93: a writing body inside a plain
+// `( … )` delivers its bytes after the whole script, and the same body inside
+// a command substitution has them captured in the value, after everything the
+// substitution's own commands wrote. So a command substitution is a boundary
+// and a subshell is not — and a reading where the subshell joined would pass
+// the rows above, since neither of them has one.
+func TestWhereAnUnwaitedForBodyIsJoined(t *testing.T) {
+	const body = `>(read -r v; sleep 0.2; printf "[%s]" "$v")`
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"a subshell is not the boundary",
+			`( printf "PIPE\n" | tee ` + body + ` >/dev/null ); printf "AFTER"`,
+			"AFTER[PIPE]",
+		},
+		{
+			"a command substitution is",
+			`v=$( printf "PIPE\n" | tee ` + body + ` >/dev/null; printf "IN" ); printf "[%s]AFTER" "$v"`,
+			"[IN[PIPE]]AFTER",
+		},
+	} {
 		t.Run(tc.name, func(t *testing.T) {
-			out, st := run(t, tc.src, nil)
-			if want := "[PIPE]AFTER"; out != want || st != 0 {
-				t.Errorf("got %q (status %d), want %q at 0 — the body's output did not land before the shell went on", out, st, want)
+			out, st := run(t, tc.src, func(r *Runner) {
+				sem := *r.Semantics
+				sem.WritingSubstitutionIsWaitedForAtTheCommand = No
+				r.Semantics = &sem
+			})
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q (status %d), want %q at 0", out, st, tc.want)
 			}
 		})
 	}

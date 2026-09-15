@@ -25,10 +25,10 @@ func localCursorSem(restores Answer) Semantics {
 	// the shell this reproduces answers them, because two of them decide
 	// whether these cases test anything.
 	//
-	// The cursor is not local to every call: that is the other axis, and a
-	// preset saying yes would hand the caller its place back without this
+	// The cursor is not the call's own: that is the other axis, and either of
+	// its two local answers would hand the caller its place back without this
 	// one doing anything.
-	s.GetoptsPositionIsFunctionLocal = No
+	s.GetoptsFunctionPosition = GetoptsFunctionPositionIsShared
 	// A valueless declaration does *not* give the name a value, which is what
 	// makes `local OPTIND` with no `=1` reach the question at all. Said yes,
 	// the declaration becomes an assignment, GetoptsAssignmentRestartsWord

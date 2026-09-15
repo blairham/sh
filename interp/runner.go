@@ -861,6 +861,17 @@ type Runner struct {
 	// OPTIND to, so a script moving it itself is noticed and the position
 	// inside the cluster dropped.
 	optChar int
+	// optWord is the word the scan is at, where that has parted company with
+	// OPTIND: a positive value overrides the parameter, and 0 says the
+	// parameter is the position.
+	//
+	// The two part only across a shell function call, and only in the dialect
+	// that gives a call a scan of its own while leaving OPTIND the shell's —
+	// see Semantics.GetoptsFunctionPosition, where dash and BusyBox ash
+	// re-read a helper's arguments on a second call and every `$OPTIND` a
+	// script reads is still the shell's number. Nothing else ever sets it,
+	// and a shell that never calls a function never has one.
+	optWord int
 	// optindAssigned records that a script wrote OPTIND since the last
 	// `getopts` wrote it. The value cannot say so on its own: resetting it to
 	// 1 while a cluster is half read is an assignment of the value it already

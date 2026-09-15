@@ -2266,30 +2266,11 @@ type Semantics struct {
 	// a second time where zsh carries on to `b`.
 	GetoptsAssignmentRestartsWord Answer
 
-	// GetoptsPositionIsFunctionLocal gives every shell function call its own
-	// `getopts` cursor: OPTIND starts the call at 1 whatever the caller had
-	// reached, and the caller's position comes back when the call returns.
+	// GetoptsFunctionPosition is what a shell function call does to the
+	// `getopts` scan position. See GetoptsFunctionPositionPolicy for the
+	// three answers and the measurements that separate them.
 	//
-	// zsh alone, and it is the parameter itself that is local rather than
-	// only the builtin's bookkeeping — an explicit assignment inside the
-	// function does not escape either:
-	//
-	//	g() { echo "entry=$OPTIND"; OPTIND=7; }
-	//	OPTIND=3; g; echo "after=$OPTIND"
-	//
-	// answers entry=1 after=3 in zsh and entry=3 after=7 in bash, bash 3.2,
-	// dash and ksh93. The position *inside* a clustered word is saved with
-	// it, which a shared cursor cannot express: with `-ab` half read, a
-	// function scanning `-cd` of its own reads both `c` and `d` in zsh and
-	// only `d` everywhere else, and on return the caller still finds its
-	// `b`.
-	//
-	// dash looks close and is not: it leaves OPTIND at 2 on the way out and
-	// starts the *next* scan at 1 because its `getopts` resets the cursor
-	// when it runs out of options. zsh shows 2 inside the function and 1
-	// outside, which is a restore rather than a reset.
-	//
-	// What this does not cover is `unset OPTIND`, which takes the parameter
+	// What it does not cover is `unset OPTIND`, which takes the parameter
 	// away rather than giving the call a value of its own: the name stays
 	// gone after the function returns in every shell measured, so there is
 	// nothing for the return to put back. A function entered with OPTIND
@@ -2300,8 +2281,10 @@ type Semantics struct {
 	// function library is written *without* the `local OPTIND=1` the others
 	// need. `add-zsh-hook -Uz precmd f` followed by any second
 	// `add-zsh-hook` had the second call reading its arguments from index 2
-	// and printing its usage — see #1392.
-	GetoptsPositionIsFunctionLocal Answer
+	// and printing its usage — see #1392. dash and BusyBox ash reach the
+	// same reusability by the other route below, and a helper function
+	// called twice parsed its options once here and twice there (#2944).
+	GetoptsFunctionPosition GetoptsFunctionPositionPolicy
 
 	// GetoptsLocalOptindRestoresTheCursor hands the caller back its position
 	// *inside* a clustered word when a call that declared a local `OPTIND`
@@ -2339,6 +2322,34 @@ type Semantics struct {
 	// rather than leaving it unset. zsh alone, and a script testing
 	// `${OPTARG-}` can tell the two apart.
 	GetoptsClearsOptarg Answer
+
+	// GetoptsEmptiesOptargForAnArgumentlessOption is the same question asked
+	// of an option the string *has* and that takes no argument, which is not
+	// the same question at all: the columns line up differently, and reading
+	// one axis for both put dash on bash's side of one row and zsh's side of
+	// the other.
+	//
+	// Measured 2026-09-15 under `env -i PATH=/usr/bin:/bin`, with
+	// `OPTARG=PRESET; OPTIND=1; getopts 'ab:' o -a`:
+	//
+	//	dash 0.5.12   []        set
+	//	BusyBox ash   []        set
+	//	zsh 5.9.2     []        set
+	//	bash 5.3      unset
+	//	ksh93u+       unset
+	//
+	// against the bad-option row above, where dash, BusyBox ash, bash and
+	// ksh93 all leave it unset and zsh alone empties it. So the two rows
+	// disagree about dash and BusyBox ash, which is what makes them two
+	// axes. `${OPTARG-…}` and `${OPTARG+…}` are how a careful script asks
+	// whether the option it has just read carried a value (#2944).
+	//
+	// zsh has a third answer this does not reach, recorded rather than
+	// modeled: it leaves an *earlier* value alone when a `getopts` has
+	// already run in the same shell, so `PRESET` survives the same line if
+	// anything scanned before it. Measured on the same day, and the first
+	// call in a shell empties it as the table says.
+	GetoptsEmptiesOptargForAnArgumentlessOption Answer
 
 	// InheritedOldpwd is what becomes of an `OLDPWD` the shell was handed in
 	// its environment: taken as it stands, taken only when it names a
@@ -13944,11 +13955,16 @@ func PosixSemantics() Semantics {
 		SystemStartupFiles: SystemStartupFiles{Login: "profile"},
 		// The four brace-range axes are left unanswered: a brace that
 		// never expands never asks them.
-		BraceExpansion:                 No,
-		BracketCaretNegates:            No,
-		ExitTrapIsFunctionLocal:        No,
-		FunctionLocalTraps:             TrapsSurviveTheFunction,
-		GetoptsPositionIsFunctionLocal: No,
+		BraceExpansion:          No,
+		BracketCaretNegates:     No,
+		ExitTrapIsFunctionLocal: No,
+		FunctionLocalTraps:      TrapsSurviveTheFunction,
+		// The standard says nothing about what a function call does to the
+		// scan position — `local` is not in it — so the preset keeps the
+		// answer it has always had rather than following a member: a call
+		// scans from where the caller reached. dash and BusyBox ash, which
+		// do give a call a scan of its own, say so themselves.
+		GetoptsFunctionPosition: GetoptsFunctionPositionIsShared,
 		// dash is the panel's POSIX-faithful member and it loses the
 		// intra-word half at the return, so the preset that follows it
 		// loses it too. The standard has nothing to say — `local` is not
@@ -16082,6 +16098,75 @@ func (r *Runner) scalarUnderACompound(p ScalarUnderACompoundPolicy, what string)
 		r.unspecified = true
 	}
 	return p
+}
+
+// GetoptsFunctionPositionPolicy is what a shell function call does to the
+// `getopts` scan position.
+//
+// The position has two halves and only one of them is a parameter: `OPTIND`
+// counts words, and how far into a clustered word the letters have been read
+// is the builtin's own bookkeeping. The panel splits three ways over which of
+// them a call gets to itself, and the split is measurable in a script rather
+// than only in a debugger.
+//
+// Measured 2026-09-15 under `env -i PATH=/usr/bin:/bin`, through `-c`, with
+//
+//	g() { while getopts ab o "$@"; do printf '%s ' "$o"; done; printf 'end=%s ' "$OPTIND"; }
+//	OPTIND=1; g -a -b; g -a -b
+//
+//	dash 0.5.12       a b end=3   a b end=3
+//	BusyBox ash       a b end=3   a b end=3
+//	zsh 5.9.2         a b end=3   a b end=3
+//	bash 5.3          a b end=3   end=3
+//	ksh93u+           a b end=3   end=3
+//
+// and the second probe is what separates the two that re-read, with the
+// caller half-way through a scan of its own:
+//
+//	g() { echo "entry=$OPTIND"; OPTIND=7; }
+//	OPTIND=3; g; echo "after=$OPTIND"
+//
+//	zsh               entry=1 after=3     the parameter is the call's
+//	dash, ash         entry=3 after=7     the parameter is the shell's
+//	bash, ksh93       entry=3 after=7
+type GetoptsFunctionPositionPolicy uint8
+
+const (
+	// GetoptsFunctionPositionUnspecified is no answer, and is reported where
+	// a call could be told apart by it.
+	GetoptsFunctionPositionUnspecified GetoptsFunctionPositionPolicy = iota
+	// GetoptsFunctionPositionIsShared gives a call the cursor the caller had
+	// reached and hands back whatever the call left: bash and ksh93, where a
+	// helper function that parses its own options parses them once however
+	// often it is called, and the `local OPTIND=1` in every such helper is
+	// what makes the second call work.
+	GetoptsFunctionPositionIsShared
+	// GetoptsFunctionPositionIsTheCallsOwn starts every call's scan at the
+	// first word and hands the caller its own place back, while leaving the
+	// *parameter* the shell's: dash and BusyBox ash, where `OPTIND` reads
+	// the caller's number inside the call and an assignment to it inside the
+	// call is the caller's afterwards. So a helper needs no `local OPTIND`
+	// and a second call re-reads the arguments, which is what makes this
+	// different from the shared answer, and a script watching `$OPTIND`
+	// cannot see a reset, which is what makes it different from zsh's.
+	GetoptsFunctionPositionIsTheCallsOwn
+	// GetoptsFunctionPositionIsLocal makes `OPTIND` itself local to the
+	// call: zsh, where the parameter reads 1 on entry whatever the caller
+	// had reached, an assignment inside the call is gone on return, and the
+	// place inside a clustered word travels with it.
+	GetoptsFunctionPositionIsLocal
+)
+
+func (p GetoptsFunctionPositionPolicy) String() string {
+	switch p {
+	case GetoptsFunctionPositionIsShared:
+		return "shared with the caller"
+	case GetoptsFunctionPositionIsTheCallsOwn:
+		return "the call's own, and OPTIND the shell's"
+	case GetoptsFunctionPositionIsLocal:
+		return "local, OPTIND included"
+	}
+	return "unspecified"
 }
 
 type UnsetArraySpanPolicy int

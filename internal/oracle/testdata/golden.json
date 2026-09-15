@@ -101117,6 +101117,57 @@
         "TimedOut": false
       }
     },
+    "getopts/optarg-after-an-option-that-takes-none": {
+      "ash": {
+        "Stdout": "o=[a] optarg=[] set=[yes]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "o=[a] optarg=[UNSET] set=[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "o=[a] optarg=[UNSET] set=[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "o=[a] optarg=[UNSET] set=[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "o=[a] optarg=[] set=[yes]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "o=[a] optarg=[UNSET] set=[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "o=[a] optarg=[] set=[yes]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "getopts/optind-across-two-calls-of-one-function": {
       "ash": {
         "Stdout": "in=3~after1=3~in=3~after2=3",

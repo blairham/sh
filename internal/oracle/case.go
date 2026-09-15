@@ -24435,6 +24435,11 @@ echo "st=$?"`,
 		Why:     "what a locale nothing names is: three columns read an unset locale as the environment's UTF-8 and count five characters, and the other four read it as C and count the six bytes. The empty `LC_ALL` is how the case reaches the question at all -- the harness sets `LC_ALL=C` for every row, and an empty value is ignored by the locale machinery exactly as an absent one is, which is measured and not assumed (#2057)",
 	},
 	{
+		ID: "getopts/optarg-after-an-option-that-takes-none", Category: "builtins",
+		Snippet: `OPTARG=PRESET; OPTIND=1; getopts "ab:" o -a; echo "o=[$o] optarg=[${OPTARG-UNSET}] set=[${OPTARG+yes}]"`,
+		Why:     "the other half of `getopts/optarg-after-a-bad-option`, and the columns line up differently: dash and BusyBox ash *empty* OPTARG for an option the string has and that takes no argument, where they leave it unset after a bad one. zsh empties it in both and bash and ksh93 unset it in both, so the two rows disagree about exactly two columns — which is what made one axis for both put dash on the wrong side of one of them. The preset value is what says the parameter was touched at all, and `${OPTARG+…}` beside `${OPTARG-…}` is the pair a careful script reads to ask whether the option it just read carried a value (#2944)",
+	},
+	{
 		ID: "getopts/optarg-after-a-bad-option", Category: "builtins",
 		Snippet: `set -- -x; getopts "a:" o; echo "o=[$o] optarg=[${OPTARG-UNSET}]"`,
 		Why:     "what `getopts` leaves in OPTARG when it reports an option the string does not have. One column empties it and the other three leave it unset, which a script reading `${OPTARG-}` can tell apart -- and the `o=[?]` half says the two are agreeing about everything else (#2057)",

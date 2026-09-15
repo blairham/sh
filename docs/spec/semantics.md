@@ -4875,7 +4875,24 @@ The rest are declared by each dialect that has them:
 | `interactive-comments` | yes | no | no |
 | `posix` | yes | no | no |
 
-dash declares none of them: it has the fourteen and nothing else.
+ksh93 declares twelve more of its own, measured 2026-09-15 by diffing its
+whole listing against ours: `bgnice`, `globstar`, `gmacs`, `interactive`,
+`letoctal`, `login_shell`, `markdirs`, `multiline`, `rc`, `restricted`,
+`showme` and `viraw`. dash declares three — `interactive`, `stdin` and
+`debug` (#2624) — and every one of the fifteen describes **how the shell was
+started** or how a *line* is read rather than a behavior a script chose,
+which is what makes them worth having: a script reads `set -o` to find out
+which of them it is under.
+
+Three of ksh93's are read live rather than recorded, because a constant
+would have been wrong on one of the two runs that produced it. `bgnice` and
+`rc` are off in a script and on at a prompt — the same fact `interactive`
+reports — and `login_shell` is on under both login routes (`-l` and an
+`argv[0]` of `-ksh`) and off otherwise. `multiline` and `viraw` are **on**:
+both describe how a line is read and drawn rather than how a script runs,
+and this editor reads raw keystrokes and redraws a line that outgrows the
+terminal in place rather than scrolling it sideways. The other seven are off
+here and off there.
 
 Of these, eight are real here — `pipefail` (the pipeline code reads it),
 `hashall`/`trackall` (one state behind both names: permission to cache
@@ -4892,6 +4909,46 @@ standing example here was `hashall`, on the grounds that nothing was
 hashed; since #2554 something is, the option gates it in the dialects
 that read it as a stop, and its state comes from the startup letters
 rather than from this table — see *The command hash*.
+
+### The listing is a roster, and ksh93 spells five of it the other way round
+
+`set -o` is a **capture surface**: a script saves and restores option state
+with `eval "$(set +o)"`, so a name missing from the listing is a state that
+save cannot carry. Measured 2026-09-15, ksh93's listing is thirty-two rows
+where ours was twenty (#2925), and the twelve names above are what closed
+the gap — `multiline` and `viraw` were the two that were both **on** and
+absent, so the save silently dropped them.
+
+Five of the twenty rows we did have were the wrong way up. ksh93 lists
+`clobber`, `exec`, `glob`, `log` and `unset` — each `on` in a stock shell —
+where bash, zsh, dash and BusyBox ash list `noclobber`, `noexec`, `noglob`,
+`nolog` and `nounset`, each off. It is the opposite row for the same state
+and not a state of its own, which is why it is modeled as a **spelling**
+(`interp.Runner.AddNegatedSetOptions`) rather than as ten entries in the
+option table. Three things follow, and all three were measured rather than
+assumed by symmetry:
+
+- The listing drops the substrate's spelling. `noclobber` is in none of
+  ksh93's thirty-two rows.
+- `set` still **takes** both. `set -o noclobber` there is status 0 and the
+  next listing says `clobber off`, so only the roster changes.
+- `set +o` names the states that are **stored**. A stock shell writes
+  neither spelling; `set +o clobber` puts `--noclobber` on the line and
+  `set -o markdirs` puts `--markdirs` on it — so a negated row being *on* is
+  what says nothing, and the `no…` spelling is what appears when it is off.
+  The word lands where the *listed* name sorts, so `--noclobber` comes after
+  `--braceexpand` and `--nounset` after `--trackall`.
+
+And three rows are listed and **refused**: `set -o interactive`,
+`set -o login_shell` and `set -o rc` are `bad option(s)` in both directions
+there, word for word with a name that shell has never heard of, while all
+three rows move with how the shell was started. That is a third answer
+beside the two the option table gives — it is a fact about the shell being
+imitated rather than about this implementation, so a dialect declares it
+(`interp.Runner.AddImmovableSetOptions`) — and it is why those three names
+are left out of the `set +o` line, which is a command and must name only
+what `set` would take. `monitor`, on for the same reason in an interactive
+shell and movable, is on the line.
 
 ### `braceexpand`, and the letter `set -B`
 
@@ -4930,10 +4987,10 @@ so and turning the option off has to take it back out. And it is **not
 one-way**: `set -B` after `set +B` restores the expansion, unlike `noexec`,
 so a switch asserted in one direction only would be a trap.
 
-The table is a subset of what these shells actually have — ksh93's own
-listing runs to `bgnice`, `globstar`, `letoctal`, `markdirs` and a dozen
-more. Names outside it are refused by name rather than accepted and
-ignored: under `set -o`, accepting an option we do not honor would be a
+The table above is still a subset of what these shells actually have — it
+was short of ksh93's `bgnice`, `globstar`, `letoctal`, `markdirs` and eight
+more until #2925, and zsh's own namespace runs to 185. Names outside it are
+refused by name rather than accepted and ignored: under `set -o`, accepting an option we do not honor would be a
 promise. zsh's `setopt` answers the same question differently and on
 purpose — see **zsh's option names** below — because the names a zsh rc
 file writes are overwhelmingly about features this shell does not have at

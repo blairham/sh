@@ -1879,6 +1879,14 @@ type Runner struct {
 	// extraOptions are the `set -o` names this dialect has beyond the ones
 	// every shell has. Declared through AddSetOptions; see setoptions.go.
 	extraOptions map[string]bool
+	// negatedOptions are the names this dialect lists as the *opposite* of a
+	// state the substrate holds — `clobber` for `noclobber` — mapped to the
+	// substrate name. Declared through AddNegatedSetOptions.
+	negatedOptions map[string]string
+	// immovableOptions are the names this dialect lists and `set` will not
+	// take, whatever the substrate could do with them. Declared through
+	// AddImmovableSetOptions.
+	immovableOptions map[string]bool
 	// promptUser answers the login name the `%n` prompt escape reports,
 	// brought in by whoever is allowed to ask the system for it. Nil in a
 	// runner nobody told, where the escape is refused rather than guessed

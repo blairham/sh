@@ -270,6 +270,8 @@ func seedTables(r *Runner) {
 	r.exported = map[string]bool{"seed": true}
 	r.exportedFuncs = map[string]bool{"seed": true}
 	r.extraOptions = map[string]bool{"seed": true}
+	r.negatedOptions = map[string]string{"seed": "noseed"}
+	r.immovableOptions = map[string]bool{"seed": true}
 	r.fds = map[int]any{7: nil}
 	r.freezing = map[string]bool{"seed": true}
 	r.literalOperands = map[string]bool{"seed": true}

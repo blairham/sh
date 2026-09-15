@@ -1243,6 +1243,80 @@ func (r *Runner) SetOptionNamespace(lookup func(r *Runner, name string) (on, kno
 type ListedOption struct {
 	Name string
 	On   bool
+
+	// NegatedName is the spelling the shell stores this state under, where
+	// the row is the *negation* of one — `noclobber` on a `clobber` row. It
+	// is what `set +o` writes when the row is off in the dialect whose `+o`
+	// names the states that are stored rather than the options that are on,
+	// and it is empty for every ordinary row. See
+	// [Runner.AddNegatedSetOptions].
+	NegatedName string
+}
+
+// AddNegatedSetOptions declares the `set -o` names this shell lists as the
+// **opposite** of a state the substrate already holds, each mapped to the
+// substrate's own name for it.
+//
+// One shell in the panel spells five of the shared options the positive way
+// round. Measured 2026-09-15 on ksh93u+ 2012-08-01: its listing writes
+// `clobber`, `exec`, `glob`, `log` and `unset` — each `on` in a stock shell —
+// where bash, zsh, dash and BusyBox ash all write `noclobber`, `noexec`,
+// `noglob`, `nolog` and `nounset`, each off. It is the opposite row for the
+// same state and not a state of its own, which is why this is a spelling
+// rather than ten entries in the option table.
+//
+// Three things follow, and all three are measured rather than symmetric:
+//
+//   - The *listing* drops the substrate's spelling. `set -o` in that shell
+//     has 32 rows and `noclobber` is in none of them.
+//   - `set` still **takes** both. `set -o noclobber` there is status 0 and
+//     the next listing says `clobber off`, so the substrate name stays a
+//     name this shell has — it is only the roster that changes.
+//   - `set +o` names the *stored* states. A stock shell writes neither
+//     spelling, `set +o clobber` puts `--noclobber` on the line, and
+//     `set -o markdirs` puts `--markdirs` on it — so the row being on is
+//     what says nothing, and the negated spelling is what appears when it is
+//     off. See [ListedOption.NegatedName].
+//
+// A name given here need not be declared with [Runner.AddSetOptions] as well:
+// the state it stands for is one the substrate already has, and this says how
+// this shell spells it.
+func (r *Runner) AddNegatedSetOptions(pairs map[string]string) {
+	if r.negatedOptions == nil {
+		r.negatedOptions = make(map[string]string, len(pairs))
+	}
+	for listed, base := range pairs {
+		r.negatedOptions[listed] = base
+	}
+}
+
+// AddImmovableSetOptions declares `set -o` names this shell **lists** and
+// `set` will not take, whatever the substrate could do with the state behind
+// them.
+//
+// A third answer beside the two [Runner.AddSetOptions] already gives, and it
+// is a fact about the shell being imitated rather than about this
+// implementation — which is why it is declared by a dialect and not recorded
+// in the option table. The substrate's own refusal is "we do not do this",
+// and it is settled by a name having no way to be applied; this is "that
+// shell does not let you", said about a name the substrate *can* move.
+//
+// Measured 2026-09-15 on ksh93u+ over `-c`, `-i` and a login invocation:
+// `interactive`, `login_shell` and `rc` are all in the listing and all three
+// are `set: <name>: bad option(s)` in **both** directions, word for word with
+// a name that shell has never heard of. `interactive` is the one that needs
+// saying out loud, because the substrate has it as a movable name for the
+// shell that does let a script write it (see the table in setoptions.go).
+//
+// The read is untouched: a row still has to say which state the shell is in,
+// and all three of those rows move with the invocation.
+func (r *Runner) AddImmovableSetOptions(names ...string) {
+	if r.immovableOptions == nil {
+		r.immovableOptions = make(map[string]bool, len(names))
+	}
+	for _, n := range names {
+		r.immovableOptions[n] = true
+	}
 }
 
 // SetOptionTable installs the `set -o` namespace of a dialect that has one of

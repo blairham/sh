@@ -1,0 +1,13 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Token recognition where zsh reads the input differently from every other
+# shell on the panel. core/tokenization.tests carries the questions the four
+# answer alike; these are the ones it could not.
+
+# The \c control escape inside $'...'. bash and ksh93 fold \cX into a control
+# character; zsh has no such escape and leaves the letters where they are.
+printf '[%s]' $'ab\cXcd' | od -An -c | sed 's/  */ /g'
+printf '\n'
+v=$'\cA'
+printf 'length: %s\n' "${#v}"

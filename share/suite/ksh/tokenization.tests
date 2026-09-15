@@ -1,0 +1,29 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Token recognition where ksh93 reads the input differently from every other
+# shell on the panel. core/tokenization.tests carries the questions the four
+# answer alike; these are the ones it could not.
+
+# A backslash-newline inside an unquoted word inside $( … ). bash, zsh and
+# dash treat it as a line continuation and join the two lines; ksh93 keeps the
+# backslash and the newline as characters of the word. It is narrower than it
+# looks — the same spelling after a blank, inside double quotes, or inside
+# backticks joins in every shell, and so does the top-level form. See #2869,
+# which this case is the record of.
+printf '1[%s]\n' "$(printf '%s' ab\
+cd)"
+printf '2[%s]\n' "$(printf '%s' ab\
+)"
+printf '3[%s]\n' "$(printf '%s' "ab\
+cd")"
+printf '4[%s]\n' "$(printf '%s%s' ab \
+cd)"
+printf '5[%s]\n' "$( printf '%s' ab\
+cd )"
+
+# A hex escape in $'...'. bash and zsh stop after two digits, so $'\x414' is
+# the two characters A and 4; ksh93 keeps taking hex digits.
+printf '[%s]\n' $'\x414'
+v=$'\x414'
+printf 'length: %s\n' "${#v}"

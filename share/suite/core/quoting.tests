@@ -63,3 +63,62 @@ printf '%s\n' "$ alone" "money \$5"
 # Tildes are not expanded inside quotes; an unquoted bare tilde is HOME and
 # the harness gives every run its own, so only the quoted halves are asked.
 printf '%s\n' "quoted: ~ ~root" '~'
+
+# --- what each form stops, one character at a time --------------------------
+#
+# The three forms differ in exactly which characters keep their meaning, and
+# the way to say so is to put the same set through each of them.
+
+printf '[%s]\n' 'raw:    $ ` \ " ! * ? ~ #'
+printf '[%s]\n' "double: \$ \` \\ \" ! * ? ~ #"
+printf '[%s]\n' raw:\ \$\ \`\ \\\ \"\ \!\ \*\ \?\ \~\ \#
+
+# A single quote cannot hold a single quote, so the way to write one is to
+# leave and come back. All three spellings make the same word.
+printf '[%s]\n' 'it'\''s' "it's" it\'s
+
+# A double quote inside single quotes is data, and the other way round.
+printf '[%s]\n' 'a "quoted" word' "a 'quoted' word"
+
+# --- backslash inside double quotes -----------------------------------------
+#
+# Inside double quotes a backslash is special before exactly four characters —
+# $, `, " and backslash itself — and is an ordinary character before anything
+# else. The newline is the fifth case and is asked in tokenization.tests.
+
+printf '[%s]\n' "\$ \` \" \\"
+printf '[%s]\n' "\a \z \1 \- \\\\"
+
+# --- quoting inside an expansion --------------------------------------------
+#
+# The word of a ${name-word} is expanded like any other word and may be
+# quoted, and the quotes belong to the expansion rather than to the line.
+
+unset u
+printf '[%s]\n' "${u-'single'}" "${u-\"double\"}" "${u-back\\slash}"
+printf '[%s]\n' "${u-two words}"
+set -- "${u-two words}"
+printf 'still one word: %s\n' "$#"
+
+# A pattern in ${name#pattern} is quoted the same way, and quoting a pattern
+# character takes its meaning away.
+p='a*b'
+printf '[%s]\n' "${p#a}" "${p#'a*'}" "${p#a\*}"
+
+# --- quoting and command substitution ---------------------------------------
+#
+# The body of $( ) is parsed on its own terms, so a quote inside it is closed
+# inside it and the quoting state outside does not reach in.
+
+printf '[%s]\n' "outer $(printf '%s' "inner double") outer"
+printf '[%s]\n' "outer $(printf '%s' 'inner single') outer"
+
+# Backticks are the older spelling and the escaping rules inside them are not
+# the same; what is asked here is only the part every shell agrees about.
+printf '[%s]\n' "`printf '%s' plain`"
+
+# --- a quoted empty word ----------------------------------------------------
+
+set -- '' "" x
+printf 'empty words kept: %s [%s] [%s] [%s]\n' "$#" "$1" "$2" "$3"
+printf 'length of an empty quoted word: %s\n' "${#1}"

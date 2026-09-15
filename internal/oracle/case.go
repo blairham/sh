@@ -17690,6 +17690,44 @@ echo "st=$? alive"`,
 		Why:     "the option is what an sh-family emulation turns on, which is the fifth axis `emulate` carries — so a zsh script that opened with `emulate sh` was already getting the POSIX answer, and the divergence only ever showed in a plain zsh",
 	},
 	{
+		ID: "cmd/command-bounds-a-fatal-error-raised-inside", Category: "command lookup",
+		Snippet: `( eval 'export -q; printf "[bare-in]"'; printf "[bare-alive]" ); printf "[bare=%d]" "$?"
+( command eval 'export -q; printf "[cmd-in]"'; printf "[cmd-alive]" ); printf "[cmd=%d]" "$?"
+printf "[alive]\n"`,
+		Script: true,
+		Why:    "the axis #2755 is named for: three columns put a **boundary** at the `command`, so a fatal error raised *inside* the builtin it ran unwinds as far as that word and no further. Written twice, bare and behind `command`, so the row is about the word rather than about the refusal — and inside a subshell each time, so a column that stops still answers the half below it. ksh93, dash and BusyBox ash report 2 for the bare half with no `[bare-alive]`, and the same refusal behind `command` abandons the rest of the `eval`'s text — no `[cmd-in]` — and leaves the subshell alive at 0. bash invoked as `sh` stops on both halves, which is the other value; bash under either of its own names never calls `export -q` fatal at all and prints `[bare-in]` twice, so it is asked nothing here, and zsh's `command` does not reach `eval` — `CommandReachesABuiltin` — so `[cmd-in]` is missing there for the other reason entirely. This is not a wider reading of #2741, which catches only what the named builtin raised *before it ran anything*: here the failure is raised by an `export` the `command` never named",
+	},
+	{
+		ID: "cmd/command-bounds-any-fatal-error-raised-inside", Category: "command lookup",
+		Snippet: `( eval 'echo "${NOPE?bad}"; printf "[bp-in]"'; printf "[bp-alive]" ); printf "[bp=%d]" "$?"
+( command eval 'echo "${NOPE?bad}"; printf "[cp-in]"'; printf "[cp-alive]" ); printf "[cp=%d]" "$?"
+( readonly rv=1; eval 'rv=2; printf "[br-in]"'; printf "[br-alive]" ); printf "[br=%d]" "$?"
+( readonly rv=1; command eval 'rv=2; printf "[cr-in]"'; printf "[cr-alive]" ); printf "[cr=%d]" "$?"
+( set -u; eval 'echo "${NOPE}"; printf "[bu-in]"'; printf "[bu-alive]" ); printf "[bu=%d]" "$?"
+( set -u; command eval 'echo "${NOPE}"; printf "[cu-in]"'; printf "[cu-alive]" ); printf "[cu=%d]" "$?"
+printf "[alive]\n"`,
+		Script: true,
+		Why:    "that the boundary is not about special builtins at all, which is why it is a second mechanism rather than a wider reading of #2741: the three columns that catch are catching *any* fatal error raised inside. Three producers decided in three different places — the error operand, a readonly reassignment and an unset name under `set -u` — each written bare and behind `command`. dash and BusyBox ash stop on all three bare halves at 2 and print `[cp-alive][cr-alive][cu-alive]` behind the word. The first pair also says the catch does not consult `ParamErrorIsAnExitRequest`, which both answer yes: `${x?word}` is a request to stop at a `.` and at a startup file there, and still ends at the `command`. ksh93 cannot be asked by any of the three — `FatalErrorEndsBorrowedTextOnly` already makes its `eval` a boundary for all of them, so every half is alive — and the row above is what answers for it. bash stops on all six halves under either name. zsh prints `[cp-alive]` for the reason it is silent everywhere here, `command not found: eval`, which is exactly why a reading of this row must check that the word reached a builtin at all",
+	},
+	{
+		ID: "cmd/posixbuiltins-does-not-bound-a-fatal-error-raised-inside", Category: "command lookup",
+		Snippet: `setopt posixbuiltins 2>/dev/null
+( eval 'set -Z; printf "[bare-in]"'; printf "[bare-alive]" ); printf "[bare=%d]" "$?"
+( command eval 'set -Z; printf "[cmd-in]"'; printf "[cmd-alive]" ); printf "[cmd=%d]" "$?"
+printf "[alive]\n"`,
+		Script: true,
+		Why:    "the route that lets zsh answer the axis at all, and the answer is no. Its `command` reaches no builtin by default, so the two rows above ask it nothing; with `posixbuiltins` on it reaches one — `cmd/posixbuiltins-lets-command-reach-a-builtin` is that fact — and a special builtin's refusal becomes fatal there, so `eval 'set -Z'` ends the subshell at 1 and `command eval 'set -Z'` ends it identically at 1. So zsh is not deliberately unanswered: it holds the same value bash does, by measurement rather than by silence. The other six have no `setopt`, whose failure is silenced so the rest of the line still runs, and they read exactly as the first row does — ksh93, dash and ash alive behind the word, bash as `sh` stopped on both halves, and both plain bash builds printing `[bare-in]` because `set -Z` is not fatal there. `set -Z` rather than `export -q` because the two refusals are decided in different places and zsh only makes the first one fatal",
+	},
+	{
+		ID: "cmd/command-does-not-bound-a-request-to-stop", Category: "command lookup",
+		Snippet: `( command eval 'exit 5'; printf "[x-after]" ); printf "[x=%d]" "$?"
+( set -e; command eval false; printf "[e-after]" ); printf "[e=%d]" "$?"
+( command exec /nonexistent/prog; printf "[p-after]" ); printf "[p=%d]" "$?"
+printf "[alive]\n"`,
+		Script: true,
+		Why:    "the line the boundary must not cross, and it is the same one `abandonKind` already draws for `.` and `eval`: a request to *stop* is not an error to be caught. Unanimous in the six columns that reach a builtin through the word — `exit 5` inside it exits 5, errexit firing under it stops at 1, and a failed `exec` ends the shell at 127, or 126 in bash 3.2, whether or not the shell is one that catches everything else there. Without this row the widened catch would read as correct while having made `command eval 'exit 5'` unreachable in three dialects. zsh says nothing about any of the three, for the reason it says nothing above",
+	},
+	{
 		ID: "cmd/command-with-an-option-nobody-has", Category: "command lookup",
 		Snippet: `command -q true; echo "st=$?"`,
 		Why:     "the CommandRejectsUnknownOption axis: bash, dash and ksh93 refuse an option command does not have, at 2; zsh stops reading options and looks up -q as the command, at 127. Probed with a letter no panel shell owns — -x is a real ksh93 option, and a probe written with -x read ksh93 as tolerant off ksh93's own feature",

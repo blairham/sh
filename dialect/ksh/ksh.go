@@ -586,6 +586,12 @@ func Semantics() interp.Semantics {
 	// probes used -x and -a, which are real ksh93 options, and recorded No
 	// off ksh93's own features.
 	s.CommandRejectsUnknownOption = interp.Yes
+	// And the word is a boundary: `eval 'export -q; echo INNER'` stops the
+	// script here, and `command eval '…'` abandons the `eval`'s text, reports
+	// 2 and carries on. The special-builtin row is what answers for this
+	// shell — the three expansion producers cannot, because its `eval` is
+	// already a boundary for those (FatalErrorEndsBorrowedTextOnly).
+	s.FatalErrorEndsAtTheCommandWord = interp.Yes
 	s.GetoptsRejectsUnknownOption = interp.Yes
 	s.ShiftCountIsArithmetic = interp.Yes
 	s.TrapBodyRunsWhatParsed = interp.No

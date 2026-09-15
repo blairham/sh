@@ -293,18 +293,29 @@ func (r *Runner) runWithoutFunctions(ctx context.Context, args []string) int {
 // eval false` stops. None of them is a failure `command` is meant to swallow,
 // and zsh is silent on all three for the reason it is silent above.
 //
-// **And only the builtin's own**, which is what Runner.throughCommandWord
-// still being set says: Runner.stmt clears it, so a flag that survived the
-// call means nothing this builtin ran raised the error. That is where the
-// panel parts and the narrow reading is the one taken here — bash invoked as
-// `sh` ends the script for `command eval 'export -q'`, while ksh93, dash and
-// BusyBox ash end only the `eval`'s text. Those three catch *any* fatal error
-// raised inside a `command`, an unset parameter under `set -u` and a readonly
-// reassignment included, which is a second mechanism rather than a wider
-// reading of this one. It is measured and asked in #2755 rather than guessed
-// at here.
+// **And only the builtin's own** in the narrow reading, which is what
+// Runner.throughCommandWord still being set says: Runner.stmt clears it, so a
+// flag that survived the call means nothing this builtin ran raised the error.
+// That is where the panel parts — bash invoked as `sh` ends the script for
+// `command eval 'export -q'`, while ksh93, dash and BusyBox ash end only the
+// `eval`'s text. Those three put a **boundary** at the word and catch *any*
+// fatal error raised inside it, an unset parameter under `set -u` and a
+// readonly reassignment included, which is a second mechanism rather than a
+// wider reading of this one. It is measured and asked as
+// Semantics.FatalErrorEndsAtTheCommandWord (#2755).
+//
+// The wide reading needs no depth of its own: this function is called from
+// the one place that *is* the boundary, so a pending error here was raised
+// somewhere under this `command` whatever the flag says.
 func (r *Runner) takeSpecialBuiltinFailure() {
-	if r.throughCommandWord && r.pendingFileError() {
+	if !r.pendingFileError() {
+		return
+	}
+	// The narrow half first, so a dialect answering the axis no still gets
+	// the failure the named builtin raised before it ran anything — the two
+	// readings are nested and not alternatives.
+	if r.throughCommandWord ||
+		r.ask(r.sem().FatalErrorEndsAtTheCommandWord, "`command` ending a fatal error raised inside the builtin it ran") {
 		r.takeFileError()
 	}
 }

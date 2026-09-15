@@ -17166,8 +17166,68 @@ reach past the builtin it named, and that is where the panel parts:
 ends only the `eval`'s text in ksh93, dash and BusyBox ash. Those three
 catch *any* fatal error raised inside a `command` — an unset parameter
 under `set -u` and a readonly reassignment included — which is a second
-mechanism rather than a wider reading of this one. The narrow reading is
-what is implemented; the other is measured in #2755.
+mechanism rather than a wider reading of this one. That is the axis
+below.
+
+**`FatalErrorEndsAtTheCommandWord`** — bash no · dash yes · ksh93 yes ·
+zsh no
+
+Puts a **boundary** at the `command`: a fatal error raised anywhere inside
+the builtin it ran unwinds as far as that word and no further, so the text
+the builtin was running is abandoned, its status is reported, and the
+script carries on. Three columns draw it and bash draws none, under its
+own name and under `sh` alike.
+
+Measured 2026-09-13 from a script file under `env -i`, each row written
+twice so it is about the word rather than about the error:
+
+| | `eval 'export -q; echo IN'` | `command eval '…'` |
+| --- | --- | --- |
+| bash 5.3 | complains, `IN`, alive | the same — never fatal here |
+| bash 5.3 as `sh` | complains, **stops**, 2 | complains, **stops**, 2 |
+| bash 3.2 | complains, `IN`, alive | the same |
+| ksh93 | complains, **stops**, 2 | complains, no `IN`, alive, 2 |
+| zsh | `command not found: eval` | — |
+| dash | complains, **stops**, 2 | complains, no `IN`, alive, 2 |
+| BusyBox ash | complains, **stops**, 2 | complains, no `IN`, alive, 1 |
+
+**It is not only the special builtins**, which is what makes it a second
+mechanism rather than a wider reading of the one above. Measured in the
+same run, in subshells so one row cannot hide the next: `command eval
+'echo "${NOPE?bad}"'`, `readonly rv=1; command eval 'rv=2'` and `set -u;
+command eval 'echo "${NOPE}"'` each print `alive` in dash and BusyBox ash
+and stop without the word. ksh93 cannot be asked by those three — its
+`eval` is already a boundary for all of them, which is
+`FatalErrorEndsBorrowedTextOnly` — and its special-builtin row above can
+and does. bash is alive on none of them either way.
+
+The first of those three also says the catch does **not** consult
+`ParamErrorIsAnExitRequest`. dash answers that axis yes — `${x?word}` is a
+request to stop at a `.` and in a startup file there — and `command eval
+'echo "${NOPE?bad}"'` still prints `alive`. So this boundary asks the
+question that `GiveUpTheFile` and `caughtBorrowedError` ask, and gets a
+different answer.
+
+zsh is **not** deliberately unanswered, and the route that asks it is
+`posixbuiltins`. Its `command` reaches no builtin at all by default, so
+every row above says nothing there; with the option on it reaches one and
+a special builtin's refusal becomes fatal, and then `eval 'set -Z'` ends
+the subshell at 1 and `command eval 'set -Z'` ends it identically —
+`readonly 1bad=x`, `unset 1bad`, `export 1bad=x` and `. /nonexistent/file`
+all the same. So zsh holds bash's value by measurement.
+
+What it must **not** catch is a request to *stop*, which is the line
+`abandonKind` already draws for `.` and `eval` and which every column that
+reaches a builtin through the word agrees on: `command eval 'exit 5'`
+exits 5, `set -e; command eval false` stops at 1, and `command exec
+/nonexistent/prog` ends the shell at 127 — 126 in bash 3.2. Without that
+half, widening the catch would have made `command eval 'exit 5'`
+unreachable in three dialects.
+
+Recorded as `cmd/command-bounds-a-fatal-error-raised-inside`,
+`cmd/command-bounds-any-fatal-error-raised-inside`,
+`cmd/posixbuiltins-does-not-bound-a-fatal-error-raised-inside` and
+`cmd/command-does-not-bound-a-request-to-stop` (#2755).
 
 **`BadOptionToSpecialBuiltinFatalInPosixMode`** — bash yes · dash yes ·
 ksh93 yes · zsh **no**

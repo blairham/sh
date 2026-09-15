@@ -38179,6 +38179,108 @@
         "TimedOut": false
       }
     },
+    "cmd/command-bounds-a-fatal-error-raised-inside": {
+      "ash": {
+        "Stdout": "[bare=2][cmd-alive][cmd=0][alive]",
+        "Stderr": "\u003cscript\u003e: export: line 1: illegal option -q~\u003cscript\u003e: export: line 2: illegal option -q",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[bare-in][bare-alive][bare=0][cmd-in][cmd-alive][cmd=0][alive]",
+        "Stderr": "\u003cscript\u003e: line 1: export: -q: invalid option~export: usage: export [-fn] [name[=value] ...] or export -p [-f]~\u003cscript\u003e: line 2: export: -q: invalid option~export: usage: export [-fn] [name[=value] ...] or export -p [-f]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[bare=2][cmd=2][alive]",
+        "Stderr": "\u003cscript\u003e: line 1: export: -q: invalid option~export: usage: export [-fn] [name[=value] ...] or export -p [-f]~\u003cscript\u003e: line 2: export: -q: invalid option~export: usage: export [-fn] [name[=value] ...] or export -p [-f]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[bare-in][bare-alive][bare=0][cmd-in][cmd-alive][cmd=0][alive]",
+        "Stderr": "\u003cscript\u003e: line 1: export: -q: invalid option~export: usage: export [-nf] [name[=value] ...] or export -p~\u003cscript\u003e: line 2: export: -q: invalid option~export: usage: export [-nf] [name[=value] ...] or export -p",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[bare=2][cmd-alive][cmd=0][alive]",
+        "Stderr": "\u003cscript\u003e: 1: export: Illegal option -q~\u003cscript\u003e: 1: export: Illegal option -q",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[bare=2][cmd-alive][cmd=0][alive]",
+        "Stderr": "\u003cscript\u003e[1]: eval[1]: export: -q: unknown option~Usage: export [-p] [name[=value]...]~\u003cscript\u003e[2]: eval[1]: export: -q: unknown option~Usage: export [-p] [name[=value]...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[bare-in][bare-alive][bare=0][cmd-alive][cmd=0][alive]",
+        "Stderr": "(eval):export:1: bad option: -q~\u003cscript\u003e:2: command not found: eval",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "cmd/command-bounds-any-fatal-error-raised-inside": {
+      "ash": {
+        "Stdout": "[bp=2][cp-alive][cp=0][br=2][cr-alive][cr=0][bu=2][cu-alive][cu=0][alive]",
+        "Stderr": "\u003cscript\u003e: eval: line 1: NOPE: bad~\u003cscript\u003e: eval: line 2: NOPE: bad~\u003cscript\u003e: eval: line 3: rv: is read only~\u003cscript\u003e: eval: line 4: rv: is read only~\u003cscript\u003e: eval: line 5: NOPE: parameter not set~\u003cscript\u003e: eval: line 6: NOPE: parameter not set",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[bp=1][cp=1][br=1][cr=1][bu=1][cu=1][alive]",
+        "Stderr": "\u003cscript\u003e: line 1: NOPE: bad~\u003cscript\u003e: line 2: NOPE: bad~\u003cscript\u003e: line 3: rv: readonly variable~\u003cscript\u003e: line 4: rv: readonly variable~\u003cscript\u003e: line 5: NOPE: unbound variable~\u003cscript\u003e: line 6: NOPE: unbound variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[bp=1][cp=1][br=1][cr=1][bu=1][cu=1][alive]",
+        "Stderr": "\u003cscript\u003e: line 1: NOPE: bad~\u003cscript\u003e: line 2: NOPE: bad~\u003cscript\u003e: line 3: rv: readonly variable~\u003cscript\u003e: line 4: rv: readonly variable~\u003cscript\u003e: line 5: NOPE: unbound variable~\u003cscript\u003e: line 6: NOPE: unbound variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[bp=1][cp=1][br=1][cr=1][bu=1][cu=1][alive]",
+        "Stderr": "\u003cscript\u003e: line 1: NOPE: bad~\u003cscript\u003e: line 2: NOPE: bad~\u003cscript\u003e: line 3: rv: readonly variable~\u003cscript\u003e: line 4: rv: readonly variable~\u003cscript\u003e: line 5: NOPE: unbound variable~\u003cscript\u003e: line 6: NOPE: unbound variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[bp=2][cp-alive][cp=0][br=2][cr-alive][cr=0][bu=2][cu-alive][cu=0][alive]",
+        "Stderr": "\u003cscript\u003e: 1: eval: NOPE: bad~\u003cscript\u003e: 1: eval: NOPE: bad~\u003cscript\u003e: 1: eval: rv: is read only~\u003cscript\u003e: 1: eval: rv: is read only~\u003cscript\u003e: 1: eval: NOPE: parameter not set~\u003cscript\u003e: 1: eval: NOPE: parameter not set",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[bp-alive][bp=0][cp-alive][cp=0][br-alive][br=0][cr-alive][cr=0][bu-alive][bu=0][cu-alive][cu=0][alive]",
+        "Stderr": "\u003cscript\u003e[1]: eval: line 1: NOPE: bad~\u003cscript\u003e[2]: eval: line 1: NOPE: bad~\u003cscript\u003e[3]: eval: line 1: rv: is read only~\u003cscript\u003e[4]: eval: line 1: rv: is read only~\u003cscript\u003e[5]: eval: line 1: NOPE: parameter not set~\u003cscript\u003e[6]: eval: line 1: NOPE: parameter not set",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[bp=1][cp-alive][cp=0][br-alive][br=0][cr-alive][cr=0][bu-alive][bu=0][cu-alive][cu=0][alive]",
+        "Stderr": "(eval):1: NOPE: bad~\u003cscript\u003e:2: command not found: eval~(eval):1: read-only variable: rv~\u003cscript\u003e:4: command not found: eval~(eval):1: NOPE: parameter not set~\u003cscript\u003e:6: command not found: eval",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "cmd/command-bypasses-a-function": {
       "ash": {
         "Stdout": "hi",
@@ -38225,6 +38327,57 @@
       "zsh": {
         "Stdout": "hi",
         "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "cmd/command-does-not-bound-a-request-to-stop": {
+      "ash": {
+        "Stdout": "[x=5][e=1][p=127][alive]",
+        "Stderr": "\u003cscript\u003e: exec: line 3: /nonexistent/prog: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[x=5][e=1][p=127][alive]",
+        "Stderr": "\u003cscript\u003e: line 3: /nonexistent/prog: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[x=5][e=1][p=127][alive]",
+        "Stderr": "\u003cscript\u003e: line 3: /nonexistent/prog: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[x=5][e=1][p=126][alive]",
+        "Stderr": "\u003cscript\u003e: line 3: /nonexistent/prog: No such file or directory~\u003cscript\u003e: line 3: exec: /nonexistent/prog: cannot execute: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[x=5][e=1][p=127][alive]",
+        "Stderr": "\u003cscript\u003e: 3: exec: /nonexistent/prog: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[x=5][e=1][p=127][alive]",
+        "Stderr": "\u003cscript\u003e[3]: exec: /nonexistent/prog: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[x-after][x=0][e=127][p-after][p=0][alive]",
+        "Stderr": "\u003cscript\u003e:1: command not found: eval~\u003cscript\u003e:2: command not found: eval~\u003cscript\u003e:3: command not found: exec",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
@@ -41285,6 +41438,57 @@
       "zsh": {
         "Stdout": "st=1",
         "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "cmd/posixbuiltins-does-not-bound-a-fatal-error-raised-inside": {
+      "ash": {
+        "Stdout": "[bare=2][cmd-alive][cmd=0][alive]",
+        "Stderr": "\u003cscript\u003e: set: line 2: illegal option -Z~\u003cscript\u003e: set: line 3: illegal option -Z",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[bare-in][bare-alive][bare=0][cmd-in][cmd-alive][cmd=0][alive]",
+        "Stderr": "\u003cscript\u003e: line 2: set: -Z: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]~\u003cscript\u003e: line 3: set: -Z: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[bare=2][cmd=2][alive]",
+        "Stderr": "\u003cscript\u003e: line 2: set: -Z: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]~\u003cscript\u003e: line 3: set: -Z: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[bare-in][bare-alive][bare=0][cmd-in][cmd-alive][cmd=0][alive]",
+        "Stderr": "\u003cscript\u003e: line 2: set: -Z: invalid option~set: usage: set [--abefhkmnptuvxBCHP] [-o option] [arg ...]~\u003cscript\u003e: line 3: set: -Z: invalid option~set: usage: set [--abefhkmnptuvxBCHP] [-o option] [arg ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[bare=2][cmd-alive][cmd=0][alive]",
+        "Stderr": "\u003cscript\u003e: 1: set: Illegal option -Z~\u003cscript\u003e: 1: set: Illegal option -Z",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[bare=2][cmd-alive][cmd=0][alive]",
+        "Stderr": "\u003cscript\u003e[2]: eval[1]: set: -Z: unknown option~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]~\u003cscript\u003e[3]: eval[1]: set: -Z: unknown option~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[bare=1][cmd=1][alive]",
+        "Stderr": "(eval):set:1: can't change option: -Z~(eval):set:1: can't change option: -Z",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

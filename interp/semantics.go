@@ -7135,6 +7135,57 @@ type Semantics struct {
 	// `cmd/command-in-front-of-a-builtin`.
 	CommandReachesABuiltin Answer
 
+	// FatalErrorEndsAtTheCommandWord puts a **boundary** at the `command`,
+	// so a fatal error raised anywhere inside the builtin it ran unwinds as
+	// far as that word and no further.
+	//
+	// A second mechanism rather than a wider reading of
+	// CommandReachesABuiltin's survivability, which is deliberately narrow:
+	// that one takes the failure only while Runner.throughCommandWord is
+	// still set, and Runner.stmt clears it, so what it catches is a failure
+	// the named builtin raised *before it ran anything* (#2741). This one
+	// catches a failure raised deeper — inside the text an `eval` or a `.`
+	// is running for it, and by any producer at all rather than by a special
+	// builtin's refusal.
+	//
+	// Measured 2026-09-13 from a script file under `env -i`, each row
+	// written twice so it is about the word rather than about the error.
+	// `eval 'export -q; echo INNER'` stops the script in ksh93, dash,
+	// BusyBox ash and bash invoked as `sh`; put `command` in front and the
+	// first three abandon the `eval`'s text, report its status and carry on,
+	// while bash as `sh` stops exactly as before. bash under its own name
+	// never calls that refusal fatal, so it is asked nothing by that row —
+	// its answer comes from the three below, where it stops either way.
+	//
+	// **Not only the special builtins.** The three columns that catch are
+	// catching any fatal error raised inside, measured in the same run in
+	// subshells so one row cannot hide the next: `command eval 'echo
+	// "${NOPE?bad}"'`, `readonly rv=1; command eval 'rv=2'` and `set -u;
+	// command eval 'echo "${NOPE}"'` each carry on in dash and BusyBox ash
+	// and stop without the word. ksh93 cannot be asked by those three —
+	// FatalErrorEndsBorrowedTextOnly already makes its `eval` a boundary for
+	// an expansion error — and its special-builtin row above can and does.
+	//
+	// **`${x?word}` is caught here even where the dialect reads it as a
+	// request to stop.** dash answers ParamErrorIsAnExitRequest yes and
+	// still prints `alive` behind `command`, so this boundary asks that
+	// question where GiveUpTheFile and caughtBorrowedError do not.
+	//
+	// What it must not catch is a request to *stop*, which is the line
+	// abandonKind already draws for `.` and `eval`, and the panel is
+	// unanimous: `command eval 'exit 5'` exits 5, `command exec
+	// /nonexistent/prog` ends the shell at 127, and `set -e; command eval
+	// false` stops.
+	//
+	// zsh answers from the `posixbuiltins` route, which is the only one
+	// where its `command` reaches a builtin at all: with the option on,
+	// `command eval 'set -Z'` ends the script exactly as the bare `eval`
+	// does. Recorded as `cmd/command-bounds-a-fatal-error-raised-inside`,
+	// `cmd/command-bounds-any-fatal-error-raised-inside`,
+	// `cmd/posixbuiltins-does-not-bound-a-fatal-error-raised-inside` and
+	// `cmd/command-does-not-bound-a-request-to-stop` (#2755).
+	FatalErrorEndsAtTheCommandWord Answer
+
 	// GetoptsRejectsUnknownOption is the same question for `getopts`, which
 	// has no options at all here — so any leading `-` word is the one being
 	// asked about, and it would otherwise be the optstring.
@@ -12481,6 +12532,12 @@ func PosixSemantics() Semantics {
 		// And POSIX gives `command` a builtin to run: bypassing the function
 		// table is what the utility is for, not bypassing the builtins too.
 		CommandReachesABuiltin: Yes,
+		// POSIX gives the word one job — the special properties of the
+		// builtin it *names* do not apply — and says nothing about an
+		// error raised deeper than that. So the core takes the narrow
+		// reading, and the three shells that put a boundary at the word
+		// override it.
+		FatalErrorEndsAtTheCommandWord: No,
 		// POSIX gives `umask` `-S` and no more, and `set` no `-p`.
 		UmaskHasTheReusableLetter: No,
 		SetHasThePrivilegedLetter: No,

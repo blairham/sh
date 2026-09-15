@@ -3492,6 +3492,36 @@ func (p *Parser) parseFuncPosix() Command {
 	return p.parseFuncParensAndBody(fn)
 }
 
+// refuseNameKeptByTheDialect settles a definition whose name this dialect
+// keeps for itself — the special builtins, in the two columns that reserve
+// them — and reports whether the parse is over.
+//
+// The set is [Dialect.FunctionNamesRefused] and the *stage* is
+// [Dialect.FunctionNameCheckedWhenTheDefinitionRuns], which is the field
+// already answering that question for a name that is not a name. Where the
+// dialect checks while reading, this is a syntax error and nothing in the
+// input runs; where it checks at the definition, the declaration is read
+// whole and the word goes on [FuncDecl.RefusedName], which
+// interp.Runner.funcDecl turns into the complaint. Both measured, and they
+// are what the two shells do rather than two spellings of one answer: the
+// reading refusal fires on a definition in a branch nothing takes, and the
+// running one does not.
+//
+// A name that is not text until the shell runs is nobody's: the set holds
+// words, and `${v}() { :; }` is a question about the expansion's product
+// rather than about the word, which no column in the panel puts this way.
+func (p *Parser) refuseNameKeptByTheDialect(fn *FuncDecl) bool {
+	if fn.NameWord != nil || !p.dialect.FunctionNamesRefused[fn.Name] {
+		return false
+	}
+	if p.dialect.FunctionNameCheckedWhenTheDefinitionRuns {
+		fn.RefusedName = fn.Name
+		return false
+	}
+	p.fail("Bad function name")
+	return true
+}
+
 // parseFuncParensAndBody reads `() compound` with the name or names already
 // on the declaration and the parser standing at the `(`.
 //
@@ -3512,6 +3542,9 @@ func (p *Parser) parseFuncParensAndBody(fn *FuncDecl) Command {
 	if p.dialect.FuncDefAtParen && !p.dialect.FunctionNamePunctuation &&
 		fn.NameWord == nil && !isName(fn.Name) {
 		p.fail("Bad function name")
+		return fn
+	}
+	if p.refuseNameKeptByTheDialect(fn) {
 		return fn
 	}
 	if p.dialect.EmptyParensAreOneToken {
@@ -3879,6 +3912,12 @@ func (p *Parser) parseFuncKeyword() Command {
 	switch {
 	case ok:
 		fn.Name, fn.NameWord = first.Name, first.Word
+		// The keyword spelling reaches the same set the `name()` spelling
+		// does — `function export { :; }` is refused word for word as
+		// `export() { :; }` is — so the one seam serves both.
+		if p.refuseNameKeptByTheDialect(fn) {
+			return fn
+		}
 	case p.dialect.FunctionNameCheckedWhenTheDefinitionRuns:
 		// The word is not a name, and this dialect says so where the
 		// definition *runs* rather than here — so the declaration is read

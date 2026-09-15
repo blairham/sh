@@ -3319,6 +3319,51 @@ type Dialect struct {
 	// the run-time complaint in bash, which is a different split again.
 	FunctionNameCheckedWhenTheDefinitionRuns bool
 
+	// FunctionNamesRefused are the words this dialect will not let a function
+	// definition bind, whatever else is true of them. Every one of them is a
+	// perfectly good name, so nothing about the *spelling* is what refuses
+	// it — the shell keeps the word for itself.
+	//
+	// Two columns have such a set and both draw it around the **special**
+	// builtins rather than around the builtins: `set`, `eval`, `export`,
+	// `readonly`, `shift`, `trap` and `unset` are refused in both, while
+	// `true`, `read` and `cd` — regular builtins — are accepted by every
+	// column including these two. The two sets are close and not equal, and
+	// each difference is a fact about which builtins that shell makes
+	// special, so the set is data here rather than one list with exceptions.
+	// Measured 2026-09-15 on the `-c` route, a script file and standard
+	// input, by defining a function of each name:
+	//
+	//	bash 5.3.15  defines every one of them, status 0
+	//	bash 3.2.57  the same
+	//	zsh 5.9.2    the same
+	//	BusyBox ash  the same, in the digest-pinned alpine image
+	//	dash 0.5.12  refuses 16 — the 15 POSIX marks special, and `local`
+	//	ksh93u+      refuses 21 — those 15 less `times`, which is a preset
+	//	             alias there rather than a builtin, plus `alias`, `enum`,
+	//	             `hash`, `login`, `newgrp`, `typeset` and `unalias`
+	//
+	// `.` and `:` are in both of those counts and in neither set, because
+	// both dialects already refuse them for their spelling — dash by the
+	// name check its parentheses commit to, ksh93 by
+	// interp.Semantics.PunctuatedFunctionNameIsRefused, which has a wording
+	// of its own for a dot. A set that repeated them would take that
+	// wording away.
+	//
+	// The stage splits the two, and it is the split
+	// [Dialect.FunctionNameCheckedWhenTheDefinitionRuns] already records for
+	// a name that is not a name: dash is a **syntax error while reading**, so
+	// `printf a; export() { :; }; printf b` prints neither word and a
+	// definition in a branch nothing takes is refused all the same; ksh93
+	// parses the definition and complains where it **runs**, so the `printf`
+	// in front of it runs, a definition inside a false branch is never
+	// reached, and one inside a subshell ends the subshell alone. Which is
+	// why this field carries no stage of its own.
+	//
+	// Nil for the four columns that refuse nothing, which is also what a
+	// hand-built dialect has.
+	FunctionNamesRefused map[string]bool
+
 	// FunctionNameIsSourceText makes a definition's name the word as it was
 	// **written** — quotes, backslashes and all — rather than the text the
 	// word comes to. A name nobody could object to is refused when it is

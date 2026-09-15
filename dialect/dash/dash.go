@@ -40,6 +40,22 @@ func Dialect() syntax.Dialect {
 	// And having committed, it checks: a name with punctuation is refused
 	// once the parens close — `Bad function name`.
 	d.FunctionNamePunctuation = false
+	// The same refusal for a name that is perfectly well formed and is a
+	// *special* builtin's. dash's special builtins are the fifteen POSIX
+	// marks special plus `local`; `.` and `:` are two of them and are
+	// already refused by the rule above, so the set holds the other
+	// fourteen. `true`, `read`, `cd` and every other regular builtin are
+	// ordinary names here. The refusal is
+	// while *reading*, so `printf a; export() { :; }; printf b` prints
+	// neither word and `if false; then export() { :; }; fi` is refused as
+	// well. Measured 2026-09-15 on all three routes; see
+	// syntax.Dialect.FunctionNamesRefused (#2932).
+	d.FunctionNamesRefused = map[string]bool{
+		"break": true, "continue": true, "eval": true, "exec": true,
+		"exit": true, "export": true, "local": true, "readonly": true,
+		"return": true, "set": true, "shift": true, "times": true,
+		"trap": true, "unset": true,
+	}
 	// One operator may stand where a case pattern belongs, opening an arm
 	// that matches nothing — measured by running it, not inferred from the
 	// error it causes elsewhere.

@@ -38,3 +38,12 @@ command -v true > /dev/null 2>&1; printf 'command -v a builtin -> %s\n' "$?"
 ( hash -r ) > /dev/null 2>&1; printf 'hash -r -> %s\n' "$?"
 ( hash -t prog ) > /dev/null 2>&1; printf 'hash -t -> %s\n' "$?"
 ( hash -l ) > /dev/null 2>&1; printf 'hash -l -> %s\n' "$?"
+
+# A function may not be *named* after a special builtin. The refusal is a
+# syntax error made while the input is **read**, so nothing at all in this
+# file runs past it — which is why it is the last thing in the file. The top
+# of core/lookup.tests says why the question cannot be asked there; bash/
+# carries the accepting side and ksh/ the other refusing one, at a different
+# stage.
+export() { printf 'fn\n'; }
+printf 'not reached -> %s\n' "$?"

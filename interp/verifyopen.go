@@ -83,6 +83,11 @@ func (r *Runner) reportRefusal(a Action) {
 //
 // A run with no gate takes the first line and nothing else, so its opens are
 // the calls they always were, flags included.
+//
+// The mode is 0666 with this shell's file-creation mask already taken out.
+// The kernel would have done that itself for a shell that kept its mask in
+// the process, and this one does not — a mask is a body's own here, so the
+// masking is done where the mode is chosen. See umaskscope.go.
 func (r *Runner) openGated(ctx context.Context, a *Action, path string, flags int) (*os.File, error) {
 	f, err := r.openGatedFile(ctx, a, path, flags)
 	// Every open this shell makes for a script comes through here, so this is
@@ -94,10 +99,11 @@ func (r *Runner) openGated(ctx context.Context, a *Action, path string, flags in
 }
 
 func (r *Runner) openGatedFile(ctx context.Context, a *Action, path string, flags int) (*os.File, error) {
+	perm := r.createMode(0o666)
 	if r.Gate == nil {
-		return os.OpenFile(path, flags, 0o666)
+		return os.OpenFile(path, flags, perm)
 	}
-	return opened.Verified(path, flags, 0o666, func(reached opened.Reached) error {
+	return opened.Verified(path, flags, perm, func(reached opened.Reached) error {
 		if !r.verifyOpened(ctx, a, reached) {
 			return errRefused
 		}

@@ -1766,15 +1766,16 @@ world-readable, and nothing in the script says so. Every enclosure leaked,
 because every one of them is a fork in a real shell: `x=$( umask 002 )` and
 `umask 002 | cat` were measured leaking too.
 
-**The boundary is reconstructed by putting the mask back, and the line is
+**Putting the mask back reaches four of the seven bodies, and the line is
 drawn at whether the caller is blocked on the body.** A subshell, a command
 substitution, a pipeline element and a shebang-less script each hold their
 caller still: the runner that started the body cannot reach another command
 until the body has ended, so handing the mask back at that moment is exactly
-what the fork did, with no window in between for anything to observe.
+what the fork did, with no window in between for anything to observe. That
+was #2898.
 
 A background job, a coprocess and a process substitution run *beside* their
-caller, and for them this mechanism is not merely incomplete — it is the
+caller, and for them that mechanism is not merely incomplete — it is the
 wrong one. The process has one mask, so it is the shell's mask too for as
 long as such a body holds one, whatever happens at the end; and what the
 body found is stale by the time it could be handed back. Measured with the
@@ -1782,14 +1783,41 @@ release wired into all seven bodies, `cat <(umask 002) >/dev/null` left our
 zsh answering `077` for the rest of the script where real zsh answers `002`
 — a mask restored over a change the shell had made itself, three commands
 later. **A stale value put back over a live one is a worse failure than the
-leak**, so those three keep the leak until the mask can be applied per open
-and per spawn rather than held in the process. See #2949.
+leak.**
+
+**So the mask stopped being held in the process at all** (#2949). It is an
+ordinary field on the Runner, copied by a clone with everything else, and it
+reaches the kernel only at the two points the kernel reads a mask:
+
+- **an open**, where the mode this shell asks for already has the mask taken
+  out of it, so the kernel has nothing left to take away; and
+- **a spawn**, where the child inherits the process's mask at the instant it
+  is forked, so the mask goes onto the process for the length of that call
+  and comes straight off again — under one lock, because the window is the
+  process's rather than any one shell's.
+
+The price is that **the process's own mask is emptied once and stays empty**:
+a mask the kernel was still applying would be a second, invisible floor
+under every mode computed by hand, and `umask 002` inside a body could not
+widen past whatever the shell was started with. The consequence is a rule for
+the rest of the tree — anything that creates a file must take the mask out
+itself, because nothing else will — and a builtin that creates a directory at
+0777 is the case where forgetting is not subtle.
+
+That dissolves the class rather than narrowing it. Two bodies running at once
+never see each other's mask, because neither is looking at the same place; a
+body's mask cannot outlive the body, because nothing outside it ever reads it;
+and there is no window between a body's end and its caller's next command,
+because nothing is handed back.
 
 This is the sharpest instance of the corollary so far, and the one that says
 what its limit is: a boundary can be reconstructed only where the thing on
-either side of it is ours to hold. Where it is the kernel's, the
-reconstruction is an ordering argument about who is running, and it holds
-exactly as far as that ordering does.
+either side of it is ours to hold. Where it is the kernel's, either the
+reconstruction is an ordering argument about who is running — and holds
+exactly as far as that ordering does — or the state has to be taken out of the
+kernel and applied where the kernel would have applied it. The first is
+cheaper and reaches less; the four bodies it reached were the ones whose
+ordering was already a guarantee, and the other three needed the second.
 
 ## A prediction that measurement contradicted
 

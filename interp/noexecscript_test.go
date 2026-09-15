@@ -341,11 +341,11 @@ func TestADescriptorParkedByExecReachesAFileRunAsAScript(t *testing.T) {
 	}
 }
 
-// The umask is the one process-wide hook the script is given, and it is taken
-// back when the script ends — which is what the fork a real shell does would
+// The umask is the one process-wide hook the script is given, and what it
+// sets is the script's own — which is what the fork a real shell does would
 // have arranged for free. Without the hook a `umask 077` in such a script
 // would do nothing and the file it then writes would be world-readable; with
-// it left standing, the caller keeps a mask it never set.
+// the mask left in the process, the caller would keep one it never set.
 func TestAUmaskTheScriptSetsDoesNotOutliveIt(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -374,8 +374,8 @@ func TestAUmaskTheScriptSetsDoesNotOutliveIt(t *testing.T) {
 	if buf.String() != "st=0\n" {
 		t.Errorf("the script: got %q, want %q", buf.String(), "st=0\n")
 	}
-	if mask != 0o022 {
-		t.Errorf("the caller's umask after the script: got %#o, want %#o", mask, 0o022)
+	if held := umaskHeld(t, r); held != 0o022 {
+		t.Errorf("the caller's umask after the script: got %#o, want %#o", held, 0o022)
 	}
 }
 

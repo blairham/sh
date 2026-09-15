@@ -193,7 +193,9 @@ func mapfileRead(r *interp.Runner, key string) ([]byte, bool) {
 // may modify that name.
 //
 // `0666` before the umask, which is what zsh leaves behind: a file created by
-// `mapfile[o]=abc` under the default `022` is `0644`, measured. The value is
+// `mapfile[o]=abc` under the default `022` is `0644`, measured. The mask is
+// taken out here rather than by the kernel, because this shell holds its mask
+// in a field of its own — see interp.Runner.CreationMode. The value is
 // written as given — no newline is appended, so `mapfile[o]="abc"` is a
 // three-byte file.
 //
@@ -207,7 +209,7 @@ func mapfileWrite(r *interp.Runner, key, value string) {
 	// The error is dropped, which is zsh's own answer rather than an
 	// omission: `mapfile[/nosuch/x]=y` writes no diagnostic and leaves `$?`
 	// at 0, because an assignment's status is the assignment's.
-	_ = os.WriteFile(path, []byte(value), 0o666)
+	_ = os.WriteFile(path, []byte(value), r.CreationMode(0o666))
 }
 
 // mapfileRemove unlinks a file, having asked whether the script may modify

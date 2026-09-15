@@ -644,7 +644,12 @@ func fileMkdir(r *interp.Runner, ctx context.Context, flags fileFlags, args []st
 		r.Diagnosef("not enough arguments\n")
 		return 1
 	}
-	mode := fs.FileMode(0o777)
+	// Without `-m` the mask decides, which is the one thing the `-m` path
+	// below deliberately does not let it do. Measured on zsh 5.9.2 under
+	// `umask 022`: `zf_mkdir d` is `drwxr-xr-x` and `zf_mkdir -m 777 d` is
+	// `drwxrwxrwx`. Ours made both 0777, because the chmod that makes the
+	// letter exact was applied to the default too.
+	mode := r.CreationMode(0o777)
 	if flags.haveMode {
 		asked, ok := fileOctalMode(flags.mode)
 		if !ok {
@@ -685,6 +690,11 @@ var errFileRefused = errors.New("refused")
 // mode passed to the system call is masked by the umask and the letter is a
 // statement about the result — measured, `zf_mkdir -m 700 d` is `drwx------`
 // under a umask that would have taken bits off it.
+//
+// The mask still reaches the *parents* `-p` brings into being, which is the
+// one place the creation mode is the final answer. It is taken out here
+// rather than by the kernel, because this shell holds its mask in a field of
+// its own — see interp.Runner.CreationMode.
 func fileMakeDir(r *interp.Runner, ctx context.Context, dir string, mode fs.FileMode, flags fileFlags) error {
 	// Every directory this call would create is asked about, not just the one
 	// the script named: `-p` creates the missing ancestors too, and a policy
@@ -707,10 +717,10 @@ func fileMakeDir(r *interp.Runner, ctx context.Context, dir string, mode fs.File
 			// where fs.ErrExist says `file already exists`.
 			return syscall.EEXIST
 		}
-		if err := os.MkdirAll(dir, 0o777); err != nil {
+		if err := os.MkdirAll(dir, r.CreationMode(0o777)); err != nil {
 			return err
 		}
-	} else if err := os.Mkdir(dir, 0o777); err != nil {
+	} else if err := os.Mkdir(dir, r.CreationMode(0o777)); err != nil {
 		return err
 	}
 	return os.Chmod(dir, mode)

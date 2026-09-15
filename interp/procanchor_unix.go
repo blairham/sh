@@ -38,6 +38,9 @@ func startProcAnchor(argv []string) (*exec.Cmd, *os.File, error) {
 	// process's environment", which is the one thing a placeholder must not
 	// be given.
 	cmd.Env = []string{}
+	// Not through Runner.startMasked: an anchor is a placeholder with no
+	// environment, no output and nothing to run, so there is no file for a
+	// file-creation mask to be about. It is also not a Runner's command.
 	err = cmd.Start()
 	// This shell's copy of the reading end has done its work either way — the
 	// child has it now, or there is no child.

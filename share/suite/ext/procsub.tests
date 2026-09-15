@@ -94,3 +94,13 @@ printf 'beside a here-document: [%s]\n' "$(cat <(printf 'a') - <<'HERE'
 here
 HERE
 )"
+
+# A substitution's body is a fork, so the mask it sets is its own — and this
+# is the body that made "put the mask back at the end" the wrong mechanism
+# (#2949): it runs beside the shell, which has moved on by the time the body
+# ends, so a value handed back then is a mask restored over a live one.
+umask 077
+read maskinside < <(umask 002; umask -S)
+printf 'inside a process substitution [%s], and here still [%s]\n' \
+	"$maskinside" "$(umask -S)"
+umask 022

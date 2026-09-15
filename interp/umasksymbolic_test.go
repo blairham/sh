@@ -266,9 +266,20 @@ func TestAnOrdinaryClauseAsksNothing(t *testing.T) {
 	if buf.String() != "" {
 		t.Errorf("said %q, want an ordinary clause to need no answer", buf.String())
 	}
-	// u=rw,g=r,o= allows 0640, so the mask is its complement.
-	if held != 0o137 {
-		t.Errorf("mask %#o, want %#o", held, 0o137)
+	// Read back through `-S`, which is the spelling no axis hangs off: asking
+	// for the number consults one, and this test is about a shell that has
+	// answered none. `u=rw,g=r,o=` allows 0640, and the mask is its
+	// complement — which is what reading the same clause back says.
+	if got := umaskProbe(t, r, "umask -S"); got != "u=rw,g=r,o=" {
+		t.Errorf("the shell holds %q, want u=rw,g=r,o= — that is %#o", got, 0o137)
+	}
+	if buf.String() != "" {
+		t.Errorf("reading it back said %q, want that to need no answer either", buf.String())
+	}
+	// And the hook was asked for nothing but the emptying of the process's
+	// own mask, which is what hands this shell the 022 it started from.
+	if held != 0 {
+		t.Errorf("the process holds %#o, want it emptied", held)
 	}
 }
 

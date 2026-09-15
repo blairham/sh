@@ -20,8 +20,9 @@ import (
 // exited 0, printed a plausible 0022 from the next `umask`, and left the file
 // world-readable — the mask having been set in a child that then exited.
 //
-// The mask itself lives in the process, not in this package, so the work is
-// done by a hook the caller supplies. See Runner.SetUmask.
+// The mask is this Runner's own, so that a body of this shell has one of its
+// own the way a fork would; it reaches the kernel at an open and at a spawn,
+// through a hook the caller supplies. See Runner.SetUmask and umaskscope.go.
 
 func init() {
 	builtins["umask"] = biUmask
@@ -72,7 +73,8 @@ func biUmask(r *Runner, _ context.Context, args []string) int {
 		}
 		return orDefault(d.UmaskBadOptionStatus, 2)
 	}
-	if r.SetUmask == nil {
+	r.ensureUmask()
+	if !r.maskKnown {
 		// Refused rather than answered from somewhere else. The whole point
 		// of #117 is that a mask this shell cannot change must not look as
 		// though it changed.
@@ -86,12 +88,10 @@ func biUmask(r *Runner, _ context.Context, args []string) int {
 	if code != 0 {
 		return code
 	}
-	// Through setMask rather than the hook, so that a forked body's change
-	// is put back when the body ends. See umaskscope.go.
-	if err := r.setMask(mask); err != nil {
-		r.diagf("umask: %v\n", err)
-		return 1
-	}
+	// Into this shell's own field and nowhere else, so that a body's mask is
+	// the body's: nothing beside it is looking at the same place, and it goes
+	// out with the body. See umaskscope.go.
+	r.umask = mask
 	// bash alone echoes the new mask when it was asked for the symbolic form
 	// and given one to set. Setting without `-S` is silent in all four.
 	if symbolic && r.ask(r.sem().UmaskSetWithSPrints, "`umask -S mask` echoing the mask it set") {
@@ -100,19 +100,14 @@ func biUmask(r *Runner, _ context.Context, args []string) int {
 	return 0
 }
 
-// reportUmask prints the mask without changing it — which takes a set and a
-// set-back, the system call offering no way to ask.
+// reportUmask prints the mask this shell holds.
 //
 // `prefixed` is `-p`: the same figure written as the command that would set
 // it again, which is what makes `eval "$(umask -p)"` a way to put a saved
 // mask back. Only the report takes it — `umask -p 077` is silent, and
 // `umask -p -S 077` prints the bare symbolic form the `-S` echo prints.
 func (r *Runner) reportUmask(symbolic, prefixed bool) int {
-	old, err := r.currentUmask()
-	if err != nil {
-		r.diagf("umask: %v\n", err)
-		return 1
-	}
+	old := r.umask
 	if symbolic {
 		r.printf("%s%s\n", umaskPrefix(prefixed, "umask -S "), symbolicUmask(old))
 		return 0
@@ -158,12 +153,7 @@ func (r *Runner) readMask(arg string) (mask, code int) {
 		}
 		return n, 0
 	}
-	current, err := r.currentUmask()
-	if err != nil {
-		r.diagf("umask: %v\n", err)
-		return 0, 1
-	}
-	n, fail, ok := r.parseSymbolicUmask(arg, current)
+	n, fail, ok := r.parseSymbolicUmask(arg, r.umask)
 	if !ok {
 		if r.unspecified {
 			return 0, r.status
@@ -187,19 +177,6 @@ func (r *Runner) readMask(arg string) (mask, code int) {
 		return 0, orDefault(d.UmaskBadMaskStatus, 1)
 	}
 	return n, 0
-}
-
-// currentUmask reads the mask without changing it, which takes a set and a
-// set-back because the system call offers no way to ask.
-func (r *Runner) currentUmask() (int, error) {
-	old, err := r.SetUmask(0)
-	if err != nil {
-		return 0, err
-	}
-	if _, err := r.SetUmask(old); err != nil {
-		return 0, err
-	}
-	return old, nil
 }
 
 // parseUmask reads an octal mask.

@@ -164,6 +164,17 @@ x=$( umask 002 )
 printf 'after a command substitution [%s]\n' "$(umask -S)"
 umask 002 | cat
 printf 'after a pipeline element [%s]\n' "$(umask -S)"
+
+# Including the ones that run *beside* the shell rather than holding it still.
+# This is the half #2898 could not reach and #2949 did: the mask cannot be
+# handed back at the end of such a body, because the shell has carried on and
+# whatever the body found is stale by then. It is a mask each shell holds for
+# itself instead, applied when a file is made and when a child is forked.
+umask 077
+{ umask 002; : > made4; } &
+wait
+printf 'made in a background job [%s], and the mask here is still [%s]\n' \
+	"$(ls -l made4 | cut -c1-10)" "$(umask -S)"
 umask 022
 
 # `kill` names a signal three ways and they are the same signal. The shell

@@ -139,7 +139,14 @@ func (r *Runner) replaceSelf(ctx context.Context, argv []string) int {
 		// the end of that command had there been an end — a name going away
 		// under an open descriptor is the ordinary case here, not a race.
 		r.cleanUpAtEnd()
+		// And the mask goes onto the process for the same reason it goes on
+		// around a fork: an execve keeps the mask the image had, and this
+		// shell's is not the process's. Taken off again on the way back,
+		// which is only reached when the replacement failed. See
+		// umaskscope.go.
+		releaseMask := r.holdMaskForFork()
 		err := r.ReplaceProcess(path, withArgv0(argv, argv0), r.environ(), r.replacementFiles())
+		releaseMask()
 		// Only reached if the replacement failed, which is the one case where
 		// there is still a shell to report it.
 		//
@@ -175,7 +182,7 @@ func (r *Runner) replaceSelf(ctx context.Context, argv []string) int {
 	// external command.
 	cmd.ExtraFiles = r.childFiles()
 
-	if err := cmd.Start(); err != nil {
+	if err := r.startMasked(cmd); err != nil {
 		if st, ran := r.execImageAsScript(ctx, action, path, argv, cmd.Env, err); ran {
 			return st
 		}

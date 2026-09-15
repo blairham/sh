@@ -341,6 +341,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `expand/tilde-plus-and-minus` | `~+ ~-~~-` | `/ /tmp~~-` | `/ /tmp~~-` | `/ /tmp~~-` | `/ /tmp~~-` | `/ /tmp~/tmp` | `~+ ~-~~-` |
 | `expand/tilde-after-a-colon-in-an-assignment` | `a:H/b:H~:~/q` | `a:H/b:H~:~/q` | `a:H/b:H~:~/q` | `a:H/b:H~:~/q` | `a:H/b:H~:~/q` | `a:H/b:H~:~/q` | `a:H/b:H~:~/q` |
 | `expand/tilde-into-an-expansion-diverges` | `a:~/x` | `a:~/x` | `a:~/x` | `a:~/x` | `a:~/x` | `a:H/x` | `a:~/x` |
+| `expand/tilde-naming-a-named-directory` | `st=2~~nd` **2>** `<shell>: 1: hash: Illegal option -d` | `st=0~~nd` | `st=0~~nd` | `st=0~~nd` | **2>** `alias: -d: bad option(s)` *(status 1)* | `st=0~/tmp` | `st=2~~nd` **2>** `<shell>: hash: line 0: illegal option -d` |
+| `expand/tilde-naming-a-user-with-no-entry` | `~nosuchuser12345~st=0` | `~nosuchuser12345~st=0` | `~nosuchuser12345~st=0` | `~nosuchuser12345~st=0` | `~nosuchuser12345~st=0` | **2>** `<shell>:1: no such user or named directory: nosuchuser12345` *(status 1)* | `~nosuchuser12345~st=0` |
 | `param/bare-brace-in-an-unquoted-operand` | `[{a,q.z}]` | `[{a,q.z}]` | `[{a,q.z}]` | `[{a,q.z}]` | `[a.z][q.z]` | `[a.z][q.z]` | `[{a,q.z}]` |
 | `param/bare-brace-in-an-operand-with-nothing-to-expand` | `[a{bc}]` | `[a{bc}]` | `[a{bc}]` | `[a{bc}]` | `[a{b}c]` | `[a{b}c]` | `[a{bc}]` |
 | `param/bare-brace-in-a-quoted-operand` | `[qc}]` | `[qc}]` | `[qc}]` | `[qc}]` | `[qc}]` | `[qc}]` | `[qc}]` |
@@ -942,6 +944,14 @@ grades it and nothing drift-checks it either, for the same reason.
 - `expand/tilde-into-an-expansion-diverges` — a tilde whose segment runs into an expansion stays literal in three of the four; zsh alone expands it and then appends the value
   ```sh
   u=/x; v=a:~$u; echo "$v" | sed "s|$HOME|H|g"
+  ```
+- `expand/tilde-naming-a-named-directory` — a **named directory**: a table the shell owns, written by `hash -d` and read back by `~name`, which needs nothing from the operating system. zsh alone has it and answers `/tmp`; bash has the letter and means `forget one hashed name` by it, so the assignment is a name it has not got and the tilde stays as written; ksh93's `hash` is an alias for `alias -t --`, where a bad option is fatal and takes the line with it; dash has no such letter at all. This shell answered `bad option: -d` in the zsh column and left `~nd` as written (#2191)
+  ```sh
+  hash -d nd=/tmp; echo "st=$?"; echo ~nd
+  ```
+- `expand/tilde-naming-a-user-with-no-entry` — what a `~name` the user database has no entry for costs. bash, bash 3.2, bash-as-sh, ksh93 and dash leave the word exactly as written at status 0; zsh refuses it — `no such user or named directory` — and the refusal ends the line, so the `echo` behind it never runs. The *hit* is deliberately not recorded here: `~root` is `/var/root` on this machine and `/root` on a Linux one, so a row naming a real user would pin the machine rather than the shell. See `expand/tilde-naming-a-named-directory` for the half that is a table the shell owns
+  ```sh
+  echo ~nosuchuser12345; echo "st=$?"
   ```
 - `param/bare-brace-in-an-unquoted-operand` — where an unquoted expansion *ends* when a bare `{` stands in its operand, which the panel splits two against three: zsh and ksh93 take the brace as opening a level, so the operand runs to `.z` and the group is then expanded into the two fields `a.z` and `q.z`, while bash, that build as `sh`, bash 3.2 and dash end the expansion at the first `}` and read `.z}` as two more characters of the word, giving the one field `{a,q.z}`. Ours gave zsh's answer in every dialect until this was a `syntax.Dialect` flag (#1587)
   ```sh

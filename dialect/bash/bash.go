@@ -1061,6 +1061,14 @@ func Semantics() interp.Semantics {
 	s.ReplacementEmptyMatchDeclined = interp.EmptyMatchDeclinedAtTheEnd
 	s.StatusArgument = interp.StatusArgNumeric
 	s.TraceAssignmentsSeparately = interp.Yes
+	// A traced array literal is the words the script wrote, not what they
+	// came to: `x="p q"; a=("$x" r)` is `a=("$x" r)` here, and the ordering
+	// says so too — `a=($(echo x))` is traced and *then* the substitution
+	// runs. Both builds agree.
+	s.TraceArrayLiteralShowsTheExpandedElements = interp.No
+	// And the subscript is the text as written: `i=2; a[$i]=v` is
+	// `a[$i]=v`, and so is `a[i]=v`.
+	s.TraceElementSubscriptIsEvaluated = interp.No
 	// bash reports success if it signaled anything at all, where the others
 	// count failures one way or another.
 	s.ExitTrapRunsOnSignalDeath = interp.Yes

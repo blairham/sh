@@ -836,6 +836,15 @@ func Semantics() interp.Semantics {
 	// is 0.5.
 	s.ArithNegativeExponentIsError = interp.No
 	s.ArrayScalarIsTheWholeArray = interp.Yes
+	// A traced array literal shows what its elements came to: `x="p q";
+	// a=("$x" r)` is `a=( 'p q' r )` here. The unquoted `a=($x)` is
+	// `a=( 'p q' )` — one element, because nothing here splits an unquoted
+	// parameter — which is this column's own expansion in its own trace.
+	s.TraceArrayLiteralShowsTheExpandedElements = interp.Yes
+	// The subscript is not resolved, though: `i=2; a[$i]=v` is `a[$i]=v`
+	// here where ksh93 writes `a[2]=v`. That pair is why the two are
+	// separate axes.
+	s.TraceElementSubscriptIsEvaluated = interp.No
 	// Asked only under `ksharrays`, which is what makes a bare name one
 	// element here: a table is read as an ordered list, so the element is the
 	// first value in the order this shell lists rather than the one keyed `0`

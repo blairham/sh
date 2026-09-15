@@ -50,6 +50,13 @@ func testSemantics() Semantics {
 	// on the way to something else need an answer rather than a refusal.
 	s.RedirectsUseEveryTarget = No
 
+	// What a traced assignment shows of its own elements and of its
+	// subscript. The words as written, which is the reading a suite tracing
+	// an array on its way to something else was written against; the suite
+	// that is *about* them answers both sides (#1959).
+	s.TraceArrayLiteralShowsTheExpandedElements = No
+	s.TraceElementSubscriptIsEvaluated = No
+
 	// The hexadecimal escape's two readings. `$'a\x1bb'` has three digits
 	// after the `\x`, so a snippet writing a control character that way
 	// reaches the first of them on the way to something else — the

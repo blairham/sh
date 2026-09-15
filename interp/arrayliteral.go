@@ -77,6 +77,11 @@ type literalElem struct {
 // but one dialect; see [Runner.literalReadsSubscripts], which is the whole of
 // what decides it and where it is measured.
 func (r *Runner) literalElems(elems []*syntax.Word, readsSubscripts bool) ([]literalElem, bool) {
+	if parsed, ok := r.takeExpandedElements(elems); ok {
+		// Already expanded, by the caller that is about to trace what they
+		// came to. See Runner.assignAll.
+		return parsed, true
+	}
 	out := make([]literalElem, 0, len(elems))
 	for _, w := range elems {
 		// Asked before the element is read rather than after it, so that an
@@ -96,6 +101,39 @@ func (r *Runner) literalElems(elems []*syntax.Word, readsSubscripts bool) ([]lit
 		out = append(out, literalElem{fields: r.expandWord(w)})
 	}
 	return out, !r.failedHeading()
+}
+
+// takeExpandedElements is an element list somebody has already expanded for
+// this very assignment, and it may be taken exactly once.
+//
+// The identity of the *slice* is what matches, not the name or the length: the
+// list handed over came out of this assignment's own tree, so the words are
+// the same words. A nested literal reached while this assignment is under way
+// carries a list of its own and does not match, which is what the identity
+// check is for — comparing by name would have handed the outer list to
+// `a=(p q)`'s namesake inside a substitution.
+//
+// Marked taken on the way out rather than cleared, because the trace may still
+// be waiting for it: a dialect that writes one line for a whole assignment
+// list cannot write it until the last value is known, which is after every
+// store has run. The mark is what keeps a *nested* literal with no elements in
+// it — the one shape whose slice cannot be told from the cached one — from
+// taking the outer list a second time.
+func (r *Runner) takeExpandedElements(elems []*syntax.Word) ([]literalElem, bool) {
+	e := r.expanded
+	if e == nil || !e.elemsSet || e.elemsTaken || !sameWordList(e.assign.Elems, elems) {
+		return nil, false
+	}
+	e.elemsTaken = true
+	return e.elems, true
+}
+
+// sameWordList reports whether two element lists are the same slice.
+func sameWordList(a, b []*syntax.Word) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	return len(a) == 0 || &a[0] == &b[0]
 }
 
 // literalReadsSubscripts reports whether this compound literal's elements name

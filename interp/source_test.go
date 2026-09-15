@@ -56,6 +56,13 @@ func permissive() Semantics {
 	// see exportedcompound_test.go (#1380).
 	s.ExportedCompoundReachesAChildAsItsFirstValue = No
 	s.SubscriptedOperandCarriesTheAttributes = Yes
+	// What a traced assignment shows of its own elements and its subscript,
+	// at bash's answers — the words as written, which is what every suite
+	// here that merely traces an array on its way to something else expects.
+	// The suite that is *about* them sets both sides; see
+	// interp/xtracearrayvalue_test.go (#1959).
+	s.TraceArrayLiteralShowsTheExpandedElements = No
+	s.TraceElementSubscriptIsEvaluated = No
 	// `readonly`'s kind letters, which POSIX does not give it and two of the
 	// panel's shells refuse outright — see Semantics.ReadonlyOptions. A suite
 	// asking what `readonly -a` *does* needs the letter to exist first, and

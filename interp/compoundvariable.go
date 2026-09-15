@@ -373,11 +373,31 @@ func (r *Runner) expandWordAsAssignment(w *syntax.Word) []string {
 // A copy of the node rather than the node itself: the tree is the program and
 // a runner must not write to it — the same literal may be run again by a loop
 // or a function, and a name rewritten in place would be prefixed twice.
+// A compound literal is traced as the assignments its body performs rather
+// than as the parentheses it was written with, and this is where that happens:
+// `set -x; c=(a=1 b=2)` writes `+ c.a=1` and `+ c.b=2`, measured on ksh93u+
+// 2012-08-01, 2026-09-14. A member's own name is the traced one, prefix and
+// all, so a nested body writes `c.b.y=2`.
+//
+// It is a correction rather than an axis, for the reason every rule about this
+// construct is: one dialect in the panel has a fourth kind, so there is no
+// second answer to choose between.
+//
+// The consequence worth naming is the one #1959 measured from the other end:
+// `set -x; b=(); echo after` writes **nothing** for the assignment there,
+// where bash writes `b=()` and zsh writes `b=( )`. That is not a rule about
+// an empty array literal — `b=()` is an empty *compound* in that shell, so it
+// performs no assignments and there is nothing to trace. A reading that
+// special-cased the empty literal would have written one line for
+// `c=(a=1 b=2)` and passed the row it was measured from.
 func (r *Runner) assignCompoundMember(ctx context.Context, prefix string, m *syntax.Assign) {
 	cp := *m
 	cp.Name = prefix + strings.TrimPrefix(m.Name, memberSep)
 	cp.Operand = false
-	r.assign(ctx, &cp)
+	// Through assignAll rather than assign, which is the one line that makes
+	// the member traceable: the trace belongs to the *list* of assignments a
+	// command carries, and a member is a list of one.
+	r.assignAll(ctx, []*syntax.Assign{&cp})
 }
 
 // memberOfACompoundVariable reports whether the name is stored inside one.

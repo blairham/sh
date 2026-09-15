@@ -1790,6 +1790,65 @@ type Semantics struct {
 	// TraceAssignmentsSeparately gives each assignment of `a=1 b=2` its own
 	// trace line. True in bash and ksh93; dash and zsh put them on one.
 	TraceAssignmentsSeparately Answer
+	// TraceArrayLiteralShowsTheExpandedElements prints what an array
+	// literal's elements came to rather than the words the script wrote.
+	//
+	// Measured 2026-09-14, `set -x; x="p q"; a=("$x" r)`:
+	//
+	//	bash 5.3.15, bash 3.2   a=("$x" r)      the words as written
+	//	ksh93u+, zsh 5.9.2      a=( 'p q' r )   the elements, quoted
+	//
+	// Each column shows its *own* expansion, which is what makes this one
+	// axis and not a rendering rule: `x="p q"; a=($x)` unquoted is
+	// `a=( p q )` in ksh93, where the field splitting made two, and
+	// `a=( 'p q' )` in zsh, where nothing splits an unquoted parameter.
+	//
+	// The **ordering** moves with it and is the reason this cannot be done in
+	// the printing. Measured at the same time, `set -x; a=($(echo x))`: bash
+	// traces `a=($(echo x))` and *then* runs the substitution, where ksh93
+	// runs it first and traces `a=( x )`. So the shell that prints the values
+	// has expanded them before it writes the line — which is where the
+	// element list has to be expanded, once, by whoever is about to store it.
+	// Expanding again to print would run the substitution twice with both
+	// sets of side effects, the double run #1915 fixed for a scalar's value.
+	//
+	// Asked only where an array literal is being traced, which is why dash
+	// and ash — neither of which has one — leave it unanswered.
+	//
+	// One shape in the same family is measured and deliberately not modeled:
+	// a **subscripted** literal is traced as element assignments in ksh93,
+	// one line each — `set -x; a=([2]=c [0]=a)` is `+ a[2]=c` and `+ a[0]=a`
+	// there, and `typeset -A m=([k]=v)` is `+ m[k]=v` then `+ typeset -A m`.
+	// That is a different construct rather than a different rendering of this
+	// one; see #2857.
+	TraceArrayLiteralShowsTheExpandedElements Answer
+	// TraceElementSubscriptIsEvaluated prints the subscript of `a[$i]=v` as
+	// the number or the key it resolved to, rather than as the text.
+	//
+	// Measured 2026-09-14, and it splits the panel differently from the axis
+	// above — which is what makes it a second question rather than a reading
+	// of the same one:
+	//
+	//	written                bash 5.3, bash 3.2, zsh 5.9.2   ksh93u+
+	//	i=2; a[$i]=v           a[$i]=v                         a[2]=v
+	//	i=2; a[i]=v            a[i]=v                          a[2]=v
+	//	i=2; a[$i+1]=v         a[$i+1]=v                       a[3]=v
+	//	typeset -A m; m[k$x]=v m[k$x]=v                        m[k]=v
+	//
+	// The last row is why the value is "what the assignment resolved" rather
+	// than "the arithmetic": a table's subscript is a key, and the key is the
+	// expanded text. zsh expands its elements and does *not* resolve its
+	// subscript, which is the pair that says the two axes are independent.
+	//
+	// Resolved once, and the trace takes that resolution rather than making
+	// its own. Measured: `set -x; i=0; a[i++]=v; echo "i=$i"` leaves `i` at
+	// **1** in ksh93, and `set -x; a[$(echo 1)]=v` runs `echo 1` before the
+	// trace line rather than after it — so the subscript is resolved, then
+	// the line is written, then the element is stored.
+	//
+	// Asked only for a subscripted assignment being traced, so the two
+	// columns with no subscript at all leave it unanswered.
+	TraceElementSubscriptIsEvaluated Answer
 	// TraceShowsItsOwnDisabling prints `set +x` before acting on it. True in
 	// dash, bash and zsh; ksh93 applies the change first, so the command
 	// that stops tracing leaves no trace of itself.

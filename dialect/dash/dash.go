@@ -256,6 +256,13 @@ func Semantics() interp.Semantics {
 	// counts, -d, -t, -u) is refused as unknown here.
 	s.ReadOptions = "rp:"
 	// dash has the two POSIX letters and calls anything else illegal.
+	// unanswered TraceArrayLiteralShowsTheExpandedElements: there is no
+	// array literal to trace. Measured 2026-09-14, `a=(1 2)` is `Syntax
+	// error: "(" unexpected` at 2 — the parenthesis, not the assignment — so
+	// no line of this shape ever reaches a trace (#1959).
+	// unanswered TraceElementSubscriptIsEvaluated: nor a subscript. `a[1]=v`
+	// is an ordinary word here, assigned to a variable literally named
+	// `a[1]`, so there is nothing for the trace to resolve.
 	// unanswered ArithFloatOverflowIsZero: dash has no floats, so `1e400` is
 	// not a number out of range but a word its arithmetic cannot read at
 	// all. Measured 2026-09-14, `$((1e400))` is `arithmetic expression:

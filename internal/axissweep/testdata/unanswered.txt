@@ -164,6 +164,8 @@ ash   TableLetterReachesItsOwnOperandsSubscript
 ash   TableUnderAnArrayDeclaration
 ash   TableUnderAnArrayLiteralDeclaration
 ash   TestAndArithmeticUpdatePipelineStatus
+ash   TraceArrayLiteralShowsTheExpandedElements
+ash   TraceElementSubscriptIsEvaluated
 ash   TransformLetterCheckedOnlyWhenValued
 ash   TwoCaseLettersOnOneDeclarationCancel
 ash   TypeFSaysTheFunctionBack
@@ -354,6 +356,8 @@ dash  TableLetterReachesItsOwnOperandsSubscript
 dash  TableUnderAnArrayDeclaration
 dash  TableUnderAnArrayLiteralDeclaration
 dash  TestAndArithmeticUpdatePipelineStatus
+dash  TraceArrayLiteralShowsTheExpandedElements
+dash  TraceElementSubscriptIsEvaluated
 dash  TransformLetterCheckedOnlyWhenValued
 dash  TwoCaseLettersOnOneDeclarationCancel
 dash  TypeFSaysTheFunctionBack

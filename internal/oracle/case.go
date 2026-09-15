@@ -4767,12 +4767,17 @@ printf "[alive]\n"`,
 	{
 		ID: "xtrace/array-literal-elements-diverge", Category: "shell options",
 		Snippet: `set -x; x="p q"; a=("$x" r)`,
-		Why:     "the deeper half of the same split: bash prints the element words as written, quotes and all, where ksh93 and zsh print what they expanded to. It follows from *when* each traces — bash writes the line before the expansion and the other two after it, which `set -x; a=($(echo x))` shows by the order of the two lines. Recorded and not modeled: expanding the elements to print them would expand them twice, with both sets of side effects, which is the double run #1915 fixed for a scalar's value (#1959)",
+		Why:     "the deeper half of the same split: bash prints the element words as written, quotes and all, where ksh93 and zsh print what they expanded to. It follows from *when* each traces — bash writes the line before the expansion and the other two after it, which `set -x; a=($(echo x))` shows by the order of the two lines. So the elements have to be expanded **once**, by whoever is about to store them, and handed to the trace the way a scalar's value already is; expanding them again to print would run both sets of side effects, which is the double run #1915 fixed. See Semantics.TraceArrayLiteralShowsTheExpandedElements (#1959)",
+	},
+	{
+		ID: "xtrace/a-compound-literal-traces-its-members", Category: "shell options",
+		Snippet: `set -x; c=(a=1 b=2); echo after`,
+		Why:     "the row that explains the one below it. ksh93 traces a compound literal as the assignments its body performs — `+ c.a=1` and `+ c.b=2`, two lines — rather than as the parentheses it was written with, which is why the *empty* one beside it traces nothing: an empty body performs no assignments. The other four columns have no compound at all and read the same parentheses as an array literal of the two strings `a=1` and `b=2`, tracing it as one line in each column's own spelling. So the pair is what says the empty literal's silence is a fact about the fourth kind and not a third answer about array literals (#1959)",
 	},
 	{
 		ID: "xtrace/empty-array-literal-diverges", Category: "shell options",
 		Snippet: `set -x; b=(); echo after`,
-		Why:     "ksh93 traces nothing at all for an empty literal — not `b=()` and not `b=( )` — where bash and zsh each trace it in their own spelling. A third answer on the same construct, recorded rather than modeled (#1959)",
+		Why:     "ksh93 traces nothing at all for an empty literal — not `b=()` and not `b=( )` — where bash and zsh each trace it in their own spelling. It is **not** a third answer about array literals, which is what this row was filed as: `b=()` is an empty *compound variable* in that shell, and a compound literal is traced as the assignments its body performs — `c=(a=1 b=2)` is two lines there, `+ c.a=1` and `+ c.b=2`. An empty body performs none, so there is nothing to write. A reading that special-cased the empty literal would have passed this row and written one line for the row beside it (#1959)",
 	},
 	{
 		ID: "xtrace/element-assignment-keeps-its-subscript", Category: "shell options",
@@ -4782,7 +4787,7 @@ printf "[alive]\n"`,
 	{
 		ID: "xtrace/element-subscript-spelling-diverges", Category: "shell options",
 		Snippet: `set -x; i=2; a[$i]=v`,
-		Why:     "two against one on which subscript is printed: bash and zsh print what was written and ksh93 prints what it came to. The majority reading is what this shell does, and it is also the only one that costs nothing — evaluating the subscript to print it would evaluate it twice, so `a[$((i++))]=v` would increment twice (#1959)",
+		Why:     "two against one on which subscript is printed: bash and zsh print what was written and ksh93 prints what it came to. The split is not the one above it — zsh prints its *elements* expanded and its subscript as written — which is what makes them two axes. The resolved reading takes the number the **store** worked out rather than making one of its own, so `a[$((i++))]=v` still increments once; the consequence is that the line waits for the assignment, and a refused one leaves no line at all. See Semantics.TraceElementSubscriptIsEvaluated (#1959)",
 	},
 	{
 		ID: "xtrace/append-assignment-keeps-its-operator", Category: "shell options",

@@ -24,6 +24,11 @@ func Dialect() syntax.Dialect {
 	// And a body's newlines are lines of the program: `$LINENO` after a
 	// two-line body reads one more than the physical line.
 	d.AliasBodyCountsLines = true
+	// A backslash an alias body ends with reaches the newline after the
+	// alias word, where it is an ordinary line continuation and joins the
+	// next line to the word. zsh and bash 3.2 are the columns that do not.
+	// See syntax.Dialect.AliasBodyBackslashJoinsTheNextLine (#2710).
+	d.AliasBodyBackslashJoinsTheNextLine = true
 	// A subscript written at command position runs to its matching `]`:
 	// `m[foo bar]=v` is the element keyed `foo bar`, read back here as
 	// `typeset -A m=(['foo bar']=v)`. Measured 2026-09-12 on 93u+ beside

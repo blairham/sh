@@ -119,6 +119,11 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 	if got, want := s.UnknownCharacterClass, interp.UnknownClassIsInert; got != want {
 		t.Errorf("UnknownCharacterClass = %v, want %v", got, want)
 	}
+	// And the `[:` that nothing closes, which is the axis beside it
+	// rather than a corner of it — see #1431.
+	if got, want := s.UnterminatedCharacterClass, interp.UnterminatedClassIsOrdinaryCharacters; got != want {
+		t.Errorf("UnterminatedCharacterClass = %v, want %v", got, want)
+	}
 	if got, want := s.BackgroundJobInput, interp.BackgroundJobInputIsTheShells; got != want {
 		t.Errorf("BackgroundJobInput = %v, want %v", got, want)
 	}

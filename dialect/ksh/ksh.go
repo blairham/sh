@@ -1087,6 +1087,9 @@ func Semantics() interp.Semantics {
 	// against two.
 	s.GlobListsDotAndDotDot = interp.Yes
 	s.UnknownCharacterClass = interp.UnknownClassEmptiesTheBracket
+	// `[[:]` makes the whole bracket match nothing, wherever the `[:` stands — the same shape this shell gives a class name it has not got.
+	// See interp.Semantics.UnterminatedCharacterClass (#1431).
+	s.UnterminatedCharacterClass = interp.UnterminatedClassEmptiesTheBracket
 	// A value's backslash is **data**, and the metacharacter behind it stays
 	// live — this shell against the other five. Measured 2026-09-12 in a
 	// directory holding `a\b` and `a*`, `v='a\*'; set -- $v` matches `a\b`

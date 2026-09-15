@@ -204,6 +204,9 @@ func Semantics() interp.Semantics {
 	// unanswered IgnoredNamesMatchTheLastComponent: see above.
 	// unanswered IgnoredNamesFollowTheParameter: see above.
 	s.UnknownCharacterClass = interp.UnknownClassIsInert
+	// `[[:]` takes the `]` as part of the name it is still looking for, so the bracket never ends and UnterminatedBracket decides: `${w#[[:]}` on `[:y` is `y` here, a literal `[` and then `[:]` matching the colon, where every other column matches nothing.
+	// See interp.Semantics.UnterminatedCharacterClass (#1431).
+	s.UnterminatedCharacterClass = interp.UnterminatedClassSwallowsTheClosingBracket
 	// `$(( ))` with nothing in it is 0 at status 0, where dash wants a
 	// primary and stops the script.
 	s.EmptyArithExpressionIsAnError = interp.No

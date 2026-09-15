@@ -1002,6 +1002,9 @@ func Semantics() interp.Semantics {
 	s.ErrexitSeesPipefailFailure = interp.Yes
 	s.UnterminatedBracket = interp.BracketLiteral
 	s.UnknownCharacterClass = interp.UnknownClassIsInert
+	// `[[:]` is a bracket holding `[` and `:`: nothing closes the name, so there is no name and the two characters are ordinary members.
+	// See interp.Semantics.UnterminatedCharacterClass (#1431).
+	s.UnterminatedCharacterClass = interp.UnterminatedClassIsOrdinaryCharacters
 	// A backslash that arrived in a value takes the metacharacter status off
 	// what follows it and stays in the text itself: measured 2026-09-12 in a
 	// directory holding `a\b` and `a*`, `v='a\*'; set -- $v` is the word

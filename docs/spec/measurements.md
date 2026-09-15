@@ -17203,6 +17203,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `pat/a-class-name-this-shell-has-not-got` | `a=Y b=n q=n ` | `a=Y b=Y q=n ` | `a=Y b=Y q=n ` | `a=Y b=n q=n ` | `a=n b=n q=n ` | `a=Y b=Y q=n ` | `a=Y b=Y q=n ` |
 | `pat/an-unknown-class-name-after-a-known-one` | `a=Y A=Y b=n a=n q=n a=n q=n ` | `a=Y A=Y b=Y a=Y q=n a=n q=Y ` | `a=Y A=Y b=Y a=Y q=n a=n q=Y ` | `a=Y A=Y b=n a=n q=n a=n q=n ` | `a=n A=n b=n a=n q=n a=n q=n ` | `a=Y A=Y b=Y a=Y q=n a=n q=Y ` | `a=Y A=Y b=Y a=Y q=n a=n q=Y ` |
 | `pat/an-empty-class-name-is-an-unknown-one` | `a=Y b=n a=Y b=n ` | `a=Y b=Y a=Y b=Y ` | `a=Y b=Y a=Y b=Y ` | `a=Y b=n a=Y b=n ` | `a=n b=n a=n b=n ` | `a=Y b=Y a=Y b=Y ` | `a=Y b=Y a=Y b=Y ` |
+| `pat/an-unterminated-class-and-the-two-characters-it-opened-with` | `[:x][[:y]` | `[x][:y]` | `[x][:y]` | `[x][[:y]` | `[:x][[:y]` | `[x][:y]` | `[:x][y]` |
+| `pat/a-member-written-before-a-class-that-never-closes` | `[b][ba]` | `[b][a]` | `[b][a]` | `[ab][a]` | `[ab][ba]` | `[b][a]` | `[ab][ba]` |
+| `pat/a-class-that-never-closes-takes-the-closing-bracket` | `[[:]z]` | `[[:]z]` | `[[:]z]` | `[[:]z]` | `[[:]z]` | `[[:]z]` | `[z]` |
 | `pat/a-class-that-never-closes-is-not-one` | `[cape[X]` | `[cape[X]` | `[cape[X]` | `[cape[X]` | `[cape[X]` | `[X]` | `[cape[X]` |
 | `pat/a-bash-closure-over-a-class-is-a-different-operator` | `[abX]` | `[]` | `[]` | `[]` | `[]` | `[abX]` | `[abX]` |
 | `pat/an-anchored-closure-over-a-class-in-a-replacement` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[  a  ]` **2>** `<shell>: line 1: [${(M)v##(#s)[[:space:]]##}]: bad substitution` *(status 1)* | `[  a  ]` **2>** `<shell>: line 1: [${(M)v##(#s)[[:space:]]##}]: bad substitution` *(status 127)* | `[  a  ]` **2>** `<shell>: [${(M)v##(#s)[[:space:]]##}]: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `(' unexpected` *(status 3)* | `[a]~[  ]` | `[  a  ]` **2>** `<shell>: syntax error: bad substitution` *(status 2)* |
@@ -17927,6 +17930,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `pat/an-empty-class-name-is-an-unknown-one` — `[::]` is a class whose name is nothing at all, and every column answers it exactly as it answers a name it does not recognize — the two halves are side by side so the record shows the agreement rather than asserting it. Worth pinning because the empty name is the spelling a reader would expect to be a special case, and it is not one anywhere
   ```sh
   t() { eval "case \"\$2\" in ($1) printf Y;; *) printf n;; esac"; }; for s in a b; do printf "%s=" "$s"; t "[a[::]b]" "$s"; printf " "; done; for s in a b; do printf "%s=" "$s"; t "[a[:nope:]b]" "$s"; printf " "; done; echo
+  ```
+- `pat/an-unterminated-class-and-the-two-characters-it-opened-with` — a `[:` with no `:]` after it holds no class name, and what the four characters of `[[:]` are instead is a five-way split. bash 5.3 and zsh read them as a bracket holding `[` and `:` and trim both fields to `x` and `:y`; dash and ksh93 match neither and leave both alone; BusyBox ash matches the `[` and not the `:`, because it takes the `]` as part of the name it is still looking for — so what is left is a literal `[` and a `[:]` behind it — and bash 3.2 matches the `:` and not the `[`, which is a reading no dialect preset is. Both fields are needed: either one alone merges two of the columns. The panic this used to be is #1409's; the divergence left after it is #1431's
+  ```sh
+  v=":x"; w="[:y"; printf "[%s][%s]" "${v#[[:]}" "${w#[[:]}"; echo
+  ```
+- `pat/a-member-written-before-a-class-that-never-closes` — the pair that separates the three refusing columns from each other, which the row above cannot: does a member written *before* the unterminated `[:` still match, and does one written after it? dash answers the first and not the second — the scan gives up where the `[:` stands, exactly as it does at a class name dash has not got — ksh93 answers neither, emptying the whole bracket, and BusyBox ash answers neither for a third reason, having no terminated bracket at all. bash 5.3 and zsh answer both, the two characters being ordinary members. bash 3.2 answers the second and not the first, which is the column that fits nowhere
+  ```sh
+  v="ab"; w="ba"; printf "[%s][%s]" "${v#[a[:]}" "${w#[[:b]}"; echo
+  ```
+- `pat/a-class-that-never-closes-takes-the-closing-bracket` — the row only one column answers, and the one that says BusyBox ash's reading is the `]` being swallowed rather than a third kind of miss: with the bracket never terminated, `[[:]]` is a literal `[`, a bracket holding the colon, and a literal `]` — three things where every other column has one — so ash trims `[:]` and prints `[z]`. The other six leave the value alone. Without it, ash's answer to the two rows above is indistinguishable from a bracket that simply matched nothing
+  ```sh
+  v="[:]z"; printf "[%s]" "${v#[[:]]}"; echo
   ```
 - `pat/a-class-that-never-closes-is-not-one` — the other end of the same scan: `[:` with no `:]` after it is not a class, so the bracket is the ordinary one holding `[`, `:`, `s`, `p`, `a`, `c` and `e` — and the closure repeats *that*. The shell with closures prints `[X]`, having taken all six of `cape[`; the rest leave the value alone, having no closure to read. It is the row that says the class case is a special reading and not the only reading, which a scan that swallowed the rest of the pattern on a missing `:]` would fail while every well-formed class still passed
   ```sh

@@ -385,6 +385,9 @@ func Semantics() interp.Semantics {
 	// unanswered IgnoredNamesMatchTheLastComponent: see above.
 	// unanswered IgnoredNamesFollowTheParameter: see above.
 	s.UnknownCharacterClass = interp.UnknownClassEndsTheScan
+	// `[[:]` stops the bracket where the `[:` stands: a member written before it still matches and nothing after it does — the same shape this shell gives a class name it has not got.
+	// See interp.Semantics.UnterminatedCharacterClass (#1431).
+	s.UnterminatedCharacterClass = interp.UnterminatedClassEndsTheScan
 	// The bash column's reading of a value's backslash, measured the same
 	// way and on the same day: `v='a\*'; set -- $v` is `a\*` here, so the
 	// `*` behind the backslash is not a metacharacter (#1367).

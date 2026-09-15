@@ -1733,6 +1733,32 @@ type Semantics struct {
 	// The class is properly closed here, which is what makes this a question
 	// of its own rather than part of #1431's unterminated `[:`.
 	UnknownCharacterClass UnknownClassPolicy
+	// UnterminatedCharacterClass is what a bracket does with a `[:` that
+	// nothing closes — `[[:]`, whose four characters hold no class name at
+	// all because the `:]` that would end one never arrives.
+	//
+	// A question of its own rather than a corner of UnknownCharacterClass
+	// above, and the panel says so: bash 3.2 answers the two shapes
+	// differently, so an implementation that folded them would be asserting
+	// an identity one column already contradicts. The four that are a
+	// dialect happen to agree between the two, which is measured here rather
+	// than assumed.
+	//
+	// Five readings, measured 2026-09-15 with prefix trims so that what
+	// matched is visible as text:
+	//
+	//	pattern  subject  bash 5.3  dash  ksh93  zsh  ash  bash 3.2
+	//	[[:]     :x       Y         n     n      Y    n    Y
+	//	[[:]     [:y      Y         n     n      Y    Y    n
+	//	[a[:]    ab       Y         Y     n      Y    n    n
+	//	[[:b]    ba       Y         n     n      Y    n    Y
+	//	[a[:]    :z       Y         n     n      Y    n    Y
+	//
+	// The values carry what each column is doing; see
+	// [UnterminatedClassPolicy]. bash 3.2 is the row nobody has a value for
+	// and no dialect preset is it, so it is recorded rather than named — the
+	// same treatment [EndOfInputBackslash] gives that column (#1431).
+	UnterminatedCharacterClass UnterminatedClassPolicy
 	// TraceAssignmentsSeparately gives each assignment of `a=1 b=2` its own
 	// trace line. True in bash and ksh93; dash and zsh put them on one.
 	TraceAssignmentsSeparately Answer
@@ -14402,6 +14428,77 @@ const (
 	UnknownClassEmptiesTheBracket
 )
 
+// UnterminatedClassPolicy is what a bracket does with a `[:` that nothing
+// closes. See [Semantics.UnterminatedCharacterClass] for the panel.
+//
+// A type of its own with four answers, for the reason [BracketPolicy] is one:
+// none of them is a variation on the others, and a wider Answer would let any
+// of them be assigned to an axis that is genuinely binary.
+type UnterminatedClassPolicy int
+
+const (
+	// UnterminatedClassUnspecified is no answer, and is refused like any
+	// other — but only where a pattern really holds one, which is what keeps
+	// an ordinary `[abc]` off the question.
+	UnterminatedClassUnspecified UnterminatedClassPolicy = iota
+
+	// UnterminatedClassIsOrdinaryCharacters reads the `[` and the `:` as
+	// members like any other, so `[[:]` is a bracket holding those two
+	// characters. bash 5.3, bash as `sh` and zsh 5.9.2 — and it is what the
+	// panic fixed in #1409 left behind, the reading this shell gave in every
+	// dialect.
+	UnterminatedClassIsOrdinaryCharacters
+
+	// UnterminatedClassEndsTheScan stops the bracket where the `[:` stands:
+	// a member written before it still matches and nothing after it does,
+	// exactly as [UnknownClassEndsTheScan] does for a name this shell has
+	// not got. dash.
+	UnterminatedClassEndsTheScan
+
+	// UnterminatedClassEmptiesTheBracket makes the whole bracket match
+	// nothing, wherever the `[:` stands and whatever else is in it. ksh93u+.
+	UnterminatedClassEmptiesTheBracket
+
+	// UnterminatedClassSwallowsTheClosingBracket takes the `]` as part of
+	// the name it is still looking for, so the bracket expression never ends
+	// and what the text is instead is [Semantics.UnterminatedBracket]'s
+	// answer. BusyBox ash.
+	//
+	// It is the reading the discriminating rows are needed for: `[[:]` on
+	// `[:y` yields `y` there, which is a literal `[` matching and the `[:]`
+	// behind it matching the colon — two constructs, not one bracket — and
+	// `[[:]]` on `[:]z` yields `z` for the same reason where every other
+	// column matches nothing.
+	UnterminatedClassSwallowsTheClosingBracket
+)
+
+func (u UnterminatedClassPolicy) String() string {
+	switch u {
+	case UnterminatedClassIsOrdinaryCharacters:
+		return "ordinary characters"
+	case UnterminatedClassEndsTheScan:
+		return "ends the scan"
+	case UnterminatedClassEmptiesTheBracket:
+		return "empties the bracket"
+	case UnterminatedClassSwallowsTheClosingBracket:
+		return "swallows the closing bracket"
+	}
+	return "unspecified"
+}
+
+// unterminatedCharacterClass resolves the axis, and only for a bracket that
+// really holds a `[:` nothing closes.
+func (r *Runner) unterminatedCharacterClass() UnterminatedClassPolicy {
+	p := r.sem().UnterminatedCharacterClass
+	if p == UnterminatedClassUnspecified {
+		r.errf("%s\n", r.diag().Report(r.name(), r.line,
+			r.unanswered("a character class that nothing closes")))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
+}
+
 func (u UnknownClassPolicy) String() string {
 	switch u {
 	case UnknownClassIsInert:
@@ -15537,11 +15634,12 @@ func (r *Runner) matchPatternR(pattern, s string, condition bool) bool {
 		// its operand is a regular expression — and it has RegexFoldsCase,
 		// which bash's `nocasematch` turns on beside this one and zsh's turns
 		// on instead of it.
-		fold:         r.MatchOption(MatchFoldsCase),
-		chars:        r.patternCountsCharacters(pattern, s),
-		escapes:      r.sem().PatternEscapeReaches,
-		classes:      r.patternClasses(pattern),
-		unknownClass: r.unknownClassPolicy(pattern),
+		fold:              r.MatchOption(MatchFoldsCase),
+		chars:             r.patternCountsCharacters(pattern, s),
+		escapes:           r.sem().PatternEscapeReaches,
+		classes:           r.patternClasses(pattern),
+		unknownClass:      r.unknownClassPolicy(pattern),
+		unterminatedClass: r.unterminatedClassPolicy(pattern),
 	}
 	// The locale narrows the fold, and only a fold there is asks: the helper
 	// is shared with the sites that convert a value rather than match one,

@@ -178,6 +178,36 @@ func TestAliasExpansion(t *testing.T) {
 			"a value's second word is not expanded",
 			table("a", "echo b", "b", "NOPE"), "y=2 a", "y=2 echo b",
 		},
+		{
+			// A leading redirection does not move the command word either.
+			// Measured 2026-09-15 on all four references: `alias
+			// s='printf "[%s]\n"'; 2> /dev/null s afterredir` prints
+			// `[afterredir]` in bash 5.3, zsh 5.9, ksh93 and dash, where
+			// this parser offered the redirection operator to the table and
+			// the word after it to nothing (#2922).
+			"a leading redirection does not stop the expansion",
+			table("a", "echo"), "2> /dev/null a HI", "echo HI 2> /dev/null",
+		},
+		{
+			// More than one, and the form without a descriptor number.
+			"several leading redirections",
+			table("a", "echo"), "> out 2> err a HI", "echo HI > out 2> err",
+		},
+		{
+			// A redirection and a prefix together, in either order.
+			"a redirection before a prefix",
+			table("a", "echo"), "> out y=2 a HI", "y=2 echo HI > out",
+		},
+		{
+			"a prefix before a redirection",
+			table("a", "echo"), "y=2 > out a HI", "y=2 echo HI > out",
+		},
+		{
+			// Only the command word, as ever: a redirection written after
+			// one does not make the word behind it eligible.
+			"a redirection after the command word expands nothing",
+			table("b", "NOPE"), "echo > out b", "echo b > out",
+		},
 		{"no table expands nothing", nil, "a hi", "a hi"},
 	} {
 		t.Run(c.name, func(t *testing.T) {

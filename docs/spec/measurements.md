@@ -7035,6 +7035,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `param/argc-refuses-assignment` | `[9][3]` | `[9][3]` | `[9][3]` | `[9][3]` | `[9][3]` | **2>** `<shell>:1: read-only variable: ARGC` *(status 1)* | `[9][3]` |
 | `param/the-command-hash-as-a-parameter` | `<shell>: 1: commands[zz]=/bin/echo: not found~st=127~<shell>: 1: zz: not found` **2>** `<shell>: 1: Bad substitution` *(status 2)* | `st=0~<shell>: line 1: zz: command not found~v=[/bin/echo]~u=0 gone=[ABSENT]~0` *(status 1)* | `st=0~<shell>: line 1: zz: command not found~v=[/bin/echo]~u=0 gone=[ABSENT]~0` *(status 1)* | `st=0~<shell>: zz: command not found~v=[/bin/echo]~u=0 gone=[ABSENT]~0` *(status 1)* | `st=0~<shell>: zz: not found~v=[/bin/echo]~u=0 gone=[ABSENT]~0` *(status 1)* | `st=0~hi~v=[/bin/echo]~u=0 gone=[ABSENT]~0` *(status 1)* | `<shell>: commands[zz]=/bin/echo: not found~st=127~<shell>: zz: not found` **2>** `<shell>: syntax error: bad substitution` *(status 2)* |
 | `param/an-assignment-prefix-to-a-produced-parameter` | `a=~b=~c=300` | `a=0~b=0~c=0` | `a=0~b=0~c=300` | `a=0~b=0~c=0` | `a=0.000~b=200.000~c=300.000` | `a=0~b=0~c=0` | `a=~b=~c=300` |
+| `special/a-bare-set-and-a-produced-parameter` | `--` | `--~RANDOM=<n>` | `--~RANDOM=<n>` | `--~RANDOM=<n>` | `RANDOM=<n>~--~RANDOM=<n>` | `RANDOM=<n>~--~RANDOM=<n>` | `--~RANDOM=<n>` |
+| `special/a-bare-declaration-word-and-a-produced-parameter` | `--` | `--~RANDOM=<n>` | `--~RANDOM=<n>` | `--~RANDOM=<n>` | `integer RANDOM~--~integer RANDOM` | `integer 10 RANDOM=<n>~--~integer 10 RANDOM=<n>` | `--` |
 
 - `name/zsh-argzero-under-a-moved-dollar-zero` — zsh alone carries the value `$0` had before anything moved it, which is the only way a sourced file can tell what the shell itself was called. It is what the `${${0:#$ZSH_ARGZERO}:-…}` idiom in a plugin manager on this machine tests against; the other five have no such name and no moved `$0` for it to record
   ```sh
@@ -7105,11 +7107,11 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   typeset -p >/dev/null 2>&1; echo "st=$?"; typeset -p 2>/dev/null | grep -E '(^| )RANDOM' | sed 's/=.*/=<n>/'
   ```
-- `special/a-produced-parameter-lists-once-it-has-been-read` — the row above with one expansion in front of it, and the pair is what says bash's two columns are one rule rather than a version split. Read the parameter first and bash 5.3 writes `declare -i RANDOM=<n>` where it wrote a bare name, and bash 3.2 writes `RANDOM=<n>` where it wrote nothing — so what those two cells record above is the *unread* state of a shell that lists the last reading, and a shell that has none has nothing to write. ksh93 and zsh are unmoved, because they re-read the producer whether or not anything else has. This engine keeps no record of what has been expanded and writes the bare name in both rows; the divergence is #2722, which was filed from this measurement
+- `special/a-produced-parameter-lists-once-it-has-been-read` — the row above with one expansion in front of it, and the pair is what says bash's two columns are one rule rather than a version split. Read the parameter first and bash 5.3 writes `declare -i RANDOM=<n>` where it wrote a bare name, and bash 3.2 writes `RANDOM=<n>` where it wrote nothing — so what those two cells record above is the *unread* state of a shell that lists the last reading, and a shell that has none has nothing to write. ksh93 and zsh are unmoved, because they re-read the producer whether or not anything else has. This engine wrote the bare name in both rows until #2722 gave it a record of which produced names an expansion has read and a cache of what they last gave -- kept by the expansion and never by a listing, which is what holds the two-listings row below at 0 in the bash columns
   ```sh
   : $RANDOM; typeset -p 2>/dev/null | grep -E '(^| )RANDOM' | sed 's/=.*/=<n>/'
   ```
-- `special/the-letters-a-produced-clock-lists-with` — the same before-and-after over the other produced parameter every shell here has, and it moves a **letter** rather than only a value: bash 5.3 writes `declare -- SECONDS` unread and `declare -i SECONDS=<n>` afterwards, alone among the seven names it lists this way — `RANDOM`, `SRANDOM` and `BASHPID` carry `-i` on both sides and `LINENO`, `EPOCHSECONDS` and `EPOCHREALTIME` carry none on either. ksh93's is the `-F 3` shape whose places no listing form here writes (#1461), which is why that column has no answer of ours beside it at all; zsh's is `-i10` on both sides, the base riding on the letter as it does for `RANDOM`. The `--` separates the two halves so an empty first half is visible rather than inferred
+- `special/the-letters-a-produced-clock-lists-with` — the same before-and-after over the other produced parameter every shell here has, and it moves a **letter** rather than only a value: bash 5.3 writes `declare -- SECONDS` unread and `declare -i SECONDS=<n>` afterwards, alone among the seven names it lists this way — `RANDOM`, `SRANDOM` and `BASHPID` carry `-i` on both sides and `LINENO`, `EPOCHSECONDS` and `EPOCHREALTIME` carry none on either. ksh93's is the `-F 3` shape whose places no listing form here writes (#1461), which is why that column has no answer of ours beside it at all; zsh's is `-i10` on both sides, the base riding on the letter as it does for `RANDOM`. The `--` separates the two halves so an empty first half is visible rather than inferred. It is stated per parameter rather than derived, because it is not a rule about readings -- ProducedDeclaration.IntegerOnceRead, and only SECONDS holds it (#2722)
   ```sh
   typeset -p 2>/dev/null | grep -E '(^| )SECONDS' | sed 's/=.*/=<n>/'; echo "--"; : $SECONDS; typeset -p 2>/dev/null | grep -E '(^| )SECONDS' | sed 's/=.*/=<n>/'
   ```
@@ -7295,6 +7297,14 @@ grades it and nothing drift-checks it either, for the same reason.
 - `param/an-assignment-prefix-to-a-produced-parameter` — an assignment prefix in front of a command, where the name is one the shell **produces** rather than stores. The first field is the one this was filed on: a prefix to an ordinary builtin is transient in every column that has the name -- both bash builds, bash as `sh`, ksh93 and zsh all answer 0 -- and this engine answered 100, because an assignment to a produced name becomes a message to its producer and the take-back put the variable tables back without telling the producer anything (#2713). The other two fields are the controls that keep this about the take-back rather than about the prefix: `b` is the function route, which ksh93 alone lets outlive the call, and `c` is the special-builtin route, where ksh93 and bash-as-`sh` persist and the rest do not -- so a fix that simply refused to apply the prefix at all would fail both. dash has no such parameter and records an ordinary variable for all three. ksh93 writes its clock with three decimal places, which is that shell answering with its own float attribute and not a difference about the prefix
   ```sh
   SECONDS=100 true; echo "a=$SECONDS"; f(){ :; }; SECONDS=200 f; echo "b=$SECONDS"; SECONDS=300 :; echo "c=$SECONDS"
+  ```
+- `special/a-bare-set-and-a-produced-parameter` — a bare `set`, before an expansion of the parameter and after one. The same rule per shell as the `-p` rows above and not a question of its own: bash writes nothing until something has read it and `RANDOM=<n>` afterwards, where ksh93 and zsh write the row on both sides because they re-read the producer. The two cells that look like exceptions are the *form* rather than the answer -- this listing is assignments, so bash's unread row, which has no reading in it, is no row at all. dash has no such parameter and BusyBox ash none either, and both list their own variables here rather than failing, which is why the `--` is needed to see that the first half is empty. `ProducedParameterListing` governed the operand-less `-p` and nothing else until #2722, and no dialect here wrote any of these rows
+  ```sh
+  set 2>/dev/null | grep -E '^RANDOM=' | sed 's/=.*/=<n>/'; echo "--"; : $RANDOM; set 2>/dev/null | grep -E '^RANDOM=' | sed 's/=.*/=<n>/'
+  ```
+- `special/a-bare-declaration-word-and-a-produced-parameter` — the bare declaration *word*, which is a third listing again and where ksh93 is the interesting column: its `typeset` writes `integer RANDOM` with **no value** where its `typeset -p` writes one, which is the opposite way round from bash. That falls out of the form rather than from a second answer -- the shape it writes is attribute words and a name and has nowhere to put a value -- and it is what makes that form the safe one over a clock. zsh writes `integer 10 RANDOM=<n>` on both sides and bash, whose bare word is byte-for-byte the listing a bare `set` writes, writes nothing until the parameter has been read. dash and ash have no such word and record the complaint they make of it (#2722)
+  ```sh
+  typeset 2>/dev/null | grep -E '(^| )RANDOM' | sed 's/=.*/=<n>/'; echo "--"; : $RANDOM; typeset 2>/dev/null | grep -E '(^| )RANDOM' | sed 's/=.*/=<n>/'
   ```
 
 ## diagnostics
@@ -19438,6 +19448,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `declare/a-store-refused-element-from-a-command-string` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `after` | `after` | `after` | `after` | **2>** `<shell>:2: a: assignment to invalid subscript range` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
 | `declare/a-store-refused-element-from-a-script-file` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | `after` | `after` | `after` | `after` | **2>** `<script>:2: a: assignment to invalid subscript range` *(status 1)* | **2>** `<script>: line 1: syntax error: unexpected "("` *(status 2)* |
 | `declare/the-refusals-in-front-of-the-store-do-not-follow-the-route` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `after` **2>** `<shell>: line 2: readonly: `a[0]': not a valid identifier` | **2>** `<shell>: line 2: readonly: `a[0]': not a valid identifier` *(status 1)* | `after` **2>** `<shell>: line 1: readonly: `a[0]': not a valid identifier` | `after` | **2>** `<shell>:readonly:2: a[0]: can't create readonly array elements` *(status 1)* | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
+| `arrays/a-second-subscript-on-a-declaration-operand` | `<script>: 1: typeset: not found~<script>: 2: typeset: not found` **2>** `<script>: 3: Bad substitution` *(status 2)* | `<script>: line 1: typeset: `a[1][2]=v': not a valid identifier~<script>: line 2: typeset: a: not found~n=0~tail` | `<script>: line 1: typeset: `a[1][2]=v': not a valid identifier~<script>: line 2: typeset: a: not found~n=0~tail` | `declare -a a='()'~n=0~tail` | `typeset -a a=([1]=([2]=v) )~n=1~tail` | **2>** `<script>:1: no matches found: a[1][2]=v` *(status 1)* | `<script>: line 1: typeset: not found~<script>: line 2: typeset: not found` **2>** `<script>: line 4: syntax error: bad substitution` *(status 2)* |
 
 - `declare/typeset-assigns` — `typeset` is the older of the two names and the one three of the four have; dash has neither and reports a command it cannot find
   ```sh
@@ -21148,6 +21159,13 @@ grades it and nothing drift-checks it either, for the same reason.
   a=(x y)
   readonly "a[0]"=v
   echo after
+  ```
+- `arrays/a-second-subscript-on-a-declaration-operand` — the same two subscripts written as a *declaration's operand*, which is the spelling #2491 was filed from and which parts the two bash columns from each other: 5.3 refuses it as `` `a[1][2]=v': not a valid identifier `` where 3.2 declares an **empty array under the base name** at status 0 -- a silent wrong answer rather than a refusal. ksh93 answers it exactly as it answers the plain assignment above, which is what says the two spellings are one value there and not two constructs; zsh globs the operand and finds no match. The row above is the control that makes that claim visible
+  ```sh
+  typeset a[1][2]=v 2>&1
+  typeset -p a 2>&1
+  echo "n=${#a[@]}"
+  echo tail
   ```
 
 ## select
@@ -22912,6 +22930,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `assoc/a-dollar-single-quoted-subscript-decodes-its-escapes` | **2>** `<script>: 2: n[$\t]=tab: not found~<script>: 3: Bad substitution` *(status 2)* | `len=1~hit=[tab]~tail` | `len=1~hit=[tab]~tail` | `len=1~hit=[tab]~tail` | `len=1~hit=[tab]~tail` | **2>** `<script>:3: bad substitution` *(status 1)* | **2>** `<script>: line 2: n[	]=tab: not found~<script>: line 4: syntax error: bad substitution` *(status 2)* |
 | `assoc/the-listing-quotes-a-whole-array-subscript-as-a-key` | `<script>: 1: typeset: not found~<script>: 2: r[@]=at: not found~<script>: 3: typeset: not found~<script>: 4: typeset: not found~<script>: 5: s[a@b]=x: not found~<script>: 6: typeset: not found~tail` | `declare -A r=(["@"]="at" )~declare -A s=([a@b]="x" )~tail` | `declare -A r=(["@"]="at" )~declare -A s=([a@b]="x" )~tail` | `<script>: line 1: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~<script>: line 3: typeset: r: not found~<script>: line 4: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~<script>: line 6: typeset: s: not found~tail` **2>** `<script>: line 2: r[@]: bad array subscript~<script>: line 5: a@b: syntax error: invalid arithmetic operator (error token is "@b")` | **2>** `<script>: line 2: @: invalid subscript in assignment` *(status 1)* | `<script>:2: r: attempt to set slice of associative array` *(status 1)* | `<script>: line 1: typeset: not found~<script>: line 2: r[@]=at: not found~<script>: line 3: typeset: not found~<script>: line 4: typeset: not found~<script>: line 5: s[a@b]=x: not found~<script>: line 6: typeset: not found~tail` |
 | `assoc/a-table-lists-in-a-different-order-than-it-expands` | `<script>: 5: typeset: not found~tail` **2>** `<script>: 2: m[z]=1: not found~<script>: 3: m[a]=2: not found~<script>: 4: m[m]=3: not found` | `declare -A m=([z]="1" [m]="3" [a]="2" )~tail` | `declare -A m=([z]="1" [m]="3" [a]="2" )~tail` | `declare -a m='([0]="2" [2]="3")'~tail` | `typeset -A m=([a]=2 [m]=3 [z]=1)~tail` | `typeset -A m=( [a]=2 [m]=3 [z]=1 )~tail` | `<script>: line 5: typeset: not found~tail` **2>** `<script>: line 2: m[z]=1: not found~<script>: line 3: m[a]=2: not found~<script>: line 4: m[m]=3: not found` |
+| `arrays/a-second-subscript-on-an-assignment` | `<script>: 1: a[1][2]=v: not found~<script>: 2: typeset: not found` **2>** `<script>: 3: Bad substitution` *(status 2)* | `<script>: line 1: a[1][2]=v: command not found~<script>: line 2: typeset: a: not found~n=0~tail` | `<script>: line 1: a[1][2]=v: command not found~<script>: line 2: typeset: a: not found~n=0~tail` | `<script>: line 1: a[1][2]=v: command not found~<script>: line 2: typeset: a: not found~n=0~tail` | `typeset -a a=([1]=([2]=v) )~n=1~tail` | **2>** `<script>:1: no matches found: a[1][2]=v` *(status 1)* | `<script>: line 1: a[1][2]=v: not found~<script>: line 2: typeset: not found` **2>** `<script>: line 4: syntax error: bad substitution` *(status 2)* |
+| `arrays/the-integer-attribute-and-a-nested-array` | `<script>: 1: typeset: not found` **2>** `<script>: 2: Syntax error: word unexpected (expecting ")")` *(status 2)* | `declare -i a~<script>: line 5: b[1][2]=5+5: command not found~declare -i b~declare -i c~tail` **2>** `<script>: line 2: a[1]: cannot assign list to array member~<script>: line 7: c[1]: cannot assign list to array member` | **2>** `<script>: line 2: a[1]: cannot assign list to array member` *(status 1)* | `declare -i a=""~<script>: line 5: b[1][2]=5+5: command not found~declare -i b=""~declare -i c=""~tail` **2>** `<script>: line 2: a[1]: cannot assign list to array member~<script>: line 7: c[1]: cannot assign list to array member` | `typeset -a -i a=([1]=(5+5) )~typeset -a -i b=([1]=([2]=10) )~typeset -a -i c=([1]=(10) )~tail` | `<script>:2: a: attempt to assign array value to non-array` *(status 1)* | `<script>: line 1: typeset: not found` **2>** `<script>: line 2: syntax error: unexpected word (expecting ")")` *(status 2)* |
 
 - `ksharrays/the-brackets-after-an-unbraced-name` — the option is described as moving the array base and what it does is make an array read the way the ksh family reads one, which shows here as four answers moving together. The discriminating one is the first: `$a[1]` is `xx[1]` under the option — the element at the base position and then the three characters — where the same text without it is `xx`, and where reading the subscript against a zero base would be `yy`. So a wrong answer here is wrong in both halves at once, which is why the row prints the braced spelling beside it: `${a[1]}` *is* `yy`, because the braces settle where the expansion ends and only the base moves. The column with the option answers exactly what the three bashes and ksh93 answer without needing one, which is the point of the option and is also what makes the row hard to fake — a shell that only moved the base matches nothing here (#1726)
   ```sh
@@ -23011,6 +23031,26 @@ grades it and nothing drift-checks it either, for the same reason.
   m[a]=2
   m[m]=3
   typeset -p m 2>&1
+  echo tail
+  ```
+- `arrays/a-second-subscript-on-an-assignment` — a name carrying **two subscripts** on the left of an assignment, which the panel answers four ways. ksh93 builds a *nested compound* -- `typeset -a a=([1]=([2]=v) )`, one element holding an array of its own -- and it is the only column that does; bash 5.3 calls the operand `a[1][2]: bad array subscript`, bash 3.2 takes the whole run between the outer brackets as one arithmetic subscript, zsh reads the brackets as a pattern with no match, and dash has no subscript at all. `n=` is what says the nesting is *under* one element rather than beside it, which a listing alone could be read either way. This engine answered `1][2: arithmetic syntax error` in every dialect -- the arithmetic reader complaining about a line that wrote no arithmetic (#2491)
+  ```sh
+  a[1][2]=v 2>&1
+  typeset -p a 2>&1
+  echo "n=${#a[@]}"
+  echo tail
+  ```
+- `arrays/the-integer-attribute-and-a-nested-array` — three ways an integer attribute meets a nested array in the one column that has them, and no two answer alike. A nested **literal** written under a standing `-i` keeps its text -- `([1]=(5+5) )`, unevaluated -- where the same attribute **arriving** over one afterwards folds *into* the nesting and leaves `([1]=(10) )`, and a **chained assignment's own value** is evaluated like any element's, `([2]=10)`. So the literal's words are not the name's values and the arrival is a different question. This engine folded every one of them by taking the element's scalar reading, which is a nested array's first element or nothing -- one number where an array had been, with every other element of it gone and nothing said (#2491). The other columns have neither the nesting nor, for three of them, the letter
+  ```sh
+  typeset -i a 2>&1
+  a[1]=(5+5) 2>&1
+  typeset -p a 2>&1
+  typeset -i b 2>/dev/null
+  b[1][2]=5+5 2>&1
+  typeset -p b 2>&1
+  c[1]=(5+5) 2>&1
+  typeset -i c 2>&1
+  typeset -p c 2>&1
   echo tail
   ```
 

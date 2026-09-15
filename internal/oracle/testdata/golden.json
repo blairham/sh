@@ -24408,6 +24408,108 @@
         "TimedOut": false
       }
     },
+    "arrays/a-second-subscript-on-a-declaration-operand": {
+      "ash": {
+        "Stdout": "\u003cscript\u003e: line 1: typeset: not found~\u003cscript\u003e: line 2: typeset: not found",
+        "Stderr": "\u003cscript\u003e: line 4: syntax error: bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "\u003cscript\u003e: line 1: typeset: `a[1][2]=v': not a valid identifier~\u003cscript\u003e: line 2: typeset: a: not found~n=0~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "\u003cscript\u003e: line 1: typeset: `a[1][2]=v': not a valid identifier~\u003cscript\u003e: line 2: typeset: a: not found~n=0~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "declare -a a='()'~n=0~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "\u003cscript\u003e: 1: typeset: not found~\u003cscript\u003e: 2: typeset: not found",
+        "Stderr": "\u003cscript\u003e: 3: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "typeset -a a=([1]=([2]=v) )~n=1~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:1: no matches found: a[1][2]=v",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "arrays/a-second-subscript-on-an-assignment": {
+      "ash": {
+        "Stdout": "\u003cscript\u003e: line 1: a[1][2]=v: not found~\u003cscript\u003e: line 2: typeset: not found",
+        "Stderr": "\u003cscript\u003e: line 4: syntax error: bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "\u003cscript\u003e: line 1: a[1][2]=v: command not found~\u003cscript\u003e: line 2: typeset: a: not found~n=0~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "\u003cscript\u003e: line 1: a[1][2]=v: command not found~\u003cscript\u003e: line 2: typeset: a: not found~n=0~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "\u003cscript\u003e: line 1: a[1][2]=v: command not found~\u003cscript\u003e: line 2: typeset: a: not found~n=0~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "\u003cscript\u003e: 1: a[1][2]=v: not found~\u003cscript\u003e: 2: typeset: not found",
+        "Stderr": "\u003cscript\u003e: 3: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "typeset -a a=([1]=([2]=v) )~n=1~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:1: no matches found: a[1][2]=v",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "arrays/a-whole-array-subscript-on-the-left": {
       "ash": {
         "Stdout": "",
@@ -24557,6 +24659,57 @@
         "Stdout": "typeset -a u=( Z )~typeset -a e=( Z )~tail",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "arrays/the-integer-attribute-and-a-nested-array": {
+      "ash": {
+        "Stdout": "\u003cscript\u003e: line 1: typeset: not found",
+        "Stderr": "\u003cscript\u003e: line 2: syntax error: unexpected word (expecting \")\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "declare -i a~\u003cscript\u003e: line 5: b[1][2]=5+5: command not found~declare -i b~declare -i c~tail",
+        "Stderr": "\u003cscript\u003e: line 2: a[1]: cannot assign list to array member~\u003cscript\u003e: line 7: c[1]: cannot assign list to array member",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 2: a[1]: cannot assign list to array member",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "declare -i a=\"\"~\u003cscript\u003e: line 5: b[1][2]=5+5: command not found~declare -i b=\"\"~declare -i c=\"\"~tail",
+        "Stderr": "\u003cscript\u003e: line 2: a[1]: cannot assign list to array member~\u003cscript\u003e: line 7: c[1]: cannot assign list to array member",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "\u003cscript\u003e: 1: typeset: not found",
+        "Stderr": "\u003cscript\u003e: 2: Syntax error: word unexpected (expecting \")\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "typeset -a -i a=([1]=(5+5) )~typeset -a -i b=([1]=([2]=10) )~typeset -a -i c=([1]=(10) )~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "\u003cscript\u003e:2: a: attempt to assign array value to non-array",
+        "Stderr": "",
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       }
@@ -184539,6 +184692,108 @@
       "zsh": {
         "Stdout": "one~st=126",
         "Stderr": "./s.sh:3: parse error near `\\n'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "special/a-bare-declaration-word-and-a-produced-parameter": {
+      "ash": {
+        "Stdout": "--",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "--~RANDOM=\u003cn\u003e",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "--~RANDOM=\u003cn\u003e",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "--~RANDOM=\u003cn\u003e",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "--",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "integer RANDOM~--~integer RANDOM",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "integer 10 RANDOM=\u003cn\u003e~--~integer 10 RANDOM=\u003cn\u003e",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "special/a-bare-set-and-a-produced-parameter": {
+      "ash": {
+        "Stdout": "--~RANDOM=\u003cn\u003e",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "--~RANDOM=\u003cn\u003e",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "--~RANDOM=\u003cn\u003e",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "--~RANDOM=\u003cn\u003e",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "--",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "RANDOM=\u003cn\u003e~--~RANDOM=\u003cn\u003e",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "RANDOM=\u003cn\u003e~--~RANDOM=\u003cn\u003e",
+        "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

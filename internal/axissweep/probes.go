@@ -63,7 +63,7 @@ func Probes() []Probe {
 			Reading: "`echo $((1e400))` is an infinity in a shell that saturates a numeral too large for a double and a zero in one that loses it",
 			Read: func(cells map[string]oracle.Result) (string, string) {
 				r := cells["axis/arith-float-overflow"]
-				first, _, _ := strings.Cut(strings.TrimSpace(r.Stdout), "\n")
+				first, _, _ := strings.Cut(strings.TrimSpace(r.Stdout), "~")
 				switch {
 				case r.Status != 0 && first == "":
 					return "", "this shell has no floats — the recorded cell is a refusal of the word `1e400` while reading it, so nothing here says what it would have done with a value out of range"

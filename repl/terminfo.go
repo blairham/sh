@@ -77,12 +77,12 @@ package repl
 //
 //     #2100 asked for one of two things before deciding: a mechanism in the
 //     curses library that made the rule predictable and platform-independent,
-//     or a second platform where the behaviour was not there. Measured
+//     or a second platform where the behavior was not there. Measured
 //     2026-09-14 on Alpine 3.20 under a container — zsh 5.9 against musl and
 //     ncurses 6.4, reading that image's own /usr/share/terminfo — and neither
 //     answer is the one that arrived:
 //
-//     The behaviour **is** there. `${+terminfo[rs2]}` is 0 for `screen`,
+//     The behavior **is** there. `${+terminfo[rs2]}` is 0 for `screen`,
 //     `vt100`, `sun` and `putty` and 1 for `xterm-256color`, exactly as on
 //     this machine, and the same compiled two-line descriptions reproduce
 //     the rule in both places: `rs2=\EQQ` alone reads absent, `rs1=\EWW,

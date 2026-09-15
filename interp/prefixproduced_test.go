@@ -80,7 +80,7 @@ func TestAPrefixToAProducedNameReachesTheCommandItPrefixes(t *testing.T) {
 	r := producedPrefixRunner(t, &out, &errs, &sem)
 	r.SetDynamic("counter", countsFromWhatItWasAssigned)
 	r.Register("show", func(rr *Runner, _ context.Context, _ []string) int {
-		fmt.Fprintf(rr.Out(), "saw=[%s]\n", countsFromWhatItWasAssigned(rr))
+		_, _ = fmt.Fprintf(rr.Out(), "saw=[%s]\n", countsFromWhatItWasAssigned(rr))
 		return 0
 	})
 	runProducedPrefix(t, r, `counter=7 show
@@ -182,7 +182,7 @@ func TestAPrefixToAProducedNameWithAWriterReachesTheCommand(t *testing.T) {
 	r.SetDynamic("cell", func(*Runner) string { return held })
 	r.SetDynamicWriter("cell", func(_ *Runner, value string) { held = value })
 	r.Register("show", func(rr *Runner, _ context.Context, _ []string) int {
-		fmt.Fprintf(rr.Out(), "saw=[%s]\n", held)
+		_, _ = fmt.Fprintf(rr.Out(), "saw=[%s]\n", held)
 		return 0
 	})
 	runProducedPrefix(t, r, `cell=moved show`)

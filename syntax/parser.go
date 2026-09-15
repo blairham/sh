@@ -2793,14 +2793,26 @@ func (p *Parser) parseSimple() Command {
 				c.Assigns = append(c.Assigns, p.parseAssign(h))
 				continue
 			}
-			// The command word is where an alias is expanded, and an
-			// assignment prefix does not move it: `alias al=echo; y=2 al HI`
-			// prints `HI` in both shells of the panel that expand aliases in
-			// a script. parseCommand expanded the word it dispatched on, and
-			// that word turned out to be an assignment, so the expansion has
-			// to be made again here — where the real command word finally
-			// stands. Left out, the word resolved as written and the answer
-			// was `command not found` (#1942).
+			// The command word is where an alias is expanded, and nothing a
+			// command may begin with moves it. An assignment prefix does
+			// not: `alias al=echo; y=2 al HI` prints `HI` in both shells of
+			// the panel that expand aliases in a script. parseCommand
+			// expanded the word it dispatched on, and that word turned out
+			// to be an assignment, so the expansion has to be made again
+			// here — where the real command word finally stands. Left out,
+			// the word resolved as written and the answer was `command not
+			// found` (#1942).
+			//
+			// A *leading redirection* does not move it either, and that is
+			// the same fact rather than a second one: `2> /dev/null al HI`
+			// is `HI` in bash 5.3, zsh 5.9, ksh93 and dash alike. It went
+			// wrong the same way and for one more reason — parseCommand
+			// offered the redirection *operator* to the table before it
+			// dispatched, and the real command word, read after the
+			// redirection, was offered to nothing (#2922). Two conditions
+			// rather than one branch each, because what they have in common
+			// is the whole point: the command word is the first word of the
+			// command that is neither a prefix nor a redirection.
 			//
 			// aliasSpliced == 0 keeps this to a word of the *input*: an alias
 			// value's own second word is not expanded in turn, only the word
@@ -2808,7 +2820,7 @@ func (p *Parser) parseSimple() Command {
 			// trailing-space branch below carries. The set is
 			// parseCommand's, so a name already spent in this command is not
 			// expanded again.
-			if len(c.Assigns) > 0 && !seenArg && p.aliasSpliced == 0 &&
+			if (len(c.Assigns) > 0 || len(c.Redirs) > 0) && !seenArg && p.aliasSpliced == 0 &&
 				(p.Aliases != nil || p.SuffixAliases != nil) {
 				p.aliasNextWord = false
 				p.expandCommandWord(p.aliasDone)

@@ -1912,7 +1912,17 @@ var Corpus = []Case{
 	{
 		ID: "core/an-unbalanced-nested-backquote", Category: "quoting",
 		Snippet: "echo A; echo \"`echo \\`echo n`\"; echo B",
-		Why:     "the nesting written wrong: the escaped backquote opens an inner body that nothing closes, so the unescaped text the outer substitution hands on runs out mid-substitution. A refusal is a legitimate answer and most of the panel gives one, but status, what reaches standard output and what reaches standard error move independently here and the row records all three. dash and BusyBox ash refuse at 2 having printed nothing — they read the whole line before running any of it; zsh refuses at 1 with `A` already out; bash 5.3, bash as `sh` and bash 3.2 complain on standard error and carry on at **0**, so `A`, an empty line and `B` are all printed; and ksh93 does not object at all and prints `n`. The four answers are four different places to put the boundary of a substitution's parse failure, and ours is zsh's and dash's: `B` is never reached, which is where the `bash` dialect parts from bash (#2703)",
+		Why:     "the nesting written wrong: the escaped backquote opens an inner body that nothing closes, so the unescaped text the outer substitution hands on runs out mid-substitution. A refusal is a legitimate answer and most of the panel gives one, but status, what reaches standard output and what reaches standard error move independently here and the row records all three. dash and BusyBox ash refuse at 2 having printed nothing — they read the whole line before running any of it; zsh refuses at 1 with `A` already out; bash 5.3, bash as `sh` and bash 3.2 complain on standard error and carry on at **0**, so `A`, an empty line and `B` are all printed; and ksh93 does not object at all and prints `n`. The four answers are four different places to put the boundary of a substitution's parse failure, and two of them are now ours by measurement: the `bash` dialect scopes the failure to the word and the rest abandon the input, which is [interp.Semantics.SubstitutionParseErrorIsFatal]. The other two are not that axis — ksh93 reads the text as nesting that closes and so never has a failure to place, and dash and ash refuse before `echo A` has run, which is a question about when the body is read (#2703)",
+	},
+	{
+		ID: "core/a-refused-older-body-leaves-an-empty-field", Category: "quoting",
+		// Not SyntaxError: the outer parse takes this text and the refusal
+		// arrives when the word is expanded, which is the fact the row is
+		// about.
+		Script:          true,
+		LayoutSensitive: true,
+		Snippet:         "printf \"[%s]\" a \"`echo \\`echo n`\" b; echo\n",
+		Why:             "the row above says the script carries on; this says what the word it carried on past is *worth*. One conversion reused, so a field that is gone prints no `[]` at all and an empty one prints `[]` — bash 5.3 and bash as `sh` answer `[a][][b]`, which is a word that expanded to nothing rather than a word that was dropped. ksh93 answers `[a][n][b]`, running the inner substitution, and zsh, dash and BusyBox ash never reach the `printf`. bash 3.2 is the same three fields behind a second complaint. Written from a file because `-c` puts everything in one list where a failed expansion ends the list",
 	},
 	{
 		ID: "core/single-quotes-in-a-quoted-expansion-body", Category: "quoting",

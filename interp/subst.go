@@ -78,12 +78,15 @@ func (r *Runner) commandSubst(ctx context.Context, span syntax.Span) string {
 		// A substitution re-parses, so the syntax-error status is the
 		// dialect's here too — not only in whatever first read the script.
 		//
-		// And it is fatal: dash, bash, ksh93 and zsh all abandon the script
-		// rather than continue with an empty substitution. They detect it
-		// when they parse the whole input; this parses the body at expansion
-		// time, so the same outcome has to be produced deliberately. Without
-		// it the diagnostic appeared and the next command ran regardless,
-		// which is the shape this package keeps finding.
+		// Whether it is fatal is the dialect's, and it was a constant here.
+		// dash, ksh93 and zsh abandon the script; bash reports the failure,
+		// expands the word to the empty string and carries the statement and
+		// the script on, exiting 0. They all detect it when they parse the
+		// whole input; this parses the body at expansion time, so either
+		// outcome has to be produced deliberately. Without the stop the
+		// diagnostic appeared and the next command ran regardless, which is
+		// the shape this package keeps finding — and with it always taken, a
+		// script bash finishes stopped here (#2703).
 		// Worded by the dialect, and located in the *script* rather than in
 		// the body. `%v` on a *syntax.Error prints the parser's own
 		// coordinates — `1:3: ";" unexpected` — which is an internal
@@ -97,7 +100,28 @@ func (r *Runner) commandSubst(ctx context.Context, span syntax.Span) string {
 		// Without the shift the one dialect that writes the line *into* its
 		// sentence — `syntax error at line N:` — counted from the body and
 		// disagreed with its own prefix.
-		r.diagf("%s\n", r.diag().ParseFailure(shiftParseError(err, base)))
+		// And the tag that goes with scoping it to the word: the one
+		// dialect that does not stop names the construct the refusal came
+		// from, because the script's own line is no longer the whole story.
+		// Both of the next two are the older spelling's alone, and for one
+		// reason: the column that scopes this failure to the word reads a
+		// `$( … )` body *with the script*, so that spelling's refusal is the
+		// line's there — untagged, and fatal. Reproducing the outcome
+		// without moving when the body is read means asking about the
+		// spelling, which is what Diagnostics.BackquotedSubstitutionRestartsLines
+		// already does one message over.
+		construct := ""
+		if span.Backquoted && r.diag().SubstitutionParseFailureNamesTheConstruct {
+			construct = "command substitution"
+		}
+		r.errf("%s", r.diagLineNamed(construct, "%s\n", r.diag().ParseFailure(shiftParseError(err, base))))
+		if span.Backquoted && !r.ask(r.sem().SubstitutionParseErrorIsFatal, "a substitution body that does not parse ending the shell") {
+			// The word expands to nothing and the statement goes on, which
+			// is a failed *expansion* rather than a failed script. The
+			// status is left alone for the same reason: the command that
+			// holds the word is about to run and report its own.
+			return ""
+		}
 		r.status = r.diag().SyntaxStatus()
 		r.stopTheShell()
 		return ""

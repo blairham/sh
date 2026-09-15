@@ -2669,6 +2669,25 @@ type Diagnostics struct {
 	// this is not simply the script location being absent.
 	ParseFailureNamesItsOwnLine bool
 
+	// SubstitutionParseFailureNamesTheConstruct puts `command substitution:`
+	// between the shell's name and the line when the refusal is a
+	// substitution *body's* rather than the script's own.
+	//
+	// bash alone, both columns of it and bash 3.2 as well, and it is the
+	// wording that goes with scoping the failure to the word rather than to
+	// the script — see [Semantics.SubstitutionParseErrorIsFatal]. Measured
+	// 2026-09-14 from a file, `echo one`, `echo ` + "`if; then :; fi`" + `,
+	// `echo two`:
+	//
+	//	bash 5.3  <file>: command substitution: line 2: syntax error …
+	//	ksh93     <file>: line 2: syntax error at line 2: `;' unexpected
+	//	dash      <file>: 1: Syntax error: ";" unexpected
+	//
+	// Only for the parse failure, and only where the body was read at
+	// expansion time: bash prints no such tag for `$( … )` refused with the
+	// file, which it reads with the script and stops on.
+	SubstitutionParseFailureNamesTheConstruct bool
+
 	// MissingFuncBodyOmitsTheLine drops the line from the location of a parse
 	// failure where a function's body was expected and never began.
 	//

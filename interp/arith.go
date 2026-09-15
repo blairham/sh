@@ -43,6 +43,14 @@ type arithError struct {
 	// divisor has no text of its own, so the offset comes from the parser —
 	// see [syntax.ArithBinary].YStart.
 	from int
+	// badNumeral says the failure was a *numeral the number reader refused*
+	// — `42abc`, `0b11`, `1#` — rather than anything about the expression
+	// around it. One column's `printf` parts the two: ksh93 writes a second
+	// line, `printf: warning: invalid argument of type d`, and reports 1 for
+	// an operand whose reading failed, and writes its complaint and reports
+	// 0 for a division by zero or an assignment that wanted an lvalue. See
+	// Diagnostics.PrintfArithArgumentType.
+	badNumeral bool
 	// complete says the message is the whole diagnostic and must not be
 	// wrapped. Measured: dash wraps a division by zero — `arithmetic
 	// expression: division by zero: "1/0"` — but reports a non-numeric
@@ -1570,10 +1578,10 @@ func (r *Runner) arithValueAsExpression(value string) (arithNum, error) {
 		// No ask: every dialect refuses this text and only the sentence
 		// differs, so a question here would be one asked where the panel
 		// agrees.
-		return intNum(0), arithError{msg: r.wordInvalidNumber(text), token: text, complete: true}
+		return intNum(0), arithError{msg: r.wordInvalidNumber(text), token: text, badNumeral: true, complete: true}
 	}
 	if !r.ask(r.sem().ArithNameValueRecurses, "re-reading a stored value as an expression") {
-		return intNum(0), arithError{msg: r.wordInvalidNumber(text), token: text, complete: true}
+		return intNum(0), arithError{msg: r.wordInvalidNumber(text), token: text, badNumeral: true, complete: true}
 	}
 	r.arithValueDepth++
 	defer func() { r.arithValueDepth-- }()
@@ -1720,11 +1728,11 @@ func (r *Runner) parseArithNum(s string) (arithNum, error) {
 			// own sentence.
 			msg = w
 		}
-		return intNum(0), arithError{msg: msg, token: s}
+		return intNum(0), arithError{msg: msg, token: s, badNumeral: true}
 	}
 	f, err := strconv.ParseFloat(s, 64)
 	if err != nil {
-		return intNum(0), arithError{msg: r.wordInvalidNumber(s), token: s}
+		return intNum(0), arithError{msg: r.wordInvalidNumber(s), token: s, badNumeral: true}
 	}
 	return floatNum(f), nil
 }
@@ -1844,7 +1852,7 @@ func (r *Runner) parseNum(s string) (int, error) {
 			// because it is the same refusal: bash writes `invalid
 			// arithmetic base` for `1#0` and ksh93 its one sentence.
 			return 0, arithError{msg: Wording(r.diag().ArithInvalidBase,
-				"invalid base: %[1]s", strconv.Itoa(b)), token: s}
+				"invalid base: %[1]s", strconv.Itoa(b)), token: s, badNumeral: true}
 		}
 		if b > 36 && !r.ask(r.sem().ArithBaseAbove36, "a base above 36") {
 			if r.unspecified {
@@ -1855,7 +1863,7 @@ func (r *Runner) parseNum(s string) (int, error) {
 			// padded one: `064#10` is `invalid base (must be 2 to 36
 			// inclusive): 64` there.
 			return 0, arithError{msg: Wording(r.diag().ArithInvalidBase,
-				"invalid base: %[1]s", strconv.Itoa(b)), token: s}
+				"invalid base: %[1]s", strconv.Itoa(b)), token: s, badNumeral: true}
 		}
 		digits, base = rest, b
 		var bad bool
@@ -1895,9 +1903,9 @@ func (r *Runner) parseNum(s string) (int, error) {
 					w = n
 				}
 			}
-			return 0, arithError{msg: w, token: s}
+			return 0, arithError{msg: w, token: s, badNumeral: true}
 		}
-		return 0, arithError{msg: r.wordInvalidNumber(s), token: s, complete: true}
+		return 0, arithError{msg: r.wordInvalidNumber(s), token: s, badNumeral: true, complete: true}
 	}
 	if neg {
 		n = -n

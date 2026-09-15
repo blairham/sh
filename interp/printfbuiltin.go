@@ -429,6 +429,11 @@ func (r *Runner) printfStars(spec string, next func() (string, bool)) (string, i
 // conversion, so the two cases are not one question. ksh93 is the seventh and
 // refuses the directive outright.
 func (r *Runner) printfStarOperand(next func() (string, bool)) (int64, int, bool) {
+	// ksh93 names `.` for a `*` operand in the second complaint line as well
+	// as in the refusal below, which is the same constant seen twice.
+	saved := r.printfConversionName
+	r.printfConversionName = "."
+	defer func() { r.printfConversionName = saved }()
 	arg, present := next()
 	if !present {
 		if r.ask(r.sem().PrintfStarWithoutOperandIsRefused, "`printf '%*d'` refusing a `*` the operands ran out before") {
@@ -617,6 +622,14 @@ func (r *Runner) printfConvert(spec string, verb byte, timeFmt string, next func
 			strings.Contains(flags, "-"), strings.Contains(flags, "0")), code, stop
 	}
 	arg, present := next()
+	// The conversion character, for the one column that names it in a
+	// second complaint about an operand its arithmetic could not read. Set
+	// here rather than threaded through the number reader, which is several
+	// calls below and takes the same operand from four different verbs.
+	// See Diagnostics.PrintfArithArgumentType.
+	saved := r.printfConversionName
+	r.printfConversionName = string(verb)
+	defer func() { r.printfConversionName = saved }()
 	switch verb {
 	case 'T':
 		return r.printfTime(spec, timeFmt, arg, present)

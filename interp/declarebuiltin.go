@@ -528,23 +528,22 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 					break letters
 				}
 			case 'E':
-				if r.declareOptionTakesANumber('E') {
-					// The float attribute again, under the letter that
-					// carries a *format* with it. Guarded against an
-					// integer letter already read for the reason `F` is,
-					// and the two float letters settle between themselves
-					// the same way: the first written wins, so `-EF 3` is
-					// the exponent form and `-FE 3` the plain one.
-					if !f.integer && !f.float {
-						f.float, f.floatExponent = true, true
-					}
-					break
+				// The float attribute again, under the letter that carries
+				// a *format* with it. Guarded against an integer letter
+				// already read for the reason `F` is, and the two float
+				// letters settle between themselves the same way: the first
+				// written wins, so `-EF 3` is the exponent form and `-FE 3`
+				// the plain one.
+				//
+				// A dialect that spells the letter and not as a float
+				// format falls through to nothing, which is right: it is
+				// whatever else the letter is there — today, nothing this
+				// engine models, and DeclareOptions and
+				// UnimplementedOptionLetters have settled that between them
+				// before the loop reached here.
+				if r.declareOptionTakesANumber('E') && !f.integer && !f.float {
+					f.float, f.floatExponent = true, true
 				}
-				// The dialect spells the letter and not as a float format,
-				// so it is whatever else it is there — today, nothing this
-				// engine models, which DeclareOptions and
-				// UnimplementedOptionLetters have already settled between
-				// them before the loop reached here.
 			case 'F':
 				if r.declareOptionTakesANumber('F') {
 					// The letter is a float's precision in this dialect

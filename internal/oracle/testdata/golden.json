@@ -202496,6 +202496,115 @@
         "TimedOut": false
       }
     },
+    "trap/a-kill-handler-never-fires": {
+      "ash": {
+        "Stdout": "before",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 9,
+        "SignalName": "killed",
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "before",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 9,
+        "SignalName": "killed",
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "before",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 9,
+        "SignalName": "killed",
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "before",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 9,
+        "SignalName": "killed",
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "before",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 9,
+        "SignalName": "killed",
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "before",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 9,
+        "SignalName": "killed",
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "before",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 9,
+        "SignalName": "killed",
+        "TimedOut": false
+      }
+    },
+    "trap/a-kill-trap-is-listed-back": {
+      "ash": {
+        "Stdout": "trap -- 'echo x' KILL~trap -- 'echo x' STOP~end",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "trap -- 'echo x' SIGKILL~trap -- 'echo x' SIGSTOP~end",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "trap -- 'echo x' KILL~trap -- 'echo x' STOP~end",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "trap -- 'echo x' SIGKILL~trap -- 'echo x' SIGSTOP~end",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "trap -- 'echo x' KILL~trap -- 'echo x' STOP~end",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "trap -- 'echo x' STOP~trap -- 'echo x' KILL~end",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "trap -- 'echo x' KILL~trap -- 'echo x' STOP~end",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "trap/a-pipeline-element-runs-the-pipe-handler-it-set-for-itself": {
       "ash": {
         "Stdout": "after",
@@ -204642,6 +204751,57 @@
         "Stdout": "bye",
         "Stderr": "",
         "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "trap/kill-and-stop-are-taken-quietly": {
+      "ash": {
+        "Stdout": "kill=0~stop=0~reset=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "kill=0~stop=0~reset=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "kill=0~stop=0~reset=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "kill=0~stop=0~reset=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "kill=0~stop=0~reset=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "kill=0~stop=0~reset=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "kill=0~stop=0~reset=0",
+        "Stderr": "",
+        "Status": 0,
         "Signal": 0,
         "TimedOut": false
       }

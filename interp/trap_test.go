@@ -136,19 +136,44 @@ func TestExitTrapIsFunctionLocalIsAnAxis(t *testing.T) {
 	}
 }
 
-func TestTrapRefusesSignalsItCannotCatch(t *testing.T) {
-	// KILL and STOP are real signals that nobody can catch, so accepting them
-	// would be promising something the kernel will not allow. Every shell in
-	// the panel takes `trap … KILL` and then never fires it; this refuses,
-	// which is a deliberate divergence and keeps its own wording rather than
-	// borrowing a dialect's complaint about a word that names nothing.
-	for _, sig := range []string{"KILL", "STOP"} {
-		out, st := run(t, `trap 'x' `+sig, nil)
-		if st == 0 || !strings.Contains(out, "not a signal this shell can catch") {
-			t.Errorf("%s: got %q/%d", sig, out, st)
+// TestTrapTakesTheSignalsNobodyCanCatch pins both halves of #2919, which are
+// two facts rather than one: the word is accepted, and the action never runs.
+//
+// Measured 2026-09-15 on bash 5.3, bash 3.2, ksh93, zsh and dash — all five
+// take `trap : KILL` at 0, take `trap : STOP` at 0, take the reset at 0, and
+// print nothing at all when the signal arrives. Refusing it was this shell's
+// own idea and it broke the common defensive spelling `trap cleanup HUP INT
+// TERM KILL` twice over, since the reset on the way out was refused as well.
+func TestTrapTakesTheSignalsNobodyCanCatch(t *testing.T) {
+	for _, src := range []string{
+		`trap 'x' KILL`,
+		`trap 'x' STOP`,
+		`trap '' KILL`,
+		`trap - KILL STOP`,
+		// 9 is KILL on every system this builds for, and the number has to
+		// meet the same answer the name does or one spelling is a hole in
+		// the other.
+		`trap 'x' 9`,
+	} {
+		if out, st := run(t, src, nil); st != 0 || out != "" {
+			t.Errorf("%s: got %q/%d, want it taken quietly", src, out, st)
 		}
 	}
-	// A word naming no signal at all is a different complaint, and one the
+	// And the other half. The action is a listing and never a handler: the
+	// shell dies of the signal exactly as though nothing had been trapped,
+	// which is 128 plus 9 and no output. This is the half a naive fix gets
+	// wrong, because a signal a script aims at this shell never reaches the
+	// kernel here — see selfSignaled — so the handler is the one thing that
+	// *could* have run, in the one shell where it must not.
+	for _, src := range []string{
+		`trap 'echo caught' KILL; kill -KILL $$; echo after`,
+		`trap '' KILL; kill -KILL $$; echo after`,
+	} {
+		if out, st := run(t, src, nil); st != 137 || out != "" {
+			t.Errorf("%s: got %q/%d, want %q/137", src, out, st, "")
+		}
+	}
+	// A word naming no signal at all is still a complaint, and one the
 	// dialect words. All four report 1 for it.
 	out, st := run(t, `trap 'x' NOSUCHSIGNAL`, nil)
 	if st != 1 || !strings.Contains(out, "NOSUCHSIGNAL") {
@@ -160,11 +185,14 @@ func TestTrapRefusesSignalsItCannotCatch(t *testing.T) {
 //
 // dash reads no SIG-prefixed name anywhere, so the same script traps a signal
 // in three shells and reports a bad trap in the fourth.
-// TestTrapTakesEverySignalButTheTwoNobodyCanCatch pins the set.
+// TestTrapTakesEverySignalTheHostKnows pins the set.
 //
 // It was nine names for a while, which left `trap 'x' CONT` refused as
-// uncatchable in a shell where all four panel members catch it.
-func TestTrapTakesEverySignalButTheTwoNobodyCanCatch(t *testing.T) {
+// uncatchable in a shell where all four panel members catch it. KILL and STOP
+// were the last two held back, and they are taken now as well — see
+// TestTrapTakesTheSignalsNobodyCanCatch, which is where the difference that
+// remains between them and these is pinned.
+func TestTrapTakesEverySignalTheHostKnows(t *testing.T) {
 	for _, sig := range []string{"CONT", "CHLD", "WINCH", "TSTP", "URG", "IO", "SYS", "TRAP", "XCPU", "USR1"} {
 		if out, st := run(t, `trap 'x' `+sig, nil); st != 0 || out != "" {
 			t.Errorf("%s: got %q/%d, want it taken quietly", sig, out, st)

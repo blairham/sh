@@ -1882,6 +1882,160 @@ func TestAFieldWiderThanFmtRendersIsLaidOutHere(t *testing.T) {
 	}
 }
 
+// A precision wider than Go's `fmt` renders is written out by this shell
+// instead.
+//
+// The ceiling is printfFmtWidthCeiling on the precision as well, because Go
+// reads both of a spec's numbers with one limit — and a spec past it is
+// refused whole, so `%!(NOVERB)%!(EXTRA float64=1)` lands where the field
+// should be, on a stream a script is reading (#3017). Measured against bash
+// 5.3.15, zsh, dash and bash 3.2 2026-09-15, which agree on every row here:
+// `%.10000010f` really is ten million decimal places in all of them.
+//
+// The precisions are one past the ceiling rather than the issue's two billion:
+// the shape is the same and the test writes ten megabytes instead of two
+// gigabytes.
+func TestAPrecisionWiderThanFmtRendersIsWrittenOutHere(t *testing.T) {
+	// One past the ceiling TestPrintfWidePrecisionReadsTheSecondNumber names;
+	// spelled out here because this file is the external test package.
+	const over = 10000010
+	for _, tc := range []struct {
+		name, src    string
+		wantLen      int
+		wantPrefix   string
+		wantSuffix   string
+		useEveryAxis bool
+	}{
+		// The plain numeric case: `1.` and then ten million zeros.
+		{
+			name: "a float", src: `printf '%.10000010f' 1`,
+			wantLen: over + 2, wantPrefix: "1.000", wantSuffix: "000",
+		},
+		// The row that catches a splice at the wrong end of the run. The
+		// fraction of 0.1 is the float's exact expansion and only *then*
+		// zeros, so zeros put in front of it make a different number — and
+		// the `1` above cannot tell the two apart.
+		{
+			name: "a float whose fraction is not all zeros", src: `printf '%.10000010f' 0.1`,
+			wantLen:    over + 2,
+			wantPrefix: "0.1000000000000000055511151231257827021181583404541015625",
+			wantSuffix: "000",
+		},
+		// The same precision reached through a `*` operand, which is the
+		// route that makes it *data* — a script can hold one in a variable.
+		{
+			name: "a precision from a star", src: `printf '%.*f' 10000010 1`,
+			wantLen: over + 2, wantPrefix: "1.000", wantSuffix: "000",
+		},
+		// `%e`'s digits do not end the field: the exponent stays behind them.
+		{
+			name: "an exponent form", src: `printf '%.10000010e' -0.25`,
+			wantLen: over + 7, wantPrefix: "-2.5000", wantSuffix: "0e-01",
+		},
+		// An integer's precision is a minimum digit count, so the zeros are
+		// in front of the value rather than behind it.
+		{
+			name: "an integer", src: `printf '%.10000010d' -7`,
+			wantLen: over + 1, wantPrefix: "-0000", wantSuffix: "0007",
+		},
+		{
+			name: "a hexadecimal integer", src: `printf '%.10000010x' 255`,
+			wantLen: over, wantPrefix: "0000", wantSuffix: "00ff",
+		},
+		// `%g` counts *significant* digits and strips the trailing zeros, so
+		// a precision past the expansion writes no more of them at all.
+		{
+			name: "significant digits", src: `printf '%.10000010g' 0.1`,
+			wantLen: 57, wantPrefix: "0.1000", wantSuffix: "15625",
+		},
+		// And the string conversions, where the precision only truncates and
+		// an operand shorter than it keeps every byte.
+		{
+			name: "a string", src: `printf '[%.10000010s]' xyz`,
+			wantLen: 5, wantPrefix: "[xyz]", wantSuffix: "[xyz]",
+		},
+		{
+			name: "an escaped string", src: `printf '[%.10000010b]' xyz`,
+			wantLen: 5, wantPrefix: "[xyz]", wantSuffix: "[xyz]",
+		},
+		{
+			name: "a quoted string", src: `printf '[%.10000010q]' abc`,
+			wantLen: 5, wantPrefix: "[abc]", wantSuffix: "[abc]", useEveryAxis: true,
+		},
+		// A width past the ceiling on top of it, which is the other half of
+		// the same spec going through printfWideField first.
+		{
+			name: "a wide width as well", src: `printf '%10000010.10000010f' 1`,
+			wantLen: over + 2, wantPrefix: "1.000", wantSuffix: "000",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var setup func(*Runner)
+			if tc.useEveryAxis {
+				sem := printfSem()
+				setup = func(r *Runner) { r.Semantics = &sem }
+			}
+			out, st := run(t, tc.src+"\n", setup)
+			if strings.Contains(out, "NOVERB") || strings.Contains(out, "EXTRA") {
+				t.Fatalf("fmt's own complaint reached the output: %.40s", out)
+			}
+			if st != 0 {
+				t.Errorf("status = %d, want 0", st)
+			}
+			if len(out) != tc.wantLen {
+				t.Fatalf("len = %d, want %d", len(out), tc.wantLen)
+			}
+			if !strings.HasPrefix(out, tc.wantPrefix) {
+				t.Errorf("head is %.60q, want it to start %q", out, tc.wantPrefix)
+			}
+			if !strings.HasSuffix(out, tc.wantSuffix) {
+				t.Errorf("tail is %q, want it to end %q",
+					out[len(out)-len(tc.wantSuffix):], tc.wantSuffix)
+			}
+		})
+	}
+}
+
+// Nothing in the band between the two ceilings writes Go's own error text,
+// whatever the verb and whatever the answer turns out to be.
+//
+// The rows above assert what each conversion writes. This one asserts the part
+// that is not about any single conversion: `%!(NOVERB)` on a shell's stdout is
+// the shell announcing its implementation language to a script that is reading
+// it, and no spec may reach it — including the ones no dialect answers, which
+// go out through stderr and must not take Go's complaint with them.
+func TestNoPrecisionWritesFmtsComplaintToStdout(t *testing.T) {
+	sem := printfSem()
+	for _, src := range []string{
+		`printf '%.10000010f' 1`,
+		`printf '%.10000010e' 1`,
+		`printf '%.10000010g' 1`,
+		`printf '%.10000010d' 1`,
+		`printf '%.10000010i' 1`,
+		`printf '%.10000010o' 1`,
+		`printf '%.10000010u' 1`,
+		`printf '%.10000010x' 1`,
+		`printf '%.10000010X' 1`,
+		`printf '%.10000010s' x`,
+		`printf '%.10000010b' x`,
+		`printf '%.10000010c' x`,
+		`printf '%.10000010q' x`,
+		`printf '%.2147483646s' x`,
+		`printf '%-20.10000010s' x`,
+		`printf '%020.10000010d' 1`,
+		`printf '%+.10000010e' 1`,
+		`printf '%#.10000010o' 8`,
+	} {
+		t.Run(src, func(t *testing.T) {
+			out, _ := run(t, src+"\n", func(r *Runner) { r.Semantics = &sem })
+			if strings.Contains(out, "NOVERB") || strings.Contains(out, "EXTRA") ||
+				strings.Contains(out, "BADPREC") {
+				t.Errorf("fmt's own complaint reached the output: %.60s", out)
+			}
+		})
+	}
+}
+
 // C99's three float conversions, which two of the panel's columns have not.
 //
 // Gated rather than always on: a dialect without them wants the letter to

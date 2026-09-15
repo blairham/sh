@@ -58,6 +58,12 @@ type Frame struct {
 	outerFunc     string
 	outerFuncLine int
 
+	// Keyword marks a function defined with the `function` keyword rather
+	// than with `name()`, for the dialect whose `$0` answers only for those
+	// — see [DollarZeroIsTheInnermostKeywordFunction]. False for a sourced
+	// file and for a startup file, neither of which is a function at all.
+	Keyword bool
+
 	// Startup marks a frame the *shell* entered rather than a script: a
 	// run-commands file, the login profile, `$ENV`, `$BASH_ENV`.
 	//
@@ -171,6 +177,32 @@ func (r *Runner) innermostCall() (string, bool) {
 	return f.Name, true
 }
 
+// innermostKeywordFunction is the nearest function on the stack that was
+// defined with the `function` keyword, for the dialect whose `$0` names one.
+//
+// It walks down rather than looking at the top frame, and that is the
+// measurement rather than a convenience: in the shell that has this, a
+// `name()` function called from inside a `function` one still reports the
+// outer function's name, and so does a file sourced from inside one. So the
+// frames that do not answer are transparent instead of being an answer of
+// their own.
+//
+// A startup file stops the walk. It is read by the shell rather than called
+// by a script — see [Frame.Startup] — so there is nothing below it a script
+// named, and a function it happens to be running is the shell's own.
+func (r *Runner) innermostKeywordFunction() (string, bool) {
+	for i := len(r.frames) - 1; i >= 0; i-- {
+		f := r.frames[i]
+		if f.Startup {
+			return "", false
+		}
+		if f.Keyword {
+			return f.Name, true
+		}
+	}
+	return "", false
+}
+
 // currentFile is the file being read now, which is what a function defined
 // here will remember.
 func (r *Runner) currentFile() string {
@@ -244,7 +276,7 @@ func (r *Runner) locationFile() string {
 	if n := len(r.frames) - r.outsideCall; n > 0 {
 		return r.frames[n-1].File
 	}
-	if r.outsideCall > 0 && r.scriptFile != "" && r.sem().DollarZeroNamesTheInnermostCall == Yes {
+	if r.outsideCall > 0 && r.scriptFile != "" && r.sem().DollarZeroNames == DollarZeroIsTheInnermostCall {
 		if in, ok := r.innermostCall(); ok {
 			return in
 		}

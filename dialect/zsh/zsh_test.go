@@ -208,7 +208,6 @@ func TestSemantics(t *testing.T) {
 		// panel, with the same sentence in front of it either way.
 		{"ArithCommandErrorStatusIsTwo", s.ArithCommandErrorStatusIsTwo, interp.Yes},
 		{"ReadonlyReassignmentFatal", s.ReadonlyReassignmentFatal, interp.Yes},
-		{"DollarZeroNamesTheInnermostCall", s.DollarZeroNamesTheInnermostCall, interp.Yes},
 		// A `jobs` listing: which end it starts from, and whether a job that
 		// has already ended appears in it at all. Both split the panel two
 		// and two, which is why both are fields.

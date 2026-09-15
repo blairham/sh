@@ -252,7 +252,7 @@ popd() {
 //
 // ZSH_ARGZERO joins them because it is the same kind of fact — what this
 // shell was called — and because it is the one value `$0` cannot answer for
-// once Semantics.DollarZeroNamesTheInnermostCall is on: `$0` follows the
+// once Semantics.DollarZeroNames follows the call stack: `$0` follows the
 // innermost function or sourced file, and this is what it was before
 // anything moved it. Captured by reading `$0` here, which works because the
 // prelude is the first thing the runner reads and nothing has been called

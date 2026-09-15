@@ -839,6 +839,21 @@ func Semantics() interp.Semantics {
 	// it made a keyword function refuse a declaration this shell takes
 	// (#1177).
 	s.DeclarationMayShadowAReadonly = interp.Yes
+	// And the keyword is what carries `$0` too. Measured 2026-09-15 from a
+	// script, and each line is a separate claim:
+	//
+	//	function kf { echo "$0"; . ./inc.sh; }   → kf, then kf again
+	//	pf() { echo "$0"; }                      → the script
+	//	. ./inc.sh at the top level              → the script
+	//	function outer { pf; }                   → outer, from inside pf
+	//
+	// So a sourced file never answers here, a `name()` function never
+	// answers here, and neither of them hides the keyword function that
+	// called it — which is a different frame from the innermost call zsh
+	// names, not the same rule with a filter on it. The axis was an Answer
+	// until #2345 and its doc said this shell keeps the script's name inside
+	// a function, which is what the `name()` spelling alone had been asked.
+	s.DollarZeroNames = interp.DollarZeroIsTheInnermostKeywordFunction
 	// An assignment prefix to a frozen name is answered by the kind of
 	// command it stands in front of, and by the kind the word *resolves*
 	// to: `command` is transparent here. Measured 2026-09-11 with

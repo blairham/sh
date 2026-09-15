@@ -3106,7 +3106,7 @@ func (r *Runner) positionalSliceElems(e *syntax.ParamExpr, elems []string) []str
 	}
 	// Through specialParam rather than r.Name, because `$0` is not always the
 	// shell: one dialect answers with the function or sourced file it is
-	// inside (Semantics.DollarZeroNamesTheInnermostCall), and a slice that
+	// inside (Semantics.DollarZeroNames), and a slice that
 	// reached past its own `$0` for a different answer than `$0` gives would
 	// be two readings of one parameter.
 	zero, _ := r.specialParam(&syntax.ParamExpr{Name: "0"})
@@ -4619,18 +4619,35 @@ func (r *Runner) specialParam(e *syntax.ParamExpr) (string, bool) {
 
 // dollarZero answers `$0`, and every all-zero digit run that means it.
 //
-// zsh reports whatever the shell is *inside* — the function being run, or the
-// file being sourced — where every other shell reports the shell's own name
-// however deep it is.
+// Three readings, one per value of Semantics.DollarZeroNames: the shell's own
+// name however deep it is, whatever the shell is *inside*, or the nearest
+// function spelled with the `function` keyword.
 //
-// The innermost call and not the innermost function: a file sourced from a
-// function is what `$0` names while it runs, so asking r.inFunc would answer
-// with the function around it. See Semantics.DollarZeroNamesTheInnermostCall
-// for the measurement.
+// For the second, the innermost call and not the innermost function: a file
+// sourced from a function is what `$0` names while it runs, so asking
+// r.inFunc would answer with the function around it. For the third it is the
+// other way about — a sourced file does not answer and does not hide the
+// function that called it — which is why the two have separate walks rather
+// than one with a filter on it.
 func (r *Runner) dollarZero() (string, bool) {
-	if in, ok := r.innermostCall(); ok &&
-		r.ask(r.sem().DollarZeroNamesTheInnermostCall, "$0 naming the function or sourced file it is inside") {
-		return in, true
+	call, inCall := r.innermostCall()
+	keyword, inKeyword := r.innermostKeywordFunction()
+	if !inCall && !inKeyword {
+		// Nothing on the stack could answer, so the axis is not consulted:
+		// a core that refuses every unanswered axis must not refuse `echo
+		// $0` in a script that has called nothing, and a startup file is
+		// outside all three readings alike.
+		return r.Name, true
+	}
+	switch r.dollarZeroScope() {
+	case DollarZeroIsTheInnermostCall:
+		if inCall {
+			return call, true
+		}
+	case DollarZeroIsTheInnermostKeywordFunction:
+		if inKeyword {
+			return keyword, true
+		}
 	}
 	return r.Name, true
 }

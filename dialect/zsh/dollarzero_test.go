@@ -76,8 +76,8 @@ func TestDollarZeroFollowsTheSourcedFile(t *testing.T) {
 // TestTheAxisIsSet is the field, which is what the preset promises and what a
 // caller building its own Semantics reads.
 func TestTheAxisIsSet(t *testing.T) {
-	if got := zsh.Semantics().DollarZeroNamesTheInnermostCall; got != interp.Yes {
-		t.Errorf("DollarZeroNamesTheInnermostCall = %v, want Yes", got)
+	if got := zsh.Semantics().DollarZeroNames; got != interp.DollarZeroIsTheInnermostCall {
+		t.Errorf("DollarZeroNames = %v, want the innermost call", got)
 	}
 }
 

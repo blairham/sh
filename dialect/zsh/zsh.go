@@ -1667,7 +1667,7 @@ func Semantics() interp.Semantics {
 	// The FUNCTION_ARGZERO option, on by default and the reason this shell
 	// alone moves `$0`: it names the function being run, or the file being
 	// sourced, and goes back to the script's name when that call returns.
-	s.DollarZeroNamesTheInnermostCall = interp.Yes
+	s.DollarZeroNames = interp.DollarZeroIsTheInnermostCall
 	s.BuiltinSyntaxErrorFatal = interp.No
 	// A sourced file is read a command at a time and `eval`'s text is read
 	// through first, which is the split that makes these two fields rather

@@ -233,7 +233,7 @@ func TestAStartupFileIsNamedByTheDiagnosticsItRaises(t *testing.T) {
 func TestAStartupFileDoesNotBecomeDollarZero(t *testing.T) {
 	var buf strings.Builder
 	sem := PosixSemantics()
-	sem.DollarZeroNamesTheInnermostCall = Yes
+	sem.DollarZeroNames = DollarZeroIsTheInnermostCall
 	dg := Diagnostics{}
 	r := newTestRunner(t, &Runner{
 		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "testsh",

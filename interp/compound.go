@@ -989,7 +989,7 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	// pushFrame, and Runner.LocatedAtTheCall for what reads it back. A push
 	// after the two assignments below would record the callee as its own
 	// caller.
-	r.pushFrame(Frame{File: r.functionFile(fn.Name), Name: name})
+	r.pushFrame(Frame{File: r.functionFile(fn.Name), Name: name, Keyword: fn.Keyword})
 	defer r.popFrame()
 	// And the arguments, where a debugger has asked for them. After the
 	// frame, because the entry records the depth it was taken at. Only a

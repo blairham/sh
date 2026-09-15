@@ -17,18 +17,19 @@ import (
 
 // `$0` and the call stack.
 //
-// One shell in the panel moves `$0` as the shell is called into things: it
-// names the function being run, or the file being sourced, and goes back to
-// the script's name when that call returns. The other five report the
-// script's name however deep the shell is. The axis is
-// Semantics.DollarZeroNamesTheInnermostCall and the measurement is the
-// `axis/dollar-zero-*` rows of docs/spec/measurements.md.
+// The panel splits three ways. One shell moves `$0` as the shell is called
+// into things: it names the function being run, or the file being sourced,
+// and goes back to the script's name when that call returns. One moves it
+// only for a function spelled with the `function` keyword, and for nothing
+// else. The rest report the script's name however deep the shell is. The axis
+// is Semantics.DollarZeroNames and the measurement is the `axis/dollar-zero-*`
+// and `cmd/function-keyword-*` rows of docs/spec/measurements.md.
 
 // zeroSemantics is permissive() with the axis under test answered, so a test
 // about `$0` is not tripped by an unrelated axis going unanswered.
-func zeroSemantics(a Answer) Semantics {
+func zeroSemantics(a DollarZeroScope) Semantics {
 	s := permissive()
-	s.DollarZeroNamesTheInnermostCall = a
+	s.DollarZeroNames = a
 	return s
 }
 
@@ -100,9 +101,9 @@ func TestDollarZeroNamesTheInnermostCall(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			for _, answer := range []struct {
-				a    Answer
+				a    DollarZeroScope
 				want string
-			}{{Yes, tc.on}, {No, tc.off}} {
+			}{{DollarZeroIsTheInnermostCall, tc.on}, {DollarZeroIsTheShellsOwnName, tc.off}} {
 				dir := t.TempDir()
 				for name, body := range tc.files {
 					write(t, dir, name, body+"\n")
@@ -124,17 +125,17 @@ func TestDollarZeroNamesTheInnermostCall(t *testing.T) {
 // and a core that refuses every unanswered axis must not refuse `echo $0` in
 // a script that has called nothing.
 func TestDollarZeroOutsideAnyCallNeverAsksTheAxis(t *testing.T) {
-	sem := zeroSemantics(Unspecified)
+	sem := zeroSemantics(DollarZeroScopeUnspecified)
 	out, st := sourceRun(t, t.TempDir(), `echo "[$0]"`, sem, Diagnostics{})
 	if out != "[testsh]\n" || st != 0 {
 		t.Errorf("got %q status %d, want the shell's own name and success", out, st)
 	}
 }
 
-// TestThePresetsAnswerForThemselves. The standard's preset answers No — five
-// of the panel's six members report the script's name on every route and the
-// sixth is the outlier — and the bare core answers nothing at all, which is
-// this package's discipline rather than an omission.
+// TestThePresetsAnswerForThemselves. The standard's preset answers with the
+// shell's own name — the majority reading, and the one the standard's own
+// text has no reason to move — and the bare core answers nothing at all,
+// which is this package's discipline rather than an omission.
 //
 // Both asserted by running the preset rather than by reading the field, and
 // with nothing overriding it: every other test here sets the axis by hand, so
@@ -191,7 +192,7 @@ func TestDollarZeroInsideACallRefusesWhenNothingAnswered(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			out, _ := sourceRun(t, dir, tc.src, zeroSemantics(Unspecified),
+			out, _ := sourceRun(t, dir, tc.src, zeroSemantics(DollarZeroScopeUnspecified),
 				Diagnostics{Location: LocationLineWord})
 			if out != tc.want {
 				t.Errorf("got %q, want %q", out, tc.want)
@@ -220,11 +221,11 @@ func TestASourcedFilesFrameCarriesBothTheOperandAndTheFile(t *testing.T) {
 	write(t, sub, "bad.sh", "nosuchcmd-xyz\n")
 	dg := Diagnostics{Location: LocationTightLine, LocationNamesTheCurrentFile: true}
 
-	out, _ := sourceRunOnPath(t, dir, "sub", ". inc.sh", zeroSemantics(Yes), dg)
+	out, _ := sourceRunOnPath(t, dir, "sub", ". inc.sh", zeroSemantics(DollarZeroIsTheInnermostCall), dg)
 	if out != "in=[inc.sh]\n" {
 		t.Errorf("got %q, want the operand the script wrote", out)
 	}
-	out, _ = sourceRunOnPath(t, dir, "sub", ". bad.sh", zeroSemantics(Yes), dg)
+	out, _ = sourceRunOnPath(t, dir, "sub", ". bad.sh", zeroSemantics(DollarZeroIsTheInnermostCall), dg)
 	if !strings.HasPrefix(out, "sub/bad.sh:1: ") {
 		t.Errorf("got %q, want the location to name the joined path", out)
 	}
@@ -300,10 +301,84 @@ func TestADigitRunWorthZeroIsDollarZero(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			for _, answer := range []struct {
-				a    Answer
+				a    DollarZeroScope
 				want string
-			}{{Yes, tc.on}, {No, tc.off}} {
+			}{{DollarZeroIsTheInnermostCall, tc.on}, {DollarZeroIsTheShellsOwnName, tc.off}} {
 				out, st := sourceRun(t, t.TempDir(), tc.src, zeroSemantics(answer.a), Diagnostics{})
+				if out != answer.want || st != 0 {
+					t.Errorf("axis %v: got %q status %d, want %q and 0", answer.a, out, st, answer.want)
+				}
+			}
+		})
+	}
+}
+
+// TestDollarZeroNamesTheInnermostKeywordFunction is the third reading, and
+// every case here is one the other two get wrong.
+//
+// It is a separate table rather than a third column on the one above because
+// the rows are different rows: what separates this reading from "the
+// innermost call" is never a function on its own but a *frame that does not
+// answer* — a `name()` function, a sourced file — sitting above one that
+// does. A table whose sources only ever call one thing cannot tell them
+// apart.
+func TestDollarZeroNamesTheInnermostKeywordFunction(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		files map[string]string
+		src   string
+		// One want per reading, so each row says what all three do.
+		call, keyword, shell string
+	}{
+		{
+			name: "the keyword spelling names the function and the other does not",
+			src: "function kf { echo \"kf=[$0]\"; }\npf() { echo \"pf=[$0]\"; }\nkf\npf\n" +
+				"echo \"top=[$0]\"",
+			call:    "kf=[kf]\npf=[pf]\ntop=[testsh]\n",
+			keyword: "kf=[kf]\npf=[testsh]\ntop=[testsh]\n",
+			shell:   "kf=[testsh]\npf=[testsh]\ntop=[testsh]\n",
+		},
+		{
+			// The row that shows this is a different frame and not the
+			// innermost call narrowed to a spelling: the file is on top of
+			// the stack and does not answer, and does not hide the function
+			// under it either.
+			name:    "a file sourced from inside a keyword function is still the function",
+			files:   map[string]string{"inc.sh": `echo "in=[$0]"`},
+			src:     "function kf { . ./inc.sh; }\nkf\n. ./inc.sh",
+			call:    "in=[./inc.sh]\nin=[./inc.sh]\n",
+			keyword: "in=[kf]\nin=[testsh]\n",
+			shell:   "in=[testsh]\nin=[testsh]\n",
+		},
+		{
+			name:    "a name() function called from inside a keyword one is still the outer",
+			src:     "pf() { echo \"pf=[$0]\"; }\nfunction outer { pf; }\nouter\npf",
+			call:    "pf=[pf]\npf=[pf]\n",
+			keyword: "pf=[outer]\npf=[testsh]\n",
+			shell:   "pf=[testsh]\npf=[testsh]\n",
+		},
+		{
+			name:    "and it goes back when the call returns",
+			src:     "function kf { echo \"in=[$0]\"; }\nkf\necho \"after=[$0]\"",
+			call:    "in=[kf]\nafter=[testsh]\n",
+			keyword: "in=[kf]\nafter=[testsh]\n",
+			shell:   "in=[testsh]\nafter=[testsh]\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, answer := range []struct {
+				a    DollarZeroScope
+				want string
+			}{
+				{DollarZeroIsTheInnermostCall, tc.call},
+				{DollarZeroIsTheInnermostKeywordFunction, tc.keyword},
+				{DollarZeroIsTheShellsOwnName, tc.shell},
+			} {
+				dir := t.TempDir()
+				for name, body := range tc.files {
+					write(t, dir, name, body+"\n")
+				}
+				out, st := sourceRun(t, dir, tc.src, zeroSemantics(answer.a), Diagnostics{})
 				if out != answer.want || st != 0 {
 					t.Errorf("axis %v: got %q status %d, want %q and 0", answer.a, out, st, answer.want)
 				}

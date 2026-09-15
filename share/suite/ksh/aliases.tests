@@ -1,0 +1,54 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Aliases in ksh93 — #2319.
+#
+# ksh93 ships nineteen aliases before a script has run a line, and several of
+# them are how the shell's own vocabulary is spelled: `integer`, `float` and
+# `nameref` are aliases for `typeset` with a flag, `history` and `r` are
+# aliases onto `fc`, and `source` is one onto `.`. None of the other three
+# shells on the panel defines a single alias at startup, so a name that is
+# already an alias here is a name a script must not assume is free — an
+# earlier draft of core/test.tests defined a function called `r` and nothing
+# could call it.
+#
+# The other two answers are about the builtin rather than the table. ksh93
+# has `alias -t` for tracked aliases and `alias -x` for exported ones,
+# neither of which the panel's other shells accept; and a name ksh93 has
+# removed can be removed *again* successfully, where the other three report
+# failure the second time as they do for a name nobody ever defined.
+#
+# The option cases are written inside a subshell. An option `alias` does not
+# have is a fatal usage error in ksh93 and would leave the rest of the file
+# unrun in the columns that lack these flags.
+
+# Removing a name twice. The first removal succeeds everywhere; the second is
+# where ksh93 parts from the panel, and the third case is the control — a
+# name that was never defined fails here too, so this is about a name the
+# shell has seen rather than about `unalias` being lenient.
+alias h=1
+unalias h; printf 'first removal -> %s\n' "$?"
+unalias h 2>/dev/null; printf 'second removal -> %s\n' "$?"
+unalias nevernamed_zz 2>/dev/null; printf 'never named -> %s\n' "$?"
+
+# The two flags. `-t` lists or creates tracked aliases — the shell's cache of
+# where a command was found on PATH — and `-x` marks an alias for export.
+( alias -t ) > /dev/null 2>&1; printf 'alias -t -> %s\n' "$?"
+( alias -x xx=1 ) 2>/dev/null; printf 'alias -x -> %s\n' "$?"
+( alias -p ) > /dev/null 2>&1; printf 'alias -p -> %s\n' "$?"
+
+# The preset table. Queried by name rather than listed, because the list
+# itself is a version's and the point being made is that these names are
+# taken.
+for n in integer float nameref history r hash source autoload stop times; do
+  if alias "$n" > /dev/null 2>&1; then
+    printf 'preset %s yes\n' "$n"
+  else
+    printf 'preset %s no\n' "$n"
+  fi
+done
+
+# And a preset is an ordinary alias: it can be removed, after which the name
+# is free.
+unalias float 2>/dev/null; printf 'unalias a preset -> %s\n' "$?"
+alias float > /dev/null 2>&1; printf 'preset after removal -> %s\n' "$?"

@@ -1,0 +1,55 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Aliases in zsh — #2319. zsh has two kinds of alias the panel's other three
+# shells have no spelling for at all, and a third way of removing them.
+#
+# A global alias is not tied to the command word. It replaces *any* word,
+# which is what makes `alias -g L='| less'` work and what makes a global
+# alias the most dangerous thing in a zsh startup file.
+#
+# A suffix alias is keyed on a word's extension rather than on the word, and
+# it decides what runs when the word is a command — so `./notes.txt` opens
+# the file instead of trying to execute it.
+#
+# Both definitions are written inside `eval` and inside a subshell, for two
+# separate reasons. The `eval` is because an alias is expanded when the
+# command that uses it is *read*: a definition and a use in one parse unit do
+# not see each other, and every case here needs the two in different reads.
+# The subshell is because ksh93 ends the shell on an option its `alias` does
+# not have, so an unguarded `alias -g` here would leave the rest of the file
+# unrun in that column — a file that measured one line and stopped.
+
+show() {
+  printf 'n=%s' "$#"
+  for a in "$@"; do printf ' [%s]' "$a"; done
+  printf '\n'
+}
+
+# A global alias in an argument position, where an ordinary alias is never
+# looked at.
+( eval 'alias -g G=gvalue'; eval 'show G one' ) 2>/dev/null
+printf 'global alias -> %s\n' "$?"
+
+# Its value is re-split, the same as an ordinary alias's is.
+( eval 'alias -g Q="a b"'; eval 'show Q' ) 2>/dev/null
+printf 'global value splits -> %s\n' "$?"
+
+# Quoting the word suppresses it, exactly as quoting a command word
+# suppresses an ordinary alias.
+( eval 'alias -g W=wv'; eval 'show "W"' ) 2>/dev/null
+printf 'global alias quoted -> %s\n' "$?"
+
+# A suffix alias: the command word is a path that is not executable, and the
+# extension decides what runs on it.
+printf 'printf "suffix ran on %%s\\n" "$1"\n' > runner
+chmod 755 runner
+( eval 'alias -s tzz=./runner'; : > f.tzz; eval './f.tzz' ) 2>/dev/null
+printf 'suffix alias -> %s\n' "$?"
+
+# `unalias -m` removes by pattern rather than by name. The two queries after
+# it are what make the removal visible: the name that matched is gone and the
+# name that did not is still there.
+alias m1=x m2=y keep=z
+( eval 'unalias -m "m*"'; eval 'alias m1'; eval 'alias keep' ) 2>/dev/null
+printf 'unalias -m -> %s\n' "$?"

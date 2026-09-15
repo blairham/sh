@@ -1,0 +1,48 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Command lookup in zsh — #2320.
+#
+# `command` means something different here. POSIX defines it as suppressing
+# the *function* lookup, so `command true` still runs the builtin; in zsh it
+# suppresses the builtin as well and runs the program on PATH. That is the
+# whole of the difference between a portable `command foo` and zsh's, and it
+# is invisible until a program of the same name as a builtin is installed —
+# at which point the portable spelling silently runs something else.
+#
+# `builtin` is the other half, and is how zsh says what POSIX's `command`
+# says. It is asked here beside it because the pair only makes sense
+# together: `command` for the program, `builtin` for the builtin, and the
+# bare word for whatever the order picks.
+#
+# The last two are zsh names for the same question. `=word` is replaced by
+# the full path the word would run, which no other shell on the panel does,
+# and `whence -p` answers it as a utility.
+
+mkdir -p bin1
+printf '#!/bin/sh\nprintf "external true\\n"\n' > bin1/true; chmod 755 bin1/true
+printf '#!/bin/sh\nprintf "external prog\\n"\n' > bin1/prog; chmod 755 bin1/prog
+PATH="$PWD/bin1:/usr/bin:/bin"
+
+# The bare word runs the builtin, as everywhere.
+true; printf 'plain true -> %s\n' "$?"
+
+# `command` reaches past it to the program.
+command true; printf 'command true -> %s\n' "$?"
+
+# And `builtin` names the builtin whatever else exists.
+( eval 'builtin true' ) 2>/dev/null; printf 'builtin true -> %s\n' "$?"
+
+# A function is shadowed by both of them, and by neither is it run.
+true() { printf 'function true\n'; }
+true; printf 'function -> %s\n' "$?"
+command true; printf 'command past the function -> %s\n' "$?"
+( eval 'builtin true' ) 2>/dev/null; printf 'builtin past the function -> %s\n' "$?"
+unset -f true
+
+# `=word` is replaced by the path the word would run. Everywhere else it is
+# four ordinary characters.
+( eval 'printf "[%s]\n" =prog' ) 2>/dev/null; printf 'equals expansion -> %s\n' "$?"
+
+# And the utility form of the same question.
+( eval 'whence -p true' ) 2>/dev/null; printf 'whence -p -> %s\n' "$?"

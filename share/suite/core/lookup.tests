@@ -1,68 +1,157 @@
 # SPDX-FileCopyrightText: 2026 Blair Hamilton
 # SPDX-License-Identifier: Apache-2.0
 #
-# Command lookup order — #2320. Which of the four things a word could name
-# the shell picks, and what changes the answer.
+# Command lookup order — #2320. Which of the things a word could name the
+# shell picks, and what changes the answer.
 #
-# The order POSIX XCU 2.9.1.1 gives is: a special builtin, then a function,
-# then a regular builtin, then PATH. The pieces are made here — two
-# directories with a program of the same name in each — so the answer is the
-# rule rather than what is installed on the machine.
+# The order POSIX XCU 2.9.1.1 gives is: a reserved word, then an alias, then
+# a special builtin, then a function, then a regular builtin, then PATH. The
+# pieces are made here — two directories with a program of the same name in
+# each — so the answer is the rule rather than what is installed on the
+# machine.
 #
-# `command -v` on a name that is nothing is held out: dash answers 127 where
-# the other three answer 1, so it is a dash answer and it is asked in dash/.
+# Three questions in this area split the panel and are asked elsewhere:
+#
+#   * whether a function may be *named* after a special builtin at all.
+#     bash and zsh accept `export() { … }`; ksh93 and dash refuse the file
+#     outright, dash calling it a syntax error. So "does a function beat a
+#     special builtin" has no common answer — in half the panel the question
+#     cannot be put. bash/ and dash/ carry the two sides.
+#   * what `command -v` prints for a word with a slash in it. bash, zsh and
+#     dash echo the operand; ksh93 resolves it against the working directory
+#     and leaves the `./` in the middle of the result. ksh/.
+#   * whether a remembered location is re-checked when a *new* program of
+#     that name appears earlier on PATH. ksh93 finds the new one, the other
+#     three keep the one they remembered until PATH is assigned to. ksh/ and
+#     bash/ again, for the two ends of it.
+#
+# `command -v` on a name that is nothing is held out for the same reason:
+# dash answers 127 where the other three answer 1, and that is in dash/.
 
-mkdir -p bin1 bin2
+mkdir -p bin1 bin2 adir
 printf '#!/bin/sh\nprintf "bin1 tool\\n"\n' > bin1/tool; chmod 755 bin1/tool
 printf '#!/bin/sh\nprintf "bin2 tool\\n"\n' > bin2/tool; chmod 755 bin2/tool
+printf '#!/bin/sh\nprintf "prog [%%s]\\n" "$1"\n' > bin1/prog; chmod 755 bin1/prog
 
-# PATH is searched left to right, and the first directory with the name wins.
+# --- PATH itself ---
+
+# Searched left to right, and the first directory holding the name wins.
 PATH="$PWD/bin1:$PWD/bin2:/usr/bin:/bin"
 tool
 PATH="$PWD/bin2:$PWD/bin1:/usr/bin:/bin"
 tool
 PATH="$PWD/bin1:$PWD/bin2:/usr/bin:/bin"
 
-# A function of the same name is found before anything on PATH, and `command`
-# is what reaches past it. Removing the function uncovers the program again.
+# An empty element means the working directory, wherever it appears in the
+# list, and `.` spelled out is the same thing.
+printf '#!/bin/sh\nprintf "cwd prog\\n"\n' > cwdprog; chmod 755 cwdprog
+PATH=":$PWD/bin1:/usr/bin:/bin"
+cwdprog 2>/dev/null; printf 'leading empty element -> %s\n' "$?"
+PATH="$PWD/bin1::/usr/bin:/bin"
+cwdprog 2>/dev/null; printf 'middle empty element -> %s\n' "$?"
+PATH="$PWD/bin1:/usr/bin:/bin:"
+cwdprog 2>/dev/null; printf 'trailing empty element -> %s\n' "$?"
+PATH=".:$PWD/bin1:/usr/bin:/bin"
+cwdprog 2>/dev/null; printf 'dot element -> %s\n' "$?"
+
+# An element may be a relative path, and it is resolved against the working
+# directory at the time of the search rather than at the time of assignment.
+mkdir -p sub
+printf '#!/bin/sh\nprintf "relative entry\\n"\n' > sub/rel; chmod 755 sub/rel
+PATH="sub:/usr/bin:/bin"
+rel 2>/dev/null; printf 'relative element -> %s\n' "$?"
+
+# An element that is not a directory, and one that does not exist, are both
+# skipped rather than ending the search.
+printf 'x\n' > plainfile
+PATH="$PWD/plainfile:$PWD/bin2:/usr/bin:/bin"
+tool 2>/dev/null; printf 'non-directory element -> %s\n' "$?"
+PATH="$PWD/nosuchdir_zz:$PWD/bin2:/usr/bin:/bin"
+tool 2>/dev/null; printf 'missing element -> %s\n' "$?"
+
+# An empty PATH finds no program at all, and finds every builtin.
+( PATH=; prog 2>/dev/null; printf 'empty PATH, a program -> %s\n' "$?" )
+( PATH=; true; printf 'empty PATH, a builtin -> %s\n' "$?" )
+
+PATH="$PWD/bin1:$PWD/bin2:/usr/bin:/bin"
+
+# --- functions, builtins and programs ---
+
+# A function is found before a program of the same name, and `command` is
+# what reaches past it. Removing the function uncovers the program again.
 tool() { printf 'function tool\n'; }
 tool
 command tool
 unset -f tool
 tool
 
-# A function is found before a regular builtin too, and `command` reaches past
-# that one the same way.
+# A function is found before a regular builtin too. `command` does not reach
+# past a *builtin* in every shell here — zsh runs the program instead, which
+# is in zsh/ — so what is asked of it is only that the function stops being
+# what runs.
 true() { printf 'function true\n'; }
 true; printf 'status %s\n' "$?"
-command true; printf 'command true -> %s\n' "$?"
 unset -f true
 true; printf 'plain true -> %s\n' "$?"
 
+# A regular builtin is found before a program of that name on PATH.
+printf '#!/bin/sh\nprintf "external true\\n"\n' > bin1/true; chmod 755 bin1/true
+true; printf 'builtin beats PATH -> %s\n' "$?"
+
 # A builtin that changes the shell is no different: a function named `cd` is
-# what `cd` runs.
+# what `cd` runs, and the working directory is unchanged because the function
+# is all that ran.
 cd() { printf 'function cd\n'; }
 cd /tmp
 unset -f cd
 
-# `command -v` reports what the name would run, and its status says whether
-# the name is anything at all.
-printf '#!/bin/sh\nprintf "external mytool\\n"\n' > bin1/mytool; chmod 755 bin1/mytool
-mytool
-command -v mytool > /dev/null; printf 'command -v external -> %s\n' "$?"
+# --- a word with a slash ---
+
+# It is a pathname and is not looked up: no PATH search, and no function of
+# that name either.
+prog() { printf 'function prog\n'; }
+prog x
+./bin1/prog y
+"$PWD/bin1/prog" z
+unset -f prog
+
+# --- what `command -v` reports ---
+
+# A reserved word, a special builtin and a regular builtin each name
+# themselves; a function names itself; a program names its path.
+command -v if; printf 'reserved word -> %s\n' "$?"
+command -v while; printf 'another reserved word -> %s\n' "$?"
+command -v set; printf 'special builtin -> %s\n' "$?"
+command -v eval; printf 'another special builtin -> %s\n' "$?"
+command -v true; printf 'regular builtin -> %s\n' "$?"
 myfn() { :; }
-command -v myfn > /dev/null; printf 'command -v function -> %s\n' "$?"
-command -v true > /dev/null; printf 'command -v builtin -> %s\n' "$?"
+command -v myfn; printf 'function -> %s\n' "$?"
+command -v prog; printf 'program -> %s\n' "$?"
+command -v /bin/ls; printf 'absolute path -> %s\n' "$?"
 
-# A word with a slash in it is a path and is not looked up at all.
-./bin1/tool
+# --- the statuses a command that does not run reports ---
 
-# The three ways a command does not run, and the statuses POSIX reserves for
-# them: nothing of that name is 127, whether the name was never anywhere or
-# PATH no longer has it, and a file that is found and cannot be executed is
-# 126.
+# Nothing of that name is 127, whether the name was never anywhere or PATH no
+# longer reaches it.
 nosuchthing_zz 2>/dev/null; printf 'not found -> %s\n' "$?"
-PATH=/nonexistent_zz; tool 2>/dev/null; printf 'empty path -> %s\n' "$?"
+PATH=/nonexistent_zz; tool 2>/dev/null; printf 'not on this PATH -> %s\n' "$?"
 PATH="$PWD/bin1:$PWD/bin2:/usr/bin:/bin"
+
+# A file that is found and cannot be run is 126, and so is a directory named
+# where a command was expected.
 printf 'x\n' > notexec; chmod 644 notexec
 ./notexec 2>/dev/null; printf 'not executable -> %s\n' "$?"
+./adir 2>/dev/null; printf 'a directory -> %s\n' "$?"
+
+# --- the remembering ---
+
+# Every shell here has somewhere to put a command's location and a way to
+# empty it, and all four report success for the three spellings. What they do
+# not agree on is what is *in* it, which is why nothing below prints it.
+( hash ) > /dev/null 2>&1; printf 'hash -> %s\n' "$?"
+( hash -r ) > /dev/null 2>&1; printf 'hash -r -> %s\n' "$?"
+( hash tool ) > /dev/null 2>&1; printf 'hash a name -> %s\n' "$?"
+
+# `command -p` searches a default PATH the shell chooses rather than the
+# caller's, so it finds a standard utility even when PATH finds nothing.
+( PATH=; command -p ls /dev/null ) > /dev/null 2>&1; printf 'command -p -> %s\n' "$?"

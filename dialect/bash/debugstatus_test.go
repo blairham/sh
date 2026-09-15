@@ -403,3 +403,65 @@ func TestARefusedLastPipelineElementRunningHereIsRefusedToo(t *testing.T) {
 		})
 	}
 }
+
+// TestTheReturnTrapFiresWhenTheDebugRuleBeganTheReturn is the pair #2778
+// filed as unreachable, measured 2026-09-15.
+//
+// The issue recorded that the returning rule "hangs bash 5.3.15 outright when
+// a RETURN trap is set", and so had no reading to copy for what the RETURN
+// action sees. That is true of the *probe* and not of the pair. The probe's
+// action tested `$BASH_COMMAND`, and a trap body does not move that parameter
+// — `trap/a-trap-action-does-not-move-the-running-command` pins it — so the
+// RETURN action's own command re-fires DEBUG with the same name still in it,
+// returns 2 again, and fires RETURN again. It is a self-reference the action
+// writes, not a state the two traps get into.
+//
+// Swap the condition for one the *script* arms and bash finishes. Every row
+// below was then run in both shells and came back byte for byte, including
+// the one the issue said could not be asked: the action sees `0`, which is
+// what the skipped command left and what `debugActionDecided` already wrote
+// on the strength of the rule beside it.
+func TestTheReturnTrapFiresWhenTheDebugRuleBeganTheReturn(t *testing.T) {
+	const body = `trap 'echo "R:$?"' RETURN; g(){ echo g1; echo g2; echo g3; }; g; echo "g-st=$?"`
+	for _, c := range []struct {
+		name, src, want string
+	}{
+		// The order these rows index into. Nine firings, the extra two over
+		// the RETURN-less shape being the `trap` that sets it and the
+		// action's own firing; bash 5.3.15 counts the same nine.
+		{
+			"the firing order these rows index into",
+			`n=0; trap 'n=$((n+1))' DEBUG; shopt -s extdebug; trap 'echo R' RETURN; g(){ echo g1; echo g2; echo g3; }; g; trap - DEBUG; echo "n=$n"`,
+			"g1\ng2\ng3\nR\nn=9\n",
+		},
+		// A 2 at the body's second command returns from the call, the RETURN
+		// action fires seeing 0, and the call reports 2. `g3` is gone and
+		// `g1` is not, which is what says the call was entered and left.
+		{"the action fires and sees 0", countingAction("5", "2") + body, "g1\nR:0\ng-st=2\n"},
+		// The same firing at 1 is a plain skip: the call runs on, the action
+		// still fires — at the end of the call rather than from the rule —
+		// and the call reports 0. Without this row the one above passes for
+		// a shell that fires the action on any refusal.
+		{"a plain skip still ends the call normally", countingAction("5", "1") + body, "g1\ng3\nR:0\ng-st=0\n"},
+		// Two more indices, because the rows above index a counter and a
+		// count that moved would silently re-aim the refusal.
+		{"a 2 at the first body command", countingAction("4", "2") + body, "R:0\ng-st=2\n"},
+		{"a 2 at the last body command", countingAction("6", "2") + body, "g1\ng2\nR:0\ng-st=2\n"},
+		// And the control that says `R:0` is a reading rather than whatever
+		// this shell happens to leave lying about: an explicit `return 2`
+		// after a `false` in the same shape shows the action `1`.
+		{
+			"an explicit return shows the action the status it was handed",
+			`shopt -s extdebug; trap 'echo "R:$?"' RETURN; g(){ echo g1; false; return 2; }; g; echo "g-st=$?"`,
+			"g1\nR:1\ng-st=2\n",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, errs, code := runTraced(t, c.src)
+			if out != c.want || errs != "" || code != 0 {
+				t.Errorf("ran %q: out %q errs %q status %d, want %q and nothing said",
+					c.src, out, errs, code, c.want)
+			}
+		})
+	}
+}

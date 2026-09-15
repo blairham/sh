@@ -4538,14 +4538,22 @@ type Diagnostics struct {
 	// substrate's own; ksh93 and zsh write a space inside each parenthesis.
 	TraceArrayLiteral TraceArrayLiteral
 	// TracePrefixRepeatsAtIndirection repeats the trace prefix's first
-	// character once per level of indirection — an `eval`, a sourced file or
-	// a command substitution the traced command is inside.
+	// character once per level of indirection — an `eval`, a sourced file, a
+	// command substitution or a trap body the traced command is inside.
 	//
 	// bash alone, measured 2026-09-11: `set -x; eval :` traces `+ eval :`
 	// then `++ :`, and `eval "eval :"` reaches `+++ :`. A function call and a
 	// subshell add nothing, so the count is of text being read again rather
 	// than of the stack. dash, ksh93 and zsh leave the prefix alone at every
 	// depth.
+	//
+	// A **trap body is a level** and EXIT's alone is not, measured 2026-09-14
+	// on bash 5.3.15: a DEBUG, ERR, RETURN or signal action traces at `++ `
+	// where the script's own commands in the same run trace at `+ `, and an
+	// `eval` inside such a body reaches `+++ `. That is the case the marker
+	// earns its keep on — a DEBUG action runs before every command, so its
+	// trace lines outnumber the script's and the depth is the only thing
+	// separating them (#2781). See Runner.enterTrapBody for the table.
 	//
 	// The *first character* rather than the whole prefix, which is what makes
 	// it a rule about the prefix rather than about the plus sign:

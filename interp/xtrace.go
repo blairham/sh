@@ -731,6 +731,11 @@ func (r *Runner) tracePromptField(f PromptField, arg string, braced bool) (strin
 // call and a subshell do not — `f(){ :; }; f` and `(:)` stay at one `+` — so
 // what counts is *text being read again* rather than the depth of the stack.
 //
+// A trap body counts too, and EXIT's does not: measured 2026-09-14, a DEBUG,
+// ERR, RETURN or signal action traces at `++ ` in a run whose own commands
+// trace at `+ `, and an EXIT action traces at `+ ` beside them (#2781). The
+// level is added by Runner.enterTrapBody, which holds the probes.
+//
 // The first character of the prefix and not the whole of it: with `PS4='XY '`
 // bash traces `XY eval :` and then `XXY :`.
 func (r *Runner) tracePrefixDepth(prefix string) string {

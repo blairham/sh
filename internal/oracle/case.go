@@ -4704,6 +4704,16 @@ printf "[alive]\n"`,
 		Why:     "bash repeats the prefix's *first character* once per level of text being read again — an `eval`, a sourced file, a command substitution — where the other three draw the same prefix at every depth. `XY` rather than the default `+ ` is what says it is the first character and not the plus sign, and `eval` rather than a function call is what says it counts indirection rather than the stack: a call and a subshell add nothing in every column",
 	},
 	{
+		ID: "xtrace/ps4-repeats-inside-a-trap-body", Category: "shell options",
+		Snippet: `PS4="XY "; d(){ :; }; trap d DEBUG; set -x; echo one`,
+		Why:     "a trap body is a level of the same count, which the row above could not ask: bash draws `XXY` in front of the action and everything the action calls, and `XY` in front of `echo one` in the same run — so the depth is the only thing separating what the script did from what its trap did. That is the case the marker earns its keep on, because a DEBUG action runs before every command and its lines outnumber the script's. The function is what says a *call* still adds nothing: `d` and the `:` inside it are drawn at the same depth. ksh93 draws one prefix at both depths and fires the action after the command rather than before it, zsh draws one prefix, and dash has no DEBUG condition at all. We drew `XY` everywhere (#2781)",
+	},
+	{
+		ID: "xtrace/ps4-does-not-repeat-inside-an-exit-body", Category: "shell options",
+		Snippet: `PS4="XY "; trap ":" EXIT; trap ":" ERR; set -x; false`,
+		Why:     "EXIT is the exemption, and the row carries both conditions so that one recorded cell holds the contrast: in bash the ERR action is drawn at `XXY` and the EXIT action at `XY`, from the same run and the same shell. Without this the rule reads as \"any trap body\", which is what a probe using EXIT alone would have recorded and is the wrong rule. ksh93 and zsh draw one prefix for both and dash refuses the ERR condition, so the three of them say only that they do not count",
+	},
+	{
 		ID: "xtrace/ps4-unset-is-not-the-default-again", Category: "shell options",
 		Snippet: `unset PS4; set -x; :`,
 		Why:     "unsetting the parameter is not the same as never having touched it: three shells then draw no prefix at all, because the default was a *value* they assigned before the script ran, and ksh93 draws `+ ` again, because there it is a special parameter that comes back. Recorded rather than modeled — this shell has no seeded `PS4` to unset, so it falls back to its dialect's prefix and answers as ksh93 does in every dialect (#1454)",
@@ -17900,6 +17910,11 @@ echo "st=$? alive"`,
 		ID: "trap/a-debug-action-names-a-compound-head", Category: "traps and exit",
 		Snippet: `trap 'echo "D:[$BASH_COMMAND]"' DEBUG; for w in a b; do :; done`,
 		Why:     "a head is named as the head and not as the whole construct — `for w in a b` rather than the loop with its body — and it is named again on the second pass, beside the body it announces. The name is this shell printing the head back rather than quoting the script, so the words keep their quoting and lose the script's spacing; ksh93 and zsh fire heads of their own here and have no parameter to put one in",
+	},
+	{
+		ID: "trap/a-debug-action-that-returns-two-with-a-return-trap-set", Category: "traps and exit",
+		Snippet: `shopt -s extdebug 2>/dev/null; armed=0; d(){ if [ "$armed" = 1 ]; then armed=0; return 2; fi; return 0; }; trap d DEBUG; trap 'printf "[R:%s]" "$?"' RETURN; g(){ printf "[g1]"; armed=1; printf "[g2]"; printf "[g3]"; }; g; printf "[done:%s]\n" "$?"`,
+		Why:     "the pair #2778 recorded as unrecordable, because the probe it was measured with hangs bash and a column that never exits would hang the record. The hang is a **self-reference** rather than the pair: that probe's action tested `$BASH_COMMAND`, a trap body does not move it — see `trap/a-trap-action-does-not-move-the-running-command` — so the RETURN action's own command re-fires DEBUG with the same name, returns 2 again and fires RETURN again, forever. An action armed by a variable the *script* sets fires once, and then the whole rule is reachable: bash 5.3 and the same build as `sh` write `[g1][R:0][done:2]` — `g2` and `g3` skipped by the simulated return, the RETURN action seeing 0 and the call reporting 2. That `R:0` is the value #2778 listed as not known and `interp.Runner.debugActionDecided` had taken from the rule beside it; it is now measured and agrees. bash 3.2 has the option and not this rule, so its cell is the three `g` lines and no `[done:]` at all; ksh93, zsh, dash and ash have no RETURN condition and run the body straight through",
 	},
 	{
 		ID: "cmd/command-v-names-a-builtin", Category: "command lookup",

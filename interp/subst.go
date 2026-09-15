@@ -57,6 +57,25 @@ func (r *Runner) commandSubst(ctx context.Context, span syntax.Span) string {
 	// Parsed whole rather than a line at a time, which is measured — an
 	// alias defined on a substitution's first line does not reach its
 	// second in dash, ksh93 or zsh.
+	// **Here rather than where the line was parsed**, which four of the seven
+	// columns do not do. Measured 2026-09-15 without an alias anywhere:
+	// `echo before; v=$(if); echo after` writes `before` in bash 3.2, ksh93
+	// and zsh and writes nothing in dash, bash 5.3, that build as `sh` and
+	// BusyBox ash — so the split runs through bash, and #2357's reading of it
+	// as dash alone is an artifact of measuring with an alias, which bash
+	// does not expand in a non-interactive shell. `false && v=$(if)` is the
+	// pair: the three lazy columns never read the body at all.
+	//
+	// Not taken, and the reason is that it cannot be a flag read here: the
+	// body would have to be parsed where the line is, with the alias table
+	// and the dialect as they stood then, and the *tree* kept — a field on
+	// the span beside syntax.Span.Arith and syntax.Span.Param, filled by the
+	// parser. Checking the body at the top of each line and throwing the
+	// tree away would answer the two corpus rows and still hand a live alias
+	// table to the parse, which is one rule with two implementations. See
+	// docs/spec/grammar/substitutions.md, and the corpus rows
+	// `subst/a-body-that-will-not-parse-stops-the-line` and
+	// `subst/a-body-that-will-not-parse-in-a-branch-never-taken`.
 	p := r.ParseWithAliases(src, r.bodyDialect(span))
 	// Where the body sits in the script, so that what it reports is reported
 	// where a reader can find it. The span's own line is the body's first,

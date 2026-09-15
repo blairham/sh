@@ -188,7 +188,7 @@ func (r *Runner) reportWhatRuns(name string) int {
 		r.printf("%s\n", name)
 		return 0
 	}
-	if reservedWord(name) {
+	if r.reservedWord(name) {
 		r.printf("%s\n", name)
 		return 0
 	}
@@ -219,16 +219,21 @@ func (r *Runner) reportWhatRuns(name string) int {
 	return 1
 }
 
-// reservedWord reports whether a name is part of the grammar rather than a
-// command. `command -v if` answers `if` in every shell in the panel.
-func reservedWord(name string) bool {
-	switch name {
-	case "if", "then", "else", "elif", "fi", "for", "while", "until", "do",
-		"done", "case", "esac", "in", "function", "select", "time", "{", "}",
-		"[[", "]]", "!":
-		return true
-	}
-	return false
+// reservedWord reports whether a name is part of *this dialect's* grammar
+// rather than a command. `command -v if` answers `if` in every shell in the
+// panel; `command -v select` answers the word in four of them and 127 in the
+// one that has no `select` loop.
+//
+// **Asked of the grammar rather than written out here**, which is what #2918
+// is. A list in this package is a claim about a language this package does
+// not define, and it drifted the moment a dialect without the constructs
+// arrived: our dash answered `[[`, `]]`, `select` and `function` as runnable
+// words it then refused to run, and answered `time` with the keyword where
+// dash has no such keyword and a script asking `command -v time` is looking
+// for the path of `/usr/bin/time`. See [syntax.Dialect.Reserves] for the
+// measurement and for the two spellings the lexer does not class as words.
+func (r *Runner) reservedWord(name string) bool {
+	return r.dialect().Reserves(name)
 }
 
 // runWithoutFunctions runs a command with the function table ignored, which

@@ -19488,6 +19488,53 @@ echo two`,
 		Script:             true,
 	},
 	{
+		ID: "alias/an-inner-body-opens-a-quote-the-input-closes", Category: "alias",
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias b='echo "'
+alias a='b x'
+echo one
+a y"
+echo two`,
+		Why:                "the seam one level in, which the token model could not reach: the quote is opened by a body that was itself expanded from another body's, so what the construct has to cross is the enclosing body's remaining text — ` x` — before it crosses the input's ` y\"`. Unanimous ` x y` in all seven columns, bash 3.2 with its extra blank. This shell refused the line, because the carry was declined outright whenever anything was pending (#2709)",
+		ExpansionCompletes: true,
+		Script:             true,
+	},
+	{
+		ID: "alias/an-inner-body-opens-a-quote-the-enclosing-body-closes", Category: "alias",
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias b='echo "'
+alias a='b x"'
+echo one
+a
+echo two`,
+		Why:    "the same seam with nothing of the input taken at all: the quote is opened by the inner body and closed by the *enclosing* one, so ` x` is the whole of it and the line after stands as written. Unanimous ` x`. It is also the row that says when the carry may happen — `b x\"` lexes as a word and a quote nothing closes, and the quote that closes it is the one `b` has yet to contribute, so a carry performed while the body is spliced reads that open quote over the input and swallows the rest of the file",
+		Script: true,
+	},
+	{
+		ID: "alias/an-inner-body-opens-a-quote-nothing-closes", Category: "alias",
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias b='echo "'
+alias a='b x'
+echo one
+a
+echo after`,
+		Why:    "the direction that matters, and the pair's control: with nothing after the alias word, the quote the inner body opened is closed by nobody and every column refuses the file — at 2 in the three bash columns, dash and ash, 1 in zsh and 3 in ksh93. Declining the carry one level in made it a *closed* quote here and ran `echo after`, which no shell runs: a quote the script never closed, closed, and a command the author did not write, run",
+		Script: true,
+	},
+	{
+		ID: "alias/three-bodies-deep-and-the-quote-still-carries", Category: "alias",
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias c='echo "'
+alias b='c y'
+alias a='b z'
+echo one
+a w"
+echo two`,
+		Why:                "the row that says the text a construct crosses is a chain rather than one body: the quote `c` opens has what is left of `b`'s body, then what is left of `a`'s, then the input in front of it, and all seven columns answer ` y z w`. A carry that reached one level rather than every level passes the two rows above at depth two and truncates this one",
+		ExpansionCompletes: true,
+		Script:             true,
+	},
+	{
 		ID: "alias/a-backslash-the-body-ends-with-reaches-the-input", Category: "alias",
 		Snippet: `shopt -s expand_aliases 2>/dev/null
 alias q='printf "[%s]" a\'

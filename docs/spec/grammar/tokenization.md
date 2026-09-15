@@ -708,11 +708,33 @@ of their own:
   nothing. The reference shells' own `-n` refuses the same text for the
   same reason, and the corpus marks such a case `ExpansionCompletes`.
 
-The seam is crossed only where the text after the alias word is the
-**input's**. A body expanded from inside another body's expansion has that
-body's remaining tokens in front of it, and a token keeps no text to be
-read again, so the carry is declined there; see #2709 for the panel rows
-on the nested arrangement.
+**The seam is crossed at every level, and the input is the last of them.**
+Where the alias word was itself a token of another body's expansion, what
+follows it is that body's remaining text, then the remaining text of every
+body that one was spliced into, and only then the input. The pending queue
+carries that text beside its tokens, and what the joined reading takes of it
+is spent by dropping the tokens it stands for. Measured 2026-09-15 from a
+script file, with `alias b='echo "'` throughout and `echo one` / `echo two`
+around the line — unanimous in all seven columns:
+
+| written | result |
+|---|---|
+| `alias a='b x'` then `a y"` | `` x y`` — the inner body opens the quote and the input closes it |
+| `alias a='b x"'` then `a` | `` x`` — the inner body opens it and the *enclosing* body closes it |
+| `alias a='b x'` then `a` alone | an unterminated quote, in every column |
+| `alias c='echo "'`, `alias b='c y'`, `alias a='b z'` then `a w"` | `` y z w`` — three bodies deep |
+
+The third row is the one that says this is not a convenience: with the carry
+declined one level in, a quote nothing closes became a closed one and the
+line after it ran, which is the direction that runs a command the author did
+not write (#2709).
+
+The carry is performed when the token is **handed out** rather than when the
+body is spliced, and the second row is why. A body's own tokenization is not
+final while an alias word stands earlier in it: `b x"` lexes as a word and a
+quote nothing closes, and the quote that closes it is the one `b` is about to
+contribute. Carrying at splice time reads that open quote over the input and
+swallows the rest of the file.
 
 ### The table reaches every text this shell reads, and the *option* is its only gate
 

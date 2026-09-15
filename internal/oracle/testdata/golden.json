@@ -2835,6 +2835,159 @@
         "TimedOut": false
       }
     },
+    "alias/an-inner-body-opens-a-quote-nothing-closes": {
+      "ash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 7: syntax error: unterminated quoted string",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 5: unexpected EOF while looking for matching `\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 5: unexpected EOF while looking for matching `\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 5: unexpected EOF while looking for matching `\"'~\u003cscript\u003e: line 7: syntax error: unexpected end of file",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: 7: Syntax error: Unterminated quoted string",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 4: syntax error at line 5: `\"' unmatched",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e:7: unmatched \"",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "alias/an-inner-body-opens-a-quote-the-enclosing-body-closes": {
+      "ash": {
+        "Stdout": "one~ x~two",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "one~ x~two",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one~ x~two",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one~  x~two",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one~ x~two",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one~ x~two",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one~ x~two",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "alias/an-inner-body-opens-a-quote-the-input-closes": {
+      "ash": {
+        "Stdout": "one~ x y~two",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "one~ x y~two",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one~ x y~two",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one~  x  y~two",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one~ x y~two",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one~ x y~two",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one~ x y~two",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "alias/an-ordinary-alias-at-the-head-of-a-pipeline": {
       "ash": {
         "Stdout": "hi~st=1",
@@ -3798,6 +3951,57 @@
       },
       "zsh": {
         "Stdout": "--plain--~G=x~r=y~--g--~G=x~--s--~t=z",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "alias/three-bodies-deep-and-the-quote-still-carries": {
+      "ash": {
+        "Stdout": "one~ y z w~two",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "one~ y z w~two",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one~ y z w~two",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one~  y  z  w~two",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one~ y z w~two",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one~ y z w~two",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one~ y z w~two",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

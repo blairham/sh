@@ -73,6 +73,36 @@ type Parser struct {
 	// expansions still *open* around the token, and that is per token rather
 	// than per command or per body, so it travels with the token.
 	pendingChains []map[string]bool
+	// pendingTails runs beside pending as well: for each token, the text
+	// that still follows it — the rest of the body it came from, and then
+	// the rest of every body that one was spliced into, in order. Empty for
+	// a token the lexer read, whose remaining text is the input itself.
+	//
+	// It is what lets a construct an alias body leaves open be continued
+	// over the *enclosing* body rather than only over the input. A token
+	// keeps no text, which is the whole of the token model, so a body one
+	// level in had nothing to be joined to and #2685's seam was crossed at
+	// the outermost level only. This is the text each token came from, kept
+	// as the queue's own column, and [Parser.carryOpenWord] reads it (#2709).
+	pendingTails []string
+	// tokTail is pendingTails' entry for the current token: the text that
+	// follows it across every body it is inside. Empty for a token of the
+	// input.
+	tokTail string
+	// pendingCarries runs beside pending for the one token of a splice that
+	// may still be reading: the body's unfinished tail, or the empty string
+	// for every token that is not it.
+	//
+	// The carry is deferred to the moment that token is *handed out* rather
+	// than performed when the body is spliced, and the reason is order. A
+	// body's own tokenization is not final while an alias word stands
+	// earlier in it: `alias b='echo "'` with `alias a='b x"'` lexes a's body
+	// as a word `x` and a quote nothing closes, and the quote that closes it
+	// is the one `b` is about to contribute. Carrying at splice time reads
+	// that open quote over the input and swallows the rest of the file;
+	// carrying when the token is reached lets `b` expand first, and its own
+	// carry then takes the `x"` out of the queue (#2709).
+	pendingCarries []string
 	// tokTouches is the same fact about the current token, and is false for
 	// a token read from the input, where the offsets answer directly.
 	tokTouches bool
@@ -417,6 +447,15 @@ func (p *Parser) next() {
 		p.tok, p.pending = p.pending[0], p.pending[1:]
 		p.tokTouches, p.pendingTouches = p.pendingTouches[0], p.pendingTouches[1:]
 		p.aliasChain, p.pendingChains = p.pendingChains[0], p.pendingChains[1:]
+		p.tokTail, p.pendingTails = p.pendingTails[0], p.pendingTails[1:]
+		carry := p.pendingCarries[0]
+		p.pendingCarries = p.pendingCarries[1:]
+		if carry != "" {
+			// The one token of its splice that may still be reading, now
+			// that everything in front of it has had its turn. See
+			// Parser.pendingCarries for why it waits until here.
+			p.carryOpenWord(&p.tok, carry)
+		}
 		// A global alias inside an alias body is expanded in turn — measured
 		// `alias -g B=x; alias -g H='a B'` gives `a x` — so the tokens being
 		// handed out are asked as well as the ones being read. Not a fresh
@@ -428,9 +467,11 @@ func (p *Parser) next() {
 	p.tok = p.lex.Next()
 	// A token of the input answers the adjacency question from its own
 	// offset, so nothing here has to be remembered for it, and it is inside
-	// no expansion: whatever a body spent is spent only for the body.
+	// no expansion: whatever a body spent is spent only for the body, and
+	// the text that follows it is the input rather than any body's.
 	p.tokTouches = false
 	p.aliasChain = nil
+	p.tokTail = ""
 	if p.err == nil && p.lex.Err() != nil {
 		p.err = p.lex.Err()
 	}

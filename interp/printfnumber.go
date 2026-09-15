@@ -80,7 +80,7 @@ func (r *Runner) printfNumber(arg string, present bool) (int64, int, bool) {
 	}
 	f, code, stop := r.printfPartialNumber(arg, text, false)
 	if code == 0 && !stop {
-		code = r.printfIntegerOverflow(arg, f)
+		code = r.printfIntegerOverflow(arg, f, false)
 	}
 	return floatToInt64(f), code, stop
 }
@@ -100,32 +100,32 @@ func (r *Runner) printfNumber(arg string, present bool) (int64, int, bool) {
 // answers `0` in that column rather than an infinity — its evaluator reads
 // `1e400` as zero, which is #2766 and not this — and it says nothing at all
 // about it, so a complaint here would be one the reference does not make.
-func (r *Runner) printfIntegerOverflow(arg string, f float64) int {
+func (r *Runner) printfIntegerOverflow(arg string, f float64, evaluated bool) int {
 	w := r.diag().PrintfIntegerOverflow
-	if w == "" || !inRangeForOverflowReport(f) {
+	if w == "" || !inRangeForOverflowReport(f, evaluated) {
 		return 0
 	}
 	r.diagf("%s\n", Wording(w, "printf: warning: %[1]s: overflow exception", arg))
 	return orDefault(r.diag().PrintfBadNumberStatus, 1)
 }
 
-// printfEvaluatedOverflow is that complaint for a value the *evaluator*
-// produced rather than a numeral the reader did, which is the one shape where
-// an infinity earns it. See the call site for the two rows that part them.
-func (r *Runner) printfEvaluatedOverflow(arg string, f float64) int {
-	w := r.diag().PrintfIntegerOverflow
-	if w == "" {
-		return 0
-	}
-	r.diagf("%s\n", Wording(w, "printf: warning: %[1]s: overflow exception", arg))
-	return orDefault(r.diag().PrintfBadNumberStatus, 1)
-}
-
-// inRangeForOverflowReport reports whether f is a finite number outside what
-// an int64 holds, which is the one shape the complaint above is made about.
-func inRangeForOverflowReport(f float64) bool {
-	if math.IsInf(f, 0) || math.IsNaN(f) {
+// inRangeForOverflowReport reports whether f is a value the complaint above is
+// made about, which is a finite number outside what an int64 holds — and,
+// where the value came out of the *evaluator*, an infinity as well.
+//
+// The two are one question and not two, which is what folds this into the
+// caller above rather than a second helper beside it: `printf '%d' 1.0/0` is
+// `overflow exception` and the clamped maximum at 1 in ksh93u+, and so are
+// `1e2/0` and `1e308*10`, while `printf '%d' 1e400` — an infinity a *numeral*
+// would have produced — is a silent zero there, that shell's reader answering
+// zero for a numeral it cannot hold (#2766). A not-a-number is neither, in
+// either direction.
+func inRangeForOverflowReport(f float64, evaluated bool) bool {
+	if math.IsNaN(f) {
 		return false
+	}
+	if math.IsInf(f, 0) {
+		return evaluated
 	}
 	return f >= math.MaxInt64 || f <= math.MinInt64
 }
@@ -224,7 +224,7 @@ func (r *Runner) printfPartialNumber(arg, text string, float bool) (float64, int
 				// there, which is #2766 — so the question is asked here,
 				// where the value is known to have been computed, rather
 				// than of every value the reading returns.
-				return f, r.printfEvaluatedOverflow(arg, f), false
+				return f, r.printfIntegerOverflow(arg, f, true), false
 			}
 			return f, 0, false
 		}

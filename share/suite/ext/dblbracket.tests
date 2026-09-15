@@ -104,3 +104,79 @@ printf 'status when a link: %s\n' "$?"
 [[ -L pointee ]]
 printf 'status when not: %s\n' "$?"
 rm -f alive dead pointee
+
+# =~ is the operator that has no counterpart in `test` at all: the right-hand
+# side is an extended regular expression, matched anywhere in the left unless
+# it is anchored. It is the construct's real divergence from `[`, and until
+# now this file did not ask it (#2312).
+[[ abc =~ b ]] && printf 'matched inside\n'
+[[ abc =~ ^a ]] && printf 'anchored at the front\n'
+[[ abc =~ ^b ]] || printf 'and the anchor is not a suggestion\n'
+[[ abc =~ c$ ]] && printf 'anchored at the end\n'
+[[ abc =~ a.c ]] && printf 'a dot is any character\n'
+[[ abc =~ [b-d]+ ]] && printf 'a class and a repetition\n'
+[[ abc =~ ^(a|z)bc$ ]] && printf 'alternation in a group\n'
+[[ abc =~ ^ab?c$ ]] && printf 'an optional character\n'
+[[ ac =~ ^ab?c$ ]] && printf 'optional, and absent\n'
+[[ 'a b' =~ a\ b ]] && printf 'an escaped space is a space\n'
+[[ abc =~ B ]] || printf 'and the match is case sensitive\n'
+
+# The status is the answer, so a regex is usable where any condition is.
+[[ abc =~ ^a ]]
+printf 'status when it matches: %s\n' "$?"
+[[ abc =~ ^z ]]
+printf 'status when it does not: %s\n' "$?"
+
+# A pattern held in a variable is a pattern when the expansion is unquoted.
+# Quoting it is what the three shells here do *not* agree about — bash reads
+# a quoted right-hand side as literal text and zsh and ksh93 still read it as
+# a regex — so only the unquoted spelling is asked, and the quoted one is in
+# bash/conditions.tests where it is bash's answer alone.
+re='^a.c$'
+[[ abc =~ $re ]] && printf 'a regex from a variable\n'
+[[ abd =~ $re ]] || printf 'and it is the regex that decided\n'
+
+# The file operators that compare two files rather than asking about one.
+# The timestamps are set here rather than waited for: a `sleep` between two
+# `touch`es measures the filesystem's granularity, and `touch -t` measures
+# the operator.
+: > older
+: > newer
+touch -t 202001010000 older
+touch -t 202101010000 newer
+[[ newer -nt older ]] && printf 'newer is newer\n'
+[[ older -nt newer ]] || printf 'and not the other way\n'
+[[ older -ot newer ]] && printf 'older is older\n'
+[[ older -ef older ]] && printf 'a file is itself\n'
+[[ older -ef newer ]] || printf 'and is not another one\n'
+ln -s older samefile
+[[ older -ef samefile ]] && printf 'a link is the file it points at\n'
+rm -f samefile
+
+# -v asks whether a name is set, which is a question about the shell rather
+# than about a string: an empty value is still set.
+unset novar
+[[ -v novar ]] || printf 'unset is not -v\n'
+vset=
+[[ -v vset ]] && printf 'set and empty is -v\n'
+vset=x
+[[ -v vset ]] && printf 'and set with a value is too\n'
+unset vset
+
+# -o asks about a shell option by its long name, and the answer is the
+# option's state rather than whether the name is known.
+[[ -o noglob ]] || printf 'noglob is off\n'
+set -o noglob
+[[ -o noglob ]] && printf 'and now it is on\n'
+set +o noglob
+
+# && binds tighter than ||, the same way it does between commands, and the
+# parentheses in the case above this one are what a different grouping needs.
+[[ -n x && -n y || -n "" ]] && printf 'and-then-or\n'
+[[ -z "" || -n "" && -z x ]] && printf 'or-then-and, and the or decided it\n'
+
+# A bracket expression with a character class inside it, which is the one
+# pattern spelling that is the same in a glob, in a case and here.
+[[ x == [[:alpha:]] ]] && printf 'alpha\n'
+[[ 9 == [[:digit:]] ]] && printf 'digit\n'
+[[ x == [[:digit:]] ]] || printf 'and not both\n'

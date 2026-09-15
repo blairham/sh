@@ -1,0 +1,35 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Two answers about `[[ ]]` that are bash's alone, and both of them are the
+# kind a script gets wrong silently.
+#
+# A **quoted** right-hand side of `=~` is literal text in bash and is still a
+# regular expression in zsh and ksh93. So `[[ $x =~ "a.c" ]]` asks whether
+# the value is the three characters `a.c` here and whether it contains any
+# `a`-something-`c` there — true and false on the same input, with no
+# diagnostic either way.
+#
+# And a numeric comparison inside `[[ ]]` reads its operands as arithmetic,
+# which in bash means a leading zero is octal. `[[ 010 -eq 10 ]]` is false
+# here and true in zsh and ksh93, so a zero-padded number from `date` or from
+# a file name compares as a different number.
+#
+# BASH_REMATCH is the third: the captures of the last `=~` are bash's and
+# nobody else's, zsh putting them in MATCH and match and ksh93 in .sh.match.
+
+[[ abc =~ "a.c" ]] || printf 'a quoted regex is literal text\n'
+[[ a.c =~ "a.c" ]] && printf 'and matches the characters it is\n'
+re='^a.c$'
+[[ abc =~ "$re" ]] || printf 'a quoted expansion is literal too\n'
+[[ abc =~ $re ]] && printf 'and unquoted it is the regex\n'
+
+[[ 010 -eq 10 ]] || printf 'a leading zero is octal in a numeric comparison\n'
+[[ 010 -eq 8 ]] && printf 'and 010 is eight\n'
+[[ 10 -eq 10 ]] && printf 'without one it is decimal\n'
+
+[[ abcd =~ (b)(c) ]]
+printf 'BASH_REMATCH [%s][%s][%s]\n' "${BASH_REMATCH[0]}" "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+printf 'and how many of them: %s\n' "${#BASH_REMATCH[@]}"
+[[ abcd =~ z ]]
+printf 'after a miss [%s] %s\n' "${BASH_REMATCH[0]}" "${#BASH_REMATCH[@]}"

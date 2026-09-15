@@ -1,0 +1,38 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# dash has neither of the two compound conditions the other three share, and
+# the way it says so is the measurement: `[[` and `((` are not constructs
+# here, so they are read as ordinary command words and looked for on PATH.
+# The answer is 127 — a command not found — rather than a syntax error, which
+# is why `command -v` is the portable test for them and a `[[` written in a
+# script that runs under dash fails at the line rather than at the parse.
+#
+# Each is run in a subshell so that the file carries on past it.
+#
+# Held out until #2918 lands: `command -v '[['` answers 127 in dash and 0 in
+# ours, and the same for `]]`, `select` and `function`, while `command -v
+# time` is `/usr/bin/time` in dash and the bare word in ours.
+#
+#   command -v '[[' ; printf 'command -v -> %s\n' "$?"
+#
+# And until #2917 lands: a two-word `test` ending in `-a` or `-o` is answered
+# by dash and refused by ours.
+#
+#   test x -a ; printf 'test x -a -> %s\n' "$?"
+
+( [[ x == x ]] ) 2> /dev/null
+printf 'a double bracket -> %s\n' "$?"
+( [[ -n x ]] ) 2> /dev/null
+printf 'with a unary operator -> %s\n' "$?"
+( (( 1 )) ) 2> /dev/null
+printf 'a double paren -> %s\n' "$?"
+( (( 1 + 1 )) ) 2> /dev/null
+printf 'with arithmetic in it -> %s\n' "$?"
+
+# The single-bracket condition is the one dash has, and it behaves the way
+# core/test.tests says it does — which is what makes the lines above about
+# the constructs rather than about conditions in general.
+[ x = x ]
+printf 'a single bracket -> %s\n' "$?"
+[ -n x ] && printf 'and stands where a command stands\n'

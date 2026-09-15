@@ -4,6 +4,7 @@
 package ksh_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/blairham/sh/dialect/bash"
@@ -102,16 +103,33 @@ func TestAFlagGroupStillNamesTheWordTail(t *testing.T) {
 		{`echo ${(a; b)x}`, "syntax error at line 1: `x}' unexpected"},
 		{`echo ${(q-)v}`, "syntax error at line 1: `v}' unexpected"},
 		{`echo ${(echo a)-b}`, "syntax error at line 1: `-b}' unexpected"},
-		// The two adjacent parens are ksh93's braced arithmetic, `${((1+2))}`
-		// being 3 there. Not implemented, and deliberately left out of the
-		// paren rule so that reading it as a subshell does not answer
-		// nothing where that shell answers a number — so it is still the
-		// refusal it was, which is what this row holds down.
-		{`echo ${((1+2))}`, "syntax error at line 1: `(' unexpected"},
 	} {
 		if got := refusal(t, c.src); got != c.want {
 			t.Errorf("%q:\n got %q\nwant %q", c.src, got, c.want)
 		}
+	}
+}
+
+// The two adjacent parens are the braced arithmetic expansion and not this
+// construct, which is where the paren rule declines and scanBracedArithmetic
+// takes over: `${((1+2))}` is 3 here and `${((echo hi))}` an arithmetic
+// syntax error, where a subshell body would have run the command. One space
+// is the whole of the discriminator and puts it back on the subshell side,
+// where `1+2` is a command nobody has (#2725).
+func TestTwoAdjacentParensAreArithmeticAndNotASubshell(t *testing.T) {
+	if out, st := kshOut(t, `x=5; echo ${((x*2))}`); out != "10\n" || st != 0 {
+		t.Errorf("got %q at %d, want %q at 0", out, st, "10\n")
+	}
+	// A subshell body would have run the command and printed `hi`. The
+	// arithmetic reading refuses the expression instead, which is the only
+	// probe that can tell the two apart.
+	if out, st := kshOut(t, `echo ${((echo hi))}`); !strings.Contains(out, "arithmetic syntax error") || st == 0 {
+		t.Errorf("`${((echo hi))}` got %q at %d, want an arithmetic refusal", out, st)
+	}
+	// One space and it is the subshell spelling again, running a command
+	// nobody has.
+	if out, st := kshOut(t, `echo ${( (1+2) )}`); !strings.Contains(out, "1+2: not found") || st != 0 {
+		t.Errorf("`${( (1+2) )}` got %q at %d, want `1+2: not found`", out, st)
 	}
 }
 

@@ -206,6 +206,68 @@ func TestWithNoTerminalTheWindowSizeIsNoughtOrWhatWasInherited(t *testing.T) {
 	}
 }
 
+// ScreenSize is the *capability* reading of the window — what
+// `$terminfo[cols]` answers — and it is deliberately not windowSizeValue with
+// a different caller. Two of its rows say so and neither is shared.
+//
+// Here: the terminal wins over what a script assigned. Measured against zsh
+// 5.9.2 through a pseudo-terminal opened 100 by 37, 2026-09-14 —
+// `COLUMNS=77; print "${terminfo[cols]} $COLUMNS"` is `100 77`, so the
+// assignment moved one name and not the other. `$COLUMNS` is asserted in the
+// same run because without it a reader that ignored the assignment everywhere
+// would pass.
+func TestTheScreenSizeIsTheTerminalAndNotWhatAScriptAssigned(t *testing.T) {
+	r, _ := windowShell(t, 37, 100)
+	if rows, cols := r.ScreenSize(); rows != 37 || cols != 100 {
+		t.Fatalf("before: %dx%d, want 37x100", rows, cols)
+	}
+	if got, want := say(t, r, `COLUMNS=77; LINES=9; echo "[$COLUMNS][$LINES]"`), "[77][9]\n"; got != want {
+		t.Fatalf("the assignment did not move $COLUMNS: got %q, want %q", got, want)
+	}
+	if rows, cols := r.ScreenSize(); rows != 37 || cols != 100 {
+		t.Errorf("after the assignment: %dx%d, want 37x100 — the window is what a capability answers", rows, cols)
+	}
+}
+
+// And here: with no terminal at all it is the classic 80 by 24 rather than the
+// nought `$COLUMNS` reports there, and an inherited value is taken ahead of
+// both. Measured on zsh 5.9.2 with no terminal anywhere: `${terminfo[cols]}`
+// is 80 where `$COLUMNS` is 0, and `COLUMNS=100 LINES=40` in the environment
+// makes it 100 by 40.
+//
+// The second row is the control on the first: a reader that answered 80 by 24
+// unconditionally passes the first and fails this one.
+func TestTheScreenSizeWithNoTerminal(t *testing.T) {
+	for _, tc := range []struct {
+		name, env  string
+		rows, cols int
+		columns    string
+	}{
+		{name: "nothing inherited", rows: 24, cols: 80, columns: "[0][0]\n"},
+		{
+			name: "inherited", env: "COLUMNS=100",
+			rows: 24, cols: 100, columns: "[100][0]\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var seen *Runner
+			out, _ := run(t, `echo "[$COLUMNS][$LINES]"`, func(r *Runner) {
+				if tc.env != "" {
+					r.Env = append(r.Env, tc.env)
+				}
+				r.ProvideWindowSize()
+				seen = r
+			})
+			if out != tc.columns {
+				t.Errorf("$COLUMNS and $LINES = %q, want %q", out, tc.columns)
+			}
+			if rows, cols := seen.ScreenSize(); rows != tc.rows || cols != tc.cols {
+				t.Errorf("the screen size = %dx%d, want %dx%d", rows, cols, tc.rows, tc.cols)
+			}
+		})
+	}
+}
+
 // A shell that was never given the capability has neither name, which is what
 // keeps this off the five panel columns that do not have the parameters.
 func TestWithoutTheCapabilityNeitherNameExists(t *testing.T) {

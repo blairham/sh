@@ -1,0 +1,47 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Aliases in bash — #2319. Two answers bash has and nobody else on the panel
+# does, and the first is the one that decides whether aliases work at all.
+#
+# bash does not expand an alias in a non-interactive shell. zsh, ksh93 and
+# dash all do, without being asked. So the single most-used feature of the
+# `alias` builtin is off by default in exactly one of the four, and a script
+# that wants it says so — `shopt -s expand_aliases` — which is why
+# core/aliases.tests opens with that line guarded by `command -v shopt`.
+#
+# The option is a bash spelling as much as the gate is a bash behaviour:
+# `shopt` is not a command in the other three, so every line here that names
+# it answers 127 there.
+#
+# Nothing in this file redirects stdout away, and the diagnostic for a word
+# that turned out not to be a command goes to stderr, which is dropped. What
+# is compared is which of the two things happened.
+
+alias gate='printf "expanded\n"'
+
+# Off by default: the word is not an alias, so it is a command name, and
+# there is no command by that name.
+gate 2>/dev/null; printf 'before the option -> %s\n' "$?"
+
+# The query prints the builtin's own name in front of the definition, which
+# is the second bash-only answer here: zsh, ksh93 and dash all write
+# `gate='…'` with nothing before it. It is `alias`'s output being valid input
+# to `alias`, and it is the reason a script that parses this output cannot be
+# written once for the panel.
+alias gate
+
+# `shopt -q` asks without changing anything, and reports the state in its
+# status.
+shopt -q expand_aliases 2>/dev/null; printf 'shopt -q -> %s\n' "$?"
+
+# Turning it on, on a line of its own so the next line is read afterwards.
+shopt -s expand_aliases 2>/dev/null; printf 'shopt -s -> %s\n' "$?"
+gate 2>/dev/null; printf 'after the option -> %s\n' "$?"
+shopt -q expand_aliases 2>/dev/null; printf 'shopt -q when on -> %s\n' "$?"
+
+# And off again. The alias is still defined — the query still finds it — but
+# the word stops being replaced.
+shopt -u expand_aliases 2>/dev/null; printf 'shopt -u -> %s\n' "$?"
+gate 2>/dev/null; printf 'after turning it off -> %s\n' "$?"
+alias gate > /dev/null 2>&1; printf 'still defined -> %s\n' "$?"

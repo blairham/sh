@@ -1,25 +1,40 @@
 # SPDX-FileCopyrightText: 2026 Blair Hamilton
 # SPDX-License-Identifier: Apache-2.0
 #
-# Aliases — #2319, and a short file on purpose.
+# Aliases — #2319.
 #
-# Almost nothing about aliases is common ground, and finding that out is the
-# result rather than a reason to skip the area. Measured on this machine:
+# An earlier draft of this file was four lines of table and a paragraph
+# saying almost nothing about aliases is common ground. The paragraph was
+# wrong, and the reason it was wrong is worth keeping: bash does not expand
+# an alias in a non-interactive shell *by default*, and a file that stops
+# there records a default as a limit. `shopt -s expand_aliases` lifts it, the
+# other three shells need nothing lifted, and the guard below is the line a
+# portable script already writes. With it in place every rule underneath —
+# the expansion point, the blank-suffix rule, keyword bodies, recursion, the
+# quoting that suppresses it — is answered the same way by all four.
 #
-#   * bash does not expand an alias in a non-interactive shell at all, so the
-#     one thing an alias is for is a bash answer by its absence. The other
-#     three expand. That is asked in bash/.
-#   * every shell starts with preset aliases of its own — ksh93 has more than
-#     twenty, zsh has two — so `alias` with no arguments prints a different
-#     list in each, and `r` is a preset alias in ksh93, which is how an
-#     earlier draft of core/test.tests came to define a function nothing
-#     could call.
-#   * `alias name` prints `alias name='…'` in bash and `name='…'` in zsh and
-#     ksh93, so even the query has no shared spelling.
+# What genuinely does not agree, and is asked elsewhere:
 #
-# What is left is the table underneath: defining, querying and removing an
-# alias, and the statuses those report. All four agree on every line below,
-# and that is the whole of what they agree on.
+#   * the gate itself. bash alone refuses without the `shopt`, and that is
+#     the claim bash/aliases.tests makes.
+#   * `alias name` prints `alias name='…'` in bash and `name='…'` in the
+#     other three, so even the query has no shared spelling. bash/ again.
+#   * `alias` with no arguments lists the shell's presets, and every shell
+#     ships a different set — ksh93 nineteen, zsh three, bash and dash none.
+#     Nothing here runs it bare.
+#   * `alias -g`, `-s` and `unalias -m` are zsh's; `alias -t` and `-x` are
+#     ksh93's; removing a name ksh93 has already removed succeeds where the
+#     other three fail. Those are in zsh/ and ksh/.
+
+if command -v shopt > /dev/null 2>&1; then shopt -s expand_aliases; fi
+
+show() {
+  printf 'n=%s' "$#"
+  for a in "$@"; do printf ' [%s]' "$a"; done
+  printf '\n'
+}
+
+# --- defining, querying, removing ---
 
 alias hi='printf "aliased\n"'; printf 'define -> %s\n' "$?"
 alias a1='printf "one\n"' a2='printf "two\n"'; printf 'define two -> %s\n' "$?"
@@ -32,13 +47,132 @@ alias 'weird=printf "w\n"'; printf 'define quoted -> %s\n' "$?"
 alias hi > /dev/null 2>&1; printf 'query present -> %s\n' "$?"
 alias nosuchalias_zz > /dev/null 2>&1; printf 'query missing -> %s\n' "$?"
 
-# Removing, one name and several. Removing a name that is *not* an alias is
-# held out: run from a script file, ksh93 answers 0 where the other three
-# answer 1 — and ksh93 answers 1 for the same line under `-c`, so it is an
-# answer about how the shell was entered as much as about unalias.
+# Removing, one name and several.
 unalias hi; printf 'unalias -> %s\n' "$?"
 unalias a1 a2; printf 'unalias two -> %s\n' "$?"
 unalias weird; printf 'unalias quoted -> %s\n' "$?"
 
 # And the name is gone from the query afterwards.
 alias hi > /dev/null 2>&1; printf 'query removed -> %s\n' "$?"
+
+# A name that was never an alias cannot be removed, alone or beside a name
+# that can be. ksh93 answers this differently for a name it has removed
+# before, which is why the name here is one nothing has ever defined.
+unalias nevernamed_zz 2>/dev/null; printf 'unalias never named -> %s\n' "$?"
+alias keep=x
+unalias keep nevernamed_zz 2>/dev/null; printf 'unalias mixed -> %s\n' "$?"
+
+# --- expansion ---
+
+# The alias replaces the command word and the replacement is re-split, so one
+# alias can supply several words.
+alias s='show'
+s a b
+alias two='show first second'
+two third
+
+# The body is stored as written and expanded when the alias is *used*, not
+# when it is defined: a parameter in the body reads the value it has at the
+# point of the call.
+v=at-definition
+alias pv='show $v'
+v=at-use
+pv
+alias pq='show "$v"'
+v=later
+pq
+
+# A trailing blank in the body makes the *next* word eligible for expansion
+# too, which is the only way an alias can reach past its own word.
+alias blank='show x '
+alias nextword='onetwo'
+blank nextword
+alias noblank='show y'
+noblank nextword
+
+# The rule chains as far as the blanks do.
+alias c1='show A '
+alias c2='B '
+alias c3='C'
+c1 c2 c3
+
+# The body may be a keyword, or a whole compound command.
+alias loop='while'
+loop false; do :; done; printf 'keyword while -> %s\n' "$?"
+alias whole='if true; then printf "compound\n"; fi'
+whole
+
+# And the blank-suffix rule feeds a keyword its operand.
+alias kw='while '
+alias cond='false'
+kw cond; do :; done; printf 'keyword chain -> %s\n' "$?"
+
+# Recursion stops: a body whose first word is the alias's own name expands
+# once and then runs the command underneath.
+alias show='show r'
+show a
+unalias show
+
+# Two different names do chain, because neither is the one being expanded.
+alias r1='r2'
+alias r2='show chained'
+r1
+
+# --- where expansion does and does not happen ---
+
+alias p='show pos'
+
+# Every command-word position, including the one inside each compound.
+p a
+{ p b; }
+( p c )
+true && p d
+true; p e
+true | p f
+if true; then p g; fi
+while false; do p h; done; p i
+for x in 1; do p j; done
+case y in y) p k ;; esac
+
+# A preceding assignment does not stop the word from being a command word,
+# and neither does a preceding redirection.
+VAR=1 p l
+2> /dev/null p m
+
+# A word that is not a command word is left alone.
+show p
+x=p; printf '%s\n' "$x"
+
+# Any quoting of the name suppresses the expansion, and the name is then a
+# command that does not exist.
+\p q 2>/dev/null; printf 'backslash -> %s\n' "$?"
+'p' q 2>/dev/null; printf 'single quoted -> %s\n' "$?"
+"p" q 2>/dev/null; printf 'double quoted -> %s\n' "$?"
+
+# `command` does not reach an alias: expansion has already happened or not by
+# the time any builtin sees the words.
+command p n 2>/dev/null; printf 'command alias -> %s\n' "$?"
+
+# --- when expansion happens ---
+
+# At the point the enclosing command is *read*, which is why an alias defined
+# and used on one line does not expand: the whole line was read first.
+alias sameline='printf "sameline\n"'; sameline 2>/dev/null; printf 'same line -> %s\n' "$?"
+
+# A function body is read once, so the definition in force when the body was
+# read is the one that runs — not the one in force at the call.
+alias fa='printf "fa-at-definition\n"'
+fn() { fa; }
+alias fa='printf "fa-at-call\n"'
+fn
+
+# `eval` reads its argument as fresh input, so an alias defined before the
+# eval is in force inside it.
+alias ev='printf "from eval\n"'
+eval 'ev'
+
+# --- removing them all ---
+
+alias u1='printf "u1\n"' u2='printf "u2\n"'
+unalias -a; printf 'unalias -a -> %s\n' "$?"
+u1 2>/dev/null; printf 'after unalias -a -> %s\n' "$?"

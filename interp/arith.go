@@ -512,6 +512,11 @@ func (r *Runner) wholeArrayElems(name string) []string {
 // whole expression before reading any of it — so a `$` still in it is a
 // literal `$` and not the start of anything.
 func (r *Runner) arithSubscriptIndex(x *syntax.ArithIndex) (arithNum, error) {
+	// Inside the brackets, for the length of the expression they hold: one
+	// dialect refuses an unset name *there* where the same name written
+	// outside them is zero. See Semantics.ArithSubscriptNameMustBeSet.
+	r.arithSubscriptDepth++
+	defer func() { r.arithSubscriptDepth-- }()
 	if x.Index != nil || x.Empty {
 		n, err := r.evalNum(x.Index)
 		return r.blamedOnTheSubscript(x, n, err)
@@ -1540,6 +1545,16 @@ func (r *Runner) arithValueOf(name string) (arithNum, error) {
 	}
 	value, ok := r.getVar(name)
 	if !ok {
+		if r.arithSubscriptDepth > 0 &&
+			r.ask(r.sem().ArithSubscriptNameMustBeSet, "an unset name inside an array subscript") {
+			// The same refusal, from the other place one dialect reads a
+			// name as a *parameter* rather than as text that might be a
+			// number: inside the brackets of a subscript. `$(( a[b] ))` is
+			// `b: parameter not set` there where `$(( b ))` is zero. See
+			// Semantics.ArithSubscriptNameMustBeSet.
+			text := Wording(r.diag().UnboundVariable, "%s: parameter not set", name)
+			return intNum(0), arithError{msg: text, token: name, complete: true}
+		}
 		if r.arithValueDepth > 0 && r.ask(r.sem().ArithRecursedNameMustBeSet, "an unset name reached through a value") {
 			// One dialect reads a name arrived at through another name's
 			// value as a *parameter reference* rather than as text that

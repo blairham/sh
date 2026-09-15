@@ -2514,6 +2514,12 @@ type Runner struct {
 	// asks whether a name was reached through a value or written in the
 	// expression itself.
 	arithValueDepth int
+	// arithSubscriptDepth counts how many array subscripts are being
+	// evaluated around the expression now being read, so that a name inside
+	// the brackets can be answered differently from the same name outside
+	// them. One dialect refuses an unset one there; see
+	// Semantics.ArithSubscriptNameMustBeSet.
+	arithSubscriptDepth int
 
 	// arithValueTopName is the name the expression under evaluation named
 	// itself, as against the ones reached through its value. Only the

@@ -7554,6 +7554,21 @@ echo "st=$?"`,
 		Why:     "`++` on a literal, which two of the panel call an assignment without an lvalue and two do not treat as an operator at all. ksh93 says `assignment requires lvalue` and zsh `bad math expression: lvalue required`; bash refuses the text while *reading* it, as an operand it expected and did not find, and dash the same way — so the sentence belongs to the two that have a postfix operator to apply. The second pair of the line is what says which half of the panel a column is in without reading its wording: the prefix spelling is **1** in bash and dash, which read two signs, and the same refusal in ksh93 and zsh. Ours wrote the substrate's `++ needs a variable` into all four (#2420)",
 	},
 	{
+		ID: "arithmetic/where-a-doubled-point-draws-its-own-sentence", Category: "arithmetic",
+		Snippet: `for e in "1..2" "..1" "007..1" "0x1..2" "-1..2" "1..2 + 3" "1 + 3..4" "1.2..3" "1e1..2" "0x..1" "+ 1..2" "(3..4)"; do echo "[$(( $e ))]"; echo "|$?"; done`,
+		Why:     "the boundary of the sentence ksh93 keeps for a numeral that met a second point straight after its first — `.: invalid character in expression - …`, which names the *character* where every other complaint of that shell's names the expression (#2817). The first six rows draw it and the last six do not, and between them they fix the rule: it is the numeral at the **front** of the expression, past any blanks and at most one sign written against it, and the two points have to follow its digit run. `1 + 3..4` is the discriminator the issue was filed on — the same literal in the same spelling, one operand along, draws the ordinary sentence — and `1.2..3` says the points must follow the digits rather than stand anywhere in the numeral, `1e1..2` that the run ends at the exponent, `0x..1` that a hexadecimal run may not be empty, and `+ 1..2` that a blank between the sign and the numeral takes the whole thing out of the shape. bash, zsh and dash have one wording for all twelve",
+	},
+	{
+		ID: "axis/an-unset-name-inside-an-array-subscript", Category: "semantics axes",
+		Snippet: `a=(1 2 3); echo "[$(( a[1] ))]"; echo "[$(( b ))]"; echo "[$(( a[b] ))]"; echo "|$?"; echo after`,
+		Why:     "a name inside a subscript's brackets, which one column reads as a *parameter* rather than as text that might be a number: `$(( a[b] ))` is `b: parameter not set` in ksh93 where `$(( b ))` on the line above it is zero, and bash answers the first element and zsh zero (#2817). The first two lines are the controls that make the third about the brackets — a subscript that is a numeral and a name outside them — and the `echo after` is what says the refusal ends the shell there. `b=` would answer 1 in that column, so it is *unset* and not empty that this is about; that row is left to interp's own test because it needs a second run of the same line. dash and BusyBox ash have no such subscript at all",
+	},
+	{
+		ID: "arithmetic/a-dotted-name-in-an-expression", Category: "arithmetic",
+		Snippet: `echo "[$(( .k ))]"; echo "[$(( x.y ))]"; echo "[$(( a..b ))]"; echo "[$(( .k + 1 ))]"; echo "[$(( .5 ))]"; echo "|$?"`,
+		Why:     "a point as a *name* character, which ksh93 has and the rest do not: `${.sh.version}` and a compound variable's members are one lexical rule there and it reaches arithmetic too, so `.k` and `x.y` and `a..b` are all unset parameters and answer zero. bash, zsh and dash each refuse every one of them, in their own wordings. The last is the collision the rule has to settle and the reason a leading point is not simply a name byte: `.5` is a half in every column that has floats, so the byte *after* the point is what decides between a numeral and a name. We refused the first four as syntax errors, which is right for three columns and wrong for the one whose `${.sh.*}` namespace this is (#2817)",
+	},
+	{
 		ID: "arithmetic/a-point-where-an-operator-belonged", Category: "arithmetic",
 		Snippet: `echo "[$(( 1..2 ))]"; echo "st=$?"`,
 		Why:     "the same point in the other position, which is what says the *point* decides and not which operand was missing: zsh gives the identical float sentence where it would otherwise have said an operator was expected. The pair is what makes the rule statable — a token beginning with a point commits that reader to a floating literal — and the row below is the control for it",

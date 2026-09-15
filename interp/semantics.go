@@ -1315,6 +1315,41 @@ type Semantics struct {
 	// whose variable held a stale name got a plausible number where the real
 	// shell had stopped.
 	ArithRecursedNameMustBeSet Answer
+
+	// ArithSubscriptNameMustBeSet refuses an unset name written **inside an
+	// array subscript** in arithmetic, where the same name written outside
+	// the brackets is zero.
+	//
+	// Measured 2026-09-15 under `env -i PATH=/usr/bin:/bin`, with
+	// `a=(1 2 3)`:
+	//
+	//	                        ksh93u+                    bash 5.3   zsh 5.9.2
+	//	$(( b ))                0                          0          0
+	//	$(( a[b] ))             b: parameter not set       1          0
+	//	$(( a[1+b] ))           b: parameter not set       2          0
+	//	$(( a[b[c]] ))          c: parameter not set       1          0
+	//	$(( nodecl[b] ))        b: parameter not set       0          0
+	//	(( a[b] = 9 ))          b: parameter not set       assigns    refused
+	//	b=; $(( a[b] ))         1                          1          0
+	//	${a[b]}                 1                          1          empty
+	//
+	// So it is the *brackets* and not the array: an undeclared name and a
+	// scalar reach it too, and an assignment's target does. It is **unset**
+	// and not empty — a name holding the empty string is zero there, which
+	// is the row that says this is a lookup rule rather than a reading of
+	// the text. And it is arithmetic and not the subscript in general: the
+	// same brackets in `${a[b]}` answer the first element without a word.
+	//
+	// Not fatal to the shell in the way `set -u` is: it is an expression
+	// failure, and what that ends is the ordinary question. The wording is
+	// Diagnostics.UnboundVariable's, which is the same sentence
+	// ArithRecursedNameMustBeSet writes for the other place that shell reads
+	// a name as a parameter rather than as text.
+	//
+	// dash and BusyBox ash have no such subscript at all. Asked only where a
+	// name inside a subscript turned out to be unset, so `$(( a[1] ))` and
+	// `$(( b ))` never raise it (#2817).
+	ArithSubscriptNameMustBeSet Answer
 	// ArithShortCircuitEvaluatesTheRightOperand runs the right operand of
 	// `&&` or `||` even when the left one has already decided the answer, so
 	// an assignment or an increment written there takes effect anyway.

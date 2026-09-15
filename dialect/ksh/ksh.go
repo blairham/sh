@@ -751,6 +751,9 @@ func Semantics() interp.Semantics {
 	// script stops, with nounset off. A name written in the expression
 	// itself is still zero — `$((nosuch+1))` is 1 here as everywhere.
 	s.ArithRecursedNameMustBeSet = interp.Yes
+	// A name inside a subscript is a *parameter* here and an unset one is
+	// refused, where the same name outside the brackets is zero (#2817).
+	s.ArithSubscriptNameMustBeSet = interp.Yes
 	// This shell has no `local`, and it answers all the same: `typeset` in a
 	// *keyword*-defined function is a local here — see
 	// TypesetLocalNeedsKeywordFunction — and the shadow it declares over a
@@ -2073,6 +2076,11 @@ func Diagnostics() interp.Diagnostics {
 		// *element* here: `a=(x y z); unset "a[0]"; set -u; echo "$a"` is
 		// `a[0]: parameter not set` where bash says `a` (#2818).
 		UnboundBareArrayNamesElementZero: true,
+		// A leading numeral that met a second point straight after its
+		// first has a sentence of its own here, naming the character:
+		// `$(( 1..2 ))` is `.: invalid character in expression -  1..2 `
+		// (#2817).
+		ArithDoubledPointInTheNumeral: ".: invalid character in expression - %[1]s",
 		// Every backquote substitution this shell reads draws a remark, and
 		// it draws it only when the shell is not going to run the program:
 		// `ksh -n bq.sh` writes one line per backquote and `ksh bq.sh`

@@ -32,6 +32,7 @@ ash   AppendedArrayLiteralOverANameNotDeclaredAnArrayStartsItOver
 ash   ArithFloatOverflowIsZero
 ash   ArithIntegerOperatorRefusesFloat
 ash   ArithRecursedNameMustBeSet
+ash   ArithSubscriptNameMustBeSet
 ash   ArithSubscriptSkippedWhenNameUnset
 ash   ArithWholeArraySubscriptIsReportedAsBad
 ash   ArithWholeArraySubscriptIsTheSlice
@@ -223,6 +224,7 @@ dash  ArithFloatOverflowIsZero
 dash  ArithIntegerOperatorRefusesFloat
 dash  ArithNegativeExponentIsError
 dash  ArithRecursedNameMustBeSet
+dash  ArithSubscriptNameMustBeSet
 dash  ArithSubscriptSkippedWhenNameUnset
 dash  ArithWholeArraySubscriptIsReportedAsBad
 dash  ArithWholeArraySubscriptIsTheSlice

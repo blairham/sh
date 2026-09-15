@@ -4210,6 +4210,26 @@ type Diagnostics struct {
 	// with floats: ksh93 answers the same expressions with its operand
 	// complaints, so this is a value one dialect holds and not an axis.
 	ArithBadFloatConstant string
+
+	// ArithDoubledPointInTheNumeral is the sentence one dialect gives an
+	// expression whose leading numeral met a second point directly after its
+	// first — `1..2`, `..1`, `0x1..2`. One verb: the expression's text, with
+	// whatever blanks it was written with.
+	//
+	// The character named is always the point, because the point is what the
+	// shape is: there is no row in the panel where this sentence names
+	// anything else, so it is written into the wording rather than passed.
+	//
+	// Measured 2026-09-15 on ksh93u+ 2012-08-01. It is the *front* of the
+	// expression and nowhere else — `$(( 1 + 3..4 ))` is the ordinary
+	// `arithmetic syntax error`, with the same literal in the same spelling —
+	// and a subscript is its own expression, so `$(( a[1..2] ))` reaches it
+	// with the subscript's text. See doubledPointInTheLeadingNumeral for the
+	// probe table that fixes the boundary.
+	//
+	// Empty is every other column: bash, zsh and dash have no such sentence
+	// and refuse `1..2` the way they refuse any bad operand (#2817).
+	ArithDoubledPointInTheNumeral string
 	// ArithExpressionRanOut is the reason when an expression wanted a value
 	// and reached the end of the text instead: `$((1+))`, `$((~))`. One verb,
 	// the operator that was left wanting, which only the shell that names one
@@ -5321,6 +5341,13 @@ func (d Diagnostics) ParseFailureLine(err error) int {
 // as `1+:2` where the parser was handed `1+`. Every other caller passes what
 // the parser saw.
 func (d Diagnostics) arithParseFailure(se *syntax.Error, expr string) string {
+	if w := d.ArithDoubledPointInTheNumeral; w != "" && doubledPointInTheLeadingNumeral(expr) {
+		// A numeral at the very front of the expression that met a second
+		// point straight after its first. One dialect has a sentence of its
+		// own for it and names the *character* rather than the expression's
+		// failure. See ArithDoubledPointInTheNumeral.
+		return Wording(w, ".: invalid character in expression - %[1]s", expr)
+	}
 	if d.ArithBadFloatConstant != "" && strings.HasPrefix(se.Token, ".") {
 		// A point that begins a refused token is a floating literal this
 		// dialect committed to reading and could not, which it words as
@@ -5402,6 +5429,60 @@ func (d Diagnostics) arithParseFailure(se *syntax.Error, expr string) string {
 	}
 	return Wording(d.ArithError, "%[1]s: %[2]s",
 		d.arithBlamedText(expr), Wording(reason, fallback, se.Token), se.Token)
+}
+
+// doubledPointInTheLeadingNumeral reports whether the expression opens with a
+// numeral that met `..` — a second point directly after the one that would
+// have made it a float.
+//
+// It is the *front* of the expression and nowhere else, which is the whole of
+// the rule and is measured rather than reasoned out. Thirty-odd probes on
+// ksh93u+ 2012-08-01, 2026-09-15, under `env -i PATH=/usr/bin:/bin` and read
+// from a file so that the blanks are the expression's own:
+//
+//	fires                             does not
+//	 1..2   ..1   1..   ...   1...2    1 + 3..4   1 * 3..4   1+2..3
+//	 007..1  0..1  00..1  9..0  08..1  (3..4)     (1..2      - 1..2
+//	 -1..2   +1..2   1..2 )            + 1..2     ++1..2     +-1..2
+//	 0x1..2  0X1..2  0x1e..2           0x..1      0b1..2     1_..2
+//	 blanks then 1..2, and 1..2 then   1 ..2      1 .. 2     1.2..3
+//	 1..2*3  1..2,3  1..2?1:2  1..e    1e1..2     1.2e.3     1.1.
+//
+// so: past any blanks, at most one sign written *against* the numeral, a run
+// of digits — hex digits where the run opened `0x`, and that run may not be
+// empty there — and then two points together. `1.2..3` is the row that says
+// the two points have to follow the digit run rather than appear anywhere in
+// the numeral, and `1e1..2` the row that says the run ends at the exponent.
+//
+// A subscript is its own expression and reaches this with its own text:
+// `$(( a[1..2] ))` is `.: invalid character in expression - 1..2` there, with
+// no blanks around it.
+func doubledPointInTheLeadingNumeral(expr string) bool {
+	i := 0
+	for i < len(expr) && (expr[i] == ' ' || expr[i] == '\t') {
+		i++
+	}
+	if i < len(expr) && (expr[i] == '+' || expr[i] == '-') {
+		i++
+	}
+	if len(expr) > i+1 && expr[i] == '0' && (expr[i+1] == 'x' || expr[i+1] == 'X') {
+		start := i + 2
+		i = start
+		for i < len(expr) && isHexDigit(expr[i]) {
+			i++
+		}
+		if i == start {
+			// `0x` with no digit after it is not a numeral this reader
+			// finished, and the sentence is the ordinary one: `$(( 0x..1 ))`
+			// is `0x..1 : arithmetic syntax error` there.
+			return false
+		}
+	} else {
+		for i < len(expr) && expr[i] >= '0' && expr[i] <= '9' {
+			i++
+		}
+	}
+	return strings.HasPrefix(expr[i:], "..")
 }
 
 // ranOutOfOperand is the sentence for a value that was wanted and never came,

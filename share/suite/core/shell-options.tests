@@ -1,0 +1,153 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Shell options — #2313, and the half core/setopts.tests does not reach.
+#
+# That file asks whether an option *works*. This one asks the three questions
+# around it: whether a letter and a long name are the same option, where an
+# option lives when a subshell or a function changes it, and — for errexit —
+# the whole list of constructs that suppress it, which is the part every
+# shell has a reputation for getting different and which all four in fact
+# agree on to the row.
+#
+# What is not here, and where it went:
+#
+#   `set -o` with no operand   four listings, four shapes. bash and zsh write
+#                              a name-and-state table of 27 and 185 rows,
+#                              ksh93 heads its with `Current option settings`
+#                              and dash writes eighteen. Nothing to compare.
+#   `set +o`                   the same, and worse: it is one line in ksh93
+#                              and one line per option in the other three.
+#   `$-`                       `hB` in bash and ksh93, `569X` in zsh, empty
+#                              in dash. Asked here through `case $- in *f*)`,
+#                              which is the portable way to read it and the
+#                              only one that means the same thing in four
+#                              shells.
+#   `set -x` and `PS4`         the trace prefix is `+ ` in three shells and
+#                              `+%N:%i> ` in zsh, and what a line looks like
+#                              after the prefix differs again. `set -v` is
+#                              held out with it: a suite file is read from a
+#                              file, so what `-v` echoes is this file.
+#
+# `shopt` is bash's own and is asked in bash/.
+
+# A letter and its long name are one option, and `$-` is where the letter
+# shows. The `case` is the reading: `$-` itself is four different strings.
+has() { case $- in *"$1"*) printf '%s: yes\n' "$2";; *) printf '%s: no\n' "$2";; esac; }
+has C 'noclobber at the start'
+( set -C; has C 'after set -C' )
+( set -o noclobber; has C 'after set -o noclobber' )
+( set -C; set +o noclobber; has C 'after the long name turned the letter off' )
+( set -u; has u 'after set -u' )
+( set -o nounset; has u 'after set -o nounset' )
+( set -e; has e 'after set -e' )
+( set -o errexit; has e 'after set -o errexit' )
+( set -a; has a 'after set -a' )
+( set -o allexport; has a 'after set -o allexport' )
+
+# An option is the shell's own state: a subshell inherits it and cannot send
+# it back, and a function is not a scope for it at all.
+( set -C; ( has C 'a nested subshell inherited it' ) )
+( set -C ) ; has C 'and the parent did not keep it'
+setter() { set -C; }
+setter
+has C 'a function set it and it stayed'
+set +C
+has C 'and it went off again'
+
+# errexit, and every construct that suppresses it. The shell is run as a
+# plain command and its status read afterwards rather than as the condition
+# of an `if`: POSIX suspends errexit inside a condition, so an `if ( … )`
+# here would report every one of these as having survived.
+e() {
+	( set -e; eval "$1" ) > /dev/null 2>&1
+	if [ $? -eq 0 ]; then printf '%-42s survived\n' "$2"; else printf '%-42s ended\n' "$2"; fi
+}
+e 'false; :' 'a plain failure'
+e '[ 1 = 2 ]; :' 'a false test'
+e 'nosuchcommand_zz; :' 'a command that is not there'
+e 'if false; then :; fi; :' 'the condition of an if'
+e 'while false; do :; done; :' 'the condition of a while'
+e 'until true; do :; done; :' 'the condition of an until'
+e 'false || true; :' 'the left of an or'
+e 'false && true; :' 'the left of an and'
+e 'true && false; :' 'the right of an and'
+e '! false; :' 'after a bang'
+e '! true; :' 'a bang whose command succeeded'
+e 'false | true; :' 'the left of a pipeline'
+e 'true | false; :' 'the right of a pipeline'
+e '( false ); :' 'a subshell that failed'
+e '{ false; }; :' 'a group that failed'
+e 'f() { false; }; f; :' 'a function that failed'
+e 'f() { false; :; }; f; :' 'a function whose last command succeeded'
+e 'f() { false; }; if f; then :; fi; :' 'a function called in a condition'
+e 'case x in x) false ;; esac; :' 'the last command of a case'
+e 'for i in 1; do false; done; :' 'inside a for body'
+e 'while :; do false; break; done; :' 'inside a while body'
+e 'v=$(false); :' 'an assignment from a substitution'
+e 'false > /dev/null; :' 'a failure with a redirection'
+e 'set +e; false; :' 'after turning it off'
+
+# nounset, against each expansion. A default is not a read, a length is, and
+# the positional list is its own case: `$@` and `$*` with no arguments are
+# not unset even though `$1` is.
+u() {
+	( set -u; eval "$1" ) > /dev/null 2>&1
+	if [ $? -eq 0 ]; then printf '%-38s ok\n' "$2"; else printf '%-38s failed\n' "$2"; fi
+}
+u 'printf "%s" "$NOSUCH"' 'a plain name'
+u 'printf "%s" "${NOSUCH}"' 'in braces'
+u 'printf "%s" "$NOSUCH$NOSUCH2"' 'two of them'
+u 'printf "%s" "${#NOSUCH}"' 'its length'
+u 'printf "%s" "${NOSUCH-default}"' 'with a default'
+u 'printf "%s" "${NOSUCH:-default}"' 'with a colon default'
+u 'printf "%s" "${NOSUCH+alternative}"' 'with an alternative'
+u 'NOSUCH=x; printf "%s" "$NOSUCH"' 'one that was set first'
+u 'NOSUCH=; printf "%s" "$NOSUCH"' 'one that was set empty'
+u 'set --; printf "%s" "$@"' 'the whole list, empty'
+u 'set --; printf "%s" "$*"' 'the star, empty'
+u 'set --; printf "%s" "$#"' 'the count, empty'
+u 'set -- a; printf "%s" "$1"' 'a positional that is there'
+
+# noclobber, and the three things it does not stop.
+printf 'first\n' > cf
+( set -C; printf 'again\n' > cf ) 2> /dev/null
+printf 'a truncation was refused [%s] and the file is [%s]\n' \
+	"$( [ $? -ne 0 ] && printf yes || printf no )" "$(cat cf)"
+( set -C; printf 'forced\n' >| cf ) 2> /dev/null
+printf 'the override worked [%s] and the file is [%s]\n' \
+	"$( [ $? -eq 0 ] && printf yes || printf no )" "$(cat cf)"
+( set -C; printf 'appended\n' >> cf ) 2> /dev/null
+printf 'an append is not a truncation [%s]\n' "$( [ $? -eq 0 ] && printf yes || printf no )"
+( set -C; printf 'new\n' > newfile ) 2> /dev/null
+printf 'a name nobody made [%s] holds [%s]\n' \
+	"$( [ $? -eq 0 ] && printf yes || printf no )" "$(cat newfile 2> /dev/null)"
+( set -C; printf 'x\n' > /dev/null ) 2> /dev/null
+printf 'and a device is not a file to lose [%s]\n' "$( [ $? -eq 0 ] && printf yes || printf no )"
+
+# noglob by its long name, which is the spelling all four share — the letter
+# is `-f` in three shells and something else in zsh, which zsh/ asks.
+mkdir -p d
+: > d/one
+: > d/two
+( set -o noglob; printf '[%s]' d/*; printf '\n' )
+( set -o noglob; set +o noglob; printf '[%s]' d/*; printf '\n' )
+( set -o noglob; case d/one in d/*) printf 'a case pattern still matches\n' ;; esac )
+( set -o noglob; v=d/*; printf 'and an assignment keeps the word [%s]\n' "$v" )
+
+# allexport, which is about assignments made while it is on rather than
+# about the names.
+( set -a; AV=1; sh -c 'printf "the child sees [%s]\n" "${AV-unset}"' )
+( AV2=1; sh -c 'printf "and without it [%s]\n" "${AV2-unset}"' )
+( set -a; set +a; AV3=1; sh -c 'printf "after turning it off [%s]\n" "${AV3-unset}"' )
+
+# noexec reads and does not run, which is the one option whose effect is that
+# nothing at all happens.
+( set -n; printf 'never printed\n' ) 2> /dev/null
+printf 'noexec ran nothing, at %s\n' "$?"
+
+# A name no shell has. The statuses split — zsh says 1 where the others say
+# 2 — so what is read is that it failed. A bad *letter* is held out with
+# them: zsh takes `set -Q` without complaint, and zsh/ asks that.
+( set -o nosuchoption_zz ) 2> /dev/null
+printf 'a bad -o name -> %s\n' "$( [ $? -ne 0 ] && printf nonzero || printf zero )"

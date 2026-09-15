@@ -1,0 +1,26 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# `set -u` and the positional parameters: ksh93 does not count an absent one
+# as an unset name, and it is alone in that.
+#
+# `set -u; set --; printf '%s' "$1"` ends bash, zsh and dash and prints an
+# empty line here. It is the shape a script meets in an argument check —
+# `set -u` at the top and `$1` read before `$#` is looked at — and it means
+# the check fires in three shells and passes silently in the fourth.
+#
+# Held out until #2925 lands: the `set -o` listing is 33 rows in ksh93 and 21
+# in ours, and five of the rows we have are the negative spelling of a name
+# ksh93 lists positive. `set +o` shows the same gap in one line.
+#
+#   set -o
+#   set +o
+
+( set -u; set --; printf 'the first positional [%s]\n' "$1" ) 2> /dev/null
+printf 'an absent positional -> %s\n' "$?"
+( set -u; set --; printf 'the whole list [%s]\n' "$*" ) 2> /dev/null
+printf 'the list itself -> %s\n' "$?"
+( set -u; set -- a; printf 'one that is there [%s]\n' "$1" ) 2> /dev/null
+printf 'a positional that is set -> %s\n' "$?"
+( set -u; printf '[%s]' "$NOSUCH_ZZ" ) 2> /dev/null
+printf 'and an ordinary name is still unset -> %s\n' "$?"

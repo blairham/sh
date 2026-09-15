@@ -1,0 +1,27 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Two answers about `set` that are zsh's alone, and both are silent.
+#
+# A letter no shell has is a usage error in bash, ksh93 and dash. zsh takes
+# it: `set -Q` is status 0 and no diagnostic, because zsh reads a single
+# letter it does not know as a no-op rather than as a mistake. So the
+# portability trap is the quiet one — a script written for zsh with a typo in
+# a `set` line runs there and fails everywhere else.
+#
+# And `$-` does not gain `f` when globbing is turned off, because in zsh the
+# letter for noglob is `-F` and `-f` is something else entirely
+# (zsh/options.tests asks that pair). `set -o noglob` works here as it does
+# in every shell; it is the letter the option reports itself under that
+# differs.
+
+has() { case $- in *"$1"*) printf '%s: yes\n' "$2";; *) printf '%s: no\n' "$2";; esac; }
+( set -o noglob; has f 'f after set -o noglob' )
+( set -o noglob; printf '[%s]' /dev/nul*; printf '\n' )
+( set -C; has C 'C after set -C' )
+
+( set -Q ) 2> /dev/null
+printf 'an unknown letter -> %s\n' "$?"
+( set -Q; printf 'and the shell carried on\n' ) 2> /dev/null
+( set -o nosuchoption_zz ) 2> /dev/null
+printf 'an unknown long name -> %s\n' "$?"

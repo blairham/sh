@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"maps"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"syscall"
@@ -516,6 +517,14 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 					flags &^= os.O_CREATE
 				}
 			}
+		case syntax.TokGreatSemi:
+			// The command writes into a file of its own, so this is an
+			// ordinary create-and-truncate — of the temporary, not of the
+			// target, which is not opened at all. `set -C` is measured not
+			// to reach it: `set -C; echo x >; f` over an existing `f`
+			// replaces it in ksh93, which follows from the target never
+			// being truncated.
+			flags = os.O_WRONLY | os.O_CREATE | os.O_TRUNC
 		case syntax.TokLess:
 			flags = os.O_RDONLY
 		case syntax.TokLessGreat:
@@ -631,6 +640,41 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 				return closers, nil
 			}
 
+			// `>;` never opens the target. The command writes into a
+			// temporary file in the target's **own directory**, and the
+			// rename at the end of the command is what makes the write
+			// visible — so a command that fails leaves the target exactly as
+			// it was, and one that fails over a target that did not exist
+			// creates nothing.
+			//
+			// Beside the target rather than in a temporary directory,
+			// because a rename across filesystems is not a rename: it would
+			// be a copy with a window in the middle, which is the one thing
+			// this operator exists to avoid.
+			//
+			// Under `exec` the redirection outlives the command, so there is
+			// no end for the rename to happen at and no status for it to
+			// read. ksh93 refuses that text outright — `exec >; f` is a
+			// syntax error there — and this shell has no parse rule keyed on
+			// a command's name, so it opens the target directly instead. The
+			// divergence is a refusal we do not make; what it must not be is
+			// a temporary file nothing ever renames or removes.
+			renameTo := ""
+			if op == syntax.TokGreatSemi && r.redirectForBuiltin != "exec" {
+				tmp, terr := os.CreateTemp(filepath.Dir(path), ".sh-rename-")
+				if terr != nil {
+					r.emit(ctx, Event{Kind: EventError, Action: action, Err: terr})
+					r.diagf("%s\n", Wording(r.diag().CannotCreate,
+						"cannot create %[1]s: %[2]s",
+						name, r.diag().openReason(terr, true)))
+					r.status = r.diag().redirectFailureStatus()
+					r.redirErr = true
+					return closers, nil
+				}
+				_ = tmp.Close()
+				renameTo, path = path, tmp.Name()
+				action.Path = path
+			}
 			// A background job's pid is settled before an open that may never
 			// return, so that `&` can hand the shell back. See
 			// settleBackgroundJobBeforeABlockingOpen: this is where a job whose
@@ -704,7 +748,17 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 				r.redirErr = true
 				return closers, nil
 			}
-			if !persists {
+			switch {
+			case renameTo != "":
+				// The rename is the close, and it has to be *this* closer
+				// rather than an extra one beside it: closing the file twice
+				// is what a plain closer and a rename closer together would
+				// do. See renameOnSuccess, which reads the status the
+				// command ended at.
+				closers = append(closers, renameOnSuccess{
+					r: r, f: f, temp: path, target: renameTo,
+				})
+			case !persists:
 				// A descriptor that outlives the command must not be closed
 				// when it ends, which is the same exemption `exec` already has
 				// — exec skips every closer.
@@ -2162,4 +2216,51 @@ func (r *Runner) fdAliased(held any) bool {
 		}
 	}
 	return any(r.Stdin) == held || any(r.Stdout) == held || any(r.Stderr) == held
+}
+
+// renameOnSuccess is the close of a `>;` redirection: the temporary file the
+// command wrote into is renamed over the target if the command succeeded, and
+// thrown away if it did not.
+//
+// A closer rather than a step of its own because the moment is the same one —
+// the command has ended, and its redirections are being taken down. That is
+// also what makes the status readable here: [Runner.status] holds what the
+// command ended at by the time the deferred closers run, on both routes into
+// them (a simple command's and a compound one's).
+//
+// The target's permissions are carried over where it already existed, because
+// a rename brings the temporary file's mode with it and a replaced file that
+// silently became world-readable would be a worse answer than no operator at
+// all. Measured on ksh93u+ 2026-09-14: `chmod 741 f` then `echo new >; f`
+// leaves the mode at `-rwxr----x`.
+type renameOnSuccess struct {
+	r      *Runner
+	f      *os.File
+	temp   string
+	target string
+}
+
+func (t renameOnSuccess) Close() error {
+	err := t.f.Close()
+	if t.r.status != 0 {
+		// The command failed, so the target is left exactly as it was — and
+		// a target that did not exist is still not there. Removing the
+		// temporary is the whole of that; nothing else happened to the
+		// target at any point.
+		_ = os.Remove(t.temp)
+		return err
+	}
+	if st, serr := os.Stat(t.target); serr == nil {
+		// Only where the target is there to have a mode. A new file keeps
+		// the temporary's own, which is what a shell creating it with `>`
+		// would have given it.
+		_ = os.Chmod(t.temp, st.Mode().Perm())
+	}
+	if rerr := os.Rename(t.temp, t.target); rerr != nil {
+		_ = os.Remove(t.temp)
+		if err == nil {
+			err = rerr
+		}
+	}
+	return err
 }

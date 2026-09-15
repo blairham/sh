@@ -1062,6 +1062,45 @@ a shell name.
 By contrast `>|`, which overrides `noclobber`, is accepted with the same
 meaning by all six and is core.
 
+### `>;` — a write that only lands if the command succeeded
+
+ksh93 alone has a third write operator. `cmd >; file` sends the output to
+a temporary file in `file`'s own directory and renames it over `file`
+when the command ends at status 0; at any other status the target is left
+exactly as it was, and a target that did not exist is not created.
+Measured 2026-09-14 on ksh93u+ 2012-08-01:
+
+| written | ksh93u+ | bash 5.3.15 · zsh 5.9.2 · dash |
+| --- | --- | --- |
+| `echo NEW >; f` over an `f` holding `old` | `f` holds `NEW`, status 0 | syntax error at the `;` |
+| `{ printf X; false; } >; f` | `f` still holds `old`, status 1 | the same refusal |
+| `{ printf X; false; } >; new` | `new` is not created | the same |
+| `set -C; echo NEW >; f` | `f` holds `NEW` | the same |
+| `chmod 741 f; echo NEW >; f` | mode still `-rwxr----x` | the same |
+
+The mode is carried over deliberately: a rename brings the temporary
+file's own permissions with it, so a replaced file would otherwise come
+back with whatever the umask gave the temporary.
+
+The `;` is part of the operator and must be tight against the `>` —
+`echo x > ; f` is a syntax error in ksh93 as well — and there is no `>>;`
+and no `<;`. So this is one operator rather than a marker that
+generalizes, which is the distinction `ClobberOverrideMarker` above
+records getting wrong once.
+
+**This is where `<->` comes from.** `echo <->; echo done` in ksh93
+reports that it cannot open `-` and then does *not* reach `done`, where
+`echo <->x; echo done` reports the same thing and does. Both follow from
+the operator: the `<` takes `-` as its operand — which is what the
+diagnostic naming `-` rather than `->` says — and the `>;` left over
+takes the word behind the `;` as its target, so `echo done` is this
+command's argument. Put any character between the `>` and the `;` and
+there is no `>;` at all. The other five shells refuse the text outright.
+
+Grammar flag: `RenameOnSuccessRedirect` — core: off; `ksh`: on. Off
+everywhere else, where the fallback is the reading those shells have: `>`
+then `;`, and a redirection with no target.
+
 ### `|&` — a pipe of both streams, or a coprocess
 
 The other operator whose two bytes mean two different things. Measured

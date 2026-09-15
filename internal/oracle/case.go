@@ -9396,6 +9396,22 @@ printf "[10:"; cat <&10; printf "]\n"
 		Why: "the same allocation from a **script file**, which is a different answer in exactly one column: ksh93 says 11 where its own `-c` route says 10, because it keeps the script it is running open on descriptor 10 — the `cat <&10` prints the rest of the script back, which is what proves it rather than infers it. bash 5.3.15 and dash leave 10 closed and bash's allocation stays at 10. So an axis set from this route alone would record ksh93's base as eleven, which #2756 proposed and which the `-c` row above falsifies. Ours does not hold the script on a number, so it answers 10 and reports a bad descriptor — recorded as the divergence it is rather than patched over by moving a base that is measured correct",
 	},
 	{
+		ID: "redirection/a-write-that-only-lands-if-the-command-succeeded", Category: "redirection",
+		Script: true,
+		Snippet: `echo old > t
+echo NEW >; t
+printf "[ok:%s:%s]" "$?" "$(cat t)"
+{ printf X; false; } >; t
+printf "[bad:%s:%s]\n" "$?" "$(cat t)"
+`,
+		Why: "ksh93 alone has `>;`, a write that goes to a temporary file beside the target and is renamed over it only if the command ended at status 0 — so the failing command here leaves the file holding what the successful one put there and reports 1, where a plain `>` would have emptied it before the command ran. bash 5.3.15, bash 3.2, zsh 5.9.2, dash and BusyBox ash all refuse the text at the `;`, each in its own words, which is the fallback a dialect without the operator leaves in place: `>` with no target",
+	},
+	{
+		ID: "redirection/a-space-before-the-semicolon-is-not-the-operator", Category: "redirection",
+		Snippet: `echo x > ; f; echo "st=$?"`,
+		Why:     "the `;` is part of the operator and has to be tight against the `>`. ksh93 refuses this exactly as the five shells without `>;` do, so the operator is one spelling rather than a marker that generalizes — the same care `ClobberOverrideMarker` records taking, and the reason `>>;` and `<;` are refused there too",
+	},
+	{
 		ID: "heredoc/a-body-reaches-a-child-that-names-its-descriptor", Category: "redirection",
 		Script: true,
 		Snippet: `/bin/sh -c 'cat <&3' 3<<X
@@ -16758,7 +16774,7 @@ printf "[%s]" .@(hid); echo`,
 	{
 		ID: "pat/a-numeric-range-against-the-filesystem", Category: "pattern matching", SyntaxError: true,
 		Snippet: `touch 1 2 10 007 21 22 abc; echo <->; echo <2-9>; echo 2<->; echo <->zzz; echo after`,
-		Why:     "the whole of the expansion half in one row: a range is matched per component and sorted with everything else, the digits in front of one are part of the word rather than a file descriptor — `2<->` names `21` and `22` and is not a redirection of descriptor 2 — and a miss is the ordinary unmatched-pattern answer, which in this shell stops the command, so `after` never runs. ksh93's cell is the second finding here and is not this change's: it *parses* `echo <->` as a redirection from a file called `-` where we refuse the `;` after it, which is a gap in the ksh grammar rather than in the range",
+		Why:     "the whole of the expansion half in one row: a range is matched per component and sorted with everything else, the digits in front of one are part of the word rather than a file descriptor — `2<->` names `21` and `22` and is not a redirection of descriptor 2 — and a miss is the ordinary unmatched-pattern answer, which in this shell stops the command, so `after` never runs. ksh93's cell is the second finding here and is not this change's: it *parses* `echo <->` as a redirection from a file called `-` — and then as the `>;` operator it alone has, whose target is the word behind the `;`. So the `echo done` after it is this command's argument rather than the next command, which is why that column reaches nothing. Modeled in the ksh grammar by `Dialect.RenameOnSuccessRedirect` (#918); the rows under `redirection/a-write-that-only-lands-if-the-command-succeeded` are where the operator itself is pinned",
 	},
 	{
 		ID: "pat/an-extended-closure-is-behind-an-option", Category: "pattern matching",

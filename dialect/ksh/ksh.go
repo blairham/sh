@@ -297,6 +297,18 @@ func Dialect() syntax.Dialect {
 	// after constructs rather than after shells. A dialect built for the
 	// newer build sets this back to true; the panel measures the older one.
 	d.AmpersandRedirect = false
+	// `>;` writes to a temporary file beside the target and renames it over
+	// the target only if the command succeeded. Measured 2026-09-14 on
+	// ksh93u+ 2012-08-01, where it is unique in the panel: `echo new >; f`
+	// replaces `f`, and `{ printf X; false; } >; f` leaves the old contents
+	// alone at status 1. bash 5.3.15, zsh 5.9.2 and dash all refuse the text
+	// at the `;`.
+	//
+	// This is where `echo <->` comes from: with `>;` in the grammar, that
+	// text is `echo` with `<-` and a `>;` whose target is the next word, and
+	// `echo <->; echo done` therefore runs nothing and reaches nothing after
+	// it (#918).
+	d.RenameOnSuccessRedirect = true
 	// `times` is a reserved word here, so `times foo` is a syntax error
 	// rather than a builtin ignoring an argument — the one place in the panel
 	// where which builtin a shell has changes what parses.

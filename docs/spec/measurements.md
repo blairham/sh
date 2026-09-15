@@ -14633,6 +14633,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `heredoc/a-body-on-a-descriptor-outlives-the-exec-that-opened-it` | `[E:kept~][F:` **2>** `<script>: 6: exec: {v}: not found` *(status 127)* | `[E:kept~][F:named~][v=10]` | `[E:kept~][F:named~][v=10]` | `[E:kept~][F:` **2>** `<script>: line 6: exec: {v}: not found` *(status 127)* | `[E:kept~][F:named~][v=11]` | `[E:kept~][F:named~][v=11]` | `[E:kept~][F:` **2>** `<script>: exec: line 6: {v}: not found` *(status 127)* |
 | `redirection/an-allocated-descriptor-counts-up-from-the-shell-s-base` | **2>** `<shell>: 1: exec: {a}: not found` *(status 127)* | `a=10 b=11 c=12` | `a=10 b=11 c=12` | **2>** `<shell>: line 0: exec: {a}: not found` *(status 127)* | `a=10 b=11 c=12` | `a=11 b=12 c=13` | **2>** `<shell>: exec: line 0: {a}: not found` *(status 127)* |
 | `redirection/a-script-file-of-its-own-takes-a-number-in-one-shell` | **2>** `<script>: 1: exec: {a}: not found` *(status 127)* | `a=10~[10:]` **2>** `cat: stdin: Bad file descriptor` | `a=10~[10:]` **2>** `cat: stdin: Bad file descriptor` | **2>** `<script>: line 1: exec: {a}: not found` *(status 127)* | `a=11~[10:]` | `a=11~[10:]` **2>** `<script>:3: 10: bad file descriptor` | **2>** `<script>: exec: line 1: {a}: not found` *(status 127)* |
+| `redirection/a-write-that-only-lands-if-the-command-succeeded` | **2>** `<script>: 2: Syntax error: ";" unexpected` *(status 2)* | **2>** `<script>: line 2: syntax error near unexpected token `;'~<script>: line 2: `echo NEW >; t'` *(status 2)* | **2>** `<script>: line 2: syntax error near unexpected token `;'~<script>: line 2: `echo NEW >; t'` *(status 2)* | **2>** `<script>: line 2: syntax error near unexpected token `;'~<script>: line 2: `echo NEW >; t'` *(status 2)* | `[ok:0:NEW][bad:1:NEW]` | **2>** `<script>:2: parse error near `;'` *(status 1)* | **2>** `<script>: line 2: syntax error: unexpected ";"` *(status 2)* |
+| `redirection/a-space-before-the-semicolon-is-not-the-operator` | **2>** `<shell>: 1: Syntax error: ";" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `;'~<shell>: -c: line 1: `echo x > ; f; echo "st=$?"'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `;'~<shell>: -c: line 1: `echo x > ; f; echo "st=$?"'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `;'~<shell>: -c: line 0: `echo x > ; f; echo "st=$?"'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `;' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `;'` *(status 1)* | **2>** `<shell>: syntax error: unexpected ";"` *(status 2)* |
 | `heredoc/a-body-reaches-a-child-that-names-its-descriptor` | `child~st=0` | `child~st=0` | `child~st=0` | `child~st=0` | `child~st=0` | `child~st=0` | `child~st=0` |
 | `heredoc/the-medium-a-body-is-carried-on-is-visible-to-a-child` | `pipe` | `pipe` | `pipe` | `file` | `file` | `file` | `pipe` |
 | `heredoc/a-here-string-lands-on-its-descriptor-too` | **2>** `<script>: 1: Syntax error: redirection unexpected` *(status 2)* | `[D:string~]` | `[D:string~]` | `[D:string~]` | `[D:string~]` | `[D:string~]` | **2>** `<script>: line 1: syntax error: unexpected redirection` *(status 2)* |
@@ -15088,6 +15090,18 @@ grades it and nothing drift-checks it either, for the same reason.
   exec {a}>/dev/null
   echo "a=$a"
   printf "[10:"; cat <&10; printf "]\n"
+  ```
+- `redirection/a-write-that-only-lands-if-the-command-succeeded` — ksh93 alone has `>;`, a write that goes to a temporary file beside the target and is renamed over it only if the command ended at status 0 — so the failing command here leaves the file holding what the successful one put there and reports 1, where a plain `>` would have emptied it before the command ran. bash 5.3.15, bash 3.2, zsh 5.9.2, dash and BusyBox ash all refuse the text at the `;`, each in its own words, which is the fallback a dialect without the operator leaves in place: `>` with no target
+  ```sh
+  echo old > t
+  echo NEW >; t
+  printf "[ok:%s:%s]" "$?" "$(cat t)"
+  { printf X; false; } >; t
+  printf "[bad:%s:%s]\n" "$?" "$(cat t)"
+  ```
+- `redirection/a-space-before-the-semicolon-is-not-the-operator` — the `;` is part of the operator and has to be tight against the `>`. ksh93 refuses this exactly as the five shells without `>;` do, so the operator is one spelling rather than a marker that generalizes — the same care `ClobberOverrideMarker` records taking, and the reason `>>;` and `<;` are refused there too
+  ```sh
+  echo x > ; f; echo "st=$?"
   ```
 - `heredoc/a-body-reaches-a-child-that-names-its-descriptor` — the document has to be on a **real descriptor**, because a child is handed the table by number and text this shell holds has no number. All four columns with the grammar print the body; ours printed `3: Bad file descriptor` at status 1, the table entry having answered nil and a nil being a descriptor closed over there (#2759). The shape that always worked is `{ cat <&3; } 3<<X`, which moves the body onto standard input and lets os/exec build the pipe — so the defect was invisible to every case written the ordinary way
   ```sh
@@ -17747,7 +17761,7 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   touch v5 v6 va; echo v<5-6>; echo v(<5-6>); echo after
   ```
-- `pat/a-numeric-range-against-the-filesystem` — the whole of the expansion half in one row: a range is matched per component and sorted with everything else, the digits in front of one are part of the word rather than a file descriptor — `2<->` names `21` and `22` and is not a redirection of descriptor 2 — and a miss is the ordinary unmatched-pattern answer, which in this shell stops the command, so `after` never runs. ksh93's cell is the second finding here and is not this change's: it *parses* `echo <->` as a redirection from a file called `-` where we refuse the `;` after it, which is a gap in the ksh grammar rather than in the range
+- `pat/a-numeric-range-against-the-filesystem` — the whole of the expansion half in one row: a range is matched per component and sorted with everything else, the digits in front of one are part of the word rather than a file descriptor — `2<->` names `21` and `22` and is not a redirection of descriptor 2 — and a miss is the ordinary unmatched-pattern answer, which in this shell stops the command, so `after` never runs. ksh93's cell is the second finding here and is not this change's: it *parses* `echo <->` as a redirection from a file called `-` — and then as the `>;` operator it alone has, whose target is the word behind the `;`. So the `echo done` after it is this command's argument rather than the next command, which is why that column reaches nothing. Modeled in the ksh grammar by `Dialect.RenameOnSuccessRedirect` (#918); the rows under `redirection/a-write-that-only-lands-if-the-command-succeeded` are where the operator itself is pinned
   ```sh
   touch 1 2 10 007 21 22 abc; echo <->; echo <2-9>; echo 2<->; echo <->zzz; echo after
   ```

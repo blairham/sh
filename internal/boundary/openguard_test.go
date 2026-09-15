@@ -228,8 +228,6 @@ var exempt = map[string]string{
 		"second `zcompile` replace a product the first one made read-only.",
 	"dialect/zsh.fileLstat": "filesgate.go's gated Lstat: AllowProbe first, and a refusal reads as a path that is not there.",
 	"dialect/zsh.fileStat":  "filesgate.go's gated Stat, behind the same AllowProbe.",
-	"dialect/zsh.fileReadDir": "filesgate.go's gated listing, behind AllowList — the action a " +
-		"recursive `zf_rm` would otherwise learn a denied tree's shape from.",
 	"dialect/zsh.fileLn": "the unlink `-f` does before a link, and the link itself, both after " +
 		"fileMayModify on the target and fileMayRead on the source — a hard link puts the " +
 		"contents inside the new name's directory, so that is where the read is asked about.",
@@ -241,11 +239,11 @@ var exempt = map[string]string{
 		"fileMayModify. Two spellings, one per platform.",
 	"dialect/zsh.fileUnlink": "the unlink itself, after fileMayModify on the path. Two spellings, one per platform.",
 
-	// Five names left this list when `-s` landed (#1669) and none of them
-	// went away: fileWalk, fileChmod, fileChown, fileRemoveTree and
-	// fileMayModifyTarget reach the filesystem through a filePlace now
-	// rather than through the `os` package, so the calls the guard sees are
-	// the place's and the reasons moved with them.
+	// Six names left this list when `-s` landed (#1669) and none of them went
+	// away: fileWalk, fileChmod, fileChown, fileRemoveTree, fileReadDir and
+	// fileMayModifyTarget reach the filesystem through a filePlace now rather
+	// than through the `os` package, so the calls the guard sees are the
+	// place's and the reasons moved with them.
 	//
 	// filesparanoid.go: the `-s` letter's walk, which is a *place* — a
 	// directory held open and a name inside it — rather than a path. The

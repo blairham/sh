@@ -84,8 +84,8 @@ func fileWriteWhole(r *interp.Runner, ctx context.Context, path string, data []b
 // `can't write zwc file`.
 var errGateRefused = errors.New("refused by the policy")
 
-// fileMayModifyTarget is fileMayModify for an operation that follows a
-// symbolic link to do its work, which `chmod` and `chown` do unless `-h`
+// fileMayModifyTargetPath is fileMayModify for an operation that **follows a
+// symbolic link** to do its work, which `chmod` and `chown` do unless `-h`
 // said otherwise.
 //
 // Checking the operand alone would be a hole rather than a check: a link
@@ -102,14 +102,10 @@ var errGateRefused = errors.New("refused by the policy")
 // is the platform's own answer to that — the kernel gives up too — and a
 // chain longer than this is left to the system call, which reports the loop
 // in the words the script expects.
-func fileMayModifyTarget(r *interp.Runner, ctx context.Context, path string) bool {
-	return fileMayModifyTargetPath(r, ctx, shellPath(r, path))
-}
-
-// fileMayModifyTargetPath is that with the path already resolved, for the
-// caller that holds one: a walk under `-s` has a place rather than an
-// operand, and resolving its name a second time is the thing that letter
-// exists to stop. See filesparanoid.go.
+//
+// It takes the path already resolved rather than the operand, which is
+// #1669's doing: every caller holds a filePlace now, and resolving its name a
+// second time is the thing `-s` exists to stop. See filesparanoid.go.
 func fileMayModifyTargetPath(r *interp.Runner, ctx context.Context, at string) bool {
 	for hop := 0; hop < fileLinkHops; hop++ {
 		if !r.AllowModify(ctx, at) {
@@ -176,18 +172,6 @@ func fileStat(r *interp.Runner, ctx context.Context, path string) (fs.FileInfo, 
 	return os.Stat(at)
 }
 
-// fileReadDir is os.ReadDir through the gate. `zf_rm -r` is the caller, and
-// enumerating a directory is the thing ActionReadDir exists to cover: a
-// recursive removal that could list a denied tree has learned its shape even
-// where every unlink in it is refused.
-func fileReadDir(r *interp.Runner, ctx context.Context, path string) ([]os.DirEntry, error) {
-	at := shellPath(r, path)
-	if !r.AllowList(ctx, at) {
-		return nil, fileNotThere("open", at)
-	}
-	return os.ReadDir(at)
-}
-
 // fileNotThere is what a refused probe answers with: the kernel's own errno
 // for a path that is not there, not fs.ErrNotExist, so that a caller printing
 // the reason prints the same sentence for both. A refusal that could be told
@@ -220,6 +204,10 @@ func fileLstatAt(r *interp.Runner, ctx context.Context, p filePlace) (fs.FileInf
 	return p.lstat()
 }
 
+// fileReadDirAt is the listing through the gate. `zf_rm -r` and the recursive
+// `zf_chmod` are the callers, and enumerating a directory is the thing
+// ActionReadDir exists to cover: a recursive removal that could list a denied
+// tree has learned its shape even where every unlink in it is refused.
 func fileReadDirAt(r *interp.Runner, ctx context.Context, p filePlace) ([]os.DirEntry, error) {
 	if !r.AllowList(ctx, p.full) {
 		return nil, fileNotThere("open", p.full)

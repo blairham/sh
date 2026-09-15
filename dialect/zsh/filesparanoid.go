@@ -21,7 +21,7 @@ import (
 // From the manual, on `rm`:
 //
 //	The -s option is a zsh extension to rm functionality. It enables
-//	paranoid behaviour, intended to avoid common security problems
+//	paranoid behavior, intended to avoid common security problems
 //	involving a root-run rm being tricked into removing files other than
 //	the ones intended. It will refuse to follow symbolic links, so that
 //	(for example) rm /tmp/foo/passwd can't accidentally remove /etc/passwd

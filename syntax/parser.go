@@ -1208,6 +1208,9 @@ func (p *Parser) parseList() []*Stmt {
 			p.skipNewlines()
 		}
 	}
+	if len(out) == 0 {
+		p.blameTheEmptyList(inCondition)
+	}
 	return out
 }
 
@@ -1334,6 +1337,102 @@ func (p *Parser) requireBody(list []*Stmt) []*Stmt {
 	}
 	p.failUnexpected("")
 	return list
+}
+
+// blameTheEmptyList records the refusal a list with nothing in it draws when
+// it stopped on a terminator the dialect blames something else for.
+//
+// Three of the seven columns name the terminator where it stands and two
+// name what is behind it, over different sets of terminators and by
+// different rules — see [Dialect.EmptyBodyBlame], which has the table, and
+// [EmptyBodyBlame]'s values for how each one steps.
+//
+// Here rather than in [Parser.requireBody], which is where an empty body is
+// refused, because one of the two dialects *allows* an empty body — its
+// `if ; then :; fi` runs — and so never reaches that check at all. What it
+// refuses is the terminator, and the terminator is what this asks about.
+// Nothing is recorded unless the token is one the dialect blames, which is
+// what keeps a list that may legitimately be empty — a `case` arm's, a
+// command substitution's — from being refused here.
+//
+// The terminator's own refusal is recorded *first* and then replaced, rather
+// than the next token being peeked at: the parser has no lookahead, and by
+// the time a decision can be made the terminator has been stepped past.
+// Recording first is what keeps anything the step lexes from raising a
+// refusal of its own in between.
+func (p *Parser) blameTheEmptyList(inCondition bool) {
+	at := p.tok
+	if p.err != nil || !p.dialect.EmptyBodyBlamed[at.Kind] {
+		return
+	}
+	p.failUnexpected("")
+	p.next()
+	if !p.blamesWhatFollows(inCondition) {
+		return
+	}
+	p.err = nil
+	p.failUnexpectedAt(p.tok, "", false)
+}
+
+// blamesWhatFollows reports whether the token the parser now stands on is the
+// one to name, the terminator behind it having been stepped over.
+func (p *Parser) blamesWhatFollows(inCondition bool) bool {
+	switch p.dialect.EmptyBodyBlame {
+	case BlameTheTokenAfterIt:
+		// Anything but a command, and anything but a newline — which is the
+		// one place this shell takes the line rather than refusing it.
+		return !p.at(TokNewline) && !p.at(TokEOF) && p.cannotBeginACommand()
+	case BlameTheKeywordAfterIt:
+		if inCondition {
+			// A condition is named at the keyword that *ends the header*,
+			// however much stands in between: `if | :; then :; fi` and
+			// `if | :; :; then :; fi` are both the `then`. So the refusal is
+			// read forward to it rather than off the next token.
+			p.skipToTheHeadersKeyword()
+		}
+		// `}` is the reserved word this one does not name: `{ | }` names the
+		// operator where `if | fi` names the `fi`. It is skipped rather than
+		// stopped at above for the same reason — a group written inside a
+		// condition closes with one, and `if | { :; }; then :; fi` is the
+		// `then` there.
+		return p.atStopWord() && p.tok.Literal() != "}"
+	}
+	return false
+}
+
+// skipToTheHeadersKeyword reads forward to the reserved word that ends a
+// condition, so that a refusal inside one can be named there.
+//
+// Bounded rather than open-ended: the parser is already on its way out with a
+// refusal recorded, and a header is a header — a scan that has read a hundred
+// tokens without finding a keyword has found something this rule was not
+// measured on, and the terminator it started from is the answer then.
+func (p *Parser) skipToTheHeadersKeyword() {
+	for range 100 {
+		if p.at(TokEOF) {
+			return
+		}
+		if p.atStopWord() && p.tok.Literal() != "}" {
+			return
+		}
+		p.next()
+	}
+}
+
+// cannotBeginACommand reports whether no command could start at the current
+// token, which is what says a refusal standing here is the grammar's own
+// rather than a line the shell would have taken.
+//
+// A stop word and the operators, and deliberately not a redirection — `> f`
+// is a command with nothing but redirections in every shell in the panel —
+// nor a `(`, which opens a subshell, nor a word, which is a command's name.
+func (p *Parser) cannotBeginACommand() bool {
+	switch p.tok.Kind {
+	case TokSemi, TokAmp, TokPipe, TokPipeAmp, TokAndAnd, TokOrOr,
+		TokDSemi, TokSemiAmp, TokDSemiAmp, TokSemiPipe, TokRightParen:
+		return true
+	}
+	return p.atStopWord()
 }
 
 // parseStmt reads one and-or list and its terminator.

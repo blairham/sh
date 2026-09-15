@@ -124,6 +124,21 @@ func Dialect() syntax.Dialect {
 	// EmptyCompoundBody, which takes both — and `{ ; ; }`, refused by the
 	// count above (#775, #2231).
 	d.SteppedOverSeparatorIsABody = true
+	// An `&` standing where a body or a condition must have something in it
+	// is refused at the token *after* it, where the rest of the panel names
+	// the `&`. Measured 2026-09-14 with `-n` over a script file: `if & then
+	// :; fi` is `` `then' unexpected ``, `while & do :; done` is `` `do' ``,
+	// `if & fi` is `` `fi' ``, `{ & }` is `` `}' ``, `( & )` is `` `)' ``,
+	// `case x in x) & ;; esac` is `` `;;' `` and `if & ; then :; fi` is
+	// `` `;' `` — the next token whatever kind it is, with nothing stepped
+	// over. It is the reverse of what the same shell does with a `;` there,
+	// which names the `;` (#2023), so whatever it does with an empty command
+	// before a terminator is not one rule over both of them.
+	//
+	// The set is `&` alone. `|`, `|&`, `&&`, `||`, `;;` and `;&` in the same
+	// positions all name themselves here (#2235).
+	d.EmptyBodyBlame = syntax.BlameTheTokenAfterIt
+	d.EmptyBodyBlamed = map[syntax.Kind]bool{syntax.TokAmp: true}
 	// `esac` written straight after a `case`'s `in`, with no newline between
 	// them, is the first arm's pattern here rather than the terminator:
 	// `case esac in esac) echo hit;; esac` prints `hit`, and `case x in esac`

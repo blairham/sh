@@ -2959,6 +2959,36 @@ echo "reached-after st=$?"`,
 		Why:     "a `;` where an `if`'s condition begins. Two of the panel step a `;` over where a command belongs, and only one of them does it here: zsh runs the line and ksh93 names the `;`, alongside dash and both bashes, which name it because they step over none at all. Ours read the leniency as reaching this position too and blamed the `then` that followed, which is a token ksh93 never names for this (#2023)",
 	},
 	{
+		ID: "core/an-ampersand-where-a-condition-begins", Category: "command language", SyntaxError: true,
+		Snippet: "if & then echo t; fi; echo done",
+		Why:     "the `;` above with the other terminator in its place, and the answer reverses in the one shell that has both: ksh93 names the `then` here where it names the `;` there, so whatever it does with an empty command before a terminator is not one rule over the two of them. dash, both bashes, bash-as-`sh` and zsh all name the `&` — zsh included, which takes the `;` line and refuses this one. Ours named the `&` in every column (#2235)",
+	},
+	{
+		ID: "core/an-ampersand-where-a-loop-body-begins", Category: "command language", SyntaxError: true,
+		Snippet: "while : ; do & done; echo done",
+		Why:     "the same terminator in a position where the *body* rather than the condition is empty, and the row that says ksh93's rule is about the terminator and not about the keyword after it: it names the `done` here as it names the `then` above, so the token it names is whatever stands next. A reading that special-cased an `if`'s condition would answer this one wrongly and look right on the row above",
+	},
+	{
+		ID: "core/a-bar-where-a-condition-begins", Category: "command language", SyntaxError: true,
+		Snippet: "if | : ; then echo t; fi; echo done",
+		Why:     "the third terminator in the first position, and the split runs the other way: zsh names the `then` where dash, both bashes, bash-as-`sh` and ksh93 all name the `|`. So each of the two shells that names what is behind a terminator does it for a *different* set of terminators — ksh93 for the `&` and zsh for the pipeline and and-or operators — which is what makes this a pair of dialect values rather than one rule. Ours named the `|` in every column",
+	},
+	{
+		ID: "core/a-bar-where-a-loop-header-begins", Category: "command language", SyntaxError: true,
+		Snippet: "while | : ; do echo t; done; echo done",
+		Why:     "the bar's second position, and zsh's own generalization: it names the `do` here as it names the `then` above. Recorded beside the ampersand rows so that the two shells' answers can be read off one page — in this row and the one above, exactly one column names something other than the operator, and it is not the same column either time",
+	},
+	{
+		ID: "core/a-bar-where-a-brace-group-begins", Category: "command language", SyntaxError: true,
+		Snippet: "{ | : ; }; echo done",
+		Why:     "the boundary of zsh's rule, and the reason it is written as *the next reserved word* rather than as anything that is not a command: the closing brace is a reserved word and zsh names the `|` here, where `if | fi` names the `fi`. Every other column names the `|` too, so this is the row a wider rule would break and nothing else would notice",
+	},
+	{
+		ID: "core/a-case-terminator-where-a-condition-begins", Category: "command language", SyntaxError: true,
+		Snippet: "if ;; then echo t; fi; echo done",
+		Why:     "the control for the four rows above: a `;;` in the same position is named where it stands by all seven, so neither shell's rule reaches it. Without it the two sets read as \"terminators\" rather than as the two specific sets they are, and a fix that stepped over any of them would pass every row above and fail this one",
+	},
+	{
 		ID: "core/a-separator-left-over-between-two-statements", Category: "command language", SyntaxError: true,
 		Snippet: "if :; ; then echo t; fi; echo done",
 		Why:     "the same `;` one statement further in, which says the rule is the *position where a statement begins* and not the token after the keyword: ksh93 names the second `;` here too and zsh runs it. All four dialects took this line, because the list stopped silently on the separator and the `then`'s own required separator then absorbed it — a leftover nobody was refusing",

@@ -164,6 +164,29 @@ func Dialect() syntax.Dialect {
 	// The same reach: a body may have nothing in it — `{ }`, `( )`, `while
 	// cond; do done`, and a condition too. Every shape, and this shell alone.
 	d.EmptyCompoundBody = true
+	// A pipeline or and-or operator standing where a body or a condition
+	// must begin is refused at a *reserved word*, where the rest of the
+	// panel names the operator. Measured 2026-09-14 with `-n` over a script
+	// file: a condition is named at the keyword that ends its header however
+	// much stands in between — `if | :; then :; fi`, `if | :; :; then :; fi`
+	// and `if | { :; }; then :; fi` are all `` `then' `` — and a body is
+	// named at a keyword standing next and at the operator otherwise, so
+	// `if :; then | fi` is `` `fi' `` and `for i in 1; do | :; done` is
+	// `` `|' ``.
+	//
+	// `{ | }` is `` `|' `` — the closing brace is the one reserved word it
+	// never names — and so are `( | )` and `case x in x) | ;; esac`.
+	//
+	// The set is the pipeline and and-or operators. An `&` there names
+	// itself in this shell, which is the reverse of ksh93's answer and the
+	// reason the two dialects need different sets (#2235).
+	d.EmptyBodyBlame = syntax.BlameTheKeywordAfterIt
+	d.EmptyBodyBlamed = map[syntax.Kind]bool{
+		syntax.TokPipe:    true,
+		syntax.TokPipeAmp: true,
+		syntax.TokAndAnd:  true,
+		syntax.TokOrOr:    true,
+	}
 	// The same reach again, one level out: an and-or list may end with its
 	// operator, so `{ : || ⏎ }` is `{ : ⏎ }`. Measured 2026-09-07 in every
 	// closing context, and this shell alone — the other four name the closer

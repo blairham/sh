@@ -72,7 +72,7 @@ wait "$a"; echo "first=$?"
 // mean the job. What comes back is the answer `kill %1` already gives for the
 // same job, and what must *not* come back is anything about a process group.
 //
-// The neighbouring number is the control, and it carries the whole claim: an
+// The neighboring number is the control, and it carries the whole claim: an
 // id one above the job's is in the same invented range and names no job, so it
 // goes to the kernel like any other number and finds nothing there. Without
 // it "the id is read as the job" cannot be told apart from "kill succeeds at
@@ -109,8 +109,8 @@ func TestKillReadsAnInventedIdAsItsJob(t *testing.T) {
 ( read x <> p; exit 5 ) & j=$!
 kill -0 "$j" 2>byid.txt; echo "byid=$?"
 kill -0 %1 2>byspec.txt; echo "byspec=$?"
-neighbour=$(( j + 1 ))
-kill -0 "$neighbour" 2>/dev/null; echo "neighbour=$(( $? != 0 ))"
+neighbor=$(( j + 1 ))
+kill -0 "$neighbor" 2>/dev/null; echo "neighbor=$(( $? != 0 ))"
 grep -c . byid.txt > said.txt; read said < said.txt; echo "said=$said"
 echo go > p
 wait
@@ -131,7 +131,7 @@ wait
 	}
 	// And the range is not blanket-accepted: one past the job's id is a
 	// number like any other and reaches nothing.
-	if !strings.Contains(out, "neighbour=1") {
+	if !strings.Contains(out, "neighbor=1") {
 		t.Errorf("out = %q, want a number that names no job handed to the kernel, where it finds nothing; stderr %q", out, errOut)
 	}
 }

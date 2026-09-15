@@ -41,6 +41,20 @@ func (r *Runner) verifyOpened(ctx context.Context, a *Action, reached opened.Rea
 	if r.Gate == nil {
 		return true
 	}
+	if r.ownPipe(a.Path) {
+		// A pipe this shell made for a substitution in the command it is
+		// running, which the first consultation already let through for the
+		// reason ownPipe carries: the script named the command and never the
+		// path, so refusing it refuses the construct. The second consultation
+		// has to make the same exemption or the first one is undone by it —
+		// and it is undone **only on Linux**, which is why this was green on
+		// one runner and red on the other. There `/dev/fd` is a symbolic link
+		// into `/proc`, so the walk resolves the name the interpreter chose
+		// into a second name the interpreter chose, under a directory no
+		// policy has ever heard of; on darwin `/dev/fd/N` is the path the
+		// walk arrives at and there is nothing to resolve.
+		return true
+	}
 	actual, elsewhere := opened.Elsewhere(reached, a.Path)
 	if !elsewhere {
 		// The object has no name a rule could be speaking about, or the name

@@ -30,21 +30,11 @@ import (
 // first would deadlock on anything longer than that buffer — which is most
 // things worth substituting.
 //
-// A named pipe rather than /dev/fd, which was tried first and is worth
-// recording. /dev/fd needs the descriptor to survive into the command that
-// opens the path, and Go marks everything it opens close-on-exec — so it has
-// to be cleared, and clearing it leaks the descriptor into *every* command the
-// shell runs afterwards. That is not a tidiness problem: a later command
-// holding the write end open means the substitution never sees end-of-file, so
-//
-//	echo x | tee >(tr a-z A-Z); sleep 0.4
-//
-// produced nothing at all, because `sleep` was holding the pipe. Clearing the
-// flag only around the right fork is what a shell in C does; Go's os/exec
-// takes the fork lock itself, so there is no window a caller can hold.
-//
-// A FIFO has none of that. It is a real path any process can open, inherits
-// nothing, and leaks nothing — at the cost of a file to make and remove.
+// The path is `/dev/fd/N`, which is what every shell in the panel that has the
+// construct hands the command. It was a named pipe under `$TMPDIR` until
+// #2893, and newProcSubPipe carries both why that was wrong and why the
+// reasoning that chose it — close-on-exec, and the leak that clearing it makes
+// — did not have to be answered by a FIFO after all.
 //
 // # The third spelling, which is a file
 //
@@ -79,7 +69,14 @@ func (r *Runner) procSub(ctx context.Context, span syntax.Span) (string, bool) {
 	if kind == syntax.ProcSubstFile {
 		return r.procSubToFile(ctx, f)
 	}
-	path, err := r.newFifo()
+	// Counted before anything can fail, on the box every shell in the tree
+	// shares. Nothing in the run reads it — the number is not in the path any
+	// more — but it is the only evidence a substitution happened at all where
+	// the path is one nobody opens: a `<(:)` in a pattern or a condition
+	// expands, is compared against, and never starts its command. See
+	// Runner.PipesMadeForTest.
+	r.procSubHomeBox().seq.Add(1)
+	ends, err := newProcSubPipe(kind == syntax.ProcSubstOut)
 	if err != nil {
 		r.diagf("%v\n", err)
 		r.expandErr = true
@@ -87,11 +84,10 @@ func (r *Runner) procSub(ctx context.Context, span syntax.Span) (string, bool) {
 	}
 	// The shell's own end of the pipe is an open and is recorded as one. It
 	// is not put to the gate, and that is the recognition #941 asked for:
-	// this path is the shell's own scaffolding, on the same side of the line
-	// as the temporary directory and the mkfifo that made it. See ownPipe,
-	// which carries the argument and which the two other places an open of
-	// this path can happen consult.
-	action := r.act(Action{Kind: ActionOpen, Path: path, Write: kind != syntax.ProcSubstOut})
+	// this end is the shell's own scaffolding, on the same side of the line
+	// as the pipe it is half of. See ownPipe, which carries the argument and
+	// which the two other places an open of this path can happen consult.
+	action := r.act(Action{Kind: ActionOpen, Path: ends.path, Write: kind != syntax.ProcSubstOut})
 
 	sub, releaseFds := r.substRunner(kind)
 	if kind == syntax.ProcSubstOut {
@@ -102,11 +98,6 @@ func (r *Runner) procSub(ctx context.Context, span syntax.Span) (string, bool) {
 	// return, and the count starts at one for the body itself. What else can
 	// join it, and why the body is not always the last, is in substEnd.
 	keep := &substEnd{held: 1, anchor: newProcAnchor(r.ProcessAnchor), done: make(chan struct{})}
-	if kind != syntax.ProcSubstOut {
-		// Only the writing end delivers an end-of-file by closing, so only
-		// that direction has a nudge to repeat. See nudgeFifoEOF.
-		keep.nudge = path
-	}
 	sub.pipeEnd = keep
 	// And the same field every other forked body answers from. The anchor
 	// lives on the count rather than on the runner because *this* body's
@@ -124,95 +115,43 @@ func (r *Runner) procSub(ctx context.Context, span syntax.Span) (string, bool) {
 		sub.Stdout = &captured.buf
 	}
 
-	// `>(cmd)` reads the command's input out of the pipe, and the shell can
-	// take that end without waiting for anybody — so it is taken here, on
-	// this goroutine, and a failure is the shell's own and is reported like
-	// one. `hold` is what makes waiting unnecessary; see openFifoReadEnd.
-	var hold *os.File
+	// Which stream the shell's end is depends only on the direction, and
+	// both are in hand before the body starts. That is the whole of what
+	// changed with the FIFO: neither end has to wait for the other to be
+	// opened, so neither direction needs a goroutine to open one on and
+	// there is no shape where nobody ever arrives. See newProcSubPipe.
 	if kind == syntax.ProcSubstOut {
-		var end *os.File
-		var oerr error
-		end, hold, oerr = openFifoReadEnd(path)
-		if oerr != nil {
-			_ = os.Remove(path)
-			r.diagf("%v\n", oerr)
-			r.expandErr = true
-			return "", false
-		}
-		sub.Stdin = end
-		keep.opened(end)
-		r.spawn(func() {
-			// Through the clone, which this goroutine owns: the record of
-			// the open that the gate already allowed.
-			sub.emit(ctx, Event{Kind: EventAccess, Action: action})
-			if _, err := sub.Run(ctx, f); err != nil {
-				sub.diagf("%v\n", err)
-			}
-		}, func() {
-			// However the goroutine ended: this end closing is the
-			// end-of-file the substituted command's reader is waiting for,
-			// and skipping it would leave the command that named the path
-			// waiting for one that is never coming.
-			//
-			// Through the count rather than straight at the descriptor,
-			// because the body is not always the last to want it: a job the
-			// body backgrounded reads this same end and outlives the return.
-			// See substEnd.
-			keep.letGo()
-			// And the copies of the table this body was given, on the same
-			// terms and released by the same hand — see ownDescriptors.
-			releaseFds()
-		})
+		// `>(cmd)` reads the command's input out of the pipe, and the body
+		// is what reads it.
+		sub.Stdin = ends.shell
 	} else {
-		// What this direction's body *reads* was chosen in substRunner,
-		// where all three spellings are prepared — see substStdin for which
-		// stream that is and why. What is left here is the writing.
-		//
-		// `<(cmd)` writes cmd's output into the pipe, so this end is the
-		// writer — and a writer has to wait for its reader, which is why
-		// this half is on a goroutine and the other half is not. The wait
-		// is bounded now rather than endless; openFifoWriteEnd is where
-		// that is done and why.
-		r.spawn(func() {
-			end, hold, err := openFifoWriteEnd(path)
-			if err != nil {
-				// Nobody opened the other end — the command did not use the
-				// path it was given, and the pipe went with it. There is
-				// nothing to run and nothing to report: `echo <(true)`
-				// prints a path and is not an error anywhere.
-				return
-			}
-			sub.emit(ctx, Event{Kind: EventAccess, Action: action})
-			sub.Stdout = end
-			keep.opened(end)
-			// And the reading end of the shell's own that came with it,
-			// which outlives the count: the pipe has to survive this end
-			// closing, or the command that named the path reads from a
-			// pipe that is no longer the one the body wrote into. See
-			// openFifoWriteEnd, and substEnd.holding for who releases it.
-			keep.holding(hold)
-			if _, err := sub.Run(ctx, f); err != nil {
-				sub.diagf("%v\n", err)
-			}
-		}, func() {
-			// The same close as the other direction, and the same reason:
-			// it is the end-of-file the command that named the path is
-			// reading until — and the same count in front of it, because a
-			// job the body backgrounded writes through this end after the
-			// body has returned. Nothing happens when nobody ever opened the
-			// other end, so there was nothing to close.
-			//
-			// The nudge is inside letGo for the same reason the close is:
-			// repeating a last-writer close while a writer is still there
-			// delivers nothing. The reading end taken above is *not*
-			// released here, and that is the whole of #2733: this close is
-			// the moment the pipe would be torn down under a reader still
-			// arriving, and the two answer different halves of that — see
-			// openFifoWriteEnd. See substEnd.
-			keep.letGo()
-			releaseFds()
-		})
+		// `<(cmd)` writes the body's output into the pipe.
+		sub.Stdout = ends.shell
 	}
+	keep.opened(ends.shell)
+
+	r.spawn(func() {
+		// Through the clone, which this goroutine owns: the record of
+		// the open that the gate already allowed.
+		sub.emit(ctx, Event{Kind: EventAccess, Action: action})
+		if _, err := sub.Run(ctx, f); err != nil {
+			sub.diagf("%v\n", err)
+		}
+	}, func() {
+		// However the goroutine ended: this end closing is the end-of-file
+		// the far side is waiting for — the command's, for `<(cmd)`, and the
+		// body's own reader for `>(cmd)` — and skipping it would leave
+		// somebody waiting for one that is never coming.
+		//
+		// Through the count rather than straight at the descriptor, because
+		// the body is not always the last to want it: a job the body
+		// backgrounded holds this same end and outlives the return. See
+		// substEnd.
+		keep.letGo()
+		// And the copies of the table this body was given, on the same
+		// terms and released by the same hand — see ownDescriptors.
+		releaseFds()
+	})
 
 	// The body travels with the path for `>(cmd)` only, because that is the
 	// direction whose body writes into the shell's own output rather than
@@ -222,10 +161,19 @@ func (r *Runner) procSub(ctx context.Context, span syntax.Span) (string, bool) {
 	if kind == syntax.ProcSubstOut {
 		body = keep.finished()
 	}
+	// What the pipe *is*, taken before anything can close an end of it: a
+	// descriptor the script takes onto the same pipe later is recognized by
+	// this rather than by the path, because the number in the path is reused.
+	// See descriptorsOnto. A stat that will not answer leaves it nil, which
+	// reads as "no descriptor of ours is on it" — the answer that waits for
+	// the body at the command rather than deferring it to the end of the
+	// shell.
+	ident, _ := ends.child.Stat()
 	r.procSubs = append(r.procSubs, procSubPipe{
-		path: path, hold: hold, body: body, captured: captured, keep: keep,
+		path: ends.path, ident: ident, hold: ends.child,
+		body: body, captured: captured, keep: keep,
 	})
-	return path, true
+	return ends.path, true
 }
 
 // capturedBody holds what a writing substitution's body wrote until the join
@@ -448,7 +396,8 @@ func (r *Runner) procSubToFile(ctx context.Context, body *syntax.File) (string, 
 	// recognizes the path while the command that named it runs. It is the
 	// interpreter's own scaffolding on the same argument the pipe is; see
 	// ownPipe.
-	r.procSubs = append(r.procSubs, procSubPipe{path: path})
+	ident, _ := f.Stat()
+	r.procSubs = append(r.procSubs, procSubPipe{path: path, file: true, ident: ident})
 	action := r.act(Action{Kind: ActionOpen, Path: path, Write: true})
 
 	sub, releaseFds := r.substRunner(syntax.ProcSubstFile)
@@ -492,13 +441,17 @@ func (r *Runner) newSubstFile() (string, *os.File, error) {
 	return path, f, nil
 }
 
-// procSubDirPrefix names the directory a shell puts its substitution pipes in.
+// procSubDirPrefix names the directory a shell puts a `=(cmd)`'s file in.
 //
 // A constant rather than a literal at the one place that makes the directory,
 // because a second reader depends on it: the guard that fails a test run
-// leaving a process holding one of these pipes finds it by this name in the
+// leaving a process holding one of these files finds it by this name in the
 // command line, and a prefix that changed in one place and not the other would
 // leave the guard quietly finding nothing. See internal/childguard.
+//
+// The name still says "procsub" although only the file spelling writes here
+// now. It is what the guard matches on and what a person sweeping a temporary
+// directory by hand would recognize, and the construct is the same one.
 const procSubDirPrefix = "sh-procsub"
 
 // ownPipe reports whether path names one of the pipes — or one of the files —
@@ -508,26 +461,25 @@ const procSubDirPrefix = "sh-procsub"
 // ActionOpen's own, quoted here because the pipe is the one thing the rule
 // reached and stopped one line short of:
 //
-//	The scaffolding a process substitution stands on — the temporary
-//	directory made for its pipes, the mkfifo that creates one, their removal
-//	— is deliberately outside the boundary: those paths are chosen by the
-//	interpreter, never by the script, and gating them would let a policy
-//	refuse the mechanism while believing it refused an access.
+//	The scaffolding a process substitution stands on — the pipe itself, the
+//	directory a `=(cmd)` writes its file in, their removal — is deliberately
+//	outside the boundary: those paths are chosen by the interpreter, never by
+//	the script, and gating them would let a policy refuse the mechanism while
+//	believing it refused an access.
 //
 // The pipe is chosen by the interpreter too. A script writes `<(cmd)` and
-// never writes `<TMPDIR>/sh-procsubNNNNNNNN/sub1`; it cannot, because the
-// directory is made per shell with a name the operating system picks and the
-// pipe is numbered inside it. So a policy that refuses this open refuses
-// `<(cmd)` itself, and there is nothing in the policy file that says so — an
-// operator reads `default deny write` and gets a shell whose process
-// substitutions have stopped working, with a diagnostic naming a path they
-// have never seen.
+// never writes `/dev/fd/11`; it cannot, because the number is the lowest one
+// this shell had free when the word expanded. So a policy that refuses this
+// open refuses `<(cmd)` itself, and there is nothing in the policy file that
+// says so — an operator reads `default deny write` and gets a shell whose
+// process substitutions have stopped working, with a diagnostic naming a path
+// they have never seen.
 //
-// `=(cmd)`'s file is the same class and is in the same set. It is made in the
-// same directory, numbered by the same counter, removed by the same
-// removeProcSubs at the end of the command that named it — so every sentence
-// above is true of it word for word, and the only thing that differs is
-// whether the path leads to a pipe or to a finished file. Two sets would have
+// `=(cmd)`'s file is the same class and is in the same set. It is numbered by
+// the same counter and removed by the same removeProcSubs at the end of the
+// command that named it — so every sentence above is true of it word for word,
+// and the only thing that differs is whether the path leads to a descriptor or
+// to a finished file the interpreter chose a name for. Two sets would have
 // been two answers to one question. Measured: that is 6 of the 1426 corpus cases under the
 // containment posture, and every case in `make conformance-gated` that
 // differed in more than the wording of a diagnostic.
@@ -557,6 +509,12 @@ const procSubDirPrefix = "sh-procsub"
 // path and the gate is asked about it. And clone() empties the set, so a
 // subshell does not inherit its parent's exemptions.
 //
+// A descriptor number is reused, which the name of a file in a directory never
+// was, so a path a script captured from an earlier command can name a *live*
+// pipe again later. That is not an exemption widening: it is the same rule
+// answering about the pipe that is there now, and it is what bash does with
+// the same spelling for the same reason.
+//
 // Probes are deliberately not included. `[ -f <(cmd) ]` is a stat, refused
 // quietly and answered the way a path that is not there is answered, so a
 // policy hiding the temporary directory makes it false rather than making the
@@ -570,32 +528,6 @@ func (r *Runner) ownPipe(path string) bool {
 		}
 	}
 	return false
-}
-
-// newFifo makes a named pipe in this shell's own directory.
-//
-// One directory per shell, made when the first substitution needs it, so a
-// shell that never uses one leaves nothing behind. The names are numbered
-// rather than random: they only have to be distinct within a directory nothing
-// else writes to.
-func (r *Runner) newFifo() (string, error) {
-	dir, err := r.procSubDir()
-	if err != nil {
-		return "", err
-	}
-	// From the box rather than from this Runner, because the directory is
-	// the box's and every shell in the tree makes its pipes in it. A counter
-	// per Runner numbered from whatever the clone happened to copy, so the
-	// two halves of `cat <(echo a) | ( cat <(echo b) )` — clones taken from
-	// the same parent, running at the same time — both asked for `sub1` in
-	// the one directory and the second mkfifo said the file exists.
-	//
-	// Atomic for the same reason: those two are goroutines.
-	path := filepath.Join(dir, "sub"+strconv.FormatUint(r.procSubHomeBox().seq.Add(1), 10))
-	if err := mkfifo(path); err != nil {
-		return "", err
-	}
-	return path, nil
 }
 
 // procSubDirs is the directory each shell makes for its named pipes, and the
@@ -663,22 +595,21 @@ func (r *Runner) procSubHomeBox() *procSubDirs {
 // shell's pipes go, and a script that assigns TMPDIR moves its own and
 // nobody else's.
 //
-// No shell in the panel exposes this: measured on darwin, bash, zsh and
-// ksh93 all expand `<(cmd)` to a /dev/fd path and none of them consults
-// TMPDIR for it, while zsh's `=(cmd)` — the one construct that does write a
-// file — reads TMPPREFIX and ignores TMPDIR too. So there is no behavior to
-// match here and no axis to add. The named pipe is ours, forced by Go's
-// close-on-exec (see the file comment), and where it lives is therefore our
-// decision rather than a compatibility question. What settles it is the
-// library rule: the answer belongs to the Runner.
+// Only `=(cmd)` reaches here now, and no shell in the panel exposes the
+// question: zsh — the one shell with that spelling — reads TMPPREFIX and
+// ignores TMPDIR. TMPPREFIX is a *process* variable a shell reads once at
+// startup and this package may not read one at all, and a Runner an embedder
+// gave a TMPDIR to is already saying where its scratch goes, so the spelling
+// of the path stays ours and the library rule settles it: the answer belongs
+// to the Runner. What is matched is what a script can observe about the file —
+// that it is regular, that it is 0600, and that it is gone when the command
+// that named it ends.
 //
-// That reading survived implementing `=(cmd)` rather than being overtaken by
-// it. TMPPREFIX is a *process* variable a shell reads once at startup and
-// this package may not read one at all, and a Runner an embedder gave a
-// TMPDIR to is already saying where its scratch goes — so the file joins the
-// pipes under r.tempHome() and the spelling of the path stays ours. What is
-// matched is what a script can observe about the file: that it is regular,
-// that it is 0600, and that it is gone when the command that named it ends.
+// The pipes used to live here too and no longer do (#2893). They were a named
+// pipe because of Go's close-on-exec and nothing else, which made where they
+// lived our decision rather than a compatibility question; the path is
+// `/dev/fd/N` now, as it is in every shell in the panel, and there is nothing
+// on disk to put anywhere.
 //
 // A relative TMPDIR is resolved against r.Dir rather than left for the
 // operating system to resolve, because the directory the *process* happens
@@ -707,6 +638,26 @@ func (r *Runner) tempHome() string {
 // owns, and that goes away with it.
 type procSubPipe struct {
 	path string
+	// file says the path leads to a regular file on disk — `=(cmd)`, the one
+	// spelling of the three that writes one — so removeProcSubs has a name to
+	// unlink. The other two name a descriptor rather than a place, and
+	// unlinking `/dev/fd/N` is not a thing to attempt.
+	file bool
+	// ident is what this substitution's pipe — or file — *is*, as the
+	// filesystem identifies it, taken when it was made. It is how a
+	// descriptor the script has since taken onto the same pipe is recognized,
+	// and it is an identity rather than the path because a descriptor number
+	// is reused: the next substitution takes the number this one gave up, so
+	// two different pipes answer to one `/dev/fd/N` within a single script.
+	// See descriptorsOnto.
+	ident os.FileInfo
+	// hold is the end of the pipe the command opens by name, parked on the
+	// descriptor number the path is made of. This shell holds it from the
+	// moment the word expands until removeProcSubs, which is what keeps the
+	// pipe there for a command that has not opened it yet — and closing it is
+	// the end-of-file a `>(cmd)`'s body reads until, and the EPIPE that stops
+	// a `<(cmd)`'s body writing into a pipe nobody reads any more. Nil for
+	// `=(cmd)`, which has no pipe. See newProcSubPipe.
 	hold *os.File
 	// body answers when a `>(cmd)`'s body has finished writing. Nil for the
 	// other two forms, which have nothing to wait for: `<(cmd)`'s body
@@ -836,20 +787,14 @@ func (r *Runner) removeProcSubs(pipes []procSubPipe) {
 		if p.hold != nil {
 			_ = p.hold.Close()
 		}
-		// And the other direction's, which is the same placeholder seen from
-		// the other side: `<(cmd)`'s reading end of this shell's own, whose
-		// whole job is to outlive the body's close and last until the
-		// command is finished with the pipe. That is now. See
-		// openFifoWriteEnd.
-		p.keep.releaseHold()
-		if r.holdsDescriptorOnto(p.path) {
+		if r.holdsDescriptorOnto(p) {
 			// Kept rather than dropped. The clause above says the *name*
 			// stays while this shell holds the pipe; what it left out is
 			// that the body and the pipe are then nobody's to finish, so
 			// both were forgotten here and `exec > >(cat)` lost its output.
 			// The descriptor's lifetime is the shell's, so the join is too —
 			// see endHeldProcSubs.
-			p.shellEnds = r.descriptorsOnto(p.path)
+			p.shellEnds = r.descriptorsOnto(p)
 			r.heldProcSubs = append(r.heldProcSubs, p)
 			continue
 		}
@@ -866,7 +811,9 @@ func (r *Runner) removeProcSubs(pipes []procSubPipe) {
 				r.deferBody(p)
 			}
 		}
-		_ = os.Remove(p.path)
+		if p.file {
+			_ = os.Remove(p.path)
+		}
 	}
 }
 
@@ -934,9 +881,12 @@ func (r *Runner) endHeldProcSubs() {
 // reason this does not trust the table. Measured 2026-09-12, bash 5.3 answers
 // that shape `hi` at status 0.
 //
-// The table is asked as well because a later command can open the *name*
-// again — the name is what the held clause keeps — and such a file was never
-// in the recorded set.
+// The table is asked as well because a later command can open the pipe again —
+// the held clause is what keeps it reachable — and such a file was never in
+// the recorded set. By the pipe rather than by the path, for the reason
+// descriptorsOnto gives: a descriptor number is reused, so the path alone
+// would take a *different* substitution's entry out of the table with this
+// one.
 //
 // A field is left holding the closed file rather than set to nil: a write to
 // it answers an error, where a nil stream is a different shape this package's
@@ -946,27 +896,40 @@ func (r *Runner) closeShellEnds(p procSubPipe) {
 	for _, f := range p.shellEnds {
 		_ = f.Close()
 	}
-	for _, f := range r.descriptorsOnto(p.path) {
+	for _, f := range r.descriptorsOnto(p) {
 		_ = f.Close()
 	}
 	for fd, v := range r.fds {
-		if f, ok := v.(*os.File); ok && f.Name() == p.path {
+		f, ok := v.(*os.File)
+		if !ok {
+			continue
+		}
+		if fi, err := f.Stat(); err == nil && p.ident != nil && os.SameFile(p.ident, fi) {
 			delete(r.fds, fd)
 		}
 	}
 }
 
-// descriptorsOnto is every file of this shell's own that is open on path.
+// descriptorsOnto is every file of this shell's own that is open on a
+// substitution's pipe.
 //
 // One scanner, and holdsDescriptorOnto is its emptiness — so a stream one of
 // them looks at and the other does not cannot happen. That split is exactly
 // how the hole this is about was made: `fds` is "the descriptors beyond the
 // three named streams" by its own definition, and `exec > >(cat)` puts the
 // pipe on a field.
-func (r *Runner) descriptorsOnto(path string) []*os.File {
+func (r *Runner) descriptorsOnto(p procSubPipe) []*os.File {
+	if p.ident == nil {
+		return nil
+	}
 	var out []*os.File
 	on := func(v any) {
-		if f, ok := v.(*os.File); ok && f.Name() == path {
+		f, ok := v.(*os.File)
+		if !ok {
+			return
+		}
+		fi, err := f.Stat()
+		if err == nil && os.SameFile(p.ident, fi) {
 			out = append(out, f)
 		}
 	}
@@ -1034,9 +997,15 @@ func (r *Runner) closeOwnPipe(v any) {
 // the path to has its own descriptor and is unaffected by the name going
 // away, which is the case the removal above was written for.
 //
-// A file's name is what it was opened by, which is this path exactly — both
-// routes that put one in the table open it from the word the substitution
-// expanded to.
+// **By the pipe rather than by the name**, and that is not fastidiousness. A
+// descriptor number is reused: this shell's own end is closed at the top of
+// removeProcSubs, and the very next substitution takes the number it gave up,
+// so `exec > >(cat); printf hi > >(tr a-z A-Z)` has two different pipes
+// answering to one `/dev/fd/N` — the second was then read as held by the
+// first's descriptor, never waited for, and its output went nowhere. Two
+// descriptors onto one pipe share the pipe's inode, whichever platform reopens
+// `/dev/fd/N` and whichever dups it, so os.SameFile answers exactly the
+// question the name used to stand in for.
 //
 // **The three named streams are asked as well as the table**, and leaving
 // them out was a hole with two floors. `exec > >(cat)` puts the pipe's
@@ -1049,12 +1018,12 @@ func (r *Runner) closeOwnPipe(v any) {
 // back. `exec 3> >(cat)` was answered correctly throughout, which is what
 // says the hole is the streams and not the question. fdAliased next door asks
 // the same three for the same reason.
-func (r *Runner) holdsDescriptorOnto(path string) bool {
+func (r *Runner) holdsDescriptorOnto(p procSubPipe) bool {
 	// The emptiness of descriptorsOnto rather than a scan of its own: the
 	// two questions are the same question, and the answer to this one
 	// decides whether the other is asked. Two scans is where the next
 	// stream reaches only one of them.
-	return len(r.descriptorsOnto(path)) > 0
+	return len(r.descriptorsOnto(p)) > 0
 }
 
 // CleanUp removes what this shell made for itself and hands back what it
@@ -1149,22 +1118,13 @@ func (r *Runner) cleanUpAtEnd() {
 // open. Reading the redirection here would be a refinement onto the wrong
 // side of the measurement.
 //
-// # Why the nudge is here
+// # The end the command opens is not on the count
 //
-// nudgeFifoEOF repeats a last-writer close until no reader is left to tell.
-// With a writer still in the pipe there is nothing for it to deliver, so it
-// belongs with the close it is repeating, which is the last one.
-//
-// # The one thing here that is not on the count
-//
-// The reading end a `<(cmd)` holds against the kernel's teardown outlives the
-// count entirely: it is released by the command that named the path, in
-// removeProcSubs, and not by the last shell to let go of the writing end.
-// That is not an inconsistency but the point of it — the window it covers
-// opens when this end closes, so a placeholder released with it covers
-// nothing. It is carried here because this is the thing with the lock and
-// the body's goroutine is what opens it. See openFifoWriteEnd, which also
-// says why it does not make the nudge above unnecessary.
+// That one is the procSubPipe's, released by the command that named the path
+// in removeProcSubs and not by the last shell to let go of this one. The two
+// are opposite ends of the same pipe and have different lifetimes on purpose:
+// this end closing is what the far side reads until, and the other has to
+// outlast it so that a command which has not opened the path yet still can.
 type substEnd struct {
 	mu   sync.Mutex
 	held int
@@ -1173,21 +1133,6 @@ type substEnd struct {
 	// It is here rather than beside it because the group's lifetime is the
 	// same lifetime this count already reconstructs — see procanchor.go.
 	anchor *procAnchor
-	// nudge names the pipe where closing this end is what delivers the
-	// end-of-file — `<(cmd)`, where the shell is the writer. Empty for
-	// `>(cmd)`, whose reader has a placeholder instead. See openFifoReadEnd.
-	nudge string
-	// hold is the reading end of this shell's own on a `<(cmd)`'s pipe,
-	// open from before the body's first write until the command that named
-	// the path is done. Nil for `>(cmd)`, whose placeholder is the mirror of
-	// it and is held in the procSubPipe from the start, because that
-	// direction opens its ends on the goroutine that expands the word.
-	hold *os.File
-	// holdEnded says the release has already been asked for, so a hold
-	// arriving after it is closed instead of kept. The two happen on
-	// different goroutines and in either order: a command can be finished
-	// with the path before the body's own open of it has returned.
-	holdEnded bool
 	// done is closed when the last holder has let go, which is the moment
 	// the body — and any job it backgrounded — has finished with this end
 	// and so has finished writing. It is what removeProcSubs waits on for a
@@ -1227,7 +1172,7 @@ func (e *substEnd) letGo() {
 	e.mu.Lock()
 	e.held--
 	last := e.held == 0
-	f, nudge, a, done := e.file, e.nudge, e.anchor, e.done
+	f, a, done := e.file, e.anchor, e.done
 	e.mu.Unlock()
 	if !last {
 		return
@@ -1250,53 +1195,6 @@ func (e *substEnd) letGo() {
 		return
 	}
 	_ = f.Close()
-	if nudge != "" {
-		nudgeFifoEOF(nudge)
-	}
-}
-
-// holding takes the reading end openFifoWriteEnd opened beside the writing
-// one, and answers to nobody: what it guards is in openFifoWriteEnd, and who
-// releases it is removeProcSubs.
-//
-// A hold that arrives after the release has been asked for is closed here
-// rather than kept. The body's goroutine opens this and the command that
-// named the path releases it, and nothing orders those two: `echo <(true)`
-// is a command that can be over before the body has opened anything.
-func (e *substEnd) holding(f *os.File) {
-	if e == nil || f == nil {
-		return
-	}
-	e.mu.Lock()
-	if e.holdEnded {
-		e.mu.Unlock()
-		_ = f.Close()
-		return
-	}
-	e.hold = f
-	e.mu.Unlock()
-}
-
-// releaseHold closes the reading end, and is the end of the window #2733 is
-// about: after it, a `<(cmd)`'s pipe is torn down when its last real end goes,
-// which is what lets a body still writing into a pipe nobody reads any more
-// learn that nobody does — `head -1 <(yes)` is that shape.
-//
-// Called on every path a command leaves behind, including the ones that never
-// had a hold: a substitution nothing opened, a `=(cmd)`'s regular file, a
-// `>(cmd)` whose placeholder is released beside this call. Nil-safe for the
-// same reason.
-func (e *substEnd) releaseHold() {
-	if e == nil {
-		return
-	}
-	e.mu.Lock()
-	f := e.hold
-	e.hold, e.holdEnded = nil, true
-	e.mu.Unlock()
-	if f != nil {
-		_ = f.Close()
-	}
 }
 
 // finished answers when the last holder has let go, or at once for an end

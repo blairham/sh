@@ -12,14 +12,14 @@ package interp
 // rather than assert something the platform cannot do.
 const HasProcessGroups = hasProcessGroups
 
-// PipeDirForTest is the directory this shell made to hold the named pipes of
-// its process substitutions, or "" if it never needed one.
+// PipeDirForTest is the directory this shell made to hold the regular file a
+// `=(cmd)` writes, or "" if it never needed one.
 //
-// Exported because it is the only evidence a substitution was performed in the
-// cases where nothing opens the path. `case abc in <(:))` expands the word to
-// a path and compares it; no reader ever appears, so the inner command is
-// never started and not one Action or Event reaches a test. The fifo and the
-// directory around it are the whole of what happened.
+// Exported because a shell that removes its own scratch leaves nothing to look
+// for afterwards, and the tests about where that scratch goes and that it is
+// taken away again need to name it. The reading and writing forms had one too
+// until #2893, and expand to `/dev/fd/N` now; what stands in for this where
+// nothing opens the path is PipesMadeForTest below.
 //
 // Those tests used to glob the shell's TMPDIR for it after the run. That
 // stopped working when Finish learned to remove the directory (#1284) — and it
@@ -37,4 +37,25 @@ func (r *Runner) PipeDirForTest() string {
 		return ""
 	}
 	return r.procSubHome.dir
+}
+
+// PipesMadeForTest is how many process substitutions this shell tree has made,
+// of any of the three spellings.
+//
+// The evidence a substitution *happened* where nothing else is: a `<(:)` in a
+// pattern, in a condition, or in a parameter operand expands to a path that
+// nothing opens, so the inner command is never started and not one Action or
+// Event reaches a test. The path used to be a named pipe in a directory of the
+// shell's own and PipeDirForTest was that evidence; since #2893 the path is
+// `/dev/fd/N` and there is no directory unless a `=(cmd)` wrote a file, so the
+// count is what is left that every spelling answers.
+//
+// The counter is the one that numbers `=(cmd)`'s files, which is why it is in
+// the box rather than on the Runner: one box per shell *tree*, so a subshell's
+// substitutions are counted with its parent's.
+func (r *Runner) PipesMadeForTest() uint64 {
+	if r.procSubHome == nil {
+		return 0
+	}
+	return r.procSubHome.seq.Load()
 }

@@ -186,14 +186,6 @@ var exempt = map[string]string{
 	"interp.CommandsOnPath": "the PATH directories, listed to answer a view of what is " +
 		"runnable. The shell chose the paths — they are $PATH — and this is the command search " +
 		"every execution already makes, asked once instead of per word.",
-	"interp.openFifoWriteEnd": "a named pipe this shell made for a process substitution, in a " +
-		"directory this shell made, opened twice — the writing end the body writes through, and " +
-		"the reading end that keeps the pipe from being torn down under a command still arriving " +
-		"at it (#2733). The script named the command, never the path.",
-	"interp.openFifoReadEnd": "the other end of the same pipe. See openFifoWriteEnd.",
-	"interp.nudgeFifoEOF":    "the same pipe again, opened to give a waiting reader end-of-file.",
-	"interp.mkfifo":          "the named pipe this shell makes for a substitution, in its own directory.",
-	"interp.procSub":         "the same pipe, removed when the substitution that made it is done.",
 	"interp.heredocReader": "the spool a here-document's or a here-string's body is put on, so " +
 		"that a child naming the descriptor can read it (#2759). The text is this shell's own — " +
 		"a string the parser produced — and there is no path a script named: the file is made " +

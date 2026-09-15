@@ -78,7 +78,8 @@ primitives, one component at a time.
 
 The exemptions are deliberate and each is documented on the action
 vocabulary itself. The scaffolding a process substitution stands on —
-the temporary directory made for its pipes, the mkfifo, their removal —
+the pipe itself, the temporary directory a `=(cmd)` writes its file in,
+their removal —
 is the interpreter's own plumbing on paths the script never chooses, and
 gating it would let a policy refuse the mechanism while believing it
 refused an access; the access is the open of the pipe, and that is gated.

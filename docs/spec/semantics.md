@@ -7314,9 +7314,11 @@ What was built, all through the extension seam — registered builtins in each
   Two places this does not reproduce zsh, both measured and both filed: a
   numeric `-u` of 10, 20 or `07` is status 0 in zsh with the descriptor then
   unreachable, where every number named here is the number it goes on; and
-  `-o nonblock` on a process substitution reads end-of-file where zsh reads the
-  command's output, because this shell's `<(cmd)` is a named pipe unlinked when
-  the command that named it ends (#1750).
+  `-o nonblock` on a process substitution used to read end-of-file where zsh
+  reads the command's output, because this shell's `<(cmd)` was a named pipe
+  unlinked when the command that named it ends (#1750). The pipe is anonymous
+  since #2893 and outlives the command while a descriptor of this shell's is
+  open on it, which is the clause that route needs.
 
   `zsystem` is `supports` and `flock`. **`supports` answers about what was
   built** — `flock` and `supports` are the whole subcommand vocabulary and

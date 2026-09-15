@@ -221,8 +221,8 @@ func TestProcessSubstitutionCleanUpRemovesTheDirectory(t *testing.T) {
 	// Four substitutions across two commands, because the claim is one
 	// directory per *shell* — made when the first one needs it and not per
 	// substitution, which leaves one behind for every one but the last.
-	src := "cat <(echo a) <(echo b) >/dev/null; cat <(echo c) <(echo d) >/dev/null"
-	if _, st := run(t, src, func(rr *Runner) {
+	src := "cat =(echo a) =(echo b) >/dev/null; cat =(echo c) =(echo d) >/dev/null"
+	if _, st := runGrammar(t, src, withFileSubst, func(rr *Runner) {
 		r = rr
 		rr.Env = append(testPATH(), "TMPDIR="+dir)
 	}); st != 0 {
@@ -277,14 +277,15 @@ func TestProcessSubstitutionPathIsNotGlobbed(t *testing.T) {
 	}
 }
 
-// Where the pipes go is the Runner's answer and never the process's.
+// Where a `=(cmd)`'s file goes is the Runner's answer and never the process's.
 //
-// This is the library rule, not a compatibility one: nothing a real shell
-// does is visible here, because every shell in the panel expands `<(cmd)` to
-// a /dev/fd path and consults no temporary directory at all. Our named pipe
-// is forced by Go's close-on-exec, so we alone have the question — and the
-// answer has to come off the Runner, because the process's TMPDIR is one
-// value every embedded shell in a program would share.
+// This is the library rule, not a compatibility one: zsh — the only shell with
+// the spelling — reads TMPPREFIX and this package may not read a process
+// variable at all, so the question is ours and the answer has to come off the
+// Runner, because the process's TMPDIR is one value every embedded shell in a
+// program would share. The reading and writing forms had the same question
+// until #2893 and no longer do: they expand to `/dev/fd/N` and write nothing
+// to disk, exactly as every shell in the panel does.
 //
 // The regression it pins: os.MkdirTemp with an empty first argument is
 // os.TempDir, which is os.Getenv("TMPDIR"). Two shells in one process could
@@ -298,7 +299,7 @@ func TestProcessSubstitutionIgnoresTheProcessTMPDIR(t *testing.T) {
 	mine := t.TempDir()
 
 	var r *Runner
-	out, st := run(t, `cat <(echo hi)`, func(rr *Runner) {
+	out, st := runGrammar(t, `cat =(echo hi)`, withFileSubst, func(rr *Runner) {
 		r = rr
 		rr.Env = append(testPATH(), "TMPDIR="+mine)
 	})
@@ -325,8 +326,8 @@ func TestProcessSubstitutionHonorsAnAssignedTMPDIR(t *testing.T) {
 	handedIn := t.TempDir()
 
 	var r *Runner
-	src := `TMPDIR=` + assigned + `; cat <(echo hi)`
-	out, st := run(t, src, func(rr *Runner) {
+	src := `TMPDIR=` + assigned + `; cat =(echo hi)`
+	out, st := runGrammar(t, src, withFileSubst, func(rr *Runner) {
 		r = rr
 		rr.Env = append(testPATH(), "TMPDIR="+handedIn)
 	})
@@ -343,7 +344,7 @@ func TestProcessSubstitutionHonorsAnAssignedTMPDIR(t *testing.T) {
 // this package is meant to be usable and a nil Env is genuinely empty.
 func TestProcessSubstitutionWithoutATMPDIR(t *testing.T) {
 	var r *Runner
-	out, st := run(t, `cat <(echo hi)`, func(rr *Runner) {
+	out, st := runGrammar(t, `cat =(echo hi)`, withFileSubst, func(rr *Runner) {
 		r = rr
 		// Back to bare: the shared helper seeds one so the suite does not
 		// litter, and this is the one test that must not have it.
@@ -378,7 +379,7 @@ func TestProcessSubstitutionWithoutATMPDIR(t *testing.T) {
 func TestASubstitutionsDirectoryIsTakenAwayAgain(t *testing.T) {
 	tmp := t.TempDir()
 	var r *Runner
-	out, st := run(t, `cat <(echo hi)`, func(rr *Runner) {
+	out, st := runGrammar(t, `cat =(echo hi)`, withFileSubst, func(rr *Runner) {
 		r = rr
 		rr.Env = append(testPATH(), "TMPDIR="+tmp)
 	})
@@ -409,7 +410,7 @@ func TestASubstitutionsDirectoryIsTakenAwayAgain(t *testing.T) {
 func TestASubshellsDirectoryIsTheParentsToRemove(t *testing.T) {
 	tmp := t.TempDir()
 	var r *Runner
-	out, st := run(t, `( cat <(echo one) ); cat <(echo two)`, func(rr *Runner) {
+	out, st := runGrammar(t, `( cat =(echo one) ); cat =(echo two)`, withFileSubst, func(rr *Runner) {
 		r = rr
 		rr.Env = append(testPATH(), "TMPDIR="+tmp)
 	})
@@ -428,13 +429,14 @@ func TestASubshellsDirectoryIsTheParentsToRemove(t *testing.T) {
 // so they number their pipes in a directory they share.
 //
 // The regression: sharing the directory without sharing the counter had both
-// clones ask for `sub1`, and the second mkfifo failed with "file exists". One
+// clones ask for the same name, and the second exclusive create failed with
+// "file exists". One
 // counter in the box the directory is in is what keeps the names distinct,
 // and it is atomic because these two are goroutines.
 func TestPipelineHalvesNumberTheirPipesApart(t *testing.T) {
 	tmp := t.TempDir()
 	var r *Runner
-	out, st := run(t, `cat <(echo a) | ( cat <(echo b) )`, func(rr *Runner) {
+	out, st := runGrammar(t, `cat =(echo a) | ( cat =(echo b) )`, withFileSubst, func(rr *Runner) {
 		r = rr
 		rr.Env = append(testPATH(), "TMPDIR="+tmp)
 	})
@@ -465,7 +467,9 @@ func TestTheHelperRegistersTheCleanUpSoNoTestHasTo(t *testing.T) {
 	tmp := t.TempDir()
 	var dir string
 	t.Run("a runner left open, which nothing else cleans up after", func(t *testing.T) {
-		f, err := syntax.Parse(`cat <(echo hi) >/dev/null`, syntax.Core())
+		d := syntax.Core()
+		withFileSubst(&d)
+		f, err := syntax.Parse(`cat =(echo hi) >/dev/null`, d)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -518,26 +522,44 @@ func waitForFile(t *testing.T, path string) string {
 	}
 }
 
-// pipeDirMade reports the directory a shell made for its substitution pipes,
+// pipeDirMade reports the directory a shell made for its `=(cmd)` files,
 // having asserted that it made one and that it is under want.
 //
-// The shared spelling of the probe four tests across three files need: they
-// run a substitution nothing opens, so no command starts, no Action is gated
-// and no Event is emitted — the directory is the only thing that happened.
-// Globbing for it afterwards is what they used to do, and Finish removing it
-// (#1284) is what ended that. Naming it does not depend on it still being
-// there, which is the property that makes the same probe answer both "one was
-// performed" and "it was taken away again".
+// Only the file spelling has one since #2893: `<(cmd)` and `>(cmd)` expand to
+// `/dev/fd/N` and write nothing to disk. What the tests using this are about
+// is where a shell's scratch goes and that it is taken away again, so they ask
+// it of the spelling that still writes.
+//
+// Naming it does not depend on it still being there, which is the property
+// that makes the same probe answer both "one was performed" and "it was taken
+// away again" — globbing for it afterwards is what they used to do, and Finish
+// removing it (#1284) is what ended that.
 func pipeDirMade(t *testing.T, r *Runner, want string) string {
 	t.Helper()
 	dir := r.PipeDirForTest()
 	if dir == "" {
-		t.Fatal("no process substitution ran: the shell never made a directory for a pipe")
+		t.Fatal("no file substitution ran: the shell never made a directory")
 	}
 	if filepath.Dir(dir) != want {
-		t.Fatalf("pipes went to %q, want a directory under %q", dir, want)
+		t.Fatalf("files went to %q, want a directory under %q", dir, want)
 	}
 	return dir
+}
+
+// pipesMade asserts that a shell performed n process substitutions, of
+// whatever spelling.
+//
+// The shared probe for the three tests that run a substitution *nothing
+// opens*: a `<(:)` in a pattern, in a condition, or in a parameter operand
+// expands to a path that is then compared against, so no command starts, no
+// Action is gated and no Event is emitted. Before #2893 the evidence was the
+// directory the pipe was made in; there is no directory now, and the count is
+// what every spelling still answers. See Runner.PipesMadeForTest.
+func pipesMade(t *testing.T, r *Runner, n uint64) {
+	t.Helper()
+	if got := r.PipesMadeForTest(); got != n {
+		t.Errorf("the shell made %d process substitutions, want %d", got, n)
+	}
 }
 
 // gone asserts that a path is not there, which after a run is the whole of
@@ -572,8 +594,8 @@ func TestTheExecReplacementCleansUpBeforeTheExecve(t *testing.T) {
 	// Two commands: the first makes the directory, the second is the exec
 	// that never returns. Split so the substitution is not part of the
 	// replacement's own redirections, which is a different question.
-	src := `cat <(echo hi) >/dev/null; exec /bin/echo`
-	_, st := run(t, src, func(rr *Runner) {
+	src := `cat =(echo hi) >/dev/null; exec /bin/echo`
+	_, st := runGrammar(t, src, withFileSubst, func(rr *Runner) {
 		r = rr
 		rr.Env = append(testPATH(), "TMPDIR="+tmp)
 		rr.ReplaceProcess = func(string, []string, []string, []*os.File) error {
@@ -594,7 +616,7 @@ func TestTheExecReplacementCleansUpBeforeTheExecve(t *testing.T) {
 	}
 	// And the shell did make one, so the assertion above is not vacuous.
 	if r.PipeDirForTest() == "" {
-		t.Error("no process substitution ran")
+		t.Error("no file substitution ran")
 	}
 }
 
@@ -613,7 +635,7 @@ func TestTheExecReplacementCleansUpBeforeTheExecve(t *testing.T) {
 func TestThePipeDirectoryCarriesTheMarkerTheGuardLooksFor(t *testing.T) {
 	tmp := t.TempDir()
 	var r *Runner
-	if _, st := run(t, `cat <(echo hi) >/dev/null`, func(rr *Runner) {
+	if _, st := runGrammar(t, `cat =(echo hi) >/dev/null`, withFileSubst, func(rr *Runner) {
 		r = rr
 		rr.Env = append(testPATH(), "TMPDIR="+tmp)
 	}); st != 0 {

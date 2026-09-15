@@ -44,10 +44,16 @@ non-POSIX features. Excluding it yields a core containing arrays,
 
 All of those are implemented, process substitution last: `<(cmd)` needs
 a path the child can *open*, which is plumbing rather than grammar. It
-is a named pipe, after `/dev/fd` was tried and rejected — that needs the
-descriptor to survive `exec`, and clearing Go's close-on-exec flag leaks
-it into every later command, so a `sleep` after the substitution holds
-the pipe open and the reader never sees end-of-file. Every item here is
+expands to `/dev/fd/N`, as it does in every shell in the panel that has
+the construct. It was a named pipe under `$TMPDIR` for a while, on the
+reasoning that `/dev/fd` needs the descriptor to survive `exec` and that
+clearing Go's close-on-exec flag leaks it into every later command — a
+`sleep` after the substitution holds the pipe open and the reader never
+sees end-of-file. That was true of *clearing the flag* and not of
+`/dev/fd`: a descriptor reaches a child by number through the table
+`childFiles` rebuilds, which is what `exec 3>f; cmd` already runs on, so
+the end is parked close-on-exec and handed to the commands of the one
+shell that named it (#2893). Every item here is
 a statement about the code and not only about the matrix — which it was
 not, for a while: `$'...'` recorded its quoting and never decoded the
 escapes, `+=` was read as a command name, C-style `for` did not parse,

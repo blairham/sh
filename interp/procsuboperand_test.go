@@ -65,28 +65,22 @@ func TestAProcessSubstitutionInAParamOperandIsAGrammarQuestion(t *testing.T) {
 // carry measured the wrong thing and agreed with the binary by accident, since
 // the flag was the only reason it produced a path at all.
 func TestAProcessSubstitutionInAParamOperandIsPerformedWhereTheGrammarHasOne(t *testing.T) {
-	tmp := t.TempDir()
 	// `${u:-<(:)}` rather than a pattern operand, because the *value* is
 	// what a path is visible in — a pattern operand's path simply fails to
 	// match, which is true of the literal reading too.
 	var r *Runner
 	out, st := runGrammar(t, `printf "[%s]" ${nosuch:-<(:)}`, procsubOperand,
-		func(rr *Runner) {
-			r = rr
-			rr.Env = append(withoutTMPDIR(rr.Env), "TMPDIR="+tmp)
-		})
+		func(rr *Runner) { r = rr })
 	if st != 0 {
 		t.Fatalf("status %d, want 0", st)
 	}
 	if strings.Contains(out, "<(") {
 		t.Errorf("got %q, want the path rather than the text", out)
 	}
-	if !strings.Contains(out, tmp) {
-		t.Errorf("got %q, want a path under the scratch directory %q", out, tmp)
+	if !strings.HasPrefix(out, "[/dev/fd/") {
+		t.Errorf("got %q, want the descriptor path the word expands to", out)
 	}
-	// Named rather than globbed for: the shell removes the directory on its
-	// way out now (#1284), and the name outlives it. See pipeDirMade.
-	gone(t, pipeDirMade(t, r, tmp))
+	pipesMade(t, r, 1)
 }
 
 // And without it, the same operand is the five characters it was written as —
@@ -121,7 +115,7 @@ func TestAProcessSubstitutionInAConditionIsAnAxis(t *testing.T) {
 		if want := "[miss]"; out != want || st != 0 {
 			t.Errorf("got %q (status %d), want %q at 0", out, st, want)
 		}
-		gone(t, pipeDirMade(t, r, tmp))
+		pipesMade(t, r, 1)
 	})
 
 	t.Run("refused where it does not, and the command never runs", func(t *testing.T) {
@@ -148,11 +142,9 @@ func TestAProcessSubstitutionInAConditionIsAnAxis(t *testing.T) {
 		// TMPDIR and want it empty, and a shell that cleans up after itself
 		// leaves it empty whether or not it ran the substitution — so the
 		// assertion would have gone on passing against exactly the shell it
-		// is here to forbid. What the shell made is remembered rather than
-		// looked for, and a shell that made nothing has nothing to remember.
-		if dir := r.PipeDirForTest(); dir != "" {
-			t.Errorf("the command ran before the refusal: pipes went to %s", dir)
-		}
+		// is here to forbid. What the shell made is counted rather than
+		// looked for, and a shell that made nothing has nothing to count.
+		pipesMade(t, r, 0)
 	})
 
 	t.Run("and an unanswered axis is refused by name", func(t *testing.T) {

@@ -18720,7 +18720,19 @@ echo after`,
 		ID: "glob/matches-are-in-order", Category: "expansion",
 		Script:  true,
 		Snippet: "mkdir -p g && cd g && : > Apple && : > banana && : > Cherry && : > _under && : > 1digit && echo *",
-		Why:     "byte order, which every shell in the panel gives under the LC_ALL=C both sweeps run in. Outside that locale three of the four collate and dash does not, and the two platforms disagree about where punctuation goes — none of which this can record, which is exactly why the ordering it does record is worth pinning",
+		Why:     "byte order, which every shell in the panel gives under the LC_ALL=C both sweeps run in. Outside that locale three of the four collate and dash does not, and the two platforms disagree about where punctuation goes — none of which this can record, which is exactly why the ordering it does record is worth pinning. Measured 2026-09-15 with each shell started under `env -i`: `LANG=C` and `LC_COLLATE=C` are byte order everywhere, a UTF-8 name in `LANG`, `LC_ALL` or `LC_COLLATE` collates in bash, ksh93 and zsh, and **no locale at all** is not unanimous — bash collates there and the other three do not, which is the state a continuous integration runner is in. See interp/order.go (#1675)",
+	},
+	{
+		ID: "glob/one-order-reaches-every-surface", Category: "expansion",
+		Script: true,
+		Snippet: "mkdir -p g && cd g && : > date && : > b && : > Z && : > 1digit && : > _under && : > A_upper && " +
+			"echo * && a=(date b Z 1digit _under A_upper) 2>/dev/null && echo ${(o)a}",
+		Why: "the same six names ordered twice: once as a pathname expansion and once by the flag one " +
+			"shell has for sorting an array. The two lines agree in the column that has both, which is " +
+			"the claim — a shell that sorted `*` one way and `${(o)a}` another would be wrong about one " +
+			"of them whichever answer is right, and an order written down in several places is one that " +
+			"drifts. The other five have no such flag and answer the second line their own way, which is " +
+			"recorded rather than read as evidence about the order (#1675)",
 	},
 	{
 		ID: "glob/a-trailing-slash-stays-on-every-match", Category: "expansion",

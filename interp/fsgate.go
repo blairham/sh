@@ -8,7 +8,6 @@ import (
 	"io/fs"
 	"os"
 	"slices"
-	"strings"
 	"syscall"
 
 	"github.com/blairham/sh/internal/opened"
@@ -171,7 +170,11 @@ func (r *Runner) readDir(path string) ([]os.DirEntry, error) {
 	// Sorted, because os.ReadDir sorts and every caller here was written
 	// against that: a glob's expansion is in name order and would otherwise
 	// come out in whatever order the directory happens to be stored in.
-	slices.SortFunc(entries, func(a, b os.DirEntry) int { return strings.Compare(a.Name(), b.Name()) })
+	//
+	// In this shell's order rather than in a comparison of its own, so a
+	// listing read through the gate and one read without it cannot come back
+	// differently ordered — see shellOrder.
+	slices.SortFunc(entries, func(a, b os.DirEntry) int { return shellOrder(a.Name(), b.Name()) })
 	return entries, err
 }
 

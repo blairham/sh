@@ -3265,6 +3265,56 @@ type Diagnostics struct {
 	// statement about the operator rather than about the token.
 	CondOperand string
 
+	// ConditionExpected is what one dialect says about a `[[ ]]` whose words
+	// it could not read as a condition. One verb: the word it names.
+	//
+	// The sentence is about the **group** rather than about the token the
+	// parser stopped on, and two things follow from that. Which word it
+	// names moves with how many there are, and there are *two* sentences —
+	// this one and ConditionExpectedPrefixed — with the second word choosing
+	// between them.
+	//
+	// Measured 2026-09-15 on zsh 5.9.2 under `env -i PATH=/usr/bin:/bin`,
+	// over `-c`, a script file and standard input alike:
+	//
+	//	[[ p q ]]              parse error: condition expected: p
+	//	[[ p q r ]]            condition expected: q
+	//	[[ p q r s ]]          condition expected: p
+	//	[[ p q r s t ]]        condition expected: p
+	//	[[ p -n q ]]           parse error: condition expected: p
+	//	[[ p -n q r ]]         parse error: condition expected: p
+	//	[[ p q -n r s ]]       condition expected: p
+	//	[[ p "q" r ]]          condition expected: "q"
+	//	[[ $u q ]]             parse error: condition expected: $u
+	//
+	// so: the first word, except for exactly three words where it is the
+	// **middle** one; and the prefixed sentence for two words, or wherever
+	// the second word is a `-` with at most one character after it. A longer
+	// `-word` is a *named* condition and an unknown one is refused by name
+	// instead — `[[ p -zz q ]]` is `unknown condition: -zz` — which is why
+	// the length is what this turns on rather than a table of operators.
+	// `[[ p -Q q ]]` is the row that says so: `-Q` is no condition at all
+	// and still draws the prefixed sentence.
+	//
+	// The word is named as it was **written**, quotes and expansions and all,
+	// which is what the last two rows are for: the refusal happens while
+	// reading, so there is nothing expanded to name.
+	//
+	// A `!` in front is not part of the group and neither are the
+	// connectives: `[[ ! p q r ]]` and `[[ p && q r s ]]` are the three-word
+	// and three-word groups their words say they are. `[[ ( p q r ) ]]` is
+	// the same again inside the parentheses.
+	//
+	// Empty is the other three columns, which name the token the parser
+	// stopped on and say nothing about conditions (#2846).
+	ConditionExpected string
+
+	// ConditionExpectedPrefixed is the other of that pair — the same
+	// sentence behind this dialect's ordinary parse-error lead-in. One verb,
+	// the same word. Empty falls back to ConditionExpected, which is what a
+	// dialect with one sentence for both would want.
+	ConditionExpectedPrefixed string
+
 	// CondSyntaxUnexpected is a token the grammar did not want *inside*
 	// `[[ ]]`, where the dialect words it differently from the same token
 	// anywhere else. Three verbs, the same as SyntaxUnexpected: %[1]s the
@@ -5497,6 +5547,13 @@ func (d Diagnostics) ParseFailure(err error) string {
 	if !errors.As(err, &se) {
 		return Wording(d.SyntaxError, "%[1]s", parseMessage(err), 0)
 	}
+	if out, ok := d.conditionExpected(se); ok {
+		// Ahead of the kinds, because this dialect's sentence is the same
+		// one wherever inside the condition the reading stopped: a word
+		// where the `]]` belonged, a binary operator with nothing after it,
+		// and a group that never closed all reach it. See ConditionExpected.
+		return out
+	}
 	switch se.Kind {
 	case syntax.ErrBadSubstitution:
 		// Two verbs for the dialect that words this as a syntax error rather
@@ -5593,6 +5650,42 @@ func (d Diagnostics) ParseFailure(err error) string {
 			escapeToken(se.LastToken), se.Pos.Line)
 	}
 	return Wording(d.SyntaxError, "%[1]s", se.Msg, se.Pos.Line)
+}
+
+// conditionExpected is the sentence one dialect gives a `[[ ]]` it could not
+// read, and whether this is one.
+//
+// The rule is measured and lives here rather than in the parser, because both
+// halves of it are that shell's: every other column names the token it
+// stopped on, and the parser records only what the group held. See
+// Diagnostics.ConditionExpected for the table.
+func (d Diagnostics) conditionExpected(se *syntax.Error) (string, bool) {
+	if d.ConditionExpected == "" || len(se.CondWords) < 2 {
+		return "", false
+	}
+	words := se.CondWords
+	form, subject := d.ConditionExpected, words[0]
+	switch {
+	case len(words) == 2, isOneLetterConditionWord(words[1]):
+		if form = d.ConditionExpectedPrefixed; form == "" {
+			form = d.ConditionExpected
+		}
+	case len(words) == 3:
+		subject = words[1]
+	}
+	return Wording(form, "condition expected: %[1]s", subject), true
+}
+
+// isOneLetterConditionWord reports whether a word is the shape of a
+// single-letter conditional test — a `-` with at most one character after it.
+//
+// The *shape* and not a table of operators, which is what the measurement
+// says: `[[ p -Q q ]]` draws the same sentence as `[[ p -n q ]]` although
+// `-Q` is no condition that shell has, and `[[ p -- q ]]` and `[[ p - q ]]`
+// do too. A longer `-word` is looked up by name instead, and an unknown one
+// is `unknown condition: -zz` rather than anything this function is about.
+func isOneLetterConditionWord(s string) bool {
+	return strings.HasPrefix(s, "-") && len(s) <= 2
 }
 
 // Remark renders something the parser had to say about input it accepted

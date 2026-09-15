@@ -311,6 +311,12 @@ type Parser struct {
 	// after a `|` that never arrived, and the `(` with nothing behind it —
 	// and a rule written out at some of them is the shape of defect this
 	// tree keeps producing.
+	// condWords are the words of the `[[ ]]` group being read, as each was
+	// written, for the one dialect whose refusal counts them. Rebuilt at
+	// every condPrimary — which is where each group begins — and read by
+	// Parser.recordCondGroup. See Error.CondWords.
+	condWords []string
+
 	inCasePattern bool
 }
 

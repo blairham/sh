@@ -501,6 +501,9 @@ func Semantics() interp.Semantics {
 	// No `'` flag, as dash has none: `%'d` is `invalid format` at 1.
 	s.PrintfGroupingFlag = interp.No
 	s.PrintfGroupingFlagAfterTheWidth = interp.No
+	// A `*` beside a width's own digits is refused here too: `printf '%5*d' 4 42`
+	// is a conversion character this shell does not have (#2824).
+	s.PrintfStarBesideTheFieldDigits = interp.No
 	s.PrintfReportsBadNumber = interp.Yes
 	s.PrintfNumberOperand = interp.PrintfNumberWholeOperand
 	// None of C99's three: `printf '%F' 1.5` is `%F]: invalid format` at 1
@@ -511,6 +514,7 @@ func Semantics() interp.Semantics {
 	// unanswered PrintfRefusedOperandKeepsItsLeadingNumber: this shell keeps
 	// no partial number at all — an operand its reader cannot finish is a
 	// zero — and it evaluates nothing, so the question has no site here.
+	// unanswered PrintfFloatOperandIsEvaluatedTwice: for the same reason.
 	s.PrintfUnfinishedConversionIsAPercent = interp.No
 	// `printf -v x '%s' hi` assigns nothing: `-v` is read as the format.
 	s.PrintfAssignsWithV = interp.No

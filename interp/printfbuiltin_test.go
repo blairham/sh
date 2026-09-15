@@ -34,8 +34,10 @@ func printfSem() Semantics {
 	s.PrintfStarComplaintCostsTheStatus = Yes
 	s.PrintfGroupingFlag = Yes
 	s.PrintfGroupingFlagAfterTheWidth = No
+	s.PrintfStarBesideTheFieldDigits = No
 	s.PrintfNumberOperand = PrintfNumberLeadingNumber
 	s.PrintfRefusedOperandKeepsItsLeadingNumber = No
+	s.PrintfFloatOperandIsEvaluatedTwice = No
 	return s
 }
 
@@ -1443,6 +1445,74 @@ func TestPrintfGroupingFlagAfterTheWidthIsAnAxis(t *testing.T) {
 			out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
 			if out != tc.want || st != tc.status {
 				t.Errorf("got %q status %d, want %q and %d", out, st, tc.want, tc.status)
+			}
+		})
+	}
+}
+
+// A `*` beside a width's own digits, which C's grammar has no room for and
+// one column reads as a field the star wins (#2824).
+//
+// The `%*0d` row is the one that separates this reading from "the scan starts
+// over": the `0` after the star is a digit that is ignored, not the
+// zero-padding flag, so a restart would answer `[0042]` here.
+//
+// The `%*8*d` row is the lost-star accounting. Both operands are read, in the
+// order they were written, and the *last* star is the one the width comes
+// from — an implementation that dropped the losing star would take 4 for the
+// width and then hand 6 to the conversion.
+func TestPrintfStarBesideTheFieldDigitsIsAnAxis(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		beside Answer
+		src    string
+		want   string
+		status int
+	}{
+		{"a star after the digits", Yes, `printf "[%5*d]" 4 42`, "[  42]", 0},
+		{"a star after the digits, refused", No, `printf "[%5*d]" 4 42`, "sh: printf: %5*: invalid directive\n[", 1},
+		{"a star before the digits", Yes, `printf "[%*5d]" 4 42`, "[  42]", 0},
+		{"a star before the digits, refused", No, `printf "[%*5d]" 4 42`, "sh: printf: %*5: invalid directive\n[", 1},
+		{"digits on both sides change nothing", Yes, `printf "[%8*9d]" 4 42`, "[  42]", 0},
+		{"the flags in front still apply", Yes, `printf "[%-5*d][%05*d]" 4 42 4 42`, "[42  ][0042]", 0},
+		{"a zero after the star is a digit", Yes, `printf "[%*0d]" 4 42`, "[  42]", 0},
+		{"two stars, both read, the last winning", Yes, `printf "[%*8*d]" 4 6 42`, "[    42]", 0},
+		{"a precision reads the same way", Yes, `printf "[%.2*d]" 4 42`, "[0042]", 0},
+		{"both fields at once", Yes, `printf "[%5*.3*d]" 4 2 9`, "[  09]", 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := printfSem()
+			sem.PrintfStarBesideTheFieldDigits = tc.beside
+			out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+			if out != tc.want || st != tc.status {
+				t.Errorf("got %q status %d, want %q and %d", out, st, tc.want, tc.status)
+			}
+		})
+	}
+}
+
+// And it is asked at that disagreement and nowhere else. Run *unanswered*, so
+// a conversion that consults it refuses the command and names it, where one
+// that does not runs as it always did.
+func TestPrintfStarBesideTheDigitsIsAskedOnlyAtItsOwnDisagreement(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		src     string
+		refused bool
+	}{
+		{"a star beside digits", `printf "[%5*d]" 4 42`, true},
+		{"the same the other way round", `printf "[%*5d]" 4 42`, true},
+		{"a star on its own settles nothing", `printf "[%*d]" 4 42`, false},
+		{"nor two of them", `printf "[%*.*d]" 4 2 42`, false},
+		{"nor a width with no star", `printf "[%5d]" 42`, false},
+		{"nor a bare conversion", `printf "[%d]" 42`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := printfSem()
+			sem.PrintfStarBesideTheFieldDigits = Unspecified
+			out, _ := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+			if got := strings.Contains(out, "disagree"); got != tc.refused {
+				t.Errorf("got %q, want the axis consulted = %v", out, tc.refused)
 			}
 		})
 	}

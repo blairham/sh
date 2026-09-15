@@ -1090,6 +1090,9 @@ func Semantics() interp.Semantics {
 	// `%15'd` is `` `'': invalid format character ``.
 	s.PrintfGroupingFlag = interp.Yes
 	s.PrintfGroupingFlagAfterTheWidth = interp.No
+	// A `*` beside a width's own digits is refused here too: `printf '%5*d' 4 42`
+	// is a conversion character this shell does not have (#2824).
+	s.PrintfStarBesideTheFieldDigits = interp.No
 	s.PrintfReportsBadNumber = interp.Yes
 	s.PrintfNumberOperand = interp.PrintfNumberLeadingNumber
 	// C99's three: `%F` is `1.500000`, `%a` is `0x1.8p+0` and `%A` is
@@ -1102,7 +1105,9 @@ func Semantics() interp.Semantics {
 	// what survives an *arithmetic* failure, and this shell runs no
 	// arithmetic over a printf operand. Keeping the number at the front is
 	// its whole reading and is PrintfNumberLeadingNumber above, so there is
-	// nothing left here to decide.
+	// nothing left here to decide. The same goes for
+	// PrintfFloatOperandIsEvaluatedTwice: an evaluation that never happens
+	// cannot happen twice.
 	s.PrintfBackslashC = interp.PrintfBackslashCLiteral
 	// A format that ends inside a conversion is an error here, with a
 	// second wording of its own — see PrintfMissingVerb.

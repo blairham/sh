@@ -454,6 +454,9 @@ func Semantics() interp.Semantics {
 	// have, and `%'d` is `printf: %': invalid directive` at 2.
 	s.PrintfGroupingFlag = interp.No
 	s.PrintfGroupingFlagAfterTheWidth = interp.No
+	// A `*` beside a width's own digits is refused here too: `printf '%5*d' 4 42`
+	// is a conversion character this shell does not have (#2824).
+	s.PrintfStarBesideTheFieldDigits = interp.No
 	s.PrintfReportsBadNumber = interp.Yes
 	s.PrintfNumberOperand = interp.PrintfNumberLeadingNumber
 	// C99's three, answering exactly as bash does on every row measured
@@ -463,7 +466,8 @@ func Semantics() interp.Semantics {
 	s.PrintfHexFloatDefaultIsTwelveDigits = interp.No
 	// unanswered PrintfRefusedOperandKeepsItsLeadingNumber: as in bash — the
 	// reading above never evaluates an operand, so no arithmetic failure ever
-	// reaches this question.
+	// reaches this question, and none reaches
+	// PrintfFloatOperandIsEvaluatedTwice either.
 	s.PrintfBackslashC = interp.PrintfBackslashCLiteral
 	s.PrintfUnfinishedConversionIsAPercent = interp.No
 	// No `\x` in a format at all: `printf 'a\x41Z'` is the six characters

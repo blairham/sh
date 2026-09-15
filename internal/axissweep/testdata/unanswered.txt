@@ -127,6 +127,7 @@ ash   OperatorDistributesOverStarSubscript
 ash   PrefixRefusalCostsTheCommand
 ash   PrintfHexFloatDefaultIsTwelveDigits
 ash   PrintfOutputPrecedesComplaint
+ash   PrintfFloatOperandIsEvaluatedTwice
 ash   PrintfRefusedOperandKeepsItsLeadingNumber
 ash   PrintfTimeOperandIsADateString
 ash   ProducedParameterListing
@@ -194,6 +195,7 @@ bash  ExitTrapFiresPastTheEnd
 bash  ImmovableOptionsSetAtInvocation
 bash  IntegerPlusFormTakesAttributesOff
 bash  PrintfOutputPrecedesComplaint
+bash  PrintfFloatOperandIsEvaluatedTwice
 bash  PrintfRefusedOperandKeepsItsLeadingNumber
 bash  SetArrayBadNameLeavesZeroFromCommandString
 bash  SetArrayLetter
@@ -313,6 +315,7 @@ dash  OperatorDistributesOverStarSubscript
 dash  PipefailSubstitutesTheBareSignal
 dash  PrefixRefusalCostsTheCommand
 dash  PrintfOutputPrecedesComplaint
+dash  PrintfFloatOperandIsEvaluatedTwice
 dash  PrintfRefusedOperandKeepsItsLeadingNumber
 dash  ProducedParameterListing
 dash  QuitResetRestoresTheDefault

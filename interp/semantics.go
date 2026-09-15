@@ -2693,6 +2693,48 @@ type Semantics struct {
 	// it.
 	PrintfGroupingFlagAfterTheWidth Answer
 
+	// PrintfStarBesideTheFieldDigits lets a `*` and digits stand side by side
+	// in a width or a precision, where the **star wins** and the digits are
+	// ignored.
+	//
+	// C's grammar has one or the other: a run of digits, or a single `*` that
+	// takes the number from the operand list. ksh93 takes both together and
+	// reads them as one field. Measured 2026-09-15 on ksh93u+ 2012-08-01
+	// under `LC_ALL=C`, with the value 42 behind the width operands:
+	//
+	//	%5*d     [  42] for `4 42`     the 5 is dropped, the star reads 4
+	//	%*5d     [  42] for `4 42`     the same with the star written first
+	//	%-5*d    [42  ] for `4 42`     the flags in front still apply
+	//	%05*d    [0042] for `4 42`     including the zero padding
+	//	%8*9d    [  42] for `4 42`     digits on both sides change nothing
+	//	%*8*d    [    42] for `4 6 42` two stars, both read, the last wins
+	//	%*0d     [  42] for `4 42`     a `0` after a star is a digit
+	//	%.2*d    [0042] for `4 42`     and a precision reads the same way
+	//	%5*.3*d  [  09] for `4 2 9`    both fields at once
+	//
+	// bash 5.3, bash as `sh`, bash 3.2, zsh 5.9.2, dash and BusyBox ash all
+	// refuse every line of that: `` `*': invalid format character `` at 1,
+	// `%5*: invalid directive` at 1, `%*5: invalid directive` at 2. So the
+	// panel is one against six and the refusal is what No keeps.
+	//
+	// A star that lost is still **read**, in the place it was written — the
+	// same rule PrintfGroupingFlagAfterTheWidth's restarts already needed,
+	// and carried the same way, by printfLostStars. `%*8*d` consumes two
+	// operands before the value.
+	//
+	// What this deliberately does **not** take is a *flag* written past the
+	// field, which ksh93 also reads: `%5-d` is `[42   ]` there and `%*-5d` is
+	// `[42   ]` for `4 42`, so the `-` restarts the scan and the 5 replaces
+	// the star's width. That is a second grammar question with a rule of its
+	// own — after a *precision* the same `-` clears the precision instead,
+	// `%.5-d` being `[42]` and `%.3-5d` being `[   42]` — and it is left
+	// refused here rather than guessed at.
+	//
+	// Asked only where a `*` and digits actually stand beside each other in a
+	// field, so `%d`, `%5d` and `%*.*d` never reach it. See
+	// printfStarBesideDigits.
+	PrintfStarBesideTheFieldDigits Answer
+
 	// PrintfNonFiniteIsConverted puts an infinity or a not-a-number through the
 	// conversion that named it, rather than writing the bare word.
 	//
@@ -2820,6 +2862,42 @@ type Semantics struct {
 	// under `LC_ALL=C`; `printf '%d' 0x10zz` is `16` there and `printf
 	// '%d' abc42` is `0`, so what is kept is a prefix and not a search.
 	PrintfRefusedOperandKeepsItsLeadingNumber Answer
+
+	// PrintfFloatOperandIsEvaluatedTwice writes the complaint about a refused
+	// operand **twice** where the conversion that asked for it was a floating
+	// one.
+	//
+	// Not a wording and not a second sentence: the same line, word for word,
+	// written again. Measured 2026-09-15 on ksh93u+ 2012-08-01 under `env -i
+	// PATH=/usr/bin:/bin`, where `printf '%f' 42abc` is
+	//
+	//	printf: 42abc: arithmetic syntax error
+	//	printf: 42abc: arithmetic syntax error
+	//	printf: warning: invalid argument of type f
+	//	42.000000
+	//
+	// and `printf '%d' 42abc` writes the arithmetic line **once** before the
+	// same warning. `%e` and `%g` double it as `%f` does, so it is the class
+	// of conversion and not the letter.
+	//
+	// The warning is not doubled with it, and the doubling is not the
+	// warning's companion: `printf '%f' 1/0` is `divide by zero` twice and
+	// earns no `invalid argument of type` line at all — that line belongs to
+	// a failure of the operand's *reading* (see
+	// Diagnostics.PrintfArithArgumentType) and this belongs to every failure
+	// a floating conversion's operand can have. It reads as the operand being
+	// evaluated once as an integer and once as a double, with the complaint
+	// escaping both times.
+	//
+	// zsh 5.9.2 is the other column that evaluates and answers No: `printf
+	// '%f' 42abc` is one line there. The four that never evaluate an operand
+	// never reach the question.
+	//
+	// Asked only where PrintfNumberOperand is already
+	// PrintfNumberArithmetic, that arithmetic has already failed, and the
+	// conversion was a floating one — so `printf '%f' 1.5` and `printf '%d'
+	// 42abc` never raise it.
+	PrintfFloatOperandIsEvaluatedTwice Answer
 
 	// PrintfC99FloatConversions gives `printf` the three float conversions
 	// C99 added to the five C89 had: `%F`, `%a` and `%A`.

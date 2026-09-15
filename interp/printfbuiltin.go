@@ -1364,24 +1364,51 @@ func (r *Runner) printfSpecPrefix(s string) (int, string, int) {
 	if inFlags, pastFlags := printfGroupingFlagPositions(s); inFlags || pastFlags {
 		group = r.ask(r.sem().PrintfGroupingFlag, "`printf` taking `'` as the flag that groups a number's digits")
 		if r.unspecified {
-			end, spec, _ := printfSpecPrefixAt(s, true, true)
+			end, spec, _ := printfSpecPrefixAt(s, true, true, true)
 			return end, spec, r.status
 		}
 		if group && pastFlags {
 			after = r.ask(r.sem().PrintfGroupingFlagAfterTheWidth, "`printf` taking the `'` flag written past the flags")
 			if r.unspecified {
-				end, spec, _ := printfSpecPrefixAt(s, true, true)
+				end, spec, _ := printfSpecPrefixAt(s, true, true, true)
 				return end, spec, r.status
 			}
 		}
 	}
-	end, spec, lost := printfSpecPrefixAt(s, group, after)
+	mixed := false
+	if printfStarBesideDigits(s, group, after) {
+		mixed = r.ask(r.sem().PrintfStarBesideTheFieldDigits,
+			"`printf` taking a `*` written beside a width's own digits")
+		if r.unspecified {
+			end, spec, _ := printfSpecPrefixAt(s, true, true, true)
+			return end, spec, r.status
+		}
+	}
+	end, spec, lost := printfSpecPrefixAt(s, group, after, mixed)
 	// Carried on the runner rather than out of the scan: the operands a lost
 	// star takes are read by printfStars, several returns below, and adding a
 	// sixth result to scanPrintfSpec for a shape one dialect can write would
 	// put it in every other caller's signature too.
 	r.printfLostStars = lost
 	return end, spec, 0
+}
+
+// printfStarBesideDigits reports whether the prefix at s holds a width or a
+// precision in which a `*` and digits stand **side by side** — `%5*d`, `%*5d`,
+// `%.2*d` — which is the one place the two readings of a field run disagree
+// and so the one place Semantics.PrintfStarBesideTheFieldDigits is asked.
+//
+// Asked of the reading the dialect already has rather than of the text: where
+// that reading stops is the verb, so a byte there that could have gone on
+// being part of the field is exactly the disagreement. `%*.*d` and `%50d`
+// stop at their conversion character and are never questioned.
+func printfStarBesideDigits(s string, group, after bool) bool {
+	end, _, _ := printfSpecPrefixAt(s, group, after, false)
+	if end >= len(s) {
+		return false
+	}
+	c := s[end]
+	return c == '*' || (c >= '0' && c <= '9')
 }
 
 // printfSpecPrefixAt is printfSpecPrefix once the two questions are settled:
@@ -1391,9 +1418,9 @@ func (r *Runner) printfSpecPrefix(s string) (int, string, int) {
 // One grammar and not two. printfGroupingFlagPositions calls this with both
 // readings open to find out what a conversion is even asking, so the widest
 // reading and the dialect's reading can never drift apart.
-func printfSpecPrefixAt(s string, group, after bool) (int, string, printfLostStars) {
-	if after {
-		return printfKshPrefix(s)
+func printfSpecPrefixAt(s string, group, after, mixed bool) (int, string, printfLostStars) {
+	if after || mixed {
+		return printfKshPrefix(s, after, mixed)
 	}
 	flags := "-+ #0"
 	if group {
@@ -1442,7 +1469,7 @@ func printfSpecPrefixAt(s string, group, after bool) (int, string, printfLostSta
 // consumed one operand instead of two, reused the format and written a second
 // field nobody asked for. So the losing stars are counted out of here as
 // printfLostStars and read by printfStars in the place they were written.
-func printfKshPrefix(s string) (int, string, printfLostStars) {
+func printfKshPrefix(s string, quote, mixed bool) (int, string, printfLostStars) {
 	i := 1 // past the %
 	flags, width, prec := "", "", ""
 	widthStars, precStars := 0, 0
@@ -1451,14 +1478,12 @@ func printfKshPrefix(s string) (int, string, printfLostStars) {
 			flags += s[i : i+n]
 			i += n
 		}
-		if n := printfFieldRun(s, i); n > 0 {
-			if s[i] == '*' {
-				widthStars++
-			}
-			width = s[i : i+n]
+		if n, stars, text := printfKshFieldRun(s, i, mixed); n > 0 {
+			widthStars += stars
+			width = text
 			i += n
 		}
-		if i < len(s) && s[i] == '\'' {
+		if quote && i < len(s) && s[i] == '\'' {
 			i++
 			continue
 		}
@@ -1470,14 +1495,12 @@ func printfKshPrefix(s string) (int, string, printfLostStars) {
 		// means and what an empty run after a quote leaves behind.
 		prec = "."
 		for {
-			if n := printfFieldRun(s, i); n > 0 {
-				if s[i] == '*' {
-					precStars++
-				}
-				prec = "." + s[i:i+n]
+			if n, stars, text := printfKshFieldRun(s, i, mixed); n > 0 {
+				precStars += stars
+				prec = "." + text
 				i += n
 			}
-			if i < len(s) && s[i] == '\'' {
+			if quote && i < len(s) && s[i] == '\'' {
 				i++
 				continue
 			}
@@ -1495,6 +1518,55 @@ func printfKshPrefix(s string) (int, string, printfLostStars) {
 		lost.prec--
 	}
 	return i, "%" + dedupFlags(flags) + width + prec, lost
+}
+
+// printfKshFieldRun reads one width or precision for the reading above, and
+// reports how far it reached, how many `*` it held and what the field comes to.
+//
+// mixed is the whole of the difference, and it is
+// Semantics.PrintfStarBesideTheFieldDigits: with it off a run is a run of
+// digits *or* a single star, which is C's grammar and every other column's;
+// with it on the two may stand side by side and the **star wins**, whichever
+// side of the digits it was written on.
+//
+// Measured 2026-09-15 on ksh93u+ 2012-08-01 under `LC_ALL=C`, with the value
+// 42 and the width operands in front of it:
+//
+//	%5*d     width from the operand, the 5 dropped        [  42] for 4
+//	%*5d     the same the other way round                 [  42] for 4
+//	%*8*d    two stars, both read, and the last wins      [    42] for 4 6
+//	%8*9d    digits on both sides change nothing          [  42] for 4
+//	%.2*d    and the precision reads the same way         [0042] for 4
+//	%*0d     a `0` after a star is a digit, not the flag  [  42] for 4
+//
+// A losing star has still taken its operand, exactly as one a quote's restart
+// replaced has — see printfLostStars — which is why the count comes back out
+// rather than the star simply being dropped.
+func printfKshFieldRun(s string, i int, mixed bool) (n, stars int, text string) {
+	if !mixed {
+		n = printfFieldRun(s, i)
+		if n == 0 {
+			return 0, 0, ""
+		}
+		if s[i] == '*' {
+			return n, 1, s[i : i+n]
+		}
+		return n, 0, s[i : i+n]
+	}
+	start := i
+	for i < len(s) && (s[i] == '*' || (s[i] >= '0' && s[i] <= '9')) {
+		if s[i] == '*' {
+			stars++
+		}
+		i++
+	}
+	if i == start {
+		return 0, 0, ""
+	}
+	if stars > 0 {
+		return i - start, stars, "*"
+	}
+	return i - start, 0, s[start:i]
 }
 
 // printfLostStars is how many `*` in a conversion's prefix took an operand
@@ -1536,7 +1608,7 @@ func dedupFlags(flags string) string {
 // answers. Narrowing it to the dialect first would ask the flag axis only
 // where the dialect already had the flag, which is the wrong way round.
 func printfGroupingFlagPositions(s string) (inFlags, pastFlags bool) {
-	end, _, _ := printfSpecPrefixAt(s, true, true)
+	end, _, _ := printfSpecPrefixAt(s, true, true, true)
 	flagEnd := 1 + runOfBytes(s, 1, "-+ #0'")
 	for i := 1; i < end && i < len(s); i++ {
 		switch {

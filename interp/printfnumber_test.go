@@ -427,6 +427,96 @@ func TestPrintfRangeErrorIsNotBaseNamed(t *testing.T) {
 	}
 }
 
+// How **many times** the complaint about a refused operand goes out, which is
+// a count and not a wording: one column writes the arithmetic line twice for
+// a *floating* conversion and once for the integer one (#2823).
+//
+// The `1/0` rows are what say this is not the `invalid argument of type`
+// warning's companion: a division by zero doubles too and earns no warning
+// line at all. The `%d` beside each `%f` is the control that keeps the
+// operand fixed while the conversion moves.
+func TestPrintfFloatOperandIsEvaluatedTwice(t *testing.T) {
+	base := printfSem()
+	base.PrintfNumberOperand = PrintfNumberArithmetic
+	base.PrintfRefusedOperandKeepsItsLeadingNumber = Yes
+	diag := Diagnostics{
+		PrintfArithOperandFailure: "printf: %[1]s",
+		PrintfArithArgumentType:   "printf: warning: invalid argument of type %[1]s",
+	}
+	for _, tc := range []struct {
+		name  string
+		twice Answer
+		src   string
+		want  string
+	}{
+		{
+			"a floating conversion says it twice", Yes, `printf '[%f]' 42abc`,
+			"sh: printf: invalid number: 42abc\nsh: printf: invalid number: 42abc\n" +
+				"sh: printf: warning: invalid argument of type f\n[42.000000]",
+		},
+		{
+			"the integer one beside it says it once", Yes, `printf '[%d]' 42abc`,
+			"sh: printf: invalid number: 42abc\nsh: printf: warning: invalid argument of type d\n[42]",
+		},
+		{
+			"an evaluation failure doubles with no warning", Yes, `printf '[%f]' 1/0`,
+			"sh: printf: division by zero\nsh: printf: division by zero\n[1.000000]",
+		},
+		{
+			"and singly at the integer conversion", Yes, `printf '[%d]' 1/0`,
+			"sh: printf: division by zero\n[1]",
+		},
+		{
+			"the other column says it once", No, `printf '[%f]' 42abc`,
+			"sh: printf: invalid number: 42abc\nsh: printf: warning: invalid argument of type f\n[42.000000]",
+		},
+		{
+			"once for a division by zero as well", No, `printf '[%f]' 1/0`,
+			"sh: printf: division by zero\n[1.000000]",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := base
+			sem.PrintfFloatOperandIsEvaluatedTwice = tc.twice
+			out, _ := run(t, tc.src, func(r *Runner) {
+				r.Semantics = &sem
+				r.Diagnostics = &diag
+			})
+			if out != tc.want {
+				t.Errorf("got %q, want %q", out, tc.want)
+			}
+		})
+	}
+}
+
+// And the count is asked only where a floating conversion's arithmetic has
+// actually failed. Run *unanswered*, so a route that consults it refuses the
+// command and names the axis.
+func TestPrintfFloatDoublingIsAskedOnlyAtItsOwnDisagreement(t *testing.T) {
+	base := printfSem()
+	base.PrintfNumberOperand = PrintfNumberArithmetic
+	base.PrintfRefusedOperandKeepsItsLeadingNumber = Yes
+	for _, tc := range []struct {
+		name    string
+		src     string
+		refused bool
+	}{
+		{"a floating conversion whose operand was refused", `printf '[%f]' 42abc`, true},
+		{"an integer one settles nothing", `printf '[%d]' 42abc`, false},
+		{"nor a floating conversion of a number", `printf '[%f]' 1.5`, false},
+		{"nor one whose expression evaluates", `printf '[%f]' 1+1`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := base
+			sem.PrintfFloatOperandIsEvaluatedTwice = Unspecified
+			out, _ := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+			if got := strings.Contains(out, "evaluating an operand"); got != tc.refused {
+				t.Errorf("got %q, want the axis consulted = %v", out, tc.refused)
+			}
+		})
+	}
+}
+
 // One column writes a **second** line after the arithmetic complaint, naming
 // the conversion character rather than the operand — and the same thing that
 // decides the line decides the status (#2765).

@@ -77146,6 +77146,57 @@
         "TimedOut": false
       }
     },
+    "declare/the-hide-letter-takes-a-string-or-an-attribute": {
+      "ash": {
+        "Stdout": "\u003cscript\u003e: line 1: typeset: not found~\u003cscript\u003e: line 2: typeset: not found~st=127",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "\u003cscript\u003e: line 1: typeset: -h: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cscript\u003e: line 2: typeset: q: not found~st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "\u003cscript\u003e: line 1: typeset: -h: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cscript\u003e: line 2: typeset: q: not found~st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "\u003cscript\u003e: line 1: typeset: -h: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cscript\u003e: line 2: typeset: q: not found~st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "\u003cscript\u003e: 1: typeset: not found~\u003cscript\u003e: 2: typeset: not found~st=127",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "q=1~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "export q=1~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "declare/the-refusals-in-front-of-the-store-do-not-follow-the-route": {
       "ash": {
         "Stdout": "",
@@ -79537,6 +79588,57 @@
       },
       "zsh": {
         "Stdout": "2",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/which-numeric-type-letter-wins": {
+      "ash": {
+        "Stdout": "\u003cscript\u003e: line 1: typeset: not found~\u003cscript\u003e: line 2: typeset: not found~\u003cscript\u003e: line 3: typeset: not found~\u003cscript\u003e: line 4: typeset: not found~st=127",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "\u003cscript\u003e: line 1: typeset: -i: invalid option~\u003cscript\u003e: line 2: typeset: a: not found~\u003cscript\u003e: line 3: typeset: -E: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cscript\u003e: line 4: typeset: b: not found~st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "\u003cscript\u003e: line 1: typeset: -i: invalid option~\u003cscript\u003e: line 2: typeset: a: not found~\u003cscript\u003e: line 3: typeset: -E: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cscript\u003e: line 4: typeset: b: not found~st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "\u003cscript\u003e: line 1: typeset: cannot use `-f' to make functions~\u003cscript\u003e: line 2: typeset: a: not found~\u003cscript\u003e: line 3: typeset: -E: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cscript\u003e: line 4: typeset: b: not found~st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "\u003cscript\u003e: 1: typeset: not found~\u003cscript\u003e: 2: typeset: not found~\u003cscript\u003e: 3: typeset: not found~\u003cscript\u003e: 4: typeset: not found~st=127",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "typeset -F 3 a=1.500~typeset -E 3 b=1.5~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "typeset -i3 a=1~typeset -F b=1.500~st=0",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

@@ -328,6 +328,11 @@ func Semantics() interp.Semantics {
 	// option word for a number to stand at the end of.
 	// unanswered BareFloatLetterResetsThePrecision: nor any float attribute
 	// to have a precision.
+	// unanswered NumericTypeLetterPrecedence: nor a rank between them, for
+	// the same reason — a declaration here cannot write two numeric letters
+	// because it cannot write one (#2419).
+	// unanswered DeclareHideInScopeLetter: no `typeset` here either, so the
+	// lower-case `h` cannot be put to this shell under either reading.
 	// unanswered NumericTypeLettersAreExclusive: nor a pair of numeric
 	// letters to write together.
 	// unanswered NamerefCycleIsRefused: there are no name references to make

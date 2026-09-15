@@ -16074,6 +16074,60 @@ Two divergences beside it, measured and not modeled: ksh93 folds an
 zsh renders `0x10` under `-i` as `16#10` where ksh93 gives `16`; that one is
 open as its own question.
 
+**`NumericTypeLetterPrecedence`** — bash unspecified · dash unspecified · ksh93 E over F over i · zsh the first letter written
+
+Which of the three numeric type letters a name ends up with when a
+declaration writes more than one and the pair is taken at all. Measured
+2026-09-14, each read back with `typeset -p`:
+
+    written                 ksh93u+                   zsh 5.9.2
+    typeset -iF 3 a=1.5     typeset -F 3 a=1.500      typeset -i3 a=1
+    typeset -Fi 3 a=1.5     typeset -F 3 a=1.500      typeset -F a=1.500
+    typeset -i -F 3 a=1.5   typeset -F 3 a=1.500      typeset a=1.5
+    typeset -EF 3 a=1.5     typeset -E 3 a=1.5        typeset -E a=1.50e+00
+    typeset -FE 3 a=1.5     typeset -E 3 a=1.5        typeset -F a=1.500
+
+The last two rows are what make it a **rank** rather than "a float letter
+beats an integer one": neither has an integer letter in it, and the two
+columns still answer them the other way round. The third says the rank
+holds across *words* as well as inside one, which the order reading
+cannot do — there both letters are really read and the integer one still
+loses.
+
+The **number** goes with the attribute rather than with the letter that
+read it, which is measured at both ends: the word's last letter is what
+consumes the following digits in ksh93, so `typeset -Fi 3` has the `i`
+reading a base and lists `typeset -F 3`, and `typeset -iF 16 a=255` has
+the `F` reading a precision and lists `typeset -F 16
+a=255.0000000000000000`. A rank that moved only the letter would leave
+both without one.
+
+`-i` with `-E` is not one of these: that pair is refused outright in the
+ranking column — see `NumericTypeLettersAreExclusive`, which is **that
+pair alone** and not every float letter. `typeset -iF 3 a=1.5` is taken
+there, which is what narrowed it (#2419).
+
+**`DeclareHideInScopeLetter`** — bash unspecified · dash unspecified · ksh93 takes a string · zsh hides in scope
+
+The fifth letter two shells spell alike and read as two unrelated things
+— after `m`, `M`, `T` and `H` — and the only one of the five whose
+readings differ about how many **words** the command has. zsh's `-h`
+hides a special name's specialness from a local declaration and takes no
+argument; ksh93's takes a string, `[-h string]` in its own usage block,
+and records nothing at all:
+
+    typeset -h "a string" q=1; typeset -p q    q=1
+    typeset -h s q=1 r=2; typeset -p q r       q=1 and r=2
+    typeset -h"s" q=1; typeset -p q            q=1
+    typeset -hx s q=1; typeset -p q            q=1 — the `x` is the string
+    typeset -h                                 `-h: string argument expected`
+
+The fourth row is where they part with no operand ordering in it: `q` is
+**not exported** there, because the `x` behind the letter was its
+argument. Reading the line the other way round declares a name the shell
+never saw — the `s`. Neither bash build has the letter under either
+reading, and dash and ash have no `typeset`.
+
 **`CompoundAttribute`** — bash keeps the elements · dash unspecified · ksh93 folds every element · zsh replaces it with a scalar
 
 The same question of a value that is *compound* — an array or a keyed

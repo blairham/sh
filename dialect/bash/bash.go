@@ -1747,6 +1747,13 @@ func Semantics() interp.Semantics {
 	// precision here to keep or reset; `-F` is the *function* listing under
 	// this name, and `declare -F 3 a=1.5` is ``cannot use `-f' to make
 	// functions``.
+	// unanswered NumericTypeLetterPrecedence: nor can a rank between them be
+	// asked, for the same reason — `-F` is the function listing here and
+	// there is no second numeric letter to rank against `-i` (#2419).
+	// unanswered DeclareHideInScopeLetter: nor a lower-case `h` under either
+	// reading. Measured 2026-09-14, `typeset -h s q=1` and `declare -h s
+	// q=1` are both `invalid option` with the usage line, so neither the
+	// hide-in-scope attribute nor the string argument can be put to it.
 	// unanswered NumericTypeLettersAreExclusive: the pair cannot be written.
 	// `-E` is not a letter at all and `-F` is the function listing, so
 	// `declare -iF a=1` is that same refusal in 3.2 and `-i: invalid option`

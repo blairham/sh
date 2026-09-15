@@ -1838,24 +1838,40 @@ func Semantics() interp.Semantics {
 	// on a variable line this shell has no meaning for it — which is why it
 	// stays in Diagnostics.UnimplementedOptionLettersOnAFunctionLine's
 	// opposite number rather than here alone. See fpath.go.
-	s.DeclareOptions = "aACEfHilmMnprtTux"
-	// And the number it takes, under this shell's own rule for a detached
-	// one: only where the letter ends its option word. `typeset -Ex 3
-	// a=3.14159` is `3: is not an identifier` here and the float in zsh.
-	// That rule is what #1461 and #2559 both deferred; it is the axis below.
-	s.DeclareOptionsTakingANumber = "E"
+	//
+	// `-F` joins it since #2419 and is the same *attribute* `-E` already
+	// had under a different rendering — n decimal places rather than n
+	// significant digits — so the two letters share every rule below. `-h`
+	// joins it too, and it is not zsh's letter of the same spelling: here it
+	// takes a string and records nothing, `[-h string]` in this shell's own
+	// usage block.
+	s.DeclareOptions = "aACEFfHhilmMnprtTux"
+	// And the number the float letters take, under this shell's own rule for
+	// a detached one: only where the letter ends its option word. `typeset
+	// -Ex 3 a=3.14159` is `3: is not an identifier` here and the float in
+	// zsh, and `typeset -Fx 3 a=1.5` is the same refusal. That rule is what
+	// #1461 and #2559 both deferred; it is the axis below.
+	s.DeclareOptionsTakingANumber = "EF"
 	s.DeclareNumberDetachedOnlyAtTheWordEnd = interp.Yes
 	s.FloatFormatLetterE = interp.FloatFormatSignificantDigits
-	// And a bare `-E` over a name that already has a precision resets it to
-	// the letter's default here, where zsh keeps it: measured 2026-09-15,
-	// `typeset -E 3 a=1.23456789; typeset -E a` reads `1.23` and then
-	// `1.23456789`.
+	// And a bare float letter over a name that already has a precision
+	// resets it to the letter's default here, where zsh keeps it: measured
+	// 2026-09-15, `typeset -E 3 a=1.23456789; typeset -E a` reads `1.23` and
+	// then `1.23456789`, and measured again 2026-09-14 at the other letter,
+	// `typeset -F 3 e=1.5; typeset -F e` reads `1.500` and then
+	// `1.5000000000`.
 	s.BareFloatLetterResetsThePrecision = interp.Yes
 	// And the integer letter cannot stand beside a float one: measured,
 	// `typeset -iE 3 a=1.5` and `typeset -Ei 3 a=1.5` are both typeset's
 	// usage block at 2, and the script ends there. zsh takes the pair and
 	// lets the first letter written win.
 	s.NumericTypeLettersAreExclusive = interp.Yes
+	// And where a pair *is* taken, the letters have a fixed rank rather than
+	// an order: `E` over `F` over `i`, whichever way round they stand and
+	// whether they share a word or not. `typeset -iF 3 a=1.5` and
+	// `typeset -Fi 3 a=1.5` both list `typeset -F 3 a=1.500` here, where zsh
+	// answers them differently (#2419).
+	s.NumericTypeLetterPrecedence = interp.NumericLetterFloatOutranksTheInteger
 	// The letters a `-f` line marks a function with, both built since #2192:
 	// `-u` says the body is read from `$FPATH` at the first call and `-t`
 	// traces the function. See dialect/ksh/fpath.go, where the measurements
@@ -1903,6 +1919,11 @@ func Semantics() interp.Semantics {
 	// interp/declarehide.go holds the whole measurement and
 	// interp.DeclareHideValueLetterPolicy is the axis.
 	s.DeclareHideValueLetter = interp.DeclareHideValueLetterIsAnInertAttribute
+	// And the lower-case letter is not the same question: here it takes a
+	// *string* — `[-h string]` in this shell's own usage block — and records
+	// nothing at all. `typeset -hx s q=1` leaves `q` unexported, the `x`
+	// having been the argument (#2419).
+	s.DeclareHideInScopeLetter = interp.DeclareHideInScopeLetterTakesAString
 	// A lone `-` or `+` is an option word to *this* builtin: measured
 	// 2026-09-10, `typeset +` names every parameter and `typeset -` writes
 	// the same table with values, where bash calls the sign an identifier
@@ -1945,7 +1966,7 @@ func Semantics() interp.Semantics {
 	// fatally, since these are special builtins there — where `typeset -f
 	// nm` on the same line lists. The word carries a type and a function
 	// has none.
-	s.IntegerOptions = "aACEHilmMnprtTux"
+	s.IntegerOptions = "aACEFHhilmMnprtTux"
 	// `-i16` and `-i 16` are an output base here — `integer -i 16 b=255` is
 	// `16#ff` — and this engine has no base to keep, so it refuses by name.
 	s.IntegerAttributeTakesABase = interp.Yes
@@ -2522,7 +2543,7 @@ func Diagnostics() interp.Diagnostics {
 			// `-C` has left it as well: the compound-variable letter is
 			// built, and it is the declaration half of the kind `c=(a=1)`
 			// makes — see interp/compoundvariable.go (#2620).
-			"typeset": "-bFhsLRSXZ",
+			"typeset": "-bsLRSXZ",
 			// `functions` is `typeset -f` under a second name, so the
 			// letters it is missing are read off its own set: `-t` traces a
 			// function and `-u` marks one to be read from `$FPATH`, both of
@@ -2573,7 +2594,7 @@ func Diagnostics() interp.Diagnostics {
 			// `-C` leaves this list with the one above it, for the reason
 			// every letter here shares one: `integer` reads typeset's whole
 			// grammar.
-			"integer": "-bFhsLRSXZ",
+			"integer": "-bsLRSXZ",
 		},
 		// `-u` on a `-f` line, which is the one letter that cannot go in
 		// the list above: it is also the upper-case attribute, and this
@@ -2679,6 +2700,14 @@ func Diagnostics() interp.Diagnostics {
 		},
 		// Two wordings, split between `export` and the other two, and the
 		// operand quoted back as given.
+		// `typeset -h` with nothing behind it, which is the one refusal that
+		// letter has here.
+		DeclareHideStringMissing: "%[1]s: -h: string argument expected",
+		// And the export *letter* brings export's sentence with it:
+		// `typeset -x 3` is `is not an identifier` where `typeset -r 3` is
+		// `invalid variable name`. See
+		// Diagnostics.ExportLetterTakesExportsBadName.
+		ExportLetterTakesExportsBadName: true,
 		BuiltinBadName: map[string]string{
 			"export":   "%[1]s: %[2]s: is not an identifier",
 			"readonly": "%[1]s: %[2]s: invalid variable name",

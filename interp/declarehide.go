@@ -86,6 +86,51 @@ func (p DeclareHideValueLetterPolicy) String() string {
 	return "unspecified"
 }
 
+// DeclareHideInScopeLetterPolicy is what the lower-case `h` letter of a
+// declaration builtin means to a dialect that spells it.
+//
+// The fifth letter two shells spell alike and read as two unrelated things,
+// and the only one of the five whose readings differ about how many *words*
+// the command has: one takes an argument and the other does not, so a line
+// read the wrong way declares a name the other never saw.
+type DeclareHideInScopeLetterPolicy int
+
+const (
+	// DeclareHideInScopeLetterUnspecified is no answer, which bash, dash and
+	// ash hold and never reach: none of them spells the letter.
+	DeclareHideInScopeLetterUnspecified DeclareHideInScopeLetterPolicy = iota
+	// DeclareHideInScopeLetterHidesInScope is zsh's: a local declaration of
+	// a name carrying the attribute is an ordinary parameter rather than the
+	// special one it is spelled like, and the tie the name is half of goes
+	// on without it. The letter takes no argument. See hideinscope.go.
+	DeclareHideInScopeLetterHidesInScope
+	// DeclareHideInScopeLetterTakesAString is ksh93's: the letter takes a
+	// string — `[-h string]` in that shell's own usage block — and records
+	// nothing at all. Measured 2026-09-14 on ksh93u+ 2012-08-01:
+	//
+	//	typeset -h "a string" q=1; typeset -p q    q=1
+	//	typeset -h s q=1 r=2; typeset -p q r       q=1 and r=2
+	//	typeset -h"s" q=1; typeset -p q            q=1
+	//	typeset -hx s q=1; typeset -p q            q=1 — the `x` is the string
+	//	typeset -h                                 `-h: string argument expected`
+	//
+	// The fourth row is what says the string may ride on the letter the way
+	// a mapping name rides on `-M`: `-hx` is the letter with `x` behind it,
+	// so the `x` is the argument rather than the export letter, and `q` is
+	// **not** exported. The last is the refusal when nothing follows it.
+	DeclareHideInScopeLetterTakesAString
+)
+
+func (p DeclareHideInScopeLetterPolicy) String() string {
+	switch p {
+	case DeclareHideInScopeLetterHidesInScope:
+		return "hides a special name's specialness in scope"
+	case DeclareHideInScopeLetterTakesAString:
+		return "takes a string argument and records nothing"
+	}
+	return "unspecified"
+}
+
 // hideValueLetterCompany reports whether this declaration asks for the
 // integer attribute beside the `H` letter, which the inert reading refuses
 // with the builtin's usage block.

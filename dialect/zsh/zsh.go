@@ -2387,6 +2387,10 @@ func Semantics() interp.Semantics {
 	// ksh93 records an inert attribute and writes the letter and the value
 	// alike. Measured 2026-09-13; interp/declarehide.go holds it.
 	s.DeclareHideValueLetter = interp.DeclareHideValueLetterHidesTheValue
+	// And the lower-case letter hides a special name's *specialness* from a
+	// local declaration, taking no argument — where ksh93 reads a string
+	// after it. See interp/hideinscope.go.
+	s.DeclareHideInScopeLetter = interp.DeclareHideInScopeLetterHidesInScope
 	// `export` is this word's declaration under another name, and it takes
 	// the same letters bar six. Measured 2026-09-12, a letter at a time
 	// against `export -X q=4`: `-A`, `-g`, `-m`, `-x` and `-z` are
@@ -2473,6 +2477,10 @@ func Semantics() interp.Semantics {
 	// `typeset -iE 3 a=1.5` lists as `typeset -i3 a=1` and `typeset -Ei 3
 	// a=1.5` as `typeset -E a=1.50e+00`. ksh93 refuses the pair outright.
 	s.NumericTypeLettersAreExclusive = interp.No
+	// And the letter read *first* wins, which is the order the parse falls
+	// into on its own: `typeset -iF 3 a=1.5` is `typeset -i3 a=1` and
+	// `-Fi 3` is `typeset -F a=1.500`.
+	s.NumericTypeLetterPrecedence = interp.NumericLetterFirstWrittenWins
 	// A bare `-F` or `-E` over a name that already has a precision keeps it
 	// here — measured, `typeset -F 3 x=1.5; typeset -F x` still reads
 	// `1.500` — where ksh93 resets to the letter's default.

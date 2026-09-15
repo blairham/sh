@@ -6514,6 +6514,12 @@ type Semantics struct {
 	// DeclareHideValueLetterPolicy.
 	DeclareHideValueLetter DeclareHideValueLetterPolicy
 
+	// DeclareHideInScopeLetter is the same question about the lower-case `h`
+	// letter, the fifth of them: zsh hides a special name's specialness from
+	// a local declaration, and ksh93 reads a *string* argument it records
+	// nowhere. See DeclareHideInScopeLetterPolicy.
+	DeclareHideInScopeLetter DeclareHideInScopeLetterPolicy
+
 	// DeclareOptionsWithoutEffect names letters out of DeclareOptions that
 	// this engine models as doing nothing: accepted, silent, and 0.
 	//
@@ -6648,7 +6654,17 @@ type Semantics struct {
 	BareFloatLetterResetsThePrecision Answer
 
 	// NumericTypeLettersAreExclusive refuses a declaration carrying both the
-	// integer letter and a float one, with the builtin's usage block.
+	// integer letter and the **exponent** float letter, with the builtin's
+	// usage block.
+	//
+	// The other float letter is not this question, which is measured rather
+	// than assumed: 2026-09-14 on ksh93u+ 2012-08-01, `typeset -iF 3 a=1.5`,
+	// `typeset -Fi 3 a=1.5` and `typeset -i -F 3 a=1.5` all declare a float
+	// and list `typeset -F 3 a=1.500`, where the same three lines with `E`
+	// are the usage block. So it is the `E` letter that will not share a
+	// declaration and not "a numeric letter" — see
+	// numericTypeLetterCompany, which is where the pair is recognized
+	// (#2419).
 	//
 	// Measured 2026-09-15. ksh93u+ answers `typeset -iE 3 a=1.5` and
 	// `typeset -Ei 3 a=1.5` alike with typeset's whole usage block at 2, and
@@ -6666,6 +6682,11 @@ type Semantics struct {
 	// axis and stays where it is — in the parse, which discards the later of
 	// the two. This asks only whether the pair is taken at all.
 	NumericTypeLettersAreExclusive Answer
+
+	// NumericTypeLetterPrecedence is which of the three numeric type letters
+	// wins where a declaration writes more than one and the pair is taken at
+	// all — see NumericTypeLetterPrecedencePolicy.
+	NumericTypeLetterPrecedence NumericTypeLetterPrecedencePolicy
 
 	// TypesetBadOptionFatal ends the script over an option `typeset` does
 	// not have. ksh93 counts `typeset` among its special builtins and stops

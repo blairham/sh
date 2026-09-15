@@ -405,13 +405,19 @@ func (r *Runner) badBuiltinName(builtin, operand, name string, fatal Answer) int
 	if d.BuiltinBadNameKeepsValue {
 		shown = operand
 	}
-	wording := d.BuiltinBadName[builtin]
+	key := builtin
+	if r.badNameWordedAs != "" {
+		// The wording is another builtin's while the name stays this one's —
+		// see Diagnostics.ExportLetterTakesExportsBadName.
+		key = r.badNameWordedAs
+	}
+	wording := d.BuiltinBadName[key]
 	// A leading digit is a different complaint in the one dialect that tells
 	// the two apart: zsh says "not an identifier: 1x" for `1x` and "not valid
 	// in this context: a-b" for `a-b`. An empty entry means the dialect says
 	// the same thing to both, which is three of the four.
 	if len(name) > 0 && name[0] >= '0' && name[0] <= '9' {
-		if numeric := d.BuiltinBadNameNumeric[builtin]; numeric != "" {
+		if numeric := d.BuiltinBadNameNumeric[key]; numeric != "" {
 			wording = numeric
 		}
 	}
@@ -421,7 +427,7 @@ func (r *Runner) badBuiltinName(builtin, operand, name string, fatal Answer) int
 	// which means subscriptOperand already refused to read a subscript out
 	// of it.
 	if strings.ContainsRune(name, '[') {
-		if bracketed := d.BuiltinBadNameBracketed[builtin]; bracketed != "" {
+		if bracketed := d.BuiltinBadNameBracketed[key]; bracketed != "" {
 			wording = bracketed
 			outer := r.inBuiltin
 			r.inBuiltin = ""

@@ -2328,6 +2328,10 @@ type Runner struct {
 	// retypingFrozen is the one name a frozen-scalar retype is under way for.
 	// See the method of the same name for why it is a field.
 	retypingFrozen string
+	// badNameWordedAs is the builtin whose bad-name *sentence* a declaration
+	// now in progress borrows, while still naming itself. Empty is the
+	// ordinary case. See Diagnostics.ExportLetterTakesExportsBadName.
+	badNameWordedAs string
 	// indexedLetterHere is the subset of those names whose declaration also
 	// carried the *indexed* container letter — `typeset -a a=([5]=q)` and not
 	// `typeset -a a` followed by the assignment on the next line.

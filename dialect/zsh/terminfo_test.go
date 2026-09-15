@@ -250,12 +250,17 @@ func TestATermcapCodeClaimedTwiceAnswersWithTheBoolean(t *testing.T) {
 // capabilities claiming one termcap code would show up as a smaller second
 // number.
 func TestTheWholeTableIsNeitherEmptyNorLopsided(t *testing.T) {
-	out, st := runZshTerminfo(t, `print -r -- "n=${#terminfo} all=${#terminfo[@]} tc=${#termcap}"`)
-	// Forty-four booleans, two numbers, four strings and one extended
-	// string; `$termcap` is the same set minus the extended one, which has no
-	// two-letter code to be found under, and minus `smgtb`, whose code `MT`
-	// the boolean `OTMT` already claimed.
-	want := "n=51 all=51 tc=49\n"
+	out, st := runZshTerminfo(t,
+		`print -r -- "n=${#terminfo} all=${#terminfo[@]} tc=${#termcap}"
+print -r -- "Se=${terminfo[(I)Se]} cols=${terminfo[(I)cols]}"`)
+	// Forty-four booleans, two numbers and four strings make fifty, and the
+	// enumeration is that plus `cols` — the one size capability this
+	// description does not carry a number for, since `lines` is already among
+	// the two. The extended string is **not** in it, which is the second
+	// line: it reads and is not listed. `$termcap` is the same set under the
+	// other spelling minus `smgtb`, whose code `MT` the boolean `OTMT` has
+	// already claimed.
+	want := "n=51 all=51 tc=50\nSe= cols=cols\n"
 	if out != want || st != 0 {
 		t.Errorf("the whole table = %q (status %d), want %q", out, st, want)
 	}
@@ -414,5 +419,101 @@ print -rn -- "past="; print -Pn -- "%F{$n}"; print -r --`)
 	want := "last=\x1b[38;5;255m\npast=\x1b[39m\n"
 	if out != want || st != 0 {
 		t.Errorf("the counted colors = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// The number capability index `cols` lives at, for the fixtures below.
+//
+// `lines` is numberLines above; the pair is what the two size capabilities
+// would be read from if they came out of the description at all.
+const numberColumns = 0 // cols
+
+// runZshTerminfoSized is runZshTerminfo with the description carrying its own
+// `cols` and `lines` — numbers no screen would ever have, so a read that came
+// from the description is unmistakable.
+func runZshTerminfoSized(t *testing.T, src string) (string, int) {
+	t.Helper()
+	nums := make([]int, numberColors+1)
+	for i := range nums {
+		nums[i] = terminfofixture.Absent
+	}
+	nums[numberColors] = 256
+	nums[numberColumns], nums[numberLines] = 999, 888
+	bools := make([]byte, boolAutoMargin+1)
+	bools[boolAutoMargin] = 1
+	dir := terminfofixture.Database(t, terminfofixture.Description{
+		Name: fixtureTerm, Bools: bools, Nums: nums,
+		StrCount: stringCursorUp + 1,
+		Strs:     map[int]string{stringCursorUp: "\x1b[A"},
+	})
+	out, st, err := preset.Combined(t, dialecttest.Base{
+		Dir: t.TempDir(),
+		Vars: map[string]string{
+			"PATH": t.TempDir(), "TERM": fixtureTerm, "TERMINFO": dir,
+			"HOME": t.TempDir(), "TERMINFO_DIRS": "",
+		},
+	}, src)
+	if err != nil {
+		t.Fatalf("run %q: %v", src, err)
+	}
+	return out, st
+}
+
+// `cols` and `lines` are the **screen's** size and not the description's, in
+// both spellings and in both readings.
+//
+// Measured against zsh 5.9.2 through a pseudo-terminal opened 100 by 37:
+// `${terminfo[cols]}` is 100 under `TERM=xterm-256color`, whose description
+// says 80, and 80 by 24 under `TERM=linux`, whose description carries neither
+// number at all. So the description loses to the window even where it has an
+// answer, which is what this fixture's 999 by 888 is for — a reader that took
+// the description would print those and nothing else would tell it apart from
+// one that took the screen.
+//
+// This run holds no terminal and inherits no `$COLUMNS`, so the screen is the
+// classic 80 by 24 — which is also zsh's answer for that state, and is not
+// `$COLUMNS`'s own: that reports 0 with no window anywhere (#2101).
+func TestTheSizeCapabilitiesAreTheScreensAndNotTheDescriptions(t *testing.T) {
+	out, st := runZshTerminfoSized(t, `print -r -- "cols=${terminfo[cols]} lines=${terminfo[lines]}"
+print -r -- "co=${termcap[co]} li=${termcap[li]}"
+print -r -- "set=${+terminfo[cols]}${+terminfo[lines]}${+termcap[co]}${+termcap[li]}"
+print -r -- "listed=${terminfo[(I)cols]}${terminfo[(I)lines]}"
+print -r -- "columns=$COLUMNS"`)
+	want := "cols=80 lines=24\nco=80 li=24\nset=1111\nlisted=colslines\ncolumns=0\n"
+	if out != want || st != 0 {
+		t.Errorf("the size capabilities = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// A description carrying neither number still answers both, which is the half
+// a fallback inside the reader would have got right and a fallback inside the
+// *description* would not: `TERM=linux` has no `cols` and no `lines` in
+// /usr/share/terminfo and zsh answers 80 and 24 there.
+func TestTheSizeCapabilitiesAnswerWhereTheDescriptionCarriesNeither(t *testing.T) {
+	out, st := runZshTerminfo(t, `print -r -- "cols=${terminfo[cols]} lines=${terminfo[lines]} set=${+terminfo[cols]}"`)
+	want := "cols=80 lines=24 set=1\n"
+	if out != want || st != 0 {
+		t.Errorf("the size capabilities = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// The extended section **reads without being listed**, which is the split
+// zsh has and this shell did not.
+//
+// Measured, `TERM=xterm-256color`: `${+terminfo[Se]}` is 1 with the cursor
+// sequence behind it and `${#terminfo}` is 220 — a count with no `Se` in it,
+// and 61 short of every name the description carries. So the enumeration is
+// the standard capabilities and the lookup is all of them.
+//
+// The two assertions are both needed and they fail in opposite directions: a
+// reader that listed everything passes the first and fails the second, and one
+// that dropped the extended names outright fails the first.
+func TestAnExtendedCapabilityReadsButIsNotListed(t *testing.T) {
+	out, st := runZshTerminfo(t, `print -r -- "Se=${+terminfo[Se]} [${(V)terminfo[Se]}]"
+print -r -- "listed=[${terminfo[(I)Se]}]"
+print -r -- "default=[${(V)${terminfo[Se]:-FELLTHROUGH}}]"`)
+	want := "Se=1 [^[[2 q]\nlisted=[]\ndefault=[^[[2 q]\n"
+	if out != want || st != 0 {
+		t.Errorf("the extended capability = %q (status %d), want %q", out, st, want)
 	}
 }

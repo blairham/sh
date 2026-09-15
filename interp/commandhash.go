@@ -173,6 +173,18 @@ func (r *Runner) HashedCommandNames() []string { return r.hashedCommandNames() }
 // path is taken as given and the hit count starts at zero.
 func (r *Runner) HashCommand(name, path string) { r.putHashedCommand(name, path, 0) }
 
+// ForgetHashedCommand takes one name out of the command hash and says whether
+// it was there.
+//
+// The other half of HashCommand, for the dialect that presents the table as a
+// parameter a script can *remove* an entry from. It is the removing half of
+// one shell's `$commands` and it is deliberately not on the other's
+// `BASH_CMDS`: measured 2026-09-12, `hash -p /bin/ls q; unset "BASH_CMDS[q]"`
+// leaves the entry alone in bash 5.3.15 and `unset "commands[ls]"` really
+// takes it out in zsh 5.9.2. So the two dialects part here, and each says so
+// in its own writer rather than in a shared rule.
+func (r *Runner) ForgetHashedCommand(name string) bool { return r.forgetHashedCommand(name) }
+
 // trackingIsOff reports whether a script has turned command tracking off.
 //
 // **Moved**, and not merely off: a shell nobody has told anything asks no axis

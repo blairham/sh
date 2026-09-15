@@ -5470,6 +5470,27 @@ type savedVar struct {
 	// different things to the shell that inherited it. See Runner.isExported.
 	exported     bool
 	exportSpoken bool
+	// assigned is the message a *produced* parameter's producer was last
+	// sent, and a tri-state for the reason the export attribute is: a name
+	// nobody has assigned and one assigned the empty string are different
+	// starting points to a producer that counts from what it was given.
+	//
+	// An assignment to a produced name never lands in Vars at all — see
+	// setVarAs, where it becomes a message in Runner.assigned — so putting
+	// the four stores above back left the message standing and the seeding
+	// outlived the command. `SECONDS=100 true; echo $SECONDS` read 100 here
+	// against 0 in bash 5.3.15, bash 3.2.57 and zsh 5.9.2, and ksh93 gives
+	// the same name back to its own clock (#2713).
+	assigned       string
+	assignedSpoken bool
+	// produced is what the producer was *answering* at the moment the prefix
+	// was applied, for the narrower set of names whose producer has a writer:
+	// there the assignment is delivered rather than left to be found, so
+	// putting the message back tells the producer nothing and the take-back
+	// has to send it one of its own. Nil for every other name, which is
+	// almost all of them — reading a producer costs a call, and a name with
+	// no writer has nothing to be told.
+	produced *string
 	// partner is the other half of a tie, saved alongside, and nil for the
 	// overwhelming majority of names that are not tied to anything. See
 	// saveVar: a tie is two names for one value and writing either moves
@@ -5518,12 +5539,37 @@ func (r *Runner) saveVarAlone(name string) savedVar {
 	a, inArray := r.Arrays[name]
 	m, inTable := r.AssocArrays[name]
 	exported, exportSpoken := r.exported[name]
+	assigned, assignedSpoken := r.assigned[name]
 	return savedVar{
 		name: name, value: old, present: present, removed: r.removed[name],
 		array: a.clone(), inArray: inArray,
 		table: m.clone(), inTable: inTable,
 		exported: exported, exportSpoken: exportSpoken,
+		assigned: assigned, assignedSpoken: assignedSpoken,
+		produced: r.producedValueToPutBack(name),
 	}
+}
+
+// producedValueToPutBack is what the producer of a name is answering right
+// now, for a name whose producer has a writer — and nil for every other name.
+//
+// The narrow gate is the whole of the design. A prefix to a produced name is
+// *delivered*: setVarAs calls the writer, and a writer is registered exactly
+// where the assignment has to do something rather than be found later. So the
+// take-back has to send a message too, and the message is the value the
+// producer was giving before this one arrived. A name with no writer needs
+// none — putting Runner.assigned back is the whole of its state — and calling
+// its producer would be a read of RANDOM or of the clock for nothing.
+func (r *Runner) producedValueToPutBack(name string) *string {
+	if _, hasWriter := r.dynamicWriters[name]; !hasWriter {
+		return nil
+	}
+	produce, ok := r.Dynamic[name]
+	if !ok {
+		return nil
+	}
+	value := produce(r)
+	return &value
 }
 
 // wasExported reports what isExported would have answered for this name at the
@@ -5595,6 +5641,24 @@ func (r *Runner) restoreVar(u savedVar) {
 	} else {
 		delete(r.exported, u.name)
 	}
+	if u.assignedSpoken {
+		if r.assigned == nil {
+			r.assigned = map[string]string{}
+		}
+		r.assigned[u.name] = u.assigned
+	} else {
+		delete(r.assigned, u.name)
+	}
+	// And the producer is *told*, where the prefix told it something. The
+	// store above is what a producer reads for itself; a writer is what the
+	// shell calls, and one that moved a line editor's cursor or a prompt has
+	// to be moved back rather than merely un-recorded. See
+	// producedValueToPutBack.
+	if u.produced != nil {
+		if write, ok := r.dynamicWriters[u.name]; ok {
+			write(r, *u.produced)
+		}
+	}
 }
 
 // takeBackFunctionPrefix ends an assignment prefix that stood in front of a
@@ -5639,6 +5703,14 @@ func (r *Runner) matchesSavedVar(u savedVar) bool {
 	// the un-exporting answer ask this axis on `v=9; v=9 f`, where the two
 	// readings land in exactly the same place.
 	if r.isExported(u.name) != u.wasExported(r) {
+		return false
+	}
+	// The message a produced parameter's producer is holding is part of the
+	// state too, and it is the only part a prefix to such a name changes:
+	// comparing the four stores alone reported "nothing moved" for
+	// `SECONDS=100 f` and skipped the take-back entirely, so the axis was
+	// never asked and the seeding stood in every dialect (#2713).
+	if assigned, spoken := r.assigned[u.name]; spoken != u.assignedSpoken || assigned != u.assigned {
 		return false
 	}
 	a, inArray := r.Arrays[u.name]

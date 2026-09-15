@@ -55,8 +55,9 @@ import (
 // the element undefines it. That is not a flourish: a write that landed in the
 // stored table would shadow the producer from then on, since a stored table is
 // what a read finds first. `builtins` is readonly here because it is readonly
-// in zsh, and `commands` refuses a write by name because this shell has no
-// command hash to put an entry in.
+// in zsh, and `commands` writes through to the command hash — see
+// writeZshCommand, which is what #2554's table made possible and #2631
+// wired.
 //
 // **`unset "name[key]"` is a write, and it is not the same write as an
 // assignment.** Each of the four below settles it separately, because what an
@@ -75,12 +76,14 @@ import (
 //     at either end; an unset asks for absence, and absence is what the table
 //     already has, so there is nothing left to warn about and the read
 //     afterwards agrees with zsh's.
-//   - `commands` still refuses, and that is the case that shows the other
-//     three are not one rule. There the read afterwards does *not* agree:
-//     zsh's `unset "commands[ls]"` drops a cached entry and `${commands[ls]}`
-//     is empty until the next search, where this shell searches every time and
-//     would still answer `/bin/ls`. Silence would hand a script testing
-//     `[[ -z $commands[ls] ]]` the opposite answer with nothing said.
+//   - `commands` **forgets a hashed command**, which is the assignment run
+//     backwards the way the first two are — and it is the case that shows
+//     these are four answers and not one rule, because the other shell in the
+//     tree with the same shape goes the other way: bash's `unset
+//     "BASH_CMDS[q]"` leaves the entry alone. It refused here until #2631,
+//     and the reason was the *read* rather than the write — with `$commands`
+//     a PATH search every time, a removal would have changed nothing the next
+//     `${commands[ls]}` said.
 //
 // #1527 was filed the other way round — that `unset "functions[m]"` should
 // *refuse*, because zsh 5.9.2 answers `functions: assignment to invalid
@@ -110,7 +113,7 @@ func registerParameterModule(r *interp.Runner) {
 	r.SetDynamicAssocWriter("options", writeZshOption)
 	r.SetDynamicAssoc("commands", zshCommandsView)
 	r.SetDynamicAssocElement("commands", zshCommandValue)
-	r.SetDynamicAssocWriter("commands", refuseZshCommandsWrite)
+	r.SetDynamicAssocWriter("commands", writeZshCommand)
 	r.SetDynamicAssoc("builtins", zshBuiltinsView)
 	// Readonly rather than given a writer, which is zsh's own answer:
 	// `builtins[x]=y` is `read-only variable: builtins` there. A produced
@@ -546,69 +549,127 @@ func writeZshOption(r *interp.Runner, name, value string, set bool) {
 	setOption(r, name, value == "on")
 }
 
-// zshCommandsView is `$commands`: every name PATH resolves, to the path it
-// resolves to.
+// zshCommandsView is `$commands`: the command hash, over the names PATH
+// resolves.
 //
-// Produced by the search the runner already does for a command word, against
-// the *runner's* PATH and directory — see [interp.Runner.CommandsOnPath]. That
-// is what makes it move when PATH does, which is the property this parameter
-// has and a hash table would not: measured, `PATH=/nonexistent` takes
-// `${+commands[ls]}` from 1 to 0 in the same shell.
+// Two tables and the hash is the one on top, which is the order the *values*
+// are measured in. zsh 5.9.2, `env -i PATH=/usr/bin:/bin`, 2026-09-12:
+// `commands[ls]=/bin/echo` makes `ls WOW` print `WOW`, `${commands[ls]}` read
+// `/bin/echo`, and `hash` list `ls=/bin/echo` — so an entry a script wrote
+// wins over what a search would find, and a name PATH never had is listed
+// beside the ones it does.
+//
+// The PATH half is the search the runner already does for a command word,
+// against the *runner's* PATH and directory — see
+// [interp.Runner.CommandsOnPath]. That is what makes the view move when PATH
+// does, which is a property this parameter has and a bare table would not:
+// measured, `PATH=/nonexistent` takes `${+commands[ls]}` from 1 to 0 in the
+// same shell.
+//
+// # What the shell being modeled does instead, and why this does not
+//
+// There, **any** touch of `$commands` hashes the whole of PATH first and the
+// parameter is then a view of the table alone. Measured with
+// `PATH=/usr/bin:/bin`: `ls >/dev/null; hash` is one line, and
+// `ls >/dev/null; : ${commands[nosuchxyz]}; hash` is 961 — a single read of a
+// key the table does not have, and does not gain, fills it from end to end.
+//
+// Every *value* is the same either way, which is why the union is taken
+// instead: the filled table is the PATH scan plus whatever was hashed by
+// hand, and that is exactly what this builds. What differs is `hash`'s own
+// listing afterwards, and the two reasons not to reproduce it are the same
+// two. A producer is asked on every whole-table read — `${(k)commands}`,
+// `${#commands}`, a listing that walks the name — so hashing there would make
+// an *expansion* quietly rewrite the shell's table 961 entries at a time. And
+// the one-key reading below exists because building the view to read a single
+// key was measured at nine milliseconds against tens of microseconds for the
+// lookup; making it fill the table would put that back and more.
 func zshCommandsView(r *interp.Runner) interp.AssocArray {
 	found := r.CommandsOnPath()
 	out := make(interp.AssocArray, len(found))
 	for name, path := range found {
 		out[name] = interp.Scalar(path)
 	}
+	// Second, so a hashed entry writes over what the search found rather than
+	// the other way round.
+	for _, name := range r.HashedCommandNames() {
+		if path, ok := r.HashedCommandPath(name); ok {
+			out[name] = interp.Scalar(path)
+		}
+	}
 	return out
 }
 
-// zshCommandValue is `${commands[git]}`: one PATH search rather than a
-// listing of every directory on PATH.
+// zshCommandValue is `${commands[git]}`: the table, then one PATH search,
+// rather than a listing of every directory on PATH.
 //
-// The same search by the same rule — [interp.Runner.LookPath] is the
-// resolution a command word gets, and the view is that resolution run over
-// every entry — so the first PATH element holding the name wins in both.
-// Measured, reading one key by building the view was nine milliseconds
-// against tens of microseconds for the lookup.
+// The same two halves as the view above and in the same order, so the two
+// readings agree by construction — which is the contract
+// [interp.Runner.SetDynamicAssocElement] states.
 //
-// A name with a slash in it is refused, and that is the one place the two
-// could have parted: the view's keys are directory entries and never contain
-// one, where `LookPath` would happily resolve `/bin/ls` as a path. So
-// `${commands[/bin/ls]}` is empty here, as it is in the table.
+// The table is read **raw** and not through [interp.Runner.LookPath], and
+// that is the one place the two could have parted. `LookPath` checks that a
+// hashed path still runs and, in this dialect, forgets it when it does not —
+// but the parameter reports what the table holds whether or not it is any
+// good: measured, `commands[qq]=/no/such/thing` leaves `${commands[qq]}` as
+// `/no/such/thing` and `${+commands[qq]}` as 1 in zsh 5.9.2, with `qq` itself
+// still `command not found`. A read that went through the lookup would have
+// answered empty for the very entry the line before it wrote.
+//
+// A name with a slash in it is refused, and that is the other place: the
+// view's keys are directory entries and never contain one, where `LookPath`
+// would happily resolve `/bin/ls` as a path. So `${commands[/bin/ls]}` is
+// empty here, as it is in the table.
 func zshCommandValue(r *interp.Runner, name string) (string, bool) {
 	if strings.ContainsRune(name, '/') {
 		return "", false
 	}
+	if path, ok := r.HashedCommandPath(name); ok {
+		return path, true
+	}
 	return r.LookPath(name)
 }
 
-// refuseZshCommandsWrite is `commands[c]=/path` and `unset "commands[c]"`,
-// which in zsh put an entry in the command hash and take one out.
+// writeZshCommand is `commands[c]=/path` and `unset "commands[c]"`, which
+// put an entry in the command hash and take one out.
 //
-// Refused by name, because the *read* side of this view is still the PATH
-// search every time: there is a command hash since #2554, but nothing routes
-// `$commands` through it, so an entry written there would not change what the
-// next `${commands[c]}` says and a removal would not drop one. Accepting and
-// dropping the request would leave a caller holding a name it believes it has
-// arranged for, which is the failure this whole file is arranged to avoid.
-// Making the view the table — the way `dialect/bash/bashcmds.go` makes
-// BASH_CMDS one — is what would lift the refusal, and is #2631.
+// Both go straight to the table, which is what makes this a view in both
+// directions rather than a read that happens to agree. Measured on zsh 5.9.2
+// with `env -i PATH=/usr/bin:/bin`, 2026-09-12:
 //
-// The unset is refused where the empty tables' is not, and the difference is
-// what the *next read* says rather than a preference. Measured: zsh's
-// `unset "commands[ls]"` is silent at status 0 and `${commands[ls]}` is empty
-// afterwards until something searches again — where this view searches every
-// time and would answer `/bin/ls`. A script guarding on `[[ -z
-// $commands[ls] ]]` would take the opposite branch here with nothing said.
-// Which verb is named follows the request, so the sentence is about what the
-// caller asked for and not about the other one.
-func refuseZshCommandsWrite(r *interp.Runner, name, _ string, set bool) {
-	verb := "removing an entry from"
-	if set {
-		verb = "assigning to"
+//	commands[zz]=/bin/echo; zz hi           hi
+//	commands[zz]=/bin/echo; hash            zz=/bin/echo
+//	commands[ls]=/bin/echo; ls WOW          WOW
+//	echo ${#commands}; unset "commands[ls]"; hash   `ls` is gone
+//
+// The removing half is where the two dialects part, and it is measured rather
+// than reasoned from: bash's `unset "BASH_CMDS[q]"` leaves the entry alone and
+// this one really takes it out. See [interp.Runner.ForgetHashedCommand],
+// which is registered here and deliberately not in dialect/bash.
+//
+// The whole of this was refused by name until #2631, because the read side
+// was a PATH search every time: an entry written to a table nothing read
+// would not have changed what the next `${commands[c]}` said, and a removal
+// would not have dropped one. Now that both readings go through the table the
+// refusal has nothing left to protect.
+//
+// One row of the measurement is the autoload stub again and not this table at
+// all. In a shell where nothing has touched `$commands` yet, `unset
+// "commands[ls]"` is `commands: assignment to invalid subscript range` at 1 —
+// the same sentence #1527 was filed on for `functions`, and for the reason
+// the file comment above gives: the name is still the module's stub holding
+// the string `zsh/parameter`, so the subscript is read as arithmetic against
+// a scalar. Touch the parameter first and the removal is silent at 0 and the
+// entry goes — `echo ${#commands}; unset "commands[ls]"; hash` leaves `ls`
+// out. So the refusal is about a name the module has not created yet rather
+// than about the table, and the removal is taken here whenever it is asked
+// for.
+func writeZshCommand(r *interp.Runner, name, value string, set bool) {
+	if !set {
+		r.ForgetHashedCommand(name)
+		return
 	}
-	r.Diagnosef("commands[%s]: %s the command hash is not implemented yet\n", name, verb)
+	r.HashCommand(name, value)
 }
 
 // zshBuiltinsView is `$builtins`: every builtin this shell has, to `defined`.

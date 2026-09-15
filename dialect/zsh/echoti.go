@@ -97,7 +97,7 @@ func echotiBuiltin(r *interp.Runner, tables *capabilityTables, args []string) in
 		return 1
 	}
 	name := args[0]
-	byTerminfo, _, kinds := tables.load(r)
+	byTerminfo, kinds := tables.terminfoTable(r)
 	value, ok := byTerminfo[name]
 	if !ok {
 		r.Diagnosef("no such terminfo capability: %s\n", name)

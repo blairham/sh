@@ -4,6 +4,8 @@
 package zsh
 
 import (
+	"maps"
+	"strconv"
 	"sync"
 
 	"github.com/blairham/sh/interp"
@@ -95,7 +97,12 @@ type capabilityTables struct {
 	mu       sync.Mutex
 	from     string
 	terminfo interp.AssocArray
-	termcap  interp.AssocArray
+	// listed is `$terminfo` again with the description's *extended* section
+	// left out: every name that can be read, minus the ones that are not
+	// enumerated. See registerCapabilityParameter for the measurement and for
+	// why the two differ at all.
+	listed  interp.AssocArray
+	termcap interp.AssocArray
 	// kinds is which section each terminfo name came from, which the two
 	// parameters have no use for and `echoti` cannot do without: a string
 	// capability is bytes for the terminal and a number or a boolean is a
@@ -108,10 +115,41 @@ type capabilityTables struct {
 // repl reads them.
 var terminfoEnvironment = []string{"TERM", "TERMINFO", "TERMINFO_DIRS", "HOME"}
 
-// load returns the two tables, reading the database if the environment has
-// moved since the last read.
-func (c *capabilityTables) load(r *interp.Runner) (
-	interp.AssocArray, interp.AssocArray, map[string]repl.TerminalCapabilityKind,
+// terminfoTable is every capability by its terminfo name — the *readable*
+// set, extended section included — and which section each came from, for
+// `echoti`, whose answer has to be the parameter's.
+func (c *capabilityTables) terminfoTable(r *interp.Runner) (
+	interp.AssocArray, map[string]repl.TerminalCapabilityKind,
+) {
+	found, _, _, kinds := c.tables(r)
+	return found, kinds
+}
+
+// listedTable is the enumerated subset: the same names without the
+// description's extended section. See registerCapabilityParameter.
+func (c *capabilityTables) listedTable(r *interp.Runner) interp.AssocArray {
+	_, listed, _, _ := c.tables(r)
+	return listed
+}
+
+// readTable is the readable set alone, which is what one key is looked up in.
+func (c *capabilityTables) readTable(r *interp.Runner) interp.AssocArray {
+	found, _, _, _ := c.tables(r)
+	return found
+}
+
+// termcapTable is the `$termcap` half, read through the same cache.
+func (c *capabilityTables) termcapTable(r *interp.Runner) interp.AssocArray {
+	_, _, byTermcap, _ := c.tables(r)
+	return byTermcap
+}
+
+// tables is the whole of one reading: every capability by terminfo name, the
+// subset of those names that is *enumerated*, the termcap spelling, and which
+// section each came from.
+func (c *capabilityTables) tables(r *interp.Runner) (
+	interp.AssocArray, interp.AssocArray, interp.AssocArray,
+	map[string]repl.TerminalCapabilityKind,
 ) {
 	env := func(name string) string {
 		value, _ := r.GetVar(name)
@@ -126,15 +164,19 @@ func (c *capabilityTables) load(r *interp.Runner) (
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.terminfo != nil && c.from == key {
-		return c.terminfo, c.termcap, c.kinds
+		return c.terminfo, c.listed, c.termcap, c.kinds
 	}
 	caps := repl.TerminalCapabilities(env)
 	kinds := make(map[string]repl.TerminalCapabilityKind, len(caps))
 	byTerminfo := make(interp.AssocArray, len(caps))
+	listed := make(interp.AssocArray, len(caps))
 	byTermcap := make(interp.AssocArray, len(caps))
 	for _, entry := range caps {
 		byTerminfo[entry.Terminfo] = interp.Scalar(entry.Value)
 		kinds[entry.Terminfo] = entry.Kind
+		if !entry.Extended {
+			listed[entry.Terminfo] = interp.Scalar(entry.Value)
+		}
 		// Skipped rather than keyed by the empty string: an extended
 		// capability is a name the description carries itself and predates no
 		// termcap, so it has no two-letter code to be found under.
@@ -149,8 +191,8 @@ func (c *capabilityTables) load(r *interp.Runner) (
 			byTermcap[entry.Termcap] = interp.Scalar(entry.Value)
 		}
 	}
-	c.from, c.terminfo, c.termcap, c.kinds = key, byTerminfo, byTermcap, kinds
-	return byTerminfo, byTermcap, kinds
+	c.from, c.terminfo, c.listed, c.termcap, c.kinds = key, byTerminfo, listed, byTermcap, kinds
+	return byTerminfo, listed, byTermcap, kinds
 }
 
 // registerTerminfoModules installs `$terminfo` and `$termcap`: two views over
@@ -158,14 +200,13 @@ func (c *capabilityTables) load(r *interp.Runner) (
 // system.
 func registerTerminfoModules(r *interp.Runner) {
 	tables := &capabilityTables{}
-	registerCapabilityParameter(r, "terminfo", func(r *interp.Runner) interp.AssocArray {
-		found, _, _ := tables.load(r)
-		return found
-	})
-	registerCapabilityParameter(r, "termcap", func(r *interp.Runner) interp.AssocArray {
-		_, found, _ := tables.load(r)
-		return found
-	})
+	registerCapabilityParameter(r, "terminfo", "cols", "lines",
+		tables.listedTable, tables.readTable)
+	// The same two names under termcap's spelling, and there the two readings
+	// are one table: an extended capability has no two-letter code, so the
+	// section that makes them differ is already absent from this half.
+	registerCapabilityParameter(r, "termcap", "co", "li",
+		tables.termcapTable, tables.termcapTable)
 	registerEchoti(r, tables)
 }
 
@@ -183,15 +224,71 @@ func registerTerminfoModules(r *interp.Runner) {
 // does not have, which is what real zsh reports and what a script testing
 // `$+terminfo[…]` is written against; refusing it was right only while the
 // table was a stub.
-func registerCapabilityParameter(r *interp.Runner, name string, view func(*interp.Runner) interp.AssocArray) {
-	r.SetDynamicAssoc(name, view)
+//
+// # Two tables, because the parameter reads more than it lists
+//
+// listed and read are the same map for `$termcap` and two maps for
+// `$terminfo`, and the split is measured: zsh answers `${terminfo[Se]}` with
+// the cursor sequence and `${+terminfo[Se]}` with 1 while leaving `Se` out of
+// `${(k)terminfo}` — `${#terminfo}` is 220 for `xterm-256color` there against
+// 281 for every name this reader finds, and the 61 are exactly the
+// description's extended section.
+//
+// That is the escape hatch [interp.Runner.SetDynamicAssocElement]'s contract
+// now names, and it is one-way: a produced association may **read more than
+// it lists, never less**. The direction matters because what the contract
+// protects is `${m[k]:-d}` and `${+m[k]}`, and both are answered by the
+// element reading — so a key that reads and is not listed leaves every
+// branch a script takes correct, where a key that lists and does not read
+// would make `${m[k]:-d}` take the default for a name the shell had just
+// enumerated (#2102).
+//
+// # The two size capabilities are the screen's, not the description's
+//
+// `cols` and `lines` — `co` and `li` in termcap's spelling — are answered
+// from [interp.Runner.ScreenSize] in both readings and whatever the
+// description holds. Measured through a pseudo-terminal opened 100x37: zsh
+// answers `cols=100` under `TERM=xterm-256color`, whose description says 80,
+// and answers 80 by 24 for `TERM=linux`, whose description carries neither
+// (#2101). They are answered ahead of the table rather than folded into it so
+// that a *one-key* read costs one ioctl instead of a copy of the whole map —
+// the same reason the element reading exists at all.
+func registerCapabilityParameter(
+	r *interp.Runner, name, colsKey, linesKey string,
+	listed, read func(*interp.Runner) interp.AssocArray,
+) {
+	r.SetDynamicAssoc(name, func(r *interp.Runner) interp.AssocArray {
+		table := listed(r)
+		if len(table) == 0 {
+			// No description, so no capabilities — the size included.
+			// Measured: under a `$TERM` the database has never heard of,
+			// `${#terminfo}` is 0 and `${+terminfo[cols]}` is 0, where
+			// `${+terminfo}` is still 1. So the two size keys belong to a
+			// description that was found and not to the parameter.
+			return nil
+		}
+		out := maps.Clone(table)
+		rows, cols := r.ScreenSize()
+		out[colsKey] = interp.Scalar(strconv.Itoa(cols))
+		out[linesKey] = interp.Scalar(strconv.Itoa(rows))
+		return out
+	})
 	// One key without building the map, which is the shape a capability test
-	// has: a theme asks about a name at a time. The two readings agree by
-	// construction — this is a lookup in the table the producer returns — so
-	// the contract SetDynamicAssocElement states is met by there being one
-	// table.
+	// has: a theme asks about a name at a time.
 	r.SetDynamicAssocElement(name, func(r *interp.Runner, key string) (string, bool) {
-		value, ok := view(r)[key]
+		table := read(r)
+		if len(table) == 0 {
+			return "", false
+		}
+		switch key {
+		case colsKey:
+			_, cols := r.ScreenSize()
+			return strconv.Itoa(cols), true
+		case linesKey:
+			rows, _ := r.ScreenSize()
+			return strconv.Itoa(rows), true
+		}
+		value, ok := table[key]
 		return value.Str, ok
 	})
 	// Readonly rather than given a writer, which is zsh's own answer and the

@@ -239,17 +239,113 @@ echo "c=[${commands[ls]:-ABSENT}]"`)
 	}
 }
 
-// Writing to it is refused by name: this shell resolves a command word by
-// searching PATH every time, so there is no hash for an entry to change.
-// Accepting the assignment and dropping it would leave a caller holding a name
-// it believes it has arranged for.
-func TestCommandsRefusesAWriteByName(t *testing.T) {
-	out, st := runZsh(t, t.TempDir(), `commands[myc]=/bin/ls 2>&1
-echo "then=[${commands[myc]:-ABSENT}]"`)
-	want := "zsh:1: commands[myc]: assigning to the command hash is not implemented yet\n" +
-		"then=[ABSENT]\n"
+// Writing to it **hashes a command**, which is what makes this a view in both
+// directions rather than a read that happens to agree with one.
+//
+// Three things in one run, and the third is the one a refusal could not have
+// given: the entry is what the parameter reads back, it is what `hash` lists,
+// and it is what the *name itself* runs. Measured on zsh 5.9.2 with
+// `PATH=/usr/bin:/bin` — `commands[zz]=/bin/echo; zz hi` prints `hi`.
+func TestWritingCommandsHashesTheCommand(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "realcmd"),
+		[]byte("#!/bin/sh\necho real\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "other"),
+		[]byte("#!/bin/sh\necho other\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	out, st := runZsh(t, dir, `commands[myc]=`+filepath.Join(dir, "other")+`
+echo "then=[${commands[myc]:-ABSENT}]"
+hash
+myc`)
+	want := "then=[" + filepath.Join(dir, "other") + "]\n" +
+		"myc=" + filepath.Join(dir, "other") + "\n" +
+		"other\n"
 	if out != want || st != 0 {
 		t.Errorf("writing $commands = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// And an entry a script wrote wins over what the search would have found, in
+// every one of the three readings — which is the row that says the table is on
+// *top* of the PATH scan and not behind it. Measured: `commands[ls]=/bin/echo;
+// ls WOW` prints `WOW` there.
+func TestAWrittenCommandsEntryWinsOverThePathSearch(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "realcmd"),
+		[]byte("#!/bin/sh\necho real\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "other"),
+		[]byte("#!/bin/sh\necho other\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	out, st := runZsh(t, dir, `echo "before=[${commands[realcmd]}]"
+commands[realcmd]=`+filepath.Join(dir, "other")+`
+echo "after=[${commands[realcmd]}]"
+realcmd`)
+	want := "before=[" + filepath.Join(dir, "realcmd") + "]\n" +
+		"after=[" + filepath.Join(dir, "other") + "]\n" +
+		"other\n"
+	if out != want || st != 0 {
+		t.Errorf("$commands over a real PATH entry = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// The table is read **raw** rather than through the lookup: an entry that does
+// not run is still what the parameter reports. Measured —
+// `commands[qq]=/no/such/thing` leaves `${commands[qq]}` as the path it was
+// given and `${+commands[qq]}` as 1, with `qq` itself `command not found`.
+//
+// It is the discriminating row for the read, because a lookup-backed read
+// would answer empty for the very entry the line before it wrote.
+func TestCommandsReportsAnEntryThatWillNotRun(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `commands[qq]=/no/such/thing
+echo "v=[${commands[qq]}] plus=${+commands[qq]}"`)
+	want := "v=[/no/such/thing] plus=1\n"
+	if out != want || st != 0 {
+		t.Errorf("a stale $commands entry = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// The **whole-table** reading carries the hash too, which is a separate
+// producer from the one-key lookup above and the half a test of
+// `${commands[c]}` alone cannot reach.
+//
+// Two rows, because the hash sits on top of the PATH scan in both of them and
+// they fail differently: a name PATH never had is a key the enumeration gains,
+// and a name PATH does have is a key whose *value* the hash replaces without
+// changing the count. Measured on zsh 5.9.2 with `PATH=/usr/bin:/bin` —
+// `commands[zz]=/bin/echo` puts `zz` in `${(k)commands}` beside everything the
+// scan found, and `commands[ls]=/bin/echo` leaves the count alone and makes
+// `${(v)commands}` say `/bin/echo` for it.
+//
+// Both readings have to agree about this: the contract
+// `interp.Runner.SetDynamicAssocElement` states allows a view to read more
+// than it lists and never less, so a table that listed the scan alone while
+// the lookup answered the hash would be the one shape it forbids — a
+// `${(k)commands}` that names fewer commands than `${+commands[c]}` admits to.
+func TestTheWholeCommandsTableCarriesTheHash(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "realcmd"),
+		[]byte("#!/bin/sh\necho real\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	out, st := runZsh(t, dir, `echo "n=${#commands} k=[${(ok)commands}]"
+commands[zzz]=/zzz/zzz
+echo "n=${#commands} k=[${(ok)commands}]"
+commands[realcmd]=/realcmd/other
+echo "n=${#commands} v=[${(o)commands}]"`)
+	// The two paths are named so that sorting them by value and listing them
+	// in key order give the same line, which keeps this row about the hash
+	// rather than about what `(o)` orders.
+	want := "n=1 k=[realcmd]\n" +
+		"n=2 k=[realcmd zzz]\n" +
+		"n=2 v=[/realcmd/other /zzz/zzz]\n"
+	if out != want || st != 0 {
+		t.Errorf("the whole $commands table = %q (status %d), want %q", out, st, want)
 	}
 }
 
@@ -730,22 +826,33 @@ echo "assign=$?"`)
 	}
 }
 
-// `$commands` is the table where the silence above would be wrong, and the
-// read afterwards is what says so: zsh drops a cached entry and answers empty
-// until something searches again, and this view searches every time. So the
-// unset refuses, and it refuses in the verb the caller used.
-func TestUnsettingACommandsElementRefusesByName(t *testing.T) {
+// `$commands` is the table where the silence above would be wrong in the
+// other direction, and this is where the four answers part: an `unset` of one
+// element **forgets a hashed command**. Measured 2026-09-12 — `echo
+// ${#commands}; unset "commands[ls]"; hash` leaves `ls` out of the listing in
+// zsh 5.9.2, where bash's `unset "BASH_CMDS[q]"` leaves its entry alone.
+//
+// The row that makes it a removal rather than a word taken and dropped is the
+// one in the middle: the name the write put in the table is gone from `hash`
+// afterwards, and the read falls back to what the search finds. A name PATH
+// still resolves comes back on the next read, which is what the shell being
+// modeled does too — there because every touch of the parameter refills the
+// table, here because the search is the other half of the view.
+func TestUnsettingACommandsElementForgetsTheHashedCommand(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "toolx"), []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	out, st := runZsh(t, dir, `unset "commands[toolx]" 2>&1
-echo "st=$? still=[${commands[toolx]:+found}]"
-commands[toolx]=/bin/x 2>&1
-echo "assign=$?"`)
-	want := "zsh:unset:1: commands[toolx]: removing an entry from the command hash is not implemented yet\n" +
-		"st=0 still=[found]\n" +
-		"zsh:3: commands[toolx]: assigning to the command hash is not implemented yet\nassign=0\n"
+	out, st := runZsh(t, dir, `commands[zzonly]=/bin/zzonly
+echo "hashed=[${commands[zzonly]}]"
+unset "commands[zzonly]"
+echo "st=$? gone=[${commands[zzonly]:-ABSENT}]"
+echo "table=[$(hash)]"
+unset "commands[toolx]"
+echo "onpath=[${commands[toolx]:+found}]"`)
+	want := "hashed=[/bin/zzonly]\n" +
+		"st=0 gone=[ABSENT]\ntable=[]\n" +
+		"onpath=[found]\n"
 	if out != want || st != 0 {
 		t.Errorf("unsetting a $commands element = %q (status %d), want %q", out, st, want)
 	}

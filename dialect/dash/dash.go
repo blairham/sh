@@ -442,8 +442,10 @@ func Semantics() interp.Semantics {
 	// so there is no scan to resume. `@{x}{a,b}@` is the one word it was
 	// written as, and the question of how far past a group that did not
 	// expand the scan steps cannot be put to a shell that never steps at
-	// all. The four `BraceRange…` axes are unanswered here for the same
-	// reason.
+	// all. The nine `BraceRange…` and `BraceCharRange…` axes are unanswered
+	// here for the same reason — `{1..}`, `{1..x}` and `{1..2..0}` are all
+	// the words they were written as, and a shell that counts no range at
+	// all has no reading of one it could not count.
 	//
 	// The three `$'…'` axes are left unanswered on purpose: dash has no
 	// `$'…'` at all — `$'a\tb'` is the six characters it was written as,

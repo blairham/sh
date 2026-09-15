@@ -723,6 +723,30 @@ func (r *Runner) resume(args []string, name string) (*Job, int) {
 		r.diagf("%s\n", Wording(d.JobNotUnderJobControl, "%[1]s: no job control", name, spec))
 		return nil, orDefault(d.JobNotUnderJobControlStatus, 1)
 	}
+	if j.PID != 0 && !j.ownGroup {
+		// A job started while the monitor was off runs in the shell's own
+		// process group, so there is no group of its own to put in front of
+		// the terminal. Every column that can reach the question refuses it
+		// rather than resuming — see Diagnostics.JobStartedWithoutJobControl.
+		//
+		// After the job control check above and not before it: with the
+		// monitor still off the answer is that there is no job control at
+		// all, and naming the job here would claim there is. The state this
+		// catches is the one in between — a job started with the monitor
+		// off, in a shell that has since turned it on.
+		//
+		// Asked of the process and not of the job, because a job with no
+		// process of its own has no group either way and is not refused:
+		// `set -m; { sleep 4; } & fg` resumes in bash exactly as it does
+		// here.
+		//
+		// This is #3020. Without it the job was resumed and waited out,
+		// which is how a suite file bash finishes in 11 ms cost 30 seconds.
+		d := r.diag()
+		r.diagf("%s\n", Wording(d.JobStartedWithoutJobControl,
+			"%[1]s: job %[2]d started without job control", name, r.jobNumber(j)))
+		return nil, orDefault(d.JobStartedWithoutJobControlStatus, 1)
+	}
 	return j, 0
 }
 

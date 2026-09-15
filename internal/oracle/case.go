@@ -5572,6 +5572,16 @@ echo "st=$?"`,
 		Why:     "`!` tests a status rather than requiring success, so a failing negation is not a failure",
 	},
 	{
+		ID: "errexit/negation-exemption-reaches-into-a-body", Category: "shell options",
+		Snippet: `set -e; ! { false; echo inner; }; echo reached`,
+		Why:     "the negation's exemption is inherited like the condition's: the failure inside what `!` ran is being tested too, so the body keeps going. Unanimous, and it is the half this shell had missing — the finished statement was exempt and everything inside it was not",
+	},
+	{
+		ID: "errexit/negation-exemption-reaches-into-a-function", Category: "shell options",
+		Snippet: `set -e; f() { false; echo inner; }; ! f; echo reached`,
+		Why:     "the same question through a call, and the one place the panel splits: bash, ksh93 and dash carry on, zsh runs the body and then stops at the function's own boundary",
+	},
+	{
 		ID: "status/an-assignment-can-read-the-previous-status", Category: "shell options",
 		Snippet: `false; E=$?; echo "E=$E ?=$?"`,
 		Why:     "the most common idiom there is, and it asks two things at once: `$?` on the right names the command before the assignment, and the assignment then reports its own success. Getting the order wrong makes `E=$?` read 0 and nothing looks broken",

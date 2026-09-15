@@ -4002,6 +4002,25 @@ func (r *Runner) pipeline(ctx context.Context, p *syntax.Pipeline) error {
 	if timing != nil {
 		timing.grow(p.Cmds)
 	}
+	if p.Negated {
+		// A negated pipeline is a status being *tested*, so `set -e` is
+		// suspended for the whole of it — and the suspension is inherited,
+		// exactly as an `if` condition's is. Skipping only the judgement of
+		// the finished statement, which is what lastIsNegated does, leaves a
+		// failure *inside* what the negation ran free to end the script:
+		//
+		//	set -e; f() { false; echo body; }; ! f; echo end
+		//	set -e; ! { false; echo body; }; echo end
+		//
+		// bash, ksh93 and dash print both lines and carry on; so does zsh
+		// for the group. This shell printed neither and stopped, which is
+		// the shape `set -e` is least forgiving of — a script that says
+		// "I am testing whether this fails" was ended by the failure it
+		// asked about. Counted here rather than in stmt so that it covers
+		// the pipeline wherever one is reached from.
+		r.tested++
+		defer func() { r.tested-- }()
+	}
 	r.pipefailRaised = false
 	if len(p.Cmds) == 0 {
 		// A `!` written with no pipeline after it, which one grammar flag

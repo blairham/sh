@@ -12260,6 +12260,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `errexit/exemption-reaches-into-functions` | `inner~reached` | `inner~reached` | `inner~reached` | `inner~reached` | `inner~reached` | `inner~reached` | `inner~reached` |
 | `errexit/only-the-last-of-a-chain` | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* |
 | `errexit/negation-is-exempt` | `reached` | `reached` | `reached` | `reached` | `reached` | `reached` | `reached` |
+| `errexit/negation-exemption-reaches-into-a-body` | `inner~reached` | `inner~reached` | `inner~reached` | `inner~reached` | `inner~reached` | `inner~reached` | `inner~reached` |
+| `errexit/negation-exemption-reaches-into-a-function` | `inner~reached` | `inner~reached` | `inner~reached` | `inner~reached` | `inner~reached` | `inner` *(status 1)* | `inner~reached` |
 | `status/an-assignment-can-read-the-previous-status` | `E=1 ?=0` | `E=1 ?=0` | `E=1 ?=0` | `E=1 ?=0` | `E=1 ?=0` | `E=1 ?=0` | `E=1 ?=0` |
 | `status/an-assignment-reports-its-substitution` | `st=1~st=0` | `st=1~st=0` | `st=1~st=0` | `st=1~st=0` | `st=1~st=0` | `st=1~st=0` | `st=1~st=0` |
 | `errexit/assignment-takes-the-substitution` | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* |
@@ -12900,6 +12902,14 @@ grades it and nothing drift-checks it either, for the same reason.
 - `errexit/negation-is-exempt` — `!` tests a status rather than requiring success, so a failing negation is not a failure
   ```sh
   set -e; ! true; echo reached
+  ```
+- `errexit/negation-exemption-reaches-into-a-body` — the negation's exemption is inherited like the condition's: the failure inside what `!` ran is being tested too, so the body keeps going. Unanimous, and it is the half this shell had missing — the finished statement was exempt and everything inside it was not
+  ```sh
+  set -e; ! { false; echo inner; }; echo reached
+  ```
+- `errexit/negation-exemption-reaches-into-a-function` — the same question through a call, and the one place the panel splits: bash, ksh93 and dash carry on, zsh runs the body and then stops at the function's own boundary
+  ```sh
+  set -e; f() { false; echo inner; }; ! f; echo reached
   ```
 - `status/an-assignment-can-read-the-previous-status` — the most common idiom there is, and it asks two things at once: `$?` on the right names the command before the assignment, and the assignment then reports its own success. Getting the order wrong makes `E=$?` read 0 and nothing looks broken
   ```sh

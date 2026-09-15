@@ -63,6 +63,39 @@ func TestErrExit(t *testing.T) {
 			"g\nf\nreached\n", 0,
 		},
 
+		// The same inheritance for `!`, which used to have only half of it:
+		// the finished statement was exempt and everything the negation ran
+		// was not, so a `!` over anything with a body of its own ended the
+		// script at the first failure inside it (#2298). Measured on bash
+		// 5.3, ksh93 and dash, which print both lines and carry on; zsh
+		// agrees for the group and is the outlier for the function, where it
+		// runs the body and then stops.
+		{
+			"the negation's exemption reaches into a function",
+			`set -e; f() { false; echo inner; }; ! f; echo reached`,
+			"inner\nreached\n", 0,
+		},
+		{
+			"and into a group",
+			`set -e; ! { false; echo inner; }; echo reached`,
+			"inner\nreached\n", 0,
+		},
+		{
+			"and into a subshell",
+			`set -e; ! (false; echo inner); echo reached`,
+			"inner\nreached\n", 0,
+		},
+		{
+			"and down a call of its own",
+			`set -e; g() { false; echo g; }; f() { g; echo f; }; ! f; echo reached`,
+			"g\nf\nreached\n", 0,
+		},
+		{
+			"and the negated statement still reports the inverted status",
+			`set -e; f() { false; }; ! f; echo "st=$?"`,
+			"st=0\n", 0,
+		},
+
 		// An assignment reports what its substitution reported.
 		{"assignment takes the substitution", `set -e; x=$(false); echo reached`, "", 1},
 		{"but a used substitution does not", `set -e; echo "$(false)"; echo reached`, "\nreached\n", 0},

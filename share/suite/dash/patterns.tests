@@ -1,0 +1,54 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Pattern matching, the answer only dash gives.
+#
+# One rule, and it is a rule about what a character *is* rather than about a
+# construct dash lacks: `^` at the head of a bracket expression negates it in
+# bash, zsh and ksh93, and is an ordinary member of the set here. POSIX says
+# the negating character is `!`, so dash is the shell following the text and
+# the other three are the ones extending it — which does not make the split
+# any less real for a script that meets it.
+#
+# The danger is that both readings match *something*. `[^b]` never fails to
+# parse and never diagnoses; it silently selects a different set, and the
+# difference only shows on a subject that is one of the two characters in
+# question.
+
+emit() { printf '%s\n' "$1"; }
+
+# `b` is in the set here and excluded from it everywhere else.
+case b in [^b]) emit 'b matched [^b]' ;; *) emit 'b did not match [^b]' ;; esac
+case a in [^b]) emit 'a matched [^b]' ;; *) emit 'a did not match [^b]' ;; esac
+
+# And `^` itself is in the set here — where in the other three it is the
+# negating character and so matches nothing of its own.
+case '^' in [^b]) emit 'caret matched [^b]' ;; *) emit 'caret did not match [^b]' ;; esac
+case '^' in [^a-z]) emit 'caret matched [^a-z]' ;; *) emit 'caret did not match [^a-z]' ;; esac
+
+# A range behind the caret reads the same way: the members are the caret and
+# the range, rather than everything outside the range.
+case 5 in [^0-9]) emit '5 matched [^0-9]' ;; *) emit '5 did not match [^0-9]' ;; esac
+case x in [^0-9]) emit 'x matched [^0-9]' ;; *) emit 'x did not match [^0-9]' ;; esac
+
+# The same characters in the trim operators, where a script most often meets
+# them: `${s#[^x]}` takes one character off the front only if that character
+# is in the set.
+s=xay
+printf 'trim [^a]: [%s]\n' "${s#[^a]}"
+printf 'trim [^x]: [%s]\n' "${s#[^x]}"
+
+# And in filename generation.
+mkdir -p p
+: > p/a
+: > p/b
+set -- p/[^a]
+printf 'glob [^a]: n=%s [%s]\n' "$#" "$1"
+
+# The control, and the reason this is a divergence rather than a shell with
+# no negation: `!` negates here exactly as it does everywhere else, so a
+# portable pattern written the way POSIX spells it means the same thing in
+# all four columns.
+case b in [!b]) emit 'b matched [!b]' ;; *) emit 'b did not match [!b]' ;; esac
+case a in [!b]) emit 'a matched [!b]' ;; *) emit 'a did not match [!b]' ;; esac
+printf 'trim [!x]: [%s]\n' "${s#[!x]}"

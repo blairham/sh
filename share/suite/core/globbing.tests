@@ -1,0 +1,133 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Filename generation, POSIX XCU 2.6.6 — the same matcher as
+# core/patterns.tests put to a directory rather than to a string.
+#
+# The two are separated because this half has a second input. A `case` is a
+# function of the pattern and the subject and nothing else; a glob also
+# depends on what is on the disk, on the order the names come back in, and on
+# a rule about the leading dot that has no counterpart in `case` at all. Every
+# case below makes its own files first, so nothing here depends on the
+# machine.
+#
+# **Every pattern in this file matches at least one name, and that is a
+# constraint rather than a convenience.** A pattern that matches nothing is
+# left alone as text in bash, ksh93 and dash and is a *failure* in zsh, so a
+# core file may not contain one. share/suite/zsh/patterns.tests is where the
+# question went.
+#
+# Results are shown as a count and one bracketed word each, never as a joined
+# line: `n=2 [a] [b]` and `[a b]` are the same line under a different
+# splitting, and a case that could not tell them apart would pass on either.
+
+show() {
+  lbl=$1
+  shift
+  printf '%s n=%s' "$lbl" "$#"
+  for w in "$@"; do printf ' [%s]' "$w"; done
+  printf '\n'
+}
+
+mkdir -p g/sub
+: > g/a.txt
+: > g/b.txt
+: > g/c.log
+: > g/-dash
+: > g/.dot
+: > g/sub/d.txt
+
+# --- the three metacharacters ------------------------------------------------
+#
+# The first line is doing two jobs: it is the star, and it is the leading-dot
+# rule. `g/.dot` exists and is not in the answer, and nothing else in this
+# file could tell you that.
+
+set -- g/*
+show 'star' "$@"
+set -- g/*.txt
+show 'star before a suffix' "$@"
+set -- g/?.txt
+show 'question' "$@"
+set -- g/[ab].txt
+show 'a bracket' "$@"
+set -- g/[!ab]*
+show 'a negated bracket' "$@"
+set -- g/[[:alpha:]].txt
+show 'a character class' "$@"
+set -- g/*.[tl]*
+show 'a bracket in the middle' "$@"
+set -- g/[-a]*
+show 'a dash first in the bracket' "$@"
+
+# The dot is reached by naming it, in the pattern or in a bracket — the rule
+# is about the *pattern's* first character rather than about the file.
+set -- g/.dot
+show 'named outright' "$@"
+set -- g/.d*
+show 'a literal dot then a star' "$@"
+
+# --- the slash ---------------------------------------------------------------
+#
+# A slash is a component separator here, which is the one way this matcher
+# differs from the one in `case`: no metacharacter matches it, and a trailing
+# one selects directories.
+
+set -- g/*/
+show 'a trailing slash' "$@"
+set -- g/*/*
+show 'a component past the slash' "$@"
+set -- g/sub
+show 'a directory named outright' "$@"
+set -- g/sub/
+show 'and with the slash on it' "$@"
+
+# --- the result is sorted, and it is one word per name ----------------------
+#
+# The order is the collating order, which is why the whole suite runs under
+# LC_ALL=C: `-dash` sorts before `a.txt` by its byte and would sort elsewhere
+# under a locale that ignores punctuation.
+
+set -- g/*
+printf 'sorted:'
+for w in "$@"; do printf ' %s' "$w"; done
+printf '\n'
+
+# Two patterns in one command are two expansions, and the words of each stay
+# in that one's order rather than being sorted together.
+set -- g/*.txt g/*.log
+show 'two patterns' "$@"
+set -- g/a.txt g/b.txt
+show 'two names, no pattern' "$@"
+
+# --- what is not a pattern ---------------------------------------------------
+
+set -- "g/*"
+show 'quoted' "$@"
+set -- g/\*
+show 'escaped' "$@"
+set -- 'g/'*
+show 'quoted up to the star' "$@"
+v='g/*'
+printf 'an assignment is not generated: [%s]\n' "$v"
+
+# Whether an *unquoted expansion* holding a pattern is generated from is a
+# dialect answer — bash, ksh93 and dash do and zsh does not — so it is asked
+# nowhere in this tier. core/expansion.tests says the same thing about the
+# splitting half of the same reflex.
+
+# --- a pattern in a word that is not the command's operand ------------------
+
+for w in g/*.txt; do printf 'in a for list: %s\n' "$w"; done
+
+# The *word* of a `case` is not generated from, however much of a pattern it
+# looks like — only the patterns after `in` are patterns.
+case 'g/*' in
+'g/*') printf 'the case word stayed as text\n' ;;
+*) printf 'the case word was generated from\n' ;;
+esac
+
+# A pattern as a redirection target is deliberately absent: bash and zsh
+# generate from it and ksh93 and dash open the pattern as a filename and
+# fail. Two against two is neither tier's claim, so it is written here rather
+# than run.

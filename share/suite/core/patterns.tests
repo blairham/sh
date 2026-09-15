@@ -74,3 +74,59 @@ printf '%s\n' "anchored=${s#X} unanchored=${s#*X}"
 
 # [^...] is deliberately absent. Measured, bash, ksh93 and zsh read it as a
 # negation and dash does not, so it is a dialect answer rather than a core one.
+
+# --- character classes ------------------------------------------------------
+#
+# The bracketed class names POSIX defines. Each is asked with a subject in it
+# and a subject outside it, because a class that matched everything and a
+# class that matched nothing both pass a one-sided case.
+
+case abc in [[:alpha:]]*) emit 'alpha: yes' ;; *) emit 'alpha: no' ;; esac
+case 5bc in [[:alpha:]]*) emit 'alpha on a digit: yes' ;; *) emit 'alpha on a digit: no' ;; esac
+case 5 in [[:digit:]]) emit 'digit: yes' ;; *) emit 'digit: no' ;; esac
+case x in [[:digit:]]) emit 'digit on a letter: yes' ;; *) emit 'digit on a letter: no' ;; esac
+case ' ' in [[:space:]]) emit 'space: yes' ;; *) emit 'space: no' ;; esac
+case A in [[:upper:]]) emit 'upper: yes' ;; *) emit 'upper: no' ;; esac
+case a in [[:upper:]]) emit 'upper on a lower: yes' ;; *) emit 'upper on a lower: no' ;; esac
+case a in [[:lower:]]) emit 'lower: yes' ;; *) emit 'lower: no' ;; esac
+case _ in [[:punct:]]) emit 'punct: yes' ;; *) emit 'punct: no' ;; esac
+case a1 in [[:alnum:]][[:alnum:]]) emit 'alnum twice: yes' ;; *) emit 'alnum twice: no' ;; esac
+case f in [[:xdigit:]]) emit 'xdigit: yes' ;; *) emit 'xdigit: no' ;; esac
+case g in [[:xdigit:]]) emit 'xdigit past f: yes' ;; *) emit 'xdigit past f: no' ;; esac
+
+# Two classes in one bracket, and a class beside a plain character. The
+# bracket is a *set*, so what is inside it composes.
+case b in [[:alpha:][:digit:]]) emit 'two classes, a letter: yes' ;; *) emit 'two classes, a letter: no' ;; esac
+case 7 in [[:alpha:][:digit:]]) emit 'two classes, a digit: yes' ;; *) emit 'two classes, a digit: no' ;; esac
+case x in [[:alpha:]x]) emit 'a class and a character: yes' ;; *) emit 'a class and a character: no' ;; esac
+case x in [![:digit:]]) emit 'a negated class: yes' ;; *) emit 'a negated class: no' ;; esac
+case 3 in [![:digit:]]) emit 'a negated class on a digit: yes' ;; *) emit 'a negated class on a digit: no' ;; esac
+
+# --- the characters a bracket has to spell out ------------------------------
+#
+# Three characters cannot be escaped inside a bracket and are given a meaning
+# by position instead: a `]` is a member when it is first, a `-` is a member
+# when it is first or last, and a `!` negates only when it is first.
+
+case ']' in []]) emit 'a bracket first: yes' ;; *) emit 'a bracket first: no' ;; esac
+case a in []a]) emit 'a bracket first, then a: yes' ;; *) emit 'a bracket first, then a: no' ;; esac
+case ']' in [!]]) emit 'a bracket after the negation: yes' ;; *) emit 'a bracket after the negation: no' ;; esac
+case a in [!]]) emit 'a letter against that same set: yes' ;; *) emit 'a letter against that same set: no' ;; esac
+case - in [a-]) emit 'a dash last: yes' ;; *) emit 'a dash last: no' ;; esac
+case b in [a-]) emit 'a dash last, a letter past the set: yes' ;; *) emit 'a dash last, a letter past the set: no' ;; esac
+case - in [-a]) emit 'a dash first: yes' ;; *) emit 'a dash first: no' ;; esac
+case '!' in [!a]) emit 'a bang against its own negation: yes' ;; *) emit 'a bang against its own negation: no' ;; esac
+case '^' in [a^]) emit 'a caret as an ordinary member: yes' ;; *) emit 'a caret as an ordinary member: no' ;; esac
+
+# `[^…]` at the head is deliberately absent, and the omission is the same
+# measurement the foot of this file records: bash, zsh and ksh93 read the
+# caret as a second negation and dash reads it as a member. It is
+# share/suite/dash/patterns.tests.
+
+# --- escaping and quoting ---------------------------------------------------
+
+case 'a b' in a\ b) emit 'an escaped blank: yes' ;; *) emit 'an escaped blank: no' ;; esac
+case abc in 'a'*) emit 'a quoted character then a star: yes' ;; *) emit 'a quoted character then a star: no' ;; esac
+case '\' in '\') emit 'a quoted backslash: yes' ;; *) emit 'a quoted backslash: no' ;; esac
+case '' in '') emit 'the empty pattern on the empty subject: yes' ;; *) emit 'the empty pattern on the empty subject: no' ;; esac
+case abc in ab) emit 'a pattern that is only a prefix: yes' ;; *) emit 'a pattern that is only a prefix: no' ;; esac

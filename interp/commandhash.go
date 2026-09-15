@@ -102,6 +102,25 @@ func (r *Runner) putHashedCommand(name, path string, hits int) {
 	r.cmdHash[name] = hashedCommand{path: path, hits: hits}
 }
 
+// retrackCommand points an entry at what a search has just found instead.
+//
+// The dialect whose table does not shadow an earlier directory keeps the
+// table current rather than stale: measured 2026-09-15 on ksh93u+, a `hash`
+// after a copy appears in front of the remembered one names the **new** path,
+// and a `hash` after that copy is removed names the old one again. So the
+// entry follows the search rather than being abandoned by it.
+//
+// The hit count is carried over rather than reset, and no hit is counted for
+// this: the table answered nothing here — a walk found the program — and the
+// count is of walks the table saved. See hashCommandHit.
+func (r *Runner) retrackCommand(name, path string) {
+	e, ok := r.cmdHash[name]
+	if !ok || e.path == path {
+		return
+	}
+	r.cmdHash[name] = hashedCommand{path: path, hits: e.hits}
+}
+
 // hashedCommandPath is what the table holds for a name, if anything.
 func (r *Runner) hashedCommandPath(name string) (string, bool) {
 	e, ok := r.cmdHash[name]

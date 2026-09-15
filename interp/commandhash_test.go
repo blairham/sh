@@ -190,6 +190,67 @@ func TestAStaleEntryIsTrustedOrSearchedAgain(t *testing.T) {
 	}
 }
 
+// TestAHashedPathMayNotShadowAnEarlierDirectory is the axis one shell answers
+// No: a copy that appears in a directory searched *earlier* than the
+// remembered one is found on the next call, with no assignment to PATH in
+// between.
+//
+// Not the question TestAStaleEntryIsTrustedOrSearchedAgain asks. There the
+// remembered file has gone; here it is still perfectly good, and a shell that
+// only looks again when its entry has gone stale answers `V2` twice.
+func TestAHashedPathMayNotShadowAnEarlierDirectory(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		shadows Answer
+		want    string
+	}{
+		{"the entry answers", Yes, "V2\nV2\n"},
+		{"the search runs again", No, "V2\nV1\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// The program is in d2, which PATH searches second, and the copy
+			// that appears afterwards is in d1, which it searches first. The
+			// order is what the axis is about, so a version of this with the
+			// two the other way round would pass under either answer.
+			out, st := withDirs(t, `zzc; cp d2/zzc d1/zzc; sed -i.bak "s/V2/V1/" d1/zzc; rm -f d1/zzc.bak; zzc`,
+				func(d1, d2 string) {
+					hashable(t, d2, "zzc", "echo V2")
+					// d1 exists and is empty, so it is a directory PATH
+					// searches and finds nothing in until the copy lands.
+					hashable(t, d1, "other", ":")
+				},
+				func(r *Runner) {
+					s := testSemantics()
+					s.HashedPathShadowsAnEarlierDirectory = tc.shadows
+					r.Semantics = &s
+				})
+			if st != 0 || out != tc.want {
+				t.Errorf("out=%q st=%d, want %q", out, st, tc.want)
+			}
+		})
+	}
+}
+
+// And the table follows the search rather than being abandoned by it: the
+// entry names the copy that is now in front, which is what `hash` prints in
+// the shell this was measured on.
+func TestASearchThatBeatsTheHashRepointsTheEntry(t *testing.T) {
+	out, st := withDirs(t, `zzc; cp d2/zzc d1/zzc; zzc; hash | sed "s|$PWD/||"`,
+		func(d1, d2 string) {
+			hashable(t, d2, "zzc", "echo V2")
+			hashable(t, d1, "other", ":")
+		},
+		func(r *Runner) {
+			s := testSemantics()
+			s.HashedPathShadowsAnEarlierDirectory = No
+			r.Semantics = &s
+			r.Diagnostics = &Diagnostics{HashListing: HashListingNameEqualsPath}
+		})
+	if st != 0 || !strings.Contains(out, "zzc=d1/zzc") {
+		t.Errorf("out=%q st=%d, want the entry repointed at d1", out, st)
+	}
+}
+
 func TestATrustedStaleEntryIsReportedAsItsPath(t *testing.T) {
 	// bash names the *remembered path* rather than the name, which is the
 	// sentence a command word with a slash in it gets — and 127 with it.

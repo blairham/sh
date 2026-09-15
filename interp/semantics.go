@@ -9647,6 +9647,56 @@ type Semantics struct {
 	// This is what `hash -r` is for in the one shell that needs it.
 	CommandHashIsTrusted Answer
 
+	// HashedPathShadowsAnEarlierDirectory keeps running what the command
+	// hash remembered even after a copy of the same name has appeared in a
+	// directory PATH searches **earlier**, with no assignment to PATH in
+	// between.
+	//
+	// ksh93 alone answers No, and it is not the same question
+	// CommandHashIsTrusted asks: that one is about an entry that has *gone*,
+	// where the four shells that look again all find the next copy. This is
+	// about an entry that is still perfectly good and is no longer the
+	// first thing PATH would find.
+	//
+	// Measured 2026-09-15, each run in a directory of its own so the
+	// previous one's files cannot decide the answer:
+	//
+	//	mkdir -p bin1 bin2
+	//	printf '#!/bin/sh\nprintf "bin2\\n"\n' > bin2/t; chmod 755 bin2/t
+	//	PATH="$PWD/bin1:$PWD/bin2:/usr/bin:/bin"
+	//	t
+	//	printf '#!/bin/sh\nprintf "bin1\\n"\n' > bin1/t; chmod 755 bin1/t
+	//	t
+	//
+	//	bash 5.3, bash 3.2, bash-as-sh, zsh, dash, BusyBox ash
+	//	                                 bin2, then bin2
+	//	ksh93                            bin2, then **bin1**
+	//
+	// ksh93 calls the table *tracked aliases* rather than a hash, and there
+	// `hash` is a preset alias for `alias -t --` rather than a builtin. The
+	// naming is a hint at the mechanism and the observable rule is the one
+	// written above; measured in the same session, the entry is not merely
+	// bypassed but **updated** — `hash` names `bin1/t` after the second call
+	// and names `bin2/t` again once that file is removed.
+	//
+	// Note that assigning PATH its own value changes nothing in ksh93, where
+	// it is what the other five need to see the new copy. That is the same
+	// fact from the other side: there was nothing being held on to.
+	//
+	// unpinned bash: the corpus cannot reach the pair. A row would have to
+	// run a program, create a second copy of it earlier on PATH and run it
+	// again, all inside one case and inside the scratch directory the case
+	// is given — and the same row would then be measuring the panel's
+	// filesystem rather than its shells. The same holds for dash, ash and
+	// zsh.
+	// unpinned dash: as bash.
+	// unpinned ash: as bash.
+	// unpinned zsh: as bash.
+	// unpinned ksh: as bash. TestAHashedPathMayNotShadowAnEarlierDirectory
+	// pins it in Go, both ways, and share/suite/ksh/lookup.tests grades the
+	// ksh93 half against the shell itself.
+	HashedPathShadowsAnEarlierDirectory Answer
+
 	// HashListingIsSorted lists the command hash in name order.
 	//
 	// zsh alone, and it is asked rather than assumed because the other three
@@ -14172,15 +14222,20 @@ func PosixSemantics() Semantics {
 		// about re-checking it; the majority of the panel looks again, and
 		// the one that does not overrides. The letters past `-r` are bash's
 		// own and are off here for the same reason every extension is.
-		CommandHashIsTrusted:          No,
-		HashListingIsSorted:           No,
-		HashListsAsCommands:           No,
-		HashTakesAPathToRemember:      No,
-		HashForgetsOneName:            No,
-		HashDefinesANamedDirectory:    No,
-		HashReportsThePath:            No,
-		HashObeysCommandTracking:      No,
-		HashRefusesWhileTrackingIsOff: No,
+		CommandHashIsTrusted: No,
+		// And the table does answer the lookup while what it holds still
+		// runs, which is what makes it a memo at all. Five of the six panel
+		// columns agree, ksh93 is the departure, and the standard's own
+		// description of `hash` is a table of remembered locations.
+		HashedPathShadowsAnEarlierDirectory: Yes,
+		HashListingIsSorted:                 No,
+		HashListsAsCommands:                 No,
+		HashTakesAPathToRemember:            No,
+		HashForgetsOneName:                  No,
+		HashDefinesANamedDirectory:          No,
+		HashReportsThePath:                  No,
+		HashObeysCommandTracking:            No,
+		HashRefusesWhileTrackingIsOff:       No,
 		// dash is the closest reading of the standard here and it hashes
 		// what it was only asked about; so do zsh and ksh93, and bash
 		// overrides.

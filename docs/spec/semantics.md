@@ -5859,6 +5859,49 @@ leaps, and then it runs the second copy exactly as the other three do — so the
 option is this axis turned down rather than a behavior of its own, and it is
 wired that way (`Runner.SetChecksHashedCommand`).
 
+### An entry that is still good and no longer first: a second axis
+
+The axis above is about an entry that has **gone**. A different question, and
+a different split, is what happens to an entry that is still perfectly good
+once a copy of the same name appears in a directory PATH searches *earlier*.
+Measured 2026-09-15, each run in a directory of its own so the previous run's
+files cannot decide the answer:
+
+    mkdir -p bin1 bin2
+    printf '#!/bin/sh\nprintf "bin2\\n"\n' > bin2/t; chmod 755 bin2/t
+    PATH="$PWD/bin1:$PWD/bin2:/usr/bin:/bin"
+    t
+    printf '#!/bin/sh\nprintf "bin1\\n"\n' > bin1/t; chmod 755 bin1/t
+    t
+
+| | first call | second call |
+| --- | --- | --- |
+| bash 5.3, bash 3.2, bash-as-`sh` | `bin2` | `bin2` |
+| zsh 5.9.2, dash, BusyBox ash | `bin2` | `bin2` |
+| ksh93 | `bin2` | **`bin1`** |
+
+Five of the six hold on to what they remembered until PATH is assigned to;
+ksh93 finds the new copy with no assignment in between. That is
+`Semantics.HashedPathShadowsAnEarlierDirectory`.
+
+The entry is **repointed** rather than merely bypassed, measured in the same
+ksh93 session: `hash` names `bin1/t` after the second call, and names `bin2/t`
+again once `bin1/t` is removed. So the table follows the search.
+
+ksh93 calls the table *tracked aliases*, which is why `hash` there is a preset
+alias for `alias -t --` rather than a builtin. The naming is a hint at the
+mechanism; the observable rule is the one in the table above, and assigning
+PATH its own value changes nothing in that column — the same fact from the
+other side, since nothing was being held on to.
+
+The walk this needs is the cost the table exists to avoid, so it is done only
+where the question is live: a dialect that answers `Yes` is spared it, because
+`Yes` and "nothing found in front" are the same outcome. That guard reads the
+axis, and the *ask* is one level up, at the point where a copy really has
+appeared earlier and the columns really do disagree — a refusal in front of
+every external command a shell has run twice would be an over-refusal of the
+kind `Runner.trackingIsOff` already avoids.
+
 ### Command tracking off: two questions, not one
 
 `hashall` in bash and zsh, `trackall` in ksh93, `-h` in the first and third.

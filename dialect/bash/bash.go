@@ -644,6 +644,11 @@ func Semantics() interp.Semantics {
 	// an axis rather than a rule.
 	s.OneCommandStopsACommandString = interp.No
 	s.JobControlAbsenceIsReportedFirst = interp.Yes
+	// And the monitor alone is what `fg` and `bg` need: `set -m` in a script
+	// with no terminal is granted here, and `fg` then runs the job.
+	// Measured 2026-09-15 with and without a pseudo-terminal, and the answer
+	// is the same both times (#2720).
+	s.MonitorAloneResumesAJob = interp.Yes
 	// A stopped job holds the exit back: the shell says so and stays,
 	// and the next attempt leaves. Measured through a pseudo-terminal for
 	// `exit` and for ^D alike.

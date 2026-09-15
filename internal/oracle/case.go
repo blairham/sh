@@ -19517,6 +19517,26 @@ cat pf`,
 		Why:     "bash and zsh refuse before reading the operand — there is no job control under -c and they say so first; ksh93 refuses in the same place and prints nothing while doing it, so the line it writes here is about the *option* and not the operand; dash alone reads the operand and complains about that. What tells ksh93's silence from a reading is `fg %2`, which names no job and is silent too, where its own `jobs %2` on the same line answers `no such job` (#2657)",
 	},
 	{
+		ID: "jobs/set-m-in-a-script-then-fg", Category: "commands",
+		// From a file rather than `-c`, because what is being asked is what a
+		// *script* can do with the monitor, and the two routes differ in
+		// nothing else here.
+		Script: true,
+		Snippet: `set -m
+sleep 0 &
+fg
+echo "rc=$?"`,
+		Why: "whether the monitor is enough for `fg` to run a job, with no terminal on any stream — which is the state a script on a pipe is in, and the state every column of `jobs/bg-with-no-job-control` above was measured in. bash grants `set -m` here silently, because its background jobs already have process groups of their own, and its `fg` then names the job and reports 0; ksh93 grants the monitor just as silently and still answers 1 without a word, so the missing thing there is a person and not a terminal — measured on a pseudo-terminal too, where ksh93 still refuses and bash still runs it. dash and BusyBox ash deny the monitor without a terminal and their `fg` then names the job it has none for, and zsh ends the script over `set -m` outright. So the row separates `Semantics.MonitorAloneResumesAJob` from the terminal question `MonitorNeedsATerminal` already answers. This shell had one gate for both and refused every column (#2720)",
+	},
+	{
+		ID: "jobs/fg-with-no-monitor-in-a-script", Category: "commands",
+		Script: true,
+		Snippet: `sleep 0 &
+fg
+echo "rc=$?"`,
+		Why: "the control for the row above, and what makes it a reading rather than a coincidence: the same script without `set -m` is refused in every column, with a terminal and without one, so the gate really is the monitor and not something `fg` decided for itself. It also pins the four refusal wordings and their three statuses in a shape the `--version` row above cannot, since that one never reaches a job at all",
+	},
+	{
 		ID: "cd/cdpath-may-announce-the-move", Category: "cd",
 		Snippet: `mkdir -p pool/sub
 out=$(CDPATH=./pool cd sub)

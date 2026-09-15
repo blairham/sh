@@ -232,6 +232,13 @@ func Semantics() interp.Semantics {
 	// with no terminal remarks `can't access tty; job control turned off` and
 	// still reports 0.
 	s.MonitorNeedsATerminal = interp.Yes
+	// The monitor alone is what `fg` and `bg` need, which here means with a
+	// terminal: the monitor is denied without one, so the gate answers no
+	// through the line above. Measured 2026-09-15 on a pseudo-terminal —
+	// `set -m; sleep 0 &; fg` prints `sleep 0` at 0 — and off one, where the
+	// denial leaves `fg: job (null) not created under job control` at 2
+	// (#2720).
+	s.MonitorAloneResumesAJob = interp.Yes
 	s.InteractiveMonitorNeedsATerminal = interp.Yes
 
 	// ---- builtins ----

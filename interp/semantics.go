@@ -9115,6 +9115,47 @@ type Semantics struct {
 	// those.
 	JobControlAbsenceIsReportedFirst Answer
 
+	// MonitorAloneResumesAJob lets `fg` and `bg` run a job whenever the
+	// monitor is on, rather than only when the shell has somebody to
+	// announce its jobs to.
+	//
+	// The two are different states and this axis is what says so. The
+	// monitor is `set -m` and whether the dialect grants it without a
+	// terminal — see setMonitor, which already models all four answers.
+	// Having somebody to tell is Runner.JobControl, which is a prompt and
+	// nothing else. A script that turns the monitor on has the first and
+	// never the second.
+	//
+	// Measured 2026-09-15, `env -i PATH=/usr/bin:/bin`, a script file, with
+	// `set -m`, `sleep 0 &` and then `fg`, run twice — once with no terminal
+	// on any stream and once on a pseudo-terminal:
+	//
+	//	                no terminal                    on a pseudo-terminal
+	//	bash 5.3.15     `sleep 0`, status 0            `sleep 0`, status 0
+	//	ksh93u+         nothing, status 1              nothing, status 1
+	//	dash            the monitor is denied, 2       `sleep 0`, status 0
+	//	zsh 5.9.2       `set -m` is fatal              the job line, status 0
+	//	BusyBox ash     the monitor is denied, 2       `sleep 0`, status 0
+	//
+	// So four of the five resume on the monitor alone, and the terminal is
+	// not the gate: it decides whether *the monitor* is granted, which is
+	// already a question of its own, and bash resumes without one. ksh93 is
+	// the column that grants the monitor, with a terminal or without, and
+	// still will not resume — measured on the pseudo-terminal precisely to
+	// tell "needs a terminal" from "needs to be interactive", and it is the
+	// second.
+	//
+	// The control is the same script without `set -m`: every column refuses
+	// there, terminal or not, which is what says this is the monitor's gate
+	// and not `fg`'s own.
+	//
+	// Read rather than asked, and no is the answer it reads as: that is
+	// Runner.JobControl, which is what this gate was before the axis and is
+	// the stricter of the two, so a preset that has not chosen refuses a
+	// resume rather than complaining about an axis in the middle of a
+	// script's job handling (#2720).
+	MonitorAloneResumesAJob Answer
+
 	// StoppedJobsHoldTheExit keeps an interactive shell alive when leaving
 	// would abandon a job that is stopped: the shell says so and stays, and
 	// the attempt has to be made a second time.

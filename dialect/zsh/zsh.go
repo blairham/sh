@@ -1327,6 +1327,11 @@ func Semantics() interp.Semantics {
 	s.WholeSubscriptOnAScalarMeasuresIt = interp.Yes
 	s.FcEmptyHistoryIsAnError = interp.Yes
 	s.JobControlAbsenceIsReportedFirst = interp.Yes
+	// And the monitor alone is what `fg` and `bg` need. Reachable only with
+	// a terminal here, since `set -m` without one is fatal in this shell —
+	// measured 2026-09-15 on a pseudo-terminal, where the job line is
+	// printed and the status is 0 (#2720).
+	s.MonitorAloneResumesAJob = interp.Yes
 	// A stopped job holds the exit back: the shell says so and stays,
 	// and the next attempt leaves. Measured through a pseudo-terminal for
 	// `exit` and for ^D alike.

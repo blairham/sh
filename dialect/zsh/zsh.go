@@ -1748,6 +1748,9 @@ func Semantics() interp.Semantics {
 	// `%15': invalid directive`.
 	s.PrintfGroupingFlag = interp.Yes
 	s.PrintfGroupingFlagAfterTheWidth = interp.No
+	// A `*` beside a width's own digits is refused here too: `printf '%5*d' 4 42`
+	// is a conversion character this shell does not have (#2824).
+	s.PrintfStarBesideTheFieldDigits = interp.No
 	s.PrintfReportsBadNumber = interp.No
 	s.PrintfNumberOperand = interp.PrintfNumberArithmetic
 	// None of C99's three: `printf '%F' 1.5` is `%F: invalid directive` at
@@ -1756,6 +1759,9 @@ func Semantics() interp.Semantics {
 	// unanswered PrintfHexFloatDefaultIsTwelveDigits: there is no `%a` here
 	// to have a default precision.
 	s.PrintfRefusedOperandKeepsItsLeadingNumber = interp.No
+	// One complaint per operand whichever conversion asked: `printf '%f'
+	// 42abc` writes one arithmetic line here, as `printf '%d' 42abc` does.
+	s.PrintfFloatOperandIsEvaluatedTwice = interp.No
 	s.PrintfBackslashC = interp.PrintfBackslashCStops
 	s.PrintfUnfinishedConversionIsAPercent = interp.No
 	// The same two digits bash reads, and an empty digit run is a zero

@@ -1246,6 +1246,9 @@ func Semantics() interp.Semantics {
 	// other two that have the flag at all.
 	s.PrintfGroupingFlag = interp.Yes
 	s.PrintfGroupingFlagAfterTheWidth = interp.Yes
+	// And a `*` may stand beside a width's own digits, where it wins:
+	// `printf '[%5*d]' 4 42` is `[  42]` here (#2824).
+	s.PrintfStarBesideTheFieldDigits = interp.Yes
 	s.PrintfReportsBadNumber = interp.No
 	s.PrintfNumberOperand = interp.PrintfNumberArithmetic
 	// C99's three, with a default precision of its own: `printf '%a' 1.5`
@@ -1255,6 +1258,10 @@ func Semantics() interp.Semantics {
 	s.PrintfC99FloatConversions = interp.Yes
 	s.PrintfHexFloatDefaultIsTwelveDigits = interp.Yes
 	s.PrintfRefusedOperandKeepsItsLeadingNumber = interp.Yes
+	// A floating conversion evaluates its operand twice and the complaint
+	// escapes both times: `printf '%f' 42abc` writes the arithmetic line
+	// twice where `printf '%d' 42abc` writes it once (#2823).
+	s.PrintfFloatOperandIsEvaluatedTwice = interp.Yes
 	s.PrintfBackslashC = interp.PrintfBackslashCControl
 	// `printf 'a%5'` is `a%` here and reports success: the unfinished
 	// conversion becomes one literal character and the prefix is dropped.

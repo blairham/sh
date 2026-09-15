@@ -30681,6 +30681,57 @@
         "TimedOut": false
       }
     },
+    "axis/printf-float-operand-is-evaluated-twice": {
+      "ash": {
+        "Stdout": "[0]|1~[0.000000]|1~[0.000000e+00]|1~[0]|1~[0.000000]|1~[0]|1~[0.000000]|1",
+        "Stderr": "\u003cshell\u003e: invalid number '42abc'~\u003cshell\u003e: invalid number '42abc'~\u003cshell\u003e: invalid number '42abc'~\u003cshell\u003e: invalid number '42abc'~\u003cshell\u003e: invalid number '1/0'~\u003cshell\u003e: invalid number '1/0'~\u003cshell\u003e: invalid number '0b11'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[42]|1~[42.000000]|1~[4.200000e+01]|1~[42]|1~[1.000000]|1~[1]|1~[0.000000]|1",
+        "Stderr": "\u003cshell\u003e: line 1: printf: 42abc: invalid number~\u003cshell\u003e: line 1: printf: 42abc: invalid number~\u003cshell\u003e: line 1: printf: 42abc: invalid number~\u003cshell\u003e: line 1: printf: 42abc: invalid number~\u003cshell\u003e: line 1: printf: 1/0: invalid number~\u003cshell\u003e: line 1: printf: 1/0: invalid number~\u003cshell\u003e: line 1: printf: 0b11: invalid number",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[42]|1~[42.000000]|1~[4.200000e+01]|1~[42]|1~[1.000000]|1~[1]|1~[0.000000]|1",
+        "Stderr": "\u003cshell\u003e: line 1: printf: 42abc: invalid number~\u003cshell\u003e: line 1: printf: 42abc: invalid number~\u003cshell\u003e: line 1: printf: 42abc: invalid number~\u003cshell\u003e: line 1: printf: 42abc: invalid number~\u003cshell\u003e: line 1: printf: 1/0: invalid number~\u003cshell\u003e: line 1: printf: 1/0: invalid number~\u003cshell\u003e: line 1: printf: 0b11: invalid number",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[0]|1~[0.000000]|1~[0.000000e+00]|1~[0]|1~[0.000000]|1~[0]|1~[0.000000]|1",
+        "Stderr": "\u003cshell\u003e: line 0: printf: 42abc: invalid number~\u003cshell\u003e: line 0: printf: 42abc: invalid number~\u003cshell\u003e: line 0: printf: 42abc: invalid number~\u003cshell\u003e: line 0: printf: 42abc: invalid number~\u003cshell\u003e: line 0: printf: 1/0: invalid number~\u003cshell\u003e: line 0: printf: 1/0: invalid number~\u003cshell\u003e: line 0: printf: 0b11: invalid number",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[42]|1~[42.000000]|1~[4.200000e+01]|1~[42]|1~[1.000000]|1~[1]|1~[0.000000]|1",
+        "Stderr": "\u003cshell\u003e: 1: printf: 42abc: not completely converted~\u003cshell\u003e: 1: printf: 42abc: not completely converted~\u003cshell\u003e: 1: printf: 42abc: not completely converted~\u003cshell\u003e: 1: printf: 42abc: not completely converted~\u003cshell\u003e: 1: printf: 1/0: not completely converted~\u003cshell\u003e: 1: printf: 1/0: not completely converted~\u003cshell\u003e: 1: printf: 0b11: not completely converted",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[42]|1~[42.000000]|1~[4.200000e+01]|1~[42]|1~[0.000000]|0~[0]|0~[0.000000]|1",
+        "Stderr": "\u003cshell\u003e: printf: 42abc: arithmetic syntax error~\u003cshell\u003e: printf: warning: invalid argument of type d~\u003cshell\u003e: printf: 42abc: arithmetic syntax error~\u003cshell\u003e: printf: 42abc: arithmetic syntax error~\u003cshell\u003e: printf: warning: invalid argument of type f~\u003cshell\u003e: printf: 42abc: arithmetic syntax error~\u003cshell\u003e: printf: 42abc: arithmetic syntax error~\u003cshell\u003e: printf: warning: invalid argument of type e~\u003cshell\u003e: printf: 42abc: arithmetic syntax error~\u003cshell\u003e: printf: 42abc: arithmetic syntax error~\u003cshell\u003e: printf: warning: invalid argument of type g~\u003cshell\u003e: printf: 1/0: divide by zero~\u003cshell\u003e: printf: 1/0: divide by zero~\u003cshell\u003e: printf: 1/0: divide by zero~\u003cshell\u003e: printf: 0b11: arithmetic syntax error~\u003cshell\u003e: printf: 0b11: arithmetic syntax error~\u003cshell\u003e: printf: warning: invalid argument of type f",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[0]|1~[0.000000]|1~[0.000000e+00]|1~[0]|1~[0.000000]|1~[0]|1~[3.000000]|0",
+        "Stderr": "\u003cshell\u003e:1: bad math expression: operator expected at `abc'~\u003cshell\u003e:1: bad math expression: operator expected at `abc'~\u003cshell\u003e:1: bad math expression: operator expected at `abc'~\u003cshell\u003e:1: bad math expression: operator expected at `abc'~\u003cshell\u003e:1: division by zero~\u003cshell\u003e:1: division by zero",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "axis/printf-grouping-flag": {
       "ash": {
         "Stdout": "[st=1~ast=1~[[7'x]",
@@ -30931,6 +30982,57 @@
       "zsh": {
         "Stdout": "[0][0]~[0.000000][0]~st=1",
         "Stderr": "\u003cshell\u003e:1: bad math expression: operator expected at `abc'~\u003cshell\u003e:1: bad math expression: operator expected at `abc'~\u003cshell\u003e:1: bad math expression: operator expected at `abc'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/printf-star-beside-the-field-digits": {
+      "ash": {
+        "Stdout": "[st=1~[st=1~[st=1",
+        "Stderr": "\u003cshell\u003e: %5*d][%*5d][%8*9d]\\n: invalid format~\u003cshell\u003e: %-5*d][%05*d][%*0d]\\n: invalid format~\u003cshell\u003e: %*8*d]\\n: invalid format",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[st=1~[st=1~[st=1",
+        "Stderr": "\u003cshell\u003e: line 1: printf: `*': invalid format character~\u003cshell\u003e: line 1: printf: `*': invalid format character~\u003cshell\u003e: line 1: printf: `8': invalid format character",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[st=1~[st=1~[st=1",
+        "Stderr": "\u003cshell\u003e: line 1: printf: `*': invalid format character~\u003cshell\u003e: line 1: printf: `*': invalid format character~\u003cshell\u003e: line 1: printf: `8': invalid format character",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[st=1~[st=1~[st=1",
+        "Stderr": "\u003cshell\u003e: line 0: printf: `*': invalid format character~\u003cshell\u003e: line 0: printf: `*': invalid format character~\u003cshell\u003e: line 0: printf: `8': invalid format character",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[   1][st=2~[1   ][000000000000000000000000000000000000000001][st=2~[st=2",
+        "Stderr": "\u003cshell\u003e: 1: printf: %*5: invalid directive~\u003cshell\u003e: 1: printf: %*0: invalid directive~\u003cshell\u003e: 1: printf: %*8: invalid directive",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[  42][  42][  42]~st=0~[42  ][0042][  42]~st=0~[    42]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[st=1~[st=1~[st=1",
+        "Stderr": "\u003cshell\u003e:printf:1: %5*: invalid directive~\u003cshell\u003e:printf:1: %-5*: invalid directive~\u003cshell\u003e:printf:1: %*8: invalid directive",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

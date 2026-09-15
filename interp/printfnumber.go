@@ -187,7 +187,13 @@ func (r *Runner) printfPartialNumber(arg, text string, float bool) (float64, int
 		if err == nil {
 			return n.asFloat(), 0, false
 		}
-		code := r.printfArithFailure(err, reading)
+		code := r.printfArithFailure(err, reading, float)
+		if r.unspecified {
+			// The count is an axis of its own and it is asked before the
+			// sentence goes out, so a dialect that has not answered it stops
+			// here rather than writing a line it cannot know the number of.
+			return 0, r.status, true
+		}
 		if !r.ask(r.sem().PrintfRefusedOperandKeepsItsLeadingNumber,
 			"`printf` keeping the number at the front of an operand its arithmetic would not evaluate") {
 			if r.unspecified {
@@ -339,12 +345,26 @@ func (r *Runner) printfOutOfRange(arg string) int {
 // reading says the failure was the operand's own reading rather than the
 // expression's, which is what one of the two columns parts on: see
 // Diagnostics.PrintfArithArgumentType.
-func (r *Runner) printfArithFailure(err error, reading bool) int {
+//
+// float says the conversion that asked for the number was a floating one,
+// which is what decides how many times the sentence goes out: see
+// Semantics.PrintfFloatOperandIsEvaluatedTwice.
+func (r *Runner) printfArithFailure(err error, reading, float bool) int {
 	msg := err.Error()
 	if w := r.diag().PrintfArithOperandFailure; w != "" {
 		msg = Wording(w, "%[1]s", msg)
 	}
-	r.diagf("%s\n", msg)
+	lines := 1
+	if float && r.ask(r.sem().PrintfFloatOperandIsEvaluatedTwice,
+		"a floating `printf` conversion evaluating an operand its arithmetic would not take") {
+		lines = 2
+	}
+	if r.unspecified {
+		return r.status
+	}
+	for range lines {
+		r.diagf("%s\n", msg)
+	}
 	if w := r.diag().PrintfArithArgumentType; w != "" {
 		if !reading {
 			// The complaint still goes out; the second line and the status

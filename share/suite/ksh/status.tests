@@ -1,0 +1,52 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Pipeline status in ksh93 — #2323.
+#
+# ksh93 shares with zsh the answer that decides most scripts: the last stage
+# of a pipeline runs in the current shell, so `printf x | read v` leaves `v`
+# set. What it does not share is the array. bash has `PIPESTATUS`, zsh has
+# `pipestatus`, and ksh93 93u+ has the name `.sh.pipestatus` in its own
+# namespace — declared, addressable, and empty after every pipeline this file
+# runs. The other three shells cannot even parse the subscript: each writes a
+# bad-substitution diagnostic where ksh93 reports a zero-length array and
+# answers 0.
+#
+# That is worth committing rather than skipping. "The name exists and is
+# never filled" is a measurement, and a version of ksh93 that starts filling
+# it would change this file — which is the point of having it.
+
+( exit 3 ) | ( exit 4 ) | ( exit 5 )
+eval 'printf "status -> %s, n=%s first=[%s] second=[%s]\n" "$?" "${#.sh.pipestatus[@]}" "${.sh.pipestatus[0]}" "${.sh.pipestatus[1]}"' 2>/dev/null
+printf 'the array read -> %s\n' "$?"
+
+# And with the option that makes the other stages matter to the status.
+( set -o pipefail
+  ( exit 3 ) | ( exit 5 )
+  eval 'printf "under pipefail -> %s, first=[%s]\n" "$?" "${.sh.pipestatus[0]}"' 2>/dev/null
+  printf 'under pipefail, the array read -> %s\n' "$?" )
+
+printf -- '--- where the stages run ---\n'
+
+# The last stage is the current shell, so what it reads stays read.
+v=before
+printf 'x\n' | read v
+printf 'read in the last stage: v=[%s]\n' "$v"
+
+w=before
+printf 'x\n' | { read w; printf 'inside the last stage: w=[%s]\n' "$w"; }
+printf 'after the pipeline: w=[%s]\n' "$w"
+
+# And a directory change in the last stage is the shell's.
+d0=$PWD
+printf 'x\n' | { cd / ; } 2>/dev/null
+case $PWD in
+  /) printf 'cd in the last stage: the shell moved\n' ;;
+  *) printf 'cd in the last stage: the shell stayed\n' ;;
+esac
+cd "$d0"
+
+# A stage that is not the last is a subshell, here as everywhere.
+u=before
+{ u=inside; printf 'x\n'; } | cat > /dev/null
+printf 'a first stage cannot assign: u=[%s]\n' "$u"

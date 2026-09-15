@@ -1,0 +1,58 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# What `.` does that POSIX leaves out — #2322. Two things, and dash has
+# neither, which is what puts them here rather than in core/.
+#
+# The first is operands. POSIX XCU gives `.` a filename and nothing else;
+# bash, zsh and ksh93 all take words after it and give the dot script those
+# as its positional parameters, putting the caller's back when it returns.
+# dash ignores them and the script reads the caller's — silently, which is
+# the worst of the three possible answers and is measured in dash/.
+#
+# The second is the `source` spelling. bash and zsh have it as a builtin;
+# ksh93 has it as one of its preset aliases, for `command .`. dash has
+# neither, so `source` there is a command name that is not found.
+#
+# One thing is deliberately not asked: a dot script given an *unquoted*
+# parameter as an operand. zsh does not split it and the other two do, and
+# that is word splitting rather than anything about `.` — core/word-splitting
+# has the question.
+
+printf 'printf "n=%%s [%%s] [%%s]\\n" "$#" "$1" "$2"\n' > args.sh
+set -- outer1 outer2
+
+# Operands become the dot script's parameters.
+. ./args.sh inner1 inner2
+
+# And the caller's are back afterwards.
+printf 'the caller still has [%s] [%s]\n' "$1" "$2"
+
+# One operand, and one that has a blank in it.
+. ./args.sh only
+. ./args.sh 'two words'
+
+# No operands at all is the POSIX form, where the dot script reads the
+# caller's parameters.
+. ./args.sh
+
+# Inside a function, the operands replace the *function's* parameters for the
+# length of the dot script and no longer.
+h() {
+  . ./args.sh from-fn
+  printf 'the function still has n=%s [%s]\n' "$#" "$1"
+}
+h fnarg1 fnarg2
+
+# `source` is the other spelling of the same builtin.
+printf 'printf "sourced\\n"\n' > s.sh
+source ./s.sh; printf 'source -> %s\n' "$?"
+
+# It takes operands the same way.
+source ./args.sh via-source
+
+# And it is looked up on PATH the same way.
+mkdir -p libdir
+printf 'printf "source found it on PATH\\n"\n' > libdir/onpath.sh
+PATH="$PWD/libdir:/usr/bin:/bin"
+source onpath.sh; printf 'source on PATH -> %s\n' "$?"

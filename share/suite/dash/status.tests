@@ -1,0 +1,64 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Exit status in dash — #2323, and the two numbers dash chooses differently
+# from the rest of the panel.
+#
+# A redirection that cannot be made is 2 here and 1 in bash, zsh and ksh93.
+# 2 is dash's number for "the shell could not do what the line said", the
+# same one it uses for a syntax error, and it is the reason a script written
+# against bash and tested with `|| [ $? = 1 ]` reads a redirection failure as
+# something else here. core/status.tests asks only that the command failed,
+# for exactly that reason.
+#
+# `exit -1` is the other one: 2 here, where the other three take it modulo
+# 256 and answer 255. dash refuses the negative operand rather than wrapping
+# it — the same 2 again, and consistent with `exit abc`, which every shell
+# but ksh93 and zsh also refuses.
+#
+# And dash has no `pipefail` and no array of the other stages' statuses under
+# any spelling, which is the whole of what it can say about a pipeline: the
+# last stage's number, and nothing else.
+
+# --- the redirection number ---
+
+( printf 'x\n' > /nosuchdir_zz/f ) 2>/dev/null; printf 'redirect a builtin -> %s\n' "$?"
+( cat < /nosuchfile_zz ) 2>/dev/null; printf 'redirect a program -> %s\n' "$?"
+( { true; } > /nosuchdir_zz/f ) 2>/dev/null; printf 'redirect a group -> %s\n' "$?"
+( exec 3< /nosuchfile_zz ) 2>/dev/null; printf 'a bad exec redirect -> %s\n' "$?"
+
+# The control: a redirection that *can* be made costs nothing.
+( true > /dev/null ) 2>/dev/null; printf 'a redirect that works -> %s\n' "$?"
+
+# --- the operand `exit` will not take ---
+
+( exit -1 ) 2>/dev/null; printf 'exit -1 -> %s\n' "$?"
+( exit abc ) 2>/dev/null; printf 'exit abc -> %s\n' "$?"
+
+# The controls, which every shell here agrees on.
+( exit 255 ); printf 'exit 255 -> %s\n' "$?"
+( exit 300 ); printf 'exit 300 -> %s\n' "$?"
+
+# --- what dash cannot say about a pipeline ---
+
+( eval 'set -o pipefail' ) 2>/dev/null; printf 'set -o pipefail -> %s\n' "$?"
+( ( exit 3 ) | ( exit 5 ); eval 'printf "[%s]\n" "${PIPESTATUS[0]}"' ) 2>/dev/null; printf 'PIPESTATUS -> %s\n' "$?"
+( ( exit 3 ) | ( exit 5 ); eval 'printf "[%s]\n" "${pipestatus[1]}"' ) 2>/dev/null; printf 'pipestatus -> %s\n' "$?"
+
+# What is left is the last stage's number, which is the POSIX answer.
+( exit 3 ) | ( exit 5 ); printf 'the pipeline -> %s\n' "$?"
+
+printf -- '--- where the stages run ---\n'
+
+# Every stage is a subshell, so nothing a stage does survives it.
+v=before
+printf 'x\n' | read v
+printf 'read in the last stage: v=[%s]\n' "$v"
+
+d0=$PWD
+printf 'x\n' | { cd / ; } 2>/dev/null
+case $PWD in
+  /) printf 'cd in the last stage: the shell moved\n' ;;
+  *) printf 'cd in the last stage: the shell stayed\n' ;;
+esac
+cd "$d0"

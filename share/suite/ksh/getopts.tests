@@ -1,0 +1,52 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# getopts in ksh93 — #2321.
+#
+# POSIX gives the option string one piece of punctuation: a `:` after a
+# letter says that letter takes an argument, and a `:` at the front says be
+# quiet about errors. ksh93's string has a second type. A letter followed by
+# `#` takes a *numeric* argument, and the digits are read as the argument
+# whether they are attached to the letter or in the word after it.
+#
+# In the other three shells `#` is simply another option letter, so the same
+# string means something different in each of them: `-n 5` there leaves the
+# 5 as an operand, and `-n5` reports 5 as an unknown option.
+#
+# This is the one place the panel's `getopts` differ in what they *parse*
+# rather than in what they publish afterwards, which is why the rest of this
+# area is prose in core/getopts.tests and three per-dialect files of state.
+
+num() {
+  OPTIND=1
+  while getopts 'n#' o "$@" > /dev/null 2>&1; do
+    printf 'saw [%s] arg=[%s]\n' "$o" "${OPTARG-unset}"
+  done
+  printf 'end ind=%s\n' "$OPTIND"
+}
+
+# The argument in the following word, and attached to the letter.
+num -n 5
+num -n5
+
+# A negative number, and a number in a word with an operand after it.
+num -n -3 rest
+num -n7 rest
+
+# Nothing numeric there at all.
+num -n
+num rest
+num
+
+# The string may mix the two types, and the `:` type behaves as it does
+# everywhere.
+both() {
+  OPTIND=1
+  while getopts 'n#s:' o "$@" > /dev/null 2>&1; do
+    printf 'both [%s] arg=[%s]\n' "$o" "${OPTARG-unset}"
+  done
+  printf 'both end ind=%s\n' "$OPTIND"
+}
+both -n 5 -s hello rest
+both -s hello -n 5
+both -n5 -shello

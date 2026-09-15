@@ -1,0 +1,84 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# getopts in zsh — #2321. Three answers zsh has alone, and all three are
+# about the state the builtin publishes rather than about which options it
+# accepts.
+#
+# Every probe is a function called once. Two `getopts` calls at the top level
+# with operands of their own is a shape zsh answers a call *behind* itself
+# in — the second call reports the first call's letter — and a case built on
+# that would pin one shell's confusion rather than any shell's answer.
+
+# --- OPTIND inside the loop ---
+
+# Every shell agrees on OPTIND once the loop has ended, which is the value
+# `shift $((OPTIND - 1))` reads. Inside the loop zsh still names the word an
+# option occupied, and the *next* call is what advances it — except where the
+# option took an argument, after which zsh has caught up.
+trace() {
+  OPTIND=1
+  while getopts 'ab:c' o "$@" > /dev/null 2>&1; do
+    printf 'saw %s ind=%s\n' "$o" "$OPTIND"
+  done
+  printf 'end ind=%s\n' "$OPTIND"
+}
+trace -a -c -b v rest
+trace -abc rest
+trace rest
+
+# The same value seen from a function that makes one call. OPTIND is not
+# local to it, so the caller reads what the call left.
+once() { OPTIND=1; getopts 'a' o -a > /dev/null 2>&1; printf 'in the function ind=%s\n' "$OPTIND"; }
+once
+printf 'in the caller ind=%s\n' "$OPTIND"
+
+# --- an option written with a plus ---
+
+# `+a` is an option here, and the sign is part of what lands in the variable
+# so a script can tell the two apart. Everywhere else `+a` is an operand and
+# the scan stops in front of it.
+plus() {
+  OPTIND=1
+  getopts 'a' o "$@" > /dev/null 2>&1
+  printf 'plus -> %s [%s] ind=%s\n' "$?" "${o-unset}" "$OPTIND"
+}
+plus +a
+plus -a
+plus +b
+
+# In the silent form too.
+plussilent() {
+  OPTIND=1
+  getopts ':a' o "$@" > /dev/null 2>&1
+  printf 'plus silent -> %s [%s] arg=[%s]\n' "$?" "${o-unset}" "${OPTARG-unset}"
+}
+plussilent +a
+
+# --- the name variable when there was nothing to parse ---
+
+# zsh returns 1 without writing to it, so whatever the script had put there
+# survives. The other three overwrite it with `?`, which a script that seeds
+# the variable and reads it after the loop will see instead.
+untouched() {
+  OPTIND=1
+  o=PRESET
+  getopts 'a' o "$@" > /dev/null 2>&1
+  printf 'nothing to parse -> %s [%s]\n' "$?" "$o"
+}
+untouched rest
+untouched
+
+# And with something to parse, it is written like anywhere else.
+untouched -a
+
+# --- OPTIND=0 ---
+
+# A starting point zsh counts on from rather than treating as a reset to the
+# first word, so one option ends at 1 where every other shell ends at 2.
+fromzero() {
+  OPTIND=0
+  getopts 'a' o -a > /dev/null 2>&1
+  printf 'from zero -> %s [%s] ind=%s\n' "$?" "${o-unset}" "$OPTIND"
+}
+fromzero

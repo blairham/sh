@@ -1,0 +1,76 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# eval and `.` in zsh — #2322. Two answers zsh has alone, and both are about
+# what the shell does when the thing it was asked to run is not there or
+# will not parse.
+#
+# The first is the status. A dot file that cannot be opened is 127 here —
+# the number a shell uses for a command it could not find — where bash and
+# ksh93 answer 1 and dash answers 2. Reading `.` as a command lookup rather
+# than as a file open is a defensible way to number it, and it is zsh's
+# alone: a script testing `. lib.sh || …` on the number gets a different one
+# in every shell on the panel.
+#
+# The second is what a dot file that will not *parse* costs. bash and dash
+# answer 2 there and ksh93 answers 3 — all three the same number they give an
+# `eval` that will not parse — while zsh splits the two apart: 1 for the
+# `eval`, and 126 for the file, which is the number a shell uses for
+# something it found and could not run.
+#
+# The text used below is `for` on a line of its own, and the choice matters.
+# `if then fi` is the obvious thing to reach for and it is useless here: zsh
+# accepts an empty condition and an empty body, so it parses, runs, and
+# answers 0 — measuring zsh's grammar rather than its error path. `while do
+# done` is worse still; zsh accepts that too and loops forever.
+#
+# And `$0` inside a dot script is the sourced file's name, which no other
+# shell here does: everywhere else `$0` is still the script that ran the `.`.
+
+# --- $0 ---
+
+printf 'printf "zero inside a dot script: [%%s]\\n" "$0"\n' > z.sh
+. ./z.sh
+
+# Not inside an eval, which is the control: `eval` runs text and does not
+# open a file, so there is no name for `$0` to become.
+eval 'printf "zero inside an eval is unchanged\n"'
+
+# --- the statuses of a `.` that could not run ---
+
+# Nothing of that name.
+( . ./nosuchfile_zz ) 2>/dev/null; printf 'missing file -> %s\n' "$?"
+
+# A name with no slash that PATH does not have either.
+( . nosuchfile_zz ) 2>/dev/null; printf 'missing name on PATH -> %s\n' "$?"
+
+# A file that is there and cannot be read.
+printf 'printf "x\\n"\n' > nr.sh; chmod 000 nr.sh
+( . ./nr.sh ) 2>/dev/null; printf 'unreadable -> %s\n' "$?"
+chmod 644 nr.sh
+
+# --- a file and an eval that will not parse ---
+
+printf 'for\n' > bad.sh
+( . ./bad.sh ) 2>/dev/null; printf 'a dot file that will not parse -> %s\n' "$?"
+( eval 'for' ) 2>/dev/null; printf 'an eval that will not parse -> %s\n' "$?"
+
+# A second text, to say the numbers belong to the parse rather than to the
+# words.
+printf 'case\n' > bad2.sh
+( . ./bad2.sh ) 2>/dev/null; printf 'another dot file -> %s\n' "$?"
+( eval 'case' ) 2>/dev/null; printf 'another eval -> %s\n' "$?"
+
+# Nothing of the file ran: its first line is never reached either.
+printf 'printf "first line\\n"\nfor\nprintf "third line\\n"\n' > bad3.sh
+( . ./bad3.sh ) 2>/dev/null; printf 'half a dot file -> %s\n' "$?"
+
+# The text that is *not* a parse error, and is the reason `if then fi` is a
+# bad probe here: an empty condition and an empty body are a command zsh
+# runs, and the answer is an ordinary success.
+( eval 'if then fi' ) 2>/dev/null; printf 'an empty if -> %s\n' "$?"
+
+# The shell carries on after any of them.
+( . ./bad.sh; printf 'carried on after the dot\n' ) 2>/dev/null
+( eval 'for'; printf 'carried on after the eval\n' ) 2>/dev/null
+printf 'reached the end\n'

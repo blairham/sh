@@ -82,3 +82,96 @@ printf 'errexit while=%s\n' "$?"
 ( trap 'printf "exit trap saw %s\n" "$?"' EXIT; exit 5 ) ; printf 'trap subshell=%s\n' "$?"
 ( trap 'printf "exit trap on fallthrough\n"' EXIT; true )
 printf 'trap on fallthrough=%s\n' "$?"
+
+printf -- '--- pipelines ---\n'
+
+# The status of a pipeline is the last stage's, whatever the others did.
+( exit 3 ) | ( exit 4 ) | ( exit 5 ); printf 'three stages -> %s\n' "$?"
+( exit 5 ) | ( exit 4 ) | ( exit 0 ); printf 'last one succeeds -> %s\n' "$?"
+( exit 0 ) | ( exit 0 ) | ( exit 7 ); printf 'only the last fails -> %s\n' "$?"
+
+# `!` inverts the pipeline's status and not the last stage's, and it flattens
+# every nonzero to 1.
+! ( exit 5 ) | ( exit 7 ); printf 'negated, nonzero last -> %s\n' "$?"
+! ( exit 5 ) | true; printf 'negated, zero last -> %s\n' "$?"
+
+# A stage that is a builtin, and one that is a compound command.
+false | true; printf 'builtin last -> %s\n' "$?"
+true | ( exit 9 ); printf 'subshell last -> %s\n' "$?"
+true | if false; then :; fi; printf 'if last -> %s\n' "$?"
+
+# `true | { exit 9; }` is deliberately not written. In zsh and ksh93 the last
+# stage of a pipeline runs in the current shell, so that line ends the script
+# there and runs a subshell's `exit` everywhere else — a case that measures
+# which shell it is in rather than what a pipeline's status is.
+
+# Which stage runs in the current shell is not common ground and is asked in
+# the four dialect files: bash and dash run every stage in a subshell, zsh
+# and ksh93 run the last one here. What *is* common is the other end — no
+# shell on the panel lets a stage that is not the last change the current
+# shell — and that is the half a portable script can lean on.
+u=before
+{ u=inside; printf 'x\n'; } | cat > /dev/null
+printf 'a first stage cannot assign here: u=[%s]\n' "$u"
+t=before
+{ t=inside; printf 'x\n'; } | { cat > /dev/null; }
+printf 'nor from inside a group: t=[%s]\n' "$t"
+
+# A pipeline in the background, waited for, reports the same status.
+( exit 6 ) | ( exit 8 ) &
+wait $!
+printf 'backgrounded pipeline -> %s\n' "$?"
+
+printf -- '--- the numbers a status can be ---\n'
+
+# The status is one byte: the value is taken modulo 256 on the way out.
+( exit 300 ); printf 'exit 300 -> %s\n' "$?"
+( exit 256 ); printf 'exit 256 -> %s\n' "$?"
+( exit 255 ); printf 'exit 255 -> %s\n' "$?"
+( exit 0 ); printf 'exit 0 -> %s\n' "$?"
+
+# `exit` with no operand carries whatever was current.
+( false; exit ); printf 'bare exit after false -> %s\n' "$?"
+( true; exit ); printf 'bare exit after true -> %s\n' "$?"
+
+# `return` is held out. bash and ksh93 wrap it the way `exit` wraps; zsh and
+# dash hand back 300 as it stands, and zsh hands back -1 as it stands too.
+# Two against two, so it belongs to nobody.
+
+printf -- '--- failures that are not the command''s ---\n'
+
+# A redirection that cannot be made is a failure of the command, whether the
+# command is a program, a builtin or a compound. The *number* is not common
+# ground — bash, zsh and ksh93 answer 1 and dash answers 2 — so what is asked
+# here is only that it failed, and dash/status.tests carries the number.
+failed() { if [ "$1" -eq 0 ]; then printf 'zero\n'; else printf 'nonzero\n'; fi; }
+( printf 'x\n' > /nosuchdir_zz/f ) 2>/dev/null; failed "$?"
+( cat < /nosuchfile_zz ) 2>/dev/null; failed "$?"
+( { true; } > /nosuchdir_zz/f ) 2>/dev/null; failed "$?"
+( exec 3< /nosuchfile_zz ) 2>/dev/null; failed "$?"
+
+# An assignment on its own carries the status of the last command
+# substitution in its value, and a plain one is always a success.
+v=$(exit 7); printf 'assignment from a substitution -> %s\n' "$?"
+v=$(nosuchcmd_zz 2>/dev/null); printf 'assignment from a missing command -> %s\n' "$?"
+v=$(exit 3)$(exit 4); printf 'two substitutions, the last one wins -> %s\n' "$?"
+v=plain; printf 'a plain assignment -> %s\n' "$?"
+
+# Two assignments in one command: the status is still the last substitution's.
+a=$(exit 1) b=$(exit 2); printf 'two assignments -> %s\n' "$?"
+
+printf -- '--- the rest of the compounds ---\n'
+
+# `until` is `while` with the condition inverted, and an untaken loop is a
+# success like an untaken `if`.
+until true; do :; done; printf 'until never ran -> %s\n' "$?"
+n=0
+until [ "$n" -ge 2 ]; do n=$((n + 1)); done; printf 'until ran, n=%s -> %s\n' "$n" "$?"
+
+# `time` reports the status of what it timed.
+( eval 'time true' ) > /dev/null 2>&1; printf 'time true -> %s\n' "$?"
+( eval 'time false' ) > /dev/null 2>&1; printf 'time false -> %s\n' "$?"
+
+# `command` and a variable assignment prefix pass the status through.
+command false; printf 'command false -> %s\n' "$?"
+VAR=1 false; printf 'assignment prefix -> %s\n' "$?"

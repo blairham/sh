@@ -1,0 +1,42 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# `pipefail` — #2323. The option that changes what a pipeline's status means,
+# and the one thing about pipeline status that bash, zsh and ksh93 all have
+# and dash does not.
+#
+# Without it a pipeline is worth exactly what its last stage was worth, which
+# is why `cmd | tee log` reports success when `cmd` died — the single most
+# reported surprise about shell error handling, and the reason `set -eo
+# pipefail` is the first line of so many scripts.
+#
+# Every case sets the option inside a subshell, so the option is not carried
+# into the case after it and the file cannot depend on its own order. The
+# `eval` is what keeps the file parseable in dash, where `set -o pipefail` is
+# an option the shell does not have.
+
+# The shape the option exists for: a failing first stage behind a successful
+# last one.
+( eval 'set -o pipefail'; ( exit 3 ) | true; printf 'a failing first stage -> %s\n' "$?" ) 2>/dev/null
+
+# All successful is still success.
+( eval 'set -o pipefail'; true | true | true; printf 'all successful -> %s\n' "$?" ) 2>/dev/null
+
+# With more than one failing, the rightmost failure is what is reported —
+# not the first, and not the last stage.
+( eval 'set -o pipefail'; ( exit 3 ) | ( exit 5 ); printf 'two failures -> %s\n' "$?" ) 2>/dev/null
+( eval 'set -o pipefail'; ( exit 3 ) | ( exit 5 ) | true; printf 'two failures then success -> %s\n' "$?" ) 2>/dev/null
+( eval 'set -o pipefail'; ( exit 3 ) | true | ( exit 5 ); printf 'failures at both ends -> %s\n' "$?" ) 2>/dev/null
+
+# A single command is a pipeline of one and is unaffected.
+( eval 'set -o pipefail'; ( exit 4 ); printf 'one stage -> %s\n' "$?" ) 2>/dev/null
+
+# `!` still inverts, and it inverts the value the option produced.
+( eval 'set -o pipefail'; ! ( exit 3 ) | true; printf 'negated -> %s\n' "$?" ) 2>/dev/null
+
+# And with the option off, the same pipeline is its last stage again.
+( eval 'set +o pipefail'; ( exit 3 ) | true; printf 'with it off -> %s\n' "$?" ) 2>/dev/null
+
+# The option is readable by name, which is how a script decides whether it
+# can rely on any of the above.
+( eval 'set -o pipefail'; case $- in *?*) : ;; esac; printf 'set -o pipefail -> %s\n' "$?" ) 2>/dev/null

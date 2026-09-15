@@ -1,0 +1,58 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# eval and `.` in dash — #2322, and the area where dash's smallness is a
+# behavior rather than an absence.
+#
+# `. file args` is the one to watch. bash, zsh and ksh93 all give the dot
+# script the operands as its own positional parameters; dash ignores them,
+# and the dot script reads the *caller's* instead. No diagnostic, no status —
+# so a library written for the other three reads `$1` and gets something,
+# just not the something it was given. ext/evaldot.tests is the other side.
+#
+# `source` does not exist here, which is the absence half: bash and zsh have
+# the builtin and ksh93 has a preset alias for `command .`, so the spelling
+# works everywhere except the shell people reach for when they want POSIX.
+#
+# And a dot file that will not parse ends the shell. bash answers 2, ksh93 3
+# and zsh 126, and all three carry on; dash stops reading, which is why every
+# case below that can fail is in a subshell.
+
+printf 'printf "n=%%s [%%s] [%%s]\\n" "$#" "$1" "$2"\n' > args.sh
+set -- outer1 outer2
+
+# Operands, ignored. The dot script reports the caller's two parameters.
+. ./args.sh inner1 inner2
+
+# One operand, and no operands, which are the same thing here.
+. ./args.sh only
+. ./args.sh
+
+# Inside a function the same holds, and what the dot script sees is the
+# function's parameters rather than the operands.
+h() {
+  . ./args.sh from-fn
+  printf 'the function has n=%s [%s]\n' "$#" "$1"
+}
+h fnarg1 fnarg2
+
+# `source` is not a command.
+printf 'printf "sourced\\n"\n' > s.sh
+( source ./s.sh ) 2>/dev/null; printf 'source -> %s\n' "$?"
+( eval 'source ./s.sh' ) 2>/dev/null; printf 'source through eval -> %s\n' "$?"
+
+# A file that will not parse ends the shell, so the second command in the
+# subshell never runs.
+printf 'for\n' > bad.sh
+( . ./bad.sh; printf 'the subshell carried on\n' ) 2>/dev/null
+printf 'a dot file that will not parse -> %s\n' "$?"
+
+# So does an `eval` operand that will not parse.
+( eval 'for'; printf 'the subshell carried on\n' ) 2>/dev/null
+printf 'an eval that will not parse -> %s\n' "$?"
+
+# And so does a dot file that is not there.
+( . ./nosuchfile_zz; printf 'the subshell carried on\n' ) 2>/dev/null
+printf 'a dot file that is not there -> %s\n' "$?"
+
+printf 'reached the end\n'

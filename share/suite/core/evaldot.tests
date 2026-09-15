@@ -4,13 +4,36 @@
 # eval, `.` and source — #2322. The two ways a shell runs text that was not
 # in the script when it started, and both are special builtins.
 #
-# What the panel splits on is held out and named:
-#   `. ./nosuchfile`   bash answers 1, zsh 127, and ksh93 and dash end the
-#                      script — a special builtin's failure is fatal in a
-#                      non-interactive shell, and the three answers to "what
-#                      failed" are not the same answer.
-#   `$0` in a dot file zsh alone renames it to the sourced file. It is asked
-#                      in zsh/ instead, where being alone is the claim.
+# What the panel splits on is held out and named. There is a lot of it, and
+# every line of it is about *failure* rather than about what either builtin
+# does when it works:
+#
+#   `. ./nosuchfile`     bash 1, ksh93 1, dash 2, zsh 127 — and inside a
+#                        function bash and zsh carry on where ksh93 and dash
+#                        give the function up. Four shells, three statuses,
+#                        two answers about whether it is fatal.
+#   a dot file or an     four shells, four numbers: an `eval` that will not
+#   `eval` that will     parse is 2 in bash and dash, 3 in ksh93 and 1 in
+#   not parse            zsh — and a dot *file* that will not parse is 126
+#                        in zsh, which is the number for a file that could
+#                        not be run. zsh/ and ksh/ carry the two ends.
+#                        `if then fi` is not the text to ask it with: zsh
+#                        accepts an empty condition and an empty body and
+#                        answers 0, so that line measures zsh's grammar
+#                        rather than any shell's error path.
+#   `. file args`        bash, zsh and ksh93 give the dot script operands of
+#                        its own and put the caller's back afterwards; dash
+#                        ignores them entirely and the script sees the
+#                        caller's. ext/ and dash/.
+#   `. name` when PATH   bash falls back to the working directory; the other
+#   does not have it     three do not. bash/.
+#   `source`             bash, zsh and ksh93 have it — in ksh93 as a preset
+#                        alias for `command .` — and dash does not. ext/.
+#   `return 300`         bash and ksh93 answer 44, zsh and dash 300. Two
+#                        against two, so it is nobody's dialect answer.
+#   `. adirectory`       bash and ksh93 fail it, zsh and dash succeed. Two
+#                        against two again.
+#   `$0` in a dot file   zsh alone renames it to the sourced file. zsh/.
 
 eval 'printf "simple\n"'
 eval printf '"%s\\n"' unquoted
@@ -76,3 +99,78 @@ mkdir -p sub
 printf 'printf "found on path\\n"\n' > sub/s7.sh
 PATH="$PWD/sub:$PATH"
 . s7.sh
+
+printf -- '--- how eval reads its operands ---\n'
+
+# The operands are joined with a single space and the result is read as shell
+# input, so the quoting a second read sees is what the first read left.
+eval printf '"[%s]\n"' one two
+eval 'printf' '"%s-%s\n"' a b
+eval printf "'%s\n'" 'has space'
+
+# Nothing to run is a success, and so is text with nothing in it to run.
+eval; printf 'no operands -> %s\n' "$?"
+eval ' '; printf 'only blanks -> %s\n' "$?"
+eval '#comment'; printf 'only a comment -> %s\n' "$?"
+
+# Several commands in one operand, and the status is the last one's.
+eval 'true; false'; printf 'last of several -> %s\n' "$?"
+eval 'false; true'; printf 'the other order -> %s\n' "$?"
+
+# It runs in the current shell, so the caller's positional parameters are
+# what it reads and what it sets.
+set -- p1 p2
+eval 'printf "args [%s][%s]\n" "$1" "$2"'
+eval 'set -- q1 q2'
+printf 'after eval set -- [%s][%s]\n' "$1" "$2"
+
+# Nested, because the inner operand is text the outer read produced.
+eval 'eval "printf \"nested\n\""'
+
+# --- the control flow that reaches out of an eval ---
+
+# `return`, `break` and `continue` inside an eval act on the function or the
+# loop the eval is in, not on the eval.
+g() { eval 'return 4'; printf 'not reached\n'; }
+g; printf 'return through eval -> %s\n' "$?"
+
+for w in 1 2 3; do eval 'break'; printf 'not reached\n'; done
+printf 'break through eval -> %s\n' "$?"
+
+n=0
+for w in 1 2 3; do eval 'continue'; n=9; done
+printf 'continue through eval, n=%s\n' "$n"
+
+printf -- '--- what a dot script answers ---\n'
+
+# The status of a dot script is the status of the last command in it, and a
+# file with no commands is a success.
+printf 'true\n' > st.sh; . ./st.sh; printf 'ends true -> %s\n' "$?"
+printf 'false\n' > st.sh; . ./st.sh; printf 'ends false -> %s\n' "$?"
+printf '' > st.sh; . ./st.sh; printf 'empty file -> %s\n' "$?"
+printf '# only a comment\n' > st.sh; . ./st.sh; printf 'only a comment -> %s\n' "$?"
+
+# A bare `return` carries the status that was current when it ran.
+printf 'false\nreturn\nprintf "not reached\\n"\n' > r.sh
+. ./r.sh; printf 'bare return after false -> %s\n' "$?"
+printf 'true\nreturn\n' > r.sh
+. ./r.sh; printf 'bare return after true -> %s\n' "$?"
+
+# The file needs to be readable and does not need to be executable.
+printf 'printf "no execute bit needed\\n"\n' > noexec.sh; chmod 644 noexec.sh
+. ./noexec.sh
+
+# A dot script inside a function sees the function's parameters, because it
+# is the function's environment it runs in.
+printf 'printf "in fn n=%%s [%%s]\\n" "$#" "$1"\n' > fn.sh
+h() { . ./fn.sh; }
+h a b c
+
+# A name with no slash is looked up on PATH, which is what makes `.` the way
+# a script loads a library. A name with a slash is a path and is not.
+mkdir -p libdir
+printf 'printf "from libdir\\n"\n' > libdir/lib.sh
+printf 'printf "from the working directory\\n"\n' > lib.sh
+PATH="$PWD/libdir:/usr/bin:/bin"
+. lib.sh
+. ./lib.sh

@@ -219,6 +219,13 @@ func Semantics() interp.Semantics {
 	// and four in dash, ksh93 and zsh. Both bash builds measured agree
 	// (#1020).
 	s.UnterminatedHeredocGainsATrailingNewline = interp.Yes
+	// A substitution body that does not parse is a failed *expansion* here
+	// rather than a failed script: the refusal is reported, the word expands
+	// to the empty string, and the statement and the script carry on at 0.
+	// dash, ksh93 and zsh all abandon the input instead, which is what this
+	// shell's answer was until #2703 — so `echo A; echo "`+"`echo \`echo n`"+`"; echo B`
+	// stopped at `A` where bash prints `A`, an empty line and `B`.
+	s.SubstitutionParseErrorIsFatal = interp.No
 	// An associative array's subscript is a quoting context here: the key is
 	// the text inside its quotes, so `m["k"]=W` stores under `k` and
 	// `${m["k"]}` reads it back. zsh takes the subscript as written and
@@ -1919,6 +1926,11 @@ func Diagnostics() interp.Diagnostics {
 		NoclobberRefusal:        "%[1]s: cannot overwrite existing file",
 		NamesTheInputInLocation: true,
 		EchoesTheOffendingLine:  true,
+		// A substitution body read at expansion time and refused is named
+		// as the construct it came from, which goes with the failure being
+		// the word's rather than the script's — see
+		// interp.Semantics.SubstitutionParseErrorIsFatal (#2703).
+		SubstitutionParseFailureNamesTheConstruct: true,
 		// A script operand it could not read, worded the same way as `.` and
 		// as a redirection: the path, then the operating system's own text.
 		// The two numbers are the measurement — 127 for a path that names

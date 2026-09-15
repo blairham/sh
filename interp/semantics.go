@@ -3242,6 +3242,47 @@ type Semantics struct {
 	// — cannot drift away from `<(cmd)`.
 	ProcessSubstitutionBodyReadsTheShellsInput Answer
 
+	// SubstitutionParseErrorIsFatal abandons the input when the *body* of a
+	// command substitution turns out not to be a program — the refusal
+	// arriving at expansion time, because that is when the body is read.
+	//
+	// The text the panel disagrees over is the older spelling's nesting
+	// written wrong, whose escaped backquote opens an inner body nothing
+	// closes. Measured 2026-09-14 from a script file,
+	// `echo A; echo "` + "`echo \`echo n`" + `"; echo B`:
+	//
+	//	dash, BusyBox ash   nothing printed, 2   the line is read whole
+	//	zsh                 A, then 1
+	//	bash 5.3, 3.2       A, an empty line, B, at 0
+	//	ksh93               A, n, B, at 0        it does not object at all
+	//
+	// Four answers, and only two of them are this axis. ksh93 reads the text
+	// as nesting that closes and so never has a failure to place, which is a
+	// question about the older spelling's unescaping rather than about a
+	// boundary; dash's and ash's is a question about *when* the body is
+	// read, since they refuse before `echo A` has run. What is left is where
+	// the refusal stops: bash reports it, expands the word to the empty
+	// string and carries the statement and the script on, and zsh abandons
+	// the script.
+	//
+	// The direction that matters is bash's, and it is the reason this is an
+	// axis rather than a constant: with the failure fatal, a script that
+	// bash finishes stops here — which is the whole of #2703.
+	//
+	// Asked for the **older spelling only**, which is measured rather than a
+	// narrowing for convenience. The column that scopes the failure to the
+	// word reads a `$( … )` body with the script, so that spelling's refusal
+	// is the line's there and is fatal: from a file, `echo one`, `echo
+	// $(if; then :; fi)`, `echo two` stops at `one` in bash 5.3 and the same
+	// three lines with backquotes print `one`, an empty line and `two` at 0.
+	// Asking this for both would take the second row and lose the first.
+	//
+	// It is the same distinction [Diagnostics.BackquotedSubstitutionRestartsLines]
+	// turns on one message over, and the same one
+	// [Diagnostics.SubstitutionParseFailureNamesTheConstruct] carries: where
+	// the failure is the word's, the wording says which word.
+	SubstitutionParseErrorIsFatal Answer
+
 	// ConditionArithmeticErrorIsFatal abandons the input when an operand of a
 	// word-spelled comparison — `[[ 1+ -eq 0 ]]` — is not an expression the
 	// arithmetic parser can read.
@@ -12851,6 +12892,11 @@ func PosixSemantics() Semantics {
 		// gives, which is that the body reads the input of the command the
 		// word stands in like any other child of it.
 		ProcessSubstitutionBodyReadsTheShellsInput: No,
+		// POSIX leaves a command substitution whose body does not parse to
+		// "the shell may exit", and four of the five columns that report it
+		// at all do exit — so the base is the fatal reading, and the one
+		// column that scopes the failure to the word says so for itself.
+		SubstitutionParseErrorIsFatal: Yes,
 		// POSIX has no `[[ ]]` to fail in, so this is the substrate's floor
 		// rather than a reading of the text: an error is diagnosed and the
 		// shell goes on, which is what POSIX asks of every failure that is

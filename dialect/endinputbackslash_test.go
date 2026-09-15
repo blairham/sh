@@ -135,12 +135,14 @@ func TestEachDialectEndsAWordOnATrailingBackslash(t *testing.T) {
 //	bash 5.3, 3.2       0, the complaint on stderr and `A`, an empty line, `B`
 //	ksh93u+             0, and it prints `n` — no objection at all
 //
-// We refuse in every dialect, which is zsh's and dash's reading and not
-// bash's: `B` is never reached here. That divergence is older than this fix
-// and unmoved by it — the same lines come out of the merge base — and it is
-// about where a substitution's parse failure stops, not about the word rule
-// above. Pinned rather than corrected, so matching bash has to be deliberate;
-// #2703 is where that decision is owed.
+// Two of those four are now ours by measurement rather than by default. The
+// `bash` dialect scopes the failure to the word — it names the construct,
+// expands the word to the empty string and carries the script on to `B` at 0
+// — which is [interp.Semantics.SubstitutionParseErrorIsFatal] answered `No`
+// there and `Yes` everywhere else (#2703). The other two answers are not this
+// axis: ksh93 reads the text as nesting that closes and so never has a
+// failure to place, and dash and ash refuse before `echo A` has run, which is
+// a question about *when* the body is read.
 //
 // The wording is the half that is #2680's: the same end of input inside the
 // same re-lexed body used to come back out as `input ends after a backslash`,
@@ -153,12 +155,15 @@ func TestAnUnbalancedNestedBackquoteNamesTheBackquote(t *testing.T) {
 	// is parsed, so `syntax.Parse` accepts this text and the refusal arrives
 	// mid-run. dash and BusyBox ash are the columns that read the whole line
 	// first and so print nothing at all.
+	//
+	// The `bash` row is the one that carries on: the empty line is the word
+	// that failed, and `B` is the statement after it.
 	const src = "echo A; echo \"`echo \\`echo n`\"; echo B"
 	for _, c := range []struct {
 		name, want string
 		status     int
 	}{
-		{"bash", "A\nbash: line 1: unexpected EOF while looking for matching ``'\n", 2},
+		{"bash", "A\nbash: command substitution: line 1: unexpected EOF while looking for matching ``'\n\nB\n", 0},
 		{"zsh", "A\nzsh:1: unmatched `\n", 1},
 		{"ksh", "A\nksh: syntax error at line 1: ``' unmatched\n", 3},
 		{"dash", "A\ndash: 1: Syntax error: EOF in backquote substitution\n", 2},

@@ -2639,6 +2639,12 @@ func (r *Runner) diagf(format string, args ...any) {
 // the four shells — see Diagnostics.TypeNotFoundOnStdout — and the prefix rule
 // is the same wherever it lands.
 func (r *Runner) diagLine(format string, args ...any) string {
+	return r.diagLineNamed("", format, args...)
+}
+
+// diagLineNamed is diagLine with a construct named in the location. See
+// Runner.locationPrefixNamed.
+func (r *Runner) diagLineNamed(construct, format string, args ...any) string {
 	msg := fmt.Sprintf(format, args...)
 	if r.speaker != "" && r.inBuiltin != "" && r.inBuiltin != r.speaker {
 		// A builtin the dialect's own function called. The complaint reaches
@@ -2661,7 +2667,7 @@ func (r *Runner) diagLine(format string, args ...any) string {
 		// as the sentence every other dialect prints.
 		msg = strings.TrimPrefix(msg, name+": ")
 	}
-	return r.locationPrefix() + msg
+	return r.locationPrefixNamed(construct) + msg
 }
 
 // lineOf is where a node is in the script, rather than in the string that was
@@ -2753,11 +2759,25 @@ func (r *Runner) locationNameAndLine(functionCounts bool) (name string, line int
 	return name, r.line, false
 }
 
-// locationPrefix is what goes in front of a diagnostic: the location above,
-// with the builtin that is speaking where this dialect puts one.
-func (r *Runner) locationPrefix() string {
+// locationPrefixNamed is what goes in front of a diagnostic: the location
+// above, with the builtin that is speaking where this dialect puts one, and
+// with a construct named between the shell's name and the line where the
+// message belongs to one — `<script>: command substitution: line 2: `.
+//
+// The construct is a parameter rather than a field on the runner, because it
+// is true of one message and not of a stretch of the run: the name rides on
+// the shell's the way a speaking builtin's does — see
+// Diagnostics.withBuiltinInLocation — and nothing else in the same statement
+// is inside the construct. Empty for every message that belongs to the script
+// itself, which is nearly all of them. See
+// Diagnostics.SubstitutionParseFailureNamesTheConstruct for the one dialect
+// that asks for it and for what it is measured against.
+func (r *Runner) locationPrefixNamed(construct string) string {
 	d := r.diag()
 	name, line, inBody := r.locationNameAndLine(r.speaker == "")
+	if construct != "" {
+		name += ": " + construct
+	}
 	if inBody {
 		if line > 0 {
 			// No borrowed name here: the function rule is the dialect

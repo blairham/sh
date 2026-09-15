@@ -1,0 +1,41 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# ksh93's printf, where it is alone among the four.
+#
+# `%q` is the largest of them. bash and zsh both write `a\ b` — a backslash
+# per character that needs one — and ksh93 quotes the word instead, reaching
+# for `$'…'` when a quote is inside it. dash has no `%q` at all. Three
+# answers among four shells, so the conversion is in no shared tier and is
+# asked here and in dash/.
+#
+# Held out, each with its issue, and each a place ours answers as the other
+# three do rather than as ksh93 does:
+#
+#   #2903  a half rounds away from zero here and to even everywhere else:
+#          `printf '%.0f %.0f' 2.5 4.5` is `3 5` in ksh93 and `2 4` in ours
+#   #2904  an escape the format does not define loses its backslash:
+#          `printf '[\q]\n'` is `[q]` in ksh93 and `[\q]` in ours
+#   #2907  an integer operand past 17 digits is rounded through a floating
+#          type: `printf '%d' 123456789012345678` is …680 in ksh93
+
+printf '[%q]\n' 'a b'
+printf '[%q]\n' "it's"
+printf '[%q]\n' ''
+printf '[%q]\n' plain
+printf '[%q]\n' 'two
+lines'
+printf '[%q]\n' '$HOME'
+printf '[%q]\n' 'a*b?c'
+
+# A star with no operand to take the width from. The other three quietly use
+# zero; ksh93 refuses the format outright, and the refusal is a diagnostic
+# rather than a silent zero. It is run in a subshell so the file survives
+# whatever the status is.
+( printf 'star with no operand [%*d]\n' ) 2> /dev/null
+printf 'that was %s\n' "$( [ $? -ne 0 ] && printf nonzero || printf zero )"
+
+# A format ending in a bare percent. bash, zsh and dash all stop there and
+# report a failure; ksh93 writes the percent out and succeeds.
+( printf 'a bare percent [%' ) 2> /dev/null
+printf '\nand that was %s\n' "$( [ $? -ne 0 ] && printf nonzero || printf zero )"

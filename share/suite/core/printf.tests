@@ -78,9 +78,16 @@ printf '[%+d]\n' 42
 printf '[% d]\n' 42
 printf '[%3c]\n' x
 
-# A star taking the width or the precision from the operand list is held out
-# until #2646 lands: every reference has it and none of our five dialects
-# does.
+# A star takes the width or the precision from the operand list, ahead of the
+# value being converted, and a negative width taken that way is a left
+# adjustment rather than an error — which is how a star differs from writing
+# the digits out.
+printf '[%*d]\n' 5 42
+printf '[%-*d]\n' 5 42
+printf '[%.*s]\n' 3 abcdef
+printf '[%*.*f]\n' 8 2 3.14159
+printf '[%*d]\n' -5 42
+printf '[%*s|%*s]\n' 4 a 6 b
 
 # The floating conversions round and format as C does, except at a half —
 # which is asked of ksh93 alone, because ksh93 alone rounds it upward.
@@ -121,10 +128,17 @@ printf '[%b' 'x\c'
 printf 'and this is a separate command]\n'
 
 # The format is reused until the operands run out, and a final pass with
-# fewer operands than conversions fills the rest in as empty. A *numeric*
-# conversion left without an operand is held out until #2648 lands: the four
-# references here write the zero silently, BusyBox diagnoses it and ends at
-# status 1, and ours is silent in ash too.
+# fewer operands than conversions fills the rest in as empty.
+#
+# A *numeric* conversion left without an operand is held out until #2913
+# lands. The four references here write the zero silently; BusyBox writes it
+# with a complaint, which #2648 gave us, and what is left is the prefix on
+# that complaint — ours names the script and the line where BusyBox names
+# only the shell. The rows are `core/` the moment the ash column can take
+# them:
+#
+#   printf '%d-%d\n' 1 2 3
+#   printf '[%s][%d]\n' a
 printf '%s=%s\n' a 1 b 2
 printf '%s|%s|%s|\n' a b c d e f
 printf '%s-%s;' a b c d e; printf '\n'
@@ -148,3 +162,55 @@ printf '[%s]\n' '  spaced  '
 printf '[%s]\n' '*'
 printf '[%s]\n' 'a
 b'
+
+# The flags on the numeric conversions, and the combinations of them that a
+# script reaches for when it is laying out a column.
+printf '[%#o][%#x][%#X]\n' 8 255 255
+printf '[%08.3f][%-8.3f|]\n' 3.14159 3.14159
+printf '[%5.2s|][%-5.2s|]\n' abcdef abcdef
+printf '[%c%c]\n' ab cd
+printf '[%d]\n' 9223372036854775807
+
+# A numeric operand in C's hexadecimal spelling is read as one. The leading
+# *zero* is not common ground and is a note rather than a case: `printf '%d'
+# 010` is 8 in bash and dash, which read it as octal, and 10 in zsh and
+# ksh93, which do not.
+printf '[%d][%d]\n' 0x10 0xff
+
+# A negative operand under an unsigned conversion is held out until #2902
+# lands. All four references write the 64-bit bit pattern — `ffffffffffffffff`
+# for `%x` of -1 — and every one of our dialects writes `-1`:
+#
+#   printf '[%x][%o][%u]\n' -1 -1 -1
+
+# What a failure does. The statuses split — dash says 2 where the other three
+# say 1 — so what is printed is whether it failed, and the output written
+# before the failure, which every shell writes. A format ending in a bare `%`
+# is not here: ksh93 writes the percent out and succeeds where the other
+# three stop, and it is asked in ksh/.
+( printf 'an undefined conversion [%y]' ) 2> /dev/null
+printf ' -> %s\n' "$( [ $? -ne 0 ] && printf nonzero || printf zero )"
+( printf ) 2> /dev/null
+printf 'no format at all -> %s\n' "$( [ $? -ne 0 ] && printf nonzero || printf zero )"
+
+# A numeric conversion given something that is not a number writes the zero
+# it could not make and carries on. Whether it also complains is not common
+# ground — bash and dash do, zsh and ksh93 do not — so the complaint is taken
+# off the stream and only the value is read.
+printf '[%d]\n' abc 2> /dev/null
+printf '[%f]\n' abc 2> /dev/null
+printf '[%d]\n' ' 7' 2> /dev/null
+
+# `--` ends printf's own options. `%q` is not asked here at all: bash and zsh
+# quote `a b` as `a\ b`, ksh93 as `'a b'` with `$'…'` where a quote is inside
+# it, and dash has no `%q`, so the conversion has three answers among four
+# shells. `\xHH` in the format is the same shape one step smaller — bash, zsh
+# and ksh93 write the byte, dash writes the backslash out — and both are
+# asked in the files of the shells that are alone.
+#
+# `%b`'s escapes are not common ground either, and split differently again:
+# `\x41` is a byte in bash and zsh and eight characters in ksh93 and dash,
+# while `\101` is the byte in bash and dash and the characters in zsh and
+# ksh93. `\0101` is the one spelling all four agree on, which is why it is
+# the one asked above.
+printf -- '%s\n' 'after the dashdash'

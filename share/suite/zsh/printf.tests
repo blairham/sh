@@ -1,0 +1,26 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Two printf answers that are zsh's alone.
+#
+# A format beginning with a dash is a format in zsh and an option error in
+# bash, ksh93 and dash. `printf '-> %s\n' x` is a working line here and a
+# usage error in the other three, which is why the portable spelling of it
+# needs the `--` the core file asks for.
+#
+# And a numeric operand that is a number with something after it: bash, ksh93
+# and dash all convert the part they could read and write 12, where zsh reads
+# the operand as a math expression, fails the whole of it and writes 0. The
+# status is 1 in all four, so a script testing the status sees no difference
+# and a script reading the value sees a different number.
+
+printf '-> [%s]\n' 'a leading dash is not an option here' 2> /dev/null
+printf 'that was %s\n' "$?"
+
+printf '[%d]\n' 12x 2> /dev/null
+printf 'that was %s\n' "$?"
+printf '[%d]\n' 34junk 2> /dev/null
+
+# A well-formed operand converts the same way it does everywhere, which is
+# what makes the line above about the trailing text rather than about %d.
+printf '[%d][%d]\n' 12 -34

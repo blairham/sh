@@ -1,0 +1,23 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# dash's printf is the POSIX one and has neither of the two extensions the
+# other three share, which makes it alone on both.
+#
+# `%q` is not a conversion here: the format is written up to it and the run
+# fails. And `\xHH` in the *format* is not an escape — bash, zsh and ksh93 all
+# write the byte, dash writes the backslash, the x and the digits. A script
+# reaching for either is writing for three shells out of four.
+
+( printf '[%q]\n' 'a b' ) 2> /dev/null
+printf 'percent q -> %s\n' "$( [ $? -ne 0 ] && printf nonzero || printf zero )"
+
+printf 'hex in the format [\x41\x42]\n'
+printf 'hex in a %%b operand [%b]\n' '\x41\x42'
+
+# The escapes dash does have, for the same reason the core file asks the ones
+# every shell shares: this file is about the two it lacks rather than about
+# printf being different here.
+printf 'octal in the format [\101\102]\n'
+printf 'octal in a %%b operand [%b]\n' '\0101\0102'
+printf 'a tab [\t] and a backslash [\\]\n'

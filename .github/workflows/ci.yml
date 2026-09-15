@@ -319,6 +319,12 @@ jobs:
     name: Performance gate (report only)
     needs: changes
     runs-on: ubuntu-latest
+    # Bounded, because the step below cannot fail: `|| true` turns a red gate
+    # into a report, and it would turn a wedged one into a job that sits at
+    # the default six-hour limit holding a runner. The measurement is about
+    # half a minute and `make perfgate` carries its own 30m test timeout, so
+    # this is the outer bound on a build that never gets that far.
+    timeout-minutes: 20
     steps:
     - uses: actions/checkout@v6
       if: needs.changes.outputs.code == 'true'

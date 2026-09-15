@@ -69,9 +69,21 @@ wait "$a"; echo "first=$?"
 // The invented ids are out above every process id a kernel can issue, which is
 // what makes the lookup a lookup and not a guess — but the lookup is the point:
 // `p=$!; kill "$p"` is the line a script writes to stop one job, and it has to
-// mean the job. A job of builtins has no process to signal, so what comes back
-// is the answer `kill %1` already gives for the same job, and what must *not*
-// come back is anything about a process group.
+// mean the job. What comes back is the answer `kill %1` already gives for the
+// same job, and what must *not* come back is anything about a process group.
+//
+// The neighbouring number is the control, and it carries the whole claim: an
+// id one above the job's is in the same invented range and names no job, so it
+// goes to the kernel like any other number and finds nothing there. Without
+// it "the id is read as the job" cannot be told apart from "kill succeeds at
+// whatever it is given", which is what the pair of assertions below used to be
+// separated by — a `no such job` complaint that this shell no longer makes,
+// because a job it is still running is a target that is there (#2994).
+//
+// The gate lets signal **0** through for the reason the same gate in
+// interp/jobreaped_test.go does: the control is only a control if `kill -0`
+// really asks, and a signal of zero is defined to send nothing, so the hazard
+// of a real signal reaching pid 0 is still refused.
 func TestKillReadsAnInventedIdAsItsJob(t *testing.T) {
 	// The job is kept alive by a read the test releases, and the fifo is
 	// opened `<>` rather than `<` on purpose.
@@ -95,27 +107,31 @@ func TestKillReadsAnInventedIdAsItsJob(t *testing.T) {
 	// ever come.
 	const src = `mkfifo p
 ( read x <> p; exit 5 ) & j=$!
-kill "$j" 2>byid.txt; echo "byid=$?"
-kill %1 2>byspec.txt; echo "byspec=$?"
-grep -q "no such job" byid.txt; echo "job=$?"
-grep -q "no such job" byspec.txt; echo "spec=$?"
+kill -0 "$j" 2>byid.txt; echo "byid=$?"
+kill -0 %1 2>byspec.txt; echo "byspec=$?"
+neighbour=$(( j + 1 ))
+kill -0 "$neighbour" 2>/dev/null; echo "neighbour=$(( $? != 0 ))"
+grep -c . byid.txt > said.txt; read said < said.txt; echo "said=$said"
 echo go > p
 wait
 `
 	out, errOut := runGatedJobScript(t, src, nil, GateFunc(func(_ context.Context, a Action) Decision {
-		if a.Kind == ActionSignal {
+		if a.Kind == ActionSignal && a.Signal != 0 {
 			return Deny
 		}
 		return Allow
 	}))
-	// The two complaints differ only in how the script spelled the operand,
-	// and the kind is the load-bearing half: a number handed to the kernel
-	// instead comes back as a *process* that is not there, which is a
-	// different sentence and a different question.
-	if !strings.Contains(out, "job=0") || !strings.Contains(out, "spec=0") {
+	// One job, one answer: the two spellings of the same target agree, and
+	// neither has anything to complain about.
+	if !strings.Contains(out, "byid=0") || !strings.Contains(out, "byspec=0") {
 		t.Errorf("out = %q, want `kill $!` read as the job `kill %%1` names; stderr %q", out, errOut)
 	}
-	if !strings.Contains(out, "byid=1") {
-		t.Errorf("out = %q, want the id read as a job with nothing to signal; stderr %q", out, errOut)
+	if !strings.Contains(out, "said=0") {
+		t.Errorf("out = %q, want nothing said about a job that is there; stderr %q", out, errOut)
+	}
+	// And the range is not blanket-accepted: one past the job's id is a
+	// number like any other and reaches nothing.
+	if !strings.Contains(out, "neighbour=1") {
+		t.Errorf("out = %q, want a number that names no job handed to the kernel, where it finds nothing; stderr %q", out, errOut)
 	}
 }

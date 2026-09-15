@@ -4,10 +4,10 @@
 package interp_test
 
 import (
-	"bytes"
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	. "github.com/blairham/sh/interp"
 
@@ -47,12 +47,40 @@ func runGatedJobScript(t *testing.T, src string, set func(*Semantics), gate Gate
 	if set != nil {
 		set(&sem)
 	}
-	var o, e bytes.Buffer
+	// Locked buffers rather than plain ones: on the deadline below the shell
+	// is still running and still writing, and reporting what it had managed to
+	// say is the whole value of that report.
+	var o, e syncBuffer
 	r := newTestRunner(t, &Runner{
 		Stdout: &o, Stderr: &e, Semantics: &sem, Name: "testsh", Env: testPATH(), Gate: gate,
 	})
-	if _, rerr := r.Run(context.Background(), f); rerr != nil {
-		t.Fatalf("run: %v", rerr)
+	// Bounded, because **a test that can hang is a defect on its own**,
+	// whatever it asserts. These scripts wait for jobs, and a job that never
+	// ends leaves the shell in a `wait` nothing ends either — and since a
+	// blocked open(2) or read(2) is not something a context can interrupt,
+	// the deadline has to be here rather than on the run. Without it the cost
+	// of one lost rendezvous is the whole `interp` package at `go test`'s
+	// ten-minute timeout, on an unrelated pull request, which is what #2692
+	// was: nine and a half minutes of a required check spent in this helper.
+	//
+	// Generous, so that it is never the reason a slow runner goes red: these
+	// scripts are milliseconds, and a minute is three orders of magnitude of
+	// room. The goroutine is left behind on the failing path deliberately —
+	// it is blocked in a syscall and cannot be told to stop, and the report
+	// is worth more than the leak in a binary that is about to exit.
+	done := make(chan error, 1)
+	go func() {
+		_, rerr := r.Run(context.Background(), f)
+		done <- rerr
+	}()
+	select {
+	case rerr := <-done:
+		if rerr != nil {
+			t.Fatalf("run: %v", rerr)
+		}
+	case <-time.After(time.Minute):
+		t.Fatalf("the script never finished, so something in it is waiting for what is not coming; it had written %q (stderr %q):\n%s",
+			o.String(), e.String(), src)
 	}
 	return o.String(), e.String()
 }

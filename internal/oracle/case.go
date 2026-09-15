@@ -10933,6 +10933,16 @@ echo "st=$?"`,
 
 	// --- [[ ]] and (( )) ------------------------------------------------------
 	{
+		ID: "cond/a-condition-that-never-begins", Category: "[[ ]] and (( ))", SyntaxError: true,
+		Snippet: `[[ ]]`,
+		Why:     "the `[[` with nothing inside it, which is the first of the five places the grammar wants a condition and can fail to find one — the others being after a `!`, after `&&`, after `||` and just inside a `(`. Every column names the **token the reading stopped on** and none of them says anything about a condition being expected, which is what #2009 and #2013 have found twice before: bash writes ``syntax error near `]]' `` and echoes the line, zsh ``parse error near `]]' ``, and ksh93 calls the `[[` unmatched. That last one is a different reading rather than a different wording and it is #2964: ksh93 and zsh both take the closer for an ordinary *word* wherever a condition could have begun and blame whatever stands after it, which under `-c` is nothing at all — the same input in a script file is `` `newline' unexpected `` in ksh93 and a parse error at the newline on line 2 in zsh, while bash's two lines do not move. So this row is graded on `-c`, where two of the three agree with what is written, and the routes that part them are recorded in that issue",
+	},
+	{
+		ID: "cond/a-condition-that-never-begins-inside-a-group", Category: "[[ ]] and (( ))", SyntaxError: true,
+		Snippet: `[[ ( ) ]]`,
+		Why:     "the same five sites reached through a group, and the row that says a `)` is refused as a token where the `]]` is not: ksh93 writes `` `)' unexpected `` here against the `` `[[' unmatched `` it writes for the row above, so its condition parser does look at this one. bash writes three lines for it rather than two — `unexpected token `)' in conditional command`, then `expected `)' ` for the group still open, then the ordinary `near` and the echoed line — which is a second conditional sentence it keeps for a token standing where a condition was to *begin*, and a third for each open parenthesis. `[[ ( ( ) ) ]]` gets two of the middle line there, which is what makes it a depth and not a flag",
+	},
+	{
 		ID: "cond/an-is-set-test-asks-about-the-parameter", Category: "[[ ]] and (( ))", SyntaxError: true,
 		Snippet: `x=1; [[ -v x ]] && echo set || echo unset; y=; [[ -v y ]] && echo set || echo unset; [[ -v nope ]] && echo set || echo unset; x=1; unset x; [[ -v x ]] && echo set || echo unset`,
 		Why:     "`-v` asks whether a parameter is *set* and never anything about its value, which is why the second arm is the one that matters: a name holding the empty string is set. Not core by one column — bash 3.2 is the only panel shell with `[[ ]]` and no `-v`, and it cannot read the line at all rather than answering differently, so the head count that made `-o` core fails here. dash has no `[[ ]]` (#1255)",

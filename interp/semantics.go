@@ -1582,6 +1582,48 @@ type Semantics struct {
 	// needed a third state. `semantics.md` records `${!x}` as the axis the
 	// binary table could not express; this is the shape that expresses it.
 	IndirectionYieldsName Answer
+
+	// OperatorAfterTheSubscriptListingIsBad refuses `${!name[@]}` with any
+	// operator written after it, rather than reading the `!` as an ordinary
+	// indirection again.
+	//
+	// `${!name[@]}` is the *subscript listing* in the bare form only. Write
+	// an operator after it and the two shells that have `${!…}` at all part
+	// company: bash reads the `!` as the indirection it means everywhere
+	// else — the operand is `name[@]`, which expands to the array's values,
+	// and the result is taken as a name to look up — and ksh93 calls the
+	// whole expansion a bad substitution and ends the script.
+	//
+	// Measured 2026-09-14, `env -i PATH=/usr/bin:/bin HOME=<scratch>`, a
+	// script file and again under `-c` and on standard input, all three
+	// giving the same answers. With `typeset -A w; w[k]=tgt; tgt=HELLO`:
+	//
+	//	written               bash 5.3.15   ksh93u+
+	//	${!w[@]}              k             k
+	//	${!w[@]#H}            ELLO          bad substitution
+	//	${!w[@]:1:2}          EL            bad substitution
+	//	${!w[@]/L/x}          HExLO         bad substitution
+	//	${!w[@]+SET}          SET           bad substitution
+	//	a=(p q); ${!a[@]#x}   p q: invalid variable name
+	//
+	// The last row is what says it is the indirection rather than a listing
+	// being filtered: `${a[@]}` on `(p q)` is two words, and bash's complaint
+	// quotes them back. The three rows above it are the same mechanism
+	// succeeding quietly — `${w[@]}` is `tgt`, which is set, so the operator
+	// runs on `HELLO`.
+	//
+	// The **written** subscript decides, not the one a dialect supplies for a
+	// bare array name: ksh93 answers `${!b#o}` on an array with `b`, its
+	// ordinary reading of `${!x}`, and refuses only the spelling that carries
+	// `[@]` or `[*]` itself.
+	//
+	// Asked rather than read, and only for that spelling, which is one no
+	// startup file writes: a dialect that has not chosen says so instead of
+	// picking one of two answers that differ by a diagnostic and a dead
+	// script. dash, BusyBox ash and zsh never reach it — `${!name[@]}` is a
+	// bad substitution there in the *bare* form too — so the question is not
+	// theirs to answer (#2821).
+	OperatorAfterTheSubscriptListingIsBad Answer
 	// BraceExpansion expands `{a,b}` and `{1..3}`. Absent from dash, where
 	// the word is a literal.
 	//
@@ -6264,6 +6306,80 @@ type Semantics struct {
 	// this question.
 	ListedHashIsBareAfterANonName Answer
 
+	// ListedBangIsOrdinary leaves a `!` in a listed word unquoted.
+	//
+	// ksh93 and zsh both do — `v1=!`, `v2=a!b`, `v3=!lead`, `v4=tail!` and
+	// the keys `[!]` and `[a!b]` all bare — and bash quotes every one of
+	// them. A different pairing from the `^` below, which is ksh93 alone,
+	// and from `=`, which is bash alone: no two of the four bytes group the
+	// same way, which is what makes each of them a question (#2820).
+	ListedBangIsOrdinary Answer
+
+	// ListedCaretIsOrdinary leaves a `^` in a listed word unquoted.
+	//
+	// One of the three bytes the panel does not agree about; see
+	// Runner.listedByteIsOrdinary for the table and for the other two. ksh93
+	// alone leaves it bare — measured 2026-09-14 over `set`, a keyed
+	// `typeset -p` and an alias listing, which agree within each column —
+	// where bash 5.3.15 and zsh 5.9.2 both write `'^'` and `'a^b'`. dash and
+	// BusyBox ash quote every listed value whatever is in it, so they are not
+	// asked and do not answer.
+	//
+	// Read and not asked, and unanswered quotes: see listedByteIsOrdinary,
+	// which is where the rule that a listing may not stop to complain lives
+	// (#2820).
+	ListedCaretIsOrdinary Answer
+
+	// ListedEqualsIsOrdinary leaves an `=` in a listed word unquoted,
+	// wherever it stands in the word.
+	//
+	// bash alone — `v3=a=b`, `v4=x=y=z` and the keys `[a=b]`, `[=x]`,
+	// `[1=2]`, `[x=y=z]` all bare — against zsh, which quotes every one of
+	// them. ksh93 is neither: a leading `name=` is bare there and the rest is
+	// quoted on its own, which is ListedAssignmentPrefixIsBare and not this.
+	// dash and BusyBox ash always quote and are not asked (#2820).
+	ListedEqualsIsOrdinary Answer
+
+	// ListedNonAsciiIsOrdinary leaves a byte above ASCII in a listed word
+	// unquoted, and decides the same question inside `$'...'`.
+	//
+	// **bash's answer is the locale's, and this carries the character
+	// reading.** Measured 2026-09-15 on one binary: with `LC_ALL=C` bash
+	// writes `$'\303\251'` for the value and `[$'\303\251']` for the key,
+	// and with any other locale named — or with none named at all — it writes
+	// the character. zsh writes the character in both and ksh93 spells it out
+	// in both, so those two are answering about the byte and bash is
+	// answering about the encoding. The corpus runs `LC_ALL=C` and records
+	// bash's other spelling there; the character is what a person's terminal
+	// sees, and it is also the reading the issue's own table measured.
+	//
+	// bash and zsh write the character itself — `v5=é`, the key `[é]` — and
+	// leave it as itself inside a `$'...'` a control byte put them in:
+	// `$'a\téb'` in both. ksh93 spells it out
+	// byte by byte, `$'\xc3\xa9'`, for a value, a key and an alias body
+	// alike — a third answer rather than the other side of a switch, and the
+	// reason this one field decides both whether such a byte is bare and
+	// whether it is escaped (#2820).
+	ListedNonAsciiIsOrdinary Answer
+
+	// ListedAssignmentPrefixIsBare writes a listed value's leading `name=`
+	// without quotes and quotes what follows on its own.
+	//
+	// ksh93's answer to `=`, and it is a rule rather than a character class:
+	// `a=b` lists as `a=b`, `a=b c` as `a='b c'`, `x=y=z` as `x='y=z'` and a
+	// tail with a tab in it as `a=$'b\tc'` — the same three answers the
+	// style gives a whole value, applied to the tail. It fires once and at
+	// the front: `a=b=c` is `a='b=c'` and not `a=b=c`. It does not fire where
+	// there is no name in front of the first `=`, so `=x` is `'=x'` and
+	// `1=2` is `'1=2'`.
+	//
+	// Keys take it too, measured: the same shell lists `[a=b]` and
+	// `[x='y=z']` in a `typeset -p` of a table.
+	//
+	// A doubled `=` is measured and not reproduced; see
+	// Runner.listedAssignmentHead (#2820).
+	ListedAssignmentPrefixIsBare Answer
+
 	// ListedHashIsBareUnlessItOpensTheValue leaves a `#` in a listed value
 	// unquoted wherever it stands except as the value's first byte. bash
 	// alone, and a weaker rule than the one above rather than a different
@@ -9746,6 +9862,39 @@ type Semantics struct {
 	// the stricter of the two, so a preset that has not chosen refuses a
 	// resume rather than complaining about an axis in the middle of a
 	// script's job handling (#2720).
+	// ChainedSubscriptReadsANestedValue makes `${a[1][2]}` a walk **into**
+	// the compound an element holds rather than a second count through what
+	// the link before it named.
+	//
+	// The grammar is syntax.Dialect.ChainedSubscript and two shells have the
+	// same text meaning two things. In zsh a subscript counts characters when
+	// it is handed one string and elements when it is handed a list, so
+	// `a=(one two three); ${a[1][2]}` is `n` — the second character of `one`.
+	// ksh93 answers that row with **empty**: element 0 holds the string
+	// `one`, a second subscript on it reaches a nested array that is not
+	// there, and the answer is nothing.
+	//
+	// So it is a second value and not the same flag with a wider grammar.
+	// Turning ChainedSubscript on for ksh93 without this would give it zsh's
+	// reading and a plausible wrong character at status 0, which is the
+	// failure mode the axis mechanism exists for.
+	//
+	// Measured 2026-09-15 on ksh93u+ 2012-08-01, from a script file, with
+	// `a[1]=(p q); a[2]=plain` — the value the write half builds (#2491):
+	//
+	//	${a[1][1]}    q          ${a[1][@]}    p, q as two fields
+	//	${a[1][9]}    unset      ${#a[1][@]}   2
+	//	${a[2][0]}    plain      ${a[2][1]}    unset
+	//	${a[2][@]}    nothing    ${#a[2][@]}   0
+	//
+	// and `c[1][2][3]=v` reading back as `v`, so the walk is any depth. See
+	// interp/nestedchainsub.go for the whole table (#2830).
+	//
+	// Read rather than asked: the grammar is what decides whether the text is
+	// reachable at all, and a dialect that took the grammar without answering
+	// this gets the character reading it already had.
+	ChainedSubscriptReadsANestedValue Answer
+
 	MonitorAloneResumesAJob Answer
 
 	// MonitorAloneAnnouncesAJob says `[1] <pid>` when a job is backgrounded

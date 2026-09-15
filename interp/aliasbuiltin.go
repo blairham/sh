@@ -752,7 +752,7 @@ func (r *Runner) aliasLine(name string, form aliasForm) string {
 // the names with it, which is the point of asking through it rather than
 // beside it.
 func (r *Runner) listedAliasName(name string) string {
-	if listedValueIsBare(name) {
+	if r.listedValueIsBare(name) {
 		return name
 	}
 	if !r.ask(r.sem().AliasListingQuotesTheName, "an alias listing spelling a name that needs quoting") {

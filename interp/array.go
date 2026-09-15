@@ -1780,6 +1780,12 @@ func (r *Runner) arraySubscript(e *syntax.ParamExpr) ([]string, bool) {
 		return nil, true
 	}
 	if len(e.Leading) > 0 {
+		if r.sem().ChainedSubscriptReadsANestedValue == Yes {
+			// The other reading of the same text: the chain reaches *into*
+			// the compound an element holds rather than counting through
+			// what the link before it named. See interp/nestedchainsub.go.
+			return r.nestedChainSubscript(e)
+		}
 		// A chain reads what the subscript before it named rather than what
 		// the name holds, so none of the name's readings below apply: an
 		// association's key is one link back, and this link is handed the

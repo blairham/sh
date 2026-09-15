@@ -16890,14 +16890,85 @@ occurrence. Something else in the value needing quotes still quotes it,
 so `16#ff x` and `16#ff*` are quoted in every column. `export -p`
 agrees with `typeset -p` about all of it.
 
-Two neighboring characters were measured in the same pass and are
-**not** modeled, so ours still differs from both shells on them: with
-`a<c>b` as the value, ksh93 leaves `!`, `=` and `^` bare where zsh
-leaves only `!`, and ours leaves `^` and quotes `!`. `=` follows a
-mirror-image rule in ksh93 — `a=b` is bare and `1=2` is quoted, so a
-name in front of the `=` is what makes it safe rather than what makes
-it unsafe. Recorded here rather than fixed with #1271, which is about
-the `#`.
+Three neighboring characters were measured in the same pass and are
+now modeled as three axes of their own, because no two of them group
+the columns the same way — see the four fields below.
+
+**`ListedBangIsOrdinary`** — bash no · ksh93 yes · zsh yes
+
+**`ListedCaretIsOrdinary`** — bash no · ksh93 yes · zsh no
+
+**`ListedEqualsIsOrdinary`** — bash yes · ksh93 no · zsh no
+
+**`ListedNonAsciiIsOrdinary`** — bash yes · ksh93 no · zsh yes
+
+Measured 2026-09-14, `env -i PATH=/usr/bin:/bin` with a scratch HOME,
+from a script file, over `set`, a keyed `typeset -p` and an alias
+listing — which agree within each column, so one table answers for all
+three surfaces:
+
+| | `!` bare | `^` bare | `=` bare | a byte above ASCII bare |
+| --- | --- | --- | --- | --- |
+| bash 5.3.15 | no | no | **yes** | **yes** |
+| ksh93u+ | **yes** | **yes** | * | no — `$'\xc3\xa9'`, byte by byte |
+| zsh 5.9.2 | **yes** | no | no | **yes** |
+
+Four bytes, four groupings, and each column wrong about at least one
+of them if the set is shared. This engine had one shared set holding
+`^` and holding neither `=` nor `!` nor a byte above ASCII, which is
+ksh93's answer to `^`, bash's to `!`, and nobody's to the other two
+(#2820).
+
+The non-ASCII field decides two things and is one field for a measured
+reason: the same column that quotes such a byte outside `$'...'` is
+the one that spells it out *inside* it. `v=$'a\t<e-acute>b'` lists as
+`$'a\téb'` in bash and zsh and as `$'a\t\xc3\xa9b'` in ksh93.
+
+**bash's answer here is the locale's**, and the field carries the
+character reading. Measured 2026-09-15 on one binary: with `LC_ALL=C`
+bash writes `$'\303\251'` and the key `[$'\303\251']`; with any
+other locale named, or with none named at all, it writes the
+character. zsh writes the character either way and ksh93 spells it out
+either way, so those two are answering a question about the byte and
+bash is answering one about the encoding. The corpus runs `LC_ALL=C`
+and records bash's other spelling there rather than reproducing it —
+and bash spells out a byte that is not a character in *any* locale,
+`$'\377'`, which this shell writes as itself.
+
+**`ListedAssignmentPrefixIsBare`** — bash no · ksh93 yes · zsh no
+
+Is ksh93's answer to `=`, and it is the `*` in the table above: a rule
+about the front of the word rather than a character class. A leading
+`name=` is written bare and what follows is quoted on its own, in
+whichever way the style would have quoted a whole value:
+
+| value | ksh93 |
+| --- | --- |
+| `a=b` | `a=b` |
+| `a=` | `a=` |
+| `a=b c` | `a='b c'` |
+| `x=y=z` | `x='y=z'` |
+| `a=b=c` | `a='b=c'` |
+| `a=<tab>` inside | `a=$'b\tc'` |
+| `=x` | `'=x'` |
+| `1=2` | `'1=2'` |
+| `a.b=c` | `'a.b=c'` |
+
+So the head is taken once and at the front — `a=b=c` is not `a=b=c` —
+and only where the text before the first `=` is a name. Keys take it
+too: the same shell lists `[a=b]` and `[x='y=z']` in a `typeset -p` of
+a table.
+
+A doubled `=` is measured and **not** reproduced: ksh93u+ writes
+`a==b` bare and `a==` as `a==''`, where ours gives `a='=b'` and
+`a='='`. All of them read back as the value, which is what the listing
+is for, and the rule that produces the shell's own spelling there is
+not one the probes could state.
+
+dash and BusyBox ash answer none of the five: every listing style
+either of them uses quotes whatever it is given, so `'^'`, `'a=b'` and
+`'é'` there say nothing about the set. They are left unanswered rather
+than given a neighbor's value.
 
 **`DeclaredNameWithoutValueIsEmpty`** — bash no · dash no · ksh93 no · zsh yes
 

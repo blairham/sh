@@ -54,6 +54,12 @@ func Dialect() syntax.Dialect {
 	// other columns refuse the operand or declare an empty array under the
 	// base name, and this is the grammar for the one that nests (#2491).
 	d.ChainedAssignSubscript = true
+	// And the read half of the same nesting: `${a[1][2]}` was a parse error
+	// here while the write built a value only `typeset -p` could show. The
+	// grammar is shared with the other shell that writes the text and the
+	// *reading* is not — see Semantics.ChainedSubscriptReadsANestedValue
+	// (#2830).
+	d.ChainedSubscript = true
 	// A backslash the input ends immediately after is kept only where it is
 	// the first thing in the word: `printf "[%s]" \` is `[\]` here and
 	// `printf "[%s]" x\` is `[x]`, where bash 5.3 keeps both and zsh drops
@@ -600,6 +606,23 @@ func Semantics() interp.Semantics {
 	// which is what says the leading text is judged and not the offset.
 	s.ListedHashIsBareUnlessItOpensTheValue = interp.No
 	s.ListingControlEscape = interp.ControlEscapeHex
+	// The column that leaves `^` bare, and the only one: `v=^` and `v=a^b`
+	// list unquoted here where bash and zsh write `'^'` and `'a^b'`.
+	// Measured 2026-09-14 over `set`, a keyed `typeset -p` and an alias
+	// listing, which agree (#2820).
+	// And `!`, which zsh leaves bare too and bash does not.
+	s.ListedBangIsOrdinary = interp.Yes
+	s.ListedCaretIsOrdinary = interp.Yes
+	// And the column that spells a byte above ASCII out: `$'\xc3\xa9'` for
+	// a value, for a key and for an alias body alike, where bash and zsh
+	// write the character. The same answer decides both halves — whether
+	// such a byte is bare, and whether it survives inside `$'...'`.
+	s.ListedNonAsciiIsOrdinary = interp.No
+	// `=` is not an ordinary byte here. What is bare is a leading `name=`,
+	// with the rest quoted on its own: `a=b` bare, `a='b c'`, `x='y=z'`,
+	// `'=x'` and `'1=2'`, keys included — `[a=b]` and `[x='y=z']`.
+	s.ListedEqualsIsOrdinary = interp.No
+	s.ListedAssignmentPrefixIsBare = interp.Yes
 	s.ExportListing = interp.DeclareListingCommandWord
 	s.ReadonlyListing = interp.DeclareListingCommandWord
 	// And the bare form is not the `-p` form here: the command word goes and
@@ -1038,6 +1061,13 @@ func Semantics() interp.Semantics {
 	s.LetReadsALeadingZeroAsDecimal = interp.Yes
 	s.ArithmeticAssignmentDeclaresAnInteger = interp.No
 	s.IndirectionYieldsName = interp.Yes
+	// And an operator after `${!name[@]}` is a bad substitution here rather
+	// than either reading: measured 2026-09-14, `${!w[@]#H}`, `${!w[@]:1:2}`,
+	// `${!w[@]/L/x}` and `${!w[@]+SET}` all end the script at 1 where the
+	// bare `${!w[@]}` answers the key. The written subscript is what is
+	// refused: `${!b#o}` on an array answers `b`, this shell's ordinary
+	// reading of `${!x}` (#2821).
+	s.OperatorAfterTheSubscriptListingIsBad = interp.Yes
 	s.BraceExpansion = interp.Yes
 	// A group that does not expand does not end the word — `@{x}{a,b}@` is
 	// `@{x}a@ @{x}b@` here too — but the scan resumes past that group's
@@ -1633,6 +1663,12 @@ func Semantics() interp.Semantics {
 	// granted in a script with no terminal, and `fg` still answers 1 without
 	// a word — on a pseudo-terminal too, which is what says the missing
 	// thing is a person and not a terminal (#2720).
+	// `${a[1][2]}` reads the nested compound `a[1][2]=v` builds, rather than
+	// counting characters the way the other shell with the grammar does:
+	// measured 2026-09-15, `a=(one two); ${a[0][1]}` is empty here and `n`
+	// there. The write half landed in #2491 and the value it built was
+	// reachable only through `typeset -p` until this (#2830).
+	s.ChainedSubscriptReadsANestedValue = interp.Yes
 	s.MonitorAloneResumesAJob = interp.No
 	// And it does not announce one on the monitor alone either, which is the
 	// same answer for a different reason: this column will not resume a job
@@ -3164,7 +3200,14 @@ func Apply(r *interp.Runner) {
 	// dynamic; they are left unset rather than pinned to a number that
 	// would be wrong as soon as a script had two lines.
 	r.SetDynamic(".sh.version", func(*interp.Runner) string { return kshVersion })
-	r.SetDynamic("RANDOM", func(*interp.Runner) string { return interp.Randoms() })
+	r.SetDynamic("RANDOM", func(rr *interp.Runner) string { return rr.Randoms() })
+	// And an assignment seeds it, which is what makes a script that uses
+	// `RANDOM` reproducible: measured 2026-09-14, `RANDOM=42` twice in one
+	// shell gives the same pair of numbers both times here, in ksh93u+ and
+	// in zsh 5.9.2. Without the writer the assignment was heard and stored
+	// for the producer to find, and the producer had no state to find it
+	// with (#2827).
+	r.SetDynamicWriter("RANDOM", func(rr *interp.Runner, value string) { rr.SeedRandoms(value) })
 	// `typeset -i RANDOM=7000`, measured — where this shell answered
 	// `RANDOM: not found` from a name it had just expanded a number for
 	// (#2451). `LINENO` lists the same way here and does not in bash 5.3,

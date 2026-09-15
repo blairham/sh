@@ -942,6 +942,43 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 		_, set, _ := r.paramSource(e)
 		return []string{setTestResult(set)}, true
 	}
+	// `${!name[@]}` is the subscript listing, and only in that exact
+	// spelling: the whole-array subscript, written, with nothing after it.
+	// Anything else carrying a `!` and a subscript is the ordinary
+	// indirection, which is the scalar path's.
+	//
+	// Two shapes fell into the listing that are not it. An operator after the
+	// listing puts the `!` back to being an indirection in bash and makes the
+	// whole expansion a bad substitution in ksh93 — see
+	// Semantics.OperatorAfterTheSubscriptListingIsBad for the table. And
+	// **one** subscript never was a listing in either: `a=(p q); ${!a[0]}` is
+	// empty in bash — `a[0]` is `p`, and `p` is unset — and `a[0]` in ksh93,
+	// where it answered `0 1` here, the subscripts of an array nobody asked
+	// to list.
+	//
+	// Ahead of the two rewrites below because it is a question about what was
+	// *written*: bareArrayAsList gives a bare array name the `[@]` its
+	// dialect means by it, and the refusal is the written spelling's alone —
+	// measured, ksh93 answers `${!b#o}` on an array with `b` and refuses
+	// `${!b[@]#o}`.
+	if e.Indirect && e.Index != nil && (!r.wholeArrayIndex(e) || e.Op != syntax.ParamNone) {
+		if r.wholeArrayIndex(e) {
+			// The listing's own spelling with an operator after it, which is
+			// the shape the two shells disagree about.
+			if r.ask(r.sem().OperatorAfterTheSubscriptListingIsBad,
+				"an operator written after `${!name[@]}`") {
+				r.reportBadSubstitution(e)
+				return nil, true
+			}
+			if r.unspecified {
+				return nil, true
+			}
+		}
+		// The scalar path, where `!` means what it means in every other
+		// expansion. It already reads a name reference first, asks
+		// IndirectionYieldsName, and looks the resolved text up.
+		return nil, false
+	}
 	// A bare array name is the *array* in one dialect, so the node is given
 	// the subscript that says so and the array path below answers it. See
 	// bareArrayAsList for why that is a rewrite rather than a path of its own.
@@ -2124,6 +2161,15 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 		// parses the same text and yields the name itself, so the grammar
 		// having accepted it is not enough to know what it means.
 		if r.ask(r.sem().IndirectionYieldsName, "${!x} yielding the name") {
+			// The name *with its subscript*, which is what was written and
+			// what that shell answers: measured 2026-09-14, ksh93u+ gives
+			// `a[0]` for `${!a[0]}` and `w[k]` for `${!w[k]}`, and `a[1]`
+			// for `${!a[$i]}` with `i=1` — the subscript expanded, since the
+			// answer is the text the expansion resolved to and not the
+			// characters in the source.
+			if e.Index != nil {
+				return e.Name + "[" + r.subscriptAsWritten(e.Subscript()) + "]"
+			}
 			return e.Name
 		}
 		if !set || value == "" {

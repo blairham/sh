@@ -66,6 +66,7 @@ ash   BraceRangeZeroStepCountsAsOne
 ash   BraceRescanEntersFailedGroup
 ash   CaseAttributeFoldsWhenRead
 ash   CaseAttributeReplacesTheNumericAttribute
+ash   ChainedSubscriptReadsANestedValue
 ash   CompoundAttribute
 ash   CompoundElementsGoThroughTheAttribute
 ash   CompoundPipelineStatusRecord
@@ -118,6 +119,11 @@ ash   JobsStateFiltersAccumulate
 ash   KeptTrapListingIncludesExit
 ash   KeyedLiteralAppendJoinsTheReplacedValue
 ash   KeyedTableScalarIsTheFirstValue
+ash   ListedAssignmentPrefixIsBare
+ash   ListedBangIsOrdinary
+ash   ListedCaretIsOrdinary
+ash   ListedEqualsIsOrdinary
+ash   ListedNonAsciiIsOrdinary
 ash   LongestMatchTakesTheWrittenArm
 ash   NamerefCycleIsRefused
 ash   NegatedTestRecordsThePostNegationStatus
@@ -130,11 +136,12 @@ ash   NumericTypeLetterRetypesAFrozenName
 ash   NumericTypeLettersAreExclusive
 ash   NumericTypeWithNoValueReachesAChildAsZero
 ash   OneCommandStopsACommandString
+ash   OperatorAfterTheSubscriptListingIsBad
 ash   OperatorDistributesOverStarSubscript
 ash   PrefixRefusalCostsTheCommand
+ash   PrintfFloatOperandIsEvaluatedTwice
 ash   PrintfHexFloatDefaultIsTwelveDigits
 ash   PrintfOutputPrecedesComplaint
-ash   PrintfFloatOperandIsEvaluatedTwice
 ash   PrintfRefusedOperandKeepsItsLeadingNumber
 ash   PrintfTimeOperandIsADateString
 ash   ProducedParameterListing
@@ -197,6 +204,7 @@ bash  ArithIntegerOperatorRefusesFloat
 bash  ArithSubscriptSkippedWhenNameUnset
 bash  BareFloatLetterResetsThePrecision
 bash  BareSubscriptIsASubscript
+bash  ChainedSubscriptReadsANestedValue
 bash  DeclareHideInScopeLetter
 bash  DeclareHideValueLetter
 bash  DeclareMappingLetter
@@ -209,8 +217,8 @@ bash  ImmovableOptionsSetAtInvocation
 bash  IntegerPlusFormTakesAttributesOff
 bash  NumericTypeLetterPrecedence
 bash  NumericTypeLettersAreExclusive
-bash  PrintfOutputPrecedesComplaint
 bash  PrintfFloatOperandIsEvaluatedTwice
+bash  PrintfOutputPrecedesComplaint
 bash  PrintfRefusedOperandKeepsItsLeadingNumber
 bash  SetArrayBadNameLeavesZeroFromCommandString
 bash  SetArrayLetter
@@ -258,6 +266,7 @@ dash  BraceRangeZeroStepCountsAsOne
 dash  BraceRescanEntersFailedGroup
 dash  CaseAttributeFoldsWhenRead
 dash  CaseAttributeReplacesTheNumericAttribute
+dash  ChainedSubscriptReadsANestedValue
 dash  CompoundAttribute
 dash  CompoundElementsGoThroughTheAttribute
 dash  CompoundPipelineStatusRecord
@@ -321,6 +330,11 @@ dash  JobsStateFiltersAccumulate
 dash  KeptTrapListingIncludesExit
 dash  KeyedLiteralAppendJoinsTheReplacedValue
 dash  KeyedTableScalarIsTheFirstValue
+dash  ListedAssignmentPrefixIsBare
+dash  ListedBangIsOrdinary
+dash  ListedCaretIsOrdinary
+dash  ListedEqualsIsOrdinary
+dash  ListedNonAsciiIsOrdinary
 dash  LongestMatchTakesTheWrittenArm
 dash  NamerefCycleIsRefused
 dash  NegatedTestRecordsThePostNegationStatus
@@ -333,11 +347,12 @@ dash  NumericTypeLetterRetypesAFrozenName
 dash  NumericTypeLettersAreExclusive
 dash  NumericTypeWithNoValueReachesAChildAsZero
 dash  OneCommandStopsACommandString
+dash  OperatorAfterTheSubscriptListingIsBad
 dash  OperatorDistributesOverStarSubscript
 dash  PipefailSubstitutesTheBareSignal
 dash  PrefixRefusalCostsTheCommand
-dash  PrintfOutputPrecedesComplaint
 dash  PrintfFloatOperandIsEvaluatedTwice
+dash  PrintfOutputPrecedesComplaint
 dash  PrintfRefusedOperandKeepsItsLeadingNumber
 dash  ProducedParameterListing
 dash  QuitResetRestoresTheDefault
@@ -438,6 +453,7 @@ zsh   IntegerAssignmentReadsALeadingZeroAsDecimal
 zsh   LocalOutsideAFunctionIsFatal
 zsh   NamerefCycleIsRefused
 zsh   NegativeSubscriptCountsOverAPromotedScalar
+zsh   OperatorAfterTheSubscriptListingIsBad
 zsh   PrintfHexFloatDefaultIsTwelveDigits
 zsh   PrintfOutputPrecedesComplaint
 zsh   ReadCountJudgesTheNamesAfterTheFirst

@@ -515,6 +515,25 @@ func Semantics() interp.Semantics {
 	// `#abcd` does not. It shows in `set` and not in `declare -p`, whose
 	// values are double-quoted whatever is in them (#2299).
 	s.ListedHashIsBareUnlessItOpensTheValue = interp.Yes
+	// The three bytes the panel does not agree about in a listed word.
+	// Measured 2026-09-14 over `set` and over a keyed `typeset -p`, which
+	// agree: `=` is ordinary here — `v=a=b` and the keys `[a=b]`, `[=x]`,
+	// `[1=2]`, `[x=y=z]` all bare — and so is a byte above ASCII, `v=é` and
+	// `[é]`, which stays itself inside a `$'...'` a control byte opened:
+	// `$'a\téb'`. `^` is not: `'^'` and `'a^b'`, where ksh93 leaves both
+	// bare. This engine had the ksh93 answer to all three (#2820).
+	s.ListedBangIsOrdinary = interp.No
+	s.ListedCaretIsOrdinary = interp.No
+	s.ListedEqualsIsOrdinary = interp.Yes
+	// The character and not the escape, which is bash's answer in every
+	// locale but `C` — measured 2026-09-15 on one binary, `LC_ALL=C`
+	// writing `$'\303\251'` and every other setting, including none at
+	// all, writing `é`. The corpus runs in `C` and records that cell;
+	// this shell carries the reading a person's terminal sees.
+	s.ListedNonAsciiIsOrdinary = interp.Yes
+	// And no bare assignment head: the `=` rule here is the character, not
+	// a prefix, so `x=y=z` is bare rather than `x='y=z'`.
+	s.ListedAssignmentPrefixIsBare = interp.No
 	s.ExportListing = interp.DeclareListingClustered
 	s.ReadonlyListing = interp.DeclareListingClustered
 	// The bare form is this shell's `-p` form exactly, in both builds and in
@@ -749,7 +768,18 @@ func Semantics() interp.Semantics {
 	// numeral this shell cannot hold is refused while it is being read —
 	// `$((1e400))` is `value too great for base` — so there is no value for
 	// an overflow rule to decide, and the question never reaches the axis.
+	// unanswered ChainedSubscriptReadsANestedValue: the grammar for a chained
+	// subscript is not this shell's — `${a[1][2]}` is a bad substitution or
+	// a pattern here — so there is no chain for a reading to be about.
+	// Measured 2026-09-15 (#2830).
 	s.IndirectionYieldsName = interp.No
+	// And an operator written after `${!name[@]}` puts the `!` back to being
+	// that indirection: the listing is the bare form only. Measured
+	// 2026-09-14 on a script file, under `-c` and on standard input alike —
+	// `typeset -A w; w[k]=tgt; tgt=HELLO; echo "${!w[@]#H}"` answers `ELLO`,
+	// and `a=(p q); echo "${!a[@]#x}"` says `p q: invalid variable name`,
+	// which is the indirection failing on the text it was handed (#2821).
+	s.OperatorAfterTheSubscriptListingIsBad = interp.No
 	s.BraceExpansion = interp.Yes
 	// A group that does not expand does not end the word, and the scan
 	// resumes one byte past its open brace rather than past its close, so a
@@ -2628,7 +2658,14 @@ func Apply(r *interp.Runner) {
 	// The command the shell is running, which a DEBUG action reads to find
 	// out which one it fired for. See bashcommand.go.
 	registerRunningCommand(r)
-	r.SetDynamic("RANDOM", func(*interp.Runner) string { return interp.Randoms() })
+	r.SetDynamic("RANDOM", func(rr *interp.Runner) string { return rr.Randoms() })
+	// And an assignment seeds it, which is what makes a script that uses
+	// `RANDOM` reproducible: measured 2026-09-14, `RANDOM=42` twice in one
+	// shell gives the same pair of numbers both times here, in ksh93u+ and
+	// in zsh 5.9.2. Without the writer the assignment was heard and stored
+	// for the producer to find, and the producer had no state to find it
+	// with (#2827).
+	r.SetDynamicWriter("RANDOM", func(rr *interp.Runner, value string) { rr.SeedRandoms(value) })
 	// How the two of them list back, which a produced parameter has to be
 	// told rather than carry: `declare -p RANDOM` is
 	// `declare -i RANDOM="16735"` in bash 5.3 and was `RANDOM: not found`

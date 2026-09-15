@@ -786,7 +786,7 @@ func (r *Runner) clusteredKey(k string) string {
 		return r.dollarQuoted(k)
 	case wholeArraySubscriptAsAKey(k):
 		return doubleQuoted(k)
-	case listedValueIsBare(k):
+	case r.listedValueIsBare(k):
 		return k
 	}
 	return doubleQuoted(k)

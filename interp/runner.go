@@ -759,6 +759,21 @@ type Runner struct {
 	// is a message to whatever produces it rather than a value of its own.
 	assigned map[string]string
 
+	// randomSeed and randomDrawn are the seeded half of Runner.Randoms: the
+	// number a script last assigned to `RANDOM`, and how many have been drawn
+	// since. Zero values are an unseeded shell, which draws from the process
+	// generator and is not reproducible — the state a shell is in until a
+	// script asks for otherwise.
+	//
+	// Two plain integers rather than a generator, and that is what makes a
+	// subshell right: clone copies the Runner by value, so a `( )` carries on
+	// from where its parent had got to and its own draws leave the parent
+	// where it was. A shared generator would have the subshell's reads
+	// advancing the sequence a later read in the parent gets.
+	randomSeed   uint64
+	randomDrawn  uint64
+	randomSeeded bool
+
 	// dynamicDeclarations is how each produced parameter lists back, as the
 	// dialect that registered it states it — see SetDynamicDeclaration.
 	dynamicDeclarations map[string]ProducedDeclaration

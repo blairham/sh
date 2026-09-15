@@ -936,6 +936,22 @@ func Semantics() interp.Semantics {
 	s.ProducedParameterListing = interp.ProducedListingWithValue
 	s.DeclareValueQuoting = interp.ListingQuoteWhenNeededRuns
 	s.ListingControlEscape = interp.ControlEscapeCaret
+	// A byte above ASCII is written as itself — `v=é`, the key `[é]`, and
+	// `$'a\téb'` where a control byte opened the form — and `^` and `=` are
+	// not: `'^'`, `'a^b'`, `'a=b'`, `'x=y=z'`. Measured 2026-09-14 over
+	// `set`, a keyed `typeset -p` and an alias listing. This engine left `^`
+	// bare and quoted the non-ASCII byte, which is ksh93's answer to both
+	// and this shell's to neither (#2820).
+	// `!` is bare here and in ksh93 and quoted in bash, which is a third
+	// pairing again: `v=!`, `v=a!b` and the key `[!]` all unquoted.
+	s.ListedBangIsOrdinary = interp.Yes
+	s.ListedCaretIsOrdinary = interp.No
+	s.ListedEqualsIsOrdinary = interp.No
+	s.ListedNonAsciiIsOrdinary = interp.Yes
+	s.ListedAssignmentPrefixIsBare = interp.No
+	// unanswered OperatorAfterTheSubscriptListingIsBad: `${!name[@]}` is a
+	// bad substitution here in the *bare* form too, so there is no listing
+	// for an operator to come after. Measured 2026-09-14 (#2821).
 	// `export -p` is that same form narrowed to the exported names, not a
 	// listing that repeats its own command word: it writes the attribute
 	// letters, and it picks `typeset` where `export` will not carry the
@@ -1375,6 +1391,12 @@ func Semantics() interp.Semantics {
 	// a terminal here, since `set -m` without one is fatal in this shell —
 	// measured 2026-09-15 on a pseudo-terminal, where the job line is
 	// printed and the status is 0 (#2720).
+	// A chain counts through what the link before it named — characters of
+	// one string, elements of a list — which is the reading
+	// syntax.Dialect.ChainedSubscript was written for and is not ksh93's
+	// walk into a nested compound. This shell has no nested compound to
+	// walk into (#2830).
+	s.ChainedSubscriptReadsANestedValue = interp.No
 	s.MonitorAloneResumesAJob = interp.Yes
 	// And the one column that *announces* on the monitor alone: a script
 	// with `set -m` writes `[1] <pid>` for a `&` job with nobody at a
@@ -3807,7 +3829,14 @@ func Apply(r *interp.Runner) {
 	// prompt and refused it by name in a script (#1090).
 	r.SetPromptStyle(PromptStyle())
 	r.SetSpecial("EUID", strconv.Itoa(os.Geteuid()))
-	r.SetDynamic("RANDOM", func(*interp.Runner) string { return interp.Randoms() })
+	r.SetDynamic("RANDOM", func(rr *interp.Runner) string { return rr.Randoms() })
+	// And an assignment seeds it, which is what makes a script that uses
+	// `RANDOM` reproducible: measured 2026-09-14, `RANDOM=42` twice in one
+	// shell gives the same pair of numbers both times here, in ksh93u+ and
+	// in zsh 5.9.2. Without the writer the assignment was heard and stored
+	// for the producer to find, and the producer had no state to find it
+	// with (#2827).
+	r.SetDynamicWriter("RANDOM", func(rr *interp.Runner, value string) { rr.SeedRandoms(value) })
 	// `typeset -p RANDOM` is `typeset -i10 RANDOM=13859` here — the base
 	// rides on the letter in this shell's listing form, and both are facts
 	// the parameter has to be told, having no attribute record of its own

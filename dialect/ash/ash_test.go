@@ -143,6 +143,11 @@ func TestTheAnswersThatSideWithBashRatherThanDash(t *testing.T) {
 	if got, want := s.UnknownCharacterClass, interp.UnknownClassIsInert; got != want {
 		t.Errorf("UnknownCharacterClass = %v, want %v", got, want)
 	}
+	// And the `[:` that nothing closes, which is the axis beside it
+	// rather than a corner of it — see #1431.
+	if got, want := s.UnterminatedCharacterClass, interp.UnterminatedClassSwallowsTheClosingBracket; got != want {
+		t.Errorf("UnterminatedCharacterClass = %v, want %v", got, want)
+	}
 	out, _ = run(t, `case b in [a[:nope:]b]) echo in ;; *) echo out ;; esac`)
 	if !strings.Contains(out, "in") {
 		t.Errorf("[a[:nope:]b] against b = %q, want the unknown name inert", out)

@@ -1618,6 +1618,9 @@ func Semantics() interp.Semantics {
 	s.TimesRejectsArguments = interp.Yes
 	s.UnterminatedBracket = interp.BracketBadPattern
 	s.UnknownCharacterClass = interp.UnknownClassIsInert
+	// `[[:]` is a bracket holding `[` and `:`, the same reading bash 5.3 gives it.
+	// See interp.Semantics.UnterminatedCharacterClass (#1431).
+	s.UnterminatedCharacterClass = interp.UnterminatedClassIsOrdinaryCharacters
 	// This shell does not glob the result of an expansion, so the axis is
 	// reached only through `${~spec}` and `setopt globsubst` — and it has an
 	// answer there rather than no answer at all. Measured 2026-09-12 in a

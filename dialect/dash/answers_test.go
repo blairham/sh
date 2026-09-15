@@ -121,6 +121,11 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 	if got, want := s.UnknownCharacterClass, interp.UnknownClassEndsTheScan; got != want {
 		t.Errorf("UnknownCharacterClass = %v, want %v", got, want)
 	}
+	// And the `[:` that nothing closes, which is the axis beside it
+	// rather than a corner of it — see #1431.
+	if got, want := s.UnterminatedCharacterClass, interp.UnterminatedClassEndsTheScan; got != want {
+		t.Errorf("UnterminatedCharacterClass = %v, want %v", got, want)
+	}
 	// The one column where an escaped separator closing a `read` value is
 	// data the trim leaves alone (#1360).
 	if got, want := s.ReadTrailingEscapedSeparator,

@@ -560,6 +560,11 @@ type patternOpts struct {
 	// when a pattern actually holds one, so the zero value here is "no
 	// bracket in this pattern asked".
 	unknownClass UnknownClassPolicy
+	// unterminatedClass is what a `[:` nothing closes does to the bracket
+	// around it — see Semantics.UnterminatedCharacterClass. Read only when a
+	// pattern actually holds one, so the zero value here is "no bracket in
+	// this pattern asked".
+	unterminatedClass UnterminatedClassPolicy
 	// group says a parenthesised group in the pattern is a group rather than
 	// literal parentheses, and quantified says a `@?+*!` in front of one is
 	// its quantifier rather than an ordinary character.
@@ -1710,7 +1715,26 @@ func matchBracket(p string, c string, o *patternOpts) (rest string, ok bool) {
 		// `[[ x == [[:] ]]` does not, in bash 5.3.15 and zsh 5.9.2 alike,
 		// so the four characters are a bracket holding `[` and `:`.
 		if strings.HasPrefix(p[i:], "[:") {
-			if end := strings.Index(p[i+2:], ":]"); end >= 0 {
+			if end := strings.Index(p[i+2:], ":]"); end < 0 {
+				// Nothing closes the name, so there is no name: `[[:]` holds
+				// four characters and no class. What that leaves is the
+				// dialect's — see Semantics.UnterminatedCharacterClass for
+				// the five readings and #1431 for the panic this used to be.
+				switch o.unterminatedClass {
+				case UnterminatedClassEndsTheScan:
+					frozen = true
+				case UnterminatedClassEmptiesTheBracket:
+					frozen, matched = true, false
+				case UnterminatedClassSwallowsTheClosingBracket:
+					// The `]` is taken as part of the name still being
+					// looked for, so this bracket expression never ends and
+					// the text is whatever an unterminated one is here.
+					return unterminatedBracket(p, c, o)
+				}
+				// UnterminatedClassIsOrdinaryCharacters falls through: the
+				// `[` and the `:` are members like any other, which is what
+				// the scan below makes of them with no arm of its own.
+			} else {
 				name := p[i+2 : i+2+end]
 				i += 2 + end + 2
 				if !classKnown(name, o.classes) {
@@ -1779,6 +1803,18 @@ func matchBracket(p string, c string, o *patternOpts) (rest string, ok bool) {
 	}
 	// An unterminated bracket is not a bracket expression, and what it is
 	// instead is the dialect's answer rather than this file's.
+	return unterminatedBracket(p, c, o)
+}
+
+// unterminatedBracket is what text that opened a bracket and never closed one
+// is instead.
+//
+// A function of its own because there are two ways to arrive at it: reading to
+// the end of the pattern without finding a `]`, and — in one column — meeting
+// a `[:` that nothing closes, which takes the `]` as part of the name it is
+// still looking for. See Semantics.UnterminatedCharacterClass. Folded rather
+// than written twice, because a second copy is how the two answers drift.
+func unterminatedBracket(p, c string, o *patternOpts) (rest string, ok bool) {
 	switch o.bracket {
 	case BracketLiteral:
 		// bash and ksh93: an ordinary `[`, and the rest of the pattern
@@ -2169,16 +2205,17 @@ func (r *Runner) patternOpts(pattern string, subjects ...string) patternOpts {
 	// operators of parameter expansion, and the builtins that take one —
 	// exits 1 where the shell rejects a pattern. Measured on all three.
 	return r.tildeModifierOpts(r.extendedPatternOpts(patternOpts{
-		caret:        r.caretNegates(pattern),
-		bracket:      BracketLiteral,
-		unknownClass: r.unknownClassPolicy(pattern),
-		chars:        r.patternCountsCharacters(append([]string{pattern}, subjects...)...),
-		group:        r.dialect().PatternAlternation,
-		topGroup:     r.dialect().PatternTopLevelAlternation.ReadsATopLevelBar(false),
-		quantified:   r.readsQuantifiedGroups(false),
-		numericRange: r.dialect().NumericRangePattern,
-		escapes:      r.sem().PatternEscapeReaches,
-		classes:      r.patternClasses(pattern),
+		caret:             r.caretNegates(pattern),
+		bracket:           BracketLiteral,
+		unknownClass:      r.unknownClassPolicy(pattern),
+		unterminatedClass: r.unterminatedClassPolicy(pattern),
+		chars:             r.patternCountsCharacters(append([]string{pattern}, subjects...)...),
+		group:             r.dialect().PatternAlternation,
+		topGroup:          r.dialect().PatternTopLevelAlternation.ReadsATopLevelBar(false),
+		quantified:        r.readsQuantifiedGroups(false),
+		numericRange:      r.dialect().NumericRangePattern,
+		escapes:           r.sem().PatternEscapeReaches,
+		classes:           r.patternClasses(pattern),
 	}, pattern, 1), pattern)
 }
 
@@ -2229,6 +2266,37 @@ func (r *Runner) unknownClassPolicy(pattern string) UnknownClassPolicy {
 		return r.sem().UnknownCharacterClass
 	}
 	return r.unknownCharacterClass()
+}
+
+// unterminatedClassPolicy resolves Semantics.UnterminatedCharacterClass, and
+// asks the axis only where the pattern actually holds a `[:` nothing closes —
+// the shape unknownClassPolicy uses, and for the same reason: a shell with no
+// answer must not be refused over a question the pattern never poses.
+func (r *Runner) unterminatedClassPolicy(pattern string) UnterminatedClassPolicy {
+	if !patternHasAnUnterminatedClass(pattern) {
+		return r.sem().UnterminatedCharacterClass
+	}
+	return r.unterminatedCharacterClass()
+}
+
+// patternHasAnUnterminatedClass reports whether pattern holds a `[:` with no
+// `:]` after it.
+//
+// It asks nothing about the roster, which is what separates it from
+// patternHasAnUnknownClass: a name that never ends is not a name, so whether
+// this shell has it cannot arise.
+func patternHasAnUnterminatedClass(pattern string) bool {
+	for i := 0; i+1 < len(pattern); i++ {
+		if pattern[i] != '[' || pattern[i+1] != ':' {
+			continue
+		}
+		end := strings.Index(pattern[i+2:], ":]")
+		if end < 0 {
+			return true
+		}
+		i += 2 + end + 1
+	}
+	return false
 }
 
 // patternHasAnUnknownClass reports whether pattern holds a closed `[:name:]`

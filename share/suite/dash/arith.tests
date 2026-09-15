@@ -1,0 +1,37 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Arithmetic, the answer only dash gives.
+#
+# One claim, asked five ways: an arithmetic error ends the shell with status
+# 2 here and with 1 in bash, zsh and ksh93. core/arith.tests asks only whether
+# the expression failed, because that much is common; the number is this file.
+#
+# Every case runs in a subshell with the diagnostic discarded. The wording is
+# each shell's own and would make this file unique for the wrong reason; the
+# status is the claim.
+
+( : "$(( 1 / 0 ))" ) 2>/dev/null
+printf 'division by zero:            %s\n' "$?"
+( : "$(( 1 % 0 ))" ) 2>/dev/null
+printf 'remainder by zero:           %s\n' "$?"
+( : "$(( 1 + ))" ) 2>/dev/null
+printf 'a dangling operator:         %s\n' "$?"
+( : "$(( 1 2 ))" ) 2>/dev/null
+printf 'two numbers, no operator:    %s\n' "$?"
+notanumber=abc
+( : "$(( notanumber ))" ) 2>/dev/null
+printf 'a name holding letters:      %s\n' "$?"
+
+# The zero-divisor pair again with the sign moved, so the claim is about the
+# divisor being zero rather than about the expression's shape.
+( : "$(( -1 / 0 ))" ) 2>/dev/null
+printf 'a negative numerator:        %s\n' "$?"
+z=0
+( : "$(( 1 / z ))" ) 2>/dev/null
+printf 'the divisor from a variable: %s\n' "$?"
+
+# The control: an expression that works leaves the status alone, so what is
+# measured above is the failure and not the subshell.
+( : "$(( 1 / 1 ))" ) 2>/dev/null
+printf 'a division that works:       %s\n' "$?"

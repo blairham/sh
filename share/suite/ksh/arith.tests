@@ -75,3 +75,40 @@ if (( 0 )); then printf '%s\n' 'unreachable'; else printf '%s\n' 'zero is a fail
 let 'a = 3 + 4'
 printf '%s\n' "$a"
 let "a == 7" && printf '%s\n' 'let reports the truth of its last expression'
+
+# --- a negative divisor is not asked, and that is the measurement ------------
+#
+# ksh93 93u+ on this machine refuses *every* integer division whose divisor is
+# negative and calls it a division by zero: `7 / -2`, `6 / -2`, `7 / -1`,
+# `-7 / -2` and `7 / (0 - 2)` all end the script, and so does a divisor read
+# out of a variable. The remainder operator with the same operands answers 1,
+# and `7 / -2.0` answers -3.5, so it is integer division with a negative
+# divisor specifically. bash, zsh and dash all answer -3.
+#
+# It is written here rather than run because a case of ours is a thing our
+# ksh has to reproduce, and this is a defect in a shell from 2012 rather than
+# a dialect's answer. core/arith.tests says the same thing from the other
+# side: `-7 / 2` is core and `7 / -2` is nowhere.
+
+# --- the top of the range ----------------------------------------------------
+#
+# bash and zsh wrap a 64-bit overflow the way C does. ksh93 saturates at the
+# largest value instead — and where saturating would lose too much, converts
+# to floating point and prints the result in that notation, which no other
+# column on the panel can do inside `$(( ))` at all.
+big=9223372036854775807
+printf 'the largest value: %s\n' "$(( big ))"
+printf 'one past it:       %s\n' "$(( big + 1 ))"
+printf 'twice it:          %s\n' "$(( big * 2 ))"
+printf 'below the smallest: %s\n' "$(( -9223372036854775807 - 2 ))"
+
+# --- a value that is not a number --------------------------------------------
+#
+# bash and zsh read an unparseable operand as zero and carry on. dash fails
+# with status 2 and ksh93 with status 1, so what is ksh93's alone is the pair:
+# it refuses, and it refuses with a 1.
+( printf 'value [%s]\n' "$(( 0x ))" ) 2>/dev/null
+printf 'a hexadecimal prefix with no digits: %s\n' "$?"
+notanumber=abc
+( printf 'value [%s]\n' "$(( notanumber ))" ) 2>/dev/null
+printf 'a name holding letters: %s\n' "$?"

@@ -1,0 +1,58 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Field splitting where zsh answers differently from every other shell on the
+# panel. core/word-splitting.tests carries the rules the four share; these are
+# the two it could not.
+
+show() {
+	printf '%s:' "$1"
+	shift
+	printf ' n=%s' "$#"
+	for w in "$@"; do printf ' [%s]' "$w"; done
+	printf '\n'
+}
+
+# --- an unquoted parameter expansion is not split ---------------------------
+#
+# bash, ksh93 and dash split it on IFS like any other expansion. zsh treats
+# the value as one word unless asked otherwise, which is the single decision
+# most of this file is downstream of.
+
+IFS=' '
+v='x y z'
+set -- $v
+show 'an unquoted parameter' "$@"
+set -- ${v}
+show 'an unquoted braced parameter' "$@"
+unset u
+set -- ${u-a b c}
+show 'the word of a default' "$@"
+set -- ${v}suffix
+show 'a parameter joined to text' "$@"
+
+# Command substitution *is* split here, which is what makes the line above a
+# decision about parameters rather than about splitting.
+set -- $(printf 'a b c')
+show 'a command substitution' "$@"
+
+# --- a trailing non-whitespace separator keeps its empty field --------------
+#
+# bash, ksh93 and dash drop the field a trailing separator would end, so `a:`
+# is one field there. zsh keeps it.
+
+IFS=:
+set -- $(printf 'a:')
+show 'a trailing colon' "$@"
+set -- $(printf ':')
+show 'one colon alone' "$@"
+set -- $(printf '::')
+show 'two colons alone' "$@"
+set -- $(printf 'a:b:')
+show 'a trailing colon after two fields' "$@"
+
+# The leading end is not the same question, and all four agree about it: a
+# leading separator does make an empty first field.
+set -- $(printf ':a')
+show 'a leading colon' "$@"
+IFS=' '

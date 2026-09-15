@@ -543,6 +543,16 @@ func (r *Runner) caughtBorrowedError(s sourced) (int, bool) {
 		// error, so the catch above does not apply to it.
 		return 0, false
 	}
+	if r.abandon == abandonUsage &&
+		r.ask(r.sem().BuiltinUsageErrorEscapesBorrowedText,
+			"a builtin's complaint about how it was called ending the shell rather than the text it is in") {
+		// The second exception, and the same shape as the first: the
+		// dialect catches every fatal error here except the ones a builtin
+		// raised about its own call. See
+		// Semantics.BuiltinUsageErrorEscapesBorrowedText for the pairs that
+		// measured the line.
+		return 0, false
+	}
 	status := r.status
 	r.takeFileError()
 	if s.fatalStatus != 0 {
@@ -796,7 +806,7 @@ func (r *Runner) dotFailed(name string, err error) int {
 	r.diagf("%s\n", Wording(format, ".: %[1]s: %[2]s", name, reason(err), r.inBuiltin))
 	// dash and ksh93 end the script here; bash and zsh report it and go on.
 	if r.ask(r.sem().DotMissingFileFatal, "`.` failing to open a file being fatal") {
-		r.fatalQuiet()
+		r.fatalUsageQuiet()
 		return r.status
 	}
 	return r.diag().dotCannotOpenStatus()

@@ -128,7 +128,7 @@ func (r *Runner) refuseWithUsage(name string) int {
 	// letters parsed fine and only their company is wrong.
 	if r.ask(r.sem().TypesetBadOptionFatal, "a bad `typeset` option ending the script") {
 		r.status = status
-		r.fatalQuiet()
+		r.fatalUsageQuiet()
 	}
 	return status
 }

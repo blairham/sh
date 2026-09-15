@@ -352,7 +352,7 @@ func (r *Runner) refusedReturnOperand(arg string) int {
 		// No `r.status = 2` to go with the 2 below: the return value is what
 		// the dispatcher writes, and it is the status the panel ends at. See
 		// setFatalStatus.
-		r.fatalQuiet()
+		r.fatalUsageQuiet()
 	}
 	return 2
 }
@@ -1570,7 +1570,7 @@ func (r *Runner) endOnSetRefusal(status int, sp setRefusalSpelling, why string) 
 	}
 	if r.ask(sp.fatal(r.sem()), why) {
 		r.status = status
-		r.fatalQuiet()
+		r.fatalUsageQuiet()
 	}
 }
 
@@ -1605,7 +1605,7 @@ func (r *Runner) finishSetRefusals() int {
 	if r.ask(sp.fatal(r.sem()),
 		"a refused `set` option ending the script after every bad word is reported") {
 		r.status = status
-		r.fatalQuiet()
+		r.fatalUsageQuiet()
 	}
 	r.setOptionStatus = 0
 	return status
@@ -2858,7 +2858,7 @@ func (r *Runner) shiftOutOfRange(wording string, n int, operand string) int {
 	if r.ask(r.sem().ShiftPastEndFatal, "shift past the end being fatal") {
 		// controlReturn only unwound a function, so at the top level the
 		// script carried on past an error the shell calls fatal.
-		r.fatal("%s\n", Wording(wording, "shift: can't shift that many", n, operand))
+		r.fatalUsage("%s\n", Wording(wording, "shift: can't shift that many", n, operand))
 		return r.status
 	}
 	// Survivable, and still worth saying where the dialect says it: zsh
@@ -2958,7 +2958,7 @@ func (r *Runner) shiftBadNumber(operand string) (int, bool) {
 	r.diagf("%s\n", Wording(d.ShiftBadNumber, "shift: %[1]s: numeric argument required", operand))
 	status := orDefault(d.BuiltinBadOptionStatus, 2)
 	if r.ask(r.sem().BadOptionToSpecialBuiltinFatal, "a special builtin's bad operand ending the script") {
-		r.fatalQuiet()
+		r.fatalUsageQuiet()
 		// The builtin's own status and not `r.status`, which fatalQuiet has
 		// just written the dialect's generic fatal answer into — 1 in bash,
 		// and the panel ends this at 2. See setFatalStatus (#2583).
@@ -5457,7 +5457,7 @@ func sortedKeys(m map[string]string) []string {
 func (r *Runner) badStatusArg(builtin, arg string) int {
 	r.diagf("%s\n", Wording(r.diag().NumericArgument, "%[1]s: invalid number: %[2]s", builtin, arg))
 	if r.ask(r.sem().BadOptionToSpecialBuiltinFatal, "a special builtin's bad operand ending the script") {
-		r.fatalQuiet()
+		r.fatalUsageQuiet()
 		// The 2 and not `r.status`, for the reason shiftBadNumber returns the
 		// builtin's status: see setFatalStatus (#2583).
 		return 2

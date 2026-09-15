@@ -376,7 +376,7 @@ func (r *Runner) refuseNameref(builtin, wording string) int {
 	r.diagf("%s: %s\n", builtin, wording)
 	if r.ask(r.sem().BadNameToDeclarationFatal, "a declaration's bad name ending the script") {
 		r.status = 1
-		r.fatalQuiet()
+		r.fatalUsageQuiet()
 		return r.status
 	}
 	if r.unspecified {

@@ -270,7 +270,7 @@ func (r *Runner) trapSingleArgument(cond string) int {
 			return r.status
 		}
 		r.diagf("%s\n", Wording(r.diag().TrapConditionRequired, "trap: condition(s) required"))
-		r.fatalQuiet()
+		r.fatalUsageQuiet()
 		return r.status
 	}
 	if r.unspecified {

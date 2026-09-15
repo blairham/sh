@@ -39,6 +39,23 @@ const (
 	// where its own unset-parameter error is caught. See
 	// Semantics.ParamErrorIsAnExitRequest.
 	abandonParamError
+
+	// abandonUsage is an error a builtin reported about **how it was
+	// called** — an option it does not have, a name it cannot use as one, a
+	// count past the end of the positional parameters, a file `.` could not
+	// open, a redirection that would not open on a special builtin.
+	//
+	// It is abandonError everywhere except at the boundary a special
+	// builtin draws around text it is running, where one dialect catches
+	// every other fatal error and lets this one out. See
+	// Semantics.BuiltinUsageErrorEscapesBorrowedText.
+	//
+	// The line is the *call* and not the builtin: a readonly reassignment
+	// `readonly` or `typeset` refuses is raised inside a builtin too, and it
+	// is caught like any other error in the same shell. Measured beside each
+	// other, which is what makes this a kind of its own rather than a test
+	// on Runner.inBuiltin.
+	abandonUsage
 )
 
 // pendingFileError reports whether what is unwinding is an error a boundary

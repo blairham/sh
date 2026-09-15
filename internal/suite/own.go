@@ -267,6 +267,31 @@ func (s Suite) attribute(name string) string {
 	return name
 }
 
+// mustRepeat says the reference is asked for a second run of *every* file of
+// this suite rather than only of the files the two shells answered
+// differently.
+//
+// It is the second of the two places a native column parts from a fetched
+// one, and it is there for the same reason the first is: the rule is built
+// rather than remembered.
+//
+// For a fetched suite the extra run buys nothing on a file the two shells
+// already agreed about — the question is only ever "is this disagreement
+// real", and a file with no disagreement has nothing to doubt.
+//
+// For a suite of ours the question is a different one. These files ship no
+// expected output, so a case the reference answers two ways has no
+// expectation for our binary to be graded against, and whether our run
+// happened to match one of those two answers is luck rather than evidence. A
+// stability check asked only at a disagreement would let exactly that case
+// through as a pass — the one shape that is invisible to every other number
+// in this report. See [Report.CaseDefects] for what is then done with it.
+//
+// The floor is one extra run, so a case that misbehaves one time in ten can
+// still get past. That is the same floor the fetched column has always stood
+// on, and naming it is better than implying a proof.
+func (s Suite) mustRepeat() bool { return s.Ours }
+
 // NamedResult is one file's outcome, with its name where naming it is allowed.
 type NamedResult struct {
 	// Name is the file, and it is empty for every fetched column. See

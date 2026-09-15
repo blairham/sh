@@ -221,6 +221,39 @@ func (r Report) NotStrict() []NamedResult {
 	return out
 }
 
+// CaseDefects is the files of our own suite the reference would not
+// reproduce, named.
+//
+// The same measurement as [Result.Unstable] read the other way round, and the
+// difference is the whole of #2297. A fetched suite is somebody else's work
+// and nobody here may edit it, so a file its own shell will not repeat is
+// evidence about neither shell and dropping it from the scored set is the
+// only honest thing available — the denominator moves and the report says by
+// how much.
+//
+// Our own suite ships no expected output, so the reference on this machine
+// *is* the expectation. A case the reference answers two different ways has
+// no expectation at all, and it is therefore not an unlucky file but a bug in
+// the case: a pid, a clock, a scheduling order, a path that escaped
+// [normalize]. It is ours, so we can fix it, and a run that met one has to
+// fail rather than quietly shrink its denominator.
+//
+// Empty for a fetched column whatever happened, because [Suite.attribute]
+// leaves a fetched case unnamed and there is nothing here to report.
+func (r Report) CaseDefects() []string {
+	if !r.Suite.Ours {
+		return nil
+	}
+	var out []string
+	for _, c := range r.Cases {
+		if c.Name == "" || !c.Result.Unstable {
+			continue
+		}
+		out = append(out, c.Name)
+	}
+	return out
+}
+
 // ProseAsked says this column has a [Suite.SelfDoc], so [Report.Prose] is a
 // measurement rather than a question nobody put. Zero means two different
 // things without it, and the report may not print them alike.
@@ -475,33 +508,36 @@ func grade(ctx context.Context, s Suite, tests, name, ours, reference string, di
 	}
 
 	res.OurStatus, res.RefStatus = own.Status, ref.Status
-	if own.Output == ref.Output && own.Status == ref.Status {
-		// Identical before normalization, so there is nothing for
-		// normalization to decide and nothing to re-run: the two shells wrote
-		// the same bytes.
-		res.Scored, res.Strict = true, true
-		l := lines(own.Output)
-		res.Common, res.Longest = len(l), len(l)
-		res.OurLines, res.RefLines = len(l), len(l)
-		return res
-	}
-
+	identical := own.Output == ref.Output && own.Status == ref.Status
 	theirs := normalize(ref.Output, reference, ref.Dir)
 	mine := normalize(own.Output, ours, own.Dir)
-	if mine == theirs && own.Status == ref.Status {
+	agreed := identical || (mine == theirs && own.Status == ref.Status)
+
+	if !agreed || s.mustRepeat() {
+		if !repeats(ctx, s, tests, name, reference, opts, theirs, ref.Status) {
+			// The reference does not produce the same run twice, so the two
+			// shells were never going to agree and this file is evidence
+			// about neither. A process id, a clock reading, a scheduling
+			// order: the reference disagrees with itself on these, and
+			// counting them against us would put a number on the machine.
+			//
+			// In a suite of ours it means the opposite thing, and
+			// [Suite.mustRepeat] is why the question was even asked here.
+			res.Unstable = true
+			return res
+		}
+	}
+	if agreed {
+		// Identical before normalization means there was nothing for
+		// normalization to decide: the two shells wrote the same bytes.
+		text := mine
+		if identical {
+			text = own.Output
+		}
 		res.Scored, res.Strict = true, true
-		l := lines(mine)
+		l := lines(text)
 		res.Common, res.Longest = len(l), len(l)
 		res.OurLines, res.RefLines = len(l), len(l)
-		return res
-	}
-	if !repeats(ctx, s, tests, name, reference, opts, theirs, ref.Status) {
-		// The reference does not produce the same run twice, so the two
-		// shells were never going to agree and this file is evidence about
-		// neither. A process id, a clock reading, a scheduling order: the
-		// reference disagrees with itself on these, and counting them against
-		// us would put a number on the machine.
-		res.Unstable = true
 		return res
 	}
 	res.Scored = true
@@ -540,8 +576,11 @@ func runIn(ctx context.Context, s Suite, tests, name, shell string, opts Options
 	return placed{Outcome: out, Dir: run}
 }
 
-// repeats asks the reference for the same file again, and only where the two
-// shells differed — the one place the answer changes anything.
+// repeats asks the reference for the same file again.
+//
+// For a fetched column, only where the two shells differed: that is the one
+// place the answer changes anything. For a suite of ours, every file — see
+// [Suite.mustRepeat].
 func repeats(ctx context.Context, s Suite, tests, name, reference string, opts Options, want string, status int) bool {
 	again := runIn(ctx, s, tests, name, reference, opts)
 	if again.TimedOut {

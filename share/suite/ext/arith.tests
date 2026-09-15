@@ -1,0 +1,104 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# The arithmetic the ksh family and zsh share and dash has not got. Every
+# construct here is refused outright by dash — as a parse error inside
+# `$(( ))`, or as a command dash has never had — which is what puts it in
+# ext/ rather than in core/arith.tests beside the POSIX operators.
+#
+# Read it beside core/arith.tests: that file is what a `sh` script may write,
+# and this is what the other four-fifths of the panel adds to it.
+
+# --- explicit bases ----------------------------------------------------------
+#
+# `base#number`, for any base from 2 to 36. Base ten spelled out is the way to
+# read a digit string with a leading zero as decimal, which is what a script
+# that parses a date or a zero-padded index actually needs.
+
+printf '%s\n' "binary=$(( 2#101 )) hex=$(( 16#ff )) octal=$(( 8#17 ))"
+printf '%s\n' "base ten spelled out=$(( 10#09 + 1 ))"
+printf '%s\n' "the widest base=$(( 36#z )) and a digit inside it=$(( 36#10 ))"
+printf '%s\n' "the narrowest=$(( 2#1 )) zero in any base=$(( 16#0 ))"
+
+# The `0x` prefix is core and is asked there; it is here once, next to its
+# spelled-out twin, because the pair is the claim a reader wants.
+printf '%s\n' "two spellings of the same number: $(( 0x1f )) $(( 16#1f ))"
+
+# --- the empty expression ----------------------------------------------------
+#
+# Nothing at all between the parentheses is zero rather than an error. dash
+# refuses it as a missing primary.
+
+printf '[%s] [%s]\n' "$(( ))" "$((    ))"
+
+# --- increment and decrement -------------------------------------------------
+#
+# Both operators in both positions, and the pair asked together: what the
+# expression was worth, and what the variable holds afterwards. Either half
+# alone passes on the wrong one.
+
+i=5
+printf '%s\n' "post-increment=$(( i++ )) then i=$i"
+printf '%s\n' "post-decrement=$(( i-- )) then i=$i"
+printf '%s\n' "pre-increment=$(( ++i )) then i=$i"
+printf '%s\n' "pre-decrement=$(( --i )) then i=$i"
+j=0
+printf '%s\n' "twice in one expression=$(( j++ + j++ )) then j=$j"
+
+# --- a value that is itself an expression ------------------------------------
+#
+# A name is read as a number, and when what it holds is not a number it is
+# read again as an expression. dash stops at the first reading and calls the
+# value an illegal number.
+
+expr='2 + 3'
+printf '%s\n' "a variable holding an expression=$(( expr ))"
+indirect=expr
+printf '%s\n' "and one holding the name of that one=$(( indirect ))"
+one=1
+plus='one + one'
+printf '%s\n' "a name inside the held expression=$(( plus ))"
+
+# --- the comma ---------------------------------------------------------------
+#
+# Every operand is evaluated, left to right, and the value is the last one.
+
+printf '%s\n' "comma=$(( 1,2,3 ))"
+g=0
+printf '%s\n' "the left operand still ran=$(( g = 5, g + 1 )) g=$g"
+
+# --- `(( ))` as a command ----------------------------------------------------
+#
+# The one place in the shell where zero is false: the status is the truth of
+# the value rather than the value itself, so a successful assignment of zero
+# is a failed command.
+
+if (( 1 + 1 == 2 )); then printf 'a true expression succeeds\n'; fi
+(( 0 ))
+printf 'zero is a failure: %s\n' "$?"
+(( 1 ))
+printf 'one is a success: %s\n' "$?"
+(( -1 ))
+printf 'a negative number is a success too: %s\n' "$?"
+a=1
+(( a = 0 ))
+printf 'an assignment of zero: status %s, a=%s\n' "$?" "$a"
+(( a = 4 ))
+printf 'an assignment of four: status %s, a=%s\n' "$?" "$a"
+
+# --- `let` -------------------------------------------------------------------
+#
+# The same evaluation as a builtin taking words, and the same inversion of
+# zero. With more than one word it is the *last* one that decides the status,
+# and every one of them still runs.
+
+let 'b = 3 + 4'
+printf 'let assigned: status %s, b=%s\n' "$?" "$b"
+let 'b - 7'
+printf 'let of a zero result: %s\n' "$?"
+let 'b'
+printf 'let of a nonzero value: %s\n' "$?"
+let 'c = 1' 'd = 0'
+printf 'the last word decides: status %s, c=%s d=%s\n' "$?" "$c" "$d"
+let 'e = 0' 'f = 1'
+printf 'and it decides the other way too: status %s, e=%s f=%s\n' "$?" "$e" "$f"

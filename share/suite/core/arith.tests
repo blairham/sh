@@ -80,3 +80,83 @@ printf '%s\n' "captured=$v"
 
 # Comparisons are 1 and 0, so they compose with the rest.
 printf '%s\n' "compose=$(((3 > 2) + (4 > 5)))"
+
+# --- the conditional, and what it does not evaluate --------------------------
+#
+# The arm not taken is dropped, which is the only way to divide by zero in a
+# shell and get an answer back.
+
+printf '%s\n' "ternary=$(( 1 ? 2 : 3 )) other=$(( 0 ? 2 : 3 ))"
+printf '%s\n' "dropped-division=$(( 0 ? 1 / 0 : 5 ))"
+k=0
+printf '%s\n' "only-one-arm-assigns=$(( 1 ? (k = 9) : (k = 8) )) k=$k"
+printf '%s\n' "parenthesised=$(( (1 ? 2 : 3) + 1 ))"
+printf '%s\n' "nested-in-the-arm=$(( 1 == 1 ? 1 == 1 ? 7 : 8 : 9 ))"
+printf '%s\n' "nested-in-the-test=$(( (0 ? 1 : 1) ? 4 : 5 ))"
+
+# --- what a name means inside an expression ---------------------------------
+#
+# A bare name is read as a number, an unset one is zero, and an empty one is
+# zero as well. The `$` is optional and changes nothing, which is worth
+# asking on one line rather than believing: the two spellings reach the value
+# by different routes.
+
+n=7
+printf '%s\n' "three spellings: $(( $n )) $(( n )) $(( ${n} ))"
+v=
+printf '%s\n' "empty=$(( v )) empty-plus-one=$(( v + 1 ))"
+unset u
+printf '%s\n' "unset=$(( u )) unset-plus-one=$(( u + 1 ))"
+neg=-4
+printf '%s\n' "negative=$(( neg )) negated=$(( -neg ))"
+
+# A *value* that is itself an expression is deliberately absent: bash, zsh and
+# ksh93 evaluate it again and dash refuses it as an illegal number. It is
+# share/suite/ext/arith.tests.
+
+# --- division, remainder and their signs ------------------------------------
+#
+# Division truncates toward zero and the remainder takes the sign of the left
+# operand, so the pair is asked together rather than either alone.
+
+printf '%s\n' "truncation=$(( 7 / 2 * 2 )) negative-quotient=$(( -7 / 2 ))"
+printf '%s\n' "negative-remainder=$(( -7 % 2 ))"
+
+# `7 / -2` is not here. ksh93 93u+ on this machine calls it a division by
+# zero and ends the script; the other three answer -3. That is
+# share/suite/ksh/arith.tests.
+
+# --- the ends of the range --------------------------------------------------
+#
+# The arithmetic is 64-bit and signed in every column. The overflowing side of
+# that is not asked here — bash and zsh wrap and ksh93 saturates — so what is
+# claimed is the range itself.
+
+big=9223372036854775807
+printf '%s\n' "largest=$(( big )) smallest=$(( -9223372036854775807 - 1 ))"
+
+# --- where an expansion may stand -------------------------------------------
+
+printf '%s\n' "grouped=$(( (1 + 2) * (3 + 4) ))"
+printf '%s\n' "a substitution inside it=$(( 1 + $(printf '2') ))"
+q=3
+printf '%s\n' "an expansion inside it=$(( $((q + 1)) * 2 ))"
+printf '%s\n' "joined to text=$(( 1 + 1 ))s"
+printf '%s\n' "a newline inside it=$(( 1 +
+2 ))"
+
+# --- a malformed expression -------------------------------------------------
+#
+# The status is the claim and the wording is not, so the diagnostic is
+# discarded and the subshell's number is printed. bash, zsh and ksh93 leave 1
+# and dash leaves 2, so only the *fact* that it failed is core; the number is
+# share/suite/dash/arith.tests.
+
+( printf '%s\n' "$(( 1 + ))" ) 2>/dev/null
+rc=$?
+printf 'a dangling operator failed: '
+if [ "$rc" -ne 0 ]; then printf 'yes\n'; else printf 'no\n'; fi
+( printf '%s\n' "$(( 1 2 ))" ) 2>/dev/null
+rc=$?
+printf 'two numbers with no operator failed: '
+if [ "$rc" -ne 0 ]; then printf 'yes\n'; else printf 'no\n'; fi

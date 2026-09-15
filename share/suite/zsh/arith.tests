@@ -1,0 +1,59 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Arithmetic, the answer only zsh gives.
+#
+# This is not a file of constructs the others lack. Every line below is an
+# expression all four shells parse and evaluate, and zsh returns a different
+# number for it — which makes it the more dangerous kind of divergence, since
+# a script written against bash or ksh93 runs here and gets an answer rather
+# than a diagnostic.
+#
+# core/arith.tests holds the operators the panel agrees about, and says on
+# each omission why it is not there. This is where those omissions went.
+
+# --- the shifts bind tighter than the arithmetic ------------------------------
+#
+# In C, and in bash, ksh93 and dash, `<<` and `>>` are below `+` and `*`.
+# In zsh they are above both, so the shift happens first.
+printf '%s\n' "shift against a sum on the right: $(( 1 << 2 + 1 ))"
+printf '%s\n' "shift against a sum on the left:  $(( 1 + 2 << 1 ))"
+printf '%s\n' "shift against a product:          $(( 1 << 2 * 2 ))"
+printf '%s\n' "the other direction:              $(( 16 >> 1 + 1 ))"
+printf '%s\n' "and against a product:            $(( 8 >> 1 * 2 ))"
+
+# The control, so the lines above are read as precedence rather than as a
+# shift that is simply wrong: parenthesised, every shell agrees.
+printf '%s\n' "parenthesised the C way: $(( 1 << (2 + 1) )) $(( (1 + 2) << 1 ))"
+
+# --- and the bitwise operators bind tighter than the comparisons -------------
+#
+# The same reordering one level down: `&` is above `<` here and below it
+# everywhere else, so `1 < 2 & 1` is `1 < (2 & 1)` and comes out false.
+printf '%s\n' "and against a comparison: $(( 1 < 2 & 1 ))"
+printf '%s\n' "parenthesised:            $(( (1 < 2) & 1 ))"
+
+# --- and the option that puts C's order back ---------------------------------
+#
+# `c_precedences` is zsh's own name for the rest of the panel's answer, which
+# is the strongest evidence that the order above is a decision and not an
+# accident. Every number here is the one bash, ksh93 and dash print.
+setopt c_precedences
+printf '%s\n' "with c_precedences: $(( 1 << 2 + 1 )) $(( 1 + 2 << 1 )) $(( 1 << 2 * 2 ))"
+printf '%s\n' "and the comparison: $(( 1 < 2 & 1 ))"
+unsetopt c_precedences
+printf '%s\n' "and back again: $(( 1 << 2 + 1 )) $(( 1 < 2 & 1 ))"
+
+# --- a leading zero is not octal ---------------------------------------------
+#
+# `010` is eight in bash, ksh93 and dash and ten here. `0x` is hexadecimal in
+# every column including this one, so the divergence is about the bare zero
+# rather than about prefixes in general.
+printf '%s\n' "leading zero: $(( 010 )) $(( 0100 )) $(( 08 + 1 ))"
+printf '%s\n' "hexadecimal is still hexadecimal: $(( 0x10 ))"
+
+# And the option for that one too, which is the same shape of evidence.
+setopt octal_zeroes
+printf '%s\n' "with octal_zeroes: $(( 010 )) $(( 0100 ))"
+unsetopt octal_zeroes
+printf '%s\n' "and back again: $(( 010 ))"

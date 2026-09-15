@@ -876,19 +876,24 @@ func (r *Runner) eachTarget(fd int, f io.Writer, opened map[int]io.Writer) io.Wr
 // redirection every shell performs.
 func (r *Runner) heredocReader(body string) (io.Reader, io.Closer) {
 	if r.sem().HeredocBody == HeredocBodyInATemporaryFile {
-		// r.tempHome() rather than os.CreateTemp's own empty directory,
-		// because the shell's `$TMPDIR` is the script's answer and the
-		// process environment's is not: a script that moved it moved where
-		// its own private text goes. The same rule every other file this
-		// package makes for itself follows.
-		f, err := os.CreateTemp(r.tempHome(), "sh-heredoc-")
+		// Named here and opened exclusively rather than through
+		// os.CreateTemp, which is forbidden in this tree for a reason that
+		// applies exactly here: it resolves an empty directory through
+		// os.TempDir, which is the *process* environment's `$TMPDIR`, where
+		// the shell's answer is the script's — `r.tempHome()`, which reads
+		// the variable. A script that moved the name moved where its own
+		// private text goes. `newSubstFile` names its file the same way.
+		path := filepath.Join(r.tempHome(),
+			".sh-heredoc-"+strconv.Itoa(os.Getpid())+"-"+
+				strconv.FormatUint(heredocSpoolSeq.Add(1), 10))
+		f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o600)
 		if err != nil {
 			return strings.NewReader(body), nil
 		}
 		// Unlinked at once and read through the descriptor that is already
 		// open on it, so nothing is left behind by a shell that is killed
 		// and nothing in the filesystem names a script's private text.
-		_ = os.Remove(f.Name())
+		_ = os.Remove(path)
 		if _, err := f.WriteString(body); err != nil {
 			_ = f.Close()
 			return strings.NewReader(body), nil
@@ -2269,6 +2274,11 @@ func renameOnSuccessTemp(target string) string {
 }
 
 var renameOnSuccessSeq atomic.Uint64
+
+// heredocSpoolSeq numbers the files a here-document's body is spooled into,
+// beside the pid, for the reason renameOnSuccessTemp gives: a loop reaches
+// this twice before the first is closed.
+var heredocSpoolSeq atomic.Uint64
 
 // finishRenameOnSuccess is the filesystem half of a `>;`, in a function of its
 // own so that what reaches the filesystem is nameable.

@@ -196,7 +196,7 @@ var exempt = map[string]string{
 	"interp.heredocReader": "the spool a here-document's or a here-string's body is put on, so " +
 		"that a child naming the descriptor can read it (#2759). The text is this shell's own — " +
 		"a string the parser produced — and there is no path a script named: the file is made " +
-		"with os.CreateTemp under r.tempHome() and unlinked before a byte is " +
+		"named under r.tempHome(), opened exclusively and unlinked before a byte is " +
 		"written, so nothing in the filesystem ever names it and the descriptor already open " +
 		"on it is the only way to it. The other medium is an os.Pipe and reaches no name at " +
 		"all. A refusal here would refuse a construct every shell performs and protect " +

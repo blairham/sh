@@ -41,15 +41,52 @@
 # and one started in a subshell — because each is a job with a status and none
 # of them is a race once it has been waited for. It asks the operands `wait`
 # takes, a job's descriptors, `jobs -p` and `jobs -l`, `nohup`, and the one
-# thing about a pid that is common: a child that has exited and not been
-# waited for still answers `kill -0`.
+# thing about a pid that is common: a job the shell is still running answers
+# `kill -0`, and stops once `wait` has reaped it.
+#
+# Held open rather than allowed to finish: four cases here ask about a job
+# the shell has not finished with, and every one of them holds it open on a
+# fifo nothing has written to yet rather than letting it exit and asking
+# quickly. A job that has ended and not yet been reaped is a *window* and not
+# a state — every reference reaps from its own SIGCHLD handler — so a case
+# that asks about one is asking which side of a scheduling decision the run
+# landed on. zsh answered three of these lines two ways, about one run in
+# forty under load, which cost the whole suite its determinism (#2974). No
+# `sleep` anywhere: a job that is alive because it has not got round to
+# exiting yet is the same race with a longer fuse.
+#
+# Each gate is spelled the same way, and both halves of the spelling were
+# paid for:
+#
+#   the job reads *a line*, with `head -n 1`, and the release *writes* one.
+#     Releasing by closing the fifo and letting the reader see an end of file
+#     hangs: caught once in forty full-file runs on this machine, with the
+#     writer's open long returned, no writer left anywhere, and `cat` still
+#     asleep in `read`. A line survives that — it is in the fifo's buffer
+#     whatever happens to the end of file, and the reader stops on having it
+#     rather than on the writer having gone.
+#   the fifo is the reader's *operand* and not a redirection on the job.
+#     `head -n 1 gate` is a job that is a process with a pid as soon as it
+#     starts; `head -n 1 < gate` is a job whose redirection is opened first,
+#     so `$!` names something that is not there to be signalled yet — which
+#     is the pid the `kill -0` case below needs rather than the job. Every
+#     reference forks first and opens in the child, so this spelling costs
+#     them nothing; it is ours that needs it (#2994).
 #
 # Still held out, and now with the file each went to: `kill` on a job
-# specification, which dash refuses entirely (dash/jobs.tests) and ksh93
-# refuses in one spelling of; `disown`, which bash and zsh have and ksh93 and
-# dash do not; `$!` before any background command, which is 0 in zsh and unset
-# in the other three; and `wait` with several operands, which reports the
-# first in zsh and the last everywhere else (both zsh/jobs.tests).
+# specification, which dash refuses entirely (dash/jobs.tests); `disown`,
+# which bash and zsh have and ksh93 and dash do not; `$!` before any
+# background command, which is 0 in zsh and unset in the other three; and
+# `wait` with several operands, which reports the first in zsh and the last
+# everywhere else (both zsh/jobs.tests).
+#
+# And held out because no reference repeats it: `wait` on a job specification
+# naming a job that has already ended. bash, ksh93 and dash keep a finished
+# job in the table until it is waited for and answer with its status; zsh
+# drops it once it has noticed and answers 127 with a diagnostic. That is a
+# real zsh-only answer and it still cannot be measured, because zsh gives it
+# only once it has got round to reaping — so the file asks the jobspec of
+# `jobs` while the job is held open, and asks the status of the pid (#2974).
 
 # Nothing to wait for is a success, not an error.
 wait; printf 'wait with nothing -> %s\n' "$?"
@@ -102,9 +139,27 @@ wait "$a"; printf 'older by pid -> %s\n' "$?"
 # first job's status under a number it should have let go of (#2651). The
 # reaping is what makes the case discriminating: with no completed job in it,
 # a shell that renumbers and a shell that does not answer alike.
+#
+# The third job is held open on a fifo rather than allowed to finish, and the
+# question is asked of `jobs` rather than of `wait`, because `wait %1` on a
+# job that has already ended is not a question any reference repeats — the
+# header says what that costs and why (#2974). Held open, the job is certainly
+# in the table, and what `%1` names is then a fact rather than a window:
+# either the number came back to the new job or it is still on one of the two
+# this file has already waited for, and the two listings are not the same
+# text. The status the third job reached is asked of its pid, which is where
+# a status is a number rather than a race.
 ( exit 7 ) & wait $!
 ( exit 3 ) & c=$!; wait "$c"
-( exit 4 ) & wait %1; printf 'jobspec after a reap -> %s\n' "$?"
+mkfifo renumber
+{ head -n 1 renumber > /dev/null; exit 4; } &
+d=$!
+jobs %1 > renum1 2>&1
+jobs %% > renumcur 2>&1
+printf 'jobspec after a reap -> %s\n' "$( [ "$(cat renum1)" = "$(cat renumcur)" ] && printf 1 || printf 0 )"
+printf 'go\n' > renumber
+wait "$d"; printf 'and the job it named -> %s\n' "$?"
+rm -f renumber renum1 renumcur
 
 # `jobs` runs and says something about nothing; what it prints is a listing
 # with pids in it and is a dialect question.
@@ -182,11 +237,37 @@ printf 'the outer shell -> %s\n' "$?"
 
 # ---- the operands `wait` takes ----
 
-# `%%` and `%+` are both the current job, which is the most recent one.
-( exit 7 ) &
-wait %%; printf 'current job -> %s\n' "$?"
-( exit 8 ) &
-wait %+; printf 'plus -> %s\n' "$?"
+# `%%` and `%+` are both the current job, which is the most recent one, and
+# `%-` is the one before it. Two jobs are held open on fifos while the
+# question is asked, so both are certainly in the table: nothing has opened
+# the other end, so neither can have ended and no reference can have reaped
+# one out from under the jobspec.
+#
+# What the listings are compared against is each other, never printed — a
+# `jobs` line is a job number, a state word and a command, and all three are
+# spelled differently in every column. Within one shell they are the same
+# text for the same job, which is what makes `%+` naming the newer job and
+# `%-` naming the older one askable at all.
+#
+# The statuses come from `wait` on the pids. `wait %%` is what these two
+# lines used to be, and it is not askable: it needs the job to have ended
+# first, and by then whether the shell still has it is wall-clock. The
+# header holds that one out and says what it would have measured (#2974).
+mkfifo older newer
+{ head -n 1 older > /dev/null; exit 7; } &
+o=$!
+{ head -n 1 newer > /dev/null; exit 8; } &
+n=$!
+jobs %% > jcur 2>&1; printf 'current job -> %s\n' "$?"
+jobs %+ > jplus 2>&1; printf 'plus -> %s\n' "$?"
+jobs %- > jminus 2>&1; printf 'minus -> %s\n' "$?"
+printf 'plus is the current job -> %s\n' "$( [ "$(cat jplus)" = "$(cat jcur)" ] && printf 1 || printf 0 )"
+printf 'minus is the other one -> %s\n' "$( [ "$(cat jminus)" = "$(cat jcur)" ] && printf 0 || printf 1 )"
+printf 'go\n' > older
+printf 'go\n' > newer
+wait "$o"; printf 'the older one ended -> %s\n' "$?"
+wait "$n"; printf 'the newer one ended -> %s\n' "$?"
+rm -f older newer jcur jplus jminus
 
 # A pid that is not a child is 127 — the one status POSIX names for this — and
 # a word that is not a pid at all is a refusal the shell carries on past. A
@@ -229,27 +310,43 @@ wait
 nohup true > /dev/null 2>&1; printf 'nohup true -> %s\n' "$?"
 nohup false > /dev/null 2>&1; printf 'nohup false -> %s\n' "$?"
 
-# A child that has exited and has not been waited for is still a process. Its
-# pid answers `kill -0`, because nothing has reaped it, and stops answering
-# once `wait` has — which is why `kill -0 "$pid"` is not a test for "is it
-# still running" in a shell script, and is the same in all four columns.
+# A job the shell is still running answers `kill -0`, and stops answering
+# once `wait` has reaped it — which is why `kill -0 "$pid"` is not a test for
+# "is it still running" in a shell script, and is the same in all four
+# columns. The job is held open on a fifo so that the first half is a fact:
+# nothing has written to the other end, so the child cannot have ended and
+# the pid cannot have gone anywhere.
 #
-# "Nothing has reaped it" is a *window* rather than a state, and the case
-# repeats only because nothing slow happens between the two lines. Every
-# reference reaps a background child from its own SIGCHLD handler and not at
-# `wait`: put a builtin-only busy loop between the `&` and the `kill -0` and
-# all four answer 0 instead. Measured 2026-09-15, and it is why zsh answers
-# this line two ways under load — #2974, which is this file's half of #2938.
-( exit 0 ) &
+# What this asked before was the harder half — that a child which has
+# *exited* and has not been waited for still answers, because nothing has
+# reaped it. That is a window rather than a state, and it is not askable
+# here at all: every reference reaps a background child from its own SIGCHLD
+# handler and not at `wait`, so put anything slow between the `&` and the
+# `kill -0` — a builtin-only busy loop is enough — and all four answer 0
+# instead. It repeated only because nothing slow happened in between, and
+# zsh under load is what slow looks like: it gave both answers about one run
+# in forty (#2974, this file's half of #2938). Measured 2026-09-15.
+#
+# The fifo is `head`'s operand rather than a redirection on the job, and it
+# is released with a line rather than with an end of file. Both are the
+# file's house spelling and both are explained in the header; this is the
+# case the first of them exists for, because it is the one that asks about
+# the pid rather than about the job, and this shell is the only column that
+# needs it that way round (#2994).
+mkfifo held
+{ head -n 1 held > /dev/null; exit 0; } &
 p=$!
 kill -0 "$p" 2> /dev/null
-printf 'an exited child still answers -> %s\n' "$(( $? == 0 ))"
+printf 'a running child answers -> %s\n' "$(( $? == 0 ))"
+printf 'go\n' > held
 wait
 kill -0 "$p" 2> /dev/null
 printf 'and stops once it is waited for -> %s\n' "$(( $? == 0 ))"
+rm -f held
 
 # `kill` on a job specification is not asked: dash refuses every spelling of
-# it — dash/jobs.tests — and ksh93 refuses `kill -s CONT %1` while taking
-# `kill -0 %1`, so the three shells that have it do not have it alike.
-# `disown` is not asked either: bash and zsh have it and ksh93 and dash do
-# not, which is two against two.
+# it, which is dash/jobs.tests and is the whole of the difference — ksh93 was
+# written down there as refusing `kill -s CONT %1` too, and that turned out
+# to be this same reap window read as a dialect answer (#2963). `disown` is
+# not asked either: bash and zsh have it and ksh93 and dash do not, which is
+# two against two.

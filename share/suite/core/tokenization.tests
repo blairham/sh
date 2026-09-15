@@ -1,0 +1,203 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Token recognition, POSIX XCU 2.3 — the step before anything is expanded or
+# run. The question every case here asks is where the shell put the token
+# boundaries, and the answers are made visible as counts and as bracketed
+# fields rather than as an exit status, because a tokenizer that got this
+# wrong would still exit 0 on most of it.
+#
+# core/quoting.tests asks what survives each quoting form. This file asks the
+# prior question: what is a word at all, what is an operator, and what is
+# neither.
+
+# --- the longest-match rule -------------------------------------------------
+#
+# An operator is read as far as it can be: > then > is >>, and a character
+# that cannot continue the operator ends it.
+
+printf 'a\n' > out
+printf 'b\n' >> out
+printf 'appended: '
+tr '\n' ' ' < out
+printf '\n'
+rm -f out
+
+# >& and > & are different: the first is one operator, the second is a
+# redirection followed by the start of another word.
+printf 'redirected\n' > out 2>&1
+printf 'two operators: '
+cat out
+rm -f out
+
+# && is one operator and & & is not; a single & after a complete command is
+# the asynchronous operator. Nothing here backgrounds anything real, because
+# a scheduling order is not deterministic.
+true && printf 'and-if ran\n'
+false || printf 'or-if ran\n'
+
+# ;; is one operator and belongs to case; ; ; is an empty command and a syntax
+# error, which is asked below where a subshell can catch it.
+case x in x) printf 'case ran\n' ;; esac
+
+# --- an operator character is only an operator unquoted ---------------------
+
+printf '[%s]\n' '>' '>>' '|' '&&' ';' '(' ')' '<'
+printf '[%s]\n' \> \>\> \| \&\& \; \( \) \<
+printf '[%s]\n' ">" "|" "&" ";"
+
+# And a word that merely contains one is one word.
+printf '[%s]\n' a\>b a\|b 'a&b' 'a;b'
+
+# --- where a word ends ------------------------------------------------------
+#
+# Blanks separate words; a run of them is one separator; a tab is a blank and
+# a newline is not.
+
+set -- a	b     c
+printf 'blank-separated: %s\n' "$#"
+
+# A quoted blank does not separate, and an operator character next to a word
+# does separate even with no blank.
+set -- "a b" 'c d'
+printf 'quoted blanks: %s [%s] [%s]\n' "$#" "$1" "$2"
+
+# --- comments ---------------------------------------------------------------
+#
+# A # starts a comment only where a word would start. Anywhere else it is an
+# ordinary character.
+
+# this whole line is a comment
+printf 'after a comment line\n'     # and this is a trailing one
+printf '[%s]\n' a#b
+printf '[%s]\n' '#quoted'
+printf '[%s]\n' "in#side"
+v=x#y
+printf '[%s]\n' "$v"
+printf '[%s]\n' "${v#x}"
+
+# A # after an operator begins a comment, because a word would start there.
+printf 'before\n' # comment
+printf 'after\n'
+
+# --- line continuation ------------------------------------------------------
+#
+# A backslash-newline outside quotes is removed entirely: it joins the lines
+# and contributes nothing, and it may fall inside a word or between words.
+
+printf 'joined: %s\n' contin\
+uation
+printf \
+  'split across lines: %s\n' \
+  ok
+
+# Inside double quotes it is removed too.
+printf '[%s]\n' "join\
+ed"
+
+# Inside single quotes there is no continuation: the backslash and the newline
+# are both data.
+printf '[%s]\n' 'back\
+slash'
+
+# What a backslash-newline does inside a command substitution is not asked
+# here, and the omission is a measurement: bash, zsh and dash join the lines,
+# and ksh93 leaves the backslash and the newline in the word.
+
+# --- blank lines and empty lists --------------------------------------------
+#
+# Newlines separate commands, and a run of them is not an error.
+
+printf 'one\n'
+
+
+printf 'two\n'
+printf 'three\n'
+
+# A line of nothing but blanks is not an error either, and it has to be built
+# rather than written: a file with a blanks-only line does not survive the
+# repository's own trailing-whitespace hook, so writing it literally would
+# have the hook quietly delete the case.
+nl='
+'
+blanks=$(printf ' \t ')
+eval "printf 'blanks-before\n'${nl}${blanks}${nl}printf 'blanks-after\n'"
+
+# And so is a line holding only a comment, which is the same shape with text
+# on it.
+
+# (this one)
+printf 'after a comment-only line\n'
+
+# A trailing ; is allowed. A line holding nothing but ; is not asked: bash and
+# dash refuse it and zsh and ksh93 run it as an empty list, so it is two
+# answers rather than one.
+printf 'four\n' ;
+
+# An operator with nothing on the side it needs is a syntax error in every
+# shell here. The refusals are caught rather than left to stop the file, and
+# the status is reduced to accepted-or-refused because the four shells exit 1,
+# 2 and 3 on a refusal and do not share a wording either.
+refuses() {
+  if (eval "$1") 2> /dev/null; then
+    printf 'accepted: %s\n' "$2"
+  else
+    printf 'refused:  %s\n' "$2"
+  fi
+}
+refuses '| true'        'a pipeline beginning with |'
+refuses 'if true; then' 'an if with no fi'
+refuses 'case in esac'  'a case with no word'
+refuses '>'             'a redirection with no command and no target'
+refuses 'true ;; true'  'a case terminator outside a case'
+
+# Two separators in a row are not asked: bash and dash read `true ; ; true` as
+# an empty command and refuse it, while zsh and ksh93 run it. Nor is a
+# dangling `&&`, which zsh accepts at end of input and the other three refuse.
+
+# --- reserved words are recognized by position ------------------------------
+#
+# `if`, `then`, `for` and the rest are reserved only where a command name
+# would go. Used as an operand they are ordinary words.
+
+printf '[%s]\n' if then else fi for while do done case esac
+printf '[%s]\n' '{' '}' '!'
+
+# Quoting a reserved word takes the reservation away, so the shell looks for a
+# command of that name instead.
+if (eval '"if" true; then printf no\n; fi') 2> /dev/null; then
+  printf 'a quoted if ran as a command\n'
+else
+  printf 'a quoted if was not a keyword\n'
+fi
+
+# A name followed immediately by ( ) is a function definition, and the same
+# name with a blank before the parenthesis still is.
+name() { printf 'defined tight\n'; }
+name
+other () { printf 'defined loose\n'; }
+other
+
+# --- assignment words -------------------------------------------------------
+#
+# A word of the form name=value is an assignment only in the first position
+# of a command and only before the command name.
+
+x=1 y=2 printf 'assignment prefix: [%s]\n' "in the environment"
+printf 'not an assignment: [%s]\n' z=3
+set -- a=1 b=2
+printf 'operands: %s [%s]\n' "$#" "$1"
+
+# The name must be a name: a leading digit makes it an ordinary word.
+printf '[%s]\n' 1x=2
+
+# --- numbers before a redirection operator ----------------------------------
+#
+# A digit run immediately before < or > is the file descriptor and is part of
+# the operator; a blank between them makes it an operand instead.
+
+printf 'to stderr\n' 2> err
+printf 'descriptor taken: '
+cat err
+rm -f err
+printf '[%s] [%s]\n' 2 '>'

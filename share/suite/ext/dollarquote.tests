@@ -26,6 +26,34 @@ printf '%s\n' $'\x41\x42\x43'
 printf '%s\n' $'Aé'
 printf '%s\n' $'\U00000041'
 
+# Each numeric form takes *up to* its full width and stops early at a
+# character it cannot use, so a short escape is not an error and the
+# characters after it are ordinary.
+printf '%s\n' $'\x4z'
+printf '%s\n' $'\u41!'
+printf '%s\n' $'\10z'
+
+# An octal escape reaches three digits and stops there even when more follow,
+# so the digits after it are text.
+printf '%s\n' $'\1011'
+
+# How wide a hex escape may be is not asked: bash and zsh take two digits and
+# ksh93 keeps going, so $'\x414' is `A4` in two of them and one character in
+# the third.
+
+# \e is the escape character, and it is the one control escape spelled by a
+# letter that is not in the C set above.
+printf '%s' $'\e' | od -An -c | sed 's/  */ /g'
+
+# What \cX does is not asked: bash and ksh93 read it as a control character
+# and zsh leaves the letters alone. Two answers among the three shells that
+# have this quoting form is not an ext claim.
+
+# The empty form is a word of no characters, like '' is.
+printf '[%s]\n' $''
+set -- $'' x
+printf 'empty is still a word: %s\n' "$#"
+
 # An undefined escape is not here, and the omission is a measurement: bash
 # keeps both the backslash and the letter for $'\d', while ksh93 and zsh keep
 # only the letter. What a shell does with an escape nobody defined is a

@@ -1,0 +1,41 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# `kill` and a job specification — #2318's dash/ half.
+#
+# dash takes `%1` in `wait`, which core/jobs.tests asks and every column
+# answers alike. It does not take one in `kill`: a job spec there is a word
+# `kill` cannot make a pid out of, and the command fails. bash, zsh and ksh93
+# all accept it.
+#
+# That matters because `kill %1` is how a script that started something in the
+# background stops it again, usually from a trap on the way out. Here it has
+# to be the pid, which the last case keeps and waits on — so this is a missing
+# spelling rather than a missing capability, and a portable script simply
+# keeps the pid. `kill "$pid"` itself is not asked, because a signal sent to a
+# job this file has not waited for is delivery order, and delivery
+# order does not repeat.
+#
+# The first case is the discriminating one: dash is alone in refusing
+# `kill -0 %1`. ksh93 joins it in refusing `kill -s CONT %1`, so that line is
+# here to say what the boundary is rather than to draw it.
+#
+# Nothing here prints a pid or a job number; each `kill` is asked as whether
+# it succeeded, and every job is waited for before the next one starts, so no
+# case depends on which process the system ran first.
+
+( exit 0 ) &
+kill -0 %1 2> /dev/null
+printf 'kill -0 on a job spec -> %s\n' "$(( $? == 0 ))"
+wait
+
+( exit 0 ) &
+kill -s CONT %1 2> /dev/null
+printf 'kill -s CONT on a job spec -> %s\n' "$(( $? == 0 ))"
+wait
+
+( exit 0 ) &
+p=$!
+wait "$p"
+printf 'wait on the pid instead -> %s\n' "$?"
+printf 'done\n'

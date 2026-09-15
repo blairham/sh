@@ -1,0 +1,49 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Two answers about background jobs that only zsh gives — #2318's zsh/ half.
+#
+# The first is what `$!` holds before anything has been backgrounded. bash,
+# ksh93 and dash leave the parameter unset, so `${!-unset}` yields the default
+# and a script can tell "no job yet" from "a job whose id is zero". zsh has it
+# set to 0 from the start, and a script that writes `if [ -n "$!" ]` to mean
+# "have I started one" gets yes on a shell that has started nothing.
+#
+# The second is `wait` with more than one operand. POSIX says the status is
+# the *last* operand's, and bash, ksh93 and dash all report that; zsh reports
+# the first. So `wait "$a" "$b"` is a different question here, and a script
+# that waits for a batch and checks the status is reading a different job's.
+#
+# Nothing here prints a pid or a job number. `$!` is compared and used as an
+# operand, never written out, which is the rule the core file states and the
+# reason most of job control is unaskable in a suite with no expected output.
+
+# `$!` before any background command. Printed through the `-` default, so what
+# is compared is "set" against "unset" rather than a number.
+printf 'before any job [%s]\n' "${!-unset}"
+
+# After one, it is a number — asked as a comparison for the reason above.
+( exit 0 ) &
+printf 'after one job, positive [%s]\n' "$(( $! > 0 ))"
+wait
+
+# `wait` with two operands. The two jobs exit with different statuses, so
+# which one is reported is the whole content of the case, and they are started
+# in the order their statuses read.
+( exit 3 ) & c=$!
+( exit 4 ) & d=$!
+wait "$c" "$d"
+printf 'two operands -> %s\n' "$?"
+
+# The other order, so a shell that always reported 3 for some reason unrelated
+# to operand position would still be told apart.
+( exit 4 ) & e=$!
+( exit 3 ) & f=$!
+wait "$e" "$f"
+printf 'the other order -> %s\n' "$?"
+
+# One operand is unambiguous everywhere, which is what makes the pair above a
+# statement about operand *position* rather than about `wait`.
+( exit 5 ) & g=$!
+wait "$g"
+printf 'one operand -> %s\n' "$?"

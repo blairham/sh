@@ -1252,7 +1252,7 @@ func (r *Runner) matchIn(dir, pattern string, o patternOpts, seeHidden bool) []s
 	o.chars = r.patternCountsCharacters(append(entryNames(entries), pattern)...)
 
 	var out []string
-	for _, name := range r.listedNames(entries) {
+	for _, name := range r.globListingNames(entries) {
 		// Only a *leading* period is special, and only in pathname
 		// expansion: `*.b` matches `a.b`, and `.hid` needs `.*id`.
 		if strings.HasPrefix(name, ".") && !hidden {
@@ -1265,7 +1265,14 @@ func (r *Runner) matchIn(dir, pattern string, o patternOpts, seeHidden bool) []s
 	return out
 }
 
-// listedNames is the names a component match may reach in one directory,
+// globListingNames is the names a component match may reach in one directory,
+//
+// Named for its caller rather than for what it holds, because `listedNames`
+// is taken: interp/producedlisting.go has a method of that name about a
+// *parameter* listing, and two methods one word apart on the same receiver
+// compile until the day they both exist. They did — #2834 and #2836 each
+// went green against a `main` the other had not landed in yet, and the merge
+// of the two did not build.
 // which is not quite the names a directory holds: three of the six columns
 // list `.` and `..` beside them and three do not.
 //
@@ -1294,7 +1301,7 @@ func (r *Runner) matchIn(dir, pattern string, o patternOpts, seeHidden bool) []s
 // two names beside the entries it finds is a question no dialect here can
 // reach: ksh93 does (`**` under `set -o globstar` writes `sub/.` and
 // `sub/..`), and this preset has no `globstar` to turn its `**` on with.
-func (r *Runner) listedNames(entries []os.DirEntry) []string {
+func (r *Runner) globListingNames(entries []os.DirEntry) []string {
 	names := make([]string, 0, len(entries)+2)
 	if r.sem().GlobListsDotAndDotDot == Yes {
 		names = append(names, ".", "..")

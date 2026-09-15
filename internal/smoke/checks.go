@@ -942,7 +942,7 @@ func checks() []check {
 				if bare := bareLineFeeds(drawn); bare > 0 {
 					return Fail, fmt.Sprintf("%d of the newlines drawn this session had no carriage "+
 						"return in front of them, so the prompt after them starts where the "+
-						"output ended: %s", bare, screenTail(drawn))
+						"output ended: %s", bare, aroundTheBareLineFeed(drawn))
 				}
 				if !strings.Contains(drawn, "\r\n") {
 					// Nothing was measured, which is not a pass. A session
@@ -1018,8 +1018,40 @@ func bareLineFeeds(drawn string) int {
 	return n
 }
 
-// screenTail is the end of what was drawn, for a failure to read.
-func screenTail(drawn string) string { return quote(Readable(LastLines(drawn, 3))) }
+// aroundTheBareLineFeed is the drawn text either side of the first one, with
+// the offender marked.
+//
+// The end of the screen is what this used to print, and the end of the screen
+// is almost never where the fault is: a bare line feed is one byte in a
+// session of thousands, and the last three rows are simply whatever the
+// session happened to finish with. #2861 was filed against the job-control
+// notice printed a few rows above the tail — which was whole — when the
+// missing return was the newline after an interrupted command, hundreds of
+// bytes earlier and off the bottom of what this said.
+//
+// The two sides are rendered separately and the break between them is named,
+// because a renderer that showed them as one string would draw the bare feed
+// as a line break exactly like every whole one beside it.
+func aroundTheBareLineFeed(drawn string) string {
+	i := -1
+	for n := 0; n < len(drawn); n++ {
+		if drawn[n] == '\n' && (n == 0 || drawn[n-1] != '\r') {
+			i = n
+			break
+		}
+	}
+	if i < 0 {
+		return quote(Readable(LastLines(drawn, 3)))
+	}
+	return quote(Readable(drawn[max(0, i-bareLineFeedContext):i])) +
+		" ⟨a line feed with no return⟩ " +
+		quote(Readable(drawn[i+1:min(len(drawn), i+1+bareLineFeedContext)]))
+}
+
+// bareLineFeedContext is how many bytes of either side are shown. Enough to
+// carry the command that was running and the prompt that followed, short
+// enough to sit under a table.
+const bareLineFeedContext = 96
 
 // drewOneOfOurPrompts reports whether either prompt this suite sets reached
 // the screen, which is what separates an escape that rendered wrongly from a

@@ -61,3 +61,26 @@ func TestTranslatingLeavesAnAbsentStreamAbsent(t *testing.T) {
 		t.Errorf("translating(nil) = %v, want nil", got)
 	}
 }
+
+// And the carry is dropped the moment something else has had the terminal.
+//
+// The state is a claim about what the *screen* ends with, not about what this
+// writer last handed over, and the two part company as soon as a command runs:
+// its output goes straight to the terminal and the terminal echoes the keys
+// itself. A return remembered across that window is a return that is no longer
+// on the screen, and the newline trusting it lands bare (#2861).
+func TestAForgottenReturnIsNotCarried(t *testing.T) {
+	var out strings.Builder
+	w := &crlf{w: &out}
+	for _, part := range []string{"redraw\r", "\n"} {
+		if _, err := w.Write([]byte(part)); err != nil {
+			t.Fatal(err)
+		}
+		w.forget()
+	}
+	// The extra return is the deliberate half of the trade: at column 0 it
+	// costs nothing, where a missing one costs the start of every row after.
+	if got, want := out.String(), "redraw\r\r\n"; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}

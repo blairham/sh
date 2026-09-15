@@ -47,6 +47,29 @@ func (c *crlf) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
+// forget drops what this stream remembers about the byte it last wrote.
+//
+// The memory is only good for as long as this writer is the only thing
+// reaching the terminal, and between one prompt and the next it is not. A
+// command runs with the terminal in its own line discipline and writes to it
+// directly; the terminal itself echoes what was typed, and a ^C leaves a `^C`
+// two columns in. Neither of those bytes comes through here, so what this
+// stream wrote *before* them is no longer what the screen ends with — and a
+// newline written afterwards is then left bare on the strength of a carriage
+// return that scrolled past several lines ago.
+//
+// That is #2861. The editor ends its line with `\x1b[?2004l\r`, the command
+// runs and is interrupted, and the newline the loop writes to get off the
+// echoed `^C` moves down without returning: the next prompt is drawn two
+// columns in. It was read as a job-control notice written bare, because the
+// two shells that hold an exit for a running job print one shortly before —
+// but those notices are whole, and this one newline was not.
+//
+// Cheap to be wrong in this direction. A return added where one was already
+// there costs nothing at all, and one left out costs the start of every row
+// after it.
+func (c *crlf) forget() { c.afterR = false }
+
 // translating wraps a stream in that rule, leaving a nil one nil — a session
 // without an error stream has nothing to translate.
 func translating(w io.Writer) io.Writer {

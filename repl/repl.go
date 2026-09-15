@@ -664,6 +664,10 @@ func (s Shell) inLineDiscipline(state *terminalState, f func()) {
 		// block that records the output is read after this, and draining by
 		// emptying would lose every command's body from the store.
 		s.drained()
+		// And whatever these streams last wrote is no longer what the
+		// terminal last saw, because f is precisely the window in which
+		// something else was writing to it — see crlf.forget.
+		s.forgetWhatTheTerminalSaw()
 		if _, err := makeRaw(s.inFile()); err != nil {
 			s.errf("%v\n", err)
 		}
@@ -1480,6 +1484,22 @@ func (s Shell) report(err error) string {
 		return s.Report(err)
 	}
 	return err.Error() + "\n"
+}
+
+// forgetWhatTheTerminalSaw clears the newline translation's memory on the two
+// streams this loop wrapped, which is the bookkeeping handing the terminal
+// over invalidates.
+//
+// A type assertion rather than a field, because the wrapping is this loop's
+// own and a session without a terminal never does it: Run replaces its copy's
+// streams on the way into the editor loop and nowhere else, so a stream that
+// is not a crlf is one that was never translating and has nothing to forget.
+func (s Shell) forgetWhatTheTerminalSaw() {
+	for _, w := range [...]io.Writer{s.Out, s.Err} {
+		if c, ok := w.(*crlf); ok {
+			c.forget()
+		}
+	}
 }
 
 func (s Shell) write(text string) {

@@ -17,9 +17,9 @@ import (
 // it was invoked.
 //
 // This is #1284, and what made it a P1 rather than a tidiness note is that the
-// leak was permanent and silent. A process substitution makes a directory
-// under the shell's TMPDIR to hold its named pipes; the pipes go as soon as
-// the command that named them ends, and nothing removed what was left. Nothing
+// leak was permanent and silent. A process substitution made a directory under
+// the shell's TMPDIR to hold its named pipes; the pipes went as soon as the
+// command that named them ended, and nothing removed what was left. Nothing
 // reports it either — the shell exits 0 and only a directory listing shows it.
 // 10,585 accumulated in /tmp over one working session, and 4,188 more in the
 // two days after those were swept by hand.

@@ -1508,8 +1508,9 @@ func (r *Runner) dupTargetText(rd *syntax.Redirect, moveFrom int) string {
 // and every descriptor in the table is otherwise rebuilt into an external
 // child's — see childFiles. Inheriting these would be worse than untidy: a
 // child holding the write end open means the coprocess never reads
-// end-of-file, which is the leak /dev/fd process substitution was rejected
-// for.
+// end-of-file, which is the same failure a process substitution's writing end
+// has and answers the same way — by reaching exactly the commands it is meant
+// to and no others. See newProcSubPipe.
 //
 // It is what bash does, measured rather than assumed, and measured on the
 // harder half: with a coprocess running, an external child finds nothing

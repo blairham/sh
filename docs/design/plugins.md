@@ -431,8 +431,8 @@ starting.
 
 The transport itself is not separately gated. It is a pipe pair to a
 child, on no path the script chose; the exec is the access, exactly as
-the open of a process substitution's pipe is the access and the mkfifo
-that created it is not.
+the open of a process substitution's pipe is the access and the pipe the
+interpreter made for it is not.
 
 ### A plugin is outside the boundary, exactly as much as any allowed exec
 

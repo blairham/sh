@@ -133,15 +133,24 @@ func TestAPipeSurvivesForADescriptorThisShellKeeps(t *testing.T) {
 // TestAPipeNobodyOpenedStillGoesAtOnce is the other side: nothing about the
 // ordinary lifetime moves. A command whose substitution nobody opened has its
 // pipe taken away at the end of that command, which is what keeps a long
-// session from filling its directory — and what ends the writer's wait.
+// session from filling its descriptor table — and what stops the body writing
+// into a pipe nobody will ever read.
+//
+// Since #2893 the path is a descriptor rather than a name, so what "gone"
+// means is that the number is no longer open here: a stale `/dev/fd/N` is
+// unopenable, where a live one is not. Asked by *opening* it rather than by
+// stat, because a number the shell has since given to something else would
+// stat perfectly well and the open is what a script would do with it.
 func TestAPipeNobodyOpenedStillGoesAtOnce(t *testing.T) {
 	out, _ := runGrammar(t, "printf '[%s]' <(printf hi)",
 		func(d *syntax.Dialect) { d.ProcessSubstitution = true }, nil)
 	path := strings.TrimSuffix(strings.TrimPrefix(out, "["), "]")
-	if path == "" {
+	if !strings.HasPrefix(path, "/dev/fd/") {
 		t.Fatalf("out = %q, want the pipe's path", out)
 	}
-	if _, err := os.Stat(path); !os.IsNotExist(err) {
-		t.Errorf("stat %s = %v, want the pipe gone with the command that named it", path, err)
+	f, err := os.Open(path)
+	if err == nil {
+		_ = f.Close()
+		t.Errorf("%s is still open, want the pipe gone with the command that named it", path)
 	}
 }

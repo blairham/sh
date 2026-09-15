@@ -24,10 +24,13 @@ import (
 //
 // Close-on-exec, because everything Go opens is: a descriptor reaches a child
 // through the table childFiles rebuilds, by number, and one that leaked
-// through the kernel behind that table's back would be open in every command
-// the shell runs — the leak that /dev/fd process substitution was rejected
-// for. The fork lock is held across the pair so that no other goroutine's
-// fork can happen between the duplicate existing and the flag being set.
+// through the kernel behind that table's back would be open in *every* command
+// the shell runs. That is the rule a process substitution's `/dev/fd/N` end
+// follows too — parked close-on-exec and put in the table — which is why it
+// reaches the command that named the path and nothing else; see
+// newProcSubPipe. The fork lock is held across the pair so that no other
+// goroutine's fork can happen between the duplicate existing and the flag
+// being set.
 func dupFile(f *os.File) (*os.File, error) {
 	conn, err := f.SyscallConn()
 	if err != nil {

@@ -181,9 +181,10 @@ func TestTheBoundarySeesTheFilesBehindReentry(t *testing.T) {
 			return a.Kind == ActionOpen && a.Path == sourced && !a.Write
 		}, true},
 		{"a process substitution opens its pipe", "/bin/cat <(/bin/echo hi)", func(a Action) bool {
-			// The path is one the shell just made for itself; the write is
-			// the shell's own end, feeding the inner command's output in.
-			return a.Kind == ActionOpen && a.Write && strings.Contains(a.Path, "sh-procsub")
+			// The path is one the shell just made for itself — a descriptor
+			// of its own, since #2893 — and the write is the shell's own end,
+			// feeding the inner command's output in.
+			return a.Kind == ActionOpen && a.Write && strings.HasPrefix(a.Path, "/dev/fd/")
 		}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

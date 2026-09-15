@@ -188,21 +188,27 @@ func TestTheShellsOwnPipeIsRecordedEvenThoughItIsNotRefused(t *testing.T) {
 	defer mu.Unlock()
 	var got []string
 	for _, a := range opens {
-		if !strings.Contains(a.Path, "sh-procsub") {
+		if !strings.HasPrefix(a.Path, "/dev/fd/") {
 			continue
 		}
 		kind := "read"
 		if a.Write {
 			kind = "write"
 		}
-		got = append(got, filepath.Base(a.Path)+" "+kind)
+		got = append(got, kind)
 	}
-	// Three, and each is a different open of the shell's own plumbing:
-	// sub1 written, which is `<(cmd)` feeding the inner command's output in;
-	// sub2 read, which is the shell taking `>(cmd)`'s input end; and sub2
-	// written, which is the *redirect* opening the pipe it was pointed at.
-	// The third is the one this fix had to reach as well as the first two.
-	want := []string{"sub1 write", "sub2 read", "sub2 write"}
+	// Three, and each is a different open of the shell's own plumbing: the
+	// `<(cmd)` end feeding the inner command's output in, which is a write;
+	// the shell taking `>(cmd)`'s input end, which is a read; and the
+	// *redirect* opening the pipe it was pointed at, which is a write. The
+	// third is the one this fix had to reach as well as the first two.
+	//
+	// By direction rather than by name, because a descriptor number is not a
+	// name: the first substitution's is closed with the command that named it
+	// and the second's is then the lowest free number, which is usually the
+	// one just given up. Dropping any of the three leaves two, so the count
+	// and the directions still tell them apart.
+	want := []string{"read", "write", "write"}
 	slices.Sort(got)
 	if !slices.Equal(got, want) {
 		t.Errorf("the stream records %v, want %v", got, want)
@@ -221,33 +227,36 @@ func TestThePipesNameIsExemptOnlyWhileItsCommandRuns(t *testing.T) {
 	// The path is printed by one command and written by the next.
 	src := `p=$(echo <(true)); echo "captured:$p" >&2; echo x > "$p"; echo "after:$?"`
 	out, errs, _ := gated(t, scratch, src, containing(t, scratch), nil)
-	if !strings.Contains(errs, "captured:") || !strings.Contains(errs, "sh-procsub") {
+	if !strings.Contains(errs, "captured:/dev/fd/") {
 		t.Fatalf("the substitution did not expand to a pipe under it: %q", errs)
 	}
 	if !strings.Contains(errs, "refused") {
 		t.Errorf("writing to the captured path was allowed.\n\tstdout %q\n\tstderr %q", out, errs)
 	}
 
-	// And the exemption is the pipe, not the directory it sits in. Here the
-	// command *does* have a live substitution — so a recognition that matched
-	// on the directory would wave through a write to a sibling path the
-	// script captured earlier, which is a hole in the shape of a fix.
-	// Two pipes of the *same* shell, which is what makes this the case a
-	// recognition matching on the directory would wave through: a command
-	// substitution gets a temporary directory of its own, so a path captured
-	// through one is never a neighbor of anything. The path is written to a
-	// file and read back with `read`, both in this shell.
+	// And the exemption is *this command's* pipe rather than the descriptor
+	// space the path is spelled in. Here the command does have a live
+	// substitution — so a recognition that matched the shape of the path
+	// would wave through a write to a different one the script captured
+	// earlier, which is a hole in the shape of a fix.
+	//
+	// The captured path is the *second* of two, and that is what makes the
+	// number sound rather than lucky. A parked end takes the lowest free
+	// descriptor, so the one substitution in the last line takes the number
+	// the first of the pair gave up; the second of the pair is a number
+	// nothing in that command holds, whatever the shell's table happened to
+	// look like when the pair was made.
 	//
 	// The live pipe is named by an *earlier redirect* of the same command,
 	// because argument words expand after the redirects are applied — so a
 	// substitution in the operand position is not registered yet when the
 	// redirect opens its target.
-	sibling := "/bin/echo <(true) > out\n" +
-		"read p < out\n" +
-		`/bin/cat < <(true) > "$p"` + "\n"
+	sibling := "/bin/echo <(true) <(true) > out\n" +
+		"read p q < out\n" +
+		`/bin/cat < <(true) > "$q"` + "\n"
 	_, errs, _ = gated(t, scratch, sibling, containing(t, scratch), nil)
 	if !strings.Contains(errs, "refused") {
-		t.Errorf("a write to a neighbor of a live pipe was allowed: %q", errs)
+		t.Errorf("a write to another command's pipe was allowed: %q", errs)
 	}
 }
 

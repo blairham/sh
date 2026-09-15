@@ -149,23 +149,18 @@ func TestAnExpandedPatternWithoutAMetacharacterAsksNothing(t *testing.T) {
 // never became a span; that was measured wrong, and the mutant that proved it
 // is the reason this file now asserts on the scratch directory (#902).
 func TestAProcessSubstitutionInAPatternIsPerformed(t *testing.T) {
-	tmp := t.TempDir()
-	// The directory the substitution made for its pipe is the evidence that
-	// one was made. Asserting on a variable the command sets would prove
-	// nothing: the command runs in a child — and here it never starts at
-	// all, because nothing opens the path, so the directory is the only
-	// thing that happened. Named rather than globbed for, since the shell
-	// removes it on its way out now (#1284); see pipeDirMade.
+	// That the shell performed one is the evidence, and it is the only
+	// evidence there is. Asserting on a variable the command sets would prove
+	// nothing: the command runs in a child — and here it never starts at all,
+	// because nothing opens the path — so the substitution being *made* is
+	// the whole of what happened. See pipesMade.
 	var r *Runner
 	out, st := runGrammar(t, `case abc in <(:)) printf "[hit]";; *) printf "[miss]";; esac`,
-		patternGrammar, func(rr *Runner) {
-			r = rr
-			rr.Env = append(withoutTMPDIR(rr.Env), "TMPDIR="+tmp)
-		})
+		patternGrammar, func(rr *Runner) { r = rr })
 	if want := "[miss]"; out != want || st != 0 {
 		t.Errorf("got %q (status %d), want %q at 0", out, st, want)
 	}
-	gone(t, pipeDirMade(t, r, tmp))
+	pipesMade(t, r, 1)
 }
 
 // And the arm does not match the text inside the substitution, which is the

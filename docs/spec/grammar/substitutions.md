@@ -453,12 +453,13 @@ sentence nobody can run keeps.
 
 **What the path looks like is the shell's business, not the grammar's.**
 Measured with `echo <(true)`: bash answers `/dev/fd/63`, ksh93
-`/dev/fd/3`, zsh `/dev/fd/11`. This implementation answers with a named
-pipe in a temporary directory of its own instead, because `/dev/fd`
-requires the descriptor to survive `exec` and clearing Go's
-close-on-exec flag leaks it into every later command. All the spec
-requires is a path the child can open; the numbers above are recorded so
-a reader does not mistake one shell's for the specification.
+`/dev/fd/3`, zsh `/dev/fd/11`. This implementation answers `/dev/fd/N`
+too — the lowest descriptor number it had free — which is the shape and
+not the number, since all the spec requires is a path the child can
+open. The numbers above are recorded so a reader does not mistake one
+shell's for the specification. It was a path under `$TMPDIR` until
+#2893; *How long the pipe has to last* below says why, and why the
+reason did not hold.
 
 **In bash and zsh the substitution is part of the word; in ksh93 it is a
 word of its own.** This one has no axis behind it yet:
@@ -492,98 +493,66 @@ of them is incomplete.
 ### How long the pipe has to last
 
 A real shell forks for `<(cmd)` and hands the child a descriptor, so the
-writer exists from the moment the word is expanded. Here it is a named pipe
-whose writer *polls* for a reader — see `interp/procsubst.go` — and the poll's
-give-up condition is the pipe's name going away at the end of the command that
-produced it. That pairing holds for every open that **waits**: a blocking open
-parks in the kernel until the writer arrives, so the two rendezvous while the
-command is still running.
+writer exists from the moment the word is expanded. So does this one: the
+word expands to `/dev/fd/N`, and *N* is one end of a pipe both of whose ends
+exist before the body starts. The shell holds the end the command will open
+from the moment the word expands until the end of the command that named it,
+which is what keeps the pipe there for a command that has not opened the path
+yet — and closing it is what delivers end-of-file to a `>(cmd)`'s body and
+`EPIPE` to a `<(cmd)`'s body that is writing into a pipe nobody reads any
+more.
 
-It does not hold for an open that does not wait. `sysopen -r -o nonblock -u fd
-<(cmd)` returns at once and the shell keeps the descriptor for a later command,
-so the command that named the path finishes with the writer still polling —
-and the unlink was then read as "nobody opened it", losing the substituted
-command outright. Measured 2026-09-11 against zsh 5.9.2: two runs in ten
-answered end of file where zsh answered the command's output every time.
+It was a named pipe until #2893, and everything that arrangement needed is
+gone with it. A FIFO's two ends have to **meet**: opening one blocks until the
+other is opened, and a command handed a path is under no obligation to open
+it — `echo <(true)` prints a path and is an error in no shell — so the
+shell's own open was a wait that might never end, bounded by polling for a
+peer and giving up when the name went away. The pipe itself existed only
+while somebody held it, so a shell that opened, wrote and closed inside the
+window a reader was still *inside* `open(2)` ran a whole pipe's life cycle
+beside a reader attached to none of it (#2733), and a last-writer close could
+be delivered to nobody (#1079). An anonymous pipe has no rendezvous, cannot
+be torn down while either end is held, and needs neither the poll, nor the
+placeholder end that kept it alive, nor the repeated close.
 
-So a substitution's pipe **keeps its name while one of this shell's own
-descriptors is open on it**, and goes with the shell's directory afterwards.
-Nothing else about the lifetime moves: a pipe nobody opened is still removed
-with the command that named it, which is what keeps a long session from
-filling its directory and what ends the writer's wait (#1750).
-
-The residual difference is the poll itself, and it is worth writing down
-rather than leaving to be rediscovered: a reader that reads the instant it has
-opened can see a pipe with no writer in it, which is end of file. A script
-that sleeps between the open and the read — which is what the workload this
-came from does — cannot see it.
+One clause of the old lifetime survives, because it is about the shell rather
+than about the FIFO: a substitution's pipe **outlives the command that named
+it while one of this shell's own descriptors is open on it**. `exec {fd}<
+<(cmd)` and `sysopen -r -o nonblock -u fd <(cmd)` both put the pipe in the
+script's hands, and the body then has to be waited for by whatever scope owns
+that descriptor rather than by the command (#1750).
 
 **And one read is not the output.** A single `read(2)` on a pipe returns what
 has arrived, so a substitution whose body writes twice answers one read with
 however much of it had been written by then — `[one]` where the whole of it is
 `onetwo`, 4 runs in 15 on this machine. That is true of the shell being copied
-as well and is not a divergence; what differs is the odds, because there the
-writer is a process already running and here it is a goroutine the poll has
-just let go. A reader that wants the output reads **to end of input**, and a
-test that reads once is measuring the scheduler (#1907).
+as well and is not a divergence. A reader that wants the output reads **to end
+of input**, and a test that reads once is measuring the scheduler (#1907).
 
-Two consequences of keeping the name follow, and the second was a defect for a
-day. The end-of-file nudge — the repeated last-writer close in
-`nudgeFifoEOF`, which exists because a reader can come out of `open` into a
-pipe whose end-of-file has already gone past — used to be ended by the unlink:
-`ENOENT` said there was no pipe to tell through. With the name kept and a
-reader that stays for the session, neither of its two answers could ever
-arrive, and it went round every twenty milliseconds for the life of the shell,
-per substitution. It has a deadline now: a hundred milliseconds of repeating a
-transition whose race is between two system calls, after which a reader that
-is still there is one holding the pipe for its own reasons.
+### What reaches the command, and nothing else
 
-### The shell holds a reading end of its own as well
+`/dev/fd/N` is only openable by a process that holds *N*, so the descriptor has
+to reach the command. Everything Go opens is close-on-exec, and clearing that
+flag hands the descriptor to **every** command the shell runs afterwards — for
+`>(cmd)` that is fatal rather than untidy, since a later command holding the
+writing end open means the body never reads end-of-file. `echo x | tee >(tr
+a-z A-Z); sleep 0.4` produced nothing at all for exactly that reason, and it
+is why the construct was written with a FIFO in the first place.
 
-A FIFO's pipe exists only while somebody holds it open. When the last reader
-and the last writer have gone, the buffer goes with them and the next open
-makes a new one — and **a reader that is still inside `open(2)` is not yet
-holding anything**, though it is enough for a writer's nonblocking open to
-succeed against rather than answer `ENXIO`. So a shell that opens the write
-end, writes and closes inside that window has run a whole pipe's life cycle
-beside a command that was attached to none of it.
+The flag never had to be cleared. A descriptor reaches a child **by number**,
+through the table the shell rebuilds for it — the same table `exec 3>out3;
+cmd` already runs on — and that table is per command. So the end the command
+opens is parked close-on-exec and put in the table of the shell that named the
+path, and of no other: a substitution's own body is a shell of its own with an
+empty list, so `tee >(cat)` cannot hand the writing end to the `cat` that is
+reading the other side of it.
 
-Measured 2026-09-14, macOS 26.5.2 on arm64, 40,000 rounds of each of two
-spellings with eight shells at once — a `while read` over a redirection, and
-`sysopen` on the path — **24 and 23 rounds** answered with the body's first
-chunk missing, or with nothing at all, or never finished at all: about one
-round in four thousand, and the three shapes are one defect (#2733).
-
-So the shell **holds a reading end of its own** on a `<(cmd)`'s pipe, opened
-before the body has written a byte and released when the command that named
-the path is done with it. On the same instrument that is **0 and 0**. It is
-the mirror of the placeholder `>(cmd)` has had since the beginning, and the
-two are deliberately not the same flags: that one is `O_RDWR`, because it has
-to be a *writer* to keep an immediate end-of-file away from a body that is
-reading; this one is `O_RDONLY`, because the end-of-file the command is
-reading until is the shell's writing end closing and nothing may hold that
-away. Neither is ever read or written through.
-
-**It does not replace the nudge above, and the measurement is the only reason
-anyone would know that.** The two look like one fix for one race. They are
-answers to two states: the placeholder keeps the *bytes* from being discarded
-under a command still arriving, and the nudge wakes a command parked in
-`open` — which is waiting for a **writer**, so no reading end of ours can
-ever be the thing it is waiting for. With the nudge taken out and only the
-placeholder left, the byte loss is 0 in 40,000 and `cat <(echo sub; echo
-noise >&2)` parks at round 991 of 2,000.
-
-What the placeholder does change is which of the nudge's three answers ends
-it. `ENXIO` — no reader left to tell — cannot arrive while the placeholder is
-up, since the placeholder is a reader; an ordinary substitution's loop ends on
-`ENOENT` instead, from the same unlink that releases the placeholder at the
-end of the command that named the path.
-
-This is an artifact of the named pipe rather than a divergence from the panel.
-A real shell forks and hands the child a descriptor that is attached before
-the child exists, so the window has no analog there — which is why the
-behavior being defended is "the command gets what the body wrote", and no
-shell was asked anything new to establish it.
+Two things follow that a name in a directory did not have, and both match the
+shells being copied. A descriptor number is **reused**, so a path captured
+from an earlier command can name a live pipe again later. And nothing is left
+on the filesystem for anything to remove: `p=$(echo <(true)); [ -e "$p" ]` is
+false afterwards because the number is closed, not because a file was
+unlinked.
 
 ### When a writing body's output lands
 

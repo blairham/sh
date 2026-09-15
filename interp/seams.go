@@ -36,18 +36,17 @@ const (
 	// the shell's own end of a process substitution's pipe.
 	//
 	// Not every file the interpreter touches is an open the gate sees. The
-	// scaffolding a process substitution stands on — the temporary directory
-	// made for its pipes, the mkfifo that creates one, the pipe itself, the
-	// regular file `=(cmd)` writes instead of a pipe, their removal — is
-	// deliberately outside the boundary: those paths are chosen by the
-	// interpreter, never by the script, and gating them would let a policy
-	// refuse the mechanism while believing it refused an access.
+	// scaffolding a process substitution stands on — the pipe itself, the
+	// temporary directory a `=(cmd)` writes its regular file in, their
+	// removal — is deliberately outside the boundary: those paths are chosen
+	// by the interpreter, never by the script, and gating them would let a
+	// policy refuse the mechanism while believing it refused an access.
 	//
 	// The pipe was on the wrong side of that sentence until #941, and the
 	// rule's own words are what put it right: a script writes `<(cmd)` and
-	// can never write the pipe's name, because the directory is made per
-	// shell with a name the operating system picks. So it is recorded — an
-	// EventAccess naming it, wherever in the shell the open happens — and
+	// can never write the pipe's name, because the number in it is the lowest
+	// one the shell had free. So it is recorded — an EventAccess naming it,
+	// wherever in the shell the open happens — and
 	// never refused. Runner.ownPipe is the recognition and carries the whole
 	// argument, including what is still refused, which is everything worth
 	// refusing: the inner command is an ActionExec, and it runs in a Runner

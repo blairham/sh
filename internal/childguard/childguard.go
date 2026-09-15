@@ -10,13 +10,20 @@
 // are *paths*, which is not a coincidence — a path is the one thing a stray
 // carries in its command line that says whose it was.
 //
-// A process substitution is a named pipe and a command started beside the one
-// that was given its path. If the shell stops without closing its end, or
-// without waiting for what it started, the command it started stays: a `cat`
-// blocked in open(2) on a FIFO no writer is coming to, sleeping, killable, and
+// A process substitution is a pipe and a command started beside the one that
+// was given its path. If the shell stops without closing its end, or without
+// waiting for what it started, the command it started stays: a `cat` blocked
+// in open(2) on a FIFO no writer was coming to, sleeping, killable, and
 // costing 0% of a processor. Harmless one at a time and unbounded over a day
 // of test runs — thirteen were found alive at once, aged half an hour to five
 // hours, and they had to be killed by hand (#972).
+//
+// That exact shape cannot arise any more: the pipes are anonymous since #2893,
+// so there is no open(2) for a command to wait in and no name for a stray to
+// carry. What the marker still finds is the directory a `=(cmd)` writes its
+// file in, which is the same construct and the same lifetime — and the guard
+// is kept rather than retired because its subject is the class of leak, not
+// the one spelling that produced the first thirteen.
 //
 // Nothing reported them, and that is the part worth fixing. The test that
 // leaked most sharply was the one asserting that the directory is cleaned up:

@@ -130,6 +130,27 @@ func (r *Runner) fileTable(asACommand bool) []*os.File {
 			highest = fd
 		}
 	}
+	// And the end of each of this command's process substitutions that the
+	// path names. It is the one thing here that is not in r.fds, and that is
+	// the point of it: the script did not put it on a number and cannot take
+	// it off one, and it reaches the commands of the shell that named it and
+	// no others. `<(cmd)` expands to `/dev/fd/N`, so the command can only
+	// open the path if N is open in it — this is what makes N open in it.
+	//
+	// The body's own commands are not among them, and that is what a C shell
+	// has to arrange by hand and this gets from the structure: a body runs in
+	// a clone, and clone() empties the list. Without that, `tee >(cat)` would
+	// hand the writing end to the `cat` reading the other side of it and the
+	// body would never see end-of-file, which is the failure /dev/fd process
+	// substitution was rejected for the first time round. See newProcSubPipe.
+	for _, p := range r.procSubs {
+		if p.hold == nil {
+			continue
+		}
+		if fd := int(p.hold.Fd()); fd >= firstExtraFd && fd <= maxInheritedFd && fd > highest {
+			highest = fd
+		}
+	}
 	if highest == 0 {
 		return nil
 	}
@@ -140,6 +161,14 @@ func (r *Runner) fileTable(asACommand bool) []*os.File {
 		}
 		if f := tableFile(v); f != nil {
 			files[fd-firstExtraFd] = f
+		}
+	}
+	for _, p := range r.procSubs {
+		if p.hold == nil {
+			continue
+		}
+		if fd := int(p.hold.Fd()); fd >= firstExtraFd && fd <= highest {
+			files[fd-firstExtraFd] = p.hold
 		}
 	}
 	if asACommand {

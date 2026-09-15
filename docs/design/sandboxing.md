@@ -656,14 +656,15 @@ property something checks.
 ### The shell's own scaffolding is recorded, never refused
 
 A process substitution runs a command with one end of a pipe and expands
-to a path the other end can be opened by. That path is a FIFO under a
-directory the interpreter makes for itself, named by the operating
-system: a script writes `<(cmd)` and can never write
-`<TMPDIR>/sh-procsubNNNNNNNN/sub1`, because it does not know the name
-and the name is different every time.
+to a path the other end can be opened by. That path is `/dev/fd/N`, the
+number of an end the interpreter parked for the command to open: a
+script writes `<(cmd)` and can never write `/dev/fd/11`, because the
+number is the lowest one the shell had free when the word expanded and
+it is different every time.
 
 So the gate is not asked about it. `ActionOpen` already said the
-scaffolding around the pipe — the directory, the `mkfifo`, the removal —
+scaffolding around the pipe — the pipe itself, the directory a `=(cmd)`
+writes its file in, their removal —
 is outside the boundary, for the reason that gating a path the script
 could not have named lets **a policy refuse the mechanism while believing
 it refused an access**. The pipe is on that side of the line and was on

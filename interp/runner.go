@@ -1541,6 +1541,12 @@ type Runner struct {
 	// so leaving the mode has to put the shell's own answer back rather than
 	// assert the standard's opposite.
 	posixSavedAliasReserved bool
+	// And the second dialect field the mode moves, saved for the same reason
+	// and separately because the two do not agree: bash expands a reserved
+	// word's alias and moves the brace scan, zsh expands the alias and leaves
+	// the brace scan alone, so one remembered value could not put both back.
+	// See syntax.Dialect.QuoteProtectsTheClosingBraceInPosixMode.
+	posixSavedQuoteProtects syntax.BraceQuotePolicy
 
 	// fds are the descriptors beyond the three named streams — what
 	// `exec 6>&1` saves and `>&6` finds again. Values are the io.Reader or

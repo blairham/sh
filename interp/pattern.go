@@ -117,6 +117,10 @@ func (r *Runner) patternOf(w *syntax.Word) string {
 	if w == nil {
 		return ""
 	}
+	// Before the spans are read, as in every other entry point: a pattern is
+	// a word and the run may divide it differently from the parse. See
+	// wordForRun.
+	w = r.wordForRun(w)
 	// A pattern is a word of its own, and the diagnostics raised inside it
 	// have to say so. The operand of `#`, `%` or `/` is reached from within
 	// the word that holds the expansion, and without this the run around a

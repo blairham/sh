@@ -2785,9 +2785,19 @@ type Dialect struct {
 	// says the form exists — which is what keeps dash, the one panel member
 	// without it, refusing `"${v/'$('/z}"` where ksh93 and ash accept it.
 	//
-	// The `sh` row is recorded and not modeled, as it is for every grammar
-	// flag: POSIX mode is a Semantics question here, and `set -o posix` cannot
-	// reach a grammar flag through it (#2399).
+	// The `sh` row is modeled, and by the *mode* rather than by the name:
+	// QuoteProtectsTheClosingBraceInPosixMode below is where a dialect says
+	// what POSIX mode makes of this axis, and driver enters that mode for
+	// every dialect invoked as `sh`.
+	//
+	// It was recorded and not modeled until #2604, on the grounds that "POSIX
+	// mode is a Semantics question here, and `set -o posix` cannot reach a
+	// grammar flag through it (#2399)". The second half of that is false and
+	// was already false when it was written: SetPosixMode replaces the
+	// Runner's Dialect to move AliasesExpandReservedWords, the front end
+	// notices the replacement and hands it to Parser.SetDialect, and the
+	// parser re-reads what it has not tokenized yet. A grammar flag is
+	// reachable at run time, and this is the second one through that door.
 	//
 	// **And it is decided when the word expands rather than when it is read**,
 	// which says a front end handing the parser a different reading at startup
@@ -2805,12 +2815,50 @@ type Dialect struct {
 	// for the *word* operand: `"${v#'a}'}"` is `[Vx}y]` under either name. zsh
 	// under the same name does not move at all, which is the shape
 	// Semantics.BadOptionToSpecialBuiltinFatalInPosixMode has, so whatever
-	// mechanism reaches this the answer has to come from the dialect. #2604
-	// holds the options; the corpus rows are
-	// core/a-quoted-brace-in-a-word-operand-in-posix-mode, its
-	// -decided-when-the-word-expands twin and
-	// invoke/called-sh-moves-a-quoted-brace-in-a-word-operand.
+	// mechanism reaches this the answer has to come from the dialect, which
+	// is what the field below is.
+	//
+	// So the mode reaches this axis twice, and the two halves are different
+	// things. The **parse-time** half is the dialect swap itself: text the
+	// parser has not read yet is read under the new value, exactly as an
+	// alias-expanded reserved word is. The **expansion-time** half is
+	// ParamExpr.RawTail, which keeps the source from a `${` to the end of the
+	// word it stands in so that an already-cut word can be divided again when
+	// it expands. Measured 2026-09-14, and it is the measurement that bounds
+	// the whole design: the re-read never moves a *word* or a *statement*
+	// boundary —
+	//
+	//	$ bash -c 'v=V; f(){ printf "[%s]" "${v-'"'"'a}"; echo MIDDLE;
+	//	          :"'"'"'}"; echo END; }; f; set -o posix; f'
+	//	[V]END
+	//	[V; echo MIDDLE; :'}]END
+	//
+	// where `MIDDLE` never prints in either mode and the `printf` takes one
+	// argument in both. The tree's shape stays a fact about the parse; what
+	// the run re-decides is one already-cut word's internal division.
 	QuoteProtectsTheClosingBrace BraceQuotePolicy
+
+	// QuoteProtectsTheClosingBraceInPosixMode is where POSIX mode puts the
+	// reading above, and the zero value is *unmoved*.
+	//
+	// bash moves and zsh does not. Measured 2026-09-14 over `v=Vx}y; printf
+	// '[%s]' "${v-'a}b'}"` with `s=a}b; printf '[%s]' "${s#'a}'}"` beside it
+	// as the pattern-operand control: bash 5.3.15 answers `[Vx}y]` and moves
+	// to `[Vx}yb'}]` under `set -o posix`, `--posix`, `POSIXLY_CORRECT=1` and
+	// the name `sh` alike, while the pattern operand is unmoved under every
+	// one of them; zsh 5.9.2 answers `[Vx}yb'}]` and `-o posixbuiltins` and
+	// the name both leave it there. bash 3.2.57 does not move either, which
+	// is recorded and not modeled for the reason every 3.2 divergence is.
+	//
+	// A type of its own rather than a second BraceQuotePolicy field, because
+	// BraceQuotePolicy's zero value is BraceQuoteProtectsAPatternOnly — a
+	// real reading — and driver calls SetPosixMode(true) for *every* dialect
+	// named `sh`. A dialect that never took a position on the mode would
+	// acquire one, and zsh-as-`sh` is measured above not to have it. That is
+	// the hazard #2659 names one axis over, and the zero value is what
+	// answers it here: unanswered stays unanswered, as it does for
+	// ForNameRunForm and for the three listing axes (#2604).
+	QuoteProtectsTheClosingBraceInPosixMode BraceQuotePosixMove
 
 	// CompoundAssignmentErrorGivesUpTheLine makes a syntax error inside
 	// `a=( … )` end the line it was written on rather than the file, so the
@@ -4960,6 +5008,53 @@ func (p BraceQuotePolicy) String() string {
 		return "every operand"
 	}
 	return "a pattern only"
+}
+
+// BraceQuotePosixMove is where POSIX mode puts [Dialect.QuoteProtectsTheClosingBrace].
+//
+// Four values rather than three, because the first of them is *unmoved* and
+// has to be the zero one: [BraceQuotePolicy]'s zero is a real reading, and
+// every dialect invoked as `sh` enters POSIX mode, so a plain second
+// BraceQuotePolicy field would hand the standard's answer to a shell that
+// never took a position on the question. See
+// [Dialect.QuoteProtectsTheClosingBraceInPosixMode] for the panel.
+type BraceQuotePosixMove uint8
+
+const (
+	// BraceQuoteUnmovedInPosixMode leaves the dialect's own reading in place.
+	// zsh, whose `posixbuiltins` and whose `sh` name both leave the axis
+	// alone, and the three shells with no POSIX mode to move it with.
+	BraceQuoteUnmovedInPosixMode BraceQuotePosixMove = iota
+	// BraceQuoteMovesToAPatternOnly is bash: the mode takes the word
+	// operand's quote away and leaves a pattern operand's where it was.
+	BraceQuoteMovesToAPatternOnly
+	// BraceQuoteMovesToNothing and BraceQuoteMovesToEveryOperand are the
+	// other two destinations. Nothing in the panel takes either, and they are
+	// declared because the axis they move is a three-valued one: a move that
+	// could only ever name one of the three readings would be recording the
+	// shell that happens to have it rather than the question.
+	BraceQuoteMovesToNothing
+	BraceQuoteMovesToEveryOperand
+)
+
+// Policy is the reading this move names, or base where it names none.
+func (m BraceQuotePosixMove) Policy(base BraceQuotePolicy) BraceQuotePolicy {
+	switch m {
+	case BraceQuoteMovesToAPatternOnly:
+		return BraceQuoteProtectsAPatternOnly
+	case BraceQuoteMovesToNothing:
+		return BraceQuoteProtectsNothing
+	case BraceQuoteMovesToEveryOperand:
+		return BraceQuoteProtectsEveryOperand
+	}
+	return base
+}
+
+func (m BraceQuotePosixMove) String() string {
+	if m == BraceQuoteUnmovedInPosixMode {
+		return "unmoved"
+	}
+	return "moves to " + m.Policy(BraceQuoteProtectsAPatternOnly).String()
 }
 
 // TopLevelAlternation is how a dialect reads a `|` standing outside every

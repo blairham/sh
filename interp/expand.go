@@ -114,6 +114,9 @@ func (r *Runner) expandOneWordFields(w *syntax.Word) []string {
 	if w == nil {
 		return nil
 	}
+	// Before anything reads the spans, because the run may divide them
+	// differently from the parse. See wordForRun.
+	w = r.wordForRun(w)
 	r.expandTilde(w)
 	r.expandEquals(w)
 
@@ -424,6 +427,7 @@ func (r *Runner) wordTextGlobMarked(w *syntax.Word) string {
 // marks survive it; colonTildes says the word is an assignment's value, where
 // a colon begins a tilde segment of its own.
 func (r *Runner) wordTextUnsplit(w *syntax.Word, mark func(string, syntax.Quoting) string, keepMarks, colonTildes bool) string {
+	w = r.wordForRun(w)
 	r.expandTilde(w)
 	failed := r.expandErr
 	// "Without globbing" has to reach the *nested* expansions too, and it did
@@ -505,6 +509,7 @@ func (r *Runner) expandRedirectTargetViews(w *syntax.Word) (fields, words []stri
 	if w == nil {
 		return nil, nil, ""
 	}
+	w = r.wordForRun(w)
 	r.expandTilde(w)
 
 	f := newWordFields()

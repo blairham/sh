@@ -217,8 +217,38 @@ recorded rather than modeled; the shape shared by all three is
 `TildePlusMinusExpands` axis provides (no for `posix`; the bash, ksh
 and zsh dialects say yes).
 
-A `~user` form needs a user database and is a different question, which
-is why the two are not lumped together as "the other tildes".
+### `~name`: a user, or a directory the shell was told about
+
+Two things wear a `~` and a name, and only one of them is the shell's.
+
+**`~user` is the user database's answer**, and every column in the panel
+gives it. It is not a semantics axis and it is not this package's to
+read either: `interp.Runner.UserHomeDir` carries it, the binaries wire
+it to `os/user` in `driver`, and a Runner with no hook leaves the word
+exactly as written — which is the right default for a library embedded
+in a program that has no business opening a password file. It is also
+what keeps a test off the machine's own users: a test that named a real
+one would pass on a laptop and fail on a runner.
+
+**`~name` is a *named directory*** — a table this shell owns outright,
+written by `hash -d name=dir` and read back by the tilde, needing
+nothing from the operating system. zsh alone has it
+(`expand/tilde-naming-a-named-directory`); bash spells `hash -d` and
+means *forget one hashed name* by it, which is
+`Semantics.HashDefinesANamedDirectory` against
+`Semantics.HashForgetsOneName` — one letter, two builtins, and no
+dialect has both. The table is also `$nameddirs`, which reads it and
+writes it.
+
+The order between them is measured: a **named directory wins**.
+`hash -d root=/tmp; print -r -- ~root` is `/tmp` in zsh where the same
+line without the assignment is `/var/root`.
+
+What a *miss* costs is still one shell's own and is not reproduced here:
+bash, bash 3.2, bash-as-sh, ksh93 and dash leave `~nosuchuser` as
+written at status 0, and zsh refuses it — `no such user or named
+directory` — ending the line. This shell gives the first answer in every
+dialect (`expand/tilde-naming-a-user-with-no-entry`, #2191).
 
 ## 3-5. Parameter, command and arithmetic expansion
 

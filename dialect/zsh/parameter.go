@@ -128,6 +128,12 @@ func registerParameterModule(r *interp.Runner) {
 	hideModuleParameter(r, "builtins")
 	r.SetDynamicAssoc("aliases", zshAliasesView)
 	r.SetDynamicAssocWriter("aliases", writeZshAlias)
+	// And the named directories, which is the same shape over a table this
+	// shell owns rather than over the aliases: `hash -d a=/tmp` takes
+	// `${#nameddirs}` from 0 to 1 and `nameddirs[x]=/tmp` defines one, both
+	// measured on zsh 5.9.2 (#2191).
+	r.SetDynamicAssoc("nameddirs", zshNamedDirsView)
+	r.SetDynamicAssocWriter("nameddirs", writeZshNamedDir)
 	// The other two kinds, each with its own parameter, which is how this
 	// shell says they are three namespaces rather than one table with flags:
 	// `alias -g G=x; alias r=y; alias -s t=z` leaves `${(k)aliases}` naming
@@ -174,7 +180,7 @@ func registerParameterModule(r *interp.Runner) {
 	registerAbsentParameters(r)
 }
 
-// zshEmptyParams are the eight parameters of the module that are empty in this
+// zshEmptyParams are the seven parameters of the module that are empty in this
 // shell and *right* to be, each with the thing it reports on.
 //
 // Not stubs. A stub is a value nobody produced standing in for one nobody can;
@@ -183,12 +189,11 @@ func registerParameterModule(r *interp.Runner) {
 // sentence a real zsh writes with none defined. Measured against zsh 5.9.2:
 // all eight are empty in a fresh shell there too.
 //
-// `nameddirs` is the eighth and #1137's survey had it in the wrong column —
-// filed as needing `hash -d`, which is true and is the point: `hash -d` is
-// `bad option` here, so no named directory can exist, so the empty table is
-// the answer rather than a gap. Measured both ways in zsh 5.9.2:
-// `hash -d foo=/tmp` takes `${#nameddirs}` from 0 to 1, and nothing else
-// does — `setopt autonamedirs` with a variable holding a path leaves it at 0.
+// `nameddirs` was the eighth and has left this list: `hash -d` works now, so
+// the table it reports on exists and an empty answer would be a lie rather
+// than an answer (#2191). It is a view over that table below, which is the
+// route out of here #2517 took for `$reswords` and #1137 described in
+// advance: what was missing was never the parameter.
 //
 // The second column is what each is waiting on, and it is load-bearing rather
 // than a comment: the tests run that exact line and require it to still
@@ -219,10 +224,9 @@ var zshEmptyParams = []struct {
 	{name: "dis_patchars", waitsFor: "disable -p", array: true, readonly: true},
 	{name: "dis_reswords", waitsFor: "disable -r", array: true, readonly: true},
 	{name: "dis_saliases", waitsFor: "disable -s"},
-	{name: "nameddirs", waitsFor: "hash -d"},
 }
 
-// registerEmptyParameters installs the eight as *views* that happen to be
+// registerEmptyParameters installs the seven as *views* that happen to be
 // empty rather than as empty tables.
 //
 // A view rather than a stored table for the reason every other one here is:
@@ -753,6 +757,25 @@ func aliasAssoc(table map[string]string) interp.AssocArray {
 		out[name] = interp.Scalar(text)
 	}
 	return out
+}
+
+// zshNamedDirsView is `$nameddirs`: every named directory, which is the table
+// `hash -d` writes and `~name` reads.
+func zshNamedDirsView(r *interp.Runner) interp.AssocArray {
+	return aliasAssoc(r.NamedDirectoryTable())
+}
+
+// writeZshNamedDir is `nameddirs[x]=/tmp`, which is `hash -d x=/tmp`.
+//
+// An *unset* of one element writes nothing, which is the measured effect
+// rather than an omission: zsh refuses `unset "nameddirs[a]"` with
+// `assignment to invalid subscript range` and leaves the entry where it was.
+// The complaint is not reproduced here; the entry staying is.
+func writeZshNamedDir(r *interp.Runner, name, dir string, set bool) {
+	if !set {
+		return
+	}
+	r.SetNamedDirectory(name, dir)
 }
 
 // zshErrnoValue is `$ERRNO`: the number the last system call this shell made

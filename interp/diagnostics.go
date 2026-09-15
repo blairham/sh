@@ -503,6 +503,14 @@ type Diagnostics struct {
 	// option — see Semantics.HashRefusesWhileTrackingIsOff, which is what
 	// decides whether this is reached at all. No verbs.
 	HashDisabled string
+	// HashNamedDirNotFound is `hash -d name` for a name the named-directory
+	// table has not got. One verb: the name. Empty means the substrate's own
+	// wording. See Semantics.HashDefinesANamedDirectory.
+	HashNamedDirNotFound string
+	// HashNamedDirBadName is `hash -d` given a name that could never be read
+	// back — one holding a `/`, which is where a `~name` stops. One verb:
+	// the name as it was written, assignment and all.
+	HashNamedDirBadName string
 
 	// CompleteNoSpec is `complete -p` or `-r` on a name nothing was
 	// registered for — and `compopt` on one, which is why the builtin's own

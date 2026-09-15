@@ -184,6 +184,9 @@ func (c *Runner) ownTables(r *Runner) {
 	// forgetting inside one cannot shorten the parent's listing.
 	c.cmdHash = maps.Clone(r.cmdHash)
 	c.cmdHashOrder = append([]string(nil), r.cmdHashOrder...)
+	// And the named directories beside it, for the same reason: `hash -d`
+	// inside a subshell is that subshell's, exactly as `hash` is.
+	c.namedDirs = maps.Clone(r.namedDirs)
 	c.disabledBuiltins = maps.Clone(r.disabledBuiltins)
 	c.withdrawnBuiltins = maps.Clone(r.withdrawnBuiltins)
 	// And the parameter half, which has to travel with the tables it takes

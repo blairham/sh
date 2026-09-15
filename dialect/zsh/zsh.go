@@ -1298,6 +1298,13 @@ func Semantics() interp.Semantics {
 	// hash counts only what PATH holds: a builtin or a function is "no
 	// such command" to it.
 	s.HashSearchesPathAlone = interp.Yes
+	// `hash -d` here is not bash's "forget one name": it is the table of
+	// **named directories** that `~name` reads back, written as an
+	// assignment. `hash -d a=/tmp; print -r -- ~a` is `/tmp`, `hash -d`
+	// lists the table sorted by name and `hash -dL` writes the command that
+	// would put an entry back. A named directory wins over a *user* of the
+	// same name — `hash -d root=/tmp; print -r -- ~root` is `/tmp` (#2191).
+	s.HashDefinesANamedDirectory = interp.Yes
 	// And lists it in name order, alone in the panel — the other three print
 	// their own tables' bucket order, which is a fact about their hashing
 	// rather than about the language.
@@ -3344,6 +3351,8 @@ func Diagnostics() interp.Diagnostics {
 		LowercaseReason:           true,
 		DirectoryReason:           "Permission denied",
 		HashNotFound:              "no such command: %[1]s",
+		HashNamedDirNotFound:      "hash: no such directory name: %[1]s",
+		HashNamedDirBadName:       "hash: invalid character in directory name: %[1]s",
 		// `ls=/bin/ls`, the shape an assignment would have — zsh and ksh93
 		// both write the table that way.
 		HashListing: interp.HashListingNameEqualsPath,

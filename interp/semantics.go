@@ -9000,6 +9000,31 @@ type Semantics struct {
 	// `hash` rather than about a letter.
 	HashForgetsOneName Answer
 
+	// HashDefinesANamedDirectory is what the *other* shell means by the same
+	// `-d`: a table of **named directories**, which `~name` reads back.
+	//
+	// It is the far side of HashForgetsOneName rather than a second reading
+	// of one letter, because what follows the letter is a different grammar:
+	// bash's operand is a name already in the command hash and zsh's is an
+	// assignment. Measured on zsh 5.9.2, 2026-09-14:
+	//
+	//	hash -d a=/tmp            defines it, quietly
+	//	hash -d                   lists `a=/tmp`, sorted by name
+	//	hash -dL                  lists `hash -d a=/tmp`
+	//	hash -d a                 nothing, at 0 — the name is there
+	//	hash -d nosuch            `no such directory name: nosuch` at 1
+	//	hash -d a/b=/tmp          `invalid character in directory name` at 1
+	//	hash -d -r                empties the table
+	//	print -r -- ~a            /tmp
+	//
+	// The table is the shell's own and wants nothing from the operating
+	// system, which is what separates it from `~user` — see
+	// Runner.UserHomeDir, and note that a named directory **wins** over a
+	// user of the same name (#2191).
+	//
+	// Asked only where `-d` is actually written.
+	HashDefinesANamedDirectory Answer
+
 	// HashReportsThePath is `hash -t name`: what the table holds for a name.
 	// bash alone.
 	//
@@ -13288,6 +13313,7 @@ func PosixSemantics() Semantics {
 		HashListsAsCommands:           No,
 		HashTakesAPathToRemember:      No,
 		HashForgetsOneName:            No,
+		HashDefinesANamedDirectory:    No,
 		HashReportsThePath:            No,
 		HashObeysCommandTracking:      No,
 		HashRefusesWhileTrackingIsOff: No,

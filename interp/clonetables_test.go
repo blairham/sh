@@ -254,6 +254,7 @@ func seedTables(r *Runner) {
 	r.aliases = map[string]aliasDef{"seed": {value: "v"}}
 	r.suffixAliases = map[string]string{"seed": "v"}
 	r.cmdHash = map[string]hashedCommand{"seed": {path: "/bin/seed", hits: 1}}
+	r.namedDirs = map[string]string{"seed": "/seed"}
 	r.assigned = map[string]string{"seed": "v"}
 	r.completions = map[string]completionSpec{"seed": {options: []string{"nospace"}, words: []string{"-F", "f"}}}
 	r.custom = map[string]Builtin{"seed": func(*Runner, context.Context, []string) int { return 0 }}

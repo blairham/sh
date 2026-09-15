@@ -529,7 +529,7 @@ func TestAnAbsentParameterMayStillBeUnset(t *testing.T) {
 	}
 }
 
-// **The ten that are empty read empty and say nothing**, and that is an
+// **The seven that are empty read empty and say nothing**, and that is an
 // answer rather than a stub: each reports on something this shell cannot do,
 // so "none" is true. A real zsh with none of them defined says the same.
 func TestTheEmptyParametersReadEmptyAndSayNothing(t *testing.T) {
@@ -562,7 +562,11 @@ func TestTheEmptyParametersStayHonest(t *testing.T) {
 		{"dis_patchars", "disable -p nosuch"},
 		{"dis_reswords", "disable -r nosuch"},
 		{"dis_saliases", "disable -s nosuch"},
-		{"nameddirs", "hash -d nosuch=/tmp"},
+		// `nameddirs` was the eighth row and has left this list: `hash -d`
+		// works now, so the table it reports on exists and the parameter is
+		// a view over it rather than an honest emptiness. That is the alarm
+		// firing and being answered rather than silenced — see
+		// TestTheNamedDirectoryParameterIsAViewOfTheTable (#2191).
 	} {
 		t.Run(tc.param, func(t *testing.T) {
 			out, st := runZsh(t, t.TempDir(), tc.waitsFor+` 2>&1
@@ -651,7 +655,7 @@ print -r -- "after=${#galiases}"`)
 func emptyModuleParams() []string {
 	return []string{
 		"dis_aliases", "dis_functions", "dis_functions_source", "dis_galiases",
-		"dis_patchars", "dis_reswords", "dis_saliases", "nameddirs",
+		"dis_patchars", "dis_reswords", "dis_saliases",
 	}
 }
 
@@ -981,7 +985,8 @@ func moduleParams() []string {
 func implementedModuleParams() []string {
 	return []string{
 		"aliases", "builtins", "commands", "funcstack", "functions",
-		"galiases", "options", "parameters", "reswords", "saliases",
+		"galiases", "nameddirs", "options", "parameters", "reswords",
+		"saliases",
 	}
 }
 
@@ -1103,5 +1108,40 @@ done`)
 		"parameters:zznosuchparam agree [UNSET]\n"
 	if out != want || st != 0 {
 		t.Errorf("key against table = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// `$nameddirs` is a view of the table `hash -d` writes, which is where it
+// went when it stopped being honestly empty.
+//
+// Measured on zsh 5.9.2, 2026-09-14. It is a *view* rather than a stored
+// table for the reason every other one in this file is: a stored table is
+// what a read finds first, so a name given one has stopped answering for
+// anything from that moment.
+func TestTheNamedDirectoryParameterIsAViewOfTheTable(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"empty until something writes one", `print -r -- "n=${#nameddirs}"`, "n=0\n"},
+		{
+			"the builtin fills it",
+			`hash -d a=/tmp; print -r -- "n=${#nameddirs} one=[$nameddirs[a]]"`,
+			"n=1 one=[/tmp]\n",
+		},
+		{"and the parameter writes it", `nameddirs[x]=/tmp; print -r -- ~x`, "/tmp\n"},
+		{"which the builtin then lists", `nameddirs[x]=/tmp; hash -d`, "x=/tmp\n"},
+		{"the keys are the names", `hash -d b=/b a=/a; print -r -- ${(k)nameddirs}`, "a b\n"},
+		// An element unset leaves the entry, which is zsh's effect: it
+		// refuses the subscript and changes nothing.
+		{
+			"an element unset leaves it alone",
+			`hash -d a=/tmp; unset "nameddirs[a]" 2>/dev/null; print -r -- "n=${#nameddirs}"`,
+			"n=1\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runZsh(t, t.TempDir(), tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("%s = %q (status %d), want %q", tc.src, out, st, tc.want)
+			}
+		})
 	}
 }

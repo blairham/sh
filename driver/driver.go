@@ -1528,6 +1528,14 @@ func (sh Shell) newRunner(name string, params []string, dg interp.Diagnostics, r
 	// is not. So a session has no `fg`, no `bg` and no ^Z — they have no
 	// meaning without one — and still has the signals a script writes.
 	r.SignalGroup = signalGroup
+	// And it answers `~user`, which means reading the system's user
+	// database. interp will not do that for itself — it is a library, and a
+	// Runner embedded in some other program has no business opening a
+	// password file on that program's behalf — so the hook is wired here,
+	// in the binary, where reaching outside the shell is the job. Not under
+	// KeepProcess: this reads system state rather than changing the
+	// process's, exactly as a PATH walk does (#2191).
+	r.UserHomeDir = userHomeDir
 	if !sh.KeepProcess {
 		// This is a shell, so `exec` may really replace it. interp will not
 		// reach for syscall.Exec itself — it is a library, and a Runner

@@ -71,6 +71,13 @@ func biHash(r *Runner, _ context.Context, args []string) int {
 		// because an operand without `-t` is a name to hash.
 		return r.hashReportPaths(args, strings.ContainsRune(opts, 'l'))
 	case strings.ContainsRune(opts, 'd'):
+		if r.ask(r.sem().HashDefinesANamedDirectory, "`hash -d` naming a directory") {
+			return r.hashNamedDirs(args, strings.ContainsRune(opts, 'L'),
+				strings.ContainsRune(opts, 'r'))
+		}
+		if r.unspecified {
+			return r.status
+		}
 		return r.hashForget(args)
 	}
 	if strings.ContainsRune(opts, 'r') {
@@ -142,7 +149,7 @@ func (r *Runner) hashOptionLetters(args []string) string {
 	}{
 		{"l", r.sem().HashListsAsCommands, "`hash -l`"},
 		{"p:", r.sem().HashTakesAPathToRemember, "`hash -p`"},
-		{"d", r.sem().HashForgetsOneName, "`hash -d`"},
+		{"d", r.hashLetterD(), "`hash -d`"},
 		{"t", r.sem().HashReportsThePath, "`hash -t`"},
 	} {
 		if !hashLetterSpelled(args, o.spelling[0]) {
@@ -154,6 +161,15 @@ func (r *Runner) hashOptionLetters(args []string) string {
 		if r.unspecified {
 			return known
 		}
+	}
+	// `-L` is the listing-as-commands letter in the dialect whose `-d` names
+	// a directory — `hash -dL` writes `hash -d a=/tmp` — and it is accepted
+	// only beside that `-d`. Measured: that shell has no `-l` at all
+	// (`hash -l` is `bad option`), and a bare `hash -L` lists the *command*
+	// table as commands, which is a letter this builtin does not have yet
+	// and is not this change's (#2191).
+	if strings.ContainsRune(known, 'd') && hashLetterSpelled(args, 'L') {
+		known += "L"
 	}
 	return known
 }
@@ -296,4 +312,77 @@ func (r *Runner) printCommandHash(asCommands bool) {
 // same name cannot intercept the line when it is pasted back.
 func hashAsCommand(name, path string) string {
 	return "builtin hash -p " + path + " " + name
+}
+
+// hashLetterD is whether `-d` is a letter this dialect has, which is two
+// different questions with one answer: the letter is in the set if it forgets
+// a name *or* if it names a directory, and no dialect does both. Written this
+// way so a dialect answering only the second does not have to claim the first
+// as well (#2191).
+func (r *Runner) hashLetterD() Answer {
+	if r.sem().HashDefinesANamedDirectory == Yes || r.sem().HashForgetsOneName == Yes {
+		return Yes
+	}
+	if r.sem().HashDefinesANamedDirectory == No && r.sem().HashForgetsOneName == No {
+		return No
+	}
+	return Unspecified
+}
+
+// hashNamedDirs is `hash -d` in the dialect where the letter names a
+// directory rather than forgetting a command.
+//
+// Three shapes, measured on zsh 5.9.2, 2026-09-14 — see
+// Semantics.HashDefinesANamedDirectory for the table:
+//
+//	hash -d name=dir …   define, quietly
+//	hash -d name …       ask; silent when it is there, a complaint at 1 when
+//	                     it is not
+//	hash -d              list, sorted by name; `-L` writes the command back
+//	hash -d -r           empty the table
+//
+// `-r` with an operand is `too many arguments` there, and the table is left
+// alone — so the clearing and the defining are not two things one call may do.
+func (r *Runner) hashNamedDirs(args []string, asCommands, clear bool) int {
+	if clear {
+		if len(args) > 0 {
+			r.builtinUsageLine("hash")
+			return orDefault(r.diag().BuiltinBadOptionStatus, 2)
+		}
+		r.namedDirs = nil
+		return 0
+	}
+	if len(args) == 0 {
+		for _, name := range r.namedDirNames() {
+			if asCommands {
+				r.printf("hash -d %s=%s\n", name, namedDirValue(r.namedDirs[name]))
+				continue
+			}
+			r.printf("%s=%s\n", name, namedDirValue(r.namedDirs[name]))
+		}
+		return 0
+	}
+	status := 0
+	for _, arg := range args {
+		name, dir, isAssignment := strings.Cut(arg, "=")
+		if !isAssignment {
+			// A name on its own asks after an entry rather than making one.
+			if _, ok := r.namedDir(name); !ok {
+				r.diagf("%s\n", Wording(r.diag().HashNamedDirNotFound,
+					"hash: no such directory name: %[1]s", name))
+				status = 1
+			}
+			continue
+		}
+		if !validNamedDirName(name) {
+			// The *name*, not the word it was written in: measured,
+			// `hash -d a/b=/tmp` blames `a/b`.
+			r.diagf("%s\n", Wording(r.diag().HashNamedDirBadName,
+				"hash: invalid character in directory name: %[1]s", name))
+			status = 1
+			continue
+		}
+		r.putNamedDir(name, dir)
+	}
+	return status
 }

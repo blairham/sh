@@ -954,13 +954,18 @@ func Semantics() interp.Semantics {
 	// ReadonlyOptions is `p` in this dialect now, so the refusal a script
 	// meets is the option's and not an axis's.
 	//
-	// The last is not an axis of the semantics vector at all, so it carries
-	// no marker: Diagnostics.UlimitListing — measured in full (#2278:
-	// fifteen rows, `core file size (blocks)         (-c) unlimited` and its
-	// fellows), and five of them — `-e`, `-i`, `-q`, `-r`, `-x` — name
-	// resources no [interp.Resource] constant does. It was also measured on
-	// Linux, where those five exist; the table a macOS build should print is
-	// a second measurement and not this one.
+	// Diagnostics.UlimitListing was the third of these and is no longer one
+	// (#2278). It was held open because five of BusyBox's fifteen rows name
+	// limits only Linux has, and a table measured on Linux could not say
+	// what a macOS build should print. The answer turned out not to need a
+	// BusyBox on a BSD, which does not exist to be measured: bash, zsh and
+	// dash on macOS each print their own Linux table without the rows for
+	// limits this kernel lacks, byte-identical otherwise, and the field
+	// width is a literal rather than one computed from the rows present. So
+	// the row a kernel cannot answer is dropped and nothing else moves —
+	// which is Runner.HasRlimit, and a fact about the platform rather than a
+	// layout anybody invented. The reasoning is written out where the table
+	// is.
 
 	return s
 }
@@ -1119,8 +1124,75 @@ func Diagnostics() interp.Diagnostics {
 		BuiltinBadOption:             "illegal option %[2]s",
 		OptionNeedsArgument:          "%[1]s: No arg for -%[2]s option",
 		UlimitBadOption:              "unrecognized option: %[1]s",
-		UmaskBadOption:               "illegal option %[1]s",
-		PrintfBadOption:              "illegal option %[1]s",
+		// `ulimit -a`, row for row as the engine writes it — the label in a
+		// fixed 32-column field, the letter in its own parenthesis at the
+		// end, `(kb)` where bash writes `(kbytes, -d)`, and the units spelled
+		// into the label rather than into a separate column. Measured
+		// 2026-09-14, BusyBox v1.37.0 on linux/arm64, and byte-identical from
+		// a glibc build on Debian 12 and a musl one on Alpine 3.
+		//
+		// Five of the fifteen name limits only Linux has — RLIMIT_NICE,
+		// RLIMIT_SIGPENDING, RLIMIT_MSGQUEUE, RLIMIT_RTPRIO and RLIMIT_LOCKS
+		// — and a build without one leaves its row out rather than printing a
+		// number it does not have; see Runner.HasRlimit. That is measured
+		// rather than assumed, because #2278 was right that it could not be
+		// read off a Linux run alone:
+		//
+		//   - bash 5.3, zsh and dash each print, on macOS, their own Linux
+		//     table minus the rows for limits this kernel has no number for
+		//     — every surviving row byte-identical, padding included. Three
+		//     shells, one rule: the row goes and nothing else moves. They do
+		//     not agree on which rows: zsh drops `-m: resident set size` as
+		//     well, where bash keeps `max memory size`, because Darwin's
+		//     sys/resource.h defines RLIMIT_RSS as RLIMIT_AS and the two
+		//     read that differently. That is a disagreement about which
+		//     limits exist, not about what becomes of a row for one that
+		//     does not.
+		//   - The field width is a literal and not computed from the rows
+		//     present. bash settles that across the platform boundary: its
+		//     widest Linux label by far is `real-time non-blocking time`, a
+		//     row macOS has no limit for, and every row that remains there
+		//     still sits in the Linux column rather than closing up around a
+		//     set whose widest label is nine characters shorter. dash says
+		//     the same from inside one table: its 20-wide field is
+		//     overflowed by `locked memory(kbytes)`, which pushes that one
+		//     row's value a column right and nothing else's — a computed
+		//     width could not do that. And BusyBox agrees from the other
+		//     side: at v1.28, whose table is a different shape again, the
+		//     field runs eight characters past its widest label, which no
+		//     widest-plus-padding rule leaves.
+		//
+		// So the ten rows a BSD kernel can answer stand here in the column
+		// this measurement found them in. This is the first table in this
+		// package written from a Linux run, which is why Runner.HasRlimit is
+		// new: the other four were written from the macOS panel and have no
+		// row a platform could take away — #2806, where a Linux build of our
+		// bash prints eleven rows against the real shell's seventeen.
+		//
+		// What this table still does not say is which of the five *letters*
+		// this shell's `ulimit` accepts when the limit does exist. The three
+		// shells above refuse all five on macOS and read all five on Linux,
+		// so that is an answer per shell *and* per platform rather than a
+		// value on an axis, and it is left open in #2805.
+		UlimitListing: []interp.UlimitListingRow{
+			{Prefix: "core file size (blocks)         (-c) ", Res: interp.ResourceCore},
+			{Prefix: "data seg size (kb)              (-d) ", Res: interp.ResourceData, Scale: 1024},
+			{Prefix: "scheduling priority             (-e) ", Res: interp.ResourceSchedulingPriority, Scale: 1},
+			{Prefix: "file size (blocks)              (-f) ", Res: interp.ResourceFileSize},
+			{Prefix: "pending signals                 (-i) ", Res: interp.ResourcePendingSignals, Scale: 1},
+			{Prefix: "max locked memory (kb)          (-l) ", Res: interp.ResourceLockedMemory, Scale: 1024},
+			{Prefix: "max memory size (kb)            (-m) ", Res: interp.ResourceResidentSet, Scale: 1024},
+			{Prefix: "open files                      (-n) ", Res: interp.ResourceOpenFiles, Scale: 1},
+			{Prefix: "POSIX message queues (bytes)    (-q) ", Res: interp.ResourceMessageQueues, Scale: 1},
+			{Prefix: "real-time priority              (-r) ", Res: interp.ResourceRealtimePriority, Scale: 1},
+			{Prefix: "stack size (kb)                 (-s) ", Res: interp.ResourceStack, Scale: 1024},
+			{Prefix: "cpu time (seconds)              (-t) ", Res: interp.ResourceCPUTime, Scale: 1},
+			{Prefix: "max user processes              (-u) ", Res: interp.ResourceProcesses, Scale: 1},
+			{Prefix: "virtual memory (kb)             (-v) ", Res: interp.ResourceAddressSpace, Scale: 1024},
+			{Prefix: "file locks                      (-x) ", Res: interp.ResourceFileLocks, Scale: 1},
+		},
+		UmaskBadOption:  "illegal option %[1]s",
+		PrintfBadOption: "illegal option %[1]s",
 
 		// Numbers. The capital is this shell's, on a message it otherwise
 		// words like the lower-case ones around it.

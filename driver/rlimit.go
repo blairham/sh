@@ -33,19 +33,36 @@ var rlimitOf = map[interp.Resource]int{
 	interp.ResourceAddressSpace: syscall.RLIMIT_AS,
 }
 
-// The three the portable syscall package does not name — locked memory, the
-// resident set, the process count — join the table where the platform file
-// looked their numbers up, and stay honestly absent where none did.
+// The eight the portable syscall package does not name join the table where
+// the platform file looked their numbers up, and stay honestly absent where
+// none did.
+//
+// The first three — locked memory, the resident set, the process count —
+// exist on every platform this builds for and are only spelled differently.
+// The five after them are Linux's alone, and their absence is load-bearing
+// rather than a gap: `ulimit -a` asks hasRlimit and leaves the row out.
 func init() {
 	for res, id := range map[interp.Resource]int{
-		interp.ResourceLockedMemory: rlimitLockedMemory,
-		interp.ResourceResidentSet:  rlimitResidentSet,
-		interp.ResourceProcesses:    rlimitProcesses,
+		interp.ResourceLockedMemory:       rlimitLockedMemory,
+		interp.ResourceResidentSet:        rlimitResidentSet,
+		interp.ResourceProcesses:          rlimitProcesses,
+		interp.ResourceFileLocks:          rlimitFileLocks,
+		interp.ResourcePendingSignals:     rlimitPendingSignals,
+		interp.ResourceMessageQueues:      rlimitMessageQueues,
+		interp.ResourceSchedulingPriority: rlimitSchedulingPriority,
+		interp.ResourceRealtimePriority:   rlimitRealtimePriority,
 	} {
 		if id >= 0 {
 			rlimitOf[res] = id
 		}
 	}
+}
+
+// hasRlimit reports whether this kernel has a limit at all, which is what
+// tells `ulimit -a` a row belongs in the table. See Runner.HasRlimit.
+func hasRlimit(res interp.Resource) bool {
+	_, ok := rlimitOf[res]
+	return ok
 }
 
 // getRlimit reads one limit, in the kernel's own units.

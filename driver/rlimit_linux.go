@@ -12,3 +12,15 @@ const (
 	rlimitProcesses    = 6
 	rlimitLockedMemory = 8
 )
+
+// And five this kernel has that the BSDs do not, by the numbers
+// asm-generic/resource.h gives them. Go's syscall package names none of the
+// five on any platform, so they are written out here for the same reason the
+// three above are.
+const (
+	rlimitFileLocks          = 10
+	rlimitPendingSignals     = 11
+	rlimitMessageQueues      = 12
+	rlimitSchedulingPriority = 13
+	rlimitRealtimePriority   = 14
+)

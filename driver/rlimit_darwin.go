@@ -12,3 +12,15 @@ const (
 	rlimitLockedMemory = 6
 	rlimitProcesses    = 7
 )
+
+// The five Linux limits this kernel does not have. Not "unimplemented" and
+// not zero: there is no such limit here, so `ulimit -a` leaves the row out
+// entirely — which is what bash 5.3, zsh and dash were each measured doing on
+// this platform, each printing its Linux table without them.
+const (
+	rlimitFileLocks          = -1
+	rlimitPendingSignals     = -1
+	rlimitMessageQueues      = -1
+	rlimitSchedulingPriority = -1
+	rlimitRealtimePriority   = -1
+)

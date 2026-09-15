@@ -336,6 +336,24 @@ type Runner struct {
 	GetRlimit func(res Resource) (soft, hard int64, err error)
 	SetRlimit func(res Resource, soft, hard int64) error
 
+	// HasRlimit reports whether this build's kernel has a given limit at
+	// all. Nil — the default — means every resource this shell names, which
+	// is what a test double wants and what the ten shared ones are.
+	//
+	// It exists because `ulimit -a` is a *table*, and a resource the kernel
+	// does not have is not a row that reads zero: it is a row that is not
+	// there. Measured across three shells on macOS, which has no
+	// RLIMIT_NICE, RLIMIT_SIGPENDING, RLIMIT_MSGQUEUE, RLIMIT_RTPRIO or
+	// RLIMIT_LOCKS — bash 5.3, zsh and dash each print their Linux table
+	// without those rows, every surviving row byte-identical, including its
+	// padding. So the row is dropped and nothing else moves.
+	//
+	// Separate from GetRlimit returning an error because the two mean
+	// different things: "this kernel has no such limit" is a fact about the
+	// build and is the table's business, where a failing getrlimit is a
+	// fault and should still be reported.
+	HasRlimit func(res Resource) bool
+
 	// procSubs are the named pipes this command's process substitutions made,
 	// waiting to be removed once it is done with them.
 	procSubs []procSubPipe

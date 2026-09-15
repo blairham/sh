@@ -2816,6 +2816,20 @@ func (r *Runner) compoundElemsFolded(name string, a Array) Array {
 	}
 	changed := false
 	for _, sub := range a.subscripts() {
+		if a[sub].Nested != nil {
+			// A nested array is not a value this name's attribute reaches on
+			// a *write*. Measured 2026-09-14 on ksh93u+, the one column whose
+			// elements nest: `typeset -i a; a[1]=(5+5)` is `typeset -a -i
+			// a=([1]=(5+5) )` there, unevaluated, and `a[1]=(2+2 3+3)` keeps
+			// both words as text — where the same attribute *arriving* over a
+			// standing `a[1]=(5+5)` does fold it, to `([1]=(10) )`. So the
+			// literal's words are not the name's values and the arrival is a
+			// different question; see foldedElems, which is the arrival and
+			// does recurse. An element assignment's value still folds, and
+			// reaches the attribute where it is written rather than here —
+			// `typeset -i a[1][2]=5+5` is `([2]=10)` (#2491).
+			continue
+		}
 		if r.attributeWouldChange(name, a[sub].scalar()) {
 			changed = true
 			break
@@ -2839,6 +2853,18 @@ func (r *Runner) compoundElemsFolded(name string, a Array) Array {
 func (r *Runner) foldedElems(name string, a Array) Array {
 	folded := Array{}
 	for _, sub := range a.subscripts() {
+		if a[sub].Nested != nil {
+			// The fold goes *into* a nested array rather than flattening it.
+			// Measured on the one column whose elements nest: `a[1]=(5+5);
+			// typeset -i a` is `typeset -a -i a=([1]=(10) )` there, the
+			// nesting kept and the word inside it evaluated. Taking the
+			// element's scalar reading instead — which is its first element,
+			// or the empty string where it has none — folded a whole array
+			// into one number and lost every other element it held, silently
+			// (#2491).
+			folded[sub] = Element{Nested: r.foldedElems(name, a[sub].Nested)}
+			continue
+		}
 		v, ok := r.attributeFolded(name, a[sub].scalar())
 		if !ok {
 			// The integer evaluation failed and has already said so, which

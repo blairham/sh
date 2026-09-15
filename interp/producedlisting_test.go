@@ -4,6 +4,7 @@
 package interp_test
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 
@@ -265,4 +266,197 @@ func TestTheFilteredListingsDoNotReachTheProducedParameters(t *testing.T) {
 			}
 		})
 	}
+}
+
+// The third answer: the listing writes what the parameter last gave a
+// *script*, and writes no value at all where nothing has read it yet.
+//
+// One rule and not two states. The row before any read has no reading to
+// write, which is what #2518 read as a version split between two columns of
+// one shell (#2722).
+func TestTheLastReadingAnswerWaitsForAReadAndThenKeepsIt(t *testing.T) {
+	set := func(s *Semantics) { s.ProducedParameterListing = ProducedListingLastReading }
+	for _, tc := range []struct{ why, src, want string }{
+		{
+			"nothing has read it, so there is no reading to write",
+			"v=1; typeset -p",
+			"declare -i X\ndeclare -- v=\"1\"\n",
+		},
+		{
+			"an expansion has read it, so the listing writes that reading",
+			"v=1; : $X; typeset -p",
+			"declare -i X=\"5\"\ndeclare -- v=\"1\"\n",
+		},
+		{
+			// The half that says it is a cache and not a re-read: the
+			// producer here answers the same value every time, so this row
+			// is about the *shape* — the ordinary name beside it is what
+			// says the listing ran at all.
+			"and a second listing writes the same reading",
+			"v=1; : $X; typeset -p >/dev/null; typeset -p",
+			"declare -i X=\"5\"\ndeclare -- v=\"1\"\n",
+		},
+	} {
+		out, errs, st := declRunWith(t, tc.src, set, Diagnostics{}, nil,
+			producing("X", "5", &ProducedDeclaration{Integer: true}))
+		out = listedRows(out, "X", "v")
+		if out != tc.want || errs != "" || st != 0 {
+			t.Errorf("%s: stdout %q stderr %q status %d, want %q at 0", tc.why, out, errs, st, tc.want)
+		}
+	}
+}
+
+// A *listing* is not a read. The cache holds what a script's own expansion
+// took, so two listings a line apart cannot differ from each other — which is
+// the whole property the answer exists for, and which a listing that filled
+// the cache from its own output would destroy.
+//
+// Proven with a producer that counts, because a producer answering a constant
+// cannot tell a cache from a re-read.
+func TestAListingDoesNotCountAsAReadOfTheProducer(t *testing.T) {
+	set := func(s *Semantics) { s.ProducedParameterListing = ProducedListingLastReading }
+	out, _, st := declRunWith(t, ": $X; typeset -p; typeset -p", set, Diagnostics{}, nil,
+		countingListed("X", &ProducedDeclaration{Integer: true}))
+	if want := "declare -i X=\"1\"\ndeclare -i X=\"1\"\n"; listedRows(out, "X") != want || st != 0 {
+		t.Errorf("got %q at %d, want %q at 0 — the listing re-read the producer", listedRows(out, "X"), st, want)
+	}
+
+	// And the control, so the row above is not a producer that simply never
+	// moves: a second *expansion* does move the reading.
+	out, _, _ = declRunWith(t, ": $X; typeset -p; : $X; typeset -p", set, Diagnostics{}, nil,
+		countingListed("X", &ProducedDeclaration{Integer: true}))
+	if want := "declare -i X=\"1\"\ndeclare -i X=\"2\"\n"; listedRows(out, "X") != want {
+		t.Errorf("got %q, want %q — an expansion is what moves the reading", listedRows(out, "X"), want)
+	}
+}
+
+// The letters some parameters carry only once there is a reading, which is
+// stated per parameter because it is not a rule about readings: the panel has
+// names that carry `-i` unread and names that carry none either side.
+func TestTheIntegerLetterCanWaitForTheFirstRead(t *testing.T) {
+	set := func(s *Semantics) { s.ProducedParameterListing = ProducedListingLastReading }
+	d := &ProducedDeclaration{Integer: true, IntegerOnceRead: true}
+	out, _, st := declRunWith(t, "typeset -p", set, Diagnostics{}, nil, producing("X", "5", d))
+	if want := "declare -- X\n"; listedRows(out, "X") != want || st != 0 {
+		t.Errorf("unread: got %q at %d, want %q at 0", listedRows(out, "X"), st, want)
+	}
+	out, _, st = declRunWith(t, ": $X; typeset -p", set, Diagnostics{}, nil, producing("X", "5", d))
+	if want := "declare -i X=\"5\"\n"; listedRows(out, "X") != want || st != 0 {
+		t.Errorf("read: got %q at %d, want %q at 0", listedRows(out, "X"), st, want)
+	}
+
+	// The control, and it is the point of the field: a parameter without it
+	// keeps its letter in the unread state, so this is not "the letters
+	// arrive with the value".
+	plain := &ProducedDeclaration{Integer: true}
+	out, _, _ = declRunWith(t, "typeset -p", set, Diagnostics{}, nil, producing("X", "5", plain))
+	if want := "declare -i X\n"; listedRows(out, "X") != want {
+		t.Errorf("without the field: got %q, want %q", listedRows(out, "X"), want)
+	}
+
+	// And the *named* listing is a different question and does not move: it
+	// writes the letter and a fresh reading whether or not anything has read
+	// the parameter.
+	out, _, _ = declRunWith(t, "typeset -p X", set, Diagnostics{}, nil, producing("X", "5", d))
+	if want := "declare -i X=\"5\"\n"; out != want {
+		t.Errorf("named: got %q, want %q", out, want)
+	}
+}
+
+// countingListed registers a produced scalar that answers a new number on
+// every read, which is what tells a cached reading from a re-read. The
+// neighboring `counting` in producedunset_test.go asks a different question
+// and carries a writer that hears assignments; this one is the plain counter.
+func countingListed(name string, d *ProducedDeclaration) func(*Runner) {
+	return func(r *Runner) {
+		n := 0
+		r.SetDynamic(name, func(*Runner) string { n++; return strconv.Itoa(n) })
+		r.SetDynamicWriter(name, func(*Runner, string) {})
+		if d != nil {
+			r.SetDynamicDeclaration(name, *d)
+		}
+	}
+}
+
+// The axis reaches the other three whole-shell listings too: a bare `set` and
+// both shapes of a bare declaration word ask it of the same names.
+//
+// #2518 recorded ProducedParameterListing as governing the operand-less `-p`
+// and nothing else, and none of the three listed a produced parameter at all.
+// Measured, the panel answers all three routes with one rule per shell — see
+// Runner.listedNames for the table (#2722).
+func TestTheProducedAnswerReachesTheBareListingsToo(t *testing.T) {
+	for _, tc := range []struct {
+		why    string
+		set    func(*Semantics)
+		src    string
+		unread string
+		read   string
+	}{{
+		why: "a bare `set`, which is assignments, so a row with no reading is no row",
+		set: func(s *Semantics) {
+			s.ProducedParameterListing = ProducedListingLastReading
+			s.SetListing = SetListingAssignments
+		},
+		src:    "set",
+		unread: "",
+		read:   "X='5'\n",
+	}, {
+		why: "a bare `set` under the re-reading answer, which always has one",
+		set: func(s *Semantics) {
+			s.ProducedParameterListing = ProducedListingWithValue
+			s.SetListing = SetListingAssignments
+		},
+		src:    "set",
+		unread: "X='5'\n",
+		read:   "X='5'\n",
+	}, {
+		why: "the bare word that writes every parameter with its value",
+		set: func(s *Semantics) {
+			s.ProducedParameterListing = ProducedListingWithValue
+			s.BareTypesetListing = BareLocalListsEveryParameter
+		},
+		src:    "typeset",
+		unread: "integer X=\"5\"\n",
+		read:   "integer X=\"5\"\n",
+	}, {
+		// Silent about a value by construction, so the answer changes
+		// nothing here — which is what makes the form safe over a clock, and
+		// is why this row is right whichever answer the dialect holds.
+		why: "the bare word that writes attributed names and no values",
+		set: func(s *Semantics) {
+			s.ProducedParameterListing = ProducedListingWithValue
+			s.BareTypesetListing = BareLocalListsAttributedNames
+		},
+		src:    "typeset",
+		unread: "integer X\n",
+		read:   "integer X\n",
+	}} {
+		out, errs, st := declRunWith(t, tc.src, tc.set, Diagnostics{}, nil,
+			producing("X", "5", &ProducedDeclaration{Integer: true}))
+		if got := rowsFor(out, "X"); got != tc.unread || errs != "" || st != 0 {
+			t.Errorf("%s, unread: got %q / %q / %d, want %q at 0", tc.why, got, errs, st, tc.unread)
+		}
+		out, errs, st = declRunWith(t, ": $X; "+tc.src, tc.set, Diagnostics{}, nil,
+			producing("X", "5", &ProducedDeclaration{Integer: true}))
+		if got := rowsFor(out, "X"); got != tc.read || errs != "" || st != 0 {
+			t.Errorf("%s, read: got %q / %q / %d, want %q at 0", tc.why, got, errs, st, tc.read)
+		}
+	}
+}
+
+// rowsFor is listedRows for the listings whose rows have no command word in
+// front of them, where a name can be the first thing on the line.
+func rowsFor(out string, name string) string {
+	var kept []string
+	for _, line := range strings.Split(out, "\n") {
+		if strings.HasPrefix(line, name+"=") || strings.HasSuffix(line, " "+name) ||
+			strings.Contains(line, " "+name+"=") {
+			kept = append(kept, line)
+		}
+	}
+	if len(kept) == 0 {
+		return ""
+	}
+	return strings.Join(kept, "\n") + "\n"
 }

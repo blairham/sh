@@ -38,6 +38,13 @@ func Dialect() syntax.Dialect {
 	// see [syntax.Dialect.ArrayLiteralShapeFollowsTheFirstElement] for the
 	// whole table and for the store rule that rides beside it (#2505).
 	d.ArrayLiteralShapeFollowsTheFirstElement = true
+	// A name on the left of an assignment may carry more than one subscript,
+	// and the later ones reach *into* what the earlier one named:
+	// `a[1][2]=v` is `typeset -a a=([1]=([2]=v) )` with one element, which is
+	// the same value `a[1]=([2]=v)` builds. Measured 2026-09-14 on 93u+; the
+	// other columns refuse the operand or declare an empty array under the
+	// base name, and this is the grammar for the one that nests (#2491).
+	d.ChainedAssignSubscript = true
 	// A backslash the input ends immediately after is kept only where it is
 	// the first thing in the word: `printf "[%s]" \` is `[\]` here and
 	// `printf "[%s]" x\` is `[x]`, where bash 5.3 keeps both and zsh drops

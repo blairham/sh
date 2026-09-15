@@ -482,7 +482,7 @@ func Semantics() interp.Semantics {
 	// `EPOCHREALTIME` carry none either side. This engine writes `-i` in
 	// both states, which is the letter the named `declare -p SECONDS` writes
 	// in bash whatever has been read (#2451) and is the after state here.
-	s.ProducedParameterListing = interp.ProducedListingNameOnly
+	s.ProducedParameterListing = interp.ProducedListingLastReading
 	s.DeclareValueQuoting = interp.ListingQuoteAlwaysDouble
 	s.ListingControlEscape = interp.ControlEscapeOctal
 	// A `#` in a listed value is quoted only where a comment could begin —
@@ -2499,7 +2499,14 @@ func Apply(r *interp.Runner) {
 	r.SetDynamic("SECONDS", func(rr *interp.Runner) string {
 		return strconv.Itoa(int(rr.SecondsFrom()))
 	})
-	r.SetDynamicDeclaration("SECONDS", interp.ProducedDeclaration{Integer: true})
+	// `-i`, but only once something has expanded it: the operand-less listing
+	// writes `declare -- SECONDS` in a shell that has never read the
+	// parameter and `declare -i SECONDS="0"` after a plain `: $SECONDS`. It
+	// is the one name of the seven that moves, and the *named*
+	// `typeset -p SECONDS` writes the letter in both states (#2722).
+	r.SetDynamicDeclaration("SECONDS", interp.ProducedDeclaration{
+		Integer: true, IntegerOnceRead: true,
+	})
 	// And the line, which this shell lists with *no* attribute where bash
 	// 3.2 writes `-i` — `declare -- LINENO="1"`, measured on 5.3.15. It is
 	// registered by the core rather than here, so this is a declaration for

@@ -397,12 +397,7 @@ func (r *Runner) bareLocalListing() int {
 		}
 		return 0
 	case BareLocalListsEveryParameter:
-		locals := r.innermostLocalNames()
-		for _, name := range r.declarableNames() {
-			d, _ := r.declarationOf(name)
-			r.printf("%s\n", r.attributeWordDeclaration(d, locals[name]))
-		}
-		return 0
+		return r.everyParameterListing()
 	}
 	r.diagf("%s\n", r.unanswered("what a bare `local` lists"))
 	r.status = 2
@@ -425,20 +420,26 @@ func (r *Runner) bareDeclarationListing() int {
 	case BareLocalListsNothing:
 		return 0
 	case BareLocalListsEveryParameter:
-		locals := r.innermostLocalNames()
-		for _, name := range r.declarableNames() {
-			d, _ := r.declarationOf(name)
-			r.printf("%s\n", r.attributeWordDeclaration(d, locals[name]))
-		}
-		return 0
+		return r.everyParameterListing()
 	case BareLocalListsWhatSetLists:
 		// Not a listing of its own: the one a bare `set` writes, run again
 		// under this word. See the constant for the measurement that says
 		// they are the same bytes.
 		return r.setListing()
 	case BareLocalListsAttributedNames:
-		for _, name := range r.declarableNames() {
-			d, _ := r.declarationOf(name)
+		names, produced, listing := r.listedNames()
+		if r.unspecified {
+			return r.status
+		}
+		for _, name := range names {
+			// The dialect's answer, exactly as under `-p`. It changes nothing
+			// this form writes — no value at all appears on these lines, so a
+			// produced row is its letters and its name whichever answer the
+			// dialect holds, which is what makes the form safe over a clock
+			// and why ksh93's `integer RANDOM` is right by construction
+			// rather than by an answer. Asked anyway, because the draw it
+			// suppresses is a behavior (#2722).
+			d, _ := r.listedDeclarationOf(name, produced[name], listing)
 			head := r.attributePhraseHead(d)
 			if head == "" {
 				// No attribute, so no line. The name is held and is
@@ -494,4 +495,25 @@ func (r *Runner) localOutsideAFunction() (int, bool) {
 		return r.status, true
 	}
 	return 1, true
+}
+
+// everyParameterListing is BareLocalListsEveryParameter: every name the shell
+// holds, written as its attributes in words and then the assignment.
+//
+// One function for the two words that reach the form — `local` and the
+// declaration word, which one dialect answers identically — rather than the
+// copy each of them used to hold. The copies were the same three lines and
+// stayed so right up until a produced parameter had to be added to the walk,
+// which is the point at which two copies become two behaviors.
+func (r *Runner) everyParameterListing() int {
+	locals := r.innermostLocalNames()
+	names, produced, listing := r.listedNames()
+	if r.unspecified {
+		return r.status
+	}
+	for _, name := range names {
+		d, _ := r.listedDeclarationOf(name, produced[name], listing)
+		r.printf("%s\n", r.attributeWordDeclaration(d, locals[name]))
+	}
+	return 0
 }

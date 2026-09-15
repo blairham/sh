@@ -34,10 +34,39 @@ func TestABareTypesetIsTheSameListingAsABareLocal(t *testing.T) {
 		}
 	}
 	// And the two words agree, which is the whole of the claim.
+	//
+	// Compared with the **re-drawn readings taken out**, because this shell's
+	// listing re-reads a produced parameter and the real one does too:
+	// measured 2026-09-14 on zsh 5.9.2, `f() { local y=2; typeset; }` and the
+	// same function ending in `local` differ on their `RANDOM` line and on
+	// nothing else that is not `$0` or `$_`. A byte comparison was true here
+	// only while the listing had no produced parameter in it at all, so
+	// keeping it would have pinned that absence rather than the claim (#2722).
 	bare, _ := runZsh(t, dir, `x=1; f() { local y=2; local; }; f`)
-	if bare != out {
+	if redrawn(bare) != redrawn(out) {
 		t.Errorf("`typeset` listed\n%q\nand `local` listed\n%q\nwant one listing for both words", out, bare)
 	}
+	// The control, so that the normalization above cannot be what makes the
+	// two agree: the line really is there, and it really does carry a value.
+	for _, listing := range []string{out, bare} {
+		if !strings.Contains(listing, "integer 10 RANDOM=") {
+			t.Errorf("listing %q has no produced RANDOM row, so the comparison above proves nothing", listing)
+		}
+	}
+}
+
+// redrawn blanks the reading of every produced parameter whose value is a new
+// one on each read, so two listings of one shell can be compared for shape.
+func redrawn(listing string) string {
+	var b strings.Builder
+	for _, line := range strings.SplitAfter(listing, "\n") {
+		if name, _, cut := strings.Cut(line, "="); cut && strings.HasSuffix(name, "RANDOM") {
+			b.WriteString(name + "=<redrawn>\n")
+			continue
+		}
+		b.WriteString(line)
+	}
+	return b.String()
 }
 
 func containsLine(out, line string) bool {

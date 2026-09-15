@@ -18394,25 +18394,38 @@ element is anything else is not. `(x (p q) )` and `((m n) (p q) )`, but
 element a trailing space writes two spaces in the second of those; a rule
 that gave the list one unconditionally writes it in the last three.
 
-Four surfaces are **not modeled** and are recorded here rather than left to
+A second subscript on the **left of an assignment** is now read, and builds
+exactly this value by the other route: `a[1][2]=v` and `typeset a[1][2]=v`
+each leave `typeset -a a=([1]=([2]=v) )`, which is what `a[1]=([2]=v)` leaves.
+See `syntax.Dialect.ChainedAssignSubscript` and `interp/chainassign.go` for
+the eleven measured rows and for the promotion rule a string already in the
+element follows (#2491).
+
+Three surfaces are **not modeled** and are recorded here rather than left to
 be rediscovered, all of them reachable only by writing a nested element and
 then asking it something the seventeen rows do not:
 
-    ${a[1][1]}                        a second subscript is still a parse error
+    ${a[1][1]}                        a second subscript *reading* — #2830
     a[1]=([2]=z); "${a[@]}"           x z there, x and an empty field here
     a[1]=([2]=z); a[1]+=(w)           refused there, appended at 3 here
     a[1]=(); a[1]+=(w)                ([1]=w) there, ([0]=w) here
 
-The second is the shell disagreeing with *itself*: with nothing at subscript
+The first is the write's other half and is its own issue: the grammar for a
+chained *expansion* exists and means something else in the shell that has it,
+counting characters of what the link before named, so ksh93's reading — into
+the nested array — is a second value of that axis rather than the same flag
+turned on for a second dialect.
+
+The third is the shell disagreeing with *itself*: with nothing at subscript
 0, `${a[1]}` is the empty string there and `"${a[@]}"` yields `z`, and one
 store can give only one of those. The strict element-0 reading is what is
 implemented, so the whole-array field reads empty.
 
-The third says the nested value has a *kind* — ksh93 answers `cannot append
+The fourth says the nested value has a *kind* — ksh93 answers `cannot append
 index array to associative array a[1]`, having made an array with an
 explicit subscript in it something else — which is its type system rather
 than this construct, and belongs with the compound variable that has none
-of its own here yet. The fourth is that shell's own next subscript after an
+of its own here yet. The last is that shell's own next subscript after an
 empty literal, which is 1 rather than 0 and follows from nothing else
 measured.
 

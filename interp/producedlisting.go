@@ -47,6 +47,17 @@ type ProducedDeclaration struct {
 	// Base is the output base written on that letter — zsh's `-i10`. Zero
 	// where the dialect writes no base, which is every shell but that one.
 	Base int
+	// IntegerOnceRead makes the `-i` letter of the operand-less listing wait
+	// for the parameter to have been read.
+	//
+	// One name in the panel does this — bash's `SECONDS`, `declare --
+	// SECONDS` before anything expands it and `declare -i SECONDS="0"`
+	// afterwards — and it is stated per parameter because it is not a rule
+	// about readings: `RANDOM`, `SRANDOM` and `BASHPID` carry `-i` unread,
+	// and `LINENO`, `EPOCHSECONDS` and `EPOCHREALTIME` carry none either
+	// side. See unreadProducedLetters, and note that the *named*
+	// `typeset -p SECONDS` writes the letter in both states (#2451).
+	IntegerOnceRead bool
 	// Float is the `-F` letter. The *places* beside it are ksh93's
 	// `typeset -F 3` and are not written by any listing form here yet
 	// (#1461), which is why ksh93's `SECONDS` is deliberately not registered:
@@ -121,6 +132,39 @@ const (
 	// ksh93 that is observable: two listings a line apart hold two different
 	// `RANDOM`s.
 	ProducedListingWithValue
+
+	// ProducedListingLastReading writes the value the parameter last gave a
+	// *script*, and writes no value at all where nothing has read it yet.
+	//
+	// bash's answer, and it is one behavior rather than the two #2518 read
+	// off the same table. Measured 2026-09-13 and again 2026-09-14, over a
+	// script file with every listing **redirected** — the `RANDOM` row of an
+	// operand-less `typeset -p`, before a plain `: $RANDOM`, after it, and
+	// again with nothing in between:
+	//
+	//	            before the read      after it              and again
+	//	bash 5.3    declare -i RANDOM    declare -i RANDOM="…" the same "…"
+	//	bash 3.2    no row at all        RANDOM=3261           the same 3261
+	//	ksh93u+     typeset -i RANDOM=…  a new number          a new number
+	//	zsh 5.9.2   typeset -i10 RANDOM=… a new number         a new number
+	//
+	// The two bash columns are one rule and not a version split. bash writes
+	// the **last** reading, so a parameter nothing has expanded has no
+	// reading to write; 5.3 writes the row without one and 3.2, whose listing
+	// form is bare assignments and so has no way to spell a name with no
+	// value, writes nothing at all. #2518's table read those two cells as
+	// "bash 5.3: the names with no values" against "bash 3.2: none of them",
+	// and both were the unread state of one rule.
+	//
+	// So this subsumes ProducedListingNameOnly rather than sitting beside it:
+	// name-only is what this writes until something reads the parameter. The
+	// older value is kept for a dialect that is name-only *always*, which is
+	// no column of the panel today and is a shape a dialect could hold.
+	//
+	// A listing never fills the cache — see Runner.producedReading — which is
+	// what keeps two listings a line apart identical here, where the
+	// re-reading answer above makes them differ.
+	ProducedListingLastReading
 )
 
 func (p ProducedListing) String() string {
@@ -129,6 +173,8 @@ func (p ProducedListing) String() string {
 		return "ProducedListingNameOnly"
 	case ProducedListingWithValue:
 		return "ProducedListingWithValue"
+	case ProducedListingLastReading:
+		return "ProducedListingLastReading"
 	}
 	return "ProducedListingUnspecified"
 }
@@ -186,4 +232,174 @@ func (r *Runner) producedListingNames(walked []string) []string {
 		add = append(add, name)
 	}
 	return add
+}
+
+// recordProducedReading keeps what a produced parameter last gave a script.
+//
+// Only for a name some dialect has said how to list: the cache exists for
+// ProducedListingLastReading and nothing else reads it, so a producer no
+// listing names — the hundred-entry error table, the locale keys — costs
+// nothing but the lookup it already pays. producedDeclaration rather than the
+// map directly, so an `unset` name stops caching by the same rule that stops
+// it listing.
+func (r *Runner) recordProducedReading(name, value string) {
+	if _, ok := r.producedDeclaration(name); !ok {
+		return
+	}
+	if r.producedReading == nil {
+		r.producedReading = map[string]string{}
+	}
+	r.producedReading[name] = value
+}
+
+// lastProducedReading is what a listing writes for a produced parameter under
+// ProducedListingLastReading, and whether there is one to write.
+//
+// False means the parameter has never been expanded in this shell, and the
+// two listing forms part over what they then do: a form with a row for a name
+// holding nothing writes the row bare, and a form that is only assignments
+// has nothing to write and writes nothing. Both fall out of hasValue being
+// false rather than needing to know which they are.
+func (r *Runner) lastProducedReading(name string) (string, bool) {
+	v, ok := r.producedReading[name]
+	return v, ok
+}
+
+// listedDeclarationOf is the row one of the whole-shell listings writes for
+// one name, produced or not.
+//
+// One function for every listing form there is, because the answer is the
+// axis's and not the form's: the operand-less `-p`, a bare `set` and the two
+// shapes of a bare declaration word all ask the same question about the same
+// name, and four copies of it is how one of them would come to disagree with
+// the other three.
+//
+// **A listing that is not going to write a drawn reading must not draw one**,
+// and that is a behavior rather than an efficiency: a producer is not always
+// free to ask. Measured 2026-09-14 on bash 5.3.15, `RANDOM=42; : $RANDOM;
+// a=$RANDOM` against the same three commands with a `declare -p >/dev/null`
+// in the middle — the same `a` either way, so the listing does not advance
+// that shell's generator. This engine's listing did draw, and the discarded
+// value came out of the producer all the same; the counting producer in
+// TestAListingDoesNotCountAsAReadOfTheProducer is what shows it, since
+// `RANDOM=n` does not seed here yet and so cannot — see #2827 (#2722).
+//
+// declarationOf is what draws, so the flag is set around it rather than the
+// value thrown away after.
+func (r *Runner) listedDeclarationOf(name string, produced bool, p ProducedListing) (declaration, bool) {
+	if !produced {
+		return r.declarationOf(name)
+	}
+	if p != ProducedListingWithValue {
+		r.listingDrawsNoReading = true
+		defer func() { r.listingDrawsNoReading = false }()
+	}
+	d, known := r.declarationOf(name)
+	if !known {
+		return d, false
+	}
+	return r.producedRow(p, name, d), true
+}
+
+// producedRow is the row itself, once the value question has been settled.
+func (r *Runner) producedRow(p ProducedListing, name string, d declaration) declaration {
+	switch p {
+	case ProducedListingNameOnly:
+		// The row and its letters, and no reading. Done by taking the value
+		// off the declaration rather than by a branch in each renderer:
+		// every form already writes the bare name for a name that has none,
+		// which is the same row this wants.
+		d.value, d.hasValue = "", false
+	case ProducedListingLastReading:
+		// The last reading a *script* took, and no row's worth of value
+		// until there has been one. The value drawn a moment ago is thrown
+		// away rather than used, which is the point: this listing must not
+		// be the thing that reads the clock.
+		d.value, d.hasValue = r.lastProducedReading(name)
+		if !d.hasValue {
+			// The letters some dialects only write once there is a reading —
+			// see ProducedDeclaration.IntegerOnceRead, which is the one of
+			// them the panel has.
+			d = r.unreadProducedLetters(name, d)
+		}
+	}
+	return d
+}
+
+// unreadProducedLetters takes off the letters a produced parameter carries
+// only once something has read it.
+//
+// One name in the panel moves, and it moves in the operand-less listing
+// alone. Measured 2026-09-13 on bash 5.3.15, the rows of `typeset -p` with no
+// operands, before a plain `: $SECONDS` and after it:
+//
+//	SECONDS        declare -- SECONDS   →  declare -i SECONDS="0"
+//	RANDOM         declare -i RANDOM    →  declare -i RANDOM="…"
+//	SRANDOM        declare -i SRANDOM   →  declare -i SRANDOM="…"
+//	BASHPID        declare -i BASHPID   →  declare -i BASHPID="…"
+//	LINENO         declare -- LINENO    →  declare -- LINENO="…"
+//	EPOCHSECONDS   declare -- EPOCH…    →  declare -- EPOCH…="…"
+//	EPOCHREALTIME  declare -- EPOCH…    →  declare -- EPOCH…="…"
+//
+// So it is not "the letters arrive with the reading" — three names carry `-i`
+// with no reading behind them and three carry none with one. It is one
+// parameter, and it is stated per parameter for that reason rather than
+// inferred from anything.
+//
+// The **named** `typeset -p SECONDS` is a different question and does not
+// move: it writes `declare -i SECONDS="0"` whether or not anything has read
+// the parameter, which is the letter #2451 recorded and which this leaves
+// exactly where it is.
+func (r *Runner) unreadProducedLetters(name string, d declaration) declaration {
+	if pd, ok := r.producedDeclaration(name); ok && pd.IntegerOnceRead {
+		d.integer, d.base = false, 0
+	}
+	return d
+}
+
+// listedNames is every name a listing over the *whole shell* walks: the
+// tables declarableNames knows plus the produced parameters the dialect has
+// said how to list, with the answer for how those rows are written.
+//
+// One walk for all four of them — the operand-less `-p`, a bare `set`, and
+// the two shapes of a bare declaration word — because the panel answers them
+// with one rule per shell and not four. Measured 2026-09-13, redirected and
+// never piped, with no reference to the parameter first and then after one:
+//
+//	              typeset -p              set                typeset
+//	bash 5.3      declare -i RANDOM       nothing            nothing
+//	              → declare -i RANDOM=…   → RANDOM=…         → RANDOM=…
+//	ksh93u+       typeset -i RANDOM=…     RANDOM=…           integer RANDOM
+//	zsh 5.9.2     typeset -i10 RANDOM=…   RANDOM=…           integer 10 RANDOM=…
+//
+// So ProducedParameterListing answers all three columns on all three routes,
+// and the two cells that look like exceptions are the *form* rather than the
+// axis: bash's `set` is assignments only, so the row it writes before a read
+// has no value and therefore no row at all, and ksh93's bare word is
+// BareLocalListsAttributedNames, which is silent about a value by
+// construction. #2518 recorded the field as governing the operand-less `-p`
+// and nothing else, which was untested rather than measured (#2722).
+//
+// The second result says which of the names came from the producers, since
+// only those rows take producedRow — a name a script has assigned to is in
+// one of the tables and its own value is what a listing writes.
+func (r *Runner) listedNames() ([]string, map[string]bool, ProducedListing) {
+	walked := r.declarableNames()
+	add := r.producedListingNames(walked)
+	if len(add) == 0 {
+		return walked, nil, ProducedListingUnspecified
+	}
+	listing := r.producedListing()
+	if r.unspecified {
+		return walked, nil, ProducedListingUnspecified
+	}
+	produced := make(map[string]bool, len(add))
+	seen := make(map[string]bool, len(walked)+len(add))
+	for _, name := range walked {
+		seen[name] = true
+	}
+	for _, name := range add {
+		seen[name], produced[name] = true, true
+	}
+	return sortedNames(seen), produced, listing
 }

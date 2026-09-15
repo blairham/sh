@@ -1719,12 +1719,12 @@ var Corpus = []Case{
 	{
 		ID: "special/a-produced-parameter-lists-once-it-has-been-read", Category: "parameters",
 		Snippet: `: $RANDOM; typeset -p 2>/dev/null | grep -E '(^| )RANDOM' | sed 's/=.*/=<n>/'`,
-		Why:     "the row above with one expansion in front of it, and the pair is what says bash's two columns are one rule rather than a version split. Read the parameter first and bash 5.3 writes `declare -i RANDOM=<n>` where it wrote a bare name, and bash 3.2 writes `RANDOM=<n>` where it wrote nothing — so what those two cells record above is the *unread* state of a shell that lists the last reading, and a shell that has none has nothing to write. ksh93 and zsh are unmoved, because they re-read the producer whether or not anything else has. This engine keeps no record of what has been expanded and writes the bare name in both rows; the divergence is #2722, which was filed from this measurement",
+		Why:     "the row above with one expansion in front of it, and the pair is what says bash's two columns are one rule rather than a version split. Read the parameter first and bash 5.3 writes `declare -i RANDOM=<n>` where it wrote a bare name, and bash 3.2 writes `RANDOM=<n>` where it wrote nothing — so what those two cells record above is the *unread* state of a shell that lists the last reading, and a shell that has none has nothing to write. ksh93 and zsh are unmoved, because they re-read the producer whether or not anything else has. This engine wrote the bare name in both rows until #2722 gave it a record of which produced names an expansion has read and a cache of what they last gave -- kept by the expansion and never by a listing, which is what holds the two-listings row below at 0 in the bash columns",
 	},
 	{
 		ID: "special/the-letters-a-produced-clock-lists-with", Category: "parameters",
 		Snippet: `typeset -p 2>/dev/null | grep -E '(^| )SECONDS' | sed 's/=.*/=<n>/'; echo "--"; : $SECONDS; typeset -p 2>/dev/null | grep -E '(^| )SECONDS' | sed 's/=.*/=<n>/'`,
-		Why:     "the same before-and-after over the other produced parameter every shell here has, and it moves a **letter** rather than only a value: bash 5.3 writes `declare -- SECONDS` unread and `declare -i SECONDS=<n>` afterwards, alone among the seven names it lists this way — `RANDOM`, `SRANDOM` and `BASHPID` carry `-i` on both sides and `LINENO`, `EPOCHSECONDS` and `EPOCHREALTIME` carry none on either. ksh93's is the `-F 3` shape whose places no listing form here writes (#1461), which is why that column has no answer of ours beside it at all; zsh's is `-i10` on both sides, the base riding on the letter as it does for `RANDOM`. The `--` separates the two halves so an empty first half is visible rather than inferred",
+		Why:     "the same before-and-after over the other produced parameter every shell here has, and it moves a **letter** rather than only a value: bash 5.3 writes `declare -- SECONDS` unread and `declare -i SECONDS=<n>` afterwards, alone among the seven names it lists this way — `RANDOM`, `SRANDOM` and `BASHPID` carry `-i` on both sides and `LINENO`, `EPOCHSECONDS` and `EPOCHREALTIME` carry none on either. ksh93's is the `-F 3` shape whose places no listing form here writes (#1461), which is why that column has no answer of ours beside it at all; zsh's is `-i10` on both sides, the base riding on the letter as it does for `RANDOM`. The `--` separates the two halves so an empty first half is visible rather than inferred. It is stated per parameter rather than derived, because it is not a rule about readings -- ProducedDeclaration.IntegerOnceRead, and only SECONDS holds it (#2722)",
 	},
 	{
 		ID: "special/two-listings-of-a-produced-parameter-in-one-shell", Category: "parameters",
@@ -23879,5 +23879,38 @@ echo "st=$?"`,
 		Script:   true,
 		Snippet:  "typeset -A m 2>/dev/null\nm[z]=1\nm[a]=2\nm[m]=3\ntypeset -p m 2>&1\necho tail\n",
 		Why:      "the **listing** order of a keyed table, which is a second question from the expansion order recorded beside it and which the panel splits differently: ksh93 and zsh both sort by key here where zsh's own `${(k)m}` is its hash order, and bash lists in the hash order both of its readings use. So the sorted order this engine chose is byte-exact with two of the three columns that list, not only with ksh93 — which is the measurement #2749 was filed without, having read the two orders as one. The keys are `z a m` on purpose: assigned in an order that is neither sorted nor any hash's, so a shell recording arrival order would show it and none does",
+	},
+	{
+		ID:       "special/a-bare-set-and-a-produced-parameter",
+		Category: "parameters",
+		Snippet:  `set 2>/dev/null | grep -E '^RANDOM=' | sed 's/=.*/=<n>/'; echo "--"; : $RANDOM; set 2>/dev/null | grep -E '^RANDOM=' | sed 's/=.*/=<n>/'`,
+		Why:      "a bare `set`, before an expansion of the parameter and after one. The same rule per shell as the `-p` rows above and not a question of its own: bash writes nothing until something has read it and `RANDOM=<n>` afterwards, where ksh93 and zsh write the row on both sides because they re-read the producer. The two cells that look like exceptions are the *form* rather than the answer -- this listing is assignments, so bash's unread row, which has no reading in it, is no row at all. dash has no such parameter and BusyBox ash none either, and both list their own variables here rather than failing, which is why the `--` is needed to see that the first half is empty. `ProducedParameterListing` governed the operand-less `-p` and nothing else until #2722, and no dialect here wrote any of these rows",
+	},
+	{
+		ID:       "special/a-bare-declaration-word-and-a-produced-parameter",
+		Category: "parameters",
+		Snippet:  `typeset 2>/dev/null | grep -E '(^| )RANDOM' | sed 's/=.*/=<n>/'; echo "--"; : $RANDOM; typeset 2>/dev/null | grep -E '(^| )RANDOM' | sed 's/=.*/=<n>/'`,
+		Why:      "the bare declaration *word*, which is a third listing again and where ksh93 is the interesting column: its `typeset` writes `integer RANDOM` with **no value** where its `typeset -p` writes one, which is the opposite way round from bash. That falls out of the form rather than from a second answer -- the shape it writes is attribute words and a name and has nowhere to put a value -- and it is what makes that form the safe one over a clock. zsh writes `integer 10 RANDOM=<n>` on both sides and bash, whose bare word is byte-for-byte the listing a bare `set` writes, writes nothing until the parameter has been read. dash and ash have no such word and record the complaint they make of it (#2722)",
+	},
+	{
+		ID:       "arrays/a-second-subscript-on-an-assignment",
+		Category: "arrays",
+		Script:   true,
+		Snippet:  "a[1][2]=v 2>&1\ntypeset -p a 2>&1\necho \"n=${#a[@]}\"\necho tail\n",
+		Why:      "a name carrying **two subscripts** on the left of an assignment, which the panel answers four ways. ksh93 builds a *nested compound* -- `typeset -a a=([1]=([2]=v) )`, one element holding an array of its own -- and it is the only column that does; bash 5.3 calls the operand `a[1][2]: bad array subscript`, bash 3.2 takes the whole run between the outer brackets as one arithmetic subscript, zsh reads the brackets as a pattern with no match, and dash has no subscript at all. `n=` is what says the nesting is *under* one element rather than beside it, which a listing alone could be read either way. This engine answered `1][2: arithmetic syntax error` in every dialect -- the arithmetic reader complaining about a line that wrote no arithmetic (#2491)",
+	},
+	{
+		ID:       "arrays/a-second-subscript-on-a-declaration-operand",
+		Category: "declarations",
+		Script:   true,
+		Snippet:  "typeset a[1][2]=v 2>&1\ntypeset -p a 2>&1\necho \"n=${#a[@]}\"\necho tail\n",
+		Why:      "the same two subscripts written as a *declaration's operand*, which is the spelling #2491 was filed from and which parts the two bash columns from each other: 5.3 refuses it as `` `a[1][2]=v': not a valid identifier `` where 3.2 declares an **empty array under the base name** at status 0 -- a silent wrong answer rather than a refusal. ksh93 answers it exactly as it answers the plain assignment above, which is what says the two spellings are one value there and not two constructs; zsh globs the operand and finds no match. The row above is the control that makes that claim visible",
+	},
+	{
+		ID:       "arrays/the-integer-attribute-and-a-nested-array",
+		Category: "arrays",
+		Script:   true,
+		Snippet:  "typeset -i a 2>&1\na[1]=(5+5) 2>&1\ntypeset -p a 2>&1\ntypeset -i b 2>/dev/null\nb[1][2]=5+5 2>&1\ntypeset -p b 2>&1\nc[1]=(5+5) 2>&1\ntypeset -i c 2>&1\ntypeset -p c 2>&1\necho tail\n",
+		Why:      "three ways an integer attribute meets a nested array in the one column that has them, and no two answer alike. A nested **literal** written under a standing `-i` keeps its text -- `([1]=(5+5) )`, unevaluated -- where the same attribute **arriving** over one afterwards folds *into* the nesting and leaves `([1]=(10) )`, and a **chained assignment's own value** is evaluated like any element's, `([2]=10)`. So the literal's words are not the name's values and the arrival is a different question. This engine folded every one of them by taking the element's scalar reading, which is a nested array's first element or nothing -- one number where an array had been, with every other element of it gone and nothing said (#2491). The other columns have neither the nesting nor, for three of them, the letter",
 	},
 }

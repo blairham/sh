@@ -228,6 +228,7 @@ func (c *Runner) ownTables(r *Runner) {
 	// describes, for the same reason: a subshell that registers one of its
 	// own must not put a row into the parent's listings.
 	c.dynamicDeclarations = maps.Clone(r.dynamicDeclarations)
+	c.producedReading = maps.Clone(r.producedReading)
 	// endedProducers travels with them for the third time and the same
 	// reason: it is the record that keeps a producer from being registered
 	// again, so a subshell that ends one while sharing this table would end

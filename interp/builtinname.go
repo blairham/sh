@@ -245,7 +245,7 @@ func (r *Runner) builtinNames(builtin string, args []string, explicitVariable bo
 		// column that has the word, and bash quotes the *whole* operand back
 		// there where it quotes only `a[1]` for a well-formed base. So the
 		// brackets are read as a subscript only once the base is a name.
-		if base, _, subscripted := r.subscriptOperand(name); subscripted && isPlainName(base) {
+		if base, _, subscripted := r.operandSubscripts(builtin, name); subscripted && isPlainName(base) {
 			if r.takesASubscript(builtin) {
 				rest = append(rest, a)
 				continue
@@ -318,7 +318,7 @@ func (r *Runner) namesAfterARefusal(builtin string, kept, remaining []string, ta
 				continue
 			}
 		}
-		if base, _, subscripted := r.subscriptOperand(name); subscripted && isPlainName(base) {
+		if base, _, subscripted := r.operandSubscripts(builtin, name); subscripted && isPlainName(base) {
 			if r.takesASubscript(builtin) {
 				kept = append(kept, a)
 			}

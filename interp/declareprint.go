@@ -297,7 +297,7 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 	// declarableNames walks, so a listing reaches one only through an
 	// attribute — and a produced array with no attributes must stay
 	// undeclared, which is the answer `$funcstack` gives and had before this.
-	if produce, ok := r.DynamicArrays[name]; ok && attributed {
+	if produce, ok := r.DynamicArrays[name]; ok && attributed && !r.listingDrawsNoReading {
 		elems := produce(r)
 		a := make(Array, len(elems))
 		for i, v := range elems {
@@ -333,8 +333,17 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 	// guard is a word and does not finish the job: the `-i10` is an integer
 	// attribute and a base that a produced parameter has no way to carry yet.
 	// The two together are #1687.
-	if produce, ok := r.Dynamic[name]; ok && attributed {
+	if produce, ok := r.Dynamic[name]; ok && attributed && !r.listingDrawsNoReading {
 		d.value, d.hasValue = produce(r), true
+		return d, true
+	}
+	if _, ok := r.Dynamic[name]; ok && attributed {
+		// The listing has said it will not write a drawn reading, so the
+		// producer is not asked — see listedDeclarationOf, and note that a
+		// producer is not always free to ask: bash's generator advances on
+		// every draw, so a listing that drew one would change the sequence a
+		// script afterwards sees. The row is still known; what it carries is
+		// the caller's to fill in.
 		return d, true
 	}
 	if v, ok := r.inheritedValue(name); ok {
@@ -468,7 +477,7 @@ func (r *Runner) declarePrintForm(names []string, form DeclarationListingForm, d
 	// and the *names* are the registering dialect's, so a shell that has
 	// registered none reaches none of this and is never asked the axis.
 	var produced map[string]bool
-	nameOnly := false
+	var listing ProducedListing
 	if len(names) == 0 {
 		names = r.declarableNames()
 		filtered = keep != nil
@@ -479,11 +488,10 @@ func (r *Runner) declarePrintForm(names []string, form DeclarationListingForm, d
 			// out rather than admitted and then rejected, which would make
 			// the axis a question those two builtins ask and never use.
 			if add := r.producedListingNames(names); len(add) > 0 {
-				listing := r.producedListing()
+				listing = r.producedListing()
 				if r.unspecified {
 					return r.status
 				}
-				nameOnly = listing == ProducedListingNameOnly
 				produced = make(map[string]bool, len(add))
 				seen := make(map[string]bool, len(names)+len(add))
 				for _, name := range names {
@@ -497,7 +505,7 @@ func (r *Runner) declarePrintForm(names []string, form DeclarationListingForm, d
 		}
 	}
 	for _, name := range names {
-		d, known := r.declarationOf(name)
+		d, known := r.listedDeclarationOf(name, produced[name], listing)
 		if known && filtered && !keep(d) {
 			continue
 		}
@@ -537,14 +545,6 @@ func (r *Runner) declarePrintForm(names []string, form DeclarationListingForm, d
 			// is still in the listing the bare word writes, and the
 			// bare-assignment form is the one this engine renders those with.
 			continue
-		}
-		if produced[name] && nameOnly {
-			// The row and its letters, and no reading. Done by taking the
-			// value off the declaration rather than by a branch in each
-			// renderer: every form already writes the bare name for a name
-			// that has none, which is the same row this wants and is
-			// measured to be bash's — `declare -i RANDOM`.
-			d.value, d.hasValue = "", false
 		}
 		r.printf("%s\n", r.listedDeclaration(form, d))
 	}

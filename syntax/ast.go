@@ -303,6 +303,20 @@ type Assign struct {
 	// Only what stands between the brackets, so a reader adds the name and
 	// the brackets itself, exactly as it does for the expanded reading.
 	IndexText string
+	// Leading holds the subscripts written *before* Index, in written order,
+	// where the grammar lets an assignment's name carry several:
+	// `a[1][2]=v` carries `1` here and `2` in Index. Nil is one subscript,
+	// which is every assignment in every other dialect.
+	//
+	// Index is the last one and not the first, exactly as it is for
+	// [ParamExpr.Leading], and for the same reason: every question anything
+	// asks about a subscripted assignment — whether it is a range, whether
+	// it names a key, what a refusal quotes back — is a question about the
+	// *final* subscript, because that is the one the value lands under. The
+	// leading ones only say what it lands *in*.
+	//
+	// See [Dialect.ChainedAssignSubscript].
+	Leading []LeadingIndex
 	// Append is `name+=value`, which adds to what is there rather than
 	// replacing it — and adds to the *end* of an array rather than to its
 	// first element.

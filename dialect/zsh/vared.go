@@ -129,7 +129,10 @@ func varedBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 			// has. An argument that is not there is its own complaint and
 			// names the letter.
 			if at+1 < len(word) {
-				at = len(word)
+				// The argument was attached, so the rest of the word is it
+				// and there are no more letters in this word. `break` is the
+				// whole of that — walking `at` to the end first would be an
+				// assignment nothing reads.
 				break
 			}
 			if i+1 >= len(args) {

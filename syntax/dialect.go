@@ -3147,6 +3147,29 @@ type Dialect struct {
 	// dialects graded here (#1223).
 	ArithDoubleQuote ArithDoubleQuotePolicy
 
+	// ArithPrecedence is the order the binary operators bind in. See
+	// [ArithPrecedencePolicy]: one shell in the panel does not use C's, and
+	// says so in its own manual.
+	//
+	// It is a grammar question and not a semantics one, which is what puts
+	// it here: nothing about what `<<` *means* changes, only which operands
+	// it is given, so the disagreement is entirely about the tree the text
+	// parses to.
+	//
+	// Measured 2026-09-15 from a script file, `env -i` with a scratch HOME:
+	//
+	//	                 zsh 5.9.2   bash 5.3   ksh93   dash
+	//	1 << 2 + 1           5           8        8       8
+	//	1 + 2 << 1           5           6        6       6
+	//	1 << 2 * 2           8          16       16      16
+	//	1 < 2 & 1            0           1        1       1
+	//	2 ** 1 | 3           8           3        3       -
+	//	6 | 1 + 1            8           6        6       6
+	//
+	// Parenthesized, every column agrees, which is what says this is
+	// precedence and not a broken operator.
+	ArithPrecedence ArithPrecedencePolicy
+
 	// ArithCharacterConstant enables `'c'` inside an arithmetic expression:
 	// the code of the character between the quotes, the way C reads one.
 	//
@@ -4976,6 +4999,70 @@ func Core() Dialect {
 // deliberately narrower than any shell anyone actually runs, which makes it
 // the right setting for a portability check and the wrong one for a runtime.
 func POSIX() Dialect { return Dialect{} }
+
+// ArithPrecedencePolicy is the order the binary arithmetic operators bind in.
+//
+// Two orders, and the second is not a quirk to be worked around: one shell
+// documents both of them and ships an option — `c_precedences` — that picks
+// between them, which is as explicit as a disagreement gets.
+//
+// The two differ in where the shifts and the bitwise operators sit, and in
+// nothing else. Everything from `&&` down and everything from `*` up is the
+// same ladder either way.
+type ArithPrecedencePolicy int
+
+const (
+	// ArithPrecedenceAsInC is ISO C's order, which POSIX defers to and which
+	// five of the six panel columns use. Tightest first, after the unary
+	// operators:
+	//
+	//	**                     exponentiation
+	//	* / %                  multiplication
+	//	+ -                    addition
+	//	<< >>                  shifts
+	//	< > <= >=              comparison
+	//	== !=                  equality
+	//	&                      bitwise and
+	//	^                      bitwise xor
+	//	|                      bitwise or
+	//	&&                     logical and
+	//	||                     logical or
+	ArithPrecedenceAsInC ArithPrecedencePolicy = iota
+
+	// ArithPrecedenceShiftsAndBitwiseBindTighter is the other order, which
+	// one shell calls its native mode. The shifts move to the *tightest*
+	// binary level and the three bitwise operators move above `**`:
+	//
+	//	<< >>                  shifts
+	//	&                      bitwise and
+	//	^                      bitwise xor
+	//	|                      bitwise or
+	//	**                     exponentiation
+	//	* / %                  multiplication
+	//	+ -                    addition
+	//	< > <= >=              comparison
+	//	== !=                  equality
+	//	&&                     logical and
+	//	||                     logical or
+	//
+	// Note what that does to `**`, which is the part a reading of the four
+	// rows in #2883 would miss: exponentiation is *looser* than the bitwise
+	// operators here, so `2 ** 1 | 3` is `2 ** (1 | 3)` and answers 8 where
+	// C's order answers 3. The relative order of the three bitwise
+	// operators, and of everything from `*` down, is unchanged.
+	//
+	// The associativity is not part of this. `**` is right-associative and
+	// everything else left-associative under both orders, measured: `2 ** 3
+	// ** 2` is 512 in every column that has the operator.
+	ArithPrecedenceShiftsAndBitwiseBindTighter
+)
+
+func (p ArithPrecedencePolicy) String() string {
+	if p == ArithPrecedenceShiftsAndBitwiseBindTighter {
+		return "shifts and bitwise operators bind tighter"
+	}
+	return "as in C"
+}
 
 // ArithDoubleQuotePolicy is what a `"` inside an arithmetic expression is.
 //

@@ -354,19 +354,61 @@ func (n *ArithAssign) Pos() Pos   { return n.Start }
 func (n *ArithAssign) End() Pos   { return n.Value.End() }
 func (n *ArithAssign) arithNode() {}
 
-// arithLevels are the binary operators by precedence, loosest first. The order
-// follows ISO C, which POSIX defers to.
-var arithLevels = [][]string{
-	{"||"},
-	{"&&"},
-	{"|"},
-	{"^"},
-	{"&"},
-	{"==", "!="},
-	{"<=", ">=", "<", ">"},
-	{"<<", ">>"},
-	{"+", "-"},
-	{"*", "/", "%"},
+// arithLevel is one rung of the precedence ladder: the operators that bind at
+// it, and whether it is the rung `**` occupies.
+//
+// The exponent rung is in the table rather than being the innermost call it
+// used to be, because one dialect puts it in the middle of the ladder — see
+// [ArithPrecedenceShiftsAndBitwiseBindTighter], where the bitwise operators
+// bind *tighter* than `**`. Hard-coding it as the tightest binary level made
+// that order unsayable.
+type arithLevel struct {
+	// ops are the operator spellings at this rung, left-associative.
+	ops []string
+	// exponent marks the rung as `**`, which is right-associative and is
+	// present only where the dialect has the operator at all.
+	exponent bool
+}
+
+// arithLaddersC is the binary operators by precedence, loosest first, in ISO
+// C's order — which POSIX defers to and five of the six panel columns use.
+var arithLaddersC = []arithLevel{
+	{ops: []string{"||"}},
+	{ops: []string{"&&"}},
+	{ops: []string{"|"}},
+	{ops: []string{"^"}},
+	{ops: []string{"&"}},
+	{ops: []string{"==", "!="}},
+	{ops: []string{"<=", ">=", "<", ">"}},
+	{ops: []string{"<<", ">>"}},
+	{ops: []string{"+", "-"}},
+	{ops: []string{"*", "/", "%"}},
+	{exponent: true},
+}
+
+// arithLadderShiftsAndBitwiseFirst is the other order, loosest first: the
+// shifts are the tightest binary rung and the three bitwise operators sit
+// between `**` and the shifts. Everything else is where C leaves it.
+var arithLadderShiftsAndBitwiseFirst = []arithLevel{
+	{ops: []string{"||"}},
+	{ops: []string{"&&"}},
+	{ops: []string{"==", "!="}},
+	{ops: []string{"<=", ">=", "<", ">"}},
+	{ops: []string{"+", "-"}},
+	{ops: []string{"*", "/", "%"}},
+	{exponent: true},
+	{ops: []string{"|"}},
+	{ops: []string{"^"}},
+	{ops: []string{"&"}},
+	{ops: []string{"<<", ">>"}},
+}
+
+// arithLadder is the ladder this dialect reads binary operators with.
+func (a *arithParser) arithLadder() []arithLevel {
+	if a.dial.ArithPrecedence == ArithPrecedenceShiftsAndBitwiseBindTighter {
+		return arithLadderShiftsAndBitwiseFirst
+	}
+	return arithLaddersC
 }
 
 var assignOps = []string{"<<=", ">>=", "*=", "/=", "%=", "+=", "-=", "&=", "^=", "|=", "="}
@@ -861,8 +903,12 @@ func (a *arithParser) colonWithoutQuestion(cond ArithExpr) ArithExpr {
 }
 
 func (a *arithParser) binary(level int) ArithExpr {
-	if level >= len(arithLevels) {
-		return a.power()
+	ladder := a.arithLadder()
+	if level >= len(ladder) {
+		return a.unary()
+	}
+	if ladder[level].exponent {
+		return a.power(level)
 	}
 	x := a.binary(level + 1)
 	if x == nil {
@@ -871,7 +917,7 @@ func (a *arithParser) binary(level int) ArithExpr {
 	for {
 		a.space()
 		op := ""
-		for _, cand := range arithLevels[level] {
+		for _, cand := range ladder[level].ops {
 			if !a.has(cand) {
 				continue
 			}
@@ -917,11 +963,17 @@ func (a *arithParser) longerOperator(cand string) bool {
 }
 
 // power is `**`, when the dialect has it. Measured across the three shells
-// that parse it: tighter than `*` (`2*3**2` is 18) and looser than unary
-// (`-2**2` is 4 — the sign is part of the base), and right-associative
-// (`2**3**2` is 512), which the recursion on the right encodes.
-func (a *arithParser) power() ArithExpr {
-	x := a.unary()
+// that parse it: looser than unary (`-2**2` is 4 — the sign is part of the
+// base) and right-associative (`2**3**2` is 512), which the recursion on the
+// right encodes.
+//
+// Where it sits among the binary operators is the dialect's, so the rung it
+// occupies is passed in rather than assumed to be the tightest one: it is
+// immediately above `*` in C's order and below the three bitwise operators in
+// the other, and `level` is that rung either way. The operands come from the
+// rung below, which is `unary` when this is the last one.
+func (a *arithParser) power(level int) ArithExpr {
+	x := a.binary(level + 1)
 	if x == nil {
 		return nil
 	}
@@ -932,7 +984,7 @@ func (a *arithParser) power() ArithExpr {
 	}
 	a.space()
 	yStart := a.off
-	y := a.power()
+	y := a.power(level)
 	if y == nil {
 		a.failArith(ErrArithOperandEnd, a.src[at:])
 		return x

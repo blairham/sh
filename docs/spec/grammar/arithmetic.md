@@ -333,8 +333,10 @@ than here.
 
 ## Operators
 
-Precedence follows C, highest first. Measured spot-checks are unanimous:
-`1+2*3` is 7, `(1+2)*3` is 9, `2*3%4` is 2.
+Precedence follows C, highest first — in five of the six columns. Measured
+spot-checks over the part they all agree about are unanimous: `1+2*3` is 7,
+`(1+2)*3` is 9, `2*3%4` is 2. Where zsh parts company is the section below
+this table.
 
     ++  --                    increment, decrement   (not POSIX; absent from dash)
     +   -   ~   !             unary
@@ -369,6 +371,67 @@ detail.
 
 Grammar flags: `ArithIncDec` and `ArithComma` — core: on for both;
 `posix` and `dash`: off for both.
+
+## zsh binds the shifts and the bitwise operators differently
+
+The ladder above is one of two, and zsh uses the other by default. Its own
+manual documents both and names the first `c_precedences`, which is as
+explicit as a disagreement between shells gets: the order below is a
+decision rather than a bug.
+
+Two rungs move, and nothing else does. The shifts go to the **tightest**
+binary level, above `*` as well as above `+`; and `&`, `^` and `|` go above
+`**`, keeping their order relative to each other.
+
+    <<  >>                    shifts
+    &                         bitwise and
+    ^                         bitwise xor
+    |                         bitwise or
+    **                        exponentiation
+    *   /   %                 multiplicative
+    +   -                     additive
+    <   <=  >   >=            relational
+    ==  !=                    equality
+    &&                        logical and
+    ||  ^^                    logical or, logical xor
+
+Measured 2026-09-15 from a script file, `env -i` with a scratch HOME:
+
+| probe | zsh | bash | ksh93 | dash |
+| --- | --- | --- | --- | --- |
+| `$(( 1 << 2 + 1 ))` | **5** | 8 | 8 | 8 |
+| `$(( 1 + 2 << 1 ))` | **5** | 6 | 6 | 6 |
+| `$(( 1 << 2 * 2 ))` | **8** | 16 | 16 | 16 |
+| `$(( 16 >> 1 + 1 ))` | **9** | 4 | 4 | 4 |
+| `$(( 1 < 2 & 1 ))` | **0** | 1 | 1 | 1 |
+| `$(( 6 \| 1 + 1 ))` | **8** | 6 | 6 | 6 |
+| `$(( 2 ** 1 \| 3 ))` | **8** | 3 | 3 | error |
+| `$(( 2 \| 1 ** 3 ))` | **27** | 3 | 3 | error |
+
+Parenthesized, every column agrees — `$(( 1 << (2 + 1) ))` is 8 and
+`$(( (1 < 2) & 1 ))` is 1 everywhere — which is what says this is precedence
+and not a broken operator.
+
+The last two rows are the ones a reading of the shift rows alone would miss.
+`**` is *looser* than the bitwise operators here, so `2 ** 1 | 3` groups as
+`2 ** (1 | 3)`. Associativity does not move with the rungs: `**` is
+right-associative and everything else left-associative under both orders,
+and `2 ** 3 ** 2` is 512 in every column that has the operator.
+
+`^^` is zsh's logical XOR and shares a level with `||` in this order. It is
+not implemented here; see the note under "what this does not cover".
+
+Grammar flag: `ArithPrecedence` — core, `posix`, `bash`, `ksh`, `dash` and
+`ash`: `ArithPrecedenceAsInC`; `zsh`: `ArithPrecedenceShiftsAndBitwiseBind‑
+Tighter`.
+
+**And the option is a run-time one, which the parse is arranged around.**
+`setopt c_precedences` changes what an expression answers on a line the
+parser has already read, and changes it inside a function whose body was
+read before the option was touched — measured on zsh 5.9.2. So an
+expression is read again when it runs while the option is in charge, the
+same way one holding a `$` already is. `interp.Runner.SetArithPrecedence`
+is what the option moves.
 
 ## Exponentiation
 
@@ -816,3 +879,8 @@ Integer width and overflow behavior, which POSIX leaves to the C
 implementation and which the panel would answer differently on different
 machines. Anything depending on it is unportable by construction, so no
 core answer is recorded rather than an arbitrary one being invented.
+
+`^^`, zsh's logical XOR. It is a real operator there — `$(( 1 || 0 ^^ 1 ))`
+is 0, the two sharing a level and associating left — and this parser refuses
+it. The precedence table above records where it sits so that implementing it
+is a question about the operator and not about the ladder.

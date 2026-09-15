@@ -426,3 +426,122 @@ func TestPrintfRangeErrorIsNotBaseNamed(t *testing.T) {
 		t.Errorf("got %q status %d, want the range sentence and 1", out, st)
 	}
 }
+
+// One column writes a **second** line after the arithmetic complaint, naming
+// the conversion character rather than the operand — and the same thing that
+// decides the line decides the status (#2765).
+//
+// What parts them is whether the operand's *reading as a number* failed, or
+// the expression around it did. The two are one observation and not two,
+// which is why one wording turns both on.
+func TestPrintfArithArgumentTypeIsTheStatusToo(t *testing.T) {
+	sem := printfSem()
+	sem.PrintfNumberOperand = PrintfNumberArithmetic
+	sem.PrintfRefusedOperandKeepsItsLeadingNumber = Yes
+	diag := Diagnostics{
+		PrintfArithOperandFailure: "printf: %[1]s",
+		PrintfArithArgumentType:   "printf: warning: invalid argument of type %[1]s",
+	}
+	set := func(r *Runner) {
+		r.Semantics = &sem
+		r.Diagnostics = &diag
+	}
+	for _, tc := range []struct {
+		name   string
+		src    string
+		want   string
+		status int
+	}{
+		// A numeral the reader refused: two lines, and the status.
+		{
+			"a refused numeral", `printf '[%d]' 42abc`,
+			"sh: printf: invalid number: 42abc\nsh: printf: warning: invalid argument of type d\n[42]", 1,
+		},
+		// The letter is the conversion's own, whichever asked.
+		{
+			"the letter follows the conversion", `printf '[%f]' 42abc`,
+			"sh: printf: invalid number: 42abc\nsh: printf: warning: invalid argument of type f\n[42.000000]", 1,
+		},
+		// And a `*` operand names the constant `.`, which is the same name
+		// the refusal of a starved star uses.
+		{
+			"a star operand is named `.`", `printf '[%*d]' 42abc 7`,
+			"sh: printf: invalid number: 42abc\nsh: printf: warning: invalid argument of type .\n[" + strings.Repeat(" ", 41) + "7]", 1,
+		},
+		// Text left over after a complete expression is a reading failure
+		// too: the operand was a number and then something else.
+		{
+			"text left over", `printf '[%d]' '3 4'`,
+			"sh: printf: 3 4: operator expected\nsh: printf: warning: invalid argument of type d\n[3]", 1,
+		},
+		// The expression failing is not. One line, and no status.
+		{
+			"a division by zero", `printf '[%d]' 1/0`,
+			"sh: printf: division by zero\n[1]", 0,
+		},
+		{
+			"an expression that wanted more", `printf '[%d]' '1+'`,
+			"sh: printf: 1+: operand expected\n[1]", 0,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := run(t, tc.src, set)
+			if out != tc.want || st != tc.status {
+				t.Errorf("got %q status %d, want %q and %d", out, st, tc.want, tc.status)
+			}
+		})
+	}
+
+	// Without the wording nothing is split: every arithmetic failure writes
+	// its one line and costs the status, which is what zsh does.
+	t.Run("the other columns say one line and always report", func(t *testing.T) {
+		plain := Diagnostics{PrintfArithOperandFailure: "printf: %[1]s"}
+		one := func(r *Runner) {
+			r.Semantics = &sem
+			r.Diagnostics = &plain
+		}
+		for _, src := range []string{`printf '[%d]' 42abc`, `printf '[%d]' 1/0`} {
+			out, st := run(t, src, one)
+			if strings.Contains(out, "warning") || st != 1 {
+				t.Errorf("%s: got %q status %d, want one line at 1", src, out, st)
+			}
+		}
+	})
+}
+
+// A value an *integer* conversion cannot hold, which one column reports and
+// the same column says nothing about at `%f` — so the range is the
+// conversion's and not the operand's (#2765).
+func TestPrintfIntegerOverflowIsTheConversionsRange(t *testing.T) {
+	sem := printfSem()
+	sem.PrintfNumberOperand = PrintfNumberArithmetic
+	diag := Diagnostics{PrintfIntegerOverflow: "printf: warning: %[1]s: overflow exception"}
+	set := func(r *Runner) {
+		r.Semantics = &sem
+		r.Diagnostics = &diag
+	}
+	out, st := run(t, `printf '[%d]' 99999999999999999999`, set)
+	if want := "sh: printf: warning: 99999999999999999999: overflow exception\n[9223372036854775807]"; out != want || st != 1 {
+		t.Errorf("got %q status %d, want %q and 1", out, st, want)
+	}
+	// The clamp is to the extreme of the type in both directions.
+	out, st = run(t, `printf '[%d]' -99999999999999999999`, set)
+	if want := "sh: printf: warning: -99999999999999999999: overflow exception\n[-9223372036854775808]"; out != want || st != 1 {
+		t.Errorf("got %q status %d, want %q and 1", out, st, want)
+	}
+	// The same operand at a float conversion is a perfectly good number.
+	if out, st := run(t, `printf '[%f]' 99999999999999999999`, set); out != "[100000000000000000000.000000]" || st != 0 {
+		t.Errorf("at %%f: got %q status %d, want the value in silence at 0", out, st)
+	}
+	// An operand that overflowed a *double* is not asked about: the column
+	// that reports this answers zero for it and says nothing (#2766).
+	if out, st := run(t, `printf '[%d]' 1e400`, set); strings.Contains(out, "overflow") || st != 0 {
+		t.Errorf("at 1e400: got %q status %d, want silence at 0", out, st)
+	}
+	// And a dialect without the wording says nothing at all.
+	plain := printfSem()
+	plain.PrintfNumberOperand = PrintfNumberArithmetic
+	if out, st := run(t, `printf '[%d]' 99999999999999999999`, func(r *Runner) { r.Semantics = &plain }); strings.Contains(out, "overflow") || st != 0 {
+		t.Errorf("without the wording: got %q status %d, want silence at 0", out, st)
+	}
+}

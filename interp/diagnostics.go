@@ -575,6 +575,68 @@ type Diagnostics struct {
 	// 42abc` and `echo $((42abc))` are the same line there. ksh93 puts the
 	// builtin's name in front of it.
 	PrintfArithOperandFailure string
+	// PrintfArithArgumentType is a **second** line one column writes after
+	// that complaint, naming the conversion character rather than the
+	// operand. One verb: the conversion character — `d`, `f`, `x` — or the
+	// constant `.` where what was being read was a `*` operand.
+	//
+	//	printf '%d' 42abc   ksh93: printf: 42abc: arithmetic syntax error
+	//	                           printf: warning: invalid argument of type d
+	//	printf '%f' 42abc   ksh93: …type f
+	//	printf '%*d' 42abc 7  ksh93: …type .
+	//
+	// Setting it turns on a **split in the status** as well, and the two are
+	// one observation rather than two: every row that earns the second line
+	// reports 1 and every row without it reports 0 (#2765). What parts them
+	// is whether the failure was the *reading of the operand as a number* —
+	// a numeral the reader refused, or a number with text left over after
+	// it — or something about the expression around it.
+	//
+	//	printf '%d' 42abc   two lines, 1     the reading failed
+	//	printf '%d' 0b11    two lines, 1
+	//	printf '%d' '3 4'   two lines, 1     text left over
+	//	printf '%d' 1/0     divide by zero, 0    the expression failed
+	//	printf '%d' '1+'    more tokens expected, 0
+	//	printf '%d' '&&'    arithmetic syntax error, 0
+	//	printf '%d' '1++'   assignment requires lvalue, 0
+	//
+	// Measured 2026-09-14 against ksh93u+ over seventeen operands. Two of
+	// them do not follow and are recorded rather than reproduced, because
+	// both come from a *different* reading of the operand rather than from
+	// this rule: `printf '%d' '9)'` is `unbalanced parenthesis` at 0 there
+	// and a bad operator at 1 here, and `printf '%d' 'x['` is two lines at 1
+	// there and a bad operator at 1 here — ksh93 reads a `)` as a
+	// parenthesis and a `[` as a subscript where this shell's parser calls
+	// both an operator it cannot use. A grammar that told those two apart
+	// would answer both rows without touching this rule.
+	//
+	// Empty is the other six columns, four of which never reach an
+	// arithmetic reading at all and one of which — zsh — says only the one
+	// sentence and reports 1 for every row.
+	PrintfArithArgumentType string
+	// PrintfIntegerOverflow is a value an *integer* conversion cannot hold,
+	// in the one column that says so. One verb: the operand.
+	//
+	//	printf '%d' 99999999999999999999
+	//	  ksh93: 9223372036854775807, and
+	//	         printf: warning: 99999999999999999999: overflow exception, 1
+	//	printf '%f' 99999999999999999999
+	//	  ksh93: 100000000000000000000.000000, in silence, at 0
+	//
+	// So the range is the *conversion's* and not the operand's, which is
+	// what parts this from PrintfNumberOutOfRange above: that one is C's
+	// `ERANGE` on the reading, reported by bash and dash at `%f` as well
+	// (#2727), and this is a number the reading handled perfectly well and
+	// the conversion cannot (#2765).
+	//
+	// Asked only of a finite value. An operand that overflows a *double*
+	// answers `0` in that column rather than an infinity — `printf '%d'
+	// 1e400` is `[0]` in silence at 0 there, because its evaluator reads the
+	// literal as zero — and that is the evaluator's answer rather than
+	// `printf`'s. #2766 is where it belongs.
+	//
+	// Empty is the other six columns, which say nothing about it.
+	PrintfIntegerOverflow string
 	// PrintfBadVerb is a conversion this shell does not have. Two verbs, and
 	// the panel splits evenly between them: %[1]s is the conversion
 	// character alone and %[2]s is the whole directive as written, so `%lQ`

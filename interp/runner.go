@@ -1597,6 +1597,18 @@ type Runner struct {
 	// through keeps its output ahead of the message and a refusal can still
 	// take the pass back; and the star reader is what takes it back (#2664).
 	printfOut *printfWriter
+	// printfConversionName is the conversion character being formatted, or
+	// `.` where what is being read is a `*` operand. One column's `printf`
+	// names it in a second complaint line about an operand its arithmetic
+	// could not read — see Diagnostics.PrintfArithArgumentType — and the
+	// number reader is several calls below the place that knows which
+	// conversion asked.
+	printfConversionName string
+	// printfLostStars is how many `*` the prefix just scanned wrote that a
+	// later run in the same field replaced. Their operands are still taken;
+	// see printfLostStars, and printfSpecPrefix for why the count travels
+	// here rather than out of the scan.
+	printfLostStars printfLostStars
 	// line is where execution currently is, for diagnostics that name it.
 	// Real shells report the line of the command that failed, so this is
 	// updated per statement rather than per token.

@@ -4,6 +4,7 @@
 package interp
 
 import (
+	"errors"
 	"math"
 	"strconv"
 	"strings"
@@ -62,7 +63,43 @@ func (r *Runner) printfNumber(arg string, present bool) (int64, int, bool) {
 		return v, 0, false
 	}
 	f, code, stop := r.printfPartialNumber(arg, text, false)
+	if code == 0 && !stop {
+		code = r.printfIntegerOverflow(arg, f)
+	}
 	return floatToInt64(f), code, stop
+}
+
+// printfIntegerOverflow reports a value an *integer* conversion cannot hold,
+// where the dialect says anything about it.
+//
+// One column does, and only at the integer conversions: `printf '%d'
+// 99999999999999999999` is the clamped value, `printf: warning:
+// 99999999999999999999: overflow exception` and 1 in ksh93u+, while
+// `printf '%f'` of the same operand is `100000000000000000000.000000` in
+// silence at 0 (#2765). So the range is the *conversion's* and not the
+// operand's, which is why this is asked here and not beside the ERANGE
+// reading printfOutOfRange reports.
+//
+// Only a finite value is asked about. An operand that overflowed a double
+// answers `0` in that column rather than an infinity — its evaluator reads
+// `1e400` as zero, which is #2766 and not this — and it says nothing at all
+// about it, so a complaint here would be one the reference does not make.
+func (r *Runner) printfIntegerOverflow(arg string, f float64) int {
+	w := r.diag().PrintfIntegerOverflow
+	if w == "" || !inRangeForOverflowReport(f) {
+		return 0
+	}
+	r.diagf("%s\n", Wording(w, "printf: warning: %[1]s: overflow exception", arg))
+	return orDefault(r.diag().PrintfBadNumberStatus, 1)
+}
+
+// inRangeForOverflowReport reports whether f is a finite number outside what
+// an int64 holds, which is the one shape the complaint above is made about.
+func inRangeForOverflowReport(f float64) bool {
+	if math.IsInf(f, 0) || math.IsNaN(f) {
+		return false
+	}
+	return f >= math.MaxInt64 || f <= math.MinInt64
 }
 
 // printfFloat reads a float operand the same way, with the conversion's own
@@ -146,11 +183,11 @@ func (r *Runner) printfPartialNumber(arg, text string, float bool) (float64, int
 			// as well.
 			return v, 0, false
 		}
-		n, err := r.printfArithValue(text)
+		n, err, reading := r.printfArithValue(text)
 		if err == nil {
 			return n.asFloat(), 0, false
 		}
-		code := r.printfArithFailure(err)
+		code := r.printfArithFailure(err, reading)
 		if !r.ask(r.sem().PrintfRefusedOperandKeepsItsLeadingNumber,
 			"`printf` keeping the number at the front of an operand its arithmetic would not evaluate") {
 			if r.unspecified {
@@ -178,11 +215,15 @@ func (r *Runner) printfPartialNumber(arg, text string, float bool) (float64, int
 // silent in zsh and ksh93 alike — the same answer `echo $((abc))` gives
 // there — where the stored-value path would call it a parameter that is not
 // set.
-func (r *Runner) printfArithValue(text string) (arithNum, error) {
+//
+// The third result says whether what failed was the *reading of the operand
+// as a number* rather than anything about the expression around it, which is
+// the one column that parts them: see Diagnostics.PrintfArithArgumentType.
+func (r *Runner) printfArithValue(text string) (arithNum, error, bool) {
 	if text == "" {
 		// No expression at all, which every evaluating column reads as zero
 		// and says nothing about: `printf '%d' ' '` is `[0]` at 0 in both.
-		return intNum(0), nil
+		return intNum(0), nil, false
 	}
 	p := syntax.NewParser("", r.dialect())
 	tree := p.ParseArithFor(text, syntax.Pos{})
@@ -195,13 +236,19 @@ func (r *Runner) printfArithValue(text string) (arithNum, error) {
 		err = &syntax.Error{Kind: syntax.ErrArithOperand, Expr: text, Token: text}
 	}
 	if err != nil {
-		return intNum(0), arithError{msg: r.subscriptFailure(text, err), complete: true}
+		// Text left over after a complete expression is a reading failure:
+		// the operand was a number and then something else. Wanting an
+		// operand, or a parenthesis that never closed, is not.
+		var se *syntax.Error
+		left := errors.As(err, &se) && se.Kind == syntax.ErrArithOperator
+		return intNum(0), arithError{msg: r.subscriptFailure(text, err), complete: true}, left
 	}
 	n, err := r.evalNum(tree)
 	if err != nil {
-		return intNum(0), arithError{msg: r.arithFailure(text, err), complete: true}
+		ae, _ := err.(arithError)
+		return intNum(0), arithError{msg: r.arithFailure(text, err), complete: true}, ae.badNumeral
 	}
-	return n, nil
+	return n, nil, false
 }
 
 // leadingNumber is the number at the front of an operand, or zero where there
@@ -288,12 +335,25 @@ func (r *Runner) printfOutOfRange(arg string) int {
 
 // printfArithFailure writes the sentence the same expression would earn in
 // `$(( ))`, which is what the two evaluating columns write here.
-func (r *Runner) printfArithFailure(err error) int {
+//
+// reading says the failure was the operand's own reading rather than the
+// expression's, which is what one of the two columns parts on: see
+// Diagnostics.PrintfArithArgumentType.
+func (r *Runner) printfArithFailure(err error, reading bool) int {
 	msg := err.Error()
 	if w := r.diag().PrintfArithOperandFailure; w != "" {
 		msg = Wording(w, "%[1]s", msg)
 	}
 	r.diagf("%s\n", msg)
+	if w := r.diag().PrintfArithArgumentType; w != "" {
+		if !reading {
+			// The complaint still goes out; the second line and the status
+			// do not. `printf '%d' 1/0` is `divide by zero` at 0 in ksh93,
+			// against `42abc`'s two lines at 1.
+			return 0
+		}
+		r.diagf("%s\n", Wording(w, "printf: warning: invalid argument of type %[1]s", r.printfConversionName))
+	}
 	return orDefault(r.diag().PrintfBadNumberStatus, 1)
 }
 

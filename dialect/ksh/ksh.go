@@ -2213,6 +2213,17 @@ func Diagnostics() interp.Diagnostics {
 		PrintfBadDateOperand:      "printf: warning: invalid argument of type T",
 		PrintfBadVerb:             "printf: %[1]s: unknown format specifier",
 		PrintfArithOperandFailure: "printf: %[1]s",
+		// And a second line after it, naming the conversion character
+		// rather than the operand — with the status split that comes with
+		// it: a reading that failed reports 1 and an expression that
+		// failed reports 0 (#2765). See Diagnostics.PrintfArithArgumentType
+		// for the seventeen operands this was measured over and the two
+		// that do not follow.
+		PrintfArithArgumentType: "printf: warning: invalid argument of type %[1]s",
+		// And a number the *conversion* cannot hold, which is a separate
+		// complaint from a reading that overflowed: `printf '%f'` of the
+		// same operand is silent here.
+		PrintfIntegerOverflow:     "printf: warning: %[1]s: overflow exception",
 		PrintfBadOption:           "printf: %[1]s: unknown option",
 		TrapConditionRequired:     "trap: condition(s) required",
 		PrintfBadOptionShowsUsage: true,

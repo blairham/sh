@@ -1429,6 +1429,13 @@ func TestPrintfGroupingFlagAfterTheWidthIsAnAxis(t *testing.T) {
 		{"past the precision, refused", No, `printf "[%.5'd]" 1234567`, "sh: printf: %.5': invalid directive\n[", 1},
 		{"ahead of the width is neither answer's business", Yes, `printf "[%'10d]" 1234567`, "[   1234567]", 0},
 		{"ahead of the width, still not", No, `printf "[%'10d]" 1234567`, "[   1234567]", 0},
+		// *Inside* a digit run, which is the position #2688 found and the
+		// one that is not "the flag written one place further along": the
+		// quote ends the run it is in, and before the `.` the scan starts
+		// over at the flags — so `%1'0d` is width 1 and a zero-padding flag
+		// rather than width ten.
+		{"inside the width", Yes, `printf "[%1'0d]" 42`, "[42]", 0},
+		{"inside the width, refused", No, `printf "[%1'0d]" 42`, "sh: printf: %1': invalid directive\n[", 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			sem := printfSem()
@@ -1917,5 +1924,54 @@ func TestPrintfHexFloatDefaultPrecisionIsAnAxis(t *testing.T) {
 				t.Errorf("got %q status %d, want %q and 0", out, st, tc.want)
 			}
 		})
+	}
+}
+
+// The `'` does not merely get skipped in the one dialect that takes it past
+// the flags: it **ends the digit run it is in**, and before the `.` the scan
+// starts over at the flags. So the digits around it are not the number they
+// look like, and a fix that only widened the acceptance would have written a
+// silently different width (#2688).
+//
+// Measured against ksh93u+ under `LC_ALL=C`; every row here is one it wrote.
+func TestPrintfGroupingFlagEndsTheFieldRunItIsIn(t *testing.T) {
+	sem := printfSem()
+	sem.PrintfGroupingFlagAfterTheWidth = Yes
+	for _, tc := range []struct{ src, want string }{
+		// The row the issue was filed from: width 1, then `0` read as the
+		// zero-padding *flag*. Deleting the quote would make it width ten.
+		{`printf "[%1'0d]" 42`, "[42]"},
+		// Each run after a quote replaces the width rather than extending it.
+		{`printf "[%1'2'3d]" 42`, "[ 42]"},
+		// An empty run leaves the width already read, and the flag it found
+		// applies to that width.
+		{`printf "[%5'0d]" 42`, "[00042]"},
+		{`printf "[%5''d]" 42`, "[   42]"},
+		// The flags accumulate across the restarts.
+		{`printf "[%1'-5d]" 42`, "[42   ]"},
+		{`printf "[%1'+5d]" 42`, "[  +42]"},
+		{`printf "[%1'#5x]" 42`, "[ 0x2a]"},
+		{`printf "[%'0'5d]" 42`, "[00042]"},
+		// After a `.` the scan does *not* restart at the flags — the digits
+		// keep being the precision, and the last run wins there too.
+		{`printf "[%.'5d]" 42`, "[00042]"},
+		{`printf "[%.5'3d]" 42`, "[042]"},
+		{`printf "[%.0'5d]" 42`, "[00042]"},
+		{`printf "[%.1'0d]" 42`, "[42]"},
+		{`printf "[%1'0.3d]" 42`, "[042]"},
+		// A star is a field run like any other, so a later run replaces it —
+		// and the operand it took is still gone.
+		{`printf "[%5'*d]" 3 42`, "[ 42]"},
+		{`printf "[%*'5d]" 3 42`, "[   42]"},
+		{`printf "[%*'*d]" 3 4 42`, "[  42]"},
+		{`printf "[%*.*'5d]" 3 4 42`, "[00042]"},
+		// And the lost operand is read in the place it was written, which is
+		// what this row is for: the width's star precedes the precision's.
+		{`printf "[%*'5.*d]" 3 2 42`, "[   42]"},
+	} {
+		out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+		if out != tc.want || st != 0 {
+			t.Errorf("%s: got %q status %d, want %q and 0", tc.src, out, st, tc.want)
+		}
 	}
 }

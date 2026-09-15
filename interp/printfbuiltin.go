@@ -324,11 +324,13 @@ func (r *Runner) printfOnce(format string, operands []string) (int, int, printfP
 // pass `%*d` and `%.*s` and still get that one wrong.
 func (r *Runner) printfVerb(spec string, verb byte, timeFmt string, next func() (string, bool)) (string, int, bool) {
 	starCode := 0
-	if strings.IndexByte(spec, '*') >= 0 {
+	lost := r.printfLostStars
+	r.printfLostStars = printfLostStars{}
+	if strings.IndexByte(spec, '*') >= 0 || lost.any() {
 		// Guarded, so an ordinary `printf '%d' 5` never reaches the star
 		// code and never consults the axis inside it.
 		var stop bool
-		if spec, starCode, stop = r.printfStars(spec, next); stop {
+		if spec, starCode, stop = r.printfStars(spec, lost, next); stop {
 			return "", starCode, true
 		}
 	}
@@ -350,12 +352,22 @@ func (r *Runner) printfVerb(spec string, verb byte, timeFmt string, next func() 
 // flag and the width without its sign, and a negative precision meaning no
 // precision at all rather than a zero one. `printf '%.*s' -3 hello` is
 // `hello` in all seven, where a precision of zero would be the empty string.
-func (r *Runner) printfStars(spec string, next func() (string, bool)) (string, int, bool) {
+func (r *Runner) printfStars(spec string, lost printfLostStars, next func() (string, bool)) (string, int, bool) {
 	i := 1 // past the %
 	for i < len(spec) && strings.IndexByte("-+ #0", spec[i]) >= 0 {
 		i++
 	}
 	flags, status := spec[1:i], 0
+	// The stars a later run in the same field replaced. Their operands are
+	// taken here, in the place they were written, and then dropped: see
+	// printfLostStars. Only the ksh93 reading produces any.
+	code, stop := r.printfDropStars(lost.width, next)
+	if stop {
+		return "", code, true
+	}
+	if code != 0 {
+		status = code
+	}
 	width := ""
 	if i < len(spec) && spec[i] == '*' {
 		i++
@@ -395,6 +407,11 @@ func (r *Runner) printfStars(spec string, next func() (string, bool)) (string, i
 		width = spec[start:i]
 	}
 	prec := ""
+	if code, stop := r.printfDropStars(lost.prec, next); stop {
+		return "", code, true
+	} else if code != 0 {
+		status = code
+	}
 	if i < len(spec) && spec[i] == '.' {
 		i++
 		if i < len(spec) && spec[i] == '*' {
@@ -420,6 +437,27 @@ func (r *Runner) printfStars(spec string, next func() (string, bool)) (string, i
 	return "%" + flags + width + prec + spec[i:], status, false
 }
 
+// printfDropStars reads and throws away the operands of n stars a later run
+// in the same field replaced, which only the ksh93 prefix grammar can write.
+//
+// Read exactly as a surviving star's operand is, complaints and refusal and
+// all, because that is what the reference does: `printf "[%*'5d]" abc 42`
+// earns the same arithmetic complaint a `%*d` would, and a list that has run
+// out is the same refusal.
+func (r *Runner) printfDropStars(n int, next func() (string, bool)) (int, bool) {
+	status := 0
+	for range n {
+		_, code, stop := r.printfStarOperand(next)
+		if stop {
+			return code, true
+		}
+		if code != 0 {
+			status = code
+		}
+	}
+	return status, false
+}
+
 // printfStarOperand reads the operand a `*` takes, which is the same number
 // the conversion itself would read and so carries the same complaints.
 //
@@ -429,6 +467,11 @@ func (r *Runner) printfStars(spec string, next func() (string, bool)) (string, i
 // conversion, so the two cases are not one question. ksh93 is the seventh and
 // refuses the directive outright.
 func (r *Runner) printfStarOperand(next func() (string, bool)) (int64, int, bool) {
+	// ksh93 names `.` for a `*` operand in the second complaint line as well
+	// as in the refusal below, which is the same constant seen twice.
+	saved := r.printfConversionName
+	r.printfConversionName = "."
+	defer func() { r.printfConversionName = saved }()
 	arg, present := next()
 	if !present {
 		if r.ask(r.sem().PrintfStarWithoutOperandIsRefused, "`printf '%*d'` refusing a `*` the operands ran out before") {
@@ -617,6 +660,14 @@ func (r *Runner) printfConvert(spec string, verb byte, timeFmt string, next func
 			strings.Contains(flags, "-"), strings.Contains(flags, "0")), code, stop
 	}
 	arg, present := next()
+	// The conversion character, for the one column that names it in a
+	// second complaint about an operand its arithmetic could not read. Set
+	// here rather than threaded through the number reader, which is several
+	// calls below and takes the same operand from four different verbs.
+	// See Diagnostics.PrintfArithArgumentType.
+	saved := r.printfConversionName
+	r.printfConversionName = string(verb)
+	defer func() { r.printfConversionName = saved }()
 	switch verb {
 	case 'T':
 		return r.printfTime(spec, timeFmt, arg, present)
@@ -1148,15 +1199,16 @@ func (r *Runner) printfQuote(spec, arg string) (string, int, bool) {
 // is an axis nothing answered, which stops the format rather than printing
 // half of it.
 func (r *Runner) scanPrintfSpec(s string) (string, byte, string, int, int) {
-	i, code := r.printfSpecPrefix(s)
+	i, spec, code := r.printfSpecPrefix(s)
 	if code != 0 {
 		return "", 0, "", i, code
 	}
 	if i >= len(s) {
 		return "", 0, "", len(s), 0
 	}
-	// The `'` that survived the prefix scan is this dialect's grouping flag,
-	// and it is dropped here rather than honored. It asks for the digits to
+	// The prefix arrives already rebuilt without its `'`s: they are this
+	// dialect's grouping flag, and it is dropped rather than honored. It asks
+	// for the digits to
 	// be parted by `LC_NUMERIC`'s thousands separator, and
 	// interp/localenumeric.go is the one home for what this shell knows about
 	// that category: the separator is empty under every locale it has numeric
@@ -1171,8 +1223,9 @@ func (r *Runner) scanPrintfSpec(s string) (string, byte, string, int, int) {
 	//
 	// A dialect that does *not* have the flag never gets this far, because
 	// the `'` is the conversion character it was refused as. See
-	// Semantics.PrintfGroupingFlag.
-	spec := "%" + strings.ReplaceAll(s[1:i], "'", "")
+	// Semantics.PrintfGroupingFlag — and printfKshPrefix, where dropping it
+	// is not enough, because in that dialect the quote *ends the digit run
+	// it is in* and the digits around it are not the number they look like.
 	if s[i] == '(' {
 		// `%(fmt)T`, the one conversion whose format is inside the
 		// conversion. One shell in the panel has it; asked here rather than
@@ -1306,21 +1359,29 @@ func (r *Runner) timeZone() *time.Location {
 // arrives at the scan as the conversion character and is refused the way any
 // other unknown one is. That is the same shape #2646 had, and the reason
 // both halves live in this function.
-func (r *Runner) printfSpecPrefix(s string) (int, int) {
+func (r *Runner) printfSpecPrefix(s string) (int, string, int) {
 	group, after := false, false
 	if inFlags, pastFlags := printfGroupingFlagPositions(s); inFlags || pastFlags {
 		group = r.ask(r.sem().PrintfGroupingFlag, "`printf` taking `'` as the flag that groups a number's digits")
 		if r.unspecified {
-			return printfSpecPrefixAt(s, true, true), r.status
+			end, spec, _ := printfSpecPrefixAt(s, true, true)
+			return end, spec, r.status
 		}
 		if group && pastFlags {
 			after = r.ask(r.sem().PrintfGroupingFlagAfterTheWidth, "`printf` taking the `'` flag written past the flags")
 			if r.unspecified {
-				return printfSpecPrefixAt(s, true, true), r.status
+				end, spec, _ := printfSpecPrefixAt(s, true, true)
+				return end, spec, r.status
 			}
 		}
 	}
-	return printfSpecPrefixAt(s, group, after), 0
+	end, spec, lost := printfSpecPrefixAt(s, group, after)
+	// Carried on the runner rather than out of the scan: the operands a lost
+	// star takes are read by printfStars, several returns below, and adding a
+	// sixth result to scanPrintfSpec for a shape one dialect can write would
+	// put it in every other caller's signature too.
+	r.printfLostStars = lost
+	return end, spec, 0
 }
 
 // printfSpecPrefixAt is printfSpecPrefix once the two questions are settled:
@@ -1330,7 +1391,10 @@ func (r *Runner) printfSpecPrefix(s string) (int, int) {
 // One grammar and not two. printfGroupingFlagPositions calls this with both
 // readings open to find out what a conversion is even asking, so the widest
 // reading and the dialect's reading can never drift apart.
-func printfSpecPrefixAt(s string, group, after bool) int {
+func printfSpecPrefixAt(s string, group, after bool) (int, string, printfLostStars) {
+	if after {
+		return printfKshPrefix(s)
+	}
 	flags := "-+ #0"
 	if group {
 		flags += "'"
@@ -1338,17 +1402,129 @@ func printfSpecPrefixAt(s string, group, after bool) int {
 	i := 1 // past the %
 	i += runOfBytes(s, i, flags)
 	i += printfFieldRun(s, i)
-	if after {
-		i += runOfBytes(s, i, "'")
-	}
 	if i < len(s) && s[i] == '.' {
 		i++
 		i += printfFieldRun(s, i)
-		if after {
-			i += runOfBytes(s, i, "'")
+	}
+	// The `'` that survived is the grouping flag, and it is dropped rather
+	// than honored — see scanPrintfSpec, where the reason is written down.
+	// Taking it out of a run of flags leaves a spec `fmt` reads, which is
+	// the whole of what this reading needs. No star is ever lost here: this
+	// grammar has one field run apiece.
+	return i, "%" + strings.ReplaceAll(s[1:i], "'", ""), printfLostStars{}
+}
+
+// printfKshPrefix is the one dialect that takes a `'` anywhere in the prefix,
+// and the grammar is not "the same prefix with quotes allowed in more places"
+// — the quote **ends the digit run it is in**, and before the `.` the scan
+// starts over at the flags (#2688).
+//
+//	%1'0d    width 1, then `0` read as the zero-padding *flag*   [42]
+//	%1'2'3d  each run after a quote replaces the width           [ 42]
+//	%5'0d    an empty run leaves the width already read          [00042]
+//	%*'5d    and a digit run after one replaces a star's width   [   42]
+//	%.'5d    after a `.` the scan does not restart: precision 5  [00042]
+//	%.5'3d   and there too the last run wins                     [042]
+//
+// Measured 2026-09-13 and 2026-09-14 against ksh93u+ over twenty-nine
+// conversions of 42 under `LC_ALL=C`, which is what says it is a grammar
+// rather than "skip the quote": deleting the quote makes `%1'0d` a width of
+// ten and pads to ten, where ksh93 writes `42`.
+//
+// The flags accumulate across the restarts and the last *non-empty* run of
+// each field wins, so the answer is rebuilt from the runs rather than edited
+// out of the text.
+//
+// **A star that loses is still read.** `printf "[%*'5d]" 3 42` is `[   42]`
+// in ksh93: the star took the 3 for a width the `5` then replaced, and the 42
+// reached the conversion. Rebuilding the prefix alone would have handed `%5d`
+// on and made the 3 the value — and, because the pass would then have
+// consumed one operand instead of two, reused the format and written a second
+// field nobody asked for. So the losing stars are counted out of here as
+// printfLostStars and read by printfStars in the place they were written.
+func printfKshPrefix(s string) (int, string, printfLostStars) {
+	i := 1 // past the %
+	flags, width, prec := "", "", ""
+	widthStars, precStars := 0, 0
+	for {
+		if n := runOfBytes(s, i, "-+ #0"); n > 0 {
+			flags += s[i : i+n]
+			i += n
+		}
+		if n := printfFieldRun(s, i); n > 0 {
+			if s[i] == '*' {
+				widthStars++
+			}
+			width = s[i : i+n]
+			i += n
+		}
+		if i < len(s) && s[i] == '\'' {
+			i++
+			continue
+		}
+		break
+	}
+	if i < len(s) && s[i] == '.' {
+		i++
+		// Precision 0 until a run says otherwise, which is what a bare `.`
+		// means and what an empty run after a quote leaves behind.
+		prec = "."
+		for {
+			if n := printfFieldRun(s, i); n > 0 {
+				if s[i] == '*' {
+					precStars++
+				}
+				prec = "." + s[i:i+n]
+				i += n
+			}
+			if i < len(s) && s[i] == '\'' {
+				i++
+				continue
+			}
+			break
 		}
 	}
-	return i
+	// The last run of each field is the one the conversion uses. Every star
+	// before it took an operand nothing then used, and if the last run is not
+	// a star at all then every star in that field did.
+	lost := printfLostStars{width: widthStars, prec: precStars}
+	if width == "*" {
+		lost.width--
+	}
+	if prec == ".*" {
+		lost.prec--
+	}
+	return i, "%" + dedupFlags(flags) + width + prec, lost
+}
+
+// printfLostStars is how many `*` in a conversion's prefix took an operand
+// that nothing then used, counted on each side of the surviving one.
+//
+// Only the ksh93 reading produces any: there a `'` restarts the field, so a
+// run written after a star *replaces* it and the star has already taken its
+// operand. `printf "[%*'5d]" 3 42` is `[   42]` — the 3 went to a width the
+// 5 replaced, and the 42 reached the conversion.
+//
+// Counted on each side because the order the operands are read in is the
+// order the stars are written in, and a width star always precedes a
+// precision star: `%*.*'5d` takes its width from the first and then loses the
+// second.
+type printfLostStars struct{ width, prec int }
+
+func (l printfLostStars) any() bool { return l.width > 0 || l.prec > 0 }
+
+// dedupFlags keeps one of each flag, in the order they were written.
+//
+// The restarts above can write the same one twice — `%0'0'5d` holds two
+// zeros — and a spec `fmt` is handed has to be one it reads.
+func dedupFlags(flags string) string {
+	var b strings.Builder
+	for i := 0; i < len(flags); i++ {
+		if strings.IndexByte(b.String(), flags[i]) < 0 {
+			b.WriteByte(flags[i])
+		}
+	}
+	return b.String()
 }
 
 // printfGroupingFlagPositions says where a `'` is written in a conversion's
@@ -1360,7 +1536,7 @@ func printfSpecPrefixAt(s string, group, after bool) int {
 // answers. Narrowing it to the dialect first would ask the flag axis only
 // where the dialect already had the flag, which is the wrong way round.
 func printfGroupingFlagPositions(s string) (inFlags, pastFlags bool) {
-	end := printfSpecPrefixAt(s, true, true)
+	end, _, _ := printfSpecPrefixAt(s, true, true)
 	flagEnd := 1 + runOfBytes(s, 1, "-+ #0'")
 	for i := 1; i < end && i < len(s); i++ {
 		switch {

@@ -2415,6 +2415,31 @@ type Semantics struct {
 	// refuse, which "the flag is read here too" and "the character is
 	// dropped" both predict.
 	//
+	// **Yes is a grammar and not a wider acceptance.** The quote may be
+	// written *inside* either digit run as well, and it **ends the run it is
+	// in** — before the `.` the scan then starts over at the flags, so the
+	// digits around it are not the number they look like (#2688):
+	//
+	//	%1'0d    width 1, then `0` as the zero-padding *flag*   [42]
+	//	%1'2'3d  each run after a quote replaces the width      [ 42]
+	//	%5'0d    an empty run leaves the width already read     [00042]
+	//	%*'5d    a digit run replaces a star's width            [   42]
+	//	%.'5d    after a `.` it does not restart: precision 5   [00042]
+	//	%.5'3d   and there the last run wins too                [042]
+	//
+	// So `strings.ReplaceAll(prefix, "'", "")` cannot serve even once the
+	// acceptance is widened: it makes `%1'0d` a width of ten and pads to ten
+	// where ksh93 writes `42`. The prefix is rebuilt from the runs instead —
+	// see printfKshPrefix — with the flags accumulating across the restarts
+	// and the last non-empty run of each field winning.
+	//
+	// A star a later run replaced has still **taken its operand**, and in the
+	// place it was written: `printf "[%*'5d]" 3 42` is `[   42]` there, the 3
+	// going to a width the 5 replaced and the 42 to the conversion. Dropping
+	// those reads would also have made the pass consume one operand instead
+	// of two and reuse the format, so it is not only a width that would have
+	// been wrong. printfLostStars is the count that carries them.
+	//
 	// Asked only where PrintfGroupingFlag has already said yes and a `'` is
 	// actually written past the flag run, so neither `%d` nor `%'d` reaches
 	// it.

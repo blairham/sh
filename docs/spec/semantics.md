@@ -452,6 +452,48 @@ is caught in neither. The *status* is not shared, which is why it is a
 That is the same shape `SyntaxErrorStatus` and `SourcedSyntaxErrorStatus`
 already have, measured the same way and for the same shell.
 
+**The boundary has one exception, and it is about the *call* rather than
+about the builtin.** In ksh93 an error a builtin reports about how it was
+called is not caught at either end of that boundary: the shell ends, and
+reaching the builtin through `eval` or through a dot script changes
+nothing. Measured 2026-09-15 against ksh93u+ 2012-08-01, each call written
+bare and again as an `eval` operand, wrapped in a subshell so the outer
+script survives to print a status:
+
+    ( eval 'alias -g gg=1'; printf 'carried on\n' ) 2>/dev/null
+    printf 'through eval -> %s\n' "$?"
+
+| the call | bare | through `eval` or `.` |
+| --- | --- | --- |
+| `alias -g x=1`, `alias 'a b'=x`, `unalias -Q x` | ends, 2 / 1 | **ends, same status** |
+| `export -Q x`, `unset -q x`, `set -q`, `set -o nope` | ends, 2 | **ends, 2** |
+| `typeset -Q v`, `typeset -n n=1bad`, `export 1bad=2` | ends, 2 / 1 | **ends, same status** |
+| `shift 5`, `trap EXIT`, `. ./nosuchfile` | ends, 1 | **ends, 1** |
+| `export x >/nope/d/f` | ends, 1 | **ends, 1** |
+| `readonly r=1` then `r=2` | ends, 1 | caught, reports 1 |
+| `readonly r=1` then `readonly r=2` | ends, 1 | caught, reports 1 |
+| `typeset -r q=1` then `typeset q=2` | ends, 1 | caught, reports 1 |
+| `echo $((1/0))`, `echo ${x!y}` | ends, 1 | caught, reports 1 |
+| `set -u` then `echo X${NOPE}` | ends, 1 | caught, reports 1 |
+
+So the line is **not** "an error a builtin raised": the three readonly
+refusals in the lower half are raised by `readonly` and by `typeset` and
+are caught like any other. It is an error about the call — an option the
+builtin does not have, a name it cannot use as one, a count past the end
+of the positional parameters, a condition word `trap` will not take, a
+file `.` could not open, a redirection that would not open on a special
+builtin. `BuiltinUsageErrorEscapesBorrowedText` is the field, and
+`abandonUsage` is what the interpreter carries beside the give-up so the
+boundary can tell the two apart.
+
+Only ksh93 can be asked. Four of the five presets catch nothing here, so
+there is no catch to carve an exception out of, and zsh catches but has no
+fatal usage error to raise: `BadOptionToSpecialBuiltinFatal`,
+`ShiftPastEndFatal` and `TypesetBadOptionFatal` are all `No` there. The
+other three boundaries the same mechanism draws are left alone — at a
+prompt every error costs the line and nothing more, which is why a
+mistyped option does not end an interactive session (#2950).
+
 **A statement the shell merely *gives up* is a third thing again**, and it
 does not end borrowed text in any shell. `readonly rr=1` then `rr=2`
 inside an `eval` or a sourced file reports the refusal, gives up that

@@ -4517,7 +4517,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// ask about `true 3>/nope/x`.
 		if specialBuiltins[argv[0]] &&
 			r.ask(r.sem().RedirectErrorOnSpecialBuiltinFatal, "a failed redirection on a special builtin ending the script") {
-			r.fatalQuiet()
+			r.fatalUsageQuiet()
 			return nil
 		}
 		// One dialect ends the shell over a `<&word` that named something
@@ -5828,6 +5828,23 @@ func (r *Runner) fatalQuiet() {
 func (r *Runner) fatal(format string, args ...any) {
 	r.diagf(format, args...)
 	r.fatalQuiet()
+}
+
+// fatalUsageQuiet is fatalQuiet for a builtin's complaint about **how it was
+// called** — see abandonUsage and Semantics.BuiltinUsageErrorEscapesBorrowedText.
+//
+// A door of its own rather than a flag set before fatalQuiet: the kind and the
+// unwinding are written together everywhere else in this file, and a "mark the
+// next fatal" flag is the shape of state a site forgets to clear.
+func (r *Runner) fatalUsageQuiet() {
+	r.fatalQuiet()
+	r.abandon = abandonUsage
+}
+
+// fatalUsage is fatalUsageQuiet for a complaint this call still has to write.
+func (r *Runner) fatalUsage(format string, args ...any) {
+	r.fatal(format, args...)
+	r.abandon = abandonUsage
 }
 
 // beginHeading clears what expanding a compound command's *heading* is about

@@ -342,7 +342,7 @@ func (r *Runner) endAfterABadName(status int) int {
 		return r.status
 	}
 	r.status = status
-	r.fatalQuiet()
+	r.fatalUsageQuiet()
 	return r.status
 }
 
@@ -379,7 +379,7 @@ func (r *Runner) badSubscriptOperand(builtin, operand, name string, fatal Answer
 	status := orDefault(d.BuiltinBadNameStatus, 1)
 	if r.ask(fatal, "a bad name to a special builtin ending the script") {
 		r.status = status
-		r.fatalQuiet()
+		r.fatalUsageQuiet()
 		return r.status
 	}
 	return status
@@ -438,7 +438,7 @@ func (r *Runner) badBuiltinName(builtin, operand, name string, fatal Answer) int
 	status := orDefault(d.BuiltinBadNameStatus, 1)
 	if r.ask(fatal, "a bad name to a special builtin ending the script") {
 		r.status = status
-		r.fatalQuiet()
+		r.fatalUsageQuiet()
 	}
 	return status
 }

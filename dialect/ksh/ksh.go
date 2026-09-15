@@ -1244,6 +1244,15 @@ func Semantics() interp.Semantics {
 	// it — for an unset parameter under `set -u`, a readonly assignment, a
 	// division by zero and a bad substitution alike.
 	s.FatalErrorEndsBorrowedTextOnly = interp.Yes
+	// But not a builtin's complaint about how it was *called*, which is the
+	// one kind that goes straight out: measured 2026-09-15, `eval 'alias -g
+	// x=1'` inside a subshell prints nothing and leaves 2, exactly as the
+	// bare call does, where `eval 'r=2'` against a readonly `r` reports and
+	// lets the next command in the subshell run. The same split holds for a
+	// dot script, and it is the same fourteen calls either way — see
+	// [interp.Semantics.BuiltinUsageErrorEscapesBorrowedText] for the two
+	// lists (#2950).
+	s.BuiltinUsageErrorEscapesBorrowedText = interp.Yes
 	// And `${x?word}` is one of those errors here rather than a request to
 	// stop: `.` reports 1 for it too and the sourcing file carries on, which
 	// is the half of this zsh answers the other way.

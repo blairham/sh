@@ -697,7 +697,7 @@ func (r *Runner) unaliasWithNothingToRemove() int {
 	// bash answers `No` to both — and became a divergence the moment POSIX
 	// mode started moving the special-builtin one.
 	if r.ask(r.sem().AliasBadOptionFatal, "a bad `unalias` usage ending the script") {
-		r.fatalQuiet()
+		r.fatalUsageQuiet()
 	}
 	return status
 }
@@ -904,7 +904,7 @@ func (r *Runner) reportAliasName(name, operand string, isDefinition bool) (taken
 	}
 	if r.ask(r.sem().AliasInvalidNameFatal, "a name an alias may not carry ending the script") {
 		r.status = 1
-		r.fatalQuiet()
+		r.fatalUsageQuiet()
 		return true, true
 	}
 	return true, false

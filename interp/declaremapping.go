@@ -136,7 +136,7 @@ func (r *Runner) declareMapping(name string, operands []string, f declareFlags) 
 func (r *Runner) endDeclarationAfterARefusal(status int) int {
 	if r.ask(r.sem().BadNameToDeclarationFatal, "a bad name to a special builtin ending the script") {
 		r.status = status
-		r.fatalQuiet()
+		r.fatalUsageQuiet()
 	}
 	return status
 }

@@ -107,7 +107,7 @@ func biFunctions(r *Runner, _ context.Context, args []string) int {
 		// the script exactly where a bad option to `typeset` stops it.
 		if r.ask(r.sem().TypesetBadOptionFatal, "a bad `typeset` option ending the script") {
 			r.status = code
-			r.fatalQuiet()
+			r.fatalUsageQuiet()
 		}
 		return code
 	}

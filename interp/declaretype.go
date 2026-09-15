@@ -208,7 +208,7 @@ func (r *Runner) refuseTypeLetter(builtin string) int {
 	status := orDefault(r.diag().BuiltinBadOptionStatus, 2)
 	if r.ask(r.sem().TypesetBadOptionFatal, "a bad `typeset` option ending the script") {
 		r.status = status
-		r.fatalQuiet()
+		r.fatalUsageQuiet()
 	}
 	return status
 }

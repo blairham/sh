@@ -844,7 +844,7 @@ func biDeclare(r *Runner, _ context.Context, args []string) int {
 		// this shell does not stops the script the same way.
 		if r.ask(r.sem().TypesetBadOptionFatal, "a bad `typeset` option ending the script") {
 			r.status = code
-			r.fatalQuiet()
+			r.fatalUsageQuiet()
 		}
 		return code
 	}

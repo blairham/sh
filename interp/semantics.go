@@ -9450,6 +9450,64 @@ type Semantics struct {
 	// failure caught at a `.` reports 1 in ksh93 and 126 in zsh.
 	FatalErrorEndsBorrowedTextOnly Answer
 
+	// BuiltinUsageErrorEscapesBorrowedText keeps an error a builtin reported
+	// about **how it was called** out of the boundary
+	// FatalErrorEndsBorrowedTextOnly draws, so such an error ends the shell
+	// even when it was raised inside an `eval` argument or inside a file `.`
+	// read.
+	//
+	// Asked only where something catches, and only one dialect can answer
+	// it. Four of the presets end the shell for every fatal error wherever
+	// it happened, so there is no catch to carve an exception out of; zsh
+	// catches but has no fatal usage error to be asked about, since
+	// BadOptionToSpecialBuiltinFatal, ShiftPastEndFatal,
+	// TypesetBadOptionFatal and the rest of that family are all No there.
+	// ksh93 is the pair with both halves.
+	//
+	// Measured 2026-09-15 against ksh93u+ 2012-08-01, each call written bare
+	// and again as the operand of an `eval`, with a `printf` after it and
+	// the pair wrapped in a subshell so that the outer script survives to
+	// report a status:
+	//
+	//	alias -g x=1, alias 'a b'=x, unalias -Q x, export -Q x, unset -q x,
+	//	set -q, set -o nope, typeset -Q v, typeset -n n=1bad, export 1bad=2,
+	//	shift 5, trap EXIT, . ./nosuchfile, export x >/nope/d/f
+	//	                       the shell ends either way, and nothing after
+	//	                       the `eval` or after the `.` runs
+	//
+	//	readonly r=1 then r=2, readonly r=1 then readonly r=2,
+	//	typeset -r q=1 then typeset q=2, echo $((1/0)), echo ${x!y},
+	//	set -u then echo X${NOPE}
+	//	                       the shell ends when written bare, and the
+	//	                       `eval` catches it and reports, with the
+	//	                       command after it run
+	//
+	// So the line is not "an error a builtin raised", which is what a check
+	// on Runner.inBuiltin would draw: the readonly refusals in the second
+	// group are raised by `readonly` and by `typeset` and are caught like
+	// any other. It is an error about the **call** — an option the builtin
+	// does not have, a name it cannot use as one, a count past the end of
+	// the positional parameters, a condition word `trap` will not take, a
+	// file `.` could not open, a redirection that would not open on a
+	// special builtin. Runner.abandon carries which of the two is
+	// unwinding, as abandonUsage.
+	//
+	// The other three boundaries are left alone, and that is measured rather
+	// than assumed for the one that can be: at a prompt every error costs
+	// the line and nothing else, which is what GiveUpTheLine already says,
+	// so a mistyped option there does not end the session.
+	//
+	// unpinned bash: FatalErrorEndsBorrowedTextOnly is No there, so nothing
+	// consults this and no row can observe it moving.
+	// unpinned dash: as bash — nothing catches, so nothing asks.
+	// unpinned ash: as bash — nothing catches, so nothing asks.
+	// unpinned zsh: reached, and the shell has no fatal usage error for a
+	// row to raise inside an `eval`, for the reason above.
+	// TestAUsageErrorEscapesBorrowedTextWhereTheDialectSaysSo pins it in Go,
+	// both ways, and share/suite/ksh/evaldot.tests grades the ksh93 half
+	// against the shell itself.
+	BuiltinUsageErrorEscapesBorrowedText Answer
+
 	// ParamErrorIsAnExitRequest makes `${x?word}` and `${x:?word}` a request
 	// to stop rather than an error, so no boundary catches it.
 	//
@@ -13844,6 +13902,10 @@ func PosixSemantics() Semantics {
 		// a `.`, and dash, the panel member that targets this text,
 		// complies. ksh93 and zsh are the departure.
 		FatalErrorEndsBorrowedTextOnly: No,
+		// Nothing is caught, so there is no exception to carve out. The
+		// answer is written down rather than left to a refusal for the
+		// reason the one below it is.
+		BuiltinUsageErrorEscapesBorrowedText: No,
 		// XCU's `${parameter?word}` says the shell writes the word and
 		// *exits*, in those words, so the standard reads the operator as a
 		// request to stop rather than as one more error. Nothing in the

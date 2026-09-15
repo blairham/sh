@@ -73,6 +73,11 @@ func TestTheTwoHalvesOfTheFatalRuleDisagree(t *testing.T) {
 	if got := s.ParamErrorIsAnExitRequest; got != interp.No {
 		t.Errorf("ParamErrorIsAnExitRequest = %v, want No", got)
 	}
+	// And the exception the boundary has: a builtin's complaint about how it
+	// was called goes straight out of an `eval` and out of a dot script.
+	if got := s.BuiltinUsageErrorEscapesBorrowedText; got != interp.Yes {
+		t.Errorf("BuiltinUsageErrorEscapesBorrowedText = %v, want Yes", got)
+	}
 
 	dir := t.TempDir()
 	// `$?` is read immediately, because the trailing echo succeeds and would
@@ -108,6 +113,46 @@ func TestNoOperandIsFatalWithItsOwnStatus(t *testing.T) {
 	}
 	if st != 2 {
 		t.Errorf("status = %d, want 2 — not the generic fatal status of 1", st)
+	}
+}
+
+// TestAFatalBuiltinUsageErrorIsNotCaughtAtAnEvalOrADot drives the issue's own
+// case through the dialect: `alias -g` is a bad option here, the refusal ends
+// the shell, and reaching it through `eval` or through a dot script does not
+// soften it (#2950).
+//
+// The bare call is run beside each as the control, and a readonly reassignment
+// is run beside all three as the discriminator: that one *is* caught at the
+// same boundary, so a shell that stopped catching anything passes the first
+// three assertions and fails the last.
+func TestAFatalBuiltinUsageErrorIsNotCaughtAtAnEvalOrADot(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "u.sh"),
+		[]byte("alias -g cc=1\nprint DOT-AFTER\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// A subshell around each, so one script can ask all four: the give-up
+	// costs the subshell and the outer shell survives to report its status.
+	for _, tc := range []struct{ name, src string }{
+		{"bare", `( alias -g aa=1; print SUB-AFTER )`},
+		{"eval", `( eval 'alias -g bb=1'; print SUB-AFTER )`},
+		{"dot", `( . ` + filepath.Join(dir, "u.sh") + `; print SUB-AFTER )`},
+	} {
+		out, _ := runKsh(t, dir, tc.src+`; print "st=$?"`)
+		if strings.Contains(out, "SUB-AFTER") || strings.Contains(out, "DOT-AFTER") {
+			t.Errorf("%s: the subshell carried on past a fatal usage error: %q", tc.name, out)
+		}
+		if !strings.Contains(out, "st=2") {
+			t.Errorf("%s: output = %q, want st=2", tc.name, out)
+		}
+	}
+	// And the error that is not a usage error, through the same `eval`.
+	out, _ := runKsh(t, dir, `( readonly r=1; eval 'r=2'; print SUB-AFTER ); print "st=$?"`)
+	if !strings.Contains(out, "SUB-AFTER") {
+		t.Errorf("a readonly reassignment is still caught at an eval here: %q", out)
+	}
+	if !strings.Contains(out, "st=0") {
+		t.Errorf("output = %q, want st=0", out)
 	}
 }
 

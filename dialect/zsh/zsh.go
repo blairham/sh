@@ -1504,6 +1504,16 @@ func Semantics() interp.Semantics {
 	// Making `readonly` read DeclareOptions here is the honest fix and has
 	// its own measurements to make.
 	s.ReadonlyOptions = "paAf"
+	// And it is `typeset -r` in the other half too: a `readonly` written
+	// inside a function declares a **local**, where every other shell in
+	// the panel freezes the name the shell already has. Measured
+	// 2026-09-15 over a script file, `b() { readonly B=1; }; b` leaves
+	// `B` unset here and at 1 in bash, ksh93, dash and BusyBox ash —
+	// including ksh93's keyword form, which is what keeps this apart from
+	// TypesetLocalNeedsKeywordFunction. `export` is not the same word and
+	// is not local here: it is `typeset -gx`, and the `g` is the whole
+	// difference.
+	s.ReadonlyDeclaresALocal = interp.Yes
 	s.ReadZeroTimeout = interp.ReadZeroTimeoutFinishesWhatItStarted
 	s.ReadTimeoutKeepsWhatArrived = interp.No
 	s.ReadTimeoutBoundsReadability = interp.Yes

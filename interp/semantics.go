@@ -6265,6 +6265,54 @@ type Semantics struct {
 	// makes it local in a function defined either way.
 	TypesetLocalNeedsKeywordFunction Answer
 
+	// ReadonlyDeclaresALocal gives `readonly` inside a function a scope of
+	// its own, the way every other declaration word has one.
+	//
+	// One shell reads `readonly` as its own `typeset -r` all the way down,
+	// so a name it declares belongs to the call and the caller gets its own
+	// back on return. The rest read it as POSIX's freeze: an attribute put on
+	// the name the shell already has, wherever the line was written.
+	//
+	// Measured 2026-09-15, `env -i` with a scratch HOME, over a script file:
+	//
+	//	b() { readonly B=1; }; b; printf '[%s]\n' "${B-unset}"
+	//
+	//	zsh    [unset]   the name went away with the call
+	//	bash   [1]       and bash 3.2, and bash invoked as `sh`
+	//	ksh93  [1]       including `function b { readonly B=1; }`
+	//	dash   [1]
+	//	ash    [1]
+	//
+	// The ksh93 row is what makes this a question of its own rather than
+	// TypesetLocalNeedsKeywordFunction asked under a second word. That shell
+	// does scope `typeset` in a keyword-defined function and does **not**
+	// scope `readonly` in one, so the two words part company there: `function
+	// t { typeset T=1; }` leaves `T` unset afterwards and `function b {
+	// readonly B=1; }` leaves `B` at 1. This axis is therefore asked of
+	// `readonly` alone, and the scope it takes is the plain one `local` takes
+	// rather than the keyword-gated one.
+	//
+	// `export` is the neighboring word and answers no in every column,
+	// including zsh, where it is `typeset -gx` and the `g` is the whole
+	// difference. That is ExportLetterDeclaresAGlobal's territory and is why
+	// a shell being "local by default" is not a property of its declaration
+	// words as a set.
+	//
+	// Where the answer is yes the scope is the ordinary one, so everything
+	// that already rides on a shadow rides on this: the outer value comes
+	// back, the freeze this call added goes away with it, and a valueless
+	// `readonly R` leaves the local holding what
+	// DeclaredNameWithoutValueIsEmpty says a declared name holds. That last
+	// part is what makes the difference bite rather than merely leak — a
+	// function that declares a readonly can be called exactly once in a shell
+	// answering no, because the second call meets the name the first left
+	// behind and ReadonlyReassignmentByDeclarationFatal ends the script.
+	//
+	// Asked only inside a function, where the two answers differ. At the top
+	// level there is no scope to take and every shell freezes the name it
+	// names.
+	ReadonlyDeclaresALocal Answer
+
 	// DeclareListing is the shape of what `declare -p` and `typeset -p`
 	// write back. Three engines rather than two answers — see
 	// DeclarationListingForm.
@@ -13757,7 +13805,14 @@ func PosixSemantics() Semantics {
 		// the standard's preset does not survive one.
 		FailedExpansionAbandonsTheLine:         No,
 		ReadonlyReassignmentByDeclarationFatal: Yes,
-		ArrayBaseIsZero:                        Yes,
+		// XCU's `readonly` sets an attribute on a name and says nothing
+		// about a scope, and there is no scope in the standard for it to
+		// take: `local` is not in XCU either. So the preset is no, which is
+		// also what every panel member but zsh does — see
+		// ReadonlyDeclaresALocal for the measurement, including the ksh93
+		// row that keeps this apart from TypesetLocalNeedsKeywordFunction.
+		ReadonlyDeclaresALocal: No,
+		ArrayBaseIsZero:        Yes,
 		// The standard has no subscript, and the nearest reading it does
 		// have is its arithmetic: a comma there is the operator whose value
 		// is its right operand, and a string is not a sequence a subscript

@@ -5114,12 +5114,20 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 				return r.status
 			}
 		}
+		// The scope, where this dialect reads `readonly` as its own
+		// `typeset -r` — see Semantics.ReadonlyDeclaresALocal. Ahead of
+		// everything the operand does, the order biLocal and biDeclare keep:
+		// the copy has to be taken before an attribute or a value lands, or
+		// the caller's name gets this call's back on return (#1673).
+		fresh := r.readonlyDeclaresALocal(name)
+		if r.unspecified {
+			return r.status
+		}
 		if (f.array || f.assoc) && r.readonlyRecordsTheCompound() {
 			// Ahead of the assignment, the order every other declaration
 			// loop keeps: the letters say what the name is and the value
-			// then lands in it. `fresh` is false because this builtin takes
-			// no scope of its own.
-			if !r.markDeclaredCompound(name, false, f, hasValue) {
+			// then lands in it.
+			if !r.markDeclaredCompound(name, fresh, f, hasValue) {
 				if r.unspecified || r.ctl == controlExit {
 					return r.status
 				}
@@ -5139,10 +5147,11 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 			if r.unspecified {
 				return r.status
 			}
-			// `readonly a+=2` joins what the name holds and then freezes it.
-			// No shadow here either, so the join is over the standing value.
+			// `readonly a+=2` joins what the name holds and then freezes it
+			// — over the standing value where this builtin took no scope,
+			// and over the fresh local's nothing where it did.
 			if appends {
-				if !r.declarationAppend(name, value, false, false) {
+				if !r.declarationAppend(name, value, false, fresh) {
 					return r.status
 				}
 				if r.ctl == controlExit {
@@ -5172,6 +5181,19 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 		// `readonly` is an attribute word too — see biExport and
 		// declarationOwnsTheStandingEmpty.
 		r.declarationOwnsTheStandingEmpty(name)
+		if fresh && !hasValue {
+			// A valueless declaration into a scope this call just made: the
+			// cell is new and holds nothing whatever the caller held, so
+			// what it shows is the same question every other declaration
+			// word asks. Without it a `readonly R` inside a function left
+			// the local unset where the shell that scopes it leaves the
+			// empty string, which is DeclaredNameWithoutValueIsEmpty's
+			// answer and not a second reading of its own.
+			r.declareEmpty(name, fresh, true, true)
+			if r.unspecified || r.ctl == controlExit {
+				return r.status
+			}
+		}
 		r.markReadonly(name)
 	}
 	if ended {
@@ -5183,6 +5205,44 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 		return 1
 	}
 	return status
+}
+
+// readonlyDeclaresALocal saves the name in the innermost scope where the
+// dialect reads `readonly` as a declaration word with a scope of its own,
+// and reports whether the copy was taken here — the same `fresh` shadow
+// hands back, and the same thing it means.
+//
+// Asked only inside a function, which is the only place the two answers
+// differ: at the top level there is no scope to take and every shell in the
+// panel freezes the name it names. See Semantics.ReadonlyDeclaresALocal.
+//
+// It is r.shadow rather than r.shadowTypeset deliberately. The keyword-word
+// gate belongs to `typeset` and was measured not to reach this one: ksh93
+// scopes `typeset` in a `function`-defined function and does not scope
+// `readonly` in the same function, so routing this through that gate would
+// have given ksh93 an answer it does not hold.
+func (r *Runner) readonlyDeclaresALocal(name string) bool {
+	if len(r.scopes) == 0 {
+		return false
+	}
+	if !r.ask(r.sem().ReadonlyDeclaresALocal, "`readonly` inside a function declaring a local") {
+		return false
+	}
+	return r.shadow(name)
+}
+
+// readonlyScopesItsOperands reports whether a `readonly` written here will
+// declare locals, which is what decides the order its array-literal operands
+// are assigned in — see the `locks` comment in Runner.runBuiltinCommand.
+//
+// It reads the axis where readonlyDeclaresALocal asks it, and the difference
+// is deliberate: this is consulted once for the whole command, before the
+// builtin has looked at an operand or even at its letters, and an unanswered
+// axis reported from there would fire for a `readonly -p` that names no name
+// at all. The builtin asks, per operand, where the answer actually changes
+// what the declaration does.
+func (r *Runner) readonlyScopesItsOperands() bool {
+	return len(r.scopes) > 0 && r.sem().ReadonlyDeclaresALocal == Yes
 }
 
 // biExit ends the shell.

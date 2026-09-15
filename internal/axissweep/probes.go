@@ -855,6 +855,28 @@ func Probes() []Probe {
 				return v, ""
 			},
 		},
+		{
+			Field: "ReadonlyDeclaresALocal",
+			Cases: []string{"readonly/inside-a-function-is-local"},
+			// The `in=` half is a control rather than the reading: it is
+			// `[1]` in every column, so a shell whose declaration failed
+			// outright would be told apart from one that scoped it. The
+			// `out=` half is the answer.
+			Reading: "`b() { readonly B=1; }; b` leaves the name unset afterwards in a shell that gave the declaration a scope of its own and holding 1 in one that froze the shell's own name",
+			Read: func(cells map[string]oracle.Result) (string, string) {
+				r := cells["readonly/inside-a-function-is-local"]
+				in, out, split := strings.Cut(strings.TrimSpace(r.Stdout), "~")
+				switch {
+				case !split || in != "in=[1]":
+					return "", "the declaration inside the function did not take, so what the name holds afterwards says nothing about a scope"
+				case out == "out=[unset]":
+					return "Yes", ""
+				case out == "out=[1]":
+					return "No", ""
+				}
+				return "", "the name afterwards was neither the declared value nor absent, so the row did not reach the question"
+			},
+		},
 	}
 }
 

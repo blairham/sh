@@ -5463,6 +5463,26 @@ echo "st=$?"`,
 		Why:     "the edge that says the record is a stack pushed at each call rather than a view computed on demand, and it has three halves in one line. Turning the option on inside a call records **that call and nothing below it**, so bash answers `2` and not `2 0`. The entry it took is not the call's to remove, so it is still there after `f` has returned. And the next call stacks on top of it: `1 2`. A shell computing the arrays from its live call stack would answer `2 0`, then nothing, then `1 0`",
 	},
 	{
+		ID: "readonly/inside-a-function-is-local", Category: "builtins",
+		Snippet: `b() { readonly B=1; printf 'in=[%s]\n' "$B"; }; b; printf 'out=[%s]\n' "${B-unset}"`,
+		Why:     "whether `readonly` is a declaration word with a scope of its own or POSIX's freeze on the name the shell already has. One shell reads it as its own `typeset -r` all the way down and the name goes away with the call; the rest leave it standing at 1. The `in=` half is what keeps the row from being read as the declaration having failed",
+	},
+	{
+		ID: "readonly/inside-a-function-does-not-reach-the-caller-s-value", Category: "builtins",
+		Snippet: `B=out; b() { readonly B=1; printf 'in=[%s]\n' "$B"; }; b; printf 'out=[%s]\n' "$B"`,
+		Why:     "the same question asked where the caller already holds a value, which is the half that says a scope was taken rather than the name merely being absent afterwards. The shell that scopes it hands `out` back; the rest have frozen the caller's name at 1 and cannot write it again",
+	},
+	{
+		ID: "readonly/a-function-declaring-one-is-callable-twice", Category: "builtins",
+		Snippet: `rf() { readonly RF=fixed; printf 'in=[%s]\n' "$RF"; }; rf; rf; echo after`,
+		Why:     "what the scope is worth to a script rather than to a listing. Where the declaration is local the function is an ordinary function and calling it twice prints twice; where it is not, the second call meets the name the first left behind and reassigning a frozen name through a declaration ends the shell in most of the panel — so the same function is callable exactly once",
+	},
+	{
+		ID: "readonly/an-array-literal-inside-a-function", Category: "builtins",
+		Snippet: `k() { readonly -a R=(a b); printf 'in=[%s]\n' "${R[*]}"; }; k; printf 'out=[%s]\n' "${R[*]-unset}"`,
+		Why:     "the ordering corner of the same question, and the one a scope changes the answer to. `readonly a=(x)` has to assign before the name is frozen or it refuses its own value, and a `readonly` that declares a **local** has to shadow before it assigns or the array lands in the caller. A shell doing only the first answers `in=[]` with the elements outside, which is a plausible-looking pair of lines at status 0. Three columns cannot be asked and say so: dash and BusyBox ash have no array literal, and ksh93 has no `-a` on this builtin. The fourth answer is bash 3.2's, which scopes this line where bash 5.3 does not — measured, plain `readonly B=1` in a function reaches the shell in both builds and only the array literal parts them, so it is a difference between bash builds rather than a second reading of the scope",
+	},
+	{
 		ID: "readonly/reassignment-by-a-declaration", Category: "builtins",
 		Snippet: "readonly x=1; export x=2; echo after",
 		Why:     "the same refusal reached through a declaration utility rather than by an assignment standing alone, and a different set of shells stops for it — three here, where a plain assignment stops all four. So which of the two ways the name was set decides, and one shell answers the two oppositely: it stops for the plain form given as an argument and never stops for this one",

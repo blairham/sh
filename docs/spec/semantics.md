@@ -3366,6 +3366,56 @@ is not there. It was named that way first, and the core stopped running
 It is asked only where the two answers differ. Inside a keyword-defined
 function they do not, so that case needs no dialect.
 
+## And an axis that is only about `readonly`
+
+The neighboring question, and it divides the panel somewhere else again:
+whether `readonly` written inside a function declares a **local**.
+
+Measured 2026-09-15, `env -i` with a scratch HOME, over a script file:
+
+    b() { readonly B=1; }; b; printf '[%s]\n' "${B-unset}"
+      zsh [unset]    bash [1]    bash 3.2 [1]    bash as sh [1]
+      ksh93 [1]      dash [1]    BusyBox ash [1]
+
+    function b { readonly B=1; }; b; printf '[%s]\n' "${B-unset}"
+      ksh93 [1] — the keyword form does not change it
+
+One shell reads `readonly` as its own `typeset -r` all the way down, so the
+name belongs to the call and the caller gets its own back on return. The
+rest read POSIX's `readonly`: an attribute put on the name the shell already
+has, wherever the line was written. The axis is
+`Semantics.ReadonlyDeclaresALocal`.
+
+The ksh93 rows are what make this a question of its own rather than
+`TypesetLocalNeedsKeywordFunction` asked under a second word. That shell
+*does* scope `typeset` in a `function`-defined function and does **not**
+scope `readonly` in the same function, so the two words part company there
+and one field could not say both. The scope this one takes is therefore the
+plain one `local` takes rather than the keyword-gated one.
+
+`export` is the third word of the family and answers no everywhere,
+including in the shell that scopes `readonly`, where it is `typeset -gx` and
+the `g` is the whole difference. So "declarations in a function are local"
+is not a property a shell has as a blanket, and a reader who learns it as
+one gets `export` wrong.
+
+Two things follow where the answer is yes, and both are the ordinary
+consequences of a scope rather than rules of this axis's own. A valueless
+`readonly R` leaves the local holding what `DeclaredNameWithoutValueIsEmpty`
+says a declared name holds, not what the caller held. And an array literal
+has to be assigned **after** the shadow, which is the reverse of the order a
+freezing `readonly` needs: `readonly a=(x)` must assign before it locks the
+name or it refuses its own value, while a scoping one must shadow before it
+assigns or the elements land in the caller. A shell doing only the first
+answers an empty array inside the function and the elements outside it, at
+status 0.
+
+The last part is why the difference bites rather than merely leaking a name.
+Writing to a readonly ends a non-interactive shell in most of the panel, so
+where the declaration is not local a function that declares one is callable
+exactly **once**: the second call meets the name the first left behind and
+the script stops.
+
 ## A declaration is an assignment, and expands like one
 
 `export`, `readonly`, `local` and `typeset` are declaration utilities:

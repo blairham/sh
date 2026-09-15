@@ -32111,49 +32111,49 @@
     },
     "axis/printf-star-beyond-an-int": {
       "ash": {
-        "Stdout": "A[x]B|0~[1]~0",
-        "Stderr": "\u003cshell\u003e: invalid number '21474836470'~\u003cshell\u003e: invalid number '21474836470'",
+        "Stdout": "[]~[]~0",
+        "Stderr": "\u003cshell\u003e: invalid number '21474836470'~\u003cshell\u003e: invalid number '4294967306'",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "bash": {
-        "Stdout": "A[x]B|1~[1.000000]~1",
-        "Stderr": "\u003cshell\u003e: line 1: printf: 21474836470: Result too large~\u003cshell\u003e: line 1: printf: 21474836470: Result too large",
+        "Stdout": "[abcdefghijklmno]~[abcdefghijklmno]~1",
+        "Stderr": "\u003cshell\u003e: line 1: printf: 21474836470: Result too large~\u003cshell\u003e: line 1: printf: 4294967306: Result too large",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "A[x]B|1~[1.000000]~1",
-        "Stderr": "\u003cshell\u003e: line 1: printf: 21474836470: Result too large~\u003cshell\u003e: line 1: printf: 21474836470: Result too large",
+        "Stdout": "[abcdefghijklmno]~[abcdefghijklmno]~1",
+        "Stderr": "\u003cshell\u003e: line 1: printf: 21474836470: Result too large~\u003cshell\u003e: line 1: printf: 4294967306: Result too large",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "bash32": {
-        "Stdout": "A[]B|0~[]~0",
-        "Stderr": "\u003cshell\u003e: line 0: printf: warning: x: Result too large~\u003cshell\u003e: line 0: printf: warning: 1: Result too large",
+        "Stdout": "[abcdefghijklmno]~[abcdefghijklmno]~0",
+        "Stderr": "\u003cshell\u003e: line 0: printf: warning: abcdefghijklmno: Result too large~\u003cshell\u003e: line 0: printf: warning: abcdefghijklmno: Result too large",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "dash": {
-        "Stdout": "A[x         ]B|0~[1.000000]~0",
+        "Stdout": "[abcdefghijklmno]~[abcdefghij]~0",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "ksh93": {
-        "Stdout": "A[x         ]B|0~[1.000000]~0",
+        "Stdout": "[abcdefghijklmno]~[abcdefghij]~0",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "zsh": {
-        "Stdout": "A[x         ]B|0~[1.000000]~0",
+        "Stdout": "[abcdefghijklmno]~[abcdefghij]~0",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

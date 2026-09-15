@@ -876,7 +876,12 @@ func (r *Runner) eachTarget(fd int, f io.Writer, opened map[int]io.Writer) io.Wr
 // redirection every shell performs.
 func (r *Runner) heredocReader(body string) (io.Reader, io.Closer) {
 	if r.sem().HeredocBody == HeredocBodyInATemporaryFile {
-		f, err := os.CreateTemp("", "sh-heredoc-")
+		// r.tempHome() rather than os.CreateTemp's own empty directory,
+		// because the shell's `$TMPDIR` is the script's answer and the
+		// process environment's is not: a script that moved it moved where
+		// its own private text goes. The same rule every other file this
+		// package makes for itself follows.
+		f, err := os.CreateTemp(r.tempHome(), "sh-heredoc-")
 		if err != nil {
 			return strings.NewReader(body), nil
 		}

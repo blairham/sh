@@ -1262,6 +1262,12 @@ func Semantics() interp.Semantics {
 	// repeats with its words, and an arithmetic `for`'s initializer or step
 	// that the script did not write fires nothing.
 	s.DebugTrapCompoundHeads = interp.DebugTrapHeadsEveryPassAndWrittenParts
+	// And a pipeline has no rule of its own here: the trap is carried into
+	// a subshell, so each element fires wherever it runs, with that
+	// element's redirections already in place. Measured: `trap 'echo d'
+	// DEBUG; echo a | tr a-z A-Z` writes `d D A`, and the upper-case `D`
+	// is the first element's own action written down the pipe.
+	s.DebugTrapPipelines = interp.DebugTrapPipelineInEachElement
 	s.DebugTrapRunsInSubshells = interp.Yes
 	// `(trap)` and `$(trap)` still list the parent's traps, EXIT included —
 	// measured, and the working state is still reset: `trap 'echo x' USR1;

@@ -487,6 +487,11 @@ func Semantics() interp.Semantics {
 	// either fires or does not and there is no third thing for a
 	// dialect to be silent about.
 	s.DebugTrapCompoundHeads = interp.DebugTrapHeadsNone
+	// And a pipeline fires nothing either, because there is no condition to
+	// fire: `trap … DEBUG` is refused here before a pipeline is reached.
+	// The value is the absence of a pipeline rule rather than a reading of
+	// one, which is what this shell would want if it ever had the trap.
+	s.DebugTrapPipelines = interp.DebugTrapPipelineInEachElement
 	s.TrapHasReturnCondition = interp.No
 	// A subshell's listing shows only what survived the entry — the ignored
 	// signals — in every boundary measured: `(trap)`, `$(trap)`, a pipeline

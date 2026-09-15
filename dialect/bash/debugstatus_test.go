@@ -297,3 +297,109 @@ func TestHowFarARefusedFiringReaches(t *testing.T) {
 		})
 	}
 }
+
+// TestARefusedPipelineElementCostsThatElementAlone is the firing site #2797
+// added, put to the same question as the rows above: a pipeline fires once
+// per simple element here, so a refusal names **one** element and the rest of
+// the pipeline still runs.
+//
+// The rows are written so that each element's fate is visible on its own
+// stream — the first writes to stderr, which nothing downstream can swallow,
+// where its stdout would go into the pipe and be lost either way. Measured
+// against bash 5.3.15 on 2026-09-14 under `env -i PATH=/usr/bin:/bin`.
+func TestARefusedPipelineElementCostsThatElementAlone(t *testing.T) {
+	// Firings: the first element, the second, then the command after.
+	const src = `echo one >&2 | echo two; echo three`
+	for _, c := range []struct {
+		name, act, wantOut, wantErrs string
+	}{
+		// The order the rows below index into, and the control that says
+		// an unrefused run writes all three.
+		{"nothing refused", countingAction("0", "1"), "two\nthree\n", "one\n"},
+		{"the first element alone", countingAction("1", "1"), "two\nthree\n", ""},
+		{"the second element alone", countingAction("2", "1"), "three\n", "one\n"},
+		{"the command after the pipeline", countingAction("3", "1"), "two\n", "one\n"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, errs, code := runTraced(t, c.act+src)
+			if out != c.wantOut || errs != c.wantErrs || code != 0 {
+				t.Errorf("ran %q: out %q errs %q status %d, want out %q errs %q",
+					c.act+src, out, errs, code, c.wantOut, c.wantErrs)
+			}
+		})
+	}
+}
+
+// TestARefusedPipelineElementLeavesNoStatusBehind is the other half of that
+// refusal, and the one no output can show: the element leaves **no entry** in
+// the pipeline's status record rather than a zero, so the pipeline reports
+// the last element that actually ran.
+//
+// `false | true` is the shape that says so. Refusing the `true` answers 1 —
+// the `false` — where an entry standing in for the refused element would
+// answer 0 and be indistinguishable from the unrefused run. Measured against
+// bash 5.3.15, which also answers `ps=1` for `${PIPESTATUS[*]}` there: one
+// status for two elements.
+func TestARefusedPipelineElementLeavesNoStatusBehind(t *testing.T) {
+	for _, c := range []struct {
+		name, act, want string
+	}{
+		{"nothing refused", countingAction("0", "1"), "st=0\n"},
+		// The refused element is the last, so the status is the `false`
+		// before it rather than the 0 it never produced.
+		{"the last element refused", countingAction("2", "1"), "st=1\n"},
+		// And with every element refused nothing ran at all, which is 0
+		// the way a refused simple command standing alone leaves 0.
+		{
+			"every element refused",
+			`shopt -s extdebug; n=0; d(){ n=$((n+1)); [ $n -le 2 ] && return 1; return 0; }; trap d DEBUG; `,
+			"st=0\n",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			const src = `false | true; echo "st=$?"`
+			out, errs, code := runTraced(t, c.act+src)
+			if out != c.want || errs != "" || code != 0 {
+				t.Errorf("ran %q: out %q errs %q status %d, want %q and nothing said",
+					c.act+src, out, errs, code, c.want)
+			}
+		})
+	}
+}
+
+// TestARefusedLastPipelineElementRunningHereIsRefusedToo is the one element a
+// refusal could plausibly miss: `shopt -s lastpipe` moves the last element
+// onto the shell itself rather than a copy, so it is dispatched by a
+// different arm of the pipeline than every other element and a refusal
+// honored only in the copies would leave exactly this one running.
+//
+// `read` is the reason lastpipe exists, so it is what the row uses: with the
+// `read` refused, `v` keeps the value it had rather than the one the pipe
+// carried. Measured against bash 5.3.15 on 2026-09-14 under `env -i
+// PATH=/usr/bin:/bin`.
+func TestARefusedLastPipelineElementRunningHereIsRefusedToo(t *testing.T) {
+	// Firings: the `shopt`, the assignment, then the pipeline's two
+	// elements, then the `echo` that reports.
+	const src = `shopt -s lastpipe; v=no; echo A | read v; echo "v=$v"`
+	for _, c := range []struct {
+		name, act, want string
+	}{
+		// The order the rows below index into, and the control that says
+		// lastpipe moved the element at all — without it `v` would still
+		// read `no` here.
+		{"nothing refused", countingAction("0", "1"), "v=A\n"},
+		// The upstream element refused, so the `read` runs and finds an
+		// input that ends at once.
+		{"the element writing into the pipe", countingAction("3", "1"), "v=\n"},
+		// And the `read` itself refused, which is the shell's own arm.
+		{"the element running on the shell itself", countingAction("4", "1"), "v=no\n"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, errs, code := runTraced(t, c.act+src)
+			if out != c.want || errs != "" || code != 0 {
+				t.Errorf("ran %q: out %q errs %q status %d, want %q and nothing said",
+					c.act+src, out, errs, code, c.want)
+			}
+		})
+	}
+}

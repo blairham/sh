@@ -289,6 +289,25 @@ func Probes() []Probe {
 			},
 		},
 		{
+			Field:   "DebugTrapPipelines",
+			Cases:   []string{"axis/debug-trap-of-a-pipeline"},
+			Reading: "the row writes a lower-case `d` per firing and pipes `a` through a command that upper-cases what it reads, so a `D` is an action whose output went **down the pipe** and therefore ran inside the element; with the closing `trap -` firing once itself, three `d` lines and no `D` is one firing per element made in the shell, and two `d` lines with no `D` is one firing for the pipeline",
+			Read: func(cells map[string]oracle.Result) (string, string) {
+				lower, upper := recordedLines(cells["axis/debug-trap-of-a-pipeline"].Stdout, "d", "D")
+				switch {
+				case lower == 0:
+					return "", "no `d` was written at all, so this shell has no DEBUG condition and the row asks it nothing about a pipeline"
+				case upper > 0:
+					return "DebugTrapPipelineInEachElement", ""
+				case lower == 3:
+					return "DebugTrapPipelinePerSimpleElement", ""
+				case lower == 2:
+					return "DebugTrapPipelineOnceForThePipeline", ""
+				}
+				return "", "the row wrote a count of firings that fits none of the readings, so it cannot say which one this is"
+			},
+		},
+		{
 			Field:   "DebugTrapRefiresOnEnteringAFunction",
 			Cases:   []string{"opt/a-debug-trap-fires-twice-for-a-function-call"},
 			Reading: "the row runs three commands with the DEBUG trap let into the calls, so it writes three `D` lines where the trap fires once per command and five where a call fires it again on the way in",
@@ -863,4 +882,24 @@ func survivesQuit(r oracle.Result) (string, string) {
 // one is the shape this whole file exists to prevent, one level down.
 func noSuchCommand(r oracle.Result) bool {
 	return strings.Contains(r.Stderr, "not found")
+}
+
+// recordedLines counts the recorded lines that are exactly a or exactly b.
+//
+// The record writes a newline as `~`, so a reading that split on "\n" would
+// see one line for every cell and count nothing. Both separators are taken,
+// because the same reading is applied to a live run's output when a probe is
+// checked by hand.
+func recordedLines(out, a, b string) (countA, countB int) {
+	for _, line := range strings.FieldsFunc(out, func(r rune) bool {
+		return r == '~' || r == '\n'
+	}) {
+		switch line {
+		case a:
+			countA++
+		case b:
+			countB++
+		}
+	}
+	return countA, countB
 }

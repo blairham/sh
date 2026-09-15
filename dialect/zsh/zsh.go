@@ -1760,6 +1760,14 @@ func Semantics() interp.Semantics {
 	// `repeat` and a function *definition* among them — and a loop's passes
 	// are inside that once rather than beside it.
 	s.DebugTrapCompoundHeads = interp.DebugTrapHeadsEveryCompound
+	// A pipeline is one statement here and fires once, in the shell running
+	// it, however many elements it has — and no element fires a head of its
+	// own. Measured: `trap 'echo d' DEBUG; echo a | tr a-z A-Z` writes
+	// `d A`, and a four-element pipeline still writes one. Commands nested
+	// *inside* an element are commands in their own right and go on firing:
+	// `echo A | { cat; }` writes one for the pipeline and one for the
+	// `cat`.
+	s.DebugTrapPipelines = interp.DebugTrapPipelineOnceForThePipeline
 	s.DebugTrapRunsInSubshells = interp.Yes
 	// The listing least is kept of: `(trap)` and `$(trap)` show nothing the
 	// parent had — not even an ignored signal, though it stays ignored in

@@ -28488,6 +28488,210 @@
         "TimedOut": false
       }
     },
+    "axis/debug-trap-of-a-longer-pipeline": {
+      "ash": {
+        "Stdout": "2:1:a",
+        "Stderr": "\u003cshell\u003e: trap: line 0: DEBUG: invalid signal specification~\u003cshell\u003e: trap: line 2: DEBUG: invalid signal specification",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "d~d~d~2:1:a~d",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "d~d~d~2:1:a~d",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "d~d~d~2:1:a~d",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "2:1:a",
+        "Stderr": "trap: DEBUG: bad trap~trap: DEBUG: bad trap",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "d~2:d~2:1:d~2:1:a~d",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "d~2:1:a~d",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/debug-trap-of-a-pipeline": {
+      "ash": {
+        "Stdout": "A",
+        "Stderr": "\u003cshell\u003e: trap: line 0: DEBUG: invalid signal specification~\u003cshell\u003e: trap: line 2: DEBUG: invalid signal specification",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "d~d~A~d",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "d~d~A~d",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "d~d~A~d",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "A",
+        "Stderr": "trap: DEBUG: bad trap~trap: DEBUG: bad trap",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "d~D~A~d",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "d~A~d",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/debug-trap-of-a-pipeline-assigning": {
+      "ash": {
+        "Stdout": "n=0",
+        "Stderr": "\u003cshell\u003e: trap: line 1: DEBUG: invalid signal specification~\u003cshell\u003e: trap: line 3: DEBUG: invalid signal specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "n=3",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "n=3",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "n=3",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "n=0",
+        "Stderr": "trap: DEBUG: bad trap~trap: DEBUG: bad trap",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "n=2",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "n=2",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/debug-trap-of-a-pipeline-whose-element-is-compound": {
+      "ash": {
+        "Stdout": "1:a",
+        "Stderr": "\u003cshell\u003e: trap: line 0: DEBUG: invalid signal specification~\u003cshell\u003e: trap: line 2: DEBUG: invalid signal specification",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "d~1:a~d",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "d~1:a~d",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "d~1:a~d",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "1:a",
+        "Stderr": "trap: DEBUG: bad trap~trap: DEBUG: bad trap",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "d~1:d~1:a~d",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "d~1:d~1:a~d",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "axis/declaration-shadows-a-readonly-keyword-function": {
       "ash": {
         "Stdout": "in=[]~st=0 out=[]~end",

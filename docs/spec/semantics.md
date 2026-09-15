@@ -12005,6 +12005,68 @@ writes a head for a `{ }` standing on its own. That is why bash's extra
 firing on entering a call is `DebugTrapRefiresOnEnteringAFunction` above
 and not a fourth reading here.
 
+**`DebugTrapPipelines`** — bash per-simple-element · dash in-each-element · ksh93 in-each-element · zsh once-for-the-pipeline
+
+How a **pipeline** fires the DEBUG trap. `DebugTrapCompoundHeads` above
+cannot answer it: a pipeline is neither a simple command nor one of the
+heads that table enumerates, so this shell fired nothing at all for one
+and a traced script skipped every `cmd | cmd` it had (#2797).
+
+Measured 2026-09-14, `env -i PATH=/usr/bin:/bin`, counting the firings
+through a **file** — an element's own action writes down the pipe, so a
+count taken from the terminal loses it. `trap 'echo x >>d' DEBUG` over the
+pipeline, then `trap - DEBUG`, which fires once itself:
+
+| pipeline | bash 5.3 / as `sh` / 3.2 | ksh93 | zsh |
+| --- | --- | --- | --- |
+| `true \| false` | 2 | 2 | 1 |
+| `true \| false \| true` | 3 | 3 | 1 |
+| `true \| false \| true \| false` | 4 | 4 | 1 |
+
+So the count divides the panel two ways, and **where** the firing happens
+divides it again. `trap 'echo d' DEBUG; echo a | tr a-z A-Z` writes:
+
+| shell | writes | what it shows |
+| --- | --- | --- |
+| bash 5.3 / as `sh` / 3.2 | `d d A` | both actions in the shell's own stream |
+| ksh93 | `d D A` | one action written **down the pipe**, so it ran inside the element |
+| zsh | `d A` | one firing, in the shell, for the pipeline as a statement |
+
+The uppercase `D` is the discriminator: it is an action whose output was
+uppercased by the element downstream of the one that wrote it, so ksh93
+fires inside each element with that element's redirections already in
+place. `trap 'n=$((n+1))' DEBUG; true | true` agrees from the other side —
+bash counts 2 in `$n` afterwards and ksh93 counts 1, the one being the
+last element, which ksh93 runs in the current shell anyway.
+
+A fourth measurement makes the bash reading narrower than "one per
+element": an element that is **not a simple command** fires nothing there,
+even when it is a head bash would otherwise fire for. `case x in x) echo
+hi;; esac | cat` writes one firing in the bash columns — the `cat` — where
+the same `case` standing alone writes a head, and `[[ 1 == 1 ]] | cat`,
+`for w in a b; do echo $w; done | cat` and `{ echo A; } | cat` answer the
+same way. ksh93 writes the head, because the head fires wherever the
+element runs and ksh93 carries the trap into it.
+
+zsh's single firing is not a head in that sense either. It stands for the
+pipeline as a **statement**, and the element's own firing is gone rather
+than moved: `echo A | { cat; }` writes one for the pipeline and one for
+the `cat` *inside* the group, and `( echo A; echo B ) | sed …` writes one
+for the pipeline and one for each `echo`. Commands nested inside an
+element go on firing normally; only the element's own head is withheld.
+
+zsh's `ZSH_DEBUG_CMD` at that firing reads the whole pipeline back — `echo
+A | sed "s/^/P:/"` — which is what a dialect implementing that parameter
+would have to record. bash's `BASH_COMMAND` names each element at the
+firing made for it.
+
+The axis and `DebugTrapRunsInSubshells` are coupled, and the coupling is
+why bash's firing is where it is: a reading that leaves each element to
+fire for itself fires *nothing* in a shell that does not carry the trap
+into a subshell, which is exactly bash's answer below.
+
+dash and BusyBox ash have no DEBUG condition and never reach the question.
+
 **`DebugTrapRunsInSubshells`** — bash no · dash unspecified · ksh93 yes · zsh yes
 
 Fires the DEBUG trap inside a subshell or a command substitution. ksh93

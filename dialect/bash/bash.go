@@ -1154,6 +1154,16 @@ func Semantics() interp.Semantics {
 	// definition write nothing. The zero value, and the same in all three
 	// bash columns.
 	s.DebugTrapCompoundHeads = interp.DebugTrapHeadsWordAndArithmetic
+	// A pipeline fires once for each element that is a **simple command**,
+	// and it fires in the shell running the pipeline rather than in the
+	// element — which is what lets a trap fire at all here, since this
+	// shell does not carry one into a subshell. Measured: `trap 'echo d'
+	// DEBUG; echo a | tr a-z A-Z` writes `d d A`, both actions in lower
+	// case because neither went down the pipe, and `case x in x) echo hi;;
+	// esac | cat` writes one firing rather than two — an element that is
+	// not a simple command fires nothing, whatever head it would fire for
+	// standing on its own.
+	s.DebugTrapPipelines = interp.DebugTrapPipelinePerSimpleElement
 	s.DebugTrapRunsInSubshells = interp.No
 	// The shell that keeps the parent's trap listing across every boundary
 	// but a process substitution — `(trap)`, `$(trap)`, `trap | cat` and

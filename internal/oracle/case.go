@@ -1269,6 +1269,26 @@ var Corpus = []Case{
 		Why:             "one more head, written as a call *enters* the body, and the row that says which **line** it names: bash 5.3, that build as `sh` and bash 3.2 all write `D=7` for the call, `D=2` for the entry and `D=3` for the body's command. That the second head fires at all is Semantics.DebugTrapRefiresOnEnteringAFunction (#2437) and `opt/a-debug-trap-fires-twice-for-a-function-call` counts the firings; neither can see where it fires, so until this row a head that named the wrong line moved no cell. `D=2` is the `{` and not the `f()` above it — the definition is spread over two lines for exactly that reason, and a head named after the definition would write `D=1` here. zsh writes the call and the command alone, and its second line reads `D=2` as well, because zsh numbers a function body from the definition and its `echo` is line 2 where bash's is line 3; the body's own head is in the row so that the coincidence does not read as agreement — over a three-command body the bash columns write 2, 3, 4, 5 and zsh writes 2, 3, 4. ksh93, dash and BusyBox ash refuse `set -T` and end the script, which is what this row records for them; measured without the option, ksh93 writes no entry head either. A function body is a group and no column writes a head for one — the column that writes a head for a `{ }` standing on its own does not write one here — so this is its own answer rather than a fourth reading of the compound heads",
 	},
 	{
+		ID: "axis/debug-trap-of-a-pipeline", Category: "semantics axes",
+		Snippet: "trap 'echo d' DEBUG\necho a | tr a-z A-Z\ntrap - DEBUG",
+		Why:     "how a **pipeline** fires the DEBUG trap, which the compound-head rows above cannot ask: a pipeline is neither a simple command nor one of the heads that axis enumerates, and this shell fired nothing at all for one, so a traced script skipped every `cmd | cmd` it had (#2797). The panel gives three answers and the uppercasing is what separates them — an action whose output reads `D` went **down the pipe**, so it ran inside the first element with that element's redirections already in place. The bash columns write `d d A`: one firing per element, both in lower case, because they fire in the shell running the pipeline before any element starts. ksh93 writes `d D A`: no rule for the pipeline at all, each element firing wherever it runs, which is inside it. zsh writes `d A`: one firing for the pipeline as a statement and none for an element. The trailing `d` is `trap - DEBUG` firing before it removes itself, which is the control that says the trap was live throughout. dash and BusyBox ash have no DEBUG condition and refuse it twice. The DebugTrapPipelines axis",
+	},
+	{
+		ID: "axis/debug-trap-of-a-longer-pipeline", Category: "semantics axes",
+		Snippet: "trap 'echo d' DEBUG\necho a | sed 's/^/1:/' | sed 's/^/2:/'\ntrap - DEBUG",
+		Why:     "the same question over three elements, which is what says the first two readings count *elements* rather than adding one firing to a pipeline: the bash columns write three `d` lines where the two-element row writes two, ksh93 writes one per element again — `d`, `2:d`, `2:1:d`, each marked by however many elements its output passed through on the way out — and zsh still writes exactly one. A reading that fired once at the top would be indistinguishable from zsh's on the row above and wrong here",
+	},
+	{
+		ID: "axis/debug-trap-of-a-pipeline-whose-element-is-compound", Category: "semantics axes",
+		Snippet: "trap 'echo d' DEBUG\n{ echo a; } | sed 's/^/1:/'\ntrap - DEBUG",
+		Why:     "the element that is not a simple command, and the row that says the bash reading is narrower than one firing per element: the bash columns write `d 1:a d`, the single `d` being the `sed`, so a group element fires nothing there — and neither does a `case`, a `[[` or a `for` element, measured the same way, though each of those writes a head standing on its own. ksh93 and zsh both write `d 1:d 1:a d` and arrive at it differently: ksh93's marked `1:d` is the `echo a` firing inside the group's own subshell, where zsh's is the same command firing while the plain `d` is the pipeline's single firing and the group's head is withheld. That the two agree here is why the row above is in the corpus as well",
+	},
+	{
+		ID: "axis/debug-trap-of-a-pipeline-assigning", Category: "semantics axes",
+		Snippet: "n=0\ntrap 'n=$((n+1))' DEBUG\ntrue | true\ntrap - DEBUG\necho n=$n",
+		Why:     "where a pipeline's firing happens, asked without the streams: an action that assigns survives only if it ran in the shell rather than in an element. The bash columns answer `n=3` — two elements and the `trap -` — and ksh93 and zsh answer `n=2`. zsh's 2 is its one firing for the pipeline plus the `trap -`; ksh93's 2 is the `trap -` plus its **last** element alone, which that shell runs in the current shell anyway, so the two elements it fires for contribute one increment between them. dash and ash refuse the condition and answer `n=0`",
+	},
+	{
 		ID: "trap/the-return-trap-is-not-carried-into-a-debug-body", Category: "traps and exit",
 		Script:  true,
 		Snippet: "set -T\nact() { echo ran; }\ntrap 'echo RET' RETURN\ntrap 'act' DEBUG\nfalse\ntrap - DEBUG\ntrap - RETURN\necho done",

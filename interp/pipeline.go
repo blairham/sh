@@ -314,6 +314,30 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 		last = n - 1
 	}
 
+	// Whatever a pipeline itself fires, fired here: before any element
+	// starts, so the action's output reaches the shell's own stream rather
+	// than the pipe, what it assigns is what every element then sees, and an
+	// action that stops the script stops it before anything has run. See
+	// Semantics.DebugTrapPipelines for the panel.
+	skip, fired := r.debugPipeline(ctx, p)
+	if r.ctl != controlNone {
+		// An `exit` or a `return` written in the action. The pipes opened
+		// above are closed here rather than left to element goroutines
+		// that will never start — every element would inherit the control
+		// state and decline on its own, but a pipeline that spawns three
+		// copies to have each of them decline is not the same shape as one
+		// that never started.
+		for i := range readers {
+			if readers[i] != nil {
+				_ = readers[i].Close()
+			}
+			if writers[i] != nil {
+				_ = writers[i].Close()
+			}
+		}
+		return nil
+	}
+
 	// The sub-runners are built here, on this goroutine, rather than inside
 	// each one. clone() reads the runner's fields, and the last element —
 	// when it runs in the current shell — writes them; doing both at once is
@@ -369,6 +393,10 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 		// Each element is its own job component, so the copy running it
 		// names it rather than inheriting whatever the shell last ran.
 		sub.killed = p.Cmds[i]
+		// And the element fires no DEBUG trap of its own where the pipeline
+		// has already fired for it, which is the half of that rule a dialect
+		// carrying the trap into a subshell would otherwise double.
+		sub.elementFired = fired
 		if gates != nil {
 			if i > 0 {
 				sub.traceWait = gates[i-1]
@@ -420,6 +448,24 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 		// that worked.
 		statuses[i] = internalErrorStatus
 		r.spawn(func() {
+			if skip != nil && skip[i] {
+				// A DEBUG action refused this element. The pipe is still
+				// plumbed and still closed below, so the element upstream
+				// of it sees an output nobody reads and the one downstream
+				// sees an input that ends, as they do for an element that
+				// ran and wrote nothing.
+				//
+				// One measured departure, and it is deliberate: bash keeps
+				// the refused element's read end open for as long as the
+				// pipeline lasts, so an upstream that fills the pipe blocks
+				// there **forever** — `yes | head -1` with the `head`
+				// refused never returns in bash 5.3.15. Closing it instead
+				// costs the writer 141 for a write nobody could ever have
+				// read, which is the answer this shell gives a broken pipe
+				// everywhere else. A hang is not a behavior worth copying.
+				statuses[i] = 0
+				return
+			}
 			start := time.Now()
 			errs[i] = subs[i].command(ctx, cmd)
 			// A pipeline element is a subshell, so it ends like one — here,
@@ -504,9 +550,22 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 			if timing != nil {
 				r.elemCPU = &timing.elems[i].cpu
 			}
+			if skip != nil && skip[i] {
+				// Refused by a DEBUG action, like any other element — and
+				// this is the one that would otherwise run on the shell
+				// itself, so a refusal that was not honored here would be
+				// the only one a script could not see.
+				statuses[i] = 0
+				return
+			}
 			// No naming needed here: this element runs on the shell itself
 			// rather than on a copy, so the dispatch records it the way it
 			// records any other command. Verified by mutation, not assumed.
+			//
+			// Its own DEBUG firing is the exception, because it is the shell
+			// and not a copy: the pipeline has already fired for it, so the
+			// dispatch must not fire again.
+			r.elementFired = fired
 			start := time.Now()
 			errs[i] = r.command(ctx, p.Cmds[i])
 			if timing != nil {
@@ -525,6 +584,28 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 		if err != nil {
 			return err
 		}
+	}
+	if skip != nil {
+		// An element a DEBUG action refused leaves no entry at all, so the
+		// record is shorter than the pipeline and the status the pipeline
+		// reports is the last element that actually ran. Measured under
+		// `shopt -s extdebug` on bash 5.3.15: `false | /bin/sh -c 'echo B;
+		// exit 7'` with the second element refused answers `st=1 ps=1`, and
+		// with the first refused answers `st=7 ps=7`.
+		ran, sigs := statuses[:0:0], signals[:0:0]
+		for i := range statuses {
+			if !skip[i] {
+				ran, sigs = append(ran, statuses[i]), append(sigs, signals[i])
+			}
+		}
+		if len(ran) == 0 {
+			// Every element refused. Nothing ran, and a refused command
+			// leaves 0 behind everywhere else this rule reaches.
+			r.recordPipeStatus(nil)
+			r.status = 0
+			return nil
+		}
+		statuses, signals, n = ran, sigs, len(ran)
 	}
 	// A pipeline reports its *last* command, not its first failure — which
 	// is exactly why the others are worth keeping.

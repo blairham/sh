@@ -1249,6 +1249,64 @@ same `MultibyteEncodingIsHonored` question `${#s}` asks, so the two
 agree by construction; reading runes unconditionally answered the UTF-8
 column in both.
 
+### Under `set -u`, a subscript that names nothing is unset
+
+| probe, `set -u` | zsh | bash 5.3 | bash 3.2 | bash-as-sh | ksh93 | dash |
+| --- | --- | --- | --- | --- | --- | --- |
+| `a=(x y z); "[${a[9]}]"` | `a[9]: parameter not set` (1) | `a[9]: unbound variable` (127) | same | same | `a[9]: parameter not set` (1) | syntax error |
+| `"[${nope[1]}]"` | `nope[1]: …` (1) | `nope[1]: …` (127) | same | same | `nope[1]: …` (1) | Bad substitution |
+| `typeset -A m; m[k]=v; "[${m[q]}]"` | `m[q]: …` (1) | `m[q]: …` (127) | no `typeset -A` | `m[q]: …` (127) | `m[(null)]: …` (1) | not found |
+| `v=x; "[${v[5]}]"` | `[]` (0) | `v[5]: unbound variable` (127) | same | same | `v[5]: parameter not set` (1) | Bad substitution |
+| `i=9; a=(x); "[${a[$i]}]"` | `a[$i]: …` (1) | `a[$i]: …` (127) | same | same | `a[9]: …` (1) | syntax error |
+| `a=(x y z); "[${a[9]-d}]"` | `[d]` | `[d]` | `[d]` | `[d]` | `[d]` | syntax error |
+| `"[${nope[@]}]"` | `nope[@]: …` (1) | `[]` (0) | `nope[@]: …` (127) | `[]` (0) | `[]` (0) | syntax error |
+
+Measured 2026-09-15 under `env -i PATH=/usr/bin:/bin`, through `-c`.
+
+**The refusal itself is unanimous** among the columns that have arrays,
+so it is core rather than an axis: a subscript that named no element is
+an unset parameter, and `set -u` gives up the script over it. It is the
+element the sentence names and not the array — `a[9]`, brackets and all.
+The four conditionals are exempt here exactly as they are for a bare
+name, which is what leaves `${a[9]-d}` quiet.
+
+**Three shapes are not that refusal**, and each is a way it could be made
+too wide:
+
+- **A whole-array subscript.** `${a[@]}` on an empty array is a list of
+  no elements rather than an unset parameter, in every column. The last
+  row is where the columns disagree, and it is a question about a name
+  that holds *nothing* rather than about an element: zsh refuses it and
+  so does bash 3.2, where bash 5.3 — the same binary as `sh` included —
+  and ksh93 print nothing and carry on. That is the existence half
+  `UnsetNameAtIsOneEmptyField` already measures from the other side, and
+  it is not modeled here.
+- **A subscript on a plain string**, where the section above applies: a
+  position past the end of a string is empty and quiet in the column
+  that counts characters, and a missing element in the two that read a
+  scalar as an array of one. That falls out of
+  `ScalarSubscriptIsACharacter` rather than needing an axis of its own.
+- **A subscript the shell refused to read.** `${a[b c]}` and `${a[]}`
+  have already written their own complaint and given up the word; the
+  element is missing because nothing could name one, and a second
+  sentence about it would report the first one's aftermath.
+
+**What the sentence writes back splits the columns**, and only a
+subscript that had to be expanded can ask: bash and zsh write the text
+that was typed, ksh93 writes what it came to. Diagnostics field
+`UnboundElementNamesTheSubscriptsValue`. ksh93 goes one step further than
+that field reaches and names the *evaluated* index — `${a[1+8]}` is
+`a[9]` there — which is recorded rather than reproduced, because carrying
+the number out to the refusal would mean evaluating the brackets a second
+time and running any command substitution in them twice. Its `(null)` for
+a missing key is that shell showing an unset pointer, and is recorded
+too.
+
+Two neighboring rows are measured and **not** modeled, for want of a
+column that agrees: zsh refuses `${#a[9]}` where bash and ksh93 answer
+`0`, and zsh and bash 3.2 refuse `${nope[@]}` where bash 5.3 and ksh93
+are silent.
+
 ### A subscript on a parameter that is not a name
 
 | probe | zsh | bash 5.3 | bash 3.2 | bash-as-sh | ksh93 | dash |

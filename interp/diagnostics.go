@@ -4466,6 +4466,30 @@ type Diagnostics struct {
 	// its first element: `unset a` then `$a` names `a` in that column too.
 	// See Runner.unboundSubject (#2818).
 	UnboundBareArrayNamesElementZero bool
+	// UnboundElementNamesTheSubscriptsValue says the `set -u` refusal for a
+	// subscript that named no element writes back what the subscript *came
+	// to* rather than the text that was typed.
+	//
+	// Measured 2026-09-15 under `env -i PATH=/usr/bin:/bin`, with
+	// `i=9; a=(x); set -u; echo "${a[$i]}"`:
+	//
+	//	bash 5.3    a[$i]: unbound variable
+	//	zsh 5.9.2   a[$i]: parameter not set
+	//	ksh93u+     a[9]: parameter not set
+	//
+	// All three write `a[9]` for a subscript typed as `9`, so only one that
+	// had to be expanded tells them apart — which is why this is a field
+	// rather than something the subject could be read off the source for.
+	//
+	// ksh93 goes one step further than this reaches and names the
+	// *evaluated* index: `${a[1+8]}` is `a[9]` there, where this writes the
+	// expanded text back and says `a[1+8]`. Recorded rather than reproduced.
+	// The index is evaluated deep inside the subscript read and the refusal
+	// is made at the expansion, so carrying the number out to it would mean
+	// either threading it through every reading of a subscript or evaluating
+	// the brackets a second time — and a second evaluation runs a command
+	// substitution written in them twice.
+	UnboundElementNamesTheSubscriptsValue bool
 
 	// SubscriptIsAnIndexAndARange is what a subscript says when one reading
 	// of it needs the single index it named and another makes it a span. No

@@ -1043,6 +1043,10 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 	// join and the splitting — is the same question it is for an array. See
 	// listBase, which is the one place the two sources meet.
 	if elems, ok := r.listBase(e); ok {
+		// `set -u` refuses a subscript that named no element, and this is
+		// the path a plain `${a[9]}` takes — the scalar path's own check
+		// never sees one. See checkNounsetElement (#2911).
+		r.checkNounsetElement(e, elems)
 		if e.Indirect {
 			// `${!a[@]}` is the array's *subscripts*, not its elements —
 			// and the indirection was being ignored, so it answered with
@@ -4965,13 +4969,138 @@ func (r *Runner) checkNounset(e *syntax.ParamExpr) {
 // one and the bare read found nothing at it — which is what keeps `unset a`
 // naming `a` in the same column.
 func (r *Runner) unboundSubject(e *syntax.ParamExpr) string {
-	if !r.diag().UnboundBareArrayNamesElementZero || e.Index != nil || e.Inner != nil {
+	if e.Inner != nil {
+		return e.Name
+	}
+	if e.Index != nil {
+		// A subscript that was *written* is written back, brackets and all,
+		// in every column that has arrays: measured 2026-09-15,
+		// `a=(x y z); set -u; echo "${a[9]}"` is `a[9]: unbound variable` in
+		// bash 5.3 and `a[9]: parameter not set` in ksh93u+ and zsh 5.9.2.
+		// This named the bare `a` for all three, which reads as a refusal
+		// about the array rather than about the element.
+		//
+		// Not for an indirection, which is a different sentence and not this
+		// one: bash 5.3 refuses `${!nope}` with `nope: invalid indirect
+		// expansion`, and where it does say `unbound variable` for a
+		// subscripted indirection it writes the `!` back too — `${!a[9]}` is
+		// `!a[9]: unbound variable`. Neither is this refusal wearing a
+		// subject.
+		//
+		// Not for a whole-array subscript either. `${nope[@]}` is refused
+		// by zsh 5.9.2 and by bash 3.2.57, and passed over in silence by
+		// bash 5.3 — the same binary as `sh` included — and by ksh93u+, so
+		// `[@]` is a question of its own with a split of its own. Answering
+		// it here would make every column refuse it.
+		if e.Indirect || r.wholeArrayIndex(e) {
+			return e.Name
+		}
+		return e.Name + "[" + r.unboundSubscript(e) + "]"
+	}
+	if !r.diag().UnboundBareArrayNamesElementZero {
 		return e.Name
 	}
 	if _, ok := r.arrayElems(e.Name); ok {
 		return e.Name + "[0]"
 	}
 	return e.Name
+}
+
+// unboundSubscript is the subscript as the `set -u` refusal writes it back:
+// the text that was typed, or what that text came to in the column that
+// answers with the value instead. See
+// Diagnostics.UnboundElementNamesTheSubscriptsValue, which holds the
+// measurement and the one shape it does not reach.
+//
+// The written text is preferred where the dialect wants it because it costs
+// nothing — syntax.ParamExpr.IndexText is the source, kept for exactly this —
+// where expanding the brackets again would run a command substitution written
+// in them a second time.
+func (r *Runner) unboundSubscript(e *syntax.ParamExpr) string {
+	if !r.diag().UnboundElementNamesTheSubscriptsValue && e.IndexText != "" {
+		return e.IndexText
+	}
+	return r.subscriptAsWritten(e.Subscript())
+}
+
+// checkNounsetElement reports a subscript that named no element under
+// `set -u`, which the list path never asked and the scalar path never reaches
+// for a plain `${a[i]}`.
+//
+// Measured 2026-09-15 under `env -i PATH=/usr/bin:/bin`, with `set -u` and
+// every column that has arrays refusing every row:
+//
+//	a=(x y z); echo "${a[9]}"               a past-the-end index
+//	echo "${nope[1]}"                       a name holding nothing at all
+//	typeset -A m; m[k]=v; echo "${m[q]}"    a key the table does not have
+//
+// bash 5.3 says `unbound variable` and ksh93u+ and zsh 5.9.2 say `parameter
+// not set`, which is Diagnostics.UnboundVariable and already answered. So the
+// refusal itself is unanimous and needs no axis of its own. We answered every
+// row with an empty string at status 0 — the outcome nothing downstream can
+// tell from a real element (#2911).
+//
+// `unset "a[1]"` is not a fourth answer. zsh leaves the element in place and
+// empty rather than removing it, which this shell already does, so the
+// element is set there and the column is quiet for the shell's own reason.
+//
+// Three things are not this refusal, and each is a way it could have been
+// made too wide:
+//
+//   - a whole-array subscript. `${a[@]}` on an empty array is no fields
+//     rather than an unset parameter, and a `for` loop over one runs zero
+//     times in every column. A name that holds *nothing* is a question of
+//     its own and not this one: `${nope[@]}` is refused by zsh 5.9.2 and by
+//     bash 3.2.57, and quiet in bash 5.3 and ksh93u+.
+//   - a subscript on a name holding one *string*, where the dialect reads
+//     the brackets as characters. A character past the end of a string is
+//     empty rather than missing — measured, `v=x; echo "${v[5]}"` is empty
+//     at 0 in zsh 5.9.2 and `v[5]: unbound variable` in bash 5.3 — so that
+//     split is Semantics.ScalarSubscriptIsACharacter and not a second axis.
+//
+// An indirection needs no clause of its own and must not have one: `${!a[9]}`
+// is refused by the scalar path's own check long before this is reached, so a
+// guard here would be a dead one. What the *subject* does with it is
+// unboundSubject's, and it is live there.
+//
+//   - a subscript the shell already refused to read. `${a[b c]}` and `${a[]}`
+//     have each written their own complaint and given up the word, and a
+//     second sentence about an element nobody could name would be this check
+//     reporting the first one's aftermath. That is r.expandErr beside
+//     r.ctl, the same pair a simple command reads to know its own word list
+//     failed — a refusal reported here reaches only one of the two.
+func (r *Runner) checkNounsetElement(e *syntax.ParamExpr, elems []string) {
+	if !r.nounset || elems != nil || e.Index == nil || e.Inner != nil {
+		return
+	}
+	if r.expandErr || r.ctl == controlExit {
+		return
+	}
+	if r.subscriptYieldsAList(e) || r.subscriptReadsCharacters(e) {
+		return
+	}
+	r.checkNounset(e)
+}
+
+// subscriptReadsCharacters reports whether the brackets on this name are read
+// as a position in one *string* rather than as an element of a list, which is
+// the reading that has no unset answer: a position past the end of a string is
+// empty, where an element that is not there is missing.
+//
+// The name's own reading rather than the subscript's, because that is what the
+// axis is about — `${v[5]}` on `v=x` is empty at 0 in the column that reads a
+// scalar this way and a refusal in the two that do not. An association is
+// asked first because a declared one is answered on an earlier branch of
+// arraySubscript and would look like a scalar here.
+func (r *Runner) subscriptReadsCharacters(e *syntax.ParamExpr) bool {
+	if r.sem().ScalarSubscriptIsACharacter != Yes || e.IndexFlags != nil {
+		return false
+	}
+	if _, isAssoc := r.assocFor(e.Name); isAssoc {
+		return false
+	}
+	_, scalar, ok := r.subscriptTarget(e)
+	return ok && scalar
 }
 
 // unboundSigilWording is the `set -u` refusal for a parameter whose name is

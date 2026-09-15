@@ -2158,6 +2158,11 @@ func Diagnostics() interp.Diagnostics {
 		// *element* here: `a=(x y z); unset "a[0]"; set -u; echo "$a"` is
 		// `a[0]: parameter not set` where bash says `a` (#2818).
 		UnboundBareArrayNamesElementZero: true,
+		// And a subscript that named no element is refused by the value the
+		// brackets came to rather than by the text in them: `i=9; a=(x);
+		// set -u; echo "${a[$i]}"` is `a[9]: parameter not set` here where
+		// bash 5.3 and zsh 5.9.2 both write `a[$i]` back (#2911).
+		UnboundElementNamesTheSubscriptsValue: true,
 		// A leading numeral that met a second point straight after its
 		// first has a sentence of its own here, naming the character:
 		// `$(( 1..2 ))` is `.: invalid character in expression -  1..2 `

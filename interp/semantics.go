@@ -9009,6 +9009,37 @@ type Semantics struct {
 	// construct give — and every preset states it anyway.
 	FirstAllocatedDescriptor DescriptorAllocationBase
 
+	// HeredocBody is what a here-document's or a here-string's text is put
+	// on: a pipe, or a temporary file.
+	//
+	// It exists because the body has to be **a real descriptor** whatever the
+	// answer. A child that names the number itself — `sh -c 'cat <&3' 3<<X` —
+	// is handed the table by number, and text this process holds has no
+	// number to hand over: the entry answered nil, a nil is a descriptor
+	// closed in the child, and all four columns of the panel print the body
+	// where this shell said `3: Bad file descriptor` (#2759).
+	//
+	// Having to choose a medium, the panel splits on it, and the split is
+	// visible to a script. Measured 2026-09-14 with `exec 3<<X` over two
+	// lines, from a script file under `env -i PATH=/usr/bin:/bin`:
+	//
+	//	                  [ -f /dev/fd/3 ]   head -1 <&3 ; cat <&3
+	//	bash 5.3.15       false              line1 · (nothing)
+	//	dash              false              line1 · (nothing)
+	//	ksh93 (AJM 93u+)  true               line1 · line2
+	//	zsh 5.9.2         true               line1 · line2
+	//
+	// The second column is the one a script feels. `head` reads a block and
+	// seeks back to just past what it consumed, which it can only do on a
+	// file — so on a pipe the rest of the document is gone with the block
+	// `head` swallowed, and on a file it is still there.
+	//
+	// Two-two, so neither answer is the common denominator and the zero value
+	// is the pipe for a different reason: it is what this shell already did,
+	// its body having been a reader over the text with no position to return
+	// to.
+	HeredocBody HeredocBodyMedium
+
 	// UnterminatedHeredocGainsATrailingNewline adds the newline a
 	// here-document body never got, where the delimiter never arrived and
 	// the input ended mid-line.
@@ -14828,6 +14859,33 @@ func (b DescriptorAllocationBase) number() int {
 
 func (b DescriptorAllocationBase) String() string {
 	return "from " + itoa(b.number())
+}
+
+// HeredocBodyMedium is what a shell puts a here-document's text *on*, which
+// is not an implementation detail: it is the difference between a descriptor
+// a script can read twice and one it cannot. See Semantics.HeredocBody, which
+// is the only reader and which records the measurements.
+type HeredocBodyMedium uint8
+
+const (
+	// HeredocBodyOnAPipe is bash 5.3.15 and dash: the body is written into a
+	// pipe, so `/dev/fd/3` is not a regular file and a second read of the
+	// descriptor gets nothing. The zero value, because it is the answer this
+	// shell already gave — its body was a reader over the text, which is
+	// consumed once and has no position to go back to.
+	HeredocBodyOnAPipe HeredocBodyMedium = iota
+	// HeredocBodyInATemporaryFile is ksh93 and zsh 5.9.2: the body is written
+	// to a file, so the descriptor is seekable and a reader that overshoots
+	// and seeks back — which `head` does — leaves the rest of the document
+	// for the next command.
+	HeredocBodyInATemporaryFile
+)
+
+func (m HeredocBodyMedium) String() string {
+	if m == HeredocBodyInATemporaryFile {
+		return "in a temporary file"
+	}
+	return "on a pipe"
 }
 
 // CoprocEndPlacement is where in the descriptor table a shell puts a

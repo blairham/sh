@@ -253,10 +253,17 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 				r.redirErr = true
 				return closers, nil
 			}
+			// The text is put on a real descriptor, which is what lets a
+			// child that names the number itself read it. See
+			// Runner.heredocReader.
+			src, closer := r.heredocReader(body)
+			if closer != nil && !persists {
+				closers = append(closers, closer)
+			}
 			// A body joins the set as an opened file does: `cat <f <<<hi` is the
 			// file and then the line, measured, so the source need not be a file
 			// to be one of several.
-			held := r.eachSource(hfd, strings.NewReader(body), sources)
+			held := r.eachSource(hfd, src, sources)
 			switch hfd {
 			case 0:
 				r.Stdin = held
@@ -790,6 +797,62 @@ func (r *Runner) eachTarget(fd int, f io.Writer, opened map[int]io.Writer) io.Wr
 	}
 	opened[fd] = f
 	return f
+}
+
+// heredocReader puts a here-document's or a here-string's body somewhere a
+// descriptor can point at, and hands back what reads it and what closes it.
+//
+// The text is this process's own — a string the parser produced — and a
+// string has no descriptor number. That is enough for every read *this* shell
+// does and for nothing a child does: `childFiles` rebuilds the table by
+// number for a command it starts, an entry it cannot turn into an *os.File
+// answers nil, and a nil is a descriptor closed over there. So `sh -c 'cat
+// <&3' 3<<X` said `3: Bad file descriptor` where all four columns of the
+// panel print the body (#2759).
+//
+// Which medium is [Semantics.HeredocBody], and it is measured rather than
+// chosen: the panel splits two-two, and a script can tell them apart.
+//
+// A medium that could not be made falls back to the text itself. That is the
+// old answer, which is wrong only for a child naming the number — the shell's
+// own reads are unaffected — so a machine out of descriptors or with no
+// writable temporary directory keeps working rather than failing a
+// redirection every shell performs.
+func (r *Runner) heredocReader(body string) (io.Reader, io.Closer) {
+	if r.sem().HeredocBody == HeredocBodyInATemporaryFile {
+		f, err := os.CreateTemp("", "sh-heredoc-")
+		if err != nil {
+			return strings.NewReader(body), nil
+		}
+		// Unlinked at once and read through the descriptor that is already
+		// open on it, so nothing is left behind by a shell that is killed
+		// and nothing in the filesystem names a script's private text.
+		_ = os.Remove(f.Name())
+		if _, err := f.WriteString(body); err != nil {
+			_ = f.Close()
+			return strings.NewReader(body), nil
+		}
+		if _, err := f.Seek(0, io.SeekStart); err != nil {
+			_ = f.Close()
+			return strings.NewReader(body), nil
+		}
+		return f, f
+	}
+	pr, pw, err := os.Pipe()
+	if err != nil {
+		return strings.NewReader(body), nil
+	}
+	// The write side is a goroutine because a body larger than the pipe
+	// buffer would otherwise block the shell against a reader that has not
+	// started yet. It ends either way: the write completes, or the read end
+	// is closed and the write fails — Go reports that as an error on a pipe
+	// rather than raising SIGPIPE, which it does only for the two standard
+	// streams.
+	go func() {
+		_, _ = io.WriteString(pw, body)
+		_ = pw.Close()
+	}()
+	return pr, pr
 }
 
 // fileOrNil is the real file behind a target, where there is one.

@@ -9377,7 +9377,43 @@ Y
 cat <&"$v"
 printf "][v=$v]\n"`,
 		Script: true,
-		Why:    "the other half of the descriptor: a document opened by `exec` is still there at the next command, and `{v}<<Y` allocates a number and hands it to the name. The first is unanimous across all seven columns; the second is only asked of the four that have the `{v}` spelling at all, and it is where the allocation base shows — bash answers 10, ksh93 and zsh answer 11, and dash, BusyBox ash and bash 3.2 have no such form and report `exec: {v}: not found` at 127. Ours left `exec 3<<X` with nothing behind it and `{v}<<Y` with nothing allocated, so `$v` was unset and the `cat` read a descriptor that was never opened. The ksh column still answers 10 here where ksh93 answers 11, which is `FirstAllocatedDescriptor` and is #2756 rather than this",
+		Why:    "the other half of the descriptor: a document opened by `exec` is still there at the next command, and `{v}<<Y` allocates a number and hands it to the name. The first is unanimous across all seven columns; the second is only asked of the four that have the `{v}` spelling at all, and it is where the allocation base shows — bash answers 10, ksh93 and zsh answer 11, and dash, BusyBox ash and bash 3.2 have no such form and report `exec: {v}: not found` at 127. Ours left `exec 3<<X` with nothing behind it and `{v}<<Y` with nothing allocated, so `$v` was unset and the `cat` read a descriptor that was never opened. The ksh column answers 10 here where ksh93 answers 11, and that is **not** the allocation base: ksh93 keeps the *script file itself* on descriptor 10 while it runs a script from a file, so 10 is taken and the first allocation lands on 11. Proved by reading it — `cat <&10` in a ksh93 script prints the rest of the script — and by the route: under `-c`, with no script file to hold, ksh93 allocates 10 like bash. See the case beside this one and #2756",
+	},
+	{
+		ID: "redirection/an-allocated-descriptor-counts-up-from-the-shell-s-base", Category: "redirection",
+		Snippet: `exec {a}>/dev/null {b}>/dev/null {c}>/dev/null
+echo "a=$a b=$b c=$c"
+`,
+		Why: "the allocation base, asked where nothing else is holding a low number: bash 5.3.15 and ksh93 count up from 10 and zsh 5.9.2 from 11, so this is `FirstAllocatedDescriptor` and the whole of it. Run through `-c` **deliberately** rather than from a file, which is the discrimination the axis needs — see the row below, where ksh93 answers one higher for a reason that is not the base",
+	},
+	{
+		ID: "redirection/a-script-file-of-its-own-takes-a-number-in-one-shell", Category: "redirection",
+		Script: true,
+		Snippet: `exec {a}>/dev/null
+echo "a=$a"
+printf "[10:"; cat <&10; printf "]\n"
+`,
+		Why: "the same allocation from a **script file**, which is a different answer in exactly one column: ksh93 says 11 where its own `-c` route says 10, because it keeps the script it is running open on descriptor 10 — the `cat <&10` prints the rest of the script back, which is what proves it rather than infers it. bash 5.3.15 and dash leave 10 closed and bash's allocation stays at 10. So an axis set from this route alone would record ksh93's base as eleven, which #2756 proposed and which the `-c` row above falsifies. Ours does not hold the script on a number, so it answers 10 and reports a bad descriptor — recorded as the divergence it is rather than patched over by moving a base that is measured correct",
+	},
+	{
+		ID: "heredoc/a-body-reaches-a-child-that-names-its-descriptor", Category: "redirection",
+		Script: true,
+		Snippet: `/bin/sh -c 'cat <&3' 3<<X
+child
+X
+echo "st=$?"
+`,
+		Why: "the document has to be on a **real descriptor**, because a child is handed the table by number and text this shell holds has no number. All four columns with the grammar print the body; ours printed `3: Bad file descriptor` at status 1, the table entry having answered nil and a nil being a descriptor closed over there (#2759). The shape that always worked is `{ cat <&3; } 3<<X`, which moves the body onto standard input and lets os/exec build the pipe — so the defect was invisible to every case written the ordinary way",
+	},
+	{
+		ID: "heredoc/the-medium-a-body-is-carried-on-is-visible-to-a-child", Category: "redirection",
+		Script: true,
+		Snippet: `/bin/sh -c 'if [ -f /dev/fd/3 ]; then echo file; else echo pipe; fi' 3<<X
+line1
+line2
+X
+`,
+		Why: "having to put the body *somewhere*, the panel splits two-two on where, and a script can see it: bash 5.3.15 and dash write it into a pipe, ksh93 and zsh into a temporary file. The consequence a script feels is seekability — with `head -1 <&3` and then `cat <&3`, the file columns still have `line2` and the pipe columns lost it with the block `head` swallowed. Asked from a child because `/dev/fd/3` names the document only there: inside the shell, 3 is an entry in a table",
 	},
 	{
 		ID: "heredoc/a-here-string-lands-on-its-descriptor-too", Category: "redirection",

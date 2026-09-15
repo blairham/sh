@@ -1301,6 +1301,20 @@ func (p *printer) redirs(rs []*Redirect) {
 		// heredocDelimiterNeedsABlank for the two delimiters that still take
 		// the space.
 		delim := p.printedWord(rd.Word)
+		if rd.Op.IsHeredoc() && !rd.Word.IsQuoted() {
+			// A delimiter is subject to quote removal and to nothing else,
+			// so the general word printer's escaping changes what it means:
+			// `<<$d` came back as `<<\$d`, which is the same delimiter and a
+			// *quoted* one, and a quoted delimiter makes the body literal.
+			// `<<$(echo X)` was worse — every character of it escaped.
+			//
+			// An unquoted delimiter needs no escaping at all and can be
+			// written as it stands. Nothing was taken out of it on the way
+			// in, which is what "unquoted" means here: had a backslash or a
+			// quote removed anything, the span it came from would carry that
+			// quoting and this branch would not be taken.
+			delim = rd.Word.Literal()
+		}
 		if !rd.Op.IsHeredoc() || heredocDelimiterNeedsABlank(rd.Op, delim) {
 			p.str(" ")
 		}

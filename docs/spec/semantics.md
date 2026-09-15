@@ -15446,6 +15446,60 @@ unanswered and refused by name at the disagreement; there is no shape in
 which a shell declines to pick a number, so a zero value that refused
 would refuse a construct every shell performs.
 
+**Measure it through `-c`, never from a script file.** ksh93 keeps the
+script it is running open on descriptor **10**, so `exec {a}>/dev/null`
+in a script answers 11 there and 10 under `-c`. That is not the base
+moving; it is a number already taken. `cat <&10` in a ksh93 script
+prints the rest of the script, which is what proves it rather than
+infers it — and the same probe says `Bad file descriptor` in bash 5.3.15
+and dash, whose allocation stays at 10 on both routes. zsh answers 11 on
+both. Re-measured 2026-09-14 after #2756 proposed moving the ksh preset
+to eleven on the strength of the script-file route alone; the corpus now
+holds both routes (`redirection/an-allocated-descriptor-counts-up-from-
+the-shell-s-base` and `redirection/a-script-file-of-its-own-takes-a-
+number-in-one-shell`) so the confound cannot be re-derived.
+
+**`HeredocBody`** — bash **on a pipe** · dash **on a pipe** · ksh93 **in a
+temporary file** · zsh **in a temporary file**
+
+What a here-document's or a here-string's text is put *on*.
+
+It exists because the body has to be a real descriptor whatever the
+answer: a child is handed the descriptor table by number, and text this
+process holds has no number to hand over. `sh -c 'cat <&3' 3<<X` printed
+`3: Bad file descriptor` here where all four columns print the body
+(#2759) — the table entry answered nil, and a nil is a descriptor closed
+in the child. The shape that always worked is `{ cat <&3; } 3<<X`, which
+moves the body onto standard input and lets os/exec build the pipe, so
+nothing written the ordinary way could see the gap.
+
+Having to choose, the panel splits two-two, and a script can see which.
+Measured 2026-09-14, `exec 3<<X` over two lines from a script file under
+`env -i PATH=/usr/bin:/bin`:
+
+|  | `[ -f /dev/fd/3 ]` | `head -1 <&3` then `cat <&3` |
+| --- | --- | --- |
+| bash 5.3.15 | false | `line1` · nothing |
+| dash | false | `line1` · nothing |
+| ksh93 (AJM 93u+) | true | `line1` · `line2` |
+| zsh 5.9.2 | true | `line1` · `line2` |
+
+The second column is the one a script feels. `head` reads a block and
+seeks back to just past what it consumed, which it can only do on a
+file — so on a pipe the rest of the document goes with the block `head`
+swallowed, and on a file it is still there. The first column has to be
+asked from a **child**, because `/dev/fd/3` names the document only
+there: inside the shell, 3 is an entry in a table and the process's own
+descriptor 3 is whatever the runtime put on it.
+
+Two-two, so neither answer is the common denominator. The zero value is
+the pipe for a different reason: it is what this shell already did, its
+body having been a reader over the text with no position to return to.
+The temporary file is unlinked as soon as it is created and read through
+the descriptor already open on it, so nothing is left behind by a shell
+that is killed and nothing in the filesystem names a script's private
+text.
+
 **`ReadFailureInAFileSubstitutionFailsIt`** — bash no · dash no · ksh93
 no · zsh **yes**
 

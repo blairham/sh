@@ -14214,6 +14214,64 @@ The consequence for the axis above is stated rather than hidden: under
 gives its first hashed key's value, and the two coincide only when the
 orders do.
 
+**A shell can hold two orders at once, and zsh does.** The table above is
+the *expansion* — `${!m[@]}`, `${m[@]}`, `${(k)m}`. The **listing** is a
+second question and only bash answers it the same way. Measured
+2026-09-14, the same two tables read both ways:
+
+| | `${!m[@]}` / `${(k)m}` | `typeset -p` / `declare -p` |
+| --- | --- | --- |
+| bash 5.3.15 | `z m a` · `1 B a _x` | `[z] [m] [a]` · `[1] [B] [a] [_x]` |
+| ksh93u+ | `a m z` · `1 B _x a` | `[a] [m] [z]` · `[1] [B] [_x] [a]` |
+| zsh 5.9.2 | `z m a` · `_x a 1 B` | `[a] [m] [z]` · `[1] [B] [_x] [a]` |
+| here | `a m z` · `1 B _x a` | `[a] [m] [z]` · `[1] [B] [_x] [a]` |
+
+So **zsh sorts its listing and hashes its expansion**, and the sorted
+order this shell chose is not merely ksh93's: it is what two of the three
+columns write when they list. What differs, per column, is therefore
+narrower than a whole-table order:
+
+- **ksh93** — nothing. Both readings agree byte for byte.
+- **zsh** — the expansion only. The listing agrees byte for byte.
+- **bash** — both, and only because its hash decides both.
+
+That matters for counting. #2749 was filed on the reading that the order
+"dominates the block's largest file" because every `${!h[@]}`, every
+`${h[@]}`, every `declare -p` of a table with more than one key and every
+`${h[@]:n:m}` differs for the one reason. Two thirds of that is a bash
+claim rather than a claim about tables: the listing is already byte-exact
+in the other two columns, and in ksh93 so is the expansion. It is still
+not measured how many of that file's differing lines this is, and it is
+still deliberately not given a number — the discount is simply smaller
+than the issue's shape suggested.
+
+The two fixed here on the way through are not the order at all, and both
+were found by the same probe (#2749):
+
+- `$'…'` **written as a subscript stored its escapes undecoded.**
+  `declare -A n; n[$'\t']=tab` put a key spelled backslash-then-t in the
+  table — two characters, reachable only by writing the same escape again,
+  and invisible to `${n[$t]}` for a `t` holding the character it meant.
+  The listing showing `["\\t"]` where bash shows `[$'\t']` was the
+  symptom; the key really was those two characters. See
+  `interp.Runner.expandKeyQuoted`.
+- **`@` and `*` list quoted.** They are ordinary characters in a key and
+  listed bare, and a listing is meant to be read back: `[@]=at` fed to the
+  shell again is the whole-array subscript rather than the key. bash is
+  the one column that will store such a key at all — ksh93 and zsh each
+  refuse the assignment by name — and it writes `["@"]`.
+
+Two more things the same probe found are recorded and not fixed here.
+`${!m[@]}` with an **operator** on it is #2821: bash reads the `!` as an
+ordinary indirection there and answers nothing, ksh93 calls it a bad
+substitution, and this shell filters the subscripts — the bare form every
+`for i in "${!a[@]}"` uses is right in all three.
+
+Three key-quoting divergences are left and are #2820: `=` lists bare in
+bash and ksh93 and quoted here, `^` lists quoted in bash and zsh and bare
+here, and a non-ASCII key lists bare in bash and zsh, as `$'\xc3\xa9'`
+in ksh93, and quoted here. None of them is the order.
+
 **`SubscriptCommaIsARange`** — bash no · dash no · ksh93 no · zsh yes
 
 Reads the comma in `${a[1,3]}` as the separator of a range rather than as

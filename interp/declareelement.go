@@ -30,7 +30,13 @@ package interp
 // r.assignFailed for the builtin's own status to read. A status of its own
 // would have to be merged with those three at every call site and could only
 // disagree with them.
-func (r *Runner) declareElement(base, sub, value string, f declareFlags, shadows bool) {
+// leading are the subscripts written *before* sub, where the dialect lets a
+// declaration's operand carry a chain — `typeset a[1][2]=v`, whose value goes
+// at 2 of the array held in element 1. Nil is one subscript, which is every
+// operand in every other dialect. See interp/chainassign.go, which the plain
+// `a[1][2]=v` spelling reaches by the other route; the two have to agree,
+// since ksh93 answers them identically.
+func (r *Runner) declareElement(base string, leading []string, sub, value string, f declareFlags, shadows bool) {
 	if r.elementDeclarationRefused(base, sub, f, shadows) {
 		return
 	}
@@ -98,6 +104,17 @@ func (r *Runner) declareElement(base, sub, value string, f declareFlags, shadows
 		r.inBuiltin = outer
 		r.storeRefusalEndedTheDeclaration()
 	}()
+	if len(leading) > 0 {
+		// A chain, whose first subscript is leading[0] and whose value lands
+		// under sub inside what the links before it named. The walk is
+		// interp/chainassign.go's, shared with the plain `a[1][2]=v`
+		// spelling that reaches it by the other route.
+		r.declareChainedElement(base, leading, sub, value, tableBefore)
+		if f.readonly && !f.readonlyOff {
+			r.markReadonly(base)
+		}
+		return
+	}
 	key, evaluated, isKey := r.subscriptedOperandKey(base, sub, tableBefore)
 	switch {
 	case r.unspecified:

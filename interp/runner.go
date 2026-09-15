@@ -6856,6 +6856,13 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 			return
 		}
 		r.assignArrayLiteral(a.Name, a.Elems, a.Append)
+	case len(a.Leading) > 0:
+		// A chain of subscripts — `a[1][2]=v` — where each one after the
+		// first reaches into the value the one before it named. Ahead of
+		// every branch below, because each of those reads Index as the
+		// *only* subscript and would write the last one straight into the
+		// name. See interp/chainassign.go.
+		r.assignChainedElement(a)
 	case a.Index != nil && a.IndexFlags == nil && wholeArraySubscript(a.IndexText):
 		// `a[@]=Z` and `a[*]=Z`, the whole-array spelling on the *left*.
 		// Ahead of both the keyed branch and the arithmetic one because each

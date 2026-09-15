@@ -1024,14 +1024,15 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		if r.unspecified {
 			return r.status
 		}
-		if base, sub, subscripted := r.subscriptOperand(name); subscripted {
+		if base, subs, subscripted := r.operandSubscripts(r.inBuiltin, name); subscripted {
+			sub := subs[len(subs)-1]
 			if hasValue {
 				// The operand names an element, so the attributes and the
 				// scope are about `a` and the value is about `a[1]`.
 				// Splitting at the `=` and handing `a[1]` to the variable
 				// store made the whole line a no-op at status 0 — see
 				// declareelement.go.
-				r.declareElement(base, sub, value, df, true)
+				r.declareElement(base, subs[:len(subs)-1], sub, value, df, true)
 				if r.unspecified || r.ctl == controlExit {
 					return r.status
 				}

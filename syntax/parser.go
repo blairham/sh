@@ -2240,6 +2240,17 @@ type assignHead struct {
 	// brackets: the source text a diagnostic quotes back. Zero when no
 	// subscript was written. See Assign.IndexText.
 	from, to Pos
+	// leading are the subscripts written before the last one, where the
+	// dialect lets a name carry several. Nil is the ordinary one subscript.
+	// See Assign.Leading and Dialect.ChainedAssignSubscript.
+	leading []assignSubscript
+}
+
+// assignSubscript is one link of a chained assignment subscript, in the same
+// three pieces the head keeps for the final one.
+type assignSubscript struct {
+	spans    []Span
+	from, to Pos
 }
 
 // isAssign reports whether a word is `name=…` written so the name is unquoted.
@@ -2324,6 +2335,11 @@ func (p *Parser) subscriptedAssign(t Token, open int) (assignHead, bool) {
 	if !isNameIn(name, p.dialect.DottedName) {
 		return h, false
 	}
+	// Where the chain starts, which is the open bracket until a link has been
+	// closed and then just inside the bracket after it. A chain is one
+	// dialect's and is otherwise dead weight: with the flag off no `]` is
+	// ever read as a link and these never move.
+	startSpan, startOff := 0, open+1
 	for i, s := range t.Spans {
 		if s.Kind != Literal || s.Quoting != Unquoted {
 			continue
@@ -2337,6 +2353,21 @@ func (p *Parser) subscriptedAssign(t Token, open int) (assignHead, bool) {
 				continue
 			}
 			rest := s.Value[j+1:]
+			if p.dialect.ChainedAssignSubscript && strings.HasPrefix(rest, "[") {
+				// A `]` with a `[` behind it closes a *link* rather than the
+				// name: the subscript after it reads into what this one
+				// named. Without the flag it closes nothing and the text
+				// runs on to the next candidate, which is the reading every
+				// other dialect keeps — `a[1][2]=v` has the four-character
+				// subscript `1][2` there, and is refused for it.
+				h.leading = append(h.leading, assignSubscript{
+					spans: spanRange(t.Spans, startSpan, startOff, i, j),
+					from:  p.subscriptPos(t, startSpan, startOff),
+					to:    offsetBy(s.Pos, j),
+				})
+				startSpan, startOff = i, j+2
+				continue
+			}
 			appends := false
 			if strings.HasPrefix(rest, "+=") {
 				if !p.dialect.AppendAssign {
@@ -2348,14 +2379,14 @@ func (p *Parser) subscriptedAssign(t Token, open int) (assignHead, bool) {
 			}
 			h.name = name
 			h.append = appends
-			h.index = spanRange(t.Spans, 0, open+1, i, j)
+			h.index = spanRange(t.Spans, startSpan, startOff, i, j)
 			// Just inside the brackets, in the input. Both ends land in an
 			// *unquoted literal* span — the `[` in the first one and the `]`
 			// in this one, which the loop above has already required — and
 			// such a span's value is its source byte for byte, which is the
 			// same assumption spanRange makes when it slides a clipped
 			// span's position along.
-			h.from = offsetBy(t.Spans[0].Pos, open+1)
+			h.from = p.subscriptPos(t, startSpan, startOff)
 			h.to = offsetBy(s.Pos, j)
 			h.span = i
 			h.off = j + 1
@@ -2367,6 +2398,17 @@ func (p *Parser) subscriptedAssign(t Token, open int) (assignHead, bool) {
 		}
 	}
 	return h, false
+}
+
+// subscriptPos is where one link of an assignment's subscript begins in the
+// input, just inside its opening bracket.
+//
+// A span's value is its source byte for byte only where it was written as
+// unquoted literal text, which is what the caller has already required of
+// every span it hands here — the same assumption spanRange makes when it
+// slides a clipped span's position along.
+func (p *Parser) subscriptPos(t Token, span, off int) Pos {
+	return offsetBy(t.Spans[span].Pos, off)
 }
 
 // assignIndexFlags reads the flag group an assignment's subscript may open
@@ -2828,6 +2870,23 @@ func (p *Parser) parseAssign(h assignHead) *Assign {
 		a.Index = p.newWord(h.index, h.index[0].Pos, p.tok.End)
 		a.IndexFlags = p.assignIndexFlags(h.index)
 		a.IndexText = p.textBetween(h.from, h.to)
+	}
+	for _, link := range h.leading {
+		// Each link is read exactly as the final subscript is, flag group
+		// included: a chain is the same subscript twice and not a shape of
+		// its own, so nothing here may know less about a link than about the
+		// one it precedes.
+		if link.spans == nil {
+			// `a[][2]=v` — an empty link, which is the empty subscript every
+			// other route already carries as a nil Word.
+			a.Leading = append(a.Leading, LeadingIndex{Text: p.textBetween(link.from, link.to)})
+			continue
+		}
+		a.Leading = append(a.Leading, LeadingIndex{
+			Index: p.newWord(link.spans, link.spans[0].Pos, p.tok.End),
+			Flags: p.assignIndexFlags(link.spans),
+			Text:  p.textBetween(link.from, link.to),
+		})
 	}
 	// The value is what is left of the span holding the `=`, plus every span
 	// after it — which is why the head reports a position rather than a count.

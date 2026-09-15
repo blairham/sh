@@ -3998,6 +3998,30 @@ type Dialect struct {
 	// tracking (#1516).
 	ChainedSubscript bool
 
+	// ChainedAssignSubscript lets an assignment's name carry more than one
+	// subscript, where the later ones reach *into* the value the earlier one
+	// named rather than being part of its text: `a[1][2]=v` puts `v` at 2 of
+	// the array held in element 1.
+	//
+	// One shell in the panel, and it is not the one ChainedSubscript is for.
+	// Measured 2026-09-14 on ksh93u+ 2012-08-01, `env -i` with a scratch
+	// HOME, read back with `typeset -p a`:
+	//
+	//	a[1][2]=v         typeset -a a=([1]=([2]=v) )   and ${#a[@]} is 1
+	//	typeset a[1][2]=v the same
+	//	a[1]=([2]=v)      the same, which is the spelling this engine had
+	//
+	// bash 5.3 and zsh both refuse the operand — `not a valid identifier`
+	// and `no matches found`, the brackets being a pattern there — and bash
+	// 3.2 declares an empty array under the base name at status 0. So four
+	// answers among the shells that reach it and this is the grammar for the
+	// one that nests (#2491).
+	//
+	// It is the *write* half alone. What `${a[1][2]}` reads in that shell is
+	// a second question and a different reading from the one
+	// ChainedSubscript enables — see #2828.
+	ChainedAssignSubscript bool
+
 	// ArithCharacterCode enables `#name` and `##c` inside an arithmetic
 	// expression: the code of the first character of a parameter's value, and
 	// the code of a character written out.

@@ -2349,12 +2349,12 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 	}
 	for _, a := range args {
 		name, value, hasValue, appends := declarationOperand(a)
-		if base, sub, subscripted := r.subscriptOperand(name); subscripted && hasValue {
+		if base, subs, subscripted := r.operandSubscripts("export", name); subscripted && hasValue {
 			// `export a[1]=v` in the two dialects that take the operand:
 			// measured, ksh93u+ and zsh 5.9.2 both write the element, and
 			// neither puts the array in the environment. See
 			// declareelement.go.
-			r.declareElement(base, sub, value, declareFlags{}, false)
+			r.declareElement(base, subs[:len(subs)-1], subs[len(subs)-1], value, declareFlags{}, false)
 			if r.unspecified || r.ctl == controlExit {
 				return r.status
 			}
@@ -2485,6 +2485,83 @@ func (r *Runner) subscriptOperand(operand string) (string, string, bool) {
 	base := operand[:open]
 	sub := strings.TrimSpace(operand[open+1 : len(operand)-1])
 	return base, sub, true
+}
+
+// operandSubscripts is subscriptOperand for the callers that can take a
+// *chain* — `a[1][2]=v` as a declaration's operand, where the second
+// subscript reaches into what the first named.
+//
+// One subscript is the common answer and comes back as a one-element slice,
+// so a caller reads the last one the same way whether or not there was a
+// chain. A dialect without the grammar never sees more than one: the reader
+// below stops at the first `]` there, which is what leaves `a[1][2]=v` the
+// unbalanced operand every other column refuses (#2491).
+func (r *Runner) operandSubscripts(builtin, operand string) (string, []string, bool) {
+	if !r.dialect().ChainedAssignSubscript || !chainedOperandBuiltin(builtin) {
+		base, sub, ok := r.subscriptOperand(operand)
+		if !ok {
+			return "", nil, false
+		}
+		return base, []string{sub}, true
+	}
+	open := strings.IndexByte(operand, '[')
+	if open <= 0 {
+		return "", nil, false
+	}
+	base, rest := operand[:open], operand[open:]
+	var subs []string
+	for rest != "" {
+		if rest[0] != '[' {
+			return "", nil, false
+		}
+		end := subscriptCloses(rest)
+		if end < 0 {
+			return "", nil, false
+		}
+		subs = append(subs, strings.TrimSpace(rest[1:end]))
+		rest = rest[end+1:]
+	}
+	return base, subs, true
+}
+
+// chainedOperandBuiltin reports whether a chain of subscripts is a shape this
+// builtin's operand may take.
+//
+// The declaration utilities, and not `unset`. Measured 2026-09-14 on ksh93u+:
+// `export a[1][2]=v` and `readonly a[1][2]=v` each write the nested element
+// and list it back, where `unset a[1][2]` is `unset: a[1][2]: cannot be an
+// array` at 1 — so the chain is a thing a *write* may name and not a thing an
+// operand may be. Reading one for `unset` would take the last subscript for
+// the whole name and remove an element nobody named, at status 0.
+func chainedOperandBuiltin(builtin string) bool {
+	switch builtin {
+	case "typeset", "declare", "integer", "local", "export", "readonly", "float", "nameref":
+		return true
+	}
+	return false
+}
+
+// subscriptCloses is where the bracket run starting at text[0] closes,
+// counting nested brackets on the way, or -1 where it never does.
+//
+// The same count subscriptBracketsBalance makes, and for the same reason: it
+// is what tells `a[i[0]]` — a subscript reading another element, which is a
+// legal expression — from `a[1][2]`, where the first bracket has closed and a
+// second one follows.
+func subscriptCloses(text string) int {
+	depth := 0
+	for i := range len(text) {
+		switch text[i] {
+		case '[':
+			depth++
+		case ']':
+			depth--
+			if depth == 0 {
+				return i
+			}
+		}
+	}
+	return -1
 }
 
 // subscriptBracketsBalance reports whether text is one `[…]` and nothing
@@ -4667,10 +4744,10 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 		if r.unspecified {
 			return r.status
 		}
-		if base, sub, subscripted := r.subscriptOperand(name); subscripted && hasValue {
+		if base, subs, subscripted := r.operandSubscripts("local", name); subscripted && hasValue {
 			// `local a[1]=v` is `typeset a[1]=v` under the other word, and
 			// the scope is the whole of what it adds — see declareelement.go.
-			r.declareElement(base, sub, value, f, true)
+			r.declareElement(base, subs[:len(subs)-1], subs[len(subs)-1], value, f, true)
 			if r.unspecified || r.ctl == controlExit {
 				return r.status
 			}
@@ -4890,7 +4967,8 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 	}
 	for _, a := range args {
 		name, value, hasValue, appends := declarationOperand(a)
-		if base, sub, subscripted := r.subscriptOperand(name); subscripted {
+		if base, subs, subscripted := r.operandSubscripts("readonly", name); subscripted {
+			sub := subs[len(subs)-1]
 			// The readonly attribute on an element is the axis with three
 			// answers — see Semantics.ReadonlyElement. Only the two dialects
 			// that take a subscripted operand at all arrive here.
@@ -4901,7 +4979,7 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 			// `readonly a[1]=v`. Nothing else changes for the valueless
 			// form, which falls through to the path it always took.
 			if hasValue {
-				r.declareElement(base, sub, value, declareFlags{readonly: true}, false)
+				r.declareElement(base, subs[:len(subs)-1], sub, value, declareFlags{readonly: true}, false)
 				if r.unspecified || r.ctl == controlExit {
 					return r.status
 				}

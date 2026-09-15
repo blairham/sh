@@ -8186,6 +8186,16 @@ echo "st=$?"`,
 		Why:     "the depth is not one: an expansion standing in the name position may itself have one standing in *its* name position, and the operators stack outward — the inner `#a` runs before the outer `%c` sees anything. The third form is the same characters with the operator on the inside instead, which has to keep working and is the reading a parser gets by accident if it splits on the first brace",
 	},
 	{
+		ID: "param/a-dollar-that-opens-no-brace-in-the-name-position", Category: "parameter expansion",
+		Snippet: `echo ${$$}; echo "st=$?"`,
+		Why:     "the neighbor that keeps `${${…}}`'s refusal honest in the one column that refuses it while *reading*. ksh93 blames a nested expansion on a `!` the input does not contain anywhere (#2418), and the rule for that has to be the pair `${` standing where the name belongs: here the `$` parameter is followed by a second `$` that opens no brace, and that column names the `$` it really read. Four columns answer `bad substitution` at the run instead, each in its own words, so the row is also where the two moments are recorded side by side",
+	},
+	{
+		ID: "param/a-nested-expansion-behind-a-name-is-not-in-the-name-position", Category: "parameter expansion",
+		Snippet: `echo ${x${v}}; echo "st=$?"`,
+		Why:     "the second neighbor, and the one a rule written as \"a `${` anywhere inside the braces\" would get wrong: the characters are the nested expansion's exactly, and they stand *behind* a name rather than where the name belongs. ksh93 names the `$` here where `${${v}}` is blamed on a `!`, so the two differ by position alone. The shells with the construct refuse it too — a name is not an expansion's result there either — which is what makes the row about where the parser was rather than about the feature",
+	},
+	{
 		ID: "param/a-nested-expansion-takes-flags-and-a-substitution", Category: "parameter expansion",
 		Snippet: `v=abc; echo "[${(U)${v}}][${${(U)v}}][${$(echo xy)#x}]"`,
 		Why:     "what may sit either side of the nesting: a flag group belongs to the expansion it opens, so the outer and the inner may each carry one and the two spellings of `(U)` come to the same word. And the inner need not be a parameter expansion at all — a command substitution stands in the same position, which is what says the shape is `an expansion` rather than `another ${`",

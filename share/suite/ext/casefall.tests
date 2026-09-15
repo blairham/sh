@@ -1,0 +1,91 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# ;& — the case terminator that runs the next list instead of leaving the
+# statement. dash refuses it as a syntax error and bash 3.2 did too, so it is
+# ext/ rather than core/.
+#
+# The whole of it is control flow, so every case here prints the lists it
+# reached and in what order. A shell that read `;&` and treated it as `;;`
+# would exit 0 on all of this and print the wrong lines, which is the shape
+# this suite exists to catch.
+
+# The plain reading: the matched list runs, and then the list of the *next*
+# item runs whether or not its pattern matches.
+for w in a b c; do
+  printf '%s: ' "$w"
+  case $w in
+    a) printf 'A'; ;&
+    b) printf 'B' ;;
+    c) printf 'C' ;;
+  esac
+  printf '\n'
+done
+
+# It chains: two in a row fall through two items.
+case x in
+  x) printf 'first\n' ;&
+  y) printf 'second\n' ;&
+  z) printf 'third\n' ;;
+esac
+
+# The next item's pattern is not consulted, so a fall-through reaches a list
+# whose pattern could never have matched.
+case q in
+  q) printf 'matched q\n' ;&
+  zzz) printf 'reached zzz anyway\n' ;;
+esac
+
+# An empty list before ;& falls through and contributes nothing of its own.
+case q in
+  q) ;&
+  *) printf 'fell to the default\n' ;;
+esac
+
+# The last item may end with ;& too, and there is nothing after it to run.
+case last in
+  last) printf 'ran the last list\n' ;&
+esac
+printf 'after the case\n'
+
+# The status of the statement is the status of the list that ran last, not of
+# the one whose pattern matched.
+case s in
+  s) true ;&
+  *) false ;;
+esac
+printf 'status after falling into false: %d\n' $?
+case s in
+  s) false ;&
+  *) true ;;
+esac
+printf 'status after falling into true:  %d\n' $?
+
+# ;& inside a loop still leaves the case rather than the loop, and break still
+# leaves the loop from inside a fallen-into list.
+i=0
+while [ "$i" -lt 3 ]; do
+  i=$((i + 1))
+  case $i in
+    2) printf 'two, falling\n' ;&
+    *) printf 'body %s\n' "$i" ;;
+  esac
+done
+
+# A nested case reached by falling through behaves like any other.
+case outer in
+  outer) printf 'outer matched\n' ;&
+  *)
+    case inner in
+      inner) printf 'inner matched\n' ;;
+    esac
+    ;;
+esac
+
+# Assignments and expansions in a fallen-into list are ordinary: the list is
+# the same kind of list it would be after ;;.
+v=before
+case go in
+  go) v=during ;&
+  *) printf 'v is now [%s]\n' "$v" ;;
+esac

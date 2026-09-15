@@ -1,0 +1,119 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# typeset — the ksh-family declaration builtin. dash has no such word at all,
+# which is why this is ext/ and not core/.
+#
+# The interesting thing about this file is what is *not* in it. The obvious
+# case to write is `f() { typeset x=inner; }`, and it does not belong here:
+# ksh93 ties a local to the `function` form of a definition and leaves
+# `name()` in the enclosing scope, so the three shells that have typeset do
+# not agree about the one thing everybody reaches for it for. Scope is asked
+# below through `function`, which is where they do agree, and the `name()`
+# reading is a per-dialect answer rather than an ext claim.
+
+# A declaration inside a function body defined with `function` is local, and
+# the enclosing value comes back when the call returns.
+x=outer
+function scoped {
+  typeset x=inner
+  printf 'inside: [%s]\n' "$x"
+}
+scoped
+printf 'after:  [%s]\n' "$x"
+
+# Local and unset is still local: the name is not the outer one and does not
+# become it by being assigned to later.
+function later {
+  typeset x
+  printf 'declared empty: [%s]\n' "$x"
+  x=assigned
+  printf 'then assigned:  [%s]\n' "$x"
+}
+later
+printf 'outer intact:   [%s]\n' "$x"
+
+# Several names in one declaration, with and without values.
+function several {
+  typeset a=1 b c=3
+  b=2
+  printf 'three names: %s%s%s\n' "$a" "$b" "$c"
+}
+several
+
+# Nesting: each call gets its own, and a callee's declaration does not reach
+# back into the caller's.
+#
+# What a callee sees of the *caller's* local before declaring one is not asked
+# here, and that is a measurement rather than an oversight: bash and zsh scope
+# dynamically and hand it down, ksh93 scopes statically and hands down
+# nothing. Three shells with typeset, two answers — so it is not an ext claim.
+function inner {
+  typeset depth=2
+  printf 'inner set:  [%s]\n' "$depth"
+}
+function outer {
+  typeset depth=1
+  inner
+  printf 'outer kept: [%s]\n' "$depth"
+}
+outer
+printf 'global:     [%s]\n' "${depth-unset}"
+
+# At the top level typeset is an assignment that also declares.
+typeset g=global
+printf 'global set: [%s]\n' "$g"
+
+# -i makes the value arithmetic: the right-hand side of a later assignment is
+# evaluated rather than stored as text.
+typeset -i n=7
+n=n+3
+printf 'integer:    [%s]\n' "$n"
+n=4*2
+printf 'evaluated:  [%s]\n' "$n"
+n=n%3
+printf 'remainder:  [%s]\n' "$n"
+
+# An integer variable used in arithmetic is the same value it prints.
+printf 'in arith:   [%s]\n' "$((n * 10))"
+
+# -u folds a value to upper case as it is stored, -l to lower, and the fold
+# happens on every later assignment rather than once.
+typeset -u up=abc
+printf 'upper:      [%s]\n' "$up"
+up=MiXeD
+printf 'still up:   [%s]\n' "$up"
+typeset -l lo=ABC
+printf 'lower:      [%s]\n' "$lo"
+lo=MiXeD
+printf 'still low:  [%s]\n' "$lo"
+
+# -r makes the value fixed, and the shells here agree that the assignment
+# fails. They do not agree on the wording, so the diagnostic goes to a place
+# where it is counted and not read.
+typeset -r fixed=set
+printf 'readonly:   [%s]\n' "$fixed"
+if (fixed=changed) 2> /dev/null; then
+  printf 'reassigned: yes\n'
+else
+  printf 'reassigned: no\n'
+fi
+printf 'unchanged:  [%s]\n' "$fixed"
+
+# An attribute applied to a name that already holds a value takes effect from
+# the next assignment, which every shell here agrees about.
+plain=xyz
+typeset -u plain
+plain=abc
+printf 'next assign:[%s]\n' "$plain"
+
+# Whether the value already sitting in the name is converted *at the moment
+# the attribute is applied* is the other question, and it is left out for the
+# reason the scoping case above is: bash leaves it alone, zsh and ksh93 fold
+# it. Two answers among three shells is not an ext claim.
+
+# The attribute is a property of the name, so unsetting it and assigning again
+# is an ordinary variable once more.
+unset plain
+plain=xyz
+printf 'after unset:[%s]\n' "$plain"

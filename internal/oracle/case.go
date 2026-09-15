@@ -13506,6 +13506,37 @@ echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
 		Why:     "the give-up reaches to the end of the line and no further, inside a sourced file exactly as at the top of a script: SAME-LINE never prints in any shell that survives the refusal, and NEXT-LINE does — a row asserting only that the file kept running would pass with the same-line half missing",
 	},
 	{
+		ID: "eval/an-abandoned-statement-in-a-subshell-ends-it", Category: "eval and dot",
+		// From a file, for `dot/a-given-up-statement-takes-the-rest-of-its-line`'s
+		// reason one row up: over `-c` a bare readonly reassignment is fatal
+		// in bash because the program *is* the command string, which is a
+		// different question and would hide this one.
+		Script: true,
+		Snippet: `readonly r=1
+eval 'r=2
+printf "[top-inner]"'
+printf "[top-after]"
+(
+eval 'r=2
+printf "[sub-inner]"'
+printf "[sub]"
+)
+printf "[after]\n"`,
+		Why: "where the rule above stops, and the pair in one cell is the whole evidence: the same two-line `eval` is written twice, once at the top level and once inside a subshell. bash 5.3 and bash 3.2 write `[top-inner][top-after]` for the first and then nothing at all for the second — the give-up passes out through the `eval` and the subshell ends with it, taking `[sub]` — where ksh93 and zsh catch it in the `eval` both times and reach `[sub]`. Either half alone reads as the other rule: the top-level half is `eval/an-abandoned-statement-does-not-end-the-text` and says nothing about subshells, and a subshell-only row cannot tell \"the subshell ends\" from \"this shell's `eval` never resumes\". dash, BusyBox ash and bash under the name `sh` end the shell over the refusal before either question arises, so they say only that. This shell resumed in both positions (#2747)",
+	},
+	{
+		ID: "eval/a-failglob-refusal-in-a-subshell-ends-it", Category: "eval and dot",
+		Script: true,
+		Snippet: `shopt -s failglob 2>/dev/null
+(
+eval 'set -- zz*zz
+printf "[inner]"'
+printf "[sub]"
+)
+printf "[after]\n"`,
+		Why: "the second refusal that reaches the same rule, and the one #2747 was filed from — a refusal the shell decides to make rather than one a name's attributes force, so the row says the rule is about *giving a line up* and not about `readonly`. bash's cells are the complaint and `[after]`; zsh refuses the pattern too and reaches `[sub]`, which is its own answer to the same question; dash and ksh93 leave an unmatched pattern alone and run the lot. The `2>/dev/null` is what lets one snippet reach every column: three of them have no `failglob` name and would otherwise spend the row complaining about `shopt`",
+	},
+	{
 		ID: "dot/readonly-refusal-ends-the-sourced-file-only", Category: "eval and dot",
 		Snippet: `printf 'echo IN-BEFORE\nreadonly rr=1\nrr=2\necho IN-AFTER\n' > p.sh; . ./p.sh; echo "OUT-AFTER st=$?"`,
 		// From a file rather than from `-c`, which is not decoration: bash

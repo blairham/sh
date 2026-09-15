@@ -75,6 +75,13 @@ const (
 	TokTLess            // <<<  herestring
 	TokAmpGreat         // &>   both streams
 	TokAmpDGreat        // &>>  both streams, appending
+	// TokGreatSemi is `>;`, one dialect's write that only lands if the
+	// command succeeded: the output goes to a temporary file beside the
+	// target and is renamed over it at the end, or thrown away. The `;` is
+	// part of the operator and has to be tight against the `>` — `> ; f` is
+	// a syntax error where `>; f` is not. See
+	// [Dialect.RenameOnSuccessRedirect].
+	TokGreatSemi // >;
 )
 
 // text is the source spelling of each operator, and the table the lexer
@@ -93,6 +100,7 @@ var text = map[Kind]string{
 	TokAmpDGreatClobber: "&>>|", TokAmpDGreatBang: "&>>!",
 	TokDLess: "<<", TokDLessDash: "<<-",
 	TokTLess: "<<<", TokAmpGreat: "&>", TokAmpDGreat: "&>>",
+	TokGreatSemi: ">;",
 }
 
 // String returns the operator's spelling, or a name for the non-operators.
@@ -124,7 +132,8 @@ func (k Kind) IsRedirect() bool {
 	case TokLess, TokGreat, TokDGreat, TokLessAmp, TokGreatAmp, TokLessGreat, TokClobber,
 		TokClobberBang, TokDGreatClobber, TokDGreatBang,
 		TokAmpGreatClobber, TokAmpGreatBang, TokAmpDGreatClobber, TokAmpDGreatBang,
-		TokDLess, TokDLessDash, TokTLess, TokAmpGreat, TokAmpDGreat:
+		TokDLess, TokDLessDash, TokTLess, TokAmpGreat, TokAmpDGreat,
+		TokGreatSemi:
 		return true
 	}
 	return false

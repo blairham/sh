@@ -2168,10 +2168,19 @@ func (p *Parser) parseRedirect() *Redirect {
 	// inRedirectTarget goes with it and says only *that* this is a target;
 	// whether a subscript in it spans separators is decided beside
 	// inArgument, in the lexer. See atSpanningRedirectTarget.
+	//
+	// inHeredocDelimiter goes with them for the here-document operators,
+	// whose target is a delimiter rather than a path: nothing in a delimiter
+	// expands, so `<<$d` waits for a line reading `$d`. The operator is
+	// already known here, which is why the flag can be set before the word
+	// is read at all.
 	savedNoAssign, savedInRedirect := p.lex.noAssignment, p.lex.inRedirectTarget
+	savedDelimiter := p.lex.inHeredocDelimiter
 	p.lex.noAssignment, p.lex.inRedirectTarget = true, true
+	p.lex.inHeredocDelimiter = r.Op.IsHeredoc()
 	p.next()
 	p.lex.noAssignment, p.lex.inRedirectTarget = savedNoAssign, savedInRedirect
+	p.lex.inHeredocDelimiter = savedDelimiter
 	if p.tok.Kind != TokWord {
 		// The token that is there, not the one that is missing. `cat <(x)` in
 		// a dialect without process substitution is `"(" unexpected` in dash,

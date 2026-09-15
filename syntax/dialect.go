@@ -1915,6 +1915,32 @@ type Dialect struct {
 	// the other one.
 	ClobberOverrideMarker bool
 
+	// RenameOnSuccessRedirect reads `>;`, one dialect's write that lands
+	// only if the command succeeded. The output goes to a temporary file in
+	// the target's own directory and is renamed over the target when the
+	// command ends at status 0; at any other status the target is left
+	// exactly as it was, and a target that did not exist is not created.
+	//
+	// Measured 2026-09-14. ksh93u+ alone has it: `echo new >; f` replaces
+	// `f`, and `{ printf X; false; } >; f` leaves the old contents and
+	// status 1. bash 5.3.15, zsh 5.9.2 and dash all refuse the text with a
+	// syntax error at the `;`, which is the fallback this flag being off
+	// leaves in place — `>` then `;`, and a `>` with no target.
+	//
+	// The `;` is part of the operator and must be tight: `echo x > ; f` is a
+	// syntax error in ksh93 too. There is no `>>;` and no `<;`; both are
+	// syntax errors there, so this is one operator rather than a marker that
+	// generalizes.
+	//
+	// It is also where `<->` comes from, which is what #918 set out to
+	// explain. `echo <->; echo done` in ksh93 reports that it cannot open
+	// `-` and then does *not* run `done` — because the text is `echo` with
+	// `<-` and `>;`, whose target is the word `echo` and whose argument is
+	// `done`. `echo <->x` puts an `x` where the `;` was, so there is no `>;`
+	// at all, and `done` runs. The diagnostic naming `-` rather than `->`
+	// was the clue: the `<` had already taken its operand.
+	RenameOnSuccessRedirect bool
+
 	// HeredocEndsAtClosingParen lets a here-document's body end at the
 	// closing parenthesis of the construct it sits inside, so that the
 	// delimiter is a delimiter even with the `)` written onto its line:

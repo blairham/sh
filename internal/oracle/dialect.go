@@ -226,5 +226,10 @@ func Dialect() syntax.Dialect {
 	// records both, so the grammar that has to *read* every case is the one
 	// that takes the construct, as above.
 	d.ProcessSubstitutionToFile = true
+	// `cmd >; file` — the write that only lands if the command succeeded.
+	// One of the seven has it and the corpus records the syntax error the
+	// other six report at the `;`, so the grammar that has to *read* every
+	// case is the one that takes it, as above.
+	d.RenameOnSuccessRedirect = true
 	return d
 }

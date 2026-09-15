@@ -14631,8 +14631,17 @@ grades it and nothing drift-checks it either, for the same reason.
 | `heredoc/a-body-that-runs-to-the-end` | `[body]` | `[body]` | `[body]` | `[body]` | `[body]` | `[body]` | `[body]` |
 | `heredoc/a-body-lands-on-the-descriptor-it-was-written-for` | `[A:three~][B:][C:pee~]` | `[A:three~][B:][C:pee~]` | `[A:three~][B:][C:pee~]` | `[A:three~][B:][C:pee~]` | `[A:three~][B:][C:pee~]` | `[A:three~][B:][C:pee~]` | `[A:three~][B:][C:pee~]` |
 | `heredoc/a-body-on-a-descriptor-outlives-the-exec-that-opened-it` | `[E:kept~][F:` **2>** `<script>: 6: exec: {v}: not found` *(status 127)* | `[E:kept~][F:named~][v=10]` | `[E:kept~][F:named~][v=10]` | `[E:kept~][F:` **2>** `<script>: line 6: exec: {v}: not found` *(status 127)* | `[E:kept~][F:named~][v=11]` | `[E:kept~][F:named~][v=11]` | `[E:kept~][F:` **2>** `<script>: exec: line 6: {v}: not found` *(status 127)* |
+| `redirection/an-allocated-descriptor-counts-up-from-the-shell-s-base` | **2>** `<shell>: 1: exec: {a}: not found` *(status 127)* | `a=10 b=11 c=12` | `a=10 b=11 c=12` | **2>** `<shell>: line 0: exec: {a}: not found` *(status 127)* | `a=10 b=11 c=12` | `a=11 b=12 c=13` | **2>** `<shell>: exec: line 0: {a}: not found` *(status 127)* |
+| `redirection/a-script-file-of-its-own-takes-a-number-in-one-shell` | **2>** `<script>: 1: exec: {a}: not found` *(status 127)* | `a=10~[10:]` **2>** `cat: stdin: Bad file descriptor` | `a=10~[10:]` **2>** `cat: stdin: Bad file descriptor` | **2>** `<script>: line 1: exec: {a}: not found` *(status 127)* | `a=11~[10:]` | `a=11~[10:]` **2>** `<script>:3: 10: bad file descriptor` | **2>** `<script>: exec: line 1: {a}: not found` *(status 127)* |
+| `redirection/a-write-that-only-lands-if-the-command-succeeded` | **2>** `<script>: 2: Syntax error: ";" unexpected` *(status 2)* | **2>** `<script>: line 2: syntax error near unexpected token `;'~<script>: line 2: `echo NEW >; t'` *(status 2)* | **2>** `<script>: line 2: syntax error near unexpected token `;'~<script>: line 2: `echo NEW >; t'` *(status 2)* | **2>** `<script>: line 2: syntax error near unexpected token `;'~<script>: line 2: `echo NEW >; t'` *(status 2)* | `[ok:0:NEW][bad:1:NEW]` | **2>** `<script>:2: parse error near `;'` *(status 1)* | **2>** `<script>: line 2: syntax error: unexpected ";"` *(status 2)* |
+| `redirection/a-space-before-the-semicolon-is-not-the-operator` | **2>** `<shell>: 1: Syntax error: ";" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `;'~<shell>: -c: line 1: `echo x > ; f; echo "st=$?"'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `;'~<shell>: -c: line 1: `echo x > ; f; echo "st=$?"'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `;'~<shell>: -c: line 0: `echo x > ; f; echo "st=$?"'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `;' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `;'` *(status 1)* | **2>** `<shell>: syntax error: unexpected ";"` *(status 2)* |
+| `heredoc/a-body-reaches-a-child-that-names-its-descriptor` | `child~st=0` | `child~st=0` | `child~st=0` | `child~st=0` | `child~st=0` | `child~st=0` | `child~st=0` |
+| `heredoc/the-medium-a-body-is-carried-on-is-visible-to-a-child` | `pipe` | `pipe` | `pipe` | `file` | `file` | `file` | `pipe` |
 | `heredoc/a-here-string-lands-on-its-descriptor-too` | **2>** `<script>: 1: Syntax error: redirection unexpected` *(status 2)* | `[D:string~]` | `[D:string~]` | `[D:string~]` | `[D:string~]` | `[D:string~]` | **2>** `<script>: line 1: syntax error: unexpected redirection` *(status 2)* |
 | `heredoc/the-delimiter-is-the-whole-line` | `line~EOF x~echo "st=0"` | `line~EOF x~echo "st=0"` **2>** `<script>: line 5: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')` | `line~EOF x~echo "st=0"` **2>** `<script>: line 5: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')` | `line~EOF x~echo "st=0"` | `line~EOF x~echo "st=0"` | `line~EOF x~echo "st=0"` | `line~EOF x~echo "st=0"` |
+| `heredoc/a-dollar-in-the-delimiter-is-an-ordinary-character` | `body EOF~after` | `body EOF~after` | `body EOF~after` | `body EOF~after` | `body EOF~after` | `body EOF~after` | `body EOF~after` |
+| `heredoc/a-substitution-in-the-delimiter-is-its-own-text` | `body` **2>** `<script>: 4: Syntax error: "(" unexpected` *(status 2)* | `body~second~after` | `body~second~after` | `body~second~after` | `body` **2>** `<script>: syntax error at line 4: `<<X' here-document not contained within command substitution` *(status 3)* | `body~second~after` | `body` **2>** `<script>: line 4: syntax error: unexpected "("` *(status 2)* |
+| `heredoc/quoting-the-delimiter-is-what-makes-the-body-literal` | `body $d~second $d~after` | `body $d~second $d~after` | `body $d~second $d~after` | `body $d~second $d~after` | `body $d~$d~cat <<\$d~second $d~$d~echo after` | `body $d~second $d~after` | `body $d~second $d~after` |
 | `heredoc/a-continued-body-line-is-joined-before-the-delimiter-is-looked-for` | `AEOF~B~done` | `AEOF~B~done` | `AEOF~B~done` | `AEOF~B~done` | `AEOF~B~done` | `AEOF~B~done` | `AEOF~B~done` |
 | `heredoc/a-quoted-delimiter-joins-no-lines` | `A\~done` | `A\~done` | `A\~done` | `A\~done` | `A\~done` | `A\~done` | `A\~done` |
 | `heredoc/backslashes-before-a-body-lines-newline-pair-off` | `A\~done` | `A\~done` | `A\~done` | `A\~done` | `A\~done` | `A\~done` | `A\~done` |
@@ -15058,7 +15067,7 @@ grades it and nothing drift-checks it either, for the same reason.
   Q
   printf "]\n"
   ```
-- `heredoc/a-body-on-a-descriptor-outlives-the-exec-that-opened-it` — the other half of the descriptor: a document opened by `exec` is still there at the next command, and `{v}<<Y` allocates a number and hands it to the name. The first is unanimous across all seven columns; the second is only asked of the four that have the `{v}` spelling at all, and it is where the allocation base shows — bash answers 10, ksh93 and zsh answer 11, and dash, BusyBox ash and bash 3.2 have no such form and report `exec: {v}: not found` at 127. Ours left `exec 3<<X` with nothing behind it and `{v}<<Y` with nothing allocated, so `$v` was unset and the `cat` read a descriptor that was never opened. The ksh column still answers 10 here where ksh93 answers 11, which is `FirstAllocatedDescriptor` and is #2756 rather than this
+- `heredoc/a-body-on-a-descriptor-outlives-the-exec-that-opened-it` — the other half of the descriptor: a document opened by `exec` is still there at the next command, and `{v}<<Y` allocates a number and hands it to the name. The first is unanimous across all seven columns; the second is only asked of the four that have the `{v}` spelling at all, and it is where the allocation base shows — bash answers 10, ksh93 and zsh answer 11, and dash, BusyBox ash and bash 3.2 have no such form and report `exec: {v}: not found` at 127. Ours left `exec 3<<X` with nothing behind it and `{v}<<Y` with nothing allocated, so `$v` was unset and the `cat` read a descriptor that was never opened. The ksh column answers 10 here where ksh93 answers 11, and that is **not** the allocation base: ksh93 keeps the *script file itself* on descriptor 10 while it runs a script from a file, so 10 is taken and the first allocation lands on 11. Proved by reading it — `cat <&10` in a ksh93 script prints the rest of the script — and by the route: under `-c`, with no script file to hold, ksh93 allocates 10 like bash. See the case beside this one and #2756
   ```sh
   exec 3<<X
   kept
@@ -15071,6 +15080,43 @@ grades it and nothing drift-checks it either, for the same reason.
   cat <&"$v"
   printf "][v=$v]\n"
   ```
+- `redirection/an-allocated-descriptor-counts-up-from-the-shell-s-base` — the allocation base, asked where nothing else is holding a low number: bash 5.3.15 and ksh93 count up from 10 and zsh 5.9.2 from 11, so this is `FirstAllocatedDescriptor` and the whole of it. Run through `-c` **deliberately** rather than from a file, which is the discrimination the axis needs — see the row below, where ksh93 answers one higher for a reason that is not the base
+  ```sh
+  exec {a}>/dev/null {b}>/dev/null {c}>/dev/null
+  echo "a=$a b=$b c=$c"
+  ```
+- `redirection/a-script-file-of-its-own-takes-a-number-in-one-shell` — the same allocation from a **script file**, which is a different answer in exactly one column: ksh93 says 11 where its own `-c` route says 10, because it keeps the script it is running open on descriptor 10 — the `cat <&10` prints the rest of the script back, which is what proves it rather than infers it. bash 5.3.15 and dash leave 10 closed and bash's allocation stays at 10. So an axis set from this route alone would record ksh93's base as eleven, which #2756 proposed and which the `-c` row above falsifies. Ours does not hold the script on a number, so it answers 10 and reports a bad descriptor — recorded as the divergence it is rather than patched over by moving a base that is measured correct
+  ```sh
+  exec {a}>/dev/null
+  echo "a=$a"
+  printf "[10:"; cat <&10; printf "]\n"
+  ```
+- `redirection/a-write-that-only-lands-if-the-command-succeeded` — ksh93 alone has `>;`, a write that goes to a temporary file beside the target and is renamed over it only if the command ended at status 0 — so the failing command here leaves the file holding what the successful one put there and reports 1, where a plain `>` would have emptied it before the command ran. bash 5.3.15, bash 3.2, zsh 5.9.2, dash and BusyBox ash all refuse the text at the `;`, each in its own words, which is the fallback a dialect without the operator leaves in place: `>` with no target
+  ```sh
+  echo old > t
+  echo NEW >; t
+  printf "[ok:%s:%s]" "$?" "$(cat t)"
+  { printf X; false; } >; t
+  printf "[bad:%s:%s]\n" "$?" "$(cat t)"
+  ```
+- `redirection/a-space-before-the-semicolon-is-not-the-operator` — the `;` is part of the operator and has to be tight against the `>`. ksh93 refuses this exactly as the five shells without `>;` do, so the operator is one spelling rather than a marker that generalizes — the same care `ClobberOverrideMarker` records taking, and the reason `>>;` and `<;` are refused there too
+  ```sh
+  echo x > ; f; echo "st=$?"
+  ```
+- `heredoc/a-body-reaches-a-child-that-names-its-descriptor` — the document has to be on a **real descriptor**, because a child is handed the table by number and text this shell holds has no number. All four columns with the grammar print the body; ours printed `3: Bad file descriptor` at status 1, the table entry having answered nil and a nil being a descriptor closed over there (#2759). The shape that always worked is `{ cat <&3; } 3<<X`, which moves the body onto standard input and lets os/exec build the pipe — so the defect was invisible to every case written the ordinary way
+  ```sh
+  /bin/sh -c 'cat <&3' 3<<X
+  child
+  X
+  echo "st=$?"
+  ```
+- `heredoc/the-medium-a-body-is-carried-on-is-visible-to-a-child` — having to put the body *somewhere*, the panel splits two-two on where, and a script can see it: bash 5.3.15 and dash write it into a pipe, ksh93 and zsh into a temporary file. The consequence a script feels is seekability — with `head -1 <&3` and then `cat <&3`, the file columns still have `line2` and the pipe columns lost it with the block `head` swallowed. Asked from a child because `/dev/fd/3` names the document only there: inside the shell, 3 is an entry in a table
+  ```sh
+  /bin/sh -c 'if [ -f /dev/fd/3 ]; then echo file; else echo pipe; fi' 3<<X
+  line1
+  line2
+  X
+  ```
 - `heredoc/a-here-string-lands-on-its-descriptor-too` — the same rule for the one-line spelling, which shares the branch and so shared the defect. bash, ksh93 and zsh put the line on 3; dash and BusyBox ash have no here-string and stop at `Syntax error: redirection unexpected`, which is why it is a case of its own rather than a fourth probe in the row above — a syntax error at the end of that script would have buried three facts it had already established
   ```sh
   printf "[D:"; { cat <&3; } 3<<<'string'
@@ -15082,6 +15128,35 @@ grades it and nothing drift-checks it either, for the same reason.
   line
   EOF x
   echo "st=$?"
+  ```
+- `heredoc/a-dollar-in-the-delimiter-is-an-ordinary-character` — a here-document's delimiter is subject to quote removal and to nothing else, so `<<$d` waits for a line reading `$d` — the `$` never expands, and the *body* still does. Unanimous across the panel, which is why it is a correction rather than an axis. The cost of getting it wrong is out of proportion to the construct: this parser stripped the `$` and looked for `d`, so the delimiter never arrived, the remaining three lines became the body, and the one shell that remarks on a document ending at end of input named `d` as the delimiter it wanted (#2745)
+  ```sh
+  d=EOF
+  cat <<$d
+  body $d
+  $d
+  echo after
+  ```
+- `heredoc/a-substitution-in-the-delimiter-is-its-own-text` — the same rule for the two spellings that have a construct to *scan*: the delimiter ends where the construct ends — `<<$(echo X)` is one word in bash and zsh — and what is kept is the source it occupied rather than anything it would produce. The split in the panel is over the second document only: dash and ksh93 refuse a `$(` in a delimiter outright, so the row records a parse refusal for them and a match for bash and zsh, where a shell that read the `(` as an ordinary character would refuse all four columns and one that expanded it would swallow the rest of the file
+  ```sh
+  cat <<${d}
+  body
+  ${d}
+  cat <<$(echo X)
+  second
+  $(echo X)
+  echo after
+  ```
+- `heredoc/quoting-the-delimiter-is-what-makes-the-body-literal` — the other half of the reading above: both delimiters here are `$d` too, and both bodies are literal — because quote removal *took something away*, which is the one question that decides it. So `<<$d` and `<<"$d"` look for the same line and differ only in whether the body expands, and a reading that decided literalness from the presence of a `$` would get this row and the one above it backwards
+  ```sh
+  d=EOF
+  cat <<"$d"
+  body $d
+  $d
+  cat <<\$d
+  second $d
+  $d
+  echo after
   ```
 - `heredoc/a-continued-body-line-is-joined-before-the-delimiter-is-looked-for` — a body line ending in a backslash continues onto the line under it, and the delimiter is looked for on the joined text — so the first `EOF` here was asked for by the line above it and the second one ends the document. Unanimous across the panel, and the one this parser got wrong: it ended the document at the first `EOF` and ran `B` and `EOF` as commands (#2430)
   ```sh
@@ -17686,7 +17761,7 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   touch v5 v6 va; echo v<5-6>; echo v(<5-6>); echo after
   ```
-- `pat/a-numeric-range-against-the-filesystem` — the whole of the expansion half in one row: a range is matched per component and sorted with everything else, the digits in front of one are part of the word rather than a file descriptor — `2<->` names `21` and `22` and is not a redirection of descriptor 2 — and a miss is the ordinary unmatched-pattern answer, which in this shell stops the command, so `after` never runs. ksh93's cell is the second finding here and is not this change's: it *parses* `echo <->` as a redirection from a file called `-` where we refuse the `;` after it, which is a gap in the ksh grammar rather than in the range
+- `pat/a-numeric-range-against-the-filesystem` — the whole of the expansion half in one row: a range is matched per component and sorted with everything else, the digits in front of one are part of the word rather than a file descriptor — `2<->` names `21` and `22` and is not a redirection of descriptor 2 — and a miss is the ordinary unmatched-pattern answer, which in this shell stops the command, so `after` never runs. ksh93's cell is the second finding here and is not this change's: it *parses* `echo <->` as a redirection from a file called `-` — and then as the `>;` operator it alone has, whose target is the word behind the `;`. So the `echo done` after it is this command's argument rather than the next command, which is why that column reaches nothing. Modeled in the ksh grammar by `Dialect.RenameOnSuccessRedirect` (#918); `redirection/a-write-that-only-lands-if-the-command-succeeded` is where the operator itself is pinned. This row is no longer marked a syntax error, and that is the change rather than an omission: the corpus grammar is the union of all seven columns, so text one of them parses is text that grammar reads
   ```sh
   touch 1 2 10 007 21 22 abc; echo <->; echo <2-9>; echo 2<->; echo <->zzz; echo after
   ```

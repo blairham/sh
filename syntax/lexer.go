@@ -135,6 +135,31 @@ type Lexer struct {
 	// split ksh93 makes.
 	inRedirectTarget bool
 
+	// inHeredocDelimiter is set while the token being read is a
+	// here-document's *delimiter*, which is the one word position where no
+	// expansion happens at all. A delimiter is subject to quote removal and
+	// to nothing else, so `<<$d` waits for a line reading `$d` — measured
+	// the same in bash 5.3.15, ksh93u+, zsh 5.9.2 and dash — and `${d}`,
+	// `$(cmd)`, `$((1+1))` and a backquoted run are all text in one.
+	//
+	// The construct is still *scanned*, because the delimiter ends where it
+	// ends: `cat <<$(echo X)` is one word in bash and zsh, and a scanner
+	// that read the `(` as an ordinary character would stop the word at it
+	// and refuse the line. What changes is only what is kept — the source
+	// the construct occupied, rather than anything it would produce. See
+	// scanDelimiterSubstitution.
+	//
+	// Quoting is not expansion and stays on: `<<$'a'` is delimited by `a`
+	// and `<<E$"x"F` by `ExF`, because `$'` and `$"` open quoted runs. So
+	// the flag is read below those two and above everything else a `$` or a
+	// backquote starts.
+	//
+	// Without it the delimiter was the word's spans *joined*, which is the
+	// text with each construct's own delimiters already stripped: `$d`
+	// arrived as `d`, the delimiter line never matched, and the rest of the
+	// file was swallowed as the body (#2745).
+	inHeredocDelimiter bool
+
 	// inRawBody is set while the text being read is a *body* rather than a
 	// word: a here-document's, or a value being read again by the flag that
 	// re-evaluates one. Both go through heredocSpans, which marks every span
@@ -1130,7 +1155,7 @@ var operators = []Kind{
 	TokDGreatClobber, TokDGreatBang, TokAmpGreatClobber, TokAmpGreatBang, // 3 bytes
 	TokAndAnd, TokOrOr, TokDSemi, TokSemiAmp, TokDGreat, TokLessAmp, TokGreatAmp,
 	TokLessGreat, TokClobber, TokClobberBang, TokDLess, TokAmpGreat,
-	TokAmpBang, TokAmpPipe, TokPipeAmp, TokSemiPipe, // 2 bytes
+	TokAmpBang, TokAmpPipe, TokPipeAmp, TokSemiPipe, TokGreatSemi, // 2 bytes
 	TokAmp, TokPipe, TokSemi, TokLeftParen, TokRightParen, TokLess, TokGreat, // 1 byte
 }
 
@@ -1163,6 +1188,8 @@ func (l *Lexer) enabled(k Kind) bool {
 		return l.dialect.PipeBothStreams || l.dialect.CoprocPipeOperator
 	case TokClobberBang, TokDGreatClobber, TokDGreatBang:
 		return l.dialect.ClobberOverrideMarker
+	case TokGreatSemi:
+		return l.dialect.RenameOnSuccessRedirect
 	case TokAmpGreatClobber, TokAmpGreatBang, TokAmpDGreatClobber, TokAmpDGreatBang:
 		// The marker on the both-streams operators needs those operators
 		// first: where `&>` is not read at all, `&>|` cannot be the marker on
@@ -2351,6 +2378,55 @@ func (l *Lexer) scanWord(start Pos) Token {
 // Both are refusals, so reading the `<(` as a substitution inside a group
 // would make two constructs work that the shell does not have. It stays a
 // case of scanWord's own.
+// startsDelimiterSubstitution reports whether an *expansion* starts at the
+// scanner's position — as opposed to a quoting form, which `$'` and `$"` are.
+// Only read while [Lexer.inHeredocDelimiter] is set, where the two have to be
+// told apart: quote removal applies to a delimiter and expansion does not.
+func (l *Lexer) startsDelimiterSubstitution() bool {
+	c := l.peek()
+	if c == '`' {
+		return true
+	}
+	if c != '$' {
+		return false
+	}
+	switch l.peekAt(1) {
+	case '(', '{':
+		return true
+	case '[':
+		return l.dialect.DollarBracketArith
+	}
+	return l.startsBareParam()
+}
+
+// scanDelimiterSubstitution reads a substitution standing in a here-document's
+// delimiter and hands back the source it occupied, as literal text.
+//
+// Scanned with the ordinary scanners because the *extent* is a real question —
+// `<<$(echo X)` is one word, and a `)` inside a nested quote belongs to the
+// substitution — and then discarded, because a delimiter takes quote removal
+// and nothing else. The value is the raw source, so the word this span belongs
+// to reads back identical to how it was written, which is what makes
+// [Token.Literal] the delimiter again.
+func (l *Lexer) scanDelimiterSubstitution(q Quoting) Span {
+	start, startPos := l.off, l.pos()
+	switch {
+	case l.peek() == '`':
+		l.scanBackticks(q)
+	case l.peekAt(1) == '(' && l.peekAt(2) == '(':
+		l.scanParens(l.doubleParenKind(), q)
+	case l.peekAt(1) == '[':
+		l.scanBracket(q)
+	case l.peekAt(1) == '(':
+		l.scanParens(CommandSubst, q)
+	case l.peekAt(1) == '{':
+		l.scanBraces(q)
+	default:
+		l.scanBareParam(q)
+	}
+	return Span{Kind: Literal, Value: l.src[start:l.off], Quoting: q, Pos: startPos}
+}
+
 func (l *Lexer) substitutionSpans(flush func()) ([]Span, bool) {
 	c := l.peek()
 	switch {
@@ -2385,6 +2461,12 @@ func (l *Lexer) substitutionSpans(flush func()) ([]Span, bool) {
 		flush()
 		l.advance() // $
 		return l.scanDouble(), true
+
+	case l.inHeredocDelimiter && l.startsDelimiterSubstitution():
+		// Below `$'` and `$"`, which are quoting rather than expansion and
+		// so still apply. See inHeredocDelimiter.
+		flush()
+		return []Span{l.scanDelimiterSubstitution(Unquoted)}, true
 
 	case c == '$' && l.peekAt(1) == '(' && l.peekAt(2) == '(':
 		// `$((` is arithmetic, unless the parentheses say otherwise: a
@@ -2675,6 +2757,14 @@ func (l *Lexer) scanDoubleEscaping(open Pos, closing bool, escapes string) []Spa
 			}
 			return out
 
+		// A double-quoted run inside a here-document's delimiter is still
+		// part of the delimiter, and nothing in a delimiter expands:
+		// `<<"$d"` is delimited by `$d` in bash, zsh and dash.
+		case l.inHeredocDelimiter && l.startsDelimiterSubstitution():
+			flush()
+			out = append(out, l.scanDelimiterSubstitution(DoubleQuoted))
+			litPos = l.pos()
+
 		// Substitutions happen inside double quotes — "$(cmd)" is how most
 		// scripts spell a substitution — so they are spans of their own here
 		// too. The quoting is carried on them because it decides whether the
@@ -2779,7 +2869,11 @@ func (l *Lexer) Tokens() []Token {
 	var out []Token
 	var heredoc Kind
 	for {
+		// The delimiter is the one word position where nothing expands, and
+		// the parser sets the same flag for it. See inHeredocDelimiter.
+		l.inHeredocDelimiter = heredoc != 0
 		t := l.Next()
+		l.inHeredocDelimiter = false
 		out = append(out, t)
 		if t.Kind == TokEOF || l.err != nil {
 			return out

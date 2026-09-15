@@ -11,8 +11,11 @@ import (
 	"io/fs"
 	"maps"
 	"os"
+	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 
 	"github.com/blairham/sh/syntax"
@@ -253,10 +256,17 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 				r.redirErr = true
 				return closers, nil
 			}
+			// The text is put on a real descriptor, which is what lets a
+			// child that names the number itself read it. See
+			// Runner.heredocReader.
+			src, closer := r.heredocReader(body)
+			if closer != nil && !persists {
+				closers = append(closers, closer)
+			}
 			// A body joins the set as an opened file does: `cat <f <<<hi` is the
 			// file and then the line, measured, so the source need not be a file
 			// to be one of several.
-			held := r.eachSource(hfd, strings.NewReader(body), sources)
+			held := r.eachSource(hfd, src, sources)
 			switch hfd {
 			case 0:
 				r.Stdin = held
@@ -509,6 +519,14 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 					flags &^= os.O_CREATE
 				}
 			}
+		case syntax.TokGreatSemi:
+			// The command writes into a file of its own, so this is an
+			// ordinary create-and-truncate — of the temporary, not of the
+			// target, which is not opened at all. `set -C` is measured not
+			// to reach it: `set -C; echo x >; f` over an existing `f`
+			// replaces it in ksh93, which follows from the target never
+			// being truncated.
+			flags = os.O_WRONLY | os.O_CREATE | os.O_TRUNC
 		case syntax.TokLess:
 			flags = os.O_RDONLY
 		case syntax.TokLessGreat:
@@ -624,6 +642,41 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 				return closers, nil
 			}
 
+			// `>;` never opens the target. The command writes into a
+			// temporary file in the target's **own directory**, and the
+			// rename at the end of the command is what makes the write
+			// visible — so a command that fails leaves the target exactly as
+			// it was, and one that fails over a target that did not exist
+			// creates nothing.
+			//
+			// Beside the target rather than in a temporary directory,
+			// because a rename across filesystems is not a rename: it would
+			// be a copy with a window in the middle, which is the one thing
+			// this operator exists to avoid.
+			//
+			// Under `exec` the redirection outlives the command, so there is
+			// no end for the rename to happen at and no status for it to
+			// read. ksh93 refuses that text outright — `exec >; f` is a
+			// syntax error there — and this shell has no parse rule keyed on
+			// a command's name, so it opens the target directly instead. The
+			// divergence is a refusal we do not make; what it must not be is
+			// a temporary file nothing ever renames or removes.
+			renameTo := ""
+			if op == syntax.TokGreatSemi && r.redirectForBuiltin != "exec" {
+				renameTo, path = path, renameOnSuccessTemp(path)
+				// Gated as its own open, because it is its own file: the
+				// target's permission was asked about above and this is a
+				// second name in the same directory. Both have to be
+				// allowed for the write to happen, which is the honest
+				// reading — a policy that may see this directory at all
+				// sees both.
+				action = r.act(Action{Kind: ActionOpen, Path: path, Write: true})
+				if !r.allowed(ctx, action) {
+					r.status = r.diag().redirectFailureStatus()
+					r.redirErr = true
+					return closers, nil
+				}
+			}
 			// A background job's pid is settled before an open that may never
 			// return, so that `&` can hand the shell back. See
 			// settleBackgroundJobBeforeABlockingOpen: this is where a job whose
@@ -697,7 +750,17 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 				r.redirErr = true
 				return closers, nil
 			}
-			if !persists {
+			switch {
+			case renameTo != "":
+				// The rename is the close, and it has to be *this* closer
+				// rather than an extra one beside it: closing the file twice
+				// is what a plain closer and a rename closer together would
+				// do. See renameOnSuccess, which reads the status the
+				// command ended at.
+				closers = append(closers, renameOnSuccess{
+					r: r, f: f, temp: path, target: renameTo,
+				})
+			case !persists:
 				// A descriptor that outlives the command must not be closed
 				// when it ends, which is the same exemption `exec` already has
 				// — exec skips every closer.
@@ -790,6 +853,72 @@ func (r *Runner) eachTarget(fd int, f io.Writer, opened map[int]io.Writer) io.Wr
 	}
 	opened[fd] = f
 	return f
+}
+
+// heredocReader puts a here-document's or a here-string's body somewhere a
+// descriptor can point at, and hands back what reads it and what closes it.
+//
+// The text is this process's own — a string the parser produced — and a
+// string has no descriptor number. That is enough for every read *this* shell
+// does and for nothing a child does: `childFiles` rebuilds the table by
+// number for a command it starts, an entry it cannot turn into an *os.File
+// answers nil, and a nil is a descriptor closed over there. So `sh -c 'cat
+// <&3' 3<<X` said `3: Bad file descriptor` where all four columns of the
+// panel print the body (#2759).
+//
+// Which medium is [Semantics.HeredocBody], and it is measured rather than
+// chosen: the panel splits two-two, and a script can tell them apart.
+//
+// A medium that could not be made falls back to the text itself. That is the
+// old answer, which is wrong only for a child naming the number — the shell's
+// own reads are unaffected — so a machine out of descriptors or with no
+// writable temporary directory keeps working rather than failing a
+// redirection every shell performs.
+func (r *Runner) heredocReader(body string) (io.Reader, io.Closer) {
+	if r.sem().HeredocBody == HeredocBodyInATemporaryFile {
+		// Named here and opened exclusively rather than through
+		// os.CreateTemp, which is forbidden in this tree for a reason that
+		// applies exactly here: it resolves an empty directory through
+		// os.TempDir, which is the *process* environment's `$TMPDIR`, where
+		// the shell's answer is the script's — `r.tempHome()`, which reads
+		// the variable. A script that moved the name moved where its own
+		// private text goes. `newSubstFile` names its file the same way.
+		path := filepath.Join(r.tempHome(),
+			".sh-heredoc-"+strconv.Itoa(os.Getpid())+"-"+
+				strconv.FormatUint(heredocSpoolSeq.Add(1), 10))
+		f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o600)
+		if err != nil {
+			return strings.NewReader(body), nil
+		}
+		// Unlinked at once and read through the descriptor that is already
+		// open on it, so nothing is left behind by a shell that is killed
+		// and nothing in the filesystem names a script's private text.
+		_ = os.Remove(path)
+		if _, err := f.WriteString(body); err != nil {
+			_ = f.Close()
+			return strings.NewReader(body), nil
+		}
+		if _, err := f.Seek(0, io.SeekStart); err != nil {
+			_ = f.Close()
+			return strings.NewReader(body), nil
+		}
+		return f, f
+	}
+	pr, pw, err := os.Pipe()
+	if err != nil {
+		return strings.NewReader(body), nil
+	}
+	// The write side is a goroutine because a body larger than the pipe
+	// buffer would otherwise block the shell against a reader that has not
+	// started yet. It ends either way: the write completes, or the read end
+	// is closed and the write fails — Go reports that as an error on a pipe
+	// rather than raising SIGPIPE, which it does only for the two standard
+	// streams.
+	go func() {
+		_, _ = io.WriteString(pw, body)
+		_ = pw.Close()
+	}()
+	return pr, pr
 }
 
 // fileOrNil is the real file behind a target, where there is one.
@@ -2099,4 +2228,82 @@ func (r *Runner) fdAliased(held any) bool {
 		}
 	}
 	return any(r.Stdin) == held || any(r.Stdout) == held || any(r.Stderr) == held
+}
+
+// renameOnSuccess is the close of a `>;` redirection: the temporary file the
+// command wrote into is renamed over the target if the command succeeded, and
+// thrown away if it did not.
+//
+// A closer rather than a step of its own because the moment is the same one —
+// the command has ended, and its redirections are being taken down. That is
+// also what makes the status readable here: [Runner.status] holds what the
+// command ended at by the time the deferred closers run, on both routes into
+// them (a simple command's and a compound one's).
+//
+// The target's permissions are carried over where it already existed, because
+// a rename brings the temporary file's mode with it and a replaced file that
+// silently became world-readable would be a worse answer than no operator at
+// all. Measured on ksh93u+ 2026-09-14: `chmod 741 f` then `echo new >; f`
+// leaves the mode at `-rwxr----x`.
+type renameOnSuccess struct {
+	r      *Runner
+	f      *os.File
+	temp   string
+	target string
+}
+
+func (t renameOnSuccess) Close() error {
+	err := t.f.Close()
+	finishRenameOnSuccess(t.temp, t.target, t.r.status == 0)
+	return err
+}
+
+// renameOnSuccessTemp names the file a `>;` writes into: a hidden name in the
+// target's **own directory**, because a rename across filesystems is not a
+// rename — it would be a copy with a window in the middle, which is the one
+// thing this operator exists to avoid.
+//
+// Numbered rather than random, the way a process substitution's own files
+// are: the pid keeps two shells apart and the counter keeps one shell's
+// several apart, and both are needed because a loop can reach this twice
+// before the first rename has happened.
+func renameOnSuccessTemp(target string) string {
+	return filepath.Join(filepath.Dir(target),
+		".sh-rename-"+strconv.Itoa(os.Getpid())+"-"+
+			strconv.FormatUint(renameOnSuccessSeq.Add(1), 10))
+}
+
+var renameOnSuccessSeq atomic.Uint64
+
+// heredocSpoolSeq numbers the files a here-document's body is spooled into,
+// beside the pid, for the reason renameOnSuccessTemp gives: a loop reaches
+// this twice before the first is closed.
+var heredocSpoolSeq atomic.Uint64
+
+// finishRenameOnSuccess is the filesystem half of a `>;`, in a function of its
+// own so that what reaches the filesystem is nameable.
+//
+// Outside the gate deliberately, and the reason is the open above it: the
+// target was asked about as an `ActionOpen` with `Write` set and the
+// temporary as a second one, so a policy that refused either never got here.
+// What is left is completing a write two gate consultations have already
+// allowed, on a path this shell chose and a path the script named.
+func finishRenameOnSuccess(temp, target string, succeeded bool) {
+	if !succeeded {
+		// The command failed, so the target is left exactly as it was — and
+		// a target that did not exist is still not there. Removing the
+		// temporary is the whole of that; nothing else happened to the
+		// target at any point.
+		_ = os.Remove(temp)
+		return
+	}
+	if st, err := os.Stat(target); err == nil {
+		// Only where the target is there to have a mode. A new file keeps
+		// the temporary's own, which is what a shell creating it with `>`
+		// would have given it.
+		_ = os.Chmod(temp, st.Mode().Perm())
+	}
+	if err := os.Rename(temp, target); err != nil {
+		_ = os.Remove(temp)
+	}
 }

@@ -9377,7 +9377,60 @@ Y
 cat <&"$v"
 printf "][v=$v]\n"`,
 		Script: true,
-		Why:    "the other half of the descriptor: a document opened by `exec` is still there at the next command, and `{v}<<Y` allocates a number and hands it to the name. The first is unanimous across all seven columns; the second is only asked of the four that have the `{v}` spelling at all, and it is where the allocation base shows — bash answers 10, ksh93 and zsh answer 11, and dash, BusyBox ash and bash 3.2 have no such form and report `exec: {v}: not found` at 127. Ours left `exec 3<<X` with nothing behind it and `{v}<<Y` with nothing allocated, so `$v` was unset and the `cat` read a descriptor that was never opened. The ksh column still answers 10 here where ksh93 answers 11, which is `FirstAllocatedDescriptor` and is #2756 rather than this",
+		Why:    "the other half of the descriptor: a document opened by `exec` is still there at the next command, and `{v}<<Y` allocates a number and hands it to the name. The first is unanimous across all seven columns; the second is only asked of the four that have the `{v}` spelling at all, and it is where the allocation base shows — bash answers 10, ksh93 and zsh answer 11, and dash, BusyBox ash and bash 3.2 have no such form and report `exec: {v}: not found` at 127. Ours left `exec 3<<X` with nothing behind it and `{v}<<Y` with nothing allocated, so `$v` was unset and the `cat` read a descriptor that was never opened. The ksh column answers 10 here where ksh93 answers 11, and that is **not** the allocation base: ksh93 keeps the *script file itself* on descriptor 10 while it runs a script from a file, so 10 is taken and the first allocation lands on 11. Proved by reading it — `cat <&10` in a ksh93 script prints the rest of the script — and by the route: under `-c`, with no script file to hold, ksh93 allocates 10 like bash. See the case beside this one and #2756",
+	},
+	{
+		ID: "redirection/an-allocated-descriptor-counts-up-from-the-shell-s-base", Category: "redirection",
+		Snippet: `exec {a}>/dev/null {b}>/dev/null {c}>/dev/null
+echo "a=$a b=$b c=$c"
+`,
+		Why: "the allocation base, asked where nothing else is holding a low number: bash 5.3.15 and ksh93 count up from 10 and zsh 5.9.2 from 11, so this is `FirstAllocatedDescriptor` and the whole of it. Run through `-c` **deliberately** rather than from a file, which is the discrimination the axis needs — see the row below, where ksh93 answers one higher for a reason that is not the base",
+	},
+	{
+		ID: "redirection/a-script-file-of-its-own-takes-a-number-in-one-shell", Category: "redirection",
+		Script: true,
+		Snippet: `exec {a}>/dev/null
+echo "a=$a"
+printf "[10:"; cat <&10; printf "]\n"
+`,
+		Why: "the same allocation from a **script file**, which is a different answer in exactly one column: ksh93 says 11 where its own `-c` route says 10, because it keeps the script it is running open on descriptor 10 — the `cat <&10` prints the rest of the script back, which is what proves it rather than infers it. bash 5.3.15 and dash leave 10 closed and bash's allocation stays at 10. So an axis set from this route alone would record ksh93's base as eleven, which #2756 proposed and which the `-c` row above falsifies. Ours does not hold the script on a number, so it answers 10 and reports a bad descriptor — recorded as the divergence it is rather than patched over by moving a base that is measured correct",
+	},
+	{
+		ID: "redirection/a-write-that-only-lands-if-the-command-succeeded", Category: "redirection",
+		Script: true,
+		Snippet: `echo old > t
+echo NEW >; t
+printf "[ok:%s:%s]" "$?" "$(cat t)"
+{ printf X; false; } >; t
+printf "[bad:%s:%s]\n" "$?" "$(cat t)"
+`,
+		Why: "ksh93 alone has `>;`, a write that goes to a temporary file beside the target and is renamed over it only if the command ended at status 0 — so the failing command here leaves the file holding what the successful one put there and reports 1, where a plain `>` would have emptied it before the command ran. bash 5.3.15, bash 3.2, zsh 5.9.2, dash and BusyBox ash all refuse the text at the `;`, each in its own words, which is the fallback a dialect without the operator leaves in place: `>` with no target",
+	},
+	{
+		ID: "redirection/a-space-before-the-semicolon-is-not-the-operator", Category: "redirection",
+		SyntaxError: true,
+		Snippet:     `echo x > ; f; echo "st=$?"`,
+		Why:         "the `;` is part of the operator and has to be tight against the `>`. ksh93 refuses this exactly as the five shells without `>;` do, so the operator is one spelling rather than a marker that generalizes — the same care `ClobberOverrideMarker` records taking, and the reason `>>;` and `<;` are refused there too",
+	},
+	{
+		ID: "heredoc/a-body-reaches-a-child-that-names-its-descriptor", Category: "redirection",
+		Script: true,
+		Snippet: `/bin/sh -c 'cat <&3' 3<<X
+child
+X
+echo "st=$?"
+`,
+		Why: "the document has to be on a **real descriptor**, because a child is handed the table by number and text this shell holds has no number. All four columns with the grammar print the body; ours printed `3: Bad file descriptor` at status 1, the table entry having answered nil and a nil being a descriptor closed over there (#2759). The shape that always worked is `{ cat <&3; } 3<<X`, which moves the body onto standard input and lets os/exec build the pipe — so the defect was invisible to every case written the ordinary way",
+	},
+	{
+		ID: "heredoc/the-medium-a-body-is-carried-on-is-visible-to-a-child", Category: "redirection",
+		Script: true,
+		Snippet: `/bin/sh -c 'if [ -f /dev/fd/3 ]; then echo file; else echo pipe; fi' 3<<X
+line1
+line2
+X
+`,
+		Why: "having to put the body *somewhere*, the panel splits two-two on where, and a script can see it: bash 5.3.15 and dash write it into a pipe, ksh93 and zsh into a temporary file. The consequence a script feels is seekability — with `head -1 <&3` and then `cat <&3`, the file columns still have `line2` and the pipe columns lost it with the block `head` swallowed. Asked from a child because `/dev/fd/3` names the document only there: inside the shell, 3 is an entry in a table",
 	},
 	{
 		ID: "heredoc/a-here-string-lands-on-its-descriptor-too", Category: "redirection",
@@ -9392,6 +9445,24 @@ printf "]\n"`,
 		Unfinished: true,
 		Snippet:    "cat <<EOF\nline\nEOF x\necho \"st=$?\"\n",
 		Why:        "the delimiter is compared against the *physical line as written*, so `EOF x` is body and not a terminator — unanimously, in a shape that would read as a terminator to anything matching a prefix. The body then runs to the end of the input, which is why the last line is printed rather than run, and bash 5.3 alone remarks that the document ended at end of file where bash 3.2 says nothing. Prior work of our own had this as a rule about prefixes, and the prefix reading is exactly what is false",
+	},
+	{
+		ID: "heredoc/a-dollar-in-the-delimiter-is-an-ordinary-character", Category: "redirection",
+		Script:  true,
+		Snippet: "d=EOF\ncat <<$d\nbody $d\n$d\necho after\n",
+		Why:     "a here-document's delimiter is subject to quote removal and to nothing else, so `<<$d` waits for a line reading `$d` — the `$` never expands, and the *body* still does. Unanimous across the panel, which is why it is a correction rather than an axis. The cost of getting it wrong is out of proportion to the construct: this parser stripped the `$` and looked for `d`, so the delimiter never arrived, the remaining three lines became the body, and the one shell that remarks on a document ending at end of input named `d` as the delimiter it wanted (#2745)",
+	},
+	{
+		ID: "heredoc/a-substitution-in-the-delimiter-is-its-own-text", Category: "redirection",
+		Script:  true,
+		Snippet: "cat <<${d}\nbody\n${d}\ncat <<$(echo X)\nsecond\n$(echo X)\necho after\n",
+		Why:     "the same rule for the two spellings that have a construct to *scan*: the delimiter ends where the construct ends — `<<$(echo X)` is one word in bash and zsh — and what is kept is the source it occupied rather than anything it would produce. The split in the panel is over the second document only: dash and ksh93 refuse a `$(` in a delimiter outright, so the row records a parse refusal for them and a match for bash and zsh, where a shell that read the `(` as an ordinary character would refuse all four columns and one that expanded it would swallow the rest of the file",
+	},
+	{
+		ID: "heredoc/quoting-the-delimiter-is-what-makes-the-body-literal", Category: "redirection",
+		Script:  true,
+		Snippet: "d=EOF\ncat <<\"$d\"\nbody $d\n$d\ncat <<\\$d\nsecond $d\n$d\necho after\n",
+		Why:     "the other half of the reading above: both delimiters here are `$d` too, and both bodies are literal — because quote removal *took something away*, which is the one question that decides it. So `<<$d` and `<<\"$d\"` look for the same line and differ only in whether the body expands, and a reading that decided literalness from the presence of a `$` would get this row and the one above it backwards",
 	},
 	{
 		ID: "heredoc/a-continued-body-line-is-joined-before-the-delimiter-is-looked-for", Category: "redirection",
@@ -16733,9 +16804,9 @@ printf "[%s]" .@(hid); echo`,
 		Why:     "the third route into the same scanner, and the one whose answer is not a match: where a group *starts* a word in argument position the shell with bare groups reads its parentheses as glob qualifiers instead, so `v(<5-6>)` is `unknown file attribute` rather than a pattern — while the bare range beside it expands. Recorded because the fix for #1217 has to reach that reading rather than turn it into a parse error, and a silent expansion there would be the wrong answer at status 0",
 	},
 	{
-		ID: "pat/a-numeric-range-against-the-filesystem", Category: "pattern matching", SyntaxError: true,
+		ID: "pat/a-numeric-range-against-the-filesystem", Category: "pattern matching",
 		Snippet: `touch 1 2 10 007 21 22 abc; echo <->; echo <2-9>; echo 2<->; echo <->zzz; echo after`,
-		Why:     "the whole of the expansion half in one row: a range is matched per component and sorted with everything else, the digits in front of one are part of the word rather than a file descriptor — `2<->` names `21` and `22` and is not a redirection of descriptor 2 — and a miss is the ordinary unmatched-pattern answer, which in this shell stops the command, so `after` never runs. ksh93's cell is the second finding here and is not this change's: it *parses* `echo <->` as a redirection from a file called `-` where we refuse the `;` after it, which is a gap in the ksh grammar rather than in the range",
+		Why:     "the whole of the expansion half in one row: a range is matched per component and sorted with everything else, the digits in front of one are part of the word rather than a file descriptor — `2<->` names `21` and `22` and is not a redirection of descriptor 2 — and a miss is the ordinary unmatched-pattern answer, which in this shell stops the command, so `after` never runs. ksh93's cell is the second finding here and is not this change's: it *parses* `echo <->` as a redirection from a file called `-` — and then as the `>;` operator it alone has, whose target is the word behind the `;`. So the `echo done` after it is this command's argument rather than the next command, which is why that column reaches nothing. Modeled in the ksh grammar by `Dialect.RenameOnSuccessRedirect` (#918); `redirection/a-write-that-only-lands-if-the-command-succeeded` is where the operator itself is pinned. This row is no longer marked a syntax error, and that is the change rather than an omission: the corpus grammar is the union of all seven columns, so text one of them parses is text that grammar reads",
 	},
 	{
 		ID: "pat/an-extended-closure-is-behind-an-option", Category: "pattern matching",

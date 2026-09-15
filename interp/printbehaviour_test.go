@@ -124,6 +124,11 @@ func corpusGrammar() syntax.Dialect {
 	// dialect narrow enough to be a shell could not read all of it.
 	d.CaseContinuePipe = true
 	d.ClobberOverrideMarker = true
+	// `cmd >; file`, the write that only lands if the command succeeded. A
+	// fourteenth thing the corpus cannot be read without: two cases write
+	// one, and without it the `;` ends the command and the `>` has no
+	// target. See oracle.Dialect, which makes the same argument.
+	d.RenameOnSuccessRedirect = true
 	d.CasePatternListSpansNewlines = true
 	// And a blank in the same place. One case is written that way and the
 	// core reads none of it: inside the arm's parentheses the list is one

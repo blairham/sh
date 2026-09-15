@@ -1653,6 +1653,12 @@ func Semantics() interp.Semantics {
 	// ksh93 — measured 2026-09-12. The same number comes back from `zsocket`
 	// in `$REPLY` and from `sysopen -u name` (#1752).
 	s.FirstAllocatedDescriptor = interp.AllocateDescriptorsFromEleven
+	// `exec 3<<X` puts the body in a temporary file here, so `/dev/fd/3` is
+	// a regular file and the descriptor is seekable: `head -1 <&3` reads a
+	// block and seeks back, and the `cat <&3` after it still gets the rest of
+	// the document. bash 5.3.15 and dash use a pipe and lose it. Measured
+	// 2026-09-14 (#2759).
+	s.HeredocBody = interp.HeredocBodyInATemporaryFile
 	// A read that fails after the open worked fails the substitution here:
 	// `mkdir dir; v=$(<dir)` is status 1 with a sentence, where bash 5.3 and
 	// ksh93 are status 0 in silence (#1778).

@@ -1863,6 +1863,12 @@ type Runner struct {
 	// nothing that builtin goes on to run. See takeSpecialBuiltinFailure for
 	// the measurement that draws the line there.
 	throughCommandWord bool
+	// defaultPathSearch is `command -p`: the lookup walks the standard
+	// utility path rather than this shell's PATH, so a script that cannot
+	// trust PATH can still reach a standard utility. Set around the lookup
+	// and the exec alone — never around a builtin `command` ran, because the
+	// script that builtin runs is the caller's. See interp/defaultpath.go.
+	defaultPathSearch bool
 	// allexport marks every assignment for the environment: `set -a`.
 	allexport bool
 	// extraOptions are the `set -o` names this dialect has beyond the ones
@@ -4918,7 +4924,13 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 		// because every shell in the panel hashes what it resolved whether
 		// or not the run then succeeds — and a policy that refuses the exec
 		// is this shell's own answer, not a fact about where the command is.
-		r.hashCommandRun(argv[0], path)
+		//
+		// A `command -p` search is the exception, and it is one for a reason
+		// that is about the hash rather than about the run: what it resolved
+		// was never on the caller's PATH. See Runner.rememberingLookups.
+		if r.rememberingLookups() {
+			r.hashCommandRun(argv[0], path)
+		}
 	}
 	action := r.act(Action{Kind: ActionExec, Path: path, Args: argv})
 	if !r.allowed(ctx, action) {

@@ -252,7 +252,7 @@ func (r *Runner) lookPathReporting(name string) (string, error) {
 	if err != nil {
 		return path, err
 	}
-	if r.sem().ALookupRemembersThePath == Yes {
+	if r.rememberingLookups() && r.sem().ALookupRemembersThePath == Yes {
 		r.hashCommandRun(name, path)
 	}
 	return path, err

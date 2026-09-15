@@ -1200,7 +1200,7 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 		r.exitTrap, r.trapDepth = outerTrap, outerDepth
 		ctl := r.ctl
 		r.ctl = controlNone
-		r.runTrapBody(ctx, body)
+		r.runTrapBody(ctx, "EXIT", body)
 		if r.ctl == controlNone {
 			r.ctl = ctl
 		}

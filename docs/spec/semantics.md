@@ -12264,14 +12264,27 @@ behind it, and the code says so in place: bash writes no such head, and
 the reading that does is ksh93's, which has no `shopt` to turn the rule on
 with.
 
-One combination is deliberately not reproduced. With a RETURN trap also
-set, the rule that returns from a call **hangs bash 5.3.15** — one line of
-output and then nothing, where the same script with the action returning 1
-finishes. That is the reference wedging itself rather than an answer to
-copy, so this shell runs the return and carries on, and the divergence is
-recorded in #2778 rather than left to read as our bug. It also keeps the
-pair out of the corpus, since a column that never exits would hang the
-record.
+One probe of it wedges bash, and the wedge turned out to be a
+**self-reference** rather than the combination. With a RETURN trap also
+set, the rule that returns from a call makes bash 5.3.15 write one line of
+output and then nothing — but only while the action's condition is
+`$BASH_COMMAND`. A trap body does not move that parameter, so the RETURN
+action's own command re-fires DEBUG with the same name still in it,
+returns 2 again, and fires RETURN again. An action armed by a variable the
+*script* sets fires once, and then bash finishes and the two shells agree
+byte for byte: measured 2026-09-15 at every firing index inside a call and
+at statuses 1 and 2 alike. This shell's guard against re-entering a RETURN
+action from inside one is what ends the recursion; nothing about the rule
+differs, and #2778 holds the measurement.
+
+That also settles the question the same issue listed as not known — what
+`$?` a RETURN action sees when the DEBUG rule is what began the return.
+bash answers `0`, the status the *skipped* command left, and an explicit
+`return 2` after a `false` in the same shape answers `1`, which is what
+makes it a reading rather than a coincidence. It is what
+`Runner.debugActionDecided` already wrote, and the pair is now a corpus
+row — `trap/a-debug-action-that-returns-two-with-a-return-trap-set` —
+since no column hangs on the armed probe.
 
 `interp.Runner.DebugActionDecides` is the capability, a switch over the
 core's trap firing rather than anything in the dialect, for the reason the

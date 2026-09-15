@@ -157,7 +157,7 @@ func (r *Runner) runPseudoTrapBody(ctx context.Context, name, body string, sees 
 	// line 5 and the `return` on line 7, bash 5.3.15 numbers a two-line
 	// RETURN body 7 and 8.
 	r.inCommandTrap = name == "DEBUG" || name == "ERR" || name == "RETURN"
-	r.runTrapBody(ctx, body)
+	r.runTrapBody(ctx, name, body)
 	r.inCommandTrap = outer
 	acted := r.status
 	if r.ctl == controlNone {
@@ -545,12 +545,18 @@ func (r *Runner) SetLocatesFunctions(on bool) { r.locatesFunctions = on }
 // is printed either way. The discriminator is an action that fires once, for
 // one named command, inside a function.
 //
-// One combination is deliberately not reproduced. With a RETURN trap also
-// set, the rule that returns from a call **hangs bash 5.3.15**: the probe
-// above with `trap 'echo R' RETURN` beside it writes `g1` and then nothing,
-// forever, where the same script with the action returning 1 instead of 2
-// finishes. That is the reference wedging itself rather than an answer to
-// copy, so this shell runs the return and carries on (#2778).
+// One probe of it wedges bash, and the wedge is a **self-reference** rather
+// than the combination it was first written down as. With a RETURN trap also
+// set, the probe above — whose action tests `$BASH_COMMAND` — makes bash
+// 5.3.15 write `g1` and then nothing, forever. A trap body does not move that
+// parameter, so the RETURN action's own command re-fires DEBUG with the same
+// name still in it, returns 2 again, and fires RETURN again. Give the action
+// a variable the *script* arms and it fires once, and then bash finishes and
+// agrees with this shell everywhere: measured 2026-09-15, `g1`, the RETURN
+// action, and the call reporting 2, in both shells and byte for byte, at
+// every firing index and at statuses 1 and 2 alike. This shell's guard
+// against re-entering a RETURN action from inside one is what ends the
+// recursion here; nothing about the rule differs (#2778).
 //
 // A capability rather than an axis, for the reason the three above it are: of
 // the panel only bash has the condition *and* an option over it.
@@ -583,10 +589,13 @@ func (r *Runner) debugActionDecided(status int) {
 	// began — which the line above has just made 0, the same thing the
 	// skipped command left for anybody else who asks.
 	//
-	// Not measured against the reference, and deliberately so: the probe
-	// that would ask — this rule firing with a RETURN trap set — hangs bash
-	// 5.3.15 outright (#2778), so there is no reading to copy. The value is
-	// taken from the rule beside it rather than invented.
+	// Measured 2026-09-15, which #2778 recorded as impossible: the probe that
+	// would ask hangs bash only while the action tests `$BASH_COMMAND`, and
+	// an action armed by the script instead reaches it. bash 5.3.15 writes
+	// `R:0` there, and `R:1` for an explicit `return 2` after a `false` in
+	// the same shape — so the action really does see what the *skipped*
+	// command left rather than the status the call had reached, which is what
+	// this line was already doing on the strength of the rule beside it.
 	r.returnSeenStatus = r.status
 	r.ctl, r.status = controlReturn, 2
 }

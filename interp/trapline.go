@@ -76,10 +76,37 @@ func (r *Runner) bodyLineStyle() TrapBodyLineStyle {
 	return r.sem().TrapBodyLine
 }
 
-// enterTrapBody sets the lines a trap body's diagnostics will name, and
-// returns what puts them back.
-func (r *Runner) enterTrapBody() func() {
+// enterTrapBody sets the lines a trap body's diagnostics will name and the
+// depth its traces are drawn at, and returns what puts them back.
+//
+// cond is the condition this body belongs to, which only the depth rule
+// reads: EXIT is the one trap whose body is not a level of indirection.
+func (r *Runner) enterTrapBody(cond string) func() {
 	base, pin, command, inTrap := r.lineBase, r.linePin, r.inCommandTrap, r.inTrapBody
+	indirection := r.indirection
+	// A trap body is text read again, and the one dialect that counts levels
+	// of that counts this one — with EXIT the single exception. Measured on
+	// bash 5.3.15, 2026-09-14, `env -i PATH=/usr/bin:/bin` over `-c`, each
+	// probe traced with the default `PS4`:
+	//
+	//	d(){ :; }; trap d DEBUG; set -x; echo one     ++ d   ++ :   + echo one
+	//	trap "echo T" ERR; set -x; false              + false       ++ echo T
+	//	trap "echo T" INT; set -x; kill -INT $$       + kill …      ++ echo T
+	//	set -T; trap "echo T" RETURN; set -x; f       + f … ++ echo T
+	//	trap "echo T" EXIT; set -x; echo one          + echo one    + echo T
+	//
+	// So DEBUG, ERR, RETURN and every signal add a level and EXIT adds none,
+	// and an `eval` inside a body adds a second on top — `trap "eval :" USR1`
+	// traces `++ eval :` and then `+++ :`. The shell's own commands are
+	// unaffected: `echo one` above is `+ ` in the same run, which is what
+	// says this is the body's depth and not a mode the trap turns on.
+	//
+	// A function call is still not a level — `++ d` and `++ :` are the same
+	// depth — which is Runner.indirection's own rule and the reason this is
+	// counted here rather than wherever a body pushes a frame (#2781).
+	if cond != "EXIT" {
+		r.indirection++
+	}
 	// The line the shell had reached is part of what a body borrows and has
 	// to give back. A trap body is a script of its own, so running it walks
 	// `r.line` through the body's lines — and through the lines of anything
@@ -93,7 +120,7 @@ func (r *Runner) enterTrapBody() func() {
 	line := r.line
 	restore := func() {
 		r.lineBase, r.linePin, r.inCommandTrap, r.inTrapBody = base, pin, command, inTrap
-		r.line = line
+		r.line, r.indirection = line, indirection
 	}
 	switch r.bodyLineStyle() {
 	case TrapBodyLineOffsetFromWhereItFired:

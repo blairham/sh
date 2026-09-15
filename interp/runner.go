@@ -2350,14 +2350,18 @@ type Runner struct {
 	// recursion bound reads it, and only one dialect blames that name.
 	arithValueTopName string
 	// indirection counts how many levels of *text being read again* this
-	// runner is inside — an `eval`, a sourced file, a command substitution.
-	// One dialect repeats its trace prefix's first character once per level
-	// and the rest do nothing with it; see Runner.tracePrefixDepth and
+	// runner is inside — an `eval`, a sourced file, a command substitution,
+	// or a trap body other than EXIT's. One dialect repeats its trace
+	// prefix's first character once per level and the rest do nothing with
+	// it; see Runner.tracePrefixDepth and
 	// Diagnostics.TracePrefixRepeatsAtIndirection.
 	//
 	// Not r.depth, which counts function calls: measured, a function call and
-	// a subshell add no level and the three above each add one, so they are
-	// different questions about different things.
+	// a subshell add no level and the four above each add one, so they are
+	// different questions about different things. The trap body is the one
+	// that is not a *route into* re-read text but text a condition reaches
+	// for, and it is counted here because it measures the same way — see
+	// Runner.enterTrapBody for the probes, and for why EXIT is exempt.
 	indirection int
 	// borrowedFiles counts how deep inside sourced *files* this runner is,
 	// which decides whether a prompt's wording applies to what it is running.
@@ -3263,7 +3267,7 @@ func (r *Runner) runExitTrap(ctx context.Context) (exitedInTheBody bool) {
 	// Kept for a bare `exit` inside the body, which in three of the four
 	// reports this rather than whatever the body's last command did.
 	r.inExitTrap, r.exitTrapEntryStatus = true, before
-	r.runTrapBody(ctx, body)
+	r.runTrapBody(ctx, "EXIT", body)
 	// Cleared for hygiene rather than for effect: the EXIT trap is the last
 	// thing a shell runs, so nothing reads this afterwards.
 	r.inExitTrap = false
@@ -3348,8 +3352,8 @@ func (r *Runner) fireExitHook(ctx context.Context) {
 // if" EXIT` prints `a` and then complains, and ksh93 reads the whole body
 // first and prints nothing. zsh never reaches this — it reads the action
 // when the trap is set and refuses one that will not parse.
-func (r *Runner) runTrapBody(ctx context.Context, body string) {
-	defer r.enterTrapBody()()
+func (r *Runner) runTrapBody(ctx context.Context, cond, body string) {
+	defer r.enterTrapBody(cond)()
 	p := r.ParseWithAliases(body, r.dialect())
 	if r.ask(r.sem().TrapBodyRunsWhatParsed, "a trap body running the part of it that parsed") {
 		r.runTrapBodyByLine(ctx, p, body)

@@ -176,3 +176,53 @@ func TestTheTracePrefixCountsIndirection(t *testing.T) {
 		})
 	}
 }
+
+// TestATrapBodyCountsAsIndirectionExceptExits is the trap half of the rule
+// above, and it is a separate test because the two halves are wired in
+// different places: `eval` and a sourced file raise the count where they read
+// the text, and a trap body raises it in enterTrapBody.
+//
+// Measured on bash 5.3.15 (#2781). The EXIT row is the discriminating one —
+// without it the rule reads as "any trap body", which is what a probe using
+// only EXIT would have recorded and is wrong.
+func TestATrapBodyCountsAsIndirectionExceptExits(t *testing.T) {
+	for _, c := range []struct{ name, src, on, off string }{
+		{
+			"a DEBUG body", `d(){ :; }; trap d DEBUG; set -x; echo one`,
+			"++ d\n++ :\n+ echo one\n", "+ d\n+ :\n+ echo one\n",
+		},
+		{
+			"an ERR body", `trap ":" ERR; set -x; false`,
+			"+ false\n++ :\n", "+ false\n+ :\n",
+		},
+		{
+			"a RETURN body", `f(){ trap ":" RETURN; :; }; set -x; f`,
+			"+ f\n+ trap : RETURN\n+ :\n++ :\n", "+ f\n+ trap : RETURN\n+ :\n+ :\n",
+		},
+		{
+			"an eval inside a body, which is a second level",
+			`trap "eval :" ERR; set -x; false`,
+			"+ false\n++ eval :\n+++ :\n", "+ false\n+ eval :\n+ :\n",
+		},
+		{
+			"an EXIT body, which is not a level", `trap ":" EXIT; set -x; echo one`,
+			"+ echo one\n+ :\n", "+ echo one\n+ :\n",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			sem := permissive()
+			sem.TrapHasReturnCondition = Yes
+			sem.TrapHasDebugCondition = Yes
+			sem.TrapHasErrCondition = Yes
+			style := PromptStyle{Expand: PromptExpandsAlways}
+			on := tracedSem(t, c.src, sem, Diagnostics{TraceQuoting: QuoteShell, TracePrefixRepeatsAtIndirection: true}, style, "")
+			if on != c.on {
+				t.Errorf("counting: traced %q, want %q", on, c.on)
+			}
+			off := tracedSem(t, c.src, sem, Diagnostics{TraceQuoting: QuoteShell}, style, "")
+			if off != c.off {
+				t.Errorf("not counting: traced %q, want %q", off, c.off)
+			}
+		})
+	}
+}

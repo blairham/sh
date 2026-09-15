@@ -719,7 +719,7 @@ func (r *Runner) runPendingTraps(ctx context.Context) {
 		// none of them runs the shell's.
 		for _, name := range r.takeSelfPending() {
 			if body, ok := r.traps[name]; ok && body != "" {
-				r.runTrapHandler(ctx, body)
+				r.runTrapHandler(ctx, name, body)
 			}
 		}
 		return
@@ -737,20 +737,20 @@ func (r *Runner) runPendingTraps(ctx context.Context) {
 		if !ok || body == "" {
 			continue
 		}
-		r.runTrapHandler(ctx, body)
+		r.runTrapHandler(ctx, name, body)
 	}
 }
 
 // runTrapHandler runs one handler body, with what the interrupted script can
 // see put back around it.
-func (r *Runner) runTrapHandler(ctx context.Context, body string) {
+func (r *Runner) runTrapHandler(ctx context.Context, cond, body string) {
 	outer := r.status
 	if r.ask(r.sem().SignalHandlerSeesEarlierStatus, "the status a signal handler sees") {
 		r.status = r.statusBefore
 	}
 	ctl := r.ctl
 	r.ctl = controlNone
-	r.runTrapBody(ctx, body)
+	r.runTrapBody(ctx, cond, body)
 	if r.ctl == controlNone {
 		r.ctl = ctl
 		r.status = outer

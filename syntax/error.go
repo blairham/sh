@@ -272,6 +272,20 @@ type Error struct {
 	// LastToken is the last token consumed before the input ran out, which
 	// is what the remaining shell names.
 	LastToken string
+	// CondWords are the words of the `[[ ]]` condition the parser could not
+	// read — the whole innermost group, from where it began to its closer,
+	// as each word was **written**.
+	//
+	// One dialect's refusal is about the group rather than about the token it
+	// stopped on: it names a word chosen by how many there are, and picks
+	// between two sentences by what the second of them looks like. See
+	// Diagnostics.ConditionExpected, which is the only reader.
+	//
+	// Set only where the group began with a plain word, which is the form
+	// that refusal is about: `[[ -n -z x ]]` is a one-operand test with an
+	// operator for an operand and is refused by naming the token, so nothing
+	// is recorded for it.
+	CondWords []string
 	// Class is what sort of token Token is, when the kind is ErrUnexpected.
 	Class TokenClass
 	// TokenOpener is the operator the unexpected token *began* with, where

@@ -222,6 +222,7 @@ func (p *Parser) parseTestClause() Command {
 		// `[[`'s line rather than the token's, which is why the construct's
 		// position travels with the error.
 		p.failUnexpected("]]")
+		p.recordCondGroup()
 		p.blameCondition(c.Start)
 		return c
 	}
@@ -373,6 +374,11 @@ func (p *Parser) condAnd() CondExpr {
 }
 
 func (p *Parser) condPrimary() CondExpr {
+	// Every primary is the start of a group as far as the one dialect that
+	// counts a condition's words is concerned: `[[`, a `(`, a `!` and either
+	// connective all arrive here, and the list below is rebuilt from
+	// whichever of them this is. See Parser.condWords.
+	p.condWords = nil
 	switch {
 	case p.err != nil, p.at(TokEOF):
 		return nil
@@ -402,6 +408,7 @@ func (p *Parser) condPrimary() CondExpr {
 		stop := p.tok.End
 		if !p.at(TokRightParen) {
 			p.fail("expected ) in a condition")
+			p.recordCondGroup()
 			return nil
 		}
 		p.next()
@@ -434,17 +441,79 @@ func (p *Parser) condPrimary() CondExpr {
 	if left == nil {
 		return nil
 	}
+	// The plain form, and the only one whose words are recorded: see
+	// Error.CondWords for why the operator forms are not.
+	p.condWords = append(p.condWords, PrintWord(left))
 	op := p.condOperator()
 	if op == "" {
 		// A bare word is a test for non-emptiness.
 		return &CondUnary{Op: "-n", X: left, Start: left.Pos()}
 	}
+	p.condWords = append(p.condWords, op)
 	right := p.condWord()
 	if right == nil {
 		p.failCondOperand(op, "binary")
 		return nil
 	}
+	p.condWords = append(p.condWords, PrintWord(right))
 	return &CondBinary{Op: op, X: left, Y: right}
+}
+
+// recordCondGroup writes the words of the condition group onto the failure
+// just recorded: the ones already read, and the ones still standing between
+// here and the group's closer.
+//
+// The rest are read *after* the failure rather than looked at before it,
+// because the refusal has to name the token the parser stopped on and reading
+// ahead would move it. The error is put aside for the length of the scan so
+// that the reads themselves do not fail against it, and put back afterwards;
+// nothing the parser does from here on is kept, since the caller returns
+// straight into a failed parse.
+//
+// Fewer than two words is not this refusal's shape and is left alone: a group
+// that never got past its first word is refused by naming the token, the way
+// every other dialect names it.
+func (p *Parser) recordCondGroup() {
+	var se *Error
+	if !errors.As(p.err, &se) || se.CondWords != nil {
+		return
+	}
+	words := append([]string(nil), p.condWords...)
+	saved := p.err
+	p.err = nil
+	for p.err == nil && p.tok.Kind == TokWord && !p.atWord("]]") {
+		w := p.word()
+		if w == nil {
+			break
+		}
+		words = append(words, PrintWord(w))
+	}
+	p.err = saved
+	if len(words) < 2 {
+		return
+	}
+	if namedConditionWord(words[0]) || namedConditionWord(words[1]) {
+		// A `-word` long enough to be a *named* condition is refused by
+		// name in that shell — `[[ p -zz q ]]` and `[[ p -prefix q ]]` are
+		// both `unknown condition: …` there, and `[[ -zz x ]]` prints the
+		// line before it first, so that refusal happens when the condition
+		// runs rather than while it is read. It is a different shape from
+		// the one this list is for and is left to the ordinary token
+		// refusal (#2846, and the run-time half of #965).
+		return
+	}
+	se.CondWords = words
+}
+
+// namedConditionWord reports whether a word is long enough to be looked up as
+// a *named* condition rather than read as a single-letter test.
+//
+// The two-operand word operators are the exception, because they are the only
+// long `-word`s that legitimately stand between two operands: `[[ p -eq q r ]]`
+// is the group refusal this excludes everything else from, and `[[ p -zz q ]]`
+// is not.
+func namedConditionWord(s string) bool {
+	return strings.HasPrefix(s, "-") && len(s) > 2 && !condBinaryWordOps[s]
 }
 
 // condSurplusOperands reads the words standing after a one-operand test that
@@ -518,6 +587,7 @@ func (p *Parser) failCondOperand(op, arity string) {
 		Expected: arity, LastToken: op,
 		Msg: p.tokenLiteral() + " unexpected",
 	}
+	p.recordCondGroup()
 }
 
 // condPatternOps are the operators whose right operand is a *pattern* — the

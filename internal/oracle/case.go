@@ -18195,6 +18195,15 @@ echo "st=$? alive"`,
 		Why:     "the boundary, and the row that says the pair falls back to being ordinary words: with nothing after it the condition is the bare-word test for non-emptiness and answers 0 — in the shell that *has* the operator as well as in the three that read the word as an ordinary one. Every other one-operand test demands its operand and complains without one, so adding these two without this row would have made one dialect refuse a line three other columns run. The two that do not answer 0 are not counter-examples: dash has no `[[ ]]` to put it in, and bash 3.2 is the odd one out against bash 5.3, reading `-prefix` as a conditional unary operator and calling the `]]` an unexpected argument to it",
 	},
 	{
+		ID: "cond/a-condition-that-will-not-read-names-one-of-its-words", Category: "conditions",
+		// A syntax error under the bash dialect the parser conformance test
+		// uses: every line here is refused while reading, in all four
+		// columns that have `[[ ]]` at all.
+		SyntaxError: true,
+		Snippet:     `echo pre; [[ p q ]]; [[ p q r ]]; [[ p q r s ]]; [[ p -n q ]]; [[ p "q" r ]]; echo post`,
+		Why:         "what a `[[ ]]` whose words are no condition *says*, which in zsh is a sentence about the group rather than about the token it stopped on — and two sentences, not one (#2846). The word named moves with how many words the group holds: the first, except for exactly three where it is the **middle** one, which is what the first three lines are together and what a rule derived from the two-word line alone would get wrong. The fourth is the other half of the pair: a second word that is a `-` with one character after it draws the prefixed sentence and names the first word again, at three words where a plain word would have named the middle. The fifth says the word is quoted back as the script *wrote* it, since nothing is expanded at the time. bash under both names, bash 3.2 and ksh93 name the offending token and say nothing about conditions; dash has no `[[ ]]` and ash reads the words as `test` words. No column reaches the `echo post`",
+	},
+	{
 		ID: "cond/a-surplus-operand-is-refused-when-it-runs", Category: "conditions",
 		// A syntax error under the bash dialect the parser conformance test
 		// uses, which is the point of the row: the arity is accepted and

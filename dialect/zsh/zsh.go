@@ -2777,7 +2777,15 @@ func Diagnostics() interp.Diagnostics {
 		// which this shell's grammar accepts and this refuses when it runs.
 		// The operator is named and the surplus word is not — `[[ -n ]]`,
 		// `[[ -n x y ]]` and `[[ -n x -z "" ]]` are one sentence (#965).
-		UnknownCondition:             "unknown condition: %[1]s",
+		UnknownCondition: "unknown condition: %[1]s",
+		// And what a condition this shell could not *read* says, which is a
+		// pair of sentences rather than one: the word named moves with how
+		// many words the group holds, and the second word chooses between
+		// the two lead-ins. Measured 2026-09-15 — `[[ p q r ]]` is
+		// `condition expected: q` and `[[ p q ]]` is `parse error:
+		// condition expected: p`. See Diagnostics.ConditionExpected (#2846).
+		ConditionExpected:            "condition expected: %[1]s",
+		ConditionExpectedPrefixed:    "parse error: condition expected: %[1]s",
 		UnknownConditionOptionStatus: 3,
 		// `[[ -prefix … ]]` and `[[ -suffix … ]]` reached outside a
 		// completion function. No verbs: the sentence names neither the

@@ -77,6 +77,16 @@ func TestReadingACoprocessThatHasJustEnded(t *testing.T) {
 // same claim pinned on its own.
 //
 // Measured on bash 5.3.15, 2026-09-14: `b=1 n=2` then `after=0`, five runs.
+//
+// And the mutation that tells the two shapes apart, since the flake itself
+// could not be made to happen here — 200 rounds of the old shape on Linux
+// under ten spinning cores, 150 of them race-instrumented, and 30 runs of the
+// whole package, all green, which is why the three sightings were all on the
+// runner. Give the body a `sleep 0.2` and the question stops being a race at
+// all: the old script answers `n=2` — the assertion it made was `n=0` — in
+// this shell **and in bash 5.3.15**, while this one answers `after=0` in
+// both. So the old row passed only for as long as the body won, and the
+// runner is where it stopped winning.
 func TestASubshellDeliversTheReapNotice(t *testing.T) {
 	out, st := runBash(t, t.TempDir(),
 		`coproc CP { echo hi; }

@@ -28,7 +28,9 @@ func TestSignalGroupReachesTheWholeGroup(t *testing.T) {
 	// by counting the group's real membership at the instant that loop
 	// returned: **166 of 200 rounds had one process in the group**, 19 had two
 	// and 15 had three. So four times in five the signal went to a group whose
-	// members had not been forked yet.
+	// members had not been forked yet — and repeating the count later the same
+	// day on a busier machine gave **195 of 200**, which is the direction load
+	// moves it.
 	//
 	// A member forked *after* the group is signaled escapes it outright: the
 	// shell is inside fork(2) when SIGTERM lands, the child is created with no

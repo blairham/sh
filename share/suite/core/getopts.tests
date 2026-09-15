@@ -2,18 +2,37 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # getopts — #2321. The one option parser POSIX XCU gives a shell, and the
-# only builtin here whose whole behaviour is a state machine carried between
+# only builtin here whose whole behavior is a state machine carried between
 # calls in OPTIND and OPTARG.
 #
 # Every loop below resets OPTIND itself. A shell that carried it in from the
 # call before would answer differently on the second call than on the first,
 # and a file whose cases depended on their order would be measuring the file.
 #
-# The diagnostics of the *non*-silent form are held out: each shell writes its
-# own sentence for an unknown letter and they do not agree, which is a case
-# for the dialect tiers rather than for this one. What is asked here is the
-# silent form — a leading colon in the option string — where the shell says
-# nothing and the answer arrives in `$opt` and `$OPTARG`.
+# Four questions in this area have no common answer and are not asked here.
+# They are worth naming because three of them are about the *same* state a
+# careful script reads:
+#
+#   * OPTARG after an option that takes no argument. bash and ksh93 leave it
+#     unset; zsh and dash set it to the empty string. Two against two, so it
+#     is neither a core case nor a dialect one — and `${OPTARG+set}` is how
+#     a script would notice.
+#   * OPTIND read *inside* the loop. zsh leaves it naming the word an option
+#     occupied until the following call, where the other three have already
+#     advanced. Everyone agrees again once the loop ends, which is the value
+#     `shift $((OPTIND - 1))` reads, so only the mid-loop reading splits.
+#     zsh/.
+#   * a second loop over the same arguments with no reset in between. bash
+#     and ksh93 see nothing, OPTIND being past the end; zsh and dash read the
+#     arguments again. Two against two.
+#   * the name variable when there was nothing to parse. zsh leaves whatever
+#     was in it; the other three write `?`. zsh/.
+#
+# The non-silent form's *wording* is held out too — each shell writes its own
+# sentence for an unknown letter — but its behavior is not, and is asked
+# below with stderr dropped.
+
+# --- the loop, in a function, over its own arguments ---
 
 f() {
   OPTIND=1
@@ -44,9 +63,48 @@ f -a -- -b
 f rest
 f
 
-# The silent form: a leading colon in the option string. An unknown letter
-# arrives as `?` in the variable with the letter in OPTARG, and a missing
-# argument arrives as `:` with the letter it belonged to.
+# A lone `-` is an operand and not an option, so the scan stops in front of
+# it with OPTIND still naming it.
+f - -a
+
+# An argument that is the empty string is an argument, not a missing one.
+f -b '' after
+
+# --- the same loop over the script's own positional parameters ---
+
+# With no operands of its own, `getopts` reads `$@`. This is the spelling a
+# top-level script uses, and it is where `shift $((OPTIND - 1))` earns its
+# keep.
+set -- -a -b val rest1 rest2
+OPTIND=1
+while getopts 'ab:' o; do
+  case $o in
+    a) printf 'top a\n' ;;
+    b) printf 'top b=%s\n' "$OPTARG" ;;
+  esac
+done
+printf 'top OPTIND=%s\n' "$OPTIND"
+shift $((OPTIND - 1))
+printf 'top rest n=%s [%s] [%s]\n' "$#" "$1" "$2"
+
+# --- explicit operands ---
+
+# Given operands, those are what is parsed and `$@` is not touched.
+set -- untouched1 untouched2
+OPTIND=1
+while getopts 'ab:' o -a -bx tail; do
+  case $o in
+    a) printf 'explicit a\n' ;;
+    b) printf 'explicit b=%s\n' "$OPTARG" ;;
+  esac
+done
+printf 'explicit OPTIND=%s and $1 is still [%s]\n' "$OPTIND" "$1"
+
+# --- the silent form ---
+
+# A leading colon in the option string. An unknown letter arrives as `?` in
+# the variable with the letter in OPTARG, and a missing argument arrives as
+# `:` with the letter it belonged to. Nothing is written to stderr.
 g() {
   OPTIND=1
   while getopts ':ab:' opt; do
@@ -63,3 +121,41 @@ g -a -z
 g -b
 g -ab
 g -- -a
+
+# --- the non-silent form, with the sentence dropped ---
+
+# Without the leading colon the shell writes a diagnostic of its own, which
+# is a dialect question. What it puts in the variable is not: an unknown
+# letter and a missing argument both arrive as `?`, and the loop carries on.
+h() {
+  OPTIND=1
+  while getopts 'ab:' opt 2>/dev/null; do
+    printf 'loud [%s]\n' "$opt"
+  done
+  printf 'loud OPTIND=%s\n' "$OPTIND"
+}
+h -z
+h -b
+h -a -z -b
+
+# --- the status ---
+
+# 0 while there is an option, 1 once there is not, and 1 every time after
+# that rather than starting over.
+k() {
+  OPTIND=1
+  getopts 'a' o "$@" > /dev/null 2>&1; printf 'first -> %s\n' "$?"
+  getopts 'a' o "$@" > /dev/null 2>&1; printf 'second -> %s\n' "$?"
+  getopts 'a' o "$@" > /dev/null 2>&1; printf 'third -> %s\n' "$?"
+}
+k -a
+
+# An empty option string parses nothing: every letter is unknown, and there
+# being no words at all is the ordinary end.
+m() {
+  OPTIND=1
+  getopts '' o "$@" > /dev/null 2>&1
+  printf 'empty option string -> %s [%s]\n' "$?" "${o-unset}"
+}
+m -a
+m

@@ -1,0 +1,81 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# getopts in dash — #2321.
+#
+# Two of the three answers here dash shares with zsh and not with bash or
+# ksh93, so neither is dash's alone and neither could be a tier of its own.
+# What makes the file dash's is the third: the sentence dash writes for an
+# option its string does not list is `Illegal option -z`, with no script
+# name, no line number and no `--` in front of the letter — the shortest
+# diagnostic on the panel and the only one that names neither the file nor
+# the utility.
+#
+# The other two are recorded here because this is where the dash side of a
+# two-against-two split is measured at all:
+#
+#   * OPTARG is set to the empty string after an option that takes no
+#     argument, where bash and ksh93 leave it unset. `${OPTARG+set}` is the
+#     difference, and it is the test a script writes when it wants to know
+#     whether the option it just read carried a value.
+#   * a second loop over the same arguments, with OPTIND left where the first
+#     loop ended, reads the arguments again rather than seeing nothing. A
+#     helper function that parses its own options therefore parses them on
+#     every call here, and only on the first call in bash and ksh93.
+
+# Each probe is its own function. Two `getopts` calls at the top level with
+# operands of their own is a shape real zsh answers a call behind itself in,
+# reporting the *previous* option's letter and argument, and a case built on
+# that would be pinning one shell's confusion rather than any shell's answer.
+
+noarg() {
+  OPTARG=PRESET
+  OPTIND=1
+  getopts 'ab:' o -a > /dev/null 2>&1
+  printf 'OPTARG after a no-argument option: [%s] set=[%s]\n' "${OPTARG-UNSET}" "${OPTARG+yes}"
+}
+noarg
+
+# And after one that does take an argument, where every shell agrees.
+witharg() {
+  OPTARG=PRESET
+  OPTIND=1
+  getopts 'ab:' o -b val > /dev/null 2>&1
+  printf 'OPTARG after an argument-taking option: [%s]\n' "${OPTARG-UNSET}"
+}
+witharg
+
+# The second loop.
+g() {
+  while getopts 'ab' o "$@" > /dev/null 2>&1; do printf 'g saw %s\n' "$o"; done
+  printf 'g end ind=%s\n' "$OPTIND"
+}
+OPTIND=1
+g -a -b
+g -a -b
+
+# The sentence. stdout is dropped and stderr kept, so what is compared is the
+# diagnostic and nothing else.
+h() { OPTIND=1; getopts 'a' o -z 2>&1 > /dev/null; }
+h
+
+# --- OPTIND inside a word of several letters ---
+
+# `-abc` is three options in one word. dash's OPTIND names the word *after*
+# it from the first letter on, keeping its place inside the word somewhere a
+# script cannot see; bash and ksh93 leave OPTIND naming the word until its
+# last letter has been read. zsh is a third answer again and is in zsh/.
+#
+# It matters for the same reason the rest of this file does: a script that
+# reads OPTIND between two calls — to `shift` early, or to report how far it
+# got — gets a different number here from the one bash gives it.
+trace() {
+  OPTIND=1
+  while getopts 'ab:c' o "$@" > /dev/null 2>&1; do
+    printf 'saw %s ind=%s\n' "$o" "$OPTIND"
+  done
+  printf 'end ind=%s\n' "$OPTIND"
+}
+trace -abc rest
+trace -ac rest
+trace -a -c rest

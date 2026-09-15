@@ -1,0 +1,62 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# getopts in bash — #2321, and the one knob bash has that nobody else on the
+# panel does.
+#
+# POSIX gives a script one way to stop `getopts` writing a diagnostic for an
+# option the string does not list: put a colon at the front of the string.
+# That is the *silent* form, and it changes more than the noise — an unknown
+# letter still arrives as `?` but the letter itself moves into OPTARG, and a
+# missing argument arrives as `:` rather than as `?`. A script that wanted
+# the ordinary reporting and none of the printing had nowhere to go.
+#
+# bash's answer is OPTERR. Set it to 0 and the sentence is not written;
+# everything else about the non-silent form stays as it was. The other three
+# shells have no such variable, and assigning it changes nothing there, which
+# is what makes this a bash file rather than a note.
+#
+# What is counted below is lines on stderr, never their text: the wording is
+# #2324's question and it would make this file a wording case by accident.
+
+lines() { OPTIND=1; getopts 'ab:' o "$@" 2>&1 > /dev/null | wc -l | tr -d ' '; }
+
+# The default. An unknown letter is reported.
+OPTERR=1
+printf 'OPTERR=1, unknown letter -> '; lines -z
+
+# And a missing argument is reported too.
+printf 'OPTERR=1, missing argument -> '; lines -b
+
+# With OPTERR=0 both go quiet.
+OPTERR=0
+printf 'OPTERR=0, unknown letter -> '; lines -z
+printf 'OPTERR=0, missing argument -> '; lines -b
+
+# The quiet is all that changed: the variable and OPTARG read the same as
+# they did before, which is the difference between this and the silent form.
+quiet() {
+  OPTIND=1
+  getopts 'ab:' o "$@" 2>/dev/null
+  printf 'OPTERR=0 still reports [%s] with OPTARG [%s]\n' "${o-unset}" "${OPTARG-unset}"
+}
+quiet -z
+quiet -b
+
+# The silent form is unaffected by OPTERR — it was already silent, and it
+# reports differently.
+silent() {
+  OPTIND=1
+  getopts ':ab:' o "$@" 2>/dev/null
+  printf 'silent reports [%s] with OPTARG [%s]\n' "${o-unset}" "${OPTARG-unset}"
+}
+silent -z
+silent -b
+
+# Back on, and the reporting comes back with it.
+OPTERR=1
+printf 'OPTERR=1 again -> '; lines -z
+
+# Unsetting it is the same as 1: the default is to report.
+unset OPTERR
+printf 'OPTERR unset -> '; lines -z

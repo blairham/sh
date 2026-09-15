@@ -2980,6 +2980,41 @@ type Semantics struct {
 	// is not already the whole number C asked for — see PrintfNumberReading.
 	PrintfNumberOperand PrintfNumberReading
 
+	// ArithDivisionByZeroYieldsAValue goes on evaluating past a division by
+	// zero, with **0** for a division and the **dividend** for a remainder,
+	// and reports the failure once the whole expression has been read.
+	//
+	// One column, ksh93u+ 2012-08-01, and it can only be seen through a
+	// `printf` operand: every other place an expression is written abandons
+	// the command over the failure, there as everywhere else. Measured
+	// 2026-09-15 with `printf '[%d]' OPERAND`, each row also writing
+	// `divide by zero` and reporting 0:
+	//
+	//	1/0      0     5/0   0     7/(3-3)   0     2*3/0   0
+	//	1%0      1     7%0   7     100%0   100     -7%0   -7
+	//	3+1/0    3     1/0+9   9    8%0*2   16     5+7%0  12
+	//	3+1%0    4     1%0+9  10
+	//
+	// The first two rows are the two operators' own answers and the last two
+	// are what say the evaluation **continues**: a value that stopped at the
+	// failure could not have reached the `+9` or been doubled. `3+1/0` and
+	// `3+1%0` differing by one is the same fact read from in front.
+	//
+	// This is what #2912 was filed as having no rule for. The three points it
+	// had — `1/0`→0, `1%0`→1, `foo(1)`→102 — are two different questions:
+	// the first two are this axis and the third is an *unknown function*,
+	// which stops the evaluation and leaves the first byte of the operand
+	// read as a character. That reading is real and measured —
+	// `bar(1)`→98, `#foo(1)`→35, `$x`→36, `@foo`→64, `]`→93, and `ä(1)`→-61,
+	// a signed char — but it holds only where the byte is not one the
+	// arithmetic lexer consumes (`&&`, `||`, `*3`, `^`, `|`, `=`, `,`, `<`,
+	// `>` and `)` are all 0), so it is an account of an evaluator's state
+	// rather than a rule, and it is recorded rather than reproduced.
+	//
+	// Asked only where a divisor really was zero, and only from the one
+	// caller that can see the value — see Runner.arithValueSurvivesTheDivision.
+	ArithDivisionByZeroYieldsAValue Answer
+
 	// PrintfFlagAfterTheField takes a flag written **past** a field in a
 	// conversion's prefix, restarting the scan at the flags the way the `'`
 	// already does — see PrintfGroupingFlagAfterTheWidth, whose grammar this

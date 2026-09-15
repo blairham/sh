@@ -1721,6 +1721,25 @@ type Runner struct {
 	// through keeps its output ahead of the message and a refusal can still
 	// take the pass back; and the star reader is what takes it back (#2664).
 	printfOut *printfWriter
+	// arithValueSurvivesTheDivision turns on the reading in which a division
+	// by zero leaves a value behind and the evaluation carries on with it.
+	//
+	// A mode rather than a plain dialect answer because the value can only be
+	// *seen* in one place. Every other site an expression is written in
+	// abandons the command over the failure — `echo $(( 1/0 ))`, `x=$((1/0))`
+	// and `${a[1/0]}` all end the line in ksh93 as they do everywhere else —
+	// so a rule applied there would change nothing observable and would risk
+	// letting a failure through. A `printf` operand is the exception: the
+	// complaint goes out, the conversion still runs, and the number it writes
+	// is the one the evaluator was holding. See
+	// Semantics.ArithDivisionByZeroYieldsAValue for the rows.
+	arithValueSurvivesTheDivision bool
+
+	// arithDivisionFailure is the first such failure held while that mode is
+	// on, for the caller to raise once the expression has been read to the
+	// end. Nil when none has happened.
+	arithDivisionFailure error
+
 	// printfConversionName is the conversion character being formatted, or
 	// `.` where what is being read is a `*` operand. One column's `printf`
 	// names it in a second complaint line about an operand its arithmetic

@@ -1306,6 +1306,9 @@ func Semantics() interp.Semantics {
 	// A flag written past a field restarts the scan, the same grammar the
 	// `'` already has here -- and a `-` past a *precision* clears the
 	// precision instead of becoming a flag (#2910).
+	// A division by zero leaves a value behind and the evaluation carries
+	// on with it: 0 for `/`, the dividend for `%` (#2912).
+	s.ArithDivisionByZeroYieldsAValue = interp.Yes
 	s.PrintfFlagAfterTheField = interp.Yes
 	s.PrintfIntegerOperandGoesThroughTheFloatingType = interp.Yes
 	s.PrintfRefusedOperandKeepsItsLeadingNumber = interp.Yes

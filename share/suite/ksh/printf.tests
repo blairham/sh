@@ -61,3 +61,13 @@ printf '[%5-3d][%5-+d][%5-3-4d]\n' 42 42 42
 printf '[%.5-d][%.3-5d][%5.3-d]\n' 42 42 42
 printf '[%.5+d][%.3+5d][%.3--5d]\n' 42 42 42
 printf 'a star the restart replaced [%*-5d]\n' 4 42
+
+# What an operand is left holding after its arithmetic evaluated and failed.
+# This shell goes on evaluating past a division by zero -- 0 for a division,
+# the dividend for a remainder -- and reports once the whole expression has
+# been read, so the value is the expression's and not a piece of the operand.
+# zsh stops at the failure with a zero and the other two never evaluate an
+# operand at all. The diagnostics differ across the panel and are dropped.
+printf '[%d][%d][%d]\n' 1/0 1%0 -7%0 2> /dev/null
+printf '[%d][%d][%d]\n' 1/0+9 1%0+9 '8%0*2' 2> /dev/null
+printf '[%d][%d]\n' 3+1/0 3+1%0 2> /dev/null

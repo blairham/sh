@@ -36,6 +36,7 @@ func printfSem() Semantics {
 	s.PrintfGroupingFlagAfterTheWidth = No
 	s.PrintfStarBesideTheFieldDigits = No
 	s.PrintfFlagAfterTheField = No
+	s.ArithDivisionByZeroYieldsAValue = No
 	s.PrintfNumberOperand = PrintfNumberLeadingNumber
 	s.PrintfRefusedOperandKeepsItsLeadingNumber = No
 	s.PrintfFloatOperandIsEvaluatedTwice = No

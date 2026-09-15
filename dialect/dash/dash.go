@@ -508,6 +508,11 @@ func Semantics() interp.Semantics {
 	// digit (#2907).
 	// A flag past a field is no flag at all: the prefix ends there and the
 	// byte arrives at the scan as the conversion character (#2910).
+	// unanswered ArithDivisionByZeroYieldsAValue: the value a division by
+	// zero leaves behind is only visible through a `printf` operand, and
+	// this shell's printf evaluates no operand -- so the question has no
+	// site here. Every other expression abandons the command, here as in
+	// the two columns that do evaluate.
 	s.PrintfFlagAfterTheField = interp.No
 	s.PrintfIntegerOperandGoesThroughTheFloatingType = interp.No
 	// C99's three, answering exactly as bash does on every row measured

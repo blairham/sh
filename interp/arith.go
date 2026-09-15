@@ -52,6 +52,14 @@ type arithError struct {
 	// 0 for a division by zero or an assignment that wanted an lvalue. See
 	// Diagnostics.PrintfArithArgumentType.
 	badNumeral bool
+	// keptTheValue says the evaluation went on past the failure and reached
+	// the end, so the number beside this error is the whole expression's and
+	// not a fragment. See Semantics.ArithDivisionByZeroYieldsAValue.
+	keptTheValue bool
+	// dividedByZero says the failure was an integer division whose divisor
+	// was zero, which one column goes on evaluating past. See
+	// Semantics.ArithDivisionByZeroYieldsAValue.
+	dividedByZero bool
 	// complete says the message is the whole diagnostic and must not be
 	// wrapped. Measured: dash wraps a division by zero — `arithmetic
 	// expression: division by zero: "1/0"` — but reports a non-numeric
@@ -1290,6 +1298,20 @@ func (r *Runner) evalBinary(x *syntax.ArithBinary) (arithNum, error) {
 		}
 		err = ae
 	}
+	if ae, ok := err.(arithError); ok && ae.dividedByZero && r.arithValueSurvivesTheDivision &&
+		r.ask(r.sem().ArithDivisionByZeroYieldsAValue,
+			"arithmetic going on past a division by zero with a value") {
+		// The failure is held rather than returned, so the rest of the
+		// expression is evaluated with the value apply left beside it:
+		// `1/0+9` is 9 in ksh93 and `8%0*2` is 16. The caller raises what is
+		// held once the whole expression has been read — see
+		// Runner.arithDivisionFailure, and the mode's own comment for why
+		// only one caller turns this on.
+		if r.arithDivisionFailure == nil {
+			r.arithDivisionFailure = err
+		}
+		return v, nil
+	}
 	return v, err
 }
 
@@ -1317,7 +1339,19 @@ func (sh *Runner) apply(op string, l, r arithNum) (arithNum, error) {
 		return sh.saturating(l.i*r.i, overflowedMul(l.i, r.i)), nil
 	case "/", "%":
 		if r.i == 0 {
-			return intNum(0), arithError{msg: Wording(sh.diag().DivisionByZero, "division by zero")}
+			// The value beside the failure is what the one column that goes
+			// on evaluating goes on with: zero for a division and the
+			// dividend for a remainder. It is discarded wherever the error
+			// is fatal, which is everywhere but one — see
+			// Semantics.ArithDivisionByZeroYieldsAValue and evalBinary.
+			v := intNum(0)
+			if op == "%" {
+				v = l
+			}
+			return v, arithError{
+				msg:           Wording(sh.diag().DivisionByZero, "division by zero"),
+				dividedByZero: true,
+			}
 		}
 		if op == "/" {
 			return intNum(l.i / r.i), nil

@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/blairham/sh/syntax"
+
 	. "github.com/blairham/sh/interp"
 )
 
@@ -935,6 +937,119 @@ func TestBuiltinCanNameTheShellAlone(t *testing.T) {
 		line, _, _ := strings.Cut(out, "\n")
 		if line != "myshell: invalid number '12x'" {
 			t.Errorf("got %q, want the diagnostic name alone", line)
+		}
+	})
+}
+
+// A division by zero may leave a value behind and the evaluation carry on
+// with it (#2912).
+//
+// The operand's *whole* expression is what the conversion writes, which is
+// the half a rule fitted to `1/0` alone cannot produce: `1/0+9` is 9 and
+// `8%0*2` is 16, and neither number is anywhere in the operand.
+func TestArithDivisionByZeroCanYieldAValue(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		yield Answer
+		src   string
+		want  string
+	}{
+		{"a division gives zero", Yes, `printf '[%d]' 1/0`, "[0]"},
+		{"whatever the dividend was", Yes, `printf '[%d]' 5/0`, "[0]"},
+		{"a remainder gives the dividend", Yes, `printf '[%d]' 1%0`, "[1]"},
+		{"and keeps its sign", Yes, `printf '[%d]' -7%0`, "[-7]"},
+		{"a zero divisor the evaluation produced counts too", Yes, `printf '[%d]' '7/(3-3)'`, "[0]"},
+		{"the evaluation carries on past a division", Yes, `printf '[%d]' 1/0+9`, "[9]"},
+		{"and past a remainder", Yes, `printf '[%d]' 1%0+9`, "[10]"},
+		{"the value reaches an operator to its left", Yes, `printf '[%d]' 3+1%0`, "[4]"},
+		{"and one to its right", Yes, `printf '[%d]' '8%0*2'`, "[16]"},
+		{"without it, the leading number stands", No, `printf '[%d]' 1/0`, "[1]"},
+		{"and the tail is never reached", No, `printf '[%d]' 1/0+9`, "[1]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := printfSem()
+			sem.PrintfNumberOperand = PrintfNumberArithmetic
+			sem.PrintfRefusedOperandKeepsItsLeadingNumber = Yes
+			sem.ArithDivisionByZeroYieldsAValue = tc.yield
+			diag := Diagnostics{DivisionByZero: "divide by zero"}
+			out, _ := run(t, tc.src, func(r *Runner) { r.Semantics = &sem; r.Diagnostics = &diag })
+			_, value, _ := strings.Cut(out, "\n")
+			if value != tc.want {
+				t.Errorf("got %q, want the value %q", out, tc.want)
+			}
+		})
+	}
+
+	t.Run("every other site still abandons the command", func(t *testing.T) {
+		// The value is only ever reached through a printf operand. An
+		// expression written anywhere else fails as it always did, which is
+		// what keeps this a reading of one builtin rather than of the
+		// evaluator.
+		sem := printfSem()
+		sem.ArithDivisionByZeroYieldsAValue = Yes
+		diag := Diagnostics{DivisionByZero: "divide by zero"}
+		out, _ := run(t, `echo $((1/0)); echo after`, func(r *Runner) { r.Semantics = &sem; r.Diagnostics = &diag })
+		if strings.Contains(out, "0\n") || !strings.Contains(out, "divide by zero") {
+			t.Errorf("got %q, want the failure and no value", out)
+		}
+	})
+
+	t.Run("and the axis is asked only where a divisor was zero", func(t *testing.T) {
+		for _, src := range []string{
+			`printf '[%d]' 1/2`,
+			`printf '[%d]' 7%3`,
+			`printf '[%d]' 1+1`,
+			`printf '[%d]' 42abc`,
+		} {
+			sem := printfSem()
+			sem.PrintfNumberOperand = PrintfNumberArithmetic
+			sem.PrintfRefusedOperandKeepsItsLeadingNumber = Yes
+			sem.ArithDivisionByZeroYieldsAValue = Unspecified
+			out, _ := run(t, src, func(r *Runner) { r.Semantics = &sem })
+			if strings.Contains(out, "past a division") {
+				t.Errorf("%s: got %q, want no question", src, out)
+			}
+		}
+	})
+}
+
+// An infinity the *evaluator* produced is a value the integer conversion
+// cannot hold, and the column that reports an overflow reports this one too.
+func TestPrintfEvaluatedInfinityIsAnOverflow(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		src  string
+		want string
+	}{
+		{"a float divided by zero", `printf '[%d]' 1.0/0`, "[9223372036854775807]"},
+		{"in the other direction", `printf '[%d]' -1.0/0`, "[-9223372036854775808]"},
+		{"an exponent driven past the type", `printf '[%d]' '1e308*10'`, "[9223372036854775807]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := printfSem()
+			sem.PrintfNumberOperand = PrintfNumberArithmetic
+			sem.PrintfRefusedOperandKeepsItsLeadingNumber = Yes
+			sem.ArithDivisionByZeroYieldsAValue = Yes
+			diag := Diagnostics{PrintfIntegerOverflow: "printf: warning: %[1]s: overflow exception"}
+			out, st := runGrammar(t, tc.src, func(d *syntax.Dialect) { d.ArithFloat = true },
+				func(r *Runner) { r.Semantics = &sem; r.Diagnostics = &diag })
+			line, value, _ := strings.Cut(out, "\n")
+			if !strings.Contains(line, "overflow exception") || value != tc.want || st != 1 {
+				t.Errorf("got %q status %d, want the overflow line and %q at 1", out, st, tc.want)
+			}
+		})
+	}
+
+	t.Run("a not-a-number is not one", func(t *testing.T) {
+		sem := printfSem()
+		sem.PrintfNumberOperand = PrintfNumberArithmetic
+		sem.PrintfRefusedOperandKeepsItsLeadingNumber = Yes
+		sem.ArithDivisionByZeroYieldsAValue = Yes
+		diag := Diagnostics{PrintfIntegerOverflow: "printf: warning: %[1]s: overflow exception"}
+		out, st := runGrammar(t, `printf '[%d]' 0.0/0`, func(d *syntax.Dialect) { d.ArithFloat = true },
+			func(r *Runner) { r.Semantics = &sem; r.Diagnostics = &diag })
+		if out != "[0]" || st != 0 {
+			t.Errorf("got %q status %d, want [0] and 0", out, st)
 		}
 	})
 }

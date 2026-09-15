@@ -109,6 +109,18 @@ func (r *Runner) printfIntegerOverflow(arg string, f float64) int {
 	return orDefault(r.diag().PrintfBadNumberStatus, 1)
 }
 
+// printfEvaluatedOverflow is that complaint for a value the *evaluator*
+// produced rather than a numeral the reader did, which is the one shape where
+// an infinity earns it. See the call site for the two rows that part them.
+func (r *Runner) printfEvaluatedOverflow(arg string, f float64) int {
+	w := r.diag().PrintfIntegerOverflow
+	if w == "" {
+		return 0
+	}
+	r.diagf("%s\n", Wording(w, "printf: warning: %[1]s: overflow exception", arg))
+	return orDefault(r.diag().PrintfBadNumberStatus, 1)
+}
+
 // inRangeForOverflowReport reports whether f is a finite number outside what
 // an int64 holds, which is the one shape the complaint above is made about.
 func inRangeForOverflowReport(f float64) bool {
@@ -201,9 +213,30 @@ func (r *Runner) printfPartialNumber(arg, text string, float bool) (float64, int
 		}
 		n, err, reading := r.printfArithValue(text)
 		if err == nil {
-			return n.asFloat(), 0, false
+			f := n.asFloat()
+			if !float && math.IsInf(f, 0) {
+				// An infinity the *evaluator* produced, which is a value the
+				// integer conversion cannot hold and which one column
+				// reports: `printf '%d' 1.0/0` is `overflow exception` and
+				// the clamped maximum at 1 in ksh93u+, and so are `1e2/0`
+				// and `1e308*10`. An infinity a *numeral* produced is not
+				// the same row and not reported — `1e400` is a silent 0
+				// there, which is #2766 — so the question is asked here,
+				// where the value is known to have been computed, rather
+				// than of every value the reading returns.
+				return f, r.printfEvaluatedOverflow(arg, f), false
+			}
+			return f, 0, false
 		}
 		code := r.printfArithFailure(err, reading, float)
+		if ae, ok := err.(arithError); ok && ae.keptTheValue {
+			// The evaluation ran to the end past a division by zero and the
+			// number it came to is the operand's — see
+			// Semantics.ArithDivisionByZeroYieldsAValue. The complaint has
+			// already gone out; only the value is decided here, and it is
+			// not the leading-number reading below.
+			return n.asFloat(), code, false
+		}
 		if r.unspecified {
 			// The count is an axis of its own and it is asked before the
 			// sentence goes out, so a dialect that has not answered it stops
@@ -265,7 +298,21 @@ func (r *Runner) printfArithValue(text string) (arithNum, error, bool) {
 		left := errors.As(err, &se) && se.Kind == syntax.ErrArithOperator
 		return intNum(0), arithError{msg: r.subscriptFailure(text, err), complete: true}, left
 	}
+	outer, held := r.arithValueSurvivesTheDivision, r.arithDivisionFailure
+	r.arithValueSurvivesTheDivision, r.arithDivisionFailure = true, nil
 	n, err := r.evalNum(tree)
+	kept := r.arithDivisionFailure
+	r.arithValueSurvivesTheDivision, r.arithDivisionFailure = outer, held
+	if err == nil && kept != nil {
+		// The evaluation carried on past a division by zero and reached the
+		// end. The complaint is the one that was held, and the value beside
+		// it is the whole expression's.
+		ae, _ := kept.(arithError)
+		return n, arithError{
+			msg: r.arithFailure(text, kept), complete: true, keptTheValue: true,
+			badNumeral: ae.badNumeral,
+		}, ae.badNumeral
+	}
 	if err != nil {
 		ae, _ := err.(arithError)
 		return intNum(0), arithError{msg: r.arithFailure(text, err), complete: true}, ae.badNumeral

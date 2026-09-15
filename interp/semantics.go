@@ -4150,6 +4150,44 @@ type Semantics struct {
 	// first of those three — see Diagnostics.LoopControlOutsideALoop.
 	LoopControlOutsideALoopIsFatal Answer
 
+	// LoopControlPlaceIsJudgedBeforeTheCount decides which of a `break`'s two
+	// complaints it makes when both are available: that there is no loop to
+	// leave, or that the count is not a number.
+	//
+	// Measured 2026-09-15 in a script file, with `echo t; break abc; echo
+	// "after=$?"` and with `f(){ break abc; }; for i in 1 2; do f; echo body;
+	// done` — the second is the same question reached through a boundary
+	// rather than through an empty loop stack:
+	//
+	//	bash 5.3, bash 3.2	`break: only meaningful in a `for', `while',
+	//	                  	or `until' loop`, status 0, the script runs on
+	//	bash as `sh`      	nothing at all, status 0, the script runs on
+	//	dash, ksh93       	the count's complaint, and the script ends
+	//	zsh, BusyBox ash  	the count's complaint, and the script ends
+	//
+	// So the bash family looks at the place first and never reads the word,
+	// and the other four read the word first and never look at the place.
+	// It is the *order* and not the wording: every column has both
+	// complaints and each writes only one of them here.
+	//
+	// The consequence is a script that stops rather than a sentence that
+	// differs, which is why this is a semantics axis and not a
+	// Diagnostics one: the count's complaint ends the script in every column
+	// that writes it — see Diagnostics.LoopControlCount — and the place's
+	// ends it in zsh alone. A shell reading the count first gives bash's
+	// `f(){ break abc; }` in a loop status 2 and no further output, where
+	// bash prints `body` twice and ends at 0.
+	//
+	// Asked only where the two answers differ: there has to be no loop the
+	// word can reach *and* a count the shell would refuse, so `break 2`
+	// inside a loop and a bare `break` anywhere ask nothing.
+	//
+	// bash 3.2 answers Yes here and still writes the count's complaint for
+	// the function case, because a call is not a boundary in that shell —
+	// there *is* a loop to leave, so the question is never put. See
+	// FunctionCallIsALoopControlBoundary.
+	LoopControlPlaceIsJudgedBeforeTheCount Answer
+
 	// NumericOperandDoubleDashEndsOptions takes a leading `--` off the four
 	// builtins whose only operand is a number — `break`, `continue`,
 	// `return` and `exit` — and reads what follows as that number.

@@ -816,6 +816,9 @@ func Semantics() interp.Semantics {
 	// `break` with no loop around it is ignored, silently: `echo t; break;
 	// echo after` prints both and ends at 0.
 	s.LoopControlOutsideALoopIsFatal = interp.No
+	// The count is read first, as in dash: `break abc` outside a loop is
+	// `Illegal number: abc`, measured in the pinned alpine image.
+	s.LoopControlPlaceIsJudgedBeforeTheCount = interp.No
 	s.ReturnOutsideAFunctionIsRefused = interp.No
 	s.StartupFileReturnCarriesItsArgument = interp.Yes
 	// `. ` with no operand is refused at 2, where dash does nothing and

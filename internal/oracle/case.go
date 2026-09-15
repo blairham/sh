@@ -18560,6 +18560,21 @@ echo "st=$? alive"`,
 		Why:     "the same position with a word that *is* a number, and the one row where the panel parts over more than a sentence: bash gives it a complaint of its own — `loop count out of range` — takes the count as 1 and lets the script carry on, so `after` runs at status 0 with no `tail`. The other four write the sentence they wrote for `abc` above and end the script. So the second sentence and the surviving script are the same column, which is why one field carries both",
 	},
 	{
+		ID: "loop-control/a-refused-count-with-no-loop-around-it", Category: "commands",
+		Snippet: `echo t; break abc; echo "after=$?"`,
+		Why:     "both complaints are available here — there is no loop to leave and the count is not a number — and every column writes exactly one of them, so this row is an *order* rather than a wording. bash 5.3 and bash 3.2 name the three loops POSIX has, never mention `abc` and run `after` at 0; bash as `sh` says nothing and runs it too; dash, ksh93, zsh and BusyBox ash each write their own sentence about the word and end the script. Ours read the word in every column, so a script bash carries on from stopped at 2 (#2299)",
+	},
+	{
+		ID: "loop-control/a-refused-count-across-a-call-boundary", Category: "commands",
+		Snippet: `f(){ break abc; }; for i in 1 2; do f; echo body; done; echo "after=$?"`,
+		Why:     "the same order asked where the loop stack is not empty, which is what says the question is about the loops the word can *reach* rather than about the ones that exist. bash 5.3 makes the call a boundary, so there is no loop to leave and it writes the place's complaint twice and ends at 0 with `body` twice; bash 3.2 does not make one, reaches the loop and therefore reads the count, which is the same axis answering Yes and never being asked. The four that read the count first are unmoved by the boundary",
+	},
+	{
+		ID: "loop-control/a-refused-count-with-no-loop-in-the-other-builtin", Category: "commands",
+		Snippet: `echo t; continue abc; echo "after=$?"`,
+		Why:     "the same order through `continue`, and the row that says the two builtins share one reader: every column that speaks writes the sentence it wrote for `break` with the other name in it, at the same status",
+	},
+	{
 		ID: "loop-control/a-marker-in-front-of-the-count", Category: "commands",
 		Snippet: `for i in 1 2; do break -- 1; echo body; done; echo "st=$?"`,
 		Why:     "the end-of-options marker in front of a count, which five columns take and two do not: both bashes, bash as `sh`, ksh93 and zsh consume the `--`, read the 1 as the count and end the loop at 0, and dash and BusyBox ash read `--` as the count itself, call it an illegal number and end the script at 2. Ours was in the second group for these four builtins while `shift` had taken the marker since its first day, so this was one reader disagreeing with another in the same shell (#2299)",

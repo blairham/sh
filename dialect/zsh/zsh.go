@@ -2359,6 +2359,10 @@ func Semantics() interp.Semantics {
 	// one line and on two both end at status 1 with nothing after the
 	// `break` running at all.
 	s.LoopControlOutsideALoopIsFatal = interp.Yes
+	// The count is read first: `break abc` outside a loop is `argument is
+	// not positive: 0` and not the `not in while, until, select, or repeat
+	// loop` this shell writes for a bare `break` in the same place.
+	s.LoopControlPlaceIsJudgedBeforeTheCount = interp.No
 	// Neither is a boundary: a `break` in a function body ends the caller's
 	// loop, and one inside `( )` ends the subshell's copy of it. The shell
 	// that stops a script over a `break` with no loop at all is the one that

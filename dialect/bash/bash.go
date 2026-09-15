@@ -1757,6 +1757,11 @@ func Semantics() interp.Semantics {
 	// next command on the line runs and the status stays 0. Measured with
 	// `echo t; break; echo after` — `after` prints and `$?` is 0.
 	s.LoopControlOutsideALoopIsFatal = interp.No
+	// The place is looked at before the count: `break abc` with no loop to
+	// leave names the loops POSIX has and never mentions `abc`, and the
+	// script carries on at 0. Identical in 3.2 and, but for the silence,
+	// in the same binary called as `sh`.
+	s.LoopControlPlaceIsJudgedBeforeTheCount = interp.Yes
 	// Both boundaries, and it says so: `f(){ break; }` called from a loop and
 	// `( break )` inside one each draw the complaint once per pass and leave
 	// the loop running. bash 3.2 answers the opposite way on both, which is

@@ -7024,14 +7024,6 @@ func (r *Runner) assignValue(a *syntax.Assign) string {
 	return r.expandAssignValue(a.Value)
 }
 
-// withExpandedValue performs one assignment from a value already expanded.
-func (r *Runner) withExpandedValue(ctx context.Context, a *syntax.Assign, value string) {
-	saved := r.expanded
-	r.expanded = &expandedAssign{assign: a, value: value}
-	defer func() { r.expanded = saved }()
-	r.assign(ctx, a)
-}
-
 // assign performs one assignment, which is three different things wearing the
 // same syntax: a scalar, a whole array, or one element of one.
 func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {

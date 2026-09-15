@@ -210977,6 +210977,108 @@
         "TimedOut": false
       }
     },
+    "vared/editing-a-variable-without-a-terminal": {
+      "ash": {
+        "Stdout": "\u003cshell\u003e: vared: not found~set=127~\u003cshell\u003e: vared: not found~missing=127~\u003cshell\u003e: vared: not found~none=127~\u003cshell\u003e: vared: not found~name=127",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "\u003cshell\u003e: line 1: vared: command not found~set=127~\u003cshell\u003e: line 1: vared: command not found~missing=127~\u003cshell\u003e: line 1: vared: command not found~none=127~\u003cshell\u003e: line 1: vared: command not found~name=127",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "\u003cshell\u003e: line 1: vared: command not found~set=127~\u003cshell\u003e: line 1: vared: command not found~missing=127~\u003cshell\u003e: line 1: vared: command not found~none=127~\u003cshell\u003e: line 1: vared: command not found~name=127",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "\u003cshell\u003e: vared: command not found~set=127~\u003cshell\u003e: vared: command not found~missing=127~\u003cshell\u003e: vared: command not found~none=127~\u003cshell\u003e: vared: command not found~name=127",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "\u003cshell\u003e: 1: vared: not found~set=127~\u003cshell\u003e: 1: vared: not found~missing=127~\u003cshell\u003e: 1: vared: not found~none=127~\u003cshell\u003e: 1: vared: not found~name=127",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "\u003cshell\u003e: vared: not found~set=127~\u003cshell\u003e: vared: not found~missing=127~\u003cshell\u003e: vared: not found~none=127~\u003cshell\u003e: vared: not found~name=127",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "\u003cshell\u003e:vared:1: can't access terminal~set=1~\u003cshell\u003e:vared:1: no such variable: nosuch~missing=1~\u003cshell\u003e:vared:1: not enough arguments~none=1~\u003cshell\u003e:vared:1: not an identifier: `1bad'~name=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "vared/the-kind-letters-mean-nothing-without-the-create-letter": {
+      "ash": {
+        "Stdout": "\u003cshell\u003e: vared: not found~alone=127~\u003cshell\u003e: vared: not found~creating=127~\u003cshell\u003e: vared: not found~both=127",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "\u003cshell\u003e: line 1: vared: command not found~alone=127~\u003cshell\u003e: line 1: vared: command not found~creating=127~\u003cshell\u003e: line 1: vared: command not found~both=127",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "\u003cshell\u003e: line 1: vared: command not found~alone=127~\u003cshell\u003e: line 1: vared: command not found~creating=127~\u003cshell\u003e: line 1: vared: command not found~both=127",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "\u003cshell\u003e: vared: command not found~alone=127~\u003cshell\u003e: vared: command not found~creating=127~\u003cshell\u003e: vared: command not found~both=127",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "\u003cshell\u003e: 1: vared: not found~alone=127~\u003cshell\u003e: 1: vared: not found~creating=127~\u003cshell\u003e: 1: vared: not found~both=127",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "\u003cshell\u003e: vared: not found~alone=127~\u003cshell\u003e: vared: not found~creating=127~\u003cshell\u003e: vared: not found~both=127",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "\u003cshell\u003e:vared:1: -a ignored~\u003cshell\u003e:vared:1: can't access terminal~alone=1~\u003cshell\u003e:vared:1: can't access terminal~creating=1~\u003cshell\u003e:vared:1: specify only one of -a and -A~both=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "variable/a-module-parameter-a-script-may-not-own": {
       "ash": {
         "Stdout": "",

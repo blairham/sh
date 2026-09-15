@@ -2519,6 +2519,14 @@ func Diagnostics() interp.Diagnostics {
 		// back out of the front of it because this dialect puts it in the
 		// location: `zsh:break:1: not in while, …`.
 		LoopControlOutsideALoop: "%[1]s: not in while, until, select, or repeat loop",
+		// The count is judged by its *sign* rather than by whether it could
+		// be read, and the sentence quotes the number it read and not the
+		// word the script wrote: `break abc` is `argument is not positive:
+		// 0` and `break -1` is `argument is not positive: -1`. Measured
+		// 2026-09-14, and the script ends in both (#2800).
+		LoopControlCount:               "%[1]s: argument is not positive: %[2]s",
+		LoopControlCountNamesTheNumber: true,
+		LoopControlCountStatus:         1,
 		// zsh names itself, not the path it was invoked by. `/bin/zsh` and a
 		// symlink called `myzsh` both say `zsh:`, and so does the shell run
 		// as `exec -a weirdname /bin/zsh` — measured all three ways, because

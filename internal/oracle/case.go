@@ -17784,6 +17784,21 @@ echo "st=$? alive"`,
 		Why:     "an exit passes out through every loop it is inside, unlike `break`, which counts them",
 	},
 	{
+		ID: "loop/a-count-break-will-not-read", Category: "commands",
+		Snippet: `for i in 1 2; do break abc; echo tail; done; echo after`,
+		Why:     "a `break` whose count is no number at all, which **every column in the panel refuses and ours took in silence**: `loopDepth` read any word it could not parse as 1, so the loop ended at status 0 and a script could not tell this from a plain `break`. Seven answers and five sentences — dash and BusyBox ash call it an illegal number, bash a numeric argument, ksh93 a *label* because its own `break` takes one, and zsh quotes the number it read rather than the word, so `abc` is `not positive: 0`. Neither `tail` nor `after` is printed anywhere, which is what says the ending is unanimous and is not an axis: plain bash answers No to BadOptionToSpecialBuiltinFatal and ends the script here regardless (#2800)",
+	},
+	{
+		ID: "loop/a-count-continue-will-not-read", Category: "commands",
+		Snippet: `for i in 1 2; do continue abc; done; echo after`,
+		Why:     "the same word in the other builtin, which is what says the reader is shared rather than copied: every column writes the same sentence with the other name in it. The pair matters because the two builtins reach the count through different control values here, and a fix written into one of them would leave the other reading `abc` as 1",
+	},
+	{
+		ID: "loop/a-count-that-is-a-number-and-not-positive", Category: "commands",
+		Snippet: `for i in 1 2; do break 0; echo tail; done; echo after`,
+		Why:     "the same position with a word that *is* a number, and the one row where the panel parts over more than a sentence: bash gives it a complaint of its own — `loop count out of range` — takes the count as 1 and lets the script carry on, so `after` runs at status 0 with no `tail`. The other four write the sentence they wrote for `abc` above and end the script. So the second sentence and the surviving script are the same column, which is why one field carries both",
+	},
+	{
 		ID: "exit/break-still-counts-its-loops", Category: "traps and exit",
 		Snippet: `while :; do while :; do break 2; done; echo inner; done; echo after`,
 		Why:     "the counter-case: `break` still stops only as many loops as it was asked to, which is what an exit must not be confused with",

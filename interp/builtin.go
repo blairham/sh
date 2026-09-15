@@ -88,7 +88,11 @@ func init() {
 // ordinary control flow and modeling it as a failure would make every caller
 // check for something that is not one.
 func biBreak(r *Runner, _ context.Context, args []string) int {
-	reach, st, done := r.loopControlReach("break", loopDepth(args))
+	want, st, done := r.loopControlCount("break", args)
+	if done {
+		return st
+	}
+	reach, st, done := r.loopControlReach("break", want)
 	if done {
 		return st
 	}
@@ -97,12 +101,69 @@ func biBreak(r *Runner, _ context.Context, args []string) int {
 }
 
 func biContinue(r *Runner, _ context.Context, args []string) int {
-	reach, st, done := r.loopControlReach("continue", loopDepth(args))
+	want, st, done := r.loopControlCount("continue", args)
+	if done {
+		return st
+	}
+	reach, st, done := r.loopControlReach("continue", want)
 	if done {
 		return st
 	}
 	r.ctl, r.ctlDepth = controlContinue, reach
 	return 0
+}
+
+// loopControlCount reads the count `break` and `continue` share, and reports
+// the one every shell in the panel refuses and ours took in silence.
+//
+// The operand is read **before** the place is judged, which is measured and
+// is the reverse of what the same shells do for `return`: `break abc` with no
+// loop around it is `only meaningful in a for', while', or until' loop` in
+// bash and never mentions `abc`, where `return abc` outside a function writes
+// the operand's complaint first and the place's after it (#2762). So the two
+// builtins order their two questions differently, and this one asks the place
+// second — which is what loopControlReach does, after this.
+//
+// See Diagnostics.LoopControlCount for the panel's sentences and for why the
+// script's ending is not an axis: all seven end there.
+func (r *Runner) loopControlCount(name string, args []string) (int, int, bool) {
+	if len(args) == 0 {
+		return 1, 0, false
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(args[0]))
+	if err == nil && n > 0 {
+		return n, 0, false
+	}
+	d := r.diag()
+	// The number this reading produced, for the one dialect whose sentence
+	// quotes that rather than the word: a word that is no number at all
+	// reads as nought there, which is what `break abc` says.
+	operand := args[0]
+	if d.LoopControlCountNamesTheNumber {
+		operand = strconv.Itoa(n)
+	}
+	if err == nil && d.LoopControlCountOutOfRange != "" {
+		// A number, and not positive, in the one column that parts the two:
+		// it complains, takes the count as 1 and lets the script carry on.
+		r.diagf("%s\n", Wording(d.LoopControlCountOutOfRange, "", name, operand))
+		return 1, 0, false
+	}
+	// The fallback chain is a chain of *formats*, not of rendered text: the
+	// operand can hold a `%` and rendering twice would read it as a verb.
+	format := d.LoopControlCount
+	if format == "" {
+		format = d.NumericArgument
+	}
+	r.diagf("%s\n", Wording(format, "%[1]s: invalid number: %[2]s", name, operand))
+	// The script ends, in every column of the panel — see the field. Not
+	// through BadOptionToSpecialBuiltinFatal: plain bash answers No there
+	// and still ends the script here.
+	// The status is the builtin's own rather than the one
+	// Semantics.FatalErrorStatusIsOne gives every other fatal error: bash
+	// says Yes to that axis and reports **2** here, where ksh93 and zsh
+	// report 1, so the two are different facts. See fatalAtStatus.
+	r.fatalAtStatus(orDefault(d.LoopControlCountStatus, 2))
+	return 0, r.status, true
 }
 
 // loopControlReach is how many loops a `break` or `continue` can see, plus

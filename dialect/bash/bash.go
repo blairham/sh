@@ -1737,8 +1737,17 @@ func Diagnostics() interp.Diagnostics {
 		// The three loops POSIX has, spelled with this shell's own quoting.
 		// It says this and carries on, which is the axis beside it.
 		LoopControlOutsideALoop: "%[1]s: only meaningful in a `for', `while', or `until' loop",
-		TypeKeyword:             "%[1]s is a shell keyword",
-		TypeFunction:            "%[1]s is a function",
+		// A count that is a number and is not positive gets its own
+		// sentence here, and this is the one column that then carries on:
+		// `for i in 1 2; do break 0; echo tail; done; echo after` prints
+		// `after` at status 0 with no `tail`, so the loop still ends and the
+		// count was taken as 1. The other four end the script. A word that
+		// is no number at all takes NumericArgument's sentence — `break:
+		// abc: numeric argument required` — and ends the script here too
+		// (#2800).
+		LoopControlCountOutOfRange: "%[1]s: %[2]s: loop count out of range",
+		TypeKeyword:                "%[1]s is a shell keyword",
+		TypeFunction:               "%[1]s is a function",
 		// The only wording in the panel that carries its own quotes, and the
 		// only verb that is not "alias".
 		TypeAlias:     "%[1]s is aliased to `%[2]s'",

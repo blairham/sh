@@ -1811,6 +1811,82 @@ type Diagnostics struct {
 	// twice.
 	LoopControlOutsideALoop string
 
+	// LoopControlCount is a `break` or `continue` whose count the shell will
+	// not read — `break abc`. Two verbs, the same pair and the same order
+	// Diagnostics.NumericArgument takes: %[1]s the builtin's name and %[2]s
+	// the operand. Empty falls back to NumericArgument, which is the right
+	// answer for three of the panel, and then to the substrate's own.
+	//
+	// **Every column in the panel refuses it and ours refused none of them**
+	// — `loopDepth` took any word it could not read as 1 and said nothing,
+	// so `break abc` left the loop at status 0 and the script could not tell
+	// that from a plain `break`. Measured 2026-09-14, `for i in 1 2; do
+	// break abc; echo tail; done; echo after` in a script file under
+	// `env -i`:
+	//
+	//	dash        break: Illegal number: abc             st 2
+	//	bash 5.3    break: abc: numeric argument required   st 2
+	//	bash 3.2    the same sentence                       st 128
+	//	bash-as-sh  the same sentence                       st 2
+	//	ksh93       break: abc: label not implemented       st 1
+	//	zsh         break: argument is not positive: 0      st 1
+	//	BusyBox ash break: Illegal number: abc              st 2
+	//
+	// Neither `tail` nor `after` is printed in any of them: **the script
+	// ends**, in all seven, which is why there is no axis here for whether
+	// it does. That is not BadOptionToSpecialBuiltinFatal reaching a second
+	// builtin — plain bash answers No there and ends the script here anyway
+	// (#2800).
+	//
+	// ksh93's sentence is about a *label* because its `break` takes one; it
+	// is that shell's own concept and not a wording of "number".
+	LoopControlCount string
+	// LoopControlCountNamesTheNumber writes the number the count *read as*
+	// into the sentence in place of the word the script wrote. zsh alone:
+	// `break abc` there is `argument is not positive: 0`, and `break -1` is
+	// `argument is not positive: -1`. Measured 2026-09-14.
+	//
+	// A flag rather than a third verb, because the two readings are never
+	// both wanted: the six columns that quote the word never quote a number,
+	// and the one that quotes a number never quotes the word.
+	//
+	// One measured row this does not reach, recorded rather than modelled:
+	// zsh reads the operand as *arithmetic*, so `break 1abc` there is `bad
+	// math expression: operator expected at `abc'` — the evaluator's own
+	// complaint and not this sentence. Ours answers `argument is not
+	// positive: 0` for that word.
+	LoopControlCountNamesTheNumber bool
+	// LoopControlCountOutOfRange is the separate sentence one column writes
+	// for a count that *is* a number and is not positive — `break 0`, `break
+	// -1`. bash alone: `break: 0: loop count out of range`.
+	//
+	// **Its presence also says the script carries on**, and that is measured
+	// rather than a convenience. The column with the second sentence is the
+	// column that does not end there, and it is the same column in both
+	// halves. Measured 2026-09-14 with `for i in 1 2; do break 0; echo tail;
+	// done; echo after`:
+	//
+	//	dash, ash   break: Illegal number: 0             st 2, script ends
+	//	ksh93       break: 0: label not implemented       st 1, script ends
+	//	zsh         break: argument is not positive: 0    st 1, script ends
+	//	bash        break: 0: loop count out of range     st 0, `after` runs
+	//
+	// bash's loop still ends — neither `tail` nor a second pass is printed —
+	// so the count is taken as 1 after the complaint. An empty field means
+	// the dialect words the two the same way and ends the script for both,
+	// which is what the other four do (#2800).
+	LoopControlCountOutOfRange string
+	// LoopControlCountStatus is what the script ends at when the count was
+	// refused. Zero means 2, which is dash's, bash's and BusyBox ash's
+	// answer; ksh93 and zsh say 1. bash 3.2 says 128 and has no dialect of
+	// its own here, so the panel's seventh answer is recorded and not held.
+	//
+	// Its own number rather than Semantics.FatalErrorStatusIsOne's, which is
+	// measured and not a duplicate: bash answers Yes to that axis and
+	// reports 2 here, so the general fatal status and this one are different
+	// facts in the one column that could have told them apart.
+	LoopControlCountStatus int
+
 	// UnsetBadFunctionName is what `unset -f` says about an operand that
 	// could not be a function name. One verb: the operand.
 	UnsetBadFunctionName string

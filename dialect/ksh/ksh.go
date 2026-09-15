@@ -2075,10 +2075,20 @@ func Diagnostics() interp.Diagnostics {
 		ShiftTooMany:  "shift: %[2]s: bad number",
 		// The same sentence for a count below zero, which is only reachable
 		// here after the end-of-options marker.
-		ShiftNegativeCount:   "shift: %[2]s: bad number",
-		StdinBuiltinLocation: interp.LocationBracketLine,
-		ArithError:           "%[1]s: %[2]s",
-		DivisionByZero:       "divide by zero",
+		ShiftNegativeCount: "shift: %[2]s: bad number",
+		// A `break`'s count is a *label* here, because this shell's `break`
+		// takes one — so a word it cannot read is not called a bad number at
+		// all. Measured 2026-09-14: `break abc`, `break 0` and `break " 1 "`
+		// are all `break: <word>: label not implemented` at status 1, with
+		// the script ended. `break -1` is the option path instead (`unknown
+		// option`, with the usage line under it), which this does not reach
+		// and which is where a leading dash goes in every builtin here
+		// (#2800).
+		LoopControlCount:       "%[1]s: %[2]s: label not implemented",
+		LoopControlCountStatus: 1,
+		StdinBuiltinLocation:   interp.LocationBracketLine,
+		ArithError:             "%[1]s: %[2]s",
+		DivisionByZero:         "divide by zero",
 		// ksh93 names the innermost keyword still awaiting a partner: `if`
 		// on its own, and the `then` inside it once that has been consumed.
 		EvalNaming:             interp.SourceBeforeLocation,

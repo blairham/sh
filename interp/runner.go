@@ -5400,6 +5400,22 @@ type scope struct {
 // dash saying 2 where the others say 1 — and the unwinding. Setting the
 // status and forgetting the unwinding is the bug this replaces, and it had
 // been written independently at three sites.
+// fatalAtStatus is fatalQuiet for a failure that carries its own number.
+//
+// Rare, and it has to be measured to be used: the status of a fatal error is
+// normally Semantics.FatalErrorStatusIsOne's, and a caller that answers it
+// itself is saying the panel's columns do not line up with that axis here.
+// `break abc` is the case — bash answers Yes to the axis and reports 2 for
+// this, where ksh93 and zsh report 1 (#2800).
+//
+// The axis is not asked at all on this path, which is the point: asking it
+// and then discarding the answer would report an unanswered axis to a
+// strict-core shell over a number it never used.
+func (r *Runner) fatalAtStatus(status int) {
+	r.status = status
+	r.ctl, r.abandon, r.errexitStopped = controlExit, abandonError, false
+}
+
 // fatalQuiet is fatal for a failure that has already reported itself.
 func (r *Runner) fatalQuiet() {
 	r.setFatalStatus()

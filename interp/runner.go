@@ -1818,6 +1818,21 @@ type Runner struct {
 	// file. So the offset is carried by whatever is running the body, which
 	// is the thing that knows where it came from.
 	lineBase int
+	// lineOrigin is what the route calls its *first* line, less one: nought
+	// where the first line is line 1, and -1 where it is line 0.
+	//
+	// Separate from lineBase and applied on top of it, because the two are
+	// different facts about the same number. lineBase is how far into a
+	// script the text being run starts, and borrowed text resets it — an
+	// `eval`'s program is line 1 of itself. This is the whole route's
+	// numbering and nothing inside the route resets it, which is what the
+	// measurement says: BusyBox ash under `-c` writes `line 0` for its first
+	// line *and* `eval: line 0:` for the first line of an `eval`'s text, so
+	// the offset survives into the borrowed text that reset the other one.
+	//
+	// See Diagnostics.CommandStringLinesFromZero, which is where the value
+	// comes from and which carries the panel's table.
+	lineOrigin int
 	// killed is the command being run, for the notice that a signal ended
 	// it — the only message that has to render a command rather than name
 	// one. Innermost wins, which is what the shell prints: a command inside
@@ -2620,7 +2635,7 @@ func (r *Runner) lineOf(p syntax.Pos) int {
 		// so the node's own line says nothing.
 		return r.linePin
 	}
-	return int(p.Line) + r.lineBase
+	return int(p.Line) + r.lineBase + r.lineOrigin
 }
 
 // builtinIsSpeaking reports whether this diagnostic belongs to a builtin,
@@ -2736,6 +2751,23 @@ func (r *Runner) locationPrefix() string {
 		// between the shell's and the location rather than after it, which
 		// is a prefix of its own rather than something to append. See
 		// Runner.borrowedNameBefore.
+		if b := r.speaking(); b != "" && d.NamesBuiltinInLocation {
+			// And a builtin naming itself takes that slot, rather than
+			// standing beside the text it was reached through. The same rule
+			// the dialect that writes the name *after* the location follows
+			// — see Runner.borrowedName and #2532 — measured here on BusyBox
+			// v1.37.0, 2026-09-14, with `p.sh` holding `shift -1`:
+			//
+			//	./s.sh does `. /p.sh`      /s.sh: shift: line 2: Illegal number: -1
+			//	the same under `-c`        /bin/ash: shift: line 2: …
+			//	./e.sh does eval "shift -1"  /e.sh: shift: line 1: …
+			//	an unset parameter in p.sh  /s.sh: /p.sh: line 2: NOPE: …
+			//
+			// so the file keeps the slot for what the *shell* says and loses
+			// it to whatever builtin speaks for itself. The line is the one
+			// inside the borrowed text either way.
+			source = b
+		}
 		return d.forBorrowed().borrowedPrefix(name, source, line)
 	}
 	return d.prefix(name, r.speaking(), r.builtinIsSpeaking(), line) + r.borrowedName(d)
@@ -3058,6 +3090,7 @@ func (r *Runner) RunPart(ctx context.Context, f *syntax.File) error {
 	// its stopped jobs is a fact about the line before this one — see the two
 	// fields for what that buys over remembering it forever.
 	r.toldOfJobsAtExit, r.tellingOfJobsAtExit = r.tellingOfJobsAtExit, false
+	r.ensureLineOrigin()
 	r.ensurePWD()
 	r.ensureSpecials()
 	r.ensureImportedFunctions()
@@ -5397,6 +5430,22 @@ type scope struct {
 // dash saying 2 where the others say 1 — and the unwinding. Setting the
 // status and forgetting the unwinding is the bug this replaces, and it had
 // been written independently at three sites.
+// fatalAtStatus is fatalQuiet for a failure that carries its own number.
+//
+// Rare, and it has to be measured to be used: the status of a fatal error is
+// normally Semantics.FatalErrorStatusIsOne's, and a caller that answers it
+// itself is saying the panel's columns do not line up with that axis here.
+// `break abc` is the case — bash answers Yes to the axis and reports 2 for
+// this, where ksh93 and zsh report 1 (#2800).
+//
+// The axis is not asked at all on this path, which is the point: asking it
+// and then discarding the answer would report an unanswered axis to a
+// strict-core shell over a number it never used.
+func (r *Runner) fatalAtStatus(status int) {
+	r.status = status
+	r.ctl, r.abandon, r.errexitStopped = controlExit, abandonError, false
+}
+
 // fatalQuiet is fatal for a failure that has already reported itself.
 func (r *Runner) fatalQuiet() {
 	r.setFatalStatus()

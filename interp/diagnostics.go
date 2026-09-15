@@ -314,6 +314,56 @@ type Diagnostics struct {
 	// file is `./f.sh:2: NOPE: parameter not set`, with no `.` anywhere in it.
 	NamesBuiltinInLocation bool
 
+	// UnsetReadonlyIsTheShellsOwn takes `unset` out of the location for the
+	// one refusal it makes about a name it may not remove, in a dialect that
+	// names the builtin there for everything else.
+	//
+	// Two dialects name a builtin in the location and they answer this
+	// differently, which is what makes it a value rather than the rule the
+	// site used to hard-code. Measured on `readonly r=1; unset r` in a script
+	// file — zsh 5.9.2 on 2026-09-12, BusyBox v1.37.0 on 2026-09-14:
+	//
+	//	zsh          ./z.sh:2: read-only variable: r
+	//	BusyBox ash  ./z.sh: unset: line 2: r: is read only
+	//
+	// and the same shells' `unset 1x` is `zsh:unset:1: 1x: invalid parameter
+	// name`, so zsh's silence here is about this refusal and not about the
+	// builtin. False — the zero value and the substrate's own — names it,
+	// which is what every dialect but zsh was measured to do.
+	UnsetReadonlyIsTheShellsOwn bool
+
+	// ExecNotFoundIsTheShellsOwn takes `exec` out of the location when the
+	// command it was given does not exist, for the same reason and in the
+	// same two dialects:
+	//
+	//	zsh          ./e.sh:1: command not found: nosuchcmd
+	//	BusyBox ash  ./e.sh: exec: line 1: /nonexistent/x: not found
+	//
+	// zsh reports exactly what a bare command word reports, which is the
+	// argument for calling it the shell's failure rather than the builtin's;
+	// BusyBox keeps the builtin, and its wording keeps the distinction the
+	// other way round — `exec:` in the location where a plain command word
+	// has none. False names it.
+	ExecNotFoundIsTheShellsOwn bool
+
+	// BuiltinLocationIsTheSpeakersOnly gives BuiltinLocation to a complaint
+	// the builtin makes itself, and never to a redirection opened for one.
+	//
+	// The wider question is [Runner.builtinIsSpeaking], which is what every
+	// other dialect's BuiltinLocation keys off: ksh93 counts a failed
+	// redirection on a builtin as the builtin's. BusyBox ash does not, and
+	// says so on the one route where its two locations differ. Measured
+	// 2026-09-14, BusyBox v1.37.0 in the pinned image, `-c` in both rows:
+	//
+	//	ash -c 'shift -1'            /bin/ash: shift: line 0: Illegal number: -1
+	//	ash -c 'read x < /nofile'    /bin/ash: can't open /nofile: no such file
+	//
+	// The second is the shell's own location — no line, which is what this
+	// route writes for everything the shell speaks — so the redirection is
+	// not the builtin's here in either respect: it is not named and it is
+	// not located as one. In a script the two coincide and nothing shows.
+	BuiltinLocationIsTheSpeakersOnly bool
+
 	// TestNamesFirstOperand makes a malformed three-argument `test` blame the
 	// first word rather than the middle one: `test a b c` is "a: unexpected
 	// operator" in dash and names `b` — the word that should have been an
@@ -395,6 +445,16 @@ type Diagnostics struct {
 	// GetoptsNamesNoLine prints those with the shell's name and no line,
 	// where this dialect gives a line to everything else. bash alone.
 	GetoptsNamesNoLine bool
+	// GetoptsUsageStatus is what `getopts` reports when it was not given
+	// both the optstring and the name to write into. Zero means 2, which is
+	// what dash, both bashes, ksh93 and BusyBox ash report; zsh alone says 1,
+	// and it is the one column that writes no usage line there but counts
+	// the operands instead. Measured 2026-09-14 — the script carries on in
+	// all seven, so only the number differs (#2801).
+	//
+	// The line itself is Diagnostics.BuiltinUsage's `getopts` entry, shared
+	// with the one a bad option earns in the two dialects that refuse one.
+	GetoptsUsageStatus int
 	// GetoptsUnprefixed prints them with neither a name nor a line. dash
 	// alone, and the only diagnostic in the panel with nothing in front of
 	// it at all.
@@ -1750,6 +1810,83 @@ type Diagnostics struct {
 	// how `zsh:break:1: not in while, …` comes out without saying `break`
 	// twice.
 	LoopControlOutsideALoop string
+
+	// LoopControlCount is a `break` or `continue` whose count the shell will
+	// not read — `break abc`. Two verbs, the same pair and the same order
+	// Diagnostics.NumericArgument takes: %[1]s the builtin's name and %[2]s
+	// the operand. Empty falls back to NumericArgument, which is the right
+	// answer for three of the panel, and then to the substrate's own.
+	//
+	// **Every column in the panel refuses it and ours refused none of them**
+	// — the count reader took any word it could not read as 1 and said
+	// nothing, so `break abc` left the loop at status 0 and the script
+	// could not tell
+	// that from a plain `break`. Measured 2026-09-14, `for i in 1 2; do
+	// break abc; echo tail; done; echo after` in a script file under
+	// `env -i`:
+	//
+	//	dash        break: Illegal number: abc             st 2
+	//	bash 5.3    break: abc: numeric argument required   st 2
+	//	bash 3.2    the same sentence                       st 128
+	//	bash-as-sh  the same sentence                       st 2
+	//	ksh93       break: abc: label not implemented       st 1
+	//	zsh         break: argument is not positive: 0      st 1
+	//	BusyBox ash break: Illegal number: abc              st 2
+	//
+	// Neither `tail` nor `after` is printed in any of them: **the script
+	// ends**, in all seven, which is why there is no axis here for whether
+	// it does. That is not BadOptionToSpecialBuiltinFatal reaching a second
+	// builtin — plain bash answers No there and ends the script here anyway
+	// (#2800).
+	//
+	// ksh93's sentence is about a *label* because its `break` takes one; it
+	// is that shell's own concept and not a wording of "number".
+	LoopControlCount string
+	// LoopControlCountNamesTheNumber writes the number the count *read as*
+	// into the sentence in place of the word the script wrote. zsh alone:
+	// `break abc` there is `argument is not positive: 0`, and `break -1` is
+	// `argument is not positive: -1`. Measured 2026-09-14.
+	//
+	// A flag rather than a third verb, because the two readings are never
+	// both wanted: the six columns that quote the word never quote a number,
+	// and the one that quotes a number never quotes the word.
+	//
+	// One measured row this does not reach, recorded rather than modeled:
+	// zsh reads the operand as *arithmetic*, so `break 1abc` there is `bad
+	// math expression: operator expected at `abc'` — the evaluator's own
+	// complaint and not this sentence. Ours answers `argument is not
+	// positive: 0` for that word.
+	LoopControlCountNamesTheNumber bool
+	// LoopControlCountOutOfRange is the separate sentence one column writes
+	// for a count that *is* a number and is not positive — `break 0`, `break
+	// -1`. bash alone: `break: 0: loop count out of range`.
+	//
+	// **Its presence also says the script carries on**, and that is measured
+	// rather than a convenience. The column with the second sentence is the
+	// column that does not end there, and it is the same column in both
+	// halves. Measured 2026-09-14 with `for i in 1 2; do break 0; echo tail;
+	// done; echo after`:
+	//
+	//	dash, ash   break: Illegal number: 0             st 2, script ends
+	//	ksh93       break: 0: label not implemented       st 1, script ends
+	//	zsh         break: argument is not positive: 0    st 1, script ends
+	//	bash        break: 0: loop count out of range     st 0, `after` runs
+	//
+	// bash's loop still ends — neither `tail` nor a second pass is printed —
+	// so the count is taken as 1 after the complaint. An empty field means
+	// the dialect words the two the same way and ends the script for both,
+	// which is what the other four do (#2800).
+	LoopControlCountOutOfRange string
+	// LoopControlCountStatus is what the script ends at when the count was
+	// refused. Zero means 2, which is dash's, bash's and BusyBox ash's
+	// answer; ksh93 and zsh say 1. bash 3.2 says 128 and has no dialect of
+	// its own here, so the panel's seventh answer is recorded and not held.
+	//
+	// Its own number rather than Semantics.FatalErrorStatusIsOne's, which is
+	// measured and not a duplicate: bash answers Yes to that axis and
+	// reports 2 here, so the general fatal status and this one are different
+	// facts in the one column that could have told them apart.
+	LoopControlCountStatus int
 
 	// UnsetBadFunctionName is what `unset -f` says about an operand that
 	// could not be a function name. One verb: the operand.
@@ -3754,6 +3891,29 @@ type Diagnostics struct {
 	// Empty falls back to ArithExpressionRanOut, which is what the two
 	// dialects that word the two failures identically want.
 	ArithOperandExpected string
+	// ArithIncrementNeedsAPlace is `++` or `--` on something that cannot be
+	// assigned to — `$(( 1++ ))`. One verb: the operator, which two of the
+	// four shells that reach the failure leave out of the sentence and which
+	// a format is free to ignore.
+	//
+	// Measured 2026-09-14, `-c` under `env -i PATH=/usr/bin:/bin`:
+	//
+	//	ksh93   1++ : assignment requires lvalue
+	//	zsh     bad math expression: lvalue required
+	//	bash    1++ : arithmetic syntax error: operand expected
+	//	                                 (error token is "+ ")
+	//	dash    arithmetic expression: expecting primary: " 1++ "
+	//
+	// Only the first two reach this. bash and dash refuse the text while
+	// *reading* it — neither has a postfix operator to apply to a literal,
+	// so there is no lvalue question for them to answer — and their rows are
+	// recorded rather than held here, because a wording written for them
+	// would put this sentence where the panel writes a reading failure.
+	//
+	// `$(( ++1 ))` parts the same two pairs the other way round: bash and
+	// dash answer **1**, reading the two signs rather than an operator, and
+	// ksh93 and zsh write the sentence above (#2420).
+	ArithIncrementNeedsAPlace string
 	// ArithIllegalByte is the reason when the arithmetic reader met a byte
 	// that is part of no token at all, at a position where the expression
 	// could legally have stopped: `$((@))` and `$((1 @))` are
@@ -4420,6 +4580,40 @@ type Diagnostics struct {
 	// where there is no $0 to name — zsh drops the line and keeps only its
 	// name there. Zero means "the same as Location".
 	StdinLocation LocationStyle
+	// CommandStringLinesFromZero numbers the `-c` route's lines from 0
+	// rather than from 1, so the program's first line is line 0.
+	//
+	// The *counter* and not the rendering, which is what the panel says:
+	// `$LINENO` moves with it. Measured 2026-09-14 under `env -i`, and the
+	// two columns that answer yes are BusyBox ash and bash 3.2:
+	//
+	//	                                     ash 1.37  bash 3.2  the rest
+	//	-c 'echo $LINENO'                    0         0         1
+	//	a script file's first line           1         1         1
+	//	-c 'shift -1'                        line 0    —         line 1
+	//	-c '<nl>shift -1'                    line 1    —         line 2
+	//	-c 'echo a<nl>echo b<nl>shift -1'    line 2    —         line 3
+	//	-c 'eval "nosuchcmd"'                eval:     —         eval:
+	//	                                     line 0              line 1
+	//	the same three lines on stdin        line 3    line 3    line 3
+	//	the same three lines in a file       line 3    line 3    line 3
+	//
+	// So it is the `-c` route alone and it is the whole of that route: a
+	// script file and standard input are 1-based in every column. The dash
+	// in bash 3.2's rows is not a disagreement — that shell writes no line
+	// for those complaints at all, so `$LINENO` is the only place its answer
+	// shows, and it is the reason this is a counter rather than a location
+	// style.
+	//
+	// It is invisible for the shell's *own* diagnostics in the dialect that
+	// has it, which carry no line on that route — `ash -c 'nosuchcmd'` is
+	// `ash: nosuchcmd: not found` — so a builtin's location and a borrowed
+	// text's are the only two places it can be read (#2799).
+	//
+	// Applied through Runner.lineOrigin, on top of the offset borrowed text
+	// carries, because an `eval`'s first line is 0 here too.
+	CommandStringLinesFromZero bool
+
 	// StdinBuiltinLocation is BuiltinLocation for the same route: zsh
 	// drops the prefix down to the builtin's own name, and ksh93 moves to
 	// `name[line]:` — a shape it uses nowhere else on this route.
@@ -4744,10 +4938,12 @@ func (d Diagnostics) forBorrowed() Diagnostics {
 // borrowed text between their own name and the location: `ash: ./p.sh: line
 // 2: `, and bash's `bash: eval: line 2: `.
 //
-// It takes no builtin, which is the shape the two callers share rather than
-// an omission: no dialect in the panel both names borrowed text here and
-// names the builtin that is speaking in its location, so writing one would
-// pin a combination nothing has been measured on.
+// It takes no builtin because the two names are *alternatives* rather than a
+// pair: the one dialect that both names borrowed text here and names the
+// builtin that is speaking writes the builtin in this very slot, so the
+// caller hands it over in place of the source. See Runner.locationPrefix,
+// and Runner.borrowedName for the same rule in the dialect that writes the
+// name after the location instead (#2532).
 //
 // The caller is expected to have applied [Diagnostics.forBorrowed] already —
 // SourceReport does it for the parse path, and Runner.locationPrefix for the
@@ -5566,13 +5762,37 @@ func (d Diagnostics) prefixWithoutLine(name, builtin string) string {
 	if name == "" {
 		name = "sh"
 	}
-	if builtin != "" && d.NamesBuiltinInLocation {
-		name += ":" + builtin
-	}
+	name = d.withBuiltinInLocation(name, builtin, d.Location)
 	if d.Location == LocationNone {
 		return ""
 	}
 	return name + ": "
+}
+
+// withBuiltinInLocation puts the speaking builtin's name between the shell's
+// name and the line, punctuated the way this location style already
+// punctuates the name it writes.
+//
+// Two dialects name the builtin here and neither needs an axis to say how,
+// because each writes the separator its own style writes everywhere else.
+// Measured on `shift -1` in a script file — zsh 5.9.2 on 2026-09-12, BusyBox
+// v1.37.0 in the pinned image on 2026-09-14:
+//
+//	zsh          zsh:shift:1: …      LocationTightLine, a bare colon
+//	BusyBox ash  /s.sh: shift: line 1: …   LocationLineWord, a colon and a space
+//
+// So the tight style joins every segment with a bare colon and the rest put
+// a space after theirs, and `name + ":" + builtin` — which was the whole of
+// this rule while zsh was the only dialect asking — wrote `/s.sh:shift: line
+// 1: ` for the second (#2761).
+func (d Diagnostics) withBuiltinInLocation(name, builtin string, style LocationStyle) string {
+	if builtin == "" || !d.NamesBuiltinInLocation {
+		return name
+	}
+	if style == LocationTightLine {
+		return name + ":" + builtin
+	}
+	return name + ": " + builtin
 }
 
 // locationNamesALineAt reports whether the ordinary location this dialect
@@ -5637,21 +5857,25 @@ func (d Diagnostics) prefix(name, builtin string, byBuiltin bool, line int) stri
 	if name == "" {
 		name = "sh"
 	}
+	if d.BuiltinLocationIsTheSpeakersOnly {
+		// One dialect gives the builtin's own location to the builtin's own
+		// complaint and to nothing else — see the field.
+		byBuiltin = builtin != ""
+	}
 	if byBuiltin && builtin != "" && d.BuiltinLocation == LocationBuiltinNameOnly {
 		// The builtin speaks for itself: no shell, no line.
 		return builtin + ": "
-	}
-	if builtin != "" && d.NamesBuiltinInLocation {
-		// One dialect names the builtin that is speaking, between the shell
-		// and the line. It rides on the shell's name rather than being a
-		// fourth LocationStyle, because it composes with whichever style the
-		// dialect already uses instead of replacing it.
-		name += ":" + builtin
 	}
 	style := d.Location
 	if byBuiltin && d.BuiltinLocation != LocationNone {
 		style = d.BuiltinLocation
 	}
+	// Two dialects name the builtin that is speaking, between the shell and
+	// the line. It rides on the shell's name rather than being a fifth
+	// LocationStyle, because it composes with whichever style the dialect
+	// already uses instead of replacing it — and the *effective* style is
+	// what punctuates it, which is why this comes after the choice above.
+	name = d.withBuiltinInLocation(name, builtin, style)
 	switch style {
 	case LocationLineWordAfterFirst:
 		if line <= 1 {

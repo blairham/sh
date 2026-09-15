@@ -512,7 +512,8 @@ func (r *Runner) wholeArrayElems(name string) []string {
 // literal `$` and not the start of anything.
 func (r *Runner) arithSubscriptIndex(x *syntax.ArithIndex) (arithNum, error) {
 	if x.Index != nil || x.Empty {
-		return r.evalNum(x.Index)
+		n, err := r.evalNum(x.Index)
+		return r.blamedOnTheSubscript(x, n, err)
 	}
 	p := syntax.NewParser("", r.dialect())
 	tree := p.ParseArithFor(x.Sub, syntax.Pos{})
@@ -550,7 +551,42 @@ func (r *Runner) arithSubscriptIndex(x *syntax.ArithIndex) (arithNum, error) {
 	if err != nil {
 		return intNum(0), arithError{msg: r.subscriptFailure(x.Sub, err), complete: true}
 	}
-	return r.evalNum(tree)
+	n, evalErr := r.evalNum(tree)
+	return r.blamedOnTheSubscript(x, n, evalErr)
+}
+
+// blamedOnTheSubscript words a failure raised while *evaluating* a subscript
+// against the subscript's own text, the way the parser's refusal above is
+// already worded against it.
+//
+// Measured 2026-09-14: `$(( nodecl[1/0] ))` is `1/0: divide by zero` in ksh93
+// and `1/0: division by 0 (error token is "0")` in bash, and `$(( 2 + nodecl[
+// 1/0] ))` and `$(( x[1/0] ))` are those same two sentences — so the blamed
+// extent is what the brackets hold, wherever the brackets stand and whatever
+// the name in front of them is. Ours quoted the whole expression, which put
+// `nodecl[1/0]` where the shells write the three characters that failed, and
+// left bash slicing its error token out of the wrong string: `error token is
+// "odecl[1/0] "`, one byte in from a `strings.Index` that had found the
+// subscript inside the name (#2420).
+//
+// Core rather than an axis: the two columns that reach it agree, and the
+// other three never arrive — dash and BusyBox ash have no such subscript at
+// all, and zsh answers zero without reading the brackets.
+//
+// Nothing is rewritten when the subscript has no text of its own: an empty
+// pair of brackets has nothing to quote, and blaming the empty string would
+// send arithFailure back to the whole expression by a longer road.
+func (r *Runner) blamedOnTheSubscript(x *syntax.ArithIndex, n arithNum, err error) (arithNum, error) {
+	if err == nil || x.Sub == "" {
+		return n, err
+	}
+	if ae, ok := err.(arithError); ok && ae.complete {
+		// Already the whole diagnostic — a refusal worded by name further
+		// in, or a nested subscript that has been through here — so the
+		// extent has been decided and this must not decide it again.
+		return n, err
+	}
+	return intNum(0), arithError{msg: r.arithFailure(x.Sub, err), complete: true}
 }
 
 // arithElemValue reads an element as a number, whichever kind of array it
@@ -1034,7 +1070,10 @@ func (r *Runner) evalUnary(x *syntax.ArithUnary) (arithNum, error) {
 	if x.Op == "++" || x.Op == "--" {
 		place, ok := arithPlaceOf(x.X)
 		if !ok {
-			return intNum(0), arithError{msg: x.Op + " needs a variable"}
+			return intNum(0), arithError{
+				msg: Wording(r.diag().ArithIncrementNeedsAPlace,
+					"%[1]s needs a variable", x.Op),
+			}
 		}
 		old, err := r.readPlace(place)
 		if err != nil {

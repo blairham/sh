@@ -14259,6 +14259,57 @@
         "TimedOut": false
       }
     },
+    "arithmetic/an-increment-on-something-that-cannot-be-assigned-to": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: arithmetic syntax error",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: 1++ : arithmetic syntax error: operand expected (error token is \"+ \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: 1++ : arithmetic syntax error: operand expected (error token is \"+ \")",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1++ : syntax error: operand expected (error token is \" \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: arithmetic expression: expecting primary: \" 1++ \"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:  1++ : assignment requires lvalue",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: bad math expression: lvalue required",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "arithmetic/an-operand-that-opens-with-a-point": {
       "ash": {
         "Stdout": "",
@@ -51136,6 +51187,159 @@
         "TimedOut": false
       }
     },
+    "core/a-bar-where-a-brace-group-begins": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected \"|\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `|'~\u003cshell\u003e: -c: line 1: `{ | : ; }; echo done'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `|'~\u003cshell\u003e: -c: line 1: `{ | : ; }; echo done'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `|'~\u003cshell\u003e: -c: line 0: `{ | : ; }; echo done'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"|\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `|' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: parse error near `|'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "core/a-bar-where-a-condition-begins": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected \"|\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `|'~\u003cshell\u003e: -c: line 1: `if | : ; then echo t; fi; echo done'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `|'~\u003cshell\u003e: -c: line 1: `if | : ; then echo t; fi; echo done'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `|'~\u003cshell\u003e: -c: line 0: `if | : ; then echo t; fi; echo done'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"|\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `|' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: parse error near `then'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "core/a-bar-where-a-loop-header-begins": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected \"|\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `|'~\u003cshell\u003e: -c: line 1: `while | : ; do echo t; done; echo done'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `|'~\u003cshell\u003e: -c: line 1: `while | : ; do echo t; done; echo done'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `|'~\u003cshell\u003e: -c: line 0: `while | : ; do echo t; done; echo done'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"|\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `|' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: parse error near `do'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "core/a-bare-brace-in-a-nested-quoted-operand": {
       "ash": {
         "Stdout": "[a{bcz\"}]~after",
@@ -51744,6 +51948,57 @@
         "Stdout": "one",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "core/a-case-terminator-where-a-condition-begins": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected \";;\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `;;'~\u003cshell\u003e: -c: line 1: `if ;; then echo t; fi; echo done'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `;;'~\u003cshell\u003e: -c: line 1: `if ;; then echo t; fi; echo done'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `;;'~\u003cshell\u003e: -c: line 0: `if ;; then echo t; fi; echo done'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \";;\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `;;' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: parse error near `;;'",
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       }
@@ -56333,6 +56588,108 @@
       "zsh": {
         "Stdout": "",
         "Stderr": "\u003cscript\u003e:1: parse error near `}'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "core/an-ampersand-where-a-condition-begins": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected \"\u0026\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `\u0026'~\u003cshell\u003e: -c: line 1: `if \u0026 then echo t; fi; echo done'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `\u0026'~\u003cshell\u003e: -c: line 1: `if \u0026 then echo t; fi; echo done'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `\u0026'~\u003cshell\u003e: -c: line 0: `if \u0026 then echo t; fi; echo done'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"\u0026\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `then' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: parse error near `\u0026'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "core/an-ampersand-where-a-loop-body-begins": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected \"\u0026\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `\u0026'~\u003cshell\u003e: -c: line 1: `while : ; do \u0026 done; echo done'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `\u0026'~\u003cshell\u003e: -c: line 1: `while : ; do \u0026 done; echo done'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `\u0026'~\u003cshell\u003e: -c: line 0: `while : ; do \u0026 done; echo done'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"\u0026\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `done' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: parse error near `\u0026'",
         "Status": 1,
         "Signal": 0,
         "TimedOut": false
@@ -76942,6 +77299,210 @@
         "TimedOut": false
       }
     },
+    "diag/a-builtin-names-itself-in-the-location": {
+      "ash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: shift: line 2: Illegal number: -1",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "one~st=1",
+        "Stderr": "\u003cscript\u003e: line 2: shift: -1: shift count out of range",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one~st=1",
+        "Stderr": "\u003cscript\u003e: line 2: shift: -1: shift count out of range",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one~st=1",
+        "Stderr": "\u003cscript\u003e: line 2: shift: -1: shift count out of range",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: 2: shift: Illegal number: -1",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e[2]: shift: -1: unknown option~Usage: shift [ options ] [n]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one~st=1",
+        "Stderr": "\u003cscript\u003e:shift:2: argument to shift must be non-negative",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "diag/a-builtin-takes-the-sourced-files-slot": {
+      "ash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: shift: line 2: Illegal number: -1",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "one~st=1",
+        "Stderr": "./p.sh: line 2: shift: -1: shift count out of range",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one~st=1",
+        "Stderr": "./p.sh: line 2: shift: -1: shift count out of range",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one~st=1",
+        "Stderr": "./p.sh: line 2: shift: -1: shift count out of range",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: 2: shift: Illegal number: -1",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e[2]: .[2]: shift: -1: unknown option~Usage: shift [ options ] [n]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one~st=1",
+        "Stderr": "./p.sh:shift:2: argument to shift must be non-negative",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "diag/a-builtin-whose-name-is-punctuation": {
+      "ash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: .: line 2: can't open '/nonexistent/file': No such file or directory",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "one~st=1",
+        "Stderr": "\u003cscript\u003e: line 2: /nonexistent/file: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 2: /nonexistent/file: No such file or directory",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one~st=1",
+        "Stderr": "\u003cscript\u003e: line 2: /nonexistent/file: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: 2: .: cannot open /nonexistent/file: No such file",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e[2]: .: /nonexistent/file: cannot open [No such file or directory]",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one~st=127",
+        "Stderr": "/nonexistent/file:.:2: no such file or directory: /nonexistent/file",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "diag/a-builtins-redirection-is-not-the-builtins": {
+      "ash": {
+        "Stdout": "one~st=1",
+        "Stderr": "\u003cscript\u003e: line 2: can't open /nonexistent/f: no such file",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "one~st=1",
+        "Stderr": "\u003cscript\u003e: line 2: /nonexistent/f: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one~st=1",
+        "Stderr": "\u003cscript\u003e: line 2: /nonexistent/f: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one~st=1",
+        "Stderr": "\u003cscript\u003e: line 2: /nonexistent/f: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one~st=2",
+        "Stderr": "\u003cscript\u003e: 2: cannot open /nonexistent/f: No such file",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one~st=1",
+        "Stderr": "\u003cscript\u003e[2]: /nonexistent/f: cannot open [No such file or directory]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one~st=1",
+        "Stderr": "\u003cscript\u003e:2: no such file or directory: /nonexistent/f",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "diag/a-command-after-an-operator": {
       "ash": {
         "Stdout": "one~st=127",
@@ -77040,6 +77601,211 @@
         "Stdout": "one~st=127",
         "Stderr": "\u003cshell\u003e:2: command not found: nosuchcmd",
         "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "diag/a-sourced-files-own-failure-keeps-its-name": {
+      "ash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: ./p.sh: line 2: NOPE: parameter not set",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "one",
+        "Stderr": "./p.sh: line 2: NOPE: unbound variable",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one",
+        "Stderr": "./p.sh: line 2: NOPE: unbound variable",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one",
+        "Stderr": "./p.sh: line 2: NOPE: unbound variable",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: 2: ./p.sh: NOPE: parameter not set",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one~st=1",
+        "Stderr": "\u003cscript\u003e[3]: .: line 2: NOPE: parameter not set",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one~st=126",
+        "Stderr": "./p.sh:2: NOPE: parameter not set",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "diag/exec-cannot-find-the-command": {
+      "ash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: exec: line 2: /nonexistent/x: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 2: /nonexistent/x: No such file or directory",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 2: /nonexistent/x: No such file or directory",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 2: /nonexistent/x: No such file or directory~\u003cscript\u003e: line 2: exec: /nonexistent/x: cannot execute: No such file or directory",
+        "Status": 126,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: 2: exec: /nonexistent/x: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e[2]: exec: /nonexistent/x: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e:2: no such file or directory: /nonexistent/x",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "diag/trap-refusing-a-condition-it-does-not-know": {
+      "ash": {
+        "Stdout": "st=1~st=1",
+        "Stderr": "\u003cscript\u003e: trap: line 1: NOSUCHSIG: invalid signal specification~\u003cscript\u003e: trap: line 3: 99: invalid signal specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "st=1~st=1",
+        "Stderr": "\u003cscript\u003e: line 1: trap: NOSUCHSIG: invalid signal specification~\u003cscript\u003e: line 3: trap: 99: invalid signal specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1~st=1",
+        "Stderr": "\u003cscript\u003e: line 1: trap: NOSUCHSIG: invalid signal specification~\u003cscript\u003e: line 3: trap: 99: invalid signal specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1~st=1",
+        "Stderr": "\u003cscript\u003e: line 1: trap: NOSUCHSIG: invalid signal specification~\u003cscript\u003e: line 3: trap: 99: invalid signal specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=1~st=1",
+        "Stderr": "trap: NOSUCHSIG: bad trap~trap: 99: bad trap",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1~st=1",
+        "Stderr": "\u003cscript\u003e[1]: trap: NOSUCHSIG: bad trap~\u003cscript\u003e[3]: trap: 99: bad trap",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cscript\u003e:trap:1: undefined signal: NOSUCHSIG",
+        "Status": -1,
+        "Signal": 11,
+        "SignalName": "segmentation fault",
+        "TimedOut": false
+      }
+    },
+    "diag/unset-refusing-a-readonly-name": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: unset: line 2: r: is read only",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cscript\u003e: line 2: unset: r: cannot unset: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 2: unset: r: cannot unset: readonly variable",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cscript\u003e: line 2: unset: r: cannot unset: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 2: unset: r: is read only",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cscript\u003e[2]: unset: warning: r: is read only",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:2: read-only variable: r",
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       }
@@ -95863,6 +96629,57 @@
         "TimedOut": false
       }
     },
+    "getopts/too-few-operands": {
+      "ash": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: getopts: line 0: usage: getopts optstring var [arg]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "st=2",
+        "Stderr": "getopts: usage: getopts optstring name [arg ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=2",
+        "Stderr": "getopts: usage: getopts optstring name [arg ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=2",
+        "Stderr": "getopts: usage: getopts optstring name [arg]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: 1: getopts: Usage: getopts optstring var [arg]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=2",
+        "Stderr": "Usage: getopts [-a name] opstring name [args...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e:getopts:1: not enough arguments",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "getopts/unknown-option-diverges": {
       "ash": {
         "Stdout": "st=0 o=[?]",
@@ -112340,6 +113157,159 @@
       "zsh": {
         "Stdout": "t",
         "Stderr": "\u003cshell\u003e:continue:1: not in while, until, select, or repeat loop",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "loop/a-count-break-will-not-read": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: break: line 0: Illegal number: abc",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: break: abc: numeric argument required",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: break: abc: numeric argument required",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 0: break: abc: numeric argument required",
+        "Status": 128,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: break: Illegal number: abc",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: break: abc: label not implemented",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:break:1: argument is not positive: 0",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "loop/a-count-continue-will-not-read": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: continue: line 0: Illegal number: abc",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: continue: abc: numeric argument required",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: continue: abc: numeric argument required",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 0: continue: abc: numeric argument required",
+        "Status": 128,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: continue: Illegal number: abc",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: continue: abc: label not implemented",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:continue:1: argument is not positive: 0",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "loop/a-count-that-is-a-number-and-not-positive": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: break: line 0: Illegal number: 0",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "after",
+        "Stderr": "\u003cshell\u003e: line 1: break: 0: loop count out of range",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "after",
+        "Stderr": "\u003cshell\u003e: line 1: break: 0: loop count out of range",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "after",
+        "Stderr": "\u003cshell\u003e: line 0: break: 0: loop count out of range",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: break: Illegal number: 0",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: break: 0: label not implemented",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:break:1: argument is not positive: 0",
         "Status": 1,
         "Signal": 0,
         "TimedOut": false
@@ -170122,6 +171092,57 @@
       },
       "zsh": {
         "Stdout": "st=-1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "return/a-refused-operand-with-nothing-to-return-from": {
+      "ash": {
+        "Stdout": "ret=2",
+        "Stderr": "\u003cshell\u003e: return: line 0: Illegal number: abc",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "ret=2",
+        "Stderr": "\u003cshell\u003e: line 1: return: abc: numeric argument required~\u003cshell\u003e: line 1: return: can only `return' from a function or sourced script",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "ret=2",
+        "Stderr": "\u003cshell\u003e: line 1: return: abc: numeric argument required",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "ret=1",
+        "Stderr": "\u003cshell\u003e: line 0: return: abc: numeric argument required~\u003cshell\u003e: line 0: return: can only `return' from a function or sourced script",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "ret=2",
+        "Stderr": "\u003cshell\u003e: 1: return: Illegal number: abc",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "ret=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "ret=0",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

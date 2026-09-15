@@ -172,17 +172,38 @@ func TestTheWordingIsTheDialects(t *testing.T) {
 	}
 }
 
-// The builtin is named in the sentence by three of the four dialects, so it
-// must not be named in the *location* by the one that puts every other
-// builtin's name there. Measured: that shell writes `zsh:1: read-only
-// variable: x` here and `zsh:unset:1: 1x: invalid parameter name` for a bad
-// name, out of the same builtin.
-func TestTheLocationDoesNotNameTheBuiltin(t *testing.T) {
+// Whether the *location* names the builtin here is the dialect's answer and
+// not a rule, which is what the second dialect to name a builtin in a
+// location settled.
+//
+// One says this refusal is its own and drops the name — `zsh:1: read-only
+// variable: x`, against `zsh:unset:1: 1x: invalid parameter name` for a bad
+// name out of the same builtin — and the other keeps it, writing `./z.sh:
+// unset: line 2: r: is read only`. The axis is
+// Diagnostics.UnsetReadonlyIsTheShellsOwn, and naming it is the default,
+// because that is what every dialect but the first was measured to do
+// (#2761).
+func TestWhetherTheLocationNamesTheBuiltinIsTheDialectsAnswer(t *testing.T) {
 	const src = `readonly x=1; unset x; echo after`
-	d := Diagnostics{UnsetReadonly: "read-only variable: %s", NamesBuiltinInLocation: true}
-	out, _ := runUnsetReadonly(t, src, Yes, Yes, d)
-	if want := "sh: read-only variable: x\n"; out != want {
-		t.Errorf("wrote %q, want %q — the builtin belongs in neither half here", out, want)
+	for _, tc := range []struct {
+		name      string
+		shellsOwn bool
+		want      string
+	}{
+		{"the shell's own refusal", true, "sh: read-only variable: x\n"},
+		{"the builtin's own refusal", false, "sh: unset: read-only variable: x\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			d := Diagnostics{
+				UnsetReadonly:               "read-only variable: %s",
+				NamesBuiltinInLocation:      true,
+				UnsetReadonlyIsTheShellsOwn: tc.shellsOwn,
+			}
+			out, _ := runUnsetReadonly(t, src, Yes, Yes, d)
+			if out != tc.want {
+				t.Errorf("wrote %q, want %q", out, tc.want)
+			}
+		})
 	}
 }
 

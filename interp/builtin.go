@@ -88,7 +88,11 @@ func init() {
 // ordinary control flow and modeling it as a failure would make every caller
 // check for something that is not one.
 func biBreak(r *Runner, _ context.Context, args []string) int {
-	reach, st, done := r.loopControlReach("break", loopDepth(args))
+	want, st, done := r.loopControlCount("break", args)
+	if done {
+		return st
+	}
+	reach, st, done := r.loopControlReach("break", want)
 	if done {
 		return st
 	}
@@ -97,12 +101,69 @@ func biBreak(r *Runner, _ context.Context, args []string) int {
 }
 
 func biContinue(r *Runner, _ context.Context, args []string) int {
-	reach, st, done := r.loopControlReach("continue", loopDepth(args))
+	want, st, done := r.loopControlCount("continue", args)
+	if done {
+		return st
+	}
+	reach, st, done := r.loopControlReach("continue", want)
 	if done {
 		return st
 	}
 	r.ctl, r.ctlDepth = controlContinue, reach
 	return 0
+}
+
+// loopControlCount reads the count `break` and `continue` share, and reports
+// the one every shell in the panel refuses and ours took in silence.
+//
+// The operand is read **before** the place is judged, which is measured and
+// is the reverse of what the same shells do for `return`: `break abc` with no
+// loop around it is `only meaningful in a for', while', or until' loop` in
+// bash and never mentions `abc`, where `return abc` outside a function writes
+// the operand's complaint first and the place's after it (#2762). So the two
+// builtins order their two questions differently, and this one asks the place
+// second — which is what loopControlReach does, after this.
+//
+// See Diagnostics.LoopControlCount for the panel's sentences and for why the
+// script's ending is not an axis: all seven end there.
+func (r *Runner) loopControlCount(name string, args []string) (int, int, bool) {
+	if len(args) == 0 {
+		return 1, 0, false
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(args[0]))
+	if err == nil && n > 0 {
+		return n, 0, false
+	}
+	d := r.diag()
+	// The number this reading produced, for the one dialect whose sentence
+	// quotes that rather than the word: a word that is no number at all
+	// reads as nought there, which is what `break abc` says.
+	operand := args[0]
+	if d.LoopControlCountNamesTheNumber {
+		operand = strconv.Itoa(n)
+	}
+	if err == nil && d.LoopControlCountOutOfRange != "" {
+		// A number, and not positive, in the one column that parts the two:
+		// it complains, takes the count as 1 and lets the script carry on.
+		r.diagf("%s\n", Wording(d.LoopControlCountOutOfRange, "", name, operand))
+		return 1, 0, false
+	}
+	// The fallback chain is a chain of *formats*, not of rendered text: the
+	// operand can hold a `%` and rendering twice would read it as a verb.
+	format := d.LoopControlCount
+	if format == "" {
+		format = d.NumericArgument
+	}
+	r.diagf("%s\n", Wording(format, "%[1]s: invalid number: %[2]s", name, operand))
+	// The script ends, in every column of the panel — see the field. Not
+	// through BadOptionToSpecialBuiltinFatal: plain bash answers No there
+	// and still ends the script here.
+	// The status is the builtin's own rather than the one
+	// Semantics.FatalErrorStatusIsOne gives every other fatal error: bash
+	// says Yes to that axis and reports **2** here, where ksh93 and zsh
+	// report 1, so the two are different facts. See fatalAtStatus.
+	r.fatalAtStatus(orDefault(d.LoopControlCountStatus, 2))
+	return 0, r.status, true
 }
 
 // loopControlReach is how many loops a `break` or `continue` can see, plus
@@ -192,7 +253,57 @@ func (r *Runner) loopControlFloor(want int) int {
 	return floor
 }
 
+// biReturn reads the operand before it judges the place, and reports the
+// operand's complaint first.
+//
+// The two complaints are not alternatives, which is what the old order
+// assumed. Measured 2026-09-14, `( return abc ); echo "ret=$?"` in a script
+// file under `env -i PATH=/usr/bin:/bin`:
+//
+//	bash 5.3.15   return: abc: numeric argument required
+//	              return: can only `return' from a function or sourced script
+//	              ret=2, and the script carries on
+//	bash 3.2      the same two lines
+//	bash-as-sh    return: abc: numeric argument required — and nothing more
+//	dash          return: Illegal number: abc
+//	BusyBox ash   return: Illegal number: abc
+//	ksh93, zsh    nothing at all, ret=0
+//
+// So the shell with both writes the operand's first, and the three that stop
+// on the operand never reach the place — bash called as `sh` is the clearest
+// of them, because it is the same binary as the first row with one complaint
+// missing rather than a different wording. Refusing the place first left the
+// operand unread in every column, and the status agreed in all seven, which
+// is why nothing in the tree noticed (#2762).
 func biReturn(r *Runner, _ context.Context, args []string) int {
+	// What `$?` was as `return` began, which is what the RETURN trap's
+	// action sees — the operand below is for the caller, not the trap. Read
+	// here rather than where it is stored, because the operand is an
+	// arithmetic expression in one dialect and reading one is a step of its
+	// own.
+	seen := r.status
+	operand, haveOperand := 0, false
+	if len(args) > 0 {
+		switch n, ok := r.statusOperand("return", args[0]); {
+		case ok:
+			operand, haveOperand = n, true
+		case r.unspecified:
+			// statusArgument has reported the unanswered axis already. It is
+			// the first question this builtin asks, so it is the one the
+			// strict core reports.
+			return 2
+		default:
+			status := r.refusedReturnOperand(args[0])
+			if r.ctl == controlExit {
+				// A special builtin's usage error is fatal here, so the
+				// script is already leaving and there is no place left to
+				// judge. That is the bash-as-`sh`, dash and ash row above:
+				// one complaint and gone.
+				return status
+			}
+			operand, haveOperand = status, true
+		}
+	}
 	if !r.hasSomethingToReturnFrom() {
 		// Nothing to return from. Three of the panel end the script here
 		// with the status given; bash refuses and carries on, which is a
@@ -208,19 +319,10 @@ func biReturn(r *Runner, _ context.Context, args []string) int {
 			return 2
 		}
 	}
-	// What `$?` was as `return` began, which is what the RETURN trap's
-	// action sees — the argument below is for the caller, not the trap.
-	r.returnSeenStatus = r.status
+	r.returnSeenStatus = seen
 	r.ctl = controlReturn
-	if len(args) > 0 {
-		switch n, ok := r.statusOperand("return", args[0]); {
-		case ok:
-			return n
-		case r.unspecified:
-			return 2
-		default:
-			return r.refusedReturnOperand(args[0])
-		}
+	if haveOperand {
+		return operand
 	}
 	return r.status
 }
@@ -243,8 +345,10 @@ func biReturn(r *Runner, _ context.Context, args []string) int {
 func (r *Runner) refusedReturnOperand(arg string) int {
 	r.diagf("%s\n", Wording(r.diag().NumericArgument, "%[1]s: invalid number: %[2]s", "return", arg))
 	if r.ask(r.sem().BadOptionToSpecialBuiltinFatal, "a special builtin's usage error ending the script") {
-		// fatalQuiet sets controlExit over the controlReturn above, which is
-		// the order that matters: the script ends rather than the function.
+		// fatalQuiet sets controlExit, which the caller reads: the script
+		// ends rather than the function, and nothing after this point runs —
+		// including the complaint about having nowhere to return to, which
+		// the shells that stop here do not write.
 		// No `r.status = 2` to go with the 2 below: the return value is what
 		// the dispatcher writes, and it is the status the panel ends at. See
 		// setFatalStatus.
@@ -387,15 +491,6 @@ func leadingDecimal(s string) int {
 		return -n
 	}
 	return n
-}
-
-func loopDepth(args []string) int {
-	if len(args) > 0 {
-		if n, ok := atoi(args[0]); ok && n > 0 {
-			return n
-		}
-	}
-	return 1
 }
 
 // specialBuiltins are the ones POSIX marks special. Two consequences follow
@@ -1619,6 +1714,12 @@ func (r *Runner) unsetReadonly(name string) int {
 	// bad name, from the same builtin. It is the same care setVarAs takes for
 	// the assignment this refusal is the twin of.
 	//
+	// **And it is that dialect's answer rather than a rule about the
+	// refusal**, which is what the second dialect to name a builtin in a
+	// location showed: BusyBox ash writes `./z.sh: unset: line 2: r: is read
+	// only`, keeping the name zsh drops. See
+	// Diagnostics.UnsetReadonlyIsTheShellsOwn for both rows (#2761).
+	//
 	// Only there, and that is the whole of the condition. Forgetting the
 	// builtin outright also forgets that a builtin is *speaking*, which is a
 	// second question and a different dialect's: ksh93 locates a builtin's
@@ -1628,7 +1729,7 @@ func (r *Runner) unsetReadonly(name string) int {
 	// only` for the assignment refused for the same reason. Measured
 	// 2026-09-12, and both forms were already in this tree with nothing
 	// choosing between them (#2417).
-	if r.diag().NamesBuiltinInLocation {
+	if r.diag().NamesBuiltinInLocation && r.diag().UnsetReadonlyIsTheShellsOwn {
 		outer := r.inBuiltin
 		r.inBuiltin = ""
 		defer func() { r.inBuiltin = outer }()

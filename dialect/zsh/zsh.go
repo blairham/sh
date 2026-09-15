@@ -164,6 +164,29 @@ func Dialect() syntax.Dialect {
 	// The same reach: a body may have nothing in it — `{ }`, `( )`, `while
 	// cond; do done`, and a condition too. Every shape, and this shell alone.
 	d.EmptyCompoundBody = true
+	// A pipeline or and-or operator standing where a body or a condition
+	// must begin is refused at a *reserved word*, where the rest of the
+	// panel names the operator. Measured 2026-09-14 with `-n` over a script
+	// file: a condition is named at the keyword that ends its header however
+	// much stands in between — `if | :; then :; fi`, `if | :; :; then :; fi`
+	// and `if | { :; }; then :; fi` are all `` `then' `` — and a body is
+	// named at a keyword standing next and at the operator otherwise, so
+	// `if :; then | fi` is `` `fi' `` and `for i in 1; do | :; done` is
+	// `` `|' ``.
+	//
+	// `{ | }` is `` `|' `` — the closing brace is the one reserved word it
+	// never names — and so are `( | )` and `case x in x) | ;; esac`.
+	//
+	// The set is the pipeline and and-or operators. An `&` there names
+	// itself in this shell, which is the reverse of ksh93's answer and the
+	// reason the two dialects need different sets (#2235).
+	d.EmptyBodyBlame = syntax.BlameTheKeywordAfterIt
+	d.EmptyBodyBlamed = map[syntax.Kind]bool{
+		syntax.TokPipe:    true,
+		syntax.TokPipeAmp: true,
+		syntax.TokAndAnd:  true,
+		syntax.TokOrOr:    true,
+	}
 	// The same reach again, one level out: an and-or list may end with its
 	// operator, so `{ : || ⏎ }` is `{ : ⏎ }`. Measured 2026-09-07 in every
 	// closing context, and this shell alone — the other four name the closer
@@ -2504,6 +2527,14 @@ func Diagnostics() interp.Diagnostics {
 		// back out of the front of it because this dialect puts it in the
 		// location: `zsh:break:1: not in while, …`.
 		LoopControlOutsideALoop: "%[1]s: not in while, until, select, or repeat loop",
+		// The count is judged by its *sign* rather than by whether it could
+		// be read, and the sentence quotes the number it read and not the
+		// word the script wrote: `break abc` is `argument is not positive:
+		// 0` and `break -1` is `argument is not positive: -1`. Measured
+		// 2026-09-14, and the script ends in both (#2800).
+		LoopControlCount:               "%[1]s: argument is not positive: %[2]s",
+		LoopControlCountNamesTheNumber: true,
+		LoopControlCountStatus:         1,
 		// zsh names itself, not the path it was invoked by. `/bin/zsh` and a
 		// symlink called `myzsh` both say `zsh:`, and so does the shell run
 		// as `exec -a weirdname /bin/zsh` — measured all three ways, because
@@ -2978,6 +3009,11 @@ func Diagnostics() interp.Diagnostics {
 		UnrecognizedModifierAlone: "unrecognized modifier",
 		ArithIllegalByte:          "bad math expression: illegal character: %[1]s",
 		ArithOperandExpected:      "bad math expression: operand expected at `%[1]s'",
+		// The same family's sentence for `++` on something that cannot be
+		// assigned to, and it names neither the operator nor the operand:
+		// `$(( 1++ ))` is `bad math expression: lvalue required`. Measured
+		// 2026-09-14 (#2420).
+		ArithIncrementNeedsAPlace: "bad math expression: lvalue required",
 		ArithBadFloatConstant:     "bad floating point constant",
 		ArithExpressionRanOut:     "bad math expression: operand expected at end of string",
 		ArithOperatorExpected:     "bad math expression: operator expected at `%[1]s'",
@@ -3089,7 +3125,16 @@ func Diagnostics() interp.Diagnostics {
 		// everyone else — and lowercased, which LowercaseReason already says.
 		GetoptsBadOption:       "bad option: -%[1]s",
 		GetoptsMissingArgument: "argument expected after -%[1]s option",
-		CdCannotChange:         "%[2]s: %[1]s",
+		// Not a usage line at all here — this shell counts the operands and
+		// says so, and it is the same sentence several of its builtins write
+		// for too few words. Measured 2026-09-14: `<script>:getopts:1: not
+		// enough arguments`, status 1 rather than the 2 the rest report, and
+		// the script carries on (#2801).
+		BuiltinUsage: map[string]string{
+			"getopts": "getopts: not enough arguments",
+		},
+		GetoptsUsageStatus: 1,
+		CdCannotChange:     "%[2]s: %[1]s",
 		// A third operand to the substitution form, at this shell's ordinary
 		// `cd` status rather than a usage one — which is where it parts
 		// company with bash over the same sentence.
@@ -3235,9 +3280,20 @@ func Diagnostics() interp.Diagnostics {
 		// zsh lowercases every strerror string it quotes, where the other
 		// three print the C string as it comes.
 		// zsh names the builtin that is speaking between its own name and the
-		// line: `zsh:shift:1:`. A rule rather than a handful of cases, and the
-		// only shell in the panel that does it.
+		// line: `zsh:shift:1:`. A rule rather than a handful of cases, and
+		// the first shell in the panel measured to do it — BusyBox ash is the
+		// second, with a space after the colon rather than none, which is the
+		// location style's own punctuation and not a second axis (#2761).
 		NamesBuiltinInLocation: true,
+		// Two refusals this shell locates as its own rather than the
+		// builtin's, where the other shell that names builtins keeps the
+		// name. `readonly r=1; unset r` is `zsh:2: read-only variable: r` and
+		// `exec nosuchcmd` is `zsh:1: command not found: nosuchcmd` — the
+		// second word for word what a bare command word reports. Both were
+		// rules in the substrate until a dialect disagreed with them; see the
+		// fields for the rows.
+		UnsetReadonlyIsTheShellsOwn: true,
+		ExecNotFoundIsTheShellsOwn:  true,
 		// Except for a math complaint, which this shell writes as its own:
 		// `let '1+'` is `zsh:1: bad math expression: …` where its `cd` is
 		// `zsh:cd:1: …`, and `let` with no operand at all *is* the builtin's

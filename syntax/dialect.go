@@ -3630,6 +3630,55 @@ type Dialect struct {
 	// (#2231).
 	SteppedOverSeparatorIsABody bool
 
+	// EmptyBodyBlame is which token a refusal names when a terminator stands
+	// where a body or a condition must have something in it.
+	//
+	// Every shell in the panel refuses `if & then :; fi`, at the same line,
+	// and only the quoted token differs — so this is a wording and not a
+	// grammar. Measured 2026-09-14, `-n` over a script file under `env -i`
+	// with a scratch `HOME` and `ZDOTDIR`:
+	//
+	//	                        dash   bash 5.3  ksh93   zsh
+	//	if & then :; fi          `&`     `&`      `then`  `&`
+	//	while & do :; done       `&`     `&`      `do`    `&`
+	//	if & fi                  `&`     `&`      `fi`    `&`
+	//	{ & }                    `&`     `&`      `}`     `&`
+	//	( & )                    `&`     `&`      `)`     `&`
+	//	if & ; then :; fi        `&`     `&`      `;`     `&`
+	//	if | then :; fi          `|`     `|`      `|`     `then`
+	//	while | do :; done       `|`     `|`      `|`     `do`
+	//	if && then :; fi         `&&`    `&&`     `&&`    `then`
+	//	if | ; then :; fi        `|`     `|`      `|`     `then`
+	//	if | :; then :; fi       `|`     `|`      `|`     `then`
+	//	{ | }                    `|`     `|`      `|`     `|`
+	//	( | )                    `|`     `|`      `|`     `|`
+	//	if ;; then :; fi         `;;`    `;;`     `;;`    `;;`
+	//
+	// Two shells step over the terminator and name what is behind it, over
+	// **different sets of terminators** — ksh93 for `&` and zsh for the
+	// pipeline and and-or operators — and they do not step the same way,
+	// which is what makes this an enum rather than a bool. See the values.
+	//
+	// The terminators each one applies it to are [Dialect.EmptyBodyBlamed].
+	// A `;` is in neither set and is [Dialect.SteppedOverSeparatorIsABody]'s
+	// and #2023's question instead; `;;`, `;&` and `;;&` are in neither and
+	// every shell names them where they stand.
+	//
+	// **This models the refusal and not the acceptance.** Both shells also
+	// *take* such a terminator in a position where the list may be empty —
+	// ksh93 runs `if :; then & :; fi` and `{ & :; }`, zsh runs nothing of
+	// the kind — and taking it is a grammar question that changes what a
+	// script does rather than what a refusal says. So where the token after
+	// the terminator could begin a command this names the terminator, which
+	// is what every column that refuses the line writes and what this shell
+	// already wrote (#2235).
+	EmptyBodyBlame EmptyBodyBlame
+
+	// EmptyBodyBlamed is the set of terminators [Dialect.EmptyBodyBlame]
+	// applies to. Empty means none, which is dash's and bash's answer and
+	// the substrate's own.
+	EmptyBodyBlamed map[Kind]bool
+
 	// RegexTakesAlternation makes a bare `|` part of a `=~` operand rather
 	// than the end of the word. bash and ksh93 say yes, so `[[ ab =~ a|b ]]`
 	// matches there; zsh says no and reports a parse error. Parentheses are
@@ -4723,3 +4772,54 @@ func (t TopLevelAlternation) ReachesPathnameExpansion() bool {
 func (t TopLevelAlternation) ReadsAWrittenBar() bool {
 	return t == TopLevelAlternationWhereverWritten
 }
+
+// EmptyBodyBlame is which token a refusal names when a terminator stands
+// where a body or a condition must have something in it. See
+// [Dialect.EmptyBodyBlame] for the measured table.
+type EmptyBodyBlame uint8
+
+const (
+	// BlameTheTerminatorItself names the terminator where it stands, which
+	// is what dash and bash do and what the substrate answers with nothing
+	// said.
+	BlameTheTerminatorItself EmptyBodyBlame = iota
+	// BlameTheTokenAfterIt names whatever stands next, one token on, with no
+	// separators stepped over. ksh93 for `&`: `if & then` is `then`, `if & ;
+	// then` is `;` and `{ & }` is `}` — the token after it whatever kind it
+	// is.
+	//
+	// A newline is the exception and it is an acceptance rather than a
+	// wording: `if &` with the `then` on the next line *runs* there, so
+	// there is no refusal to name. This names the terminator, which is what
+	// this shell already wrote.
+	BlameTheTokenAfterIt
+	// BlameTheKeywordAfterIt names a reserved word, and how far it looks for
+	// one depends on which list the terminator stood in. zsh for `|`, `|&`,
+	// `&&` and `||`, measured 2026-09-14:
+	//
+	//	if | :; then :; fi        `then`   a condition, read to its keyword
+	//	if | :; :; then :; fi     `then`   however much stands in between
+	//	if | { :; }; then :; fi   `then`   a `}` on the way is not it
+	//	if | ; then :; fi         `then`
+	//	if | :; fi                `fi`     the construct's own closer
+	//	while | :; done           `done`
+	//	until | :; do :; done     `do`
+	//	if :; then | fi           `fi`     a body, and the keyword is next
+	//	for i in 1; do | :; done  `|`      a body, and a command is next
+	//	{ | }                     `|`      the closing brace is not named
+	//	( | )                     `|`
+	//	case x in x) | ;; esac    `|`
+	//
+	// So a **condition** is named at the reserved word that ends its header,
+	// read forward to; a **body** is named at the reserved word standing
+	// next, and at the terminator otherwise. The closing brace is the one
+	// reserved word never named — measured rather than assumed, and what
+	// parts this from naming any stop word.
+	//
+	// One measured row this does not reach: `if | || :; then :; fi` is `||`
+	// there, which is neither a reserved word nor the terminator. It is the
+	// shell's own recovery showing through, it is what this shell already
+	// wrote, and a rule built to catch it would have to name an operator in
+	// a position where `if | ; then :; fi` names the keyword.
+	BlameTheKeywordAfterIt
+)

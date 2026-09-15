@@ -124,6 +124,21 @@ func Dialect() syntax.Dialect {
 	// EmptyCompoundBody, which takes both — and `{ ; ; }`, refused by the
 	// count above (#775, #2231).
 	d.SteppedOverSeparatorIsABody = true
+	// An `&` standing where a body or a condition must have something in it
+	// is refused at the token *after* it, where the rest of the panel names
+	// the `&`. Measured 2026-09-14 with `-n` over a script file: `if & then
+	// :; fi` is `` `then' unexpected ``, `while & do :; done` is `` `do' ``,
+	// `if & fi` is `` `fi' ``, `{ & }` is `` `}' ``, `( & )` is `` `)' ``,
+	// `case x in x) & ;; esac` is `` `;;' `` and `if & ; then :; fi` is
+	// `` `;' `` — the next token whatever kind it is, with nothing stepped
+	// over. It is the reverse of what the same shell does with a `;` there,
+	// which names the `;` (#2023), so whatever it does with an empty command
+	// before a terminator is not one rule over both of them.
+	//
+	// The set is `&` alone. `|`, `|&`, `&&`, `||`, `;;` and `;&` in the same
+	// positions all name themselves here (#2235).
+	d.EmptyBodyBlame = syntax.BlameTheTokenAfterIt
+	d.EmptyBodyBlamed = map[syntax.Kind]bool{syntax.TokAmp: true}
 	// `esac` written straight after a `case`'s `in`, with no newline between
 	// them, is the first arm's pattern here rather than the terminator:
 	// `case esac in esac) echo hit;; esac` prints `hit`, and `case x in esac`
@@ -2066,10 +2081,20 @@ func Diagnostics() interp.Diagnostics {
 		ShiftTooMany:  "shift: %[2]s: bad number",
 		// The same sentence for a count below zero, which is only reachable
 		// here after the end-of-options marker.
-		ShiftNegativeCount:   "shift: %[2]s: bad number",
-		StdinBuiltinLocation: interp.LocationBracketLine,
-		ArithError:           "%[1]s: %[2]s",
-		DivisionByZero:       "divide by zero",
+		ShiftNegativeCount: "shift: %[2]s: bad number",
+		// A `break`'s count is a *label* here, because this shell's `break`
+		// takes one — so a word it cannot read is not called a bad number at
+		// all. Measured 2026-09-14: `break abc`, `break 0` and `break " 1 "`
+		// are all `break: <word>: label not implemented` at status 1, with
+		// the script ended. `break -1` is the option path instead (`unknown
+		// option`, with the usage line under it), which this does not reach
+		// and which is where a leading dash goes in every builtin here
+		// (#2800).
+		LoopControlCount:       "%[1]s: %[2]s: label not implemented",
+		LoopControlCountStatus: 1,
+		StdinBuiltinLocation:   interp.LocationBracketLine,
+		ArithError:             "%[1]s: %[2]s",
+		DivisionByZero:         "divide by zero",
 		// ksh93 names the innermost keyword still awaiting a partner: `if`
 		// on its own, and the `then` inside it once that has been consumed.
 		EvalNaming:             interp.SourceBeforeLocation,
@@ -2090,9 +2115,15 @@ func Diagnostics() interp.Diagnostics {
 		// An operand failure is two sentences here, and which one is said
 		// turns on whether the expression ran out or found something it
 		// could not use: `$((1+))` against `$((%))`.
-		ArithOperandExpected:  "arithmetic syntax error",
-		ArithExpressionRanOut: "more tokens expected",
-		ArithOperatorExpected: "arithmetic syntax error",
+		ArithOperandExpected: "arithmetic syntax error",
+		// `++` on something that cannot be assigned to is about the
+		// assignment rather than about the operator, and the operator is not
+		// in the sentence. Measured 2026-09-14: `$(( 1++ ))`, `$(( 1-- ))`
+		// and `$(( ++1 ))` all draw it, where bash and dash answer the last
+		// of those with 1 (#2420).
+		ArithIncrementNeedsAPlace: "assignment requires lvalue",
+		ArithExpressionRanOut:     "more tokens expected",
+		ArithOperatorExpected:     "arithmetic syntax error",
 		// A stray `:` is the one construct this shell writes back to front:
 		// the byte, the reason, and then the expression after a ` - `, where
 		// every other math complaint it makes is `<expression>: <reason>`.

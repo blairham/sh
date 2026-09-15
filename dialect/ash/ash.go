@@ -1014,6 +1014,51 @@ func Diagnostics() interp.Diagnostics {
 		Location:       interp.LocationNameOnly,
 		ScriptLocation: interp.LocationLineWord,
 		StdinLocation:  interp.LocationNameOnly,
+		// A builtin names itself between the script and the line, and on
+		// every route rather than only where the shell's own message carries
+		// a line. Measured 2026-09-14, BusyBox v1.37.0 in the pinned image:
+		//
+		//	a script     /s.sh: export: line 1: illegal option -q
+		//	-c           /bin/ash: export: line 0: illegal option -q
+		//	standard in  /bin/ash: shift: line 1: Illegal number: -1
+		//	a prompt     /bin/ash: shift: Illegal number: -1
+		//
+		// so the name is unconditional and the *line* is what the route
+		// decides — which is why the three builtin locations below say
+		// something the plain ones do not: `-c` and standard input name no
+		// line for the shell's own failures and both name one here, and the
+		// prompt names neither.
+		//
+		// It is a rule rather than a list, and the same rule zsh follows:
+		// `export`, `set`, `unset`, `readonly`, `trap`, `shift`, `.`,
+		// `return`, `break`, `continue`, `exit`, `cd`, `read`, `eval`,
+		// `umask`, `getopts`, `hash`, `local`, `wait` and `command` were
+		// measured and every one names itself. What stays bare is equally
+		// consistent: a command that was not found, a parse failure the
+		// shell reads for itself, an unset parameter, a division by zero, a
+		// redirection that would not open, and an assignment to a readonly
+		// name. Those are the shell's own failures and not a builtin's
+		// (#2761).
+		NamesBuiltinInLocation: true,
+		// The three routes where a builtin's location is not the shell's.
+		// LocationNone would mean "the same as Location", which is this
+		// shell's name and no line — and a builtin does carry one on the two
+		// routes where the shell does not.
+		BuiltinLocation:       interp.LocationLineWord,
+		StdinBuiltinLocation:  interp.LocationLineWord,
+		PromptBuiltinLocation: interp.LocationNameOnly,
+		// And the line belongs to the builtin's own complaint rather than to
+		// anything a builtin was merely involved in: `ash -c 'read x <
+		// /nofile'` is `ash: can't open /nofile: no such file`, with neither
+		// the builtin's name nor a line, where `ash -c 'shift -1'` has both.
+		// See interp.Diagnostics.BuiltinLocationIsTheSpeakersOnly.
+		BuiltinLocationIsTheSpeakersOnly: true,
+		// And the `-c` route counts its lines from 0, which the two
+		// locations above are the only way to see: the shell's own
+		// diagnostics carry no line there at all. `$LINENO` moves with it,
+		// so it is the counter and not the rendering — see the field for the
+		// panel's table (#2799).
+		CommandStringLinesFromZero: true,
 		// A sourced file and an `eval` are both named between the shell and
 		// the line, which is bash's and ksh93's placing rather than dash's:
 		// `ash: ./p.sh: line 3: NOPE: parameter not set`, and `ash: eval:
@@ -1074,9 +1119,23 @@ func Diagnostics() interp.Diagnostics {
 		ArithOperatorExpected: "arithmetic syntax error",
 		DigitTooGreatForBase:  "arithmetic syntax error",
 		ArithConditionalColon: "arithmetic syntax error",
+		// The one arithmetic reason that is not `arithmetic syntax error`,
+		// and it is `divide` where the substrate and three of the panel
+		// write `division`. Measured 2026-09-14, `: $((1/0))` and `: $((1%0))`
+		// alike: `/t.sh: line 1: divide by zero`, and the script ends at 2
+		// (#2801).
+		DivisionByZero: "divide by zero",
 
 		// The command-resolution family. Neither a name nor a line in front
 		// of the `not found`, which is the shape ksh93 uses too.
+		// `trap` words a condition it does not know as bash does rather than
+		// as dash does, which is the half of #2761 that is not a location:
+		// `/s.sh: trap: line 1: NOSUCHSIG: invalid signal specification`
+		// against dash's `bad trap`, and the same sentence for a number out
+		// of range. Measured 2026-09-14 over `NOSUCHSIG`, `99` and a second
+		// condition after a good one; the status is 1 in every row.
+		TrapBadSignal: "trap: %[1]s: invalid signal specification",
+
 		TypeKeyword:            "%[1]s is a shell keyword",
 		TypeFunction:           "%[1]s is a function",
 		TypeAlias:              "%[1]s is an alias for %[2]s",
@@ -1238,6 +1297,15 @@ func Diagnostics() interp.Diagnostics {
 		KillNoSuchJob:       "%[1]s: no such job",
 		WaitNoSuchJob:       "%[1]s: no such job",
 		WaitNoSuchJobStatus: 2,
+		// An operand that is no job spec at all is refused by the *number*
+		// reader rather than by the job table, and it is the same sentence
+		// this shell writes for `shift -1`, `exit abc` and `return abc` —
+		// one reader for all of them, where ours had a second one here
+		// saying `abc: not a pid`. Measured 2026-09-14: `/t.sh: wait: line
+		// 1: Illegal number: abc` at 2, beside `%1: no such job` above,
+		// which is the job table answering a word that *is* a spec (#2801).
+		WaitBadJob:       "wait: Illegal number: %[1]s",
+		WaitBadJobStatus: 2,
 
 		// `kill`. The applet-level messages carry neither a line nor a
 		// builtin, which the unprefixed flags say.
@@ -1255,6 +1323,20 @@ func Diagnostics() interp.Diagnostics {
 		GetoptsBadOption:       "Illegal option -%[1]s",
 		GetoptsMissingArgument: "No arg for -%[1]s option",
 		GetoptsUnprefixed:      true,
+		// The usage line is not one of those two: it carries the shell, the
+		// builtin and the line as everything else here does, and only the
+		// word for the slot the shell writes into differs — `var` where the
+		// substrate and bash write `name`. Measured 2026-09-14, with no
+		// operands and with one, which draw the same line: `/t.sh: getopts:
+		// line 1: usage: getopts optstring var [arg]`, status 2, and the
+		// script carries on (#2801).
+		//
+		// Written with the builtin in front as bash's and ksh93's entries
+		// are; NamesBuiltinInLocation takes it back out again, because this
+		// dialect puts the name in the location instead.
+		BuiltinUsage: map[string]string{
+			"getopts": "getopts: usage: getopts optstring var [arg]",
+		},
 
 		// `cd`, with the OS's reason where dash gives none.
 		CdCannotChange: "can't cd to %[1]s: %[2]s",

@@ -4,12 +4,11 @@
 package blocks
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"os"
 	"path/filepath"
-	"strings"
+	"slices"
 	"sync"
 	"time"
 
@@ -18,7 +17,15 @@ import (
 	"github.com/blairham/sh/internal/secret"
 )
 
-// IndexName is the file every session appends its records to.
+// IndexName is the flat index older stores wrote, and this version only ever
+// reads.
+//
+// Kept because a store is somebody's record and an upgrade must not lose the
+// front of it. Records go to a dated shard now — see IndexPath — and this file
+// holds everything written before that change, which makes it the oldest part
+// of any store that has one. Nothing appends to it again, so it stops growing
+// on the first run of this version and is the one part of a store `rm` still
+// cannot take a slice of.
 const IndexName = "index.jsonl"
 
 // bodyDir is where a block's output is kept, sharded by date underneath.
@@ -61,6 +68,10 @@ type Store struct {
 	// somebody who never uses it.
 	index  *os.File
 	opened bool
+	// shard is the dated index the open handle is appending to, so a session
+	// that runs past midnight notices that its records now belong in the next
+	// day's file rather than filing them under the day it started.
+	shard string
 }
 
 // Open prepares a store rooted at dir.
@@ -125,7 +136,7 @@ func (s *Store) Append(ctx context.Context, r Record) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	f, err := s.indexFile(ctx)
+	f, err := s.indexFile(ctx, r.Start)
 	if f == nil {
 		return err
 	}
@@ -178,22 +189,41 @@ func (s *Store) Record(ctx context.Context, r Record, out Output) error {
 	return s.Append(ctx, r)
 }
 
-// indexFile is the open index, opened on first use.
+// indexFile is the open shard, opened on first use and reopened when the date
+// moves.
 //
-// Opened once per session and kept, rather than opened per record: a record is
-// written after every command, and a shell that opened and closed a file each
-// time would be paying for this at the prompt. The append mode is what makes
-// the shared handle safe anyway — the offset is taken at the write, not at the
+// Opened once and kept, rather than opened per record: a record is written
+// after every command, and a shell that opened and closed a file each time
+// would be paying for this at the prompt. The append mode is what makes the
+// shared handle safe anyway — the offset is taken at the write, not at the
 // open, so a second shell appending in between does not overwrite anything.
 //
+// The shard is chosen by the time the block *started*, which is also what
+// names its body, so the two halves of a record are always filed under the
+// same date and one `rm -rf` takes both. A session left open overnight
+// therefore rolls over on its first command of the new day rather than filing
+// a week of work under the Monday it was started on — which is the failure
+// that would have made the sharding useless for exactly the long-lived
+// sessions it is for.
+//
 // A refusal is remembered as an open that produced no file, so a policy that
-// hides the store is asked once rather than at every command.
-func (s *Store) indexFile(ctx context.Context) (*os.File, error) {
-	if s.opened {
+// hides the store is asked once rather than at every command. Remembered per
+// shard, because a new day is a new path and a policy is entitled to answer
+// about it differently.
+func (s *Store) indexFile(ctx context.Context, start time.Time) (*os.File, error) {
+	rel := IndexPath(start)
+	if s.opened && s.shard == rel {
 		return s.index, nil
 	}
-	s.opened = true
-	path := filepath.Join(s.dir, IndexName)
+	if s.index != nil {
+		// Yesterday's shard. Closed rather than leaked, and its error dropped:
+		// every record was written with one Write, so there is nothing
+		// buffered to lose and nothing a caller could do about a failed close.
+		_ = s.index.Close()
+		s.index = nil
+	}
+	s.opened, s.shard = true, rel
+	path := filepath.Join(s.dir, filepath.FromSlash(rel))
 	// 0700 and 0600: a block store is a record of what someone typed and what
 	// it printed, which is not something to leave readable by everyone on the
 	// machine. The history file already sets that bar.
@@ -232,7 +262,7 @@ func (s *Store) Close() error {
 		return nil
 	}
 	f := s.index
-	s.index, s.opened = nil, false
+	s.index, s.opened, s.shard = nil, false, ""
 	return f.Close()
 }
 
@@ -293,48 +323,38 @@ func (s *Store) Body(ctx context.Context, r Record) (string, bool) {
 
 // Load reads the last n records, oldest first.
 //
-// The whole file is read and the tail is kept, which is what the line file
-// already does with HISTFILESIZE and is right for the same reason: the file is
-// append-only and is never rewritten, so bounding what a *reader* keeps is the
-// only bounding there is. A store that had grown beyond what is comfortable to
-// read is a store to run `rm` over, not one for the shell to quietly truncate.
+// Bounded, in time and in memory, by reading the newest shard backwards and
+// stopping as soon as it has n. That is the half of #2275 the layout alone did
+// not fix: this used to decode every record in the store into a slice and
+// *then* keep the last n, so `-blocks-show 1` cost 3.5 s and 1.1 GB of
+// resident memory on a store of 1.3M records — against a comment in cmd/sh
+// promising that naming a block costs the same after a year of use as it does
+// on the first morning. The result was bounded and the read was not.
+//
+// Shards are walked newest first and the flat index older stores wrote is read
+// last, since it holds only what was written before the sharding. The store is
+// never rewritten and never trimmed by the shell, so what bounds a *reader* is
+// still all the bounding there is — this makes that bound mean something.
 //
 // A line that will not parse is skipped rather than ending the read. That is
 // the property JSON Lines was chosen for: a torn write costs one record, and a
-// record from a future schema version is skipped by the caller rather than
-// here — Load reports what it read and the caller decides what it understands.
+// record from a future schema version is skipped by decode rather than here —
+// Load reports what it read and the caller decides what it understands.
 func (s *Store) Load(ctx context.Context, n int) []Record {
 	if s == nil || s.dir == "" || n <= 0 {
 		return nil
 	}
-	path := filepath.Join(s.dir, IndexName)
-	f, err := s.bound.OpenFile(ctx, boundary.File{Path: path})
-	if err != nil {
-		// A store nothing has written to yet is the first session anyone runs,
-		// and a store a policy hides is one this session does not read.
-		// Complaining about either would be the first thing they saw.
-		return nil
-	}
-	defer func() { _ = f.Close() }()
-
 	var recs []Record
-	sc := bufio.NewScanner(f)
-	// A record holds a command line, and a pasted command can be very long.
-	sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
-	for sc.Scan() {
-		line := strings.TrimSpace(sc.Text())
-		if line == "" {
-			continue
+	for rel := range s.shards(ctx) {
+		recs = s.tail(ctx, rel, n, recs)
+		if len(recs) >= n {
+			break
 		}
-		r, ok := decode(line)
-		if !ok {
-			continue
-		}
-		recs = append(recs, r)
 	}
-	if len(recs) > n {
-		recs = recs[len(recs)-n:]
-	}
+	// Read newest first because that is the direction a bounded read has to go
+	// in; handed back oldest first because that is the order a log is read and
+	// the order every caller was written against.
+	slices.Reverse(recs)
 	return recs
 }
 

@@ -2045,6 +2045,10 @@ func Diagnostics() interp.Diagnostics {
 		// and not about the operator — see
 		// Semantics.BareElementsInATableLiteralEndTheScript.
 		IndexArrayIntoATable: "cannot append index array to associative array %[1]s",
+		// And the fourth kind is not exportable at all — the letter is
+		// refused rather than the value being flattened. The builtin names
+		// itself here, which `export` and `typeset` both do.
+		CompoundIsNotExportable: "%[2]s: %[1]s: only simple variables can be exported",
 		// The same sentence from `unset`, with the builtin named in front of
 		// it as this shell names it in front of the arithmetic one below.
 		UnsetSubscriptBeforeTheFirstElement: "unset: %[1]s: subscript out of range",

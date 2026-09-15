@@ -19774,6 +19774,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `declare/a-store-refused-element-from-a-command-string` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `after` | `after` | `after` | `after` | **2>** `<shell>:2: a: assignment to invalid subscript range` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
 | `declare/a-store-refused-element-from-a-script-file` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | `after` | `after` | `after` | `after` | **2>** `<script>:2: a: assignment to invalid subscript range` *(status 1)* | **2>** `<script>: line 1: syntax error: unexpected "("` *(status 2)* |
 | `declare/the-refusals-in-front-of-the-store-do-not-follow-the-route` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `after` **2>** `<shell>: line 2: readonly: `a[0]': not a valid identifier` | **2>** `<shell>: line 2: readonly: `a[0]': not a valid identifier` *(status 1)* | `after` **2>** `<shell>: line 1: readonly: `a[0]': not a valid identifier` | `after` | **2>** `<shell>:readonly:2: a[0]: can't create readonly array elements` *(status 1)* | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
+| `declare/exporting-a-compound-is-refused` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | `after~declare -ax c=([0]="a=1")` | `after~declare -ax c=([0]="a=1")` | `after~declare -ax c='([0]="a=1")'` | **2>** `<script>[1]: export: c: only simple variables can be exported` *(status 1)* | `after~typeset -ax c=( 'a=1' )` | **2>** `<script>: line 1: syntax error: unexpected "("` *(status 2)* |
+| `declare/the-export-letter-over-a-standing-compound` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | `after~two` | `after~two` | `after~two` | **2>** `<script>[2]: typeset: c: only simple variables can be exported` *(status 1)* | `after~two` | **2>** `<script>: line 1: syntax error: unexpected "("` *(status 2)* |
+| `declare/a-frozen-compound-lists-without-the-kind-letter` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | `declare -ar c=([0]="a=1" [1]="b=2")~declare -ar d=()` | `declare -ar c=([0]="a=1" [1]="b=2")~declare -ar d=()` | `declare -ar c='([0]="a=1" [1]="b=2")'~declare -ar d='()'` | `typeset -r c=(a=1;b=2)~typeset -r d=()` | `typeset -ar c=( 'a=1' 'b=2' )~typeset -ar d=(  )` | **2>** `<script>: line 1: syntax error: unexpected "("` *(status 2)* |
+| `declare/a-table-letter-over-a-compound-body` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | `declare -A c=([a=1]="b=2" )~tail` **2>** `<script>: line 3: [${c[0].a}]: bad substitution` | `declare -A c=([a=1]="b=2" )` **2>** `<script>: line 3: [${c[0].a}]: bad substitution` *(status 1)* | `<script>: line 1: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~declare -a c='([0]="a=1" [1]="b=2")'~[a=1]~tail` | `typeset -A c=([0]=(a=1;b=2))~[1]~tail` | `typeset -A c=( ['a=1']='b=2' )` **2>** `<script>:3: bad substitution` *(status 1)* | **2>** `<script>: line 1: syntax error: unexpected "("` *(status 2)* |
 | `arrays/a-second-subscript-on-a-declaration-operand` | `<script>: 1: typeset: not found~<script>: 2: typeset: not found` **2>** `<script>: 3: Bad substitution` *(status 2)* | `<script>: line 1: typeset: `a[1][2]=v': not a valid identifier~<script>: line 2: typeset: a: not found~n=0~tail` | `<script>: line 1: typeset: `a[1][2]=v': not a valid identifier~<script>: line 2: typeset: a: not found~n=0~tail` | `declare -a a='()'~n=0~tail` | `typeset -a a=([1]=([2]=v) )~n=1~tail` | **2>** `<script>:1: no matches found: a[1][2]=v` *(status 1)* | `<script>: line 1: typeset: not found~<script>: line 2: typeset: not found` **2>** `<script>: line 4: syntax error: bad substitution` *(status 2)* |
 
 - `declare/typeset-assigns` — `typeset` is the older of the two names and the one three of the four have; dash has neither and reports a command it cannot find
@@ -21509,6 +21513,36 @@ grades it and nothing drift-checks it either, for the same reason.
   a=(x y)
   readonly "a[0]"=v
   echo after
+  ```
+- `declare/exporting-a-compound-is-refused` — the fourth kind meeting the one attribute that has to cross a process boundary, and the column that has the kind is the column that refuses: ksh93 answers `export: c: only simple variables can be exported` at 1 and the script **ends**, where `after` is never printed. A compound has no environment representation at all, so there is nothing for the other columns to have chosen differently — both bashes and zsh read the parentheses as an array literal and export it as an array of the one string `a=1`, which is what the listing line is here to show, and dash has no parenthesized value to read. The refusal being fatal is the same special-builtin rule that ends the script over a bad `typeset` option there (#2736)
+  ```sh
+  export c=(a=1)
+  echo after
+  typeset -p c
+  ```
+- `declare/the-export-letter-over-a-standing-compound` — the same refusal at the other spelling — the attribute arriving over a name that is *already* a compound rather than on the line that makes one — and the two controls that say what it is not. ksh93 names `typeset` rather than `export` here, so the sentence carries the word the line was written with, and it is fatal again: neither `after` nor `two` is printed. The two lines past the refusal are what a reader needs to know it is the compound and not the parentheses: an **index array** is exportable in that column (`typeset -x a=(p q)` at 0) and so is a **table**, so a fix that refused every container would have failed both. They still run in the four columns that reach them, which is what makes `two` the row's marker
+  ```sh
+  c=(a=1)
+  typeset -x c
+  echo after
+  typeset -x a=(p q)
+  typeset -Ax m 2>/dev/null
+  m[k]=v
+  echo two
+  ```
+- `declare/a-frozen-compound-lists-without-the-kind-letter` — the `C` letter is the compound's *default* spelling and not a letter it carries: ksh93 writes `typeset -r c=(a=1;b=2)` where the identical value with no attribute lists as `typeset -C c=(a=1;b=2)`, so the kind letter is dropped the moment the listing has another one to write. The parentheses are written either way, which is what still tells a reader the kind. The empty pair is the second line because it is a compound there too — `typeset -r d=()` — and a reading that treated `()` as an empty array would have written a different letter for it. The three columns without the fourth kind read both lines as array literals and say so with their own letters
+  ```sh
+  readonly c=(a=1 b=2)
+  typeset -p c
+  readonly d=()
+  typeset -p d
+  ```
+- `declare/a-table-letter-over-a-compound-body` — the `A` letter does **not** take the compound reading off the literal in ksh93, which is the half that separates it from `-a`: the same body under `typeset -a` there is an index array of the two strings `a\=1` and `b\=2`, and under `-A` it is a compound stored as the value at key `0` — `typeset -A c=([0]=(a=1;b=2))`, with `${c[0].a}` answering 1. So what the table letter forbids is a *bare-word* literal (`typeset -A c=(x y)` is `cannot append index array to associative array c` and ends the script), not a compound one. Recorded rather than reproduced: a member under a subscripted head is a name this grammar has no spelling for — `${c[0].a}` is a syntax error here — so the row is the measurement the work stands on rather than a row this shell answers. The other columns pair the words off as key and value or refuse the letter outright
+  ```sh
+  typeset -A c=(a=1 b=2) 2>&1
+  typeset -p c 2>&1
+  echo "[${c[0].a}]"
+  echo tail
   ```
 - `arrays/a-second-subscript-on-a-declaration-operand` — the same two subscripts written as a *declaration's operand*, which is the spelling #2491 was filed from and which parts the two bash columns from each other: 5.3 refuses it as `` `a[1][2]=v': not a valid identifier `` where 3.2 declares an **empty array under the base name** at status 0 -- a silent wrong answer rather than a refusal. ksh93 answers it exactly as it answers the plain assignment above, which is what says the two spellings are one value there and not two constructs; zsh globs the operand and finds no match. The row above is the control that makes that claim visible
   ```sh

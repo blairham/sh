@@ -2306,6 +2306,14 @@ type Runner struct {
 	// type letter over exactly that shape. See
 	// Semantics.TypeLetterAndAnArrayLiteralIsAnInconsistentType.
 	literalOperands map[string]bool
+	// compoundOperands is the narrower subset whose operand is a *compound*
+	// literal — `c=(a=1)`, whose items are assignments — rather than an
+	// element list. Both spellings are parenthesized and both answer
+	// syntax.Assign.IsArray, so literalOperands above cannot tell them
+	// apart, and one builtin's refusal turns on exactly the difference: a
+	// compound may not be exported and an index array may. See
+	// Runner.exportRefusesACompound.
+	compoundOperands map[string]bool
 	// retypingFrozen is the one name a frozen-scalar retype is under way for.
 	// See the method of the same name for why it is a field.
 	retypingFrozen string
@@ -4544,6 +4552,8 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// z=(1 2)` is refused in the same words as `typeset -i z=(1 2)`.
 		outerLiterals := r.literalOperands
 		r.literalOperands = arrayLiteralOperands(c)
+		outerCompounds := r.compoundOperands
+		r.compoundOperands = compoundLiteralOperands(c)
 		// Recorded by the builtin as it reads its letters, and read by the
 		// operand assignments that run after it — so it is cleared here
 		// rather than seeded, and restored beside literalOperands for the
@@ -4596,6 +4606,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		r.applyDeferredFreeze()
 		r.freezing = outerFreezing
 		r.literalOperands = outerLiterals
+		r.compoundOperands = outerCompounds
 		r.indexedLetterHere = outerIndexed
 		r.tableLetterHere = outerTable
 		if fatal {

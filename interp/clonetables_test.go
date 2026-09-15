@@ -273,6 +273,7 @@ func seedTables(r *Runner) {
 	r.fds = map[int]any{7: nil}
 	r.freezing = map[string]bool{"seed": true}
 	r.literalOperands = map[string]bool{"seed": true}
+	r.compoundOperands = map[string]bool{"seed": true}
 	r.indexedLetterHere = map[string]bool{"seed": true}
 	r.tableLetterHere = map[string]bool{"seed": true}
 	r.funcOrigins = map[string]funcOrigin{"seed": {file: "v"}}

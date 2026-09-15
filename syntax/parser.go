@@ -2160,6 +2160,11 @@ func (p *Parser) newWord(spans []Span, start, stop Pos) *Word {
 				bareSubscriptClose(rest, p.dialect, nil) < 0
 		}
 	}
+	// Where a `}` ends a `${ … }` is a grammar question POSIX mode moves in
+	// one dialect, and the mode is entered long after the word was cut. Same
+	// place and the same reason as the tail below: this is where the word
+	// ends. See ParamExpr.RawTail.
+	p.setRawTails(out, stop)
 	// A flag group the parser could not read reports the rest of the word it
 	// stands in, and this is the one place that knows where the word ends —
 	// scanParamFlags is called with the braces alone, halfway through.

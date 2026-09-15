@@ -173,6 +173,19 @@ type Lexer struct {
 	// double-quoted.
 	inRawBody bool
 
+	// inWordTail is set while the text being read is the tail of one word
+	// that has already been read once — a [ParamExpr.RawTail], divided again
+	// because a run in POSIX mode reads the closing brace of a `${ … }`
+	// somewhere else. See [RereadWordTail].
+	//
+	// What it says is that the input running out is the *word* running out.
+	// The word was cut by a parse that read a closing quote wherever one was
+	// written, so a quote left open at the end of this text is the one that
+	// closed the word — the division being redone is inside it, not around
+	// it. Refusing the tail for an unmatched quote would be refusing the word
+	// the parse already accepted.
+	inWordTail bool
+
 	// recorded, when non-nil, collects every token Next hands back. It is
 	// how [ShellWords] gets the *parser's* reading of a text without a tree:
 	// the parser is the only thing that knows a token stands where an
@@ -545,7 +558,7 @@ func (l *Lexer) failUnmatched(open Pos, opener, closer, msg string) {
 // said otherwise, so anything parsing text without saying where it came from
 // gets the answer every shell in the panel agrees on.
 func (l *Lexer) closesQuotesAtEOF() bool {
-	return l.dialect.CloseQuotesAtEOF.Has(l.dialect.ProgramRoute)
+	return l.inWordTail || l.dialect.CloseQuotesAtEOF.Has(l.dialect.ProgramRoute)
 }
 
 // replacesUnmatched reports whether a construct noticing that the input ran

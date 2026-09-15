@@ -100,6 +100,15 @@ func Dialect() syntax.Dialect {
 	// where only a *pattern* operand's quote does that. bash 3.2 answers with
 	// 5.3. See Dialect.QuoteProtectsTheClosingBrace (#2399).
 	d.QuoteProtectsTheClosingBrace = syntax.BraceQuoteProtectsEveryOperand
+	// And POSIX mode takes it back to the core's reading, for the *word*
+	// operand alone. Measured 2026-09-14 on 5.3.15 over `v=Vx}y; printf
+	// '[%s]' "${v-'a}b'}"`: `[Vx}y]` by default and `[Vx}yb'}]` under
+	// `set -o posix`, `--posix`, `POSIXLY_CORRECT=1` and the name `sh`, with
+	// `s=a}b; printf '[%s]' "${s#'a}'}"` unmoved at `[b]` under every one of
+	// them. Set here and nowhere else: zsh's own mode leaves the axis alone,
+	// and the zero value is what says so. See
+	// syntax.Dialect.QuoteProtectsTheClosingBraceInPosixMode (#2604).
+	d.QuoteProtectsTheClosingBraceInPosixMode = syntax.BraceQuoteMovesToAPatternOnly
 	// A syntax error between a compound assignment's parentheses ends that
 	// line and not the file: `a=(p & q)` is reported, the line is thrown away
 	// unrun, and the next one runs. bash 3.2 answers the same; `sh`, zsh,

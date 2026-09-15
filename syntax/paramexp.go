@@ -317,6 +317,50 @@ type ParamExpr struct {
 	// The pattern operand never takes it: its quotes quote in every column,
 	// unanimously, which is why only Arg2 has a second reading.
 	Arg2Enclosed *Word
+
+	// RawTail is the source from this expansion's `${` to the end of the word
+	// it stands in, kept so that the run can divide that word again.
+	//
+	// Where a `}` ends a `${ … }` is a grammar question — see
+	// [Dialect.QuoteProtectsTheClosingBrace] — and POSIX mode moves the
+	// answer in one dialect. The mode is a run-time state, and the word may
+	// have been read long before it was entered: one function body, parsed
+	// once, answers `[Vx}y]` and then `[Vx}yb'}]` as `set -o posix` moves
+	// under it. So the reading cannot be settled while the word is cut, and
+	// the text has to survive the cut.
+	//
+	// It is a *tail* and not a second tree because the re-read is bounded by
+	// the word. Measured 2026-09-14: the leftover characters join the
+	// enclosing word rather than re-tokenizing it, so `"${v-'a}" x "'}"`
+	// stays one argument under both modes and a `;` swallowed into it never
+	// becomes a statement. The tree's shape is a fact about the parse in bash
+	// too; only one already-cut word's internal division is the run's.
+	//
+	// Set only where the dialect has somewhere to move to — see
+	// [Dialect.QuoteProtectsTheClosingBraceInPosixMode] — and only for an
+	// expansion whose body holds a quote the scan had to rule on, so the
+	// dialects with no POSIX mode carry nothing. Empty everywhere else, and
+	// [interp] reads it only when the run's reading differs from RawTailRead.
+	//
+	// On [ParamExpr] rather than on [Span] or [Word] for a priced reason:
+	// syntax/nodesize_test.go budgets Word at 48 bytes and Span at 64, and
+	// one measured interactive startup keeps 149,937 Words and 185,748 Spans,
+	// so a 16-byte string on Span is 3.0MB of resident memory (#2073). ArgText
+	// and Arg2Text are here for the same kind of reason. The string is a slice
+	// of the input and allocates nothing (#2604).
+	RawTail string
+	// RawTailRead is the reading RawTail was cut under, which is what says
+	// whether the run has to cut it again.
+	//
+	// Kept beside the text rather than derived from the dialect, because the
+	// dialect field it would be derived from is the one POSIX mode replaces:
+	// a word parsed *inside* the mode and expanded outside it moves back, and
+	// there would be nothing left to compare against. Measured — bash answers
+	// that case with the default reading, and the corpus row
+	// core/a-quoted-brace-in-a-word-operand-parsed-in-posix-mode-and-expanded-outside-it
+	// is where it is recorded. Meaningless where RawTail is empty.
+	RawTailRead BraceQuotePolicy
+
 	// All is `//`, replacing every match rather than the first.
 	All bool
 	// Anchor is '#' for `/#` or '%' for `/%`, and 0 otherwise.

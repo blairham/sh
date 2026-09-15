@@ -379,12 +379,36 @@ same name does not move at all. One function body, parsed once before the
 mode was on, prints `[Vx}y]` and then `[Vx}yb'}]` — so bash stores the
 word and re-reads the `${ }` at expansion time, and a grammar flag chosen
 at startup would be a different mechanism that happens to agree on some
-inputs. This is not modeled: the flag is the parser's and the mode is
-`interp`'s state. Recorded by
+inputs. Recorded by
 `core/a-quoted-brace-in-a-word-operand-in-posix-mode`,
 `core/a-quoted-brace-in-a-word-operand-decided-when-the-word-expands` and
-`invoke/called-sh-moves-a-quoted-brace-in-a-word-operand`; the options are
-in #2604.
+`invoke/called-sh-moves-a-quoted-brace-in-a-word-operand`.
+
+**Modeled, in two halves.** `QuoteProtectsTheClosingBraceInPosixMode` says
+where the mode puts the reading, and its zero value is *unmoved* — which
+it has to be, because every dialect invoked as `sh` enters the mode and
+zsh is measured not to move. The **parse-time** half is `SetPosixMode`
+replacing the `Dialect`, the same door `AliasesExpandReservedWords`
+already went through: text the parser has not read yet is read under the
+new value, which is why `bash -n` refuses a file whose running self
+accepts it. The **expansion-time** half is `ParamExpr.RawTail`, the source
+from a `${` to the end of the word it stands in, kept so that an
+already-cut word can be divided again when it expands.
+
+The re-read is bounded by the word, and that bound is what makes the
+mechanism small rather than a re-architecture. `printf '[%s]' "${v-'a}" x
+"'}"` is **one** argument under both modes — the leftover characters join
+the word rather than re-tokenizing it, and they are neither split nor
+re-quoted — and a `;` among them never becomes a statement. So a word's
+extent and a statement's stay facts about the parse in bash too, and only
+one already-cut word's internal division belongs to the run. Recorded by
+`core/a-quoted-brace-in-a-word-operand-does-not-move-a-word-boundary` and
+`core/a-quoted-brace-in-a-word-operand-does-not-move-a-statement-boundary`
+(#2604).
+
+The two doors nothing here reaches are `--posix` and `POSIXLY_CORRECT`,
+which the front end does not have at all; the rows below record what they
+would answer.
 
 Five more rows say how little of the answer the parse holds, and they
 matter because the cheap fix on offer is to hand the parser a reading at

@@ -414,6 +414,7 @@ func (r *Runner) SetPosixMode(on bool) {
 	badSetName, badSetLetter := r.posixSavedBadSetName, r.posixSavedBadSetLetter
 	assignPrefix := r.posixSavedAssignPrefix
 	aliasReserved := r.posixSavedAliasReserved
+	quoteProtects := r.posixSavedQuoteProtects
 	if on {
 		r.posixSaved = r.sem().RedirectErrorOnSpecialBuiltinFatal
 		r.posixSavedUnsetReadonly = r.sem().UnsetReadonlyFatal
@@ -439,6 +440,14 @@ func (r *Runner) SetPosixMode(on bool) {
 		assignPrefix = Yes
 		r.posixSavedAliasReserved = r.dialect().AliasesExpandReservedWords
 		aliasReserved = false
+		// The dialect's own answer on the way in, not the standard's: the
+		// three shells with no POSIX mode do not agree with bash about this
+		// axis and every dialect invoked as `sh` comes through here, so an
+		// asserted reading would move a shell that has nothing to move. The
+		// zero value of the move is what declines it.
+		r.posixSavedQuoteProtects = r.dialect().QuoteProtectsTheClosingBrace
+		quoteProtects = r.dialect().QuoteProtectsTheClosingBraceInPosixMode.
+			Policy(r.posixSavedQuoteProtects)
 		redir, unsetRO = Yes, Yes
 		forName = ForNameEndsTheScriptAsASyntaxError
 		funcName = FuncNameEndsTheScriptAsASyntaxError
@@ -588,8 +597,16 @@ func (r *Runner) SetPosixMode(on bool) {
 	// either bash or zsh as `sh`. The saved answer on the way out, because
 	// the two shells that have the mode both expand reserved-word aliases
 	// without it and the three that do not have it never did.
-	if d := r.dialect(); d.AliasesExpandReservedWords != aliasReserved {
+	//
+	// The thirteenth goes through the same door and is the same kind of
+	// thing: where a `}` ends a `${ … }` is decided while a word is *read*.
+	// It differs in what the run then owes the words it read *before* the
+	// mode moved — see syntax.ParamExpr.RawTail and Runner.wordForRun, which
+	// is the expansion-time half bash has and an alias does not.
+	if d := r.dialect(); d.AliasesExpandReservedWords != aliasReserved ||
+		d.QuoteProtectsTheClosingBrace != quoteProtects {
 		d.AliasesExpandReservedWords = aliasReserved
+		d.QuoteProtectsTheClosingBrace = quoteProtects
 		r.Dialect = &d
 	}
 	r.posixMode = on

@@ -2057,7 +2057,7 @@ var Corpus = []Case{
 	{
 		ID: "core/a-quoted-brace-in-a-word-operand-in-posix-mode", Category: "quoting",
 		Snippet: `set -o posix; v=Vx}y; printf '[%s]' "${v-'a}b'}"; echo`,
-		Why:     "the mode moves where the expansion *ends*, which is a thing a grammar flag cannot be told at run time: bash 5.3 answers `[Vx}y]` without this line and `[Vx}yb'}]` with it, which is its own `sh` column reached the other way. bash 3.2 answers `[Vx}y]` in both, so the change is 5.x's and not bash's. The three shells with no such name refuse the `set` instead. Ours answers the non-posix reading in both modes — QuoteProtectsTheClosingBrace is a syntax.Dialect flag and the mode is interp's state (#2604)",
+		Why:     "the mode moves where the expansion *ends*, which is a thing a grammar flag cannot be told at run time: bash 5.3 answers `[Vx}y]` without this line and `[Vx}yb'}]` with it, which is its own `sh` column reached the other way. bash 3.2 answers `[Vx}y]` in both, so the change is 5.x's and not bash's. The three shells with no such name refuse the `set` instead. We move it too, and the mode reaches the flag by replacing the Dialect — the door SetPosixMode already used for AliasesExpandReservedWords. The words read before it moved are divided again when they expand; see syntax.ParamExpr.RawTail (#2604)",
 	},
 	{
 		ID: "core/a-quoted-brace-in-a-word-operand-decided-when-the-word-expands", Category: "quoting",
@@ -2065,10 +2065,26 @@ var Corpus = []Case{
 		Why:     "the row that says *when* the answer above is decided, and it is not at the parse: one function body, parsed once before the mode was on, prints `[Vx}y]` and then `[Vx}yb'}]` in bash 5.3. So bash re-reads the operand at expansion time and a front end that handed the parser a different reading at startup would be a different mechanism that agrees only on the inputs it was tested with. bash 3.2 prints the same thing twice, and the three shells without the name print once and refuse the `set` (#2604)",
 	},
 	{
+		ID: "core/a-quoted-brace-in-a-word-operand-does-not-move-a-word-boundary", Category: "quoting",
+		Snippet: `v=V; f(){ printf '[%s]' "${v-'a}" x "'}"; echo; }; f; set -o posix; f`,
+		Why:     "what the mode moves and what it cannot, which is the measurement the whole mechanism is built on. The body is parsed once under the default reading, where the quote protects and the `${ … }` swallows the rest of the line; expanded again with the mode on, bash 5.3 answers `[V x '}]` — **one** argument, not three. So the leftover characters join the word the parse cut rather than re-tokenizing it: the spaces do not split, the quotes around them are removed, and no word boundary moves. The three shells that never protect show the contrast at the *parse* instead, answering `[V][x]['}]` on their first line, where the same division is three words because it was made while the line was read. A fix that re-read the leftover as the rest of a *word* rather than as content of the quoting passes the row above and fails this one (#2604)",
+	},
+	{
+		ID: "core/a-quoted-brace-in-a-word-operand-does-not-move-a-statement-boundary", Category: "quoting",
+		Snippet: `v=V; f(){ printf '[%s]' "${v-'a}"; echo MIDDLE; :"'}"; echo END; }; f; set -o posix; f`,
+		Why:     "the same bound one level up, and the sharper half: there is a `;` in the text the second reading leaves over, and it does not become a statement. bash 5.3 answers `[V]END` and then `[V; echo MIDDLE; :'}]END` — `MIDDLE` never printing in either mode, because the statement boundary the parse fixed stands whatever the mode does to the word inside it. dash, ksh93 and zsh print `MIDDLE` on their first line, having cut the statements under the non-protecting reading while reading; that is what the divergence looks like when it really is the parse's. Together with the row above this is what says the tree's *shape* is a fact about the parse in bash too, and that only one already-cut word's internal division belongs to the run (#2604)",
+	},
+	{
 		ID: "invoke/called-sh-moves-a-quoted-brace-in-a-word-operand", Category: "quoting",
 		Argv0:   "sh",
 		Snippet: `v=Vx}y; printf '[%s]' "${v-'a}b'}" "${v#'a}'}"; echo`,
 		Why:     "the same pair of operands under the standard's own name, which is the other door into the mode and the one a shebang takes. bash moves the *word* operand and not the pattern — `[Vx}yb'}][Vx}y]` where it answers `[Vx}y][Vx}y]` called `bash` — and **zsh does not move at all**, answering `[Vx}yb'}][Vx}yb'}]` under either name, which is the same shape the special-builtin usage error has. The pattern field is the control: it is the half the mode leaves alone, so a fix that made the quote ordinary everywhere under `sh` would pass the first field and fail the second (#2604)",
+	},
+	{
+		ID: "invoke/called-sh-a-second-reading-that-runs-off-the-end-of-the-word", Category: "quoting",
+		Argv0:   "sh",
+		Snippet: `v=V; f(){ printf '[%s]' "${v-'a}"; echo; }; set +o posix; f; echo AFTER=$?`,
+		Why:     "what happens when the division the run wants does not exist. Read under the name's own posix reading the word is whole — the quote is a character and the closing brace ends the expansion — and `set +o posix` then asks for the reading where the quote protects, under which the `${` never closes at all. bash 5.3 as `sh` answers ``bad substitution: no closing `}' in \"${v-'a}\"`` at status 1: a **run-time** failure belonging to the word, not a syntax error belonging to the line, which is the whole distinction this axis turns on. The same build under its own name refuses the file at 2 while reading it, having had only the protecting reading to read it with, and that pair is the row: identical text, one shell, two readings, and the failure lands in a different phase under each. bash 3.2 refuses it at 2 for the same reason and says so twice; dash and ksh93 stop at the `set` and zsh carries on past it. We reach the run-time half at the right status and word it against the enclosing quote rather than against the brace, which is a Diagnostics question and is filed as #2969 (#2604)",
 	},
 	{
 		ID: "core/a-quoted-brace-in-a-word-operand-parsed-in-posix-mode-and-expanded-outside-it", Category: "quoting",

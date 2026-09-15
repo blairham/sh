@@ -596,7 +596,7 @@ func (r *Runner) rangeMissingAComponent(lo, hi, stepText string, hasStep bool) (
 	// one, and only then: a missing first endpoint or a missing step leaves
 	// it with no range at all. Asked only where the first endpoint is a
 	// number, since `{a..}` is left alone in every column.
-	if hi == "" && !(hasStep && stepText == "") {
+	if hi == "" && (!hasStep || stepText != "") {
 		if _, err := strconv.Atoi(lo); err == nil {
 			if r.askBrace(r.sem().BraceRangeMissingEndCountsFromZero, "a missing second endpoint counting from zero") {
 				return r.numericRange(lo, "0", stepText, hasStep)

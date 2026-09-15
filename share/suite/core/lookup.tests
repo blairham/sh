@@ -179,3 +179,14 @@ printf 'x\n' > notexec; chmod 644 notexec
 # `command -p` searches a default PATH the shell chooses rather than the
 # caller's, so it finds a standard utility even when PATH finds nothing.
 ( PATH=; command -p ls /dev/null ) > /dev/null 2>&1; printf 'command -p -> %s\n' "$?"
+
+# The reporting letters ask the same question of the same path, so a script
+# can test with -v what it is about to run with -p. Only the status is
+# printed: *which* path holds ls is a fact about the machine.
+( PATH=; command -pv ls ) > /dev/null 2>&1; printf 'command -pv -> %s\n' "$?"
+( PATH=; command -pV ls ) > /dev/null 2>&1; printf 'command -pV -> %s\n' "$?"
+
+# And the letter reaches the word `command` named, not the script that word
+# goes on to run: the `ls` inside the eval is looked up on the caller's PATH.
+( PATH=/nonexistent_zz; command -p eval 'ls /dev/null' ) > /dev/null 2>&1
+printf 'not inside eval -> %s\n' "$?"

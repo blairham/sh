@@ -48,17 +48,19 @@ func biCommand(r *Runner, ctx context.Context, args []string) int {
 	// because a leading `-` word is a bundle and only its first letter is
 	// refused — and it used neither the dialect's wording nor its status.
 	//
-	// `-p` means "use a default PATH". Ours is already the Runner's rather
-	// than the process's, and inventing a second would be a guess about this
-	// machine, so it is accepted and changes nothing — which is what it
-	// means for a shell that never had the developer's PATH to begin with.
-	// `-v` and `-p` are read by all four. What splits them is a leading `-`
+	// `-p` means "search a default PATH that finds the standard utilities",
+	// which is the whole point of the letter: a script reaches for it when
+	// PATH is the thing it cannot trust. It was read and then ignored here,
+	// on the reasoning that ours is already the Runner's PATH rather than the
+	// process's — true, and beside the point, since the case the letter is
+	// written for is a PATH the *script* has cleared or mangled (#2933). See
+	// interp/defaultpath.go. `-v` and `-p` are read by all four. What splits them is a leading `-`
 	// word that is *not* one of those: bash, dash and ksh93 refuse it as an
 	// option, and zsh alone stops reading options and takes it as the
 	// command, so `command -q ls` is `command not found: -q` there. Probed
 	// with a letter no panel shell owns — `-x` is a real ksh93 option, and
 	// the first measurement read ksh93 off it, wrongly.
-	verbose, sentence := false, false
+	verbose, sentence, defaultPath := false, false, false
 	for len(args) > 0 {
 		a := args[0]
 		if len(a) < 2 || a[0] != '-' {
@@ -74,6 +76,7 @@ func biCommand(r *Runner, ctx context.Context, args []string) int {
 			// both letters, and all four shells word it the way their
 			// `type` does.
 			sentence = sentence || strings.ContainsRune(letters, 'V')
+			defaultPath = defaultPath || strings.ContainsRune(letters, 'p')
 			args = args[1:]
 			continue
 		}
@@ -92,10 +95,17 @@ func biCommand(r *Runner, ctx context.Context, args []string) int {
 		// `type`'s sentence with `command`'s name on the complaint: the
 		// found wordings are shared and only the missing one is this
 		// builtin's own — see Diagnostics.CommandVNotFound.
+		defer r.searchingTheDefaultPath(defaultPath)()
 		return r.describeName(args[0], typeKindNone, false,
 			Wording(r.diag().CommandVNotFound, "command: %[1]s: not found", args[0]))
 	}
 	if verbose {
+		// `-p` asks the reporting letters the same question it asks the run:
+		// `command -pv sed` names what `command -p sed` would start, and a
+		// script that tested one and ran the other would be testing the
+		// wrong PATH. Measured — all four columns answer `/usr/bin/sed` here
+		// with a PATH that holds nothing.
+		defer r.searchingTheDefaultPath(defaultPath)()
 		return r.reportWhatRuns(args[0])
 	}
 	// What the command reports is the *command's*, not this builtin's. The
@@ -105,7 +115,7 @@ func biCommand(r *Runner, ctx context.Context, args []string) int {
 	outer := r.inBuiltin
 	r.inBuiltin = ""
 	defer func() { r.inBuiltin = outer }()
-	return r.runWithoutFunctions(ctx, args)
+	return r.runWithoutFunctions(ctx, args, defaultPath)
 }
 
 // biBuiltin runs a builtin, and only a builtin.
@@ -224,7 +234,7 @@ func reservedWord(name string) bool {
 // runWithoutFunctions runs a command with the function table ignored, which
 // is the whole of what `command name` means: a function may then wrap the
 // thing it is named after without calling itself.
-func (r *Runner) runWithoutFunctions(ctx context.Context, args []string) int {
+func (r *Runner) runWithoutFunctions(ctx context.Context, args []string, defaultPath bool) int {
 	// Or with the builtin table ignored as well, in the dialect where the
 	// word asks for an external program and nothing else. There the lookup
 	// is skipped entirely rather than tried and discarded: `command set` has
@@ -251,6 +261,11 @@ func (r *Runner) runWithoutFunctions(ctx context.Context, args []string) int {
 		r.inBuiltin = outer
 		return st
 	}
+	// And the default path, if `-p` asked for one — around the lookup the
+	// exec makes and around nothing else. A builtin does not come through
+	// here, which is the line the measurement draws: `command -p eval 'ls'`
+	// looks `ls` up on the caller's PATH in every column.
+	defer r.searchingTheDefaultPath(defaultPath)()
 	if err := r.exec(ctx, args, r.environ()); err != nil {
 		r.diagf("command: %v\n", err)
 		return 1

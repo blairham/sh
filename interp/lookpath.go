@@ -96,7 +96,7 @@ func (r *Runner) lookPath(name string) (string, error) {
 	// with two copies of one name on PATH, the first hashed and then
 	// deleted — the arrangement that tells the readings apart, since with
 	// one copy all four fail and only the wording moves.
-	if hashed, ok := r.hashedCommandPath(name); ok {
+	if hashed, ok := r.hashedCommandPath(name); ok && r.rememberingLookups() {
 		full := r.absolute(hashed)
 		err := r.runnable(full)
 		if err == nil {
@@ -128,8 +128,7 @@ func (r *Runner) lookPath(name string) (string, error) {
 	// it, because whether a directory counts as a candidate at all is the
 	// one part of this search the panel disagrees on.
 	var denied, dirDenied *pathError
-	path, _ := r.getVar("PATH")
-	for _, dir := range r.pathElements(path) {
+	for _, dir := range r.pathElements(r.commandSearchPath()) {
 		if dir == "" {
 			dir = "."
 		}

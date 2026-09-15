@@ -148,7 +148,11 @@ func TestTouchingParensAtCommandPositionAreArithmetic(t *testing.T) {
 func TestCondUnbalancedTouchingParens(t *testing.T) {
 	tests := []struct{ src, want string }{
 		{`[[ ((1 -eq 1) ]]`, `1:15: expected ) in a condition`},
-		{`[[ (()) ]]`, `1:6: expected a condition after (`},
+		// The token the reading stopped on, which is what every shell in the
+		// panel names here: ksh93 writes `` `)' unexpected `` for this input
+		// and bash and zsh name the same `)` inside a longer line. See
+		// Parser.failCondTerm (#2909).
+		{`[[ (()) ]]`, `1:6: ")" unexpected`},
 	}
 	for _, tc := range tests {
 		t.Run(tc.src, func(t *testing.T) {

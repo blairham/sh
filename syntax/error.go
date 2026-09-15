@@ -286,6 +286,18 @@ type Error struct {
 	// operator for an operand and is refused by naming the token, so nothing
 	// is recorded for it.
 	CondWords []string
+	// CondTermMissing says the refused token stood where a condition was to
+	// **begin** — after the `[[` itself, after a `!`, after a connective, or
+	// just inside a group — rather than anywhere a condition had already
+	// been read.
+	//
+	// One dialect words the two apart and one of its wordings is *nothing at
+	// all*. See Diagnostics.CondCommandPreamble for the measurement.
+	CondTermMissing bool
+	// CondGroupsOpen is how many `(` of the condition had been entered and
+	// not closed when it failed. The same dialect writes one line per open
+	// group in front of the rest.
+	CondGroupsOpen int
 	// Class is what sort of token Token is, when the kind is ErrUnexpected.
 	Class TokenClass
 	// TokenOpener is the operator the unexpected token *began* with, where

@@ -176,6 +176,12 @@ var condBinaryWordOps = map[string]bool{
 // parseTestClause parses `[[ … ]]`. The opening word is current on entry.
 func (p *Parser) parseTestClause() Command {
 	c := &TestClause{Start: p.tok.Pos}
+	// Where the `[[` stood, for the five sites below it that raise a failure
+	// the construct has to be named in and that cannot see this frame. See
+	// failCondTerm and blameCondition.
+	outerStart, outerGroups := p.condStart, p.condGroups
+	p.condStart, p.condGroups = c.Start, 0
+	defer func() { p.condStart, p.condGroups = outerStart, outerGroups }()
 	// One dialect reads pattern groups here and nowhere else, and the lexer
 	// decides where a word ends — so it has to be told before the first token
 	// inside the condition is read.
@@ -204,7 +210,7 @@ func (p *Parser) parseTestClause() Command {
 	// closer at once. The one above is still needed — nothing has read
 	// anything yet at that point.
 	if c.Expr == nil && p.err == nil {
-		p.fail("expected a condition after [[")
+		p.failCondTerm()
 	}
 	c.Stop = p.tok.End
 	p.lex.inCondition = false
@@ -297,6 +303,51 @@ func (p *Parser) condOperatorHasItsOperand(op string) bool {
 	return rest != ""
 }
 
+// failCondTerm is a condition the grammar wanted and did not find: after the
+// `[[` itself, after a `!`, after a connective, or just inside a group.
+//
+// Five sites and one sentence, and until #2909 that sentence was the parser's
+// own prose — `expected a condition after [[` — which no shell in the panel
+// writes. Measured 2026-09-15 over `-c`, each of the five: bash writes a
+// `syntax error near` quoting the `]]` and echoes the line, zsh a `parse
+// error near` quoting the same, and both name the *token the reading stopped
+// on*. So this is the
+// ordinary unexpected-token path and not a message of the construct's own,
+// which is the same answer #2013 reached for the arithmetic command and
+// #2872's `]]` test reached one line further down.
+//
+// What is recorded beside it is where the token stood, because one dialect
+// words a token refused *here* differently from one refused after a condition
+// has been read — and for the closer itself writes no extra line at all. See
+// Diagnostics.CondCommandPreamble.
+//
+// Two of the three columns are only *partly* answered by this, and the `-c`
+// route cannot tell: zsh and ksh93 do not refuse the closer as a token at all
+// — they read it as an ordinary word and blame whatever stands after it, so
+// the same file with a trailing newline is a parse error at the newline in
+// both of them, on line 2, against bash's unmoved two lines. Under
+// `-c` there is nothing after it, which is why zsh's line and this one agree
+// byte for byte and the agreement proves less than it looks. That is a change
+// to what the parser *consumes* rather than to how a refusal is worded, so it
+// is measured and filed rather than guessed at here (#2964).
+func (p *Parser) failCondTerm() {
+	if p.err != nil {
+		// A site further in has already recorded this failure, and it is the
+		// one that knows how deep it was. Every one of the five is reached
+		// on the way back out — a group whose condition is missing returns
+		// nil to the connective that called it, which returns nil to the
+		// `[[` — so without this the innermost group's depth was overwritten
+		// by the outermost frame's, and every nesting reported one.
+		return
+	}
+	p.failUnexpected("]]")
+	var se *Error
+	if errors.As(p.err, &se) {
+		se.CondTermMissing, se.CondGroupsOpen = true, p.condGroups
+	}
+	p.blameCondition(p.condStart)
+}
+
 // blameCondition marks the failure just recorded as one the `[[` was open
 // over, and records where the `[[` was.
 //
@@ -340,7 +391,7 @@ func (p *Parser) condOr() CondExpr {
 		p.skipNewlines()
 		y := p.condAnd()
 		if y == nil {
-			p.fail("expected a condition after ||")
+			p.failCondTerm()
 			return x
 		}
 		x = &CondLogic{Op: "||", X: x, Y: y}
@@ -365,7 +416,7 @@ func (p *Parser) condAnd() CondExpr {
 		p.skipNewlines()
 		y := p.condPrimary()
 		if y == nil {
-			p.fail("expected a condition after &&")
+			p.failCondTerm()
 			return x
 		}
 		x = &CondLogic{Op: "&&", X: x, Y: y}
@@ -389,7 +440,7 @@ func (p *Parser) condPrimary() CondExpr {
 		p.skipNewlines()
 		x := p.condPrimary()
 		if x == nil {
-			p.fail("expected a condition after !")
+			p.failCondTerm()
 			return nil
 		}
 		return &CondNot{X: x, Start: start}
@@ -399,11 +450,16 @@ func (p *Parser) condPrimary() CondExpr {
 		start := p.tok.Pos
 		p.next()
 		p.skipNewlines()
+		p.condGroups++
 		x := p.condOr()
 		if x == nil {
-			p.fail("expected a condition after (")
+			// Still counted as open, because the failure is *inside* it:
+			// one dialect writes a line per group the refusal was under.
+			p.failCondTerm()
+			p.condGroups--
 			return nil
 		}
+		p.condGroups--
 		// Nor here, and for the same reason.
 		stop := p.tok.End
 		if !p.at(TokRightParen) {

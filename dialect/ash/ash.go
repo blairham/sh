@@ -938,8 +938,8 @@ func Semantics() interp.Semantics {
 	//
 	// unanswered BraceRescanEntersFailedGroup: this shell has no brace
 	// expansion either, so nothing ever resumes a scan — `@{x}{a,b}@` is
-	// one word, and the four `BraceRange…` axes are unanswered beside it
-	// for the same reason.
+	// one word, and the nine `BraceRange…` and `BraceCharRange…` axes are
+	// unanswered beside it for the same reason.
 	//
 	// unanswered StoreRefusalOfADeclaredElementLeavesZeroFromCommandString:
 	// no declaration utility and no array literal here either, so neither

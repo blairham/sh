@@ -817,6 +817,54 @@ var Corpus = []Case{
 		Why:     "a stride over a letter range: bash and ksh93 expand it, zsh leaves the word alone",
 	},
 	{
+		ID: "expand/brace-range-between-any-two-characters", Category: "expansion",
+		Snippet: `printf '[%s]' {5..A}; echo; printf '[%s]' {1...}; echo; printf '[%s]' {....}; echo; printf '[%s]' {.....}; echo`,
+		Why:     "what a range between two single characters spans. zsh counts between whatever the two are — `{5..A}` walks the punctuation from `5` to `A` and `{1...}` is `1 0 / .` — where bash, bash 3.2, bash-as-sh and ksh93 want two letters and leave all four words alone. The last two rows are why the body is counted in characters rather than cut at its first `..`: `{....}` is the single word `.` and `{.....}` is the word as written, which a cut reads the other way round. BraceCharRangeSpansAnyCharacter, and the `-alpha-stepped` row above is its other half — the wider reading takes no step",
+	},
+	{
+		ID: "expand/brace-range-between-two-characters-outside-utf8", Category: "expansion",
+		Snippet: `printf '[%s]' {α..γ}; echo`,
+		Why:     "the same reading where the endpoints are not one byte each. Under the `LC_ALL=C` this harness pins, zsh leaves the word alone — two bytes is not one character there — so a range this wide is the locale's question as much as the dialect's, and is asked the same way a pattern's `?` is. The row below is the same word under a UTF-8 locale, where the same shell counts three",
+	},
+	{
+		ID: "expand/brace-range-between-two-characters-in-utf8", Category: "expansion",
+		Env:     []string{"LC_ALL=C.UTF-8"},
+		Snippet: `printf '[%s]' {α..γ}; echo`,
+		Why:     "and under a UTF-8 locale zsh counts `α β γ`, which is what makes the pair a measurement of the locale rather than of the alphabet. The other five columns leave the word alone in both locales",
+	},
+	{
+		ID: "expand/brace-range-missing-endpoint", Category: "expansion",
+		Snippet: `printf '[%s]' @{1..}@; echo; printf '[%s]' @{..3}@; echo; printf '[%s]' @{1..2..}@; echo; printf '[%s]' @{1....2}@; echo`,
+		Why:     "three answers to one word. bash, bash 3.2, bash-as-sh and dash leave `{1..}` exactly as written; ksh93 counts the missing *second* endpoint from zero and answers `1 0`, while leaving `{..3}` and `{1..2..}` alone — so it is the second endpoint alone and `{1....2}` is `1`, the same reading with a step beside it; zsh takes the **braces off** and leaves `1..` standing as ordinary text, which is neither of the other two. The `@` on both sides is what makes the braces visible: it shows one word rather than a brace that vanished. BraceRangeMissingEndCountsFromZero and BraceRangeThatCannotBeCounted (#1691)",
+	},
+	{
+		ID: "expand/brace-range-missing-endpoint-left-alone", Category: "expansion",
+		Snippet: `printf '[%s]' {..}; echo; printf '[%s]' {..2..}; echo; printf '[%s]' {-1..}; echo; printf '[%s]' {+1..}; echo; printf '[%s]' {1..2..x}; echo`,
+		Why:     "the boundary of the row above, and every column agrees on all five. A body with **no digit at either end** is the word as written even in the shell that drops braces — which is what separates `{..2..}` from `{1..2..}` and is the rule a first reading of #1691 got backwards — and the shape is narrow besides: a sign on the *first* endpoint, a `+` anywhere, or a letter puts the body outside the reading. Without these rows an implementation that dropped the braces from anything holding a `..` would pass the row above",
+	},
+	{
+		ID: "expand/brace-range-endpoint-with-a-plus", Category: "expansion",
+		Snippet: `printf '[%s]' {+1..2}; echo; printf '[%s]' {1..+2}; echo; printf '[%s]' {1..2..+1}; echo`,
+		Why:     "a `+` in front of a range's number: bash and ksh93 read all three as `1 2`, and zsh takes a `+` anywhere as putting the body outside the reading altogether. It is separate from the sign that means something — `{-1..1}` is `-1 0 1` in every column that counts — and it is the reading a Go `strconv.Atoi` gets wrong for free, since that accepts a leading plus. BraceRangeNumberMayCarryAPlus",
+	},
+	{
+		ID: "expand/brace-range-zero-step", Category: "expansion",
+		Snippet: `printf '[%s]' {1..2..0}; echo`,
+		Why:     "a written step of zero is a walk that never arrives, and the three shells that have steps answer the way they answer a range with a gap in it: bash reads it as one and counts `1 2`, ksh93 leaves the word, zsh drops the braces. BraceRangeZeroStepCountsAsOne, and the two columns that decline fall through to BraceRangeThatCannotBeCounted",
+	},
+	{
+		ID: "expand/brace-range-element-is-not-a-pattern", Category: "expansion",
+		Script:  true,
+		Snippet: "mkdir -p g && cd g && : > q && : > z && printf '[%s]' {=..?}; echo; printf '[%s]' {?,x}; echo",
+		Why:     "what a range counted is data and what a list held is text. zsh's `{=..?}` writes the three characters `= > ?` with the `?` never matched against a filename, while its `{?,x}` matches both files in the directory — so a range's element is put back quoted and an alternative is not. It is invisible until a character range is wider than the letters, and then it decides every word: `{5..A}` holds a `?` of its own. The other columns have no range here and match the list the same way",
+	},
+	{
+		ID: "expand/brace-range-that-lost-its-braces-is-still-a-pattern", Category: "expansion",
+		Script:  true,
+		Snippet: "mkdir -p g && cd g && : > 1..x && printf '[%s]' {1..}*; echo",
+		Why:     "the other side of the row above: what the braces left behind *is* a pattern. zsh prints `1..x`, so the text a collapsed range leaves is an ordinary word and not the quoted, unmatched text a failed expanded endpoint leaves. The columns that keep the braces print `{1..}*` unmatched, which is the same statement from the other end",
+	},
+	{
 		ID: "expand/brace-nested", Category: "expansion",
 		Snippet: `echo {a,{b,c}}; echo x{1,{2,3}}y`,
 		Why:     "an alternative may itself be a brace expansion, and a prefix and suffix distribute over the flattened result — {a,{b,c}} is three words, not a word containing braces",

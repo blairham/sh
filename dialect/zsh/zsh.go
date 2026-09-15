@@ -1448,6 +1448,17 @@ func Semantics() interp.Semantics {
 	// And the endpoints are read after the expansions in them: `n=3;
 	// echo {1..$n}` is `1 2 3` where bash prints the literal `{1..3}`.
 	s.BraceRangeEndpointsExpanded = interp.Yes
+	// A range between two single characters spans whatever those characters
+	// are — `{1..x}` is seventy-two words and `{α..γ}` is three — and takes
+	// no step, so `{a..z..2}` is the word as written where bash counts
+	// `a c e …`. And a body shaped like a numeric range that holds no range
+	// loses its *braces* rather than standing whole: `{1..}` is `1..`,
+	// `{..3}` is `..3`, and a written step of zero goes the same way.
+	s.BraceCharRangeSpansAnyCharacter = interp.Yes
+	s.BraceRangeMissingEndCountsFromZero = interp.No
+	s.BraceRangeZeroStepCountsAsOne = interp.No
+	s.BraceRangeNumberMayCarryAPlus = interp.No
+	s.BraceRangeThatCannotBeCounted = interp.BraceRangeFailureDropsTheBraces
 	s.BracketCaretNegates = interp.Yes
 	s.EqualsExpansion = interp.Yes
 	s.LastPipelineElementInCurrentShell = interp.Yes

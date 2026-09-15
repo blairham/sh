@@ -155,6 +155,11 @@ func TestBraceRanges(t *testing.T) {
 		sem.BraceRangePadsToEndpointWidth = Yes
 		sem.BraceRangeStepSignHonored = No
 		sem.BraceRangeNegativeStepReverses = No
+		sem.BraceCharRangeSpansAnyCharacter = No
+		sem.BraceRangeZeroStepCountsAsOne = Yes
+		sem.BraceRangeMissingEndCountsFromZero = No
+		sem.BraceRangeNumberMayCarryAPlus = Yes
+		sem.BraceRangeThatCannotBeCounted = BraceRangeFailureKeepsTheWord
 		d := syntax.Core()
 		r := newTestRunner(t, &Runner{
 			Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh", Dialect: &d,

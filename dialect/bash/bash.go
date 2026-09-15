@@ -717,6 +717,15 @@ func Semantics() interp.Semantics {
 	// Braces finish before parameters begin, so a range cannot be built
 	// from one: `n=3; echo {1..$n}` is the literal `{1..3}`.
 	s.BraceRangeEndpointsExpanded = interp.No
+	// A character range is letters only — `{1..x}` is the word as written —
+	// and it takes a step: `{a..z..2}` is `a c e …`. A step of zero counts as
+	// one rather than never arriving, so `{1..2..0}` is `1 2`, and a body
+	// that is range-shaped with a gap in it is the word as written.
+	s.BraceCharRangeSpansAnyCharacter = interp.No
+	s.BraceRangeMissingEndCountsFromZero = interp.No
+	s.BraceRangeZeroStepCountsAsOne = interp.Yes
+	s.BraceRangeNumberMayCarryAPlus = interp.Yes
+	s.BraceRangeThatCannotBeCounted = interp.BraceRangeFailureKeepsTheWord
 	s.BracketCaretNegates = interp.Yes
 	// One character-class name beyond the twelve POSIX ones. Measured
 	// 2026-09-10, `[[ $c = [[:ascii:]] ]]` a character at a time: `a` is in

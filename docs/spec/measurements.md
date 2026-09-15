@@ -321,6 +321,15 @@ grades it and nothing drift-checks it either, for the same reason.
 | `expand/brace-range-expanded-endpoint-quoting` | `{1..3}~{1..3}~{1..3}` | `{1..3}~{1..3}~{1..3}` | `{1..3}~{1..3}~{1..3}` | `{1..3}~{1..3}~{1..3}` | `1 2 3~1 2 3~1 2 3` | `1 2 3~1 2 3~1 2 3` | `{1..3}~{1..3}~{1..3}` |
 | `expand/brace-range-expanded-endpoint-refused` | `[@{1..abc}@]~[@{1..2][3}@]~[@{1..3,5}@]` | `[@{1..abc}@]~[@{1..2][3}@]~[@1..3@][@5@]` | `[@{1..abc}@]~[@{1..2][3}@]~[@1..3@][@5@]` | `[@{1..abc}@]~[@{1..2][3}@]~[@1..3@][@5@]` | `[@{1..abc}@]~[@{1..2 3}@]~[@1..3@][@5@]` | `[@{1..abc}@]~[@{1..2 3}@]~[@1..3@][@5@]` | `[@{1..abc}@]~[@{1..2][3}@]~[@{1..3,5}@]` |
 | `expand/brace-range-alpha-stepped` | `{a..e..2}` | `a c e` | `a c e` | `{a..e..2}` | `a c e` | `{a..e..2}` | `{a..e..2}` |
+| `expand/brace-range-between-any-two-characters` | `[{5..A}]~[{1...}]~[{....}]~[{.....}]` | `[{5..A}]~[{1...}]~[{....}]~[{.....}]` | `[{5..A}]~[{1...}]~[{....}]~[{.....}]` | `[{5..A}]~[{1...}]~[{....}]~[{.....}]` | `[{5..A}]~[{1...}]~[{....}]~[{.....}]` | `[5][6][7][8][9][:][;][<][=][>][?][@][A]~[1][0][/][.]~[.]~[{.....}]` | `[{5..A}]~[{1...}]~[{....}]~[{.....}]` |
+| `expand/brace-range-between-two-characters-outside-utf8` | `[{α..γ}]` | `[{α..γ}]` | `[{α..γ}]` | `[{α..γ}]` | `[{α..γ}]` | `[{α..γ}]` | `[{α..γ}]` |
+| `expand/brace-range-between-two-characters-in-utf8` | `[{α..γ}]` | `[{α..γ}]` | `[{α..γ}]` | `[{α..γ}]` | `[{α..γ}]` | `[α][β][γ]` | `[{α..γ}]` |
+| `expand/brace-range-missing-endpoint` | `[@{1..}@]~[@{..3}@]~[@{1..2..}@]~[@{1....2}@]` | `[@{1..}@]~[@{..3}@]~[@{1..2..}@]~[@{1....2}@]` | `[@{1..}@]~[@{..3}@]~[@{1..2..}@]~[@{1....2}@]` | `[@{1..}@]~[@{..3}@]~[@{1..2..}@]~[@{1....2}@]` | `[@1@][@0@]~[@{..3}@]~[@{1..2..}@]~[@1@]` | `[@1..@]~[@..3@]~[@1..2..@]~[@1....2@]` | `[@{1..}@]~[@{..3}@]~[@{1..2..}@]~[@{1....2}@]` |
+| `expand/brace-range-missing-endpoint-left-alone` | `[{..}]~[{..2..}]~[{-1..}]~[{+1..}]~[{1..2..x}]` | `[{..}]~[{..2..}]~[{-1..}]~[{+1..}]~[{1..2..x}]` | `[{..}]~[{..2..}]~[{-1..}]~[{+1..}]~[{1..2..x}]` | `[{..}]~[{..2..}]~[{-1..}]~[{+1..}]~[{1..2..x}]` | `[{..}]~[{..2..}]~[-1][0]~[1][0]~[{1..2..x}]` | `[{..}]~[{..2..}]~[{-1..}]~[{+1..}]~[{1..2..x}]` | `[{..}]~[{..2..}]~[{-1..}]~[{+1..}]~[{1..2..x}]` |
+| `expand/brace-range-endpoint-with-a-plus` | `[{+1..2}]~[{1..+2}]~[{1..2..+1}]` | `[1][2]~[1][2]~[1][2]` | `[1][2]~[1][2]~[1][2]` | `[1][2]~[1][2]~[{1..2..+1}]` | `[1][2]~[1][2]~[1][2]` | `[{+1..2}]~[{1..+2}]~[{1..2..+1}]` | `[{+1..2}]~[{1..+2}]~[{1..2..+1}]` |
+| `expand/brace-range-zero-step` | `[{1..2..0}]` | `[1][2]` | `[1][2]` | `[{1..2..0}]` | `[{1..2..0}]` | `[1..2..0]` | `[{1..2..0}]` |
+| `expand/brace-range-element-is-not-a-pattern` | `[{=..?}]~[{?,x}]` | `[{=..?}]~[q][z][x]` | `[{=..?}]~[q][z][x]` | `[{=..?}]~[q][z][x]` | `[{=..?}]~[q][z][x]` | `[=][>][?]~[q][z][x]` | `[{=..?}]~[{?,x}]` |
+| `expand/brace-range-that-lost-its-braces-is-still-a-pattern` | `[{1..}*]` | `[{1..}*]` | `[{1..}*]` | `[{1..}*]` | `[1..x][0*]` | `[1..x]` | `[{1..}*]` |
 | `expand/brace-nested` | `{a,{b,c}}~x{1,{2,3}}y` | `a b c~x1y x2y x3y` | `a b c~x1y x2y x3y` | `a b c~x1y x2y x3y` | `a b c~x1y x2y x3y` | `a b c~x1y x2y x3y` | `{a,{b,c}}~x{1,{2,3}}y` |
 | `expand/brace-after-a-group-that-did-not-expand` | `[@{x}{a,b}@]~[{a}{b}{c,d}]` | `[@{x}a@][@{x}b@]~[{a}{b}c][{a}{b}d]` | `[@{x}a@][@{x}b@]~[{a}{b}c][{a}{b}d]` | `[@{x}a@][@{x}b@]~[{a}{b}c][{a}{b}d]` | `[@{x}a@][@{x}b@]~[{a}{b}c][{a}{b}d]` | `[@{x}a@][@{x}b@]~[{a}{b}c][{a}{b}d]` | `[@{x}{a,b}@]~[{a}{b}{c,d}]` |
 | `expand/brace-inside-a-group-that-did-not-expand` | `[{a{b,c}}]~[{a}{b{c,d}}]~[{a{b,c}}{d,e}]` | `[{ab}][{ac}]~[{a}{bc}][{a}{bd}]~[{ab}d][{ab}e][{ac}d][{ac}e]` | `[{ab}][{ac}]~[{a}{bc}][{a}{bd}]~[{ab}d][{ab}e][{ac}d][{ac}e]` | `[{ab}][{ac}]~[{a}{bc}][{a}{bd}]~[{ab}d][{ab}e][{ac}d][{ac}e]` | `[{a{b,c}}]~[{a}{b{c,d}}]~[{a{b,c}}d][{a{b,c}}e]` | `[{ab}][{ac}]~[{a}{bc}][{a}{bd}]~[{ab}d][{ab}e][{ac}d][{ac}e]` | `[{a{b,c}}]~[{a}{b{c,d}}]~[{a{b,c}}{d,e}]` |
@@ -850,6 +859,42 @@ grades it and nothing drift-checks it either, for the same reason.
 - `expand/brace-range-alpha-stepped` — a stride over a letter range: bash and ksh93 expand it, zsh leaves the word alone
   ```sh
   echo {a..e..2}
+  ```
+- `expand/brace-range-between-any-two-characters` — what a range between two single characters spans. zsh counts between whatever the two are — `{5..A}` walks the punctuation from `5` to `A` and `{1...}` is `1 0 / .` — where bash, bash 3.2, bash-as-sh and ksh93 want two letters and leave all four words alone. The last two rows are why the body is counted in characters rather than cut at its first `..`: `{....}` is the single word `.` and `{.....}` is the word as written, which a cut reads the other way round. BraceCharRangeSpansAnyCharacter, and the `-alpha-stepped` row above is its other half — the wider reading takes no step
+  ```sh
+  printf '[%s]' {5..A}; echo; printf '[%s]' {1...}; echo; printf '[%s]' {....}; echo; printf '[%s]' {.....}; echo
+  ```
+- `expand/brace-range-between-two-characters-outside-utf8` — the same reading where the endpoints are not one byte each. Under the `LC_ALL=C` this harness pins, zsh leaves the word alone — two bytes is not one character there — so a range this wide is the locale's question as much as the dialect's, and is asked the same way a pattern's `?` is. The row below is the same word under a UTF-8 locale, where the same shell counts three
+  ```sh
+  printf '[%s]' {α..γ}; echo
+  ```
+- `expand/brace-range-between-two-characters-in-utf8` — and under a UTF-8 locale zsh counts `α β γ`, which is what makes the pair a measurement of the locale rather than of the alphabet. The other five columns leave the word alone in both locales
+  ```sh
+  printf '[%s]' {α..γ}; echo
+  ```
+- `expand/brace-range-missing-endpoint` — three answers to one word. bash, bash 3.2, bash-as-sh and dash leave `{1..}` exactly as written; ksh93 counts the missing *second* endpoint from zero and answers `1 0`, while leaving `{..3}` and `{1..2..}` alone — so it is the second endpoint alone and `{1....2}` is `1`, the same reading with a step beside it; zsh takes the **braces off** and leaves `1..` standing as ordinary text, which is neither of the other two. The `@` on both sides is what makes the braces visible: it shows one word rather than a brace that vanished. BraceRangeMissingEndCountsFromZero and BraceRangeThatCannotBeCounted (#1691)
+  ```sh
+  printf '[%s]' @{1..}@; echo; printf '[%s]' @{..3}@; echo; printf '[%s]' @{1..2..}@; echo; printf '[%s]' @{1....2}@; echo
+  ```
+- `expand/brace-range-missing-endpoint-left-alone` — the boundary of the row above, and every column agrees on all five. A body with **no digit at either end** is the word as written even in the shell that drops braces — which is what separates `{..2..}` from `{1..2..}` and is the rule a first reading of #1691 got backwards — and the shape is narrow besides: a sign on the *first* endpoint, a `+` anywhere, or a letter puts the body outside the reading. Without these rows an implementation that dropped the braces from anything holding a `..` would pass the row above
+  ```sh
+  printf '[%s]' {..}; echo; printf '[%s]' {..2..}; echo; printf '[%s]' {-1..}; echo; printf '[%s]' {+1..}; echo; printf '[%s]' {1..2..x}; echo
+  ```
+- `expand/brace-range-endpoint-with-a-plus` — a `+` in front of a range's number: bash and ksh93 read all three as `1 2`, and zsh takes a `+` anywhere as putting the body outside the reading altogether. It is separate from the sign that means something — `{-1..1}` is `-1 0 1` in every column that counts — and it is the reading a Go `strconv.Atoi` gets wrong for free, since that accepts a leading plus. BraceRangeNumberMayCarryAPlus
+  ```sh
+  printf '[%s]' {+1..2}; echo; printf '[%s]' {1..+2}; echo; printf '[%s]' {1..2..+1}; echo
+  ```
+- `expand/brace-range-zero-step` — a written step of zero is a walk that never arrives, and the three shells that have steps answer the way they answer a range with a gap in it: bash reads it as one and counts `1 2`, ksh93 leaves the word, zsh drops the braces. BraceRangeZeroStepCountsAsOne, and the two columns that decline fall through to BraceRangeThatCannotBeCounted
+  ```sh
+  printf '[%s]' {1..2..0}; echo
+  ```
+- `expand/brace-range-element-is-not-a-pattern` — what a range counted is data and what a list held is text. zsh's `{=..?}` writes the three characters `= > ?` with the `?` never matched against a filename, while its `{?,x}` matches both files in the directory — so a range's element is put back quoted and an alternative is not. It is invisible until a character range is wider than the letters, and then it decides every word: `{5..A}` holds a `?` of its own. The other columns have no range here and match the list the same way
+  ```sh
+  mkdir -p g && cd g && : > q && : > z && printf '[%s]' {=..?}; echo; printf '[%s]' {?,x}; echo
+  ```
+- `expand/brace-range-that-lost-its-braces-is-still-a-pattern` — the other side of the row above: what the braces left behind *is* a pattern. zsh prints `1..x`, so the text a collapsed range leaves is an ordinary word and not the quoted, unmatched text a failed expanded endpoint leaves. The columns that keep the braces print `{1..}*` unmatched, which is the same statement from the other end
+  ```sh
+  mkdir -p g && cd g && : > 1..x && printf '[%s]' {1..}*; echo
   ```
 - `expand/brace-nested` — an alternative may itself be a brace expansion, and a prefix and suffix distribute over the flattened result — {a,{b,c}} is three words, not a word containing braces
   ```sh

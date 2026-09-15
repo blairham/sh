@@ -1497,6 +1497,107 @@ type Semantics struct {
 	// unsplit and unmatched — ksh93 splits `$sp` in a word of its own and
 	// leaves `{1..$sp}` a single field — so the ordering decides that too.
 	BraceRangeEndpointsExpanded Answer
+	// BraceCharRangeSpansAnyCharacter widens a range written between two
+	// single characters past the letters. `{1..x}` is the seventy-two words
+	// from `1` to `x` in zsh, punctuation and upper case and all, and is the
+	// literal `{1..x}` in bash, bash 3.2, bash-as-sh and ksh93.
+	//
+	// The two readings are not one widened. Measured on zsh 5.9.2 and bash
+	// 5.3.15, 2026-09-14:
+	//
+	//	{a..z}      the same 26 words in both
+	//	{a..z..2}   `a c e …` in bash and ksh93; zsh leaves the word alone
+	//	{1..x}      72 words in zsh; the word alone in bash and ksh93
+	//	{1...}      `1 0 / .` in zsh; the word alone in bash and ksh93
+	//	{....}      `.` in zsh; the word alone in bash and ksh93
+	//	{α..γ}      `α β γ` in zsh; the word alone in bash and ksh93
+	//
+	// So the wider reading is "the body is one character, `..`, one
+	// character, and nothing else", counted in **characters** rather than
+	// bytes — which is why `{α..γ}` counts at all — and it takes no step,
+	// where the narrower letters-only reading does. The second row is the
+	// half that makes it an exchange rather than a widening, and the fourth
+	// and fifth are why the body is counted rather than cut at its first
+	// `..`: cutting reads `{....}` as an empty endpoint and `{.....}` as a
+	// range, and the measurements are the other way round.
+	//
+	// Asked only where the two readings differ. A range between two single
+	// letters with no step is unanimous and must never become a question.
+	BraceCharRangeSpansAnyCharacter Answer
+	// BraceRangeMissingEndCountsFromZero reads a range whose *second*
+	// endpoint is not there as one ending at zero: ksh93's `{1..}` is `1 0`,
+	// its `{5..}` is `5 4 3 2 1 0` and its `{-1..}` is `-1 0`. bash and zsh
+	// have no such reading.
+	//
+	// Only the second endpoint, measured: ksh93 leaves `{..3}` and `{1..2..}`
+	// exactly as written, so a missing first endpoint or a missing step is
+	// not a zero and is not a range either. `{1....2}` is `1` there, which is
+	// the same reading with a step beside it — count from 1 to 0 by 2.
+	//
+	// Asked only where the second endpoint is missing and the first is a
+	// number, since `{a..}` is the word as written in every column.
+	BraceRangeMissingEndCountsFromZero Answer
+	// BraceRangeZeroStepCountsAsOne reads a written step of zero as one and
+	// counts the range anyway: bash's `{1..2..0}` is `1 2`. ksh93 and zsh
+	// both decline — a walk of zero never arrives — and then part over what
+	// a range they could not count leaves behind, which is
+	// BraceRangeThatCannotBeCounted.
+	//
+	// Asked only where a step of zero is actually written.
+	BraceRangeZeroStepCountsAsOne Answer
+	// BraceRangeNumberMayCarryAPlus accepts a `+` in front of a range's
+	// number. bash and ksh93 do — `{+1..2}`, `{1..+2}` and `{1..2..+1}` all
+	// count `1 2` — and zsh takes a `+` anywhere as putting the body outside
+	// the reading altogether, so all three are the word as written there.
+	//
+	// It is separate from the sign that means something, which every column
+	// reads: `{-1..1}` counts `-1 0 1` everywhere. Asked only where a `+` is
+	// actually written.
+	BraceRangeNumberMayCarryAPlus Answer
+	// BraceRangeThatCannotBeCounted is what a body shaped like a numeric
+	// range but holding no range leaves behind — `{1..}`, `{..3}`,
+	// `{1..2..}`, `{1....2}`, and in the two columns that decline it a step
+	// of zero as well.
+	//
+	// Measured 2026-09-14 on zsh 5.9.2 and bash 5.3.15, with `printf '[%s]'`
+	// around the word so the characters are visible:
+	//
+	//	written       zsh        bash, bash 3.2, bash-as-sh, dash
+	//	{1..}         1..        {1..}
+	//	{..3}         ..3        {..3}
+	//	{1..2..}      1..2..     {1..2..}
+	//	{1....2}      1....2     {1....2}
+	//	{..1..2}      ..1..2     {..1..2}
+	//	{08..}        08..       {08..}
+	//	{1..2..0}     1..2..0    1 2
+	//	{..}          {..}       {..}
+	//	{..2..}       {..2..}    {..2..}
+	//	{......}      {......}   {......}
+	//	{-1..}        {-1..}     {-1..}
+	//	{+1..}        {+1..}     {+1..}
+	//	{1..2..x}     {1..2..x}  {1..2..x}
+	//	{a..}         {a..}      {a..}
+	//
+	// Two rules come out of the right-hand rows and both are in
+	// rangeMissingAComponent rather than here, because they decide whether
+	// the question is asked at all rather than what its answer is. **The
+	// shape is narrow**: the first endpoint is an unsigned run of digits and
+	// the second and the step may each carry a `-`, so a `+` anywhere, a
+	// sign on the first endpoint, or a letter takes the body out of the
+	// reading entirely and every column leaves it alone. **A body with no
+	// digit at either end is left alone too** — `{..}`, `{..2..}` and
+	// `{......}` are the word as written in zsh as well — which is what
+	// separates `{..2..}` from `{1..2..}` and is the row the issue's first
+	// reading of this rule got backwards (#1691).
+	//
+	// ksh93 is the third answer and is not on this axis: it *counts* rather
+	// than collapsing, which is BraceRangeMissingEndCountsFromZero above,
+	// and leaves the word alone wherever that reading does not reach.
+	//
+	// The collapsed body is ordinary unquoted text. With a file named `1..x`
+	// present, zsh's `echo {1..}*` prints `1..x`, so what the braces left is
+	// a word like any other and still a pattern.
+	BraceRangeThatCannotBeCounted BraceRangeFailurePolicy
 	// EqualsExpansion replaces an unquoted word beginning with `=` by the
 	// path of the command named after it: `echo =ls` prints /bin/ls. zsh
 	// alone, and silent in the `&>` sense — the other three take the word
@@ -14801,6 +14902,52 @@ func (r *Runner) readTrailingEscapedSeparator() ReadTrailingEscapedSeparatorPoli
 	if p == ReadTrailingEscapedSeparatorUnspecified {
 		r.diagf("%s\n", r.unanswered(
 			"an escaped IFS whitespace character closing a `read` value"))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
+}
+
+// BraceRangeFailurePolicy is what a body shaped like a numeric range but
+// holding no range leaves behind. See Semantics.BraceRangeThatCannotBeCounted
+// for the measurements.
+type BraceRangeFailurePolicy uint8
+
+const (
+	// BraceRangeFailureUnspecified is no answer, and is refused: the two
+	// below put different words on the wire for `echo {1..}`.
+	BraceRangeFailureUnspecified BraceRangeFailurePolicy = iota
+	// BraceRangeFailureKeepsTheWord leaves the word exactly as written,
+	// braces and all. bash, bash 3.2, bash-as-sh and ksh93.
+	BraceRangeFailureKeepsTheWord
+	// BraceRangeFailureDropsTheBraces takes the braces off and leaves the
+	// body standing as ordinary text, so `@{1..}@` is the one word `@1..@`.
+	// zsh.
+	BraceRangeFailureDropsTheBraces
+)
+
+func (p BraceRangeFailurePolicy) String() string {
+	switch p {
+	case BraceRangeFailureKeepsTheWord:
+		return "keeps the word"
+	case BraceRangeFailureDropsTheBraces:
+		return "drops the braces"
+	}
+	return "unspecified"
+}
+
+// braceRangeFailure resolves the axis, and like askBrace it is silent in a
+// dialect whose braces do not expand at all: what the range came to is put
+// back by the caller there, so a question that cannot change an answer must
+// not be the thing that refuses the script.
+func (r *Runner) braceRangeFailure() BraceRangeFailurePolicy {
+	if r.sem().BraceExpansion != Yes || r.noBraceExpand {
+		return BraceRangeFailureKeepsTheWord
+	}
+	p := r.sem().BraceRangeThatCannotBeCounted
+	if p == BraceRangeFailureUnspecified {
+		r.diagf("%s\n", r.unanswered(
+			"what a brace range that cannot be counted leaves behind"))
 		r.status = 2
 		r.unspecified = true
 	}

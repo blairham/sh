@@ -1,0 +1,27 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# `.` takes no operands past the file name in dash, and it is alone in that.
+#
+# POSIX gives `.` optional operands that become the dot script's positional
+# parameters for the length of the file. bash, zsh and ksh93 all pass them;
+# dash ignores them, so the dot script sees the caller's `$@` unchanged —
+# which means the same script, sourced the same way, reads a different
+# argument list here than in any other shell on the panel.
+#
+# The dot script is written by this file rather than assumed, so what it
+# prints is what this run put in it.
+
+printf 'printf "dot sees [%%s][%%s]\\n" "$#" "$1"\n' > d.sh
+set -- keep
+. ./d.sh extra
+printf 'and the caller still has [%s][%s]\n' "$#" "$1"
+
+# With no operand the answer is the caller's list in every shell, which is
+# what makes the line above the difference rather than the pair of them.
+. ./d.sh
+
+# More operands than the script reads, and an operand that would need
+# quoting: neither is passed either.
+. ./d.sh one two three
+. ./d.sh 'two words'

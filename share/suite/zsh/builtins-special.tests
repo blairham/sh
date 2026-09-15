@@ -1,0 +1,46 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# `command` in zsh runs a *command*, and a builtin is not one.
+#
+# POSIX gives `command name` the job of reaching past a function to the
+# builtin or the utility underneath, and of stripping a special builtin of
+# its specialness while it runs. bash, ksh93 and dash all find the builtin.
+# zsh looks for an external file on PATH and nothing else, so `command :`,
+# `command export` and `command eval` are all 127 with a not-found
+# diagnostic — in a shell where every one of those names exists.
+#
+# That makes `command` a portability trap rather than the portable spelling
+# it is usually reached for: `command unset x` is a working line in three
+# shells on this panel and a failure in the fourth.
+#
+# Held out until #2887 lands, which is the other zsh-alone answer in this
+# area: `readonly name` with no value gives the name an empty value in zsh
+# and leaves it unset in the other three, and ours still leaves it unset.
+#
+#   readonly frozen
+#   printf 'unvalued readonly -> [%s]\n' "${frozen-unset}"
+
+command : 2> /dev/null
+printf 'command on a special builtin -> %s\n' "$?"
+command export cv=1 2> /dev/null
+printf 'command export -> %s, and nothing was set [%s]\n' "$?" "${cv-unset}"
+command eval 'printf "ran\n"' 2> /dev/null
+printf 'command eval -> %s\n' "$?"
+command unset cv 2> /dev/null
+printf 'command unset -> %s\n' "$?"
+
+# -p asks for the standard PATH and changes nothing about the lookup: it is
+# still a file that is being looked for.
+command -p : 2> /dev/null
+printf 'command -p -> %s\n' "$?"
+
+# -v is a different question — *what would this word run* — and it answers
+# `:` in every shell here, zsh included. So the name is known; it is the
+# running of it through `command` that is not.
+printf 'command -v -> [%s] %s\n' "$(command -v : 2> /dev/null)" "$?"
+
+# A name that really is a file on PATH is found, which is what makes the
+# lines above about builtins rather than about `command` being broken.
+command true
+printf 'command on a file -> %s\n' "$?"

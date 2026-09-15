@@ -1,0 +1,47 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# The compound shapes zsh accepts and every other shell on the panel refuses.
+# core/grammar.tests carries the refusals all four agree about; these are the
+# ones it could not.
+#
+# The theme is one rule rather than six coincidences: zsh lets a compound
+# command have an empty body, where bash, ksh93 and dash require a list. It is
+# visible only as accepted-or-refused, because the three that refuse exit 1, 2
+# and 3 and share no wording.
+
+tries() {
+  if (eval "$1") 2> /dev/null; then
+    printf 'accepted: %s\n' "$2"
+  else
+    printf 'refused:  %s\n' "$2"
+  fi
+}
+
+tries 'if true; then fi'         'an if with an empty then'
+tries 'if false; then :; else fi' 'an if with an empty else'
+tries 'for w in a; do done'      'a for with an empty body'
+tries 'until true; do done'      'an until with an empty body'
+tries 'f() { }'                  'a function with an empty body'
+tries '{ }'                      'an empty brace group'
+tries '( )'                      'an empty subshell'
+tries 'for in a b; do :; done'   'a for whose name is a reserved word'
+
+# `while true; do done` is deliberately absent: zsh accepts it and then loops
+# forever, so the case would never finish and would grade nothing. The rule it
+# would demonstrate is already demonstrated by `until true; do done` above.
+
+# An empty body is an empty list, so the construct's status is the status of
+# an empty list rather than of whatever ran last.
+#
+# Through eval, which is how the file stays readable to the three shells that
+# refuse these: written literally they stop at the first one and the rest of
+# the file is never reached, so the claim would rest on a parse error instead
+# of on a difference of meaning.
+eval 'false
+if true; then fi
+printf "empty then left status=%s\n" "$?"
+false
+{ }
+printf "empty group left status=%s\n" "$?"' 2> /dev/null
+printf 'reached the end\n'

@@ -1,0 +1,270 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# The shell command language, POSIX XCU 2.9 — the shapes a command may take
+# and how they nest.
+#
+# core/control.tests asks what each compound command does and what status it
+# leaves. This file asks the grammar's own questions: how the operators bind,
+# what may be nested inside what, where a redirection attaches when the
+# command it is attached to is a compound one, and which shapes every shell
+# here refuses.
+
+# --- && and || bind left to right, at equal precedence ----------------------
+#
+# Printed rather than deduced: a shell that gave && the higher precedence
+# would run a different list and still exit 0.
+
+printf 'a1 '; true  && printf 'b ' || printf 'c '; printf '\n'
+printf 'a2 '; false && printf 'b ' || printf 'c '; printf '\n'
+printf 'a3 '; true  || printf 'b ' && printf 'c '; printf '\n'
+printf 'a4 '; false || printf 'b ' && printf 'c '; printf '\n'
+
+# A pipeline is what the operators join, not a single command, so the status
+# that decides the next step is the pipeline's.
+printf 'p1 '; true | false  && printf 'b ' || printf 'c '; printf '\n'
+printf 'p2 '; false | true  && printf 'b ' || printf 'c '; printf '\n'
+
+# ! negates the whole pipeline and nothing more.
+printf 'n1 '; ! true | false  && printf 'b ' || printf 'c '; printf '\n'
+printf 'n2 '; ! false        && printf 'b ' || printf 'c '; printf '\n'
+
+# The status of a negated pipeline is 0 or 1, never the original number.
+(exit 42); printf 'plain=%s\n' "$?"
+! (exit 42); printf 'negated=%s\n' "$?"
+! (exit 0);  printf 'negated zero=%s\n' "$?"
+
+# --- grouping ---------------------------------------------------------------
+#
+# A brace group is a grammar device and needs the list to be terminated; a
+# subshell does not. Both may be the left side of an operator.
+
+{ printf 'brace '; printf 'group\n'; }
+( printf 'sub '; printf 'shell\n' )
+{ true; } && printf 'brace group as a condition\n'
+( true ) && printf 'subshell as a condition\n'
+{ false; } || printf 'brace group failed\n'
+
+# A group is not a command name, so a word after the closing brace is a
+# separate command rather than an argument.
+{ :; } ; printf 'after the group\n'
+
+# Nesting the two in each other.
+( { printf 'brace inside subshell\n'; } )
+{ ( printf 'subshell inside brace\n' ); }
+( ( ( printf 'three deep\n' ) ) )
+
+# --- redirections on a compound command -------------------------------------
+#
+# The redirection belongs to the whole compound, so every command inside it is
+# affected and the file is opened once.
+
+{ printf 'one\n'; printf 'two\n'; } > grouped
+printf 'brace group wrote: '; tr '\n' ' ' < grouped; printf '\n'
+rm -f grouped
+
+( printf 'three\n'; printf 'four\n' ) > subshelled
+printf 'subshell wrote: '; tr '\n' ' ' < subshelled; printf '\n'
+rm -f subshelled
+
+for w in a b c; do printf '%s\n' "$w"; done > looped
+printf 'for wrote: '; tr '\n' ' ' < looped; printf '\n'
+rm -f looped
+
+i=0
+while [ "$i" -lt 2 ]; do i=$((i + 1)); printf '%s\n' "$i"; done > whiled
+printf 'while wrote: '; tr '\n' ' ' < whiled; printf '\n'
+rm -f whiled
+
+if true; then printf 'from if\n'; fi > iffed
+printf 'if wrote: '; cat iffed
+rm -f iffed
+
+case x in x) printf 'from case\n' ;; esac > cased
+printf 'case wrote: '; cat cased
+rm -f cased
+
+# Input redirection on a loop: the loop body reads from the file, and the
+# descriptor is shared across iterations rather than reopened.
+printf 'l1\nl2\nl3\n' > lines
+while read -r l; do printf 'read [%s]\n' "$l"; done < lines
+rm -f lines
+
+# A compound command in a pipeline.
+printf 'x\ny\n' | { read -r a; read -r b; printf 'group read [%s][%s]\n' "$a" "$b"; }
+printf 'z\n' | ( read -r a; printf 'subshell read [%s]\n' "$a" )
+for w in q r; do printf '%s\n' "$w"; done | tr '\n' '-'
+printf '\n'
+
+# --- nesting each compound inside each --------------------------------------
+
+for w in 1 2; do
+  if [ "$w" = 1 ]; then printf 'if in for: %s\n' "$w"; else printf 'else in for: %s\n' "$w"; fi
+done
+
+if true; then
+  for w in a b; do printf 'for in if: %s\n' "$w"; done
+fi
+
+i=0
+while [ "$i" -lt 2 ]; do
+  i=$((i + 1))
+  case $i in
+    1) printf 'case in while: one\n' ;;
+    *) printf 'case in while: other\n' ;;
+  esac
+done
+
+case nest in
+  nest)
+    i=0
+    until [ "$i" -ge 2 ]; do i=$((i + 1)); printf 'until in case: %s\n' "$i"; done
+    ;;
+esac
+
+if if true; then false; else true; fi; then
+  printf 'an if as an if condition: taken\n'
+else
+  printf 'an if as an if condition: not taken\n'
+fi
+
+while { printf 'group as a while condition\n'; false; }; do :; done
+
+f() {
+  for w in in a function; do printf 'function body: %s\n' "$w"; done
+  if true; then printf 'function body: if\n'; fi
+}
+f
+
+# --- a compound command as the body of a function ---------------------------
+
+g() ( printf 'a function whose body is a subshell\n'; v=lost )
+v=kept
+g
+printf 'still [%s]\n' "$v"
+
+# --- case terminators -------------------------------------------------------
+#
+# ;; ends the statement. The forms that fall through are not here: ;& is ext/
+# and ;;& is bash's alone.
+
+case b in
+  a) printf 'no\n' ;;
+  b) printf 'second arm\n' ;;
+  c) printf 'no\n' ;;
+esac
+
+# The last arm's ;; may be left off.
+case c in
+  a) printf 'no\n' ;;
+  c) printf 'last arm without a terminator\n'
+esac
+
+# A leading ( on a pattern is allowed.
+case d in
+  (d) printf 'parenthesised pattern\n' ;;
+esac
+
+# An arm with an empty list runs nothing and leaves the status alone.
+false
+case e in
+  e) ;;
+esac
+printf 'empty arm left status=%s\n' "$?"
+
+# --- compounds where a simple command would do ------------------------------
+#
+# Every place the grammar allows a command, it allows a compound one. These
+# are the places a shell that special-cased simple commands would still look
+# right on the cases above.
+
+{ printf 'a\nb\n'; } | while read -r l; do printf '<%s>' "$l"; done
+printf '\n'
+
+set -- p q
+for w in "$@" r; do printf '%s.' "$w"; done
+printf '\n'
+
+# A function defined inside a loop outlives the loop.
+for w in once; do inner() { printf 'defined in a loop\n'; }; done
+inner
+
+# A redirection on a *definition* applies to every call, and each call opens
+# the file again rather than appending to one handle.
+logged() { printf 'to the file\n'; } > deffile
+logged; logged
+printf 'file holds %s lines\n' "$(wc -l < deffile | tr -d ' ')"
+rm -f deffile
+
+# A redirection inside a redirected compound wins for the command it is on.
+{ printf 'outer\n'; printf 'inner\n' > innerfile; } > outerfile
+printf 'outer file: '; cat outerfile
+printf 'inner file: '; cat innerfile
+rm -f outerfile innerfile
+
+# A compound inside a command substitution, and a substitution inside a
+# condition.
+printf '[%s]\n' "$(case y in y) printf 'from case' ;; esac)"
+if [ "$(if true; then printf y; fi)" = y ]; then printf 'nested substitution condition\n'; fi
+
+# A pipeline as a loop condition.
+i=0
+until printf '%s\n' "$i" | grep -q 3; do i=$((i + 1)); done
+printf 'until with a pipeline stopped at %s\n' "$i"
+
+# A subshell as a loop body, and a group as a case arm.
+for w in s; do ( printf 'subshell body %s\n' "$w" ); done
+case g in
+  g) { printf 'group as a case arm\n'; } ;;
+esac
+
+# A compound as the left side of && .
+if true; then true; fi && { printf 'if then &&\n'; }
+for w in t; do :; done && printf 'for then &&\n'
+
+# A redirection inside a loop body runs once per iteration.
+for w in 1 2; do printf '%s\n' "$w" >> appended; done
+printf 'appended: '; tr '\n' ' ' < appended
+printf '\n'
+rm -f appended
+
+# return leaves the function from inside a loop, not just the loop.
+h() { for w in a b c; do if [ "$w" = b ]; then return 7; fi; done; return 0; }
+h
+printf 'returned %s\n' "$?"
+
+# A here-document may be attached to a compound command, and the loop below
+# reads it across iterations from one descriptor.
+{ cat; } <<'HD'
+heredoc on a group
+HD
+while read -r l; do printf 'heredoc loop [%s]\n' "$l"; done <<'HD'
+one
+two
+HD
+
+# --- the shapes every shell refuses -----------------------------------------
+#
+# Reduced to accepted-or-refused: the four shells exit 1, 2 and 3 on a syntax
+# error and share no wording for one.
+
+refuses() {
+  if (eval "$1") 2> /dev/null; then
+    printf 'accepted: %s\n' "$2"
+  else
+    printf 'refused:  %s\n' "$2"
+  fi
+}
+refuses 'case x in x) ;; '          'a case with no esac'
+refuses 'case x in ) ;; esac'       'a case arm with an empty pattern'
+refuses 'if true; then :; fi fi'    'a stray fi'
+refuses 'do printf x'               'do outside a loop'
+refuses 'f()'                       'a function with no body at all'
+refuses '!'                         'a lone negation with nothing to negate'
+
+# The empty-*body* forms are not here, and the omission is the measurement:
+# zsh accepts every one of them — an empty `then`, an empty `do`, `f() { }`,
+# `{ }`, `( )`, and `for in a b` — where bash, ksh93 and dash all refuse. They
+# are share/suite/zsh/grammar.tests, which is where an answer one shell has
+# alone belongs. `while true; do done` is left out even there: zsh accepts it
+# and then loops forever, and a case that does not finish grades nothing.

@@ -229,6 +229,12 @@ func Semantics() interp.Semantics {
 	// ---- invocation and options ----
 
 	s.CommandNotFoundStatusIsNotFound = interp.Yes
+	// A pathname operand is written back to `command -v` and `type` exactly as
+	// it was typed, POSIX's "shall be written as absolute pathnames"
+	// notwithstanding. Measured 2026-09-14 in the pinned alpine image:
+	// `command -v ./bb/tool` is `./bb/tool` and `command -v bb/tool` is
+	// `bb/tool`, with ksh93 the only column in the panel that joins.
+	s.APathnameOperandIsReportedAbsolute = interp.No
 	s.SetFTurnsOffGlobbing = interp.Yes
 	// No braces to expand and no `-B` to turn them off: `set -B` is `illegal
 	// option -B` and ends the script.

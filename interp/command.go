@@ -151,10 +151,13 @@ func biBuiltin(r *Runner, ctx context.Context, args []string) int {
 
 // reportWhatRuns answers `command -v`.
 //
-// A builtin or a function is named as it was written; an external is named by
-// the path that would be run, because that is the part a script cannot work
-// out for itself. Nothing found is a failure with no output at all — the
-// silence is what makes `command -v x >/dev/null` the usual spelling.
+// A builtin or a function is named as it was written; an external found on
+// PATH is named by the path that would be run, because that is the part a
+// script cannot work out for itself. An operand that was *already* written
+// with a slash was never searched for, and what is written for it splits the
+// panel — see Runner.reportedPath. Nothing found is a failure with no output
+// at all — the silence is what makes `command -v x >/dev/null` the usual
+// spelling.
 func (r *Runner) reportWhatRuns(name string) int {
 	// An alias first, and as a *definition* rather than as a bare name: the
 	// three shells that print `alias a='echo hi'` here are printing a line
@@ -189,6 +192,10 @@ func (r *Runner) reportWhatRuns(name string) int {
 	// answer for what will actually run, not for what is on the disk.
 	if !r.reservedBuiltin(name) {
 		if path, err := r.lookPathReporting(name); err == nil {
+			path = r.reportedPath(name, path)
+			if r.unspecified {
+				return r.status
+			}
 			r.printf("%s\n", path)
 			return 0
 		}

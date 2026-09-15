@@ -2561,6 +2561,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `core/readonly-letter-carries-its-own-sign` | `st=0 n=[2]~end` **2>** `<script>: 2: typeset: not found` | `st=1 n=[1]~end` **2>** `<script>: line 3: n: readonly variable` | **2>** `<script>: line 3: n: readonly variable` *(status 1)* | `st=1 n=[1]~end` **2>** `<script>: line 3: n: readonly variable` | **2>** `<script>: line 3: n: is read only` *(status 1)* | **2>** `<script>:3: read-only variable: n` *(status 1)* | `st=0 n=[2]~end` **2>** `<script>: line 2: typeset: not found` |
 | `axis/readonly-removed-by-local-in-the-same-call` | **2>** `<script>: 1: local: -r: bad variable name` *(status 2)* | `st=1~end` **2>** `<script>: line 1: local: y: readonly variable~<script>: line 1: y: readonly variable` | **2>** `<script>: line 1: local: y: readonly variable~<script>: line 1: y: readonly variable` *(status 1)* | `st=1~end` **2>** `<script>: line 1: local: y: readonly variable~<script>: line 1: y: readonly variable` | `in=[2]~st=0~end` **2>** `<script>: line 1: local: not found~<script>: line 1: local: not found` | `in=[2]~st=0~end` | **2>** `<script>: local: line 1: -r: bad variable name` *(status 2)* |
 | `core/a-plus-word-beside-the-readonly-letter-removes-nothing` | `d=127~st=0 x=[2]~end` **2>** `<script>: 1: typeset: not found~<script>: 2: typeset: not found` | `d=0~st=1 x=[1]~end` **2>** `<script>: line 4: x: readonly variable` | `d=0` **2>** `<script>: line 4: x: readonly variable` *(status 1)* | `d=0~st=1 x=[1]~end` **2>** `<script>: line 4: x: readonly variable` | `d=0` **2>** `<script>: line 4: x: is read only` *(status 1)* | `d=0` **2>** `<script>:4: read-only variable: x` *(status 1)* | `d=127~st=0 x=[2]~end` **2>** `<script>: line 1: typeset: not found~<script>: line 2: typeset: not found` |
+| `axis/command-v-reports-a-pathname-operand` | `./bb/tool` | `./bb/tool` | `./bb/tool` | `./bb/tool` | `<tmp>/./bb/tool` | `./bb/tool` | `./bb/tool` |
+| `axis/command-v-does-not-clean-a-pathname-operand` | `./bb/../bb/tool` | `./bb/../bb/tool` | `./bb/../bb/tool` | `./bb/../bb/tool` | `<tmp>/./bb/../bb/tool` | `./bb/../bb/tool` | `./bb/../bb/tool` |
 | `glob/a-trailing-slash-run-is-reproduced-except-in-bash` | `[ax_dir//][cx//][sym//]` | `[ax_dir/][cx/][sym/]` | `[ax_dir/][cx/][sym/]` | `[ax_dir/][cx/][sym/]` | `[ax_dir//][cx//][sym//]` | `[ax_dir//][cx//][sym//]` | `[ax_dir//][cx//][sym//]` |
 | `glob/an-empty-component-behind-a-matched-one` | `[cx//ax][sym//ax]` | `[cx/ax][sym/ax]` | `[cx/ax][sym/ax]` | `[cx/ax][sym/ax]` | `[cx//ax][sym//ax]` | `[cx//ax][sym//ax]` | `[cx//ax][sym//ax]` |
 | `axis/assign-through-an-expansion-onto-a-list` | **2>** `<script>: 2: @: bad variable name` *(status 2)* | `after` **2>** `<script>: line 2: $@: cannot assign in this way~<script>: line 3: $*: cannot assign in this way` | `after` **2>** `<script>: line 2: $@: cannot assign in this way~<script>: line 3: $*: cannot assign in this way` | `after` **2>** `<script>: line 2: $@: cannot assign in this way~<script>: line 3: $*: cannot assign in this way` | **2>** `<script>: line 2: ${@:=abc}: bad substitution` *(status 1)* | **2>** `<script>:2: not an identifier: @` *(status 1)* | **2>** `<script>: line 2: @: bad variable name` *(status 2)* |
@@ -3208,6 +3210,14 @@ grades it and nothing drift-checks it either, for the same reason.
   x=2
   echo "st=$? x=[$x]"
   echo end
+  ```
+- `axis/command-v-reports-a-pathname-operand` — POSIX says a command_name with a slash in it "shall be written as an absolute pathname", and ksh93 is the only column that does it: it writes the working directory with the operand stuck on the end, `./` and all. bash 5.3, bash 3.2, bash-as-sh, zsh, dash and BusyBox ash write the operand back unchanged. We joined *and* cleaned in all four dialects, which matched nobody — wrong for the five by resolving at all and wrong for ksh93 by tidying the `./` away, so `cmd=$(command -v ./helper)` handed back a string the script had not named (#2931)
+  ```sh
+  mkdir -p bb; printf '#!/bin/sh\n:\n' > bb/tool; chmod +x bb/tool; command -v ./bb/tool
+  ```
+- `axis/command-v-does-not-clean-a-pathname-operand` — the half that says ksh93's absolutization is a prefix join and not a path normalization: the dot-dot survives in the middle of its answer, exactly as the `./` does, and the other six still write the operand back. A cleaning would shorten both readings to the same two shapes, which is why the row above cannot show this on its own
+  ```sh
+  mkdir -p bb; printf '#!/bin/sh\n:\n' > bb/tool; chmod +x bb/tool; command -v ./bb/../bb/tool
   ```
 - `glob/a-trailing-slash-run-is-reproduced-except-in-bash` — where the panel splits, and the reason the row above is not read as "normalize the end to one slash": dash, ksh93, zsh and ash reproduce the run as written and answer `[ax_dir//][cx//][sym//]`, while bash 5.3, bash-as-sh and bash 3.2 collapse it to `[ax_dir/][cx/][sym/]`. Reproducing it is the rule the mid-pattern case already follows unanimously — `cx//*` is `cx//ax` in all seven — so it is what this shell does in every dialect; bash's collapse is recorded and not implemented, being a shape no script writes (#1350)
   ```sh
@@ -19396,6 +19406,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `path/missing-path-is-not-a-missing-name` | `st=127` **2>** `<shell>: 1: ./nope: not found` | `st=127` **2>** `<shell>: line 1: ./nope: No such file or directory` | `st=127` **2>** `<shell>: line 1: ./nope: No such file or directory` | `st=127` **2>** `<shell>: ./nope: No such file or directory` | `st=127` **2>** `<shell>: ./nope: not found` | `st=127` **2>** `<shell>:1: no such file or directory: ./nope` | `st=127` **2>** `<shell>: ./nope: not found` |
 | `cmd/command-v-names-a-builtin` | `echo` | `echo` | `echo` | `echo` | `echo` | `echo` | `echo` |
 | `cmd/command-v-names-an-external-by-path` | `/bin/ls` | `/bin/ls` | `/bin/ls` | `/bin/ls` | `/bin/ls` | `/bin/ls` | `/bin/ls` |
+| `cmd/command-v-keeps-an-absolute-operand-as-written` | `/bin/./ls` | `/bin/./ls` | `/bin/./ls` | `/bin/./ls` | `/bin/./ls` | `/bin/./ls` | `/bin/./ls` |
 | `cmd/command-v-on-nothing` | `st=127` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` | `st=127` |
 | `cmd/command-v-names-a-function` | `f` | `f` | `f` | `f` | `f` | `f` | `f` |
 | `cmd/command-bypasses-a-function` | `hi` | `hi` | `hi` | `hi` | `hi` | `hi` | `hi` |
@@ -19493,6 +19504,10 @@ grades it and nothing drift-checks it either, for the same reason.
 - `cmd/command-v-names-an-external-by-path` — an external is answered by the path, because that is the part a script cannot work out for itself
   ```sh
   command -v ls
+  ```
+- `cmd/command-v-keeps-an-absolute-operand-as-written` — unanimous, and the control on the two rows above: an absolute operand has nothing to join to, so every column writes it back byte for byte — the `/.` included. It is the same reason `command -v /bin/ls` was right here while a relative operand was not, and it is what says the fix is about the join rather than about paths in general
+  ```sh
+  command -v /bin/./ls
   ```
 - `cmd/command-v-on-nothing` — nothing found prints nothing at all, which is what makes `command -v x >/dev/null` the usual spelling — and dash answers 127 where the others answer a plain failure
   ```sh

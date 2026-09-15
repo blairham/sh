@@ -100,6 +100,10 @@ func Semantics() interp.Semantics {
 	// so the positional spelling is the whole of the question here.
 	s.UnsplitAtListJoinsOnIFS = interp.Yes
 	s.CommandNotFoundStatusIsNotFound = interp.Yes
+	// `command -v ./bb/tool` is `./bb/tool` here: the operand back, not the
+	// absolute path POSIX asks for. Measured 2026-09-14 against 0.5.12, the
+	// panel's closest reading of the standard declining to follow it.
+	s.APathnameOperandIsReportedAbsolute = interp.No
 	s.SetFTurnsOffGlobbing = interp.Yes
 	// Neither editing mode is ever selected on its own here — measured
 	// 2026-09-11, `set -o` reports both off in a script and under `-i`.

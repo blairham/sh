@@ -242,7 +242,11 @@ func (r *Runner) hashBuiltinIsRefused() bool {
 //
 // It is in a helper rather than inside lookPath because lookPath is the
 // *execution* path too, where the answer is not this one: running a command
-// hashes it in all four, so hashCommandRun stays there unconditionally.
+// hashes it in all four, so hashCommandRun stays there unconditionally. What it
+// returns is still the path on disk: how a *pathname operand* is written back
+// is Runner.reportedPath's question, and it is asked where the answer is
+// printed rather than here, because `type -t ./x` writes `file` in every
+// column and must not be refused for an axis it cannot show.
 func (r *Runner) lookPathReporting(name string) (string, error) {
 	path, err := r.lookPath(name)
 	if err != nil {

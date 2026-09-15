@@ -36,6 +36,13 @@ func TestTypeSaysWhatANameWouldRun(t *testing.T) {
 			out, st := run(t, tc.src, func(r *Runner) {
 				sem := CoreSemantics()
 				sem.TypePrintsFunctionBody = No
+				// The external case names a path, and how a pathname operand
+				// is written back is an axis — see
+				// Semantics.APathnameOperandIsReportedAbsolute. Answered so
+				// this test stays about the wording: an *absolute* operand is
+				// the same string under either reading, which is what makes
+				// it the safe fixture here.
+				sem.APathnameOperandIsReportedAbsolute = No
 				r.Semantics, r.Diagnostics = &sem, &dg
 			})
 			if st != 0 {

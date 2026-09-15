@@ -1941,6 +1941,12 @@ func Semantics() interp.Semantics {
 	// The letters `typeset` reads here. `-g` it simply does not have, and
 	// there is no `local` (see Register), so LocalOptions stays empty.
 	//
+	// unanswered LocalDashSavesTheShellOptions: `local -` is an operand of a
+	// builtin this shell does not have, so there is no spelling of the
+	// question to put to it. Measured 2026-09-15: `local -` here is
+	// `local: not found` and the option the body set survives, which is what
+	// a missing command does rather than an answer about the operand.
+	//
 	// `-f` is here now (#1494), and it says the function back *verbatim*:
 	// the parser keeps the definition's own characters and the listing
 	// writes them, terminator and all — see

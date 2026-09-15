@@ -2675,6 +2675,11 @@ func Semantics() interp.Semantics {
 	// has, special parameters and tied arrays included: a fact about this
 	// engine's parameter table, refused as unimplemented rather than
 	// approximated.
+	// `-` is a parameter here — the option letters in effect — so `local -`
+	// is a declaration of it and not the save the other three read it as.
+	// Measured 2026-09-15: the options a body sets are still set after it
+	// returns.
+	s.LocalDashSavesTheShellOptions = interp.No
 	s.BareLocalListing = interp.BareLocalListsEveryParameter
 	// The same table for the other word, which is what zsh writes for it.
 	s.BareTypesetListing = interp.BareLocalListsEveryParameter

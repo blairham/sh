@@ -76,9 +76,9 @@
 # Still held out, and now with the file each went to: `kill` on a job
 # specification, which dash refuses entirely (dash/jobs.tests); `disown`,
 # which bash and zsh have and ksh93 and dash do not; `$!` before any
-# background command, which is 0 in zsh and unset in the other three; and
-# `wait` with several operands, which reports the first in zsh and the last
-# everywhere else (both zsh/jobs.tests).
+# background command, which is 0 in zsh and unset in the other three; and the
+# status `jobs` gives a job specification against an empty table, which is
+# 127 in zsh where bash and ksh93 say 1 and dash says 2 (both zsh/jobs.tests).
 #
 # And held out because no reference repeats it: `wait` on a job specification
 # naming a job that has already ended. bash, ksh93 and dash keep a finished
@@ -87,6 +87,16 @@
 # real zsh-only answer and it still cannot be measured, because zsh gives it
 # only once it has got round to reaping — so the file asks the jobspec of
 # `jobs` while the job is held open, and asks the status of the pid (#2974).
+#
+# Held out for the same reason, and it used to be filed as a dialect answer:
+# `wait` with several operands. POSIX makes the status the last operand's and
+# the whole panel gives that — *once the children are reaped*. Before they
+# are, zsh reports the older job instead, whichever order the operands were
+# written in, so `wait "$c" "$d"` and `wait "$d" "$c"` both answer with `$c`'s
+# status. zsh/jobs.tests had that written down as "zsh reports the first
+# operand", which it does not: it was the reap window, and holding the jobs
+# open on fifos does not reach it either — 54 runs in 120 split under load
+# (#2993). One operand is a fact and stays; several is not askable.
 
 # Nothing to wait for is a success, not an error.
 wait; printf 'wait with nothing -> %s\n' "$?"

@@ -9,41 +9,84 @@
 # set to 0 from the start, and a script that writes `if [ -n "$!" ]` to mean
 # "have I started one" gets yes on a shell that has started nothing.
 #
-# The second is `wait` with more than one operand. POSIX says the status is
-# the *last* operand's, and bash, ksh93 and dash all report that; zsh reports
-# the first. So `wait "$a" "$b"` is a different question here, and a script
-# that waits for a batch and checks the status is reading a different job's.
+# The second is the status `jobs` gives a job specification when the table is
+# empty. zsh answers 127 — the status of a command that is not there — where
+# bash and ksh93 answer 1 and dash answers 2. It is the same 127 zsh spends on
+# a `wait` that cannot resolve a spec, so the shell treats "no such job" as
+# "no such command" throughout, and a script testing `jobs %1` against 1 to
+# mean "nothing running" reads a shell error instead. Every spelling of a spec
+# is asked, because the status belongs to the lookup and not to the spelling.
 #
 # Nothing here prints a pid or a job number. `$!` is compared and used as an
-# operand, never written out, which is the rule the core file states and the
-# reason most of job control is unaskable in a suite with no expected output.
+# operand, and written out only where it is 0 or empty and can therefore be
+# neither — which is the rule the core file states and the reason most of job
+# control is unaskable in a suite with no expected output.
+#
+# ---- what used to be here, and what it was ----
+#
+# This file's second answer was `wait` with more than one operand: POSIX makes
+# the status the *last* operand's, bash, ksh93 and dash all report that, and
+# zsh was written down as reporting the first. That is not a fact about zsh.
+# It is the reap window #2963 and #2974 were both caught by, read as a dialect
+# answer (#2993). Measured 2026-09-15 with two jobs exiting 3 and 4 in that
+# order:
+#
+#   asked immediately, zsh answers 3 — and it answers 3 with the operands
+#     *reversed* as well, so it is not reporting the first operand, it is
+#     reporting the older job
+#   asked after a builtin-only busy loop, so both children are certainly
+#     reaped, zsh answers 4 in start order and 3 reversed — the last operand,
+#     exactly like the other three
+#
+# Which of the two a run gets is wall-clock. Holding the jobs open on fifos
+# and releasing them first — the pattern core/jobs.tests uses — does not fix
+# it either: 54 runs in 120 split under load, the majority landing on the
+# reaped answer. So the question is not askable here in any spelling, and the
+# only thing that was ever zsh-only about it was which side of a scheduling
+# decision the measurement fell on.
 
-# `$!` before any background command. Printed through the `-` default, so what
-# is compared is "set" against "unset" rather than a number.
+# `$!` before any background command, asked the four ways a script asks it.
+# Printed through the default and the alternative, so what is compared is
+# "set" against "unset"; printed bare too, because the only two values it can
+# have here are `0` and nothing and neither is a pid.
 printf 'before any job [%s]\n' "${!-unset}"
+printf 'before any job, the alternative [%s]\n' "${!+set}"
+printf 'before any job, written out [%s]\n' "$!"
+if [ -n "$!" ]; then printf 'non-empty before any job -> yes\n'; else printf 'non-empty before any job -> no\n'; fi
 
-# After one, it is a number — asked as a comparison for the reason above.
+# A job specification against an empty table. Asked in every spelling — the
+# current job, its two signs, and two numbers, one of which was never issued —
+# because what is being measured is the status of a lookup that found nothing
+# and not the grammar of the word.
+jobs %% 2> /dev/null; printf 'jobs %%%% with an empty table -> %s\n' "$?"
+jobs %+ 2> /dev/null; printf 'jobs %%+ with an empty table -> %s\n' "$?"
+jobs %- 2> /dev/null; printf 'jobs %%- with an empty table -> %s\n' "$?"
+jobs %1 2> /dev/null; printf 'jobs %%1 with an empty table -> %s\n' "$?"
+jobs %2 2> /dev/null; printf 'jobs %%2 with an empty table -> %s\n' "$?"
+
+# The control, and it is what makes the five above a statement about the spec
+# rather than about the builtin: `jobs` with nothing after it succeeds on an
+# empty table in every column.
+jobs > /dev/null 2>&1; printf 'jobs with no spec at all -> %s\n' "$?"
+
+# The other control, and it is the one that says what the 127 belongs to. Give
+# `fg` and `bg` the same empty table and the same spec and zsh answers 1, the
+# same 1 bash and ksh93 give — so the status is `jobs`'s own answer to a
+# lookup that found nothing, not this shell's answer to every missing job
+# spec. Both are run with their output caught, because refusing is the case
+# and the four sentences they refuse with are not.
+fg %1 > /dev/null 2>&1; printf 'fg %%1 with an empty table -> %s\n' "$?"
+bg %1 > /dev/null 2>&1; printf 'bg %%1 with an empty table -> %s\n' "$?"
+
+# After one job, `$!` is a number — asked as a comparison, since a pid does
+# not reproduce.
 ( exit 0 ) &
 printf 'after one job, positive [%s]\n' "$(( $! > 0 ))"
 wait
 
-# `wait` with two operands. The two jobs exit with different statuses, so
-# which one is reported is the whole content of the case, and they are started
-# in the order their statuses read.
-( exit 3 ) & c=$!
-( exit 4 ) & d=$!
-wait "$c" "$d"
-printf 'two operands -> %s\n' "$?"
-
-# The other order, so a shell that always reported 3 for some reason unrelated
-# to operand position would still be told apart.
-( exit 4 ) & e=$!
-( exit 3 ) & f=$!
-wait "$e" "$f"
-printf 'the other order -> %s\n' "$?"
-
-# One operand is unambiguous everywhere, which is what makes the pair above a
-# statement about operand *position* rather than about `wait`.
+# One operand is unambiguous everywhere, and it is here as the control for
+# what was removed above: `wait` reports the status of the job it was given,
+# and it is only with *several* operands that the question stops being a fact.
 ( exit 5 ) & g=$!
 wait "$g"
 printf 'one operand -> %s\n' "$?"

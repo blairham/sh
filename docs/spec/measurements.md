@@ -12199,6 +12199,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | `status/an-assignment-reports-its-substitution` | `st=1~st=0` | `st=1~st=0` | `st=1~st=0` | `st=1~st=0` | `st=1~st=0` | `st=1~st=0` | `st=1~st=0` |
 | `errexit/assignment-takes-the-substitution` | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* |
 | `nounset/a-bare-array-name-whose-base-element-is-gone` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: a: unbound variable` *(status 127)* | **2>** `<shell>: line 1: a: unbound variable` *(status 127)* | **2>** `<shell>: a: unbound variable` *(status 127)* | **2>** `<shell>: a[0]: parameter not set` *(status 1)* | `[x y z]` **2>** `<shell>:1: a: assignment to invalid subscript range` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
+| `nounset/a-subscript-that-names-no-element` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: a[9]: unbound variable` *(status 127)* | **2>** `<shell>: line 1: a[9]: unbound variable` *(status 127)* | **2>** `<shell>: a[9]: unbound variable` *(status 127)* | **2>** `<shell>: a[9]: parameter not set` *(status 1)* | **2>** `<shell>:1: a[9]: parameter not set` *(status 1)* | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
+| `nounset/a-subscript-on-a-name-that-holds-nothing` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: nope[1]: unbound variable` *(status 127)* | **2>** `<shell>: line 1: nope[1]: unbound variable` *(status 127)* | **2>** `<shell>: nope[1]: unbound variable` *(status 127)* | **2>** `<shell>: nope[1]: parameter not set` *(status 1)* | **2>** `<shell>:1: nope[1]: parameter not set` *(status 1)* | **2>** `<shell>: syntax error: bad substitution` *(status 2)* |
+| `nounset/a-key-the-association-does-not-have` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[k]=v: not found~<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: m[q]: unbound variable` *(status 127)* | **2>** `<shell>: line 1: m[q]: unbound variable` *(status 127)* | **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~<shell>: q: unbound variable` *(status 127)* | **2>** `<shell>: m[(null)]: parameter not set` *(status 1)* | **2>** `<shell>:1: m[q]: parameter not set` *(status 1)* | **2>** `<shell>: typeset: not found~<shell>: m[k]=v: not found~<shell>: syntax error: bad substitution` *(status 2)* |
+| `nounset/a-subscript-on-a-name-holding-one-string` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: v[5]: unbound variable` *(status 127)* | **2>** `<shell>: line 1: v[5]: unbound variable` *(status 127)* | **2>** `<shell>: v[5]: unbound variable` *(status 127)* | **2>** `<shell>: v[5]: parameter not set` *(status 1)* | `[]~after` | **2>** `<shell>: syntax error: bad substitution` *(status 2)* |
+| `nounset/the-refusal-names-the-subscript-as-written` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: a[$i]: unbound variable` *(status 127)* | **2>** `<shell>: line 1: a[$i]: unbound variable` *(status 127)* | **2>** `<shell>: a[$i]: unbound variable` *(status 127)* | **2>** `<shell>: a[9]: parameter not set` *(status 1)* | **2>** `<shell>:1: a[$i]: parameter not set` *(status 1)* | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
 | `opt/set-v-echoes-lines-as-read` | `a~b` **2>** `echo a~echo b` | `a~b` **2>** `echo a~echo b` | `a~b` **2>** `echo a~echo b` | `a~b` **2>** `echo a~echo b` | `a~b` **2>** `echo a~echo b` | `a~b` **2>** `echo a~echo b` | `a~b` **2>** `echo a~echo b` |
 | `opt/set-e-carries-the-err-trap` | `done` **2>** `trap: ERR: bad trap` | `ERR~ERR~done` | `ERR~ERR~done` | `ERR~ERR~done` | *(no output, status 2)* | `ERR~done` | `ERR~ERR~done` |
 | `opt/set-n-reads-and-never-runs` | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* |
@@ -12846,6 +12851,26 @@ grades it and nothing drift-checks it either, for the same reason.
 - `nounset/a-bare-array-name-whose-base-element-is-gone` — the loudest form of the same reading, and the one that fails in the opposite direction: with the base element gone the bare name is not set, so `set -u` refuses it and the shell gives up — 127 in bash through `-c` and 1 in ksh93, the statuses `nounset/unset-variable-from-a-command-string` already pins. ksh93's sentence names `a[0]` rather than `a`, which says out loud which element a bare name is. We printed a value and reported 0
   ```sh
   a=(x y z); unset "a[0]"; set -u; echo "[$a]"
+  ```
+- `nounset/a-subscript-that-names-no-element` — the refusal `nounset/a-bare-array-name-whose-base-element-is-gone` is the subject of, one bracket further in. Every column with arrays refuses an index past the end and names the element — `a[9]`, not `a` — where we printed an empty string and reported 0, which is the outcome nothing downstream can tell from a real element holding nothing. `echo after` is the half a status alone cannot show: the three that refuse never reach it (#2911)
+  ```sh
+  a=(x y z); set -u; echo "[${a[9]}]"; echo after
+  ```
+- `nounset/a-subscript-on-a-name-that-holds-nothing` — the same refusal where the *name* is what is missing rather than the element, which is the shape a script meets when it reads an array a branch above never built. Unanimous among the three with arrays and named the same way, brackets and all — so the check is about the subscript rather than about what the name holds
+  ```sh
+  set -u; echo "[${nope[1]}]"; echo after
+  ```
+- `nounset/a-key-the-association-does-not-have` — the third reading of one subscript: a key rather than an index. bash 5.3 and zsh both name `m[q]` and ksh93 prints `m[(null)]`, which is that shell showing an unset pointer and is recorded rather than reproduced. bash 3.2 has no `typeset -A` at all and refuses the declaration first, so its cell measures the missing option and not this
+  ```sh
+  typeset -A m; m[k]=v; set -u; echo "[${m[q]}]"; echo after
+  ```
+- `nounset/a-subscript-on-a-name-holding-one-string` — the boundary of the row above, and the one place the columns part: a subscript on a scalar is a *character* in zsh, where position 5 of a one-character string is empty at 0, and a one-element array in bash and ksh93, where element 5 is missing and refused. So it falls out of `Semantics.ScalarSubscriptIsACharacter` rather than needing an axis about `set -u`, and a check written without it would have made zsh refuse a substring
+  ```sh
+  v=x; set -u; echo "[${v[5]}]"; echo after
+  ```
+- `nounset/the-refusal-names-the-subscript-as-written` — which text the refusal writes back, which only a subscript that had to be expanded can ask: bash 5.3 and zsh both say `a[$i]` and ksh93 says `a[9]`. `Diagnostics.UnboundElementNamesTheSubscriptsValue`, and the reason the subject is a field rather than something read off the source — the same three columns all say `a[9]` for a subscript typed as `9`
+  ```sh
+  i=9; a=(x); set -u; echo "[${a[$i]}]"
   ```
 - `opt/set-v-echoes-lines-as-read` — the verbose option writes each line back as it is read — not the line that turned it on, which was spent before it took effect. Unanimous, and reachable only from a file: a -c string is read whole before it runs
   ```sh

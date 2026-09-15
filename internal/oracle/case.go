@@ -7235,6 +7235,31 @@ echo "st=$?"`,
 		Why:     "the loudest form of the same reading, and the one that fails in the opposite direction: with the base element gone the bare name is not set, so `set -u` refuses it and the shell gives up — 127 in bash through `-c` and 1 in ksh93, the statuses `nounset/unset-variable-from-a-command-string` already pins. ksh93's sentence names `a[0]` rather than `a`, which says out loud which element a bare name is. We printed a value and reported 0",
 	},
 	{
+		ID: "nounset/a-subscript-that-names-no-element", Category: "shell options",
+		Snippet: `a=(x y z); set -u; echo "[${a[9]}]"; echo after`,
+		Why:     "the refusal `nounset/a-bare-array-name-whose-base-element-is-gone` is the subject of, one bracket further in. Every column with arrays refuses an index past the end and names the element — `a[9]`, not `a` — where we printed an empty string and reported 0, which is the outcome nothing downstream can tell from a real element holding nothing. `echo after` is the half a status alone cannot show: the three that refuse never reach it (#2911)",
+	},
+	{
+		ID: "nounset/a-subscript-on-a-name-that-holds-nothing", Category: "shell options",
+		Snippet: `set -u; echo "[${nope[1]}]"; echo after`,
+		Why:     "the same refusal where the *name* is what is missing rather than the element, which is the shape a script meets when it reads an array a branch above never built. Unanimous among the three with arrays and named the same way, brackets and all — so the check is about the subscript rather than about what the name holds",
+	},
+	{
+		ID: "nounset/a-key-the-association-does-not-have", Category: "shell options",
+		Snippet: `typeset -A m; m[k]=v; set -u; echo "[${m[q]}]"; echo after`,
+		Why:     "the third reading of one subscript: a key rather than an index. bash 5.3 and zsh both name `m[q]` and ksh93 prints `m[(null)]`, which is that shell showing an unset pointer and is recorded rather than reproduced. bash 3.2 has no `typeset -A` at all and refuses the declaration first, so its cell measures the missing option and not this",
+	},
+	{
+		ID: "nounset/a-subscript-on-a-name-holding-one-string", Category: "shell options",
+		Snippet: `v=x; set -u; echo "[${v[5]}]"; echo after`,
+		Why:     "the boundary of the row above, and the one place the columns part: a subscript on a scalar is a *character* in zsh, where position 5 of a one-character string is empty at 0, and a one-element array in bash and ksh93, where element 5 is missing and refused. So it falls out of `Semantics.ScalarSubscriptIsACharacter` rather than needing an axis about `set -u`, and a check written without it would have made zsh refuse a substring",
+	},
+	{
+		ID: "nounset/the-refusal-names-the-subscript-as-written", Category: "shell options",
+		Snippet: `i=9; a=(x); set -u; echo "[${a[$i]}]"`,
+		Why:     "which text the refusal writes back, which only a subscript that had to be expanded can ask: bash 5.3 and zsh both say `a[$i]` and ksh93 says `a[9]`. `Diagnostics.UnboundElementNamesTheSubscriptsValue`, and the reason the subject is a field rather than something read off the source — the same three columns all say `a[9]` for a subscript typed as `9`",
+	},
+	{
 		ID: "array/removing-one-element", Category: "expansion",
 		Snippet: `a=(p q r); unset "a[2]"; echo "n=${#a[@]} all=[${a[@]}]"`,
 		Why:     "the same question reached from the other side, and `unset a[i]` had been doing nothing at all: the subscript was read as part of the name, so a name that was never in the table was deleted from it. What the hole then looks like is the same axis",

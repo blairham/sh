@@ -1069,8 +1069,10 @@ func bareAssignmentFlags(d declaration) []string {
 	if d.isAssoc {
 		flags = append(flags, "-A")
 	}
+	compoundAt := -1
 	if d.compoundVar {
 		flags = append(flags, "-C")
+		compoundAt = len(flags) - 1
 	}
 	if d.hidden && !d.hidesTheValue {
 		// The inert reading of `-H`, which is the only one that reaches this
@@ -1099,7 +1101,37 @@ func bareAssignmentFlags(d declaration) []string {
 			flags = append(flags, itoa(d.base))
 		}
 	}
-	return flags
+	return dropACompoundLetterBesideAnother(flags, compoundAt)
+}
+
+// dropACompoundLetterBesideAnother removes the `C` where the listing has some
+// other letter to write, which is the only shape it is written in.
+//
+// A correction rather than an axis: one dialect has compound variables at all,
+// so there is no second answer to choose between. Measured 2026-09-14 on
+// ksh93u+ 2012-08-01, `env -i PATH=/usr/bin:/bin` with a scratch HOME:
+//
+//	c=(a=1); typeset -p c                  typeset -C c=(a=1)
+//	typeset -C c=(a=1); typeset -p c       typeset -C c=(a=1)
+//	readonly c=(a=1); typeset -p c         typeset -r c=(a=1)
+//	typeset -rC c=(a=1); typeset -p c      typeset -r c=(a=1)
+//	c=(a=1); typeset -t c; typeset -p c    typeset -t c=(a=1)
+//	readonly c=(); typeset -p c            typeset -r c=()
+//
+// Rows two and four are what say this is about the *letter written back* and
+// not about which letters the declaration carried: the same `-C` is spelled
+// on the command in both, and only the one with nothing beside it survives.
+// The parentheses are written either way, so a reader can still see the kind
+// — it is the letter that is not repeated.
+//
+// at is where the `C` was appended, or below zero where none was. It is taken
+// rather than searched for because `-C` is also how a *base* would be spelled
+// if one were ever 12, and a scan for the string would find that instead.
+func dropACompoundLetterBesideAnother(flags []string, at int) []string {
+	if at < 0 || len(flags) == 1 {
+		return flags
+	}
+	return append(flags[:at:at], flags[at+1:]...)
 }
 
 // bareAssignmentHead is everything a bare-assignment listing writes in front

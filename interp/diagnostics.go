@@ -2023,6 +2023,16 @@ type Diagnostics struct {
 	// here; the other two pair the words off and say nothing (#2611).
 	IndexArrayIntoATable string
 
+	// CompoundIsNotExportable is what the one dialect with a fourth kind says
+	// about an export letter written over a compound variable, which has no
+	// environment representation at all. Two verbs: %[1]s the name and %[2]s
+	// the builtin the line was written with, which is `export` or `typeset`.
+	//
+	// Empty means the dialect does not refuse it, which is every dialect
+	// without compound variables — there is no such value for the letter to
+	// meet. See Runner.exportRefusesACompound for the measurement.
+	CompoundIsNotExportable string
+
 	// AppendToANumericSlice is what the shell that splices characters says
 	// when `+=` is written at a subscript of a name carrying an arithmetic
 	// attribute. It takes the name, which that shell's own sentence does not

@@ -1052,6 +1052,13 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 			name = base
 			df.array = df.array || !df.assoc
 		}
+		if r.exportRefusesACompound(name, df) {
+			// The export letter over a compound, which one shell will not
+			// have at all. Ahead of the shadow and of every attribute
+			// because nothing about the operand is to happen: the letter
+			// does not land, the value is not stored, and the script ends.
+			return r.status
+		}
 		// Read before the attributes are applied, because `-x` on this very
 		// declaration would otherwise answer a question asked about the name
 		// it shadows. See shadowedExport.
@@ -2762,6 +2769,72 @@ func arrayLiteralOperands(c *syntax.SimpleCmd) map[string]bool {
 	var names map[string]bool
 	for _, a := range c.Assigns {
 		if !a.Operand || !a.IsArray {
+			continue
+		}
+		if names == nil {
+			names = map[string]bool{}
+		}
+		names[a.Name] = true
+	}
+	return names
+}
+
+// exportRefusesACompound reports — and refuses — an export letter written over
+// a name whose value is a compound variable, which is the one kind the
+// environment has no representation of at all.
+//
+// A correction rather than an axis: one dialect in the panel has the fourth
+// kind, so there is no second answer to choose between. Measured 2026-09-14 on
+// ksh93u+ 2012-08-01, `env -i PATH=/usr/bin:/bin` with a scratch HOME, over
+// `-c`, a script file and standard input alike — status 1 and the script ends
+// in each:
+//
+//	export c=(a=1)               export: c: only simple variables can be exported
+//	c=(a=1); export c            the same
+//	c=(a=1); typeset -x c        typeset: c: only simple variables can be exported
+//	typeset -Cx c=(a=1)          the same
+//	typeset -x a=()              typeset: a: only simple variables can be exported
+//	c=(a=1); typeset -Cx d=c     typeset: d: only simple variables can be exported
+//
+// The last row is why the name reported is the operand's and not the value's:
+// the copy names `d`. The fifth is why an *empty* parenthesized literal
+// belongs here — `a=()` is a compound in that shell, not an empty array, which
+// is what its own `typeset -p a` says.
+//
+// Two neighbours are the control, and both are taken at 0 there: `typeset -x
+// a=(p q)` exports an index array and `typeset -Ax m` a table. So it is the
+// compound alone and not every parenthesized value, which is what keeps this
+// from being a refusal of arrays wearing a compound's name.
+//
+// The three ways a name is one on this line are all asked, because they are
+// three different moments: it is already a compound, the `-C` letter is making
+// it one, or the operand carries a compound literal for it to become. A check
+// that waited for the store would have let the attribute land first.
+func (r *Runner) exportRefusesACompound(name string, f declareFlags) bool {
+	if !f.export || f.remove || r.diag().CompoundIsNotExportable == "" {
+		return false
+	}
+	if !r.isCompoundVariable(name) && !f.compoundVar && !r.compoundOperands[name] {
+		return false
+	}
+	r.fatal("%s\n", Wording(r.diag().CompoundIsNotExportable,
+		"%[2]s: %[1]s: only simple variables can be exported",
+		name, r.builtinComplaintName(r.inBuiltin)))
+	return true
+}
+
+// compoundLiteralOperands is arrayLiteralOperands narrowed to the parenthesized
+// operands whose items are *assignments* — a compound variable's body — which
+// is the shape the parser kept apart as Assign.Members.
+//
+// Two functions rather than one map with two bits in it, because the two are
+// read by different questions and one of them existed first: widening
+// literalOperands to carry a kind would have made every caller of it decide
+// something none of them was asking.
+func compoundLiteralOperands(c *syntax.SimpleCmd) map[string]bool {
+	var names map[string]bool
+	for _, a := range c.Assigns {
+		if !a.Operand || a.Members == nil {
 			continue
 		}
 		if names == nil {

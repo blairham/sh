@@ -2423,6 +2423,17 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 	}
 	for _, a := range args {
 		name, value, hasValue, appends := declarationOperand(a)
+		if r.exportRefusesACompound(name, declareFlags{
+			export: true,
+			remove: strings.ContainsRune(opts, 'n'),
+		}) {
+			// The same refusal `typeset -x` meets, at the other spelling.
+			// This loop is where `export` declares when no letter sent it
+			// through declareNames, so the check has to stand in both — and
+			// it is one function so the two cannot come to disagree about
+			// which values are exportable.
+			return r.status
+		}
 		if base, subs, subscripted := r.operandSubscripts("export", name); subscripted && hasValue {
 			// `export a[1]=v` in the two dialects that take the operand:
 			// measured, ksh93u+ and zsh 5.9.2 both write the element, and

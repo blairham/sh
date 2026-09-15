@@ -94,7 +94,10 @@ func (r *Runner) declareElement(base, sub, value string, f declareFlags, shadows
 	// badSubscriptOperand and the readonly refusal already do it.
 	outer := r.inBuiltin
 	r.inBuiltin = ""
-	defer func() { r.inBuiltin = outer }()
+	defer func() {
+		r.inBuiltin = outer
+		r.storeRefusalEndedTheDeclaration()
+	}()
 	key, evaluated, isKey := r.subscriptedOperandKey(base, sub, tableBefore)
 	switch {
 	case r.unspecified:
@@ -124,6 +127,39 @@ func (r *Runner) declareElement(base, sub, value string, f declareFlags, shadows
 	if f.readonly && !f.readonlyOff {
 		r.markReadonly(base)
 	}
+}
+
+// storeRefusalEndedTheDeclaration is the status a declaration leaves behind
+// when the *store* refused its element and ended the shell.
+//
+// One dialect leaves 0 there where every other route to the same refusal
+// leaves 1, and it does so only when the program came from `-c`: measured,
+// `zsh -f -c 'a=(x y); typeset "a[0]"=v'` exits 0 and the same line in a
+// script file exits 1, with byte-identical stderr and nothing after it
+// running on either route (#1770). So what moves is the number alone.
+//
+// Called from the one place the builtin's name is put aside, and that is the
+// whole of the scoping. The region exists because zsh's store complains
+// without naming a builtin where the builtin's own refusals name one, and the
+// route split follows exactly the same line: every refusal raised inside the
+// region moves and every one raised outside it — the readonly refusal, the
+// three inconsistent-type ones, a name that is not a name — stays at 1. A
+// rule written instead as "a bad subscript" or as "a declaration that ends
+// the script" would have taken all six of those with it.
+//
+// Both fields, for the reason setArrayOperands gives: controlExit is what Run
+// reports and the builtin's own return value is read separately, so a caller
+// looking at either has to see the same answer. declareElement returns
+// nothing, so r.status is the whole of it here.
+func (r *Runner) storeRefusalEndedTheDeclaration() {
+	if r.ctl != controlExit || r.Route != RouteCommandString {
+		return
+	}
+	if !r.ask(r.sem().StoreRefusalOfADeclaredElementLeavesZeroFromCommandString,
+		"a declaration whose store refused its element leaving 0 behind when the program came from an argument") {
+		return
+	}
+	r.status = 0
 }
 
 // elementDeclarationRefused asks the three axes a declaration of an element

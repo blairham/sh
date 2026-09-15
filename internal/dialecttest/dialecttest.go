@@ -94,6 +94,16 @@ type Base struct {
 	// runs on, and because a runner claiming a terminal it does not have
 	// would grant job control nothing backs.
 	Terminal bool
+	// Route is where the program came from, which a front end reads off the
+	// invocation and which two measured behaviors turn on: `set -A` with a
+	// bad name and a declaration whose store refuses its element each leave
+	// a different status behind under `-c` than from a script file, with
+	// byte-identical output on both.
+	//
+	// RouteUnspecified is the default and is neither of the three, which is
+	// what a runner built by hand has always answered — so a case that does
+	// not mean to ask about the invocation is unchanged by this existing.
+	Route interp.Route
 }
 
 // Runner returns a runner wired to all four of the preset's vectors, with
@@ -117,6 +127,7 @@ func (p Preset) Runner(b Base) *interp.Runner {
 		Name:    name, Dir: b.Dir, Vars: b.Vars, Env: b.Env,
 		Interactive: b.Interactive,
 		Terminal:    b.Terminal,
+		Route:       b.Route,
 	}
 	p.Apply(r)
 	return r

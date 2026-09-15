@@ -746,10 +746,28 @@ func (r *Runner) clusteredKey(k string) string {
 	switch {
 	case hasControl(k):
 		return r.dollarQuoted(k)
+	case wholeArraySubscriptAsAKey(k):
+		return doubleQuoted(k)
 	case listedValueIsBare(k):
 		return k
 	}
 	return doubleQuoted(k)
+}
+
+// wholeArraySubscriptAsAKey reports whether a key is one of the two words that
+// mean *the whole array* when they stand alone in brackets.
+//
+// Both are ordinary characters in a key and both list bare without this, which
+// is worse than cosmetic: a listing is meant to be read back, and `[@]=at` fed
+// to the shell again is the whole-array subscript rather than the key `@` the
+// table is holding. Measured 2026-09-14, bash 5.3.15 — the one column that
+// will store such a key at all, ksh93 and zsh each refusing the assignment by
+// name — writes `declare -A r=(["@"]="at" )` (#2749).
+//
+// The whole key and not a character in it: `a@b` and `a*b` are bare and quoted
+// respectively there for the ordinary reasons, and neither is this.
+func wholeArraySubscriptAsAKey(k string) bool {
+	return k == "@" || k == "*"
 }
 
 // numberedLetterEndsTheWord breaks a cluster after the letter carrying a

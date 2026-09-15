@@ -280,6 +280,14 @@ func Semantics() interp.Semantics {
 	// table and no literal to write one with. Measured 2026-09-12,
 	// `m=([k]+=x)` is `Syntax error: "(" unexpected` before any element is
 	// looked at, so no value is ever joined to anything (#2405).
+	// unanswered StoreRefusalOfADeclaredElementLeavesZeroFromCommandString:
+	// there is no declaration utility and no array for one's operand to name
+	// an element of, so no store of this shell's can refuse a declaration's
+	// element on either route. Measured 2026-09-14, `a=(x y); typeset
+	// "a[0]"=v; echo after` is `Syntax error: "(" unexpected` at 2 from `-c`
+	// and from a script file alike — the parenthesis is refused before any
+	// subscript is read, which is the same wall #2250 records for the
+	// neighboring array axes (#1770).
 	// unanswered ArrayLiteralOperandRetypesAFrozenScalar: there is no
 	// declaration utility and no array literal to be one's operand. Measured
 	// 2026-09-12, `readonly q=1; typeset -g q=(b)` is `Syntax error: "("

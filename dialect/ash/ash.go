@@ -941,6 +941,12 @@ func Semantics() interp.Semantics {
 	// one word, and the four `BraceRange…` axes are unanswered beside it
 	// for the same reason.
 	//
+	// unanswered StoreRefusalOfADeclaredElementLeavesZeroFromCommandString:
+	// no declaration utility and no array literal here either, so neither
+	// route reaches a store that could refuse an element. Measured
+	// 2026-09-14 in the pinned image, `a=(x y); typeset "a[0]"=v` is `syntax
+	// error: unexpected "("` at 2 by both routes — the same wall dash meets
+	// (#1770).
 	// unanswered ArrayLiteralOperandRetypesAFrozenScalar: no declaration
 	// utility and no array literal here either. Measured 2026-09-12 on
 	// BusyBox, `readonly q=1; typeset -g q=(b)` is `syntax error: unexpected

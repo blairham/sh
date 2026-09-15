@@ -195,6 +195,9 @@ func (r *Runner) assignArrayLiteral(name string, elems []*syntax.Word, appendTo 
 		// The subscript is text rather than an expression, and a literal
 		// written with one declares a keyed array — one concept with two
 		// consequences, so the elements go where a declared name's would.
+		if appendTo {
+			r.keyedLiteralOverAScalar(name)
+		}
 		r.markAssoc(name)
 		r.assignAssocElems(name, parsed, appendTo)
 		return
@@ -299,6 +302,69 @@ func (r *Runner) appendedOverAScalar(name string) (Array, int) {
 		return Array{}, 0
 	}
 	return Array{0: Scalar(v)}, 1
+}
+
+// keyedLiteralOverAScalar is appendedOverAScalar's question asked on the other
+// route out of assignArrayLiteral: `a+=([1]=Z)` rather than `a+=(2)`.
+//
+// One operator over one scalar, and the only thing that sends the two
+// spellings down different paths is whether the literal's first element
+// carries a subscript — so the value the name was holding has to survive both.
+// It did not: the keyed path went straight to markAssoc, which builds an empty
+// table, and the scalar went with it at status 0 (#2785). Measured 2026-09-14
+// on ksh93u+ 2012-08-01, the only dialect whose literal subscripts are keys:
+//
+//	a=one; a+=([1]=Z); typeset -p a    typeset -A a=([0]=one [1]=Z)
+//	a=one; a+=([k]=Z); typeset -p a    typeset -A a=([0]=one [k]=Z)
+//	a=one; a+=(2);     typeset -p a    typeset -a a=(one 2)
+//	unset a; a+=([1]=Z)                typeset -A a=([1]=Z)
+//	a=;      a+=([1]=Z)                typeset -A a=([0]='' [1]=Z)
+//
+// So an empty scalar counts as a value and an unset name does not, which is
+// the distinction getVar already draws and the reason this asks it rather than
+// reading Runner.Vars — see appendedOverAScalar for the environment half of
+// the same argument.
+//
+// The base is spelled `0` because a table has no positions: it is a key like
+// any other, and it is the same key the *declared* route writes — `a=one;
+// typeset -A a` is `typeset -A a=([0]=one)` in both promoting columns. That is
+// why this reads ScalarUnderATableDeclaration rather than inventing an axis
+// beside it. The append declares the table, and what a table declaration does
+// to a scalar already has an answer; a second axis would be the same fact
+// written down twice, free to drift. Only ksh93 reaches this route today —
+// ArrayLiteralSubscriptIsAKey is no in bash and zsh — and its answer to that
+// axis is the promoting one, which is what the rows above show.
+//
+// The compound variable is **not** this, and is deliberately left alone.
+// `a=(b=1); a+=([1]=Z)` is `typeset -A a=([0]=() [1]=Z)` there — an *emptied
+// compound* standing at the base, whose `${a[0]}` reads back as the two lines
+// `(` and `)` — which is a value kind this engine's tables have no way to
+// hold. Recorded rather than modeled, as the same shape is on the indexed
+// route in appendedOverAScalar.
+func (r *Runner) keyedLiteralOverAScalar(name string) {
+	if r.sem().ScalarUnderATableDeclaration != ScalarUnderACompoundBecomesTheFirstElement {
+		return
+	}
+	if r.isCompoundVariable(name) {
+		return
+	}
+	if _, ok := r.arrayToAppendTo(name); ok {
+		// Appending to an array, not over a scalar. The indexed store is
+		// asked through arrayToAppendTo rather than Runner.Arrays so a
+		// *produced* array counts as one here exactly as it does there.
+		return
+	}
+	if r.assocDeclared(name) {
+		// The name is already a table, so there is no scalar under it: the
+		// literal's elements join the ones it holds.
+		return
+	}
+	v, held := r.getVar(name)
+	if !held {
+		return
+	}
+	r.markAssoc(name)
+	r.setAssocElem(name, "0", v)
 }
 
 // literalInto places a literal's elements into an array, starting at next.

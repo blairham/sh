@@ -1425,6 +1425,7 @@ func Semantics() interp.Semantics {
 	// from an argument rather than from a file. Measured on every
 	// neighboring refusal too, and they all leave 1 — see the axis.
 	s.SetArrayBadNameLeavesZeroFromCommandString = interp.Yes
+	s.StoreRefusalOfADeclaredElementLeavesZeroFromCommandString = interp.Yes
 	s.HeredocExpandsInTheCommandsProcess = interp.Yes
 	s.RedirectTargetExpandsInTheCommandsProcess = interp.Yes
 	s.ArithNameValueRecurses = interp.Yes

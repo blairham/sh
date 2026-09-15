@@ -420,8 +420,25 @@ func (r *Runner) assocAssignKey(name string, w *syntax.Word) (string, bool) {
 
 // expandKeyQuoted is the key under the reading that removes quotes: the
 // subscript expanded as a word, joined, and not trimmed.
+//
+// The shortcut is for a word that *is* its text — one literal span, nothing to
+// expand — and it has to ask how that span was quoted as well as what kind it
+// is. `$'…'` is a Literal span whose Value is the source between the quotes
+// with its escapes still in it: the decoding is the expansion's, and taking
+// the Value as the key skipped it. So `declare -A n; n[$'\t']=tab` stored a key
+// spelled backslash-then-t rather than a tab — two characters, reachable only
+// by writing the same escape again, and invisible to `${n[$t]}` for a `t`
+// holding the character it meant. bash, whose subscript this is, stores the
+// tab (#2749).
+//
+// Every other quoting kind really is its text. Single quotes protect
+// everything, a double-quoted literal keeps a backslash that escapes nothing,
+// and a backslash-quoted span is one character — so naming the one kind that
+// decodes is narrower than routing every quoted span through the expander,
+// and it keeps the shortcut doing what it is for.
 func (r *Runner) expandKeyQuoted(w *syntax.Word) string {
-	if w != nil && len(w.Spans) == 1 && w.Spans[0].Kind == syntax.Literal {
+	if w != nil && len(w.Spans) == 1 && w.Spans[0].Kind == syntax.Literal &&
+		w.Spans[0].Quoting != syntax.DollarSingleQuoted {
 		return w.Spans[0].Value
 	}
 	return strings.Join(r.expandWordNoSplit(w), "")

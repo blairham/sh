@@ -3085,6 +3085,48 @@ type Semantics struct {
 	// which is why bash and dash leave it unanswered.
 	ArithIntegerOperatorRefusesFloat Answer
 
+	// ArithFloatOverflowIsZero loses a float numeral whose magnitude a
+	// double cannot hold, answering zero, where the other reading saturates
+	// to an infinity.
+	//
+	// Measured 2026-09-14, `LC_ALL=C`, on the two columns that have floats
+	// at all:
+	//
+	//	snippet                     zsh 5.9.2   ksh93u+
+	//	echo $((1e400))             Inf         -0
+	//	echo $((-1e400))            -Inf        0
+	//	echo $((1e400+1))           Inf         1
+	//	x=1e400; echo $((x))        Inf         0
+	//	echo $((1e300*1e300))       Inf         inf
+	//
+	// The last row is why the axis is about the *numeral* and not about the
+	// arithmetic: ksh93 answers `inf` for the value once it has been
+	// computed, and zero only for the same value written down. A reading
+	// that made every overflow zero would contradict its own third column.
+	//
+	// Two details of the zero reading, both measured on the only column that
+	// has it, and both following from a zero that carries a sign:
+	//
+	//   - the numeral comes to a *negative* zero, which is why `$((1e400))`
+	//     writes `-0` and `$((-1e400))` writes `0` — the sign is applied to
+	//     it rather than read as part of it.
+	//   - a value read out of a *variable* comes to a positive zero, so
+	//     `x=1e400; echo $((x))` is `0` where the identical numeral written
+	//     in the expression is `-0`. The two readers part here the way
+	//     ArithStoredValueReadsALeadingZeroAsDecimal records them parting
+	//     over a leading zero, and in the same shell.
+	//
+	// Asked only where the dialect has floats and the numeral really did
+	// overflow: an underflow is zero in both columns with nothing to choose
+	// between, and every other numeral is read without this being reached.
+	// So bash, dash and ash never reach it and leave it unanswered.
+	//
+	// Silent and arithmetically wrong either way it is answered wrongly, and
+	// in opposite directions: a budget that overflowed reads as nothing at
+	// all under one reading and as unbounded under the other. Refusing the
+	// numeral — which is what this shell did before #2766 — is neither.
+	ArithFloatOverflowIsZero Answer
+
 	// ArithNegativeExponentIsError refuses `2**-1` rather than answering
 	// with a float. bash says yes and stops the expression; ksh93 and zsh
 	// say no and answer 0.5. It does not arise where the grammar has no

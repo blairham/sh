@@ -5,6 +5,7 @@ package interp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -1569,7 +1570,7 @@ func (r *Runner) arithNumOfStored(value string) (arithNum, error) {
 		return intNum(0), nil
 	}
 	value = r.decimalLeadingNumeral(value)
-	if n, err := r.parseArithNum(strings.TrimSpace(value)); err == nil {
+	if n, err := r.parseArithStored(strings.TrimSpace(value)); err == nil {
 		return n, nil
 	}
 	return r.arithValueAsExpression(value)
@@ -1731,13 +1732,34 @@ func leadingZeroRun(value string, hexPrefixSurvives bool) int {
 	return n
 }
 
-// parseArithNum reads a literal, which may be a float where the dialect has
+// parseArithNum reads a numeral written in the expression itself.
+//
+// See readArithNum: the two readers part over a numeral too large for a
+// double, and only there.
+func (r *Runner) parseArithNum(s string) (arithNum, error) {
+	return r.readArithNum(s, true)
+}
+
+// parseArithStored reads a numeral that came out of a variable.
+//
+// The counterpart of parseArithNum, and the reason readArithNum takes the
+// site at all: ksh93's two readers give an overflowed numeral zeros of
+// opposite sign. See Semantics.ArithFloatOverflowIsZero.
+func (r *Runner) parseArithStored(s string) (arithNum, error) {
+	return r.readArithNum(s, false)
+}
+
+// readArithNum reads a literal, which may be a float where the dialect has
 // them.
 //
 // The axis is asked only when the text is float-shaped. An expression of whole
 // numbers means the same thing in every shell in the panel, so `3/2` needs no
 // dialect and `3.0/2` does.
-func (r *Runner) parseArithNum(s string) (arithNum, error) {
+//
+// written says the text stood in the expression rather than in a variable the
+// expression named, which decides the sign of the zero an overflow comes to
+// where an overflow comes to zero at all.
+func (r *Runner) readArithNum(s string, written bool) (arithNum, error) {
 	s = strings.TrimSpace(s)
 	if r.dialect().ArithDigitSeparator {
 		// The separator is removed and then the ordinary rules apply to what
@@ -1770,10 +1792,35 @@ func (r *Runner) parseArithNum(s string) (arithNum, error) {
 		return intNum(0), arithError{msg: msg, token: s, badNumeral: true}
 	}
 	f, err := strconv.ParseFloat(s, 64)
+	if errors.Is(err, strconv.ErrRange) {
+		// The numeral is well formed and too large: ParseFloat has already
+		// read it and saturated to an infinity, and handed back the value
+		// *and* the error. Discarding both is what refused `$((1e400))`,
+		// which both float columns answer. An underflow is not this — Go
+		// reports no error for one, and both columns answer zero anyway.
+		if r.ask(r.sem().ArithFloatOverflowIsZero, "a float numeral too large for a double") {
+			return floatNum(overflowZero(written)), nil
+		}
+		return floatNum(f), nil
+	}
 	if err != nil {
 		return intNum(0), arithError{msg: r.wordInvalidNumber(s), token: s, badNumeral: true}
 	}
 	return floatNum(f), nil
+}
+
+// overflowZero is the zero a numeral too large for a double comes to, in the
+// dialect where it comes to a zero at all.
+//
+// The sign is measured and is not decoration: `$((1e400))` writes `-0` and
+// `$((-1e400))` writes `0`, which is one negative zero with the unary minus
+// applied to it, and a value read out of a variable is the positive one. See
+// Semantics.ArithFloatOverflowIsZero for the table.
+func overflowZero(written bool) float64 {
+	if written {
+		return math.Copysign(0, -1)
+	}
+	return 0
 }
 
 // floatShaped reports whether a literal can only be a float.

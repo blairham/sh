@@ -54,6 +54,28 @@ func Probes() []Probe {
 			},
 		},
 		{
+			Field: "ArithFloatOverflowIsZero",
+			Cases: []string{"axis/arith-float-overflow"},
+			// Read off the row's **first** line, which is the numeral. The
+			// third line is in the case as a control and must not be read
+			// here: it is `inf` in both columns, so a reading taken from it
+			// would grade every float shell alike and answer nothing.
+			Reading: "`echo $((1e400))` is an infinity in a shell that saturates a numeral too large for a double and a zero in one that loses it",
+			Read: func(cells map[string]oracle.Result) (string, string) {
+				r := cells["axis/arith-float-overflow"]
+				first, _, _ := strings.Cut(strings.TrimSpace(r.Stdout), "\n")
+				switch {
+				case r.Status != 0 && first == "":
+					return "", "this shell has no floats — the recorded cell is a refusal of the word `1e400` while reading it, so nothing here says what it would have done with a value out of range"
+				case strings.Contains(strings.ToLower(first), "inf"):
+					return "No", ""
+				case strings.Trim(first, "-+") == "0":
+					return "Yes", ""
+				}
+				return "", "the first line was neither an infinity nor a zero, so the row did not reach the numeral"
+			},
+		},
+		{
 			Field:   "EchoInterpretsEscapes",
 			Cases:   []string{"axis/echo-backslash"},
 			Reading: "the row compares `echo 'a\\tb'` against its own text and prints `expanded` where the escape was taken",

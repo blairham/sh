@@ -701,6 +701,10 @@ func Semantics() interp.Semantics {
 	// bash has no floats, so `2**-1` has no integer answer and stops the
 	// expression; the two shells with floats answer 0.5 instead.
 	s.ArithNegativeExponentIsError = interp.Yes
+	// unanswered ArithFloatOverflowIsZero: the same absence of floats. A
+	// numeral this shell cannot hold is refused while it is being read —
+	// `$((1e400))` is `value too great for base` — so there is no value for
+	// an overflow rule to decide, and the question never reaches the axis.
 	s.IndirectionYieldsName = interp.No
 	s.BraceExpansion = interp.Yes
 	// A group that does not expand does not end the word, and the scan

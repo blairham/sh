@@ -14874,6 +14874,51 @@ Admits `37#…` through `64#…`, whose letters split into cases and whose
 last two digits are `@` and `_`. bash and ksh93 take the full 64; zsh
 stops at 36 and says so.
 
+**`ArithFloatOverflowIsZero`** — bash unspecified · dash unspecified · ksh93 yes · zsh no
+
+Loses a float numeral whose magnitude a double cannot hold, answering
+zero, where the other reading saturates to an infinity. Measured
+2026-09-14, `LC_ALL=C`, on the two columns that have floats at all:
+
+    snippet                     zsh 5.9.2   ksh93u+
+    echo $((1e400))             Inf         -0
+    echo $((-1e400))            -Inf        0
+    echo $((1e400+1))           Inf         1
+    x=1e400; echo $((x))        Inf         0
+    echo $((1e300*1e300))       Inf         inf
+
+The last row is why the axis is about the **numeral** and not about the
+arithmetic. ksh93 answers `inf` for the value once it has been computed
+and zero only for the same value written down, so a reading that made
+every overflow zero would contradict the column it was measured from —
+and the integer side of the same question is a separate axis,
+`ArithOverflowSaturates`, whose columns do not line up with these.
+
+Two details of the zero reading, both measured on the only column that
+has it, and both following from a zero that carries a sign. The numeral
+comes to a **negative** zero, which is why `$((1e400))` writes `-0` and
+`$((-1e400))` writes `0`: the unary minus is applied to it rather than
+read as part of it. And a numeral read out of a **variable** comes to a
+positive one, so `x=1e400; echo $((x))` is `0` where the identical
+numeral written in the expression is `-0` — the same two readers that
+part over a leading zero in `ArithStoredValueReadsALeadingZeroAsDecimal`,
+parting again in the same shell.
+
+One measured edge is recorded rather than reproduced: `x=1e400; echo
+$(( x*1.0 ))` is `-0` in ksh93, where the value read out of the variable
+was a positive zero a line earlier. Multiplying a positive zero by one
+cannot produce a negative one, so that column is reading the stored text
+a second time rather than reusing the value it read — which is a third
+reader, not a sign rule, and nothing in the corpus asks it.
+
+This shell refused the numeral outright until #2766, which is neither
+reading: the reader returns the infinity **and** an out-of-range report
+together, and both were being thrown away. An **underflow** is not this
+and never asks the axis — `$((1e-400))` is zero in both columns with
+nothing to choose between, and Go's reader signals no error for one.
+bash, dash and ash have no floats, so `1e400` is refused there while the
+word is being read and no value is ever produced for the axis to decide.
+
 **`ArithIntegerOperatorRefusesFloat`** — bash unspecified · dash unspecified · ksh93 yes · zsh no
 
 Rejects a float where only an integer will do — `7 % 2.5`, `1.5 & 1`, a

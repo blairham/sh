@@ -141,6 +141,9 @@ func TestSemantics(t *testing.T) {
 		// capital, because `-F` is zsh's own short spelling of it.
 		{"NoglobLetterIsF", s.NoglobLetterIsF, interp.No},
 		{"ArithIntegerOperatorRefusesFloat", s.ArithIntegerOperatorRefusesFloat, interp.No},
+		// A numeral a double cannot hold saturates here: `$((1e400))` is
+		// `Inf` and `$((-1e400))` is `-Inf` (#2766).
+		{"ArithFloatOverflowIsZero", s.ArithFloatOverflowIsZero, interp.No},
 		// The strict end of both file-comparison questions: -nt and -ot
 		// want both files to exist, and a non-numeric -t operand is a
 		// plain false.

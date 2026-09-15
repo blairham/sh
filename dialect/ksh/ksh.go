@@ -514,6 +514,11 @@ func Semantics() interp.Semantics {
 	// from every other member of the panel.
 	s.DollarDashLetterOrder = "icaefhmnstuvxBCEHTl"
 	s.ArithIntegerOperatorRefusesFloat = interp.Yes
+	// A numeral a double cannot hold is lost rather than saturated:
+	// `$((1e400))` is `-0` here where the same value *computed*,
+	// `$((1e300*1e300))`, is `inf`. The zero is the negative one and the
+	// unary minus applies to it, so `$((-1e400))` is `0`.
+	s.ArithFloatOverflowIsZero = interp.Yes
 	// A negative exponent is a float answer here, not a refusal: `2**-1`
 	// is 0.5.
 	s.ArithNegativeExponentIsError = interp.No

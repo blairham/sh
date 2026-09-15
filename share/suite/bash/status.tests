@@ -1,0 +1,65 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Pipeline status in bash — #2323.
+#
+# A pipeline's status is its last stage's, and every other stage's status is
+# gone — which is what `pipefail` was invented to paper over and what
+# PIPESTATUS was invented to expose. bash's array holds one element per
+# stage, indexed from 0, and it is bash's alone: zsh has the same idea under
+# a lower-case name and one-based indexing, ksh93 93u+ has the name
+# `.sh.pipestatus` and never fills it, and dash has nothing and cannot even
+# parse the subscript.
+#
+# The other half of this file is where the stages run. bash runs every stage
+# of a pipeline in a subshell, so nothing a stage does to the shell survives
+# it — not an assignment, not a `cd`, not a `read`. zsh and ksh93 run the
+# *last* stage in the current shell, which is why `printf x | read v` leaves
+# `v` set there and unset here, and is the single most quoted difference
+# between the two families.
+#
+# The array is read on the line after the pipeline, before anything else has
+# run: any command in between would be a pipeline of one and would replace it.
+
+( exit 3 ) | ( exit 4 ) | ( exit 5 )
+printf 'status -> %s, PIPESTATUS [%s][%s][%s]\n' "$?" "${PIPESTATUS[0]}" "${PIPESTATUS[1]}" "${PIPESTATUS[2]}"
+
+# All of them succeeding.
+true | true | true
+printf 'all zero -> [%s][%s][%s]\n' "${PIPESTATUS[0]}" "${PIPESTATUS[1]}" "${PIPESTATUS[2]}"
+
+# A pipeline of one still sets it, with one element.
+( exit 6 )
+printf 'one stage -> n=%s [%s]\n' "${#PIPESTATUS[@]}" "${PIPESTATUS[0]}"
+
+# And so does a simple command that is not written as a pipeline at all.
+false
+printf 'a bare command -> n=%s [%s]\n' "${#PIPESTATUS[@]}" "${PIPESTATUS[0]}"
+
+# The whole array at once.
+( exit 1 ) | ( exit 2 ) | ( exit 3 ) | ( exit 4 )
+printf 'four stages -> n=%s [%s]\n' "${#PIPESTATUS[@]}" "${PIPESTATUS[*]}"
+
+# `!` inverts the pipeline's status and leaves the array alone.
+! ( exit 3 ) | ( exit 5 )
+printf 'negated -> %s, PIPESTATUS [%s][%s]\n' "$?" "${PIPESTATUS[0]}" "${PIPESTATUS[1]}"
+
+printf -- '--- where the stages run ---\n'
+
+# Nothing a stage does survives the pipeline.
+v=before
+printf 'x\n' | read v
+printf 'read in the last stage: v=[%s]\n' "$v"
+
+w=before
+printf 'x\n' | { read w; printf 'inside the last stage: w=[%s]\n' "$w"; }
+printf 'after the pipeline: w=[%s]\n' "$w"
+
+# Including a directory change.
+d0=$PWD
+printf 'x\n' | { cd / ; } 2>/dev/null
+case $PWD in
+  /) printf 'cd in the last stage: the shell moved\n' ;;
+  *) printf 'cd in the last stage: the shell stayed\n' ;;
+esac
+cd "$d0"

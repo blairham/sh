@@ -14,9 +14,9 @@
 # the builtin and ksh93 has a preset alias for `command .`, so the spelling
 # works everywhere except the shell people reach for when they want POSIX.
 #
-# And a dot file that will not parse ends the shell. bash answers 2 and
-# ksh93 3 and both carry on; zsh answers 0 and carries on; dash stops
-# reading, which is why every case below that can fail is in a subshell.
+# And a dot file that will not parse ends the shell. bash answers 2, ksh93 3
+# and zsh 126, and all three carry on; dash stops reading, which is why every
+# case below that can fail is in a subshell.
 
 printf 'printf "n=%%s [%%s] [%%s]\\n" "$#" "$1" "$2"\n' > args.sh
 set -- outer1 outer2
@@ -43,12 +43,12 @@ printf 'printf "sourced\\n"\n' > s.sh
 
 # A file that will not parse ends the shell, so the second command in the
 # subshell never runs.
-printf 'if then fi\n' > bad.sh
+printf 'for\n' > bad.sh
 ( . ./bad.sh; printf 'the subshell carried on\n' ) 2>/dev/null
 printf 'a dot file that will not parse -> %s\n' "$?"
 
 # So does an `eval` operand that will not parse.
-( eval 'if then fi'; printf 'the subshell carried on\n' ) 2>/dev/null
+( eval 'for'; printf 'the subshell carried on\n' ) 2>/dev/null
 printf 'an eval that will not parse -> %s\n' "$?"
 
 # And so does a dot file that is not there.

@@ -4,10 +4,10 @@
 # eval and `.` in ksh93 — #2322.
 #
 # ksh93 answers 3 for text that will not parse, which is a number no other
-# shell on the panel uses for anything: bash and dash answer 2 and zsh
-# answers 0. It is the same 3 whether the text came from a file or from an
-# `eval` operand, which says the number belongs to the parse rather than to
-# either builtin.
+# shell on the panel uses here: bash and dash answer 2, and zsh answers 1 for
+# an `eval` and 126 for a file. It is the same 3 in ksh93 whether the text
+# came from a file or from an `eval` operand, which says the number belongs
+# to the parse rather than to either builtin.
 #
 # The other answer here is about how far a *fatal* error travels. In ksh93 an
 # unknown option to a builtin ends the shell, and reaching that builtin
@@ -21,17 +21,17 @@
 
 # --- the status of text that will not parse ---
 
-printf 'if then fi\n' > bad.sh
+printf 'for\n' > bad.sh
 ( . ./bad.sh ) 2>/dev/null; printf 'a dot file that will not parse -> %s\n' "$?"
 ( eval 'if then fi' ) 2>/dev/null; printf 'an eval that will not parse -> %s\n' "$?"
 
 # A different parse error, to say the number is the parse and not the text.
-printf 'for\n' > bad2.sh
+printf 'case\n' > bad2.sh
 ( . ./bad2.sh ) 2>/dev/null; printf 'another dot file -> %s\n' "$?"
 ( eval 'case' ) 2>/dev/null; printf 'another eval -> %s\n' "$?"
 
 # Nothing of the file ran.
-printf 'printf "first line\\n"\nif then fi\nprintf "third line\\n"\n' > bad3.sh
+printf 'printf "first line\\n"\nfor\nprintf "third line\\n"\n' > bad3.sh
 ( . ./bad3.sh ) 2>/dev/null; printf 'half a dot file -> %s\n' "$?"
 
 # --- how far a fatal builtin error travels ---

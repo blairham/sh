@@ -12,9 +12,17 @@
 # alone: a script testing `. lib.sh || …` on the number gets a different one
 # in every shell on the panel.
 #
-# The second is that a dot file or an `eval` that will not *parse* is a
-# success. bash answers 2, ksh93 3, dash gives the shell up entirely — and
-# zsh answers 0, so the caller cannot tell from the status that nothing ran.
+# The second is what a dot file that will not *parse* costs. bash and dash
+# answer 2 there and ksh93 answers 3 — all three the same number they give an
+# `eval` that will not parse — while zsh splits the two apart: 1 for the
+# `eval`, and 126 for the file, which is the number a shell uses for
+# something it found and could not run.
+#
+# The text used below is `for` on a line of its own, and the choice matters.
+# `if then fi` is the obvious thing to reach for and it is useless here: zsh
+# accepts an empty condition and an empty body, so it parses, runs, and
+# answers 0 — measuring zsh's grammar rather than its error path. `while do
+# done` is worse still; zsh accepts that too and loops forever.
 #
 # And `$0` inside a dot script is the sourced file's name, which no other
 # shell here does: everywhere else `$0` is still the script that ran the `.`.
@@ -43,16 +51,26 @@ chmod 644 nr.sh
 
 # --- a file and an eval that will not parse ---
 
-printf 'if then fi\n' > bad.sh
+printf 'for\n' > bad.sh
 ( . ./bad.sh ) 2>/dev/null; printf 'a dot file that will not parse -> %s\n' "$?"
-( eval 'if then fi' ) 2>/dev/null; printf 'an eval that will not parse -> %s\n' "$?"
+( eval 'for' ) 2>/dev/null; printf 'an eval that will not parse -> %s\n' "$?"
 
-# And nothing in either of them ran, which is what makes the 0 worth asking
-# about: the file's second line is never reached.
-printf 'printf "first line\\n"\nif then fi\nprintf "third line\\n"\n' > bad2.sh
-( . ./bad2.sh ) 2>/dev/null; printf 'half a dot file -> %s\n' "$?"
+# A second text, to say the numbers belong to the parse rather than to the
+# words.
+printf 'case\n' > bad2.sh
+( . ./bad2.sh ) 2>/dev/null; printf 'another dot file -> %s\n' "$?"
+( eval 'case' ) 2>/dev/null; printf 'another eval -> %s\n' "$?"
 
-# The shell carries on afterwards in either case.
+# Nothing of the file ran: its first line is never reached either.
+printf 'printf "first line\\n"\nfor\nprintf "third line\\n"\n' > bad3.sh
+( . ./bad3.sh ) 2>/dev/null; printf 'half a dot file -> %s\n' "$?"
+
+# The text that is *not* a parse error, and is the reason `if then fi` is a
+# bad probe here: an empty condition and an empty body are a command zsh
+# runs, and the answer is an ordinary success.
+( eval 'if then fi' ) 2>/dev/null; printf 'an empty if -> %s\n' "$?"
+
+# The shell carries on after any of them.
 ( . ./bad.sh; printf 'carried on after the dot\n' ) 2>/dev/null
-( eval 'if then fi'; printf 'carried on after the eval\n' ) 2>/dev/null
+( eval 'for'; printf 'carried on after the eval\n' ) 2>/dev/null
 printf 'reached the end\n'

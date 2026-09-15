@@ -12,9 +12,15 @@
 #                        function bash and zsh carry on where ksh93 and dash
 #                        give the function up. Four shells, three statuses,
 #                        two answers about whether it is fatal.
-#   a dot file or an     bash 2, dash 2, ksh93 3 — and zsh 0, carrying on as
-#   `eval` that will     though nothing had happened. zsh/ and ksh/.
-#   not parse
+#   a dot file or an     four shells, four numbers: an `eval` that will not
+#   `eval` that will     parse is 2 in bash and dash, 3 in ksh93 and 1 in
+#   not parse            zsh — and a dot *file* that will not parse is 126
+#                        in zsh, which is the number for a file that could
+#                        not be run. zsh/ and ksh/ carry the two ends.
+#                        `if then fi` is not the text to ask it with: zsh
+#                        accepts an empty condition and an empty body and
+#                        answers 0, so that line measures zsh's grammar
+#                        rather than any shell's error path.
 #   `. file args`        bash, zsh and ksh93 give the dot script operands of
 #                        its own and put the caller's back afterwards; dash
 #                        ignores them entirely and the script sees the

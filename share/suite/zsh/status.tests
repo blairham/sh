@@ -1,0 +1,65 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Pipeline status in zsh — #2323.
+#
+# zsh keeps every stage's status in `pipestatus`, lower case and indexed from
+# 1 like every other zsh array. bash has the same idea spelled `PIPESTATUS`
+# and indexed from 0; ksh93 93u+ has the name `.sh.pipestatus` and never
+# fills it; dash has neither and cannot parse the subscript. So all four
+# answers to "what did the other stages do" are different, and none of them
+# is portable.
+#
+# The second half is where the stages run. zsh runs the *last* stage of a
+# pipeline in the current shell, so `printf x | read v` leaves `v` set — the
+# behaviour ksh93 shares and bash and dash do not, and the one that makes
+# `something | read a b c` a working idiom here and a silent no-op there.
+#
+# The array is read on the line after the pipeline, before anything else has
+# run: any command in between is a pipeline of one and replaces it.
+
+( exit 3 ) | ( exit 4 ) | ( exit 5 )
+printf 'status -> %s, pipestatus [%s][%s][%s]\n' "$?" "${pipestatus[1]}" "${pipestatus[2]}" "${pipestatus[3]}"
+
+# All of them succeeding.
+true | true | true
+printf 'all zero -> [%s][%s][%s]\n' "${pipestatus[1]}" "${pipestatus[2]}" "${pipestatus[3]}"
+
+# A pipeline of one, and a bare command, each set it with one element.
+( exit 6 )
+printf 'one stage -> n=%s [%s]\n' "${#pipestatus[@]}" "${pipestatus[1]}"
+false
+printf 'a bare command -> n=%s [%s]\n' "${#pipestatus[@]}" "${pipestatus[1]}"
+
+# The whole array at once.
+( exit 1 ) | ( exit 2 ) | ( exit 3 ) | ( exit 4 )
+printf 'four stages -> n=%s [%s]\n' "${#pipestatus[@]}" "${pipestatus[*]}"
+
+# Index 0 is not a stage, because the array starts at 1.
+( exit 7 ) | ( exit 8 )
+printf 'index zero is [%s] and index one is [%s]\n' "${pipestatus[0]}" "${pipestatus[1]}"
+
+printf -- '--- where the stages run ---\n'
+
+# The last stage is the current shell, so what it reads stays read.
+v=before
+printf 'x\n' | read v
+printf 'read in the last stage: v=[%s]\n' "$v"
+
+w=before
+printf 'x\n' | { read w; printf 'inside the last stage: w=[%s]\n' "$w"; }
+printf 'after the pipeline: w=[%s]\n' "$w"
+
+# And a directory change in the last stage is the shell's.
+d0=$PWD
+printf 'x\n' | { cd / ; } 2>/dev/null
+case $PWD in
+  /) printf 'cd in the last stage: the shell moved\n' ;;
+  *) printf 'cd in the last stage: the shell stayed\n' ;;
+esac
+cd "$d0"
+
+# A stage that is *not* the last is still a subshell, here as everywhere.
+u=before
+{ u=inside; printf 'x\n'; } | cat > /dev/null
+printf 'a first stage cannot assign: u=[%s]\n' "$u"

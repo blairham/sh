@@ -1590,6 +1590,13 @@ type Runner struct {
 	// builtin runs, so a failure is only ever read by the builtin it
 	// belongs to.
 	writeFailed error
+	// printfOut is the writer of the `printf` pass that is running, or nil
+	// when none is. It is here because two things outside that loop need to
+	// reach it: a diagnostic written while a conversion is being formatted
+	// waits for that conversion to resolve, so that a dialect writing
+	// through keeps its output ahead of the message and a refusal can still
+	// take the pass back; and the star reader is what takes it back (#2664).
+	printfOut *printfWriter
 	// line is where execution currently is, for diagnostics that name it.
 	// Real shells report the line of the command that failed, so this is
 	// updated per statement rather than per token.
@@ -2514,6 +2521,12 @@ func (r *Runner) printf(format string, args ...any) {
 }
 
 func (r *Runner) errf(format string, args ...any) {
+	if r.printfOut != nil && r.printfOut.hold(fmt.Sprintf(format, args...)) {
+		// A `printf` conversion is being formatted, and what it says waits
+		// for it: the output in front of it is released first, or the pass
+		// is taken back, and only then does this go out. See printfWriter.
+		return
+	}
 	_, _ = fmt.Fprintf(r.stderr(), format, args...)
 }
 

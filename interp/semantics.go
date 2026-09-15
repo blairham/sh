@@ -2055,6 +2055,22 @@ type Semantics struct {
 	// `a%ll` are both `a%` there, so the prefix that was scanned is dropped
 	// rather than written back.
 	//
+	// **A `*` in the dropped prefix still takes its operand**, even though
+	// the conversion never completes — so the format is *reused*, once per
+	// star's worth of operands, where `%` and `%5` consume nothing and the
+	// builtin ends after one pass. `printf 'a%*' 5 9` is `a%a%` and
+	// `printf 'a%*' 5 9 7` is `a%a%a%`, against `a%` for `printf 'a%' 5 9`
+	// (#2667). One operand per star and in written order, exactly as a
+	// finished conversion reads them: `printf 'a%*.*' 5 9 7 3` is `a%a%`.
+	// The operand list running out is the same refusal a finished conversion
+	// meets, rewind and all — `printf 'a%*'` with nothing writes nothing and
+	// reports 1 — which is why printfUnfinishedStars reads through
+	// printfStarOperand rather than counting for itself.
+	//
+	// Only this answer reaches any of that. The other four refuse the
+	// unfinished conversion outright, so the pass is over before an operand
+	// is looked at.
+	//
 	// Asked only where a format actually ends inside a conversion.
 	PrintfUnfinishedConversionIsAPercent Answer
 	// PrintfHexEscape is how a printf format reads `\x`, and it is four
@@ -2280,19 +2296,38 @@ type Semantics struct {
 	// was: `%*s` and `%*.*f` both report `.`. Measured 2026-09-13 rather
 	// than derived, and reproduced as a constant for that reason.
 	//
-	// The status and the complaint are what this axis reproduces. What it
-	// does not is ksh93's *stdout*, which the refusal rewinds: the pass is
-	// truncated back to the start of the last conversion that consumed an
-	// operand, so `printf 'AB%sCD%sEF%*dG' q r` is `ABqCD` there and
-	// `ABqCDrEF` here. Eight formats were measured to arrive at that rule and
-	// every one of them fits it, including the two that look like exceptions
-	// — a conversion whose own stars ran out consumed nothing and so is not
-	// the mark, which is why `printf 'XY%s%*.*dZ' q 3` rewinds past the `%s`
-	// to `XY`. It is recorded rather than implemented because rewinding needs
-	// the whole pass held, and ksh93 is the one dialect that writes through:
-	// holding it would put every other complaint in the pass *after* the
-	// output it currently precedes, which is a live behavior traded for a
-	// dead one. Filed as #2664.
+	// **The refusal takes the pass back with it.** stdout is truncated to
+	// the start of the last conversion that *completed*, so
+	// `printf 'AB%sCD%sEF%*dG' q r` is `ABqCD` and `printf '%s[%*d]\n' x` is
+	// nothing at all. Every format measured 2026-09-13 fits that rule,
+	// including the two that read as exceptions: a conversion whose own
+	// stars ran out never completed and so is not the mark, which is why
+	// `printf 'XY%s%*.*dZ' q 3` rewinds past the `%s` to `XY`.
+	//
+	// Completing is the test and consuming a *present* operand is not:
+	// `printf 'AB%sCD%*dEF'` with no operands at all is `AB`, so the `%s`
+	// that read a missing one marked exactly as one reading a present one
+	// does. A `%%` and an escape move nothing — `printf 'AB%%CD%*dEF'` is
+	// empty — which is what says the mark belongs to conversions rather than
+	// to output. It is per pass and not per builtin:
+	// `printf '%s[%*d]\n' a 3 7 d` writes the first pass in full and nothing
+	// of the second.
+	//
+	// It is the star refusal's own behavior and not a discard on any error:
+	// `printf 'X%*dY%vZ' 3 7 q` is `X  7Y` and then the complaint about the
+	// `%v`.
+	//
+	// One answer and not two. The one column that refuses is the one that
+	// rewinds, so nothing measured parts "refuses" from "refuses and drops
+	// what it had written", and a second axis would be a distinction no
+	// shell makes. #2664 filed the rewind as unimplemented because ksh93 is
+	// also the one dialect that writes through, and holding the pass to make
+	// a rewind possible looked like trading a live behavior for a dead one.
+	// It is not a trade: what a conversion *says* is held with it, and
+	// released after the output in front of it — see printfWriter — so `[`
+	// still arrives before the complaint about the `%z` that followed, and
+	// `printf 'X%dY%*.*dZ' 42abc 7abc` still rewinds past a complaint that
+	// has already gone out.
 	PrintfStarWithoutOperandIsRefused Answer
 
 	// PrintfStarComplaintCostsTheStatus lets a complaint about the operand a

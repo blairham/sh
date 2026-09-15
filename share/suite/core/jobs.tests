@@ -34,6 +34,22 @@
 # background job with no operating-system process, a job a `wait` has reported
 # gives its number back so the next job takes it, and `fg` with a job in the
 # table refuses instead of running it.
+#
+# What was added after that, and what it cost: the file now asks what may be
+# *put* in the background — a pipeline, a group, a loop, the right side of an
+# and-list, a redirected command, a bare builtin, a job started in a function
+# and one started in a subshell — because each is a job with a status and none
+# of them is a race once it has been waited for. It asks the operands `wait`
+# takes, a job's descriptors, `jobs -p` and `jobs -l`, `nohup`, and the one
+# thing about a pid that is common: a child that has exited and not been
+# waited for still answers `kill -0`.
+#
+# Still held out, and now with the file each went to: `kill` on a job
+# specification, which dash refuses entirely (dash/jobs.tests) and ksh93
+# refuses in one spelling of; `disown`, which bash and zsh have and ksh93 and
+# dash do not; `$!` before any background command, which is 0 in zsh and unset
+# in the other three; and `wait` with several operands, which reports the
+# first in zsh and the last everywhere else (both zsh/jobs.tests).
 
 # Nothing to wait for is a success, not an error.
 wait; printf 'wait with nothing -> %s\n' "$?"
@@ -136,3 +152,97 @@ wait
 # parallelizes actually puts it.
 f() { ( exit 2 ) & wait $!; }
 f; printf 'in function -> %s\n' "$?"
+
+# ---- what may be put in the background ----
+
+# Every one of these is a job, and `wait` on it reports the status the body
+# reached rather than the status of starting it. A pipeline's is its last
+# stage's, which is the same rule a foreground pipeline has.
+( exit 1 ) | ( exit 5 ) &
+wait $!; printf 'a pipeline -> %s\n' "$?"
+{ exit 3; } & wait $!; printf 'a group -> %s\n' "$?"
+for x in a; do exit 2; done & wait $!; printf 'a for loop -> %s\n' "$?"
+true && ( exit 9 ) &
+wait $!; printf 'the right side of an and-list -> %s\n' "$?"
+( exit 2 ) > /dev/null & wait $!; printf 'with a redirection -> %s\n' "$?"
+
+# A body of nothing but builtins is still a job with a status.
+: & wait $!; printf 'a builtin -> %s\n' "$?"
+false & wait $!; printf 'a failing builtin -> %s\n' "$?"
+
+# A job started inside a function is the shell's job, and `$!` is set here.
+starter() { ( exit 5 ) & }
+starter
+wait $!; printf 'started in a function -> %s\n' "$?"
+
+# A job started inside a subshell belongs to that subshell: the inner `wait`
+# reports it and the outer shell never saw it.
+( ( exit 6 ) & wait $!; printf 'the inner shell -> %s\n' "$?" )
+printf 'the outer shell -> %s\n' "$?"
+
+# ---- the operands `wait` takes ----
+
+# `%%` and `%+` are both the current job, which is the most recent one.
+( exit 7 ) &
+wait %%; printf 'current job -> %s\n' "$?"
+( exit 8 ) &
+wait %+; printf 'plus -> %s\n' "$?"
+
+# A pid that is not a child is 127 — the one status POSIX names for this — and
+# a word that is not a pid at all is a refusal the shell carries on past. A
+# job specification the shell does not have is held out: ksh93 answers 0 where
+# the other three refuse.
+wait 999999 2> /dev/null
+printf 'a pid that is not ours -> %s\n' "$?"
+wait notanumber 2> /dev/null
+printf 'a word that is not a pid -> %s\n' "$(( $? != 0 ))"
+printf 'still running\n'
+
+# ---- a job's descriptors are the ones it was given ----
+
+# The redirections on a background command apply to it and not to this shell,
+# and waiting is what makes reading the file afterwards a fact rather than a
+# race.
+printf 'hello\n' > infile
+{ cat < infile > outfile; } &
+wait
+printf 'copied [%s]\n' "$(cat outfile)"
+
+# Its standard input is whatever it was redirected from, and a job reading
+# from the null device gets an immediate end rather than the shell's input.
+{ cat > catout; } < /dev/null &
+wait
+printf 'read from /dev/null: %s bytes\n' "$(wc -c < catout | tr -d ' ')"
+
+# ---- the rest of the interface ----
+
+# `jobs` takes its two most common options and succeeds; what it prints has
+# pids in it and is a dialect question.
+( exit 0 ) &
+jobs -p > /dev/null 2>&1; printf 'jobs -p -> %s\n' "$?"
+jobs -l > /dev/null 2>&1; printf 'jobs -l -> %s\n' "$?"
+wait
+
+# `nohup` runs the command and reports its status, which is the whole of what
+# is common about it — where it sends the output when there is a terminal is
+# not, and there is no terminal here.
+nohup true > /dev/null 2>&1; printf 'nohup true -> %s\n' "$?"
+nohup false > /dev/null 2>&1; printf 'nohup false -> %s\n' "$?"
+
+# A child that has exited and has not been waited for is still a process. Its
+# pid answers `kill -0`, because nothing has reaped it, and stops answering
+# once `wait` has — which is why `kill -0 "$pid"` is not a test for "is it
+# still running" in a shell script, and is the same in all four columns.
+( exit 0 ) &
+p=$!
+kill -0 "$p" 2> /dev/null
+printf 'an exited child still answers -> %s\n' "$(( $? == 0 ))"
+wait
+kill -0 "$p" 2> /dev/null
+printf 'and stops once it is waited for -> %s\n' "$(( $? == 0 ))"
+
+# `kill` on a job specification is not asked: dash refuses every spelling of
+# it — dash/jobs.tests — and ksh93 refuses `kill -s CONT %1` while taking
+# `kill -0 %1`, so the three shells that have it do not have it alike.
+# `disown` is not asked either: bash and zsh have it and ksh93 and dash do
+# not, which is two against two.

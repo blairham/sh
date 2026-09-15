@@ -1,0 +1,53 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Two things zsh does with a trap that no other shell on the panel does —
+# #2314's zsh/ half. Both are the kind of difference a script carries across
+# from bash without noticing, because neither changes what is printed until
+# the day it does.
+#
+# The first is scope. `trap … EXIT` written inside a function is that
+# *function's* trap in zsh: it runs when the function returns, and it is gone
+# afterwards. In bash, ksh93 and dash the same line sets the shell's EXIT trap
+# and nothing happens until the shell ends. So a function that sets a cleanup
+# trap and returns has already cleaned up here and has not there — and a
+# script that sets one in a function and relies on it at the end gets nothing
+# at all, because the disposition went away with the call.
+#
+# The second is `$?`. Read at the top of a signal handler, zsh gives the
+# status from before the command that delivered the signal; the other three
+# give the status of that command, which is the `kill` itself and is zero.
+#
+# Neither needs `setopt`: this is what zsh does out of the box. POSIX_TRAPS
+# is what turns the first of them off, and is not asked here because the file
+# is about what a script meets when nobody set an option.
+
+# An EXIT trap set in a function, and a line after the call. In zsh the trap
+# has already run by the time that line is reached.
+f() { trap 'printf "trap in f\n"' EXIT; printf 'in f\n'; }
+f
+printf 'after f\n'
+
+# Including when the function ends with `return`, and the status the call
+# reports is the function's rather than the trap's.
+g() { trap 'printf "trap in g\n"' EXIT; return 2; }
+g
+printf 'after g -> %s\n' "$?"
+
+# And it does not run a second time when the shell ends: the trap belonged to
+# the call. `end` is the last thing this file prints here, and is the line the
+# other three print *before* their copy of the traps above.
+printf 'end of the function section\n'
+
+# `$?` inside a signal handler. The command that delivers the signal is
+# `kill`, which succeeds, so a shell reporting the interrupted command's
+# status reports 0 — and zsh reports what the command before it left.
+trap 'printf "handler sees %s\n" "$?"' USR1
+( exit 4 )
+kill -s USR1 $$
+printf 'status after the handler -> %s\n' "$?"
+true
+kill -s USR1 $$
+( exit 6 )
+kill -s USR1 $$
+trap - USR1

@@ -19,6 +19,29 @@
 # the parent's pid in every shell here, so `( trap … USR1; kill -s USR1 $$ )`
 # reaches the *outer* trap. That is worth knowing and is not worth a case,
 # because what it measures is which process the number named.
+#
+# Held out below, each with the file its answer went to:
+#
+#   the wording of a listing line — bash writes `SIGUSR1` where ksh93 writes
+#     `USR1`, and in a subshell zsh and dash list nothing where bash and
+#     ksh93 list everything, so `$(trap)` is not a question with one answer.
+#     The *count* of lines is, and that is what is asked.
+#   the status of a child that died on a signal — 128 plus the number in
+#     bash, zsh and dash, 256 plus it in ksh93 (ksh/signals.tests). The
+#     comparison `> 128` is what is left that every column agrees about.
+#   `SIGUSR1` as a spelling, and the ERR and DEBUG conditions — the three
+#     with them agree and dash has none of it (ext/signals.tests).
+#   an EXIT trap set inside a function — zsh runs it when the *function*
+#     returns and the other three when the shell ends (zsh/signals.tests),
+#     which is the single most surprising thing in this area.
+#   `$?` read inside a signal trap — zsh alone shows the status from before
+#     the command that sent the signal (zsh/signals.tests).
+#   `exit` with an operand between 257 and 510 — ksh93 reads it as "died of
+#     signal n" and raises that signal, which ends the script instead of
+#     answering it. 256 and 511 are asked because every column wraps those.
+#   `exit` from inside a *signal* trap, which ends the shell and so cannot be
+#     asked from the middle of a file that has more to ask. The EXIT trap's
+#     `exit` is asked instead, in a subshell, where ending it is the point.
 
 # A trap fires when the signal arrives, the command after it runs, and the
 # status the trap leaves behind is not the signalled command's.
@@ -68,3 +91,167 @@ kill -s USR1 $$
 ( trap 'printf "exit trap\n"' EXIT; printf 'body\n' )
 ( trap 'printf "exit trap saw %s\n" "$?"' EXIT; exit 3 ); printf 'status %s\n' "$?"
 ( trap 'printf "exit via trap in func\n"' EXIT; h() { exit 4; }; h ); printf 'func exit %s\n' "$?"
+
+# ---- the whole of `trap`'s own interface ----
+
+# Every disposition set above is put back first, so what the listing below
+# counts is what this section set and not what the file happens to have
+# accumulated. Resetting a signal that has no trap is not an error.
+trap - USR1 USR2 TERM INT HUP
+trap > traplist 2>&1
+printf 'nothing set=%s\n' "$(wc -l < traplist | tr -d ' ')"
+
+# `trap` with no operands lists what is set, one line per disposition, and a
+# reset takes that line away again. The *wording* of a line is the shell's
+# own — bash writes SIGUSR1 where ksh93 writes USR1, and in a subshell zsh and
+# dash print nothing at all where bash and ksh93 print the list — so what is
+# common is the count, and the count is asked without a subshell anywhere near
+# it.
+trap 'printf "on usr1\n"' USR1
+trap > traplist 2>&1
+printf 'one set=%s\n' "$(wc -l < traplist | tr -d ' ')"
+trap '' USR2
+trap > traplist 2>&1
+printf 'two set=%s\n' "$(wc -l < traplist | tr -d ' ')"
+trap 'printf "on exit\n"' EXIT
+trap > traplist 2>&1
+printf 'with exit=%s\n' "$(wc -l < traplist | tr -d ' ')"
+trap - USR1 USR2 EXIT
+trap > traplist 2>&1
+printf 'all reset=%s\n' "$(wc -l < traplist | tr -d ' ')"
+
+# `trap` with no operands at all, and with `--` and nothing else, are both a
+# listing and both succeed.
+trap 2> /dev/null; printf 'bare trap -> %s\n' "$?"
+trap -- 2> /dev/null; printf 'trap -- -> %s\n' "$?"
+
+# One action, several signals.
+trap 'printf "shared action\n"' USR1 USR2
+kill -s USR1 $$
+kill -s USR2 $$
+trap - USR1 USR2
+
+# A signal named by its number, which is the spelling every shell here takes.
+# 2 and 15 rather than a signal whose number is the operating system's.
+trap 'printf "number 2\n"' 2
+kill -2 $$
+trap 'printf "number 15\n"' 15
+kill -15 $$
+trap - 2 15
+
+# `kill -l` lists the names, and `kill -l` on a number gives that signal's
+# name. The listing's shape is the shell's; that it is not empty is not.
+kill -l > killlist 2>&1
+printf 'kill -l -> %s, empty %s\n' "$?" "$(( $(wc -l < killlist) == 0 ))"
+kill -l 15
+kill -l 2
+kill -0 $$; printf 'kill -0 on this shell -> %s\n' "$?"
+
+# A name no signal has is refused, and the shell carries on past it.
+trap 'printf "never\n"' NOSUCHSIG 2> /dev/null
+printf 'unknown name refused -> %s\n' "$(( $? != 0 ))"
+printf 'still running\n'
+
+# The action is read when the signal arrives and not when the trap was set:
+# the value the action names is the one it has at delivery.
+n=first
+trap 'printf "action sees %s\n" "$n"' USR1
+n=second
+kill -s USR1 $$
+
+# What the action leaves in `$?` does not become the shell's: the status after
+# a trap is the status the interrupted command had.
+trap 'printf "action ran\n"; false' USR1
+kill -s USR1 $$
+printf 'status after a failing action -> %s\n' "$?"
+
+# An action may be several commands, and it may assign — which is how a
+# counting handler is written.
+trap 'printf "one\n"; printf "two\n"' USR1
+kill -s USR1 $$
+c=0
+trap 'c=$(( c + 1 ))' USR1
+kill -s USR1 $$
+kill -s USR1 $$
+printf 'delivered=%s\n' "$c"
+trap - USR1
+
+# ---- what a disposition does to a child, and what a child's death does here ----
+
+# An ignored signal is inherited: a child of this shell starts with it ignored
+# and survives being sent it. `trap -` puts the default back and the next child
+# dies of it. The status is compared rather than printed — 128 plus a signal
+# number is the operating system's number, not the shell's — and the shell's
+# own note about a child that died on a signal is a diagnostic whose wording
+# and whose presence are both the shell's, so the whole thing is run with the
+# standard error of a group redirected rather than of the command.
+trap '' USR1
+{ sh -c 'kill -s USR1 $$; printf "inherited the ignore\n"'; st=$?; } 2> /dev/null
+printf 'ignored child status -> %s\n' "$st"
+trap - USR1
+{ sh -c 'kill -s USR1 $$; printf "not reached\n"'; st=$?; } 2> /dev/null
+printf 'default child died -> %s\n' "$(( st > 128 ))"
+
+# KILL and STOP cannot be caught, and every shell here takes the line without
+# a word and carries on — the refusal a reader might expect is nobody's.
+trap 'printf "never\n"' KILL 2> /dev/null
+printf 'trap KILL -> %s\n' "$?"
+trap 'printf "never\n"' STOP 2> /dev/null
+printf 'trap STOP -> %s\n' "$?"
+trap - KILL STOP
+
+# ---- delivery while something else is running ----
+
+# A signal sent to this shell is handled between commands, so a loop that
+# sends one on every pass runs the action on every pass and the loop body
+# finishes.
+trap 'printf "fired\n"' USR1
+i=0
+while [ "$i" -lt 3 ]; do
+	i=$(( i + 1 ))
+	kill -s USR1 $$
+	printf 'pass %s\n' "$i"
+done
+
+# And in a pipeline, where the stage doing the sending is a child: the trap is
+# this shell's and runs here.
+kill -s USR1 $$ | cat
+printf 'after a pipeline\n'
+trap - USR1
+
+# ---- EXIT, and what it does to the status ----
+
+# Nested subshells each run their own EXIT trap, innermost first, and the
+# outer one runs after the code that follows the inner shell.
+( trap 'printf "outer exit\n"' EXIT; ( trap 'printf "inner exit\n"' EXIT; : ); printf 'between\n' )
+
+# An EXIT trap sees the status the shell is about to report, including one
+# that came from a function called on the last line.
+f() { ( exit 3 ); }
+( trap 'printf "exit trap saw %s\n" "$?"' EXIT; f ); printf 'kept -> %s\n' "$?"
+
+# `exit` inside the EXIT trap replaces that status; an action that does not
+# call `exit` leaves it alone.
+( trap 'printf "trap exits 9\n"; exit 9' EXIT; exit 2 ); printf 'replaced -> %s\n' "$?"
+( trap 'printf "trap does not exit\n"' EXIT; exit 6 ); printf 'unchanged -> %s\n' "$?"
+
+# And it runs once, not once per way of leaving.
+( trap 'printf "once\n"' EXIT; exit 0 ); printf 'once -> %s\n' "$?"
+
+# `exec` replaces this shell with the command, so an EXIT trap set before it
+# never runs and the status is the command's.
+( trap 'printf "never runs\n"' EXIT; exec true ); printf 'after exec true -> %s\n' "$?"
+( trap 'printf "never runs\n"' EXIT; exec /usr/bin/false ); printf 'after exec false -> %s\n' "$?"
+
+# An EXIT trap may be ignored outright, which is the one disposition `trap ''`
+# has that makes no sense for a signal — there is nothing to deliver.
+( trap '' EXIT; printf 'ignored exit body\n'; exit 5 ); printf 'ignored exit -> %s\n' "$?"
+
+# ---- the two ends of the status range ----
+
+# 256 wraps to 0 and 511 to 255, which is the low eight bits and nothing else.
+# The numbers between are held out: ksh93 reads 256 plus a signal number as
+# "died of that signal" and raises it, which ends the script rather than
+# answering, and is written up in ksh/signals.tests.
+( exit 256 ); printf 'exit 256 -> %s\n' "$?"
+( exit 511 ); printf 'exit 511 -> %s\n' "$?"

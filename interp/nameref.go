@@ -69,16 +69,6 @@ import "strings"
 // expansion — would have left every builtin that takes a *name* operand
 // (`read`, `getopts`, `printf -v`) reaching around it.
 
-// namerefTargetOf is what a name references, and false for a name that
-// references nothing.
-//
-// One step, not the chain: see namerefTarget for why the chain is followed
-// somewhere else.
-func (r *Runner) namerefTargetOf(name string) (string, bool) {
-	t, ok := r.nameref[name]
-	return t, ok
-}
-
 // namerefDepth bounds how far a chain is followed.
 //
 // A reference to a reference is real — `typeset -n r=v; typeset -n s=r`

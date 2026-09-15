@@ -382,18 +382,33 @@ func sortedNames(seen map[string]bool) []string {
 // deliberately passing over functions and builtins: one dialect has a builtin
 // whose whole job is that narrower question, and without this it would have
 // to reimplement the search the runner already does.
+//
+// It is the *reporting* answer and not the execution one, which is the whole
+// of what it is for: an operand written with a slash comes back the way this
+// dialect writes it — see Runner.reportedPath — so a `whence -p` built on
+// this says what the shell it claims to be says.
 func (r *Runner) LookPath(name string) (string, bool) {
 	path, err := r.lookPath(name)
 	if err != nil {
 		return "", false
 	}
-	return path, true
+	return r.reportedPath(name, path), true
 }
 
 // LookPathAll is every PATH entry a name resolves to, in PATH order and
 // duplicates included, for a builtin whose job is to list them all rather than
 // to pick one.
-func (r *Runner) LookPathAll(name string) []string { return r.lookPathAll(name) }
+//
+// The reporting answer, like LookPath: a pathname operand is written the way
+// this dialect writes one — see Runner.reportedPath — so a `whence -a` built
+// on this lists what the shell it claims to be lists.
+func (r *Runner) LookPathAll(name string) []string {
+	hits := r.lookPathAll(name)
+	for i, path := range hits {
+		hits[i] = r.reportedPath(name, path)
+	}
+	return hits
+}
 
 // NameKind is what a shell would run for a word: the resolution itself, with
 // no wording attached to it.

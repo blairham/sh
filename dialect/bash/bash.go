@@ -331,6 +331,11 @@ func Semantics() interp.Semantics {
 	// same answer in the 3.2 macOS ships. ksh93 and zsh let `-s` name them.
 	s.StdinOptionNamesTheOperands = interp.No
 	s.CommandNotFoundStatusIsNotFound = interp.No
+	// A pathname operand comes back unchanged from `command -v`, `command -V`,
+	// `type`, `type -p`, `type -P` and `type -a` alike — `./bb/tool` stays
+	// `./bb/tool` — against POSIX's reading, which only ksh93 follows.
+	// Measured 2026-09-14 in 5.3.15 and in the 3.2.57 macOS ships.
+	s.APathnameOperandIsReportedAbsolute = interp.No
 	s.SetFTurnsOffGlobbing = interp.Yes
 	// The one shell in the panel that selects an editing mode for itself.
 	// Measured 2026-09-11 on 5.3.15 and on the 3.2 macOS ships, and under an

@@ -825,7 +825,64 @@ func Probes() []Probe {
 				return v, why
 			},
 		},
+		{
+			Field: "APathnameOperandIsReportedAbsolute",
+			Cases: []string{
+				"axis/command-v-reports-a-pathname-operand",
+				"axis/command-v-does-not-clean-a-pathname-operand",
+			},
+			// Two rows, and the second is what keeps the reading from being
+			// satisfied by a cleaning. A shell that joined and then tidied
+			// would write `<dir>/bb/tool` for the first row, which ends in
+			// the operand and would read as the joining answer; on the
+			// second it writes `<dir>/bb/tool` as well, where both real
+			// readings keep the dot-dot. So the first row decides and the
+			// second refuses a cell that lost part of the operand — which is
+			// exactly the answer this shell used to give (#2931).
+			Reading: "`command -v` on a relative pathname operand writes the operand back in a shell that reports it as written, and the working directory with the whole operand on the end in one that resolves it — neither shell cleaning anything out of the middle",
+			Read: func(cells map[string]oracle.Result) (string, string) {
+				v, why := pathnameOperandReading(cells["axis/command-v-reports-a-pathname-operand"], "./bb/tool")
+				if v == "" {
+					return v, why
+				}
+				again, whyAgain := pathnameOperandReading(cells["axis/command-v-does-not-clean-a-pathname-operand"], "./bb/../bb/tool")
+				switch {
+				case again == "":
+					return "", whyAgain
+				case again != v:
+					return "", "the two rows disagree, so this shell is doing something to the operand that neither reading describes"
+				}
+				return v, ""
+			},
+		},
 	}
+}
+
+// pathnameOperandReading reads one `command -v <relative path>` cell.
+//
+// The operand itself is the discriminator and it is passed in, because both
+// rows ask the same question of a different spelling: a cell that *is* the
+// operand is the shell writing it back, and a cell ending in the operand
+// after a slash is the shell putting its working directory in front of it. A
+// cell that is neither has lost part of the operand, which is a cleaning and
+// is no shell's answer.
+//
+// What stands in front is not inspected and cannot be: the harness replaces
+// the scratch directory a run invented with a placeholder, so the joining
+// cell reads `<tmp>/./bb/tool` rather than an absolute path. The suffix is
+// the whole of the evidence, and it is enough — a cleaned answer ends in
+// `/bb/tool` and never in `/./bb/tool`.
+func pathnameOperandReading(r oracle.Result, operand string) (string, string) {
+	out := strings.TrimSpace(r.Stdout)
+	switch {
+	case out == "":
+		return "", "nothing was written, so the row never reached a lookup at all"
+	case out == operand:
+		return "No", ""
+	case strings.HasSuffix(out, "/"+operand):
+		return "Yes", ""
+	}
+	return "", "the cell is neither the operand nor something ending in the whole of it, so it does not show either reading"
 }
 
 // boundedAtTheCommandWord is the reading both #2755 rows take: a fatal error

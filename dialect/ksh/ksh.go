@@ -446,6 +446,18 @@ func Semantics() interp.Semantics {
 	// neither can stand in for the other.
 	s.UnsplitAtListJoinsOnIFS = interp.No
 	s.CommandNotFoundStatusIsNotFound = interp.No
+	// The one shell in the panel that does what POSIX asks of `command -v`
+	// for a pathname operand: `command -v ./bb/tool` is the working directory
+	// with the operand stuck on the end. Measured 2026-09-14 against 93u+ —
+	// the `./` survives in the middle, `cd /` gives `//./bin/ls`, and
+	// `command -v /bin/./ls` comes back untouched, so the rule is a prefix
+	// join and never a cleaning. `whence -p` and `whence -a` answer the same
+	// way, which is why the shaping is in one place (#2931).
+	//
+	// Written out rather than left to PosixSemantics, which already holds
+	// Yes: this is the column the axis was measured on, and a reader looking
+	// for the measurement should find it beside the shell that makes it.
+	s.APathnameOperandIsReportedAbsolute = interp.Yes
 	s.SetFTurnsOffGlobbing = interp.Yes
 	// Neither editing mode is selected on its own, interactive or not.
 	// Measured 2026-09-11 in a session at a real terminal: `set -o` reports

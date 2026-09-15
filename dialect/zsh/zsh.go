@@ -607,6 +607,10 @@ func Dialect() syntax.Dialect {
 func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
 	s.CommandNotFoundStatusIsNotFound = interp.No
+	// A pathname operand is written back as typed, through `command -v`,
+	// `type` and `whence -p` alike: `./bb/tool` is `./bb/tool`. Measured
+	// 2026-09-14 against 5.9.2.
+	s.APathnameOperandIsReportedAbsolute = interp.No
 	// The command that named a `>(cmd)` waits for its body here, which is
 	// what makes `printf x | tee >(sleep 3) >/dev/null` take three seconds
 	// in this shell and none in bash and ksh93 (#2197).

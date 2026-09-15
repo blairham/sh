@@ -18439,6 +18439,21 @@ echo "st=$? alive"`,
 		Why:     "an external is answered by the path, because that is the part a script cannot work out for itself",
 	},
 	{
+		ID: "axis/command-v-reports-a-pathname-operand", Category: "semantics axes",
+		Snippet: `mkdir -p bb; printf '#!/bin/sh\n:\n' > bb/tool; chmod +x bb/tool; command -v ./bb/tool`,
+		Why:     "POSIX says a command_name with a slash in it \"shall be written as an absolute pathname\", and ksh93 is the only column that does it: it writes the working directory with the operand stuck on the end, `./` and all. bash 5.3, bash 3.2, bash-as-sh, zsh, dash and BusyBox ash write the operand back unchanged. We joined *and* cleaned in all four dialects, which matched nobody — wrong for the five by resolving at all and wrong for ksh93 by tidying the `./` away, so `cmd=$(command -v ./helper)` handed back a string the script had not named (#2931)",
+	},
+	{
+		ID: "axis/command-v-does-not-clean-a-pathname-operand", Category: "semantics axes",
+		Snippet: `mkdir -p bb; printf '#!/bin/sh\n:\n' > bb/tool; chmod +x bb/tool; command -v ./bb/../bb/tool`,
+		Why:     "the half that says ksh93's absolutization is a prefix join and not a path normalization: the dot-dot survives in the middle of its answer, exactly as the `./` does, and the other six still write the operand back. A cleaning would shorten both readings to the same two shapes, which is why the row above cannot show this on its own",
+	},
+	{
+		ID: "cmd/command-v-keeps-an-absolute-operand-as-written", Category: "command lookup",
+		Snippet: `command -v /bin/./ls`,
+		Why:     "unanimous, and the control on the two rows above: an absolute operand has nothing to join to, so every column writes it back byte for byte — the `/.` included. It is the same reason `command -v /bin/ls` was right here while a relative operand was not, and it is what says the fix is about the join rather than about paths in general",
+	},
+	{
 		ID: "cmd/command-v-on-nothing", Category: "command lookup",
 		Snippet: `command -v nosuchthing; echo "st=$?"`,
 		Why:     "nothing found prints nothing at all, which is what makes `command -v x >/dev/null` the usual spelling — and dash answers 127 where the others answer a plain failure",

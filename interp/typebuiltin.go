@@ -232,12 +232,19 @@ func (r *Runner) typePath(name string, m typeMode) int {
 		// A miss is silence and the failing status in the bare-path shells.
 		return orDefault(r.diag().TypeNotFoundStatus, 1)
 	}
-	switch {
-	case m.kind:
+	if m.kind {
+		// The kind and never the path, so the operand question is not asked:
+		// `type -pt ./x` is `file` in every column.
 		r.printf("file\n")
-	case sentence:
+		return 0
+	}
+	path = r.reportedPath(name, path)
+	if r.unspecified {
+		return r.status
+	}
+	if sentence {
 		r.printf("%s\n", Wording(r.diag().TypeExternal, "%[1]s is %[2]s", name, path))
-	default:
+	} else {
 		r.printf("%s\n", path)
 	}
 	return 0
@@ -254,6 +261,13 @@ func (r *Runner) typeBarePath(name string, kind bool) int {
 	if kind {
 		r.printf("file\n")
 		return 0
+	}
+	// Written the dialect's way, and only here: `-P` with `-t` answers
+	// `file` above and never reaches a path, so the axis is not asked where
+	// nothing would show it — see Runner.reportedPath.
+	path = r.reportedPath(name, path)
+	if r.unspecified {
+		return r.status
 	}
 	r.printf("%s\n", path)
 	return 0
@@ -349,9 +363,14 @@ func (r *Runner) typeAll(name string, m typeMode) int {
 	if !r.reservedBuiltin(name) {
 		for _, path := range r.lookPathAll(name) {
 			found = true
-			if !r.sayKind(m.asked(), name, "file", NamedKindWord(NameFile)) {
-				r.printf("%s is %s\n", name, path)
+			if r.sayKind(m.asked(), name, "file", NamedKindWord(NameFile)) {
+				continue
 			}
+			path = r.reportedPath(name, path)
+			if r.unspecified {
+				return r.status
+			}
+			r.printf("%s is %s\n", name, path)
 		}
 	}
 	if found {
@@ -452,8 +471,13 @@ func (r *Runner) describeName(name string, kind typeKind, skipFuncs bool, notFou
 		if path, err := r.lookPathReporting(name); err == nil {
 			if r.sayKind(kind, name, "file", NamedKindWord(NameFile)) {
 				// The kind and never the path, which is what keeps the word
-				// comparable on any machine.
+				// comparable on any machine — and is why the operand
+				// question is asked below rather than here.
 				return 0
+			}
+			path = r.reportedPath(name, path)
+			if r.unspecified {
+				return r.status
 			}
 			r.printf("%s\n", Wording(dg.TypeExternal, "%[1]s is %[2]s", name, path))
 			return 0

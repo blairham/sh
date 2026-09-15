@@ -9538,6 +9538,47 @@ type Semantics struct {
 	// `hash` can tell them apart.
 	ALookupRemembersThePath Answer
 
+	// APathnameOperandIsReportedAbsolute decides what a builtin asked *where*
+	// a command is writes for an operand that was already written with a
+	// slash — `command -v ./bb/tool`, and the same question through
+	// `command -V`, `type`, `type -p`, `type -P`, `type -a` and `whence`.
+	//
+	// A word with a slash in it is a pathname and is not searched for, which
+	// is unanimous and is not this axis. What the utility *writes* for it is
+	// not.
+	//
+	// POSIX XCU gives `command -v` the wide reading: "command_names including
+	// a <slash> character ... shall be written as absolute pathnames". One
+	// shell in the panel does that and the rest write the operand back
+	// unchanged. Measured 2026-09-14 in a directory holding `bb/tool`, with
+	// the working directory written as <dir>:
+	//
+	//	                                  ./bb/tool          bb/tool
+	//	ksh93u+                           <dir>/./bb/tool    <dir>/bb/tool
+	//	bash 5.3.15, bash 3.2.57          ./bb/tool          bb/tool
+	//	bash-as-sh, zsh 5.9.2             ./bb/tool          bb/tool
+	//	dash 0.5.12, BusyBox ash 1.37.0   ./bb/tool          bb/tool
+	//
+	// **Neither reading cleans the path, and that is the half worth keeping.**
+	// The `./` survives in the middle of ksh93's answer, so its absolutization
+	// is a prefix join and not a path normalization: `cd /` then
+	// `command -v ./bin/ls` is `//./bin/ls` there, double slash and all, and
+	// `command -v ./bb/../bb/tool` keeps the dot-dot. An absolute operand is
+	// written back byte for byte in every column, ksh93 included —
+	// `command -v /bin/./ls` is `/bin/./ls` in all six.
+	//
+	// This shell used to join *and* clean in all four dialects, which matched
+	// nobody: wrong for bash, zsh, dash and ash by resolving at all, and wrong
+	// for ksh93 by tidying the `./` away. `cmd=$(command -v ./helper)` is
+	// ordinary defensive scripting, and the string it handed back was one the
+	// script had not named (#2931).
+	//
+	// The join is against the shell's own working directory — the logical one,
+	// so a directory reached through a symbolic link keeps the name it was
+	// reached by. Measured: `cd /tmp` on macOS, where `/tmp` is a link to
+	// `/private/tmp`, and ksh93 answers `/tmp/./bb/tool`.
+	APathnameOperandIsReportedAbsolute Answer
+
 	// APrefixedPathEmptiesTheCommandHash lets a `PATH=… cmd` prefix reach
 	// this shell's own PATH, which empties the command hash the way any
 	// other assignment to the name does — and putting the old value back
@@ -13928,6 +13969,12 @@ func PosixSemantics() Semantics {
 		// what it was only asked about; so do zsh and ksh93, and bash
 		// overrides.
 		ALookupRemembersThePath: Yes,
+		// The standard says it in as many words: a command_name including a
+		// slash "shall be written as an absolute pathname". ksh93 is the one
+		// shell in the panel that does it, and the other five override. The
+		// standard says absolute and not canonical, which is why the join
+		// that satisfies it does not clean.
+		APathnameOperandIsReportedAbsolute: Yes,
 		// The standard says a prefix to a command that is not a special
 		// builtin or a function does not affect the current execution
 		// environment, which reads as the table surviving; dash is its

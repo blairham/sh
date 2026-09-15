@@ -51,3 +51,20 @@ printf '#!/bin/sh\nprintf "tool\\n"\n' > bin1/tool; chmod 755 bin1/tool
 command -v ./bin1/tool; printf 'dot slash -> %s\n' "$?"
 command -v bin1/tool; printf 'relative -> %s\n' "$?"
 command -v /bin/ls; printf 'absolute -> %s\n' "$?"
+
+# And the join is not a cleaning: the dot-dot survives in the middle of the
+# answer exactly as the `./` does. core/ asks the half every reference agrees
+# on — that the operand comes back whole — and this is the spelling where a
+# shell that joined and *then* cleaned would look like this one.
+command -v ./bin1/../bin1/tool; printf 'dot-dot -> %s\n' "$?"
+
+# The same answer through the builtin whose whole job is this question, so a
+# fix applied to `command -v` alone is visible here rather than nowhere.
+whence -p ./bin1/tool; printf 'whence -p -> %s\n' "$?"
+
+# Held out until #2953 lands: `command -V` and `type` get the path right and
+# the sentence wrong. ksh93 keeps `is a tracked alias for` for a name it
+# resolved through PATH and writes the plain sentence for a pathname operand,
+# where we write the tracked-alias one for both.
+#
+#   command -V ./bin1/tool

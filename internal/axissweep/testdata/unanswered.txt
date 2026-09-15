@@ -29,6 +29,7 @@
 ash   AliasInvalidNameFatal
 ash   AliasNameCheckReachesALookup
 ash   AppendedArrayLiteralOverANameNotDeclaredAnArrayStartsItOver
+ash   ArithDivisionByZeroYieldsAValue
 ash   ArithFloatOverflowIsZero
 ash   ArithIntegerOperatorRefusesFloat
 ash   ArithRecursedNameMustBeSet
@@ -199,6 +200,7 @@ ash   WholeArraySubscriptAssigningATable
 ash   WholeArraySubscriptAssigningAnArray
 ash   WritingSubstitutionIsWaitedForAtTheCommand
 
+bash  ArithDivisionByZeroYieldsAValue
 bash  ArithFloatOverflowIsZero
 bash  ArithIntegerOperatorRefusesFloat
 bash  ArithSubscriptSkippedWhenNameUnset
@@ -228,6 +230,7 @@ bash  SetArrayWithNoValuesUnsetsTheName
 dash  AliasInvalidNameFatal
 dash  AliasNameCheckReachesALookup
 dash  AppendedArrayLiteralOverANameNotDeclaredAnArrayStartsItOver
+dash  ArithDivisionByZeroYieldsAValue
 dash  ArithFloatOverflowIsZero
 dash  ArithIntegerOperatorRefusesFloat
 dash  ArithNegativeExponentIsError

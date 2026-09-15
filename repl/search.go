@@ -144,8 +144,19 @@ func (e *editor) research(query []rune, at int) (int, bool) {
 	return i, false
 }
 
-// findBack is the newest entry at or before from that contains the query, and
-// where in it the match begins.
+// findBack is the entry at or before from that the query names, and where in
+// it the match begins.
+//
+// Two passes, contiguous first. The newest entry that *contains* the query is
+// the answer whenever there is one, which is what this editor has always done
+// and what the panel shells were measured for; only a query that nothing
+// contains reaches the ranked subsequence match in searchrank.go, so `gco`
+// finds `git checkout origin/main` where it used to ring the bell (#1311).
+//
+// The order is what makes the new behavior strictly additive. A query that
+// matched before matches the same line, in the same sequence under a repeated
+// `C-r`, for the same cost — the ranking pass is not run at all. Putting the
+// ranked pass first would have re-decided every search anybody already had.
 //
 // Rune offsets out, byte offsets in: the cursor sits between characters, and a
 // match after a multi-byte one would otherwise be drawn several columns to the
@@ -160,7 +171,7 @@ func (e *editor) findBack(query []rune, from int) (int, int) {
 			return i, utf8.RuneCountInString(e.history[i][:j])
 		}
 	}
-	return -1, 0
+	return e.rankBack(query, from)
 }
 
 // showMatch puts an entry in the line with the cursor at the match.

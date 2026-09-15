@@ -2412,7 +2412,7 @@ func (l *Lexer) substitutionSpans(flush func()) ([]Span, bool) {
 
 	case c == '$' && l.startsBareParam():
 		flush()
-		return []Span{l.scanBareParam(Unquoted)}, true
+		return l.scanBareParam(Unquoted), true
 
 	case c == '`':
 		flush()
@@ -2548,7 +2548,7 @@ func (l *Lexer) heredocSpans() []Span {
 			litPos = l.pos()
 		case c == '$' && l.startsBareParam():
 			flush()
-			out = append(out, l.scanBareParam(DoubleQuoted))
+			out = append(out, l.scanBareParam(DoubleQuoted)...)
 			litPos = l.pos()
 		case c == '`':
 			flush()
@@ -2697,7 +2697,7 @@ func (l *Lexer) scanDoubleEscaping(open Pos, closing bool, escapes string) []Spa
 			litPos = l.pos()
 		case c == '$' && l.startsBareParam():
 			flush()
-			out = append(out, l.scanBareParam(DoubleQuoted))
+			out = append(out, l.scanBareParam(DoubleQuoted)...)
 			litPos = l.pos()
 		case c == '`':
 			flush()
@@ -4240,7 +4240,7 @@ func isBareParam(c byte) bool {
 // A digit is a *single* positional parameter here: `$12` is `$1` followed by
 // the character 2, which is why the multi-digit form needs braces. A special
 // character is likewise exactly one.
-func (l *Lexer) scanBareParam(q Quoting) Span {
+func (l *Lexer) scanBareParam(q Quoting) []Span {
 	open := l.pos()
 	l.advance() // $
 	begin := l.off
@@ -4274,8 +4274,19 @@ func (l *Lexer) scanBareParam(q Quoting) Span {
 			l.advance()
 		}
 	}
-	l.bareSubscript(l.src[begin:l.off], q)
-	return Span{Kind: ParamExp, Value: l.src[begin:l.off], Quoting: q, Pos: open, Bare: true}
+	// Where the name ends, kept because the scan below advances the cursor
+	// in both of its outcomes and the expansion's Value is only the first
+	// of them: a subscript the scan *took* belongs to the expansion, and a
+	// bracket run it gave back and kept as text does not.
+	name := l.src[begin:l.off]
+	kept, hasKept := l.bareSubscript(name, q)
+	if hasKept {
+		return []Span{
+			{Kind: ParamExp, Value: name, Quoting: q, Pos: open, Bare: true},
+			kept,
+		}
+	}
+	return []Span{{Kind: ParamExp, Value: l.src[begin:l.off], Quoting: q, Pos: open, Bare: true}}
 }
 
 // startsBareParam reports whether the `$` under the cursor begins a bare
@@ -4388,9 +4399,9 @@ func takesBareSubscript(name string) bool {
 // scan that stopped at every newline would have been wrong for the quoted
 // half and was — nothing caught it until the line was mutated away and the
 // shell was asked.
-func (l *Lexer) bareSubscript(name string, q Quoting) {
+func (l *Lexer) bareSubscript(name string, q Quoting) (Span, bool) {
 	if !l.dialect.BareSubscript || l.peek() != '[' || !takesBareSubscript(name) {
-		return
+		return Span{}, false
 	}
 	depth := 0
 	// A subscript may open with a flag group of its own, and the `(` that
@@ -4426,6 +4437,7 @@ func (l *Lexer) bareSubscript(name string, q Quoting) {
 	// scan has not committed to the subscript yet and must be able to give
 	// the characters back.
 	subEnd := -1
+	sawSub := false
 	for i := l.off; i < len(l.src); i++ {
 		if i > l.off && i < past {
 			continue
@@ -4435,6 +4447,7 @@ func (l *Lexer) bareSubscript(name string, q Quoting) {
 			sub := NewLexer(l.src[i:], l.dialect)
 			if sub.skipSubstitution() && sub.Err() == nil {
 				subEnd = i + sub.off
+				sawSub = true
 			}
 		}
 		switch {
@@ -4448,20 +4461,119 @@ func (l *Lexer) bareSubscript(name string, q Quoting) {
 					// half a substitution and no subscript at all. zsh gives
 					// the characters back here too: `x=$a[$(: ]; echo 2)]`
 					// leaves them as text.
-					return
+					return l.keptBareSubscript(q, sawSub)
 				}
 				for l.off <= i {
 					l.advance()
 				}
-				return
+				return Span{}, false
 			}
 		case i < subEnd:
 		case q == DoubleQuoted && c == '"':
-			return
+			return l.keptBareSubscript(q, sawSub)
 		case q != DoubleQuoted && l.isWordEnd(c):
-			return
+			return l.keptBareSubscript(q, sawSub)
 		}
 	}
+	return l.keptBareSubscript(q, sawSub)
+}
+
+// keptBareSubscript is what the brackets are once the scan above has given
+// them back, and it is not "the rest of the word".
+//
+// Measured on zsh 5.9.2, 2026-09-14, `setopt noglob` so a pattern matching
+// nothing cannot be what is reported, `a=(xx yy zz)`:
+//
+//	$a[$(: ]; echo 2)]             xx yy zz[$(: ]; echo 2)]
+//	$a[$(echo 2; : [)]             xx yy zz[$(echo 2; : [)]
+//	$a[$(: ]; echo 2)]$(echo Q)    xx yy zz[$(: ]; echo 2)]Q
+//	$a[$(: ]; echo *)]             xx yy zz[$(: ]; echo *)]
+//	$a[$(: ]; echo 2)]*            no matches found: …]*
+//	$a[$(: ]; echo 2)              invalid subscript
+//	$a[$(: ]; echo 2)x             invalid subscript
+//
+// So the characters the subscript scan gave back are **kept as written**: the
+// substitution between them is never run, the `*` between them is not a
+// pattern, and the spaces between them do not split a field. What stands
+// *behind* the closing bracket is a word like any other — the third row runs
+// its substitution and the fifth matches with its `*` — so what is quoted is
+// the bracket run and nothing past it (#2786).
+//
+// The extent is the `]` that closes the `[` with every substitution stepped
+// over **as a unit**, which is a second scan and not the one above: the scan
+// above counts a bracket written inside a substitution, which is what decides
+// whether there is a subscript at all, and this one does not, which is what
+// decides how far the text runs. The last two rows are the other end of it —
+// no such bracket, and the word is refused rather than kept, which the same
+// scan answers for the parser — see bareSubscriptClose.
+//
+// Only where a substitution was in the way, and only unquoted. A `[` a word
+// simply never closed is the refusal #1757 records, and the double-quoted
+// spelling is a different question this shell already answers differently.
+func (l *Lexer) keptBareSubscript(q Quoting, sawSub bool) (Span, bool) {
+	if !sawSub || q != Unquoted {
+		return Span{}, false
+	}
+	at := bareSubscriptClose(l.src[l.off:], l.dialect, l.isWordEnd)
+	if at < 0 {
+		return Span{}, false
+	}
+	open, start := l.pos(), l.off
+	for l.off <= start+at {
+		l.advance()
+	}
+	// SingleQuoted, which is what the measurements say: the `*` between the
+	// brackets is a character and the blanks there do not split.
+	return Span{
+		Kind: Literal, Quoting: SingleQuoted,
+		Value: l.src[start : start+at+1], Pos: open,
+	}, true
+}
+
+// bareSubscriptClose finds the `]` that closes the `[` s opens with, with
+// each `$( )` stepped over as a unit, or -1. ends reports a byte that ends
+// the word, for the caller whose text runs past the word's end.
+//
+// One function for two callers, which is the point rather than an economy:
+// the lexer asks it how far the kept run reaches and the parser asks it
+// whether the subscript is closed at all, and a rule answered in two places
+// is a rule that drifts. A plain search for a `]` answers the parser's
+// question for every shape but one — `$a[$(: ]; echo 2)` holds a `]` that
+// closes nothing, and zsh refuses that word where it keeps
+// `$a[$(: ]; echo 2)]` as text.
+//
+// A backtick ends it rather than being stepped over, and the measurement is
+// what says so rather than the shape of the code: on zsh 5.9.2, 2026-09-14,
+// a subscript whose only `]` is inside backticks is `invalid subscript`
+// where the `$( )` spelling of the same word is kept. A backtick written
+// *inside* a `$( )` is a different matter and never reaches here, since the
+// group around it is stepped over whole.
+func bareSubscriptClose(s string, d Dialect, ends func(byte) bool) int {
+	depth := 0
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c == '`' {
+			return -1
+		}
+		if c == '$' && i+1 < len(s) && s[i+1] == '(' {
+			sub := NewLexer(s[i:], d)
+			if sub.skipSubstitution() && sub.Err() == nil {
+				i += sub.off - 1
+				continue
+			}
+		}
+		switch {
+		case c == '[':
+			depth++
+		case c == ']':
+			if depth--; depth == 0 {
+				return i
+			}
+		case ends != nil && ends(c):
+			return -1
+		}
+	}
+	return -1
 }
 
 // openingOf is how a span's kind is written, for saying what is unfinished.

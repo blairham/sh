@@ -4562,6 +4562,37 @@ subscript instead and reports `invalid subscript` at run time — for the
 unclosed unquoted form and for `"$a[" ]` alike; the shape fails either
 way, and the difference is the wording.
 
+A **command substitution between the brackets** is where "closes" needs
+two scans rather than one, and the pair is measured
+(`array/a-bare-subscript-a-substitution-leaves-unbalanced` and
+`-closed-only-inside-a-substitution`, zsh 5.9.2, `a=(xx yy zz)` under
+`setopt noglob`):
+
+| written | zsh |
+| --- | --- |
+| `$a[$(echo 2)]` | `yy` — an ordinary subscript |
+| `$a[$(: ]; echo 2)]` | `xx yy zz[$(: ]; echo 2)]` |
+| `$a[$(echo 2; : [)]` | `xx yy zz[$(echo 2; : [)]` |
+| `$a[$(: ]; echo 2)]$(echo Q)` | `xx yy zz[$(: ]; echo 2)]Q` |
+| `$a[$(: ]; echo 2)` | `invalid subscript` |
+| `` $a[`: ]; echo 2`] `` | `invalid subscript` |
+
+Whether there **is** a subscript is decided by the scan that counts
+every bracket, including one written inside the substitution — which is
+why rows two and three have none. What the brackets then **are** is the
+second scan's question, and that one steps over each `$( )` as a unit:
+the run from the `[` to the `]` that closes it is kept **as written**,
+so the substitution between them is never performed, its blanks do not
+split a field and a `*` there is not a pattern. Only the run is kept —
+row four runs the substitution behind the closing bracket like any other
+word.
+
+Where the second scan finds no closing bracket the word is the unclosed
+refusal instead, which is row five; and a backtick is not stepped over
+at all, which is row six. This implementation ran the substitution and
+spliced its output into the word — `zz[2]` — which is neither answer
+(#2786, #1757).
+
 ## A subscript's own flag group — zsh only
 
 A subscript may open with a parenthesized group of flags of its own,

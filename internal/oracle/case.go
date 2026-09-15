@@ -7265,6 +7265,16 @@ echo "st=$?"`,
 		Why:     "the subscript is a word and not a numeral, so a command substitution stands in one — the shape that shows the parser has to keep the spans rather than flatten the brackets to text. Unanimous in the three with arrays, at the base each of them counts from",
 	},
 	{
+		ID: "array/a-bare-subscript-a-substitution-leaves-unbalanced", Category: "expansion",
+		Snippet: `a=(xx yy zz); printf "<%s>" $a[$(: ]; echo 2)]; echo; printf "<%s>" $a[$(echo 2; : [)]; echo; printf "<%s>" $a[$(: ]; echo 2)]$(echo Q); echo`,
+		Why:     "a `[` behind an unbraced name whose `]` was written *inside* a command substitution. zsh reads no subscript there and keeps the whole bracket run **as written** — the substitution between the brackets is never run — while what stands behind the closing bracket is a word like any other and still expands, which the third line shows. The columns with no bare subscript read `$a` and then the characters, running the substitution in all three. This shell ran it too and spliced the `2` in, which is neither answer (#2786)",
+	},
+	{
+		ID: "array/a-bare-subscript-closed-only-inside-a-substitution", Category: "expansion",
+		Snippet: `a=(xx yy zz); printf "<%s>" $a[$(: ]; echo 2); echo; printf "<%s>" $a[` + "`" + `: ]; echo 2` + "`" + `]; echo`,
+		Why:     "the control for the row above, and the two spellings of a substitution parting. A `]` that closes nothing once the `$( )` is stepped over whole leaves the subscript unfinished, and zsh refuses the word rather than keeping it. The second line is the same word written with backticks *and* a closing bracket — refused as well, because a backtick is not stepped over at all where a `$( )` is. Without these the row above reads as \"any `]` anywhere in the word closes it\", which is what this shell had",
+	},
+	{
 		ID: "array/appending-through-a-subscript-holding-an-expansion", Category: "expansion",
 		Snippet: `a=(x y); i=1; a[$i]+=Q; printf "[%s]" "${a[@]}"; echo`,
 		Why:     "`+=` after an expanded subscript, which is the combination that reaches both halves of the assignment scan at once: the `]` and the `+=` after it are in a span the old scan never looked at. Joining rather than replacing is `array/appending-to-an-element`'s question and the base is `array/appending-to-an-element-inherits-the-base`'s; this case is only about the form parsing at all",

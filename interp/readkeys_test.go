@@ -310,7 +310,7 @@ func TestAnExpiredKeyReadDoesNotSwallowTheNextKey(t *testing.T) {
 	// reporting that as "the expired read swallowed the key" sends the next
 	// reader after a bug that is not there. That issue asked for exactly
 	// this — *"the failure message should say it was a timeout rather than a
-	// behavioural mismatch, so the next reader is not misled"*.
+	// behavioral mismatch, so the next reader is not misled"*.
 	pressed := make(chan bool, 1)
 	go func() {
 		// Bounded so a shell that never reaches the first read cannot leave

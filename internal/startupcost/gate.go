@@ -295,7 +295,7 @@ type Result struct {
 	// work the program does, and the least-contended spawn is the closest
 	// this can get to it.
 	//
-	// The two halves are minimised independently, and not from the same
+	// The two halves are minimized independently, and not from the same
 	// invocation. That is deliberate: each is the least-contended sample of
 	// the quantity it measures, and insisting they come from one run would
 	// mean picking a winner between the two and reporting the loser's

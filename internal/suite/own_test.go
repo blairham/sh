@@ -269,3 +269,32 @@ func TestOnlyHereReadsTheGroupTheColumnLandedIn(t *testing.T) {
 		t.Errorf("a column that is not in any group reported %v", with)
 	}
 }
+
+// TestEveryNativeRunNamesTheShellUnderTest guards the one thing that makes
+// invocation askable, and it guards both halves of it.
+//
+// core/invocation.tests starts a shell to ask how a shell starts. If a column
+// does not name [OurShellVar] the case has no shell to start; if the tier
+// suite [CrossCheck] and [OnlyHere] use does not name it, the same file run
+// through the references would have each of them starting *nothing* — and
+// four shells failing the same way is agreement on an error message, which is
+// the one result this instrument may not report as a pass.
+func TestEveryNativeRunNamesTheShellUnderTest(t *testing.T) {
+	for _, s := range OurColumns() {
+		if s.ShellVar != OurShellVar {
+			t.Errorf("the %s column names the shell under test in %q, not %q", s.Name, s.ShellVar, OurShellVar)
+		}
+	}
+	for _, name := range Tiers {
+		if got := tier(name).ShellVar; got != OurShellVar {
+			t.Errorf("the %s tier's cross-check names the shell under test in %q, not %q", name, got, OurShellVar)
+		}
+	}
+	for _, s := range OurColumns() {
+		if d := s.DialectTier(); d != "" {
+			if got := tier(d).ShellVar; got != OurShellVar {
+				t.Errorf("the %s tier's only-here check names the shell under test in %q, not %q", d, got, OurShellVar)
+			}
+		}
+	}
+}

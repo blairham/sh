@@ -106,6 +106,29 @@ const OurRoot = "share/suite"
 // own suite has: a file of assertions that a shell executes from the top.
 const OurExt = ".tests"
 
+// OurShellVar is the environment variable our own suite names the shell under
+// test in, and it is what makes invocation askable at all.
+//
+// Every other question in this suite can be asked from inside a running
+// shell. How the shell was *started* cannot: `-c` against a script file
+// against standard input, an option bundle, `--`, what `$0` is in each of
+// them. A case has to start a shell to ask any of it, and the shell it starts
+// has to be the shell of the run — the reference re-entering the reference
+// and ours re-entering ours. A name frozen to one of them would have our
+// column grading the reference against itself, which is a green run that
+// measured nothing.
+//
+// [environ] sets it to the shell of the run for every suite that names one,
+// which is the mechanism the bash column has always used. What is new here is
+// that ours name one too, [tier] included: a cross-check runs the same files
+// through each reference in turn and each must re-enter *itself*, or the tier
+// agreement would be four shells agreeing about one shell.
+//
+// Its value is an absolute path and [normalize] replaces it with `<shell>`,
+// so a case may print `$0` from a `-c` with no operand — which is the shell's
+// own name in every column — without printing a path that differs per run.
+const OurShellVar = "SUITE_SHELL"
+
 // Ours is one column per dialect binary under cmd/.
 //
 // Five rows from the first commit, for the reason the fetched panel has four:
@@ -114,28 +137,31 @@ const OurExt = ".tests"
 // passed.
 var Ours = []Suite{
 	{
-		Name:    "bash",
-		Dialect: "bash",
-		Ours:    true,
-		Dirs:    []string{"core", "ext", "bash"},
-		Ext:     OurExt,
-		Lookup:  []string{"/opt/homebrew/bin/bash", "/usr/local/bin/bash", "/bin/bash", "/usr/bin/bash"},
+		Name:     "bash",
+		Dialect:  "bash",
+		Ours:     true,
+		Dirs:     []string{"core", "ext", "bash"},
+		Ext:      OurExt,
+		ShellVar: OurShellVar,
+		Lookup:   []string{"/opt/homebrew/bin/bash", "/usr/local/bin/bash", "/bin/bash", "/usr/bin/bash"},
 	},
 	{
-		Name:    "zsh",
-		Dialect: "zsh",
-		Ours:    true,
-		Dirs:    []string{"core", "ext", "zsh"},
-		Ext:     OurExt,
-		Lookup:  []string{"/opt/homebrew/bin/zsh", "/usr/local/bin/zsh", "/bin/zsh", "/usr/bin/zsh"},
+		Name:     "zsh",
+		Dialect:  "zsh",
+		Ours:     true,
+		Dirs:     []string{"core", "ext", "zsh"},
+		Ext:      OurExt,
+		ShellVar: OurShellVar,
+		Lookup:   []string{"/opt/homebrew/bin/zsh", "/usr/local/bin/zsh", "/bin/zsh", "/usr/bin/zsh"},
 	},
 	{
-		Name:    "ksh93",
-		Dialect: "ksh",
-		Ours:    true,
-		Dirs:    []string{"core", "ext", "ksh"},
-		Ext:     OurExt,
-		Lookup:  []string{"/bin/ksh", "/usr/bin/ksh", "/opt/homebrew/bin/ksh93"},
+		Name:     "ksh93",
+		Dialect:  "ksh",
+		Ours:     true,
+		Dirs:     []string{"core", "ext", "ksh"},
+		Ext:      OurExt,
+		ShellVar: OurShellVar,
+		Lookup:   []string{"/bin/ksh", "/usr/bin/ksh", "/opt/homebrew/bin/ksh93"},
 	},
 	{
 		// The column the fetched panel can never have: dash ships no suite,
@@ -145,12 +171,13 @@ var Ours = []Suite{
 		// gap: dash is the holdout on arrays, [[ ]], $'…', += and the rest,
 		// and running those files here would grade dash on constructs it
 		// has never claimed to have.
-		Name:    "dash",
-		Dialect: "dash",
-		Ours:    true,
-		Dirs:    []string{"core", "dash"},
-		Ext:     OurExt,
-		Lookup:  []string{"/bin/dash", "/usr/bin/dash", "/opt/homebrew/bin/dash"},
+		Name:     "dash",
+		Dialect:  "dash",
+		Ours:     true,
+		Dirs:     []string{"core", "dash"},
+		Ext:      OurExt,
+		ShellVar: OurShellVar,
+		Lookup:   []string{"/bin/dash", "/usr/bin/dash", "/opt/homebrew/bin/dash"},
 	},
 	{
 		// The column that was a row until now. There is no BusyBox on a
@@ -175,6 +202,7 @@ var Ours = []Suite{
 		Ours:       true,
 		Dirs:       []string{"core", "ash"},
 		Ext:        OurExt,
+		ShellVar:   OurShellVar,
 		Lookup:     []string{"/bin/ash", "/bin/busybox"},
 		Container:  "ash",
 		MustReport: "busybox",
@@ -215,7 +243,7 @@ var Tiers = []string{"core", "ext"}
 // per-run directory a graded run gets. A cross-check run on different terms
 // from the graded run would be measuring something else.
 func tier(name string) Suite {
-	return Suite{Name: name, Dialect: "sh", Ours: true, Dirs: []string{name}, Ext: OurExt}
+	return Suite{Name: name, Dialect: "sh", Ours: true, Dirs: []string{name}, Ext: OurExt, ShellVar: OurShellVar}
 }
 
 // CrossShells is the columns whose references are expected to agree about a

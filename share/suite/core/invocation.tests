@@ -1,0 +1,183 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# How a shell is started — #2315, and the one area of this suite that could
+# not be asked at all until now.
+#
+# Every other question here is asked from inside a running shell. This one is
+# about the run itself: `-c` against a script file against standard input,
+# what `$0` is in each, `-s`, an option bundle, `-o` and `+o` on the command
+# line, `--`, and the status a script that never says `exit` ends with. A case
+# has to *start* a shell to ask any of it.
+#
+# `$SUITE_SHELL` is that shell, and it is the shell of this run — the
+# reference re-enters the reference and our binary re-enters ours. A name
+# frozen to one of them would have our column grading the reference against
+# itself: a green run that measured nothing. See suite.OurShellVar.
+#
+# Two normalizations make the output comparable, and both are the harness's
+# rather than this file's: the shell's own path becomes `<shell>`, which is
+# what `$0` is for a `-c` with no operand and for a script on standard input,
+# and the run's directory becomes `<dir>`. Nothing else here prints a path.
+#
+# Held out, each with where its answer is:
+#
+#   the option *letters* on the command line. `-f` is noglob in bash, ksh93
+#     and dash and "read no rc files" in zsh, so `-fc 'printf "[%s]\n" *'`
+#     globs in one column and not the other three — zsh/options.tests records
+#     the split and this file uses `-o noglob`, which is the spelling all four
+#     share.
+#   `$0` read inside a function of a `-c` command string: zsh answers with the
+#     function's name and the other three with the shell's `$0`. That is
+#     zsh/functions.tests.
+#   `$-` containing `c` for a `-c` run — bash and ksh93 put it there, zsh and
+#     dash do not — which is two against two and no tier's.
+#   argv[0] choosing a dialect, which is what `cmd/sh` does with the name it
+#     was invoked under. It cannot be asked here at all: each reference on the
+#     panel *is* a different shell, so the case would be four programs
+#     answering about themselves rather than one question with one answer.
+#   a login shell. Every column reaches it by a different door — a leading `-`
+#     on argv[0], `-l`, `--login` — and what it then does is read files that
+#     do not exist in a run with a synthetic HOME.
+
+# ---- the three routes in ----
+
+# `-c` with no operand: `$0` is the shell itself and there are no positional
+# parameters.
+"$SUITE_SHELL" -c 'printf "c: zero=[%s] count=%s\n" "$0" "$#"'
+
+# With operands, the first is `$0` and the rest are the positional parameters
+# — which is the part that surprises everybody, because it is not `$1`.
+"$SUITE_SHELL" -c 'printf "c: zero=[%s] count=%s one=[%s] two=[%s]\n" "$0" "$#" "$1" "$2"' myname a b
+"$SUITE_SHELL" -c 'printf "c: star=[%s]\n" "$*"' myname x y
+
+# A script named on the command line: `$0` is the name as it was written, and
+# the operands after it are `$1` onward.
+printf 'printf "file: zero=[%%s] count=%%s one=[%%s]\\n" "$0" "$#" "$1"\n' > script1.sh
+"$SUITE_SHELL" ./script1.sh p q
+
+# Including when the name is absolute, and when it is a bare name found on
+# PATH — the run's own directory leads PATH, which is what makes the third
+# line work.
+"$SUITE_SHELL" "$PWD/script1.sh"
+"$SUITE_SHELL" script1.sh
+
+# A script on standard input: `$0` is the shell, as it is for `-c`, and there
+# are no operands to be positional parameters.
+"$SUITE_SHELL" < script1.sh
+
+# `-s` says "read standard input" out loud, which is how operands are given to
+# a script that arrives that way.
+"$SUITE_SHELL" -s a b < script1.sh
+"$SUITE_SHELL" -s -- a b < script1.sh
+
+# ---- `--`, and operands that look like options ----
+
+# After the command string, an operand is an operand however it is spelled —
+# `--` included, which every column here takes as the `$0` operand rather than
+# as an end-of-options marker, because the options already ended at the
+# command string.
+"$SUITE_SHELL" -c 'printf "dashdash: zero=[%s] count=%s one=[%s]\n" "$0" "$#" "$1"' -- myname a
+"$SUITE_SHELL" -c 'printf "looks like an option: count=%s one=[%s]\n" "$#" "$1"' myname -x
+"$SUITE_SHELL" -- ./script1.sh arg
+
+# ---- options on the command line ----
+
+: > aaa.txt
+: > bbb.txt
+
+# `-o name` is the spelling of an option every column shares, and it applies
+# before the command string runs.
+"$SUITE_SHELL" -o noglob -c 'printf "noglob: [%s]\n" *.txt'
+"$SUITE_SHELL" -c 'printf "glob: [%s]\n" *.txt'
+
+# `+o` turns one off, and a later `+o` undoes an earlier `-o` on the same
+# line — so the command line is read left to right like everything else.
+"$SUITE_SHELL" +o noglob -c 'printf "plus o: [%s]\n" *.txt'
+"$SUITE_SHELL" -o noglob +o noglob -c 'printf "o then plus o: [%s]\n" *.txt'
+
+# Letters bundle with `-c`, and two letters may share one word.
+"$SUITE_SHELL" -uc 'printf "[%s]\n" "$nosuch_zz"' 2> /dev/null
+printf 'bundled -uc ended it -> %s\n' "$(( $? != 0 ))"
+"$SUITE_SHELL" -ec 'false; printf "not reached\n"' 2> /dev/null
+printf 'bundled -ec -> %s\n' "$?"
+"$SUITE_SHELL" -eu -c 'false' 2> /dev/null
+printf 'two letters in one word -> %s\n' "$?"
+
+# `-n` reads and does not run.
+"$SUITE_SHELL" -n -c 'printf "never runs\n"'
+printf 'noexec -> %s\n' "$?"
+
+# `-i` puts `i` in the flags even with no terminal anywhere, and a run without
+# it does not.
+"$SUITE_SHELL" -i -c 'case "$-" in *i*) printf "i is set\n" ;; *) printf "i is not set\n" ;; esac' 2> /dev/null
+"$SUITE_SHELL" -c 'case "$-" in *i*) printf "i is set\n" ;; *) printf "i is not set\n" ;; esac'
+
+# A long option name no shell has is refused, and refusing it is refusing the
+# whole run rather than carrying on without it.
+"$SUITE_SHELL" -o nosuchopt_zz -c 'printf "ran\n"' 2> /dev/null
+printf 'an option name nobody has -> %s\n' "$(( $? != 0 ))"
+
+# ---- the status a run ends with ----
+
+# With no `exit`, it is the last command's.
+printf 'true\n' > end0.sh
+"$SUITE_SHELL" ./end0.sh
+printf 'ends with true -> %s\n' "$?"
+printf 'false\n' > end1.sh
+"$SUITE_SHELL" ./end1.sh
+printf 'ends with false -> %s\n' "$?"
+printf 'exit 7\n' > end2.sh
+"$SUITE_SHELL" ./end2.sh
+printf 'ends with exit 7 -> %s\n' "$?"
+
+# A script with nothing in it, and one with nothing but a comment, are both a
+# success — there is no last command and the status is zero rather than
+# whatever the shell had.
+: > end3.sh
+"$SUITE_SHELL" ./end3.sh
+printf 'an empty script -> %s\n' "$?"
+printf '# only a comment\n' > end4.sh
+"$SUITE_SHELL" ./end4.sh
+printf 'only a comment -> %s\n' "$?"
+
+# The same for an empty command string, and a failing one reports the failure.
+"$SUITE_SHELL" -c ''
+printf 'an empty command string -> %s\n' "$?"
+"$SUITE_SHELL" -c 'false'
+printf 'a failing command string -> %s\n' "$?"
+
+# A script that is not there fails rather than running nothing.
+"$SUITE_SHELL" ./nosuchscript_zz.sh 2> /dev/null
+printf 'no such script -> %s\n' "$(( $? != 0 ))"
+
+# A script whose last command is a background job does not wait for it, and
+# ends with the status of *starting* it. With a `wait` the job is finished
+# before the shell ends, which is what makes reading its output a fact.
+printf 'false &\n' > bg1.sh
+"$SUITE_SHELL" ./bg1.sh
+printf 'ends with a background job -> %s\n' "$?"
+printf '( exit 3 ) &\nwait\n' > bg2.sh
+"$SUITE_SHELL" ./bg2.sh
+printf 'background then wait -> %s\n' "$?"
+printf 'printf "from the background\\n" > bg.out &\nwait\n' > bg3.sh
+"$SUITE_SHELL" ./bg3.sh
+printf 'the background job wrote [%s]\n' "$(cat bg.out)"
+
+# ---- what the run inherits ----
+
+# The environment, through a prefix on the invocation.
+FOO=bar "$SUITE_SHELL" -c 'printf "the environment reaches it [%s]\n" "$FOO"'
+
+# Its standard input, which is whatever it was given: a script reading from
+# the null device gets an immediate end, and one reading from a file gets the
+# file.
+printf 'if read line; then printf "read [%%s]\\n" "$line"; else printf "nothing to read\\n"; fi\n' > reader.sh
+"$SUITE_SHELL" ./reader.sh < /dev/null
+printf 'a line from a file\n' > readfrom
+"$SUITE_SHELL" ./reader.sh < readfrom
+
+# A command string may be more than one line, and a newline in it is a command
+# separator like any other.
+"$SUITE_SHELL" -c 'printf "line one\n"
+printf "line two\n"'

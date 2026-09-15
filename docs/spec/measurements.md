@@ -19272,6 +19272,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `decl/an-array-literal-over-the-other-kind-of-array` | **2>** `<shell>: 1: h[k]=v: not found~<shell>: 2: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 2: h: cannot convert associative to indexed array~<shell>: line 4: c: cannot convert indexed to associative array` *(status 1)* | **2>** `<shell>: line 2: h: cannot convert associative to indexed array~<shell>: line 4: c: cannot convert indexed to associative array` *(status 1)* | `st=0~declare -a h='([0]="x")'~<shell>: line 3: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~st=2~declare -a c='([0]="v")'` | `st=0~typeset -a h=(x)~st=0~typeset -A c=([k]=v)` | `st=0~typeset -a h=( x )~st=0~typeset -A c=( [k]=v )` | **2>** `<shell>: h[k]=v: not found~<shell>: syntax error: unexpected "("` *(status 2)* |
 | `decl/an-index-array-literal-on-a-table` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=0~k=[1]~st=0~declare -A m=([alpha]="one" )~tail` | `st=0~k=[1]~st=0~declare -A m=([alpha]="one" )~tail` | `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~st=2~<shell>: line 1: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~k=[1]~st=2~declare -a m='([0]="alpha" [1]="one")'~tail` **2>** `<shell>: line 2: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `st=0~k=[1]` **2>** `<shell>: line 3: cannot append index array to associative array m` *(status 1)* | `st=0~k=[1]~st=0~typeset -A m=( [alpha]=one )~tail` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
 | `decl/an-index-array-literal-replacing-a-table` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=0 [][]~declare -A m=([x]="y" )~st=0~declare -A n=([p]="q" [a]="1" )~tail` | `st=0 [][]~declare -A m=([x]="y" )~st=0~declare -A n=([p]="q" [a]="1" )~tail` | `st=0 [x][x]~declare -a m='([0]="x" [1]="y")'~st=0~declare -a n='([0]="1" [1]="p" [2]="q")'~tail` | `st=0 [x][x]~typeset -a m=(x y)` **2>** `<shell>: line 4: cannot append index array to associative array n` *(status 1)* | `st=0 [][]~typeset -A m=( [x]=y )~st=0~typeset -A n=( [a]=1 [p]=q )~tail` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
+| `declare/a-store-refused-element-from-a-command-string` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `after` | `after` | `after` | `after` | **2>** `<shell>:2: a: assignment to invalid subscript range` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
+| `declare/a-store-refused-element-from-a-script-file` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | `after` | `after` | `after` | `after` | **2>** `<script>:2: a: assignment to invalid subscript range` *(status 1)* | **2>** `<script>: line 1: syntax error: unexpected "("` *(status 2)* |
+| `declare/the-refusals-in-front-of-the-store-do-not-follow-the-route` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `after` **2>** `<shell>: line 2: readonly: `a[0]': not a valid identifier` | **2>** `<shell>: line 2: readonly: `a[0]': not a valid identifier` *(status 1)* | `after` **2>** `<shell>: line 1: readonly: `a[0]': not a valid identifier` | `after` | **2>** `<shell>:readonly:2: a[0]: can't create readonly array elements` *(status 1)* | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
 
 - `declare/typeset-assigns` — `typeset` is the older of the two names and the one three of the four have; dash has neither and reports a command it cannot find
   ```sh
@@ -20964,6 +20967,24 @@ grades it and nothing drift-checks it either, for the same reason.
   typeset -A n=([a]=1) 2>/dev/null
   n+=(p q) 2>&1; echo "st=$?"; typeset -p n 2>&1
   echo tail
+  ```
+- `declare/a-store-refused-element-from-a-command-string` — the status a declaration leaves behind when the **store** refuses the element it names, with the program arriving as an argument. The row under it is the same three lines read from a *file*, and one column answers the two differently: zsh is 0 here and 1 there, byte for byte the same complaint and `after` printed by neither, so the status is the whole of the difference. Subscript `0` because the first element is number one in that shell; bash and ksh93 take it as an ordinary index and print `after`, and dash has no array literal to reach it with. #1770 was filed from this route alone and read as a divergence on every route -- from a file this engine already agreed (#1770)
+  ```sh
+  a=(x y)
+  typeset "a[0]"=v
+  echo after
+  ```
+- `declare/a-store-refused-element-from-a-script-file` — the other half of the pair, and the half that says the split is the *route's*: the same three lines from a file leave 1 in the column that leaves 0 from an argument. Every other column answers both routes alike, which is what makes this a status axis with one dissenter rather than a rule about declarations -- see Semantics.StoreRefusalOfADeclaredElementLeavesZeroFromCommandString
+  ```sh
+  a=(x y)
+  typeset "a[0]"=v
+  echo after
+  ```
+- `declare/the-refusals-in-front-of-the-store-do-not-follow-the-route` — the control the pair above needs, and the seam the rule actually turns on. A declaration's *own* refusal names the builtin in its location -- `<shell>:readonly:1:` -- where the store's complaint two rows up names none, and it keeps its status on both routes in every column. `integer a[0]=5`, `typeset -a a[0]=v`, `typeset -i a[0]=v` and `typeset -A a[0]=v` are the same side of that seam and are pinned in dialect/zsh rather than here, one row being enough to say the two sides exist
+  ```sh
+  a=(x y)
+  readonly "a[0]"=v
+  echo after
   ```
 
 ## select
@@ -22723,6 +22744,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | `scalarsubscript/read-fills-a-subscripted-operand` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `declare -a a=([0]="x" [1]="y" [2]="z")` | `declare -a a=([0]="x" [1]="y" [2]="z")` | `declare -a a='([0]="x" [1]="y" [2]="z")'` | `typeset -a a=(x y Q)` | `typeset -a a=( x Q z )` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
 | `param/keyed-table-as-a-scalar` | `[]~st=0` **2>** `<shell>: 1: m[a]=1: not found~<shell>: 1: m[b]=2: not found` | `[]~st=0` | `[]~st=0` | `[2]~st=0` | `[]~st=0` | `[1]~st=0` | `[]~st=0` **2>** `<shell>: m[a]=1: not found~<shell>: m[b]=2: not found` |
 | `arrays/a-whole-array-subscript-on-the-left` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=0 [Z v]~tail` **2>** `<shell>: line 2: x[@]: bad array subscript~<shell>: line 4: y[*]: bad array subscript` | **2>** `<shell>: line 2: x[@]: bad array subscript` *(status 127)* | `tail` **2>** `<shell>: line 1: x[@]: bad array subscript~<shell>: line 3: y[*]: bad array subscript~<shell>: line 5: m[@]: bad array subscript` | **2>** `<shell>: line 2: @: invalid subscript in assignment` *(status 1)* | `st=0 n=1 [Z]~st=0 [p q Z]~<shell>:6: m: attempt to set slice of associative array` *(status 1)* | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
+| `arrays/an-appended-literal-over-a-scalar-under-both-spellings` | **2>** `<script>: 2: Syntax error: word unexpected (expecting ")")` *(status 2)* | `declare -a a=([0]="one" [1]="Z")~a0=[one] n=2~declare -a b=([0]="one" [1]="2")~b0=[one]~tail` | `declare -a a=([0]="one" [1]="Z")~a0=[one] n=2~declare -a b=([0]="one" [1]="2")~b0=[one]~tail` | `declare -a a='([0]="one" [1]="Z")'~a0=[one] n=2~declare -a b='([0]="one" [1]="2")'~b0=[one]~tail` | `typeset -A a=([0]=one [1]=Z)~a0=[one] n=2~typeset -a b=(one 2)~b0=[one]~tail` | `typeset -a a=( Z )~a0=[] n=1~typeset -a b=( one 2 )~b0=[]~tail` | **2>** `<script>: line 2: syntax error: unexpected word (expecting ")")` *(status 2)* |
+| `arrays/an-empty-scalar-and-an-unset-name-under-a-keyed-append` | **2>** `<script>: 2: Syntax error: word unexpected (expecting ")")` *(status 2)* | `declare -a u=([1]="Z")~declare -a e=([0]="" [1]="Z")~tail` | `declare -a u=([1]="Z")~declare -a e=([0]="" [1]="Z")~tail` | `declare -a u='([1]="Z")'~declare -a e='([0]="" [1]="Z")'~tail` | `typeset -A u=([1]=Z)~typeset -A e=([0]='' [1]=Z)~tail` | `typeset -a u=( Z )~typeset -a e=( Z )~tail` | **2>** `<script>: line 2: syntax error: unexpected word (expecting ")")` *(status 2)* |
+| `assoc/a-dollar-single-quoted-subscript-decodes-its-escapes` | **2>** `<script>: 2: n[$\t]=tab: not found~<script>: 3: Bad substitution` *(status 2)* | `len=1~hit=[tab]~tail` | `len=1~hit=[tab]~tail` | `len=1~hit=[tab]~tail` | `len=1~hit=[tab]~tail` | **2>** `<script>:3: bad substitution` *(status 1)* | **2>** `<script>: line 2: n[	]=tab: not found~<script>: line 4: syntax error: bad substitution` *(status 2)* |
+| `assoc/the-listing-quotes-a-whole-array-subscript-as-a-key` | `<script>: 1: typeset: not found~<script>: 2: r[@]=at: not found~<script>: 3: typeset: not found~<script>: 4: typeset: not found~<script>: 5: s[a@b]=x: not found~<script>: 6: typeset: not found~tail` | `declare -A r=(["@"]="at" )~declare -A s=([a@b]="x" )~tail` | `declare -A r=(["@"]="at" )~declare -A s=([a@b]="x" )~tail` | `<script>: line 1: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~<script>: line 3: typeset: r: not found~<script>: line 4: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~<script>: line 6: typeset: s: not found~tail` **2>** `<script>: line 2: r[@]: bad array subscript~<script>: line 5: a@b: syntax error: invalid arithmetic operator (error token is "@b")` | **2>** `<script>: line 2: @: invalid subscript in assignment` *(status 1)* | `<script>:2: r: attempt to set slice of associative array` *(status 1)* | `<script>: line 1: typeset: not found~<script>: line 2: r[@]=at: not found~<script>: line 3: typeset: not found~<script>: line 4: typeset: not found~<script>: line 5: s[a@b]=x: not found~<script>: line 6: typeset: not found~tail` |
+| `assoc/a-table-lists-in-a-different-order-than-it-expands` | `<script>: 5: typeset: not found~tail` **2>** `<script>: 2: m[z]=1: not found~<script>: 3: m[a]=2: not found~<script>: 4: m[m]=3: not found` | `declare -A m=([z]="1" [m]="3" [a]="2" )~tail` | `declare -A m=([z]="1" [m]="3" [a]="2" )~tail` | `declare -a m='([0]="2" [2]="3")'~tail` | `typeset -A m=([a]=2 [m]=3 [z]=1)~tail` | `typeset -A m=( [a]=2 [m]=3 [z]=1 )~tail` | `<script>: line 5: typeset: not found~tail` **2>** `<script>: line 2: m[z]=1: not found~<script>: line 3: m[a]=2: not found~<script>: line 4: m[m]=3: not found` |
 
 - `ksharrays/the-brackets-after-an-unbraced-name` — the option is described as moving the array base and what it does is make an array read the way the ksh family reads one, which shows here as four answers moving together. The discriminating one is the first: `$a[1]` is `xx[1]` under the option — the element at the base position and then the three characters — where the same text without it is `xx`, and where reading the subscript against a zero base would be `yy`. So a wrong answer here is wrong in both halves at once, which is why the row prints the braced spelling beside it: `${a[1]}` *is* `yy`, because the braces settle where the expansion ends and only the base moves. The column with the option answers exactly what the three bashes and ksh93 answer without needing one, which is the point of the option and is also what makes the row hard to fake — a shell that only moved the base matches nothing here (#1726)
   ```sh
@@ -22772,6 +22798,56 @@ grades it and nothing drift-checks it either, for the same reason.
   y[*]+=Z 2>&1; echo "st=$? [${y[*]}]"
   typeset -A m 2>/dev/null; m[k]=v
   m[@]=Z 2>&1; echo "st=$? [${m[@]}]"
+  echo tail
+  ```
+- `arrays/an-appended-literal-over-a-scalar-under-both-spellings` — the same operator over the same scalar, written twice: a **subscripted** literal and a bare one. The scalar the name was holding becomes the base element in every column that has arrays at all -- `a0=[one]` -- and the two spellings must not part over it, which is what the `b` half is the control for. They parted here: ksh93 is the one column whose literal subscripts are keys, so `a+=([1]=Z)` took the keyed route, went straight to an empty table and dropped `one` at status 0, while `b+=(2)` beside it was already right (#2785). bash reads the same brackets as an arithmetic index and answers `declare -a a=([0]="one" [1]="Z")`; zsh reads neither bracket as a subscript at all and keeps only the literal's own word; dash has no array literal and stops at the parenthesis. `tail` is what says a column carried on
+  ```sh
+  a=one
+  a+=([1]=Z) 2>&1
+  typeset -p a 2>&1
+  echo "a0=[${a[0]}] n=${#a[@]}"
+  b=one
+  b+=(2) 2>&1
+  typeset -p b 2>&1
+  echo "b0=[${b[0]}]"
+  echo tail
+  ```
+- `arrays/an-empty-scalar-and-an-unset-name-under-a-keyed-append` — the boundary the row above rests on, and the one a fix that seeded the base unconditionally would lose: an **empty** scalar is a value the name is holding and an **unset** name is not. ksh93 answers `typeset -A u=([1]=Z)` with no base and `typeset -A e=([0]='' [1]=Z)` with one, so the two lines differ by the single character that assigned nothing. It is the same distinction the bare spelling already draws -- `a=; a+=(2)` is two elements and `unset a; a+=(2)` is one -- which is why the promotion asks getVar rather than counting what is stored (#2785)
+  ```sh
+  unset u
+  u+=([1]=Z) 2>&1
+  typeset -p u 2>&1
+  e=
+  e+=([1]=Z) 2>&1
+  typeset -p e 2>&1
+  echo tail
+  ```
+- `assoc/a-dollar-single-quoted-subscript-decodes-its-escapes` — a `$'…'` written as the **subscript of an assignment**, which is the one position whose escapes this engine was not decoding. The key length says it: bash stores one character and stored two here, so the table held a key spelled backslash-then-t that only the same escape written again could reach — `hit=` is that fact from the other side, reading through a variable holding the character the script meant. bash is the only column that answers both fields, `${!n[@]}` being its own spelling; ksh93 has no `${!m[@]}` over a table and zsh calls it a bad substitution, so their cells record those refusals and the row is graded on the column that can be asked (#2749)
+  ```sh
+  typeset -A n 2>/dev/null
+  n[$'\t']=tab
+  for k in "${!n[@]}"; do printf 'len=%d\n' "${#k}"; done
+  t=$'\t'
+  echo "hit=[${n[$t]}]"
+  echo tail
+  ```
+- `assoc/the-listing-quotes-a-whole-array-subscript-as-a-key` — `@` as a whole key against `@` inside one, which is what says the quoting is about the *subscript* rather than about the character. A listing is meant to be read back and `[@]=at` read back is the whole-array subscript, so bash writes `["@"]` for the first and leaves `[a@b]` bare for the second; this engine wrote both bare. bash is the one column that will store such a key at all — ksh93 answers `@: invalid subscript in assignment` and zsh `attempt to set slice of associative array`, each ending the line — so the second table is what those two columns are graded on, and `tail` says which of them carried on (#2749)
+  ```sh
+  typeset -A r 2>&1
+  r[@]=at 2>&1
+  typeset -p r 2>&1
+  typeset -A s 2>&1
+  s[a@b]=x 2>&1
+  typeset -p s 2>&1
+  echo tail
+  ```
+- `assoc/a-table-lists-in-a-different-order-than-it-expands` — the **listing** order of a keyed table, which is a second question from the expansion order recorded beside it and which the panel splits differently: ksh93 and zsh both sort by key here where zsh's own `${(k)m}` is its hash order, and bash lists in the hash order both of its readings use. So the sorted order this engine chose is byte-exact with two of the three columns that list, not only with ksh93 — which is the measurement #2749 was filed without, having read the two orders as one. The keys are `z a m` on purpose: assigned in an order that is neither sorted nor any hash's, so a shell recording arrival order would show it and none does
+  ```sh
+  typeset -A m 2>/dev/null
+  m[z]=1
+  m[a]=2
+  m[m]=3
+  typeset -p m 2>&1
   echo tail
   ```
 

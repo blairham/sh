@@ -24408,6 +24408,108 @@
         "TimedOut": false
       }
     },
+    "arrays/an-appended-literal-over-a-scalar-under-both-spellings": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 2: syntax error: unexpected word (expecting \")\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "declare -a a=([0]=\"one\" [1]=\"Z\")~a0=[one] n=2~declare -a b=([0]=\"one\" [1]=\"2\")~b0=[one]~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "declare -a a=([0]=\"one\" [1]=\"Z\")~a0=[one] n=2~declare -a b=([0]=\"one\" [1]=\"2\")~b0=[one]~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "declare -a a='([0]=\"one\" [1]=\"Z\")'~a0=[one] n=2~declare -a b='([0]=\"one\" [1]=\"2\")'~b0=[one]~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 2: Syntax error: word unexpected (expecting \")\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "typeset -A a=([0]=one [1]=Z)~a0=[one] n=2~typeset -a b=(one 2)~b0=[one]~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "typeset -a a=( Z )~a0=[] n=1~typeset -a b=( one 2 )~b0=[]~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "arrays/an-empty-scalar-and-an-unset-name-under-a-keyed-append": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 2: syntax error: unexpected word (expecting \")\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "declare -a u=([1]=\"Z\")~declare -a e=([0]=\"\" [1]=\"Z\")~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "declare -a u=([1]=\"Z\")~declare -a e=([0]=\"\" [1]=\"Z\")~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "declare -a u='([1]=\"Z\")'~declare -a e='([0]=\"\" [1]=\"Z\")'~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 2: Syntax error: word unexpected (expecting \")\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "typeset -A u=([1]=Z)~typeset -A e=([0]='' [1]=Z)~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "typeset -a u=( Z )~typeset -a e=( Z )~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "assignment/arithmetic-that-will-not-parse": {
       "ash": {
         "Stdout": "",
@@ -24557,6 +24659,57 @@
         "Stdout": "n=1 b=2 a=gone",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "assoc/a-dollar-single-quoted-subscript-decodes-its-escapes": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 2: n[\t]=tab: not found~\u003cscript\u003e: line 4: syntax error: bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "len=1~hit=[tab]~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "len=1~hit=[tab]~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "len=1~hit=[tab]~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 2: n[$\\t]=tab: not found~\u003cscript\u003e: 3: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "len=1~hit=[tab]~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:3: bad substitution",
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       }
@@ -25734,6 +25887,57 @@
         "TimedOut": false
       }
     },
+    "assoc/a-table-lists-in-a-different-order-than-it-expands": {
+      "ash": {
+        "Stdout": "\u003cscript\u003e: line 5: typeset: not found~tail",
+        "Stderr": "\u003cscript\u003e: line 2: m[z]=1: not found~\u003cscript\u003e: line 3: m[a]=2: not found~\u003cscript\u003e: line 4: m[m]=3: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "declare -A m=([z]=\"1\" [m]=\"3\" [a]=\"2\" )~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "declare -A m=([z]=\"1\" [m]=\"3\" [a]=\"2\" )~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "declare -a m='([0]=\"2\" [2]=\"3\")'~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "\u003cscript\u003e: 5: typeset: not found~tail",
+        "Stderr": "\u003cscript\u003e: 2: m[z]=1: not found~\u003cscript\u003e: 3: m[a]=2: not found~\u003cscript\u003e: 4: m[m]=3: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "typeset -A m=([a]=2 [m]=3 [z]=1)~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "typeset -A m=( [a]=2 [m]=3 [z]=1 )~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "assoc/an-empty-key": {
       "ash": {
         "Stdout": "no-attribute",
@@ -25985,6 +26189,57 @@
         "Stdout": "[0]~declared-only~[0]~after",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "assoc/the-listing-quotes-a-whole-array-subscript-as-a-key": {
+      "ash": {
+        "Stdout": "\u003cscript\u003e: line 1: typeset: not found~\u003cscript\u003e: line 2: r[@]=at: not found~\u003cscript\u003e: line 3: typeset: not found~\u003cscript\u003e: line 4: typeset: not found~\u003cscript\u003e: line 5: s[a@b]=x: not found~\u003cscript\u003e: line 6: typeset: not found~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "declare -A r=([\"@\"]=\"at\" )~declare -A s=([a@b]=\"x\" )~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "declare -A r=([\"@\"]=\"at\" )~declare -A s=([a@b]=\"x\" )~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "\u003cscript\u003e: line 1: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cscript\u003e: line 3: typeset: r: not found~\u003cscript\u003e: line 4: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cscript\u003e: line 6: typeset: s: not found~tail",
+        "Stderr": "\u003cscript\u003e: line 2: r[@]: bad array subscript~\u003cscript\u003e: line 5: a@b: syntax error: invalid arithmetic operator (error token is \"@b\")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "\u003cscript\u003e: 1: typeset: not found~\u003cscript\u003e: 2: r[@]=at: not found~\u003cscript\u003e: 3: typeset: not found~\u003cscript\u003e: 4: typeset: not found~\u003cscript\u003e: 5: s[a@b]=x: not found~\u003cscript\u003e: 6: typeset: not found~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 2: @: invalid subscript in assignment",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "\u003cscript\u003e:2: r: attempt to set slice of associative array",
+        "Stderr": "",
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       }
@@ -65824,6 +66079,108 @@
         "TimedOut": false
       }
     },
+    "declare/a-store-refused-element-from-a-command-string": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected \"(\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:2: a: assignment to invalid subscript range",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/a-store-refused-element-from-a-script-file": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error: unexpected \"(\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:2: a: assignment to invalid subscript range",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "declare/a-subscripted-declaration-into-a-fresh-scope": {
       "ash": {
         "Stdout": "",
@@ -74694,6 +75051,57 @@
         "Stdout": "qa=1~qb=2~--~qb",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/the-refusals-in-front-of-the-store-do-not-follow-the-route": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected \"(\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "after",
+        "Stderr": "\u003cshell\u003e: line 2: readonly: `a[0]': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 2: readonly: `a[0]': not a valid identifier",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "after",
+        "Stderr": "\u003cshell\u003e: line 1: readonly: `a[0]': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:readonly:2: a[0]: can't create readonly array elements",
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       }

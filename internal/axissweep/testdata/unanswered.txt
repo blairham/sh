@@ -142,6 +142,7 @@ ash   SetArrayLetter
 ash   SetArrayOptionsContinuePastTheName
 ash   SetArrayWithNoValuesUnsetsTheName
 ash   StoppedJobTakesTheCurrentJobMarker
+ash   StoreRefusalOfADeclaredElementLeavesZeroFromCommandString
 ash   SubscriptExpressionStopsAtASeparator
 ash   SubscriptIsAQuotingContext
 ash   SubscriptedArrayLiteral
@@ -319,6 +320,7 @@ dash  SetArrayBadNameLeavesZeroFromCommandString
 dash  SetArrayLetter
 dash  SetArrayOptionsContinuePastTheName
 dash  SetArrayWithNoValuesUnsetsTheName
+dash  StoreRefusalOfADeclaredElementLeavesZeroFromCommandString
 dash  SubscriptExpressionStopsAtASeparator
 dash  SubscriptIsAQuotingContext
 dash  SubscriptedArrayLiteral

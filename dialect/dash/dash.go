@@ -482,6 +482,9 @@ func Semantics() interp.Semantics {
 	// A `*` beside a width's own digits is refused here too: `printf '%5*d' 4 42`
 	// is a conversion character this shell does not have (#2824).
 	s.PrintfStarBesideTheFieldDigits = interp.No
+	s.CaseSubjectKeepsThePreviousLine = interp.No
+	// unanswered SubstringRangeThirdColonIsABadSubstitution: no substring
+	// range at all here, so there is no third segment to refuse.
 	s.PrintfReportsBadNumber = interp.Yes
 	s.PrintfNumberOperand = interp.PrintfNumberLeadingNumber
 	// C99's three, answering exactly as bash does on every row measured

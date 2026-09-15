@@ -60,7 +60,20 @@ const diagnoseCommand = "diagnose"
 // voice away: `pushd() { cd /nope; }` in an rc file then reports `cd` from
 // the function's own line, which is what bash does for a function shadowing a
 // builtin.
-func (r *Runner) SourcingPrelude(on bool) { r.sourcingPrelude = on }
+// Turning it **off** also forgets what line the prelude's own text reached,
+// which matters for exactly one construct: a `case` subject in the dialect
+// that expands it before the line advances reads the line the command in
+// front of it was on, and with the prelude's twenty-odd lines still recorded
+// that was a line of the dialect's plumbing rather than of the script. See
+// Runner.prevLine and Semantics.CaseSubjectKeepsThePreviousLine. Every other
+// route sets the line from the node it is about before it says anything, so
+// nothing else could see the difference.
+func (r *Runner) SourcingPrelude(on bool) {
+	r.sourcingPrelude = on
+	if !on {
+		r.line, r.prevLine = 0, 0
+	}
+}
 
 // preludeDefined records a function as the dialect's own, and is called for
 // every definition the runner makes.

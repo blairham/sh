@@ -373,6 +373,7 @@ dash  SubscriptedOperandCarriesTheAttributes
 dash  SubscriptedOperandTakesALocalDeclaration
 dash  SubscriptedOperandTakesTheContainerAttribute
 dash  SubscriptedOperandTakesTheIntegerAttribute
+dash  SubstringRangeThirdColonIsABadSubstitution
 dash  TableLetterReachesItsOwnOperandsSubscript
 dash  TableUnderAnArrayDeclaration
 dash  TableUnderAnArrayLiteralDeclaration
@@ -441,6 +442,7 @@ zsh   ReadCountJudgesTheNamesAfterTheFirst
 zsh   ReadExactCountKeepsPartial
 zsh   ReadPartialCountSucceeds
 zsh   ReportsAKilledCommandInACommandSubstitution
+zsh   SubstringRangeThirdColonIsABadSubstitution
 zsh   TableLetterReachesItsOwnOperandsSubscript
 zsh   TransformLetterCheckedOnlyWhenValued
 zsh   TrapListsSignalsWithL

@@ -19,6 +19,10 @@ func Dialect() syntax.Dialect {
 	d := syntax.Core()
 	// ksh93 expands them in a script too, on every route and with no option
 	// to turn on.
+	// A `:` written straight after the substring's own belongs to the offset
+	// expression here, so `${x::2}` is the expression `:2` and a refusal
+	// rather than an offset of nothing (#2818).
+	d.ParamSubstringOffsetTakesALeadingColon = true
 	d.AliasesExpandUnlessTold = true
 	d.ExpandAliasesInProgramText = syntax.RouteOnEveryRoute
 	// And a body's newlines are lines of the program: `$LINENO` after a
@@ -1249,6 +1253,12 @@ func Semantics() interp.Semantics {
 	// And a `*` may stand beside a width's own digits, where it wins:
 	// `printf '[%5*d]' 4 42` is `[  42]` here (#2824).
 	s.PrintfStarBesideTheFieldDigits = interp.Yes
+	// A `case` does not advance the line until its subject is expanded, so
+	// the subject reads the line of the command in front of it (#2818).
+	s.CaseSubjectKeepsThePreviousLine = interp.Yes
+	// A third segment in a substring range is a bad substitution here, named
+	// after the whole word: `${x:1:5:t}` (#2818).
+	s.SubstringRangeThirdColonIsABadSubstitution = interp.Yes
 	s.PrintfReportsBadNumber = interp.No
 	s.PrintfNumberOperand = interp.PrintfNumberArithmetic
 	// C99's three, with a default precision of its own: `printf '%a' 1.5`
@@ -2059,6 +2069,10 @@ const kshKillUsage = "Usage: kill [-lL] [-n signum] [-s signame] job ...\n" +
 
 func Diagnostics() interp.Diagnostics {
 	d := interp.Diagnostics{
+		// A bare array name refused by `set -u` is named as its first
+		// *element* here: `a=(x y z); unset "a[0]"; set -u; echo "$a"` is
+		// `a[0]: parameter not set` where bash says `a` (#2818).
+		UnboundBareArrayNamesElementZero: true,
 		// Every backquote substitution this shell reads draws a remark, and
 		// it draws it only when the shell is not going to run the program:
 		// `ksh -n bq.sh` writes one line per backquote and `ksh bq.sh`

@@ -3070,7 +3070,8 @@ func sliceElems(elems []string, off int, e *syntax.ParamExpr, r *Runner) []strin
 		return nil
 	}
 	out := elems[off:]
-	if lenWord == nil {
+	if lenWord == nil || r.rangeRefused {
+		// As in substring above: one complaint per range.
 		return out
 	}
 	n := r.numOf(lenWord, e, nil)
@@ -3146,22 +3147,93 @@ func (r *Runner) numOf(w *syntax.Word, e *syntax.ParamExpr, tail *syntax.Word) i
 		// Extending the text before evaluating it instead was a second,
 		// invented failure — `${x:2:1+}` reported that `2:1+` would not parse
 		// and then that `1+` would not, where the shell reports the one.
-		blame := text
+		blame := r.rangeSegmentBlame(w, rangeWritten(e, w), text)
 		if tail != nil && r.diag().SubstringErrorNamesTheWholeRange {
 			// The tail through the same reader, because the protection is
 			// applied to each half and the halves are then joined: measured,
 			// `${s:1+:(2)}` blames `1+:\(2\)` rather than leaving the half
 			// that was not evaluated as it was written.
 			restore := r.withoutGlobbing()
-			blame += ":" + r.rangeSegmentText(tail)
+			blame += ":" + r.rangeSegmentBlame(tail, rangeWritten(e, tail), r.rangeSegmentText(tail))
 			restore()
 		}
 		r.diagf("%s\n", Wording(r.diag().SubstringRangeError, "%[2]s",
 			r.paramSubject(e), r.subscriptFailure(blame, err)))
 		r.expandErr = true
+		// One complaint per range, which is unanimous: `${x:&&:&&}` is one
+		// line in bash 5.3 and one in ksh93u+, and we wrote two — the
+		// offset's and then the length's. See Runner.rangeRefused.
+		r.rangeRefused = true
 		return 0
 	}
 	return n
+}
+
+// rangeWritten is the text a range's half was written with, where the tree
+// still knows it. Both halves are kept on the expansion by the parser; which
+// one this word is is settled by identity rather than by position, so a
+// synthetic expansion carrying the same words answers the same.
+func rangeWritten(e *syntax.ParamExpr, w *syntax.Word) string {
+	switch {
+	case e == nil || w == nil:
+		return ""
+	case w == e.Arg:
+		return e.ArgText
+	case w == e.Arg2:
+		return e.Arg2Text
+	}
+	return ""
+}
+
+// rangeSegmentBlame is one half of a range as a *diagnostic* names it, which
+// is not the text that was evaluated: the complaint quotes back what the
+// script wrote, **before quote and backslash removal**.
+//
+// Measured 2026-09-15 under `env -i PATH=/usr/bin:/bin` with `x=abc`:
+//
+//	                     bash 5.3.15            ksh93u+
+//	${x:'&&'}            `'&&'`                 `'\&\&'`
+//	${x:\&\&}            `\&\&`                 `\\\&\\\&`
+//	i='&&'; ${x:$i}      `&&`                   `\&\&`
+//
+// So the two columns agree about *which characters* are quoted back and part
+// only over the pattern protection one of them applies on top — which is
+// SubstringRangeQuotesPatternCharacters and is already asked. A parameter the
+// range read from is expanded first and its value carries no quoting of the
+// script's, which is the third row and the reason this is not simply the
+// source text: `$i` is blamed as `&&`.
+//
+// evaluated is what to fall back to, and it is the answer wherever the half
+// holds anything but plain text — an expansion, a substitution — since there
+// the characters the script wrote are not the ones the reader saw.
+func (r *Runner) rangeSegmentBlame(w *syntax.Word, written, evaluated string) string {
+	if written == "" || w == nil || !wordIsPlainText(w) {
+		return evaluated
+	}
+	text := strings.TrimSpace(written)
+	if !strings.ContainsAny(text, rangePatternCharacters) {
+		return text
+	}
+	// The same protection the evaluated text already went through, and the
+	// same question: asked once per range half, and the answer here can only
+	// be the one taken there a moment ago.
+	if !r.ask(r.sem().SubstringRangeQuotesPatternCharacters,
+		"a substring range having its pattern characters protected before it is read") {
+		return text
+	}
+	return escapeRangePatternCharacters(text)
+}
+
+// wordIsPlainText reports whether a word is literal characters and nothing
+// else — no expansion, no substitution — so that what the script wrote is
+// still recoverable from its source.
+func wordIsPlainText(w *syntax.Word) bool {
+	for _, s := range w.Spans {
+		if s.Kind != syntax.Literal {
+			return false
+		}
+	}
+	return true
 }
 
 // rangeSegmentText is one half of a substring range as the evaluator receives
@@ -3948,6 +4020,11 @@ func unitStops(value string, o patternOpts) []int {
 // actually begins with an unquoted letter, so `${x:1:2}` needs no answer from
 // anyone.
 func (r *Runner) substringRange(value string, e *syntax.ParamExpr) string {
+	// Each range answers for itself: the flag says the *offset of this one*
+	// was refused, so the length of the next range in the same word is still
+	// read.
+	r.rangeRefused = false
+	defer func() { r.rangeRefused = false }()
 	if rangeSegmentIsAModifier(e.Arg) {
 		if !r.ask(r.sem().SubstringRangeReadsModifiers,
 			"a substring range beginning with a letter being a modifier list") {
@@ -3992,6 +4069,18 @@ func (r *Runner) substringRange(value string, e *syntax.ParamExpr) string {
 			return ""
 		}
 		return out
+	}
+	// A range with a *third* segment, in a dialect that has no modifiers to
+	// make of it. bash reads the rest as one expression and complains about
+	// the arithmetic; ksh93 refuses the substitution outright.
+	if _, _, ok := splitLengthFromModifiers(e.Arg2); ok &&
+		r.ask(r.sem().SubstringRangeThirdColonIsABadSubstitution,
+			"a substring range with a third colon in it") {
+		r.reportBadSubstitution(e)
+		return ""
+	}
+	if r.unspecified {
+		return ""
 	}
 	return substring(value, r.numOf(e.Arg, e, e.Arg2), e, r)
 }
@@ -4047,7 +4136,9 @@ func substring(value string, off int, e *syntax.ParamExpr, r *Runner) string {
 	if off > len(units) {
 		return ""
 	}
-	if lenWord == nil {
+	if lenWord == nil || r.rangeRefused {
+		// A range whose offset was refused evaluates no length: the panel
+		// writes one complaint for it and not two. See Runner.rangeRefused.
 		return strings.Join(units[off:], "")
 	}
 	n := r.numOf(lenWord, e, nil)
@@ -4782,8 +4873,35 @@ func (r *Runner) checkNounset(e *syntax.ParamExpr) {
 		return
 	}
 	if !isPositional(e.Name) {
-		r.fatalExpansion("%s\n", Wording(r.diag().UnboundVariable, "%s: parameter not set", e.Name))
+		r.fatalExpansion("%s\n", Wording(r.diag().UnboundVariable, "%s: parameter not set", r.unboundSubject(e)))
 	}
+}
+
+// unboundSubject is the parameter as the `set -u` refusal names it, which is
+// its name except where a bare *array* name was read and the element the bare
+// form means is the one that is gone.
+//
+// Measured 2026-09-15 under `env -i PATH=/usr/bin:/bin`, with
+// `a=(x y z); unset "a[0]"; set -u; echo "[$a]"`:
+//
+//	ksh93u+     a[0]: parameter not set
+//	bash 5.3    a: unbound variable
+//
+// so the two columns that refuse it part over the subject and not over the
+// refusal. zsh is a third answer and not a disagreement about this: there the
+// `unset "a[0]"` is itself refused, so `$a` is still the whole array.
+//
+// The element is named only where the array is still *there* — the name holds
+// one and the bare read found nothing at it — which is what keeps `unset a`
+// naming `a` in the same column.
+func (r *Runner) unboundSubject(e *syntax.ParamExpr) string {
+	if !r.diag().UnboundBareArrayNamesElementZero || e.Index != nil || e.Inner != nil {
+		return e.Name
+	}
+	if _, ok := r.arrayElems(e.Name); ok {
+		return e.Name + "[0]"
+	}
+	return e.Name
 }
 
 // unboundSigilWording is the `set -u` refusal for a parameter whose name is

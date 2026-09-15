@@ -10727,6 +10727,62 @@ type Semantics struct {
 	// syntax.ParamExpr.Arg2Enclosed (#1209).
 	ReplacementOperandTakesTheEnclosingQuoting Answer
 
+	// SubstringRangeThirdColonIsABadSubstitution refuses `${x:1:5:t}`
+	// outright, rather than reading everything past the first colon as the
+	// length and complaining about the arithmetic in it.
+	//
+	// Measured 2026-09-15 under `env -i PATH=/usr/bin:/bin` with
+	// `x=/tmp/Dir/File.Txt.gz` and `t=0`:
+	//
+	//	ksh93u+     "[${x:1:5:t}]": bad substitution
+	//	bash 5.3    x: 5:t: arithmetic syntax error in expression …
+	//
+	// so both refuse the line and they part over *what kind* of refusal it
+	// is — which is a reading and not a wording, because the one that calls
+	// it a bad substitution names the word rather than the expression and
+	// never evaluates anything. zsh is asked something else entirely: there
+	// the third segment is a modifier list and `${x:1:5:t}` is `D`, which is
+	// SubstringRangeReadsModifiers and is settled before this. dash has no
+	// substring at all.
+	//
+	// Asked only where a third segment is actually written and the modifier
+	// reading has already declined it, so `${x:1:5}` never raises it (#2818).
+	SubstringRangeThirdColonIsABadSubstitution Answer
+
+	// CaseSubjectKeepsThePreviousLine expands a `case` subject before the
+	// recorded line advances to the `case`, so the subject reads the line of
+	// the command in front of it.
+	//
+	// Not a wording and not a location style: it is the **counter**, and the
+	// two places it shows are the same number. Measured 2026-09-15 on ksh93u+
+	// 2012-08-01 under `env -i PATH=/usr/bin:/bin`, with `echo a` on line 1
+	// and `echo b` on line 2 and the `case` on line 3:
+	//
+	//	                               ksh93u+   the other five
+	//	case $LINENO in 1|2|3) …       two       three
+	//	case $((1/0)) in *) :;; esac   line 2    line 3
+	//
+	// bash 5.3, that binary as `sh`, bash 3.2, zsh 5.9.2 and dash all answer
+	// the `case`'s own line, so this is one column against the panel.
+	//
+	// The number is the line the last command that **ran** was on, and not
+	// the `case`'s own line less one: two blank lines between `echo a` and
+	// the `case` still answer 1, and a `case` after an `if` whose body ran on
+	// line 3 answers 3. Before anything has run it reads 1 rather than 0, so
+	// a `case` on the first line of a file is `line 1` there and a `case` on
+	// the first line of a `-c` string carries no line at all — which is that
+	// route's ordinary rule for line 1 rather than anything of this axis's.
+	//
+	// It reaches three rows of the corpus at once — the two `axis/a-failed-
+	// case-subject` routes and `case/an-unset-subject-under-u-keeps-its-
+	// status` — because every one of them is a subject that failed and every
+	// complaint carries a line (#2818).
+	//
+	// Asked only where the two readings would name different lines, so a
+	// `case` written beside the command before it, or first in its file,
+	// never raises it.
+	CaseSubjectKeepsThePreviousLine Answer
+
 	// LinenoCountsFromTheFunction numbers `$LINENO` inside a function from
 	// the line the function was written on: zsh; the other three count from
 	// the file.

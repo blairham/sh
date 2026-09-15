@@ -631,6 +631,45 @@ func (r *Runner) loopControl() bool {
 	return false
 }
 
+// caseSubjectLine offers the line the command *before* this `case` was on as
+// the one to read while the subject is expanded, and returns the call that
+// takes the offer away again.
+//
+// Offered rather than installed, because the two readings are only ever
+// distinguishable where something actually reads the line — `$LINENO` written
+// in the subject, or a complaint the subject's expansion makes — and a `case
+// $- in …` reads neither. Runner.lineNow is where the offer is taken up, and
+// it is the only place the axis is consulted.
+//
+// One column does not advance its line for a `case` until the subject is
+// expanded. Measured 2026-09-15 on ksh93u+ 2012-08-01 under `env -i
+// PATH=/usr/bin:/bin`, with `echo a` on line 1 and `echo b` on line 2:
+//
+//	case $LINENO in 1) …;; 2) …;; 3) …;; esac   on line 3
+//	  ksh93u+                               two
+//	  bash 5.3, zsh 5.9.2, dash, bash 3.2   three
+//
+//	case $((1/0)) in *) :;; esac               on line 3, in a file
+//	  ksh93u+      <script>: line 2: 1/0: divide by zero
+//	  the others   … line 3 …
+//
+// It is the line of the last command that **ran**, not the `case`'s own line
+// less one: with two blank lines between `echo a` and the `case` the answer is
+// still 1, and after an `if` whose body ran on line 3 it is 3. Before anything
+// has run at all it is 1 rather than 0 — a `case` on the first line of a file
+// is `line 1` there — which is the floor below.
+func (r *Runner) caseSubjectLine() func() {
+	was := r.prevLine
+	if was < 1 {
+		// Nothing has run yet, and the counter reads 1 there rather than 0:
+		// a `case` on a file's first line is `line 1` in that column.
+		was = 1
+	}
+	held := r.caseSubjectPrev
+	r.caseSubjectPrev = was
+	return func() { r.caseSubjectPrev = held }
+}
+
 func (r *Runner) caseClause(ctx context.Context, c *syntax.CaseClause) error {
 	return r.withRedirs(ctx, c.Redirs, func() error {
 		// The subject expands but is neither field-split nor globbed, even
@@ -649,7 +688,9 @@ func (r *Runner) caseClause(ctx context.Context, c *syntax.CaseClause) error {
 		// expanded subject shows it per arm instead, from caseItemMatches.
 		r.traceCaseHeader(c.Header)
 		r.beginHeading()
+		restore := r.caseSubjectLine()
 		subject := strings.Join(r.expandWordNoSplit(c.Word), "")
+		restore()
 		if r.failedHeading() {
 			// Before any arm is tested, because a subject that failed is
 			// empty and empty *matches*: the `""` arm fired and the shell

@@ -68,6 +68,11 @@ func permissive() Semantics {
 	// asking what `readonly -a` *does* needs the letter to exist first, and
 	// the suite that asks whether it exists sets the field itself (#2277).
 	s.ReadonlyOptions = "paAf"
+	// Which line a `case` subject reads, at the answer five of the six give:
+	// the `case`'s own. A suite about a *failed* subject reports that
+	// failure's location, so the question is live for every such row, and
+	// the one suite that is about the axis sets it itself.
+	s.CaseSubjectKeepsThePreviousLine = No
 	s.BuiltinSyntaxErrorFatal = No
 	s.DotMissingFileFatal = No
 	s.DotWithNoOperandIsAnError = Yes

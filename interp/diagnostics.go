@@ -4307,6 +4307,24 @@ type Diagnostics struct {
 	// fact about each dialect, and one field for both would tie a change on
 	// either to the other. See Semantics.EmptyParamSubscriptIsAnError.
 	EmptyParamSubscript string
+	// UnboundBareArrayNamesElementZero names the *element* a bare array name
+	// stands for when `set -u` refuses it, rather than the array.
+	//
+	// Measured 2026-09-15 under `env -i PATH=/usr/bin:/bin`, with
+	// `a=(x y z); unset "a[0]"; set -u; echo "[$a]"`:
+	//
+	//	ksh93u+     a[0]: parameter not set
+	//	bash 5.3    a: unbound variable
+	//
+	// Both refuse; they part over what the sentence names. zsh is not a
+	// third answer to this question — there `unset "a[0]"` is itself refused
+	// and `$a` is still the whole array — and dash has no arrays.
+	//
+	// Only where the array is still there and the bare read found nothing at
+	// its first element: `unset a` then `$a` names `a` in that column too.
+	// See Runner.unboundSubject (#2818).
+	UnboundBareArrayNamesElementZero bool
+
 	// SubscriptIsAnIndexAndARange is what a subscript says when one reading
 	// of it needs the single index it named and another makes it a span. No
 	// verbs: the one shell that has both constructs names neither the array

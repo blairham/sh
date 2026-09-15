@@ -317,6 +317,15 @@ type Parser struct {
 	// Parser.recordCondGroup. See Error.CondWords.
 	condWords []string
 
+	// condStart is where the `[[` now being read stood, for the refusals
+	// raised below the frame that knows it. See Parser.failCondTerm.
+	condStart Pos
+
+	// condGroups is how many `(` of the condition being read have been
+	// entered and not yet closed. One dialect writes a line per open group
+	// in front of a refusal; see Error.CondGroupsOpen.
+	condGroups int
+
 	inCasePattern bool
 }
 

@@ -2200,7 +2200,13 @@ func Diagnostics() interp.Diagnostics {
 		// one above: a sentence about the construct at the `[[`'s line, then
 		// a shorter `near` at the token's. Measured on bash 5.3.15 —
 		// `[[ -n x` newline `-z "" ]]` names line 1 and then line 2.
-		CondSyntaxPreamble:   "syntax error in conditional expression: unexpected token `%[1]s'",
+		CondSyntaxPreamble: "syntax error in conditional expression: unexpected token `%[1]s'",
+		// And a *second* sentence for a token standing where a condition was
+		// to begin, with no sentence at all for the closer itself — see
+		// CondCommandPreamble, and CondGroupUnclosed for the line each open
+		// `(` adds under both (#2909).
+		CondCommandPreamble:  "unexpected token `%[1]s' in conditional command",
+		CondGroupUnclosed:    "expected `%[1]s'",
 		CondSyntaxUnexpected: "syntax error near `%[1]s'",
 		// And a `[[` the input ran out inside of gets a line of its own,
 		// naming the closer it was waiting for. Measured: this shell writes

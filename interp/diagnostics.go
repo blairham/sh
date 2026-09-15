@@ -3412,6 +3412,39 @@ type Diagnostics struct {
 	// Empty means no such line, which is every dialect but one.
 	CondSyntaxPreamble string
 
+	// CondCommandPreamble is that line again for a token refused where a
+	// condition was to **begin** — after the `[[`, after a `!`, after a
+	// connective, or just inside a group. One verb: the token, and %[2]d the
+	// line, as above.
+	//
+	// The same dialect, a different sentence, and for the closer itself *no
+	// sentence at all*. Measured 2026-09-15 on bash 5.3.15 over `-c`:
+	//
+	//	[[ ]]      syntax error near `]]' and the echoed line, and nothing else
+	//	[[ ! ]]    the same two lines
+	//	[[ a && ]] the same two lines
+	//	[[ ; ]]    unexpected token `;' in conditional command, then those two
+	//	[[ ) ]]    unexpected token `)' in conditional command, then those two
+	//	[[ | ]]    unexpected token `|' in conditional command, then those two
+	//
+	// So the closer standing where a condition should have begun is not an
+	// unexpected *token* to this shell — its condition parser reads it as the
+	// end and the ordinary grammar refuses it one level out — where any other
+	// token is refused inside the condition and named there. Empty means no
+	// such line, which is every dialect but one (#2909).
+	CondCommandPreamble string
+
+	// CondGroupUnclosed is a line the same dialect writes **once per open
+	// `(`** of the condition, between the preamble above and the ordinary
+	// sentence. One verb: the closer it was waiting for.
+	//
+	//	[[ ( ]]        expected `)' / syntax error near `]]'
+	//	[[ ( ) ]]      unexpected token `)' … / expected `)' / syntax error near `)'
+	//	[[ ( ( ) ) ]]  … / expected `)' / expected `)' / syntax error near `)'
+	//
+	// Measured with the same run. Empty means no such line.
+	CondGroupUnclosed string
+
 	// CondUnterminatedPreamble is the same idea for a `[[` the input ran
 	// out inside of, and the same dialect writes it: `unexpected EOF while
 	// looking for `]]'`, again at the `[[`'s line and again in front of the
@@ -6060,19 +6093,50 @@ func (d Diagnostics) condPreamble(name, input string, err error) string {
 		return ""
 	}
 	form, verb := d.CondSyntaxPreamble, se.Token
+	line := se.ConstructLine
 	if se.Kind == syntax.ErrUnterminated {
 		form, verb = d.CondUnterminatedPreamble, se.Expected
+		if se.CondTermMissing && d.CondCommandPreamble != "" {
+			// The input ran out where the condition was to *begin*, which
+			// this dialect words as the token-in-a-conditional-command line
+			// with `EOF` for a token — and at the line the input ran out on
+			// rather than the `[[`'s. Measured 2026-09-15: `[[` alone under
+			// `-c` is `line 2: unexpected token `EOF' in conditional
+			// command`, where `[[ -n x` — a condition that *was* read — is
+			// `line 1: unexpected EOF while looking for `]]' `.
+			form, verb = d.CondCommandPreamble, "EOF"
+			line = se.EndLine
+		}
 	} else if se.Kind != syntax.ErrUnexpected {
 		return ""
+	} else if se.CondTermMissing {
+		// A token where the condition was to begin, which this dialect words
+		// differently — and for the closer itself does not word at all. See
+		// CondCommandPreamble.
+		form = d.CondCommandPreamble
+		if se.Token == se.Expected {
+			form = ""
+		}
 	}
-	if form == "" {
-		return ""
-	}
-	line := se.ConstructLine
 	if line < 1 {
 		line = 1
 	}
-	return d.ReportFrom(name, input, line, Wording(form, "", verb, line)+"\n")
+	out := ""
+	if form != "" {
+		out = d.ReportFrom(name, input, line, Wording(form, "", verb, line)+"\n")
+	}
+	if w := d.CondGroupUnclosed; w != "" {
+		// One line per group still open, after the sentence about the token
+		// and before the ordinary one. Measured; see CondGroupUnclosed.
+		group := se.ConstructLine
+		if group < 1 {
+			group = 1
+		}
+		for range se.CondGroupsOpen {
+			out += d.ReportFrom(name, input, group, Wording(w, "expected `%[1]s'", ")")+"\n")
+		}
+	}
+	return out
 }
 
 // echoLine is the second line, or empty for none.

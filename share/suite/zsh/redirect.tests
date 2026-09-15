@@ -73,3 +73,55 @@ printf 'teed\n' > p > q
 printf 'multios p=[%s] q=[%s]\n' "$(cat p)" "$(cat q)"
 ( unsetopt multios; printf 'once\n' > p > q )
 printf 'without multios p=[%s] q=[%s]\n' "$(cat p)" "$(cat q)"
+
+# --- MULTIOS on the input side ----------------------------------------------
+#
+# The option above tees a write. It does the same thing to a read, from the
+# other direction: two sources for one descriptor are concatenated rather than
+# the second replacing the first. bash, ksh93 and dash all feed the command
+# only the last source named.
+#
+# Two here-documents on one command line is the shape that meets a script:
+# there is no sensible reason to write it, and a shell that fed both is doing
+# something nobody expected.
+cat <<A <<B
+first
+A
+second
+B
+
+# And the same with a file beside a here-document, in both orders — because a
+# shell that replaced rather than concatenated would answer one of them the
+# way zsh does by accident.
+printf 'from the file\n' > src
+cat < src <<C
+from the here-document
+C
+cat <<D < src
+from the here-document
+D
+
+# Two files, which is the plain form of the same rule.
+printf 'second file\n' > src2
+cat < src < src2
+
+# And the option really is what does it.
+unsetopt multios
+cat < src < src2
+cat <<E <<F
+first
+E
+second
+F
+setopt multios
+
+# --- a write to a closed descriptor -----------------------------------------
+#
+# bash, ksh93 and dash all fail. zsh does not: the write goes nowhere and the
+# status is 0, which is the half of the closing pair core/redirect.tests had
+# to leave out. Reading a closed descriptor fails here as it does everywhere,
+# and that half is in core/.
+( printf 'into the void\n' >&- )
+printf 'writing to a closed descriptor: %s\n' "$?"
+( cat <&- ) 2>/dev/null
+printf 'reading one:                    %s\n' "$?"

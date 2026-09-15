@@ -1,0 +1,55 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Redirection, the answer only bash gives: a descriptor number wider than one
+# digit.
+#
+# `10> file` is a redirection here and is two tokens everywhere else — the
+# word `10` followed by `>` — so zsh, ksh93 and dash run a command called `10`
+# and redirect its output. That is the dangerous shape: the line parses in all
+# four shells and means something completely different in three of them.
+#
+# The neighbouring construct is `exec {name}> file`, which bash, zsh and ksh93
+# all have and which exists precisely because a hand-written number is a
+# shared namespace with no registry. It is share/suite/ext/redirect.tests. The
+# two together are the whole answer to "how do I get a descriptor above 9":
+# one shell lets you write the number, three make you ask for one.
+
+exec 10> wide
+printf 'through descriptor ten\n' >&10
+exec 10>&-
+printf 'ten: [%s]\n' "$(cat wide)"
+
+exec 11< wide
+IFS= read -r line <&11
+exec 11<&-
+printf 'eleven, reading: [%s]\n' "$line"
+
+# Three digits is no different from two: the width is not the question, only
+# whether the shell reads the digits as a number at all.
+exec 200> wider
+printf 'through descriptor two hundred\n' >&200
+exec 200>&-
+printf 'two hundred: [%s]\n' "$(cat wider)"
+
+# And on a simple command rather than on `exec`, which is where a script
+# actually writes one.
+{ printf 'scoped\n' >&12; } 12> scoped
+printf 'on a command: [%s]\n' "$(cat scoped)"
+{ cat <&13; } 13< scoped
+
+# Duplication and closing take the wide number too.
+exec 14> dup14
+exec 15>&14
+printf 'through the duplicate\n' >&15
+exec 15>&-
+exec 14>&-
+printf 'duplicated: [%s]\n' "$(cat dup14)"
+
+# The append and read-write forms, for the same reason the core file asks
+# every operator once: a shell that read only `>` wide would pass a file that
+# asked only that.
+exec 16>> dup14
+printf 'appended\n' >&16
+exec 16>&-
+printf 'appended: [%s]\n' "$(cat dup14 | tr '\n' '-')"

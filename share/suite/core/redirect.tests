@@ -108,3 +108,194 @@ if [ -e nosuchfile ]; then printf 'yes\n'; else printf 'no\n'; fi
 : > made
 printf 'null command made the file: '
 if [ -f made ]; then printf 'yes\n'; else printf 'no\n'; fi
+
+# --- every operator, once ----------------------------------------------------
+#
+# The table the rest of the file leans on. `>` `>>` `<` `<>` `>&` `<&` `>&-`
+# `<&-` `>|` and `<<`, each on its own line, so a shell missing one is missing
+# a named line rather than a subtle difference in a compound case.
+
+printf 'to a file\n' > op1
+printf 'write:       [%s]\n' "$(cat op1)"
+printf 'appended\n' >> op1
+printf 'append:      [%s]\n' "$(cat op1 | tr '\n' '-')"
+printf 'read:        [%s]\n' "$(cat < op1)"
+( printf 'read-write\n' 1<> op2 )
+printf 'read-write:  [%s]\n' "$(cat op2)"
+{ printf 'dup\n' >&5; } 5> op3
+printf 'duplicated:  [%s]\n' "$(cat op3)"
+{ cat <&6; } 6< op3
+( printf 'clobbered\n' >| op1 )
+printf 'clobbering:  [%s]\n' "$(cat op1)"
+
+# The numbered descriptor is the command's, so it is gone again afterwards.
+( printf 'gone\n' >&5 ) 2>/dev/null
+rc=$?
+printf 'the descriptor did not outlive its command: '
+if [ "$rc" -ne 0 ]; then printf 'yes\n'; else printf 'no\n'; fi
+
+# --- closing -----------------------------------------------------------------
+#
+# `>&-` and `<&-` close. Reading from a closed descriptor fails in every
+# column; *writing* to one does not — zsh leaves status 0 where the other
+# three fail — so only the reading half is here and the other is
+# share/suite/zsh/redirect.tests.
+
+( cat <&- ) 2>/dev/null
+rc=$?
+printf 'reading a closed descriptor failed: '
+if [ "$rc" -ne 0 ]; then printf 'yes\n'; else printf 'no\n'; fi
+
+# --- noclobber ---------------------------------------------------------------
+#
+# With `set -C` a plain `>` will not truncate a file that exists. What it does
+# instead is refuse, and the *number* it refuses with is dash's own — 2 there
+# and 1 in the other three — so what is claimed here is the refusal and its
+# effect on the file, and share/suite/dash/redirect.tests holds the number.
+
+set -C
+printf 'kept\n' > nc
+( printf 'overwritten\n' > nc ) 2>/dev/null
+rc=$?
+printf 'noclobber refused: '
+if [ "$rc" -ne 0 ]; then printf 'yes\n'; else printf 'no\n'; fi
+printf 'the file is untouched: [%s]\n' "$(cat nc)"
+( printf 'appended\n' >> nc ) 2>/dev/null
+printf 'append is allowed: [%s]\n' "$(cat nc | tr '\n' '-')"
+( printf 'forced\n' >| nc ) 2>/dev/null
+printf 'the override truncates: [%s]\n' "$(cat nc)"
+( printf 'fresh\n' > nc2 ) 2>/dev/null
+printf 'a file that did not exist: [%s]\n' "$(cat nc2)"
+( : > nc3 ) 2>/dev/null
+printf 'a new file from the null command: [%s]\n' "$(cat nc3)"
+( printf 'discarded\n' > /dev/null ) 2>/dev/null
+rc=$?
+printf 'the null device is exempt: %s\n' "$rc"
+set +C
+printf 'after set +C\n' > nc
+printf 'and the option really was what refused: [%s]\n' "$(cat nc)"
+
+# --- order -------------------------------------------------------------------
+#
+# Redirections are applied left to right, so `>file 2>&1` sends both streams
+# to the file and `2>&1 >file` sends the error stream wherever the output was
+# *before* the file was opened. The pair is the case; either line alone is
+# indistinguishable from a shell that applied them in the other order.
+
+{ printf 'out\n'; printf 'err\n' >&2; } > ord1 2>&1
+printf 'file first:  [%s]\n' "$(cat ord1 | tr '\n' '-')"
+{ printf 'out\n'; printf 'err\n' >&2; } 2>&1 > ord2
+printf 'dup first:   [%s]\n' "$(cat ord2 | tr '\n' '-')"
+{ printf 'o\n'; printf 'e\n' >&2; } > ord3 2> ord4
+printf 'two targets: [%s] [%s]\n' "$(cat ord3)" "$(cat ord4)"
+
+# Both streams to the same file by name rather than by duplication: the second
+# open truncates what the first wrote, which is the reason `2>&1` exists.
+{ printf 'first\n'; printf 'second\n' >&2; } > same 2> same
+printf 'the same name twice: [%s]\n' "$(cat same | tr '\n' '-')"
+
+# --- a redirection that fails -----------------------------------------------
+#
+# The redirection is set up before the command runs, so a failure means the
+# command did not run at all — and a *later* redirection in the same command
+# was never reached either.
+
+( cat < nosuchfile ) 2>/dev/null
+rc=$?
+printf 'a missing input failed: '
+if [ "$rc" -ne 0 ]; then printf 'yes\n'; else printf 'no\n'; fi
+( cat < nosuchfile > wouldbe ) 2>/dev/null
+printf 'the later target was not created: '
+if [ -e wouldbe ]; then printf 'it was\n'; else printf 'it was not\n'; fi
+
+# --- here-documents ----------------------------------------------------------
+#
+# Four ways to write the delimiter, and only the bare one expands the body.
+
+v=expanded
+cat <<BARE
+bare: $v and $((2 * 3)) and $(printf 'sub')
+BARE
+cat <<'SINGLE'
+single: $v and $((2 * 3))
+SINGLE
+cat <<"DOUBLE"
+double: $v
+DOUBLE
+cat <<\ESCAPED
+escaped: $v
+ESCAPED
+
+# A backslash in an unquoted body escapes, and in a quoted one it is data.
+cat <<BS
+unquoted backslash: \$v and \\ and a continued \
+line
+BS
+cat <<'BS'
+quoted backslash: \$v and \\ and a continued \
+line
+BS
+
+# The body may be empty, may end in text, and may hold a tab.
+printf 'empty body: ['
+cat <<EMPTY
+EMPTY
+printf ']\n'
+cat <<TAB
+tab	inside
+TAB
+
+# A blank between the operator and the delimiter word is allowed.
+cat << SPACED
+a blank before the delimiter word
+SPACED
+
+# The body is the command's standard input wherever the command is: in a
+# group, in a function, in a pipeline, and with another redirection beside it.
+{ cat; } <<GROUP
+inside a group
+GROUP
+emit() {
+	cat <<FUNC
+inside a function, where $v still expands
+FUNC
+}
+emit
+cat <<PIPE | tr '\n' '-'
+piped
+away
+PIPE
+printf '\n'
+cat <<FILE > hdfile
+into a file
+FILE
+printf 'and back: [%s]\n' "$(cat hdfile)"
+
+# An expansion in an unquoted body is an expansion like any other, so one that
+# fails takes the command with it — and the body is not written.
+unset missing
+( cat <<FAIL
+before ${missing?is unset}
+after
+FAIL
+) 2>/dev/null
+rc=$?
+printf 'a failing expansion in the body failed the command: '
+if [ "$rc" -ne 0 ]; then printf 'yes\n'; else printf 'no\n'; fi
+( cat <<'SAFE'
+before ${missing?is unset}
+SAFE
+) 2>/dev/null
+printf 'and quoted, the same text is data\n'
+
+# `<<-` strips leading tabs from the body *and* from the delimiter line, and
+# strips only tabs — a leading blank is data.
+cat <<-STRIP
+	tabs are stripped
+		even from a deeper line
+	    and the blanks past the tabs are data
+	STRIP
+
+# Two here-documents on one command line are deliberately absent: bash, ksh93
+# and dash feed the command only the last, and zsh's MULTIOS feeds it both, so
+# it is share/suite/zsh/redirect.tests.

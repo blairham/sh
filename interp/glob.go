@@ -1288,9 +1288,12 @@ func (r *Runner) matchIn(dir, pattern string, o patternOpts, seeHidden bool) []s
 // The names go in front, which is where a listing that holds them puts them
 // and is invisible anyway: every column sorts what it matched.
 //
-// Only the component match, never the `**` descent. A `..` the walk descended
-// into would climb out of the tree and never stop, and no column does that —
-// ksh93's `**` lists the tree below and nothing above it.
+// The component match only. A `..` the walk *descended into* would climb out
+// of the tree and never stop, and no column does that — ksh93's `**` lists
+// the tree below and nothing above it. Whether the descent also *lists* the
+// two names beside the entries it finds is a question no dialect here can
+// reach: ksh93 does (`**` under `set -o globstar` writes `sub/.` and
+// `sub/..`), and this preset has no `globstar` to turn its `**` on with.
 func (r *Runner) listedNames(entries []os.DirEntry) []string {
 	names := make([]string, 0, len(entries)+2)
 	if r.sem().GlobListsDotAndDotDot == Yes {

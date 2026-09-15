@@ -16945,6 +16945,65 @@ printf "[%s]" .@(hid); echo`,
 			"the parameter's miss and not the expansion's",
 	},
 	{
+		ID: "pat/the-ignore-parameter-under-the-other-name", Category: "pattern matching",
+		Snippet: `mkdir -p gi && cd gi && : > a.txt && : > b.txt && : > c.log && : > .dot && ` +
+			`FIGNORE='*.txt'; GLOBIGNORE='*.txt'; echo *`,
+		Why: "the same facility under two spellings, set in one line so each shell " +
+			"reads its own and the other four read neither. bash takes the two `.txt` " +
+			"names out and brings `.dot` in; ksh93 does the same and lists `.` and `..` " +
+			"beside it, which is the one rule the two do not share and is the row #2748 " +
+			"was filed on. This shell had no `FIGNORE` at all, so the ksh93 column was " +
+			"the three visible names",
+	},
+	{
+		ID: "pat/the-ignore-parameter-value-is-one-pattern-or-a-list", Category: "pattern matching",
+		Snippet: `mkdir -p gi && cd gi && : > a.txt && : > b.txt && : > c.log && ` +
+			`FIGNORE='*.txt:*.log'; GLOBIGNORE='*.txt:*.log'; echo *; ` +
+			`FIGNORE='@(*.txt|*.log)'; GLOBIGNORE='@(*.txt|*.log)'; echo *`,
+		Why: "bash splits the value on colons and takes all three names out; ksh93 " +
+			"reads the whole value as **one pattern**, no name holds a colon, and " +
+			"nothing is taken out at all. The second line is what keeps that from " +
+			"reading as \"ksh93's parameter is broken\": written as an alternation in " +
+			"the pattern grammar the same two kinds go, so the value really is a " +
+			"pattern rather than a list of them",
+	},
+	{
+		ID: "pat/an-ignore-pattern-matches-the-entry-or-the-word", Category: "pattern matching",
+		Snippet: `mkdir -p gi/sub && cd gi && : > sub/x.txt && : > sub/y.log && ` +
+			`FIGNORE='*.txt'; GLOBIGNORE='*.txt'; echo */*; ` +
+			`FIGNORE='sub/x.txt'; GLOBIGNORE='sub/x.txt'; echo */*`,
+		Why: "what the pattern is matched against, and the two shells are exactly " +
+			"opposite. ksh93 matches the **entry the directory listing gave**, so " +
+			"`*.txt` reaches `sub/x.txt` on the first line and `sub/x.txt` reaches " +
+			"nothing on the second; bash matches the word the expansion produced and " +
+			"answers the other way round on both. The pair is the discriminating " +
+			"shape — one line alone is answered by a filter that matched everything or " +
+			"nothing",
+	},
+	{
+		ID: "pat/an-ignore-value-inherited-from-the-environment", Category: "pattern matching",
+		Env:     []string{"FIGNORE=*.txt", "GLOBIGNORE=*.txt"},
+		Snippet: `mkdir -p gi && cd gi && : > a.txt && : > c.log && : > .dot && echo *; FIGNORE=''; GLOBIGNORE=''; echo *`,
+		Why: "whether the facility is a state an assignment latched or the parameter " +
+			"as it stands. bash reads nothing from the environment — the first line is " +
+			"the two visible names — and ksh93 filters straight away. The second line " +
+			"is the same seam from the null side: assigning an empty value leaves " +
+			"bash's hidden-name switch where it was and turns ksh93's on, because that " +
+			"shell has no option of its own for a script to write back",
+	},
+	{
+		ID: "glob/dot-and-dotdot-in-a-listing", Category: "expansion",
+		Snippet: `mkdir -p gd/sub && cd gd && : > a.txt && : > .dot && echo .*; echo .*/; echo *`,
+		Why: "whether `.` and `..` are in the names a pathname expansion may match. " +
+			"ksh93, dash, BusyBox ash and bash 3.2 list them; bash 5.3, that build as " +
+			"`sh`, and zsh do not — bash against itself across versions, which is why " +
+			"the preset that models 5.3 answers no. The third line is the control: the " +
+			"leading-period rule keeps them out of an ordinary `*` in every column, so " +
+			"this is the *listing* and not a hidden-name option. It is where the ignore " +
+			"parameter's `.`/`..` row comes from and is its own axis rather than a " +
+			"second rule about that parameter (#2748)",
+	},
+	{
 		ID: "exec/lines-run-as-they-are-read", Category: "command language", SyntaxError: true,
 		Script:  true,
 		Snippet: "echo one\n{ fi; }\necho three\n",

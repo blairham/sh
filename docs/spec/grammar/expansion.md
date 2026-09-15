@@ -164,6 +164,29 @@ above.
 
 **Core**: present. Dialect `posix` disables it (matching dash).
 
+### `.` and `..` in a listing
+
+Whether a pathname expansion's component match may reach the two names
+every directory holds. Measured 2026-09-14 in a directory holding
+`a.txt`, `.dot` and `sub` (`glob/dot-and-dotdot-in-a-listing`):
+
+| shell | `echo .*` | `echo .*/` |
+| --- | --- | --- |
+| bash 5.3, bash-as-sh, zsh | `.dot` | no match |
+| ksh93, dash, BusyBox ash, bash 3.2 | `. .. .dot` | `../ ./` |
+
+Three of the panel's columns against three, with bash disagreeing with
+itself across versions — so the preset that models 5.3 answers no and
+nothing here claims to be 3.2. `GlobListsDotAndDotDot`.
+
+The leading-period rule is what keeps the two names out of an ordinary
+`*`, so this is the **listing** rather than a hidden-name option: turning
+hidden names on is what makes `echo *` show them in the columns that have
+them, which is how the rule came to be filed with ksh93's `FIGNORE`
+(#2748, and `patterns.md` for the parameter). The `**` descent never
+follows them — a `..` descended into climbs out of the tree and does not
+stop, and no column does that.
+
 ## 2. Tilde expansion
 
 Applies only to an **unquoted** `~` at the **start of a word**, and in

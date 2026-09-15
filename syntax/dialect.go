@@ -4183,6 +4183,46 @@ type Dialect struct {
 	// since a bare `$=` expands to nothing there rather than printing.
 	BareParamFlags bool
 
+	// MultiDigitPositional makes a run of digits after an unbraced `$` one
+	// positional parameter: `$10` is the tenth, not `$1` followed by a `0`.
+	//
+	// One shell in the panel. Measured 2026-09-15 with
+	// `set -- 1 2 3 4 5 6 7 8 9 ten eleven twelve` on zsh 5.9.2, bash 5.3,
+	// bash 3.2, bash as `sh`, ksh93, dash and BusyBox ash: `$10` is `ten` in
+	// zsh and `10` — `$1` then the character — in the other six, and `$11` is
+	// `eleven` against `11` the same way. The **braced** `${10}` is the tenth
+	// in every one of the seven, which is what says this is about where the
+	// unbraced token ends and not about what a positional name means.
+	//
+	// It is the lexer's for the reason BareSubscript and MultiDigitFdNumber
+	// are: the word boundary moves. `$10` is one expansion where the flag is
+	// on and an expansion plus a literal `0` where it is off, and once the
+	// spans are cut nothing downstream can tell the two readings apart. And
+	// it is a grammar flag rather than a semantics axis for the same reason —
+	// the two shells are not disagreeing about the value of a parameter, they
+	// are reading different tokens.
+	//
+	// The run is read as a *number*, which is what decides the leading-zero
+	// spellings rather than a rule about the digits: measured on the same
+	// binary, `$01` is the first parameter, `$09` is the ninth, `$010` is the
+	// tenth, and `$00` is the shell's own name. So the name the span carries
+	// is whatever digits were written and whoever resolves it reads the
+	// number — the same division FdVariablePositional makes, and the reason
+	// the lexer does not normalize the text it took.
+	//
+	// Neighboring forms are unaffected and were measured beside it. A digit
+	// run still stops at the first non-digit, so `$1a` is `$1` then `a` in
+	// every column; a run still takes no bare subscript, so `$1[2]` is
+	// unchanged; and `$#10` is the length of the tenth parameter in the shell
+	// that has both this and BareSubscript, which falls out of the two
+	// without a rule of its own.
+	//
+	// POSIX is the reason this is a flag rather than a fault in six shells:
+	// XCU makes `$10` the first positional parameter followed by a `0` and
+	// says the multi-digit form has to be braced, so the majority conforms
+	// and the one shell that reads further is the extension.
+	MultiDigitPositional bool
+
 	// ChainedSubscript lets a braced expansion carry more than one subscript,
 	// each reading what the one before it named: `${m[k][2]}` is the second
 	// *character* of the value under `k`, and `${a[2,4][1]}` the first

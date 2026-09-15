@@ -1,0 +1,133 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# The special built-ins of POSIX XCU 2.15 — the fifteen names the standard
+# lists, and what every shell on the panel agrees they do.
+#
+# What POSIX says makes them special is two consequences, and neither one of
+# them is core. Measured here on 2026-09-15, one line at a time:
+#
+#   an assignment in the command's own prefix persists afterwards
+#     `v=outer; v=inner :; printf '%s' "$v"` writes `inner` in ksh93 and in
+#     dash and `outer` in bash and in zsh — two against two, so it is a note
+#     and not a case. bash implements the POSIX rule under `set -o posix`
+#     and the reference here is bash run as bash, which is the shape the
+#     whole column has: what a dialect binary must match is the shell as it
+#     is started, not the shell as the standard would have it.
+#
+#   a failure is fatal to a non-interactive shell
+#     splits the same way and further. `export 1bad=x`, `unset -q`, `set -o
+#     nosuchopt`, `shift` past the end, `. ./nosuchfile` and a redirection
+#     error on `:` all end dash and ksh93 and end neither bash nor zsh; and
+#     writing to a readonly name inverts that pairing, ending bash and dash
+#     while ksh93 and zsh carry on. Even the status splits — dash says 2
+#     where the others say 1 — so a file printing the number would be
+#     measuring dash's exit convention rather than the rule.
+#
+# That is the finding rather than a gap in this file: **the specialness of a
+# special builtin is not common ground.** A script that leans on either
+# consequence is writing for one pair of shells. What follows is what the
+# whole panel does agree on — which is every one of these builtins' actual
+# work, and none of its ceremony.
+#
+# Held out and asked per dialect, each because one shell is alone:
+#   `times`               a preset alias in ksh93 rather than a builtin
+#   `. file arg`          dash alone passes no positional parameters
+#   `return` at the top   bash alone refuses it and carries on
+#   `readonly name`       zsh alone gives an unvalued name an empty value
+
+# The names are all there, and `command -v` finds each one as itself rather
+# than as a file on PATH. `times` is left out of the loop: it is an alias in
+# ksh93, which is asked in ksh/.
+for n in : . eval exec exit export readonly return set shift trap unset break continue; do
+	printf '[%s:%s]' "$n" "$(command -v "$n" 2> /dev/null || printf 'none')"
+done
+printf '\n'
+
+# `:` takes operands, expands them, and does nothing with them. The expansion
+# is the point: it is how a script asks for a side effect and no command.
+: a b c
+printf 'colon with operands -> %s\n' "$?"
+: "${novar=assigned}"
+printf 'colon expanded its operand -> [%s]\n' "$novar"
+
+# `readonly` refuses the write. What that does to the shell is the split
+# above, so the write is made in a subshell and the value read back out here
+# — which answers the question either way the subshell ends.
+readonly ro=one
+( ro=two ) 2> /dev/null
+printf 'readonly kept [%s]\n' "$ro"
+( unset ro ) 2> /dev/null
+printf 'unset refused too [%s]\n' "$ro"
+
+# `export` marks a name rather than a value: a later assignment to an
+# exported name is what the child sees, and a name exported before it has a
+# value is in no environment at all.
+export nv
+printf 'exported but unset -> [%s]\n' "$(sh -c 'printf %s "${nv-absent}"')"
+nv=now
+printf 'and once it has a value -> [%s]\n' "$(sh -c 'printf %s "${nv-absent}"')"
+ev=1
+export ev
+ev=2
+printf 'the child sees the later value [%s]\n' "$(sh -c 'printf %s "$ev"')"
+unset ev
+printf 'and nothing after unset [%s]\n' "$(sh -c 'printf %s "${ev-gone}"')"
+
+# `unset` takes a name out of one of two namespaces, and -v and -f say which.
+uf() { printf 'the function\n'; }
+uf=variable
+unset -v uf
+printf 'after unset -v: variable [%s], function ' "${uf-gone}"
+uf
+unset -f uf
+uf 2> /dev/null
+printf 'after unset -f: %s\n' "$?"
+
+# `exec` with redirections and no command redirects the shell itself, and the
+# descriptor stays open until it is closed.
+exec 3> three
+printf 'written through fd 3\n' >&3
+exec 3>&-
+printf 'file holds [%s]\n' "$(cat three)"
+( exec 4> four; printf 'in subshell\n' >&4; exec 4>&- )
+printf 'subshell file holds [%s]\n' "$(cat four)"
+
+# `exec` with a command replaces the shell, so nothing after it runs; and a
+# command it cannot start ends that shell at 127 rather than returning.
+( exec printf 'exec replaced the shell\n'; printf 'not reached\n' )
+printf 'after the exec subshell -> %s\n' "$?"
+( exec ./nosuchprogram ) 2> /dev/null
+printf 'exec of nothing ended it -> %s\n' "$?"
+
+# `exit` with no operand carries the status of the command before it, and a
+# subshell's status is a command's status like any other.
+( true; exit ); printf 'exit after true -> %s\n' "$?"
+( false; exit ); printf 'exit after false -> %s\n' "$?"
+( exit 3 ); printf 'exit 3 -> %s\n' "$?"
+( ( exit 3 ); exit ); printf 'exit after a subshell -> %s\n' "$?"
+
+# `break` and `continue` take a count, which is how many enclosing loops the
+# jump is out of rather than how many iterations it skips.
+for a in 1 2; do for b in x y; do printf '[%s%s]' "$a" "$b"; break; done; done
+printf '\n'
+for a in 1 2; do for b in x y; do printf '[%s%s]' "$a" "$b"; break 2; done; done
+printf '\n'
+for a in 1 2; do for b in x y; do [ "$b" = x ] && continue; printf '[%s%s]' "$a" "$b"; done; done
+printf '\n'
+for a in 1 2; do for b in x y; do [ "$b" = x ] && continue 2; printf '[%s%s]' "$a" "$b"; done; done
+printf '\nnothing ran above this line\n'
+
+# `.` runs the file in the current environment, and with no operand after the
+# name the positional parameters are the caller's. Passing operands is asked
+# in dash/, which is the shell that does not take them.
+printf 'printf "dot sees [%%s][%%s]\\n" "$#" "$1"\n' > d.sh
+set -- keep
+. ./d.sh
+printf 'after the dot [%s][%s]\n' "$#" "$1"
+
+# `set` with no operand at all is a listing, and the four shells write four
+# different listings — so what is asked here is the one thing they share,
+# that it is not an error and does not touch the positional parameters.
+set > /dev/null 2>&1
+printf 'bare set -> %s, and argv is still [%s]\n' "$?" "$*"

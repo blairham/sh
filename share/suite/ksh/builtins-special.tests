@@ -1,0 +1,37 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# `times` is not a builtin in ksh93 at all — it is a preset alias for a timed
+# empty compound, `{ { time;} 2>&1;}`, and that is this shell's alone.
+#
+# POSIX lists `times` among the special built-ins, so this is the one name on
+# that list ksh93 answers from somewhere else entirely, and both halves of
+# the difference follow from the alias rather than from the timing. It is
+# what `command -v` reports, and it is why a variable assignment written in
+# front of it is a *syntax error*: the word expands to a brace group before
+# the grammar sees it, and an assignment prefix has nothing to attach to.
+#
+# The syntax error itself is held out until #2888 lands. Both shells refuse
+# the line at the same place with the same status; ksh93 quotes the opening
+# brace of the expanded alias and we quote the closing one, which is about
+# the alias route rather than about `times`:
+#
+#   ( eval 'v=x times > /dev/null' ) 2>&1
+#   printf 'an assignment in front of it -> %s\n' "$?"
+#
+# What is asked instead is that the assignment prefix fails at all, which is
+# the half that follows from the alias and is this shell's alone. The status
+# is read from a subshell so the file survives it.
+
+printf 'command -v times -> [%s]\n' "$(command -v times 2> /dev/null)"
+alias times > /dev/null 2>&1
+printf 'and it is an alias -> %s\n' "$?"
+
+( eval 'v=x times > /dev/null' ) 2> /dev/null
+printf 'an assignment in front of it -> %s\n' "$?"
+
+# Called as a word of its own it still reports four times, whichever thing it
+# is. The numbers are the run's and cannot be printed, so what is asked is
+# that it answered at all.
+times > /dev/null 2>&1
+printf 'times itself -> %s\n' "$?"

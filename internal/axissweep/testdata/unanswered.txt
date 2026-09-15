@@ -251,6 +251,7 @@ dash  EmptyAssociativeKeyRefusesTheLength
 dash  EmptyParamSubscriptIsAnError
 dash  EmptyReplacementPattern
 dash  EmptySubscriptTextIsAMathError
+dash  ErrTrapRefiresForTheCommandItFiredInside
 dash  ErrTrapRunsInSubshells
 dash  ErrTrapRunsInsideFunctions
 dash  ErrexitSeesPipefailFailure

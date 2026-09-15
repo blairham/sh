@@ -175,13 +175,43 @@ func (r *Runner) runPseudoTrapBody(ctx context.Context, name, body string, sees 
 // action itself, not inside a function the dialect does not carry the trap
 // into, and not inside a subshell unless the dialect keeps it there.
 func (r *Runner) runErrTrap(ctx context.Context) {
-	body := r.errTrap
-	if body == nil || *body == "" || r.inErrTrap {
+	if !r.errTrapFiresHere(true) {
 		return
 	}
+	r.fireErrTrap(ctx)
+}
+
+// errTrapFiresHere answers whether *this place* is one the ERR trap fires
+// in, which is everything runErrTrap decides before it runs anything.
+//
+// refuse says whether an axis the dialect has not answered is refused by
+// name here. runErrTrap passes true: it is about to fire, so an unanswered
+// axis decides what happens and the shell must say so rather than guess.
+// judgeTheBodyForErr passes false, because it is asking a question nothing
+// asked before: the end of a call with a failing body is reached whether or
+// not the trap has any business there, and refusing at every one of them
+// printed the same complaint twice for a call whose body failed and printed
+// one for a body that failed by `return` alone, where the statement that
+// would have refused was never judged. Where the dialect has not said, the
+// refusal belongs to the failing statement inside the body — which is the
+// place runErrTrap reaches, and the place it already makes it.
+//
+// Split out from runErrTrap rather than written a second time, so that a
+// later change to what "fires here" means cannot reach one caller only.
+func (r *Runner) errTrapFiresHere(refuse bool) bool {
+	body := r.errTrap
+	if body == nil || *body == "" || r.inErrTrap {
+		return false
+	}
+	answered := func(a Answer, axis string) bool {
+		if !refuse {
+			return a == Yes
+		}
+		return r.ask(a, axis)
+	}
 	if cur := r.currentFunctionFrameSerial(); cur != 0 && cur != r.errTrapFrame && !r.errtrace &&
-		!r.ask(r.sem().ErrTrapRunsInsideFunctions, "the ERR trap inside a function it was not set in") {
-		return
+		!answered(r.sem().ErrTrapRunsInsideFunctions, "the ERR trap inside a function it was not set in") {
+		return false
 	}
 	// Inherited, not merely inside a subshell: a trap the subshell set for
 	// itself fires everywhere — measured, `(trap 'echo err' ERR; false)`
@@ -193,12 +223,112 @@ func (r *Runner) runErrTrap(ctx context.Context) {
 	// `set -E` in front of it writes two — the subshell's failure and then
 	// the subshell command's.
 	if r.errTrapInherited && !r.errtrace &&
-		!r.ask(r.sem().ErrTrapRunsInSubshells, "the ERR trap inside a subshell") {
+		!answered(r.sem().ErrTrapRunsInSubshells, "the ERR trap inside a subshell") {
+		return false
+	}
+	return true
+}
+
+// fireErrTrap runs the action, with every question about whether this place
+// fires already settled by errTrapFiresHere.
+func (r *Runner) fireErrTrap(ctx context.Context) {
+	r.inErrTrap = true
+	r.runPseudoTrapBody(ctx, "ERR", *r.errTrap, r.status)
+	r.inErrTrap = false
+	// Recorded after the body rather than before it, because the body is
+	// statements and every statement clears this on the way in. What it
+	// means is "the failure the status now reports has been announced", and
+	// it stops the group, the loop or the `if` that merely *reports* that
+	// status from announcing it again — see Runner.errTrapFired.
+	r.errTrapFired = true
+}
+
+// errTrapIsSet reports whether this shell has an ERR trap with a body to run.
+//
+// Read before a simple command as well as after one: one column's answer to
+// ErrTrapRefiresForTheCommandItFiredInside turns on whether a trap was set
+// when the command *began*, and a function that sets one on its first line
+// has changed that by the time it returns.
+func (r *Runner) errTrapIsSet() bool {
+	return r.errTrap != nil && *r.errTrap != ""
+}
+
+// reopenErrJudgment decides whether a simple command that ran the failure it
+// reports is a second place the ERR trap fires, and takes the record of the
+// firing back where it is.
+//
+// set is whether an ERR trap was in force when the command began.
+//
+// Asked only where the answer decides something: with nothing fired inside
+// the command there is no second firing to suppress, so a shell with no ERR
+// trap — dash, which refuses the condition outright — never reaches the
+// question. Nor is there one where the command took the trap away with it: a
+// dialect that hands a function's traps back at the return leaves a body
+// that set its own ERR trap with none at all afterwards, so there is nothing
+// left to refire and the axis decides nothing.
+func (r *Runner) reopenErrJudgment(set bool) {
+	if !r.errTrapFired || !r.errTrapIsSet() {
 		return
 	}
-	r.inErrTrap = true
-	r.runPseudoTrapBody(ctx, "ERR", *body, r.status)
-	r.inErrTrap = false
+	switch r.errTrapRefiring() {
+	case ErrTrapAlwaysRefires:
+		r.errTrapFired = false
+	case ErrTrapRefiresWhereItWasSetFirst:
+		r.errTrapFired = !set
+	}
+}
+
+// errTrapRefiring resolves the axis, and refuses by name where the dialect
+// has not answered it.
+func (r *Runner) errTrapRefiring() ErrTrapRefiring {
+	a := r.sem().ErrTrapRefiresForTheCommandItFiredInside
+	if a == ErrTrapRefiringUnspecified {
+		r.diagf("%s\n", r.unanswered("the ERR trap firing again for the command it fired inside"))
+		r.status = 2
+		r.unspecified = true
+	}
+	return a
+}
+
+// judgeTheBodyForErr fires the ERR trap for the status a function body is
+// about to report, from inside the frame that produced it.
+//
+// This is the other half of ErrTrapFiresOnceForTheFailure, and what it
+// settles is *where* rather than whether. The count is the same either way:
+// a body that ends non-zero leaves the call reporting the same status, and
+// with the call suppressed instead the one firing would happen there. What
+// differs is what the action can read. Measured on zsh 5.9.2: with the body
+// declaring `local v=in` the action prints `in` where the caller's is `out`,
+// `${funcstack[*]}` reads `g`, and `$1` is the argument the call was given —
+// so the handler runs in the frame that failed. bash, which judges the call,
+// reads the caller's of all three.
+//
+// Which is why it is called with the frame still standing, before the locals
+// are put back and the frame popped. Written after the teardown first, it
+// passed every count there was and read the caller's variables.
+func (r *Runner) judgeTheBodyForErr(ctx context.Context) {
+	if r.tested != 0 || r.status == 0 || r.errTrapFired || !r.errTrapIsSet() {
+		return
+	}
+	// A `return` is the case this exists for, so the control flow it sets
+	// is not a reason to decline — where anything else is still standing,
+	// the body did not finish and there is no status of its own to judge.
+	if r.ctl != controlNone && r.ctl != controlReturn {
+		return
+	}
+	// Whether the frame is a place the trap fires at all, asked *before*
+	// the axis and asked quietly: a shell that keeps the trap out of the
+	// calls it was not set in judges nothing here, so an unanswered
+	// refiring axis is not a question it has been put, and an unanswered
+	// frame axis is one the failing statement inside the body has already
+	// refused.
+	if !r.errTrapFiresHere(false) {
+		return
+	}
+	if r.errTrapRefiring() != ErrTrapFiresOnceForTheFailure {
+		return
+	}
+	r.fireErrTrap(ctx)
 }
 
 // runDebugTrap fires the DEBUG trap before a simple command.

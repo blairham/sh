@@ -1033,6 +1033,15 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	// handler — see localtraps.go.
 	r.runPendingTraps(ctx)
 
+	// And the ERR trap, where the dialect judges the body's status in the
+	// frame that produced it rather than at the call — see
+	// judgeTheBodyForErr. Here, while the frame is still standing, because
+	// that is where it was measured: with the action printing `$v` and the
+	// body declaring `local v=in`, zsh 5.9.2 writes `in`, so the locals,
+	// the positional parameters and the call stack are all still the
+	// call's when the handler runs.
+	r.judgeTheBodyForErr(ctx)
+
 	r.depth--
 	// Put back what `local` displaced, in whatever order it was declared:
 	// the values are keyed by name, so order does not matter.

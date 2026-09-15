@@ -12042,12 +12042,61 @@ set inside a function fires in that function and at the top level after
 it returns, and does not fire inside a sibling function entered
 afterwards, though the sibling's own failing call still does.
 
+**`ErrTrapRefiresForTheCommandItFiredInside`** — bash *refires where it
+was set first* · dash unspecified · ksh93 *always refires* · zsh *fires
+once for the failure* · ash *always refires*
+
+How many times **one** failure fires the condition, once the command that
+failed is inside something. A compound is not part of the question and
+has no axis: a group, a loop, an `if` and a `case` report the status their
+last command left, and no column in the panel fires a second time for one.
+This shell judged the failure once per *statement* instead, so a handler
+ran twice one level deep, three times two levels deep and four times three
+levels deep, in every dialect that has the condition (#2793).
+
+What the columns do disagree about is a command that **ran** the failure
+— a function call, a `.`, an `eval`:
+
+- **zsh** judges the failure where it happened and nowhere else.
+  `f(){ g; }; g(){ h; }; h(){ false; }; f` writes one E, and with the
+  action printing `${funcstack[*]}` it reads `h g f` — so none of the
+  three calls is an event of its own. The corollary is that an explicit
+  `return 1` is judged *inside the frame* too — not a firing the count can
+  see, since the call it would otherwise be judged at reports the same
+  status, but one the action can read: `g(){ return 1; }; g` writes its one
+  E with `${funcstack[*]}` reading `g`, with the body's locals in scope and
+  with `$1` the argument the call was given.
+- **ksh93** and **BusyBox ash** refire for the command whatever the trap
+  was doing when it began. ksh93 carries the trap into a call as well, so
+  the three-deep script writes **four** E lines there; ash carries nothing
+  in, so only the outermost call is a place it can fire and the same
+  script writes one.
+- **bash** refires only where an ERR trap was already set when that
+  command began. Both halves are one measurement, read off `$LINENO` from
+  a script file: with the trap set at the top and `set -E` carrying it in,
+  `g(){ false; }` fires at the body's line and again at the call's; with
+  the trap set for the first time *inside* the function it fires at the
+  body's line alone, with or without the option, though the trap it set is
+  still there afterwards.
+
+A **subshell** is not this axis and needs no answer: the child is a copy,
+so its firing is the child's and the parent judges the failing subshell
+command with nothing remembered. That is what keeps zsh's two E lines for
+`(false)`, and it is why `{ (false); }` is still two rather than three.
+
+Nor is this one of the four boundary axes the options below move. `set -E`
+changes whether the trap reaches a function at all, not what the call then
+owes it: bash with the trap set inside the function fires in the body alone
+**with or without** the option, which is this axis answering the same way
+on both sides of it.
+
 #### the two options that override all four
 
-The four axes above are where a shell stands with nothing asked. bash —
-alone in the panel — lets a script move it, and the four `No` answers
-above are the reason it has to: they are what the options exist to turn
-off.
+The four **boundary** axes above — the two ERR and the two DEBUG ones, not
+the refiring axis between them — are where a shell stands with nothing
+asked. bash — alone in the panel — lets a script move them, and the four
+`No` answers above are the reason it has to: they are what the options
+exist to turn off.
 
 `errtrace`, reachable as `set -E`, `set -o errtrace` or as half of
 `shopt -s extdebug`, carries the ERR trap into functions *and* into

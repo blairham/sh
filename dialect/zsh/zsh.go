@@ -1744,6 +1744,16 @@ func Semantics() interp.Semantics {
 	s.TrapIsNamedByAFunction = interp.Yes
 	s.ErrTrapRunsInsideFunctions = interp.Yes
 	s.ErrTrapRunsInSubshells = interp.Yes
+	// One failure, one firing, however deeply the command that failed was
+	// called: `f(){ g; }; g(){ h; }; h(){ false; }; f` writes a single E,
+	// and with the action printing `${funcstack[*]}` it reads `h g f` — so
+	// the firing is inside the frame that failed and none of the three
+	// calls is an event of its own. Read from the frame rather than counted:
+	// a `return 1` judged at the call instead would write the same one E,
+	// and only the action's view of the locals, the arguments and the stack
+	// says which happened. A subshell still fires on both sides, which is
+	// the axis above and not this one.
+	s.ErrTrapRefiresForTheCommandItFiredInside = interp.ErrTrapFiresOnceForTheFailure
 	s.DebugTrapRunsInsideCalls = interp.Yes
 	s.DebugTrapRefiresOnEnteringAFunction = interp.No
 	// Every compound head, once each — `if`, `while`, a group, a subshell,

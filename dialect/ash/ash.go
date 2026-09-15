@@ -572,6 +572,15 @@ func Semantics() interp.Semantics {
 	// `trap 'echo e' ERR` is accepted too — the sole holdout on the
 	// pseudo-conditions is dash, and this shell is not with it.
 	s.TrapHasErrCondition = interp.Yes
+	// And a command that ran the failure fires it again whatever the trap
+	// was doing when the command began, which is ksh93's answer and not
+	// bash's: measured in BusyBox 1.37, `g() { trap 'echo I' ERR; false; }`
+	// writes two I lines where bash writes one. The count stays at one for
+	// a trap set at the top — `f(){ g; }; g(){ h; }; h(){ false; }; f`
+	// writes a single E — because this shell does not carry the trap into a
+	// call at all, so only the outermost of the three is a place it can
+	// fire.
+	s.ErrTrapRefiresForTheCommandItFiredInside = interp.ErrTrapAlwaysRefires
 	s.TrapHasDebugCondition = interp.No
 	// No DEBUG condition, so no head to fire one at. Not an unanswered
 	// axis — DebugTrapHeads has no unspecified value, because a head

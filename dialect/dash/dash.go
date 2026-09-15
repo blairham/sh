@@ -476,6 +476,11 @@ func Semantics() interp.Semantics {
 	// and RETURN with it. Measured, and the refusal does not end the
 	// script — the status is 1 and the next command runs.
 	s.TrapHasErrCondition = interp.No
+	// unanswered ErrTrapRefiresForTheCommandItFiredInside: the axis is how
+	// many times one failure fires the ERR trap, and this shell has no ERR
+	// trap for it to fire. The question is only reached where a trap with a
+	// body exists, which is why the two axes above it are unanswered here
+	// too.
 	s.TrapHasDebugCondition = interp.No
 	// No DEBUG condition, so no head to fire one at. Not an unanswered
 	// axis — DebugTrapHeads has no unspecified value, because a head

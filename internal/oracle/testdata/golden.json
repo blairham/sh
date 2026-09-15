@@ -195560,6 +195560,57 @@
         "TimedOut": false
       }
     },
+    "trap/a-debug-action-that-returns-two-with-a-return-trap-set": {
+      "ash": {
+        "Stdout": "[g1][g2][g3][done:0]",
+        "Stderr": "\u003cshell\u003e: trap: line 0: DEBUG: invalid signal specification~\u003cshell\u003e: trap: line 0: RETURN: invalid signal specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[g1][R:0][done:2]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[g1][R:0][done:2]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[g1][g2][g3]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[g1][g2][g3][done:0]",
+        "Stderr": "trap: DEBUG: bad trap~trap: RETURN: bad trap",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[g1][g2][g3][done:0]",
+        "Stderr": "\u003cshell\u003e: trap: RETURN: bad trap",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[g1][g2][g3][done:0]",
+        "Stderr": "\u003cshell\u003e:trap:1: undefined signal: RETURN",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "trap/a-failure-three-calls-deep": {
       "ash": {
         "Stdout": "E~done",
@@ -207866,6 +207917,57 @@
         "TimedOut": false
       }
     },
+    "xtrace/ps4-does-not-repeat-inside-an-exit-body": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "XY false~XY :~XY :",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "XY false~XXY :~XY :",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "XY false~XXY :~XY :",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "XY false~XXY :~XY :",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "trap: ERR: bad trap~XY false~XY :",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "XY false~XY :~XY :",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "XY false~XY :~XY :",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "xtrace/ps4-draws-the-user-escape": {
       "ash": {
         "Stdout": "differs",
@@ -208116,6 +208218,57 @@
       "zsh": {
         "Stdout": "names-the-login-name",
         "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "xtrace/ps4-repeats-inside-a-trap-body": {
+      "ash": {
+        "Stdout": "one",
+        "Stderr": "\u003cshell\u003e: trap: line 0: DEBUG: invalid signal specification~XY echo one",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "one",
+        "Stderr": "XXY d~XXY :~XY echo one",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one",
+        "Stderr": "XXY d~XXY :~XY echo one",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one",
+        "Stderr": "XXY d~XXY :~XY echo one",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one",
+        "Stderr": "trap: DEBUG: bad trap~XY echo one",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one",
+        "Stderr": "XY echo one~XY d~XY :",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one",
+        "Stderr": "XY d~XY :~XY echo one",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

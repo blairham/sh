@@ -1,0 +1,64 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# ksh93's answer to "what happened to that child" — #2314's ksh/ half.
+#
+# Every other shell on the panel reports a process that died on a signal as
+# 128 plus the signal's number, which is what the whole of shell scripting is
+# written against. ksh93 reports 256 plus it. That is one decision, and it is
+# visible in two places a script actually looks: the status of a command that
+# was killed, and what `exit` does with an operand in that range.
+#
+# The numbers are printed raw here, where core/signals.tests can only compare
+# them to 128 — printing them is the whole point of a dialect file, and a
+# comparison would put ksh93 in the same group as the other three and fail the
+# check this tier is graded by.
+#
+# The signal numbers themselves are the operating system's rather than the
+# shell's, and the four used here are the four that are the same number on
+# every Unix: HUP is 1, QUIT is 3, KILL is 9, TERM is 15. A run under another
+# kernel gets the same lines.
+#
+# Not asked, and the reason is in the file rather than in a case: `exit 257`
+# through `exit 510` completes the same model — ksh93 reads the operand as
+# "died of signal n" and *raises* that signal, so `( exit 258 )` kills the
+# script with SIGINT rather than answering with a number. A case cannot hold
+# a shell that ends itself, and the behaviour is the same decision as the two
+# below seen from the other side.
+#
+# The second half of the file is ERR, which ksh93 fires for a compound
+# command's own non-zero status as well as for the command inside it that
+# failed. bash and zsh fire once where ksh93 fires twice; dash has no ERR at
+# all. ext/signals.tests asks the part the three with it agree about.
+
+# A child killed by a signal. The shell's note about a dead child is a
+# diagnostic whose wording and whose presence are both the shell's, so the
+# standard error of the group is redirected rather than the command's.
+{ sh -c 'kill -s TERM $$'; st=$?; } 2> /dev/null
+printf 'TERM -> %s\n' "$st"
+{ sh -c 'kill -s KILL $$'; st=$?; } 2> /dev/null
+printf 'KILL -> %s\n' "$st"
+{ sh -c 'kill -s QUIT $$'; st=$?; } 2> /dev/null
+printf 'QUIT -> %s\n' "$st"
+{ sh -c 'kill -s HUP $$'; st=$?; } 2> /dev/null
+printf 'HUP -> %s\n' "$st"
+
+# A child that exited normally is the ordinary number, so this is an encoding
+# for one kind of death and not a different numbering for everything.
+{ sh -c 'exit 3'; st=$?; } 2> /dev/null
+printf 'plain exit -> %s\n' "$st"
+{ sh -c 'exit 0'; st=$?; } 2> /dev/null
+printf 'plain success -> %s\n' "$st"
+
+# ERR, counted. `f` fails because the command in it failed, and ksh93 reports
+# both; `g` returns non-zero without any command having failed, and it is
+# reported once; `h` succeeds and is reported not at all.
+f() { false; }
+g() { return 1; }
+h() { true; }
+( trap 'printf "err\n"' ERR; f; printf 'after f\n' ) 2> /dev/null
+( trap 'printf "err\n"' ERR; g; printf 'after g\n' ) 2> /dev/null
+( trap 'printf "err\n"' ERR; h; printf 'after h\n' ) 2> /dev/null
+
+# The same for a pipeline: the stage that failed, and then the pipeline.
+( trap 'printf "err\n"' ERR; true | false; printf 'after pipeline\n' ) 2> /dev/null

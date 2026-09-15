@@ -1,0 +1,69 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Traps past POSIX — #2314's ext/ half. Three things bash, zsh and ksh93 all
+# have and dash has none of: a signal named with its `SIG` prefix, the `ERR`
+# condition, and the `DEBUG` condition.
+#
+# dash is the measured holdout on every line here, which is what puts the
+# file in this tier rather than in core/. It refuses `SIGUSR1` in `trap` and
+# in `kill -s` alike, and takes `ERR` and `DEBUG` as signal names it does not
+# know.
+#
+# `RETURN` is not here. bash and ksh93 both document it and neither fires it
+# for a function called from the shell that set the trap — the disposition is
+# not inherited by the function unless the shell is asked to trace, and asking
+# it to is a different question in each — so the three columns agree on an
+# empty output, which is agreement on nothing.
+#
+# Nor is the number of times `DEBUG` fires for a given stretch of script:
+# bash and zsh count three where ksh93 counts four for the same two commands
+# and a `trap -`. That it fires once per command, and before the command, is
+# what all three agree about and is what is asked.
+#
+# ERR is asked only where all three agree, which is the simple command.
+# ksh93 fires it a second time for the *function* whose body failed and a
+# second time for the *pipeline* whose last stage failed — counting the
+# compound command's own non-zero status as another failing command — where
+# bash and zsh fire once. That split is ksh93's own and is in ksh/signals.tests.
+
+# A signal may be named with its `SIG` prefix, in `trap`, in `kill -s`, and as
+# the option-looking form of `kill`.
+trap 'printf "prefixed action\n"' SIGUSR1
+kill -s SIGUSR1 $$
+kill -s USR1 $$
+kill -SIGUSR1 $$
+
+# And reset by the prefixed name, which takes the same line out of the listing
+# the unprefixed name put in.
+trap - SIGUSR1
+trap > traplist 2>&1
+printf 'listed after reset=%s\n' "$(wc -l < traplist | tr -d ' ')"
+
+# ERR runs when a command ends non-zero, and the command after it still runs:
+# ERR is a report, not `set -e`.
+( trap 'printf "err\n"' ERR; false; printf 'after the failure\n' ) 2> /dev/null
+printf 'err trap -> %s\n' "$?"
+
+# It sees the status that fired it.
+( trap 'printf "err saw %s\n" "$?"' ERR; ( exit 4 ); ( exit 7 ) ) 2> /dev/null
+
+# With `set -e` both happen: the action runs and then the shell ends.
+( set -e; trap 'printf "err with errexit\n"' ERR; false; printf 'not reached\n' ) 2> /dev/null
+printf 'errexit -> %s\n' "$?"
+
+# The places a non-zero status is part of the construct rather than a failure
+# are the places ERR stays quiet — the same list `set -e` ignores.
+( trap 'printf "err\n"' ERR; if false; then :; fi; printf 'condition quiet\n' ) 2> /dev/null
+( trap 'printf "err\n"' ERR; while false; do :; done; printf 'while quiet\n' ) 2> /dev/null
+( trap 'printf "err\n"' ERR; false || true; printf 'or quiet\n' ) 2> /dev/null
+( trap 'printf "err\n"' ERR; ! false; printf 'bang quiet\n' ) 2> /dev/null
+( trap 'printf "err\n"' ERR; false && true; printf 'and quiet\n' ) 2> /dev/null
+
+# A command that succeeded is not a failure, and a reset disposition is not a
+# disposition.
+( trap 'printf "err\n"' ERR; true; printf 'success quiet\n' ) 2> /dev/null
+( trap 'printf "err\n"' ERR; trap - ERR; false; printf 'reset quiet\n' ) 2> /dev/null
+
+# DEBUG runs once per command, before it.
+( trap 'printf "debug\n"' DEBUG; :; : ) 2> /dev/null

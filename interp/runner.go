@@ -684,6 +684,23 @@ type Runner struct {
 	// dialect that registered it states it — see SetDynamicDeclaration.
 	dynamicDeclarations map[string]ProducedDeclaration
 
+	// listingDrawsNoReading is set while a whole-shell listing is building a
+	// produced parameter's row under an answer that writes no drawn value —
+	// see listedDeclarationOf. Not cloned: it is live only inside one
+	// builtin's own call.
+	listingDrawsNoReading bool
+
+	// producedReading is the value a produced parameter last gave a *script*,
+	// kept for the one listing form that writes the reading rather than
+	// taking a new one — see ProducedListingLastReading.
+	//
+	// Written where an expansion reads the producer and nowhere else, which
+	// is the whole of what makes it the right thing to write: a listing that
+	// filled it would be recording its own output, and two listings a line
+	// apart would then differ from each other in the shell whose listing is
+	// supposed to be the thing that cannot.
+	producedReading map[string]string
+
 	// endedProducers are the produced parameters an `unset` and an assignment
 	// have between them turned into ordinary names — see
 	// Semantics.AssignmentRestoresAnUnsetProducedParameter and
@@ -6464,7 +6481,14 @@ func (r *Runner) varValue(name string, folded bool) (string, bool) {
 		// assigned is kept where the producer can see it — SECONDS counts
 		// from it — rather than shadowing the producer entirely.
 		if !r.removed[name] {
-			return f(r), true
+			v := f(r)
+			// This is the *expansion* of the parameter, so it is the reading
+			// one dialect's listing writes back. Recorded here rather than
+			// inside the producers because every one of them would otherwise
+			// have to remember, and a producer a dialect adds tomorrow would
+			// be the one that forgot. See Runner.producedReading.
+			r.recordProducedReading(name, v)
+			return v, true
 		}
 	}
 	if r.isCompoundVariable(name) {

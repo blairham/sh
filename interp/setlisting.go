@@ -61,8 +61,17 @@ func (r *Runner) setListing() int {
 		r.unspecified = true
 		return 2
 	}
-	for _, name := range r.declarableNames() {
-		d, known := r.declarationOf(name)
+	names, produced, listing := r.listedNames()
+	if r.unspecified {
+		return r.status
+	}
+	for _, name := range names {
+		// A produced parameter takes the dialect's answer here exactly as it
+		// does under `-p`. The name-with-no-value states then fall out of the
+		// rule below rather than needing one of their own: this listing is
+		// assignments, so a row with nothing to assign is no row, which is
+		// what bash writes before anything has read the parameter.
+		d, known := r.listedDeclarationOf(name, produced[name], listing)
 		if !known || (!d.hasValue && !d.isArr && !d.isAssoc) {
 			// An attribute with no value is a declaration but not a set
 			// variable, and no shell lists it here.

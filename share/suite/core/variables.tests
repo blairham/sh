@@ -12,7 +12,20 @@
 # Held out and named: assigning to a readonly, which zsh ends the script over
 # where the other three carry on; and the default value of IFS, which is
 # space-tab-newline in three shells and space-tab-newline-NUL in zsh. Both are
-# zsh answers and belong in zsh/.
+# zsh answers and belong in zsh/, and both are there now, beside the third:
+# `readonly` inside a function is a *local* readonly in zsh.
+#
+# Two more splits are written where their cases would have been, because each
+# is two shells against two and a note is not a tier: an assignment written in
+# front of a special builtin (`X=1 :`) persists in ksh93 and dash and does not
+# in bash and zsh, and the last stage of a pipeline runs in this shell in zsh
+# and ksh93 and in a child in bash and dash.
+#
+# `local` is the other absence, and it is the largest: bash, zsh and dash all
+# have it and the ksh93 on this panel has no such word, so the line is a
+# command that is not found and the assignment on it never happens. That is
+# ksh/variables.tests, and it is the shortest statement of why a bash script
+# does not run under ksh93.
 
 v=plain; printf '[%s]\n' "$v"
 v=; printf 'empty [%s]\n' "$v"
@@ -80,3 +93,178 @@ i=0; i=$((i+1)); printf 'i=%s\n' "$i"
 
 # A child that is not this shell sees the exported name and not the other.
 env -i PATH=/bin sh -c 'printf "child sees NOPE [%s]\n" "${NOPE-unset}"' 2>/dev/null
+
+# ---- readonly, past the value ----
+
+# A readonly name refuses an assignment and refuses `unset`, and the value is
+# still there after both. Each is asked in a subshell, because a shell that
+# ends the script over it — which zsh does — would take the rest of the file
+# with it, and what is common is the refusal rather than what follows it.
+( RO=changed ) 2> /dev/null
+printf 'assignment refused -> %s\n' "$(( $? != 0 ))"
+printf 'value intact [%s]\n' "$RO"
+( unset RO ) 2> /dev/null
+printf 'unset refused -> %s\n' "$(( $? != 0 ))"
+printf 'value still intact [%s]\n' "$RO"
+readonly -p > ro.list 2>&1
+printf 'readonly -p -> %s, names RO %s\n' "$?" "$(grep -c RO ro.list)"
+
+# ---- what a function's declaration reaches ----
+
+# `export` and a plain assignment from inside a function are the shell's, the
+# same as at the top level.
+ef() { export EF=exported; }
+ef
+printf 'export from a function [%s]\n' "$(sh -c 'printf %s "$EF"')"
+pf() { PF=plain; }
+pf
+printf 'plain from a function [%s]\n' "${PF-unset}"
+
+# `readonly` is not asked here: zsh makes it a *local* readonly and the name
+# is unset once the call returns, where bash, ksh93 and dash leave it set in
+# the shell. That is zsh/variables.tests. Nor is `local`, which ksh93 on this
+# machine does not have as a word at all — ksh/variables.tests — and nor is
+# `typeset`, which is ext/typeset.tests and is local in bash and zsh, global
+# in ksh93, and absent from dash: three answers on one line.
+
+# ---- export, in every order the two halves can be written ----
+
+export E1=one
+printf 'exported with a value [%s]\n' "$(sh -c 'printf %s "$E1"')"
+E2=two
+export E2
+printf 'assigned then exported [%s]\n' "$(sh -c 'printf %s "$E2"')"
+export E3
+E3=three
+printf 'exported then assigned [%s]\n' "$(sh -c 'printf %s "$E3"')"
+
+# Exporting does not change the value on this side, and a later assignment
+# keeps the attribute rather than dropping it.
+printf 'value here [%s]\n' "$E2"
+E1=changed
+printf 'still exported [%s]\n' "$(sh -c 'printf %s "$E1"')"
+
+# `unset` takes it out of the environment as well as out of the shell.
+unset E1
+printf 'after unset [%s]\n' "$(sh -c 'printf "%s" "${E1-gone}"')"
+
+# `set -a` exports every assignment made while it is on, and nothing that was
+# made before it. Asked in a subshell so the option does not leak into the
+# rest of the file.
+( set -a; AX=exported; printf 'allexport [%s]\n' "$(sh -c 'printf %s "$AX"')" )
+( AY=plain; printf 'without it [%s]\n' "$(sh -c 'printf "%s" "${AY-unset}"')" )
+
+# ---- unset, and the two things it can name ----
+
+uv=value
+uf() { printf 'the function ran\n'; }
+unset -v uv
+printf 'unset -v [%s]\n' "${uv-gone}"
+unset -f uf 2> /dev/null
+printf 'unset -f -> %s\n' "$?"
+uf 2> /dev/null
+printf 'calling it now -> %s\n' "$(( $? != 0 ))"
+both=variable
+unset both
+printf 'unset with no flag takes the variable [%s]\n' "${both-gone}"
+
+# ---- a name is a name ----
+
+# A word that is not a name is not an assignment: the line is a command, the
+# command is not found, and the shell carries on past it.
+1bad=x 2> /dev/null
+printf 'digit first -> %s\n' "$(( $? != 0 ))"
+a-b=x 2> /dev/null
+printf 'dash in the name -> %s\n' "$(( $? != 0 ))"
+printf 'still running\n'
+
+# ---- what a value may hold ----
+
+nl='a
+b'
+printf 'a newline survives [%s]\n' "$nl"
+printf 'and is one line break: %s\n' "$(printf '%s' "$nl" | wc -l | tr -d ' ')"
+eq='has = in it'
+printf 'an equals sign [%s]\n' "$eq"
+sq='$not expanded'
+printf 'single quotes [%s]\n' "$sq"
+pad='  padded  '
+printf 'blanks at both ends [%s]\n' "$pad"
+mt=''
+printf 'empty is set [%s][%s]\n' "${mt-unset}" "${mt+set}"
+
+# ---- assignments on one command line ----
+
+# They are performed left to right, so the second may read the first.
+unset la lb
+la=1 lb=$la
+printf 'one command [%s][%s]\n' "$la" "$lb"
+
+# A prefix may carry several names, all of them in the command's environment
+# and none of them in the shell's.
+unset PA PB
+PA=1 PB=2 env | grep -E '^(PA|PB)=' | sort
+printf 'after the prefix [%s][%s]\n' "${PA-unset}" "${PB-unset}"
+
+# `X=1 :` is not asked: the assignment persists in ksh93 and dash, where `:`
+# is a special builtin and POSIX says a prefix on one survives, and does not
+# in bash and zsh. Two against two is a note rather than a tier.
+
+# ---- scope through a dot script ----
+
+printf 'sv=sourced\nsf() { printf "the sourced function ran\\n"; }\n' > lib.sh
+. ./lib.sh
+printf 'sourced value [%s]\n' "$sv"
+sf
+
+# The sourced file sees what the shell set, and what it sets stays set.
+printf 'printf "it sees [%%s]\\n" "$before"\nbefore=changed\n' > lib2.sh
+before=original
+. ./lib2.sh
+printf 'after sourcing [%s]\n' "$before"
+
+# A dot script read from inside a function is still the shell's scope.
+unset sv
+dotter() { . ./lib.sh; }
+dotter
+printf 'sourced from a function [%s]\n' "$sv"
+
+# ---- a subshell's assignments do not come back ----
+
+sv2=outer
+captured=$( sv2=inner; printf '%s' "$sv2" )
+printf 'inside [%s] outside [%s]\n' "$captured" "$sv2"
+( sv2=subshell )
+printf 'after a subshell [%s]\n' "$sv2"
+
+# The last stage of a pipeline is not asked: it runs in this shell in zsh and
+# ksh93 and in a child in bash and dash, so an assignment there comes back in
+# half the panel. Two against two.
+
+# ---- the parameters the shell maintains ----
+
+case "$-" in *i*) printf 'interactive\n' ;; *) printf 'not interactive\n' ;; esac
+set -f
+case "$-" in *f*) printf 'set -f shows in the flags\n' ;; *) printf 'set -f does not show\n' ;; esac
+set +f
+case "$-" in *f*) printf 'set +f left it\n' ;; *) printf 'set +f took it out\n' ;; esac
+printf 'the pid is positive [%s]\n' "$(( $$ > 0 ))"
+printf 'and it does not change [%s]\n' "$(( $$ == $$ ))"
+
+# PWD follows `cd` and OLDPWD holds where it was. The paths are compared
+# rather than printed: an absolute path under the run's own directory is the
+# one thing a case may not put in its output.
+mkdir -p sub
+start=$PWD
+cd sub
+if [ "$PWD" != "$start" ]; then printf 'PWD moved\n'; else printf 'PWD did not move\n'; fi
+if [ "$OLDPWD" = "$start" ]; then printf 'OLDPWD is where we were\n'; else printf 'OLDPWD is not\n'; fi
+cd ..
+if [ "$PWD" = "$start" ]; then printf 'PWD is back\n'; else printf 'PWD is not back\n'; fi
+
+# ---- set -u ----
+
+( set -u; printf 'before\n'; printf '[%s]\n' "$nosuchvar_zz"; printf 'not reached\n' ) 2> /dev/null
+printf 'nounset ended it -> %s\n' "$(( $? != 0 ))"
+( set -u; printf '[%s]\n' "${nosuchvar_zz-a default is fine}" ) 2> /dev/null
+printf 'a default is not a reference -> %s\n' "$?"

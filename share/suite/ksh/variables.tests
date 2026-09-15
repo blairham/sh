@@ -1,0 +1,56 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# `local` — #2316's ksh/ half, and the shortest possible statement of why a
+# script written for bash does not run here.
+#
+# bash, zsh and dash all have a `local` builtin and all three scope the name
+# to the call. The ksh93 on this panel — AT&T's 93u+ of 2012, which is the
+# ksh the oracle grades against — has no such word: the line is a command, the
+# command is not found, and the *assignment on it never happens*. So a
+# function whose first line is `local n=0` runs with whatever `n` the shell
+# had, and a function that writes to a name it believed it had made its own
+# writes to the caller's.
+#
+# That is worse than a diagnostic, and the cases below are arranged around
+# it: each one asks what the value is rather than what the shell said, because
+# what the shell said goes to standard error and a script does not read it.
+#
+# `typeset` is the spelling that works here, and it is asked in
+# ext/typeset.tests, where it has to be written with the `function` keyword —
+# ksh93 ties a local to that form and leaves a `name()` definition in the
+# enclosing scope, which is a second half of the same trap.
+#
+# Held out: the wording. Every shell here writes something different for a
+# command it cannot find and core/diagnostics.tests owns that question.
+
+# The shape a bash script is written in. The declaration does not take, so the
+# body sees the caller's value.
+lv=outer
+shadow() { local lv=inner; printf 'inside [%s]\n' "$lv"; }
+shadow 2> /dev/null
+printf 'after the call [%s]\n' "$lv"
+
+# And a declaration with no value does not shield the name either: the
+# assignment after it writes straight through to the shell's.
+gv=before
+writer() { local gv; gv=written; printf 'inside [%s]\n' "$gv"; }
+writer 2> /dev/null
+printf 'after the call [%s]\n' "$gv"
+
+# A name the caller never had is created in the shell rather than in the call.
+unset nv
+maker() { local nv=made; printf 'inside [%s]\n' "${nv-unset}"; }
+maker 2> /dev/null
+printf 'after the call [%s]\n' "${nv-unset}"
+
+# The call itself is not a failure — only the line is — so the function runs
+# to the end and returns what its last command returned.
+value() { local x=1; printf 'ran\n'; }
+value 2> /dev/null
+printf 'the call -> %s\n' "$?"
+
+# At the top level it is the same missing command and nothing more.
+tl=top
+local tl=other 2> /dev/null
+printf 'at the top level -> %s [%s]\n' "$(( $? != 0 ))" "$tl"

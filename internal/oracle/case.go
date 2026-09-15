@@ -1925,6 +1925,21 @@ var Corpus = []Case{
 		Why:     "the nesting written wrong: the escaped backquote opens an inner body that nothing closes, so the unescaped text the outer substitution hands on runs out mid-substitution. A refusal is a legitimate answer and most of the panel gives one, but status, what reaches standard output and what reaches standard error move independently here and the row records all three. dash and BusyBox ash refuse at 2 having printed nothing — they read the whole line before running any of it; zsh refuses at 1 with `A` already out; bash 5.3, bash as `sh` and bash 3.2 complain on standard error and carry on at **0**, so `A`, an empty line and `B` are all printed; and ksh93 does not object at all and prints `n`. The four answers are four different places to put the boundary of a substitution's parse failure, and two of them are now ours by measurement: the `bash` dialect scopes the failure to the word and the rest abandon the input, which is [interp.Semantics.SubstitutionParseErrorIsFatal]. The other two are not that axis — ksh93 reads the text as nesting that closes and so never has a failure to place, and dash and ash refuse before `echo A` has run, which is a question about when the body is read (#2703)",
 	},
 	{
+		ID: "subst/a-body-that-will-not-parse-stops-the-line", Category: "quoting",
+		// Deliberately **not** marked SyntaxError, which is that flag's one
+		// interesting case: it says the snippet does not parse under the
+		// bash dialect *here*, and this one does — the body is kept as
+		// source and parsed when the substitution runs, which is the whole
+		// subject of the row. Marking it would assert the gap closed.
+		Snippet: `echo before; v=$(if); echo after`,
+		Why:     "**when** a `$( … )` body is parsed, asked without an alias anywhere — which is what #2357 was missing, since its own instrument needed `alias x=y; $(x)`, a shape nobody writes deliberately. The body is not a program, and whether `before` is written says whether the text was read with the line that holds it or when the substitution ran. dash, bash 5.3, the same build as `sh` and BusyBox ash read it with the line and print nothing at all; bash 3.2, ksh93 and zsh read it when it runs and print `before` first. So it is four columns against three, with the split running *through* bash — not the one column the issue records — and this shell is on the lazy side in every dialect",
+	},
+	{
+		ID: "subst/a-body-that-will-not-parse-in-a-branch-never-taken", Category: "quoting",
+		Snippet: `false && v=$(if); echo "after=$?"`,
+		Why:     "the same question with the substitution *never reached*, which is what makes the row above a statement about parsing rather than about how far a failure unwinds: the `&&` is false, so a shell that reads the body when it runs never reads it at all and prints `after=1` with nothing said. The four columns that read it with the line refuse the whole thing before `false` has run. Either row alone is ambiguous — the first could be a shell that gives up the line, and the second could be a shell that swallows the failure — and together they can only be the parse moment",
+	},
+	{
 		ID: "core/a-refused-older-body-leaves-an-empty-field", Category: "quoting",
 		// Not SyntaxError: the outer parse takes this text and the refusal
 		// arrives when the word is expanded, which is the fact the row is

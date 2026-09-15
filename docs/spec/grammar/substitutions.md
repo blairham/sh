@@ -932,6 +932,59 @@ of its own rather than folded into this form:
   reaches the hook and pointing `READNULLCMD` somewhere else still reads
   the file.
 
+## When a `$( … )` body is parsed — four columns against three
+
+The text between `$(` and `)` is kept as source and parsed a second time
+when the substitution runs, which is what `syntax.Span` says of it. Four
+of the panel do not wait that long: they read the body with the line that
+holds it, before anything on that line has run.
+
+Measured 2026-09-15, `env -i PATH=/usr/bin:/bin`, over `-c`, with a body
+that is not a program:
+
+    echo before; v=$(if); echo after
+
+| shell | `before` | when the refusal arrives |
+| --- | --- | --- |
+| dash | no | with the line |
+| bash 5.3 | no | with the line |
+| bash 5.3 as `sh` | no | with the line |
+| BusyBox ash | no | with the line |
+| **bash 3.2** | **yes** | when the substitution runs |
+| ksh93 | yes | when it runs |
+| zsh 5.9.2 | yes | when it runs |
+
+So the split runs *through bash*: 3.2 reads the body lazily and 5.3 reads
+it with the line. That is worth stating plainly, because #2357 records
+this as dash alone against ksh93 and zsh — an artifact of the instrument
+it used, which was an alias defined and used on the same line. An alias
+only reaches the question where the shell expands aliases at all, and
+bash does not in a non-interactive shell, so bash's column read as
+agreement when it is the opposite.
+
+The second probe is what makes the first one mean the parse moment rather
+than how far a failure reaches:
+
+    false && v=$(if); echo "after=$?"
+
+The substitution is never reached. The three lazy columns print `after=1`
+with nothing said; the four eager ones refuse before `false` has run.
+
+**This implementation is on the lazy side in every dialect**, so `bash`,
+`dash` and `ash` are off here. Both rows are in the corpus —
+`subst/a-body-that-will-not-parse-stops-the-line` and
+`subst/a-body-that-will-not-parse-in-a-branch-never-taken` — so a change
+is graded rather than argued.
+
+**What taking the eager side needs**, and why it is not a semantics axis
+alone: the body would have to be parsed where the line is, with the alias
+table and the dialect *as they stood then*, and the result kept — which
+is a field on the span beside `Span.Arith` and `Span.Param`, filled by
+the parser, rather than a flag the interpreter reads. Validating the body
+at the top of each line without keeping the tree would answer the two
+rows above and still get the alias row wrong, which is one rule with two
+implementations and the shape this tree has been bitten by before.
+
 ## What this does not cover
 
 The internal grammar of each form: arithmetic operators and their

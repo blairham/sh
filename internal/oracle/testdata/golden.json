@@ -191327,6 +191327,108 @@
         "TimedOut": false
       }
     },
+    "subst/a-body-that-will-not-parse-in-a-branch-never-taken": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected \")\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `)'~\u003cshell\u003e: -c: line 1: `false \u0026\u0026 v=$(if); echo \"after=$?\"'",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `)'~\u003cshell\u003e: -c: line 1: `false \u0026\u0026 v=$(if); echo \"after=$?\"'",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "after=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \")\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "after=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "after=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "subst/a-body-that-will-not-parse-stops-the-line": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected \")\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `)'~\u003cshell\u003e: -c: line 1: `echo before; v=$(if); echo after'",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `)'~\u003cshell\u003e: -c: line 1: `echo before; v=$(if); echo after'",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "before~after",
+        "Stderr": "\u003cshell\u003e: command substitution: line 1: syntax error: unexpected end of file",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \")\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "before",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `)' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "before",
+        "Stderr": "\u003cshell\u003e:1: parse error near `if'~\u003cshell\u003e:1: parse error in command substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "subst/a-body-valued-from-what-it-left-in-reply": {
       "ash": {
         "Stdout": "",

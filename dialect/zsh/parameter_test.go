@@ -310,6 +310,45 @@ echo "v=[${commands[qq]}] plus=${+commands[qq]}"`)
 	}
 }
 
+// The **whole-table** reading carries the hash too, which is a separate
+// producer from the one-key lookup above and the half a test of
+// `${commands[c]}` alone cannot reach.
+//
+// Two rows, because the hash sits on top of the PATH scan in both of them and
+// they fail differently: a name PATH never had is a key the enumeration gains,
+// and a name PATH does have is a key whose *value* the hash replaces without
+// changing the count. Measured on zsh 5.9.2 with `PATH=/usr/bin:/bin` —
+// `commands[zz]=/bin/echo` puts `zz` in `${(k)commands}` beside everything the
+// scan found, and `commands[ls]=/bin/echo` leaves the count alone and makes
+// `${(v)commands}` say `/bin/echo` for it.
+//
+// Both readings have to agree about this: the contract
+// `interp.Runner.SetDynamicAssocElement` states allows a view to read more
+// than it lists and never less, so a table that listed the scan alone while
+// the lookup answered the hash would be the one shape it forbids — a
+// `${(k)commands}` that names fewer commands than `${+commands[c]}` admits to.
+func TestTheWholeCommandsTableCarriesTheHash(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "realcmd"),
+		[]byte("#!/bin/sh\necho real\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	out, st := runZsh(t, dir, `echo "n=${#commands} k=[${(ok)commands}]"
+commands[zzz]=/zzz/zzz
+echo "n=${#commands} k=[${(ok)commands}]"
+commands[realcmd]=/realcmd/other
+echo "n=${#commands} v=[${(o)commands}]"`)
+	// The two paths are named so that sorting them by value and listing them
+	// in key order give the same line, which keeps this row about the hash
+	// rather than about what `(o)` orders.
+	want := "n=1 k=[realcmd]\n" +
+		"n=2 k=[realcmd zzz]\n" +
+		"n=2 v=[/realcmd/other /zzz/zzz]\n"
+	if out != want || st != 0 {
+		t.Errorf("the whole $commands table = %q (status %d), want %q", out, st, want)
+	}
+}
+
 // A produced association is never replaced by a stored one, whichever route
 // the write comes by. Both of these would otherwise put an empty table in
 // front of the producer, and every read afterwards would be a plausible answer

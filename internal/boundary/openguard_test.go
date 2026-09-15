@@ -146,15 +146,16 @@ var exempt = map[string]string{
 		"user.Lookup for a name the file does not hold and that is a library call no gate is " +
 		"on. Closing it means gating account lookup as a whole, which is a different " +
 		"question from a directory listing.",
-	"repl.isDir": "one bit about an entry a listing the gate already allowed has just " +
-		"named — whether a symbolic link among the completions points at a directory, which " +
-		"is what decides the trailing slash. No content is read and no name is disclosed that " +
-		"the allowed ReadDir did not already return. It is a probe, and Boundary has no probe " +
-		"seam to route it through the way interp's AllowProbe routes a dialect's; that " +
-		"asymmetry is #1824 rather than this line.",
-	"repl.trim": "the history file's rewrite, on the path the append already passed the gate " +
-		"on, through a temporary in the same directory. The shell's own scaffolding, which " +
-		"ActionOpen's rule places outside the boundary.",
+	"repl.trim": "the history file's rewrite, after Boundary.Modify on the path — which is " +
+		"$HISTFILE, a variable a line at the prompt can set, so the name is one whoever the " +
+		"policy is about chose. The os calls left are the read of the file it is about to " +
+		"replace, on the same path the append already passed the gate on, the temporary it " +
+		"builds beside it, and the rename the Modify has just allowed. It was exempt as the " +
+		"shell's own scaffolding until #1824 gave Boundary a modify seam to ask with. The " +
+		"temporary itself stays outside: its name is one this shell composed and no script " +
+		"can aim, which is ActionOpen's own rule about a process substitution's pipes, and " +
+		"gating its removal while its creation went unasked would be a check that could " +
+		"refuse to clean up a file it had allowed into existence.",
 	"internal/acp.newSession": "os.DevNull, so an agent this client starts does not inherit a terminal.",
 	"driver.OpenAudit": "the audit stream's own file. The apparatus is outside the boundary it " +
 		"enforces — a policy that could hide its own log would be a policy nobody could check, " +

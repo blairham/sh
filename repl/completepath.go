@@ -165,6 +165,13 @@ func correctableTyped(typed string) bool {
 // for a symlink. It matters more than it looks: a link to a directory is a
 // directory to everything else the shell does, and completing it without the
 // slash stops the next Tab at a name that cannot be continued.
+//
+// Through the boundary, not through os, for the reason the ReadDir above is:
+// the entry is under a directory the person at the prompt typed. It was the
+// one call in this package with nowhere to go — a probe, where Boundary had
+// ReadDir and OpenFile and no probe seam — which is what #1824 was about. A
+// refused probe answers as an absent path does, so the entry is offered
+// without its slash, exactly as a link pointing at a file is.
 func (s shellCompleter) isDir(dir string, e os.DirEntry) bool {
 	if e.IsDir() {
 		return true
@@ -172,7 +179,7 @@ func (s shellCompleter) isDir(dir string, e os.DirEntry) bool {
 	if e.Type()&os.ModeSymlink == 0 {
 		return false
 	}
-	info, err := os.Stat(filepath.Join(dir, e.Name()))
+	info, err := s.bound.Stat(s.context(), filepath.Join(dir, e.Name()))
 	return err == nil && info.IsDir()
 }
 

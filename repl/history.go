@@ -298,7 +298,7 @@ func (h historyFile) save(ctx context.Context, added []string) error {
 	if err := f.Close(); err != nil {
 		return err
 	}
-	return h.trim()
+	return h.trim(ctx)
 }
 
 // trim brings the file back under HISTFILESIZE.
@@ -319,7 +319,16 @@ func (h historyFile) save(ctx context.Context, added []string) error {
 // list at exit, so a bash that ran with a small HISTSIZE throws away what
 // earlier sessions wrote; that is a divergence and it is on purpose, because
 // silently deleting somebody's history is the worse of the two failures.
-func (h historyFile) trim() error {
+// The temporary beside it is this shell's own name, but the two verbs that
+// finish the rewrite — the rename over HISTFILE and the removal of the
+// temporary — are changes to a path a *script* chose, since HISTFILE is a
+// variable a line at the prompt can set. So they go through
+// boundary.Boundary.Modify, which is the seam #1824 added: the open of this
+// same file has passed the gate since this package existed, and the rewrite
+// that replaces it was exempt as scaffolding. A refused rename leaves the old
+// history where it is, which is what a shell killed in the middle of this
+// leaves too.
+func (h historyFile) trim(ctx context.Context) error {
 	f, err := os.Open(h.path)
 	if err != nil {
 		return nil
@@ -354,6 +363,22 @@ func (h historyFile) trim() error {
 	if err := tmp.Close(); err != nil {
 		_ = os.Remove(tmp.Name())
 		return err
+	}
+	if !h.bound.Modify(ctx, h.path) {
+		// Refused, and the temporary goes with it: a policy that will not
+		// have the file replaced must not be left a half-written neighbor of
+		// it either. Silent for the reason save's refusal is — the session
+		// is ending and the sink has the record.
+		//
+		// The temporary's own removal asks nothing, and that is the rule
+		// rather than an omission: its name is one *this shell* composed and
+		// no script can aim, which is what puts it outside the boundary —
+		// the same sentence interp.ActionOpen makes about a process
+		// substitution's pipes. Gating the removal and not the creation
+		// beside it would be a check that could refuse the cleanup of a file
+		// it had already allowed into existence.
+		_ = os.Remove(tmp.Name())
+		return nil
 	}
 	if err := os.Rename(tmp.Name(), h.path); err != nil {
 		_ = os.Remove(tmp.Name())

@@ -4716,7 +4716,16 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// was given. Every other declaration utility wants the opposite
 		// order: `local a=(x)` must make the name local first, or the array
 		// lands in the caller's scope.
-		locks := argv[0] == "readonly"
+		//
+		// Which is also what puts `readonly` on the other side of it in the
+		// dialect that reads the word as its own `typeset -r`: there a
+		// `readonly -a A=(x y)` inside a function is declaring a local, so
+		// assigning first lands the array in the *caller's* scope and the
+		// local comes into being empty. Where that is the reading it takes
+		// the second order and the deferred freeze with it, which is the
+		// same answer `declare -ar A=(x y)` has always needed — see
+		// Semantics.ReadonlyDeclaresALocal.
+		locks := argv[0] == "readonly" && !r.readonlyScopesItsOperands()
 		outerFreezing := r.freezing
 		// Recorded whichever order the two halves run in, because the
 		// refusal it feeds belongs to the *declaration* and `readonly -i

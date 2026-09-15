@@ -51,6 +51,7 @@ ash    PrintfNumberOperand                                  PrintfNumberWholeOpe
 ash    PrintfRefusedOperandKeepsItsLeadingNumber            -
 ash    QuitIgnoredWhenNotInteractive                        Yes
 ash    QuitResetRestoresTheDefault                          No
+ash    ReadonlyDeclaresALocal                               No
 ash    ReadonlyReassignmentFatal                            Yes
 ash    SetODeclinesADashWord                                No
 ash    SetOLetterAttachesItsName                            No
@@ -91,6 +92,7 @@ bash   PrintfNumberOperand                                  PrintfNumberLeadingN
 bash   PrintfRefusedOperandKeepsItsLeadingNumber            -
 bash   QuitIgnoredWhenNotInteractive                        Yes
 bash   QuitResetRestoresTheDefault                          No
+bash   ReadonlyDeclaresALocal                               No
 bash   ReadonlyReassignmentFatal                            No
 bash   SetODeclinesADashWord                                Yes
 bash   SetOLetterAttachesItsName                            No
@@ -131,6 +133,7 @@ dash   PrintfNumberOperand                                  PrintfNumberLeadingN
 dash   PrintfRefusedOperandKeepsItsLeadingNumber            -
 dash   QuitIgnoredWhenNotInteractive                        No
 dash   QuitResetRestoresTheDefault                          -
+dash   ReadonlyDeclaresALocal                               No
 dash   ReadonlyReassignmentFatal                            Yes
 dash   SetODeclinesADashWord                                No
 dash   SetOLetterAttachesItsName                            No
@@ -171,6 +174,7 @@ ksh    PrintfNumberOperand                                  PrintfNumberArithmet
 ksh    PrintfRefusedOperandKeepsItsLeadingNumber            Yes
 ksh    QuitIgnoredWhenNotInteractive                        No
 ksh    QuitResetRestoresTheDefault                          -
+ksh    ReadonlyDeclaresALocal                               No
 ksh    ReadonlyReassignmentFatal                            Yes
 ksh    SetODeclinesADashWord                                Yes
 ksh    SetOLetterAttachesItsName                            Yes
@@ -211,6 +215,7 @@ zsh    PrintfNumberOperand                                  PrintfNumberArithmet
 zsh    PrintfRefusedOperandKeepsItsLeadingNumber            No
 zsh    QuitIgnoredWhenNotInteractive                        Yes
 zsh    QuitResetRestoresTheDefault                          Yes
+zsh    ReadonlyDeclaresALocal                               Yes
 zsh    ReadonlyReassignmentFatal                            Yes
 zsh    SetODeclinesADashWord                                No
 zsh    SetOLetterAttachesItsName                            Yes

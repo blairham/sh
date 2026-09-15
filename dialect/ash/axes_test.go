@@ -155,6 +155,12 @@ func TestNoAnsweredAxisRefusesAtRunTime(t *testing.T) {
 			"DeclarationMayShadowAReadonly",
 		},
 		{
+			"a `readonly` written inside a function",
+			"b() { readonly B=1; }\nb\necho \"[${B-unset}]\"\n",
+			"ReadonlyDeclaresALocal — asked only inside a function, since " +
+				"every shell in the panel freezes a name written at the top",
+		},
+		{
 			"a valueless declaration of a name its scope holds",
 			`f() { local v=1; local v; echo "[$v]"; }; f`,
 			"ValuelessDeclarationOfAHeldNameListsIt",

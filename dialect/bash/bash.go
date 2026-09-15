@@ -1129,6 +1129,16 @@ func Semantics() interp.Semantics {
 	s.TrapHasReturnCondition = interp.Yes
 	s.ErrTrapRunsInsideFunctions = interp.No
 	s.ErrTrapRunsInSubshells = interp.No
+	// And the command that *ran* a failure fires the condition again, but
+	// only where a trap was set before that command began. Both halves are
+	// measured, from a script file with the action printing $LINENO: with
+	// the trap set at the top and `set -E` carrying it in, `g(){ false; }`
+	// fires at the body's line and again at the call's; with the trap set
+	// for the first time *inside* g it fires at the body's line alone, with
+	// or without the option. `. ./lib.sh` over a file holding `false` fires
+	// twice with nothing asked, because a sourced file never bounded this
+	// trap in the first place.
+	s.ErrTrapRefiresForTheCommandItFiredInside = interp.ErrTrapRefiresWhereItWasSetFirst
 	s.DebugTrapRunsInsideCalls = interp.No
 	s.DebugTrapRefiresOnEnteringAFunction = interp.Yes
 	// The heads whose own work is a word or an expression: `case`, `[[`,

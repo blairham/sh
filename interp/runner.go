@@ -1948,6 +1948,24 @@ type Runner struct {
 	inErrTrap    bool
 	inDebugTrap  bool
 	inReturnTrap bool
+	// errTrapFired says the ERR trap has already fired for the failure the
+	// status now reports. A group, a loop, an `if` and a `case` report the
+	// status their last command left, and judging that status again is how
+	// one failure two compounds deep ran a handler three times (#2793).
+	//
+	// Cleared at the head of every statement, which is what makes it mean
+	// *this* failure rather than the last one: the enclosing compound's own
+	// statement cleared it before its body ran, so what the body sets is
+	// still there when the compound is judged. A second iteration of a loop
+	// clears it again and fires again, which is measured — `for i in 1 2;
+	// do false; done` writes two E lines in every column that has the
+	// condition, and one per failure is the rule rather than one per loop.
+	//
+	// A subshell needs nothing here for the same reason: the child is a
+	// copy, so its firing is recorded on the copy and the parent judges the
+	// failing subshell command with its own flag still clear — which is
+	// what keeps zsh's two E lines for `(false)`.
+	errTrapFired bool
 	// returnSeenStatus is `$?` as it was when `return` began. The RETURN
 	// trap's body sees this rather than the argument the `return` carried
 	// — measured: `f(){ trap 'echo R=$?' RETURN; return 3; }; f` prints
@@ -3425,6 +3443,11 @@ func (r *Runner) stmt(ctx context.Context, st *syntax.Stmt) error {
 	// because runWithoutFunctions is the only setter and it puts back what
 	// it found.
 	r.throughCommandWord = false
+	// And the ERR trap has not fired for whatever this statement is about
+	// to leave behind. See Runner.errTrapFired: the clear has to be here,
+	// at the head of a statement, so that a compound clears it before its
+	// body runs and still sees the body's firing when it is judged itself.
+	r.errTrapFired = false
 	r.statusBefore = r.status
 	if st.Coprocess {
 		// Before Background, because a coprocess is a background job with
@@ -3481,7 +3504,13 @@ func (r *Runner) checkErrExit(ctx context.Context) {
 		return
 	}
 	pipefailOnly := r.pipefailRaised
-	r.runErrTrap(ctx)
+	// Once per failure, not once per level that reports it. `set -e` is
+	// deliberately outside this guard: it judges the statement it is given
+	// and a failure inside a compound has already ended the script before
+	// the compound is reached, so nothing here changes what it stops for.
+	if !r.errTrapFired {
+		r.runErrTrap(ctx)
+	}
 	if !r.errexit || r.ctl != controlNone {
 		// Either nothing more to do, or the trap's own action already ended
 		// the script — its `exit` wins, and judging the statement again
@@ -3688,7 +3717,16 @@ func (r *Runner) command(ctx context.Context, c syntax.Command) error {
 	}
 	switch x := c.(type) {
 	case *syntax.SimpleCmd:
-		return r.simple(ctx, x)
+		// A simple command is the one kind that can *run* the failure it
+		// reports — a function call, a `.`, an `eval` — and the dialects
+		// disagree about whether it is then a second place the ERR trap
+		// fires. Whether an ERR trap was set when the command began is part
+		// of one column's answer, so it is read here, before the command
+		// runs, and not afterwards when the body may have set one.
+		set := r.errTrapIsSet()
+		err := r.simple(ctx, x)
+		r.reopenErrJudgment(set)
+		return err
 	case *syntax.Group:
 		return r.group(ctx, x)
 	case *syntax.TryClause:

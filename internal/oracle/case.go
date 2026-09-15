@@ -4296,6 +4296,41 @@ echo "reached-after st=$?"`,
 		Why:     "the reason the condition exists: the trap runs first and errexit then stops the script with the failure's own status, so a script can say where it died",
 	},
 	{
+		ID: "trap/one-failure-two-compounds-deep-fires-err-once", Category: "traps and exit",
+		Snippet: `trap 'echo E' ERR; { { false; }; }; echo done`,
+		Why:     "a compound reports the status its last command left and is not a second failure, and the depth is what makes the row worth keeping: every column that has the condition writes one E however many groups the failure is wrapped in. This shell judged the failure once per *statement*, and a group, a loop and an `if` are statements — so it wrote two E lines one level deep, three at two and four at three, and a fix that canceled the second firing at one depth would still have doubled at the next (#2793)",
+	},
+	{
+		ID: "trap/each-pass-of-a-loop-is-its-own-failure", Category: "traps and exit",
+		Snippet: `trap 'echo E' ERR; for i in 1 2; do false; done; echo done`,
+		Why:     "the other side of the row above, and the reason the rule is one firing per *failure* rather than one per compound: two passes that fail write two E lines in every column that has the condition. A shell that suppressed the loop's own second firing by remembering that it had fired at all would write one here",
+	},
+	{
+		ID: "trap/a-failure-three-calls-deep", Category: "traps and exit",
+		Snippet: `trap 'echo E' ERR; f() { g; }; g() { h; }; h() { false; }; f; echo done`,
+		Why:     "how many places one failure can be judged when it is three calls down. The three answers are all here: bash does not carry the trap into a call, so only the outermost call is judged and it writes one; zsh carries it in and judges no call at all, so it writes one from inside `h`; ksh93 carries it in *and* judges every call, so it writes four. ash carries nothing in and writes one. Nothing in the count distinguishes bash from zsh — the rows below are what do",
+	},
+	{
+		ID: "trap/a-trap-set-inside-the-function-and-the-failing-call", Category: "traps and exit",
+		Snippet: `g() { trap 'echo I' ERR; false; }; g; echo done`,
+		Why:     "the row that splits bash from ksh93 and ash: with no ERR trap in force when the call began, bash judges the failure inside the body and the failing call is not a place the condition fires — one I — where ksh93 and BusyBox ash write two. zsh writes one because it judges no call. The trap survives the return in every column, so this is a question about the command rather than about the trap's lifetime",
+	},
+	{
+		ID: "trap/a-sourced-file-refires-the-err-trap", Category: "traps and exit",
+		Snippet: `trap 'echo E' ERR; echo false > lib.sh; . ./lib.sh; echo done`,
+		Why:     "a sourced file bounds nothing here — the failure inside it fires wherever the trap was set — so what is left is whether the `.` that ran it is judged too. bash, its 3.2 column and ksh93 write two E lines and zsh writes one, which is the same split the function rows have and is why the axis is about a command that *ran* a failure rather than about calls",
+	},
+	{
+		ID: "trap/eval-refires-the-err-trap-for-its-text", Category: "traps and exit",
+		Snippet: `trap 'echo E' ERR; eval false; echo done`,
+		Why:     "the third command of the same shape, and the cheapest to write: `eval` runs its text in this shell, the failure in that text fires, and the columns split over whether the `eval` itself fires again exactly as they do for `.` and for a call",
+	},
+	{
+		ID: "trap/an-explicit-return-and-the-failing-call", Category: "traps and exit",
+		Snippet: `trap 'echo E' ERR; g() { false; return 1; }; g; echo done`,
+		Why:     "two statuses out of one body, and the columns disagree about where the second is announced. bash judges neither the `return` nor the failure inside the body and writes one E for the failing call; ksh93 writes two, the `false` and the call; zsh writes two with `${funcstack[*]}` reading `g` both times, so the `return` is judged *inside the frame* it came from rather than at the call it reports to. A shell that judged the call alone would write one here and pass the plain `g() { false; }` row while getting this one wrong",
+	},
+	{
 		ID: "trap/debug-fires-before-each-command", Category: "traps and exit",
 		Snippet: `trap 'echo D' DEBUG; echo a; echo b`,
 		Why:     "DEBUG runs before each simple command rather than after — the D precedes what it announces — and dash refuses the name like any other word that is no signal",

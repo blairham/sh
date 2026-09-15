@@ -10469,6 +10469,19 @@ type Semantics struct {
 	// every trap that is not ignored.
 	ErrTrapRunsInSubshells Answer
 
+	// ErrTrapRefiresForTheCommandItFiredInside says what a command owes the
+	// ERR trap when the failure it is *reporting* has already fired it —
+	// the call whose body failed, the `.` whose file failed, the `eval`
+	// whose text failed. See ErrTrapRefiring for the three answers and the
+	// measurements behind them.
+	//
+	// A compound is not this question and has no axis: a group, a loop, an
+	// `if` and a `case` report the status their last command left and no
+	// column in the panel fires a second time for one. That was this
+	// shell's bug — every level of nesting fired again, so a handler ran
+	// three times for one failure two compounds deep (#2793).
+	ErrTrapRefiresForTheCommandItFiredInside ErrTrapRefiring
+
 	// DebugTrapRunsInsideCalls fires the DEBUG trap before commands inside
 	// a function or a sourced file the trap was not set in. bash does not;
 	// ksh93 and zsh do. Not the ERR axis under another name, and not only
@@ -13080,6 +13093,87 @@ func (t TrapLocality) String() string {
 		return "traps survive the function"
 	case TrapsGoBackAtTheReturn:
 		return "traps go back at the return"
+	}
+	return "unspecified"
+}
+
+// ErrTrapRefiring is what a command owes the ERR trap when the failure it
+// reports has already fired it. See
+// Semantics.ErrTrapRefiresForTheCommandItFiredInside.
+//
+// The question is only ever asked of a command that *ran* the failure in this
+// shell — a function call, a `.`, an `eval`. A compound never refires in any
+// column and is not an answer here; a subshell always does, on both sides,
+// and needs no answer either, because the child's firing is the child's and
+// never reaches the parent.
+//
+// Measured 2026-09-14 against bash 5.3.15, bash 3.2.57, ksh93u+ 2012-08-01,
+// zsh 5.9.2 and BusyBox ash 1.37, startup files off, with the action printing
+// `$LINENO` from a script file so that *which* firing is which can be read
+// rather than inferred from a count.
+type ErrTrapRefiring uint8
+
+const (
+	// ErrTrapRefiringUnspecified is no answer, and is refused like any
+	// other — though only where it decides something: a shell with no ERR
+	// trap set has nothing to fire twice and is never asked.
+	ErrTrapRefiringUnspecified ErrTrapRefiring = iota
+
+	// ErrTrapFiresOnceForTheFailure judges the failure where it happened
+	// and nowhere else: zsh.
+	//
+	//	g() { false; }; g        one E, from inside g
+	//	f(){ g; }; g(){ h; }; h(){ false; }; f   still one
+	//	. ./lib.sh, the file holding `false`     one
+	//
+	// The place is measured rather than assumed from the count: with the
+	// action printing `${funcstack[*]}`, zsh writes `g` — it fires *in the
+	// frame*, and the call the caller wrote is not a second event.
+	//
+	// So a `return 1` is judged inside the frame too, which is what keeps
+	// the count right where nothing else in the body failed: `g() { return
+	// 1; }` writes one E with `funcstack` reading `g`, and `g() { false;
+	// return 1; }` writes two, both from inside g.
+	ErrTrapFiresOnceForTheFailure
+
+	// ErrTrapRefiresWhereItWasSetFirst refires for the command, but only
+	// where an ERR trap was already set when that command began: bash.
+	//
+	// The two halves are one measurement. With the trap set at the top and
+	// `set -E` carrying it into the call, bash fires at the failing command
+	// inside the body *and* at the call — lines 4 and 6 of the same script.
+	// With the trap set for the first time *inside* the function, bash
+	// fires only inside it, `set -E` or not: there was no ERR trap in force
+	// when the call started, so the call is not a place the condition can
+	// fire, however the body leaves the trap behind afterwards.
+	//
+	// That is a question about the command rather than about functions:
+	// `trap 'echo E' ERR; . ./lib.sh` with `false` in the file writes two E
+	// lines in bash, because the trap was set before the `.` and a sourced
+	// file does not bound the ERR trap. `eval false` writes two for the
+	// same reason.
+	ErrTrapRefiresWhereItWasSetFirst
+
+	// ErrTrapAlwaysRefires refires for the command whatever the trap was
+	// doing when it started: ksh93 and BusyBox ash.
+	//
+	// ksh93 shows it at every level, because it also carries the trap into
+	// a call: `f(){ g; }; g(){ h; }; h(){ false; }; f` writes **four** E
+	// lines — the failure and each of the three calls. ash does not carry
+	// the trap in, so the same script writes one, and the answer is read
+	// off the other row instead: with the trap set for the first time
+	// inside the function, ash writes two where bash writes one.
+	ErrTrapAlwaysRefires
+)
+
+func (e ErrTrapRefiring) String() string {
+	switch e {
+	case ErrTrapFiresOnceForTheFailure:
+		return "the ERR trap fires once for the failure"
+	case ErrTrapRefiresWhereItWasSetFirst:
+		return "the ERR trap refires where it was set before the command"
+	case ErrTrapAlwaysRefires:
+		return "the ERR trap always refires for the command"
 	}
 	return "unspecified"
 }

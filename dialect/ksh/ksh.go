@@ -1243,6 +1243,12 @@ func Semantics() interp.Semantics {
 	s.TrapHasReturnCondition = interp.No
 	s.ErrTrapRunsInsideFunctions = interp.Yes
 	s.ErrTrapRunsInSubshells = interp.No
+	// And every call is a second place it fires, whatever the trap was
+	// doing when the call began: with the trap carried into functions as
+	// well, `f(){ g; }; g(){ h; }; h(){ false; }; f` writes four E lines —
+	// the failure and each of the three calls — where bash writes one and
+	// zsh writes one.
+	s.ErrTrapRefiresForTheCommandItFiredInside = interp.ErrTrapAlwaysRefires
 	s.DebugTrapRunsInsideCalls = interp.Yes
 	s.DebugTrapRefiresOnEnteringAFunction = interp.No
 	// The same heads as the bash columns, and two measured departures: the

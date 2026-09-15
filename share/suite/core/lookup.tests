@@ -129,6 +129,28 @@ command -v myfn; printf 'function -> %s\n' "$?"
 command -v prog; printf 'program -> %s\n' "$?"
 command -v /bin/ls; printf 'absolute path -> %s\n' "$?"
 
+# What `command -v` writes for a word with a slash in it splits the panel and
+# is asked in ksh/. What every reference agrees on, and what a script actually
+# depends on, is that the *operand survives whole*: none of them cleans a `./`
+# or a dot-dot out of the middle of the answer, so the one that resolves is
+# performing a prefix join rather than a path normalization. A shell that
+# cleaned would write a third thing, which is what this implementation did in
+# every dialect until #2931.
+case $(command -v ./bin1/tool) in
+*"./bin1/tool") printf 'keeps ./bin1/tool whole\n' ;;
+*) printf 'rewrote the operand\n' ;;
+esac
+case $(command -v ./bin1/../bin1/tool) in
+*"./bin1/../bin1/tool") printf 'keeps the dot-dot\n' ;;
+*) printf 'rewrote the operand\n' ;;
+esac
+
+# An absolute operand has nothing to resolve against, so every reference
+# writes it back byte for byte — the `/.` included. It is the reason
+# `command -v /bin/ls` above was right here all along while a relative operand
+# was not, and it says the question is the join rather than paths in general.
+command -v /bin/./ls; printf 'absolute path, uncleaned -> %s\n' "$?"
+
 # --- the statuses a command that does not run reports ---
 
 # Nothing of that name is 127, whether the name was never anywhere or PATH no

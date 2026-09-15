@@ -622,6 +622,33 @@ func printfWithoutPrecision(spec string) string {
 	return spec[:i] + spec[j:]
 }
 
+// printfWithoutSignFlags answers the spec with `+` and a space taken out of
+// its flags, the rest of the flags and the field left where they were.
+//
+// It exists for the unsigned conversions, where C says a sign flag applies to
+// a signed conversion and says nothing about these — and every reference
+// ignores it: `printf '[%+x]' 255` is `[ff]` and `[% x]` of it is `[ff]` in
+// bash 5.3, zsh, ksh93 and dash alike, where Go writes `+ff` and ` ff`. The
+// flag was already reaching the output before the sign was fixed; what the
+// fix changed is that it became visible, since a negative operand used to
+// carry a `-` of its own and Go writes only one sign.
+//
+// The `#` and `0` flags are untouched — both mean something here, and
+// `%#x` of 255 is `0xff` in every column.
+//
+// Read with the same flag run printfWithoutPrecision reads, for the same
+// reason: a second scanner beside it is how a fix reaches one and not the
+// other.
+func printfWithoutSignFlags(spec string) string {
+	i := 1 // past the %
+	n := runOfBytes(spec, i, "-+ #0'")
+	flags := spec[i : i+n]
+	if !strings.ContainsAny(flags, "+ ") {
+		return spec
+	}
+	return "%" + strings.NewReplacer("+", "", " ", "").Replace(flags) + spec[i+n:]
+}
+
 // printfPadToWidth lays a rendered field out to a width `fmt` refused.
 //
 // Only the space and zero paddings are modeled, which is the whole of what a
@@ -733,9 +760,22 @@ func (r *Runner) printfConvert(spec string, verb byte, timeFmt string, next func
 			return "", code, true
 		}
 		if verb == 'u' {
+			// Go has no `%u`. Unsigned decimal is `%d` of an unsigned
+			// value, which is what the conversion below hands it.
 			verb = 'd'
 		}
-		return fmt.Sprintf(spec+string(verb), n), code, false
+		// The operand's bit pattern, 64 bits wide. An unsigned conversion
+		// takes the value's representation and not its magnitude, so
+		// `printf '%x' -1` is `ffffffffffffffff` and `%u` of it is
+		// `18446744073709551615` — unanimous across bash 5.3, zsh, ksh93,
+		// dash and BusyBox ash, which is why no dialect is consulted
+		// (#2902). The width is the shell's `intmax_t` and not C's `int`:
+		// C prints `ffffffff` for the same call.
+		//
+		// A signed reading is what wrote `-ff` for `printf '%x' -255`, which
+		// is not a numeral any of those shells would read back, and `%u` with
+		// a minus sign in front of it.
+		return fmt.Sprintf(printfWithoutSignFlags(spec)+string(verb), uint64(n)), code, false
 	case 'f', 'e', 'E', 'g', 'G', 'F', 'a', 'A':
 		f, code, stopped := r.printfFloat(arg, present)
 		if stopped {

@@ -162887,6 +162887,57 @@
         "TimedOut": false
       }
     },
+    "printf/unsigned-conversions-write-the-bit-pattern": {
+      "ash": {
+        "Stdout": "[ffffffffffffffff][FFFFFFFFFFFFFFFF][1777777777777777777777][18446744073709551615]~[ffffffffffffff01][1777777777777777777770][18446744073709551611]~[0xffffffffffffffff][01777777777777777777770][0000ffffffffffffffff]~[    ffffffffffffffff][ffffffffffffffff    ][ffffffffffffffff]~[ffffffffffffffff][ffffffffffffffff][18446744073709551615]~[ff][ff][5][377]~[-1][-255][+1][-0000001]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[ffffffffffffffff][FFFFFFFFFFFFFFFF][1777777777777777777777][18446744073709551615]~[ffffffffffffff01][1777777777777777777770][18446744073709551611]~[0xffffffffffffffff][01777777777777777777770][0000ffffffffffffffff]~[    ffffffffffffffff][ffffffffffffffff    ][ffffffffffffffff]~[ffffffffffffffff][ffffffffffffffff][18446744073709551615]~[ff][ff][5][377]~[-1][-255][+1][-0000001]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[ffffffffffffffff][FFFFFFFFFFFFFFFF][1777777777777777777777][18446744073709551615]~[ffffffffffffff01][1777777777777777777770][18446744073709551611]~[0xffffffffffffffff][01777777777777777777770][0000ffffffffffffffff]~[    ffffffffffffffff][ffffffffffffffff    ][ffffffffffffffff]~[ffffffffffffffff][ffffffffffffffff][18446744073709551615]~[ff][ff][5][377]~[-1][-255][+1][-0000001]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[ffffffffffffffff][FFFFFFFFFFFFFFFF][1777777777777777777777][18446744073709551615]~[ffffffffffffff01][1777777777777777777770][18446744073709551611]~[0xffffffffffffffff][01777777777777777777770][0000ffffffffffffffff]~[    ffffffffffffffff][ffffffffffffffff    ][ffffffffffffffff]~[ffffffffffffffff][ffffffffffffffff][18446744073709551615]~[ff][ff][5][377]~[-1][-255][+1][-0000001]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[ffffffffffffffff][FFFFFFFFFFFFFFFF][1777777777777777777777][18446744073709551615]~[ffffffffffffff01][1777777777777777777770][18446744073709551611]~[0xffffffffffffffff][01777777777777777777770][0000ffffffffffffffff]~[    ffffffffffffffff][ffffffffffffffff    ][ffffffffffffffff]~[ffffffffffffffff][ffffffffffffffff][18446744073709551615]~[ff][ff][5][377]~[-1][-255][+1][-0000001]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[ffffffffffffffff][FFFFFFFFFFFFFFFF][1777777777777777777777][18446744073709551615]~[ffffffffffffff01][1777777777777777777770][18446744073709551611]~[0xffffffffffffffff][01777777777777777777770][0000ffffffffffffffff]~[    ffffffffffffffff][ffffffffffffffff    ][ffffffffffffffff]~[ffffffffffffffff][ffffffffffffffff][18446744073709551615]~[ff][ff][5][377]~[-1][-255][+1][-0000001]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[ffffffffffffffff][FFFFFFFFFFFFFFFF][1777777777777777777777][18446744073709551615]~[ffffffffffffff01][1777777777777777777770][18446744073709551611]~[0xffffffffffffffff][01777777777777777777770][0000ffffffffffffffff]~[    ffffffffffffffff][ffffffffffffffff    ][ffffffffffffffff]~[ffffffffffffffff][ffffffffffffffff][18446744073709551615]~[ff][ff][5][377]~[-1][-255][+1][-0000001]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "procsub/a-background-job-after-the-body-execs": {
       "ash": {
         "Stdout": "BC",

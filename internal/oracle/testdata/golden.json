@@ -64141,6 +64141,57 @@
         "TimedOut": false
       }
     },
+    "declare/a-cycle-of-name-references": {
+      "ash": {
+        "Stdout": "\u003cshell\u003e: typeset: not found~one=127~\u003cshell\u003e: typeset: not found~two=127~read=[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "one=0~two=0~read=[]",
+        "Stderr": "\u003cshell\u003e: line 1: warning: a: circular name reference",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one=0~two=0~read=[]",
+        "Stderr": "\u003cshell\u003e: line 1: warning: a: circular name reference",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "\u003cshell\u003e: line 0: typeset: -n: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~one=2~\u003cshell\u003e: line 0: typeset: -n: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~two=2~read=[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "\u003cshell\u003e: 1: typeset: not found~one=127~\u003cshell\u003e: 1: typeset: not found~two=127~read=[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one=0~\u003cshell\u003e: typeset: b: invalid self reference",
+        "Stderr": "",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "\u003cshell\u003e:typeset:1: bad option: -n~one=1~\u003cshell\u003e:typeset:1: bad option: -n~two=1~read=[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "declare/a-declaration-operands-subscript-has-to-close-at-the-end": {
       "ash": {
         "Stdout": "st=127~\u003cshell\u003e: typeset: not found~st=127~\u003cshell\u003e: typeset: not found",
@@ -64647,6 +64698,57 @@
         "Stdout": "\u003cshell\u003e:typeset:1: a[1]: can't create readonly array elements",
         "Stderr": "",
         "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/a-function-fills-in-a-variable-by-name": {
+      "ash": {
+        "Stdout": "[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[filled]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[filled]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[filled]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[]",
+        "Stderr": "",
+        "Status": 0,
         "Signal": 0,
         "TimedOut": false
       }
@@ -65824,6 +65926,108 @@
         "TimedOut": false
       }
     },
+    "declare/a-name-reference-lists-as-itself": {
+      "ash": {
+        "Stdout": "\u003cshell\u003e: typeset: not found~\u003cshell\u003e: typeset: not found~st=127",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "declare -n r=\"v\"~declare -- v=\"1\"~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "declare -n r=\"v\"~declare -- v=\"1\"~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "\u003cshell\u003e: line 0: typeset: r: not found~declare -- v=\"1\"~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found~st=127",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "typeset -n r=v~v=1~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "\u003cshell\u003e:typeset:1: no such variable: r~typeset v=1~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/a-name-reference-reads-and-writes-through": {
+      "ash": {
+        "Stdout": "\u003cshell\u003e: typeset: not found~read=[]~wrote=[1] st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "read=[1]~wrote=[2] st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "read=[1]~wrote=[2] st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "\u003cshell\u003e: line 0: typeset: -n: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~read=[]~wrote=[1] st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "\u003cshell\u003e: 1: typeset: not found~read=[]~wrote=[1] st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "read=[1]~wrote=[2] st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "\u003cshell\u003e:typeset:1: bad option: -n~read=[]~wrote=[1] st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "declare/a-negative-value-in-an-output-base": {
       "ash": {
         "Stdout": "1[]~2[]",
@@ -66738,6 +66942,57 @@
         "Stdout": "",
         "Stderr": "\u003cshell\u003e:readonly:1: a[1]: can't create readonly array elements",
         "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/a-reference-is-aimed-by-its-first-value": {
+      "ash": {
+        "Stdout": "\u003cshell\u003e: typeset: not found~bare=127~aimed=[v]~\u003cshell\u003e: typeset: not found",
+        "Stderr": "",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "bare=0~aimed=[1]~declare -n r=\"v\"",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "bare=0~aimed=[1]~declare -n r=\"v\"",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "\u003cshell\u003e: line 0: typeset: -n: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~bare=2~aimed=[v]~declare -- r=\"v\"",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "\u003cshell\u003e: 1: typeset: not found~bare=127~aimed=[v]~\u003cshell\u003e: 1: typeset: not found",
+        "Stderr": "",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "bare=0~aimed=[1]~typeset -n r=v",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "\u003cshell\u003e:typeset:1: bad option: -n~bare=1~aimed=[v]~typeset r=v",
+        "Stderr": "",
+        "Status": 0,
         "Signal": 0,
         "TimedOut": false
       }
@@ -77497,6 +77752,57 @@
       },
       "zsh": {
         "Stdout": "[plain] st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/unset-through-a-reference-and-unset-of-one": {
+      "ash": {
+        "Stdout": "through=[1]~\u003cshell\u003e: unset: line 0: illegal option -n",
+        "Stderr": "",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "through=[GONE]~letter=[2]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "through=[GONE]~letter=[2]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "through=[1]~\u003cshell\u003e: line 0: unset: -n: invalid option~unset: usage: unset [-f] [-v] [name ...]~letter=[2]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "through=[1]~\u003cshell\u003e: 1: unset: Illegal option -n",
+        "Stderr": "",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "through=[GONE]~letter=[2]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "through=[1]~\u003cshell\u003e:unset:1: bad option: -n~letter=[2]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

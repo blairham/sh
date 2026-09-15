@@ -2037,6 +2037,29 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 		// because a pattern is not a name and would not survive it.
 		return r.unsetMatching(args)
 	}
+	if strings.ContainsRune(opts, 'n') {
+		// The letter names the **reference** and not what it points at, which
+		// is the whole of the difference between `unset -n r` and `unset r`:
+		// measured on bash 5.3.15 and ksh93u+ alike, `v=1; typeset -n r=v;
+		// unset -n r` leaves `v` holding 1 and `r` gone, where the plain
+		// `unset r` takes `v` away and leaves nothing behind either.
+		//
+		// Ahead of the axis below, which is the question about a name that is
+		// *not* a reference — a real disagreement, and one this branch does
+		// not reach. See interp/nameref.go.
+		rest := args[:0:0]
+		for _, name := range args {
+			if !r.isNameref(name) {
+				rest = append(rest, name)
+				continue
+			}
+			r.unsetNameref(name)
+		}
+		if len(rest) == 0 {
+			return 0
+		}
+		args = rest
+	}
 	if strings.ContainsRune(opts, 'n') &&
 		!r.ask(r.sem().UnsetReferenceLetterRemovesANonReference,
 			"`unset -n` on a name that is not a name reference") {
@@ -2179,6 +2202,7 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 // entered the builtin by different doors and would otherwise have been two
 // copies of this, which is how one of them ends up forgetting a table.
 func (r *Runner) unsetName(name string) {
+	name = r.throughNameref(name)
 	if name == "PATH" {
 		// The same rule as an assignment to it, and for the same reason: a
 		// search nobody can repeat is not an answer worth keeping. Measured,
@@ -4889,6 +4913,22 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 				return r.status
 			}
 		}
+		if f.nameref {
+			// `local -n out=$1` — the common spelling of a name reference,
+			// and the reason the letter is on this word at all. Behind the
+			// shadow, which is the whole of what `local` adds to it: the
+			// reference belongs to this call and the caller's own name of
+			// the same spelling gets itself back on return. See
+			// interp/nameref.go.
+			if code := r.declareNameref("local", name, value, hasValue); code != 0 {
+				status = code
+				if r.ctl == controlExit {
+					return r.status
+				}
+				r.assignFailed = true
+			}
+			continue
+		}
 		switch {
 		case hasValue && appends:
 			// `local a+=2` joins what the *local* is holding, which the
@@ -5376,6 +5416,7 @@ func (r *Runner) badStatusArg(builtin, arg string) int {
 // Asking it would refuse `unset "a[1]"` outright in a core with no dialect,
 // over a value nothing on this path would have looked at.
 func (r *Runner) nameIsSet(name string) bool {
+	name = r.throughNameref(name)
 	if !r.removed[name] && (r.arrayDeclared(name) || r.assocDeclared(name)) {
 		return true
 	}

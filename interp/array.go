@@ -228,6 +228,7 @@ func (a Array) pastTheEnd() int {
 // `a=(one two)` says nothing about which number the first element answers to
 // and must not have to ask.
 func (r *Runner) setArray(name string, elems []string) {
+	name = r.throughNameref(name)
 	a := make(Array, len(elems))
 	for i, v := range elems {
 		a[i] = Scalar(v)
@@ -406,6 +407,7 @@ func (r *Runner) markIndexed(name string) {
 // where the first element is 1 it is `a[0]`, which is below it. Neither shell
 // has both, and that is why one rule needs two spellings to show it.
 func (r *Runner) setArrayElem(name string, idx int, sub, value string) {
+	name = r.throughNameref(name)
 	if r.subscriptSplicesCharacters(name) {
 		// The name is holding a string and this dialect's subscript names one
 		// of its characters, so the value is spliced in rather than an
@@ -1666,6 +1668,7 @@ func (r *Runner) arrayScalar(elems []string) string {
 // where nothing was assigned. Two of the shells with arrays read it the first
 // way and one the second, so the dialect answers.
 func (r *Runner) arrayElems(name string) ([]string, bool) {
+	name = r.throughNameref(name)
 	// Produced first, for the same reason a produced scalar is read ahead of
 	// the stored table: the record is the answer, and a copy left in Arrays
 	// would be the previous pipeline's.
@@ -1750,6 +1753,19 @@ func (r *Runner) arrayHasGaps(a Array) bool {
 func (r *Runner) arraySubscript(e *syntax.ParamExpr) ([]string, bool) {
 	if e.Index == nil {
 		return nil, false
+	}
+	if target := r.throughNamerefName(e.Name); target != e.Name {
+		// A subscript written on a **name reference** indexes what the
+		// reference points at: `v=(a b c); typeset -n r=v` reads `${r[1]}`
+		// as `b` and writes `r[1]=Z` into `v`. Resolved once, here, on a
+		// copy of the node — the readings below consult the name against
+		// four tables and a special parameter, and resolving at each of them
+		// is how one of them would be missed. The AST itself is never
+		// touched: a `${r[1]}` inside a function body is parsed once and run
+		// under a different reference every call.
+		copied := *e
+		copied.Name = target
+		e = &copied
 	}
 	if r.refusesEmptyParamSubscript(e) {
 		// Refused, and every reading below is about a subscript there is
@@ -2693,6 +2709,7 @@ func (r *Runner) subscriptIndexAsWritten(written, text string) (int, bool) {
 // arrayElementCount reports how many elements a name holds and whether it is
 // an array at all, either kind.
 func (r *Runner) arrayElementCount(name string) (int, bool) {
+	name = r.throughNameref(name)
 	if a, ok := r.Arrays[name]; ok {
 		return len(r.readArray(a)), true
 	}

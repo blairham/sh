@@ -314,6 +314,10 @@ func Semantics() interp.Semantics {
 	// unanswered KeyedLiteralAppendJoinsTheReplacedValue: no keyed table and
 	// no literal here either. Measured 2026-09-12 on BusyBox v1.37.0,
 	// `m=([k]+=x)` is `syntax error: unexpected "("` (#2405).
+	// unanswered NamerefCycleIsRefused: there are no name references to make
+	// a cycle of. Measured 2026-09-15 on BusyBox v1.37.0, `typeset` is not a
+	// command here at all — `typeset: not found` at 127 — so neither
+	// spelling of the declaration can be put to this shell (#2553).
 	// unanswered UnsetReferenceLetterRemovesANonReference: no `-n` on `unset`
 	// here either. Measured 2026-09-12 on BusyBox v1.37.0, `unset -n x` is
 	// `unset: line 0: illegal option -n`, and the shell ends at 2 without

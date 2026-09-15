@@ -934,6 +934,14 @@ func Semantics() interp.Semantics {
 	// what `unset x` does — the letter changes nothing for a name that is not
 	// a reference, where bash removes nothing at all (#932).
 	s.UnsetReferenceLetterRemovesANonReference = interp.Yes
+	// A name reference that would reach itself is refused at the
+	// *declaration* here, however long the loop. Measured 2026-09-15 on
+	// ksh93u+, `env -i` with a scratch HOME: `typeset -n r=r` and the pair
+	// `typeset -n a=b; typeset -n b=a` are both `typeset: …: invalid self
+	// reference` at 1 — the second on the declaration that closes the loop —
+	// where bash makes the pair and warns at the read. See
+	// Semantics.NamerefCycleIsRefused.
+	s.NamerefCycleIsRefused = interp.Yes
 	s.ReadZeroTimeout = interp.ReadZeroTimeoutTakesWhatIsWaiting
 	s.ReadPartialCountSucceeds = interp.Yes
 	s.ReadExactCountKeepsPartial = interp.No
@@ -1797,7 +1805,7 @@ func Semantics() interp.Semantics {
 	// declares a local in a keyword body here and the global in the other,
 	// so a listing that dropped the word would hand back a program whose
 	// variables leak — and the source text keeps it because it was written.
-	s.DeclareOptions = "aACfHilmMprTux"
+	s.DeclareOptions = "aACfHilmMnprTux"
 	// `-m` is here now, and it is not the letter zsh spells the same way:
 	// it *moves* a parameter — `typeset -m new=old` — where the other
 	// shell selects several by pattern. Measured 2026-09-13 on ksh93u+;
@@ -1882,7 +1890,7 @@ func Semantics() interp.Semantics {
 	// fatally, since these are special builtins there — where `typeset -f
 	// nm` on the same line lists. The word carries a type and a function
 	// has none.
-	s.IntegerOptions = "aACHilmMprTux"
+	s.IntegerOptions = "aACHilmMnprTux"
 	// `-i16` and `-i 16` are an output base here — `integer -i 16 b=255` is
 	// `16#ff` — and this engine has no base to keep, so it refuses by name.
 	s.IntegerAttributeTakesABase = interp.Yes
@@ -2416,8 +2424,12 @@ func Diagnostics() interp.Diagnostics {
 			// started as a change.
 			"jobs": "-n",
 			// typeset's letters this engine does not hold: the floats'
-			// -F, namerefs, padding and alignment, mappings and the rest of
-			// its usage line.
+			// -F, padding and alignment, mappings and the rest of its usage
+			// line.
+			//
+			// `-n` has left this list: the **name reference** is built
+			// (#2553), under this word and under `nameref`, and
+			// interp/nameref.go is the whole of it.
 			//
 			// `-f` has left this list — the function listing is built
 			// (#1494). `-t` has not: on a `-f` line it *traces* a function,
@@ -2451,7 +2463,7 @@ func Diagnostics() interp.Diagnostics {
 			// `-C` has left it as well: the compound-variable letter is
 			// built, and it is the declaration half of the kind `c=(a=1)`
 			// makes — see interp/compoundvariable.go (#2620).
-			"typeset": "-bFhnstELRSXZ",
+			"typeset": "-bFhstELRSXZ",
 			// `functions` is `typeset -f` under a second name, so the
 			// letters it is missing are read off its own set: `-t` traces a
 			// function and `-u` marks one to be read from `$FPATH`, both of
@@ -2498,7 +2510,7 @@ func Diagnostics() interp.Diagnostics {
 			// `-C` leaves this list with the one above it, for the reason
 			// every letter here shares one: `integer` reads typeset's whole
 			// grammar.
-			"integer": "-bFhnstELRSXZ",
+			"integer": "-bFhstELRSXZ",
 		},
 		// `-u` on a `-f` line, which is the one letter that cannot go in
 		// the list above: it is also the upper-case attribute, and this
@@ -2584,6 +2596,12 @@ func Diagnostics() interp.Diagnostics {
 		FunctionNameListingKeyword: "%[1]s",
 		BuiltinComplaintName: map[string]string{
 			"type": "whence", "integer": "typeset", "functions": "typeset",
+			// `nameref` is `typeset -n` under a second word, and its
+			// complaints say so: measured 2026-09-15, `nameref 1x=v` is
+			// `typeset: 1x=v: is not an identifier` — the *other* word's
+			// name, which is what says the spelling is a front rather than a
+			// builtin of its own.
+			"nameref": "typeset",
 		},
 		// Two wordings, split between `export` and the other two, and the
 		// operand quoted back as given.
@@ -2599,6 +2617,19 @@ func Diagnostics() interp.Diagnostics {
 			// its own, because this shell's `integer 1x` calls itself
 			// `typeset` — see BuiltinComplaintName above.
 			"typeset": "%[1]s: %[2]s: invalid variable name",
+			// And the second spelling of that word takes the same wording,
+			// keyed by what the script wrote rather than by what the
+			// complaint calls it: the table is read before the rename above
+			// is applied, so a missing entry here would fall back to the
+			// substrate's sentence under ksh93's name.
+			//
+			// The real shell is one word apart on this line — `typeset -n
+			// 1x=v` is `is not an identifier` there where the plain `typeset
+			// 1x=v` is `invalid variable name`, a wording the `n` letter has
+			// to itself. That is recorded rather than modeled: it would be a
+			// per-letter bad-name wording, which is a table of its own for
+			// one row.
+			"nameref": "%[1]s: %[2]s: invalid variable name",
 			// `read` takes readonly's wording too, and it names the part in
 			// front of a prompt `?`: `read "1bad?p"` is `1bad`, and
 			// `read "?p"` is the empty word the split left.
@@ -2609,6 +2640,22 @@ func Diagnostics() interp.Diagnostics {
 		// mapping rather than zsh's math facility.
 		DeclareUnknownMapping:    "%[1]s: %[2]s: unknown mapping name",
 		DeclareMappingNeedsAName: "%[1]s: -M requires argument when operands are specified",
+		// A name reference's two refusals. Measured 2026-09-15 on ksh93u+,
+		// `env -i` with a scratch HOME:
+		//
+		//	typeset -n r=1bad    typeset: 1bad: invalid variable name
+		//	typeset -n r=r       typeset: r: invalid self reference
+		//
+		// The first is this shell's ordinary bad-name sentence rather than
+		// one of the letter's own, which is where it parts from bash — so it
+		// is written out here rather than left to fall back, because the
+		// substrate's fallback is bash's wording.
+		NamerefBadTarget:     "%[1]s: invalid variable name",
+		NamerefSelfReference: "%[1]s: invalid self reference",
+		// NamerefCircularWarning is deliberately empty and is not a gap: a
+		// cycle is refused at the declaration here — see
+		// Semantics.NamerefCycleIsRefused — so there is never a read through
+		// one for this shell to warn about.
 		BuiltinBadNameKeepsValue: true,
 		BuiltinUsageUnprefixed:   true,
 		// Three of this shell's builtins write their complaint bare, where
@@ -3029,6 +3076,12 @@ func Apply(r *interp.Runner) {
 	// to disagree about the header, the layout, or the status a name nobody
 	// defined leaves behind. See interp/functionsbuiltin.go.
 	r.Register("functions", interp.FunctionsBuiltin())
+	// And `nameref` is `typeset -n` under a second word, on the same terms
+	// and for the same reason. See interp/namerefbuiltin.go.
+	r.Register("nameref", interp.NamerefBuiltin())
+	// The assignment rule follows this name too: `nameref r=v` is a
+	// declaration's operand and not a word to split.
+	r.SetDeclaring("nameref")
 	// How this shell arranges a function it says back, stated rather than
 	// left to the zero value — see FunctionLayout. The same layout for a
 	// function written into the environment, because this shell does not

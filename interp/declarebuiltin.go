@@ -77,7 +77,14 @@ type declareFlags struct {
 	hide      bool
 	hideNamed bool
 	unique    bool
-	tie       bool
+	// nameref is the `n` letter: the name being declared is a **reference**
+	// to another parameter rather than a parameter of its own, and the value
+	// on the operand is the name it points at. Its own field rather than a
+	// value of a container enum for the reason compoundVar has one — what
+	// the letter declares is not a kind of store but where every later read
+	// and write lands. See interp/nameref.go.
+	nameref bool
+	tie     bool
 	// typeName is the name that rode on the `T` letter in the dialect that
 	// reads it as a *type* — `typeset -TPt v` — and typeNamed says one was
 	// written at all. The two cannot be one field for the reason
@@ -453,6 +460,13 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 					f.typeName, f.typeNamed = rest, true
 					break letters
 				}
+			case 'n':
+				// A name *reference*: what the operand carries is the name
+				// this one stands for, and every later read, write and
+				// `unset` through it lands there. Recorded rather than acted
+				// on here, because what the letter does depends on the
+				// operand — see declareNameref.
+				f.nameref = !f.remove
 			case 'U':
 				// Keep only the first occurrence of each element. Like
 				// `-i` and the case attributes it is a property of the
@@ -984,7 +998,11 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 	// script stops after them — real zsh's `. f` over `typeset ":" ok=1`
 	// leaves `ok` at 1, and this left it empty until the give-up was held
 	// back (#1211). The flag is raised below the loop.
-	args, code, ended := r.builtinNames(r.builtinComplaintName(name), args, false)
+	// Kept before the loop, whose own `name` is the operand: a per-operand
+	// refusal that has to say which word was written cannot reach the
+	// parameter any more once the shadowing begins.
+	complaintName := r.builtinComplaintName(name)
+	args, code, ended := r.builtinNames(complaintName, args, false)
 	if r.unspecified {
 		// An unanswered axis inside the name check is not a refusal to carry
 		// past: nothing was decided, so nothing is declared.
@@ -1164,6 +1182,25 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		}
 		if r.unspecified {
 			return r.status
+		}
+		if df.nameref {
+			// The `n` letter makes the name a **reference**, and what the
+			// operand carries is the name it points at rather than a value
+			// to store. Ahead of every store below because none of them
+			// applies: nothing is written into the parameter tables at all.
+			//
+			// Behind the shadow and the attributes, which is load-bearing
+			// for `local -n`: the reference belongs to this binding, so the
+			// caller's own name of the same spelling is untouched and gets
+			// itself back on return. See interp/nameref.go.
+			if code := r.declareNameref(complaintName, name, value, hasValue); code != 0 {
+				status = code
+				if r.ctl == controlExit {
+					return r.status
+				}
+				r.assignFailed = true
+			}
+			continue
 		}
 		switch {
 		case hasValue && df.compoundVar:

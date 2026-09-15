@@ -3450,6 +3450,29 @@ type Diagnostics struct {
 	// DeclarePrintReportsAMissingName said yes.
 	DeclareNoSuchVariable string
 
+	// NamerefBadTarget is a declaration aiming a name reference at a word
+	// that is not a name. One verb: the word as the script wrote it.
+	//
+	// Measured 2026-09-15: bash 5.3.15 says ``typeset: `1bad': invalid
+	// variable name for name reference`` and ksh93u+ says `typeset: 1bad:
+	// invalid variable name` — the same refusal it gives any bad name,
+	// where bash has a sentence of its own for this letter.
+	NamerefBadTarget string
+
+	// NamerefSelfReference is a declaration refusing a reference that would
+	// reach itself, in the dialect that refuses one — see
+	// Semantics.NamerefCycleIsRefused. One verb: the name being declared.
+	NamerefSelfReference string
+
+	// NamerefCircularWarning is the other answer to the same question: the
+	// reference is made and this is said. One verb, the name.
+	//
+	// Spoken as the *shell* rather than as the builtin, measured: bash
+	// writes `bash: line 1: warning: a: circular name reference` with no
+	// `typeset:` in it, where its refusals on the same line carry the
+	// builtin's name.
+	NamerefCircularWarning string
+
 	// DeclareUnknownMapping is what `typeset -M nosuch` says in the dialect
 	// whose `M` letter names a character mapping. Two verbs: the builtin's
 	// complaint name and the mapping asked for. See

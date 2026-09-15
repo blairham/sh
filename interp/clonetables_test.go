@@ -296,6 +296,7 @@ func seedTables(r *Runner) {
 	r.tied = map[string]tie{"seed": {}}
 	r.traps = map[string]string{"seed": "v"}
 	r.unique = map[string]bool{"seed": true}
+	r.nameref = map[string]string{"seed": "target"}
 	r.uppered = map[string]bool{"seed": true}
 }
 

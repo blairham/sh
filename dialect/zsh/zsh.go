@@ -1425,6 +1425,12 @@ func Semantics() interp.Semantics {
 	// alone; `-n` is not here, and that is measured rather than an
 	// omission — `unset -n x` is `bad option: -n` in zsh 5.9.2 where bash
 	// 5.3 and ksh93 take it.
+	// unanswered NamerefCycleIsRefused: this shell has no name references to
+	// make a cycle of, which is measured rather than assumed — #2553's report
+	// named `typeset -n` among its three spellings and it is not one.
+	// Measured 2026-09-15 on zsh 5.9.2, `env -i` with a scratch HOME, inside
+	// a function so all three words are reachable: `typeset -n v=1`,
+	// `declare -n v=1` and `local -n v=1` are each `bad option: -n`.
 	// unanswered UnsetReferenceLetterRemovesANonReference: `-n` is not one of
 	// this shell's letters. Measured 2026-09-12, `unset -n x` is
 	// `unset: bad option: -n` at 1 and `x` keeps its value (#932).
@@ -2884,15 +2890,26 @@ func Diagnostics() interp.Diagnostics {
 			// still named here is refused as missing while it works, and a
 			// letter in neither is `bad option` for something zsh has.
 			"read": "qeEzcl",
-			// typeset's letters this engine does not hold: floats (-E -F),
-			// namerefs (-n), padding and alignment (-L -R -Z), and the
-			// rest. The same set under both names, and for `local` too.
+			// typeset's letters this engine does not hold: the float
+			// format (-E), the key read (-k) and tracing (-t).
 			// `-H`, `-U`, `-T`, `-h` and `-m` have left this list — they are
 			// implemented, in DeclareOptions above.
 			// `L`, `R` and `Z` have left this list: they are the width
 			// attributes and are implemented, in DeclareOptions and
 			// DeclareOptionsTakingANumber above.
-			"typeset": "bcEknt",
+			//
+			// **`-b`, `-c` and `-n` have left it because this shell has not
+			// got them**, which is the other way a letter leaves: naming one
+			// here says "zsh has it and we do not", and refuses it as
+			// missing where zsh refuses it as unknown. Measured 2026-09-15
+			// on zsh 5.9.2, `env -i` with a scratch HOME, in a function so
+			// all three words are reachable — `typeset -b v=1`, `-c` and
+			// `-n` are each `bad option` under `typeset`, `declare` and
+			// `local` alike, while `-E`, `-k` and `-t` are silently taken.
+			// `-n` is the one that was load-bearing: #2553 built the name
+			// reference for bash and ksh93 on the premise that this shell
+			// spelled it too, and it does not.
+			"typeset": "Ekt",
 			// `w` has left this list and joined TypeOptions above, in the same
 			// change: a letter in both is refused as missing while it works,
 			// and a letter in neither is `bad option` for something this
@@ -2903,7 +2920,7 @@ func Diagnostics() interp.Diagnostics {
 			// job was started in, and -z and -Z are about the process
 			// title rather than about the job table.
 			"jobs":    "dzZ",
-			"declare": "bcEknt",
+			"declare": "Ekt",
 			// The same list as `typeset` and `declare`, which is the point:
 			// `-F` is one attribute and the three names declare it alike.
 			// It was here and in neither of theirs, which is the same split
@@ -2915,7 +2932,13 @@ func Diagnostics() interp.Diagnostics {
 			// unimplemented told a script the letter was on its way when
 			// nothing was coming. `L`, `R` and `Z` are the padding letters
 			// `local` really does spell and this engine does not.
-			"local": "bcEknt",
+			//
+			// `-k` is gone for the same reason `-b`, `-c` and `-n` are:
+			// measured in the same run, `local -k v=1` inside a function is
+			// `bad option: -k` where `typeset -k` and `declare -k` are taken
+			// — so this list is one letter shorter than theirs and not the
+			// same list after all.
+			"local": "Et",
 			// `integer`'s own short list, and it is not typeset's: the
 			// letters typeset is missing that `integer` refuses outright —
 			// b, c, E and m — are bad options under this name and belong in

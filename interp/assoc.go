@@ -89,6 +89,7 @@ func (a AssocArray) equal(b AssocArray) bool {
 // `functions[f]=…` and `unset "functions[f]"` each asking whether the name
 // was keyed and building nineteen hundred function bodies to find out.
 func (r *Runner) assocDeclared(name string) bool {
+	name = r.throughNameref(name)
 	if _, stored := r.AssocArrays[name]; stored {
 		return true
 	}
@@ -138,6 +139,7 @@ func (r *Runner) markAssoc(name string) {
 // association, still hold the right keys, and never say it had stopped
 // tracking. See SetDynamicAssocWriter.
 func (r *Runner) setAssocElem(name, key, value string) {
+	name = r.throughNameref(name)
 	if write, ok := r.dynamicAssocWriters[name]; ok {
 		write(r, key, value, true)
 		return
@@ -864,6 +866,7 @@ func (r *Runner) assocElemCurrent(name, key string) string {
 // gets its own value back. A produced one has no stored table until something
 // writes to it, so in practice the second clause is the answer.
 func (r *Runner) assocFor(name string) (AssocArray, bool) {
+	name = r.throughNameref(name)
 	if a, ok := r.AssocArrays[name]; ok {
 		return a, true
 	}

@@ -337,6 +337,24 @@ func (r *Runner) forClause(ctx context.Context, c *syntax.ForClause) error {
 				if i+j < len(items) {
 					it = items[i+j]
 				}
+				if r.isNameref(name) {
+					// A loop whose variable is a **name reference**
+					// re-points the reference rather than writing through
+					// it. Measured 2026-09-15 in bash 5.3.15 and ksh93u+
+					// alike: `v=1; typeset -n r=v; for r in x y; do :; done`
+					// leaves `declare -n r="y"` and `v` still holding 1, and
+					// `$r` inside the loop is empty because `x` and `y` are
+					// names nothing has set.
+					//
+					// It is the one assignment that does this, and it is not
+					// a rule about loops: it is the rule that aims a
+					// reference — see namerefAssignmentTarget — reaching a
+					// reference that is already aimed. So it is stated here
+					// rather than derived, because deriving it would make
+					// every other assignment re-point too.
+					r.setNameref(name, it)
+					continue
+				}
 				r.setVar(name, it)
 			}
 			// After the assignments, because zsh traces the assignments

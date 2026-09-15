@@ -10561,8 +10561,29 @@ any Unix can issue — Linux caps `pid_max` at 4194304 and macOS and the BSDs
 at 99999 — so that it names nothing outside this process. Inside it, `wait`
 and `kill` look the number up in the job table before going near the
 kernel, so `wait "$!"` reports the job's status and `kill "$!"` reaches the
-job's processes, which for a job of builtins is none and is reported as the
-job with nothing to signal that `kill %1` already reports.
+job's processes, which for a job of builtins is none.
+
+**A job the shell still holds is a target that is there, whether or not it
+has a process.** Measured 2026-09-15 on bash 5.3.15, zsh 5.9.2, ksh93u+
+2012-08-01 and dash, on a job blocked opening a fifo as a redirection
+(`head -n 1 < gate &`), as an operand (`head -n 1 gate &`), and made only
+of builtins (`{ read x < gate; } &`): `kill -0 "$!"` is 0 in all four for
+every shape, because each forked before it opened anything and the child is
+there for the whole of the job's life. This shell answered no to all three.
+The redirection shape is the one a script meets by accident rather than by
+construction: a background job's redirections are opened *before* the job is
+a process here, and the pid is settled at zero at a blocking open so that
+`&` can return at all, so `$!` named something `kill` could not reach for as
+long as the open lasted (#2994). A running job with no process is now
+reported like a finished one that has not been waited for (#2938) — the
+target is there and nothing receives the signal.
+
+What is still not reproduced is delivery: a job this shell has no process
+for cannot receive a signal, so `kill -TERM "$!"` reports the 0 the panel
+reports and the job runs on, where a real shell's fork would have taken it.
+The number is not spent on anything else — it is read back as the job rather
+than handed to the kernel — so the failure is a signal that reaches nothing,
+never one that reaches something the script did not name.
 
 **The deviation is recorded rather than papered over**: a real shell's `$!`
 names a process that exists and can be found in `ps`, and this one cannot.

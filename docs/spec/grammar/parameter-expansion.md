@@ -3978,11 +3978,6 @@ empty-but-set name in the same row), `-does-not-trip-nounset` (with the
 
 ### What this implementation does not match
 
-`${+00}` is `1` in zsh and `0` here, which is inherited rather than the
-flag's: `${00}` is the shell's own name there and the empty string here, so
-a positional written with a leading zero is a gap of its own and this
-follows it.
-
 `${#+v}` is `v` in zsh — the `$#` reading above — and a `bad substitution`
 here, which is a gap this change neither opened nor closed: `${#}` taking
 an alternate word is the `${}` half of the same issue.
@@ -4470,6 +4465,98 @@ a second, simpler reproducer that has nothing to do with `::=`:
   standing: `a=(1 2 3); ${a::=x y}` substitutes `x y` and `a` is still the
   three elements, where the shell leaves the scalar `x y`. `read a` over
   an array does the same thing, which is where this belongs.
+
+## A positional parameter past the ninth, without braces — zsh only
+
+`${10}` is the tenth positional parameter in every shell in the panel.
+`$10` is not: to six of the seven it is `$1` followed by the character
+`0`, and to zsh it is the tenth. The difference is where the token ends,
+which makes it a grammar question and not a disagreement about what a
+positional name means.
+
+Measured 2026-09-15 on zsh 5.9.2, bash 5.3.15, bash 3.2.57, that binary
+as `sh`, ksh93, dash and BusyBox ash, with
+`set -- 1 2 3 4 5 6 7 8 9 ten eleven`:
+
+| probe | zsh | the other six |
+| --- | --- | --- |
+| `"$10"` | `ten` | `10` |
+| `"$11"` | `eleven` | `11` |
+| `"${10}"` | `ten` | `ten` |
+| `"${11}"` | `eleven` | `eleven` |
+
+The parameters are numbered so the two readings spell themselves out:
+`$1` is literally `1`, so the majority answer to `$10` is the string
+`10` and the tenth parameter is the word `ten`. Nothing distinguishes
+them but the reading.
+
+This fails quietly in both directions. `10` is an ordinary word, so a
+zsh script that means the tenth parameter and is run under the narrow
+reading prints something plausible; and a POSIX script that means `$1`
+followed by a digit — a filename stem, a version suffix — reads an
+eleventh parameter it never had under the wide one. The same shape as
+`$#a` above: a number in either reading and nothing says which.
+
+The same measurement, on all three routes — `-c`, a script file and
+standard input — gives the same answer in every column, so it is the
+lexer's reading of `$` and digits and nothing about how the program
+arrived.
+
+### The run is a number, not a name
+
+What decides the leading-zero spellings is that the digits are read as a
+*number*, and the panel is unanimous about that half. Measured on the
+same binaries with ten parameters set:
+
+| probe | every column |
+| --- | --- |
+| `${01}` | the first |
+| `${09}` | the ninth |
+| `${010}` | the tenth |
+| `${00}`, `${000}` | the shell's own name, exactly as `$0` |
+
+So the lexer keeps the digits exactly as they were written and whoever
+resolves the name reads the number — the same division
+`FdVariablePositional` makes, and the reason there is no rule about
+zeros in the scan. In zsh, where the unbraced run is read, `$01` and
+`$00` follow: the first parameter and the shell's own name.
+
+### Where the run stops
+
+At the first character that is not a digit, in every column and whatever
+the flag says: `$1a` is the first parameter and a literal `a` in all
+seven, and in zsh `$10a` is the tenth parameter and an `a`.
+
+A run of digits still takes no bare subscript — `$1[2]` is the parameter
+and two literal characters, which is the rule under *Which parameters
+take one* below and is not widened by this. A **length** does read the
+whole run where the dialect has both flags: `$#10` is `3` in zsh with
+`$10` holding `ten`, which falls out of the two without a rule of its
+own.
+
+### Grammar
+
+Grammar flag `MultiDigitPositional`, consumed by the **lexer**, because
+the word boundary is what changes: `$10` is one expansion where the flag
+is on and an expansion plus a literal `0` where it is off, and nothing
+downstream can tell the two apart once the spans are cut. The span it
+produces is the one `${ … }` would have produced, so the parser, the
+interpreter and the printer are unchanged and the printer writes the
+braced spelling back.
+
+Core: off; `zsh`: on. Off for the core for the ordinary reason — six of
+the seven columns read one digit, and POSIX's XCU agrees with them,
+making the multi-digit form the extension rather than the majority a
+core should carry.
+
+### What the corpus pins
+
+`param/a-positional-past-the-ninth-without-braces` (the split),
+`-with-braces` (the control, where every column agrees, which is what
+says the flag is about the token),
+`param/a-positional-written-with-a-leading-zero`,
+`param/a-digit-run-worth-zero-is-the-shell-name` and
+`param/a-digit-run-stops-at-the-first-character-that-is-not-one`.
 
 ## A subscript without braces — zsh only
 
@@ -5864,6 +5951,8 @@ reason: `${$((6*7))[1]}`.
                            ${a:/pat/rep}, the same family's fourth
                            operator — zsh only
     BareSubscript          $a[1] and $#a, written without braces — zsh only
+    MultiDigitPositional   $10 as the tenth positional parameter rather than
+                           $1 and a 0 — zsh only
     ArraySubscriptFlags    ${a[(re)v]}, a flag group inside the brackets
                            — zsh only
     ChainedSubscript       ${m[k][2]}, a second subscript reading what the
@@ -5889,6 +5978,10 @@ the first and the last three are one shell's, and the `!` family is two
 shells' — neither is a common denominator. `BareSubscript` is false for
 both, and for the same reason as `ParamExpansionFlags`: one shell reads
 those characters that way and three read them as text.
+`MultiDigitPositional` is false for both on the widest evidence of any
+of them — six of the seven columns read one digit, and POSIX's XCU says
+they are right — which makes the wider reading an extension rather than
+a denominator.
 `SpecialParamSubscript` is false for both as well, and its evidence is
 stronger still: every other member of the panel refuses the expansion
 outright. `ArraySubscriptFlags` is false for both on evidence stronger

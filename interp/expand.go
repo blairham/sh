@@ -4559,19 +4559,7 @@ func (r *Runner) specialParam(e *syntax.ParamExpr) (string, bool) {
 		}
 		return itoa(r.lastJobPID), true
 	case "0":
-		// zsh reports whatever the shell is *inside* — the function being
-		// run, or the file being sourced — where every other shell reports
-		// the shell's own name however deep it is.
-		//
-		// The innermost call and not the innermost function: a file sourced
-		// from a function is what `$0` names while it runs, so asking
-		// r.inFunc would answer with the function around it. See
-		// Semantics.DollarZeroNamesTheInnermostCall for the measurement.
-		if in, ok := r.innermostCall(); ok &&
-			r.ask(r.sem().DollarZeroNamesTheInnermostCall, "$0 naming the function or sourced file it is inside") {
-			return in, true
-		}
-		return r.Name, true
+		return r.dollarZero()
 	case "*", "@":
 		// Reached where expandAt declined and one string is what the context
 		// wants: a here-document body, which is lexed as double-quoted text
@@ -4594,7 +4582,20 @@ func (r *Runner) specialParam(e *syntax.ParamExpr) (string, bool) {
 		// path and only reaches this line when it was not an array at all.
 		return strings.Join(r.Params, r.unsplitJoinSeparator(e.Name == "*", len(r.Params))), true
 	}
-	if n, ok := atoi(e.Name); ok && n >= 1 {
+	if n, ok := atoi(e.Name); ok {
+		if n == 0 {
+			// A digit run worth nothing is `$0`, however it was spelled.
+			// Measured 2026-09-15 across the whole panel — bash 5.3, bash
+			// 3.2, bash as `sh`, ksh93, dash, zsh and BusyBox ash — `${00}`
+			// and `${000}` are all the shell's own name, so the digits are
+			// read as a *number* and a leading zero is not part of a name.
+			// Unanimous, so it is a fact here rather than an axis.
+			//
+			// This used to fall through and answer the empty string, which
+			// the unbraced spelling could not reach until a dialect read
+			// `$00` as one parameter (Dialect.MultiDigitPositional, #2879).
+			return r.dollarZero()
+		}
 		if n <= len(r.Params) {
 			return r.Params[n-1], true
 		}
@@ -4605,6 +4606,24 @@ func (r *Runner) specialParam(e *syntax.ParamExpr) (string, bool) {
 		return "", false
 	}
 	return "", false
+}
+
+// dollarZero answers `$0`, and every all-zero digit run that means it.
+//
+// zsh reports whatever the shell is *inside* — the function being run, or the
+// file being sourced — where every other shell reports the shell's own name
+// however deep it is.
+//
+// The innermost call and not the innermost function: a file sourced from a
+// function is what `$0` names while it runs, so asking r.inFunc would answer
+// with the function around it. See Semantics.DollarZeroNamesTheInnermostCall
+// for the measurement.
+func (r *Runner) dollarZero() (string, bool) {
+	if in, ok := r.innermostCall(); ok &&
+		r.ask(r.sem().DollarZeroNamesTheInnermostCall, "$0 naming the function or sourced file it is inside") {
+		return in, true
+	}
+	return r.Name, true
 }
 
 // specialLength answers `${#@}` and `${#*}`.

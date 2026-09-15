@@ -4574,9 +4574,10 @@ func isBareParam(c byte) bool {
 
 // scanBareParam reads `$name`, `$1` or `$?` and friends.
 //
-// A digit is a *single* positional parameter here: `$12` is `$1` followed by
-// the character 2, which is why the multi-digit form needs braces. A special
-// character is likewise exactly one.
+// A digit is a *single* positional parameter here — `$12` is `$1` followed by
+// the character 2, which is why the multi-digit form needs braces — unless the
+// dialect has MultiDigitPositional, where the whole run is one parameter and
+// `$12` is the twelfth. A special character is exactly one either way.
 func (l *Lexer) scanBareParam(q Quoting) []Span {
 	open := l.pos()
 	l.advance() // $
@@ -4598,6 +4599,16 @@ func (l *Lexer) scanBareParam(q Quoting) []Span {
 	switch c := l.peek(); {
 	case c >= '0' && c <= '9':
 		l.advance()
+		if l.dialect.MultiDigitPositional {
+			// The rest of the run, where the dialect reads it as one
+			// parameter. The digits are kept exactly as written and the
+			// number is read by whoever resolves the name, which is what
+			// makes `$00` the shell's own name and `$010` the tenth
+			// parameter without a rule here about leading zeros.
+			for !l.eof() && l.peek() >= '0' && l.peek() <= '9' {
+				l.advance()
+			}
+		}
 	case strings.IndexByte(bareParamSpecials, c) >= 0:
 		l.advance()
 	default:

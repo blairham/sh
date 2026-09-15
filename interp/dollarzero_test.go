@@ -252,3 +252,62 @@ func sourceRunOnPath(t *testing.T, dir, path, src string, sem Semantics, dg Diag
 	}
 	return buf.String(), st
 }
+
+// TestADigitRunWorthZeroIsDollarZero. `${00}` and `${000}` are the shell's own
+// name, not the empty string: a positional parameter's digits are read as a
+// *number*, so a leading zero is not part of a name and a run worth nothing
+// names what `$0` names.
+//
+// Unanimous across the panel — measured 2026-09-15 on bash 5.3, bash 3.2, bash
+// as `sh`, ksh93, dash, zsh and BusyBox ash — so it is a fact here rather than
+// an axis, and it is asked of this package because every dialect inherits it.
+//
+// This answered the empty string until #2879, which was reachable only through
+// the braced spelling while every dialect read `$00` as `$0` with a `0` left
+// over. `Dialect.MultiDigitPositional` gives one of them the unbraced route to
+// it, which is why the two land together.
+//
+// The axis is carried through rather than bypassed: a run worth zero is `$0`
+// wherever it stands, so inside a call it follows `$0` and does not fall back
+// to the script's name.
+func TestADigitRunWorthZeroIsDollarZero(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		src     string
+		on, off string
+	}{
+		{
+			name: "at the top level",
+			src:  `echo "[${0}][${00}][${000}]"`,
+			on:   "[testsh][testsh][testsh]\n",
+			off:  "[testsh][testsh][testsh]\n",
+		},
+		{
+			name: "inside a call it follows $0",
+			src:  "f() { echo \"[${0}][${00}]\"; }\nf",
+			on:   "[f][f]\n",
+			off:  "[testsh][testsh]\n",
+		},
+		{
+			// The control that says the run is read as a number and not
+			// merely stripped of zeros: `${01}` is the *first* parameter and
+			// `${010}` the tenth, neither of which is `$0`.
+			name: "a run worth more is a positional",
+			src:  `set -- p q r s t u v w x y; echo "[${01}][${010}][${0010}]"`,
+			on:   "[p][y][y]\n",
+			off:  "[p][y][y]\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, answer := range []struct {
+				a    Answer
+				want string
+			}{{Yes, tc.on}, {No, tc.off}} {
+				out, st := sourceRun(t, t.TempDir(), tc.src, zeroSemantics(answer.a), Diagnostics{})
+				if out != answer.want || st != 0 {
+					t.Errorf("axis %v: got %q status %d, want %q and 0", answer.a, out, st, answer.want)
+				}
+			}
+		})
+	}
+}

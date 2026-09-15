@@ -13307,6 +13307,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | `param/an-assignment-through-an-expansion-reaches-the-positional` | **2>** `<shell>: 1: 1: bad variable name` *(status 2)* | **2>** `<shell>: line 1: $1: cannot assign in this way` *(status 1)* | **2>** `<shell>: line 1: $1: cannot assign in this way` *(status 1)* | **2>** `<shell>: $1: cannot assign in this way` *(status 1)* | **2>** `<shell>: "${1:=new}": bad substitution` *(status 1)* | `[new][new][1] st=0` | **2>** `<shell>: 1: bad variable name` *(status 2)* |
 | `param/an-assignment-through-an-expansion-replaces-a-positional-that-is-there` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: 1: =new: arithmetic syntax error: operand expected (error token is "=new")` *(status 1)* | **2>** `<shell>: line 1: 1: =new: arithmetic syntax error: operand expected (error token is "=new")` *(status 1)* | **2>** `<shell>: 1: =new: syntax error: operand expected (error token is "=new")` *(status 1)* | **2>** `<shell>: :=new: arithmetic syntax error` *(status 1)* | `[new][new][q][2] st=0` | **2>** `<shell>: arithmetic syntax error` *(status 2)* |
 | `param/an-assignment-through-an-expansion-widens-the-positional-list` | **2>** `<shell>: 1: 3: bad variable name` *(status 2)* | **2>** `<shell>: line 1: $3: cannot assign in this way` *(status 1)* | **2>** `<shell>: line 1: $3: cannot assign in this way` *(status 1)* | **2>** `<shell>: $3: cannot assign in this way` *(status 1)* | **2>** `<shell>: "${3:=new}": bad substitution` *(status 1)* | `[new][p][][new][3] st=0` | **2>** `<shell>: 3: bad variable name` *(status 2)* |
+| `param/a-positional-past-the-ninth-without-braces` | `[10][11]` | `[10][11]` | `[10][11]` | `[10][11]` | `[10][11]` | `[ten][eleven]` | `[10][11]` |
+| `param/a-positional-past-the-ninth-with-braces` | `[ten][eleven]` | `[ten][eleven]` | `[ten][eleven]` | `[ten][eleven]` | `[ten][eleven]` | `[ten][eleven]` | `[ten][eleven]` |
+| `param/a-positional-written-with-a-leading-zero` | `[p][x][y]` | `[p][x][y]` | `[p][x][y]` | `[p][x][y]` | `[p][x][y]` | `[p][x][y]` | `[p][x][y]` |
+| `param/a-digit-run-worth-zero-is-the-shell-name` | `same` | `same` | `same` | `same` | `same` | `same` | `same` |
+| `param/a-digit-run-stops-at-the-first-character-that-is-not-one` | `[1a][10a]` | `[1a][10a]` | `[1a][10a]` | `[1a][10a]` | `[1a][10a]` | `[1a][tena]` | `[1a][10a]` |
 | `param/only-the-equals-makes-the-always-assign` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[][][old]` | `[][][old]` | `[][][old]` | **2>** `<shell>: :-D: arithmetic syntax error` *(status 1)* | `[][][old]` | `[][][old]` |
 | `param/word-is-itself-expanded` | `[DEF][sub]` | `[DEF][sub]` | `[DEF][sub]` | `[DEF][sub]` | `[DEF][sub]` | `[DEF][sub]` | `[DEF][sub]` |
 | `param/prefix-shortest-and-longest` | `[b.c][c]` | `[b.c][c]` | `[b.c][c]` | `[b.c][c]` | `[b.c][c]` | `[b.c][c]` | `[b.c][c]` |
@@ -13912,6 +13917,26 @@ grades it and nothing drift-checks it either, for the same reason.
 - `param/an-assignment-through-an-expansion-widens-the-positional-list` — a position past the end widens the list with empty parameters rather than being dropped, so `$#` becomes 3 and `$2` is an empty parameter that is nonetheless there. The row that says the store is the list and not a slot: an implementation that only replaced an existing element would answer this one with `$#` still 1
   ```sh
   set -- p; printf "[%s]" "${3:=new}"; printf "[%s][%s][%s][%s]" "$1" "$2" "$3" "$#"; echo " st=$?"
+  ```
+- `param/a-positional-past-the-ninth-without-braces` — where an unbraced `$` stops reading digits. zsh takes the whole run as one positional parameter and answers the tenth and eleventh; every other column reads `$1` and leaves the next digit in the word, so the answer is `10` and `11`. The parameters are numbered so that the two readings cannot be confused with each other — `$1` is literally `1`, which is what makes `[10]` the wrong answer *spelled out* rather than a plausible one. It is a grammar split and not a value: the word boundary moves, and nothing downstream can tell the readings apart once the spans are cut
+  ```sh
+  set -- 1 2 3 4 5 6 7 8 9 ten eleven; printf "[%s][%s]" "$10" "$11"; echo
+  ```
+- `param/a-positional-past-the-ninth-with-braces` — the control for the row above, and the reason that one is about the token rather than about what a positional name means: braced, every column in the panel answers the tenth and eleventh. An implementation that read the run everywhere would pass this row and fail its neighbor; one that read it nowhere would fail this row too, which is how the pair tells a missing flag from a missing feature
+  ```sh
+  set -- 1 2 3 4 5 6 7 8 9 ten eleven; printf "[%s][%s]" "${10}" "${11}"; echo
+  ```
+- `param/a-positional-written-with-a-leading-zero` — a positional parameter's digits are a *number*, so a leading zero is not part of a name: `${01}` is the first, `${09}` the ninth and `${010}` the tenth, unanimously across the panel. It is the row that says the unbraced flag needs no rule of its own about zeros — the lexer keeps the digits as written and whoever resolves the name reads the number
+  ```sh
+  set -- p q r s t u v w x y; printf "[%s][%s][%s]" "${01}" "${09}" "${010}"
+  ```
+- `param/a-digit-run-worth-zero-is-the-shell-name` — the end of the same rule: a run of digits worth nothing names what `$0` names, in every column. Compared against `$0` rather than printed, because the value is the shell's own name and differs per column while the *equality* does not. This answered the empty string here until #2879, which nothing reached while every dialect read `$00` as `$0` with a `0` left over — the unbraced flag is what gave one of them a route to it
+  ```sh
+  set -- p q; if [ "${00}" = "$0" ]; then echo same; else echo "differ [${00}]"; fi
+  ```
+- `param/a-digit-run-stops-at-the-first-character-that-is-not-one` — the half the flag does not move. However far a dialect reads, the run ends at the first character that is not a digit, so `$1a` is the first parameter and a literal `a` everywhere — including the shell that reads `$10a` as the tenth parameter and an `a`. A dialect that took the letters too would answer this row with an unset name in both slots
+  ```sh
+  set -- 1 2 3 4 5 6 7 8 9 ten; printf "[%s][%s]" "$1a" "$10a"; echo
   ```
 - `param/only-the-equals-makes-the-always-assign` — the disambiguation is one character wide, and this is the row that says so: with a second colon in front of them `-` and `+` are *not* operators, they are an offset of nothing and a length of `-D`, so the answer is empty and `v` is untouched. A grammar that widened `::` by one character would answer `D` here and pass every row above
   ```sh

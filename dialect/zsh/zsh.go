@@ -524,6 +524,15 @@ func Dialect() syntax.Dialect {
 	// shell alone, which is why it is set here and nowhere else.
 	d.BareSubscript = true
 	d.BareParamFlags = true
+	// A run of digits after an unbraced `$` is one positional parameter here.
+	// Measured 2026-09-15 with `set -- 1 2 3 4 5 6 7 8 9 ten eleven`: `$10` is
+	// `ten` and `$11` is `eleven` in this shell, where bash 5.3, bash 3.2,
+	// bash as `sh`, ksh93, dash and BusyBox ash all answer `10` and `11` —
+	// `$1` with the next digit left in the word. `${10}` is the tenth in all
+	// seven, so the braces are what the other six need and this shell does
+	// not. The run is read as a number, so `$01` is the first parameter and
+	// `$00` is the shell's own name (#2879).
+	d.MultiDigitPositional = true
 	// A braced expansion carries more than one subscript here, each reading
 	// what the one before it named. Measured 2026-09-08 on zsh 5.9.2 with
 	// `a=(one two three); echo ${a[1][2]}`: this shell prints `n`, bash 5.3

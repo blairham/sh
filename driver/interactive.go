@@ -384,6 +384,10 @@ func (sh Shell) frontEnd(r *interp.Runner, name string, dg interp.Diagnostics) r
 		// What this binary adds to every prompt, which is nothing for a
 		// dialect binary and the sandbox marker for cmd/sh under a policy.
 		PromptProviders: sh.PromptProviders,
+		// And what else keeps this session's history, which is nothing unless
+		// the binary attached a tool. The file is told either way.
+		HistoryRecorders: sh.HistoryRecorders,
+		HistorySources:   sh.HistorySources,
 		// And what colors the line while it is typed, which is nothing
 		// unless the binary asked for it.
 		Highlighter: sh.highlighter(r),

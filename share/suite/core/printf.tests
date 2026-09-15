@@ -177,11 +177,30 @@ printf '[%d]\n' 9223372036854775807
 # ksh93, which do not.
 printf '[%d][%d]\n' 0x10 0xff
 
-# A negative operand under an unsigned conversion is held out until #2902
-# lands. All four references write the 64-bit bit pattern — `ffffffffffffffff`
-# for `%x` of -1 — and every one of our dialects writes `-1`:
+# An unsigned conversion writes the operand's bit pattern, and the width is
+# the shell's own integer and not C's: `printf '%x' -1` in C is `ffffffff`
+# and in all four of these shells it is sixty-four bits of it (#2902).
+printf '[%x][%X][%o][%u]\n' -1 -1 -1 -1
+printf '[%x][%o][%u]\n' -255 -8 -5
+
+# The flags go through the bit pattern the same way a positive operand's
+# digits do — except the two that name a sign, which an unsigned conversion
+# has none of and every reference ignores.
 #
-#   printf '[%x][%o][%u]\n' -1 -1 -1
+# The extremes are notes rather than cases, because what parts the columns
+# there is the *reading* of the operand and not the conversion. `printf '%x'
+# -9223372036854775808` is `8000000000000000` in bash, ksh93 and dash, and in
+# zsh the operand does not survive being read: `number truncated after 18
+# digits`. An operand that overflows splits three ways again — bash and dash
+# saturate unsigned, ksh93 signed, zsh keeps nineteen digits of it.
+printf '[%#x][%#o][%.20x]\n' -1 -8 -1
+printf '[%20x][%-20x]\n' -1 -1
+printf '[%+x][% x][%+u]\n' -1 -1 -1
+printf '[%+x][% x][%+u]\n' 255 255 5
+
+# The signed conversions keep the sign, which is the whole of what parts
+# them from the four above.
+printf '[%d][%i]\n' -1 -255
 
 # What a failure does. The statuses split — dash says 2 where the other three
 # say 1 — so what is printed is whether it failed, and the output written

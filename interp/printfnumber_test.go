@@ -635,3 +635,83 @@ func TestPrintfIntegerOverflowIsTheConversionsRange(t *testing.T) {
 		t.Errorf("without the wording: got %q status %d, want silence at 0", out, st)
 	}
 }
+
+// The unsigned conversions write the operand's bit pattern and never a sign.
+//
+// #2902: `%x` of -1 was `-1` and `%x` of -255 was `-ff`, which is not a
+// numeral any shell in the panel would read back, and `%u` of -1 was `-1` —
+// the conversion doing the opposite of what it names. All six columns write
+// the sixty-four-bit pattern, which is why this runs under CoreSemantics: an
+// implementation reaching an axis to produce these would be asking a question
+// the panel does not have.
+//
+// The width is the shell's `intmax_t` and not C's `int`. C's own `printf`
+// answers `ffffffff` for the first row here, so a fix taken from C would be
+// half of one.
+//
+// The rows with a positive operand and the `%d`/`%i` rows are here to say
+// what did *not* move: the flags, the field and the signed conversions are
+// what surrounds this one and are untouched by it.
+func TestPrintfUnsignedConversionsWriteTheBitPattern(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		src  string
+		want string
+	}{
+		{"hexadecimal", `printf '[%x]' -1`, "[ffffffffffffffff]"},
+		{"upper case", `printf '[%X]' -1`, "[FFFFFFFFFFFFFFFF]"},
+		{"octal", `printf '[%o]' -1`, "[1777777777777777777777]"},
+		{"unsigned decimal", `printf '[%u]' -1`, "[18446744073709551615]"},
+		{"a pattern with digits in it", `printf '[%x]' -255`, "[ffffffffffffff01]"},
+		{"octal of a small one", `printf '[%o]' -8`, "[1777777777777777777770]"},
+		{"unsigned decimal of a small one", `printf '[%u]' -5`, "[18446744073709551611]"},
+		// The low edge of the type: the one operand whose pattern has its
+		// top bit set and nothing else. Not in share/suite, because zsh
+		// cannot *read* the operand — `number truncated after 18 digits` —
+		// so the row is not common ground there even though the conversion
+		// is.
+		{"the low edge of the type", `printf '[%x]' -9223372036854775808`, "[8000000000000000]"},
+		{"and unsigned", `printf '[%u]' -9223372036854775808`, "[9223372036854775808]"},
+		{"negative zero is zero", `printf '[%x]' -0`, "[0]"},
+		{"a positive operand is untouched", `printf '[%x]' 255`, "[ff]"},
+		{"the high edge is untouched", `printf '[%x]' 9223372036854775807`, "[7fffffffffffffff]"},
+
+		// The `#` flag, the width and the precision go through the pattern
+		// the way they went through the digits before.
+		{"the alternate form", `printf '[%#x]' -1`, "[0xffffffffffffffff]"},
+		{"the alternate form in octal", `printf '[%#o]' -8`, "[01777777777777777777770]"},
+		{"the alternate form of a positive", `printf '[%#x]' 255`, "[0xff]"},
+		{"a width", `printf '[%20x]' -1`, "[    ffffffffffffffff]"},
+		{"a left-aligned width", `printf '[%-20x]' -1`, "[ffffffffffffffff    ]"},
+		{"a precision", `printf '[%.20x]' -1`, "[0000ffffffffffffffff]"},
+		{"a width the pattern outgrows", `printf '[%08x]' -1`, "[ffffffffffffffff]"},
+		{"a width a positive still fits", `printf '[%08x]' 255`, "[000000ff]"},
+
+		// The two flags that name a sign. C gives them to the signed
+		// conversions only and says nothing about these; every reference
+		// ignores them here, where Go writes the sign out.
+		{"a plus flag is ignored", `printf '[%+x]' -1`, "[ffffffffffffffff]"},
+		{"a space flag is ignored", `printf '[% x]' -1`, "[ffffffffffffffff]"},
+		{"a plus flag at unsigned decimal", `printf '[%+u]' -1`, "[18446744073709551615]"},
+		{"a plus flag over a positive", `printf '[%+x]' 255`, "[ff]"},
+		{"a space flag over a positive", `printf '[% x]' 255`, "[ff]"},
+		{"a plus flag in octal", `printf '[%+o]' 255`, "[377]"},
+		{"a plus flag at unsigned decimal of a positive", `printf '[%+u]' 5`, "[5]"},
+
+		// The signed conversions keep the sign, and keep the flags that
+		// name one. This is the whole of what parts them from the above.
+		{"signed decimal keeps the sign", `printf '[%d]' -1`, "[-1]"},
+		{"and its other spelling", `printf '[%i]' -255`, "[-255]"},
+		{"a plus flag at a signed conversion", `printf '[%+d]' 1`, "[+1]"},
+		{"a space flag at a signed conversion", `printf '[% d]' 1`, "[ 1]"},
+		{"a signed width keeps room for the sign", `printf '[%08d]' -1`, "[-0000001]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := CoreSemantics()
+			out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q status %d, want %q and 0", out, st, tc.want)
+			}
+		})
+	}
+}

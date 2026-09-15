@@ -68,3 +68,12 @@ whence -p ./bin1/tool; printf 'whence -p -> %s\n' "$?"
 # where we write the tracked-alias one for both.
 #
 #   command -V ./bin1/tool
+
+# A function may not be *named* after a special builtin here either, and the
+# stage is this shell's own: the definition parses and the complaint comes
+# where it **runs**, so the line in front of it does run. It still ends the
+# file, which is why it is the last thing in it — dash/ has the same refusal
+# made while reading, and bash/ the accepting side.
+printf 'before\n'
+export() { printf 'fn\n'; }
+printf 'not reached -> %s\n' "$?"

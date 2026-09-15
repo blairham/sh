@@ -52,3 +52,17 @@ hash -r
 ( hash -t nosuch_zz ) > /dev/null 2>&1; printf 'hash -t on a name it has not -> %s\n' "$?"
 ( hash -l ) > /dev/null 2>&1; printf 'hash -l -> %s\n' "$?"
 ( hash -d lsalias ) > /dev/null 2>&1; printf 'hash -d -> %s\n' "$?"
+
+# A function may be *named* after a special builtin here, where ksh93 and
+# dash refuse the whole file — see the note at the top of core/lookup.tests
+# for why the question has no common answer, and dash/ and ksh/ for the two
+# refusing shapes. Only the definition is asked: whether the function is then
+# what the name *finds* splits this shell from zsh, and that half belongs to
+# neither file.
+export() { printf 'fn export\n'; }
+printf 'special builtin defined -> %s\n' "$?"
+unset -f export
+printf 'undefined again -> %s\n' "$?"
+set() { printf 'fn set\n'; }
+printf 'another one defined -> %s\n' "$?"
+unset -f set

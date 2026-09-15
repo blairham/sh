@@ -215,6 +215,29 @@ func Dialect() syntax.Dialect {
 	// stops the script. interp.Semantics.FunctionNameWhenTheDefinitionRuns is
 	// what happens then (#1296).
 	d.FunctionNameCheckedWhenTheDefinitionRuns = true
+	// And the same stage for a name this shell keeps for itself. A function
+	// may not be named after a *special* builtin here — `export() { :; }` is
+	// `export: invalid function name` and the script stops at 1 — and the
+	// set is this shell's own rather than POSIX's list: `times` is a preset
+	// alias here rather than a builtin and is an ordinary name, while
+	// `alias`, `enum`, `hash`, `login`, `newgrp`, `typeset` and `unalias`
+	// are special and are refused. Regular builtins are not: `true`, `read`
+	// and `cd` all define. `.` and `:` are special too and are left out,
+	// because PunctuatedFunctionNameIsRefused already refuses them and says
+	// so in this shell's own two wordings — a dot names a discipline
+	// function here, which is a different complaint. Both spellings of a
+	// definition reach the set, and the stage is what
+	// separates this from dash — the `printf` in front of the definition
+	// runs, a definition in a branch nothing takes is never refused, and one
+	// inside a subshell ends the subshell alone. Measured 2026-09-15 on all
+	// three routes; see syntax.Dialect.FunctionNamesRefused (#2932).
+	d.FunctionNamesRefused = map[string]bool{
+		"alias": true, "break": true, "continue": true, "enum": true,
+		"eval": true, "exec": true, "exit": true, "export": true,
+		"hash": true, "login": true, "newgrp": true, "readonly": true,
+		"return": true, "set": true, "shift": true, "trap": true,
+		"typeset": true, "unalias": true, "unset": true,
+	}
 	// And a definition keeps the characters it was written with, because this
 	// shell's `typeset -f` says them back rather than laying the tree out:
 	// `f(){    echo     a   ;   }` lists with every one of those blanks, a

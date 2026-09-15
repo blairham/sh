@@ -16,7 +16,9 @@
 #     bash and zsh accept `export() { … }`; ksh93 and dash refuse the file
 #     outright, dash calling it a syntax error. So "does a function beat a
 #     special builtin" has no common answer — in half the panel the question
-#     cannot be put. bash/ and dash/ carry the two sides.
+#     cannot be put. bash/ carries the accepting side, and dash/ and ksh/
+#     the two refusing ones — which differ in stage as well: dash refuses
+#     while reading and ksh93 where the definition runs.
 #   * what `command -v` prints for a word with a slash in it. bash, zsh and
 #     dash echo the operand; ksh93 resolves it against the working directory
 #     and leaves the `./` in the middle of the result. ksh/.

@@ -96629,6 +96629,57 @@
         "TimedOut": false
       }
     },
+    "files/a-link-on-the-way-to-the-name": {
+      "ash": {
+        "Stdout": "paranoid=127~plain=127~gone",
+        "Stderr": "\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: zf_mkdir: not found~\u003cshell\u003e: can't create real/passwd: nonexistent directory~\u003cshell\u003e: zf_ln: not found~\u003cshell\u003e: zf_rm: not found~\u003cshell\u003e: zf_rm: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "paranoid=127~plain=127~gone",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zf_mkdir: command not found~\u003cshell\u003e: line 1: real/passwd: No such file or directory~\u003cshell\u003e: line 1: zf_ln: command not found~\u003cshell\u003e: line 1: zf_rm: command not found~\u003cshell\u003e: line 1: zf_rm: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "paranoid=127~plain=127~gone",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zf_mkdir: command not found~\u003cshell\u003e: line 1: real/passwd: No such file or directory~\u003cshell\u003e: line 1: zf_ln: command not found~\u003cshell\u003e: line 1: zf_rm: command not found~\u003cshell\u003e: line 1: zf_rm: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "paranoid=127~plain=127~gone",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: zf_mkdir: command not found~\u003cshell\u003e: real/passwd: No such file or directory~\u003cshell\u003e: zf_ln: command not found~\u003cshell\u003e: zf_rm: command not found~\u003cshell\u003e: zf_rm: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "paranoid=127~plain=127~gone",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: zf_mkdir: not found~\u003cshell\u003e: 1: cannot create real/passwd: Directory nonexistent~\u003cshell\u003e: 1: zf_ln: not found~\u003cshell\u003e: 1: zf_rm: not found~\u003cshell\u003e: 1: zf_rm: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "paranoid=127~plain=127~gone",
+        "Stderr": "\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: zf_mkdir: not found~\u003cshell\u003e: real/passwd: cannot create [No such file or directory]~\u003cshell\u003e: zf_ln: not found~\u003cshell\u003e: zf_rm: not found~\u003cshell\u003e: zf_rm: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "paranoid=1~kept~plain=0~gone",
+        "Stderr": "\u003cshell\u003e:zf_rm:1: link/passwd: not a directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "files/moving-and-removing-with-the-zf-names": {
       "ash": {
         "Stdout": "mv=127~rm=127~removed",
@@ -96674,6 +96725,57 @@
       },
       "zsh": {
         "Stdout": "mv=0~gone~moved~rm=0~removed",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "files/removing-a-link-is-never-asked-about": {
+      "ash": {
+        "Stdout": "links=127~both-gone",
+        "Stderr": "\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: zf_ln: not found~\u003cshell\u003e: zf_ln: not found~\u003cshell\u003e: zf_rm: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "links=127~both-gone",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zf_ln: command not found~\u003cshell\u003e: line 1: zf_ln: command not found~\u003cshell\u003e: line 1: zf_rm: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "links=127~both-gone",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zf_ln: command not found~\u003cshell\u003e: line 1: zf_ln: command not found~\u003cshell\u003e: line 1: zf_rm: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "links=127~both-gone",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: zf_ln: command not found~\u003cshell\u003e: zf_ln: command not found~\u003cshell\u003e: zf_rm: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "links=127~both-gone",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: zf_ln: not found~\u003cshell\u003e: 1: zf_ln: not found~\u003cshell\u003e: 1: zf_rm: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "links=127~both-gone",
+        "Stderr": "\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: zf_ln: not found~\u003cshell\u003e: zf_ln: not found~\u003cshell\u003e: zf_rm: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "links=0~both-gone",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -96777,6 +96879,57 @@
       "zsh": {
         "Stdout": "drwxr-xr-x~st=1",
         "Stderr": "\u003cshell\u003e:zf_mkdir:1: invalid mode `zzz'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "files/the-paranoid-letter-stops-at-the-last-component": {
+      "ash": {
+        "Stdout": "rm=127~unlinked~chmod=127",
+        "Stderr": "\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: zf_mkdir: not found~\u003cshell\u003e: can't create real/passwd: nonexistent directory~\u003cshell\u003e: zf_ln: not found~\u003cshell\u003e: zf_rm: not found~\u003cshell\u003e: zf_chmod: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "rm=127~unlinked~chmod=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zf_mkdir: command not found~\u003cshell\u003e: line 1: real/passwd: No such file or directory~\u003cshell\u003e: line 1: zf_ln: command not found~\u003cshell\u003e: line 1: zf_rm: command not found~\u003cshell\u003e: line 1: zf_chmod: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "rm=127~unlinked~chmod=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zf_mkdir: command not found~\u003cshell\u003e: line 1: real/passwd: No such file or directory~\u003cshell\u003e: line 1: zf_ln: command not found~\u003cshell\u003e: line 1: zf_rm: command not found~\u003cshell\u003e: line 1: zf_chmod: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "rm=127~unlinked~chmod=127",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: zf_mkdir: command not found~\u003cshell\u003e: real/passwd: No such file or directory~\u003cshell\u003e: zf_ln: command not found~\u003cshell\u003e: zf_rm: command not found~\u003cshell\u003e: zf_chmod: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "rm=127~unlinked~chmod=127",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: zf_mkdir: not found~\u003cshell\u003e: 1: cannot create real/passwd: Directory nonexistent~\u003cshell\u003e: 1: zf_ln: not found~\u003cshell\u003e: 1: zf_rm: not found~\u003cshell\u003e: 1: zf_chmod: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "rm=127~unlinked~chmod=127",
+        "Stderr": "\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: zf_mkdir: not found~\u003cshell\u003e: real/passwd: cannot create [No such file or directory]~\u003cshell\u003e: zf_ln: not found~\u003cshell\u003e: zf_rm: not found~\u003cshell\u003e: zf_chmod: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "rm=0~unlinked~intact~chmod=0",
+        "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

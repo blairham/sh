@@ -103,7 +103,14 @@ var errGateRefused = errors.New("refused by the policy")
 // chain longer than this is left to the system call, which reports the loop
 // in the words the script expects.
 func fileMayModifyTarget(r *interp.Runner, ctx context.Context, path string) bool {
-	at := shellPath(r, path)
+	return fileMayModifyTargetPath(r, ctx, shellPath(r, path))
+}
+
+// fileMayModifyTargetPath is that with the path already resolved, for the
+// caller that holds one: a walk under `-s` has a place rather than an
+// operand, and resolving its name a second time is the thing that letter
+// exists to stop. See filesparanoid.go.
+func fileMayModifyTargetPath(r *interp.Runner, ctx context.Context, at string) bool {
 	for hop := 0; hop < fileLinkHops; hop++ {
 		if !r.AllowModify(ctx, at) {
 			return false
@@ -188,4 +195,34 @@ func fileReadDir(r *interp.Runner, ctx context.Context, path string) ([]os.DirEn
 // interp/fsgate.go states and every caller inherits.
 func fileNotThere(op, path string) error {
 	return &fs.PathError{Op: op, Path: path, Err: syscall.ENOENT}
+}
+
+// The gate asked about a place rather than about an operand.
+//
+// Each is the same question the path-shaped one asks and is answered from the
+// place's resolved name: what the policy decides is *where in the filesystem*
+// a script is reaching, which is a fact about the name and not about how the
+// walk got there. What the place changes is the call that follows — see
+// filesparanoid.go.
+
+func fileMayModifyAt(r *interp.Runner, ctx context.Context, p filePlace) bool {
+	return r.AllowModify(ctx, p.full)
+}
+
+func fileMayModifyTargetAt(r *interp.Runner, ctx context.Context, p filePlace) bool {
+	return fileMayModifyTargetPath(r, ctx, p.full)
+}
+
+func fileLstatAt(r *interp.Runner, ctx context.Context, p filePlace) (fs.FileInfo, error) {
+	if !r.AllowProbe(ctx, p.full) {
+		return nil, fileNotThere("lstat", p.full)
+	}
+	return p.lstat()
+}
+
+func fileReadDirAt(r *interp.Runner, ctx context.Context, p filePlace) ([]os.DirEntry, error) {
+	if !r.AllowList(ctx, p.full) {
+		return nil, fileNotThere("open", p.full)
+	}
+	return p.readDir()
 }

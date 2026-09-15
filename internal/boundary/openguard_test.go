@@ -223,9 +223,6 @@ var exempt = map[string]string{
 	// dialect/zsh. filesgate.go is the module's gate — every call in it is
 	// behind the consultation above it — and the rest are the mutating system
 	// calls, each one behind a fileMayModify about that exact path (#1819).
-	"dialect/zsh.fileMayModifyTarget": "the link chain chmod and chown follow, walked one hop " +
-		"at a time with AllowModify asked about every hop before the Lstat and Readlink that " +
-		"find the next one.",
 	"dialect/zsh.fileWriteWhole": "filesgate.go's gated whole-file write, which asks AllowModify " +
 		"about the name first. The removal in front of the write is what lets a " +
 		"second `zcompile` replace a product the first one made read-only.",
@@ -233,25 +230,43 @@ var exempt = map[string]string{
 	"dialect/zsh.fileStat":  "filesgate.go's gated Stat, behind the same AllowProbe.",
 	"dialect/zsh.fileReadDir": "filesgate.go's gated listing, behind AllowList — the action a " +
 		"recursive `zf_rm` would otherwise learn a denied tree's shape from.",
-	"dialect/zsh.fileChown": "chown of a path fileWalk has just asked AllowModify about, " +
-		"following the link chain unless -h said otherwise.",
-	"dialect/zsh.fileChmod": "chmod of a path fileWalk has just asked AllowModify about, on the " +
-		"same terms as fileChown.",
-	"dialect/zsh.fileWalk": "the recursive descent's own Lstat, on a path the allow callback " +
-		"above it has already passed. The descent is this package's rather than WalkDir's " +
-		"precisely so that every directory it lists goes through fileReadDir.",
 	"dialect/zsh.fileLn": "the unlink `-f` does before a link, and the link itself, both after " +
 		"fileMayModify on the target and fileMayRead on the source — a hard link puts the " +
 		"contents inside the new name's directory, so that is where the read is asked about.",
 	"dialect/zsh.fileMv":      "the rename, after fileMayModify on both the source and the target.",
 	"dialect/zsh.fileMakeDir": "the directory creation, after fileMayModify on it and on every parent `-p` would make.",
-	"dialect/zsh.fileRemoveTree": "the unlink at the end of a recursive removal, after " +
-		"fileMayModify on the path and fileReadDir on the directory it came from.",
-	"dialect/zsh.fileRmdir": "the directory removal, after fileMayModify on it.",
+	"dialect/zsh.fileRmdir":   "the directory removal, after fileMayModify on it.",
 	"dialect/zsh.fileWritable": "the access check `-i` and `zf_mv`'s default ask about, on a " +
 		"path fileConfirm has just passed through fileLstat's AllowProbe and the caller through " +
 		"fileMayModify. Two spellings, one per platform.",
 	"dialect/zsh.fileUnlink": "the unlink itself, after fileMayModify on the path. Two spellings, one per platform.",
+
+	// Five names left this list when `-s` landed (#1669) and none of them
+	// went away: fileWalk, fileChmod, fileChown, fileRemoveTree and
+	// fileMayModifyTarget reach the filesystem through a filePlace now
+	// rather than through the `os` package, so the calls the guard sees are
+	// the place's and the reasons moved with them.
+	//
+	// filesparanoid.go: the `-s` letter's walk, which is a *place* — a
+	// directory held open and a name inside it — rather than a path. The
+	// gate is asked about the place's resolved name before any of these
+	// runs, in exactly the spots the path-shaped route asks about a path;
+	// what the descriptor changes is the call afterwards, not who decides.
+	// See dialect/zsh/filesparanoid.go.
+	"dialect/zsh.openParanoidDir": "the paranoid descent itself: the operand's directory components " +
+		"opened one at a time so that none of them may be a symbolic link. It touches no name a " +
+		"script gave beyond the operand's own parents, and the operand is asked about by the " +
+		"caller through fileLstatAt.",
+	"dialect/zsh.lstat":   "filePlace.lstat, which fileLstatAt calls after AllowProbe — the gated route, one level down.",
+	"dialect/zsh.readDir": "filePlace.readDir, which fileReadDirAt calls after AllowList.",
+	"dialect/zsh.removeDir": "filePlace.removeDir, after fileMayModifyAt on the place. The unlink " +
+		"beside it is filePlace.unlinkOnly, which goes through os.Root and so does not reach here.",
+	"dialect/zsh.chmod":  "filePlace.chmod, after the walk's own allow callback on the place.",
+	"dialect/zsh.chown":  "filePlace.chown, on the same terms.",
+	"dialect/zsh.lchown": "filePlace.lchown, on the same terms — `-h`, which changes the link and not what it points at.",
+	"dialect/zsh.fileMayModifyTargetPath": "the link chain chmod and chown follow, walked one hop " +
+		"at a time with AllowModify asked at every one. It is fileMayModifyTarget with the path " +
+		"already resolved, for the caller holding a place rather than an operand.",
 	"dialect/zsh.statPath": "the stat behind `zstat`, which statmodule.go asks AllowProbe about " +
 		"before calling — a refusal is the kernel's own ENOENT, so the answer for a hidden path " +
 		"and a missing one is the same sentence (#1819).",

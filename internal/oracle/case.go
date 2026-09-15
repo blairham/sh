@@ -21326,6 +21326,21 @@ echo "st=$?"`,
 		Why:     "a directory is `is a directory` and 1 until `-r` asks for it, and then everything below goes before the directory does. The `-p` on the way in is the other half of the same module and is what makes the tree deeper than one level",
 	},
 	{
+		ID: "files/a-link-on-the-way-to-the-name", Category: "builtins",
+		Snippet: `cd "$(pwd -P)"; zmodload zsh/files; zf_mkdir real; printf x > real/passwd; zf_ln -s "$PWD/real" link; zf_rm -s link/passwd; echo "paranoid=$?"; [ -e real/passwd ] && echo kept; zf_rm link/passwd; echo "plain=$?"; [ -e real/passwd ] || echo gone`,
+		Why:     "the manual's own example of what `-s` is for, and the whole of what the letter is measured to change: `rm /tmp/foo/passwd` must not remove what `foo` points at. The link here is `link` and not `passwd` — the letter is about the components *on the way to* a name — and the pair is the discrimination, because the same line without it removes the file. The `cd \"$(pwd -P)\"` is not decoration: a temporary directory is under `/var` on this machine and `/var` is a link to `/private/var`, so every operand under one is reached through a link and `-s` refuses the lot, in the real shell as much as here. This engine refused the letter by name until #1669",
+	},
+	{
+		ID: "files/the-paranoid-letter-stops-at-the-last-component", Category: "builtins",
+		Snippet: `cd "$(pwd -P)"; zmodload zsh/files; zf_mkdir real; printf x > real/passwd; zf_ln -s "$PWD/real" link; zf_rm -s link; echo "rm=$?"; [ -L link ] || echo unlinked; [ -d real ] && echo intact; zf_chmod -s 700 real/passwd; echo "chmod=$?"`,
+		Why:     "where the letter stops, which is the row that keeps an implementation from over-reaching: the **last** component is treated exactly as it is without `-s`, so `rm` unlinks a link there and does not follow it, and `chmod` goes on following one. A walk that refused a link wherever it found one would answer `not a directory` for both halves and look like the letter working",
+	},
+	{
+		ID: "files/removing-a-link-is-never-asked-about", Category: "builtins",
+		Snippet: `cd "$(pwd -P)"; zmodload zsh/files; printf x > t; chmod 444 t; zf_ln -s t live; zf_ln -s no/such dangling; zf_rm live dangling < /dev/null; echo "links=$?"; [ -L live ] || [ -L dangling ] || echo both-gone`,
+		Why:     "a symbolic link is removed without the `overriding mode` query, whether it points at something unwritable or at nothing at all. The query is about the thing being removed and what is being removed here is the *link*, whose own mode the system does not honor — but `access` follows it, which is how this went wrong: a dangling link answered \"not writable\", every `zf_rm -r` over a tree holding one stopped to ask a question no script could answer, and then failed with `directory not empty` because the entry it asked about was still there. Found while building `-s` over a tree that happened to hold one (#1669)",
+	},
+	{
 		ID: "files/the-mode-a-directory-is-made-with", Category: "builtins",
 		Snippet: `zmodload zsh/files zsh/stat; umask 077; zf_mkdir -m 755 d; zstat -s +mode -- d; zf_mkdir -m zzz bad; echo "st=$?"`,
 		Why:     "`-m` is a statement about the result rather than an argument to the system call, so the umask does not take bits off it — set to 077 here, which would show as `drwx------` in a shell that passed the mode straight through. The second half is the only spelling of a mode either of these commands accepts",

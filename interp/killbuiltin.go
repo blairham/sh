@@ -471,6 +471,31 @@ func (r *Runner) sendSignal(pid int, name string, sig syscall.Signal) error {
 	s.mu.Lock()
 	body, trapped := s.traps[name]
 	s.mu.Unlock()
+	if !catchableSignal(sig) {
+		// `trap` takes KILL and STOP because every shell on the panel does,
+		// and the entry it leaves is a listing rather than a handler: nothing
+		// can catch either signal, so what follows is what would have
+		// followed with no trap at all. Measured — `trap 'echo T' KILL; kill
+		// -KILL $$` prints nothing and exits 137 in all six — which is
+		// exactly the treatment below for a signal nobody trapped, so the
+		// table is stepped over rather than answered a second way (#2919).
+		//
+		// This shell would otherwise be the one place the promise came true:
+		// a signal aimed at `$$` never reaches the kernel here — see
+		// selfSignaled — so a KILL handler would have fired, and a script
+		// that traps KILL defensively would have survived `kill -9` here and
+		// nowhere else.
+		//
+		// The ignore is stepped over too, and that half is about this being a
+		// library. `trap '' KILL` leaves an entry with an empty body, which
+		// is not a handler and so falls to the bottom of the switch — where a
+		// real kill(2) is made at our own pid, and an embedder's process dies
+		// on a line of script. An untrapped KILL has never taken that route:
+		// it goes through signalDeath, which stops the script and leaves the
+		// dying to Runner.DieBySignal. An ignore that cannot be honored must
+		// land in the same place.
+		trapped = false
+	}
 	switch {
 	case trapped && body != "":
 		// The shell is the only thing listening, so the kernel is not

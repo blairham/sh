@@ -3988,6 +3988,23 @@ echo "reached-after st=$?"`,
 		Why:     "an empty handler ignores the signal, which is different from having no trap at all",
 	},
 	{
+		ID: "trap/kill-and-stop-are-taken-quietly", Category: "traps and exit",
+		Snippet: `trap : KILL; echo "kill=$?"; trap : STOP; echo "stop=$?"; trap - KILL STOP; echo "reset=$?"`,
+		Why:     "the two signals nobody can catch are words `trap` takes all the same: bash 5.3, bash-as-`sh`, bash 3.2, ksh93, zsh, dash and BusyBox ash all report 0 for each of the three lines and print no diagnostic. This shell refused all three at 2 with a sentence of its own, on the ground that accepting a handler the kernel will never run is a promise it cannot keep — and the refusal was louder than the thing it warned about, because `trap cleanup HUP INT TERM KILL` is a common defensive spelling and the *reset* on the way out was refused too, on a line that installs nothing and so has nothing that could fail (#2919)",
+	},
+	{
+		ID: "trap/a-kill-trap-is-listed-back", Category: "traps and exit",
+		Script:  true,
+		Snippet: "trap 'echo x' KILL\ntrap 'echo x' STOP\ntrap\necho end\n",
+		Why:     "the entry is real even though the handler can never run, and the listing is where that shows: every column prints both rows back, with the split already measured for every other signal — bash spells them SIGKILL and SIGSTOP, zsh, dash and ash spell them KILL and STOP, and ksh93 prints its listing in the reverse order it prints every other one in. It is the case that separates `the word was accepted` from `the word was swallowed`: a shell that took the line and recorded nothing would pass the status row above and print nothing here",
+	},
+	{
+		ID: "trap/a-kill-handler-never-fires", Category: "traps and exit",
+		Script:  true,
+		Snippet: "trap 'echo caught' KILL\necho before\nkill -KILL $$\necho after\n",
+		Why:     "and the half that is not the same fact: the action is a listing and never a handler, so the shell dies of the signal exactly as though nothing had been trapped — `before`, nothing else, killed by signal 9 in every column. Worth a row of its own because this shell is the one place it could have gone the other way: a signal a script aims at `$$` never reaches the kernel here (see selfSignaled), so accepting KILL without stepping over the table would have made `trap … KILL` actually work, in the one shell where it must not",
+	},
+	{
 		ID: "trap/default-signal-terminates", Category: "traps and exit",
 		Script:  true,
 		Snippet: "kill -INT $$\necho after\n",

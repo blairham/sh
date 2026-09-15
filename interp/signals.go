@@ -21,9 +21,34 @@ import (
 // So arrival is recorded here and delivery happens in stmt, which is the only
 // place that knows a command has finished.
 //
-// Every signal but the two nobody can catch is offered. KILL and STOP are
-// refused rather than accepted and quietly ignored, which is a deliberate
-// divergence: all four shells take `trap … KILL` and then never fire it.
+// Every signal this shell knows is a word `trap` takes, KILL and STOP
+// included — and those two are taken and then never fired, which is a promise
+// about the *word* and not about the handler.
+//
+// That reads like a lie and is not one, because there is no honest
+// alternative. Nothing in any process can catch SIGKILL or SIGSTOP, so no
+// shell anywhere can run `trap cleanup KILL`; the only question left is
+// whether it says so out loud. Measured 2026-09-15 across bash 5.3, bash 3.2,
+// ksh93, zsh and dash: all five take the line and report 0, list the entry
+// back from a bare `trap`, take it away again at 0, and print nothing at all
+// when the signal arrives — `trap 'echo T' KILL; kill -KILL $$` prints
+// nothing and exits 137 in every one of them. Unanimous, and unanimous in our
+// four dialects too, so this is one answer in the shared builtin rather than a
+// semantics axis (#2919).
+//
+// Refusing it was this shell's own idea, and it cost more than it bought.
+// `trap cleanup HUP INT TERM KILL` is a common defensive spelling: it runs
+// everywhere and died here, loudly, and it died a second time on the way out,
+// because the reset was refused too — and a reset installs nothing, so there
+// was never anything there that could fail. An honest refusal earns a
+// divergence when a script asks for something this shell could do and will
+// not. This script asked for something no shell does, and every shell answers
+// by taking the word and staying quiet.
+//
+// The inertness is kept where it is real rather than at the door: see
+// catchableSignal, and the two places it is asked. The table entry exists so
+// that a listing can show it and `trap -` can take it away; no arrival is ever
+// routed through it, because no arrival is possible.
 //
 // The set is derived rather than listed, because a list is what it was — nine
 // entries that left `trap 'x' CONT` refused as uncatchable in a shell where
@@ -31,9 +56,6 @@ import (
 var trappableSignals = func() map[string]syscall.Signal {
 	m := make(map[string]syscall.Signal, len(knownSignals))
 	for _, k := range knownSignals {
-		if k.Sig == syscall.SIGKILL || k.Sig == syscall.SIGSTOP {
-			continue
-		}
 		m[k.Name] = k.Sig
 	}
 	return m
@@ -207,18 +229,37 @@ func (s *signalState) drainForwarded() {
 	}
 }
 
-// signalWord is what a `trap` condition turned out to name, which is three
-// answers rather than two: a word can name a signal this shell will catch, a
-// real signal nobody can catch, or nothing at all. The middle one is a
-// different complaint from the last, and only the last is the dialect's to
-// word.
+// signalWord is what a `trap` condition turned out to name: a signal this
+// shell knows, or nothing at all. Only the second is a complaint, and the
+// wording of it is the dialect's.
+//
+// There were three answers until #2919, with a middle one for a real signal
+// nobody can catch. The distinction is real and it belongs further in: KILL
+// and STOP are words `trap` takes like any other, and what is different about
+// them is what happens after the table is written — see catchableSignal.
 type signalWord int
 
 const (
 	signalTrappable signalWord = iota
-	signalUncatchable
 	signalUnknown
 )
+
+// catchableSignal reports whether a handler for a signal can ever run.
+//
+// Two cannot, on every system this builds for: SIGKILL and SIGSTOP are acted
+// on by the kernel and never offered to the process. `trap` takes their names
+// all the same — see trappableSignals — so this is the line between the word
+// being accepted and the handler being real, and it is asked at the only two
+// places where the difference is observable: the process disposition
+// trapSignal would otherwise change, and the arrival sendSignal would
+// otherwise manufacture for a signal the script aimed at this shell.
+//
+// One function rather than the same two names written at both call sites,
+// because a second copy of a decision is how one copy gets a fix and the
+// other keeps the bug.
+func catchableSignal(sig syscall.Signal) bool {
+	return sig != syscall.SIGKILL && sig != syscall.SIGSTOP
+}
 
 // canonicalSignal reads a condition the way `trap` accepts it: a name with or
 // without the SIG prefix, in any case, or a number.
@@ -241,9 +282,6 @@ func (r *Runner) canonicalSignal(s string) (string, syscall.Signal, signalWord) 
 	}
 	if sig, ok := trappableSignals[up]; ok {
 		return up, sig, signalTrappable
-	}
-	if knownSignal(up) {
-		return up, 0, signalUncatchable
 	}
 	return up, 0, signalUnknown
 }
@@ -274,28 +312,44 @@ func (r *Runner) trapSignal(name string, sig syscall.Signal, body *string) {
 	s := r.sigs()
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	// Every one of the three branches below changes a disposition that
-	// belongs to the *process*, so the shell borrows it rather than owning
-	// it. Noted before the change, and only the first time, so what goes
-	// back is the state this shell was handed and not the state some earlier
-	// line of the same script left. See restoreDispositions.
-	s.borrow(sig)
-	switch {
-	case body == nil:
+	// The table first, because every condition `trap` takes gets an entry:
+	// the entry is what a listing prints and what `trap -` takes away, and
+	// it is the whole of what KILL and STOP ever get.
+	if body == nil {
 		delete(s.traps, name)
 		if s.defaultRestored == nil {
 			s.defaultRestored = map[string]bool{}
 		}
 		s.defaultRestored[name] = true
+	} else {
+		s.traps[name] = *body
+		delete(s.defaultRestored, name)
+	}
+	if !catchableSignal(sig) {
+		// Nothing below this line would do anything a process can observe,
+		// and two of the three calls would quietly claim otherwise:
+		// signal.Ignore and signal.Notify are sigaction, and the kernel
+		// refuses both for these two without telling Go. Stopping here says
+		// the same thing on purpose rather than by accident — and it keeps
+		// the borrow ledger honest, since a disposition never changed is not
+		// one restoreDispositions has to put back (#2919).
+		return
+	}
+	// Each of the three calls below changes a disposition that belongs to the
+	// *process*, so the shell borrows it rather than owning it. Noted before
+	// the change, and only the first time, so what goes back is the state
+	// this shell was handed and not the state some earlier line of the same
+	// script left. Taken after the table write above, which the ledger has
+	// nothing to say about: what it records is what the *process* was doing.
+	// See restoreDispositions.
+	s.borrow(sig)
+	switch {
+	case body == nil:
 		signal.Reset(sig)
 		s.dropOwnIgnore(sig)
 	case *body == "":
-		s.traps[name] = ""
-		delete(s.defaultRestored, name)
 		signal.Ignore(sig)
 	default:
-		s.traps[name] = *body
-		delete(s.defaultRestored, name)
 		signal.Notify(s.ch, sig)
 	}
 }

@@ -7871,6 +7871,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `trap/lineno-inside-an-action` | `one~in trap LINENO=1~two` | `one~in trap LINENO=1~two` | `one~in trap LINENO=1~two` | `one~in trap LINENO=3~two` | `one~in trap LINENO=3~two` | `one~in trap LINENO=3~two` | `one~in trap LINENO=3~two` |
 | `trap/listing-is-ordered-by-signal-number` | `trap -- 'echo x' EXIT~trap -- 'echo x' HUP~trap -- 'echo x' INT~trap -- 'echo x' QUIT~trap -- 'echo x' ABRT~trap -- 'echo x' TERM~x` | `trap -- 'echo x' EXIT~trap -- 'echo x' SIGHUP~trap -- 'echo x' SIGINT~trap -- 'echo x' SIGQUIT~trap -- 'echo x' SIGABRT~trap -- 'echo x' SIGTERM~x` | `trap -- 'echo x' EXIT~trap -- 'echo x' HUP~trap -- 'echo x' INT~trap -- 'echo x' QUIT~trap -- 'echo x' ABRT~trap -- 'echo x' TERM~x` | `trap -- 'echo x' EXIT~trap -- 'echo x' SIGHUP~trap -- 'echo x' SIGINT~trap -- 'echo x' SIGQUIT~trap -- 'echo x' SIGABRT~trap -- 'echo x' SIGTERM~x` | `trap -- 'echo x' TERM~trap -- 'echo x' IOT~trap -- 'echo x' QUIT~trap -- 'echo x' INT~trap -- 'echo x' HUP~trap -- 'echo x' EXIT~x` | `trap -- 'echo x' EXIT~trap -- 'echo x' HUP~trap -- 'echo x' INT~trap -- 'echo x' QUIT~trap -- 'echo x' ABRT~trap -- 'echo x' TERM~x` | `trap -- 'echo x' EXIT~trap -- 'echo x' HUP~trap -- 'echo x' INT~trap -- 'echo x' QUIT~trap -- 'echo x' ABRT~trap -- 'echo x' TERM~x` |
 | `trap/empty-handler-ignores` | `after` | `after` | `after` | `after` | `after` | `after` | `after` |
+| `trap/kill-and-stop-are-taken-quietly` | `kill=0~stop=0~reset=0` | `kill=0~stop=0~reset=0` | `kill=0~stop=0~reset=0` | `kill=0~stop=0~reset=0` | `kill=0~stop=0~reset=0` | `kill=0~stop=0~reset=0` | `kill=0~stop=0~reset=0` |
+| `trap/a-kill-trap-is-listed-back` | `trap -- 'echo x' KILL~trap -- 'echo x' STOP~end` | `trap -- 'echo x' SIGKILL~trap -- 'echo x' SIGSTOP~end` | `trap -- 'echo x' KILL~trap -- 'echo x' STOP~end` | `trap -- 'echo x' SIGKILL~trap -- 'echo x' SIGSTOP~end` | `trap -- 'echo x' STOP~trap -- 'echo x' KILL~end` | `trap -- 'echo x' KILL~trap -- 'echo x' STOP~end` | `trap -- 'echo x' KILL~trap -- 'echo x' STOP~end` |
+| `trap/a-kill-handler-never-fires` | `before` *(killed by signal 9 (killed))* | `before` *(killed by signal 9 (killed))* | `before` *(killed by signal 9 (killed))* | `before` *(killed by signal 9 (killed))* | `before` *(killed by signal 9 (killed))* | `before` *(killed by signal 9 (killed))* | `before` *(killed by signal 9 (killed))* |
 | `trap/default-signal-terminates` | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* |
 | `trap/reset-restores-the-default` | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* |
 | `trap/a-reset-takes-back-an-ignore-a-child-would-inherit` | `st=143` | `st=143` | `st=143` | `st=143` | `st=271` | `st=143` | `st=143` |
@@ -8084,6 +8087,24 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   trap '' INT
   kill -INT $$
+  echo after
+  ```
+- `trap/kill-and-stop-are-taken-quietly` — the two signals nobody can catch are words `trap` takes all the same: bash 5.3, bash-as-`sh`, bash 3.2, ksh93, zsh, dash and BusyBox ash all report 0 for each of the three lines and print no diagnostic. This shell refused all three at 2 with a sentence of its own, on the ground that accepting a handler the kernel will never run is a promise it cannot keep — and the refusal was louder than the thing it warned about, because `trap cleanup HUP INT TERM KILL` is a common defensive spelling and the *reset* on the way out was refused too, on a line that installs nothing and so has nothing that could fail (#2919)
+  ```sh
+  trap : KILL; echo "kill=$?"; trap : STOP; echo "stop=$?"; trap - KILL STOP; echo "reset=$?"
+  ```
+- `trap/a-kill-trap-is-listed-back` — the entry is real even though the handler can never run, and the listing is where that shows: every column prints both rows back, with the split already measured for every other signal — bash spells them SIGKILL and SIGSTOP, zsh, dash and ash spell them KILL and STOP, and ksh93 prints its listing in the reverse order it prints every other one in. It is the case that separates `the word was accepted` from `the word was swallowed`: a shell that took the line and recorded nothing would pass the status row above and print nothing here
+  ```sh
+  trap 'echo x' KILL
+  trap 'echo x' STOP
+  trap
+  echo end
+  ```
+- `trap/a-kill-handler-never-fires` — and the half that is not the same fact: the action is a listing and never a handler, so the shell dies of the signal exactly as though nothing had been trapped — `before`, nothing else, killed by signal 9 in every column. Worth a row of its own because this shell is the one place it could have gone the other way: a signal a script aims at `$$` never reaches the kernel here (see selfSignaled), so accepting KILL without stepping over the table would have made `trap … KILL` actually work, in the one shell where it must not
+  ```sh
+  trap 'echo caught' KILL
+  echo before
+  kill -KILL $$
   echo after
   ```
 - `trap/default-signal-terminates` — untrapped, INT kills the shell and the status is 128 plus the number

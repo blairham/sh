@@ -198,7 +198,12 @@ trap 'printf "never\n"' KILL 2> /dev/null
 printf 'trap KILL -> %s\n' "$?"
 trap 'printf "never\n"' STOP 2> /dev/null
 printf 'trap STOP -> %s\n' "$?"
+# And the reset, which is the half most easily got wrong: it installs nothing,
+# so it is a line that cannot fail for any reason — and this shell refused it
+# all the same, so a script putting KILL back got a diagnostic on a line that
+# does nothing at all. Its status is asked rather than assumed (#2919).
 trap - KILL STOP
+printf 'reset KILL STOP -> %s\n' "$?"
 
 # ---- delivery while something else is running ----
 

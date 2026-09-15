@@ -5237,8 +5237,11 @@ func biExit(r *Runner, _ context.Context, args []string) int {
 // biTrap sets what runs when a condition arises: EXIT, a signal, or one of
 // the pseudo-conditions a dialect has (ERR, DEBUG, RETURN — pseudotrap.go).
 //
-// A signal nobody can catch is refused rather than accepted and never fired,
-// because the silent wrong answer is the one this package exists to avoid.
+// Every condition the shell knows is taken, including the two signals nobody
+// can catch: `trap … KILL` is accepted, listed and reset here exactly as any
+// other signal is, and the handler it records can never run. That is not a
+// silent wrong answer — it is the unanimous one, measured on all five
+// references, and trappableSignals carries the reasoning at length (#2919).
 func biTrap(r *Runner, _ context.Context, args []string) int {
 	args, done := r.trapOptions(args)
 	if done != trapKeepGoing {
@@ -5286,13 +5289,6 @@ func biTrap(r *Runner, _ context.Context, args []string) int {
 		}
 		name, sig, kind := r.canonicalSignal(c)
 		switch kind {
-		case signalUncatchable:
-			// A real signal that nobody can catch. Every shell in the panel
-			// takes `trap … KILL` and then never fires it; this refuses
-			// instead, which is a deliberate divergence and keeps its own
-			// wording, because it is not the dialect's complaint to word.
-			r.diagf("trap: %s: not a signal this shell can catch\n", c)
-			return 2
 		case signalUnknown:
 			msg := Wording(r.diag().TrapBadSignal, "trap: %[1]s: bad trap", c)
 			if r.diag().TrapBadSignalUnprefixed {

@@ -84,10 +84,11 @@ func (r *Runner) trapFunctionCondition(fname string) (cond string, sig syscall.S
 	if r.unspecified && !asked {
 		return "", 0, false
 	}
-	// A signal nobody can catch is not a condition here either. `trap`
-	// refuses one outright rather than accepting it and never firing it, and
-	// a second route that accepted `TRAPKILL` would be that refusal with a
-	// hole in it.
+	// The two signals nobody can catch are conditions here too, because they
+	// are conditions in `trap`: measured on zsh 5.9.2, `TRAPKILL(){ … }` is
+	// listed by a bare `trap` exactly the way `TRAPUSR1` is, and refusing the
+	// name here while `trap … KILL` took it would be the same answer given
+	// two ways (#2919).
 	name, signum, kind := r.canonicalSignal(suffix)
 	if kind != signalTrappable {
 		return "", 0, false

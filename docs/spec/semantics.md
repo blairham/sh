@@ -2441,10 +2441,32 @@ Measuring it also turned up something that was not an axis at all. The
 trappable set was nine names, so `trap 'x' CONT` was refused as a signal
 this shell cannot catch — in a shell where all four panel members catch
 it, along with CHLD, WINCH, TSTP, URG, IO, SYS, TRAP and XCPU. The set is
-now derived: everything except KILL and STOP. Refusing those two remains
-a deliberate divergence, since all four accept `trap … KILL` and then
-never fire it, and it keeps its own wording rather than borrowing the
-dialect's complaint about a word that names nothing.
+now derived, and it is every signal the host knows.
+
+**KILL and STOP are taken too, and never fire.** They were the last two
+holdouts, refused on the ground that accepting a handler nobody can run
+would be a promise this shell could not keep. Measured across bash 5.3,
+bash 3.2, ksh93, zsh and dash, every one of them:
+
+    trap : KILL         status 0, and a bare `trap` lists it back
+    trap : STOP         status 0
+    trap - KILL STOP    status 0
+    trap 'echo T' KILL; kill -KILL $$   → nothing printed, status 137
+
+So taking the word is unanimous, and so is never firing the action —
+which are two facts and not one. The reason to follow is that the refusal
+was louder than the thing it warned about: `trap cleanup HUP INT TERM
+KILL` is a common defensive spelling, and it ran everywhere and died
+here, twice, because the reset on the way out was refused as well. A
+reset installs nothing, so there was never anything there that could
+fail.
+
+The line between the two facts is drawn in one place — `catchableSignal`
+— and asked where the difference is observable: the process disposition
+`trap` would otherwise change, and the arrival `kill -KILL $$` would
+otherwise deliver to the shell's own traps. This shell would have been
+the one place the promise came true, since a signal aimed at `$$` never
+reaches the kernel here.
 
 ## A measured non-conflict, recorded so it is not over-generalized
 

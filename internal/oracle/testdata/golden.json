@@ -31242,6 +31242,57 @@
         "TimedOut": false
       }
     },
+    "axis/printf-integer-operand-goes-through-the-floating-type": {
+      "ash": {
+        "Stdout": "[123456789012345678][1000000000000000001][9007199254740993]~[9223372036854775807][-9223372036854775807][42]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[123456789012345678][1000000000000000001][9007199254740993]~[9223372036854775807][-9223372036854775807][42]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[123456789012345678][1000000000000000001][9007199254740993]~[9223372036854775807][-9223372036854775807][42]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[123456789012345678][1000000000000000001][9007199254740993]~[9223372036854775807][-9223372036854775807][42]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[123456789012345678][1000000000000000001][9007199254740993]~[9223372036854775807][-9223372036854775807][42]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[123456789012345680][1000000000000000000][9007199254740992]~[9223372036854775807][-9223372036854775808][42]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[123456789012345678][1000000000000000001][9007199254740993]~[9223372036854775807][-9223372036854775807][42]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "axis/printf-non-finite-is-converted": {
       "ash": {
         "Stdout": "[INF][NAN][-INF]~[       inf][inf       ][       inf]~[+inf][ inf][+nan]~[                 nan][ inf]~st=0",
@@ -160745,6 +160796,57 @@
         "TimedOut": false
       }
     },
+    "printf/a-trailing-blank-is-not-part-of-the-number": {
+      "ash": {
+        "Stdout": "[7]|0~[0]|1~[0]|1~[7]|0~[0]|1~[0]|1~[0]|1~[0]|1",
+        "Stderr": "\u003cshell\u003e: invalid number '7 '~\u003cshell\u003e: invalid number '7  '~\u003cshell\u003e: invalid number '7\t'~\u003cshell\u003e: invalid number ''~\u003cshell\u003e: invalid number ''~\u003cshell\u003e: invalid number '1.5 '",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[7]|0~[7]|1~[7]|1~[7]|0~[7]|1~[0]|1~[0]|1~[1]|1",
+        "Stderr": "\u003cshell\u003e: line 1: printf: 7 : invalid number~\u003cshell\u003e: line 1: printf:   7  : invalid number~\u003cshell\u003e: line 1: printf: 7\t: invalid number~\u003cshell\u003e: line 1: printf:  : invalid number~\u003cshell\u003e: line 1: printf: : invalid number~\u003cshell\u003e: line 1: printf: 1.5 : invalid number",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[7]|0~[7]|1~[7]|1~[7]|0~[7]|1~[0]|1~[0]|1~[1]|1",
+        "Stderr": "\u003cshell\u003e: line 1: printf: 7 : invalid number~\u003cshell\u003e: line 1: printf:   7  : invalid number~\u003cshell\u003e: line 1: printf: 7\t: invalid number~\u003cshell\u003e: line 1: printf:  : invalid number~\u003cshell\u003e: line 1: printf: : invalid number~\u003cshell\u003e: line 1: printf: 1.5 : invalid number",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[7]|0~[0]|1~[0]|1~[7]|0~[0]|1~[0]|1~[0]|0~[0]|1",
+        "Stderr": "\u003cshell\u003e: line 0: printf: 7 : invalid number~\u003cshell\u003e: line 0: printf:   7  : invalid number~\u003cshell\u003e: line 0: printf: 7\t: invalid number~\u003cshell\u003e: line 0: printf:  : invalid number~\u003cshell\u003e: line 0: printf: 1.5 : invalid number",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[7]|0~[7]|1~[7]|1~[7]|0~[7]|1~[0]|1~[0]|0~[1]|1",
+        "Stderr": "\u003cshell\u003e: 1: printf: 7 : not completely converted~\u003cshell\u003e: 1: printf:   7  : not completely converted~\u003cshell\u003e: 1: printf: 7\t: not completely converted~\u003cshell\u003e: 1: printf:  : expected numeric value~\u003cshell\u003e: 1: printf: 1.5 : not completely converted",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[7]|0~[7]|0~[7]|0~[7]|0~[7]|0~[0]|0~[0]|0~[1]|0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[7]|0~[7]|0~[7]|0~[7]|0~[7]|0~[0]|0~[0]|0~[1]|0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "printf/a-trailing-percent-after-a-doubled-one": {
       "ash": {
         "Stdout": "a%b st=1",
@@ -160893,6 +160995,57 @@
       "zsh": {
         "Stdout": " 61 ",
         "Stderr": "\u003cshell\u003e:1: character not in range",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "printf/an-arithmetic-complaint-belongs-to-the-evaluator": {
+      "ash": {
+        "Stdout": "[0]~st=1~[0]~st=1~-Zst=0",
+        "Stderr": "\u003cshell\u003e: invalid number '12x'~\u003cshell\u003e: invalid number '1/0'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[12]~st=1~[1]~st=1~st=2",
+        "Stderr": "\u003cshell\u003e: line 1: printf: 12x: invalid number~\u003cshell\u003e: line 1: printf: 1/0: invalid number~\u003cshell\u003e: line 1: printf: -Z: invalid option~printf: usage: printf [-v var] format [arguments]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[12]~st=1~[1]~st=1~st=2",
+        "Stderr": "\u003cshell\u003e: line 1: printf: 12x: invalid number~\u003cshell\u003e: line 1: printf: 1/0: invalid number~\u003cshell\u003e: line 1: printf: -Z: invalid option~printf: usage: printf [-v var] format [arguments]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[0]~st=1~[0]~st=1~st=2",
+        "Stderr": "\u003cshell\u003e: line 0: printf: 12x: invalid number~\u003cshell\u003e: line 0: printf: 1/0: invalid number~\u003cshell\u003e: line 0: printf: -Z: invalid option~printf: usage: printf [-v var] format [arguments]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[12]~st=1~[1]~st=1~st=2",
+        "Stderr": "\u003cshell\u003e: 1: printf: 12x: not completely converted~\u003cshell\u003e: 1: printf: 1/0: not completely converted~\u003cshell\u003e: 1: printf: Illegal option -Z",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[12]~st=1~[0]~st=0~st=2",
+        "Stderr": "\u003cshell\u003e: printf: 12x: arithmetic syntax error~\u003cshell\u003e: printf: warning: invalid argument of type d~\u003cshell\u003e: printf: 1/0: divide by zero~\u003cshell\u003e: printf: -Z: unknown option~Usage: printf [ options ] format [string ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[0]~st=1~[0]~st=1~-Zst=0",
+        "Stderr": "\u003cshell\u003e:1: bad math expression: operator expected at `x'~\u003cshell\u003e:1: division by zero",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

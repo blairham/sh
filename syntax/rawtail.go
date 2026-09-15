@@ -27,6 +27,15 @@ func (p *Parser) setRawTails(spans []Span, stop Pos) {
 	if p.dialect.QuoteProtectsTheClosingBraceInPosixMode == BraceQuoteUnmovedInPosixMode {
 		return
 	}
+	// A tail being divided again has no tail of its own to keep. Its spans
+	// carry offsets into that tail rather than into the program, so `stop`
+	// names a position in some other string — and sourceBetween's guards
+	// catch most of those pairs and not all of them, which is a slice of the
+	// wrong text rather than nothing. The re-read word is thrown away when
+	// the expansion ends either way, so there is nothing here to record.
+	if p.lex.inWordTail {
+		return
+	}
 	for i := range spans {
 		s := &spans[i]
 		// Inside double quotes only: written without them the quote protects

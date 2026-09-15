@@ -12813,6 +12813,52 @@ is inside a loop leaves that subshell in four of the six, which is why
 the count this is asked against is the dynamic one a cloned Runner
 carries with it.
 
+**`LoopControlPlaceIsJudgedBeforeTheCount`** — bash yes · dash no · ksh93
+no · zsh no · ash no
+
+Decides which of a misplaced `break`'s two complaints it makes, when both
+are available: that there is no loop to leave, or that the count is not a
+number. Measured 2026-09-15 in a script file:
+
+    echo t; break abc; echo "after=$?"
+
+    bash 5.3, bash 3.2  `break: only meaningful in a `for', `while', or
+                        `until' loop`, then `after=0`
+    bash as `sh`        nothing at all, then `after=0`
+    dash                `break: Illegal number: abc`, script ends at 2
+    ksh93               `break: abc: label not implemented`, ends at 1
+    zsh                 `argument is not positive: 0`, ends at 1
+    BusyBox ash         `Illegal number: abc`, ends at 2
+
+Every column has both complaints and each writes exactly one of them, so
+this is an **order** and not a wording: the bash family looks at the place
+first and never reads the word, the other four read the word first and
+never look at the place.
+
+It decides whether the script survives rather than only what it says. The
+count's complaint ends the script in every column that writes it — see
+`Diagnostics.LoopControlCount` — and the place's ends it in zsh alone, so
+a shell reading the count first stops where bash carries on.
+
+The question is about the loops the word can **reach**, not the ones that
+exist:
+
+    f(){ break abc; }; for i in 1 2; do f; echo body; done
+
+bash 5.3 makes the call a boundary, so there is no loop to leave and it
+writes the place's complaint twice and ends at 0 with `body` twice. bash
+3.2 answers `yes` here too and still writes the count's complaint, because
+a call is not a boundary there — the loop is reachable, so the question is
+never put. See `FunctionCallIsALoopControlBoundary`.
+
+Asked only where the two answers differ: there has to be no loop the word
+can reach *and* a count the reader has refused, so `break 2` inside a loop
+and a bare `break` anywhere ask nothing.
+
+`return` is the counter-case and does not share the rule: `return abc`
+outside a function writes the operand's complaint *and* the place's, in
+that order.
+
 **`ReturnOutsideAFunctionIsRefused`** — bash yes · dash no · ksh93 no · zsh no
 
 Reports a `return` that has nothing to return from and carries on,

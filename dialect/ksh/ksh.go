@@ -1907,6 +1907,9 @@ func Semantics() interp.Semantics {
 	// 93u+ 2012-08-01, `echo t; break; echo after` prints both and ends at
 	// 0. No wording goes with it, which is dash's answer too.
 	s.LoopControlOutsideALoopIsFatal = interp.No
+	// The count is read first — `break abc` outside a loop is `break: abc:
+	// label not implemented` — and the place draws no sentence here.
+	s.LoopControlPlaceIsJudgedBeforeTheCount = interp.No
 	// The same pairing as dash: a call stops a `break` and the parentheses
 	// do not.
 	s.FunctionCallIsALoopControlBoundary = interp.Yes

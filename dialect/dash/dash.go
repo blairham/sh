@@ -857,6 +857,10 @@ func Semantics() interp.Semantics {
 	// `echo t; break; echo after` prints both and ends at 0, with no
 	// wording to go with it.
 	s.LoopControlOutsideALoopIsFatal = interp.No
+	// The count is read first: `break abc` with no loop around it is
+	// `break: Illegal number: abc` and the script ends, where this shell
+	// has nothing at all to say about the place.
+	s.LoopControlPlaceIsJudgedBeforeTheCount = interp.No
 	// A call is a boundary and a subshell is not, which is the pairing that
 	// makes these two fields rather than one: `f(){ break; }` called from a
 	// loop leaves the loop running, and `( break )` inside one leaves only

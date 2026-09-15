@@ -145,13 +145,22 @@ func (r *Runner) numericOperandMarker(args []string) ([]string, bool) {
 // loopControlCount reads the count `break` and `continue` share, and reports
 // the one every shell in the panel refuses and ours took in silence.
 //
-// The operand is read **before** the place is judged, which is measured and
-// is the reverse of what the same shells do for `return`: `break abc` with no
-// loop around it is `only meaningful in a for', while', or until' loop` in
-// bash and never mentions `abc`, where `return abc` outside a function writes
-// the operand's complaint first and the place's after it (#2762). So the two
-// builtins order their two questions differently, and this one asks the place
-// second — which is what loopControlReach does, after this.
+// **Which of the two complaints comes out is an order and not a wording.**
+// The count and the place are both available for `break abc` with no loop to
+// leave, every column writes exactly one of them, and which one divides the
+// panel — the bash family looks at the place and never reads the word, the
+// other four read the word and never look at the place. That is
+// Semantics.LoopControlPlaceIsJudgedBeforeTheCount, asked below and only
+// where the two answers differ; where the place is judged first the count is
+// never read here at all and loopControlReach has the only complaint.
+//
+// The comment this replaced asserted the opposite order for every dialect and
+// cited bash's place complaint as the evidence for it, so the code refused
+// `break abc` where bash names the loops and carries on (#2299).
+//
+// `return` is the counter-case and is not this question: `return abc` outside
+// a function writes the operand's complaint *and* the place's, in that order
+// (#2762), so the two builtins do not share a rule here.
 //
 // See Diagnostics.LoopControlCount for the panel's sentences and for why the
 // script's ending is not an axis: all seven end there.
@@ -171,6 +180,27 @@ func (r *Runner) loopControlCount(name string, args []string) (int, int, bool) {
 		return n, 0, false
 	}
 	d := r.diag()
+	// Both complaints are available from here, and the dialect decides which
+	// one it makes. Asked only at the disagreement: there has to be no loop
+	// the word could reach — loopControlFloor is what makes a boundary one of
+	// the ways there is none — and a count this reader has already refused,
+	// so `break 2` inside a loop and a bare `break` anywhere ask nothing.
+	if r.loopDepth-r.loopControlFloor(1) <= 0 {
+		switch {
+		case r.unspecified:
+			// A boundary axis went unanswered inside the floor, and it is
+			// the first question asked here.
+			return 0, r.status, true
+		case r.ask(r.sem().LoopControlPlaceIsJudgedBeforeTheCount,
+			"a misplaced `break` being judged before its count is read"):
+			// The place is judged first, so the word is never read and never
+			// quoted: a count of one carries through to loopControlReach,
+			// which finds no loop and writes the place's complaint.
+			return 1, 0, false
+		case r.unspecified:
+			return 0, r.status, true
+		}
+	}
 	// The number this reading produced, for the one dialect whose sentence
 	// quotes that rather than the word: a word that is no number at all
 	// reads as nought there, which is what `break abc` says.

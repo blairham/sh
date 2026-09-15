@@ -118313,6 +118313,159 @@
         "TimedOut": false
       }
     },
+    "loop-control/a-refused-count-across-a-call-boundary": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: break: line 0: Illegal number: abc",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "body~body~after=0",
+        "Stderr": "\u003cshell\u003e: line 1: break: only meaningful in a `for', `while', or `until' loop~\u003cshell\u003e: line 1: break: only meaningful in a `for', `while', or `until' loop",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "body~body~after=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 0: break: abc: numeric argument required",
+        "Status": 128,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: break: Illegal number: abc",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: break: abc: label not implemented",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "f:break: argument is not positive: 0",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "loop-control/a-refused-count-with-no-loop-around-it": {
+      "ash": {
+        "Stdout": "t",
+        "Stderr": "\u003cshell\u003e: break: line 0: Illegal number: abc",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "t~after=0",
+        "Stderr": "\u003cshell\u003e: line 1: break: only meaningful in a `for', `while', or `until' loop",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "t~after=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "t~after=0",
+        "Stderr": "\u003cshell\u003e: line 0: break: only meaningful in a `for', `while', or `until' loop",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "t",
+        "Stderr": "\u003cshell\u003e: 1: break: Illegal number: abc",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "t",
+        "Stderr": "\u003cshell\u003e: break: abc: label not implemented",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "t",
+        "Stderr": "\u003cshell\u003e:break:1: argument is not positive: 0",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "loop-control/a-refused-count-with-no-loop-in-the-other-builtin": {
+      "ash": {
+        "Stdout": "t",
+        "Stderr": "\u003cshell\u003e: continue: line 0: Illegal number: abc",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "t~after=0",
+        "Stderr": "\u003cshell\u003e: line 1: continue: only meaningful in a `for', `while', or `until' loop",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "t~after=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "t~after=0",
+        "Stderr": "\u003cshell\u003e: line 0: continue: only meaningful in a `for', `while', or `until' loop",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "t",
+        "Stderr": "\u003cshell\u003e: 1: continue: Illegal number: abc",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "t",
+        "Stderr": "\u003cshell\u003e: continue: abc: label not implemented",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "t",
+        "Stderr": "\u003cshell\u003e:continue:1: argument is not positive: 0",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "loop-control/break-inside-a-function-called-from-a-loop": {
       "ash": {
         "Stdout": "after",

@@ -158,8 +158,22 @@ func (r *Runner) tildeSplit(v string) (dir, tail string, ok bool) {
 		}
 		return home, tail, true
 	}
-	// `~user` needs a user database this package does not carry, so it is
-	// left alone rather than guessed at.
+	// What is left is a name, and two different things wear one. A **named
+	// directory** is this shell's own table — `hash -d name=dir` writes it —
+	// and is asked first, measured: on zsh 5.9.2, 2026-09-14,
+	// `hash -d root=/tmp; print -r -- ~root` is `/tmp` where the same line
+	// without the assignment is `/var/root`.
+	if dir, ok := r.namedDir(name); ok {
+		return dir, tail, true
+	}
+	// And `~user` is the user database's answer, which this package does not
+	// read for itself: Runner.UserHomeDir carries it, and with no hook the
+	// word is left alone rather than guessed at.
+	if r.UserHomeDir != nil {
+		if dir, ok := r.UserHomeDir(name); ok {
+			return dir, tail, true
+		}
+	}
 	return "", "", false
 }
 

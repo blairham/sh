@@ -150,6 +150,23 @@ func (r *Runner) GlobalAliasTable() map[string]string {
 	return out
 }
 
+// NamedDirectoryTable is every named directory — the table `~name` reads and
+// `hash -d` writes — as a copy, on the same terms as the alias tables above.
+//
+// A copy rather than the map, so a view built from it cannot be a second
+// writer of the shell's own state.
+func (r *Runner) NamedDirectoryTable() map[string]string {
+	out := make(map[string]string, len(r.namedDirs))
+	for k, v := range r.namedDirs {
+		out[k] = v
+	}
+	return out
+}
+
+// SetNamedDirectory writes one entry, which is what `hash -d name=dir` does
+// and what an assignment to the parameter that views this table does.
+func (r *Runner) SetNamedDirectory(name, dir string) { r.putNamedDir(name, dir) }
+
 // SuffixAliasTable is the second namespace, keyed on the extension.
 func (r *Runner) SuffixAliasTable() map[string]string {
 	out := make(map[string]string, len(r.suffixAliases))

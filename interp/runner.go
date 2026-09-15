@@ -583,6 +583,28 @@ type Runner struct {
 	// what a script parses, and it is byte-identical with or without this.
 	NotFoundHint func(name string) string
 
+	// UserHomeDir answers `~user`: the home directory of the user so named,
+	// and false where the system has no such user.
+	//
+	// A hook rather than an `os/user` call down here, for the reason lookPath
+	// reads this Runner's PATH rather than the process's — the core may not
+	// ask the *process* a question the Runner should hold. A Runner with no
+	// hook leaves `~user` exactly as it was written, which is the right
+	// default for a library embedded in a program that has no business
+	// reading a password file, and which is what this package did
+	// unconditionally before (#2191).
+	//
+	// It answers for `~user` alone. A **named directory** — `hash -d
+	// name=dir` and then `~name` — is a table this shell owns and is asked
+	// first: measured on zsh 5.9.2, `hash -d root=/tmp; print -r -- ~root`
+	// is `/tmp` where the same line without the assignment is `/var/root`.
+	//
+	// The binaries wire it to `os/user` in driver, where process-wide
+	// questions belong. A test must not: `internal/testenv` exists because
+	// a test that reads the real user database passes on a laptop and fails
+	// on a runner with no such user.
+	UserHomeDir func(name string) (string, bool)
+
 	// Terminal says this shell has a terminal, which is the fact job control
 	// turns on: the kernel hands SIGINT and SIGTSTP to whatever process group
 	// owns one, so a shell with none has nothing to hand a job and nothing to
@@ -876,6 +898,12 @@ type Runner struct {
 	// subshells explain and which no field here claims yet.
 	cmdHash      map[string]hashedCommand
 	cmdHashOrder []string
+
+	// namedDirs is the table behind `~name` — a directory this shell was
+	// *told* about, written by `hash -d` in the one dialect that has the
+	// construct and read by tildeSplit. See interp/nameddir.go, including
+	// why it is not the user database and why it wins over one.
+	namedDirs map[string]string
 
 	// checksHashedCommand is `shopt -s checkhash`: look at the remembered
 	// path before running it, and fall back to a fresh PATH search when it

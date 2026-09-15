@@ -99077,6 +99077,57 @@
         "TimedOut": false
       }
     },
+    "glob/one-order-reaches-every-surface": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error: unexpected \"(\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "1digit A_upper Z _under b date",
+        "Stderr": "\u003cscript\u003e: line 1: ${(o)a}: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "1digit A_upper Z _under b date",
+        "Stderr": "\u003cscript\u003e: line 1: ${(o)a}: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "1digit A_upper Z _under b date",
+        "Stderr": "\u003cscript\u003e: line 1: ${(o)a}: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "1digit A_upper Z _under b date",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error at line 1: `a}' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "1digit A_upper Z _under b date~1digit A_upper Z _under b date",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "harness/a-command-string-that-spans-lines": {
       "ash": {
         "Stdout": "one~st=0",

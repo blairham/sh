@@ -1375,7 +1375,7 @@ func TestRecordPinsBeforeItRenders(t *testing.T) {
 	}
 	dir := t.TempDir()
 	doc, golden := filepath.Join(dir, "measurements.md"), filepath.Join(dir, "golden.json")
-	if err := got.Record(prev, cases, doc, golden); err != nil {
+	if err := got.Record(prev, cases, doc, golden, false); err != nil {
 		t.Fatalf("Record: %v", err)
 	}
 

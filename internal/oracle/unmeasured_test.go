@@ -44,7 +44,7 @@ func TestARecordNeverHoldsSomethingNobodyMeasured(t *testing.T) {
 	if missed := r.Unmeasured(); len(missed) != 1 || !strings.Contains(missed[0], "c1 [ash]") {
 		t.Errorf("Unmeasured = %v, want the one cell the harness could not reach", missed)
 	}
-	if err := r.Record(nil, cases, doc, golden); err != nil {
+	if err := r.Record(nil, cases, doc, golden, false); err != nil {
 		t.Fatal(err)
 	}
 

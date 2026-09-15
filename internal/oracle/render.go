@@ -245,7 +245,16 @@ func categories(cases []Case) []string {
 // document is rendered from the same Run the record is saved from, so pinning
 // after rendering would leave a stable golden.json beside a measurements.md
 // that still churned. Nothing about the two writes says so on its own.
-func (r *Run) Record(prev *Run, cases []Case, docPath, goldenPath string) error {
+func (r *Run) Record(prev *Run, cases []Case, docPath, goldenPath string, allowLoss bool) error {
+	// First, and before either artifact is touched. LostMeasurements has to
+	// be asked before markUnmeasured reduces the cells, and the record has to
+	// still be the old one when the answer is no — so the refusal lives here,
+	// with the rest of this function's ordering, rather than at the call
+	// site where it would read as an unrelated check that happens to come
+	// first. See LostMeasurements for what it is protecting against.
+	if loss := r.LostMeasurements(prev); len(loss) > 0 && !allowLoss {
+		return &LossRefused{Golden: goldenPath, Loss: loss}
+	}
 	r.KeepRacingRows(prev, cases)
 	// Before the document is rendered and not only before the record is
 	// saved: the two are written from one Run, and a cell reduced in the
@@ -303,6 +312,128 @@ func (r *Run) Unmeasured() []string {
 		}
 	}
 	sort.Strings(out)
+	return out
+}
+
+// ColumnLoss is one shell's column losing measurements between two runs.
+//
+// Counted against the record being replaced rather than against the corpus,
+// because the question is not "how much of the panel answered" — a narrower
+// panel is an honest weaker claim — but "is this regeneration about to take
+// away answers the record already has".
+type ColumnLoss struct {
+	Shell string
+	// Lost is the cells prev holds a measurement for and this run does not.
+	Lost []string
+	// Kept is how many of prev's measurements in this column survived, which
+	// is what tells a reader whether the runner died at the start or partway
+	// through.
+	Kept int
+}
+
+func (c ColumnLoss) String() string {
+	s := fmt.Sprintf("%s: %d measurement(s) lost, %d kept", c.Shell, len(c.Lost), c.Kept)
+	// Enough rows to recognize which part of the corpus went, and not the
+	// several hundred a dead container produces — a list that long is
+	// scrolled past, which is the failure this whole guard exists to stop.
+	const show = 5
+	for i, id := range c.Lost {
+		if i == show {
+			s += fmt.Sprintf("\n    … and %d more", len(c.Lost)-show)
+			break
+		}
+		s += "\n    " + id
+	}
+	return s
+}
+
+// LossRefused is Record declining to write a record that would give up
+// measurements the one on disk already holds.
+//
+// A type rather than fmt.Errorf so the caller can print the columns as a list
+// and the sentence once, and so a test can ask what was refused rather than
+// matching on prose.
+type LossRefused struct {
+	Golden string
+	Loss   []ColumnLoss
+}
+
+func (e *LossRefused) Error() string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "refusing to write %s: %d column(s) would lose measurements the record already holds\n",
+		e.Golden, len(e.Loss))
+	for _, c := range e.Loss {
+		b.WriteString("  " + c.String() + "\n")
+	}
+	b.WriteString("The panel could not answer for cells it answered before — a container that is not running, or two\n" +
+		"runs contending for one. Fix that and run again, or pass -allow-losing-measurements if the shell is\n" +
+		"really gone and the record should stop asking.")
+	return b.String()
+}
+
+// LostMeasurements reports the columns where this run holds no measurement
+// for a cell the previous record measured.
+//
+// This is the guard on regeneration, and it exists because the failure it
+// catches is silent in the direction that passes. The golden record *is* the
+// expectation: oracle-check grades the panel against it and `make check`
+// gates on that, so a cell reduced to `unmeasured` is not a cell that
+// disagrees — it is a question no longer asked. Blanking a column therefore
+// makes the next `make check` green *because* the coverage went away.
+//
+// Seen twice on 2026-09-14, in two sessions that did not know about each
+// other, from two causes with one shape (#2802): colima was not running, so
+// every ash cell came back as the harness's own complaint; and two `make
+// oracle` runs overlapped, the alpine container lost its runner partway, and
+// roughly 380 ash cells came back the same way. Both exited 0 and said
+// nothing a reader had to act on, and both were caught only by someone
+// reading the diff.
+//
+// Deliberately not a threshold. "Most of a column" would have to pick a
+// fraction, and the contended run above lost part of a column rather than
+// all of it — so the rule is that a measurement the record already holds is
+// not given up silently, however few. A cell prev never measured is not a
+// loss, and neither is a case the corpus no longer has: only cells this run
+// still asks about are compared.
+//
+// Read before Record, which is what reduces the cells: a caller that asks
+// afterwards is asking a question of a record already rewritten.
+func (r *Run) LostMeasurements(prev *Run) []ColumnLoss {
+	if prev == nil {
+		return nil
+	}
+	lost, kept := map[string][]string{}, map[string]int{}
+	for id, now := range r.Results {
+		was, ok := prev.Results[id]
+		if !ok {
+			continue
+		}
+		for sh, wasRes := range was {
+			if wasRes.Unmeasured {
+				// Nothing to lose: a cell prev could not measure either.
+				continue
+			}
+			nowRes, ok := now[sh]
+			switch {
+			case !ok:
+				// The shell is not in this run's panel at all, which is
+				// Run.Absent's business and is already announced as NOT RUN.
+				// A column that did not run is a different event from a
+				// column that ran and could not answer, and conflating them
+				// would make an honest narrower panel look like this bug.
+			case nowRes.Unmeasured:
+				lost[sh] = append(lost[sh], id)
+			default:
+				kept[sh]++
+			}
+		}
+	}
+	out := make([]ColumnLoss, 0, len(lost))
+	for sh, ids := range lost {
+		sort.Strings(ids)
+		out = append(out, ColumnLoss{Shell: sh, Lost: ids, Kept: kept[sh]})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Shell < out[j].Shell })
 	return out
 }
 

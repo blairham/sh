@@ -919,6 +919,16 @@ var Corpus = []Case{
 		Snippet: `u=/x; v=a:~$u; echo "$v" | sed "s|$HOME|H|g"`,
 		Why:     "a tilde whose segment runs into an expansion stays literal in three of the four; zsh alone expands it and then appends the value",
 	},
+	{
+		ID: "expand/tilde-naming-a-named-directory", Category: "expansion",
+		Snippet: `hash -d nd=/tmp; echo "st=$?"; echo ~nd`,
+		Why:     "a **named directory**: a table the shell owns, written by `hash -d` and read back by `~name`, which needs nothing from the operating system. zsh alone has it and answers `/tmp`; bash has the letter and means `forget one hashed name` by it, so the assignment is a name it has not got and the tilde stays as written; ksh93's `hash` is an alias for `alias -t --`, where a bad option is fatal and takes the line with it; dash has no such letter at all. This shell answered `bad option: -d` in the zsh column and left `~nd` as written (#2191)",
+	},
+	{
+		ID: "expand/tilde-naming-a-user-with-no-entry", Category: "expansion",
+		Snippet: `echo ~nosuchuser12345; echo "st=$?"`,
+		Why:     "what a `~name` the user database has no entry for costs. bash, bash 3.2, bash-as-sh, ksh93 and dash leave the word exactly as written at status 0; zsh refuses it — `no such user or named directory` — and the refusal ends the line, so the `echo` behind it never runs. The *hit* is deliberately not recorded here: `~root` is `/var/root` on this machine and `/root` on a Linux one, so a row naming a real user would pin the machine rather than the shell. See `expand/tilde-naming-a-named-directory` for the half that is a table the shell owns",
+	},
 
 	// --- semantics axes --------------------------------------------------
 	{

@@ -1818,8 +1818,9 @@ type Diagnostics struct {
 	// answer for three of the panel, and then to the substrate's own.
 	//
 	// **Every column in the panel refuses it and ours refused none of them**
-	// — `loopDepth` took any word it could not read as 1 and said nothing,
-	// so `break abc` left the loop at status 0 and the script could not tell
+	// — the count reader took any word it could not read as 1 and said
+	// nothing, so `break abc` left the loop at status 0 and the script
+	// could not tell
 	// that from a plain `break`. Measured 2026-09-14, `for i in 1 2; do
 	// break abc; echo tail; done; echo after` in a script file under
 	// `env -i`:
@@ -1850,7 +1851,7 @@ type Diagnostics struct {
 	// both wanted: the six columns that quote the word never quote a number,
 	// and the one that quotes a number never quotes the word.
 	//
-	// One measured row this does not reach, recorded rather than modelled:
+	// One measured row this does not reach, recorded rather than modeled:
 	// zsh reads the operand as *arithmetic*, so `break 1abc` there is `bad
 	// math expression: operator expected at `abc'` — the evaluator's own
 	// complaint and not this sentence. Ours answers `argument is not

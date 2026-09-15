@@ -493,15 +493,6 @@ func leadingDecimal(s string) int {
 	return n
 }
 
-func loopDepth(args []string) int {
-	if len(args) > 0 {
-		if n, ok := atoi(args[0]); ok && n > 0 {
-			return n
-		}
-	}
-	return 1
-}
-
 // specialBuiltins are the ones POSIX marks special. Two consequences follow
 // from the same list — an assignment prefixed to one persists, and a failure
 // in one is fatal to a non-interactive shell — so it is one concept rather

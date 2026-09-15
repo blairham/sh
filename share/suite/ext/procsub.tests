@@ -58,3 +58,39 @@ wc -l < <(printf 'l1\nl2\nl3\n')
 printf 'empty produces: ['
 cat <(true)
 printf ']\n'
+
+# --- the word itself ---------------------------------------------------------
+#
+# What `<(…)` expands to is a path, and the number in it is the shell's
+# business — so the digits are replaced before anything is compared. What
+# survives is the shape, which is the part a script can depend on: it is a
+# name under /dev/fd on every column here, not a file in a temporary
+# directory, which is why nothing has to clean it up.
+
+printf 'the reading form: [%s]\n' "$(printf '%s' <(true) | sed 's/[0-9][0-9]*/N/g')"
+printf 'the writing form: [%s]\n' "$(printf '%s' >(true) | sed 's/[0-9][0-9]*/N/g')"
+
+# And the descriptor behind the name is open in the direction the operator
+# named, which is the whole of what `>(…)` can be asked without waiting for a
+# process this shell does not wait for.
+printf 'the reading form is readable: '
+if test -r <(true); then printf 'yes\n'; else printf 'no\n'; fi
+printf 'the writing form is writable: '
+if test -w >(true); then printf 'yes\n'; else printf 'no\n'; fi
+
+# Three of them in one command, in the order they were written rather than in
+# the order the three processes happened to finish — which is the reason the
+# producers here each write one short string and exit.
+printf 'three at once: [%s]\n' "$(cat <(printf 'a') <(printf 'b') <(printf 'c'))"
+
+# One nested inside another: the inner process substitutes into the outer
+# one's command, and the outer one's reader never sees the difference.
+printf 'nested: [%s]\n' "$(cat <(cat <(printf 'deep')))"
+
+# It stands beside the ordinary redirections on the same command, and a
+# here-document may be the other operand — `-` is the standard input the
+# here-document is on.
+printf 'beside a here-document: [%s]\n' "$(cat <(printf 'a') - <<'HERE'
+here
+HERE
+)"

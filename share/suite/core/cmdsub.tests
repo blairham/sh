@@ -61,3 +61,92 @@ printf '[%s]\n' "$(pwd)"
 
 # `$(( ))` is arithmetic, not a substitution of a subshell named `(`.
 printf '[%s]\n' "$(( 2 + 3 ))"
+
+# The cases above left the shell in `/`, which is where the `cd` case put it.
+# Everything below writes files, so it moves back to the directory the harness
+# made for this run first. `$HOME` is that directory and is never printed: the
+# path is the machine's and a case that showed it would not repeat anywhere
+# else.
+cd "$HOME"
+
+# --- where the status goes ---------------------------------------------------
+#
+# A substitution's status reaches the shell only through an assignment or by
+# being the whole command. Used as an operand it is discarded, because the
+# command that took the operand has a status of its own — which is the shape
+# every `foo=$(bar) || exit` in the wild depends on, and the shape a case that
+# only printed the text could not tell apart from the other one.
+
+out=$(exit 7)
+rc=$?
+printf 'through an assignment: [%s] status %s\n' "$out" "$rc"
+: "$(exit 5)"
+rc=$?
+printf 'as an operand of a command that succeeded: %s\n' "$rc"
+: `exit 6`
+rc=$?
+printf 'the backtick form, the same: %s\n' "$rc"
+v=$(true; false)
+rc=$?
+printf 'the last command inside it decides: %s\n' "$rc"
+v=$(false; true)
+rc=$?
+printf 'and the other way round: %s\n' "$rc"
+v=$(exit 2) w=$(exit 3)
+rc=$?
+printf 'two assignments, the last one decides: %s\n' "$rc"
+
+# --- what the text is --------------------------------------------------------
+#
+# Trailing newlines are removed — all of them — and newlines in the middle are
+# not. Blanks at either end survive, because it is newlines that are stripped
+# and not whitespace.
+
+printf 'trailing newlines go: [%s]\n' "$(printf 'a\nb\n\n\n')"
+printf 'only newlines: [%s]\n' "$(printf '\n\n')"
+printf 'nothing at all: [%s]\n' "$(printf '')"
+printf 'an interior blank line survives: [%s]\n' "$(printf 'x\n\ny\n')"
+printf 'blanks survive: [%s]\n' "$(printf '   spaced   ')"
+printf 'a tab survives: [%s]\n' "$(printf 'tab\there')"
+nl=$(printf 'a\nb')
+printf 'the length of a two-line result: %s\n' "${#nl}"
+
+# --- quoting inside the backtick form ---------------------------------------
+#
+# The backtick is the older spelling and reads its body differently: a
+# backslash is significant before `$`, `` ` `` and another backslash, which is
+# what makes nesting one inside another possible at all — and what makes the
+# `$( )` form worth preferring.
+
+printf 'plain: [%s]\n' "`printf 'plain'`"
+printf 'a double quote inside: [%s]\n' "`printf '%s' \"quoted inside\"`"
+v=val
+printf 'an expansion inside: [%s]\n' "`printf '%s' $v`"
+printf 'an escaped dollar stays text: [%s]\n' "`printf '%s' \\$v`"
+printf 'a single-quoted dollar too: [%s]\n' "`printf '%s' '\$v'`"
+printf 'an escaped backslash: [%s]\n' "`printf 'a\\\\b'`"
+printf 'and the same in the modern form: [%s]\n' "$(printf 'a\\b')"
+printf 'a backtick nested in a backtick: [%s]\n' "`printf '%s' \"\`printf inner\`\"`"
+printf 'the modern form nesting the old: [%s]\n' "$(printf '%s' "`printf inner`")"
+
+# --- where a substitution may stand -----------------------------------------
+
+$(printf 'printf') 'as the whole command\n'
+printf 'x\n' > "$(printf 'target')"
+printf 'as a redirection target: [%s]\n' "$(cat target)"
+printf 'joined on the left: [%s]\n' "pre-$(printf 'a b')"
+printf 'joined on the right: [%s]\n' "$(printf 'a b')-tail"
+printf 'two of them running together: [%s]\n' "$(printf 'one')$(printf 'two')"
+for w in $(printf 'p q'); do printf 'in a for list: %s\n' "$w"; done
+case $(printf 'match') in match) printf 'as the word of a case\n' ;; esac
+if $(printf 'true'); then printf 'as the condition of an if\n'; fi
+
+# --- what goes inside it -----------------------------------------------------
+
+printf 'a comment inside: [%s]\n' "$( : # a comment to the end of the line
+printf 'past the comment' )"
+printf 'a close paren from a case: [%s]\n' "$(case x in x) printf 'reached' ;; esac)"
+printf 'a close paren in the data: [%s]\n' "$(printf 'a)b')"
+printf 'a subshell, which is not the same paren: [%s]\n' "$( (printf 'subshell') )"
+printf 'text that looks like a substitution: [%s]\n' "$(printf '%s' '$(not expanded)')"
+printf 'a redirection inside: [%s]\n' "$(cat < target)"

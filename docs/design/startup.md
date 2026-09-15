@@ -244,6 +244,40 @@ dialect is missing from the table altogether, and one requires the
 report to carry the CPU ratio so a reader can tell a slow dialect from a
 busy machine.
 
+### The runner is not this machine, and bash does not pass there
+
+The first thing the CI job produced, on an idle ubuntu runner (load
+average 2.04) at `dc777851`:
+
+| dialect | case | ours | original | ratio | ours cpu | orig cpu | cpu |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| bash | bare | 2.91ms | 0.73ms | **4.00x** | 3.51ms | 0.67ms | **5.24x** |
+| bash | workload | 11.06ms | 7.25ms | 1.53x | 11.68ms | 7.17ms | 1.63x |
+| dash | bare | 2.12ms | 0.46ms | 4.58x | 2.63ms | 0.40ms | 6.55x |
+| dash | workload | 9.52ms | 2.80ms | 3.40x | 10.05ms | 2.73ms | 3.68x |
+| ksh | bare | 2.31ms | 0.69ms | 3.36x | 2.93ms | 0.62ms | 4.70x |
+| ksh | workload | 9.86ms | 3.50ms | 2.81x | 10.46ms | 3.43ms | 3.05x |
+| zsh | bare | 3.38ms | 0.96ms | 3.53x | 3.91ms | 0.89ms | 4.41x |
+| zsh | workload | 11.37ms | 5.16ms | 2.20x | 12.01ms | 5.08ms | 2.36x |
+
+**All eight comparisons are SLOWER, bash included**, where on the
+maintainer's macOS machine bash is 0.53x and 0.66x. Nothing about the
+tree differs between those two runs.
+
+What differs is the reference. Real bash costs **0.73ms** to run `-c ':'`
+on the runner and **6.76ms** on macOS — the same program, an order of
+magnitude apart — because macOS process creation and dyld cost what Linux
+does not. Ours costs 2.91ms there and 3.56ms here. So bash's margin on
+macOS was never ours: **it was macOS being slow at starting bash**, and
+on a platform where starting a process is cheap the Go runtime floor is
+the whole of the difference.
+
+Two things follow. The release bar in #1403 is considerably further away
+than the macOS figures said, on every dialect rather than three of four.
+And an expectation table written from this machine would have been wrong
+about every row on the runner — which is exactly why the CI job reports
+rather than blocks.
+
 And it runs in CI, report-only, on every change that touches code
 (#2257). For a week it ran nowhere at all and "perfgate is failing" was
 passed on second-hand; the measurement is now produced on every build

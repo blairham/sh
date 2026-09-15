@@ -402,6 +402,11 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 	// bash 3.2 alike. Without this the give-up cost the whole borrowed text,
 	// which is the same error as the one this file is named for, one level
 	// down. The rule is RunPart's, and it is spelled the same way there.
+	//
+	// And it stops being a file once the shell is inside a subshell, which is
+	// the half that was missing: there the give-up passes straight through
+	// and the subshell ends with it. See the clause that reads r.inSubshell
+	// below for the measurement (#2747).
 	abandoned, stopped := 0, false
 	for !stopped {
 		f, ok := nextBorrowedLine(p, &whole)
@@ -433,6 +438,43 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 				return 2
 			}
 			if r.ctl == controlAbandon {
+				if r.inSubshell {
+					// Except inside a subshell, where the give-up is not
+					// caught here at all: it goes on out and the subshell
+					// ends with it. Measured 2026-09-15 on bash 5.3.15 and
+					// bash 3.2.57 with a reassignment to a readonly name and
+					// again with `shopt -s failglob` and an unmatched
+					// pattern, in a two-line `eval` so that giving up the
+					// line and giving up the text are different outcomes:
+					//
+					//	readonly r=1
+					//	( eval 'r=2
+					//	echo inner'
+					//	echo sub )
+					//	echo after
+					//
+					// writes `after` alone, where the same `eval` at the top
+					// level writes `inner` and then `after` — so this is the
+					// subshell changing the answer and not bash's `eval`
+					// never catching a give-up. The `!r.inSubshell` half is
+					// what the row above it needs.
+					//
+					// Not an axis: no other column has a give-up to ask it
+					// about. Every route to controlAbandon that a script can
+					// reach is answered the abandoning way by one preset
+					// only — a reassignment to a readonly name, a failed
+					// expansion, a refused compound-kind change, a whole-array
+					// subscript and an empty table key are all fatal in dash,
+					// ksh93, zsh and BusyBox ash — and a fatal error inside
+					// borrowed text is FatalErrorEndsBorrowedTextOnly's
+					// question, already measured and answered. Measured all
+					// the same: ksh93 and zsh both reach the statement after
+					// the subshell's `eval`, and dash, BusyBox ash and bash
+					// under the name `sh` end the shell over the refusal
+					// before the question arises (#2747).
+					stopped = true
+					break
+				}
 				r.ctl, abandoned = controlNone, r.abandonLine
 				continue
 			}

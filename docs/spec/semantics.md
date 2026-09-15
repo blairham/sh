@@ -460,6 +460,48 @@ inside the borrowed text — in bash 5.3 and bash 3.2 alike. Where the same
 refusal is *fatal*, ksh93 and zsh give up the text and report 1 and 126 as
 above, which is what makes the pair worth measuring on one snippet.
 
+**Except inside a subshell, where the give-up is not caught at all.** The
+same two-line `eval`, written twice in one script — once at the top level
+and once inside a subshell — measured 2026-09-15:
+
+    readonly r=1
+    eval 'r=2                      ( eval 'r=2
+    printf "[top-inner]"'          printf "[sub-inner]"'
+    printf "[top-after]"           printf "[sub]" )
+                                   printf "[after]\n"
+
+| | top-inner | top-after | sub-inner | sub | after |
+| --- | --- | --- | --- | --- | --- |
+| bash 5.3 | **yes** | yes | no | **no** | yes |
+| bash 3.2 | **yes** | yes | no | **no** | yes |
+| ksh93 | no | yes | no | **yes** | yes |
+| zsh | no | yes | no | **yes** | yes |
+| dash, ash, bash-as-`sh` | — | — | — | — | — |
+
+The last row's shells end over the refusal before either question arises.
+ksh93 and zsh lose `top-inner` for the reason above — the refusal is fatal
+there, so it is the *text* they give up and not the line — which means the
+column that gives a line up at all is bash, and the subshell is what
+changes its answer. The give-up goes out through the `eval` and the
+subshell ends with it, taking `[sub]` with it.
+
+Not an axis, and the reason is the one the RETURN trap's functrace
+exemption gives: no other column has a give-up to ask it about. Every
+route a script has to one — a reassignment to a readonly name, a failed
+expansion, a refused compound-kind change, a whole-array subscript and an
+empty table key — is answered the abandoning way by bash's preset alone
+and is fatal in the rest, and a fatal error inside borrowed text is
+`FatalErrorEndsBorrowedTextOnly`'s question, which is already measured.
+The same split shows on `shopt -s failglob` with an unmatched pattern,
+which is what #2747 was filed from; both are corpus rows.
+
+The *direct* form needs none of this and always did the right thing: a
+statement that gives up inside a subshell with no borrowed text between it
+and the subshell's own list reaches that list already, so `( r=2; printf
+X )` on two lines loses the subshell in every column that survives the
+refusal. It is only the `eval` and the `.` in between that used to catch
+what bash lets past.
+
 **Four further measurements make it one axis rather than several.**
 
 - **It is not about expansion.** A readonly reassignment where the dialect

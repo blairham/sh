@@ -18432,6 +18432,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `eval/exit-in-evaluated-text-is-never-caught` | `IN-BEFORE` *(status 7)* | `IN-BEFORE` *(status 7)* | `IN-BEFORE` *(status 7)* | `IN-BEFORE` *(status 7)* | `IN-BEFORE` *(status 7)* | `IN-BEFORE` *(status 7)* | `IN-BEFORE` *(status 7)* |
 | `eval/an-abandoned-statement-does-not-end-the-text` | `IN-BEFORE` **2>** `<script>: 3: eval: rr: is read only` *(status 2)* | `IN-BEFORE~IN-AFTER~OUT-AFTER st=0` **2>** `<script>: line 3: rr: readonly variable` | `IN-BEFORE` **2>** `<script>: line 3: rr: readonly variable` *(status 1)* | `IN-BEFORE~IN-AFTER~OUT-AFTER st=0` **2>** `<script>: line 6: rr: readonly variable` | `IN-BEFORE~OUT-AFTER st=1` **2>** `<script>[1]: eval: line 3: rr: is read only` | `IN-BEFORE~OUT-AFTER st=1` **2>** `(eval):3: read-only variable: rr` | `IN-BEFORE` **2>** `<script>: eval: line 3: rr: is read only` *(status 2)* |
 | `dot/a-given-up-statement-takes-the-rest-of-its-line` | `IN-BEFORE` **2>** `<script>: 3: ./p.sh: rr: is read only` *(status 2)* | `IN-BEFORE~NEXT-LINE~OUT-AFTER st=0` **2>** `./p.sh: line 3: rr: readonly variable` | `IN-BEFORE` **2>** `./p.sh: line 3: rr: readonly variable` *(status 1)* | `IN-BEFORE~NEXT-LINE~OUT-AFTER st=0` **2>** `./p.sh: line 3: rr: readonly variable` | `IN-BEFORE~OUT-AFTER st=1` **2>** `<script>[1]: .: line 3: rr: is read only` | `IN-BEFORE~OUT-AFTER st=126` **2>** `./p.sh:3: read-only variable: rr` | `IN-BEFORE` **2>** `<script>: ./p.sh: line 3: rr: is read only` *(status 2)* |
+| `eval/an-abandoned-statement-in-a-subshell-ends-it` | **2>** `<script>: 1: eval: r: is read only` *(status 2)* | `[top-inner][top-after][after]` **2>** `<script>: line 2: r: readonly variable~<script>: line 6: r: readonly variable` | **2>** `<script>: line 2: r: readonly variable` *(status 1)* | `[top-inner][top-after][after]` **2>** `<script>: line 3: r: readonly variable~<script>: line 7: r: readonly variable` | `[top-after][sub][after]` **2>** `<script>[2]: eval: line 1: r: is read only~<script>[6]: eval: line 1: r: is read only` | `[top-after][sub][after]` **2>** `(eval):1: read-only variable: r~(eval):1: read-only variable: r` | **2>** `<script>: eval: line 2: r: is read only` *(status 2)* |
+| `eval/a-failglob-refusal-in-a-subshell-ends-it` | `[inner][sub][after]` | `[after]` **2>** `<script>: line 3: no match: zz*zz` | `[after]` **2>** `<script>: line 3: no match: zz*zz` | `[after]` **2>** `<script>: line 4: no match: zz*zz` | `[inner][sub][after]` | `[sub][after]` **2>** `(eval):1: no matches found: zz*zz` | `[inner][sub][after]` |
 | `dot/readonly-refusal-ends-the-sourced-file-only` | `IN-BEFORE` **2>** `<script>: 3: ./p.sh: rr: is read only` *(status 2)* | `IN-BEFORE~IN-AFTER~OUT-AFTER st=0` **2>** `./p.sh: line 3: rr: readonly variable` | `IN-BEFORE` **2>** `./p.sh: line 3: rr: readonly variable` *(status 1)* | `IN-BEFORE~IN-AFTER~OUT-AFTER st=0` **2>** `./p.sh: line 3: rr: readonly variable` | `IN-BEFORE~OUT-AFTER st=1` **2>** `<script>[1]: .: line 3: rr: is read only` | `IN-BEFORE~OUT-AFTER st=126` **2>** `./p.sh:3: read-only variable: rr` | `IN-BEFORE` **2>** `<script>: ./p.sh: line 3: rr: is read only` *(status 2)* |
 | `dot/cwd-fallback-is-bash-only` | **2>** `<shell>: 1: .: fb.sh: not found` *(status 2)* | `cwd-hit~st=0` | **2>** `<shell>: line 1: .: fb.sh: file not found` *(status 1)* | `cwd-hit~st=0` | **2>** `<shell>: .: fb.sh: cannot open [No such file or directory]` *(status 1)* | `st=127` **2>** `<shell>:.:1: no such file or directory: fb.sh` | `cwd-hit~st=0` |
 | `exec/replaces-the-shell` | `replaced` | `replaced` | `replaced` | `replaced` | `replaced` | `replaced` | `replaced` |
@@ -18624,6 +18626,29 @@ grades it and nothing drift-checks it either, for the same reason.
 - `dot/a-given-up-statement-takes-the-rest-of-its-line` — the give-up reaches to the end of the line and no further, inside a sourced file exactly as at the top of a script: SAME-LINE never prints in any shell that survives the refusal, and NEXT-LINE does — a row asserting only that the file kept running would pass with the same-line half missing
   ```sh
   printf 'echo IN-BEFORE\nreadonly rr=1\nrr=2; echo SAME-LINE\necho NEXT-LINE\n' > p.sh; . ./p.sh; echo "OUT-AFTER st=$?"
+  ```
+- `eval/an-abandoned-statement-in-a-subshell-ends-it` — where the rule above stops, and the pair in one cell is the whole evidence: the same two-line `eval` is written twice, once at the top level and once inside a subshell. bash 5.3 and bash 3.2 write `[top-inner][top-after]` for the first and then nothing at all for the second — the give-up passes out through the `eval` and the subshell ends with it, taking `[sub]` — where ksh93 and zsh catch it in the `eval` both times and reach `[sub]`. Either half alone reads as the other rule: the top-level half is `eval/an-abandoned-statement-does-not-end-the-text` and says nothing about subshells, and a subshell-only row cannot tell "the subshell ends" from "this shell's `eval` never resumes". dash, BusyBox ash and bash under the name `sh` end the shell over the refusal before either question arises, so they say only that. This shell resumed in both positions (#2747)
+  ```sh
+  readonly r=1
+  eval 'r=2
+  printf "[top-inner]"'
+  printf "[top-after]"
+  (
+  eval 'r=2
+  printf "[sub-inner]"'
+  printf "[sub]"
+  )
+  printf "[after]\n"
+  ```
+- `eval/a-failglob-refusal-in-a-subshell-ends-it` — the second refusal that reaches the same rule, and the one #2747 was filed from — a refusal the shell decides to make rather than one a name's attributes force, so the row says the rule is about *giving a line up* and not about `readonly`. bash's cells are the complaint and `[after]`; zsh refuses the pattern too and reaches `[sub]`, which is its own answer to the same question; dash and ksh93 leave an unmatched pattern alone and run the lot. The `2>/dev/null` is what lets one snippet reach every column: three of them have no `failglob` name and would otherwise spend the row complaining about `shopt`
+  ```sh
+  shopt -s failglob 2>/dev/null
+  (
+  eval 'set -- zz*zz
+  printf "[inner]"'
+  printf "[sub]"
+  )
+  printf "[after]\n"
   ```
 - `dot/readonly-refusal-ends-the-sourced-file-only` — one snippet, two rules. Where a readonly reassignment is *fatal* it ends only the sourced file — ksh93 1, zsh 126 — which is the reach being a fact about any error a shell calls fatal rather than about expansion. Where it is not fatal, bash gives up the statement and its line and runs the `echo` after it, inside the file, which is the give-up costing a line rather than the text it is in
   ```sh

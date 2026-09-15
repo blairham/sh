@@ -84032,6 +84032,57 @@
         "TimedOut": false
       }
     },
+    "eval/a-failglob-refusal-in-a-subshell-ends-it": {
+      "ash": {
+        "Stdout": "[inner][sub][after]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[after]",
+        "Stderr": "\u003cscript\u003e: line 3: no match: zz*zz",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[after]",
+        "Stderr": "\u003cscript\u003e: line 3: no match: zz*zz",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[after]",
+        "Stderr": "\u003cscript\u003e: line 4: no match: zz*zz",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[inner][sub][after]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[inner][sub][after]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[sub][after]",
+        "Stderr": "(eval):1: no matches found: zz*zz",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "eval/a-syntax-error-quotes-the-offending-line": {
       "ash": {
         "Stdout": "",
@@ -84129,6 +84180,57 @@
       "zsh": {
         "Stdout": "IN-BEFORE~OUT-AFTER st=1",
         "Stderr": "(eval):3: read-only variable: rr",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "eval/an-abandoned-statement-in-a-subshell-ends-it": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: eval: line 2: r: is read only",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[top-inner][top-after][after]",
+        "Stderr": "\u003cscript\u003e: line 2: r: readonly variable~\u003cscript\u003e: line 6: r: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 2: r: readonly variable",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[top-inner][top-after][after]",
+        "Stderr": "\u003cscript\u003e: line 3: r: readonly variable~\u003cscript\u003e: line 7: r: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: eval: r: is read only",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[top-after][sub][after]",
+        "Stderr": "\u003cscript\u003e[2]: eval: line 1: r: is read only~\u003cscript\u003e[6]: eval: line 1: r: is read only",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[top-after][sub][after]",
+        "Stderr": "(eval):1: read-only variable: r~(eval):1: read-only variable: r",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

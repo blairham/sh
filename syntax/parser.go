@@ -2002,7 +2002,7 @@ func (p *Parser) newWord(spans []Span, start, stop Pos) *Word {
 			}
 			rest := p.sourceBetween(from, stop)
 			e.BareIndexUnclosed = strings.HasPrefix(rest, "[") &&
-				!bareSubscriptCloses(rest, p.dialect)
+				bareSubscriptClose(rest, p.dialect, nil) < 0
 		}
 	}
 	// A flag group the parser could not read reports the rest of the word it

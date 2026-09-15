@@ -4504,8 +4504,8 @@ func (l *Lexer) bareSubscript(name string, q Quoting) (Span, bool) {
 // above counts a bracket written inside a substitution, which is what decides
 // whether there is a subscript at all, and this one does not, which is what
 // decides how far the text runs. The last two rows are the other end of it —
-// no such bracket, and the word is refused rather than kept, which
-// bareSubscriptCloses answers for the parser.
+// no such bracket, and the word is refused rather than kept, which the same
+// scan answers for the parser — see bareSubscriptClose.
 //
 // Only where a substitution was in the way, and only unquoted. A `[` a word
 // simply never closed is the refusal #1757 records, and the double-quoted
@@ -4514,22 +4514,49 @@ func (l *Lexer) keptBareSubscript(q Quoting, sawSub bool) (Span, bool) {
 	if !sawSub || q != Unquoted {
 		return Span{}, false
 	}
-	open := l.pos()
-	start := l.off
+	at := bareSubscriptClose(l.src[l.off:], l.dialect, l.isWordEnd)
+	if at < 0 {
+		return Span{}, false
+	}
+	open, start := l.pos(), l.off
+	for l.off <= start+at {
+		l.advance()
+	}
+	// SingleQuoted, which is what the measurements say: the `*` between the
+	// brackets is a character and the blanks there do not split.
+	return Span{
+		Kind: Literal, Quoting: SingleQuoted,
+		Value: l.src[start : start+at+1], Pos: open,
+	}, true
+}
+
+// bareSubscriptClose finds the `]` that closes the `[` s opens with, with
+// each `$( )` stepped over as a unit, or -1. ends reports a byte that ends
+// the word, for the caller whose text runs past the word's end.
+//
+// One function for two callers, which is the point rather than an economy:
+// the lexer asks it how far the kept run reaches and the parser asks it
+// whether the subscript is closed at all, and a rule answered in two places
+// is a rule that drifts. A plain search for a `]` answers the parser's
+// question for every shape but one — `$a[$(: ]; echo 2)` holds a `]` that
+// closes nothing, and zsh refuses that word where it keeps
+// `$a[$(: ]; echo 2)]` as text.
+//
+// A backtick ends it rather than being stepped over, and the measurement is
+// what says so rather than the shape of the code: on zsh 5.9.2, 2026-09-14,
+// a subscript whose only `]` is inside backticks is `invalid subscript`
+// where the `$( )` spelling of the same word is kept. A backtick written
+// *inside* a `$( )` is a different matter and never reaches here, since the
+// group around it is stepped over whole.
+func bareSubscriptClose(s string, d Dialect, ends func(byte) bool) int {
 	depth := 0
-	for i := l.off; i < len(l.src); i++ {
-		c := l.src[i]
+	for i := 0; i < len(s); i++ {
+		c := s[i]
 		if c == '`' {
-			// A backtick is not stepped over, and the measurement is what
-			// says so rather than the shape of the code: `$a[`: ]; echo 2`]`
-			// is `invalid subscript` in zsh where the `$( )` spelling of the
-			// same thing is kept as text. One inside a `$( )` is a different
-			// matter and never reaches here, because the group around it is
-			// stepped over whole — `$a[$(: ]; echo `echo 2`)]` is kept.
-			return Span{}, false
+			return -1
 		}
-		if c == '$' && i+1 < len(l.src) && l.src[i+1] == '(' {
-			sub := NewLexer(l.src[i:], l.dialect)
+		if c == '$' && i+1 < len(s) && s[i+1] == '(' {
+			sub := NewLexer(s[i:], d)
 			if sub.skipSubstitution() && sub.Err() == nil {
 				i += sub.off - 1
 				continue
@@ -4540,58 +4567,13 @@ func (l *Lexer) keptBareSubscript(q Quoting, sawSub bool) (Span, bool) {
 			depth++
 		case c == ']':
 			if depth--; depth == 0 {
-				for l.off <= i {
-					l.advance()
-				}
-				// SingleQuoted, which is what the measurements say: the `*`
-				// between the brackets is a character and the spaces there
-				// do not split.
-				return Span{
-					Kind: Literal, Quoting: SingleQuoted,
-					Value: l.src[start : i+1], Pos: open,
-				}, true
+				return i
 			}
-		case l.isWordEnd(c):
-			return Span{}, false
+		case ends != nil && ends(c):
+			return -1
 		}
 	}
-	return Span{}, false
-}
-
-// bareSubscriptCloses reports whether the `[` s opens with is closed inside
-// s, with every substitution stepped over as a unit.
-//
-// The parser's question rather than the lexer's: what makes a bare subscript
-// *unclosed* is where the word ends, and s is the word's own text. A plain
-// search for a `]` answers it for every shape but one — `$a[$(: ]; echo 2)`
-// holds a `]` that closes nothing, and zsh refuses that word where it keeps
-// `$a[$(: ]; echo 2)]` as text (#2786).
-func bareSubscriptCloses(s string, d Dialect) bool {
-	depth := 0
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if c == '`' {
-			// Not stepped over, for the reason keptBareSubscript gives: the
-			// two spellings of a substitution are measured apart here.
-			return false
-		}
-		if c == '$' && i+1 < len(s) && s[i+1] == '(' {
-			sub := NewLexer(s[i:], d)
-			if sub.skipSubstitution() && sub.Err() == nil {
-				i += sub.off - 1
-				continue
-			}
-		}
-		switch c {
-		case '[':
-			depth++
-		case ']':
-			if depth--; depth == 0 {
-				return true
-			}
-		}
-	}
-	return false
+	return -1
 }
 
 // openingOf is how a span's kind is written, for saying what is unfinished.

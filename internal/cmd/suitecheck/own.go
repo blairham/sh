@@ -48,6 +48,12 @@ func runOwn(ctx context.Context, root string, bins binSet, timeout time.Duration
 	fmt.Println("  is checked in. A .right file of ours would let us record our own bug as")
 	fmt.Println("  correct, which is the one failure the oracle exists to prevent.")
 	fmt.Println()
+	fmt.Println("  That is also why a case the reference will not repeat is a failure here")
+	fmt.Println("  and an exclusion in the fetched columns. With no expected output, a file")
+	fmt.Println("  the reference answers two ways carries no expectation at all — and this")
+	fmt.Println("  file is ours to fix. Every native file is asked twice for that reason,")
+	fmt.Println("  not only the ones the two shells answered differently.")
+	fmt.Println()
 
 	opts := suite.Options{Timeout: timeout, Jobs: jobs, Only: names(only)}
 	code := 0
@@ -122,6 +128,9 @@ func runOwn(ctx context.Context, root string, bins binSet, timeout time.Duration
 
 	for _, rep := range reports {
 		printOwnColumn(rep)
+		if len(rep.CaseDefects()) > 0 {
+			code = 1
+		}
 	}
 	printOwnTable(reports)
 	fmt.Println("  A tier is a claim, not filing. core/ is what a script may assume in any of")
@@ -153,6 +162,9 @@ func runOwn(ctx context.Context, root string, bins binSet, timeout time.Duration
 			continue
 		}
 		printCross(cross)
+		if len(cross.Unstable) > 0 {
+			code = 1
+		}
 	}
 	for _, col := range suite.OurColumns() {
 		if col.DialectTier() == "" || col.Container != "" {
@@ -165,6 +177,9 @@ func runOwn(ctx context.Context, root string, bins binSet, timeout time.Duration
 			continue
 		}
 		printOwn(own)
+		if len(own.Unstable) > 0 {
+			code = 1
+		}
 	}
 	printCrossOmission(contained)
 	printOwnOmission(contained)
@@ -203,9 +218,23 @@ func printOwnColumn(rep suite.Report) {
 		fmt.Sprintf("%d/%d", rep.Strict, rep.Scored), 100*rep.StrictRate())
 	fmt.Printf("  lines      %-9s %5.1f%%   longest common subsequence, by line\n",
 		"", 100*rep.LineRate())
-	if rep.Unstable+rep.OracleHung+rep.DialectHung > 0 {
-		fmt.Printf("  not scored %d unstable · %d reference hung · %d ours hung\n",
-			rep.Unstable, rep.OracleHung, rep.DialectHung)
+	if rep.OracleHung+rep.DialectHung > 0 {
+		fmt.Printf("  not scored %d reference hung · %d ours hung\n",
+			rep.OracleHung, rep.DialectHung)
+	}
+	if defects := rep.CaseDefects(); len(defects) > 0 {
+		// Never "not scored", and never folded in with a hang. A fetched
+		// suite's unstable file is an exclusion because nobody here may edit
+		// it; ours is a bug in a file we wrote, and the run fails on it.
+		fmt.Printf("  BAD CASES  %d of these files are not deterministic — %s\n",
+			len(defects), strings.Join(defects, ", "))
+		fmt.Println("             The reference answered one of them two different ways, so it")
+		fmt.Println("             carries no expectation for anything to be graded against. Our")
+		fmt.Println("             suite ships no expected output, which makes that a defect in")
+		fmt.Println("             the case rather than an unlucky file: a pid, a clock, a")
+		fmt.Println("             scheduling order, a path the harness did not normalize. Fix")
+		fmt.Println("             the case. This is the one place our columns invert the")
+		fmt.Println("             fetched rule, and it is why this run exits non-zero.")
 	}
 	if rep.OracleFailed+rep.DialectFailed > 0 {
 		// Loud, and never folded into the score. A run that did not start
@@ -229,7 +258,10 @@ func printOwnColumn(rep suite.Report) {
 		case c.Result.OracleHung:
 			fmt.Printf("    %-28s the reference never finished — a harness fault, not a finding\n", c.Name)
 		case c.Result.Unstable:
-			fmt.Printf("    %-28s the reference would not repeat it — a pid, a clock, an order\n", c.Name)
+			// Listed above as well, under BAD CASES, and deliberately: this
+			// line is about the column's score and that one is about the
+			// file. A reader scanning for work needs it in both places.
+			fmt.Printf("    %-28s the case is not deterministic — fix the case, not the shell\n", c.Name)
 		case c.Result.DialectFailed:
 			fmt.Printf("    %-28s ours never started — a harness fault, not a finding\n", c.Name)
 		case c.Result.OracleFailed:
@@ -302,7 +334,8 @@ func printCross(cross suite.Cross) {
 		fmt.Printf("    %-28s not core: %s\n", split.Name, strings.Join(groups, " ≠ "))
 	}
 	for _, name := range cross.Unstable {
-		fmt.Printf("    %-28s a reference would not repeat it, so it says nothing either way\n", name)
+		fmt.Printf("    %-28s not deterministic: a reference answered it two ways, so it can\n", name)
+		fmt.Println("                                 make no claim about this tier at all. It is ours — fix it.")
 	}
 	fmt.Println()
 }
@@ -320,7 +353,8 @@ func printOwn(own suite.Own) {
 			share.Name, own.Shell, strings.Join(share.With, ", "))
 	}
 	for _, name := range own.Unstable {
-		fmt.Printf("    %-28s a reference would not repeat it, so it says nothing either way\n", name)
+		fmt.Printf("    %-28s not deterministic: a reference answered it two ways, so it can\n", name)
+		fmt.Println("                                 make no claim about this tier at all. It is ours — fix it.")
 	}
 	fmt.Println()
 }

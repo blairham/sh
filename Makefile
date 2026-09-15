@@ -333,7 +333,15 @@ dash-suite: ## dash has no suite of its own; prints why
 # through the oracle's own container route (#2263) and cross-compiles its own
 # binary for the image — a Mach-O built here would not start in there. With no
 # container runtime the column is printed as unrun, loudly, and the target
-# still exits 0: this is a report, not a gate.
+# still exits 0 for that: a column this machine cannot reach is a fact about
+# the machine.
+#
+# What it does not exit 0 for is a case of ours the reference will not repeat.
+# A fetched suite's unstable file is dropped from the scored set, because
+# nobody here may edit it and the honest thing is to say the denominator
+# moved; ours ships no expected output, so a file the reference answers two
+# ways carries no expectation for anything to be graded against and is a bug
+# in a file we wrote. See suite.Report.CaseDefects (#2297).
 suite: ## Run our own conformance suite in every dialect and report the per-dialect baseline
 	@mkdir -p $(BINDIR)
 	@for s in bash zsh ksh dash; do go build -o $(BINDIR)/own-$$s ./cmd/$$s || exit 1; done

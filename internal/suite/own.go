@@ -60,8 +60,11 @@ import (
 //	core/    every column, every reference. What a script may assume anywhere.
 //	ext/     the substrate's core language beyond POSIX — arrays, [[ ]],
 //	         $'…', +=, substrings, pattern substitution, C-style for,
-//	         `function`, select and herestrings. Every column but dash and
-//	         ash, which are the measured holdouts.
+//	         `function`, select, herestrings, process substitution, typeset
+//	         and `;&`. Every column but dash and ash, which are the measured
+//	         holdouts. One file per row of docs/spec/shell-matrix.md that
+//	         dash alone says no to, which is what makes the tier finished
+//	         rather than as far as anyone got.
 //	<shell>/ the answer only that shell has.
 //
 // core/ and ext/ are written, and the per-dialect directories have begun: a

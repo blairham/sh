@@ -109277,6 +109277,57 @@
         "TimedOut": false
       }
     },
+    "invoke/called-sh-a-second-reading-that-runs-off-the-end-of-the-word": {
+      "ash": {
+        "Stdout": "[V]~AFTER=0",
+        "Stderr": "\u003cshell\u003e: set: line 0: illegal option +o posix",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: bad substitution: no closing `}' in \"${v-'a}\"",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: bad substitution: no closing `}' in \"${v-'a}\"",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: unexpected EOF while looking for matching `''~\u003cshell\u003e: -c: line 1: syntax error: unexpected end of file",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: set: Illegal option -o posix",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: set: posix: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:set:1: no such option: posix",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "invoke/called-sh-and-a-script-operand-starts-in-posix-mode": {
       "ash": {
         "Stdout": "",

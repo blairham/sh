@@ -17,7 +17,7 @@ import (
 // a condition that *was* read and never closed — measured 2026-09-15 on
 // ksh93u+ over `-c`.
 //
-// The neighbouring shape, a `]]` standing where a condition could have begun,
+// The neighboring shape, a `]]` standing where a condition could have begun,
 // is **not** this: that shell reads the closer as an ordinary word there and
 // blames whatever follows, which is #2964 and a change to what the parser
 // consumes. These rows are the ones a wording can answer.

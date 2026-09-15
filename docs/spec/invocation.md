@@ -388,6 +388,29 @@ This shell had one gate for both states — `Runner.JobControl`, which is a
 prompt and nothing else — so `set -m` in a script was granted and `fg`
 refused anyway (#2720). Two corpus rows hold the pair.
 
+The **start notice** is the same seam one notice over, and the panel divides
+differently: four of the five resume on the monitor alone and exactly one
+announces on it. Measured 2026-09-15 on a pseudo-terminal, a script file
+holding `set -m`, `sleep 1 &` and a mark after it — zsh 5.9.2 writes
+`[1] <pid>`, and bash 5.3.15, ksh93u+, dash and BusyBox ash write nothing.
+
+That is `Semantics.MonitorAloneAnnouncesAJob`: zsh **yes**, everything else
+no. It is not `AnnouncesBackgroundJob`, which asks whether a dialect
+announces at all and which bash and ksh93 also answer yes — all three
+announce at a prompt, and only zsh does from a script (#2838).
+
+Two more things a script with the monitor can now reach, both in the same
+place and both measured on the same route and again at an interactive
+prompt. `fg` on a job that is **already running** prints a listing row in
+zsh with the job's own state in it — `[1]  + running    sleep 1`, where a
+job it had to continue is `[1]  + continued  sleep 5` — so `continued` is
+a state word beside `running` and `suspended` rather than part of a
+sentence. And `bg` on a job that is already running is refused by two of
+the five, with different statuses: bash says `bg: job 1 already in
+background` and still reports **0**, zsh says `bg: job already in
+background` and reports **1**, and ksh93, dash and ash resume it and print
+the ordinary notice.
+
 #### Which terminal counts
 
 **A terminal on any one of the three standard streams**, and that is measured

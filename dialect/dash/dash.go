@@ -125,6 +125,10 @@ func Semantics() interp.Semantics {
 	// denial leaves `fg: job (null) not created under job control` at 2
 	// (#2720).
 	s.MonitorAloneResumesAJob = interp.Yes
+	// It resumes on the monitor alone and still announces nothing on it: a
+	// script with `set -m` on a pseudo-terminal prints no start notice here,
+	// though it does report the job *ending*. Measured 2026-09-15 (#2838).
+	s.MonitorAloneAnnouncesAJob = interp.No
 	// dash leaves it off with no terminal too, remarking `can't access tty;
 	// job control turned off` — the same sentence its `set -m` refusal uses,
 	// from the same shell, about two different questions.

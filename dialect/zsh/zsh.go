@@ -1376,6 +1376,12 @@ func Semantics() interp.Semantics {
 	// measured 2026-09-15 on a pseudo-terminal, where the job line is
 	// printed and the status is 0 (#2720).
 	s.MonitorAloneResumesAJob = interp.Yes
+	// And the one column that *announces* on the monitor alone: a script
+	// with `set -m` writes `[1] <pid>` for a `&` job with nobody at a
+	// prompt, where the other four write nothing. Measured 2026-09-15 on a
+	// pseudo-terminal, which is the only place this shell has a monitor at
+	// all (#2838).
+	s.MonitorAloneAnnouncesAJob = interp.Yes
 	// A stopped job holds the exit back: the shell says so and stays,
 	// and the next attempt leaves. Measured through a pseudo-terminal for
 	// `exit` and for ^D alike.
@@ -2773,12 +2779,29 @@ func Diagnostics() interp.Diagnostics {
 		// number. Under a newline of its own, as bash's is.
 		JobStoppedNotice:           "%[3]s: suspended  %[4]s",
 		JobStoppedNoticeOnANewLine: true,
-		// `fg` and `bg` both print a listing row with a state no listing
-		// ever shows — `[1]  + continued  sleep 3` — so it is spelled here
-		// rather than beside JobRunning and JobStopped. The shape is
-		// JobLine's, with `continued` in the 11-wide state column.
-		JobResumedInForeground: "[%[1]d]  %[2]s continued  %[3]s",
+		// `fg` and `bg` both print a listing row, and the state in it is
+		// JobLine's 11-wide column with the resume's own word in it. Not
+		// always `continued`: measured 2026-09-15 on a pseudo-terminal,
+		// `fg` on a job that is *running* prints `[1]  + running    sleep 1`
+		// — the row `jobs` prints — and only a job the shell had to send a
+		// continue to is called continued. So the state is a verb here and
+		// `continued` is JobContinued, beside JobRunning and JobStopped
+		// where a state word belongs (#2838).
+		JobResumedInForeground: "[%[1]d]  %[2]s %-11[4]s%[3]s",
+		// `bg` never sees the other state: a job that is already running is
+		// refused below rather than resumed, so the only row this prints is
+		// the continued one. Spelled with the literal word for that reason —
+		// the format that takes the verb is the one that has two answers.
 		JobResumedInBackground: "[%[1]d]  %[2]s continued  %[3]s",
+		JobContinued:           "continued",
+		// `bg` on a job that is not stopped is refused, and the sentence
+		// names neither the builtin nor the job — this shell's location
+		// prefix already carries the builtin, as `bg: %1: no such job` does.
+		// Status 1, where bash complains about the same thing and still
+		// reports success. Measured 2026-09-15 from a script with `set -m`
+		// on a pseudo-terminal and again at an interactive prompt (#2838).
+		JobAlreadyInBackground:       "job already in background",
+		JobAlreadyInBackgroundStatus: 1,
 		// The shell names itself here too, and the held `exit` reports
 		// nothing — measured, `echo $?` after the refusal says 0, where
 		// bash's says 1.

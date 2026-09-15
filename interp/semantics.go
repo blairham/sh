@@ -9614,6 +9614,48 @@ type Semantics struct {
 	// script's job handling (#2720).
 	MonitorAloneResumesAJob Answer
 
+	// MonitorAloneAnnouncesAJob says `[1] <pid>` when a job is backgrounded
+	// in a shell that has the monitor and nobody at a prompt — which is what
+	// a script that ran `set -m` is.
+	//
+	// The same split MonitorAloneResumesAJob draws, drawn again one notice
+	// over, and the panel divides differently here: four of the five resume
+	// on the monitor alone and exactly one announces on it.
+	//
+	// Measured 2026-09-15, `env -i PATH=/usr/bin:/bin HOME=<scratch>`, a
+	// script file on a pseudo-terminal — which zsh needs, since `set -m`
+	// without one is fatal there — holding `set -m`, `sleep 1 &` and a mark
+	// after it:
+	//
+	//	bash 5.3.15   nothing        ksh93u+       nothing
+	//	dash          nothing        BusyBox ash   nothing
+	//	zsh 5.9.2     [1] <pid>
+	//
+	// So the start notice rides on the monitor in zsh and on having somebody
+	// to tell everywhere else. Runner.JobControl is that somebody, and it is
+	// a prompt and nothing else; a script has the monitor and never it.
+	//
+	// Not the same question as AnnouncesBackgroundJob, which asks whether a
+	// dialect announces at all and which zsh, bash and ksh93 all answer yes:
+	// all three announce at a prompt and only zsh does from a script. Nor
+	// AnnouncesBackgroundJobWithoutTheMonitor, which is the opposite corner
+	// — somebody to tell and the monitor off — and where zsh is the one that
+	// goes quiet.
+	//
+	// Read rather than asked, exactly as MonitorAloneResumesAJob is, and no
+	// is what it reads as: silence is what four of the five do, and a preset
+	// that has not chosen had better print nothing than put "the shells
+	// disagree here" between a script's commands.
+	//
+	// unpinned: never reached from the corpus, and it cannot be. Every case
+	// runs with no controlling terminal, and the one shell that answers yes
+	// will not grant the monitor without one — so no row can have both the
+	// monitor and this dialect. Pinned instead by
+	// interp/monitorannounce_test.go, which builds that state directly and
+	// moves the axis both ways (TestTheMonitorAloneMayAnnounceAJob), and by
+	// each dialect's own vector table (#2838).
+	MonitorAloneAnnouncesAJob Answer
+
 	// StoppedJobsHoldTheExit keeps an interactive shell alive when leaving
 	// would abandon a job that is stopped: the shell says so and stays, and
 	// the attempt has to be made a second time.

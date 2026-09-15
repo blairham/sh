@@ -266,6 +266,10 @@ func Semantics() interp.Semantics {
 	// denial leaves `fg: job (null) not created under job control` at 2
 	// (#2720).
 	s.MonitorAloneResumesAJob = interp.Yes
+	// And announces nothing on the monitor alone, as dash does not.
+	// Measured 2026-09-15 in the pinned image, a script file on a
+	// pseudo-terminal (#2838).
+	s.MonitorAloneAnnouncesAJob = interp.No
 	s.InteractiveMonitorNeedsATerminal = interp.Yes
 
 	// ---- builtins ----

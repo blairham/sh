@@ -496,7 +496,7 @@ func biFg(r *Runner, _ context.Context, args []string) int {
 	}
 	// Named on the way in, which is how a shell says which job it just put
 	// back in front of you when you did not say.
-	r.printf("%s\n", r.resumeNotice(j, r.diag().JobResumedInForeground, j.Command))
+	r.printf("%s\n", r.resumeNotice(j, r.diag().JobResumedInForeground, j.Command, r.resumeState(j)))
 	if err := r.signalJob(j, syscall.SIGCONT); err != nil {
 		r.diagf("fg: %v\n", err)
 		return 1
@@ -607,15 +607,31 @@ func (r *Runner) finishResumed(j *Job) int {
 
 // resumeNotice is what `fg` or `bg` says about the job it resumed.
 //
-// Three verbs — the number, the marker and the command — and a fallback the
-// caller supplies, because the two builtins differ in what a dialect that
-// says nothing of its own prints: `fg` names the command alone and `bg` puts
-// the `&` back after it.
-func (r *Runner) resumeNotice(j *Job, wording, fallback string) string {
+// Four verbs — the number, the marker, the command and the state — and a
+// fallback the caller supplies, because the two builtins differ in what a
+// dialect that says nothing of its own prints: `fg` names the command alone
+// and `bg` puts the `&` back after it.
+func (r *Runner) resumeNotice(j *Job, wording, fallback, state string) string {
 	if wording == "" {
 		return fallback
 	}
-	return Wording(wording, "", r.jobNumber(j), r.jobMarker(j), j.Command)
+	return Wording(wording, "", r.jobNumber(j), r.jobMarker(j), j.Command, state)
+}
+
+// resumeState is the state word a resume notice carries, in the one dialect
+// whose notice is a listing row rather than a sentence.
+//
+// `continued` where the job was actually continued, and the job's own state
+// where it was already doing it — measured, zsh's `fg` on a running job
+// prints the row `jobs` would print, `running` and all, and only a job it
+// had to send a continue to is called continued. The state is read before
+// either builtin clears Job.Stopped, because that flag is the whole of the
+// question.
+func (r *Runner) resumeState(j *Job) string {
+	if j.Stopped {
+		return Wording(r.diag().JobContinued, "continued")
+	}
+	return r.jobState(j, false)
 }
 
 func biBg(r *Runner, _ context.Context, args []string) int {
@@ -623,13 +639,27 @@ func biBg(r *Runner, _ context.Context, args []string) int {
 	if code != 0 {
 		return code
 	}
+	// A job that was never stopped is already doing what `bg` would ask of
+	// it, and two of the panel say so rather than sending a continue to a
+	// process that is running and announcing it as resumed. The other three
+	// resume it and print the usual notice — see
+	// Diagnostics.JobAlreadyInBackground, which is empty for those.
+	if !j.Stopped {
+		if w := r.diag().JobAlreadyInBackground; w != "" {
+			r.diagf("%s\n", Wording(w, "", "bg", r.jobNumber(j)))
+			return r.diag().JobAlreadyInBackgroundStatus
+		}
+	}
+	// Read while Job.Stopped still says what the job was doing, which is what
+	// the state word is about.
+	state := r.resumeState(j)
 	if err := r.signalJob(j, syscall.SIGCONT); err != nil {
 		r.diagf("bg: %v\n", err)
 		return 1
 	}
 	j.Stopped = false
 	// `&` after it, which is what says the shell is not waiting.
-	r.printf("%s\n", r.resumeNotice(j, r.diag().JobResumedInBackground, j.Command+" &"))
+	r.printf("%s\n", r.resumeNotice(j, r.diag().JobResumedInBackground, j.Command+" &", state))
 	return 0
 }
 
@@ -664,6 +694,23 @@ func (r *Runner) resume(args []string, name string) (*Job, int) {
 	if j == nil {
 		return nil, code
 	}
+	// What the job's own goroutine already saw, taken before either builtin
+	// reads Job.Stopped — because everything below turns on that flag, and
+	// until something looks it says what the job was doing at the last
+	// listing rather than what it is doing now.
+	//
+	// A job stopped from outside the shell — `kill -STOP %1`, another
+	// terminal, a debugger — is the shape that showed it. `jobs` takes the
+	// note as part of reaping and `fg` never did, so the same script with a
+	// `jobs` line in it and without answered differently: with it, `fg`
+	// continued the job and waited it out; without, it thought the job was
+	// running, printed the wrong state word in the dialect whose notice
+	// carries one, and then read the stale note in finishResumed and
+	// reported 128+SIGSTOP without waiting at all (#2838).
+	//
+	// Idempotent, so this is not a second reaper: the note is taken once and
+	// a job the script has since resumed is not put back to stopped.
+	r.noticeStoppedJob(j)
 	if !r.canResume() {
 		// The operand read first and nothing wrong with it, which leaves the
 		// refusal this shell had all along. dash names the spec here, and

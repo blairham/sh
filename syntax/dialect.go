@@ -362,6 +362,63 @@ const (
 	EndOfInputBackslashIsLiteralOnlyAtAWordStart
 )
 
+// BraceProgramBodyEnd says where the body of `${ cmd;}` stops.
+//
+// The body holds a command list, and the two shells that have the construct
+// disagree about which `}` ends it. Measured 2026-09-13 over `-c`, ksh93u+
+// 2012-08-01 and bash 5.3.15 — the four columns without the construct are not
+// in the table because they refuse every row of it:
+//
+//	written                      ksh93            bash 5.3
+//	${ echo a}b;}                a}b              a}b
+//	${ echo hi}                  `{' unmatched    unexpected EOF
+//	${ echo } ;}                 `}' unexpected   }
+//	${ echo a } b;}              `}' unexpected   a } b
+//	A${ echo B }C                ABC              unexpected EOF
+//	${ echo {a,b};}              `{' unmatched    a b
+//	${ echo a;}                  a                a
+//
+// Both readings refuse `${ echo hi}`, which is the row that matters most:
+// a body with no terminator in front of the brace is not a closed
+// substitution in either column, and reading it as one runs a command the
+// author never wrote (#2711). The rest of the table is where the two part
+// company (#2724).
+//
+// The values carry the two rules; see [BraceProgramBodyEnd]'s constants.
+type BraceProgramBodyEnd uint8
+
+const (
+	// BraceProgramBodyEndsWhereAListEnds ends the body exactly where the
+	// list of a `{ …; }` group ends: at the reserved word `}`, which stands
+	// only where a command may begin. bash 5.3, and the core, because it is
+	// the rule the construct's own braces already have everywhere else in
+	// the grammar.
+	//
+	// It is why `echo }` passes a literal brace to `echo` from inside a body
+	// — rows three and four above — and why a body with no terminator runs
+	// off the end of the input rather than closing at the first `}` it meets.
+	BraceProgramBodyEndsWhereAListEnds BraceProgramBodyEnd = iota
+
+	// BraceProgramBodyEndsAtATokenStart ends it at a `}` that *begins a
+	// token*, which is argument position as well as command position, and
+	// lets a `{` that begins one open a nested level that a token-start `}`
+	// closes. ksh93u+.
+	//
+	// Rows three and four are the visible consequence: a `}` written as an
+	// argument ends the body there rather than reaching `echo`, so what is
+	// left over is a stray brace and the line is refused. Row six is the
+	// other half — `{a,b}` opens a level whose `}` is mid-word and closes
+	// nothing, so the body runs past the end of the input.
+	//
+	// Quotes and the older substitution shield a brace and the newer one
+	// does not, which is measured rather than assumed: a body whose `}` sits
+	// inside a backquoted substitution keeps it — `}x` comes back — and the
+	// same body written `${ echo $(echo x)}` is `` `{' unmatched ``, so the
+	// `)` that closes a `$( )` leaves the cursor inside a word while the
+	// `)` of a subshell — `${ (echo q)}` — begins the next token.
+	BraceProgramBodyEndsAtATokenStart
+)
+
 // Dialect says which constructs the lexer accepts.
 //
 // Fields are named for the construct rather than for the shell that wants it,
@@ -879,6 +936,16 @@ type Dialect struct {
 	// grammar: `${x}` is a parameter and `${ x}` is a command.
 	CurrentShellSubstitution bool
 
+	// BraceProgramBodyEnd says which `}` ends that body. The two shells that
+	// have the construct disagree, and both of them refuse a body with no
+	// terminator in front of the brace. The values carry the measurements;
+	// see [BraceProgramBodyEnd].
+	//
+	// Read only where CurrentShellSubstitution is on — where it is off there
+	// is no such body to end — and it governs [Dialect.ReplySubstitution]'s
+	// body too, which is the same list with a `|` in front of it.
+	BraceProgramBodyEnd BraceProgramBodyEnd
+
 	// ReplySubstitution reads `${| cmd;}` as a command substitution that runs
 	// in the current shell and expands to whatever the body left in `$REPLY`
 	// rather than to what it printed. bash 5.3 has it and nothing else in the
@@ -944,6 +1011,33 @@ type Dialect struct {
 	// it not found. That spelling is refused here as it was before this flag,
 	// and it is a construct of its own rather than a corner of this one.
 	SubshellSubstitution bool
+
+	// BracedArithmeticExpansion reads `${((expr))}` as an arithmetic
+	// expansion. ksh93 has it and nothing else in the panel does: the three
+	// bash columns and dash call it a bad substitution, BusyBox ash words
+	// that as a syntax error, and zsh reads the parenthesis as its expansion
+	// flags and complains about the letters inside.
+	//
+	// **Arithmetic and not [Dialect.SubshellSubstitution] with a subshell in
+	// it**, which is measured rather than assumed. The discriminator is one
+	// space: `${((echo hi))}` is `echo hi: arithmetic syntax error` there,
+	// where a subshell body would have run the command and printed `hi`, and
+	// `${( (1+2) )}` — the same characters with the parens apart — reports
+	// `1+2: not found`, a command by that name. Measured 2026-09-13 on
+	// ksh93u+ 2012-08-01:
+	//
+	//	${((1+2))}        3
+	//	${(( 1+2 ))}      3
+	//	${(((1+2)))}      3
+	//	${((1+2))}x       3x
+	//	${((echo hi))}    echo hi: arithmetic syntax error
+	//	${((1+2)) }       `end of file' unexpected
+	//
+	// The last row is why the `}` is required directly behind the `))` with
+	// nothing between them, which is the same shape [Dialect.SubshellSubstitution]
+	// has and the reason the two adjacent parens can settle the spelling
+	// before anything else is read (#2725).
+	BracedArithmeticExpansion bool
 
 	// CasePatternAcceptsOperator lets an operator stand where a case pattern
 	// belongs, which produces an arm with no patterns at all.

@@ -238,12 +238,24 @@ func Dialect() syntax.Dialect {
 	// so that what it assigns survives. The space after the brace is the
 	// whole of the grammar: `${x}` is a parameter and `${ x}` is not.
 	d.CurrentShellSubstitution = true
+	// And that body ends at a `}` which begins a *token*, in argument
+	// position as well as command position, which is where this shell parts
+	// from the other one that has the construct: `${ echo } ;}` is refused
+	// here and hands `echo` a literal brace there. See
+	// syntax.Dialect.BraceProgramBodyEnd for the seven rows (#2724).
+	d.BraceProgramBodyEnd = syntax.BraceProgramBodyEndsAtATokenStart
 	// `${(list)}`, whose body is the parenthesized subshell and whose `}` has
 	// to sit directly behind the matching `)`. Not the form above with a `(`
 	// for an opener: `${(echo a); echo b;}` is refused while reading here and
 	// the blank spelling of the same body runs both commands. See
 	// syntax.Dialect.SubshellSubstitution for the six rows (#2615).
 	d.SubshellSubstitution = true
+	// `${((expr))}`, a second spelling for an arithmetic expansion — and not
+	// the form above with a subshell inside it: `${((echo hi))}` is an
+	// arithmetic syntax error here where a subshell body would have printed
+	// `hi`, and one space, `${( (1+2) )}`, is what turns it back into a
+	// command nobody has. See syntax.Dialect.BracedArithmeticExpansion (#2725).
+	d.BracedArithmeticExpansion = true
 	// A here-document inside parentheses that hold a program ends at the
 	// closing one: `v=$(cat <<EOF` / `a` / `EOF)` is accepted and `v` is `a`.
 	// dash and zsh read the body from the whole input instead, so the `)`

@@ -3254,6 +3254,86 @@ func (l *Lexer) parseToClose(from int) (int, []Remark, bool) {
 	return from + int(sub.tok.Pos.Offset), sub.lex.remarks, true
 }
 
+// parseToCloseBrace reads the body of `${ cmd;}` and returns the offset of
+// the `}` that ends it, for the reading that ends it where a list ends.
+//
+// It is parseToClose's shape with the other closer, and for the same reason:
+// what ends a command list is a question about the grammar rather than about
+// how many braces have been seen. `}` is a reserved word, so it stands only
+// where a command may begin — which is exactly what [Parser.parseList] stops
+// on, and exactly why `${ echo } ;}` hands `echo` a literal brace and
+// `${ echo hi}` never closes at all.
+//
+// A body the parser could not read comes back as not-ok and the caller
+// reports the construct unterminated. There is deliberately no fall-back to
+// counting braces here, which is where scanParens differs: counting would
+// close `${ echo hi}` at the brace that ends the word, which is the reading
+// this exists to remove.
+//
+// It is written as a candidate scan rather than as one read of the whole
+// remaining text, because the closing brace need not be a token of its own:
+// `echo ${ echo a;}Y` is `aY` in the column that has this rule, so the `}`
+// ends the body and `Y` goes on with the word around it — where the same
+// characters written as a group command, `{ echo a;}Y`, are refused. So each
+// `}` that *could* be the reserved word is offered the text in front of it,
+// and the first one a list actually ends at is the answer. Truncating at the
+// candidate is what makes the offer honest: a `}` inside quotes or inside a
+// substitution leaves that construct unterminated in the prefix, the read
+// fails, and the scan moves on.
+func (l *Lexer) parseToCloseBrace(from int) (int, []Remark, bool) {
+	refused := -1
+	for i := from; i < len(l.src); i++ {
+		if l.src[i] != '}' || !braceCouldBeReserved(l.src, from, i) {
+			continue
+		}
+		sub := NewParserAt(l.src[from:i+1], l.dialect, l.line)
+		sub.parseList()
+		if sub.err == nil && sub.atWord("}") {
+			return i, sub.lex.remarks, true
+		}
+		if !sub.at(TokEOF) && refused < 0 {
+			// The read stopped inside the prefix rather than running out of
+			// it, so what is in front of this brace is text the grammar will
+			// not take — with a complaint recorded or, for a pipeline with
+			// nothing on its left, without one.
+			refused = i
+		}
+	}
+	if refused >= 0 {
+		// A brace *does* stand where the reserved word can, and what is in
+		// front of it is not a list the parser will take: `${ | REPLY=hi;}`
+		// is a pipeline with nothing on its left. That is a complaint about
+		// the body and not about the brace, and the panel words it that way
+		// — `|' unexpected, looking for `}'` — so the expansion is closed
+		// here and the body is handed on to be refused by whoever reads it.
+		//
+		// The distinction this keeps is the whole of #2711: a body with *no*
+		// brace in command position at all is a different failure, and it is
+		// the one that has to stay unterminated rather than closing at the
+		// first `}` in sight.
+		return refused, nil, true
+	}
+	return 0, nil, false
+}
+
+// braceCouldBeReserved is the cheap half of that scan: whether a `}` at i
+// stands anywhere a reserved word could, given only the byte in front of it.
+//
+// Every brace the reserved word could be passes it and most of the braces in
+// a body do not, which is the point — the expensive half is a parse, and
+// `${x}` written in a body would otherwise buy one for every parameter the
+// body reads.
+func braceCouldBeReserved(src string, from, i int) bool {
+	if i <= from {
+		return true
+	}
+	switch src[i-1] {
+	case ' ', '\t', '\n', ';', '&', '|', '(', ')':
+		return true
+	}
+	return false
+}
+
 // procSubstKind says which end of the pipe the word will name.
 func procSubstKind(c byte) SpanKind {
 	if c == '>' {
@@ -3284,6 +3364,41 @@ func closers(k SpanKind) int {
 	return 1
 }
 
+// scanBracedArithmetic reads `${((expr))}`, one shell's second spelling for
+// an arithmetic expansion. See Dialect.BracedArithmeticExpansion for the rows
+// and for the space that tells it from the subshell spelling.
+//
+// It is asked before that one because the two adjacent parens are the whole
+// of the discriminator, and it commits rather than backtracking: the shell
+// that has this construct commits too, so `${((1+2)) }` is refused there
+// rather than falling back to anything.
+func (l *Lexer) scanBracedArithmetic(open Pos, start int, q Quoting) (Span, bool) {
+	if !l.dialect.BracedArithmeticExpansion || start+1 >= len(l.src) ||
+		l.src[start] != '(' || l.src[start+1] != '(' {
+		return Span{}, false
+	}
+	l.advance() // the first (
+	l.advance() // the second (
+	from := l.off
+	// Two parentheses to close, counted the way `$(( ))` counts them, so
+	// `${(((1+2)))}` ends at the third `)` and not at the first pair.
+	if !l.skipToDepth(2) {
+		l.ranOut("${")
+		l.failUnmatched(open, "${", "}", "unterminated arithmetic expansion")
+		return Span{Kind: ArithSubst, Braced: true, Value: l.src[from:l.off], Quoting: q, Pos: open}, true
+	}
+	end := l.off - closers(ArithSubst)
+	if l.eof() || l.peek() != '}' {
+		// The brace has to sit directly behind the `))` with nothing between
+		// them, not even a blank — the same shape the subshell spelling has,
+		// and measured the same way.
+		l.failUnmatched(open, "${", "}", "unterminated arithmetic expansion")
+		return Span{Kind: ArithSubst, Braced: true, Value: l.src[from:end], Quoting: q, Pos: open}, true
+	}
+	l.advance() // the }
+	return Span{Kind: ArithSubst, Braced: true, Value: l.src[from:end], Quoting: q, Pos: open}, true
+}
+
 // scanSubshellSubstitution reads `${(list)}`, the spelling whose body is a
 // parenthesized subshell. See Dialect.SubshellSubstitution for the panel and
 // for why the extent is the parenthesis rather than a command list.
@@ -3305,12 +3420,14 @@ func (l *Lexer) scanSubshellSubstitution(open Pos, start int, q Quoting) (Span, 
 		return Span{}, false
 	}
 	if start+1 < len(l.src) && l.src[start+1] == '(' {
-		// `${((expr))}` is ksh93's braced arithmetic and not a subshell —
-		// `${((echo hi))}` is an arithmetic syntax error there. Two adjacent
-		// parens are the whole of the discriminator, so `${( (1+2) )}` is a
-		// subshell running a command called `1+2`. The arithmetic spelling
-		// is not implemented; leaving it here would read it as a subshell
-		// and answer nothing where ksh93 answers a number.
+		// `${((expr))}` is the braced arithmetic expansion and not a
+		// subshell — `${((echo hi))}` is an arithmetic syntax error in the
+		// shell that has both. Two adjacent parens are the whole of the
+		// discriminator, so `${( (1+2) )}` is a subshell running a command
+		// called `1+2`. scanBracedArithmetic is asked first and has already
+		// taken it where the dialect has that spelling; declining here is
+		// what leaves the text the refusal it was for every dialect that
+		// does not (#2725).
 		return Span{}, false
 	}
 	end, remarks, ok := l.parseToClose(start + 1)
@@ -3350,6 +3467,9 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 	// syntax error in the shell that has both. See Dialect.ReplySubstitution
 	// for the five rows.
 	reply := l.dialect.ReplySubstitution && start < len(l.src) && l.src[start] == '|'
+	if span, ok := l.scanBracedArithmetic(open, start, q); ok {
+		return span
+	}
 	if span, ok := l.scanSubshellSubstitution(open, start, q); ok {
 		return span
 	}
@@ -3363,6 +3483,42 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 	// A level opened by a bare `{` repeats its enclosing level's start,
 	// because a brace opens no operand of its own.
 	bodies := []int{start}
+	// Where the command body itself begins, which is past the `|` of the
+	// reply form. The two readings below both need it: one hands it to the
+	// parser and the other measures token starts from it.
+	body := start
+	if reply {
+		body++
+	}
+	// Which `}` ends a command body. See [Dialect.BraceProgramBodyEnd] for
+	// the two rules and the rows that separate them.
+	//
+	// The stack is per level rather than per construct because a `${x}`
+	// written inside a body is a parameter expansion again and ends at its
+	// own brace wherever that brace stands: `${ echo ${x};}` yields the
+	// value in ksh93, which the token-start rule applied to the inner level
+	// would refuse. A level a token-start `{` opens keeps the rule, which is
+	// what makes `${ echo {a,b};}` run off the end there.
+	tokenStart := []bool{brace && l.dialect.BraceProgramBodyEnd == BraceProgramBodyEndsAtATokenStart}
+	// Where the parser said the body ends, for the reading that ends it
+	// where a list ends. -1 says nothing ends it, and the loop then reads to
+	// the end of the input and reports the `${` unterminated — which is the
+	// answer both shells give to `${ echo hi}` and is the whole of #2711.
+	closeAt := -1
+	listBody := brace && !tokenStart[0]
+	if listBody {
+		if end, remarks, ok := l.parseToCloseBrace(body); ok {
+			// What that read had to say comes back with it, exactly as it
+			// does for the parenthesis a substitution closes at.
+			l.remarks = append(l.remarks, remarks...)
+			closeAt = end
+		}
+	}
+	// The offset of the most recent `)` that closed a `$( )`, which leaves
+	// the cursor inside a word rather than at the end of a token. Only the
+	// token-start reading consults it.
+	wordParen := -1
+	dollarParens := 0
 	for depth > 0 {
 		if l.eof() {
 			l.ranOut("${")
@@ -3402,6 +3558,18 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 				se.BraceNameStop, se.BraceNameStopFollowsAPrefix = braceNameStop(l.src[start:])
 			}
 			break
+		}
+		if listBody {
+			// The end was settled before the loop, by the parser, so there
+			// is nothing here to find: walk to it. Quoting, comments and
+			// nested constructs were all the sub-parse's question and it has
+			// already answered them, and closeAt of -1 walks to the end of
+			// the input and is reported above.
+			if l.off == closeAt {
+				depth--
+			}
+			l.advance()
+			continue
 		}
 		switch c := l.peek(); c {
 		case '\'':
@@ -3453,6 +3621,23 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 			// The substitution check stays in front of it: `$(` is a
 			// construct of its own and is stepped over whole, exactly as the
 			// default branch does it for a backquote.
+			//
+			// Except under the token-start reading, which does not let a
+			// `$( )` shield a brace — measured, and the one place the two
+			// spellings of a substitution part company there:
+			// `${ echo $(echo }x);}` ends the body at the brace inside the
+			// parentheses and is refused, while the backquoted spelling of
+			// the same body keeps it and yields `}x`. So the parentheses are
+			// counted rather than stepped over, and what the count is for is
+			// the `)` at the far end: it leaves the cursor inside a word, so
+			// a `}` behind it begins no token. A subshell's `)` does —
+			// `${ (echo q)}` is `q` there.
+			if tokenStart[len(tokenStart)-1] && l.peekAt(1) == '(' {
+				dollarParens++
+				l.advance() // $
+				l.advance() // (
+				continue
+			}
 			if l.skipSubstitution() {
 				continue
 			}
@@ -3461,6 +3646,9 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 				depth++
 				l.advance()
 				bodies = append(bodies, l.off)
+				// A `${x}` written in a body is a parameter expansion and
+				// ends at its own brace wherever that brace stands.
+				tokenStart = append(tokenStart, false)
 			}
 		case '{':
 			// A bare `{` inside a *double-quoted* expansion is an ordinary
@@ -3491,15 +3679,53 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 			// its braces are that program's, so a `{ … }` block written in
 			// one has to balance for the same reason its quotes do — which
 			// is why the flag is not consulted for it.
-			if brace || (q != DoubleQuoted && l.dialect.BareBraceNestsInExpansion) {
+			//
+			// The token-start reading narrows that to a `{` which begins a
+			// token, and the level it opens keeps the rule: that is what
+			// makes `${ echo {a,b};}` run off the end of the input in the
+			// column that has it, since the `}` of the group is mid-word and
+			// closes nothing.
+			nests := brace || (q != DoubleQuoted && l.dialect.BareBraceNestsInExpansion)
+			if tokenStart[len(tokenStart)-1] {
+				nests = l.atBraceTokenStart(body, wordParen)
+			}
+			if nests {
 				depth++
 				bodies = append(bodies, bodies[len(bodies)-1])
+				tokenStart = append(tokenStart, tokenStart[len(tokenStart)-1])
+			}
+			l.advance()
+		case ')':
+			// Which kind of `)` this was, for the token-start reading above.
+			// Nothing else consults it, and for every other reading this is
+			// the default branch spelled out.
+			if dollarParens > 0 {
+				dollarParens--
+				wordParen = l.off
+			}
+			l.advance()
+		case '(':
+			if dollarParens > 0 {
+				// Inside a `$( )` already, so this parenthesis is one the
+				// matching `)` at the far end has to get past — `$(( ))`
+				// most of all, whose two closers would otherwise leave the
+				// second one looking like a subshell's.
+				dollarParens++
 			}
 			l.advance()
 		case '}':
+			if tokenStart[len(tokenStart)-1] && !l.atBraceTokenStart(body, wordParen) {
+				// A `}` in the middle of a word is an ordinary character
+				// there: `${ echo a}b;}` yields `a}b`.
+				l.advance()
+				continue
+			}
 			depth--
 			if len(bodies) > 1 {
 				bodies = bodies[:len(bodies)-1]
+			}
+			if len(tokenStart) > 1 {
+				tokenStart = tokenStart[:len(tokenStart)-1]
 			}
 			l.advance()
 		default:
@@ -3534,15 +3760,10 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 		// what follows as a name and failing.
 		//
 		// The body is taken exactly as the parameter form takes it: a `}`
-		// inside quotes does not close either, and both nest.
-		body := start
-		if reply {
-			// The `|` is the marker and not the first word of the body,
-			// which is the one place the two forms differ once the end has
-			// been found: the blank form's opening blank *is* body text and
-			// this one's pipe is not.
-			body++
-		}
+		// inside quotes does not close either, and both nest. Where it
+		// *ends* is the one place they differ and is settled above; `body`
+		// is past the `|` of the reply form, because the blank form's
+		// opening blank is body text and this one's pipe is its marker.
 		return Span{Kind: CommandSubst, CurrentShell: true, ReplyValue: reply, Value: l.src[body:end], Quoting: q, Pos: open, Comments: l.bodyComments(CommandSubst)}
 	}
 	return Span{Kind: ParamExp, Value: l.src[start:end], Quoting: q, Pos: open}
@@ -3564,6 +3785,28 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 // form's `${ (echo a); echo b;}` runs both, so a `(` admitted here would
 // accept a body ksh93 refuses while reading it. See
 // Dialect.SubshellSubstitution for the six rows.
+// atBraceTokenStart reports whether a brace at the cursor begins a token, for
+// the reading that ends a `${ cmd;}` body at one. See
+// [BraceProgramBodyEndsAtATokenStart].
+//
+// from is where the body began and wordParen the offset of the most recent
+// `)` that closed a `$( )`. That second argument is the whole of the
+// difference between `${ (echo q)}`, which is `q` in the column that has this
+// rule, and `${ echo $(echo x)}`, which is refused there: both have a `)` in
+// front of the brace and only one of them has ended a token with it.
+func (l *Lexer) atBraceTokenStart(from, wordParen int) bool {
+	if l.off <= from {
+		return true
+	}
+	switch l.src[l.off-1] {
+	case ' ', '\t', '\n', ';', '&', '|', '(':
+		return true
+	case ')':
+		return l.off-1 != wordParen
+	}
+	return false
+}
+
 func isBraceCommandStart(c byte) bool {
 	return c == ' ' || c == '\t' || c == '\n'
 }

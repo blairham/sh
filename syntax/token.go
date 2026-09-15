@@ -317,6 +317,12 @@ type Span struct {
 	// script rather than printing it.
 	Bracketed bool
 
+	// Braced says an arithmetic expansion was written `${(( … ))}` rather
+	// than `$(( … ))`, which is the same reasoning again and the third
+	// spelling of one construct. One shell in the panel has it; the rest
+	// call it a bad substitution. See [Dialect.BracedArithmeticExpansion].
+	Braced bool
+
 	// PatternGroup says this literal span is the text of a parenthesised
 	// group that belongs to the word — `(a|b)` in `echo (a|b)`, `@(a|b)`
 	// or a `case` arm's pattern — so its `(`, `|` and `)` are the

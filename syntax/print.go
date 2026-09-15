@@ -1607,6 +1607,10 @@ func (p *printer) span(s Span) {
 			p.str("$[" + s.Value + "]")
 			return
 		}
+		if s.Braced {
+			p.str("${((" + s.Value + "))}")
+			return
+		}
 		p.str("$((" + s.Value + "))")
 	case ParamExp:
 		// `$x` where that is what it means, and `${x}` where the braces are

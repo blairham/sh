@@ -6536,9 +6536,56 @@ echo "st=$?"`,
 		Why:     "the contrast that makes the row above mean something: the same two commands behind a *blank* run in all three columns that have the blank-opened construct — ksh93, and bash 5.3 in both of its columns — and print `a b`. So the refusal above is not about a subshell standing first in a body — it is about where `${(` ends. bash 3.2 has neither spelling and dash, ash and zsh have none, which is also what tells this row from the paren one in the record rather than only in this sentence",
 	},
 	{
+		ID: "subst/a-braced-arithmetic-expansion", Category: "commands",
+		Snippet: `x=5; echo "[${((x*2))}]"`,
+		Why:     "`${((expr))}` is a second spelling for an arithmetic expansion in one column — ksh93 answers `[10]` — and a bad substitution in the other six, worded four ways: the three bash columns and dash say so plainly, BusyBox ash calls it a syntax error, and zsh reads the parenthesis as its expansion flags and complains about the letters inside. Written inside a word so the answer is the whole expansion rather than only a number on a line of its own",
+	},
+	{
+		ID: "subst/a-braced-arithmetic-body-is-not-a-subshell", Category: "commands",
+		Snippet: `echo ${((echo hi))}`,
+		Why:     "the discriminator, and the reason the row above is arithmetic rather than `${(list)}` with a subshell inside it: a subshell body would run `echo hi` and print it, and ksh93 answers `echo hi: arithmetic syntax error` instead. The contrast is one space — `${( (1+2) )}` is the subshell spelling there and reports `1+2: not found`, a command by that name — so two adjacent parens settle the spelling before anything inside is read. Without this row the two constructs are indistinguishable and the wrong reading answers nothing where ksh93 answers a number (#2725)",
+	},
+	{
+		ID: "subst/a-braced-arithmetic-expansion-with-a-word-after-it", Category: "commands",
+		Snippet: `echo ${((1+2))}x${(((4+5)))}`,
+		Why:     "the extent, twice over: the `}` behind the `))` ends the expansion and the `x` goes on with the word around it, and a third parenthesis belongs to the expression rather than closing anything — so the second field ends at the third `)` and not at the first pair. ksh93 answers `3x9`; the other six call the word a bad substitution. Both halves are what a scan that counted only two parens would get wrong",
+	},
+	{
 		ID: "subst/a-brace-body-opens-on-a-blank-or-a-paren-and-nothing-else", Category: "commands",
 		Snippet: `echo ${echo hi;}`,
 		Why:     "the control: with neither a blank nor a `(` after the brace ksh93 refuses the line while reading it, blaming the blank inside, so `${` does not fall back to a body when the name turns out not to be one. It is the only column that answers at parse time — the other six all defer to the run and call it a bad substitution, in four wordings and at four statuses, which is the ordinary split for an expansion nobody can read",
+	},
+	{
+		ID: "subst/a-body-with-no-terminator-before-its-brace", Category: "commands",
+		SyntaxError: true,
+		Snippet:     `echo ${ echo hi}`,
+		Why:         "the body of `${ cmd;}` holds a command list, so it has to be terminated before the closing brace exactly as `{ …; }` is — and the two columns that *have* the construct both refuse this, bash 5.3 naming the end of the input it went looking for the brace past and ksh93 the `{` it never matched. The other five never read it as a body at all and call it a bad substitution. Unanimous as a refusal and it is the direction that matters: read as closed, this runs a command nobody wrote, which is what this shell did until #2711",
+	},
+	{
+		ID: "subst/a-brace-mid-word-in-a-body-is-not-its-end", Category: "commands",
+		Snippet: `echo ${ echo a}b;}`,
+		Why:     "the control on the row above, and the row that says the refusal there is about the *terminator* rather than about a brace appearing in a body: with the `;` written, the earlier brace is an ordinary character in the middle of a word and both columns with the construct print `a}b`. A scan that ended the body at the first unquoted brace passes the row above and truncates this one",
+	},
+	{
+		ID: "subst/a-brace-in-argument-position-ends-a-body-or-does-not", Category: "commands",
+		Snippet: `echo ${ echo } ;}`,
+		Why:     "the first of the two rows the two columns split on, and the axis is where the body stops. bash 5.3 ends it where a `{ …; }` group ends — at the reserved word `}`, which stands only where a command may begin — so the brace written as an *argument* reaches `echo` and the line prints it. ksh93 ends it at a `}` that begins a token, argument position included, so the body is ` echo ` and the `;}` left over is refused. Ours was neither before #2724: it took the first unquoted brace wherever it stood, which is a third answer nobody gives",
+	},
+	{
+		ID: "subst/a-body-ending-at-a-brace-with-a-word-after-it", Category: "commands",
+		SyntaxError: true,
+		Snippet:     `echo A${ echo B }C`,
+		Why:         "the same split written so the early end is visible as output rather than as a refusal: ksh93 ends the body at the token-start brace and prints `ABC`, and bash 5.3 runs off the end of the input looking for a brace in command position. The two rows are the pair — a shell that ends a body at the first brace it meets matches ksh93 here and bash on the row above, and neither of them on both",
+	},
+	{
+		ID: "subst/a-brace-group-written-in-a-body", Category: "commands",
+		Snippet: `echo ${ echo {a,b};}`,
+		Why:     "the third row of the split and the one that says the token reading is a *nesting* rule rather than only a stopping rule: the `{` of the group begins a token there and opens a level, its own `}` is mid-word and closes nothing, and ksh93 runs out of input. bash 5.3 reads the group as an ordinary word and expands it to `a b`. Written with the brace group of an expansion rather than a command's, because that is the spelling where the two readings differ with no terminator question mixed in",
+	},
+	{
+		ID: "subst/a-body-whose-brace-is-glued-to-the-word-around-it", Category: "commands",
+		Snippet: `echo X${ echo a;}Y`,
+		Why:     "the closing brace need not be a token of its own: both columns with the construct answer `XaY`, so the `}` ends the body and the `Y` goes on with the word around it — where the same characters written as a group command, `{ echo a;}Y`, are refused in both. It is the guard on how the list reading finds its end, which looks for a brace the grammar would take as the reserved word and must not require it to stand alone",
 	},
 	{
 		ID: "subst/a-comment-in-a-current-shell-body", Category: "commands",

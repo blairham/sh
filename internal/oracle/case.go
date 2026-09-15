@@ -23586,4 +23586,23 @@ echo "st=$?"`,
 		Snippet:  "unset u\nu+=([1]=Z) 2>&1\ntypeset -p u 2>&1\ne=\ne+=([1]=Z) 2>&1\ntypeset -p e 2>&1\necho tail\n",
 		Why:      "the boundary the row above rests on, and the one a fix that seeded the base unconditionally would lose: an **empty** scalar is a value the name is holding and an **unset** name is not. ksh93 answers `typeset -A u=([1]=Z)` with no base and `typeset -A e=([0]='' [1]=Z)` with one, so the two lines differ by the single character that assigned nothing. It is the same distinction the bare spelling already draws -- `a=; a+=(2)` is two elements and `unset a; a+=(2)` is one -- which is why the promotion asks getVar rather than counting what is stored (#2785)",
 	},
+	{
+		ID:       "declare/a-store-refused-element-from-a-command-string",
+		Category: "declarations",
+		Snippet:  "a=(x y)\ntypeset \"a[0]\"=v\necho after",
+		Why:      "the status a declaration leaves behind when the **store** refuses the element it names, with the program arriving as an argument. The row under it is the same three lines read from a *file*, and one column answers the two differently: zsh is 0 here and 1 there, byte for byte the same complaint and `after` printed by neither, so the status is the whole of the difference. Subscript `0` because the first element is number one in that shell; bash and ksh93 take it as an ordinary index and print `after`, and dash has no array literal to reach it with. #1770 was filed from this route alone and read as a divergence on every route -- from a file this engine already agreed (#1770)",
+	},
+	{
+		ID:       "declare/a-store-refused-element-from-a-script-file",
+		Category: "declarations",
+		Script:   true,
+		Snippet:  "a=(x y)\ntypeset \"a[0]\"=v\necho after\n",
+		Why:      "the other half of the pair, and the half that says the split is the *route's*: the same three lines from a file leave 1 in the column that leaves 0 from an argument. Every other column answers both routes alike, which is what makes this a status axis with one dissenter rather than a rule about declarations -- see Semantics.StoreRefusalOfADeclaredElementLeavesZeroFromCommandString",
+	},
+	{
+		ID:       "declare/the-refusals-in-front-of-the-store-do-not-follow-the-route",
+		Category: "declarations",
+		Snippet:  "a=(x y)\nreadonly \"a[0]\"=v\necho after",
+		Why:      "the control the pair above needs, and the seam the rule actually turns on. A declaration's *own* refusal names the builtin in its location -- `<shell>:readonly:1:` -- where the store's complaint two rows up names none, and it keeps its status on both routes in every column. `integer a[0]=5`, `typeset -a a[0]=v`, `typeset -i a[0]=v` and `typeset -A a[0]=v` are the same side of that seam and are pinned in dialect/zsh rather than here, one row being enough to say the two sides exist",
+	},
 }

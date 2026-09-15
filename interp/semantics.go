@@ -4307,6 +4307,68 @@ type Semantics struct {
 	// `-c 'false; set -A 1bad v'` exits 0 too.
 	SetArrayBadNameLeavesZeroFromCommandString Answer
 
+	// StoreRefusalOfADeclaredElementLeavesZeroFromCommandString makes a
+	// declaration whose *store* refuses the element end the shell at **0**
+	// where the same refusal from a script file leaves 1.
+	//
+	// True in zsh, false in bash, and unreachable in the shells with no
+	// arrays. Measured 2026-09-14, `-f` and a scratch `HOME`, each line run
+	// twice — once as `-c` and once from a file — with the output discarded
+	// so the number is the shell's own:
+	//
+	//	zsh 5.9.2                              -c   file
+	//	a=(x y); typeset "a[0]"=v               0     1
+	//	a=(x y); export  "a[0]"=v               0     1
+	//	a=(x y); declare "a[0]"=v               0     1
+	//	a=(x y); local   "a[0]"=v               0     1
+	//	a=(x y); typeset -g "a[0]"=v            0     1
+	//	a=(x y); typeset -x "a[0]"=v            0     1
+	//	a=(x y); typeset "a[0,0]"=v             0     1
+	//	a=(x y); typeset "a[1+]"=v              0     1
+	//	v=abc;   typeset "v[0]"=X               0     1
+	//
+	// The stderr is byte-identical on both routes and `after` runs on
+	// neither, so the refusal is fatal either way and only the status moves —
+	// which is why this is a status axis and not a fatality one. It is also a
+	// flat 0 rather than the previous command's: `-c 'false; a=(x y); typeset
+	// "a[0]"=v'` exits 0 too.
+	//
+	// **The seam is which complaint it is, and the engine already has it.**
+	// declareElement puts the builtin's name aside before it reaches the
+	// store, because zsh's store complains without naming one — `zsh:1: a:
+	// assignment to invalid subscript range` — where the builtin's own
+	// refusals do name it. Every refusal measured *inside* that region moves
+	// with the route and every one raised *outside* it stays at 1:
+	//
+	//	a=(x y); readonly "a[0]"=v   zsh:readonly:1: can't create readonly …   1
+	//	a=(x y); integer  "a[0]"=5   zsh:integer:1: inconsistent array …       1
+	//	a=(x y); typeset -a "a[0]"=v zsh:typeset:1: inconsistent type …        1
+	//	a=(x y); typeset -i "a[0]"=v zsh:typeset:1: inconsistent array …       1
+	//	a=(x y); typeset -A "a[0]"=v zsh:typeset:1: inconsistent type …        1
+	//	a=(x y); typeset 1bad=v      not a subscript at all                    1
+	//
+	// So it is not "a declaration that ends the script" and not "a bad
+	// subscript": it is the store refusing on a declaration's behalf, which
+	// is one seam and is the one the wording already turns on.
+	//
+	// The bare assignment is a separate route and does not move: `a=(x y);
+	// a[0]=v` is 1 by both routes, as are `a[0]+=v` and `a[0,0]=v`. That is
+	// what #1770 recorded as the divergence — "a declaration, where the bare
+	// assignment agrees" — and what it did not have is the route, having
+	// measured `-c` alone: from a script file zsh answers 1 and this engine
+	// already agreed.
+	//
+	// bash is the No that makes the field worth having rather than an
+	// implicit zsh-ism: `a=(x y); declare "a[1+]"=v` ends bash at 1 by both
+	// routes, and `declare "a[-5]"=v` is not fatal there at all. ksh93 splits
+	// on neither route either — `typeset "a[-5]"=v` is 1 from `-c` and from a
+	// file alike.
+	//
+	// unpinned dash, ash: neither has arrays, so no declaration of theirs
+	// reaches a store that could refuse an element. See
+	// TestAStoreRefusalOfADeclaredElementFollowsTheRoute for the axis itself.
+	StoreRefusalOfADeclaredElementLeavesZeroFromCommandString Answer
+
 	// FailedExpansionAbandonsTheLine ends the *line* a failed expansion
 	// happened on and carries on at the next one, rather than ending the
 	// shell. A bad substitution, a division by zero, a bad subscript and an

@@ -535,6 +535,14 @@ func Semantics() interp.Semantics {
 	// form that names a job answers the same as the bare one.
 	s.WaitForAJobFailsWhenInterrupted = interp.No
 	s.CommandRejectsUnknownOption = interp.Yes
+	// And the word is a boundary around everything it runs: `eval 'export -q;
+	// echo INNER'` stops the script and `command eval '…'` reports 2 and
+	// carries on, with the same split on `${NOPE?bad}`, a readonly
+	// reassignment and an unset name under `set -u`. The first of those is
+	// caught here even though this shell reads `${x?word}` as a request to
+	// stop elsewhere — ParamErrorIsAnExitRequest is yes and the subshell
+	// still prints `alive` behind the word.
+	s.FatalErrorEndsAtTheCommandWord = interp.Yes
 	// Both string-ordering operators, which this shell has and the three
 	// unary additions past the three-word rules it does not: `test -a f`,
 	// `test -o errexit` and `test -N f` are all `unexpected operator` here.

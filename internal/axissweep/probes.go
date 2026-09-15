@@ -696,7 +696,74 @@ func Probes() []Probe {
 				return "", "the row did not reach its second wait at all"
 			},
 		},
+		{
+			Field: "FatalErrorEndsAtTheCommandWord",
+			Cases: []string{
+				"cmd/posixbuiltins-does-not-bound-a-fatal-error-raised-inside",
+				"cmd/command-bounds-any-fatal-error-raised-inside",
+			},
+			// Two rows, because no single one can ask every column. The
+			// first turns a special builtin's refusal fatal by an option a
+			// shell that has no `setopt` silently skips, which is the only
+			// route to a column whose `command` reaches no builtin by
+			// default; a column that does not call *that* refusal fatal is
+			// asked nothing by it, and the second row — three producers
+			// nobody's option decides — is what answers there. A column
+			// whose `eval` is already a boundary of its own is silent on the
+			// second and answered by the first.
+			//
+			// In both, the bare half is the control and is why neither can
+			// be read from its `command` half alone: a column that printed
+			// the rest of the `eval`'s text without the word never called
+			// the error fatal, so nothing there was ever going to end a
+			// script, and scoring its living `command` half as a boundary
+			// would count a shell that was never asked as one that answered.
+			Reading: "each row runs a fatal error inside an `eval`, once bare and once behind `command`, each in a subshell: a living `command` half after a bare half that stopped is a boundary at the word, and a `command` half that stopped with it is no boundary",
+			Read: func(cells map[string]oracle.Result) (string, string) {
+				if v, why := boundedAtTheCommandWord(
+					cells["cmd/posixbuiltins-does-not-bound-a-fatal-error-raised-inside"],
+					"[bare-in]", "[cmd-alive]", "[cmd="); v != "" {
+					return v, why
+				}
+				v, why := boundedAtTheCommandWord(
+					cells["cmd/command-bounds-any-fatal-error-raised-inside"],
+					"[bp-alive]", "[cp-alive]", "[cp=")
+				if v == "" && why == "" {
+					why = "neither row put an error this shell calls fatal in front of a `command` that reached a builtin"
+				}
+				return v, why
+			},
+		},
 	}
+}
+
+// boundedAtTheCommandWord is the reading both #2755 rows take: a fatal error
+// raised inside an `eval`, written once bare and once behind `command`, each
+// in a subshell so a half that stops still leaves the next one to run.
+//
+// Folded rather than written twice for the reason the file already gives
+// about pairs — two copies of one sentence is how a fix lands in one of them.
+// The three markers are all that differ: what the bare half prints when it
+// was **not** stopped, what the `command` half prints when it outlived the
+// error, and the prefix that says the `command` half was reached at all.
+//
+// An empty answer with an empty reason means "this row did not ask", which
+// lets a caller try the other row before giving up; an empty answer with a
+// reason is the row asking and getting nothing.
+func boundedAtTheCommandWord(r oracle.Result, bareRan, commandLived, commandReached string) (string, string) {
+	switch {
+	case !strings.Contains(r.Stdout, "[alive]"):
+		return "", "the row did not reach its last line, so neither half of it can be read"
+	case strings.Contains(r.Stdout, bareRan):
+		return "", ""
+	case noSuchCommand(r):
+		return "", ""
+	case strings.Contains(r.Stdout, commandLived):
+		return "Yes", ""
+	case strings.Contains(r.Stdout, commandReached):
+		return "No", ""
+	}
+	return "", "the row reached neither end of its `command` half"
 }
 
 // refusedSetOptionFatal is the reading both `set` refusal axes take, given

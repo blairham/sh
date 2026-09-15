@@ -539,6 +539,14 @@ func Semantics() interp.Semantics {
 	s.WaitForAJobFailsWhenInterrupted = interp.No
 	s.DisownRemovesTheJob = interp.Yes
 	s.CommandRejectsUnknownOption = interp.Yes
+	// The word takes the named builtin's specialness away and draws no
+	// boundary of its own: a fatal error raised *inside* it is still fatal.
+	// Measured 2026-09-13 in subshells under `env -i`, three producers that
+	// this shell does end a script for — `command eval 'echo "${NOPE?bad}"'`,
+	// `readonly rv=1; command eval 'rv=2'` and `set -u; command eval 'echo
+	// "${NOPE}"'` — each ends the subshell at 1 with the word and without it,
+	// under this shell's own name and under `sh` alike. Both builds agree.
+	s.FatalErrorEndsAtTheCommandWord = interp.No
 	s.GetoptsRejectsUnknownOption = interp.Yes
 	s.ShiftCountIsArithmetic = interp.No
 	s.TrapBodyRunsWhatParsed = interp.Yes

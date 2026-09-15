@@ -522,6 +522,13 @@ func Semantics() interp.Semantics {
 	s.ShiftPastEndFatal = interp.No
 	// `command -Z true` is `illegal option -Z` at 2.
 	s.CommandRejectsUnknownOption = interp.Yes
+	// And the word is a boundary around everything it runs. Measured
+	// 2026-09-13 inside the pinned alpine image: `eval 'export -q; echo
+	// INNER'` stops the script, `command eval '…'` reports 1 and carries on,
+	// and the same split holds for `${NOPE?bad}`, a readonly reassignment and
+	// an unset name under `set -u` — alive on all three with the word, gone
+	// on all three without it.
+	s.FatalErrorEndsAtTheCommandWord = interp.Yes
 	s.GetoptsRejectsUnknownOption = interp.No
 	s.GetoptsAssignmentRestartsWord = interp.Yes
 	s.GetoptsClearsOptarg = interp.No

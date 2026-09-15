@@ -965,6 +965,14 @@ func Semantics() interp.Semantics {
 	// `emulate ksh` turn that option on — so setopt.go reads and writes this
 	// axis and the preset only says where a plain zsh starts.
 	s.CommandReachesABuiltin = interp.No
+	// And where it does reach one — `setopt posixbuiltins`, the only route
+	// that can be asked at all — it draws no boundary. Measured 2026-09-13
+	// with the option on: `eval 'set -Z; echo IN'` ends the subshell at 1 and
+	// `command eval 'set -Z; echo IN'` ends it identically, as do `readonly
+	// 1bad=x`, `unset 1bad`, `export 1bad=x` and `. /nonexistent/file` in the
+	// same text. So the axis is a constant here where CommandReachesABuiltin
+	// is not.
+	s.FatalErrorEndsAtTheCommandWord = interp.No
 	s.GetoptsRejectsUnknownOption = interp.No
 	s.ShiftCountIsArithmetic = interp.Yes
 	// No by construction rather than by measurement: zsh has already parsed

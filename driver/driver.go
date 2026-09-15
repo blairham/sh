@@ -144,6 +144,30 @@ type Shell struct {
 	// carried a policy, and no shell's grammar has an opinion about that.
 	PromptProviders []repl.PromptProvider
 
+	// HistoryRecorders are told every line an interactive session records,
+	// besides the history file, which is always told too. HistorySources
+	// supply lines such a session can recall, before the file's.
+	//
+	// Here for the reason PromptProviders is here, and the reason is worth
+	// stating because it is what the two halves of #804 were asking for. The
+	// seam itself is repl's and has been since the history seam landed, but a
+	// seam nothing can reach is a seam a *host program* does not have: the
+	// fields were on repl.Shell and this is the type every binary composes, so
+	// the only way to attach a history tool was to stop using driver and write
+	// a front end — which is the copy this package exists to prevent.
+	//
+	// Not a dialect's answer, for the same reason a provider is not: a
+	// recorder is a code path and a dialect is a table of values. No dialect
+	// package sets one, and a binary that attaches a tool is composing a shell
+	// rather than describing one.
+	//
+	// Both are additions and neither is a replacement. repl/historyseam.go
+	// carries the rules — what a recorder is told and when, that a line
+	// carrying a credential never reaches one, and that a source is asked once
+	// before the first prompt.
+	HistoryRecorders []repl.HistoryRecorder
+	HistorySources   []repl.HistorySource
+
 	// Register adds or removes builtins — the part of a dialect that shell
 	// cannot express. Nil means the dialect needs none, which is the common
 	// case now that cd, pwd and read live in the core.

@@ -314,3 +314,53 @@ jobs:
       # only a panel that matches the record can answer it: `make check`
       # locally.
       run: go run ./internal/cmd/oracle -check || true
+
+  perfgate:
+    name: Performance gate (report only)
+    needs: changes
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+      if: needs.changes.outputs.code == 'true'
+    - uses: actions/setup-go@v6
+      if: needs.changes.outputs.code == 'true'
+      with:
+        go-version-file: go.mod
+        check-latest: true
+        cache: true
+    - name: Install the shells the dialects are graded against
+      if: needs.changes.outputs.code == 'true'
+      run: sudo apt-get update -qq && sudo apt-get install -y -qq dash ksh zsh
+    - name: How does each dialect compare with the shell it claims to be?
+      if: needs.changes.outputs.code == 'true'
+      # #2257: this existed as `make perfgate` and was in no workflow at all,
+      # so the promise #1403 encodes -- "no dialect can be slower than the
+      # original" -- was checked only when somebody remembered to type it.
+      # That is the shape a stale fact survives in, and it is why "perfgate is
+      # failing" circulated for a week as hearsay. It runs here now, on every
+      # change that touches code, and it costs about half a minute.
+      #
+      # Report-only, and for a reason that is measured rather than assumed.
+      # Three of the four dialects are slower than their originals today and
+      # have been since #1403 was closed on 2026-09-08 -- on this runner's
+      # ancestors and on the maintainer's machine alike -- so a blocking job
+      # would be red on arrival and stay red, which is how a check becomes one
+      # people learn to ignore. dash cannot be met at all: an empty Go binary
+      # costs more CPU to start than /bin/dash costs to do its whole job.
+      #
+      # It is deliberately NOT wired as a blocking regression gate yet. The
+      # honest form of that is an expectation of which comparisons pass, and
+      # every figure this repository has is from one macOS machine; writing a
+      # runner's expectations from a machine that is not the runner is the
+      # trap this file already documents for the oracle job below. This job is
+      # what produces the runner measurements that table would be written
+      # from.
+      #
+      # The half that can block already does, and blocks elsewhere. Whether
+      # the gate can bite -- that a slower dialect is caught, that a refusing
+      # one is not scored as a pass, that a tie is not a win, that the
+      # workload answer is the panel's own -- needs no measurement and has the
+      # same answer on every machine, so those are ordinary tests in the
+      # required Build and test job. What cannot rot unnoticed here is the
+      # machinery; what is reported here is the number.
+      run: make perfgate || true

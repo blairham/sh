@@ -168,26 +168,62 @@ func Cases() []Case {
 	}
 }
 
-// RunProgram runs one program through a subject's `-c` route and returns how
-// long the whole invocation took and what it wrote.
+// Timing is what one invocation cost, measured two ways.
+//
+// Both, because neither alone is enough here and the two answer different
+// questions. Wall is what a person waits for and is the requirement as
+// written; CPU is how much work the program did, and it is the only half of
+// this measurement that is a fact about the code rather than about the
+// machine.
+//
+// The distinction is not academic in this repository. #1403's own closing run
+// has zsh/bare at 4.26 ms against 4.28 ms (FASTER) at load average 26 and
+// 4.89 ms against 4.83 ms (SLOWER) at load 60 — **the same tree, the same
+// binaries, and the verdict flipped**, because taking the minimum over a
+// hundred interleaved samples bounds the contention a sample can have paid
+// but does not remove it. A number that decides a release bar should not move
+// when somebody else starts a build.
+type Timing struct {
+	// Wall is how long the invocation took from fork to exit.
+	Wall time.Duration
+	// CPU is the child's own user plus system time, from the kernel's
+	// accounting rather than from a clock this process read — so it counts
+	// what the program executed and not what it waited behind.
+	//
+	// It is a sum across the child's threads, which matters for exactly one
+	// side of this comparison: our shells are Go programs with a garbage
+	// collector and the references are single-threaded C. So our CPU can
+	// exceed our wall where theirs cannot, and the CPU column is the harder
+	// bar for us of the two rather than a kinder one.
+	CPU time.Duration
+}
+
+// RunProgram runs one program through a subject's `-c` route and returns what
+// the invocation cost and what it wrote.
 //
 // The output comes back rather than being discarded, which is what lets the
 // caller refuse a time for work that was not done. Standard error is captured
 // with it so that a refusal can be quoted in the failure instead of
 // disappearing.
-func RunProgram(s Subject, program string) (time.Duration, string, error) {
+func RunProgram(s Subject, program string) (Timing, string, error) {
 	argv := append(append([]string{}, s.CommandArgs...), program)
 	var out, errOut bytes.Buffer
-	var took time.Duration
+	var took Timing
 	err := retryingTextFileBusy(func() error {
 		out.Reset()
 		errOut.Reset()
+		took = Timing{}
 		cmd := exec.Command(s.Path, argv...)
 		cmd.Env = bareEnv(s.Env)
 		cmd.Stdin, cmd.Stdout, cmd.Stderr = nil, &out, &errOut
 		start := time.Now()
 		err := cmd.Run()
-		took = time.Since(start)
+		took.Wall = time.Since(start)
+		// Nil where the process was never started — the ETXTBSY path below
+		// is one — and there is no accounting for a child that did not run.
+		if cmd.ProcessState != nil {
+			took.CPU = cmd.ProcessState.UserTime() + cmd.ProcessState.SystemTime()
+		}
 		return err
 	})
 	if err != nil {
@@ -258,7 +294,13 @@ type Result struct {
 	// and a mean is a measurement of the load. What is wanted is how much
 	// work the program does, and the least-contended spawn is the closest
 	// this can get to it.
-	Best time.Duration
+	//
+	// The two halves are minimised independently, and not from the same
+	// invocation. That is deliberate: each is the least-contended sample of
+	// the quantity it measures, and insisting they come from one run would
+	// mean picking a winner between the two and reporting the loser's
+	// second-best number.
+	Best Timing
 	// Samples is how many invocations that minimum was drawn from.
 	Samples int
 }
@@ -276,12 +318,25 @@ type Comparison struct {
 	Err error
 }
 
-// Ratio is ours over the original. Below 1 is the requirement met.
-func (c Comparison) Ratio() float64 {
-	if c.Real.Best <= 0 {
+// Ratio is ours over the original on wall time. Below 1 is the requirement
+// met, and it is what Passed consults.
+func (c Comparison) Ratio() float64 { return ratio(c.Ours.Best.Wall, c.Real.Best.Wall) }
+
+// CPURatio is the same comparison on the work done rather than the time taken.
+//
+// Reported beside Ratio and deliberately not gated on. The requirement in
+// #1403 is about how long a person waits, so moving the verdict onto CPU
+// would be moving the release bar rather than measuring it better — but a
+// wall verdict with no CPU figure beside it cannot say whether a dialect is
+// slower because of what it does or because of what the machine was doing,
+// and that is the question every reader of a red gate has asked so far.
+func (c Comparison) CPURatio() float64 { return ratio(c.Ours.Best.CPU, c.Real.Best.CPU) }
+
+func ratio(ours, real time.Duration) float64 {
+	if real <= 0 {
 		return 0
 	}
-	return float64(c.Ours.Best) / float64(c.Real.Best)
+	return float64(ours) / float64(real)
 }
 
 // Passed reports whether this comparison meets the requirement.
@@ -291,7 +346,7 @@ func (c Comparison) Ratio() float64 {
 // requirement as written, and a gate that allowed 5% would be answering a
 // question nobody asked. A comparison that could not be measured has not
 // passed — see Err.
-func (c Comparison) Passed() bool { return c.Err == nil && c.Ours.Best < c.Real.Best }
+func (c Comparison) Passed() bool { return c.Err == nil && c.Ours.Best.Wall < c.Real.Best.Wall }
 
 // Measure times every pair on every case, interleaved, and returns what it
 // found.
@@ -332,7 +387,8 @@ func Measure(pairs []Pair, cases []Case, batches, per int) []Comparison {
 			c.Err = errors.New("the reference shell is not installed here, so there is nothing to compare against")
 			continue
 		}
-		c.Ours.Best, c.Real.Best = time.Duration(1<<62), time.Duration(1<<62)
+		unset := Timing{Wall: time.Duration(1 << 62), CPU: time.Duration(1 << 62)}
+		c.Ours.Best, c.Real.Best = unset, unset
 		slots = append(slots, slot{c.Pair, c.Case, &c.Ours, &c.Real, &c.Err})
 	}
 
@@ -376,8 +432,14 @@ func Measure(pairs []Pair, cases []Case, batches, per int) []Comparison {
 						return
 					}
 					into.Samples++
-					if took < into.Best {
-						into.Best = took
+					if took.Wall < into.Best.Wall {
+						into.Best.Wall = took.Wall
+					}
+					// A CPU figure of zero is not a very fast run, it is a
+					// run the kernel gave no accounting for, and taking it
+					// as a minimum would report the fastest possible shell.
+					if took.CPU > 0 && took.CPU < into.Best.CPU {
+						into.Best.CPU = took.CPU
 					}
 				}
 				record(s.pair.Ours, "ours", s.ours)
@@ -387,14 +449,27 @@ func Measure(pairs []Pair, cases []Case, batches, per int) []Comparison {
 	}
 	for i := range out {
 		c := &out[i]
-		if c.Ours.Samples == 0 {
-			c.Ours.Best = 0
-		}
-		if c.Real.Samples == 0 {
-			c.Real.Best = 0
-		}
+		clearUnmeasured(&c.Ours)
+		clearUnmeasured(&c.Real)
 	}
 	return out
+}
+
+// clearUnmeasured turns the sentinel a minimum starts at back into a zero, so
+// that a side nothing was recorded for reports nothing rather than reporting
+// a hundred and forty-six years.
+//
+// Per half rather than per Result, because the CPU half can be the only one
+// missing: a kernel that gave no accounting for any of the samples leaves the
+// wall minimum real and the CPU minimum untouched.
+func clearUnmeasured(r *Result) {
+	const sentinel = time.Duration(1 << 62)
+	if r.Samples == 0 || r.Best.Wall == sentinel {
+		r.Best.Wall = 0
+	}
+	if r.Samples == 0 || r.Best.CPU == sentinel {
+		r.Best.CPU = 0
+	}
 }
 
 // Report renders a comparison table, and is what a failure quotes.
@@ -403,10 +478,20 @@ func Measure(pairs []Pair, cases []Case, batches, per int) []Comparison {
 // original are always printed together with the ratio between them — and the
 // load average is printed above, because on a machine with other work on it
 // that is the difference between a result and an anecdote.
+//
+// Both clocks, side by side, because a red row on its own does not say which
+// kind of red it is. Where the wall ratio is above 1 and the CPU ratio is
+// too, the dialect really is doing more work; where the wall ratio is above 1
+// and the CPU ratio is below it, the run was waiting behind something else on
+// the machine and the row is about the machine. Nobody reading this table has
+// been able to tell those apart before, which is how "perfgate is failing"
+// has been passed on second-hand for a week without anybody knowing what it
+// meant.
 func Report(cs []Comparison) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "load average: %s\n", LoadAverage())
-	fmt.Fprintf(&b, "%-10s %-9s %10s %10s %8s %7s  %s\n", "dialect", "case", "ours", "original", "ratio", "samples", "verdict")
+	fmt.Fprintf(&b, "%-10s %-9s %10s %10s %8s %10s %10s %8s %7s  %s\n",
+		"dialect", "case", "ours", "original", "ratio", "ours cpu", "orig cpu", "cpu", "samples", "verdict")
 	sorted := append([]Comparison(nil), cs...)
 	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].Pair.Name < sorted[j].Pair.Name })
 	for _, c := range sorted {
@@ -416,8 +501,11 @@ func Report(cs []Comparison) string {
 		} else if !c.Passed() {
 			verdict = "SLOWER"
 		}
-		fmt.Fprintf(&b, "%-10s %-9s %8.2fms %8.2fms %7.2fx %7d  %s\n",
-			c.Pair.Name, c.Case.Name, ms(c.Ours.Best), ms(c.Real.Best), c.Ratio(), c.Ours.Samples, verdict)
+		fmt.Fprintf(&b, "%-10s %-9s %8.2fms %8.2fms %7.2fx %8.2fms %8.2fms %7.2fx %7d  %s\n",
+			c.Pair.Name, c.Case.Name,
+			ms(c.Ours.Best.Wall), ms(c.Real.Best.Wall), c.Ratio(),
+			ms(c.Ours.Best.CPU), ms(c.Real.Best.CPU), c.CPURatio(),
+			c.Ours.Samples, verdict)
 		if c.Err != nil {
 			fmt.Fprintf(&b, "%-10s %-9s   %v\n", "", "", c.Err)
 		}

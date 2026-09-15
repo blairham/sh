@@ -211,6 +211,27 @@ The load average is printed above every table for that reason.
 **No tolerance.** Strictly faster. A gate that allowed 5% would be
 answering a question nobody asked.
 
+**Both clocks, and the verdict is the wall one.** Every row carries the
+wall minimum, the child's own CPU minimum (user plus system, from the
+kernel's accounting of the child rather than from a clock this process
+read), and a ratio for each. The verdict stays on wall time because the
+requirement is about how long a person waits, and moving it onto CPU
+would be moving the bar rather than measuring it better.
+
+The CPU column exists because a red row on its own does not say what
+kind of red it is. #1403's closing run has zsh/bare at 4.26ms against
+4.28ms (FASTER) at load average 26 and 4.89ms against 4.83ms (SLOWER) at
+load 60 — the same tree, the same binaries, the verdict flipped. Taking
+the minimum bounds how much contention a sample can have paid but does
+not remove it. With both ratios printed, a row whose wall ratio is above
+1 and whose CPU ratio is below it was waiting behind something else on
+the machine, and a row where both are above 1 is doing more work.
+Measured on 2026-09-14 at load 11, every red row is red on CPU too and
+by a **wider** margin than on the wall — dash/bare 2.07x wall against
+2.67x CPU, ksh/workload 2.02x against 2.27x, zsh/bare 1.09x against
+1.41x. So the gate's red columns are work and not the machine, which is
+the question #2257 asked and the instrument could not previously answer.
+
 The gate is a target of its own and not part of `go test ./...`, for the
 reason `make startup` is: it spawns several thousand processes and its
 answer depends on what else the machine is doing. What keeps it from
@@ -218,8 +239,20 @@ rotting is that the tests *around* it always run — one manufactures a
 subject doing strictly more work than the same shell and requires the
 gate to catch it, one hands it a program that runs nothing and requires
 the gate to refuse rather than score it, one checks the workload's
-expected answer against every reference shell installed, and one fails
-if a dialect is missing from the table altogether.
+expected answer against every reference shell installed, one fails if a
+dialect is missing from the table altogether, and one requires the
+report to carry the CPU ratio so a reader can tell a slow dialect from a
+busy machine.
+
+And it runs in CI, report-only, on every change that touches code
+(#2257). For a week it ran nowhere at all and "perfgate is failing" was
+passed on second-hand; the measurement is now produced on every build
+and is about half a minute. It does not block, because three of the four
+dialects are slower today and have been since #1403 closed — a job that
+is red on arrival is a job people learn to ignore — and because the
+honest blocking form is an expectation of which comparisons pass, which
+would have to be written from runner measurements that did not exist.
+This job is what produces them.
 
 ### What it found, and the part that is not ours
 

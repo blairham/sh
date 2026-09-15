@@ -431,6 +431,7 @@ ksh   HeldExitListsTheJobs
 ksh   ImmovableOptionsSetAtInvocation
 ksh   InteractiveStartupFileWhenLogin
 ksh   JobsStateFiltersAccumulate
+ksh   LocalDashSavesTheShellOptions
 ksh   LocalOutsideAFunctionIsFatal
 ksh   NegatedTestRecordsThePostNegationStatus
 ksh   QuitResetRestoresTheDefault

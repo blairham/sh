@@ -4847,6 +4847,26 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 		}
 		return r.bareLocalListing()
 	}
+	if kept, dash := localDashOperands(args); dash {
+		// `local -` is the operand that is not a name — see localdash.go.
+		// Taken out before the names are checked, because that check is what
+		// used to refuse it: the shell answered ``local: `-': not a valid
+		// identifier`` and then let every option the body set outlive the
+		// call (#3000).
+		if !r.ask(r.sem().LocalDashSavesTheShellOptions, "`local -` saving the shell's options") {
+			if r.unspecified {
+				return r.status
+			}
+			// The dialect that reads `-` as a parameter name rather than as
+			// this request. It falls through as the operand it wrote.
+		} else {
+			args = kept
+			r.saveOptionsForThisCall()
+			if len(args) == 0 {
+				return 0
+			}
+		}
+	}
 	args, status, ended := r.builtinNames("local", args, false)
 	if r.unspecified {
 		return status

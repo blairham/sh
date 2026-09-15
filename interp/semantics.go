@@ -7735,6 +7735,39 @@ type Semantics struct {
 	// substrate's old behavior.
 	LocalOptions string
 
+	// LocalDashSavesTheShellOptions is the operand `-` handed to `local`:
+	// the shells that take it save the `set` table at the declaration and
+	// put it back when the function returns, so an option the body turns on
+	// does not outlive the call.
+	//
+	// Measured 2026-09-15, `env -i PATH=/usr/bin:/bin`, `-c` and a script
+	// file alike, with `f() { local -; set -f; }; f; echo $-`:
+	//
+	//	bash 5.3.15    the `f` is gone — restored
+	//	dash           the `f` is gone — restored, and `local` takes no
+	//	               option letters there at all, so this is not one
+	//	BusyBox ash    the `f` is gone — restored
+	//	bash 3.2.57    refused: ``local: `-\': not a valid identifier``,
+	//	               and the option survives the call. The form arrived
+	//	               between the two builds, so this is a fact about the
+	//	               version rather than about the dialect — the preset
+	//	               models 5.3, which is the bash column of the panel
+	//	zsh 5.9.2      `-` is a *parameter* there, so `local -` declares it
+	//	               and the options are untouched
+	//
+	// A conflict rather than a gap: two characters that mean a save in three
+	// shells and a declaration in the fourth. What is saved is the `set`
+	// table alone — measured the same day, a `shopt -s nullglob` inside such
+	// a function survives the return where a `set -o pipefail` does not.
+	//
+	// Asked only where the operand was written, so no ordinary `local`
+	// reaches it.
+	//
+	// unpinned ksh: there is no `local` builtin in that dialect at all — see
+	// dialect/ksh's Register — so no spelling of this reaches the question.
+	// See TestLocalDashRestoresEverySetOption for the axis itself.
+	LocalDashSavesTheShellOptions Answer
+
 	// BareLocalListing is what `local` with no operands writes — three
 	// shapes from the three shells that can reach it, so it is a form
 	// rather than a flag. See BareLocalListingForm.

@@ -888,6 +888,11 @@ func Semantics() interp.Semantics {
 	// LocalOptions stays empty. A bare `local` writes nothing, and a bare
 	// `set` lists the variables alone, every value single-quoted with an
 	// embedded quote doubled out: `'quo'"'"'te'`.
+	// `local -` is the one operand this shell's `local` reads as something
+	// other than a name, and it reads it even though the builtin takes no
+	// option letters at all: measured 2026-09-15, `f() { local -; set -f; };
+	// f; echo $-` comes back without the letter.
+	s.LocalDashSavesTheShellOptions = interp.Yes
 	s.BareLocalListing = interp.BareLocalListsNothing
 	s.SetListing = interp.SetListingAssignments
 	s.SetListingQuoting = interp.ListingQuoteAlwaysDoubled

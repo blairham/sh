@@ -12259,6 +12259,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `errexit/condition-is-exempt` | `reached` | `reached` | `reached` | `reached` | `reached` | `reached` | `reached` |
 | `errexit/exemption-reaches-into-functions` | `inner~reached` | `inner~reached` | `inner~reached` | `inner~reached` | `inner~reached` | `inner~reached` | `inner~reached` |
 | `errexit/only-the-last-of-a-chain` | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* |
+| `local/dash-saves-the-shell-options` | `restored` | `restored` | `restored` | `kept` | `kept` | `kept` | `restored` |
 | `errexit/negation-is-exempt` | `reached` | `reached` | `reached` | `reached` | `reached` | `reached` | `reached` |
 | `status/an-assignment-can-read-the-previous-status` | `E=1 ?=0` | `E=1 ?=0` | `E=1 ?=0` | `E=1 ?=0` | `E=1 ?=0` | `E=1 ?=0` | `E=1 ?=0` |
 | `status/an-assignment-reports-its-substitution` | `st=1~st=0` | `st=1~st=0` | `st=1~st=0` | `st=1~st=0` | `st=1~st=0` | `st=1~st=0` | `st=1~st=0` |
@@ -12896,6 +12897,10 @@ grades it and nothing drift-checks it either, for the same reason.
 - `errexit/only-the-last-of-a-chain` — -e judges the final operand of an && chain and nothing before it, so the first line survives and the second does not
   ```sh
   set -e; false && :; echo one; : && false; echo two
+  ```
+- `local/dash-saves-the-shell-options` — `local -` is the operand that is not a name: bash 5.3, dash and BusyBox ash put the `set` table back when the function returns, bash 3.2 refuses the operand as a bad name, ksh93 has no `local` at all, and zsh reads `-` as a parameter and declares it. The case asks by presence rather than by printing $-, because the startup letters differ per shell and per route — and the declaration is silenced, because the shell that takes `-` as a name answers it with a listing of every parameter it has, which is this machine's environment rather than a fact about the shell
+  ```sh
+  f() { local - >/dev/null 2>&1; set -u; }; f; case $- in *u*) echo kept ;; *) echo restored ;; esac
   ```
 - `errexit/negation-is-exempt` — `!` tests a status rather than requiring success, so a failing negation is not a failure
   ```sh

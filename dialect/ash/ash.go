@@ -399,6 +399,10 @@ func Semantics() interp.Semantics {
 	s.AliasListingQuotesTheName = interp.No
 	s.TrapQuoting = interp.ListingQuoteAlwaysDoubled
 	// A bare `local` in a function writes nothing.
+	// `local -` saves the `set` table, as in dash: measured 2026-09-15 in
+	// the pinned Alpine image, `f() { local -; set -f; }; f; echo $-` comes
+	// back without the letter.
+	s.LocalDashSavesTheShellOptions = interp.Yes
 	s.BareLocalListing = interp.BareLocalListsNothing
 	// `local` reads no options: `local -r x` declares a variable named `-r`
 	// and then refuses it as the bad name it is, so LocalOptions stays empty.

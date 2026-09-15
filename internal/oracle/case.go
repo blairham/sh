@@ -5567,6 +5567,11 @@ echo "st=$?"`,
 		Why:     "-e judges the final operand of an && chain and nothing before it, so the first line survives and the second does not",
 	},
 	{
+		ID: "local/dash-saves-the-shell-options", Category: "shell options",
+		Snippet: `f() { local - >/dev/null 2>&1; set -u; }; f; case $- in *u*) echo kept ;; *) echo restored ;; esac`,
+		Why:     "`local -` is the operand that is not a name: bash 5.3, dash and BusyBox ash put the `set` table back when the function returns, bash 3.2 refuses the operand as a bad name, ksh93 has no `local` at all, and zsh reads `-` as a parameter and declares it. The case asks by presence rather than by printing $-, because the startup letters differ per shell and per route — and the declaration is silenced, because the shell that takes `-` as a name answers it with a listing of every parameter it has, which is this machine's environment rather than a fact about the shell",
+	},
+	{
 		ID: "errexit/negation-is-exempt", Category: "shell options",
 		Snippet: `set -e; ! true; echo reached`,
 		Why:     "`!` tests a status rather than requiring success, so a failing negation is not a failure",

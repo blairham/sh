@@ -1866,6 +1866,11 @@ func Semantics() interp.Semantics {
 	s.DeclareGlobalReachesPastALocal = interp.Yes
 	// A bare `local` writes the running function's own locals, each as a
 	// clustered declaration — `declare -i n`, `declare -- x`.
+	// `local -` saves the `set` table for the life of the call: measured
+	// 2026-09-15, `f() { local -; set -f; }; f; echo $-` comes back without
+	// the letter. The `set` table alone — a `shopt` the body changed
+	// survives the return.
+	s.LocalDashSavesTheShellOptions = interp.Yes
 	s.BareLocalListing = interp.BareLocalListsLocals
 	// The *declaration* word lists something else again, and it is this
 	// shell's `set` listing exactly: every variable as an assignment, then

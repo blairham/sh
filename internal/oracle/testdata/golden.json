@@ -153961,6 +153961,57 @@
         "TimedOut": false
       }
     },
+    "printf/a-refused-star-rewinds-the-pass": {
+      "ash": {
+        "Stdout": "ABqCD0EF|1~ABqCDrEF0G|1~XYq   Z|1~AB  2CD     EF|1~ABCD0EF|1~AB%CD0EF|1~a[  7];d[0];|1~X  7Y|1~X0Y0Z|1",
+        "Stderr": "\u003cshell\u003e: invalid number ''~\u003cshell\u003e: invalid number ''~\u003cshell\u003e: invalid number ''~\u003cshell\u003e: invalid number ''~\u003cshell\u003e: invalid number ''~\u003cshell\u003e: invalid number ''~\u003cshell\u003e: invalid number ''~\u003cshell\u003e: %vZ: invalid format~\u003cshell\u003e: invalid number '42abc'~\u003cshell\u003e: invalid number ''",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "ABqCD0EF|0~ABqCDrEF0G|0~XYq   Z|0~AB  2CD     EF|0~ABCD0EF|0~AB%CD0EF|0~a[  7];d[0];|0~X  7Y|1~X42Y0Z|1",
+        "Stderr": "\u003cshell\u003e: line 1: printf: `v': invalid format character~\u003cshell\u003e: line 1: printf: 42abc: invalid number",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "ABqCD0EF|0~ABqCDrEF0G|0~XYq   Z|0~AB  2CD     EF|0~ABCD0EF|0~AB%CD0EF|0~a[  7];d[0];|0~X  7Y|1~X42Y0Z|1",
+        "Stderr": "\u003cshell\u003e: line 1: printf: `v': invalid format character~\u003cshell\u003e: line 1: printf: 42abc: invalid number",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "ABqCD0EF|0~ABqCDrEF0G|0~XYq   Z|0~AB  2CD     EF|0~ABCD0EF|0~AB%CD0EF|0~a[  7];d[0];|0~X  7Y|1~X0Y0Z|1",
+        "Stderr": "\u003cshell\u003e: line 0: printf: `v': invalid format character~\u003cshell\u003e: line 0: printf: 42abc: invalid number",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "ABqCD0EF|0~ABqCDrEF0G|0~XYq   Z|0~AB  2CD     EF|0~ABCD0EF|0~AB%CD0EF|0~a[  7];d[0];|0~X  7Y|2~X42Y0Z|1",
+        "Stderr": "\u003cshell\u003e: 1: printf: %v: invalid directive~\u003cshell\u003e: 1: printf: 42abc: not completely converted",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "AB|1~ABqCD|1~XY|1~AB|1~AB|1~|1~a[  7];|1~X  7Y|1~X|1",
+        "Stderr": "\u003cshell\u003e: printf: .: unknown format specifier~\u003cshell\u003e: printf: .: unknown format specifier~\u003cshell\u003e: printf: .: unknown format specifier~\u003cshell\u003e: printf: .: unknown format specifier~\u003cshell\u003e: printf: .: unknown format specifier~\u003cshell\u003e: printf: .: unknown format specifier~\u003cshell\u003e: printf: .: unknown format specifier~\u003cshell\u003e: printf: v: unknown format specifier~\u003cshell\u003e: printf: 42abc: arithmetic syntax error~\u003cshell\u003e: printf: warning: invalid argument of type d~\u003cshell\u003e: printf: .: unknown format specifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "ABqCD0EF|0~ABqCDrEF0G|0~XYq  0Z|0~AB  2CD    0EF|0~ABCD0EF|0~AB%CD0EF|0~a[  7];d[0];|0~X  7Y|1~X0Y0Z|1",
+        "Stderr": "\u003cshell\u003e:printf:1: %v: invalid directive~\u003cshell\u003e:1: bad math expression: operator expected at `abc'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "printf/a-run-of-length-modifiers": {
       "ash": {
         "Stdout": "[42][42]~st=0",
@@ -154364,6 +154415,57 @@
       "zsh": {
         "Stdout": "[ st=1",
         "Stderr": "\u003cshell\u003e:printf:1: %.3.: invalid directive",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "printf/an-unfinished-star-conversion-reuses-the-format": {
+      "ash": {
+        "Stdout": "a|1~a|1~a|1~a|1~a|1~a|1~a|1",
+        "Stderr": "\u003cshell\u003e: %: invalid format~\u003cshell\u003e: %5: invalid format~\u003cshell\u003e: %*: invalid format~\u003cshell\u003e: %*: invalid format~\u003cshell\u003e: %*.*: invalid format~\u003cshell\u003e: %.*: invalid format~\u003cshell\u003e: %*: invalid format",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "a|1~a|1~a|1~a|1~a|1~a|1~a|1",
+        "Stderr": "\u003cshell\u003e: line 1: printf: `%': missing format character~\u003cshell\u003e: line 1: printf: `%5': missing format character~\u003cshell\u003e: line 1: printf: `%*': missing format character~\u003cshell\u003e: line 1: printf: `%*': missing format character~\u003cshell\u003e: line 1: printf: `%*.*': missing format character~\u003cshell\u003e: line 1: printf: `%.*': missing format character~\u003cshell\u003e: line 1: printf: `%*': missing format character",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "a|1~a|1~a|1~a|1~a|1~a|1~a|1",
+        "Stderr": "\u003cshell\u003e: line 1: printf: `%': missing format character~\u003cshell\u003e: line 1: printf: `%5': missing format character~\u003cshell\u003e: line 1: printf: `%*': missing format character~\u003cshell\u003e: line 1: printf: `%*': missing format character~\u003cshell\u003e: line 1: printf: `%*.*': missing format character~\u003cshell\u003e: line 1: printf: `%.*': missing format character~\u003cshell\u003e: line 1: printf: `%*': missing format character",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "a|1~a|1~a|1~a|1~a|1~a|1~a|1",
+        "Stderr": "\u003cshell\u003e: line 0: printf: `%': missing format character~\u003cshell\u003e: line 0: printf: `%5': missing format character~\u003cshell\u003e: line 0: printf: `%*': missing format character~\u003cshell\u003e: line 0: printf: `%*': missing format character~\u003cshell\u003e: line 0: printf: `%*.*': missing format character~\u003cshell\u003e: line 0: printf: `%.*': missing format character~\u003cshell\u003e: line 0: printf: `%*': missing format character",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "a|2~a|2~a|2~a|2~a|2~a|2~a|2",
+        "Stderr": "\u003cshell\u003e: 1: printf: missing format character~\u003cshell\u003e: 1: printf: missing format character~\u003cshell\u003e: 1: printf: missing format character~\u003cshell\u003e: 1: printf: missing format character~\u003cshell\u003e: 1: printf: missing format character~\u003cshell\u003e: 1: printf: missing format character~\u003cshell\u003e: 1: printf: missing format character",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "a%|0~a%|0~a%a%|0~a%a%a%|0~a%a%|0~a%a%|0~|1",
+        "Stderr": "\u003cshell\u003e: printf: .: unknown format specifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "a|1~a|1~a|1~a|1~a|1~a|1~a|1",
+        "Stderr": "\u003cshell\u003e:printf:1: %: invalid directive~\u003cshell\u003e:printf:1: %5: invalid directive~\u003cshell\u003e:printf:1: %*: invalid directive~\u003cshell\u003e:printf:1: %*: invalid directive~\u003cshell\u003e:printf:1: %*.*: invalid directive~\u003cshell\u003e:printf:1: %.*: invalid directive~\u003cshell\u003e:printf:1: %*: invalid directive",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

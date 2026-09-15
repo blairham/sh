@@ -534,6 +534,41 @@ func TestPrintfUnfinishedConversionCanBeALiteralPercent(t *testing.T) {
 	}
 }
 
+// A `*` in the part of an unfinished conversion that *was* written still
+// takes its operand, even though the conversion never completes — so the
+// format is reused once per star's worth of operands where `%` and `%5`
+// consume nothing and the builtin ends after one pass (#2667).
+//
+// Visible only in the dialect above, because the other four refuse an
+// unfinished conversion outright and the pass is over before any operand is
+// looked at.
+func TestPrintfUnfinishedConversionStillTakesItsStarOperands(t *testing.T) {
+	sem := printfSem()
+	sem.PrintfLengthModifiers = PrintfLengthModifiersC99
+	sem.PrintfUnfinishedConversionIsAPercent = Yes
+	for _, tc := range []struct{ src, want string }{
+		// Nothing is consumed without a star, so one pass and no more
+		// however many operands are waiting.
+		{`printf "a%" 5 9`, "a%"},
+		{`printf "a%5" 5 9`, "a%"},
+		// One operand per star, so one pass per operand.
+		{`printf "a%*" 5 9`, "a%a%"},
+		{`printf "a%*" 5 9 7`, "a%a%a%"},
+		// Two stars take two.
+		{`printf "a%*.*" 5 9 7 3`, "a%a%"},
+		// Whatever else the unfinished prefix holds — a length modifier is
+		// as unfinished as a bare `%`, and a star in the precision reads its
+		// operand exactly as one in the width does.
+		{`printf "a%*ll" 5 9`, "a%a%"},
+		{`printf "a%.*" 5 9`, "a%a%"},
+	} {
+		out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+		if out != tc.want || st != 0 {
+			t.Errorf("%s: got %q status %d, want %q and 0", tc.src, out, st, tc.want)
+		}
+	}
+}
+
 // The axis is asked only where a format actually ends inside a conversion.
 func TestPrintfUnfinishedConversionIsAskedOnlyWhenOneIsThere(t *testing.T) {
 	sem := printfSem()
@@ -1233,6 +1268,13 @@ func TestPrintfStarWithNoOperandIsNotTheAbsentNumberCase(t *testing.T) {
 // ksh93 alone refuses the directive outright when a star finds the operand
 // list already empty. The trigger is the star's operand and not the operand
 // count — a star that has its width is fine however little is left after it.
+//
+// The refusal takes the pass back with it, which is one answer and not two:
+// the one column that refuses is also the one that rewinds, so nothing
+// measured parts "refuses" from "refuses and drops what it had written"
+// (#2664). The pass goes back to the *start* of the last conversion that
+// completed, which is why `%s[%*d]` with `x` keeps none of `x[` — the `%s`
+// completed, so the mark is where it began.
 func TestPrintfStarWithoutOperandIsRefusedIsAnAxis(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
@@ -1242,7 +1284,23 @@ func TestPrintfStarWithoutOperandIsRefusedIsAnAxis(t *testing.T) {
 		status  int
 	}{
 		{"a silent zero", No, `printf '%s[%*d]' x`, "x[0]", 0},
-		{"refused", Yes, `printf '%s[%*d]' x`, "sh: printf: .: invalid directive\nx[", 1},
+		{"refused", Yes, `printf '%s[%*d]' x`, "sh: printf: .: invalid directive\n", 1},
+		// The rewind is to the start of the last *completed* conversion and
+		// not to the start of the pass: the second `%s` is the mark here, so
+		// what the first one wrote stays.
+		{"back to the last completed conversion", Yes, `printf 'AB%sCD%sEF%*dG' q r`, "sh: printf: .: invalid directive\nABqCD", 1},
+		// Reaching the operand list is the test and not finding anything in
+		// it. The `%s` read a missing operand and still moved the mark.
+		{"a conversion that read a missing operand still marks", Yes, `printf 'AB%sCD%*dEF'`, "sh: printf: .: invalid directive\nAB", 1},
+		// A `%%` is not a conversion that reads anything, so it moves
+		// nothing and the whole pass goes.
+		{"a percent moves no mark", Yes, `printf 'AB%%CD%*dEF'`, "sh: printf: .: invalid directive\n", 1},
+		// Per pass and not per builtin: the first pass is written in full
+		// and the second is taken back to nothing.
+		{"the rewind is one pass's", Yes, `printf '%s[%*d];' a 3 7 d`, "a[  7];sh: printf: .: invalid directive\n", 1},
+		// An ordinary refusal does not rewind — this is the star's own
+		// behavior rather than a discard on any error.
+		{"another refusal keeps the output", Yes, `printf 'X%*dY%vZ' 3 7 q`, "sh: printf: %v: invalid directive\nX  7Y", 1},
 		// The star has its operand here; what ran out is the `%d`, which is
 		// the other question and not this one.
 		{"a star that has its width is not refused", Yes, `printf '[%*d]' 6`, "[     0]", 0},

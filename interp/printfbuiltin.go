@@ -200,14 +200,17 @@ func (r *Runner) printfOnce(format string, operands []string) (int, int, printfP
 	// Written as it is produced rather than collected and written at the end:
 	// a shell that complains half way through has already printed the half
 	// before it, and ksh93's `[` arrives before its complaint about what
-	// followed.
-	b := printfWriter{w: r.stdout(), r: r}
-	if !r.printfWritesThrough() {
-		// Held until the end, so a complaint reaches the reader first — which
-		// is what three of the four do, their output still being in a buffer
-		// when the complaint goes out.
-		b.hold = new(strings.Builder)
-	}
+	// followed. The others hold to the end, so their complaint reaches the
+	// reader first — their output is still in a buffer when it goes out.
+	b := &printfWriter{w: r.stdout(), r: r, through: r.printfWritesThrough()}
+	// On the runner for the length of the pass, because two things outside
+	// this loop need it: every diagnostic reveals what has been produced
+	// before it is written, and the one refusal that takes a pass back
+	// rewinds from inside the star reader. Saved and put back rather than
+	// cleared, so a pass is never left holding another's writer.
+	saved := r.printfOut
+	r.printfOut = b
+	defer func() { r.printfOut = saved }()
 	defer b.flush()
 	next := func() (string, bool) {
 		if used < len(operands) {
@@ -236,18 +239,31 @@ func (r *Runner) printfOnce(format string, operands []string) (int, int, printfP
 			b.writeByte(c)
 			i++
 		default:
+			// The conversion is a window: what it produces can still be
+			// taken back until it resolves, and what it *says* waits for it.
+			// See printfWriter.
+			mark := b.mark()
+			b.begin()
 			spec, verb, timeFmt, n, code := r.scanPrintfSpec(format[i:])
 			if code != 0 {
+				b.end(mark, false)
 				return used, code, printfPassStopped
 			}
+			unfinished := format[i : i+n]
 			i += n
 			if verb == '%' {
+				b.end(mark, false)
 				b.writeByte('%')
 				continue
 			}
 			if verb == 0 {
 				if spec != "" {
-					return used, r.printfBadVerb(format[:i], badVerbName(format, i)), printfPassStopped
+					// The complaint before the close, because it is what
+					// tells the writer to let out the text in front of this
+					// conversion. See printfWriter.end.
+					code := r.printfBadVerb(format[:i], badVerbName(format, i))
+					b.end(mark, false)
+					return used, code, printfPassStopped
 				}
 				// An empty prefix is a format that ran out before it
 				// reached a conversion character — `%`, `%5`, `%ll` at the
@@ -255,19 +271,43 @@ func (r *Runner) printfOnce(format string, operands []string) (int, int, printfP
 				// treat it as an error at all: it writes a bare `%` for the
 				// whole unfinished conversion, prefix and all, and succeeds.
 				if r.ask(r.sem().PrintfUnfinishedConversionIsAPercent, "a format that ends inside a conversion") {
+					// The one dialect that writes a bare `%` for it. A `*`
+					// in the part that was written still takes its operand,
+					// even though the conversion never completed — so the
+					// format is reused once per star's worth of operands
+					// where `%` and `%5` consume nothing and end the
+					// builtin after one pass (#2667).
+					code, stop := r.printfUnfinishedStars(unfinished, next)
+					if stop {
+						b.end(mark, false)
+						return used, code, printfPassStopped
+					}
+					b.end(mark, false)
 					b.writeByte('%')
-					return used, 0, printfPassStopped
+					// Truncated and not stopped, so the loop over the
+					// operands runs again. A format with no star reads
+					// nothing here, and the loop's own guard against a pass
+					// that consumed nothing is what ends the builtin then.
+					return used, 0, printfPassTruncated
 				}
 				if r.unspecified {
+					b.end(mark, false)
 					return used, r.status, printfPassStopped
 				}
-				return used, r.printfMissingVerb(format[:i]), printfPassStopped
+				code := r.printfMissingVerb(format[:i])
+				b.end(mark, false)
+				return used, code, printfPassStopped
 			}
+			took := used
 			text, code, stop := r.printfVerb(spec, verb, timeFmt, next)
 			if code != 0 {
 				status = code
 			}
 			b.WriteString(text)
+			// Completed means it reached the operand list and finished, which
+			// is what a rewind stops at. A conversion that stopped did not,
+			// however many star operands it read on the way.
+			b.end(mark, !stop && used > took)
 			if stop {
 				return used, status, printfPassStopped
 			}
@@ -392,6 +432,18 @@ func (r *Runner) printfStarOperand(next func() (string, bool)) (int64, int, bool
 	arg, present := next()
 	if !present {
 		if r.ask(r.sem().PrintfStarWithoutOperandIsRefused, "`printf '%*d'` refusing a `*` the operands ran out before") {
+			// The refusal takes the pass back with it, which is the half
+			// #2664 was filed for: ksh93's stdout for `printf 'AB%sCD%*dEF' q`
+			// is `AB` and not `ABqCD`. The rewind reaches the start of the
+			// last conversion that completed, and printfOnce has been
+			// committing everything before that as it went — so there is
+			// nothing to measure here, only what is still pending to drop.
+			//
+			// Before the complaint and not after, because the complaint
+			// reveals what is pending on its way out.
+			if r.printfOut != nil {
+				r.printfOut.rewind()
+			}
 			// ksh93 names `.` whatever the conversion was — `%*s` and
 			// `%*.*f` both report `.` — so the name is the constant it
 			// measured as rather than anything read out of the format.
@@ -417,6 +469,43 @@ func (r *Runner) printfStarOperand(next func() (string, bool)) (int64, int, bool
 		code = 0
 	}
 	return n, code, false
+}
+
+// printfUnfinishedStars reads the operands the stars of an *unfinished*
+// conversion take — a format that ended before its conversion character, with
+// a `*` somewhere in the part that was written.
+//
+// It is reached only in the dialect whose answer to
+// PrintfUnfinishedConversionIsAPercent is yes, because the other four refuse
+// the unfinished conversion outright and the pass is over before any operand
+// is looked at.
+//
+// The star takes its operand even though the conversion never completes,
+// which is the whole of #2667: `printf 'a%*' 5 9` is `a%a%` in ksh93 and
+// `printf 'a%' 5 9` and `printf 'a%5' 5 9` are `a%`. One operand per star and
+// in written order, exactly as a finished conversion reads them —
+// `printf 'a%*.*' 5 9 7 3` is `a%a%` — and the list running out is the same
+// refusal, rewind and all: `printf 'a%*'` with no operands writes nothing at
+// all and reports 1.
+//
+// So this is printfStarOperand in a loop rather than a reader of its own. A
+// second one beside it is how the refusal, its status and its rewind would
+// reach a finished conversion and not this one.
+func (r *Runner) printfUnfinishedStars(unfinished string, next func() (string, bool)) (int, bool) {
+	status := 0
+	for _, c := range []byte(unfinished) {
+		if c != '*' {
+			continue
+		}
+		_, code, stop := r.printfStarOperand(next)
+		if stop {
+			return code, true
+		}
+		if code != 0 {
+			status = code
+		}
+	}
+	return status, false
 }
 
 // printfFmtWidthCeiling is the widest field Go's `fmt` will render. Past it
@@ -1744,40 +1833,146 @@ func (r *Runner) unicodeEscapeText(p PrintfUnicodeEscapePolicy, s string) (strin
 }
 
 // printfWriter is the shell's output stream, held back or written through
-// depending on which the dialect does.
+// depending on which the dialect does — and, in the one dialect that takes a
+// pass back, the buffer that rewind comes out of.
+//
+// Everything is buffered now, which used to be the hold-it-all dialects'
+// arrangement alone. The dialect that writes through releases each
+// conversion's worth as the *next* conversion begins, so what is still held
+// is exactly what a rewind could reach — the pass back to the start of the
+// last conversion that completed (#2664).
+//
+// The diagnostics a conversion produces are held with it, and that is what
+// lets both halves be true at once. ksh93 writes `[` before it complains
+// about the `%z` that followed, so the complaint cannot simply wait for the
+// end of the pass; and it answers `X` for `printf 'X%dY%*.*dZ' 42abc 7abc`,
+// where the complaint about `42abc` goes out and the rewind still reaches
+// back past `42Y`. Holding the complaint until the conversion it belongs to
+// has resolved settles both: the output before that conversion is released
+// first, or the pass is taken back, and only then does the complaint go out.
 type printfWriter struct {
-	w    io.Writer
-	r    *Runner
-	hold *strings.Builder
+	w io.Writer
+	r *Runner
+	// pending is what has been produced and not yet written. In a
+	// write-through dialect it reaches back only as far as a rewind could;
+	// in the others it is the whole pass.
+	pending []byte
+	// written is how much of the pass has already gone out, so that a mark
+	// can name a place in the pass rather than a place in pending.
+	written int
+	// floor is the mark a rewind stops at: the start of the last conversion
+	// that completed. Kept in both kinds of dialect, because the refusal
+	// that rewinds is an axis of its own and not the write-through one.
+	floor int
+	// inConv says a conversion is being formatted, so a diagnostic belongs
+	// to it and waits for it. diags is what has been said meanwhile.
+	inConv bool
+	diags  []string
+	// rewound records that this conversion refused and took the pass back,
+	// so the end of it releases nothing.
+	rewound bool
+	// through says the dialect writes as it produces. The others hold the
+	// whole pass on purpose — their complaint reaches the reader first.
+	through bool
 }
 
-func (p printfWriter) WriteString(s string) {
-	if s == "" {
-		return
-	}
-	if p.hold != nil {
-		p.hold.WriteString(s)
-		return
-	}
-	p.write(s)
-}
+func (p *printfWriter) WriteString(s string) { p.pending = append(p.pending, s...) }
 
 // writeByte is not WriteByte: that name carries an error return by
 // convention, and this writer reports one the way every builtin's output
 // does — on the runner, for the dispatcher to fold in.
 //
-// The conversion is through a one-byte slice and not through `string(c)`,
-// which is a *rune* conversion: it spells 0xc0 as the two bytes UTF-8 gives
-// U+00C0, so a format holding a byte no encoding claims came out as two.
-func (p printfWriter) writeByte(c byte) { p.WriteString(string([]byte{c})) }
+// The byte is appended rather than converted through `string(c)`, which is a
+// *rune* conversion: it spells 0xc0 as the two bytes UTF-8 gives U+00C0, so a
+// format holding a byte no encoding claims came out as two.
+func (p *printfWriter) writeByte(c byte) { p.pending = append(p.pending, c) }
 
-func (p printfWriter) flush() {
-	if p.hold != nil {
-		p.write(p.hold.String())
+// mark names where the pass stands now, counted from its start rather than
+// from the front of pending — which moves as text is released.
+func (p *printfWriter) mark() int { return p.written + len(p.pending) }
+
+// begin opens a conversion: what it says is held until end says how it went.
+func (p *printfWriter) begin() { p.inConv = true }
+
+// end closes the conversion that began at mark, releases or rewinds, and only
+// then lets out what the conversion had to say.
+//
+// completed is whether the conversion reached the operand list and finished,
+// which is what moves the floor. Reaching the list is the test and not
+// finding anything in it: `printf 'AB%sCD%*dEF'` with no operands at all is
+// `AB` in ksh93, so a `%s` that read a missing operand marks exactly as one
+// that read a present operand does.
+func (p *printfWriter) end(mark int, completed bool) {
+	p.inConv = false
+	switch {
+	case p.rewound:
+		// Taken back, so nothing before this conversion may go out either:
+		// the rewind reaches past it to the floor.
+		p.rewound = false
+	case completed:
+		p.release(mark)
+		if mark > p.floor {
+			p.floor = mark
+		}
+	case len(p.diags) > 0:
+		// Something is about to be said about a conversion that did not
+		// complete. In the dialect that writes through, what stands in front
+		// of it goes out first — ksh93's `[` arrives before its complaint
+		// about the `%z` that followed. A conversion with nothing to say and
+		// nothing consumed releases nothing, which is what keeps a `%%` from
+		// putting the text before it beyond a later rewind's reach.
+		p.release(mark)
+	}
+	diags := p.diags
+	p.diags = nil
+	for _, d := range diags {
+		p.r.errf("%s", d)
 	}
 }
 
-func (p printfWriter) write(s string) {
+// hold takes a diagnostic written while a conversion is being formatted, and
+// reports whether it was taken. Outside a conversion nothing is held.
+func (p *printfWriter) hold(msg string) bool {
+	if !p.inConv {
+		return false
+	}
+	p.diags = append(p.diags, msg)
+	return true
+}
+
+// release lets out everything produced before to, in the dialect that writes
+// through. In the others it does nothing: they hold the pass to the end.
+func (p *printfWriter) release(to int) {
+	if !p.through {
+		return
+	}
+	n := to - p.written
+	if n <= 0 {
+		return
+	}
+	p.write(string(p.pending[:n]))
+	p.pending = append(p.pending[:0], p.pending[n:]...)
+	p.written = to
+}
+
+// rewind takes the pass back to the floor, which is the refusal in #2664.
+// Text already released cannot be taken back, and nothing puts the floor
+// behind what was released.
+func (p *printfWriter) rewind() {
+	if n := p.floor - p.written; n >= 0 && n <= len(p.pending) {
+		p.pending = p.pending[:n]
+	}
+	p.rewound = true
+}
+
+func (p *printfWriter) flush() {
+	p.written += len(p.pending)
+	text := string(p.pending)
+	p.pending = p.pending[:0]
+	p.write(text)
+}
+
+func (p *printfWriter) write(s string) {
 	if s == "" {
 		// Nothing to write cannot fail to be written: `printf '' >&-`
 		// succeeds in every shell measured.

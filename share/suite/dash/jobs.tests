@@ -16,23 +16,56 @@
 # job this file has not waited for is delivery order, and delivery
 # order does not repeat.
 #
-# The first case is the discriminating one: dash is alone in refusing
-# `kill -0 %1`. ksh93 joins it in refusing `kill -s CONT %1`, so that line is
-# here to say what the boundary is rather than to draw it.
+# ---- the job has to still be running ----
+#
+# Both `kill` cases were asked about `( exit 0 ) &` — a child that is already
+# finished by the time the next line runs, usually. Whether `%1` still names
+# something to signal is then a question about how far the shell has got with
+# reaping it, and that is a race rather than an answer: zsh reported both ways
+# for `kill -0 %1`, which made the file non-deterministic and cost the dash
+# column its whole run, since a suite that ships no expected output has
+# nothing to grade a file the reference will not repeat against (#2963).
+#
+# So each `kill` is asked about a job that cannot have finished. The job
+# blocks opening a fifo for reading, which cannot complete until this script
+# opens the other end, so the child is alive for certain when `kill` is asked
+# about it and exits normally — status 0, no signal, nothing for the shell to
+# report asynchronously — once the case is done with it. No `sleep`, because
+# a job that is alive because it has not got round to exiting yet is the race
+# again with a longer fuse.
+#
+# The discriminating claim survives that change, because it never depended on
+# the child being finished: dash alone cannot make a pid out of the *word*.
+#
+# What did not survive is the second line's boundary, and holding the job open
+# is what showed it up. Asked about a finished job, ksh93 refused
+# `kill -s CONT %1` ("no such job") and bash and zsh took it — so the line was
+# written down as a spelling ksh93 joins dash in refusing. Asked about a
+# running one, ksh93 takes it like the other two, and refuses it only once
+# the job is gone. Measured 2026-09-15 on ksh93 (AT&T 93u 2012-08-01), both
+# ways. That was never a fact about `kill -s CONT %1`; it was the same race
+# the first line was caught by, read as a dialect difference. Both lines now
+# say the one thing: dash is alone.
 #
 # Nothing here prints a pid or a job number; each `kill` is asked as whether
 # it succeeded, and every job is waited for before the next one starts, so no
 # case depends on which process the system ran first.
 
-( exit 0 ) &
+mkfifo gate
+cat < gate > /dev/null &
 kill -0 %1 2> /dev/null
 printf 'kill -0 on a job spec -> %s\n' "$(( $? == 0 ))"
+: > gate
 wait
+rm -f gate
 
-( exit 0 ) &
+mkfifo gate
+cat < gate > /dev/null &
 kill -s CONT %1 2> /dev/null
 printf 'kill -s CONT on a job spec -> %s\n' "$(( $? == 0 ))"
+: > gate
 wait
+rm -f gate
 
 ( exit 0 ) &
 p=$!

@@ -111,7 +111,7 @@ func TestTheHistoryRewriteAsksBeforeItReplacesTheFile(t *testing.T) {
 	})
 }
 
-// A refused rename must not leave the half-written neighbour behind: a policy
+// A refused rename must not leave the half-written neighbor behind: a policy
 // that will not have the file replaced did not ask for a second copy of it in
 // the same directory.
 func TestARefusedRewriteTakesItsTemporaryWithIt(t *testing.T) {

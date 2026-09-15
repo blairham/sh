@@ -366,7 +366,7 @@ func (b Boundary) Stat(ctx context.Context, path string) (os.FileInfo, error) {
 // history file and renames it over, and both the removal and the rename were
 // exempt as the shell's own scaffolding. They are not scaffolding by this
 // package's own rule — `HISTFILE` is a variable a line of script can set, so
-// the path was chosen by whoever the policy is about — and the neighbouring
+// the path was chosen by whoever the policy is about — and the neighboring
 // *open* of the same file has gone through the gate since this package
 // existed.
 //

@@ -12277,18 +12277,51 @@ record.
 core's trap firing rather than anything in the dialect, for the reason the
 two tracing bits and the listing are.
 
-What bash's extended debugging *also* names is still not provided here:
-the BASH_ARGC/BASH_ARGV record. `$BASH_COMMAND` was a second gap beside
-it and is not part of this option at all — it is the command the shell is
-running, recorded whether any trap is set or not, and without it a DEBUG
-action could only ever do something unconditional, since a breakpoint is
-`[[ $BASH_COMMAND == … ]]` and there is no other way to write one. It
-landed in #2779; the sites it is recorded at are the sites the DEBUG trap
-fires at, measured rather than assumed, and `interp.RunningCommand` holds
-the probes that say so. The name is taken for what it moves rather than
-refused for what it does not, which is the same partial honesty `set -o
-posix` keeps — and the remainder is itemized and measured in #2476 rather
-than left as this paragraph, so it is countable.
+**The fifth state is the record of each call's arguments**, published
+under two names: `BASH_ARGC` is one count per call, innermost first, and
+`BASH_ARGV` is every argument of every call in one list. The second is a
+**stack**, so the innermost call's *last* argument is element 0 — with
+the option on, `g(){ …; }; f(){ g x y z; }; f a b` answers `3 2 0` and
+`z y x b a`. The trailing count is the top level's own arguments, which
+are the positional parameters: none under `-c` with no operands, and two
+for `bash -c '…' name p1 p2`. Measured on bash 5.3.15, 2026-09-14.
+
+It is a **record** and not a view of the call stack, which is what the
+edges say. With the option off, both arrays are empty and a call entered
+while it is off is absent from the record afterwards. Turning it on
+records the frame it was turned on in and *nothing below it*: inside `f a
+b`, `shopt -s extdebug` answers `2` and not `2 0`. That entry is not the
+call's to take away, so it is still there after `f` has returned — and
+the next call stacks on top of it, `1 2`. A shell computing the arrays
+from its live stack would answer `2 0`, then nothing, then `1 0`. Turning
+it on where the record already reaches adds nothing, which is what keeps
+`2 2 0` from becoming `2 2 2 0`.
+
+bash 3.2.57 omits the top-level entry, so the same line answers `3 2`
+there — a change within bash, recorded in the corpus's `bash32` column
+rather than given an axis.
+
+`interp.Runner.SetRecordsCallArguments` is the capability, and the record
+lives in `interp/callarguments.go` under no shell's names, for the reason
+the three states above are capabilities: four of the panel's shells have
+no such record at all and the fifth can move it twice in a script.
+
+What a **sourced file** does to that record is measured and deliberately
+not modeled, because it is two rules of its own rather than a smaller
+version of this one: `. ./s.sh x y` pushes a frame of two *with extended
+debugging off*, and `. ./s.sh` with no operands pushes a frame of one
+holding the file's own name. Neither follows from the option.
+
+`$BASH_COMMAND` was a second gap beside all of this and is not part of
+this option at all — it is the command the shell is running, recorded
+whether any trap is set or not, and without it a DEBUG action could only
+ever do something unconditional, since a breakpoint is `[[ $BASH_COMMAND
+== … ]]` and there is no other way to write one. It landed in #2779; the
+sites it is recorded at are the sites the DEBUG trap fires at, measured
+rather than assumed, and `interp.RunningCommand` holds the probes that
+say so. The name is taken for what it moves rather than refused for what
+it does not, which is the same partial honesty `set -o posix` keeps —
+and with the record above, #2476's itemized remainder is closed.
 
 **`ExitTrapFiresPastTheEnd`** — bash unspecified · dash unspecified · ksh93 no · zsh yes
 
@@ -13492,18 +13525,63 @@ Two corners are deliberately outside it, both measured:
   #2699 made it an option word and had the applying loop carry on past it —
   a reading `set - a b` cannot tell from stopping, since the loop breaks on
   `a` either way (#2742).
-- **ksh93's listing.** It defers to the end of the option parse and prints
-  once, in a form the last `-o`/`+o` decides: `set -o -e` is the `+o`
-  re-input form, `set -o -e -o` and `set +o -o` are the two-column one and
-  only once, and `set -o -` is a third form nothing here writes. Ours lists
-  where it stands, in the sign's own form, which is exactly bash's reading —
-  `set -o -o` there is two listings and `set +o -o` is one of each. So ksh93
-  answers this axis, because it does decline the word; what it still owes is
-  a listing mechanism, which is a different question. Filed as #2698, with
-  the ten measured shapes.
+- **ksh93's listing**, which is not this axis and is now
+  `SetListsOptionsOnceAtTheEnd` below. ksh93 answers *this* field yes because
+  it does decline the word; what it also does with the listing that follows
+  is a separate mechanism.
 
 Ours took the next word in every dialect, so `set -o -e` refused `-e` as a
 name and left errexit off where bash and ksh93 turn it on (#2671).
+
+**`SetListsOptionsOnceAtTheEnd`** — bash no · dash no · ksh93 **yes** · zsh
+no · ash no
+
+Defers `set -o`'s listing to the end of the option parse and writes it
+**once**, in the form the last `-o` or `+o` decided — where a `-o` that
+declined its word counts as a `+o`.
+
+Measured on ksh93u+ 2012-08-01, 2026-09-13 and again 2026-09-15. Three
+listing forms exist there and only one ever appears per `set`:
+
+| written | ksh93 prints |
+| --- | --- |
+| `set -o` | `Current option settings` and the two-column name/state table |
+| `set +o` | the `set --default --braceexpand …` re-input line |
+| `set -o -e` | the **re-input** line, with `--errexit` already in it |
+| `set -o --` | the re-input line |
+| `set -o -- a b` | the re-input line; `$#` is 2 |
+| `set -o +o` | the re-input line, **once** |
+| `set +o -o` | the two-column table, **once** |
+| `set -o -e -o` | the two-column table, once, with `errexit on` in it |
+| `set -o -Z` | **nothing at all** — `-Z: unknown option` and the usage line |
+| `set -o -` | a third form: five columns of `no`-prefixed names |
+
+Two things follow that an immediate listing cannot express.
+
+**It is deferred.** `set -o -e -o` lists once and the listing already holds
+`errexit on`, so it is written after the whole parse rather than at the `-o`.
+And `set -o -Z` writes none at all: the parse failed before the end, so the
+listing never happened. That is why the flush is on a parse that came out at
+0 — every early return inside the option loop is a refusal.
+
+**The form is the last one's**, where a `-o` that declined its word counts as
+a `+o`. That is the whole of what separates `set -o -e` from `set -e -o`,
+which hold the same single `-o`.
+
+Everywhere else the listing happens where it stands, in the sign's own form:
+`set -o -o` in bash 5.3.15 is two listings and `set +o -o` is one of each.
+The corpus holds both readings of the same three lines —
+`opt/the-option-listing-is-written-once-and-at-the-end`,
+`opt/a-declined-word-makes-the-listing-the-plus-form` and
+`opt/one-of-each-sign-is-still-one-listing` — because a shell that deferred
+the form but not the count would pass the first and fail the third.
+
+**The tenth row is not modeled.** `set -o -` is a form nothing here writes at
+all; under this axis it comes out as the re-input line, because a bare `-` is
+a word the `-o` declines. That is a wrong answer of a different shape from
+the old one and is recorded rather than papered over: the form is ksh93's
+alone, and it is reached through a word whose own reading — `BareOptionWord`
+— is a separate axis (#2698).
 
 **`DefaultOptionLetters`** — bash hB · dash  · ksh93 hB · zsh 569X
 

@@ -1625,6 +1625,10 @@ func Semantics() interp.Semantics {
 	// mechanism rather than another answer here, #2698. Measured on the
 	// field.
 	s.SetODeclinesADashWord = interp.Yes
+	// And it lists **once**, at the end of the option parse, in the form the
+	// last `-o`/`+o` decided — measured across ten shapes on ksh93u+ 2012-08-01
+	// (#2698). The other five columns list where they stand.
+	s.SetListsOptionsOnceAtTheEnd = interp.Yes
 	// A bare `-` turns `-x` and `-v` off here and so does a bare `+`, which is this column alone (#2699).
 	s.BareOptionWord = interp.BareEitherSignClearsTraceAndVerbose
 	// unanswered SetValidatesOptionLettersFirst: this column does agree with

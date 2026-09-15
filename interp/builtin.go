@@ -443,7 +443,42 @@ func biSet(r *Runner, ctx context.Context, args []string) int {
 	return status
 }
 
-func (r *Runner) setOptionsAndOperands(_ context.Context, args []string) int {
+// setOptionsAndOperands reads `set`'s option words and then its operands.
+//
+// The listing is written from here rather than from inside the loop in the
+// one dialect that defers it. See Semantics.SetListsOptionsOnceAtTheEnd: the
+// options are listed once, after the whole parse, in the form the last `-o`
+// or `+o` decided — so `set -o -e -o` lists once with `errexit on` already in
+// it, and `set -o -Z` lists not at all because the parse ended early.
+//
+// Only on a parse that came out at 0, which is that last row: every early
+// return inside the loop is a refusal, and a refusal is exactly what ksh93
+// writes no listing after.
+func (r *Runner) setOptionsAndOperands(ctx context.Context, args []string) int {
+	r.pendingOptionListing = listingNotPending
+	st := r.setOptionWordsAndOperands(ctx, args)
+	pending := r.pendingOptionListing
+	r.pendingOptionListing = listingNotPending
+	if pending != listingNotPending && st == 0 {
+		return r.listOptions(pending == listingAsInput)
+	}
+	return st
+}
+
+// pendingListingForm is which listing a deferred `set -o` still owes.
+type pendingListingForm uint8
+
+const (
+	listingNotPending pendingListingForm = iota
+	// listingAsTable is what a `-o` that took no word asks for.
+	listingAsTable
+	// listingAsInput is what a `+o` asks for — and what a `-o` that
+	// *declined* its word asks for, which is the rule that separates
+	// `set -o -e` from `set -e -o`.
+	listingAsInput
+)
+
+func (r *Runner) setOptionWordsAndOperands(_ context.Context, args []string) int {
 	if len(args) == 0 {
 		return r.setListing()
 	}
@@ -548,7 +583,46 @@ func (r *Runner) setOptionsAndOperands(_ context.Context, args []string) int {
 				// With no name to set, `-o` lists the options and `+o`
 				// writes them back as input — four shapes, each the
 				// dialect's own.
-				st := r.listOptions(!on)
+				//
+				// Or it does not list here at all. One dialect writes one
+				// listing after the whole parse, in the form the last of
+				// these decided, and a `-o` that declined its word asks for
+				// the `+o` form there. See
+				// Semantics.SetListsOptionsOnceAtTheEnd, asked wherever the
+				// listing would have happened so that a shell which never
+				// reaches one is never asked.
+				//
+				// Asked only where the two readings can disagree, which is
+				// where **something still happens after this listing site**:
+				// a word the `-o` declined, which is the only way a second
+				// listing site is ever reached and the only way an option
+				// changes after one, or welded letters read after the
+				// listing. A `set -o` that is the last thing the parse does
+				// writes the same listing either way, and asking there would
+				// refuse the commonest line in the builtin from any shell
+				// whose vector does not answer.
+				//
+				// And once a listing is pending, this `set` is already in
+				// the deferred reading: a second site that listed here
+				// would make two listings out of the one this dialect
+				// writes. That is the `set +o -o` row.
+				deferred := false
+				if declined || after != "" || r.pendingOptionListing != listingNotPending {
+					deferred = r.ask(r.sem().SetListsOptionsOnceAtTheEnd,
+						"the `set -o` listing deferred to the end of the option parse")
+					if r.unspecified {
+						return r.status
+					}
+				}
+				st := 0
+				switch {
+				case deferred && (declined || !on):
+					r.pendingOptionListing = listingAsInput
+				case deferred:
+					r.pendingOptionListing = listingAsTable
+				default:
+					st = r.listOptions(!on)
+				}
 				// And in the shells that do not weld, what follows the `o`
 				// is more option letters, read after the listing rather than
 				// instead of it.

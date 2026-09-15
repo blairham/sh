@@ -54,6 +54,56 @@ func registerCallStack(r *interp.Runner) {
 		return out
 	})
 
+	// The other two, which are a *record* rather than a view of the stack:
+	// they are kept only while extended debugging is on, and what is in them
+	// is what was in them when each call was entered. See
+	// interp/callarguments.go, and Runner.SetRecordsCallArguments for what
+	// turning the record on does to the frame it is turned on in.
+	//
+	// BASH_ARGC is one count per call, innermost first; BASH_ARGV is every
+	// argument of every call in one list, and it is a **stack** — the
+	// innermost call's last argument is element 0. Measured on bash 5.3.15,
+	// 2026-09-14: `g(){ …; }; f(){ g x y z; }; f a b` under `shopt -s
+	// extdebug` answers `3 2 0` and `z y x b a`, where the trailing `0` is
+	// the top level's own arguments under `-c` with no operands (#2476).
+	r.SetDynamicArray("BASH_ARGC", func(r *interp.Runner) []string {
+		frames := r.CallArguments()
+		out := make([]string, 0, len(frames))
+		for _, args := range frames {
+			out = append(out, strconv.Itoa(len(args)))
+		}
+		return out
+	})
+
+	r.SetDynamicArray("BASH_ARGV", func(r *interp.Runner) []string {
+		return r.CallArgumentsFlat()
+	})
+
+	// The other two, which are a *record* rather than a view of the stack:
+	// they are kept only while extended debugging is on, and what is in them
+	// is what was in them when each call was entered. See
+	// interp/callarguments.go, and Runner.SetRecordsCallArguments for what
+	// turning the record on does to the frame it is turned on in.
+	//
+	// BASH_ARGC is one count per call, innermost first; BASH_ARGV is every
+	// argument of every call in one list, and it is a **stack** — the
+	// innermost call's last argument is element 0. Measured on bash 5.3.15,
+	// 2026-09-14: `g(){ …; }; f(){ g x y z; }; f a b` under `shopt -s
+	// extdebug` answers `3 2 0` and `z y x b a`, where the trailing `0` is
+	// the top level's own arguments under `-c` with no operands (#2476).
+	r.SetDynamicArray("BASH_ARGC", func(r *interp.Runner) []string {
+		frames := r.CallArguments()
+		out := make([]string, 0, len(frames))
+		for _, args := range frames {
+			out = append(out, strconv.Itoa(len(args)))
+		}
+		return out
+	})
+
+	r.SetDynamicArray("BASH_ARGV", func(r *interp.Runner) []string {
+		return r.CallArgumentsFlat()
+	})
+
 	r.SetDynamicArray("BASH_LINENO", func(r *interp.Runner) []string {
 		frames := r.CallStack()
 		out := make([]string, 0, len(frames))

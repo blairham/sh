@@ -705,6 +705,7 @@ func Semantics() interp.Semantics {
 	// And it takes the next word whatever it looks like: `set -o -e` is
 	// `Illegal option -o -e` at 2, with the dash word refused as the name.
 	s.SetODeclinesADashWord = interp.No
+	s.SetListsOptionsOnceAtTheEnd = interp.No
 	// A bare `-` turns `-x` and `-v` off here, and a bare `+` is consumed with no effect (#2699).
 	s.BareOptionWord = interp.BareDashClearsTraceAndVerbose
 	// And it applies as it goes: `command set -e -Z` leaves errexit **on**,

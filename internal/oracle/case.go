@@ -5231,6 +5231,16 @@ echo "st=$?"`,
 		Why:     "the third thing extended debugging carries, and the only one of the three that is not a `set` option under another name: with it on, a names-only listing writes the line the definition begins on and the file it was read from after the name. all three bash columns answer `g`, then `g 1 ./lib.sh`, then `g` again, so the option is read at the listing rather than at the definition — and unlike the tracing row above, bash 3.2 agrees, which is what says this half of the option is older than the indicator split. It is what a shell-level debugger needs to put a breakpoint anywhere, and it was missing here (#2476)",
 	},
 	{
+		ID: "shopt/extdebug-keeps-the-arguments-of-each-call", Category: "shell options",
+		Snippet: `f(){ echo "off [${BASH_ARGV[@]}] [${BASH_ARGC[@]}]"; }; f a b; shopt -s extdebug; g(){ echo "on [${BASH_ARGV[@]}] [${BASH_ARGC[@]}]"; }; h(){ g x y z; }; h a b`,
+		Why:     "the last item of #2476's list: with extended debugging on, the arguments of each call the shell is inside are kept, and read back under two names. `BASH_ARGC` is one count per call innermost first; `BASH_ARGV` is every argument of every call in one list and is a **stack**, so the innermost call's last argument is element 0 — which is why the answer is `z y x b a` and `3 2 0` rather than `x y z a b`. The control in front of it is the half that says it is a record rather than a view of the call stack: with the option off, both are empty. The trailing `0` is the top level's own arguments, which under `-c` with no operands is a count of none rather than no entry. The three shells without `shopt` say `command not found` and then read two names nothing ever set, so this row is bash's alone in substance and records what the others answer to the same text",
+	},
+	{
+		ID: "shopt/extdebug-records-the-frame-it-was-turned-on-in", Category: "shell options",
+		Snippet: `f(){ shopt -s extdebug; echo "in [${BASH_ARGC[@]}]"; }; f a b; echo "after [${BASH_ARGC[@]}]"; g(){ echo "next [${BASH_ARGC[@]}]"; }; g z`,
+		Why:     "the edge that says the record is a stack pushed at each call rather than a view computed on demand, and it has three halves in one line. Turning the option on inside a call records **that call and nothing below it**, so bash answers `2` and not `2 0`. The entry it took is not the call's to remove, so it is still there after `f` has returned. And the next call stacks on top of it: `1 2`. A shell computing the arrays from its live call stack would answer `2 0`, then nothing, then `1 0`",
+	},
+	{
 		ID: "readonly/reassignment-by-a-declaration", Category: "builtins",
 		Snippet: "readonly x=1; export x=2; echo after",
 		Why:     "the same refusal reached through a declaration utility rather than by an assignment standing alone, and a different set of shells stops for it — three here, where a plain assignment stops all four. So which of the two ways the name was set decides, and one shell answers the two oppositely: it stops for the plain form given as an argument and never stops for this one",
@@ -17288,7 +17298,22 @@ echo "st=$? alive"`,
 	{
 		ID: "opt/a-bad-letter-behind-a-bare-set-o", Category: "shell options",
 		Snippet: `set -o -Z; echo "st=$?"; echo after`,
-		Why:     "where the decline meets `Semantics.SetValidatesOptionLettersFirst`, and the reason the two are one measurement rather than two. With the word declined it is an option **letter**, so bash's validating pass reaches it before anything is applied: `set -o -Z` is `-Z: invalid option` at 2 with **no option table written at all**, where `set -o -e` writes one. ksh93 declines the word too and reports `-Z: unknown option`; dash, BusyBox ash and zsh take it as a name. No redirect, because the absence of the listing is the fact. Ours writes one in the ksh dialect and should not — that column defers its listing to the end of the option parse and prints it once, in a form the last `-o`/`+o` decides, which is a listing mechanism nothing here has and not another answer to the axis (#2671)",
+		Why:     "where the decline meets `Semantics.SetValidatesOptionLettersFirst`, and the reason the two are one measurement rather than two. With the word declined it is an option **letter**, so bash's validating pass reaches it before anything is applied: `set -o -Z` is `-Z: invalid option` at 2 with **no option table written at all**, where `set -o -e` writes one. ksh93 declines the word too and reports `-Z: unknown option`; dash, BusyBox ash and zsh take it as a name. No redirect, because the absence of the listing is the fact. Ours used to write one in the ksh dialect and now does not: that column defers its listing to the end of the option parse, so a parse that ended early writes none at all. See `Semantics.SetListsOptionsOnceAtTheEnd` and the rows beside this one (#2671, #2698)",
+	},
+	{
+		ID: "opt/the-option-listing-is-written-once-and-at-the-end", Category: "shell options",
+		Snippet: `set -o -e -o >out 2>&1; echo "st=$?"; grep errexit out`,
+		Why:     "one `set`, two `-o`, and **one** listing in ksh93 — written after the whole option parse, so the single `errexit` line it holds already reads `on`. bash writes two listings, each where it stands, so it holds two errexit lines and the first of them reads `off`: the `-e` had not been applied when the first `-o` listed. That pair is the whole of the axis in three words of output, and it is why this is an axis rather than a correction — the same text is one listing in one column and two in another. Redirected to a file and grepped rather than printed, because the listings themselves are fifty lines of option names that say nothing about the question. `Semantics.SetListsOptionsOnceAtTheEnd`, yes in ksh93 alone (#2698)",
+	},
+	{
+		ID: "opt/a-declined-word-makes-the-listing-the-plus-form", Category: "shell options",
+		Snippet: `set -o -e >out 2>&1; echo "st=$?"; head -1 out | sed 's/[ 	].*//'; case $- in *e*) echo errexit-on;; *) echo errexit-off;; esac`,
+		Why:     "the rule that separates `set -o -e` from `set -e -o`, which hold the same single `-o`: a `-o` that **declined** its word counts as a `+o`, so ksh93 writes the re-input `set --default …` line here where a bare `-o` gets the two-column table. The first *word* of the listing is what tells the two forms apart — cut to one word so the row asks about the form and not about which option names a shell happens to have, which is a difference of its own and one every column would otherwise be asked twice. The `case` after it is the control that says the `-e` still applied — `Semantics.SetODeclinesADashWord` is what leaves the word to the loop, and this row would pass on the listing alone with the option never turned on",
+	},
+	{
+		ID: "opt/one-of-each-sign-is-still-one-listing", Category: "shell options",
+		Snippet: `set +o -o >out 2>&1; echo "st=$?"; head -1 out | sed 's/[ 	].*//'; grep -c braceexpand out`,
+		Why:     "the other direction and the half that says **once**: bash writes the re-input line for the `+o` and then the table for the `-o`, so `braceexpand` appears twice; ksh93 writes the table alone and it appears once. The first word says which form came out — cut to one word for the reason the row above gives — and the count says how many listings there were — a shell that deferred the form but not the count would pass the row above and fail this one",
 	},
 	{
 		ID: "opt/a-welded-set-o-with-no-word-behind-it", Category: "shell options",

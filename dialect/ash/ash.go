@@ -393,6 +393,7 @@ func Semantics() interp.Semantics {
 	// And as in dash the next word is taken whatever it looks like:
 	// `set -o -e` is `illegal option -o -e` at 1, errexit left off.
 	s.SetODeclinesADashWord = interp.No
+	s.SetListsOptionsOnceAtTheEnd = interp.No
 	// A bare `-` turns `-x` and `-v` off here, and a bare `+` is consumed with no effect (#2699).
 	s.BareOptionWord = interp.BareDashClearsTraceAndVerbose
 	// And as in dash it applies as it goes: `command set -e -Z` leaves

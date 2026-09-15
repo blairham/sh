@@ -6430,6 +6430,46 @@ type Semantics struct {
 	//     with the ten measured shapes.
 	SetODeclinesADashWord Answer
 
+	// SetListsOptionsOnceAtTheEnd defers `set -o`'s listing to the end of
+	// the option parse and writes it **once**, in the form the last `-o` or
+	// `+o` decided — where a `-o` that declined its word counts as a `+o`.
+	//
+	// Yes in ksh93 alone. Everywhere else the listing happens where it
+	// stands, in the sign's own form, which is exactly bash's reading:
+	// `set -o -o` there is two listings and `set +o -o` is one of each.
+	//
+	// Measured 2026-09-13 and again 2026-09-15 on ksh93u+ 2012-08-01, where
+	// three different listing forms exist and only one ever appears per
+	// `set`:
+	//
+	//	written          ksh93 prints
+	//	set -o           the two-column name/state table
+	//	set +o           the `set --default …` re-input line
+	//	set -o -e        the re-input line, with `--errexit` already in it
+	//	set -o --        the re-input line
+	//	set -o -- a b    the re-input line; `$#` is 2
+	//	set -o +o        the re-input line, once
+	//	set +o -o        the two-column table, once
+	//	set -o -e -o     the two-column table, once, with `errexit on` in it
+	//	set -o -Z        nothing at all — `-Z: unknown option` and the usage
+	//	set -o -         a third form: five columns of `no`-prefixed names
+	//
+	// Two things follow that an immediate listing cannot express. It is
+	// **deferred**: `set -o -e -o` lists once and the listing already has
+	// `errexit on` in it, so it is written after the whole parse rather than
+	// at the `-o`; and `set -o -Z` writes none at all, because the parse
+	// failed before the end. And the **form is the last one's**, which is
+	// what separates `set -o -e` from `set -e -o` — the same single `-o`,
+	// declined in one and not in the other.
+	//
+	// The tenth row is not modeled. `set -o -` is a form nothing here writes
+	// at all; under this axis it comes out as the re-input line, because a
+	// bare `-` is a word the `-o` declines. That is a wrong answer of a
+	// different shape from the old one and is recorded rather than papered
+	// over: a listing form no shell but ksh93 has, reached by a word whose
+	// own reading — Semantics.BareOptionWord — is a separate axis.
+	SetListsOptionsOnceAtTheEnd Answer
+
 	// BareOptionWord is what `set` does with a word that is exactly `-` or
 	// exactly `+`.
 	//

@@ -1599,6 +1599,7 @@ func Semantics() interp.Semantics {
 	// shell is `-e: invalid option name`, which is the front end's own
 	// position-sensitive parse and not this axis.
 	s.SetODeclinesADashWord = interp.Yes
+	s.SetListsOptionsOnceAtTheEnd = interp.No
 	// A bare `-` turns `-x` and `-v` off here, and a bare `+` is consumed with no effect (#2699).
 	s.BareOptionWord = interp.BareDashClearsTraceAndVerbose
 	// And every option word's letters are read before any of them is

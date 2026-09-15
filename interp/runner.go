@@ -1065,6 +1065,12 @@ type Runner struct {
 	// locatesFunctions is whether a names-only function listing says where
 	// each function was defined — see Runner.LocatesFunctions.
 	locatesFunctions bool
+
+	// recordsCallArgs and callArgs are the arguments of each call the shell
+	// is inside, kept only while something asks for them. See
+	// interp/callarguments.go.
+	recordsCallArgs bool
+	callArgs        []callArgs
 	// debugActionDecides is whether a DEBUG action's *status* decides what
 	// runs next — see Runner.DebugActionDecides.
 	debugActionDecides bool
@@ -1634,7 +1640,18 @@ type Runner struct {
 	// Nothing else may read either: both are set and consumed inside one
 	// call of the builtin.
 	setRefusalOwed bool
-	setUsageOwed   bool
+
+	// pendingOptionListing is the `set -o` listing a deferred parse still
+	// owes, and which form it is in. One dialect writes one listing after
+	// the whole option parse rather than at each `-o`, so the form has to
+	// survive the words between; see Semantics.SetListsOptionsOnceAtTheEnd.
+	//
+	// Cleared at the top of every `set`, and read only by the one function
+	// that wraps the parse: it is a value passed between two halves of one
+	// call rather than shell state, and nothing outside that call may see
+	// it.
+	pendingOptionListing pendingListingForm
+	setUsageOwed         bool
 
 	// setLettersWelded records that the letters being read are the ones that
 	// were welded behind an `-o` in the same word, which the pass that

@@ -60,6 +60,7 @@ func seedStacks(r *Runner) {
 	r.procSubs = append(make([]procSubPipe, 0, 4), procSubPipe{})
 	r.heldProcSubs = append(make([]procSubPipe, 0, 4), procSubPipe{})
 	r.frames = append(make([]Frame, 0, 4), Frame{})
+	r.callArgs = append(make([]callArgs, 0, 4), callArgs{})
 	r.borrowed = append(make([]borrowedText, 0, 4), borrowedText{})
 	r.InheritedFiles = append(make([]*os.File, 0, 4), nil)
 	r.ProcessAnchor = append(make([]string, 0, 4), "seed")

@@ -1156,6 +1156,17 @@ func Semantics() interp.Semantics {
 	// A `*` beside a width's own digits is refused here too: `printf '%5*d' 4 42`
 	// is a conversion character this shell does not have (#2824).
 	s.PrintfStarBesideTheFieldDigits = interp.No
+
+	// Refused at INT_MAX itself, where ash gives up one past it:
+	// `printf '[%2147483647s]' x` is the complaint here and two billion
+	// characters of padding there. Measured 2026-09-15.
+	s.PrintfFieldBeyondAnInt = interp.PrintfFieldRefused
+
+	// The complaint is the number's range rather than the field's, and the
+	// field is still laid out: `printf 'A[%*s]B' 21474836470 x` is `A[x]B`
+	// at 1 after `printf: 21474836470: Result too large`. Measured
+	// 2026-09-15, and the other half of PrintfFieldBeyondAnInt above.
+	s.PrintfStarBeyondAnInt = interp.PrintfStarIsOutOfRange
 	s.CaseSubjectKeepsThePreviousLine = interp.No
 	s.SubstringRangeThirdColonIsABadSubstitution = interp.No
 	s.PrintfReportsBadNumber = interp.Yes

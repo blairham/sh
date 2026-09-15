@@ -1824,6 +1824,15 @@ func Semantics() interp.Semantics {
 	// A `*` beside a width's own digits is refused here too: `printf '%5*d' 4 42`
 	// is a conversion character this shell does not have (#2824).
 	s.PrintfStarBesideTheFieldDigits = interp.No
+
+	// The width is stored in a C int and what is left is used, so
+	// `printf '[%21474836470s]' x` — -10 as an int32 — is `[x         ]`
+	// and `%4294967306s` is `[         x]`. Measured 2026-09-15.
+	s.PrintfFieldBeyondAnInt = interp.PrintfFieldWrapsToAnInt
+
+	// Wraps on both routes, which is what makes the literal spelling and
+	// the star agree here. Measured 2026-09-15.
+	s.PrintfStarBeyondAnInt = interp.PrintfStarWrapsToAnInt
 	s.CaseSubjectKeepsThePreviousLine = interp.No
 	// unanswered SubstringRangeThirdColonIsABadSubstitution: a third segment
 	// is a *modifier list* here — `${x:1:5:t}` is `D` — so the question of

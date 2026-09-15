@@ -2871,6 +2871,58 @@ type Semantics struct {
 	// printfStarBesideDigits.
 	PrintfStarBesideTheFieldDigits Answer
 
+	// PrintfFieldBeyondAnInt is what a width or a precision does when the
+	// number written for it is past the C `int` every reference stores it in.
+	//
+	// It is an axis and not a limit to pick, because the panel splits three
+	// ways on `printf '[%21474836470s]' a b` — a width ten times INT_MAX,
+	// with two operands so that the format's reuse is visible too:
+	//
+	//	bash 5.3   `[` then `printf: Value too large to be stored in data
+	//	           type` at 1, the builtin over
+	//	dash       `[` then `printf: xvsnprintf failed` at 2, the builtin over
+	//	bash 3.2   `[][]` in silence at 0
+	//	ash        `[][]` in silence at 1
+	//	zsh        `[a         ][b         ]` at 0
+	//	ksh93      `[a         ][b         ]` at 0
+	//
+	// The two that print `[a         ]` are not padding to ten. They are
+	// storing the width in a C `int` and letting it wrap: 21474836470 is
+	// -10 as an int32, and a negative width is a left-justified one. The
+	// probe that says so is a second width rather than a byte count, because
+	// both come to ten characters and only the justification parts them —
+	// `%4294967306s` is 10 exactly, and zsh and ksh93 answer
+	// `[         a]`, right-justified. See PrintfFieldWrapsToAnInt.
+	//
+	// **Nothing on the panel lays the field out.** That is the whole reason
+	// this axis exists: without it a shell honors the width as written, and
+	// 21 GB of padding is not a slow answer but a hang — #3008, found by
+	// `make bash-suite` and not by anything else in the tree, because a hang
+	// is the one failure a bounded case corpus cannot show.
+	//
+	// Where each column turns is measured and is not the same place:
+	// bash 5.3 and dash refuse *at* INT_MAX, ash goes empty only above it —
+	// `%2147483647s` is 2147483647 characters of padding there — and the
+	// wrapping two have no boundary at all, since a width inside an int is
+	// itself. Modeled as one boundary per reading: at INT_MAX for the
+	// refusals, above it for the empty ones.
+	//
+	// bash 3.2 is the one column that reading is approximate for. It goes
+	// empty *below* INT_MAX as well — `%2147483645s` is `[]` there where
+	// `%2000000000s` is two billion characters — and the point it turns
+	// moves with the length of the text being laid out, which reads as the
+	// field and the text having to fit in an int together. Measured
+	// 2026-09-15 and deliberately not modeled: the band it is wrong in is
+	// widths between two billion and INT_MAX, and a case in that band would
+	// be measuring an allocation rather than a shell.
+	PrintfFieldBeyondAnInt PrintfFieldReading
+
+	// PrintfStarBeyondAnInt is the same question asked of a `*` operand
+	// rather than of digits written in the format, and the panel does not
+	// answer the two alike — see PrintfStarReading, which carries the
+	// measurements and the one column that splits.
+	PrintfStarBeyondAnInt PrintfStarReading
+
 	// PrintfNonFiniteIsConverted puts an infinity or a not-a-number through the
 	// conversion that named it, rather than writing the bare word.
 	//
@@ -15234,6 +15286,117 @@ func (p PrintfQuoteStyle) String() string {
 //
 // bash 3.2 answers like BusyBox ash and is not a dialect for it: the record
 // splits on the age of a binary there, the reading #2647 took of `%c`.
+// PrintfStarReading is what a `*` standing for a width or a precision does
+// with an operand outside the C `int` that width is stored in.
+//
+// It is a separate question from Semantics.PrintfFieldBeyondAnInt and the
+// panel answers it differently, which is what says the two are not one axis
+// read twice. `printf 'A[%*s]B' 21474836470 x`, the same number the literal
+// route was measured with:
+//
+//	bash 5.3   `A[x]B` at 1, after `printf: 21474836470: Result too large`
+//	ash        `A[x]B` at 0, after `invalid number '21474836470'`
+//
+// The two complaining columns are not one reading. What each leaves behind
+// shows only at a precision — bash's `printf '[%.*f]' 21474836470 1` is
+// `[1.000000]`, the default six places an *omitted* precision earns, and
+// ash's is `[1]`, a precision of nought. A width cannot tell them apart,
+// since absent and zero are the same width.
+//
+//	dash       `A[x         ]B` at 0
+//	zsh        `A[x         ]B` at 0
+//	ksh93      `A[x         ]B` at 0
+//
+// **dash is the column that splits.** It refuses the literal spelling
+// `%21474836470s` outright and wraps the same number arriving through a
+// star, so a single axis over both routes would have to be wrong about dash
+// in one of them. The difference is where the number is read: an operand
+// goes through the shell's own numeric reading before it is ever a width,
+// and digits in a format do not.
+//
+// The two complaining columns complain with wordings they already have —
+// bash's Diagnostics.PrintfNumberOutOfRange and, where that is empty, the
+// bad-number wording ash answers with — so this axis picks the reading and
+// never the words.
+type PrintfStarReading int
+
+const (
+	// PrintfStarUnspecified is no answer, and is refused like any other.
+	PrintfStarUnspecified PrintfStarReading = iota
+	// PrintfStarWrapsToAnInt stores the operand in a C `int` and uses what is
+	// left, in silence: dash, zsh and ksh93.
+	PrintfStarWrapsToAnInt
+	// PrintfStarIsOutOfRange complains that the operand is a number C cannot
+	// hold and leaves the field *absent*: bash 5.3. The field is still laid
+	// out, which is why `A[x]B` comes out whole rather than the builtin
+	// stopping — and absent is not zero, which the precision is what shows.
+	// Measured 2026-09-15:
+	//
+	//	printf '[%.*f]' 21474836470 1   bash  [1.000000], the default six
+	//	printf '[%.*f]' abc 1           bash  [1], a precision of nought
+	//
+	// So an operand bash could not *read* is a zero and one it read and
+	// cannot *hold* is nothing at all, in the same shell and one wording
+	// apart. That is the whole difference between this reading and the one
+	// below.
+	PrintfStarIsOutOfRange
+	// PrintfStarIsNotANumber calls the operand unreadable rather than
+	// out of range, and so leaves the zero an unreadable number leaves:
+	// ash, whose `printf '[%.*f]' 21474836470 1` is `[1]` — identical to
+	// its answer for `abc`, wording included.
+	PrintfStarIsNotANumber
+)
+
+func (p PrintfStarReading) String() string {
+	switch p {
+	case PrintfStarWrapsToAnInt:
+		return "wrapped into an int"
+	case PrintfStarIsOutOfRange:
+		return "a number out of range"
+	case PrintfStarIsNotANumber:
+		return "a number that cannot be read"
+	}
+	return "unspecified"
+}
+
+// PrintfFieldReading is what a shell does with a width or a precision whose
+// number is past the C `int` it would be stored in.
+//
+// See Semantics.PrintfFieldBeyondAnInt, which carries the measurements.
+type PrintfFieldReading int
+
+const (
+	// PrintfFieldUnspecified is no answer, and is refused like any other.
+	PrintfFieldUnspecified PrintfFieldReading = iota
+	// PrintfFieldRefused ends the builtin where the conversion stood, with a
+	// complaint and a failing status: bash 5.3 and dash. The text already
+	// written stays — `printf 'A[%21474836470s]B' x` is `A[` — so it is the
+	// pass stopping and not the output being taken back.
+	PrintfFieldRefused
+	// PrintfFieldEmpty writes nothing for the conversion, operand included,
+	// and carries on: bash 3.2 and BusyBox ash. The operand is *consumed* —
+	// `printf '[%21474836470s]' a b` is `[][]` and not one pass — so the
+	// field is lost rather than the conversion being skipped.
+	PrintfFieldEmpty
+	// PrintfFieldWrapsToAnInt stores the number in a C `int` and uses what is
+	// left: zsh and ksh93. A width that wraps negative is a left-justified
+	// one, which is C's own rule for a negative width and is why
+	// `%21474836470s` — -10 as an int32 — left-justifies in ten columns.
+	PrintfFieldWrapsToAnInt
+)
+
+func (p PrintfFieldReading) String() string {
+	switch p {
+	case PrintfFieldRefused:
+		return "refused"
+	case PrintfFieldEmpty:
+		return "an empty field"
+	case PrintfFieldWrapsToAnInt:
+		return "wrapped into an int"
+	}
+	return "unspecified"
+}
+
 type PrintfNumberReading int
 
 const (

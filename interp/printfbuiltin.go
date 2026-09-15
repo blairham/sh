@@ -371,14 +371,18 @@ func (r *Runner) printfStars(spec string, lost printfLostStars, next func() (str
 	width := ""
 	if i < len(spec) && spec[i] == '*' {
 		i++
-		n, code, stop := r.printfStarOperand(next)
+		n, absent, code, stop := r.printfStarOperand(next)
 		if stop {
 			return "", code, true
 		}
 		if code != 0 {
 			status = code
 		}
-		if n < 0 {
+		if absent {
+			// No width at all, which is what the out-of-range reading
+			// leaves behind — and what the zero below writes as nothing.
+			n = 0
+		} else if n < 0 {
 			// C's rule, and the panel's: a negative width is the `-` flag
 			// and the magnitude. Added only where the flag is not already
 			// there, because `%--6d` is not a spelling Go's fmt reads.
@@ -416,14 +420,14 @@ func (r *Runner) printfStars(spec string, lost printfLostStars, next func() (str
 		i++
 		if i < len(spec) && spec[i] == '*' {
 			i++
-			n, code, stop := r.printfStarOperand(next)
+			n, absent, code, stop := r.printfStarOperand(next)
 			if stop {
 				return "", code, true
 			}
 			if code != 0 {
 				status = code
 			}
-			if n >= 0 {
+			if n >= 0 && !absent {
 				prec = "." + strconv.FormatInt(n, 10)
 			}
 		} else {
@@ -447,7 +451,7 @@ func (r *Runner) printfStars(spec string, lost printfLostStars, next func() (str
 func (r *Runner) printfDropStars(n int, next func() (string, bool)) (int, bool) {
 	status := 0
 	for range n {
-		_, code, stop := r.printfStarOperand(next)
+		_, _, code, stop := r.printfStarOperand(next)
 		if stop {
 			return code, true
 		}
@@ -466,7 +470,7 @@ func (r *Runner) printfDropStars(n int, next func() (string, bool)) (int, bool) 
 // and ash is the column that *does* complain about an absent operand at the
 // conversion, so the two cases are not one question. ksh93 is the seventh and
 // refuses the directive outright.
-func (r *Runner) printfStarOperand(next func() (string, bool)) (int64, int, bool) {
+func (r *Runner) printfStarOperand(next func() (string, bool)) (n int64, absent bool, code int, stop bool) {
 	// ksh93 names `.` for a `*` operand in the second complaint line as well
 	// as in the refusal below, which is the same constant seen twice.
 	saved := r.printfConversionName
@@ -490,16 +494,46 @@ func (r *Runner) printfStarOperand(next func() (string, bool)) (int64, int, bool
 			// ksh93 names `.` whatever the conversion was — `%*s` and
 			// `%*.*f` both report `.` — so the name is the constant it
 			// measured as rather than anything read out of the format.
-			return 0, r.printfBadVerb(".", "."), true
+			return 0, false, r.printfBadVerb(".", "."), true
 		}
 		if r.unspecified {
-			return 0, r.status, true
+			return 0, false, r.status, true
 		}
-		return 0, 0, false
+		return 0, false, 0, false
 	}
-	n, code, stop := r.printfNumber(arg, true)
+	n, code, stop = r.printfNumber(arg, true)
 	if stop {
-		return n, code, true
+		return n, false, code, true
+	}
+	if code == 0 && (n > printfFieldMax || n < math.MinInt32) {
+		// A number the shell read perfectly well and the width cannot hold.
+		// Settled here rather than where the format's own digits are
+		// settled, because the panel answers the two routes differently —
+		// see Semantics.PrintfStarBeyondAnInt.
+		switch r.starReading() {
+		case PrintfStarWrapsToAnInt:
+			w, left := printfFieldWrap(n)
+			n = int64(w)
+			if left {
+				n = -n
+			}
+		case PrintfStarIsOutOfRange:
+			// The field goes *absent* rather than to zero, and the pass
+			// carries on: `printf 'A[%*s]B' 21474836470 x` is `A[x]B` and
+			// `printf 'A[%.*f]B' 21474836470 1` is `A[1.000000]B` — the
+			// default six places, which is what an omitted precision means
+			// and a precision of nought does not.
+			code, n, absent = r.printfOutOfRange(arg), 0, true
+		case PrintfStarIsNotANumber:
+			// The same complaint, and the zero an unreadable number leaves
+			// rather than an absence: `printf '[%.*f]' 21474836470 1` is
+			// `[1]` here, which is this column's answer for `abc` as well.
+			// printfOutOfRange words it from the bad-number sentence, since
+			// Diagnostics.PrintfNumberOutOfRange is empty in this column.
+			code, n = r.printfOutOfRange(arg), 0
+		default:
+			return 0, false, r.status, true
+		}
 	}
 	if code != 0 && !r.ask(r.sem().PrintfStarComplaintCostsTheStatus, "a `printf` complaint about a `*` operand reporting failure") {
 		// ash alone writes the complaint and reports success anyway:
@@ -507,11 +541,11 @@ func (r *Runner) printfStarOperand(next func() (string, bool)) (int64, int, bool
 		// status's. Asked only where there is a complaint to cost anything,
 		// so the two dialects that never complain are never questioned.
 		if r.unspecified {
-			return n, r.status, true
+			return n, absent, r.status, true
 		}
 		code = 0
 	}
-	return n, code, false
+	return n, absent, code, false
 }
 
 // printfUnfinishedStars reads the operands the stars of an *unfinished*
@@ -540,7 +574,7 @@ func (r *Runner) printfUnfinishedStars(unfinished string, next func() (string, b
 		if c != '*' {
 			continue
 		}
-		_, code, stop := r.printfStarOperand(next)
+		_, _, code, stop := r.printfStarOperand(next)
 		if stop {
 			return code, true
 		}
@@ -649,6 +683,158 @@ func printfWithoutSignFlags(spec string) string {
 	return "%" + strings.NewReplacer("+", "", " ", "").Replace(flags) + spec[i+n:]
 }
 
+// printfFieldMax is the C `int` every reference on the panel stores a width
+// and a precision in. Nothing there lays a field out past it — it refuses, or
+// writes an empty field, or wraps the number into the int and uses what is
+// left — and this shell laying one out is the hang #3008 reports: a width ten
+// times this is 21 GB of padding, which is not a slow answer.
+const printfFieldMax = math.MaxInt32
+
+// printfFieldNumber reads the run of digits at i as a C `strtol` would: the
+// value, saturated at the top of a 64-bit signed integer rather than wrapped,
+// because that is where the reading stops rather than where the storing does.
+//
+// The saturation is load-bearing and is measured, not assumed:
+// `printf '[%99999999999999999999s]' x` is `[x]` in zsh — one character, no
+// padding — which is LONG_MAX truncated to an int32 giving -1, a negative
+// width being a left-justified one, and a width of one holding a single
+// character. A value wrapped modulo 2^64 instead would land somewhere else
+// and pad.
+func printfFieldNumber(s string, i, n int) int64 {
+	var v int64
+	for ; n > 0; i, n = i+1, n-1 {
+		d := int64(s[i] - '0')
+		if v > (math.MaxInt64-d)/10 {
+			return math.MaxInt64
+		}
+		v = v*10 + d
+	}
+	return v
+}
+
+// printfFieldWrap stores a field number in a C `int` and answers what is left,
+// as the two wrapping columns do.
+//
+// A negative width is a left-justified one, which is C's own rule, so the
+// answer is a magnitude and a flag rather than a signed number. The one value
+// with no magnitude is INT_MIN, whose negation is itself: measured as a width
+// of nothing at all — `printf '[%2147483648s]' x` is `[x]` in zsh — so it
+// answers zero rather than two billion.
+func printfFieldWrap(v int64) (width int, left bool) {
+	w := int32(uint32(v))
+	if w >= 0 {
+		return int(w), false
+	}
+	if n := -w; n > 0 {
+		return int(n), true
+	}
+	return 0, true
+}
+
+// printfFieldBeyondAnInt reports whether the width or the precision written in
+// spec is past the int a reference stores it in, and answers the spec those
+// numbers wrapped into one — which is what the wrapping columns use and what
+// the other two readings never look at.
+//
+// Every `*` has been replaced by the operand it took before this is reached,
+// so the runs here are digits.
+//
+// The boundary is not the same for every reading and the caller is what knows
+// which: this answers `beyond` at the *widest* of them, INT_MAX itself, and
+// PrintfFieldEmpty's columns turn one above that. See
+// Semantics.PrintfFieldBeyondAnInt.
+func printfFieldBeyondAnInt(spec string) (beyond, atTheEdge bool, wrapped string) {
+	i := 1 // past the %
+	flagEnd := i + runOfBytes(spec, i, "-+ #0'")
+
+	widthAt := flagEnd
+	widthRun := printfFieldRun(spec, widthAt)
+	width := printfFieldNumber(spec, widthAt, widthRun)
+
+	precAt, precRun := -1, 0
+	prec := int64(-1)
+	if j := widthAt + widthRun; j < len(spec) && spec[j] == '.' {
+		precAt = j + 1
+		precRun = printfFieldRun(spec, precAt)
+		prec = printfFieldNumber(spec, precAt, precRun)
+	}
+	// Strictly below, because the widest boundary any reading uses is
+	// INT_MAX *itself*: bash and dash refuse there. atTheEdge is what lets
+	// the readings that turn one past it say so.
+	if width < printfFieldMax && prec < printfFieldMax {
+		return false, false, spec
+	}
+	atTheEdge = width == printfFieldMax || prec == printfFieldMax
+
+	// Rebuilt rather than patched: a width and a precision can both be past
+	// the edge, and each wraps on its own.
+	flags := spec[i:flagEnd]
+	var b strings.Builder
+	b.WriteByte('%')
+	if widthRun > 0 {
+		n, left := printfFieldWrap(width)
+		if left && !strings.Contains(flags, "-") {
+			// The flag rather than a sign, so the scanners that read flags
+			// out of a spec see a left-justified field where C would.
+			flags += "-"
+		}
+		b.WriteString(flags)
+		b.WriteString(strconv.Itoa(n))
+	} else {
+		b.WriteString(flags)
+	}
+	if precAt >= 0 {
+		// A negative precision is C's "as if it were omitted", and the
+		// omission takes the dot with it.
+		if n, left := printfFieldWrap(prec); !left {
+			b.WriteString("." + strconv.Itoa(n))
+		}
+	}
+	// Whatever followed the field: the length modifiers, and nothing else,
+	// since a spec does not carry its conversion character.
+	tail := widthAt + widthRun
+	if precAt >= 0 {
+		tail = precAt + precRun
+	}
+	b.WriteString(spec[tail:])
+	return true, atTheEdge, b.String()
+}
+
+// printfFieldRefused is the complaint the two refusing columns write, and the
+// status they report with it.
+func (r *Runner) printfFieldRefused() int {
+	d := r.diag()
+	r.diagf("%s\n", Wording(d.PrintfFieldBeyondAnInt,
+		"printf: Value too large to be stored in data type"))
+	return orDefault(d.PrintfFieldBeyondAnIntStatus, 1)
+}
+
+// starReading resolves Semantics.PrintfStarBeyondAnInt, refusing an
+// unanswered axis the way every other unanswered axis here is refused.
+func (r *Runner) starReading() PrintfStarReading {
+	p := r.sem().PrintfStarBeyondAnInt
+	if p == PrintfStarUnspecified {
+		r.errf("%s\n", r.diag().Report(r.name(), r.line,
+			r.unanswered("printf: a `*` operand past a C int")))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
+}
+
+// fieldReading resolves Semantics.PrintfFieldBeyondAnInt, refusing an
+// unanswered axis the way every other unanswered axis here is refused.
+func (r *Runner) fieldReading() PrintfFieldReading {
+	p := r.sem().PrintfFieldBeyondAnInt
+	if p == PrintfFieldUnspecified {
+		r.errf("%s\n", r.diag().Report(r.name(), r.line,
+			r.unanswered("printf: a width or a precision past a C int")))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
+}
+
 // printfPadToWidth lays a rendered field out to a width `fmt` refused.
 //
 // Only the space and zero paddings are modeled, which is the whole of what a
@@ -678,6 +864,33 @@ func printfPadToWidth(field string, width int, left, zero bool) string {
 
 // printfConvert formats one conversion whose width and precision are settled.
 func (r *Runner) printfConvert(spec string, verb byte, timeFmt string, next func() (string, bool)) (string, int, bool) {
+	// A field past the C int a reference stores it in is settled before
+	// anything else, because the layout below would honor it: 21 GB of
+	// padding is a hang rather than a slow answer, and no shell on the panel
+	// lays one out (#3008).
+	if beyond, atTheEdge, wrapped := printfFieldBeyondAnInt(spec); beyond {
+		switch reading := r.fieldReading(); reading {
+		case PrintfFieldRefused:
+			return "", r.printfFieldRefused(), true
+		case PrintfFieldEmpty:
+			// Only above the edge: this reading's columns lay INT_MAX out
+			// in full and give up one past it.
+			if !atTheEdge {
+				// The operand is taken and then dropped, which is what
+				// makes `printf '[%21474836470s]' a b` two empty fields
+				// rather than one pass.
+				next()
+				return "", orDefault(r.diag().PrintfFieldBeyondAnIntStatus, 1), false
+			}
+		case PrintfFieldWrapsToAnInt:
+			spec = wrapped
+		default:
+			// Unanswered. fieldReading has already said so and set the
+			// status; the pass stops rather than guessing a layout.
+			return "", r.status, true
+		}
+	}
+
 	// A width past what `fmt` renders is laid out here instead. Done before
 	// the argument is taken so the conversion below sees exactly the spec it
 	// would have, minus a width it could not have honored.

@@ -720,6 +720,21 @@ type Diagnostics struct {
 	//
 	// Empty is the other six columns, which say nothing about it.
 	PrintfIntegerOverflow string
+	// PrintfFieldBeyondAnInt is a width or a precision past the C `int` it
+	// would be stored in, in the two columns that refuse one. No verbs: both
+	// name the trouble rather than the number.
+	//
+	//	printf '[%21474836470s]' x
+	//	  bash 5.3: printf: Value too large to be stored in data type, 1
+	//	  dash:     printf: xvsnprintf failed, 2
+	//
+	// Empty in the four columns that do not refuse — see
+	// Semantics.PrintfFieldBeyondAnInt, which is what decides whether this is
+	// reached at all.
+	PrintfFieldBeyondAnInt string
+	// PrintfFieldBeyondAnIntStatus is what that reports. Zero means 1, which
+	// is bash's; dash sets 2.
+	PrintfFieldBeyondAnIntStatus int
 	// PrintfBadVerb is a conversion this shell does not have. Two verbs, and
 	// the panel splits evenly between them: %[1]s is the conversion
 	// character alone and %[2]s is the whole directive as written, so `%lQ`

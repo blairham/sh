@@ -549,6 +549,23 @@ func Semantics() interp.Semantics {
 	// A `*` beside a width's own digits is refused here too: `printf '%5*d' 4 42`
 	// is a conversion character this shell does not have (#2824).
 	s.PrintfStarBesideTheFieldDigits = interp.No
+
+	// The field is dropped, operand and all, and the builtin carries on
+	// reporting 1: `printf '[%21474836470s]' a b` is `[][]` at 1. Only
+	// above INT_MAX — `%2147483647s` is laid out in full here.
+	// Measured 2026-09-15.
+	s.PrintfFieldBeyondAnInt = interp.PrintfFieldEmpty
+
+	// A number this shell will not read rather than one it read and cannot
+	// hold, which is the reading and not only the wording: the complaint is
+	// the bad-number sentence — Diagnostics.PrintfNumberOutOfRange is empty
+	// here — and what it leaves behind is a zero, so
+	// `printf '[%.*f]' 21474836470 1` is `[1]`, identical to this column's
+	// answer for `abc`. bash parts from it on exactly that, leaving the
+	// field absent and writing `[1.000000]`. It costs nothing, since
+	// PrintfStarComplaintCostsTheStatus is No, so
+	// `printf 'A[%*s]B' 21474836470 x` is `A[x]B` at 0. Measured 2026-09-15.
+	s.PrintfStarBeyondAnInt = interp.PrintfStarIsNotANumber
 	s.CaseSubjectKeepsThePreviousLine = interp.No
 	s.SubstringRangeThirdColonIsABadSubstitution = interp.No
 	s.PrintfReportsBadNumber = interp.Yes

@@ -3102,6 +3102,37 @@ type Dialect struct {
 	// #965, which is that question and not this one.
 	CompletionConditions bool
 
+	// ConditionArityIsCheckedWhenItRuns lets `[[ … ]]` accept a known
+	// conditional operator standing with the wrong number of operands, and
+	// leaves the refusal to the interpreter.
+	//
+	// The grammar question #965 is about, and it is the one place in this
+	// parser where a condition is *accepted* and then refused. Measured
+	// 2026-09-14 on zsh 5.9.2, which is the only column that does it:
+	//
+	//	[[ -n ]]            unknown condition: -n     at evaluation, status 2
+	//	[[ -n x y ]]        unknown condition: -n     the same
+	//	[[ -n x -z "" ]]    unknown condition: -n     the same
+	//
+	// against bash 5.3 and ksh93, which refuse all three while reading and
+	// name the offending token. `echo pre; [[ -n x y ]]` prints `pre` in zsh
+	// and prints nothing in the other two, which is what says where the
+	// refusal happens rather than only how it is worded.
+	//
+	// **A known operator only**, which is measured and is the line between
+	// this and CompletionConditions above: `[[ -bogus ]]` is 0 in zsh — a
+	// bare word is a test for non-emptiness and `-bogus` is not empty — so a
+	// word that is not an operator here is not an operator with a bad arity
+	// either.
+	//
+	// **And not where the operand is itself an operator**, which is the row
+	// that stops this being "everything after the operand is surplus":
+	// `[[ -n -z x ]]` is `parse error near `x'` in zsh, where `[[ -n x y ]]`
+	// is the run-time refusal — so an operator-shaped operand starts a
+	// reading of its own and the word after it is simply unexpected.
+	// `[[ -n -n ]]` is 0 in the same shell, which is that reading finishing.
+	ConditionArityIsCheckedWhenItRuns bool
+
 	// ParameterIsSetTest enables `[[ -v name ]]`, which asks whether a
 	// parameter is set rather than anything about its value.
 	//

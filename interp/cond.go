@@ -120,6 +120,9 @@ func (r *Runner) evalCond(c syntax.CondExpr) (bool, error) {
 		r.traceConditionOp(x.Op)
 		return r.evalCond(x.Y)
 
+	case *syntax.CondArity:
+		return r.condWrongArity(x)
+
 	case *syntax.CondUnary:
 		return r.evalCondUnary(x)
 
@@ -127,6 +130,35 @@ func (r *Runner) evalCond(c syntax.CondExpr) (bool, error) {
 		return r.evalCondBinary(x)
 	}
 	return false, arithError{msg: "unsupported condition"}
+}
+
+// condWrongArity refuses a known conditional operator that stood with the
+// wrong number of operands.
+//
+// The refusal the grammar handed on rather than made — see
+// syntax.Dialect.ConditionArityIsCheckedWhenItRuns, which is what lets the
+// condition parse at all, and #965. The operator is named and nothing else
+// is: measured on zsh 5.9.2, `[[ -n ]]`, `[[ -n x y ]]` and `[[ -n x -z "" ]]`
+// are all `unknown condition: -n`, so it is the operator's name and not the
+// surplus word's.
+//
+// It ends the shell at 2, in every position measured — before a `||`, inside
+// an `if` head, inside a function, from `-c` and from a script file — and the
+// commands before it on the same line have already run, which is the whole
+// difference this makes. The status is written here rather than left to
+// FatalErrorStatusIsOne: that axis answers the *generic* fatal error and this
+// refusal is 2 in the one shell that has it, where the same shell's generic
+// answer is 1.
+func (r *Runner) condWrongArity(x *syntax.CondArity) (bool, error) {
+	d := r.diag()
+	r.diagf("%s\n", Wording(d.UnknownCondition, "unknown condition: %s", x.Op))
+	status := orDefault(d.UnknownConditionStatus, 2)
+	r.status = status
+	r.stopTheShell()
+	// A status rather than a message, because the complaint is already
+	// written: condStatus is the shape testClause takes the number from
+	// without saying anything further, and the shell has been stopped above.
+	return false, condStatus{code: status}
 }
 
 func (r *Runner) evalCondUnary(x *syntax.CondUnary) (bool, error) {

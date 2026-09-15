@@ -18065,6 +18065,29 @@ echo "st=$? alive"`,
 		Why:     "the boundary, and the row that says the pair falls back to being ordinary words: with nothing after it the condition is the bare-word test for non-emptiness and answers 0 — in the shell that *has* the operator as well as in the three that read the word as an ordinary one. Every other one-operand test demands its operand and complains without one, so adding these two without this row would have made one dialect refuse a line three other columns run. The two that do not answer 0 are not counter-examples: dash has no `[[ ]]` to put it in, and bash 3.2 is the odd one out against bash 5.3, reading `-prefix` as a conditional unary operator and calling the `]]` an unexpected argument to it",
 	},
 	{
+		ID: "cond/a-surplus-operand-is-refused-when-it-runs", Category: "conditions",
+		// A syntax error under the bash dialect the parser conformance test
+		// uses, which is the point of the row: the arity is accepted and
+		// checked at run time in exactly one column.
+		SyntaxError: true,
+		Snippet:     `echo pre; [[ -n x y ]]; echo post`,
+		Why:         "*where* a condition of the wrong arity is refused, which is a different question from how it is worded and is what the `echo pre` asks: zsh writes `pre` and then `unknown condition: -n` at status 2, so the condition parsed and the arity was checked when it ran, while bash under both names, bash 3.2 and ksh93 name the offending token while reading and never run the `echo`. The operator is what zsh names and the surplus word is not, which is the second half of the row. Two columns are a third shape rather than agreement with zsh: dash has no `[[ ]]` and answers `[[: not found`, and BusyBox ash reads the words as `test` words and complains `y: unknown operand` — both run *both* echoes, where zsh runs the first and stops. We refused all of it at parse time, naming `y`, which is right for two columns and wrong for the third in wording *and* in where it happens (#965, the second half of #888)",
+	},
+	{
+		ID: "cond/an-operator-with-no-operand-at-all", Category: "conditions",
+		// A syntax error under the bash dialect the parser conformance test
+		// uses, which is the point of the row: the arity is accepted and
+		// checked at run time in exactly one column.
+		SyntaxError: true,
+		Snippet:     `echo pre; [[ -n ]]; echo post`,
+		Why:         "the same refusal from the other end of the arity, and the row that says it is the *operator's* name being reported rather than whatever word was surplus — there is no surplus word here and zsh still writes `unknown condition: -n`. It also parts the three refusing columns from each other: bash names the `]]` as an unexpected argument to a unary operator and ksh93 calls the `]]` unexpected, where the row above has them naming `y`. BusyBox ash is the column that changes between the two rows — it complains about the surplus word above and takes this one silently, `-n` with nothing after it being a bare-word test there",
+	},
+	{
+		ID: "cond/an-operator-shaped-operand-is-an-operand", Category: "conditions",
+		Snippet: `echo pre; [[ -n -n ]]; echo post`,
+		Why:     "the control for both rows above, and it is unanimous: every column that has `[[ ]]` answers 0 with both echoes run, because `-n` in the *operand* position is an ordinary word and a non-empty one. Without it the rule reads as \"a `-` word after an operator is surplus\", which is the reading that would make this line a refusal — and zsh parts company with it a step further out, calling `[[ -n -z x ]]` a parse error near `x` where `[[ -n x y ]]` is the run-time refusal",
+	},
+	{
 		ID: "param/the-names-with-a-prefix", Category: "parameter expansion",
 		Snippet: `ZQ_a=1; ZQ_b=2; echo ${!ZQ_@}`,
 		Why:     "yields the *names* rather than any value, sorted — bash and ksh93 have it and the other two call it a bad substitution, which is the same flag that governs `${!x}`",

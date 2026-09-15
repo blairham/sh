@@ -219,8 +219,54 @@ reading the token would consume it.
 
 **Three or more words is a different question and is not this flag.**
 `[[ -prefix -foo : ]]` parses in zsh and is refused here, and so is
-`[[ -nosuch x ]]`; both are the arity rule in "What this does not cover"
-below, which is #965.
+`[[ -nosuch x ]]`; the second is still the unknown-operator rule in "What
+this does not cover" below. The arity of a *known* operator is the
+section that follows.
+
+## A known operator's arity is checked when the condition runs — zsh only
+
+    echo pre; [[ -n x y ]]; echo post
+
+| shell | `pre` | what it says | status |
+| --- | --- | --- | --- |
+| bash 5.3, and as `sh` | no | ``syntax error in conditional expression: unexpected token `y'`` | 2 |
+| bash 3.2 | no | `syntax error in conditional expression` | 2 |
+| ksh93 | no | ``syntax error at line 1: `y' unexpected`` | 3 |
+| zsh 5.9.2 | **yes** | `unknown condition: -n` | 2 |
+| dash | yes, and `post` | `[[: not found` | 0 |
+
+The `echo pre` is the whole point of the row: it is the difference
+between a refusal made while *reading* and one made while *running*, and
+no wording can show it. Three of the columns never run the `echo`; zsh
+runs it, then refuses, then ends the shell. dash is a third shape rather
+than agreement — it has no `[[ ]]` and runs both echoes.
+
+**The operator is what is named**, not the surplus word, which the other
+end of the arity says without ambiguity: `[[ -n ]]` is `unknown
+condition: -n` there too, with no surplus word to name. Same status, same
+sentence, and the refusal reaches out of a negation, out of a group and
+out of the right-hand side of a `&&`.
+
+That is `syntax.Dialect.ConditionArityIsCheckedWhenItRuns`, and
+`syntax.CondArity` is the node it produces — an operator and every word
+that stood with it, so a formatter writes the line back as it was and the
+interpreter names the operator. The sentence is
+`interp.Diagnostics.UnknownCondition` and the status
+`UnknownConditionStatus`, which is 2 and is *not* that shell's generic
+fatal status of 1.
+
+**Two boundaries, each measured**, and each is a row a simpler rule gets
+wrong:
+
+| written | zsh 5.9.2 | why it is not the rule above |
+| --- | --- | --- |
+| `[[ -bogus ]]` | 0 | a word that is no operator is a bare-word test, and `-bogus` is not empty |
+| `[[ -n -n ]]` | 0 | an operator-shaped *operand* is an ordinary word |
+| `[[ -n -z x ]]` | ``parse error near `x'`` | so that operand starts a reading of its own, and the word after it is unexpected rather than surplus |
+
+A reading that collected every word after the operand would answer
+`unknown condition: -n` for the third, and one that fired on any `-word`
+would refuse the first.
 
 ## A process substitution as an operand — bash only
 
@@ -846,9 +892,12 @@ So the general rule in that shell is that **any** `-word` followed by an
 operand parses as a unary condition and an unknown one is refused when it
 runs — which is precisely the shape the rule above forbids, and adopting
 it would be a decision to change the rule rather than a gap to fill. That
-question is #965 and is still open; `-prefix` and `-suffix` were taken
-*as named operators* instead, which keeps the rule — see the section
-above — and leaves `-after`, `-before`, `-between` and the rest here. The
+question is #965, which took the half of it that is about a **known**
+operator's arity — see the section above — and left this one: an operator
+this shell does not have at all is still refused while reading here.
+`-prefix` and `-suffix` were taken *as named operators* instead, which
+keeps the rule, and leaves `-after`, `-before`, `-between` and the rest
+here. The
 other four disagree with it and with each other: bash 5 and ksh93 make
 `[[ -nosuch x ]]` a syntax error, and bash 3.2 accepts it.
 

@@ -164,7 +164,7 @@ func TestADeclarationOperandTakesTheChain(t *testing.T) {
 // The name's attributes reach the value the chain writes, because that is
 // where an element assignment's value meets them wherever it is written.
 //
-// Not the *words of a nested literal*, which is the neighbouring row and the
+// Not the *words of a nested literal*, which is the neighboring row and the
 // opposite answer: `typeset -i a; a[1]=(5+5)` keeps its text.
 func TestTheChainsValueGoesThroughTheNamesAttribute(t *testing.T) {
 	sem := chainSem()

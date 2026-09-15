@@ -84,3 +84,137 @@ outer() {
 }
 outer
 inner
+
+# --- what a function sees of $@, $# and $0 ----------------------------------
+#
+# $0 is not asked here: bash, ksh93 and dash leave it as the script, and zsh
+# replaces it with the function's name. That is share/suite/zsh/functions.tests.
+
+show() { printf 'count=%s star=[%s] at=[%s]\n' "$#" "$*" "$@"; }
+set -- keep1 keep2
+show one "two three" four
+printf 'restored: %s [%s] [%s]\n' "$#" "$1" "$2"
+
+# "$@" with nothing in it expands to no words at all, so a loop over it does
+# not run once with an empty word.
+none() {
+	set --
+	printf 'none: %s\n' "$#"
+	for w in "$@"; do printf 'unreached\n'; done
+	printf 'loop over an empty "$@" did not run\n'
+}
+none
+
+# --- return from a nested call ----------------------------------------------
+#
+# return leaves the innermost function and nothing further out.
+
+lvl2() { return 5; }
+lvl1() { lvl2; printf 'lvl1 saw %s\n' "$?"; return 6; }
+lvl1
+printf 'the caller saw %s\n' "$?"
+
+inner2() { return 9; }
+outer2() { inner2; printf 'outer2 is still running\n'; return 0; }
+outer2
+printf 'outer2 status %s\n' "$?"
+
+# --- return from a sourced file ---------------------------------------------
+#
+# A dot script is not a function, and return ends the script rather than the
+# shell — the lines after it are not read.
+
+cat > sourced.sh <<'EOS'
+printf 'sourced: before\n'
+return 4
+printf 'sourced: after\n'
+EOS
+. ./sourced.sh
+printf 'after sourcing status=%s\n' "$?"
+rm -f sourced.sh
+
+cat > sourced2.sh <<'EOS'
+sfn() { return 8; }
+sfn
+printf 'sourced fn status=%s\n' "$?"
+EOS
+. ./sourced2.sh
+rm -f sourced2.sh
+
+# --- a function and a variable sharing a name -------------------------------
+#
+# They are different name spaces, and unset -f reaches only one of them.
+
+dual=variable
+dual() { printf 'the function named dual ran\n'; }
+dual
+printf 'the variable named dual is [%s]\n' "$dual"
+unset -f dual
+printf 'the variable survived unset -f: [%s]\n' "$dual"
+
+# --- redefinition -----------------------------------------------------------
+
+redef() { printf 'first\n'; }
+redef
+redef() { printf 'second\n'; }
+redef
+
+# A function that redefines itself while running finishes as it was, and the
+# replacement takes the next call.
+selfredef() { printf 'original\n'; selfredef() { printf 'replacement\n'; }; }
+selfredef
+selfredef
+
+# --- unset -f ----------------------------------------------------------------
+#
+# What unset -f does to a name nothing defined is not asked here: bash, ksh93
+# and dash say nothing and exit 0, zsh complains and exits 1.
+
+gone() { printf 'still here\n'; }
+unset -f gone
+if (gone) 2> /dev/null; then printf 'gone still runs\n'; else printf 'gone is gone\n'; fi
+
+# --- bodies that are not brace groups ---------------------------------------
+#
+# The body is any compound command, so each of them is one.
+
+sub() ( printf 'subshell body\n'; v=lost )
+v=kept
+sub
+printf 'a subshell body left [%s]\n' "$v"
+
+loopbody() for w in a b; do printf 'loop body %s\n' "$w"; done
+loopbody
+
+casebody() case $1 in a) printf 'case body a\n' ;; *) printf 'case body other\n' ;; esac
+casebody a
+casebody z
+
+ifbody() if [ "$1" = y ]; then printf 'if body yes\n'; else printf 'if body no\n'; fi
+ifbody y
+ifbody n
+
+# --- a function called inside a subshell ------------------------------------
+
+setter() { touched=yes; }
+touched=no
+( setter; printf 'inside the subshell: %s\n' "$touched" )
+printf 'outside: %s\n' "$touched"
+
+# --- return outside a function ----------------------------------------------
+
+if (eval 'return 2') 2> /dev/null; then
+	printf 'a return outside a function was accepted\n'
+else
+	printf 'a return outside a function was refused\n'
+fi
+
+# --- recursion depth --------------------------------------------------------
+#
+# Fifty is far below any shell's limit here and far enough to tell a working
+# call stack from one that only handles a couple of frames.
+
+depth=0
+rec() { depth=$((depth + 1)); if [ "$depth" -lt 50 ]; then rec; fi; }
+rec
+printf 'recursed to %s\n' "$depth"

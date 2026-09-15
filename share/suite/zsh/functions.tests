@@ -1,0 +1,41 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# What zsh does with a function that no other shell on the panel does.
+# core/functions.tests carries the questions the four answer alike; these are
+# the two it could not.
+
+# $0 inside a function body. bash, ksh93 and dash leave it as the script name;
+# zsh replaces it with the name of the function being run.
+OUTER0=$0
+zero() {
+	if [ "$0" = "$OUTER0" ]; then
+		printf 'dollar-zero unchanged\n'
+	else
+		printf 'dollar-zero is the function name\n'
+	fi
+}
+zero
+
+nested() { inner; }
+inner() {
+	if [ "$0" = "$OUTER0" ]; then
+		printf 'nested dollar-zero unchanged\n'
+	else
+		printf 'nested dollar-zero is the innermost function\n'
+	fi
+}
+nested
+
+# unset -f on a name nothing defined. bash, ksh93 and dash say nothing and
+# exit 0; zsh diagnoses it and exits 1. The diagnostic is redirected into the
+# comparison rather than to stderr so that the wording is graded too — it is
+# this shell's own words and this is this shell's own file.
+unset -f neverdefined 2>&1
+printf 'unset -f on an undefined name status=%s\n' "$?"
+
+# And it is about the name rather than about the option: unsetting one that
+# does exist is silent and zero here like everywhere else.
+defined() { :; }
+unset -f defined 2>&1
+printf 'unset -f on a defined name status=%s\n' "$?"

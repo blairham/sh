@@ -1143,7 +1143,7 @@ func Semantics() interp.Semantics {
 	s.PrintfReportsBadNumber = interp.Yes
 	s.PrintfNumberOperand = interp.PrintfNumberLeadingNumber
 	// The digits are written back exactly: `printf '%d' 123456789012345678`
-	// is the operand, not a double's nearest neighbour (#2907).
+	// is the operand, not a double's nearest neighbor (#2907).
 	// A flag past a field is no flag at all: the prefix ends there and the
 	// byte arrives at the scan as the conversion character (#2910).
 	// unanswered ArithDivisionByZeroYieldsAValue: the value a division by

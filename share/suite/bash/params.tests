@@ -71,3 +71,15 @@ printf 'keys: %s\n' "${#m[@]}"
 target=found
 ref=target
 printf '%s\n' "${!ref}"
+
+# A single quote inside the word of an expansion, inside double quotes. bash
+# reads the brace group with its own quoting rules and the quotes stay in the
+# word as characters, so `${u-'}'}` has the word `'}'` and the `}` between the
+# quotes does not end the expansion. zsh, ksh93 and dash end it at that first
+# `}` and read the rest of the line as text.
+#
+# The escaped and the double-quoted spellings agree across the whole panel
+# and are in core/params.tests; this is the one that does not.
+unset u
+printf '[%s]\n' "${u-'}'}"
+printf '[%s]\n' "${u-'x'}"

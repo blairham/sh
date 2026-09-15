@@ -63,3 +63,137 @@ printf '%s\n' "nested=${path%"$suffix"}"
 
 # $? and $$ are deliberately absent: a pid is not reproducible, and a case
 # the reference will not repeat says nothing about either shell.
+
+# --- the four value operators, every state, both spellings -------------------
+#
+# The table above asks the operators one line at a time; this asks the whole
+# grid, because the colon is the only difference between two halves of it and
+# a grid with a hole in it is where a shell gets one cell wrong and nothing
+# notices. Three states — unset, set-but-empty, set — against four operators
+# and their colon-bearing twins.
+
+unset u
+e=''
+s=value
+printf 'dash       [%s] [%s] [%s]\n' "${u-w}" "${e-w}" "${s-w}"
+printf 'colon-dash [%s] [%s] [%s]\n' "${u:-w}" "${e:-w}" "${s:-w}"
+printf 'plus       [%s] [%s] [%s]\n' "${u+w}" "${e+w}" "${s+w}"
+printf 'colon-plus [%s] [%s] [%s]\n' "${u:+w}" "${e:+w}" "${s:+w}"
+
+# The assigning operator is the one with a side effect, so each cell is asked
+# twice: what it substituted, and what the variable holds afterwards.
+unset a1
+printf 'equals unset       [%s] [%s]\n' "${a1=w}" "${a1-<unset>}"
+a2=''
+printf 'equals empty       [%s] [%s]\n' "${a2=w}" "${a2-<unset>}"
+a3=''
+printf 'colon-equals empty [%s] [%s]\n' "${a3:=w}" "${a3-<unset>}"
+a4=keep
+printf 'equals set         [%s] [%s]\n' "${a4=w}" "$a4"
+
+# `?` is not here, and the omission is a measurement rather than an oversight:
+# an unset parameter under it ends the shell with status 1 in bash, zsh and
+# ksh93 and with 2 in dash. share/suite/dash/params.tests is where that lives.
+
+# --- the word ---------------------------------------------------------------
+#
+# The word is an ordinary word: it is expanded, it may hold another expansion,
+# and it is not evaluated at all when the test did not fire.
+
+unset a5
+q=from
+printf 'word is expanded: [%s]\n' "${a5=$q-here}"
+printf 'word may be a substitution: [%s]\n' "${u-$(printf 'ran')}"
+printf 'word may be arithmetic: [%s]\n' "${u-$((3 + 4))}"
+printf 'word may be another expansion: [%s]\n' "${u-${s}}"
+printf 'word may nest twice: [%s]\n' "${u-${u-deep}}"
+printf 'word may hold an operator: [%s]\n' "${u-${s#va}}"
+printf 'empty word: [%s] [%s] [%s] [%s]\n' "${u-}" "${u:-}" "${e-}" "${e:-}"
+
+# A `}` in the word has to be escaped or quoted, and the double quotes around
+# the whole expansion do not do it. Only the escaped and the double-quoted
+# spellings agree across the panel; the single-quoted one is bash's own answer
+# and is in share/suite/bash/params.tests.
+printf 'escaped brace: [%s]\n' "${u-\}}"
+printf 'quoted brace:  [%s]\n' "${u-"}"}"
+
+# The word is skipped when the parameter answered the test, which is visible
+# because an assignment inside it would otherwise have happened.
+w1=untouched
+: "${s-$(printf 'x' > side)}"
+printf 'word not evaluated: '
+if [ -e side ]; then printf 'it ran\n'; else printf 'it did not run\n'; fi
+
+# --- length -----------------------------------------------------------------
+
+v=hello
+printf 'length: %s %s %s\n' "${#v}" "${#e}" "${#u}"
+v2='a b c'
+printf 'length counts blanks: %s\n' "${#v2}"
+nl='x
+y'
+printf 'length counts a newline: %s\n' "${#nl}"
+bs='a\b'
+printf 'length counts a backslash: %s\n' "${#bs}"
+set -- p q r
+printf 'length of the count: %s %s\n' "${#}" "${#1}"
+
+# `${#*}` and `${#@}` are deliberately absent. bash, zsh and ksh93 give the
+# number of positional parameters and dash gives the length of the joined
+# string, which is share/suite/dash/params.tests.
+
+# --- prefix and suffix removal ----------------------------------------------
+#
+# Four operators over one value with a repeated separator, so the short and
+# the long forms have somewhere to differ.
+
+p=x.y.z.w
+printf 'hash   [%s] [%s]\n' "${p#*.}" "${p##*.}"
+printf 'pct    [%s] [%s]\n' "${p%.*}" "${p%%.*}"
+printf 'literal [%s] [%s]\n' "${p#x}" "${p%w}"
+printf 'no match [%s] [%s]\n' "${p#q}" "${p%q}"
+printf 'empty pattern [%s] [%s]\n' "${p#}" "${p%}"
+printf 'star alone [%s] [%s]\n' "${p#*}" "${p##*}"
+printf 'star alone, suffix [%s] [%s]\n' "${p%*}" "${p%%*}"
+printf 'a class [%s]\n' "${p#[xy]}"
+printf 'a question [%s]\n' "${p#?}"
+printf 'a bracketed dot [%s]\n' "${p##*[.]}"
+printf 'on empty [%s] [%s]\n' "${e#a}" "${e%a}"
+printf 'on unset [%s] [%s]\n' "${u#a}" "${u%a}"
+
+# The pattern is a pattern, and escaping or quoting takes that back.
+meta='a*b?c[d]e'
+printf 'escaped star [%s]\n' "${meta#a\*}"
+printf 'unescaped star [%s]\n' "${meta#a*}"
+printf 'escaped bracket [%s]\n' "${meta%\[d\]e}"
+printf 'escaped question [%s]\n' "${meta#*\?}"
+lit=hello
+printf 'single-quoted pattern [%s]\n' "${lit#'he'}"
+printf 'double-quoted pattern [%s]\n' "${lit%"lo"}"
+printf 'escaped ordinary character [%s]\n' "${lit#\h}"
+
+# A pattern that came from a variable is asked quoted only. Unquoted it is a
+# pattern in bash, ksh93 and dash and literal text in zsh — the same reflex
+# that keeps zsh from splitting a parameter — so that spelling carries no core
+# claim. See share/suite/core/patterns.tests.
+dot=.
+printf 'quoted operand [%s]\n' "${p#x"$dot"}"
+printf 'operand built from an expansion [%s]\n' "${p#"${p%%.*}$dot"}"
+
+# The value's own characters are data however much they look like syntax.
+printf 'backslash in the value [%s]\n' "${bs#a}"
+printf 'newline in the value [%s]\n' "${nl#x}"
+
+# --- braces -----------------------------------------------------------------
+#
+# The braces are what end the name, so they are required wherever the next
+# character could continue one.
+
+abc=outer
+printf 'name then a letter: [%s]\n' "${abc}d"
+set -- 1 2 3 4 5 6 7 8 9 ten eleven
+printf 'braced two-digit positional: [%s] [%s]\n' "${10}" "${11}"
+
+# `$10` unbraced is deliberately absent: bash, ksh93 and dash read it as `$1`
+# followed by a `0` and zsh reads the tenth parameter, which is
+# share/suite/zsh/params.tests.

@@ -99,3 +99,11 @@ hiddenargc
 zmodload zsh/parameter
 localmodule() { local parameters; printf '[%s]\n' "$parameters"; }
 localmodule
+
+# A positional parameter past the ninth, without braces. bash, ksh93 and dash
+# read `$10` as `$1` followed by the character `0`; zsh reads the whole digit
+# string, so it is the tenth parameter. The braced spelling means the tenth in
+# every shell and is in core/params.tests — this is the one that parts.
+set -- 1 2 3 4 5 6 7 8 9 ten eleven
+printf 'unbraced: [%s] [%s]\n' "$10" "$11"
+printf 'braced:   [%s] [%s]\n' "${10}" "${11}"

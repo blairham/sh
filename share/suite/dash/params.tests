@@ -1,0 +1,75 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Parameter expansion, the answer only dash gives.
+#
+# core/params.tests names three questions it had to leave out, and this is
+# where the three went. Each is a place where dash reads a special parameter
+# through an operator differently from bash, zsh and ksh93 — not a construct
+# dash lacks, which is what a dialect file usually holds, but the same
+# construct answered another way. That makes them the more dangerous kind: a
+# script written against any of the other three runs here and gets a number
+# back rather than a diagnostic.
+#
+# Every status below is taken from a subshell with the diagnostic discarded.
+# The wording is each shell's own and is not the claim; the number is.
+
+# `${#*}` and `${#@}`. bash, zsh and ksh93 give the number of positional
+# parameters — the same number `${#}` gives. dash gives the length in
+# characters of the parameters joined with a space, which is what `${#}`
+# applied to the *value* of `$*` would be.
+set -- alpha beta gamma
+printf 'count:      %s\n' "${#}"
+printf 'hash-star:  %s\n' "${#*}"
+printf 'hash-at:    %s\n' "${#@}"
+set -- one two
+printf 'two: count %s hash-star %s hash-at %s\n' "${#}" "${#*}" "${#@}"
+set --
+printf 'none: count %s hash-star %s hash-at %s\n' "${#}" "${#*}" "${#@}"
+set -- 'a b'
+printf 'one with a blank: count %s hash-star %s\n' "${#}" "${#*}"
+
+# A trim operator applied to `$@`. In bash, zsh and ksh93 the operator runs
+# once per parameter and the result is that many words; in dash the
+# parameters are joined first, the operator runs once on the join, and what
+# comes back is split again. The difference is invisible when only the first
+# parameter matches the pattern, which is why the values below are chosen so
+# that the second one does too.
+set -- aa ab ba
+printf 'at-trim: [%s][%s][%s]\n' "${@#a}"
+set -- xa ya za
+printf 'at-trim-suffix: [%s][%s][%s]\n' "${@%a}"
+set -- aa ab
+printf 'at-trim-two: [%s][%s]\n' "${@#a}"
+
+# The same operator on `$*` is a two-against-two split rather than dash's
+# own answer — bash and ksh93 run it per parameter, zsh and dash run it on
+# the join — so it is not asked here at all. A dialect file is the claim that
+# one shell is alone.
+
+# `${name?}` on an unset parameter. Every shell here ends the subshell; the
+# status is 1 in bash, zsh and ksh93 and 2 in dash. The word makes no
+# difference to the number, and neither does the colon.
+unset u
+( : "${u?}" ) 2>/dev/null
+printf 'error operator:        %s\n' "$?"
+( : "${u?a word of our own}" ) 2>/dev/null
+printf 'error operator, word:  %s\n' "$?"
+e=''
+( : "${e:?}" ) 2>/dev/null
+printf 'error operator, colon: %s\n' "$?"
+
+# And the same number for an assignment to a positional parameter. This one
+# parts three ways rather than two — 1 in bash and ksh93, 0 in zsh, which
+# does not treat it as an error at all, and 2 here — so it is dash's own
+# answer by the same test as the rest of the file even though the shells it
+# is unlike do not agree with each other.
+set --
+( : "${1=w}" ) 2>/dev/null
+printf 'assign to a positional: %s\n' "$?"
+
+# The control: an operator that is not an error leaves the status alone in
+# every shell, so what is measured above is the failure and not the run.
+s=set
+( : "${s?}" ) 2>/dev/null
+printf 'no error:              %s\n' "$?"

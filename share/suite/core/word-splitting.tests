@@ -1,0 +1,198 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Field splitting, POSIX XCU 2.6.5 — what IFS does to the result of an
+# expansion, one rule at a time.
+#
+# Every case shows the boundaries rather than the joined text: a count and one
+# bracketed field per word. A case that printed "$*" and compared the line
+# would pass on two different splittings whenever the separator happened to
+# match, which is the failure mode this whole tier is arranged against.
+#
+# The splitting is asked through command substitution throughout, and that is
+# a measurement rather than a habit: an unquoted *parameter* expansion splits
+# in bash, ksh93 and dash and does not split at all in zsh, so it cannot carry
+# a core claim. The zsh answer is share/suite/zsh/word-splitting.tests.
+
+show() {
+	printf '%s:' "$1"
+	shift
+	printf ' n=%s' "$#"
+	for w in "$@"; do printf ' [%s]' "$w"; done
+	printf '\n'
+}
+
+# --- the default IFS --------------------------------------------------------
+#
+# Space, tab and newline, and the three are interchangeable.
+#
+# The value is built rather than written: a literal one ends its line with a
+# space and a tab, and this repository's trailing-whitespace hook deletes
+# those — quietly turning the case into a different one. `unset IFS` is the
+# same value and is asked below; this spelling is here because an explicit
+# assignment and the default are two separate claims.
+nl='
+'
+IFS=" $(printf '\t')$nl"
+set -- $(printf 'a b\tc\nd')
+show 'space tab newline' "$@"
+
+# A run of whitespace separators is one separator, and a run at either edge
+# produces no field.
+set -- $(printf '   a     b   ')
+show 'runs collapse' "$@"
+set -- $(printf '\n\na\n\nb\n\n')
+show 'newline runs collapse' "$@"
+set -- $(printf '     ')
+show 'nothing but whitespace' "$@"
+
+# --- IFS holding one non-whitespace character -------------------------------
+#
+# A non-whitespace separator is not collapsed: each one ends a field, so two
+# in a row leave an empty one between them.
+
+IFS=:
+set -- $(printf 'a:b:c')
+show 'colon' "$@"
+set -- $(printf 'a::b')
+show 'adjacent colons make an empty field' "$@"
+set -- $(printf ':a')
+show 'leading colon' "$@"
+set -- $(printf 'a b:c')
+show 'space is not a separator now' "$@"
+set -- $(printf '')
+show 'an empty expansion makes no field' "$@"
+
+# What a *trailing* non-whitespace separator does is not asked here: bash,
+# ksh93 and dash drop the empty field it would end, and zsh keeps it, so
+# `a:` is one field in three shells and two in the fourth.
+
+# --- IFS holding only whitespace we chose -----------------------------------
+
+IFS='	'
+set -- $(printf 'a\t\tb \tc')
+show 'tab only, and a space is ordinary' "$@"
+
+# --- a mix of whitespace and non-whitespace ---------------------------------
+#
+# Whitespace around a non-whitespace separator is absorbed into it, so the two
+# together are still one boundary.
+
+IFS=' :'
+set -- $(printf 'a b:c')
+show 'space and colon' "$@"
+set -- $(printf 'a : b')
+show 'blanks around a colon' "$@"
+set -- $(printf 'a:  :b')
+show 'two colons separated by blanks' "$@"
+set -- $(printf ' :a')
+show 'a blank then a colon at the start' "$@"
+
+IFS=',;'
+set -- $(printf 'a,b;c')
+show 'two non-whitespace separators' "$@"
+set -- $(printf 'a,;b')
+show 'two different ones adjacent' "$@"
+
+# An IFS character that is also a pattern character is a separator and not a
+# pattern.
+IFS='*'
+set -- $(printf 'a*b')
+show 'a star as a separator' "$@"
+
+# --- IFS empty, and IFS unset ------------------------------------------------
+
+IFS=
+set -- $(printf 'a b c')
+show 'empty IFS splits nothing' "$@"
+unset IFS
+set -- $(printf 'a b c')
+show 'unset IFS is the default' "$@"
+IFS=' '
+
+# --- quoting is what suppresses it ------------------------------------------
+
+set -- "$(printf 'a b c')"
+show 'quoted command substitution' "$@"
+v='x y z'
+set -- "$v"
+show 'quoted parameter' "$@"
+set -- "${v}"
+show 'quoted braced parameter' "$@"
+unset u
+set -- "${u-a b c}"
+show 'quoted default word' "$@"
+
+# --- which expansions are split ---------------------------------------------
+
+IFS=' '
+set -- $(printf 'c s')
+show 'command substitution' "$@"
+set -- `printf 'b t'`
+show 'backtick' "$@"
+set -- $(( 1 + 1 ))
+show 'arithmetic makes one field' "$@"
+
+# Splitting happens once, on the result, so a separator that arrived as data
+# is a separator and a field is not looked at again.
+IFS=:
+sep=:
+set -- $(printf 'a%sb' "$sep")
+show 'a separator that came from a value' "$@"
+IFS=' '
+set -- $(printf 'a b')
+show 'the fields are not split again' "$@"
+
+# An assignment is not split however much IFS would have matched.
+IFS=:
+a=$(printf 'a:b')
+printf 'assignment kept whole: [%s]\n' "$a"
+IFS=' '
+
+# --- "$@" and "$*" -----------------------------------------------------------
+#
+# "$@" is one field per parameter whatever IFS says; "$*" is one field joined
+# by IFS's first character.
+
+set -- one 'two three' four
+IFS=' '
+printf 'quoted at:'; for w in "$@"; do printf ' [%s]' "$w"; done; printf '\n'
+printf 'quoted star: [%s]\n' "$*"
+IFS=:
+printf 'quoted at is unaffected by IFS:'; for w in "$@"; do printf ' [%s]' "$w"; done; printf '\n'
+printf 'quoted star with IFS=colon: [%s]\n' "$*"
+IFS='#@'
+printf 'quoted star joins with the first character: [%s]\n' "$*"
+IFS=
+printf 'quoted star with IFS empty: [%s]\n' "$*"
+unset IFS
+printf 'quoted star with IFS unset: [%s]\n' "$*"
+IFS=' '
+
+# With no positional parameters, "$@" is no words and "$*" is one empty one.
+set --
+n=0
+for w in "$@"; do n=$((n + 1)); done
+printf 'quoted at over nothing: %s\n' "$n"
+printf 'quoted star over nothing: [%s]\n' "$*"
+
+# --- IFS changed between one use and the next -------------------------------
+
+set -- a b c
+IFS=-
+printf 'star after changing IFS: [%s]\n' "$*"
+IFS=+
+printf 'star again: [%s]\n' "$*"
+IFS=' '
+
+# --- read splits on IFS too, into its names ---------------------------------
+#
+# The same rule, applied to a different destination: the last name keeps
+# everything left over rather than being one more field.
+
+printf 'a b c d\n' | { IFS=' ' read -r x y; printf 'read two names: [%s][%s]\n' "$x" "$y"; }
+printf 'a:b:c\n' | { IFS=: read -r x y z; printf 'read colon: [%s][%s][%s]\n' "$x" "$y" "$z"; }
+printf 'a::c\n' | { IFS=: read -r x y z; printf 'read empty middle: [%s][%s][%s]\n' "$x" "$y" "$z"; }
+printf '  a  b  \n' | { IFS=' ' read -r x y; printf 'read trims whitespace: [%s][%s]\n' "$x" "$y"; }
+printf 'a b\n' | { IFS=' ' read -r x y z; printf 'read with too few fields: [%s][%s][%s]\n' "$x" "$y" "$z"; }
+printf '  one  \n' | { IFS= read -r line; printf 'read with an empty IFS keeps the blanks: [%s]\n' "$line"; }

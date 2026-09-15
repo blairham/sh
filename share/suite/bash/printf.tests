@@ -1,0 +1,39 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# What bash says when a numeric conversion is given something that is not a
+# number, which is one complaint per operand and a status of 1 — and which
+# the panel otherwise splits over three ways. zsh and ksh93 take the number
+# they can read and say nothing at all; dash complains in words of its own
+# and calls it "not completely converted"; bash calls it an invalid number
+# and is the only one of the four to complain about the empty string.
+#
+# The diagnostics are left on the stream rather than sent to /dev/null, which
+# is the whole point of the file: the wording *is* the answer here, and a
+# case that suppressed it would be asking whether bash writes a zero, which
+# every shell does.
+#
+# Held out until #2905 lands: a trailing blank on an otherwise good operand
+# is an invalid number in bash and a silent 7 in ours.
+#
+#   printf '[%d]\n' '7 '
+
+printf '[%d]\n' abc
+printf 'abc -> %s\n' "$?"
+printf '[%d]\n' ''
+printf 'the empty string -> %s\n' "$?"
+printf '[%d]\n' 12x
+printf '12x -> %s\n' "$?"
+printf '[%f]\n' abc
+printf 'a float from abc -> %s\n' "$?"
+
+# One complaint per operand rather than one per run, and the format keeps
+# being reused after each.
+printf '[%d][%d]\n' one two
+printf 'two of them -> %s\n' "$?"
+
+# A leading blank is not the same question and is accepted by every shell
+# here, which is what makes the lines above about the text and not about the
+# whitespace.
+printf '[%d]\n' ' 7'
+printf 'a leading blank -> %s\n' "$?"

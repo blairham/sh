@@ -149,16 +149,21 @@ umask 077
 : > made2
 printf 'under 077 [%s]\n' "$(ls -l made2 | cut -c1-10)"
 
-# A subshell has a mask of its own, and a file it writes gets it.
+# A subshell has a mask of its own: the file it writes gets that mask, and the
+# mask does not come back out with it. The second half was the one line of
+# this file every column failed when it was written, and it was held out until
+# #2898 landed — ours reached the process mask directly, so the shell was left
+# with the subshell's and every file written afterwards had it.
 ( umask 002; : > made3 )
-printf 'made in a subshell [%s]\n' "$(ls -l made3 | cut -c1-10)"
+printf 'made in a subshell [%s], and the mask here is still [%s]\n' \
+	"$(ls -l made3 | cut -c1-10)" "$(umask -S)"
 
-# That the subshell's mask does not come back out is held out until #2898
-# lands. It is the one line of this file every column failed when it was
-# written: ours reaches the process mask directly, so the parent is left with
-# the subshell's mask and every file written afterwards has it.
-#
-#   printf 'and the mask here is still [%s]\n' "$(umask -S)"
+# Every enclosure is a fork, not only the parentheses.
+umask 077
+x=$( umask 002 )
+printf 'after a command substitution [%s]\n' "$(umask -S)"
+umask 002 | cat
+printf 'after a pipeline element [%s]\n' "$(umask -S)"
 umask 022
 
 # `kill` names a signal three ways and they are the same signal. The shell

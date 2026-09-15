@@ -2219,6 +2219,15 @@ type Runner struct {
 	// nothing about a command killed inside `$(…)` and does report one
 	// killed inside `( … )`.
 	inCommandSubst bool
+	// maskMoved and maskOuter are the file-creation mask a forked body
+	// found, kept so that the end of the body can put it back: the mask
+	// lives in the process and a body of this shell is not one, so nothing
+	// else would. Set by setMask, cleared and read by forkMask, and
+	// meaningless on a shell that is not a body — the outermost one, whose
+	// mask outlives it. See umaskscope.go for what the boundary does and
+	// does not reconstruct.
+	maskMoved bool
+	maskOuter int
 	// traceWait and traceDone order the trace lines of a pipeline without
 	// ordering the pipeline itself: an element waits for the one before it
 	// to have printed, then prints, then releases the next. Only the

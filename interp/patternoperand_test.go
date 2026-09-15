@@ -166,8 +166,19 @@ func TestAProcessSubstitutionInAPatternIsPerformed(t *testing.T) {
 // And the arm does not match the text inside the substitution, which is the
 // wrong answer this replaced: `case x in <(x))` hit where every shell in the
 // panel that can read the arm at all misses.
+//
+// The body is a *function* that says nothing, and it has to be. The inner text
+// must be exactly `x` for the case to be about the text at all, so the body is
+// the command `x` — and a substitution's body runs beside the command that
+// named the path, on a goroutine, whether or not anything ever opens that path
+// (bash runs it too: `case x in <(nosuchcmd))` prints `command not found`
+// there). With no `x` to run, whether its `not found` reaches the buffer
+// before the shell stops is the scheduler's to decide, and that raced on a
+// loaded runner — [miss] here and `[miss]sh: x: not found` there, from one
+// tree. Defining `x` leaves the claim exactly as it was and gives the race
+// nothing to be about.
 func TestAProcessSubstitutionsInnerTextIsNotThePattern(t *testing.T) {
-	out, st := runGrammar(t, `case x in <(x)) printf "[hit]";; *) printf "[miss]";; esac`,
+	out, st := runGrammar(t, `x() { :; }; case x in <(x)) printf "[hit]";; *) printf "[miss]";; esac`,
 		patternGrammar, nil)
 	if want := "[miss]"; out != want || st != 0 {
 		t.Errorf("got %q (status %d), want %q at 0", out, st, want)

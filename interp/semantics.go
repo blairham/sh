@@ -1820,7 +1820,7 @@ type Semantics struct {
 	// one line each — `set -x; a=([2]=c [0]=a)` is `+ a[2]=c` and `+ a[0]=a`
 	// there, and `typeset -A m=([k]=v)` is `+ m[k]=v` then `+ typeset -A m`.
 	// That is a different construct rather than a different rendering of this
-	// one; see #2857.
+	// one; see #2866.
 	TraceArrayLiteralShowsTheExpandedElements Answer
 	// TraceElementSubscriptIsEvaluated prints the subscript of `a[$i]=v` as
 	// the number or the key it resolved to, rather than as the text.

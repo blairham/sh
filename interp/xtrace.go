@@ -411,7 +411,7 @@ func traceArrayLiteral(elems []*syntax.Word, parsed []literalElem, style TraceAr
 		if parsed == nil || parsed[i].subscripted {
 			// The words as written, which is one dialect's whole answer —
 			// and, in the dialect that prints the values, the fallback for a
-			// `[sub]=value` element, whose own shape is #2857's.
+			// `[sub]=value` element, whose own shape is #2866's.
 			words = append(words, syntax.PrintWord(w))
 			continue
 		}

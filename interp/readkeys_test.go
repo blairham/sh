@@ -300,6 +300,18 @@ func TestAnExpiredKeyReadDoesNotSwallowTheNextKey(t *testing.T) {
 		done <- out.String()
 	}()
 
+	// Whether the key was ever pressed, which is what keeps the failure below
+	// from naming the wrong culprit.
+	//
+	// Both remaining deadlines are bail-outs for a shell that has stopped
+	// rather than assertions about timing, and #2382 is what says they have
+	// to be told apart in the report: a run that reaches the ten seconds
+	// because this goroutine gave up first never delivered a key at all, and
+	// reporting that as "the expired read swallowed the key" sends the next
+	// reader after a bug that is not there. That issue asked for exactly
+	// this — *"the failure message should say it was a timeout rather than a
+	// behavioral mismatch, so the next reader is not misled"*.
+	pressed := make(chan bool, 1)
 	go func() {
 		// Bounded so a shell that never reaches the first read cannot leave
 		// this goroutine running past the test. It must not take from `done`
@@ -308,11 +320,13 @@ func TestAnExpiredKeyReadDoesNotSwallowTheNextKey(t *testing.T) {
 		deadline := time.Now().Add(9 * time.Second)
 		for !strings.Contains(out.String(), "a=[") {
 			if time.Now().After(deadline) {
+				pressed <- false
 				return
 			}
 			time.Sleep(time.Millisecond)
 		}
 		_, _ = control.WriteString("X")
+		pressed <- true
 	}()
 
 	select {
@@ -324,6 +338,14 @@ func TestAnExpiredKeyReadDoesNotSwallowTheNextKey(t *testing.T) {
 			t.Errorf("got %q, want the key pressed after the timeout to reach the second read", out)
 		}
 	case <-time.After(10 * time.Second):
-		t.Fatal("the second read never returned: the expired read swallowed the key")
+		select {
+		case sent := <-pressed:
+			if !sent {
+				t.Fatalf("the shell never reported the first read giving up, so no key was ever pressed and this is a stalled run rather than a swallowed key; it had written %q", out.String())
+			}
+			t.Fatalf("the second read never returned after the key was pressed: the expired read swallowed it; the shell had written %q", out.String())
+		default:
+			t.Fatalf("the shell is still somewhere before the key being pressed, so this is a stalled run rather than a swallowed key; it had written %q", out.String())
+		}
 	}
 }

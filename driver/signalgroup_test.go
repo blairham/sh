@@ -6,6 +6,7 @@
 package driver
 
 import (
+	"io"
 	"os/exec"
 	"syscall"
 	"testing"
@@ -18,21 +19,59 @@ import (
 // apart: signaling the leader alone leaves the other running, so a test with
 // one process would pass on the bug.
 func TestSignalGroupReachesTheWholeGroup(t *testing.T) {
-	cmd := exec.Command("/bin/sh", "-c", "sleep 30 & sleep 30")
+	// The inner shell says when the members exist, and that handshake is the
+	// whole of #2382's second flake.
+	//
+	// What was here waited for `kill(-pgid, 0)` to succeed, which is true the
+	// moment the **leader** exists and says nothing at all about the two
+	// `sleep`s the assertion is about. Measured on this machine, 2026-09-14,
+	// by counting the group's real membership at the instant that loop
+	// returned: **166 of 200 rounds had one process in the group**, 19 had two
+	// and 15 had three. So four times in five the signal went to a group whose
+	// members had not been forked yet — and repeating the count later the same
+	// day on a busier machine gave **195 of 200**, which is the direction load
+	// moves it.
+	//
+	// A member forked *after* the group is signaled escapes it outright: the
+	// shell is inside fork(2) when SIGTERM lands, the child is created with no
+	// pending signal of its own, it execs `sleep 30`, and it is still there
+	// thirty seconds later. The window is one fork wide, which is why this
+	// only ever failed on a loaded runner — `FAIL (5.02s)` is the five-second
+	// deadline below expiring on a `sleep` that was never signaled, and it
+	// read as "the signal reached the leader rather than the group" when the
+	// signal had in fact reached every member there was.
+	//
+	// So both are backgrounded and the shell prints after forking them.
+	// Nothing about what is being measured changes: with three processes in
+	// the group, a signalGroup that reached only the leader still leaves two
+	// `sleep`s answering, which is the failure this test exists to catch.
+	cmd := exec.Command("/bin/sh", "-c", "sleep 30 & sleep 30 & echo ready; wait")
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	ready, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatalf("stdout pipe: %v", err)
+	}
 	if err := cmd.Start(); err != nil {
 		t.Skipf("could not start a process group here: %v", err)
 	}
 	pgid := cmd.Process.Pid
 	t.Cleanup(func() { _ = syscall.Kill(-pgid, syscall.SIGKILL) })
 
-	// Give the inner shell a moment to start both.
-	deadline := time.Now().Add(3 * time.Second)
-	for syscall.Kill(-pgid, 0) != nil {
-		if time.Now().After(deadline) {
-			t.Skip("the group never came up")
+	// Bounded, because a shell that never says it is ready must fail this
+	// test rather than wedge the package until `go test` gives up on it.
+	said := make(chan error, 1)
+	go func() {
+		var buf [len("ready\n")]byte
+		_, err := io.ReadFull(ready, buf[:])
+		said <- err
+	}()
+	select {
+	case err := <-said:
+		if err != nil {
+			t.Skipf("the group never came up: %v", err)
 		}
-		time.Sleep(20 * time.Millisecond)
+	case <-time.After(30 * time.Second):
+		t.Fatal("the inner shell never reported its jobs started")
 	}
 
 	if err := signalGroup(pgid, syscall.SIGTERM); err != nil {
@@ -50,7 +89,7 @@ func TestSignalGroupReachesTheWholeGroup(t *testing.T) {
 	// Nothing is left alive in it. The other member is not this process's
 	// child — it belongs to the shell that started it — so once the leader is
 	// reaped, anything still answering is something still running.
-	deadline = time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(5 * time.Second)
 	for {
 		if err := syscall.Kill(-pgid, 0); err != nil {
 			return

@@ -10,6 +10,8 @@ import (
 	"testing"
 
 	. "github.com/blairham/sh/interp"
+
+	"github.com/blairham/sh/internal/testenv"
 )
 
 // The command hash — what PATH resolved a name to, kept so the next run does
@@ -27,7 +29,7 @@ func hashable(t *testing.T, dir, name, body string) {
 		t.Fatal(err)
 	}
 	at := filepath.Join(dir, name)
-	if err := os.WriteFile(at, []byte("#!/bin/sh\n"+body+"\n"), 0o700); err != nil {
+	if err := testenv.WriteExecutable(at, []byte("#!/bin/sh\n"+body+"\n"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 }

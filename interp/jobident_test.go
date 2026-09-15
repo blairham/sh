@@ -73,13 +73,33 @@ wait "$a"; echo "first=$?"
 // is the answer `kill %1` already gives for the same job, and what must *not*
 // come back is anything about a process group.
 func TestKillReadsAnInventedIdAsItsJob(t *testing.T) {
+	// The job is kept alive by a read the test releases, and the fifo is
+	// opened `<>` rather than `<` on purpose.
+	//
+	// A fifo opened for reading blocks until a writer arrives and one opened
+	// for writing blocks until a reader does, so a script whose two halves
+	// open opposite ends is a rendezvous **in which either side can block
+	// forever**. Nothing orders the background job's open against the
+	// foreground's, and where a real shell has a forked child here we have a
+	// goroutine — so if the two ever miss each other, the foreground shell
+	// waits in open(2) for a reader that is not coming, `wait` is never
+	// reached, and the whole package is lost to the ten-minute timeout with
+	// this test's name on it. That is what #2692 cost PR #2689: a hang rather
+	// than a failure, on a diff that touches no job, signal or kill code.
+	//
+	// `<>` opens read-write, which blocks for neither, so only one of the two
+	// opens can block now and the side that can is waiting on a goroutine
+	// that is runnable rather than on one that is already blocked. The
+	// release is a line of data instead of the writer closing, because the
+	// reader's own read-write end counts as a writer and no end-of-file would
+	// ever come.
 	const src = `mkfifo p
-( read x < p; exit 5 ) & j=$!
+( read x <> p; exit 5 ) & j=$!
 kill "$j" 2>byid.txt; echo "byid=$?"
 kill %1 2>byspec.txt; echo "byspec=$?"
 grep -q "no such job" byid.txt; echo "job=$?"
 grep -q "no such job" byspec.txt; echo "spec=$?"
-: > p
+echo go > p
 wait
 `
 	out, errOut := runGatedJobScript(t, src, nil, GateFunc(func(_ context.Context, a Action) Decision {

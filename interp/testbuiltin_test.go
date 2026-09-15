@@ -11,6 +11,8 @@ import (
 	"time"
 
 	. "github.com/blairham/sh/interp"
+
+	"github.com/blairham/sh/internal/testenv"
 )
 
 // `test` is defined by argument count before grammar, so these are organized
@@ -107,7 +109,7 @@ func TestFileOperators(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "empty"), nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "exe"), []byte("x\n"), 0o755); err != nil {
+	if err := testenv.WriteExecutable(filepath.Join(dir, "exe"), []byte("x\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Mkdir(filepath.Join(dir, "adir"), 0o755); err != nil {

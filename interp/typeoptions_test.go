@@ -4,12 +4,13 @@
 package interp_test
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	. "github.com/blairham/sh/interp"
+
+	"github.com/blairham/sh/internal/testenv"
 )
 
 // type's remaining letters — TypeOptions — and the three axes measured
@@ -20,7 +21,7 @@ func typeDir(t *testing.T) (dir, exe string) {
 	t.Helper()
 	dir = t.TempDir()
 	exe = filepath.Join(dir, "echo")
-	if err := os.WriteFile(exe, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+	if err := testenv.WriteExecutable(exe, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	return dir, exe
@@ -107,7 +108,7 @@ func TestTypeCapitalPAlwaysSearches(t *testing.T) {
 func TestTypeFSkipsOrSays(t *testing.T) {
 	dir, exe := typeDir(t)
 	tool := filepath.Join(dir, "tool")
-	if err := os.WriteFile(tool, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+	if err := testenv.WriteExecutable(tool, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	out, _, _ := typeRun(t, "tool() { :; }\ntype -f tool", dir, func(s *Semantics) {

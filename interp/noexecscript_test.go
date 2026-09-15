@@ -14,6 +14,8 @@ import (
 
 	. "github.com/blairham/sh/interp"
 
+	"github.com/blairham/sh/internal/testenv"
+
 	"github.com/blairham/sh/syntax"
 )
 
@@ -60,7 +62,7 @@ func imageSemantics() Semantics {
 func writeImage(t *testing.T, dir, name string, content []byte, mode os.FileMode) string {
 	t.Helper()
 	path := filepath.Join(dir, name)
-	if err := os.WriteFile(path, content, mode); err != nil {
+	if err := testenv.WriteExecutable(path, content, mode); err != nil {
 		t.Fatalf("write %s: %v", path, err)
 	}
 	return path

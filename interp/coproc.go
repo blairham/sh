@@ -167,12 +167,25 @@ func (r *Runner) startCoproc(ctx context.Context, name string, run func(*Runner)
 		}
 		status = sub.status
 	}, func() {
-		// The command is done with its ends, and closing them here is what
-		// turns its exit into end-of-file for whoever reads NAME[0].
-		_ = childIn.Close()
-		_ = childOut.Close()
 		releaseFds()
 		job.finish(status)
+		// **Finished first, and then the ends.** Closing them is what turns
+		// the command's exit into end-of-file for whoever reads NAME[0], so
+		// in this order a script that has read the near end dry *knows* the
+		// job has ended — the reaping has something to find, and the notice
+		// the next reap point delivers is not a race the script has to win.
+		// See retireCoproc, which gates on exactly this, and
+		// TestASubshellDeliversTheReapNotice, which is written against the
+		// invariant: with the closes first, that test was asserting a reap
+		// whose precondition nothing in the script had established, and it
+		// lost under load on the runner three times in a day (#2661).
+		//
+		// Nothing reaches these two but this goroutine — ownDescriptors was
+		// taken before either was installed, so releaseFds does not hold
+		// them — and the shell's own ends are not these, so a `wait` that
+		// returns a moment earlier has nothing it can race with here.
+		_ = childIn.Close()
+		_ = childOut.Close()
 	})
 	<-job.ready
 	<-job.started

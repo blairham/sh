@@ -12,6 +12,8 @@ import (
 	"testing"
 
 	. "github.com/blairham/sh/interp"
+
+	"github.com/blairham/sh/internal/testenv"
 	"github.com/blairham/sh/syntax"
 )
 
@@ -253,7 +255,7 @@ func TestCommandsOnPathFollowsTheLookupsOwnRules(t *testing.T) {
 	first, second := t.TempDir(), t.TempDir()
 	// The same name in both, so the answer says which entry won.
 	for _, dir := range []string{first, second} {
-		if err := os.WriteFile(filepath.Join(dir, "both"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+		if err := testenv.WriteExecutable(filepath.Join(dir, "both"), []byte("#!/bin/sh\n"), 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}

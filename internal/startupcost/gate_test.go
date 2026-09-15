@@ -157,8 +157,8 @@ func TestAComparisonThatCouldNotBeMeasuredNeverPasses(t *testing.T) {
 	c := startupcost.Comparison{
 		Pair: startupcost.Pair{Name: "stopped-halfway"},
 		Case: startupcost.Case{Name: "workload"},
-		Ours: startupcost.Result{Best: time.Millisecond, Samples: 4},
-		Real: startupcost.Result{Best: 10 * time.Millisecond, Samples: 4},
+		Ours: startupcost.Result{Best: at(time.Millisecond), Samples: 4},
+		Real: startupcost.Result{Best: at(10 * time.Millisecond), Samples: 4},
 		Err:  errors.New("stopped answering partway through"),
 	}
 	if c.Passed() {
@@ -186,8 +186,8 @@ func TestATieIsNotAPass(t *testing.T) {
 		return startupcost.Comparison{
 			Pair: startupcost.Pair{Name: "level"},
 			Case: startupcost.Case{Name: "bare"},
-			Ours: startupcost.Result{Best: ours, Samples: 4},
-			Real: startupcost.Result{Best: real, Samples: 4},
+			Ours: startupcost.Result{Best: at(ours), Samples: 4},
+			Real: startupcost.Result{Best: at(real), Samples: 4},
 		}
 	}
 	if tie(3*time.Millisecond, 3*time.Millisecond).Passed() {
@@ -200,6 +200,83 @@ func TestATieIsNotAPass(t *testing.T) {
 	}
 	if tie(3*time.Millisecond+1, 3*time.Millisecond).Passed() {
 		t.Error("a dialect one nanosecond slower than the original passed")
+	}
+}
+
+// at is a Timing whose two clocks agree, for the tests that are about the
+// comparison rather than about which clock it reads.
+//
+// CPU set as well as wall rather than left zero, deliberately: a zero CPU
+// figure means "the kernel gave no accounting for this run" elsewhere in the
+// package, and a fixture that quietly relied on that would be asserting
+// something other than what it says.
+func at(d time.Duration) startupcost.Timing { return startupcost.Timing{Wall: d, CPU: d} }
+
+// TestTheReportSaysWhetherARedRowIsWorkOrLoad is what makes the CPU column
+// worth printing rather than merely present.
+//
+// The two kinds of red are the whole reason this package was hard to read: a
+// dialect that really does more work, and a run that spent its time waiting
+// behind something else on the machine. #1403's closing run recorded zsh/bare
+// as FASTER at load 26 and SLOWER at load 60 on the same tree, which is the
+// second kind wearing the first kind's verdict — and "perfgate is failing"
+// was then passed on for a week with nobody able to say which it was.
+//
+// Both rows here are SLOWER on the wall clock. What separates them is the CPU
+// ratio, so the assertion is that the report carries it.
+func TestTheReportSaysWhetherARedRowIsWorkOrLoad(t *testing.T) {
+	t.Parallel()
+	row := func(name string, ours, real startupcost.Timing) startupcost.Comparison {
+		return startupcost.Comparison{
+			Pair: startupcost.Pair{Name: name},
+			Case: startupcost.Case{Name: "bare"},
+			Ours: startupcost.Result{Best: ours, Samples: 4},
+			Real: startupcost.Result{Best: real, Samples: 4},
+		}
+	}
+	doesMoreWork := row("works-harder",
+		startupcost.Timing{Wall: 4 * time.Millisecond, CPU: 4 * time.Millisecond},
+		startupcost.Timing{Wall: 2 * time.Millisecond, CPU: 2 * time.Millisecond})
+	waitedBehindTheMachine := row("waited",
+		startupcost.Timing{Wall: 4 * time.Millisecond, CPU: time.Millisecond},
+		startupcost.Timing{Wall: 2 * time.Millisecond, CPU: 2 * time.Millisecond})
+
+	if doesMoreWork.Passed() || waitedBehindTheMachine.Passed() {
+		t.Fatal("both rows are meant to be slower on the wall clock, which is what makes the CPU column the thing that tells them apart")
+	}
+	if got := doesMoreWork.CPURatio(); got != 2 {
+		t.Errorf("a dialect burning twice the CPU reports a CPU ratio of %.2f, want 2.00", got)
+	}
+	if got := waitedBehindTheMachine.CPURatio(); got != 0.5 {
+		t.Errorf("a dialect burning half the CPU reports a CPU ratio of %.2f, want 0.50", got)
+	}
+	report := startupcost.Report([]startupcost.Comparison{doesMoreWork, waitedBehindTheMachine})
+	for _, want := range []string{"2.00x", "0.50x", "ours cpu", "orig cpu"} {
+		if !strings.Contains(report, want) {
+			t.Errorf("the report does not carry %q, so a reader cannot tell a slow dialect from a busy machine:\n%s", want, report)
+		}
+	}
+}
+
+// TestAMissingCPUAccountingIsNotTheFastestShellInTheTable is the same refusal
+// the rest of this package makes about a shell that will not do the work.
+//
+// A run the kernel gave no accounting for comes back with a CPU of zero, and
+// zero is the smallest number there is: taken as a sample it would become the
+// minimum and the dialect would be reported as costing nothing at all. That
+// is the failure this package has already been caught making three times in
+// another guise (docs/design/startup.md), so the ratio has to answer 0 —
+// "nothing to compare" — rather than a very good number.
+func TestAMissingCPUAccountingIsNotTheFastestShellInTheTable(t *testing.T) {
+	t.Parallel()
+	c := startupcost.Comparison{
+		Pair: startupcost.Pair{Name: "unaccounted"},
+		Case: startupcost.Case{Name: "bare"},
+		Ours: startupcost.Result{Best: startupcost.Timing{Wall: time.Millisecond}, Samples: 4},
+		Real: startupcost.Result{Best: startupcost.Timing{Wall: 2 * time.Millisecond}, Samples: 4},
+	}
+	if got := c.CPURatio(); got != 0 {
+		t.Errorf("a comparison with no CPU accounting on either side reports a CPU ratio of %.2f, want 0 for `nothing to compare`", got)
 	}
 }
 

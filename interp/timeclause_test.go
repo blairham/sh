@@ -6,12 +6,13 @@ package interp_test
 import (
 	"bytes"
 	"context"
-	"os"
 	"path/filepath"
 	"regexp"
 	"testing"
 
 	. "github.com/blairham/sh/interp"
+
+	"github.com/blairham/sh/internal/testenv"
 
 	"github.com/blairham/sh/syntax"
 )
@@ -130,7 +131,7 @@ func TestTimePerCommandStaysSilentWithoutAFork(t *testing.T) {
 func TestTimePerCommandReportsAnExternal(t *testing.T) {
 	dir := t.TempDir()
 	exe := filepath.Join(dir, "x")
-	if err := os.WriteFile(exe, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+	if err := testenv.WriteExecutable(exe, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	line := regexp.MustCompile(`^x  \d+\.\d{2}s user \d+\.\d{2}s system \d+% cpu \d+\.\d{3} total\n$`)

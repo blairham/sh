@@ -1,0 +1,65 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# `shopt` — the second option table, which is bash's alone. No other shell on
+# the panel has the builtin at all, and the options in it are not the ones
+# `set -o` names: the two tables overlap only through `shopt -o`, which is
+# `set -o` reached through this spelling.
+#
+# The listing is asked whole rather than by row count. Fifty-nine options is
+# a fact about this bash, and a case that counted them would pass on a
+# different build with a different roster while a case that prints them says
+# which ones moved.
+#
+# Six `set -o` names are deliberately not here: bash takes `keyword`,
+# `privileged`, `histexpand` and `history`, and the letters `-k`, `-p`, `-H`,
+# `-b`, `-r` and `-P` with them, and this shell refuses all of them by
+# design — `dialect/bash`'s UnimplementedOptionLetters records the letters
+# and the long names are paired to them, so a case here would be asking bash
+# a question this shell has already answered "not built".
+
+shopt | head -6
+printf 'and the listing is %s rows\n' "$(shopt | grep -c .)"
+
+# -s and -u turn one on and off, and -p writes the line back in the form that
+# would set it again.
+shopt -s nullglob extglob
+shopt -p nullglob extglob
+shopt -u nullglob
+shopt -p nullglob
+
+# -q is the quiet form: the status is the answer and nothing is written.
+shopt -q extglob
+printf 'q on an option that is on -> %s\n' "$?"
+shopt -q nullglob
+printf 'q on one that is off -> %s\n' "$?"
+shopt -u extglob
+
+# And the option does what it says, which is what keeps this from being a
+# case about a table.
+shopt -s nullglob
+printf 'nullglob on [%s]\n' "$(printf '[%s]' nosuchpattern_zz*)"
+shopt -u nullglob
+printf 'nullglob off [%s]\n' "$(printf '[%s]' nosuchpattern_zz*)"
+
+# A name nobody has, which is a failure rather than a new option.
+shopt -s nosuchoption_zz 2> /dev/null
+printf 'a name nobody has -> %s\n' "$?"
+shopt -q nosuchoption_zz 2> /dev/null
+printf 'and -q on it -> %s\n' "$?"
+
+# -o is the other table: the same names `set -o` uses, reached through this
+# builtin, and printed in `set`'s form rather than in shopt's.
+shopt -o -p errexit
+shopt -o -p noglob
+shopt -o -s noglob
+shopt -o -p noglob
+shopt -o -u noglob
+
+# BASHOPTS holds the ones that are on, as a colon-separated list.
+shopt -u extglob
+printf 'BASHOPTS is %s\n' "${BASHOPTS+set}"
+shopt -s extglob
+case ":$BASHOPTS:" in *:extglob:*) printf 'and turning one on puts it in\n' ;; *) printf 'and it did not\n' ;; esac
+shopt -u extglob
+case ":$BASHOPTS:" in *:extglob:*) printf 'still there\n' ;; *) printf 'and turning it off takes it out\n' ;; esac

@@ -99,7 +99,7 @@ func TestASubstitutionBodyKilledBySignalLeavesTheShellRunning(t *testing.T) {
 			if err := rd.Close(); err != nil {
 				t.Fatal(err)
 			}
-			defer wr.Close()
+			defer func() { _ = wr.Close() }()
 
 			r := newTestRunner(t, &Runner{
 				Stdout: &out, Stderr: wr,

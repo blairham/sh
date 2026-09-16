@@ -63,6 +63,29 @@ printf 'after the fallback -> %s\n' "$?"
 # name-shaped value ends the script at that line, so with it first a
 # regression there would take the other two blocks' rows with it and
 # one wrong answer would read as three.
+printf -- '--- a backslash inside a bracket expression ---\n'
+
+# A member here and an escape in the other six columns (#3271). `[\]` is the
+# one-character set holding a backslash, so the second `]` is a literal and
+# the pattern wants four characters — where every other column reads the
+# escape and matches three.
+case 'a]c' in a[\]]c) printf 'escaped terminator: yes\n';; *) printf 'escaped terminator: no\n';; esac
+case 'a\]c' in a[\]]c) printf 'backslash then terminator: yes\n';; *) printf 'backslash then terminator: no\n';; esac
+
+# The dash behind a backslash is still the range operator, so `[a\-z]` is `a`
+# together with the range 0x5c to 0x7a. The three rows are what say this is a
+# reading and not a refusal: a shell that rejected the pattern would answer no
+# to all of them.
+case 'a-c' in a[a\-z]c) printf 'a dash: yes\n';; *) printf 'a dash: no\n';; esac
+case 'abc' in a[a\-z]c) printf 'inside the range: yes\n';; *) printf 'inside the range: no\n';; esac
+case 'a\c' in a[a\-z]c) printf 'the left bound: yes\n';; *) printf 'the left bound: no\n';; esac
+
+# The controls. Outside a bracket the escape is spent here as everywhere, and
+# an ordinary set still matches — without these, a shell that had simply
+# stopped reading backslashes in patterns would pass every row above.
+case 'beta' in bet\a) printf 'outside a bracket: yes\n';; *) printf 'outside a bracket: no\n';; esac
+case 'abc' in a[b]c) printf 'an ordinary set: yes\n';; *) printf 'an ordinary set: no\n';; esac
+
 printf -- '--- a name-shaped value in arithmetic ---\n'
 
 # dash reads the value as a literal and stops at `Illegal number: y`. Six of

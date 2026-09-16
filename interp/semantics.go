@@ -10341,10 +10341,19 @@ type Semantics struct {
 	// characters `bet\a` and matches `beta` not at all.
 	//
 	// Measured 2026-09-07 by handing the matcher a raw backslash, which is
-	// the only way to ask: quote removal takes an escape off a pattern
-	// written in the source before the matcher ever sees it, so a `case`
-	// pattern spelled `bet\a` is `beta` in all six and says nothing about
-	// this. What does ask it is a *substituted* pattern — `p='bet\a'; case
+	// the only way to ask *this* axis: quote removal takes an escape off a
+	// pattern written in the source before the matcher ever sees it, so a
+	// `case` pattern spelled `bet\a` is `beta` in all seven and says nothing
+	// about this. That row is also the control for BracketEscape — outside a
+	// bracket expression BusyBox ash spends the escape like every other
+	// column, which is what keeps #3271 about the bracket.
+	//
+	// The sentence "only `${~p}` hands this matcher a raw backslash" used to
+	// stand here and in BracketEscape's doc, and it is false: BusyBox's quote
+	// removal keeps the escape before a character that is a metacharacter to
+	// *that* shell, so a bracket expression written in the source reaches its
+	// matcher with the backslash still in it. What is unanimous is this axis
+	// rather than the route. What does ask it is a *substituted* pattern — `p='bet\a'; case
 	// beta in $p)` in the five shells that match the result of an expansion,
 	// and `setopt globsubst` with the same two lines in zsh, which does not.
 	//

@@ -491,7 +491,8 @@ func (r *Runner) expansionPattern(v string, q syntax.Quoting, glob Answer) (stri
 // bracketEscapeAsMember rewrites a value about to be matched as a pattern so
 // that the backslashes inside its bracket expressions are members of their
 // sets as well as protection for the characters behind them — which is what
-// [Semantics.BracketEscapeIsAlsoAMember] records, and what one column does.
+// [Semantics.BracketEscape] records at BracketEscapeProtectsAndIsAMember,
+// and what one column does.
 //
 // It is spelled as a rewrite rather than as a flag the matcher reads because
 // the matcher cannot tell the two provenances apart. A backslash reaching it

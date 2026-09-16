@@ -3311,7 +3311,28 @@ func (p *Parser) looksLikeFuncDef() bool {
 	// `a\ b()` is three spans there and is the definition bash reads before
 	// refusing the name.
 	if !p.dialect.FunctionNameExpands && !p.tokenIsPlainText(p.tok) {
-		return false
+		// A word carrying an expansion is still a definition where the name
+		// is read as source text, and the refusal is the *definition's*
+		// rather than the parser's: bash 5.3.20 and bash 3.2.57 answer
+		// `_p_${w}() { :; }` with `` `_p_${w}': not a valid identifier ``,
+		// give it 1 and carry on, where this parser called the `(` an
+		// unexpected token and gave up the rest of the input. Measured
+		// 2026-09-16 over `x$y`, `x${y}`, `x$(y)` and `_p_${w}`, with and
+		// without a blank before the parentheses. #1296 fixed the same word
+		// after the `function` keyword and this spelling kept the refusal —
+		// which is the expensive half, a parse error costing every line of a
+		// file after it rather than one definition.
+		if !p.dialect.FunctionNameIsSourceText {
+			return false
+		}
+		// An array assignment is a parenthesis after a word too, and its
+		// subscript is where an expansion ordinarily goes: `a[$i]=()` empties
+		// an element and defines nothing. The same lexical test the expanding
+		// dialect makes below.
+		if _, isAssign := p.isAssign(p.tok); isAssign {
+			return false
+		}
+		return p.peekIsFuncParens()
 	}
 	if p.dialect.FuncDefAtParen {
 		// The paren is the whole announcement here, and the word before it is

@@ -4680,7 +4680,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// read as a pattern. Only after the first word is expanded is it
 		// known which utility this is, so the test is inside the loop.
 		if i > 0 && len(argv) > 0 && assignShaped(w) {
-			declaring := r.declares(argv[0]) && r.declarationWordWritten(c, argv[0])
+			declaring := r.declarationCommand(c, argv)
 			// `set -k` takes the word before the declaration route can,
 			// where the dialect says it reaches that far. bash's does and
 			// ksh93's does not, which is measured and is why this is asked

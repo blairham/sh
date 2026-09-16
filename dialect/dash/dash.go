@@ -139,6 +139,17 @@ func Semantics() interp.Semantics {
 	// keyword` is refused the same way. The refusal is dash's answer rather
 	// than a gap, which is what this states.
 	s.KeywordAssignments = interp.No
+	// A declaration utility is recognized by the name of the utility that
+	// runs, however the word was written: `cmd=export; $cmd v=$b`, `\export
+	// v=$b`, `'export' v=$b` and `e=; $e export v=$b` all keep `x y` whole,
+	// where zsh, bash and ksh93 split at least one of them. The zero value,
+	// stated here because it is measured and not inherited — 2026-09-16 on
+	// dash 0.5.12, for export, readonly and local.
+	s.DeclarationCommandWord = interp.DeclarationByUtilityName
+	// And `command export v=$b` keeps it whole too, in every spelling of the
+	// prefix and with `-p` as well. See #3341.
+	s.CommandPrefixKeepsADeclaration = interp.Yes
+
 	// unanswered KeywordPromotesADeclarationsOperand: there is no keyword
 	// option here to reach a declaration with — `set -k` is `Illegal option
 	// -k` and ends the file — so the question cannot be put to this shell.

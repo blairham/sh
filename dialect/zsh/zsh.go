@@ -834,6 +834,12 @@ func Semantics() interp.Semantics {
 	// 2026-09-16 on zsh 5.9.2, for typeset, declare, export, local, readonly,
 	// float and integer. See #3315.
 	s.DeclarationCommandWord = interp.DeclarationByUnquotedLiteralWord
+	// And `command` in front of one does not keep the rule. The question can
+	// only be put to this shell under `setopt posixbuiltins`, since `command
+	// typeset` is `command not found` without it: `setopt shwordsplit
+	// posixbuiltins; command typeset a=$b` is `[x]` there, and so is
+	// `command -p typeset a=$b`. Measured 2026-09-16 on zsh 5.9.2. See #3341.
+	s.CommandPrefixKeepsADeclaration = interp.No
 
 	s.HistoryExpansionAtAPrompt = interp.Yes
 	// The startup files, and zsh has more of them than the rest of the panel

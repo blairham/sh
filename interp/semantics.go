@@ -13606,20 +13606,43 @@ type Semantics struct {
 	//
 	// The panel gives three answers. Measured 2026-09-16 from script files
 	// with `b='x y'` (and `setopt shwordsplit` in zsh, without which nothing
-	// splits and the probe cannot tell the readings apart):
+	// splits and the probe cannot tell the readings apart), for every
+	// declaration utility each shell has:
 	//
-	//	                      zsh 5.9.2  bash 5.3  ksh93u+  dash
-	//	typeset a=$b          [x y]      [x y]     [x y]    [x y]   (export in dash)
-	//	cmd=typeset; $cmd a=$b [x]       [x]       [x]      [x y]
-	//	\typeset a=$b         [x]        [x]       [x y]    [x y]
-	//	'typeset' a=$b        [x]        [x]       [x y]    [x y]
+	//	                        zsh 5.9.2  bash 5.3  ksh93u+  dash, ash
+	//	export a=$b             [x y]      [x y]     [x y]    [x y]
+	//	cmd=export; $cmd a=$b   [x]        [x]       [x]      [x y]
+	//	e=; $e export a=$b      [x]        [x]       [x]      [x y]
+	//	\export a=$b            [x]        [x]       [x y]    [x y]
+	//	'export' a=$b           [x]        [x]       [x y]    [x y]
+	//	expor't' a=$b           [x]        [x]       [x y]    [x y]
 	//
 	// zsh and bash want an unquoted literal word, ksh93 wants a word that was
-	// written rather than produced, and dash wants only the utility's name.
-	// Only zsh answers here so far: bash is #3339 and ksh93 is #3340, and
-	// both keep the zero value until they are moved. See
+	// written rather than produced, and dash and BusyBox ash want only the
+	// utility's name. bash 3.2 and bash as `sh` give bash's answer on the two
+	// rows measured for them, the expansion and the backslash. See
 	// declarationword.go.
 	DeclarationCommandWord DeclarationCommandWordReading
+
+	// CommandPrefixKeepsADeclaration decides whether a declaration utility run
+	// through `command` — `command export a=$b` — still takes its
+	// `name=value` operands as assignments.
+	//
+	// Measured 2026-09-16 from script files, `b='x y'`, inside a function:
+	//
+	//	                           bash 5.3  zsh 5.9.2  ksh93u+  dash    ash
+	//	command export a=$b        [x]       [x]        [x y]    [x y]   [x y]
+	//	command command export a=$b [x]      —          [x y]    [x y]   [x y]
+	//	\command export a=$b       [x]       —          [x y]    [x y]   [x y]
+	//	command -p export a=$b     [x]       [x]        [x]      [x y]   [x y]
+	//
+	// zsh's column is under `setopt posixbuiltins`, without which `command
+	// typeset` is `command not found` there. How `command` and the utility
+	// must themselves be written is DeclarationCommandWord's answer applied
+	// to each word in turn, which is why `-p` parts ksh93 from dash: a flag
+	// is not the prefix as written, and it does not change the utility that
+	// runs. Asked only where a declaration utility stands behind `command`.
+	CommandPrefixKeepsADeclaration Answer
 
 	// HistoryExpansion gives the shell a history expander at all: `!!` for the
 	// previous command, `!$` for its last word, `^old^new^` for the previous

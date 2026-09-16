@@ -560,6 +560,18 @@ func Semantics() interp.Semantics {
 	// keywordassign.go records rather than models.
 	s.KeywordAssignments = interp.Yes
 	s.KeywordPromotesADeclarationsOperand = interp.No
+	// A declaration utility is recognized from the command word as it was
+	// written, quoting and all — `\typeset v=$b`, `'typeset' v=$b`,
+	// `"typeset" v=$b` and `typese't' v=$b` all keep the value whole — but
+	// not from a word an expansion produced: `cmd=typeset; $cmd v=$b` and
+	// `e=; $e typeset v=$b` split it. Measured 2026-09-16 on ksh93u+
+	// 2012-08-01 with `b='x y'`, for typeset, export and readonly. See #3340.
+	s.DeclarationCommandWord = interp.DeclarationByWrittenWord
+	// `command typeset v=$b` keeps the value whole, and so do `\command
+	// typeset v=$b` and `command command typeset v=$b`. `command -p typeset
+	// v=$b` splits it, which the reading above accounts for: the flag is not
+	// the prefix as written. Measured the same day. See #3341.
+	s.CommandPrefixKeepsADeclaration = interp.Yes
 	s.HistoryExpansionAtAPrompt = interp.No
 	// Login-ness written out, in both spellings. Measured 2026-09-05 with a
 	// scratch home directory: `ksh -l -c cmd` and `ksh --login -c cmd` each

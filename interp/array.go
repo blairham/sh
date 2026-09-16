@@ -1882,7 +1882,26 @@ func (r *Runner) subscriptOver(e *syntax.ParamExpr, src subscriptSource) ([]stri
 	written := r.subscriptTextAsWritten(e.Subscript())
 	idx := trimSubscript(written)
 	if r.wholeArrayIndex(e) {
-		return elems, true
+		if e.Length || e.Indirect {
+			// `${#a[@]}` counts the elements and `${!a[@]}` names them;
+			// neither reads a value, and measured, neither enters the hook
+			// once. `${#a[1]}` is not this case and does fire — the length
+			// of *one* element is a read of it — which is why the question
+			// is asked on the whole-array branch alone.
+			return elems, true
+		}
+		if !r.disciplineIsWatching(src.name, disciplineGet) {
+			// Asked before the subscripts are worked out, and not only to
+			// save the walk: naming an element counts from the array base,
+			// and the base is an *axis*. A dialect-free runner reading
+			// `${a[@]}` would have been asked to settle it for a hook that
+			// does not exist.
+			return elems, true
+		}
+		// One `.get` per element, each entered with its own subscript —
+		// measured on ksh93u+ 2012-08-01, `${a[@]}` on three elements runs
+		// the hook three times with `0`, `1`, `2`. See interp/discipline.go.
+		return r.disciplinedElements(src.name, r.elementSubscripts(src.name, len(elems)), elems), true
 	}
 	if lo, hi, isRange := splitSubscriptRange(idx); isRange && !r.pairsAreSplitWhenWritten() {
 		// A grammar whose parser does not separate a written pair, where the
@@ -1926,18 +1945,69 @@ func (r *Runner) subscriptOver(e *syntax.ParamExpr, src subscriptSource) ([]stri
 		return nil, true
 	}
 	if r.subscriptIsReadAsItsIndex(e, src) {
+		// The *index*, not the element — `(i)` answers where a value is and
+		// never reads it, so there is no read for a discipline to be part of.
 		return []string{itoa(r.forwardSubscriptIndex(n, len(elems)))}, true
 	}
 	if scalar {
 		if v, ok := scalarElemAt(elems[0], n, r.arrayBase()); ok {
 			return []string{v}, true
 		}
+		// No hook here, and that is measured rather than an omission: a
+		// scalar has one place, so `g=raw; ${g[1]}` enters nothing in
+		// ksh93u+ where `a=(p q r); ${a[9]}` enters the hook with `9`. The
+		// one place it does have is read through varValue above, which has
+		// already run the hook for it.
 		return nil, true
 	}
-	if v, ok := r.elemAt(src.name, elems, n); ok {
-		return []string{v}, true
+	v, held := r.elemAt(src.name, elems, n)
+	if !r.disciplineIsWatching(src.name, disciplineGet) {
+		// Before forwardSubscriptIndex, which counts a negative subscript
+		// from the array *base* — an axis a runner with no dialect cannot
+		// answer and must not be asked for a hook nobody defined.
+		if held {
+			return []string{v}, true
+		}
+		return nil, true
+	}
+	sub := itoa(r.forwardSubscriptIndex(n, len(elems)))
+	if held {
+		return []string{r.disciplinedElement(src.name, sub, v)}, true
+	}
+	// A subscript the array has no element at still fires: the element is a
+	// place in an array and the array is there. A hook that says nothing
+	// leaves the read absent, which is what keeps `${a[9]:-d}` taking the
+	// default.
+	if got, replaced := r.disciplineElementRead(src.name, sub); replaced {
+		return []string{got}, true
 	}
 	return nil, true
+}
+
+// elementSubscripts is the subscript each of a name's elements answers to, in
+// the order arrayElems hands the values back, for the hook that is entered
+// once per element.
+//
+// The keys are asked of the stored array so that a sparse one says `0 3 9`
+// rather than `0 1 2` — the same reading `${!a[@]}` gives, which is why it is
+// arrayKeys and not a count. A produced array has no keys to ask and no gaps
+// to have, so it counts from the base; so does any reading whose keys did not
+// line up with its values, where counting is at least the right length.
+func (r *Runner) elementSubscripts(name string, n int) []string {
+	out := make([]string, n)
+	if a, ok := r.Arrays[name]; ok {
+		if keys := r.arrayKeys(a); len(keys) == n {
+			for i, k := range keys {
+				out[i] = itoa(k)
+			}
+			return out
+		}
+	}
+	base := r.arrayBase()
+	for i := range out {
+		out[i] = itoa(base + i)
+	}
+	return out
 }
 
 // scalarElemAt answers a numeric subscript against a plain string read as an

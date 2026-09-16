@@ -172,6 +172,14 @@ func (r *Runner) runDiscipline(variable, event, subscript, value string, valueGi
 	err := callDisciplineBody(r, fn)
 	got, assigned := r.Vars[disciplineValueParam]
 	restore()
+	if event == disciplineSet || event == disciplineAppend {
+		// What the hook returned, for the assignment command to report. Kept
+		// here rather than left in `r.status` because the store has more to
+		// do afterwards and every step of it would overwrite the answer. See
+		// Runner.disciplineStatus, and disciplineRead for the other half:
+		// a `.get` puts the status back and a write does not.
+		r.disciplineStatus, r.disciplineStatusSet = r.status, true
+	}
 	if err != nil {
 		return "", false
 	}
@@ -232,13 +240,87 @@ func (r *Runner) enterDisciplineParams(variable, subscript, value string, valueG
 // `function g.get { return 5; }` reads at status 0, where `function s.set {
 // return 5; }; s=1` is status 5.
 func (r *Runner) disciplineRead(variable string) (string, bool) {
+	return r.disciplineElementRead(variable, "")
+}
+
+// disciplineElementRead is disciplineRead with the element the read is about
+// carried in, which is what `${.sh.subscript}` answers inside the hook.
+//
+// A read of one element is a read, and the same hook runs for it: measured on
+// ksh93u+ 2012-08-01, 2026-09-16, `a=(p q); function a.get { … }; ${a[1]}`
+// enters the hook with `${.sh.name}` as `a` and `${.sh.subscript}` as `1`,
+// and a hook that assigns `${.sh.value}` replaces that element alone. The
+// same rules as the whole-name read decide it — the store is read afterwards,
+// and only an *assignment* to the parameter replaces anything.
+//
+// Which subscript a read carries is measured rather than derived:
+//
+//   - `${a[@]}` and `${a[*]}` enter the hook once per element, each with its
+//     own subscript, in the order the elements come out.
+//   - A subscript the array has no element at fires all the same —
+//     `a=(p q r); ${a[9]}` enters with `9` — where the same subscript on a
+//     *scalar* fires nothing, because a scalar has one place and not nine.
+//   - A negative subscript arrives counted forwards: `${a[-1]}` on three
+//     elements enters with `2`.
+//   - A bare `$a` on an indexed array is element `0` and says so; a bare read
+//     of a scalar or of a keyed table carries the empty subscript.
+//   - `${#a[@]}` and `${!a[@]}` fire nothing: neither is a read of a value.
+func (r *Runner) disciplineElementRead(variable, subscript string) (string, bool) {
 	if !r.disciplineIsWatching(variable, disciplineGet) {
 		return "", false
 	}
 	status, ctl := r.status, r.ctl
-	v, assigned := r.runDiscipline(variable, disciplineGet, "", "", false)
+	v, assigned := r.runDiscipline(variable, disciplineGet, subscript, "", false)
 	r.status, r.ctl = status, ctl
 	return v, assigned
+}
+
+// disciplinedElement is one element's stored value after the name's `.get`
+// has had the chance to replace it, and is the identity when there is no hook
+// — which is every array in every shell but the one that has disciplines.
+func (r *Runner) disciplinedElement(variable, subscript, stored string) string {
+	if v, replaced := r.disciplineElementRead(variable, subscript); replaced {
+		return v
+	}
+	return stored
+}
+
+// disciplinedElements is the same for a whole-array read, which enters the
+// hook once per element with that element's own subscript.
+//
+// The subscripts come from the caller because only it knows them: an indexed
+// array's are its keys, a keyed table's are the keys in the order its values
+// came out, and the two are the same length as the values by construction.
+// A read reaching here with no name behind it — the subscript on an
+// expansion's own result — has no hook to find and is handed back untouched.
+func (r *Runner) disciplinedElements(variable string, subscripts, values []string) []string {
+	if !r.disciplineIsWatching(variable, disciplineGet) || len(subscripts) != len(values) {
+		return values
+	}
+	out := make([]string, len(values))
+	copy(out, values)
+	for i := range out {
+		out[i] = r.disciplinedElement(variable, subscripts[i], out[i])
+	}
+	return out
+}
+
+// exportedThroughDiscipline is the value an exported name reaches a child
+// with, which is the one a *read* of it answers rather than the one the store
+// holds.
+//
+// Measured on ksh93u+ 2012-08-01, 2026-09-16: `g=raw; function g.get {
+// .sh.value=A; }; export g; env` hands the child `g=A`, and so does a `ksh
+// -c` started from the same shell. The environment is built from the tables,
+// so without this the hook is the one reader nobody asks — and a discipline
+// that computes a value would have been invisible to every command the script
+// ran.
+//
+// No status to put back and none to take: disciplineElementRead already
+// leaves `$?` where it found it, which is what keeps building an environment
+// from being something a script can see in `$?`.
+func (r *Runner) exportedThroughDiscipline(name, stored string) string {
+	return r.disciplinedElement(name, "", stored)
 }
 
 // dottedFunctionNameIsWellFormed reports whether a name `unset -f` is given

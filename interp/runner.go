@@ -2634,6 +2634,21 @@ type Runner struct {
 	// measured: a `.get` that *assigns* its variable does fire that
 	// variable's `.set`.
 	disciplineRunning map[string]bool
+	// disciplineStatus is what the last `.set` or `.append` hook to run
+	// returned, and whether one ran at all since the flag was cleared.
+	//
+	// It exists because a *plain* assignment answers with the hook's status
+	// — measured on ksh93u+ 2012-08-01, 2026-09-16, `function s.set { return
+	// 5; }; s=1` leaves 5 in `$?` while the assignment itself still happens
+	// — and the store that runs the hook is several frames below the command
+	// that has to report it. `typeset s=1`, `read s` and `for s in …` all
+	// fire the same hook and all report 0 there, which is why the flag is
+	// read by the bare-assignment path alone and not by the store.
+	//
+	// The last hook wins: `a=1 b=2` with a hook on each reports b's, and
+	// `b=1 a=2` reports a's. A scalar, so a subshell gets its own copy.
+	disciplineStatus    int
+	disciplineStatusSet bool
 	// mathFuncs holds the `functions -M` registrations: names arithmetic may
 	// call, each naming a shell function to run. mathOrder is the order they
 	// arrived in, because the listing walks it backwards. See mathfunc.go.
@@ -4518,6 +4533,12 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// So: run them with the previous status still in place, and decide
 		// afterwards from whether a substitution reported anything.
 		r.substRan = false
+		// And whether a `.set` or `.append` discipline ran, whose status the
+		// assignment answers with — see the block below and
+		// Runner.disciplineStatus. Cleared here rather than by the store, so
+		// that a hook fired by the *previous* command cannot decide this
+		// one's status.
+		r.disciplineStatusSet = false
 		r.assignAll(ctx, c.Assigns)
 		if r.ctl == controlExit || r.ctl == controlAbandon {
 			// A readonly reassignment is fatal in three of the four shells
@@ -4543,7 +4564,24 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			r.failedExpansion()
 			return nil
 		}
-		if !r.substRan && !r.assignFailed && !r.unspecified {
+		if r.disciplineStatusSet {
+			// A discipline ran for one of these assignments, and what it
+			// returned is what the command reports. Ahead of the
+			// substitution's own status rather than beside it: measured on
+			// ksh93u+ 2012-08-01, 2026-09-16, `function s.set { return 5; };
+			// s=$(false)` is 5 and the same hook returning 0 is 0, so the
+			// hook is the answer and not merely a way of failing.
+			//
+			// The *last* hook to run wins — `a=1 b=2` with a hook on each
+			// reports b's and `b=1 a=2` reports a's — which is what
+			// recording rather than combining gives.
+			//
+			// Only the bare assignment reads this. `typeset s=1`, `read s`
+			// and `for s in one` fire the very same hook and all report 0
+			// there, and each of them reaches its status through a builtin
+			// or a clause rather than through here.
+			r.status = r.disciplineStatus
+		} else if !r.substRan && !r.assignFailed && !r.unspecified {
 			// Nothing in them reported, so the assignment itself does, and
 			// an assignment that happens cannot fail. One that was *refused*
 			// did fail, which is what assignFailed carries: the dialect that
@@ -5458,6 +5496,17 @@ func (r *Runner) environ() []string {
 			out = append(out, k+"="+live)
 			continue
 		}
+		if r.disciplined != nil {
+			// A name inherited and never assigned since can still have a
+			// `.get` discipline, and a child is handed what a read of it
+			// answers — see the Vars loop below, where the same rule is
+			// measured. Behind the nil check because this loop runs for
+			// every command in every shell.
+			if v, _, cut := strings.Cut(kv, "="); cut {
+				out = append(out, k+"="+r.exportedThroughDiscipline(k, v))
+				continue
+			}
+		}
 		out = append(out, kv)
 	}
 	// The functions this shell was told to carry, written as source because
@@ -5501,7 +5550,14 @@ func (r *Runner) environ() []string {
 		// run puts `a=AB` there. So the padding is a presentation of the
 		// parameter and the fold is a property of the value, which is why
 		// this calls the case one by name rather than the pair.
-		out = append(out, k+"="+r.readCaseFolded(k, v))
+		//
+		// And a `.get` discipline is asked, because the environment is a
+		// *read* of the name and this is the one reader that was built from
+		// the tables instead. Measured on ksh93u+ 2012-08-01, 2026-09-16:
+		// `g=raw; function g.get { .sh.value=A; }; export g; env` hands the
+		// child `g=A`, not the `raw` the store holds. See
+		// interp/discipline.go.
+		out = append(out, k+"="+r.exportedThroughDiscipline(k, r.readCaseFolded(k, v)))
 	}
 	// A **table** keeps no scalar view, so the loop above never sees one and
 	// the dialect that hands a child its first value would hand it nothing.
@@ -7038,12 +7094,34 @@ func (r *Runner) varValue(name string, folded bool) (string, bool) {
 	//
 	// Set-ness stays the store's either way — measured, a `.get` on a name
 	// nothing has assigned fires and `${g-word}` still takes the word.
-	got, replaced := r.disciplineRead(r.throughNamerefName(name))
+	got, replaced := r.disciplineElementRead(r.throughNamerefName(name), r.bareReadSubscript(name))
 	v, ok := r.storedValue(name, folded)
 	if replaced {
 		return got, ok
 	}
 	return v, ok
+}
+
+// bareReadSubscript is the element an unsubscripted `$name` is a read of, as
+// a discipline hears it.
+//
+// Empty for nearly everything, because nearly everything is one place. An
+// *indexed array* is the exception: measured on ksh93u+ 2012-08-01,
+// 2026-09-16, `a=(p q); function a.get { … }; $a` enters the hook with
+// `${.sh.subscript}` as `0` — a bare read of an array is a read of its first
+// element and says so — where the same probe on a scalar and on a keyed table
+// both enter with the subscript empty.
+func (r *Runner) bareReadSubscript(name string) string {
+	if _, ok := r.Arrays[name]; !ok {
+		return ""
+	}
+	if !r.disciplineIsWatching(name, disciplineGet) {
+		// The base is an axis, and asking it for a name with no hook would
+		// make a dialect-free runner settle how arrays are numbered to read
+		// a variable that has nothing to do with them.
+		return ""
+	}
+	return itoa(r.arrayBase())
 }
 
 // storedValue is varValue with the discipline hooks left off: what the

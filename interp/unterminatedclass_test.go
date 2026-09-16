@@ -25,6 +25,11 @@ func unterminatedClassSem(p UnterminatedClassPolicy) Semantics {
 	s := permissive()
 	s.UnterminatedCharacterClass = p
 	s.UnterminatedBracket = BracketLiteral
+	// And the axis beside it, because the text arrives there rather than at
+	// the one above: the bracket these rows leave open was left open by the
+	// `[:` inside it. Both at the same value, so the rows below measure the
+	// class policy and nothing else.
+	s.UnterminatedBracketAfterASubExpression = BracketLiteral
 	return s
 }
 

@@ -117,6 +117,10 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 	if got, want := s.UnterminatedBracket, interp.BracketBadPattern; got != want {
 		t.Errorf("UnterminatedBracket = %v, want %v", got, want)
 	}
+	// a bracket a sub-expression left open is no pattern at all, as a bare one is.
+	if got, want := s.UnterminatedBracketAfterASubExpression, interp.BracketBadPattern; got != want {
+		t.Errorf("UnterminatedBracketAfterASubExpression = %v, want %v", got, want)
+	}
 	if got, want := s.UnknownCharacterClass, interp.UnknownClassIsInert; got != want {
 		t.Errorf("UnknownCharacterClass = %v, want %v", got, want)
 	}

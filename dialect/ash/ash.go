@@ -195,6 +195,9 @@ func Semantics() interp.Semantics {
 	// read as a literal: `case a in [a) echo one;; *) echo def;; esac`
 	// reaches the default arm.
 	s.UnterminatedBracket = interp.BracketNoMatch
+	// And the same question where a `[:name:]`, a `[.x.]` or a `[=x=]`
+	// inside it is what left it open: unmeasured — no BusyBox was reachable; this keeps the answer the shell already gave, which is dash's (#3379).
+	s.UnterminatedBracketAfterASubExpression = interp.BracketNoMatch
 	// But inside a bracket expression it escapes nothing at all: the
 	// backslash is an ordinary member of the set and the character behind it
 	// keeps whatever meaning it has there. `case 'a]c' in a[\]]c)` reaches

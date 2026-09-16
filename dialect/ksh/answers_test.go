@@ -140,6 +140,10 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 	if got, want := s.UnterminatedBracket, interp.BracketLiteral; got != want {
 		t.Errorf("UnterminatedBracket = %v, want %v", got, want)
 	}
+	// the column that moves between the two bracket axes: a bare `[` is a literal `[` here and `[[:alpha:]` matches nothing.
+	if got, want := s.UnterminatedBracketAfterASubExpression, interp.BracketNoMatch; got != want {
+		t.Errorf("UnterminatedBracketAfterASubExpression = %v, want %v", got, want)
+	}
 	if got, want := s.UnknownCharacterClass, interp.UnknownClassEmptiesTheBracket; got != want {
 		t.Errorf("UnknownCharacterClass = %v, want %v", got, want)
 	}

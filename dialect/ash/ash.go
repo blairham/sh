@@ -195,6 +195,24 @@ func Semantics() interp.Semantics {
 	// read as a literal: `case a in [a) echo one;; *) echo def;; esac`
 	// reaches the default arm.
 	s.UnterminatedBracket = interp.BracketNoMatch
+	// `[[ x =~ "" ]]` matches rather than being refused, which is ksh93's
+	// answer among the shells that have the operator and not bash's or
+	// zsh's. Measured 2026-09-16 in the pinned alpine image: status 0 here,
+	// 2 in bash 5.3, bash-as-`sh` and bash 3.2, and 1 in zsh, with `[[ abc
+	// =~ b ]]` at 0 and `[[ abc =~ x ]]` at 1 in all four as the controls
+	// that say the operator works at all. This dialect has `[[ ]]` and took
+	// the preset's `Yes` — the refusal — because nothing asked (#3248's
+	// class).
+	s.EmptyRegexOperandIsAnError = interp.No
+	// A `<(cmd)` may stand as a condition's operand and is performed there,
+	// as it is in bash. Measured 2026-09-16 in the pinned alpine image:
+	// `[[ "<(echo x)" == <(echo x) ]]` is **1**, because the right side
+	// became a `/dev/fd` name and the left is the text — the row that tells
+	// "performed" from "read as a literal word", which the `-e` form cannot.
+	// zsh refuses at 1 with a sentence of its own and ksh93 and dash refuse
+	// while reading, so the preset's `No` was three shells' answer and not
+	// this one's (#3248's class).
+	s.ProcessSubstitutionInCondition = interp.Yes
 	// `echo .*` lists `.` and `..` beside the hidden names, which is the
 	// answer dash and ksh93 give and bash 5.3 does not. Recorded from the
 	// corpus run inside the container rather than guessed at, since there
@@ -985,6 +1003,14 @@ func Semantics() interp.Semantics {
 	s.EvalOptions = interp.EvalReadsNoOptions
 	s.DotTakesTheSearchPathOption = interp.No
 	s.DotDirectoryOperandIsAnError = interp.No
+	// An operand with no slash that PATH does not have is looked for in the
+	// current directory, which bash does and dash, zsh and ksh93 do not.
+	// Measured 2026-09-16 in the pinned alpine image with the same basename
+	// in both places: PATH wins where it has the name — that half is
+	// unanimous — and where it has not, `. cwdlib.sh` runs the copy beside
+	// the script here and is `not found` in dash. Inherited from the preset
+	// as `No` until now (#3248's class).
+	s.DotFallsBackToCurrentDirectory = interp.Yes
 	// Words after the filename become the sourced file's own positional
 	// parameters, and the caller's come back afterwards. This is the panel's
 	// six-to-one split rather than its sibling's answer: dash alone ignores
@@ -1137,6 +1163,13 @@ func Semantics() interp.Semantics {
 
 	// `$((2**-1))` is `exponent less than 0` — no float answer, which is
 	// bash's side of the split (#2272).
+	// A name-shaped value is re-read as an expression, and it recurses as
+	// far as the values lead: `y=5; x=y` makes `$((x+1))` 6, and `y=z; z=7;
+	// x=y` makes it 8. dash is the panel's only holdout — `Illegal number:
+	// y` there — and taking the preset's `No` put this shell beside it
+	// (#3248's class). Measured 2026-09-16 in the pinned alpine image,
+	// BusyBox v1.37.0, both depths.
+	s.ArithNameValueRecurses = interp.Yes
 	s.ArithNegativeExponentIsError = interp.Yes
 
 	// unanswered TraceArrayLiteralShowsTheExpandedElements: no array literal
@@ -1784,6 +1817,17 @@ func Apply(r *interp.Runner) {
 	// it is the dialect's answer, and "nothing but expansion" is an answer
 	// rather than an absence.
 	r.SetPromptStyle(PromptStyle())
+	// `source` is `.` under a second name here, as it is in bash, zsh and
+	// ksh93 — and not as it is in dash, which has no such command. Measured
+	// 2026-09-16 in the pinned alpine image, BusyBox v1.37.0: `type source`
+	// is `source is a special shell builtin`, `command -v source` answers
+	// `source`, and `source ./args.sh sarg1` gives the sourced file the word
+	// exactly as `.` does. `cmd/ash` answered `source: not found` at 127 for
+	// all three, which is dash's answer and the shape of #3248 arriving at a
+	// builtin rather than at an axis.
+	if dot, ok := r.Builtin("."); ok {
+		r.Register("source", dot)
+	}
 	r.Unregister("typeset")
 	r.Unregister("declare")
 	r.Unregister("disown")

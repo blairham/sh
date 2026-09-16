@@ -1316,8 +1316,10 @@ type Semantics struct {
 	// ArithNameValueRecurses re-evaluates a name-shaped value as an
 	// expression: with `y=5; x=y`, `$((x+1))` is 6 because `y` is looked up
 	// in turn, and it recurses as far as the values lead — `y=z; z=7; x=y`
-	// is 8. Yes in bash, zsh and ksh93; **dash alone** reads the value as a
-	// literal and refuses it, `Illegal number: y`.
+	// is 8. Yes in bash, zsh, ksh93 and BusyBox ash; **dash alone** reads
+	// the value as a literal and refuses it, `Illegal number: y`. Measured
+	// 2026-09-16 over the seven columns at both depths, which is six to one
+	// and not three to one (#3248's class).
 	//
 	// The interpreter once followed the shells that agree and said so in a
 	// comment, which is the shape of a guess rather than a measurement; it
@@ -4079,11 +4081,20 @@ type Semantics struct {
 	// ProcessSubstitutionInCondition lets `<(cmd)` stand as a condition's
 	// operand — `[[ $v == <(cmd) ]]` — and be performed there.
 	//
-	// bash alone. zsh reads the word and then refuses it, at status 2 and in
-	// a sentence of its own; ksh93 refuses earlier still, while reading, and
-	// dash has no `[[ ]]` to refuse it in. So the answer is no for three of
-	// the four, and what differs between them is only when and in what words
-	// — which is exactly the split between this axis and Diagnostics.
+	// bash and BusyBox ash, and this said "bash alone" until the seventh
+	// column was put to it (#3248's class). zsh reads the word and then
+	// refuses it, in a sentence of its own; ksh93 refuses earlier still,
+	// while reading, and dash has no `[[ ]]` to refuse it in — so the answer
+	// is no for three of the five, and what differs between those three is
+	// only when and in what words, which is exactly the split between this
+	// axis and Diagnostics.
+	//
+	// The discriminating probe is a comparison against the construct's own
+	// text, and not a file test on it: measured 2026-09-16, `[[ "<(echo x)"
+	// == <(echo x) ]]` is 1 in bash and BusyBox ash because the right side
+	// became a `/dev/fd` name, where a shell that left the word as written
+	// would answer 0. `[[ -e <(echo x) ]]` is 0 under both readings and
+	// decides nothing.
 	//
 	// It is asked *before* the substitution is performed. A shell that
 	// refuses the word must not have started the command first, and that is
@@ -4366,11 +4377,13 @@ type Semantics struct {
 	// quoting a regex is unportable in either direction.
 	RegexQuotingMakesLiteral Answer
 	// EmptyRegexOperandIsAnError refuses `[[ x =~ "" ]]` rather than
-	// matching with it. The three shells with the operator split two to
-	// one: bash refuses with `invalid regular expression \`\': empty
+	// matching with it. The four shells with the operator split two to two:
+	// bash refuses with `invalid regular expression \`\': empty
 	// (sub)expression` and status 2, zsh refuses with `failed to compile
-	// regex: empty (sub)expression` and status 1, and ksh93 accepts it and
-	// reports a match. Both refusals are POSIX ERE showing through — the
+	// regex: empty (sub)expression` and status 1, and ksh93 and BusyBox ash
+	// both accept it and report a match — measured 2026-09-16 over the seven
+	// columns, where this had been a three-shell panel written before ash
+	// had one (#3248's class). Both refusals are POSIX ERE showing through — the
 	// grammar has no empty expression — while ksh93 takes the empty pattern
 	// as one that matches everywhere.
 	//
@@ -13369,10 +13382,13 @@ type Semantics struct {
 	// DotFallsBackToCurrentDirectory looks in the current directory for a
 	// `.` operand with no slash in it, after PATH has missed.
 	//
-	// True only in bash. PATH is searched first everywhere, and wins over an
-	// identically named file in the current directory in all seven columns,
-	// measured 2026-09-16 with the same basename in both places — this is
-	// only about what happens when PATH does not have it.
+	// bash and BusyBox ash, and this said "true only in bash" until the
+	// seventh column was put to it (#3248's class). PATH is searched first
+	// everywhere, and wins over an identically named file in the current
+	// directory in all seven columns, measured 2026-09-16 with the same
+	// basename in both places — this is only about what happens when PATH
+	// does not have it, and there dash, zsh and ksh93 report not found where
+	// the other two read the copy beside the script.
 	//
 	// About `.`, and only about `.`. One shell's second name for the builtin
 	// answers differently: zsh's `source` looks in the current directory

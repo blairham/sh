@@ -70,3 +70,18 @@ printf 'after the file set its own n=%s [%s] [%s]\n' "$#" "$1" "$2"
 printf 'printf "before the return n=%%s [%%s]\\n" "$#" "$1"\nreturn 3\nprintf "not reached\\n"\n' > early.sh
 . ./early.sh returned; printf 'the early return -> %s\n' "$?"
 printf 'after the early return n=%s [%s] [%s]\n' "$#" "$1" "$2"
+
+# --- `source`, which this shell has and dash has not ---
+#
+# The same builtin under a second name, and the panel's dash column is the
+# only one without it. `cmd/ash` answered `source: not found` at 127 for
+# every spelling below, which is dash's answer arriving at a builtin rather
+# than at an axis (#3248's class).
+
+printf 'v=[%s]\n' "$(command -v source)"
+source ./args.sh sarg1 sarg2
+printf 'the caller still has n=%s [%s] [%s]\n' "$#" "$1" "$2"
+
+# It takes its words the way `.` does, and it restores the same way.
+source ./args.sh
+printf 'and with none n=%s [%s]\n' "$#" "$1"

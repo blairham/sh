@@ -2481,7 +2481,13 @@ func (l *Lexer) scanWord(start Pos) Token {
 			// the `<(` whose first byte a group reads as an operator.
 			if ss, ok := l.substitutionSpans(flush); ok {
 				spans = append(spans, ss...)
-				pidArmed = l.dialect.PidBraceGroupIsText &&
+				// Not inside a run already: a second `$$` in there opens
+				// nothing, which is measured. `$${a$${b,c}d}` is two words
+				// on the shell this comes from — the inner `{b,c}` expanded
+				// as an ordinary list — where a nested run would have made
+				// it one. The inner braces are counted below as the text
+				// they are.
+				pidArmed = l.dialect.PidBraceGroupIsText && l.pidBraces == 0 &&
 					l.peek() == '{' && spansAreThePid(ss)
 				break
 			}

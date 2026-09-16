@@ -77,6 +77,13 @@ func TestThePidBracePairIsNotABraceExpansion(t *testing.T) {
 			"[@{a,1..3}]\n",
 		},
 		{
+			// A run does not nest: the second `$$` opens nothing, so the
+			// inner pair is the ordinary list it looks like.
+			"a second `$$` inside one opens nothing",
+			`printf '[%s]' $${a$${b,c}d}; echo`,
+			"[@{a@bd}][@{a@cd}]\n",
+		},
+		{
 			"the control: the same group one character along",
 			`printf '[%s]' $$x{a,b}; echo`,
 			"[@xa][@xb]\n",

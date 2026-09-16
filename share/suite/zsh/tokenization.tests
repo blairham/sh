@@ -62,3 +62,12 @@ show $$x{a,b}
 # An unmatched run swallows the rest of the input and is then refused.
 ( eval 'show $${a' ) 2>/dev/null
 printf 'unmatched -> %s\n' "$?"
+
+# A run does not nest: the second `$$` opens nothing, so the inner pair is the
+# ordinary list it looks like — and a blank in it is still text, because the
+# outer run already made it so. Only the word count is printed for these two:
+# the inner `$$` leaves a pid in the middle of the word, where stripping the
+# leading one cannot reach it.
+count() { printf 'n=%s\n' "$#"; }
+count $${a$${b,c}d}
+count $${a$${b c}d}

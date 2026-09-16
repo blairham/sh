@@ -4,6 +4,7 @@
 package syntax
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -76,6 +77,7 @@ func TestAPidBraceRunIsOneWord(t *testing.T) {
 		{"a nested pair", "echo $${a{b c}d}", []string{"echo", "$${a{b c}d}"}},
 		{"text behind the run", "echo $${a b}rest", []string{"echo", "$${a b}rest"}},
 		{"two runs in one word", "echo $${a b}$${c d}", []string{"echo", "$${a b}$${c d}"}},
+		{"a second `$$` inside one", "echo $${a$${b c}d}", []string{"echo", "$${a$${b c}d}"}},
 		{"the run ends at its match", "echo $${a} b", []string{"echo", "$${a}", "b"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -200,8 +202,27 @@ func TestThePidBraceRunIsOffWithoutTheFlag(t *testing.T) {
 // expected`, so an unmatched one is a refusal rather than text.
 func TestAnUnmatchedPidBraceIsRefused(t *testing.T) {
 	d := pidBraceDialect()
-	if _, err := Parse("echo $${a\necho two\n", d); err == nil {
-		t.Error("an unmatched run parsed, and the shell this is measured from refuses it")
+	const src = "echo $${a\necho two\n"
+	_, err := Parse(src, d)
+	if err == nil {
+		t.Fatal("an unmatched run parsed, and the shell this is measured from refuses it")
+	}
+	// And it points at the `{` that never closed, which is what every other
+	// unmatched opener here points at. The two lines the run swallowed are
+	// behind it, so a refusal carrying the end of the input instead would
+	// name a line the script has no brace on.
+	var se *Error
+	if !errors.As(err, &se) {
+		t.Fatalf("%v is not a parse error", err)
+	}
+	if se.Kind != ErrUnmatched {
+		t.Errorf("kind = %v, want an unmatched opener", se.Kind)
+	}
+	if got, want := int(se.Pos.Offset), strings.IndexByte(src, '{'); got != want {
+		t.Errorf("refused at offset %d, want the `{` at %d", got, want)
+	}
+	if se.Token != "{" || se.Expected != "}" {
+		t.Errorf("opener %q closer %q, want `{` and `}`", se.Token, se.Expected)
 	}
 }
 
@@ -232,6 +253,41 @@ func TestThePidBracesAreMarkedAndNothingElseIs(t *testing.T) {
 	}
 	if unmarked != "a{b,c}d" {
 		t.Errorf("unmarked literal text %q, want the contents with their own braces", unmarked)
+	}
+}
+
+// TestARunDoesNotNest. A second `$$` inside a run opens nothing: its braces
+// are the ordinary text the run already makes inert. Measured — `$${a$${b,c}d}`
+// is two words on the shell this comes from, the inner `{b,c}` having expanded
+// as a list, where a nested run would have left it one. So the marking is on
+// one pair and the interior is untouched, which is what the counts here say.
+func TestARunDoesNotNest(t *testing.T) {
+	d := pidBraceDialect()
+	f, err := Parse("echo $${a$${b,c}d}", d)
+	if err != nil {
+		t.Fatalf("echo $${a$${b,c}d}: %v", err)
+	}
+	c := f.Stmts[0].Expr.(*Pipeline).Cmds[0].(*SimpleCmd)
+	marked, params := 0, 0
+	var unmarked string
+	for _, sp := range c.Args[1].Spans {
+		switch {
+		case sp.PidBrace:
+			marked++
+		case sp.Kind == ParamExp:
+			params++
+		case sp.Kind == Literal:
+			unmarked += sp.Value
+		}
+	}
+	if marked != 2 {
+		t.Errorf("%d marked braces, want the outer pair alone", marked)
+	}
+	if params != 2 {
+		t.Errorf("%d parameter expansions, want both `$$`", params)
+	}
+	if unmarked != "a{b,c}d" {
+		t.Errorf("unmarked literal text %q, want the inner braces left as text", unmarked)
 	}
 }
 

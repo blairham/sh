@@ -2021,6 +2021,15 @@ func Semantics() interp.Semantics {
 	// `$1`, where zsh swallows the word whole. Two axes since #3129, because
 	// the two shells with the invocation spelling disagree about the builtin.
 	s.SetLongOptionWord = interp.LongOptionWordIsAnOptionName
+	// And two of those words are not option names at all: `--state` writes
+	// what `set +o` writes and `--default` puts every option back to its
+	// compiled-in default. This shell prints both in the usage line it shows
+	// when it refuses something else — `Usage: set [--default] [--state]
+	// [arg ...]` — so refusing them was declining what the diagnostic had
+	// just offered, and it is the reason `eval "$(set +o)"` still did not
+	// round-trip with every roster name moving: that line opens with
+	// `--default` (#3153).
+	s.SetHasTheStateAndDefaultWords = interp.Yes
 	s.LongOptionValueIsANumber = interp.Yes
 	// unanswered LongOptionNameIgnoresHyphens: this shell folds hyphens
 	// **and** underscores, and does it on every route to an option name
@@ -3489,6 +3498,20 @@ func Apply(r *interp.Runner) {
 	// bash takes the same word and does move it, which is why this is the
 	// dialect's to say. See Runner.AddInertSetOptions (#3128).
 	r.AddInertSetOptions("privileged")
+	// The six rows this shell's **compiled default** has on, which is what
+	// `set --default` puts back and is not the state the shell starts in.
+	// Measured 2026-09-16 on ksh93u+ 2012-08-01 by reading the whole listing
+	// after `set -o errexit; set --default`: exactly these six are on, and
+	// `braceexpand`, `multiline` and `trackall` — all three on in a stock
+	// shell — are off. The reset reaches behavior and not only the listing:
+	// `set --default; echo {a,b}` prints `{a,b}`, and `$-` goes from `chsB`
+	// to `cs` as the brace and tracking letters leave with their options.
+	//
+	// Five of them are this shell's positive spelling of a state the
+	// substrate stores negated, and the reset goes through the same seam
+	// `set -o clobber` does, so the inversion is written once. See
+	// Runner.AddDefaultOnSetOptions.
+	r.AddDefaultOnSetOptions("clobber", "exec", "glob", "log", "unset", "viraw")
 	// ksh93 has a `builtin` of its own and it is a different command: it
 	// *registers* builtins rather than running one. With no operands it
 	// lists the table; each operand is a name to add, and one that is not

@@ -1367,6 +1367,39 @@ func (r *Runner) AddInertSetOptions(names ...string) {
 	}
 }
 
+// AddDefaultOnSetOptions declares the `set -o` rows this shell's **compiled
+// default** has on, in the spellings its own listing uses.
+//
+// What `set --default` puts back, and it is a table rather than a re-read of
+// the option entries because **the compiled default is not the startup
+// state**. Measured 2026-09-16 on ksh93u+ 2012-08-01: a stock shell lists
+// `braceexpand`, `multiline` and `trackall` on, and after `set --default` all
+// three are off while `viraw` is still on — so a reset that called the
+// listing's own `on` field would put back the state it was asked to leave.
+//
+// The rows are declared in the **listed** spelling, which is the one a reader
+// can hold against the shell's own output: after `set -o errexit;
+// set --default` that shell's listing has exactly six rows on — `clobber`,
+// `exec`, `glob`, `log`, `unset` and `viraw` — and this is that list. Five of
+// them are the positive spelling of a state the substrate stores negated, and
+// the reset goes through the same seam `set -o clobber` does, so the negation
+// is not written down twice. See AddNegatedSetOptions.
+//
+// A name the shell lists and will not move is not reset, because a reset is a
+// request like any other and those refuse one: `interactive`, `login_shell`
+// and `rc` all move with the invocation and are refused to a script in both
+// directions. Nor is an inert one, which is granted and moves nothing anyway.
+// See AddImmovableSetOptions and AddInertSetOptions, and
+// Semantics.SetHasTheStateAndDefaultWords for the word itself (#3153).
+func (r *Runner) AddDefaultOnSetOptions(names ...string) {
+	if r.defaultOnOptions == nil {
+		r.defaultOnOptions = make(map[string]bool, len(names))
+	}
+	for _, n := range names {
+		r.defaultOnOptions[n] = true
+	}
+}
+
 // SetOptionTable installs the `set -o` namespace of a dialect that has one of
 // its own: the rows `set -o` and `set +o` write, and what moving one name
 // does.

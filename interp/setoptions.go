@@ -1439,6 +1439,113 @@ func (r *Runner) listOptions(plus bool) int {
 	return 0
 }
 
+// setControlWords are the `--name` words the `set` builtin takes that are not
+// option names, in the one shell that has any. See
+// Semantics.SetHasTheStateAndDefaultWords for the measurements and for the
+// usage line that advertises them.
+var setControlWords = []string{"default", "state"}
+
+// setControlWord reads a `--name` word — dashes already off — as one of those,
+// by **unique prefix**, which is measured rather than assumed: `--d`, `--de`
+// and `--defa` are all `--default` in ksh93u+ and `--s`, `--st` and `--stat`
+// are all `--state`, while an *option* name abbreviates nowhere — `--g`,
+// `--gl` and `--glo` are each `bad option(s)` in the same shell, so the
+// abbreviation belongs to these two words and not to the namespace beside
+// them.
+//
+// Case is not folded, which is the same shell's answer for an option name and
+// is measured on both: `--DEFAULT` and `--GLOBSTAR` are refused alike. An
+// empty word is not a prefix of anything here — `set --` is the terminator
+// and never reaches this.
+//
+// A `no` prefix is **not** read off these two. Measured and deliberately not
+// modeled: `set --nostate` writes the state line in that shell and
+// `set --nodefault` is a silent 0, which is neither the option the word names
+// nor its negation, and reproducing it would be copying a surface nothing
+// documents. A script writing either gets this shell's `bad option(s)`.
+func setControlWord(word string) (string, bool) {
+	if word == "" {
+		return "", false
+	}
+	found := ""
+	for _, w := range setControlWords {
+		if !strings.HasPrefix(w, word) {
+			continue
+		}
+		if found != "" {
+			// Two words share the prefix, so it names neither. Unreachable
+			// with today's pair — `default` and `state` share no first
+			// letter — and written because the ambiguity is the rule a
+			// prefix match lives or dies by, not because a row needs it.
+			return "", false
+		}
+		found = w
+	}
+	return found, found != ""
+}
+
+// applySetControlWord answers one of those words, reporting whether it was one
+// at all.
+//
+// The two are answered at different **times**, and that is measured rather
+// than chosen. `--default` moves the options where it stands, so a `-o` after
+// it survives and one before it does not: `set --default -o errexit` leaves
+// errexit on and `set -o errexit; set --default` takes it off. `--state`
+// writes nothing here — it asks for the listing this builtin already defers
+// to the end of the option parse, which is what makes `set --state -o errexit`
+// name errexit on the line, `set --state --default` write the state the reset
+// left, and `set --state --state` write one line rather than two. All four
+// measured 2026-09-16 on ksh93u+.
+//
+// The form it asks for is the `+o` one, so the line `--state` writes and the
+// line `set +o` writes are the same line by construction rather than by
+// agreement — and measurement says they agree in every state probed: a moved
+// row, a moved negated row, a recorded row, and after `--default` itself. See
+// Semantics.SetListsOptionsOnceAtTheEnd for the deferral this borrows.
+func (r *Runner) applySetControlWord(word string) bool {
+	name, ok := setControlWord(word)
+	if !ok || !r.ask(r.sem().SetHasTheStateAndDefaultWords,
+		"`set --state` and `set --default`") {
+		return false
+	}
+	if name == "state" {
+		r.pendingOptionListing = listingAsInput
+		return true
+	}
+	r.setOptionsToTheirDefaults()
+	return true
+}
+
+// setOptionsToTheirDefaults is `set --default`: every option back to the state
+// this shell was compiled with.
+//
+// The dialect's declared rows are the on ones and everything else its listing
+// carries goes off — see [Runner.AddDefaultOnSetOptions] for why that is a
+// table and not a re-read of the option entries. Written through the same
+// seam `set -o NAME` goes through, so a negated spelling is inverted once and
+// a recorded name is recorded rather than needing a second path.
+//
+// It does not touch the positional parameters, which is measured: `set 1 2 3;
+// set --default` leaves `$*` as `1 2 3` and `set --default a b` sets them to
+// `a b`, so the word is an option and the operands behind it are operands.
+// Nothing here has to arrange that — the option loop reaches this and the
+// operands are read after it — and it is written down because the opposite is
+// the obvious guess about a word named "default".
+func (r *Runner) setOptionsToTheirDefaults() {
+	for _, name := range r.listedOptionNames() {
+		if r.immovableOptions[name] || r.inertOptions[name] {
+			// A reset is a request like any other, and these two refuse or
+			// swallow one. The three immovable rows in the shell that has
+			// this word are facts about the invocation — they move with how
+			// the shell was started and a script cannot write them — so a
+			// reset that reported them off would be lying about the shell it
+			// is running in.
+			continue
+		}
+		r.setNamedOption(name, r.defaultOnOptions[name])
+	}
+}
+
 // SetLongOption applies one invocation option written as `--name`, the
 // spelling ksh93 gives every `set -o` name on its command line. Exported for
 // the front end beside SetOptionLetters and SetNamedOption, and returning the

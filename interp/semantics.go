@@ -7956,6 +7956,52 @@ type Semantics struct {
 	// there and discards here.
 	SetLongOptionWord LongOptionWordAtSet
 
+	// SetHasTheStateAndDefaultWords gives `set` the two `--name` words that
+	// are not option names at all: `--state`, which writes what `set +o`
+	// writes, and `--default`, which puts every option back to its
+	// compiled-in default.
+	//
+	// One shell in the panel has them, and it **advertises them in the usage
+	// line it prints when it refuses something else**:
+	//
+	//	$ ksh -c 'set --zzznope'
+	//	ksh: set: zzznope: bad option(s)
+	//	Usage: set [--default] [--state] [arg ...]
+	//
+	// So a shell that refuses them is refusing what its own diagnostic just
+	// offered — #3128's complaint one level down, and the reason
+	// `eval "$(set +o)"` did not round-trip even with every roster name
+	// moving: the line that idiom saves **opens** with `--default` (#3153).
+	//
+	// The three shells that read a `--` word as letters never reach this,
+	// and neither does the one that discards it — see SetLongOptionWord.
+	//
+	// Measured 2026-09-16 on ksh93u+ 2012-08-01:
+	//
+	//   - `--state` writes the `set +o` line byte for byte, at 0, in every
+	//     state probed: a moved row, a moved *negated* row (`set +o clobber`
+	//     puts `--noclobber` on both), a recorded row, and after `--default`
+	//     itself.
+	//   - `--default` is 0 and leaves the **positional parameters alone**:
+	//     `set 1 2 3; set --default` keeps `$*` as `1 2 3`, and
+	//     `set --default a b` sets them to `a b`, so the word is an option
+	//     and the operands behind it are still operands.
+	//   - Both are matched by **unique prefix**: `--d`, `--de`, `--defa` are
+	//     all `--default` and `--s`, `--st`, `--stat` are all `--state`,
+	//     while no *option* name abbreviates at all — `--g`, `--gl` and
+	//     `--glo` are each `bad option(s)` in the same shell. Case is not
+	//     folded either way: `--DEFAULT` and `--GLOBSTAR` are both refused.
+	//
+	// **The compiled default is not the startup state**, which is the part
+	// that needs measuring rather than assuming and is why the dialect
+	// declares the rows rather than this axis carrying them. A stock ksh93
+	// lists `braceexpand`, `multiline` and `trackall` on; after `--default`
+	// all three are off and `viraw` is still on. It reaches real behavior and
+	// not only the listing — `set --default; echo {a,b}` prints `{a,b}` —
+	// and `$-` follows it, `chsB` becoming `cs`. See
+	// Runner.AddDefaultOnSetOptions.
+	SetHasTheStateAndDefaultWords Answer
+
 	// LongOptionNameIgnoresHyphens takes the hyphens out of a `--name` word
 	// before the option name inside it is looked up, so `--no-glob` is
 	// `noglob` and `--e-x-t-endedglob` is `extendedglob`.
@@ -15323,6 +15369,10 @@ func PosixSemantics() Semantics {
 		// override. dash — the closest reading of the standard here — is the
 		// one that refuses it outright, which is the same answer.
 		SetHasTheTLetter: No,
+		// The standard's `set` takes `-o name` and nothing spelled `--name`
+		// at all, so the two words below it are one shell's own and the
+		// preset claims neither.
+		SetHasTheStateAndDefaultWords: No,
 		// The standard has no history expansion — it is a csh feature four
 		// of the panel grew and one did not — so the preset claims neither
 		// half and every shell that has one overrides. dash is the column

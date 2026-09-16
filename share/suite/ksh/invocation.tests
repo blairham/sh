@@ -126,3 +126,62 @@ printf -- '=== the same spelling at the builtin ===\n'
 ( set --zzznosuch ) 2>&1 | sed -e 's#^\([^/ ]*\)ksh: #<base>: #'
 printf 'set --zzznosuch -> %s\n' "$?"
 ( set -- --xtrace; printf 'behind the terminator [%s]\n' "$1" )
+
+printf -- '=== the two words in that usage line that are not option names ===\n'
+
+# `set`'s refusal above advertises them — `Usage: set [--default] [--state]
+# [arg ...]` — and the builtin declined both, which is a surface naming what
+# the shell then refuses. It is also why `eval "$(set +o)"` did not round-trip
+# even with every roster name moving: the line that idiom saves **opens** with
+# `--default` (#3153).
+#
+# `--state` writes what `set +o` writes. `--default` puts every option back to
+# its **compiled-in** state, which is not the state the shell starts in: a
+# stock shell here lists `braceexpand`, `multiline` and `trackall` on, and the
+# reset leaves only `viraw`.
+#
+# Not at the invocation: `ksh --default` and `ksh --state` are `bad option(s)`
+# at 2, so the two words belong to the builtin alone. The rows for that are
+# above, where every other refused word is.
+
+( set --state )
+( set -o globstar; set --state )
+( set +o clobber; set --state )
+( set --default; set --state )
+( set --default; set -o )
+
+# The reset reaches behavior and not only the listing, and it leaves the
+# positional parameters where they stood — which is the opposite of the
+# obvious guess about a word named "default".
+( set --default; printf 'braces after the reset [%s]\n' {a,b} )
+( set 1 2 3; set --default; printf 'the parameters stand [%s]\n' "$*" )
+( set 1 2 3; set --default a b; printf 'and operands are operands [%s]\n' "$*" )
+
+# The two are answered at different times. `--default` moves the options where
+# it stands, so a `-o` written after it survives; `--state` asks for the
+# listing this builtin already defers to the end of the option parse, so the
+# line names whatever the rest of the words left and twice is once.
+( set --default -o errexit; printf 'a later -o survives [%s]\n' "$-" )
+( set -o errexit --default; printf 'an earlier one does not [%s]\n' "$-" )
+( set --state -o errexit )
+( set --state --default )
+( set --state --state )
+
+# Both abbreviate, down to one letter — and no *option* name does, which is
+# what says the abbreviation belongs to this pair and not to the namespace.
+( set --s )
+( set --sta )
+( set --d; printf 'set --d left [%s]\n' "$-" )
+( set --defaul; printf 'set --defaul left [%s]\n' "$-" )
+( set --defaults ) 2>&1 | sed -e 's#^\([^/ ]*\)ksh: #<base>: #'
+printf 'set --defaults -> %s\n' "$?"
+( set --DEFAULT ) 2>&1 | sed -e 's#^\([^/ ]*\)ksh: #<base>: #'
+printf 'set --DEFAULT -> %s\n' "$?"
+
+# And the round trip the whole surface is for.
+( set -o globstar -o errexit
+  saved=$(set +o)
+  set --default
+  printf 'after the reset [%s]\n' "$-"
+  eval "$saved"
+  printf 'and after the restore [%s]\n' "$-" )

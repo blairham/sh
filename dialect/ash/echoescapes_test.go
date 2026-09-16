@@ -74,8 +74,8 @@ func TestTheEscapeSetBehindDashE(t *testing.T) {
 		{
 			// Neither Unicode spelling is in the set.
 			"the unicode escapes are absent",
-			`echo -e 'aAZ'`,
-			`aAZ` + "\n",
+			`echo -e 'a\u0041Z'`,
+			`a\u0041Z` + "\n",
 		},
 		{
 			// The same two extensions at the `%b` site, with the same

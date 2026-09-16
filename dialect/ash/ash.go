@@ -540,7 +540,7 @@ func Semantics() interp.Semantics {
 	s.EchoExpandsHexEscapes = interp.Yes
 	s.EchoExpandsEscEscape = interp.Yes
 	s.EchoExpandsCapitalEscEscape = interp.No
-	// `\u` and `\U` are in neither set: `echo -e 'aAZ'` writes the
+	// `\u` and `\U` are in neither set: `echo -e 'a\u0041Z'` writes the
 	// eight characters as they stand.
 	s.EchoExpandsUnicodeEscapes = interp.No
 	// And a `\x` that runs out of digits stands rather than reading as a
@@ -550,7 +550,7 @@ func Semantics() interp.Semantics {
 	// live, and a default that happens to be right is not a measurement.
 	s.EchoEmptyHexDigitRunIsNul = interp.No
 	// `printf 'a\x41Z'` is `aAZ`, so the hex escape is here where dash has
-	// none at all, and `%b` takes it too. `\u` is not: `printf 'aAZ'` is
+	// none at all, and `%b` takes it too. `\u` is not: `printf 'a\u0041Z'` is
 	// the text as written. The digit rule is the same at both sites and the
 	// same as `echo -e`'s: two digits at most, so `printf 'a\x4142b'` is
 	// `aA42b`.

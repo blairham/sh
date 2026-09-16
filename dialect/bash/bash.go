@@ -611,6 +611,11 @@ func Semantics() interp.Semantics {
 	// read: `break -- 1` ends the loop, `exit -- 3` exits 3. Identical in
 	// 3.2 and in the same binary called as `sh`.
 	s.NumericOperandDoubleDashEndsOptions = interp.Yes
+	// A second operand is one too many, and the refusal costs the rest of
+	// the statement — the loop stops, the `; echo` behind it never runs,
+	// and the next line does. Measured 2026-09-16 on 5.3.20 in a script
+	// file; 3.2.57 says the same sentence at status 1.
+	s.ExtraNumericOperand = interp.ExtraNumericOperandGivesUpTheStatement
 	s.ShiftNamesAreArrays = interp.No
 	s.ShiftNegativeIsOutOfRange = interp.Yes
 	s.WaitReadsOptions = interp.Yes
@@ -2095,8 +2100,11 @@ func Diagnostics() interp.Diagnostics {
 		// abc: numeric argument required` — and ends the script here too
 		// (#2800).
 		LoopControlCountOutOfRange: "%[1]s: %[2]s: loop count out of range",
-		TypeKeyword:                "%[1]s is a shell keyword",
-		TypeFunction:               "%[1]s is a function",
+		// The builtin names itself, because bash's layout puts the shell and
+		// the line in front of it: `bash: line 3: break: too many arguments`.
+		NumericOperandTooMany: "%[1]s: too many arguments",
+		TypeKeyword:           "%[1]s is a shell keyword",
+		TypeFunction:          "%[1]s is a function",
 		// The only wording in the panel that carries its own quotes, and the
 		// only verb that is not "alias".
 		TypeAlias:     "%[1]s is aliased to `%[2]s'",

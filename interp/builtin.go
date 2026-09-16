@@ -88,7 +88,7 @@ func init() {
 // ordinary control flow and modeling it as a failure would make every caller
 // check for something that is not one.
 func biBreak(r *Runner, _ context.Context, args []string) int {
-	want, st, done := r.loopControlCount("break", args)
+	rest, want, st, done := r.loopControlCount("break", args)
 	if done {
 		return st
 	}
@@ -96,12 +96,21 @@ func biBreak(r *Runner, _ context.Context, args []string) int {
 	if done {
 		return st
 	}
+	// After the place, which is where bash asks it: `break 1 2` outside a
+	// loop is `only meaningful in a for, while, or until loop` there and is
+	// `too many arguments` in zsh, and that ordering is
+	// Semantics.LoopControlPlaceIsJudgedBeforeTheCount read at a second site
+	// rather than a reading of its own. Inside a loop both columns say too
+	// many, and neither leaves the loop.
+	if st, done := r.extraNumericOperands("break", rest); done {
+		return st
+	}
 	r.ctl, r.ctlDepth = controlBreak, reach
 	return 0
 }
 
 func biContinue(r *Runner, _ context.Context, args []string) int {
-	want, st, done := r.loopControlCount("continue", args)
+	rest, want, st, done := r.loopControlCount("continue", args)
 	if done {
 		return st
 	}
@@ -109,8 +118,57 @@ func biContinue(r *Runner, _ context.Context, args []string) int {
 	if done {
 		return st
 	}
+	if st, done := r.extraNumericOperands("continue", rest); done {
+		return st
+	}
 	r.ctl, r.ctlDepth = controlContinue, reach
 	return 0
+}
+
+// extraNumericOperands is what a word written **behind** the count of
+// `break`, `continue`, `return`, `exit` or `shift` comes to: the status the
+// builtin ends at, and whether it ends there.
+//
+// One helper for the five because it is one rule in every shell that has it —
+// bash reaches it through `no_args`, once, from the reader all five share —
+// and a second copy beside the first is how this repository's recurring
+// defect is spelled: a fix applied to one spelling and not its twin.
+//
+// The count is already read when this is asked, which is measured rather than
+// convenient: `shift abc def` is `abc: numeric argument required` and
+// `exit abc def` is `exit: abc: numeric argument required`, so a count that
+// will not read is what a script hears about first and this never speaks. It
+// does win over everything *after* the read — `shift 5 2` on three positional
+// parameters is `too many arguments` and not the out-of-range complaint, and
+// `shift -2 3` is the same.
+//
+// See Semantics.ExtraNumericOperand for the three readings and the panel.
+func (r *Runner) extraNumericOperands(name string, args []string) (int, bool) {
+	if len(args) < 2 {
+		return 0, false
+	}
+	p := r.extraNumericOperand()
+	if r.unspecified {
+		return r.status, true
+	}
+	if p == ExtraNumericOperandIgnored {
+		return 0, false
+	}
+	r.diagf("%s\n", Wording(r.diag().NumericOperandTooMany, "%[1]s: too many arguments", name))
+	if p == ExtraNumericOperandGivesUpTheStatement {
+		// The rest of the *statement* goes with it and the input does not:
+		// measured, `shift 1 2; echo SAME` prints no `SAME` and the next
+		// line runs, and a loop around the refusal stops where it stands.
+		// That is controlAbandon, which the refused readonly assignment
+		// beside it already raises — see interp/compound.go.
+		r.status = 2
+		r.ctl, r.abandonLine = controlAbandon, r.line
+		return 2, true
+	}
+	// Refused and nothing given up: the loop around it runs on and complains
+	// again on the next pass.
+	r.status = 1
+	return 1, true
 }
 
 // numericOperandMarker takes a leading `--` off the operands of a builtin
@@ -158,26 +216,31 @@ func (r *Runner) numericOperandMarker(args []string) ([]string, bool) {
 // cited bash's place complaint as the evidence for it, so the code refused
 // `break abc` where bash names the loops and carries on (#2299).
 //
+// The operands *past* the end-of-options marker come back with the count,
+// because the caller has one more question to ask of them and asking it of
+// the words as written would count the marker: `break -- 1` is one operand
+// and not two. See Runner.extraNumericOperands.
+//
 // `return` is the counter-case and is not this question: `return abc` outside
 // a function writes the operand's complaint *and* the place's, in that order
 // (#2762), so the two builtins do not share a rule here.
 //
 // See Diagnostics.LoopControlCount for the panel's sentences and for why the
 // script's ending is not an axis: all seven end there.
-func (r *Runner) loopControlCount(name string, args []string) (int, int, bool) {
+func (r *Runner) loopControlCount(name string, args []string) ([]string, int, int, bool) {
 	args, marked := r.numericOperandMarker(args)
 	if !marked {
 		// The axis went unanswered; ask told the script so and the builtin
 		// stops rather than guessing which of `--` and the word behind it
 		// is the count.
-		return 0, r.status, true
+		return nil, 0, r.status, true
 	}
 	if len(args) == 0 {
-		return 1, 0, false
+		return args, 1, 0, false
 	}
 	n, err := strconv.Atoi(strings.TrimSpace(args[0]))
 	if err == nil && n > 0 {
-		return n, 0, false
+		return args, n, 0, false
 	}
 	d := r.diag()
 	// Both complaints are available from here, and the dialect decides which
@@ -190,15 +253,15 @@ func (r *Runner) loopControlCount(name string, args []string) (int, int, bool) {
 		case r.unspecified:
 			// A boundary axis went unanswered inside the floor, and it is
 			// the first question asked here.
-			return 0, r.status, true
+			return args, 0, r.status, true
 		case r.ask(r.sem().LoopControlPlaceIsJudgedBeforeTheCount,
 			"a misplaced `break` being judged before its count is read"):
 			// The place is judged first, so the word is never read and never
 			// quoted: a count of one carries through to loopControlReach,
 			// which finds no loop and writes the place's complaint.
-			return 1, 0, false
+			return args, 1, 0, false
 		case r.unspecified:
-			return 0, r.status, true
+			return args, 0, r.status, true
 		}
 	}
 	// The number this reading produced, for the one dialect whose sentence
@@ -212,7 +275,7 @@ func (r *Runner) loopControlCount(name string, args []string) (int, int, bool) {
 		// A number, and not positive, in the one column that parts the two:
 		// it complains, takes the count as 1 and lets the script carry on.
 		r.diagf("%s\n", Wording(d.LoopControlCountOutOfRange, "", name, operand))
-		return 1, 0, false
+		return args, 1, 0, false
 	}
 	// The fallback chain is a chain of *formats*, not of rendered text: the
 	// operand can hold a `%` and rendering twice would read it as a verb.
@@ -229,7 +292,7 @@ func (r *Runner) loopControlCount(name string, args []string) (int, int, bool) {
 	// says Yes to that axis and reports **2** here, where ksh93 and zsh
 	// report 1, so the two are different facts. See fatalAtStatus.
 	r.fatalAtStatus(orDefault(d.LoopControlCountStatus, 2))
-	return 0, r.status, true
+	return args, 0, r.status, true
 }
 
 // loopControlReach is how many loops a `break` or `continue` can see, plus
@@ -358,6 +421,9 @@ func biReturn(r *Runner, _ context.Context, args []string) int {
 	if len(args) > 0 {
 		switch n, ok := r.statusOperand("return", args[0]); {
 		case ok:
+			if st, done := r.extraNumericOperands("return", args); done {
+				return st
+			}
 			operand, haveOperand = n, true
 		case r.unspecified:
 			// statusArgument has reported the unanswered axis already. It is
@@ -3113,6 +3179,14 @@ func biShift(r *Runner, _ context.Context, args []string) int {
 					return r.status
 				}
 			}
+			if len(names) == 0 {
+				// Not names, so it is one operand too many — and the
+				// column that refuses does so ahead of both ends of the
+				// range below.
+				if st, done := r.extraNumericOperands("shift", args); done {
+					return st
+				}
+			}
 		}
 	}
 	if n < 0 {
@@ -5665,6 +5739,9 @@ func biExit(r *Runner, _ context.Context, args []string) int {
 	if len(args) > 0 {
 		switch n, ok := r.statusOperand("exit", args[0]); {
 		case ok:
+			if st, done := r.extraNumericOperands("exit", args); done {
+				return st
+			}
 			// Masked here and not in the reading, because the eight bits are
 			// the *process's* limit rather than a decision any shell made:
 			// `exit 300` is 44 in all six, including the two that leave a

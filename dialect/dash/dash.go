@@ -756,6 +756,8 @@ func Semantics() interp.Semantics {
 	// `break: Illegal number: --` and the script ends there, which is the
 	// same answer this shell gives `shift --`.
 	s.NumericOperandDoubleDashEndsOptions = interp.No
+	// The count is taken and the rest of the line is not read.
+	s.ExtraNumericOperand = interp.ExtraNumericOperandIgnored
 	s.ShiftNamesAreArrays = interp.No
 	s.ShiftNegativeIsOutOfRange = interp.No
 	s.WaitReadsOptions = interp.Yes

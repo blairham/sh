@@ -2109,6 +2109,19 @@ type Diagnostics struct {
 	// facts in the one column that could have told them apart.
 	LoopControlCountStatus int
 
+	// NumericOperandTooMany is what a word behind the count of `break`,
+	// `continue`, `return`, `exit` or `shift` is refused with. One verb: the
+	// builtin's name.
+	//
+	// The name is in the format rather than supplied by the location,
+	// because the two columns that refuse lay the sentence out differently:
+	// bash writes `bash: line 3: break: too many arguments` and zsh writes
+	// `./s.sh:break:1: too many arguments`, where the name is already in the
+	// location its own diagnostics carry. An empty field is a dialect that
+	// never arrives — see Semantics.ExtraNumericOperand, which is what
+	// decides whether anything is said at all.
+	NumericOperandTooMany string
+
 	// UnsetBadFunctionName is what `unset -f` says about an operand that
 	// could not be a function name. One verb: the operand.
 	UnsetBadFunctionName string

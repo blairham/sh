@@ -4,9 +4,12 @@
 package suite
 
 import (
+	"bytes"
 	"context"
+	"os/exec"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/blairham/sh/internal/oracle"
 )
@@ -70,6 +73,16 @@ type Build struct {
 	// What matters is that the report cannot print the second as though it
 	// were an identification, which is the whole of #3135.
 	Known bool
+	// ByProbe says Version is a fingerprint taken with [Suite.AgainstProbe]
+	// rather than a build string the shell printed.
+	//
+	// The two are used identically — printed in the header, matched against
+	// AgainstReport — and they are still not the same kind of fact, so the
+	// report may not present a fingerprint as though the shell had named
+	// itself. A reader who sees `esc=4 pipefail-listed=n` where a version
+	// belongs has to be told that is a measurement, or the next person to
+	// change the probe will think they are editing a version string.
+	ByProbe bool
 }
 
 // String is the build for a reader, and it never returns something that could
@@ -77,6 +90,9 @@ type Build struct {
 func (b Build) String() string {
 	if !b.Known {
 		return "could not determine — this shell answers no version probe"
+	}
+	if b.ByProbe {
+		return b.Version + " — a fingerprint, because this shell answers no version probe"
 	}
 	return b.Version
 }
@@ -94,6 +110,88 @@ func Version(ctx context.Context, shell string) Build {
 		return Build{}
 	}
 	return Build{Version: line, Known: true}
+}
+
+// Identify is what a report must call rather than [Version]: it asks the
+// shell what it is, and where the shell will not say, it measures.
+//
+// # The column that forced this
+//
+// dash answers no version probe in any spelling — not `--version`, not
+// `--help`, not `${.sh.version}` — so [Version] returns Known == false for
+// it on every machine, `Against` was left empty at its entry for that
+// reason, and [Suite.Lineage] therefore had nothing to raise a notice from.
+// The consequence was not theoretical. The dash column is the one CI report
+// with no banner on it, which is exactly why the previous reading of #2291
+// called it "the only unexcused per-column strict gap" — and both of the
+// files in that gap are the *distribution's patch* rather than anything
+// ours:
+//
+//   - `printf 'a\eZ'` is three bytes under Debian's dash and four under
+//     upstream 0.5.12 and Apple's dash-16 alike;
+//   - `set -o` lists nineteen options under Debian's and seventeen under
+//     both of the others, `privileged` and `pipefail` being the additions.
+//
+// Two builds of one upstream version disagreeing is what says it is a patch
+// and not a version the cases are behind on. Measured 2026-09-16: every one
+// of the 52 files this column runs is byte-identical under Apple's dash-16
+// and under upstream 0.5.12 built from source on the same machine, once the
+// shell's own path and the per-run directory are normalized the way [Sweep]
+// normalizes them.
+//
+// # Why a fingerprint is allowed to stand in for a version
+//
+// Because the question the notice asks is not "what release is this" — it is
+// "is the shell in front of me the one this column's cases were measured
+// against". A version string answers that by proxy and a fingerprint answers
+// it directly, which is the better instrument for a build whose divergence
+// is a patch rather than a release. It also cannot be spoofed by a refusal
+// the way #3135's usage line was: the probe is scored on what the shell
+// *did*, and a shell that refuses it prints no fingerprint at all.
+//
+// The rule from [looksLikeABuild] carries over in the same form. An answer
+// has to look like an answer: a non-zero status, an empty line, or anything
+// on standard error instead of standard output is not an identification, and
+// the column says it could not tell rather than printing a refusal where a
+// build belongs.
+func (s Suite) Identify(ctx context.Context, shell string) Build {
+	if b := Version(ctx, shell); b.Known {
+		return b
+	}
+	if s.AgainstProbe == "" {
+		return Build{}
+	}
+	out, ok := fingerprint(ctx, shell, s.AgainstProbe)
+	if !ok {
+		return Build{}
+	}
+	return Build{Version: out, Known: true, ByProbe: true}
+}
+
+// fingerprint runs a column's identifying probe through the reference and
+// returns its first line.
+//
+// Standard error is dropped rather than folded in, which is the deliberate
+// opposite of how a suite file is run: a file is run with the two streams
+// joined because their interleaving is part of what is being compared, and a
+// probe is run with them apart because a diagnostic wearing a fingerprint's
+// clothes is #3135 again.
+func fingerprint(ctx context.Context, shell, script string) (string, bool) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, shell, "-c", script)
+	// The environment a probe of a shell has to have: nothing of the
+	// machine's, and C, because a fingerprint that moved with LANG would be
+	// measuring the machine rather than the build.
+	cmd.Env = []string{"PATH=/usr/bin:/bin", "LC_ALL=C", "LANG=C"}
+	cmd.Stdin = nil
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	if err := cmd.Run(); err != nil {
+		return "", false
+	}
+	line := strings.TrimSpace(firstLine(out.String()))
+	return line, line != ""
 }
 
 // buildNumber is the mark of an answer: a build string names a build, so it
@@ -145,8 +243,12 @@ func (s Suite) Lineage(b Build) (label, why string) {
 	case strings.Contains(strings.ToLower(b.Version), s.AgainstReport):
 		return "", ""
 	}
+	here := "the shell here is " + b.Version
+	if b.ByProbe {
+		here = "the shell here answers " + b.Version
+	}
 	return "WRONG BUILD", "this column is graded against " + s.Against +
-		" and the shell here is " + b.Version + ". The numbers below are that build's " +
+		" and " + here + ". The numbers below are that build's " +
 		"answers, not this column's: where the two shells word a diagnostic differently " +
 		"the difference scores against us and is not ours to fix. A delta across one pull " +
 		"request on this machine still means something; the absolute figure does not."

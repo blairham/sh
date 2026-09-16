@@ -7,22 +7,46 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/blairham/sh/dialect/ash"
 	"github.com/blairham/sh/dialect/bash"
 	"github.com/blairham/sh/dialect/dash"
 	"github.com/blairham/sh/dialect/ksh"
 	"github.com/blairham/sh/dialect/zsh"
 	"github.com/blairham/sh/internal/dialecttest"
+	"github.com/blairham/sh/interp"
+	"github.com/blairham/sh/syntax"
 )
 
-// presets is the four dialects' real vectors, which is what makes the rows
-// below evidence: a test inside interp can only build a synthetic Semantics
-// and would pass against a live dialect bug.
+// presets is every preset a shipped binary runs under, with its real vectors —
+// which is what makes the rows below evidence: a test inside interp can only
+// build a synthetic Semantics and would pass against a live dialect bug.
+//
+// The five dialect packages and the POSIX preset, which is `sh -dialect posix`
+// and the answers `dialect/ash` and `dialect/dash` inherit where they set
+// none. It is here rather than in one test's own table because a preset only
+// some tests can reach is a preset only some tests grade: #3248 and the five
+// after it were all an ash answer taken from this vector in silence, and a
+// cross-dialect row that stops at four columns cannot see a 4-3 split at all.
+//
+// `core` is deliberately absent: it answers nothing the panel disagrees about,
+// so a test that ranges over this map expecting a sentence would have to
+// special-case it. A case about the refusal builds it where the refusal is the
+// subject — see TestTypeSaysSpecialShellBuiltinWhereTheReferenceDoes.
 var presets = map[string]dialecttest.Preset{
-	"bash": {Name: "bash", Dialect: bash.Dialect, Semantics: bash.Semantics, Diagnostics: bash.Diagnostics, Apply: bash.Apply},
-	"dash": {Name: "dash", Dialect: dash.Dialect, Semantics: dash.Semantics, Diagnostics: dash.Diagnostics, Apply: dash.Apply},
-	"ksh":  {Name: "ksh", Dialect: ksh.Dialect, Semantics: ksh.Semantics, Diagnostics: ksh.Diagnostics, Apply: ksh.Apply},
-	"zsh":  {Name: "zsh", Dialect: zsh.Dialect, Semantics: zsh.Semantics, Diagnostics: zsh.Diagnostics, Apply: zsh.Apply},
+	"bash":  {Name: "bash", Dialect: bash.Dialect, Semantics: bash.Semantics, Diagnostics: bash.Diagnostics, Apply: bash.Apply},
+	"dash":  {Name: "dash", Dialect: dash.Dialect, Semantics: dash.Semantics, Diagnostics: dash.Diagnostics, Apply: dash.Apply},
+	"ksh":   {Name: "ksh", Dialect: ksh.Dialect, Semantics: ksh.Semantics, Diagnostics: ksh.Diagnostics, Apply: ksh.Apply},
+	"zsh":   {Name: "zsh", Dialect: zsh.Dialect, Semantics: zsh.Semantics, Diagnostics: zsh.Diagnostics, Apply: zsh.Apply},
+	"ash":   {Name: "ash", Dialect: ash.Dialect, Semantics: ash.Semantics, Diagnostics: ash.Diagnostics, Apply: ash.Apply},
+	"posix": {Name: "sh", Dialect: syntax.POSIX, Semantics: interp.PosixSemantics, Diagnostics: interp.PosixDiagnostics, Apply: noApply},
 }
+
+// noApply is the POSIX preset's Apply. It has no builtins of its own — that is
+// what makes it the substrate's own answers rather than a shell — and
+// dialecttest.Preset calls Apply unconditionally, on purpose: an optional field
+// there is how a dialect comes to be graded without the half a front end
+// installs.
+func noApply(*interp.Runner) {}
 
 // What each dialect says when `read` is given a word that is not a name, whole
 // line and status, against the sentence its own binary printed (#1440).

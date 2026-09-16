@@ -372,6 +372,17 @@ func TestViEditingAndTheOptionAreReadTogether(t *testing.T) {
 		{src: "setopt vi\nbindkey -e\n", option: true},
 		{src: "setopt vi\nunsetopt vi\n", vi: true},
 		{src: "bindkey -v\nset +o vi\n", vi: true},
+
+		// And turning off the name that is *not* selected, which is the row
+		// that tells "only on selects" from "either direction selects". The
+		// two rows above cannot: turning `vi` off in a shell that turned `vi`
+		// on would select `viins` again either way and read the same. This
+		// one moves the other name, so a selection on the way off would put
+		// the editor in emacs. Measured: `setopt vi; unsetopt emacs` leaves
+		// `main` on `viins` with `vi` still on.
+		{src: "setopt vi\nunsetopt emacs\n", vi: true, option: true},
+		{src: "bindkey -v\nunsetopt emacs\n", vi: true},
+		{src: "setopt emacs\nunsetopt vi\n"},
 	} {
 		r := bindkeyRunner(t, c.src)
 		if got := zsh.ViEditing(r); got != c.vi {

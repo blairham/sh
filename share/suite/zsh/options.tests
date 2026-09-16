@@ -188,3 +188,11 @@ editing() {
 ( bindkey -lL emacs main )
 ( bindkey -lL nosuchkeymap_zz ) 2> /dev/null
 printf 'bindkey -lL on a name nobody has -> %s\n' "$?"
+
+# And turning off the name that is *not* selected, which is the row that tells
+# "only turning one on selects" from "either direction selects": turning `vi`
+# off in a shell that turned `vi` on reselects the same keymap and reads alike
+# whichever rule is in force.
+( setopt vi; unsetopt emacs; editing 'setopt vi; unsetopt emacs' )
+( bindkey -v; unsetopt emacs; editing 'bindkey -v; unsetopt emacs' )
+( setopt emacs; unsetopt vi; editing 'setopt emacs; unsetopt vi' )

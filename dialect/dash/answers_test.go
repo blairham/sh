@@ -82,6 +82,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"SubscriptCommaIsARange", s.SubscriptCommaIsARange, interp.No},
 		{"ScalarSubscriptIsACharacter", s.ScalarSubscriptIsACharacter, interp.No},
 		{"SplitParamExpansion", s.SplitParamExpansion, interp.Yes},
+		{"UnrunNegationInvertsTheStatus", s.UnrunNegationInvertsTheStatus, interp.No},
 		{"UnquotedListJoinsOnIFS", s.UnquotedListJoinsOnIFS, interp.No},
 		// POSIX makes an unquoted `$@` behave as `$*` where nothing is
 		// split, and this shell complies: `IFS=-; set -- x y z; v=${@}` is

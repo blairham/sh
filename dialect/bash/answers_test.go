@@ -103,6 +103,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"EchoInterpretsEscapes", s.EchoInterpretsEscapes, interp.No},
 		{"LengthOfSpecialIsCount", s.LengthOfSpecialIsCount, interp.Yes},
 		{"SplitParamExpansion", s.SplitParamExpansion, interp.Yes},
+		{"UnrunNegationInvertsTheStatus", s.UnrunNegationInvertsTheStatus, interp.No},
 		{"UnquotedListJoinsOnIFS", s.UnquotedListJoinsOnIFS, interp.Yes},
 		// The other join, and the opposite answer: an unquoted `@` list
 		// reaching a context that keeps no fields is rejoined on a hard

@@ -183,6 +183,10 @@ func TestSemantics(t *testing.T) {
 		{"AttributeRereadsTheValueItFinds", s.AttributeRereadsTheValueItFinds, interp.Yes},
 		{"TypesetLocalNeedsKeywordFunction", s.TypesetLocalNeedsKeywordFunction, interp.No},
 		{"SplitParamExpansion", s.SplitParamExpansion, interp.No},
+		// And the `-n` answer this shell is alone in: a `!` in front of a
+		// pipeline `set -n` never ran still inverts the status the shell
+		// exits with, where the other six columns leave it alone (#3179).
+		{"UnrunNegationInvertsTheStatus", s.UnrunNegationInvertsTheStatus, interp.Yes},
 		{"UnquotedListJoinsOnIFS", s.UnquotedListJoinsOnIFS, interp.No},
 		// And the join this shell does perform: an unquoted `@` list
 		// reaching a context that keeps no fields joins on the first

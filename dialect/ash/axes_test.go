@@ -178,6 +178,14 @@ func TestNoAnsweredAxisRefusesAtRunTime(t *testing.T) {
 			"PidListingFinishesWithAJob — a bare `jobs -p` never reaches it, " +
 				"which is why the issue's second report did not reproduce",
 		},
+		{
+			"a `!` in front of a pipeline `set -n` never ran",
+			"set -n\n! true\n",
+			"UnrunNegationInvertsTheStatus — asked only under `set -n`, so a " +
+				"plain `! true` reaches no question and cannot stand in for " +
+				"this. Measured against BusyBox 1.37.0, which writes nothing " +
+				"and exits 0 where zsh exits 1",
+		},
 	} {
 		if strings.Contains(tc.src, "sleep") && testing.Short() {
 			continue

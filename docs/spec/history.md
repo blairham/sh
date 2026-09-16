@@ -605,12 +605,27 @@ carries on.
 ### What is implemented, and what is not
 
 Implemented: every event designator (`!!`, `!n`, `!-n`, `!string`,
-`!?string?`, `!#`, `!{…}`), every word designator (`^`, `$`, `*`, `%`, `n`,
-`x-y`, `x-`, `x*`), the modifiers `h t r e p q x s/// & g a`, quick
-substitution, the quoting rules above, `histchars`, the prompt route and the
-script route, and the `history` builtin's tie to the list the designators
-index — including the line `history -s` and `history -p` each drop from it,
-which is their own.
+`!?string?`, `!#`), every word designator (`^`, `$`, `*`, `%`, `n`, `x-y`,
+`x-`, `x*`), the modifiers `h t r e p q x s/// & g a`, quick substitution, the
+quoting rules above, `histchars`, the prompt route and the script route, and
+the `history` builtin's tie to the list the designators index — including the
+line `history -s` and `history -p` each drop from it, which is their own.
+
+Three of those modifiers were **wrong** until the script route made them easy
+to run against bash, and all three were wrong at a prompt as well. `:p` showed
+the expansion and then ran the line anyway, which is the one thing it exists
+not to do. `:r` and `:e` read the last `.` of the *basename* where bash reads
+the last `.` of the whole word — `/a.b/c` is the discriminator, where `:r` is
+`/a` — and `:e` answered an empty string for every word with no extension
+where bash hands the word back whole. The eight words behind the corrected
+rule are in `internal/histexpand`'s own comment.
+
+`!{…}` is listed above as **not** implemented, and it used to be listed as
+implemented. It is expanded here and is `event not found` in bash 5.3.20, bash
+3.2.57 and bash-as-`sh` alike — the brace is not punctuation there, and even
+`!{1}` fails with event 1 in the list. Whether any shell in the panel has the
+form cannot be settled from a script, since the two that might do not expand
+in one; see #3220, which is where the pty measurement goes.
 
 **Not implemented: `shopt histverify`**, which puts the expansion back on the
 editing line instead of running it. It is the one remaining piece and it is a

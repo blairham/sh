@@ -2752,6 +2752,12 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 			r.exported[base] = !strings.ContainsRune(opts, 'n')
 			continue
 		}
+		// The export attribute goes to what a reference points at, and this
+		// loop takes no scope, so there is never a fresh binding for it to be
+		// about instead. See interp/namerefattribute.go.
+		if target, follows := r.attributeFollowsTheReference(name, declareFlags{}); follows {
+			name = target
+		}
 		if hasValue {
 			// `export` is a declaration, so its plain word meets the same
 			// refusal `typeset`'s does where the name is really holding an
@@ -5182,6 +5188,14 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 		// the dialect that took this as a global: there is nothing to put
 		// back, and it becomes a plain assignment.
 		fresh := r.shadow(name)
+		// And a name already holding a **reference** puts everything below on
+		// what it points at. After the shadow, which is what leaves a fresh
+		// binding out of it: the copy drops the reference along with every
+		// other attribute. See interp/namerefattribute.go.
+		if target, follows := r.attributeFollowsTheReference(name, f); follows {
+			name = target
+			wasExported = r.isExported(name)
+		}
 		// After the shadow, for the reason biDeclare gives: the cell this
 		// declaration writes is a fresh binding, and an attribute applied
 		// ahead of the shadow was saved as the *outer* name's and came back
@@ -5434,6 +5448,14 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 		fresh := r.readonlyDeclaresALocal(name)
 		if r.unspecified {
 			return r.status
+		}
+		// The freeze belongs to what a reference points at, which is the row
+		// of #3136 that costs a script something: a helper handed the name of
+		// a caller's variable and told to freeze it froze the reference, and
+		// the caller's variable stayed writable at status 0. See
+		// interp/namerefattribute.go.
+		if target, follows := r.attributeFollowsTheReference(name, f); follows {
+			name = target
 		}
 		if (f.array || f.assoc) && r.readonlyRecordsTheCompound() {
 			// Ahead of the assignment, the order every other declaration

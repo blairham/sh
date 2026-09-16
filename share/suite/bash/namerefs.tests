@@ -231,3 +231,53 @@ say 'and a loop walks the array one element per pass'
   for n in 1 2 3; do printf '%s ' "${a[i++]-D}"; done
   printf 'i=%s\n' "$i" ) 2>&1
 ( c=(1 2); m=0; printf '[%s][%s] m=%s\n' "${c[m++]-D}" "${c[m++]-D}" "$m" ) 2>&1
+
+# An **attribute letter** over an existing reference — #3136. A declaration
+# that does not write `-n` again operates on what the reference points at, so
+# the letter goes to the target and the reference keeps only `-n`. This shell
+# put the letter on the reference, which left the target without it and the
+# reference carrying a letter no reference can carry.
+#
+# `readonly` is the row that costs a script something: a helper handed the
+# name of a caller's variable and told to freeze it froze nothing, and the
+# caller's variable stayed writable for the rest of the run at status 0.
+
+say 'a letter over a reference lands on the target'
+( u=1; declare -n s=u; declare -i s; declare -p s u ) 2>&1
+( u=1; declare -n s=u; declare -r s; declare -p s u ) 2>&1
+( u=1; declare -n s=u; declare -x s; declare -p s u ) 2>&1
+( u=AB; declare -n s=u; declare -l s; declare -p s u ) 2>&1
+( u=1; declare -n s=u; declare -a s; declare -p s u ) 2>&1
+( u=1; declare -n s=u; declare -ix s=7; declare -p s u ) 2>&1
+
+say 'and the letter works where it landed'
+( u=1; declare -n s=u; declare -i s; s=3+4; printf 'u=[%s]\n' "$u" ) 2>&1
+( u=1; declare -i u; declare -n s=u; declare +i s; s=3+4; printf 'u=[%s]\n' "$u" ) 2>&1
+
+say 'the attribute words follow it too'
+( u=1; declare -n s=u; readonly s; declare -p u; u=9; printf 'NOPE\n' ) 2>&1
+printf 'st=%s\n' "$?"
+( u=1; declare -n s=u; readonly s; s=9; printf 'NOPE\n' ) 2>&1
+( u=1; declare -n s=u; export s; declare -p u; env | grep '^u=' ) 2>&1
+
+say 'the chain is walked to the end, and an element lands on its array'
+( u=1; declare -n s=u; declare -n s2=s; declare -i s2; declare -p s s2 u ) 2>&1
+( declare -a a=(x y); declare -n s=a[1]; declare -i s; declare -p s a ) 2>&1
+
+say 'a target nobody set is brought into being with it'
+( declare -n s=nope; declare -i s; declare -p s nope ) 2>&1
+
+say 'n on the same line keeps the letters on the reference'
+( u=1; declare -rn s=u; declare -p s u ) 2>&1
+( v=1; declare -rn r=v; declare -i r; printf 'st=%s\n' "$?"; declare -p r v ) 2>&1
+
+say 'a fresh binding is a declaration of that binding'
+( u=1; declare -n s=u; f() { local -i s; declare -p s u; }; f; declare -p s u ) 2>&1
+( u=1; declare -n s=u; f() { declare -i s; declare -p s u; }; f; declare -p s u ) 2>&1
+( f() { local u=1; local -n s=u; local -i s; declare -p s u; }; f ) 2>&1
+( u=1; declare -n s=u; f() { declare -g -r s; }; f; declare -p s u ) 2>&1
+
+say 'and a re-aim is about the reference rather than about its target'
+( u=1; w=2; declare -n s=u; declare -n s=w; declare -p s u w ) 2>&1
+( u=1; w=2; declare -n s=u; declare -rn s=w; declare -p s u w ) 2>&1
+( u=1; declare -n s=u; declare -n s; declare -p s u ) 2>&1

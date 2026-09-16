@@ -227,6 +227,10 @@ func (c *Runner) ownTables(r *Runner) {
 	c.DynamicAssocs = maps.Clone(r.DynamicAssocs)
 	c.dynamicAssocElements = maps.Clone(r.dynamicAssocElements)
 	c.dynamicAssocWriters = maps.Clone(r.dynamicAssocWriters)
+	// And the emptying policy travels with the writer it is expressed
+	// through: a subshell that owned the writer while sharing this would
+	// decide by the parent's table which of its own writes clear first.
+	c.dynamicAssocEmptied = maps.Clone(r.dynamicAssocEmptied)
 	// And the array writer travels with DynamicArrays for the same reason
 	// the table above travels with DynamicAssocs.
 	c.dynamicArrayWriters = maps.Clone(r.dynamicArrayWriters)

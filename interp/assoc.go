@@ -578,14 +578,16 @@ func (r *Runner) tableBecomesAnIndexArray(name string, appendTo bool) bool {
 // dialect that reads a subscript as a key stores `a=([k]=v)` here, and it must
 // not expand the elements a second time to do so.
 func (r *Runner) assignAssocElems(name string, parsed []literalElem, appendTo bool) {
-	if _, produced := r.DynamicAssocs[name]; produced && !appendTo {
-		// Replacing a produced association wholesale would mean emptying
-		// something this shell does not store — every function at once, every
-		// option at once — and the stored table it would leave behind
-		// shadows the view for good. Refused by name; the element form
-		// beside it goes through the producer's own hook.
-		r.diagf("%s: assigning to the whole of a produced association is not implemented yet\n", name)
-		return
+	_, produced := r.DynamicAssocs[name]
+	if produced && !appendTo {
+		if _, writable := r.dynamicAssocWriters[name]; !writable {
+			// A produced association with no writer has nowhere for the
+			// elements to go, and the stored table a fallback would leave
+			// behind shadows the view for good. Refused by name; the
+			// element form beside it is refused by the same absence.
+			r.diagf("%s: assigning to the whole of a produced association is not implemented yet\n", name)
+			return
+		}
 	}
 	// Written to, so the name leaves the declared-only set. Here rather than
 	// only in setAssocElem below, because an empty literal — `m=()`, the very
@@ -596,7 +598,26 @@ func (r *Runner) assignAssocElems(name string, parsed []literalElem, appendTo bo
 	// answers to KeyedLiteralAppendJoinsTheReplacedValue needs and the clear
 	// is about to destroy it.
 	replaced := r.replacedElems(name, parsed, appendTo)
-	if !appendTo {
+	switch {
+	case appendTo:
+	case produced:
+		// The producer's own table is what a replacing assignment replaces,
+		// and only for the names whose shell empties it first — see
+		// SetDynamicAssocEmptiedByReplacement for why that is per-name and
+		// not a rule. Never the stored table: writing an empty one here
+		// would put a snapshot in front of the view, which is the failure
+		// SetDynamicAssocWriter exists to prevent.
+		//
+		// And only for a literal that names a key. `aliases=()` leaves every
+		// alias standing in zsh 5.9.2, as does `e=(); aliases=($e)` — the
+		// empty literal hands that shell's parameter no table at all and its
+		// set function returns before it clears anything. So the one shape
+		// that reads most like "empty this" is the one shape that does not,
+		// and it is measured rather than reasoned.
+		if r.dynamicAssocEmptied[name] && literalNamesAKey(parsed) {
+			r.emptyProducedAssoc(name)
+		}
+	default:
 		if r.AssocArrays == nil {
 			r.AssocArrays = map[string]AssocArray{}
 		}
@@ -629,6 +650,20 @@ func (r *Runner) assignAssocElems(name string, parsed []literalElem, appendTo bo
 		}
 		r.setAssocElem(name, pairs[i], value)
 	}
+}
+
+// literalNamesAKey reports whether a keyed literal has anything to store —
+// an element with a `[k]=` head, or a bare word to pair off. False for `m=()`
+// and for `m=($empty)` alike, which is the distinction the empty-literal
+// paragraph in assignAssocElems turns on: the second is empty after
+// expansion, not in the source, and both leave a produced table alone.
+func literalNamesAKey(parsed []literalElem) bool {
+	for _, e := range parsed {
+		if e.subscripted || len(e.fields) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // replacedElems is what the append elements of a *replacing* keyed literal
@@ -759,6 +794,67 @@ func (r *Runner) SetDynamicAssocWriter(name string, write func(r *Runner, key, v
 		r.dynamicAssocWriters = map[string]func(*Runner, string, string, bool){}
 	}
 	r.dynamicAssocWriters[name] = write
+}
+
+// SetDynamicAssocEmptiedByReplacement says that a *replacing* whole-table
+// assignment to this produced association — `m=(k v)`, `m=([k]=v)` — empties
+// the table it views before the literal's own keys go in, rather than merging
+// into it.
+//
+// Per-name rather than a rule, because the shells do not agree with
+// themselves about it. Measured on zsh 5.9.2 and bash 5.3.20, 2026-09-16, by
+// writing one key the ordinary way, replacing the table with a literal naming
+// a *different* key, and asking for the first one back:
+//
+//	$commands       kept       $aliases    emptied
+//	$functions      kept       $galiases   emptied
+//	$options        kept       $saliases   emptied
+//	$mapfile        kept       $nameddirs  emptied
+//	BASH_CMDS       kept
+//	BASH_ALIASES    kept
+//
+// A probe that replaced the table with a literal naming the *same* key could
+// not have told the two apart, which is why the measurement uses two.
+//
+// The emptying goes through the writer, one `set` false per key the view
+// currently lists, so a name registered here needs a writer whose unset
+// actually removes the entry — see emptyProducedAssoc.
+func (r *Runner) SetDynamicAssocEmptiedByReplacement(name string) {
+	if r.dynamicAssocEmptied == nil {
+		r.dynamicAssocEmptied = map[string]bool{}
+	}
+	r.dynamicAssocEmptied[name] = true
+}
+
+// emptyProducedAssoc removes every key the view currently lists, through the
+// producer's own writer.
+//
+// Through the writer rather than by reaching into whatever the producer reads
+// from, because the writer is the one place that knows what removing an entry
+// *means* for this name: an alias leaves the alias table, a named directory
+// leaves the named-directory table, and neither is a map interp could clear
+// on the dialect's behalf without knowing which.
+//
+// Sorted, so a writer with a visible order — a diagnostic, a trace — writes
+// the same sequence twice for the same table.
+func (r *Runner) emptyProducedAssoc(name string) {
+	write, ok := r.dynamicAssocWriters[name]
+	if !ok {
+		return
+	}
+	produce, ok := r.DynamicAssocs[name]
+	if !ok {
+		return
+	}
+	table := produce(r)
+	keys := make([]string, 0, len(table))
+	for key := range table {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		write(r, key, "", false)
+	}
 }
 
 // SetDynamicAssocElement says how a produced association answers *one* key,

@@ -350,18 +350,26 @@ echo "n=${#commands} v=[${(o)commands}]"`)
 }
 
 // A produced association is never replaced by a stored one, whichever route
-// the write comes by. Both of these would otherwise put an empty table in
+// the write comes by. Either of these would otherwise put an empty table in
 // front of the producer, and every read afterwards would be a plausible answer
 // about a shell that had stopped being watched.
+//
+// The whole-table assignment used to be refused here for exactly that fear,
+// and the refusal was the wrong half to keep: measured on zsh 5.9.2, the same
+// five lines answer `whole=0 [\t:] n=2` and `other` then runs. So the write
+// goes through the producer's own writer, one key at a time, and `f` survives
+// it — which is the no-shadowing property this test is about, now shown by a
+// table that grew rather than by one that refused to.
 func TestAProducedAssociationCannotBeShadowed(t *testing.T) {
 	out, st := runZsh(t, t.TempDir(), `f(){ :; }
 typeset -A functions
 echo "declared=[${functions[f]:-ABSENT}] n=${#functions}"
 functions=(other "echo x") 2>&1
-echo "whole=$? [${functions[f]:-ABSENT}] n=${#functions}"`)
+echo "whole=$? [${functions[f]:-ABSENT}] n=${#functions}"
+other`)
 	want := "declared=[\t:] n=1\n" +
-		"zsh:4: functions: assigning to the whole of a produced association is not implemented yet\n" +
-		"whole=0 [\t:] n=1\n"
+		"whole=0 [\t:] n=2\n" +
+		"x\n"
 	if out != want || st != 0 {
 		t.Errorf("shadowing attempts = %q (status %d), want %q", out, st, want)
 	}
@@ -1129,18 +1137,160 @@ func TestTheNamedDirectoryParameterIsAViewOfTheTable(t *testing.T) {
 		{"and the parameter writes it", `nameddirs[x]=/tmp; print -r -- ~x`, "/tmp\n"},
 		{"which the builtin then lists", `nameddirs[x]=/tmp; hash -d`, "x=/tmp\n"},
 		{"the keys are the names", `hash -d b=/b a=/a; print -r -- ${(k)nameddirs}`, "a b\n"},
-		// An element unset leaves the entry, which is zsh's effect: it
-		// refuses the subscript and changes nothing.
+		// An element unset *removes* the entry, measured on zsh 5.9.2 and on
+		// zsh 5.9 alike. This row used to want `n=1` on the reading that zsh
+		// refuses the subscript and changes nothing — and the `2>/dev/null`
+		// it kept is the tell, because a probe that throws the diagnostic
+		// away cannot see that there was never one to throw. zsh is silent
+		// here at status 0 and the entry is gone; the shell was accepting the
+		// unset and leaving `~a` pointing at `/tmp`, which is #3092's silent
+		// wrong answer one name over.
 		{
-			"an element unset leaves it alone",
-			`hash -d a=/tmp; unset "nameddirs[a]" 2>/dev/null; print -r -- "n=${#nameddirs}"`,
-			"n=1\n",
+			"an element unset removes it",
+			`hash -d a=/tmp; unset "nameddirs[a]"; print -r -- "n=${#nameddirs}"`,
+			"n=0\n",
+		},
+		{
+			"and the builtin no longer lists it",
+			`hash -d a=/tmp b=/b; unset "nameddirs[a]"; hash -d`,
+			"b=/b\n",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, st := runZsh(t, t.TempDir(), tc.src)
 			if out != tc.want || st != 0 {
 				t.Errorf("%s = %q (status %d), want %q", tc.src, out, st, tc.want)
+			}
+		})
+	}
+}
+
+// A *whole-table* assignment to a produced association is the write #3092 was
+// filed about. It used to be refused by name and the status stayed 0, so a
+// script that rewired a command read back the PATH search and was told
+// nothing had gone wrong.
+//
+// Measured on zsh 5.9.2, 2026-09-16, and every row uses **two different
+// keys**: one written the ordinary way, then a literal naming another, then
+// the first asked for again. A literal naming the key the table already holds
+// would give the same output whether the table was emptied first or merged
+// into, so that probe cannot tell the two answers apart — and which of them
+// each name gives is the only thing this test is about.
+func TestAWholeTableAssignmentReachesTheProducer(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		// The four that merge. The first key survives.
+		{
+			"commands keeps what was there",
+			`commands[cA]=/bin/echo
+commands=(cB /bin/echo)
+print -r -- "st=$? A=[$commands[cA]] B=[$commands[cB]]"`,
+			"st=0 A=[/bin/echo] B=[/bin/echo]\n",
+		},
+		{
+			// And the write is a real binding rather than a table entry: the
+			// name is not on PATH, so a shell that stored the pair and looked
+			// the word up afresh would answer `command not found`.
+			"and the command it bound runs",
+			`commands=(cB /bin/echo)
+cB ran`,
+			"ran\n",
+		},
+		{
+			"functions keeps what was there",
+			`fA() { print A }
+functions=(fB "print B")
+print -r -- "st=$?"
+fA
+fB`,
+			"st=0\nA\nB\n",
+		},
+		{
+			"and the keyed spelling of the literal reaches it too",
+			`functions=([fC]="print C")
+fC`,
+			"C\n",
+		},
+		{
+			"options keeps what was there",
+			`setopt extendedglob
+options=(nomatch on)
+print -r -- "st=$? eg=[$options[extendedglob]] nm=[$options[nomatch]]"`,
+			"st=0 eg=[on] nm=[on]\n",
+		},
+		// The four that empty the table first. The first key is gone.
+		{
+			"aliases empties first",
+			`alias aA=x
+aliases=(aB y)
+print -r -- "st=$? A=[$aliases[aA]] B=[$aliases[aB]]"`,
+			"st=0 A=[] B=[y]\n",
+		},
+		{
+			"galiases empties first",
+			`alias -g gA=x
+galiases=(gB y)
+print -r -- "st=$? A=[$galiases[gA]] B=[$galiases[gB]]"`,
+			"st=0 A=[] B=[y]\n",
+		},
+		{
+			"saliases empties first",
+			`alias -s sA=x
+saliases=(sB y)
+print -r -- "st=$? A=[$saliases[sA]] B=[$saliases[sB]]"`,
+			"st=0 A=[] B=[y]\n",
+		},
+		{
+			"nameddirs empties first",
+			`hash -d dA=/tmp
+nameddirs=(dB /usr)
+print -r -- "st=$? A=[$nameddirs[dA]] B=[$nameddirs[dB]]"`,
+			"st=0 A=[] B=[/usr]\n",
+		},
+		// Emptying one kind of alias is not emptying the others: the three
+		// parameters are three namespaces, and a clear that reached the
+		// shared table would take the regular alias with it.
+		{
+			"and only its own namespace",
+			`alias rA=x
+alias -g gA=y
+galiases=(gB z)
+print -r -- "r=[$aliases[rA]] g=[$galiases[gA]] new=[$galiases[gB]]"`,
+			"r=[x] g=[] new=[z]\n",
+		},
+		// The shape that reads most like "clear this" clears nothing. zsh's
+		// parameter is handed no table at all by an empty literal and its set
+		// function returns before touching anything — so this row is measured
+		// rather than reasoned, and it is the one row that would have been
+		// wrong had the emptying been written as an obvious rule.
+		{
+			"an empty literal empties nothing",
+			`alias aA=x
+aliases=()
+print -r -- "st=$? A=[$aliases[aA]]"`,
+			"st=0 A=[x]\n",
+		},
+		{
+			"nor one that is empty only after expansion",
+			`alias aA=x
+e=()
+aliases=($e)
+print -r -- "st=$? A=[$aliases[aA]]"`,
+			"st=0 A=[x]\n",
+		},
+		// A readonly produced table still refuses, which is the other of
+		// zsh's two answers and the one that must not be lost to this: the
+		// write is stopped with a sentence and a status, not accepted.
+		{
+			"a readonly produced table still refuses",
+			`builtins=(b c) 2>&1
+print -r -- "st=$?"`,
+			"zsh:2: read-only variable: builtins\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, _ := runZsh(t, t.TempDir(), "zmodload zsh/parameter\n"+tc.src)
+			if out != tc.want {
+				t.Errorf("%s = %q, want %q", tc.src, out, tc.want)
 			}
 		})
 	}

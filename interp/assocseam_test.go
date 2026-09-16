@@ -713,3 +713,92 @@ func TestADenseArrayReadsTheSameUnderTheDenseShortcut(t *testing.T) {
 		t.Errorf("a dense array = %q, want %q", got, want)
 	}
 }
+
+// A *whole-table* literal goes through the same hook, one key at a time,
+// rather than being refused — which is what it used to be, at status 0, with
+// the diagnostic on stderr and nothing written. See #3092.
+//
+// `through:` on each value is what tells a write that reached the hook from
+// one that landed in a stored table: a stored table would hand the literal's
+// own bytes straight back.
+func TestAWholeTableLiteralGoesThroughTheWriter(t *testing.T) {
+	var out, errs strings.Builder
+	r := seamRunner(t, &out, &errs)
+	table := map[string]string{"a": "1"}
+	seamView(r, "view", table)
+	runSeam(t, r, `view=(b 2 c 3)
+printf '[%s][%s][%s]' "${view[a]}" "${view[b]}" "${view[c]}"`)
+	// `a` survives, because a produced association merges unless its dialect
+	// has said otherwise — see SetDynamicAssocEmptiedByReplacement.
+	if want := "[1][through:2][through:3]"; out.String() != want {
+		t.Errorf("a whole-table literal = %q, want %q", out.String(), want)
+	}
+	if errs.String() != "" {
+		t.Errorf("a whole-table literal wrote %q to stderr, want nothing", errs.String())
+	}
+}
+
+// And the name whose dialect *has* said otherwise empties the view first,
+// through the same hook's unset. Paired with the test above because the two
+// snippets are identical apart from the registration: a fix that emptied
+// everything, or nothing, would pass one of them and fail the other, where
+// either alone would read as correct.
+func TestAnEmptiedProducedAssociationLosesItsOldKeys(t *testing.T) {
+	var out, errs strings.Builder
+	r := seamRunner(t, &out, &errs)
+	table := map[string]string{"a": "1"}
+	seamView(r, "view", table)
+	r.SetDynamicAssocEmptiedByReplacement("view")
+	runSeam(t, r, `view=(b 2 c 3)
+printf '[%s][%s][%s]' "${view[a]}" "${view[b]}" "${view[c]}"`)
+	if want := "[][through:2][through:3]"; out.String() != want {
+		t.Errorf("a whole-table literal on an emptied view = %q, want %q", out.String(), want)
+	}
+	// The one shape that reads like "clear this" and does not: an empty
+	// literal hands the table nothing, so nothing is emptied. Measured on
+	// zsh — see the paragraph in assignAssocElems.
+	out.Reset()
+	runSeam(t, r, `view=()
+printf '[%s]' "${view[b]}"`)
+	if want := "[through:2]"; out.String() != want {
+		t.Errorf("an empty literal on an emptied view = %q, want %q", out.String(), want)
+	}
+}
+
+// A produced association with *no* writer is still refused by name. It has
+// nowhere for the elements to go, and a stored table left in front of the
+// producer is the shadowing the two tests above are about.
+func TestAWholeTableLiteralIsRefusedWithoutAWriter(t *testing.T) {
+	var out, errs strings.Builder
+	r := seamRunner(t, &out, &errs)
+	r.SetDynamicAssoc("view", func(*Runner) AssocArray { return AssocArray{"a": Scalar("1")} })
+	runSeam(t, r, `view=(b 2)
+printf '[%s][%s]' "${view[a]}" "${view[b]}"`)
+	if want := "[1][]"; out.String() != want {
+		t.Errorf("a whole-table literal with no writer = %q, want %q", out.String(), want)
+	}
+	if !strings.Contains(errs.String(), "not implemented yet") {
+		t.Errorf("a whole-table literal with no writer wrote %q to stderr, want the refusal", errs.String())
+	}
+}
+
+// seamView registers a produced association over a map the caller keeps, with
+// a writer that marks every value it stores. One registration for the three
+// tests above, because what separates them is which *policy* is registered
+// beside it and not how the view is built.
+func seamView(r *Runner, name string, table map[string]string) {
+	r.SetDynamicAssoc(name, func(*Runner) AssocArray {
+		copied := make(AssocArray, len(table))
+		for k, v := range table {
+			copied[k] = Scalar(v)
+		}
+		return copied
+	})
+	r.SetDynamicAssocWriter(name, func(_ *Runner, key, value string, set bool) {
+		if !set {
+			delete(table, key)
+			return
+		}
+		table[key] = "through:" + value
+	})
+}

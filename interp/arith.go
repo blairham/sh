@@ -2694,10 +2694,33 @@ func (r *Runner) arithTreeOver(tree syntax.ArithExpr, text string) (syntax.Arith
 	expanded := r.expandArithText(text)
 	p := syntax.NewParser("", r.dialect())
 	out := p.ParseArithFor(expanded, syntax.Pos{})
+	// The marks go no further than the reader they were put on for. Every
+	// caller of this uses the text it gets back to *show* something — a
+	// trace, a refusal, the value a reader stopped at — and a dialect
+	// without subscripts never scans one at all, so its expression keeps
+	// the marks all the way to the diagnostic: measured, our `dash` wrote a
+	// NUL either side of a value's quote into `arithmetic expression:
+	// expecting EOF`. See stripArithValueMarks.
+	shown := stripArithValueMarks(expanded)
 	if err := p.Err(); err != nil {
-		return nil, expanded, err
+		return nil, shown, unmarkArithFailure(err)
 	}
-	return out, expanded, nil
+	return out, shown, nil
+}
+
+// unmarkArithFailure is a parse failure worded about the text a script wrote
+// rather than the marked one it was read from: the error's extent and token
+// are slices of what the parser was handed. See stripArithValueMarks.
+func unmarkArithFailure(err error) error {
+	se, ok := err.(*syntax.Error)
+	if !ok {
+		return err
+	}
+	out := *se
+	out.Expr = stripArithValueMarks(out.Expr)
+	out.Token = stripArithValueMarks(out.Token)
+	out.Msg = stripArithValueMarks(out.Msg)
+	return &out
 }
 
 // arithPrecedenceOptionInCharge reports whether a dialect's run-time option is

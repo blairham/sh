@@ -428,7 +428,12 @@ func (r *Runner) condOperandText(w *syntax.Word) string {
 // what keeps the axis from being asked of `[[ n -eq 5 ]]`. See
 // Semantics.ConditionArithmeticReadsTheWrittenSubscript.
 func (r *Runner) conditionSubscriptText(marked, plain string) string {
-	if marked == plain {
+	// Nothing to read the two ways: with no bracket anywhere in the operand
+	// there is no subscript for a mark to change the extent of, and an
+	// operand whose quoted spans carried none of the bytes a scan reads is
+	// the same string either way. Both are the ordinary case, and neither
+	// demands a dialect for a question that has no operand to ask it about.
+	if marked == plain || !strings.Contains(plain, "[") {
 		return plain
 	}
 	if r.ask(r.sem().ConditionArithmeticReadsTheWrittenSubscript,
@@ -503,20 +508,6 @@ func (r *Runner) conditionOperand(text string) (value int, failure string) {
 		return 0, r.arithFailure(shown, err)
 	}
 	return v, ""
-}
-
-// unmarkArithFailure is a parse failure worded about the text a script wrote
-// rather than the marked one it was read from. See stripArithValueMarks.
-func unmarkArithFailure(err error) error {
-	se, ok := err.(*syntax.Error)
-	if !ok {
-		return err
-	}
-	out := *se
-	out.Expr = stripArithValueMarks(out.Expr)
-	out.Token = stripArithValueMarks(out.Token)
-	out.Msg = stripArithValueMarks(out.Msg)
-	return &out
 }
 
 // condArithFailed reports an unreadable condition operand and says how the

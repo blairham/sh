@@ -14181,6 +14181,12 @@ func PosixSemantics() Semantics {
 		// assign with and a leading `-` word is not one.
 		PrintfAssignsWithV:         No,
 		PrintfRejectsUnknownOption: Yes,
+		// POSIX defers the conversion specifications to the C `printf()`
+		// function, and C reads `#` off the *value*: the `0x` is written
+		// for a nonzero argument, and an octal's precision is raised until
+		// there is a leading zero however few digits the precision left. So
+		// the text answers this one and ksh93 is the departure.
+		PrintfAlternateFormAsksTheValue: Yes,
 		// POSIX shows the mask in a form that can be read back; three of the
 		// four write four octal digits.
 		UmaskPrintsFourDigits: Yes,

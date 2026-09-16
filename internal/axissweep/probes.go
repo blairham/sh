@@ -673,6 +673,30 @@ func Probes() []Probe {
 			},
 		},
 		{
+			Field: "PrintfAlternateFormAsksTheValue",
+			Cases: []string{"axis/printf-alternate-form-at-nought"},
+			// The row's **first** line, which carries both halves of the
+			// reading in one string: the hexadecimal says whether a `0x`
+			// goes in front of a nought, and the octal beside it is the
+			// control that keeps the line from being read as "this shell
+			// has no alternate form" — every column writes `[0]` there.
+			// The second line parts the two readings as well and is not
+			// what is read: its cells differ in a width as well as in a
+			// prefix, and a reading that counted spaces could not say which
+			// of the two it had seen.
+			Reading: "`printf '[%#x][%#X][%#o]' 0 0 0` is `[0][0][0]` where C's `#` is read off the value and `[0x0][0X0][0]` where the prefix follows the digits",
+			Read: func(cells map[string]oracle.Result) (string, string) {
+				first, _, _ := strings.Cut(cells["axis/printf-alternate-form-at-nought"].Stdout, "~")
+				switch first {
+				case "[0][0][0]":
+					return "Yes", ""
+				case "[0x0][0X0][0]":
+					return "No", ""
+				}
+				return "", "this column wrote neither form of the alternate prefix at a nought, so the row says nothing about which reading it has"
+			},
+		},
+		{
 			Field: "PrintfNumberOperand",
 			Cases: []string{"axis/printf-number-operand"},
 			// The row's **first** line, because one line carries all three

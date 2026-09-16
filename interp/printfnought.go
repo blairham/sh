@@ -40,7 +40,7 @@ import (
 // out below is a sign and digits and printfPadToWidth can place a `0` fill
 // without knowing about a prefix it will never see. Where the padding would
 // have to land inside a `0x` the answer is still `fmt`'s, which is a separate
-// question with a separate divergence of its own (#3057).
+// question with a separate divergence of its own (#3066).
 //
 // spec is the conversion as the caller will hand it to `fmt`: the unsigned
 // conversions have already had their sign flags taken out by
@@ -99,7 +99,7 @@ func (r *Runner) printfNoughtField(spec string, verb byte, n int64) (string, boo
 	// which is C and is unanimous on the panel: `printf '%+05.0d' 0` pads
 	// with blanks in six of the seven columns. ksh93 is the seventh and pads
 	// with zeros there whatever the precision says, which is a reading of its
-	// own and is filed rather than modeled (#3058).
+	// own and is filed rather than modeled (#3067).
 	zero := prec < 0 && strings.ContainsRune(flags, '0')
 	return printfPadToWidth(sign+prefix+digits, width,
 		strings.ContainsRune(flags, '-'), zero), true

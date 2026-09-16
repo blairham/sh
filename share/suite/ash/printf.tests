@@ -1,0 +1,25 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# BusyBox ash and C's `#` at a value of nought.
+#
+# It is here rather than in core/ for one reason: ksh93 parts from every
+# other shell on these spellings, so the tier that has to agree in all five
+# columns cannot hold them. musl's formatter reads the alternate form off the
+# *value* exactly as the BSD columns do — the `0x` goes on a nonzero one, and
+# an octal's precision is raised until there is a leading zero even where the
+# precision had erased every digit — so this file is the fifth column of a
+# reading the bash, zsh and dash files already carry.
+
+printf 'a hexadecimal nought [%#x] [%#X]\n' 0 0
+printf 'through a precision [%#.2x] and a width [%#5x]\n' 0 0
+printf 'and a zero fill [%#05x]\n' 0
+printf 'an octal with nothing left [%#.0o] [%#5.0o]\n' 0 0
+
+# The controls. `%#.0x` is where the two readings agree — no nonzero value
+# and no digit for a prefix to stand in front of — `%#o` of nought is the
+# octal already leading with its own zero, and the nonzero forms are the
+# ordinary alternate form every shell writes the same way.
+printf 'no value and no digits [%#.0x]\n' 0
+printf 'an octal nought [%#o]\n' 0
+printf 'nonzero [%#x] [%#o]\n' 255 255

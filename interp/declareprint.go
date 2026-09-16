@@ -457,9 +457,19 @@ func (r *Runner) declarableNames() []string {
 	}
 	for name := range r.declaredBare {
 		// A name with no value and no attribute is in none of the tables
-		// above, so the bare listing reaches it only from here. The dialect
-		// that does not keep the record has an empty map and adds nothing.
-		seen[name] = true
+		// above, so the bare listing reaches it only from here.
+		//
+		// Asked rather than added, which is not the economy it looks like:
+		// the record is kept for every dialect, so a dialect whose listing
+		// has no row for it would collect the name here, find nothing in
+		// declarationOf, and reach the *missing name* path — which is a
+		// second axis, unanswered in the two dialects that have no
+		// declaration listing at all. Measured: `f(){ local x; export -p;
+		// }` in the dash dialect complained about a name nobody had asked
+		// about.
+		if r.bareDeclarationListed(name) {
+			seen[name] = true
+		}
 	}
 	for name, on := range r.compoundVariable {
 		if on {

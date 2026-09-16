@@ -55,7 +55,20 @@ func (r *Runner) recordBareDeclaration(name string) {
 }
 
 // bareDeclarationListed reports whether the listing has such a record to write
-// for this name. It is the only reader.
+// for this name. It is the only reader, and so it is where the axis is asked.
+//
+// Not where the record is *made*, and that is the placement rather than an
+// accident of it. A declaration with no value and no letters is a line every
+// dialect runs — `local u` is in dash and in BusyBox ash as much as in
+// bash — and an axis asked there would be an axis four dialects have to
+// answer before they can run a script that says it. Where the panel actually
+// disagrees is one step later, over what a listing does with the name, and
+// a dialect with no declaration listing never arrives.
+//
+// The `&&` is load-bearing: the ask only happens for a name that has such a
+// record, so a dialect that never makes one is never asked.
 func (r *Runner) bareDeclarationListed(name string) bool {
-	return r.declaredBare[name]
+	return r.declaredBare[name] &&
+		r.ask(r.sem().ValuelessDeclarationRecordsTheName,
+			"what a listing does with a name declared with neither a value nor an attribute")
 }

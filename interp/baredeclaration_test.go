@@ -145,3 +145,27 @@ typeset -p | while read -r line; do case $line in *walked*) echo "row=$line";; e
 		t.Errorf("= %q (stderr %q, status %d), want %q", out, errs, st, want)
 	}
 }
+
+// The walk the bare listing makes is asked the axis too, and that is not a
+// tidiness: the record is kept for every dialect, so a dialect whose listing
+// has no row for such a name would collect it, find nothing to say about it,
+// and reach the *missing name* path — a second axis, and one the dialects
+// with no declaration listing do not answer. It showed as a complaint about
+// a name nobody had asked about, from an `export -p` in a function that had
+// declared a local.
+func TestTheBareListingWalkSkipsTheRecordTheDialectDoesNotKeep(t *testing.T) {
+	src := `typeset skipped
+typeset -p | while read -r line; do case $line in *skipped*) echo "row=$line";; esac; done
+echo "end=$?"`
+	out, errs, st := declRun(t, src, func(s *Semantics) {
+		withBareRecord(No)(s)
+		// The axis the walk would otherwise reach, left unanswered exactly
+		// as the two dialects without a declaration listing leave it: if
+		// the name gets into the walk, this is what says so.
+		s.DeclarePrintReportsAMissingName = Unspecified
+	}, Diagnostics{})
+	const want = "end=0\n"
+	if out != want || errs != "" || st != 0 {
+		t.Errorf("= %q (stderr %q, status %d), want %q", out, errs, st, want)
+	}
+}

@@ -924,7 +924,7 @@ scan:
 		// makes the whole expansion a bad substitution in the four grammars
 		// that call it one.
 		for strings.HasPrefix(s, "[") {
-			i := closingBracket(s)
+			i := closingBracket(s, p.dialect.SubscriptQuoteProtectsTheClosingBracket)
 			if i <= 0 {
 				break
 			}
@@ -1446,10 +1446,69 @@ func scanParamName(s string, dot bool) (name, rest string) {
 // it went unnoticed until a real script used the nested form.
 //
 // Depth counting, because a subscript may itself hold one: `${a[b[0]]}`.
-func closingBracket(s string) int {
+//
+// Quoting is stepped over where the dialect says it protects the bracket, so
+// `${m['a]b']}` reads the key back that `m['a]b']=v` wrote — the write side
+// has always quoted, being the lexer's word boundary, and the read side is a
+// different scanner that used to stop at the quoted `]` and hand the rest to
+// the operator scan, which called the whole expansion a bad substitution. See
+// Dialect.SubscriptQuoteProtectsTheClosingBracket for which constructs each
+// dialect counts.
+//
+// An unterminated quote returns -1, the same as an unclosed bracket: there is
+// no closing `]` in what is left, and the caller's answer to that is already
+// to leave the brackets alone.
+func closingBracket(s string, quoting SubscriptQuoting) int {
 	depth := 0
 	for i := 0; i < len(s); i++ {
 		switch s[i] {
+		case '\\':
+			if quoting.Has(SubscriptBackslashQuotes) {
+				if i+1 >= len(s) {
+					return -1
+				}
+				i++
+			}
+		case '\'':
+			if quoting.Has(SubscriptSingleQuotes) {
+				end := strings.IndexByte(s[i+1:], '\'')
+				if end < 0 {
+					return -1
+				}
+				i += end + 1
+			}
+		case '"':
+			if quoting.Has(SubscriptDoubleQuotes) {
+				end := closingDoubleQuote(s[i+1:])
+				if end < 0 {
+					return -1
+				}
+				i += end + 1
+			}
+		case '$':
+			// `$'…'` is one construct and not a `$` beside a quote, and only
+			// the dialect that steps over it reads the escapes in it.
+			//
+			// Where the dialect does not, this scan still steps over the
+			// quoted run, because the `'` behind the `$` is the single quote
+			// the case above handles and refusing to see it would take
+			// `${a[$'k']}` — the ordinary spelling, with no `]` in it —
+			// away from every dialect that has `$'…'` at all. What that
+			// costs is one measured cell, recorded rather than modeled: bash
+			// decodes the escapes *before* it looks for the bracket, so a
+			// `]` written inside `$'…'` ends the subscript there and
+			// `${a[$'x]y']}` is a bad substitution against `${a[x]y]}` with
+			// the quoting already gone, where this scan reads the whole run.
+			// Both answers disagree with the key the assignment wrote, and
+			// the disagreement is the same size before and after this scan
+			// learned to quote.
+			if quoting.Has(SubscriptDollarSingleQuotes) && i+1 < len(s) && s[i+1] == '\'' {
+				end := closingSingleQuoteAfterEscapes(s[i+2:])
+				if end < 0 {
+					return -1
+				}
+				i += end + 2
+			}
 		case '[':
 			depth++
 		case ']':
@@ -1457,6 +1516,34 @@ func closingBracket(s string) int {
 			if depth == 0 {
 				return i
 			}
+		}
+	}
+	return -1
+}
+
+// closingDoubleQuote is the index of the `"` that ends a run s begins inside,
+// with a backslash quoting the byte behind it, or -1.
+func closingDoubleQuote(s string) int {
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '\\':
+			i++
+		case '"':
+			return i
+		}
+	}
+	return -1
+}
+
+// closingSingleQuoteAfterEscapes is the index of the `'` that ends a `$'…'`
+// run s begins inside, where a backslash quotes the byte behind it, or -1.
+func closingSingleQuoteAfterEscapes(s string) int {
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '\\':
+			i++
+		case '\'':
+			return i
 		}
 	}
 	return -1

@@ -109,6 +109,16 @@ func Dialect() syntax.Dialect {
 	// and the zero value is what says so. See
 	// syntax.Dialect.QuoteProtectsTheClosingBraceInPosixMode (#2604).
 	d.QuoteProtectsTheClosingBraceInPosixMode = syntax.BraceQuoteMovesToAPatternOnly
+	// A backslash and both quotes hold a `]` back from ending a `${a[ … ]}`
+	// subscript, so `${m['a]b']}` reads back the key `m['a]b']=v` wrote.
+	// `$'…'` does not, and that is the one cell where this shell and ksh93
+	// part. Measured 2026-09-15 on 5.3.20 with `a=(9 8 7); echo
+	// "[${a['0]'+1]}]"`: an arithmetic error naming `'0]'+1` where the quote
+	// protects, and the text `[1]]` — the `+` read as the alternate-value
+	// operator — where it does not. Unmoved by `--posix` and by the name
+	// `sh`. See Dialect.SubscriptQuoteProtectsTheClosingBracket (#2299).
+	d.SubscriptQuoteProtectsTheClosingBracket = syntax.SubscriptBackslashQuotes |
+		syntax.SubscriptSingleQuotes | syntax.SubscriptDoubleQuotes
 	// A syntax error between a compound assignment's parentheses ends that
 	// line and not the file: `a=(p & q)` is reported, the line is thrown away
 	// unrun, and the next one runs. bash 3.2 answers the same; `sh`, zsh,

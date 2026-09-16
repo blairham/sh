@@ -1132,12 +1132,52 @@ diagnostic any below-base subscript gets; the divergence is recorded
 rather than modeled, because none of it is behavior a script can rely on
 across shells.
 
+## Where a subscript *ends* — which quoting protects the bracket
+
+The bracket was said here to parse the same way in every shell that has
+subscripts at all, and it does not: a `]` written inside a quoted run ends
+the subscript in some columns and not in others. Measured 2026-09-15 with
+`a=(9 8 7); echo "[${a[<q>0]<q>+1]}]"`, where `<q>` is the quoting under
+test. Where the quote protects, the subscript is the whole of `0]+1` and
+the shell reports an arithmetic error naming it; where it does not, the
+subscript ends at the quoted `]`, the `+` behind it is read as the
+alternate-value operator, and the expansion is the text `1]` — the answer
+`[1]]`, with nothing reported.
+
+| quoting | bash 5.3 | bash-as-sh | bash 3.2 | ksh93 | zsh | dash |
+| --- | --- | --- | --- | --- | --- | --- |
+| `\]` | protects | protects | no | protects | protects | no subscripts |
+| `'…]…'` | protects | protects | no | protects | no | no subscripts |
+| `"…]…"` | protects | protects | no | protects | no | no subscripts |
+| `$'…]…'` | no | no | no | protects | no | no subscripts |
+
+`syntax.Dialect.SubscriptQuoteProtectsTheClosingBracket` is the flag, a set
+rather than an ordered policy because the rows do not nest. POSIX mode does
+not move it — `--posix` and the name `sh` both answer with the bash row —
+which is what makes it one field where the closing *brace*'s axis needed
+two.
+
+Two boundaries are not this flag's. The **write** side has always quoted, in
+every column that has arrays: `m['a]b']=v` stores the key `a]b`, which is the
+lexer's word boundary and is `SubscriptSpansSeparators`. And whether the
+quote's own bytes then reach the subscript is a *separate* question: bash
+keeps a single quote's, so `${a['0]'+1]}` is an arithmetic error against
+`'0]'+1` with the quotes still in it, and removes a double quote's, reporting
+`0]+1`; ksh93 removes both. This flag decides only where the subscript ends.
+
+bash's `$'…]…'` cell is measured and not modeled. bash decodes the escapes
+before it looks for the bracket, so the `]` inside is a bare one by the time
+the scan runs and `${a[$'x]y']}` is a bad substitution quoting back
+`${a[x]y]}` with the quoting already gone. This parser reads the run whole,
+which keeps the ordinary `${a[$'k']}` working in every dialect that has the
+construct.
+
 ## What a subscript *means* — three readings that diverge
 
-The bracket parses the same way in every shell that has subscripts at
-all. What is inside it does not mean the same thing, and the three
-divergences below are all one evaluator. Measured 2026-09-05 on zsh
-5.9.2, bash 5.3.15, bash 3.2.57, bash as `sh`, ksh93 and dash.
+What is inside the bracket does not mean the same thing in every shell
+either, and the three divergences below are all one evaluator. Measured
+2026-09-05 on zsh 5.9.2, bash 5.3.15, bash 3.2.57, bash as `sh`, ksh93 and
+dash.
 
 ### A comma: a range, or the arithmetic operator
 

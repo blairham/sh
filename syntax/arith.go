@@ -1617,7 +1617,7 @@ func (a *arithParser) charCode(start Pos) ArithExpr {
 		}
 		n.Name = a.src[begin:a.off]
 		if a.off < len(a.src) && a.src[a.off] == '[' {
-			if end := closingBracket(a.src[a.off:]); end > 0 {
+			if end := closingBracket(a.src[a.off:], a.p.dialect.SubscriptQuoteProtectsTheClosingBracket); end > 0 {
 				a.off += end + 1
 				n.Subscripted = true
 			}

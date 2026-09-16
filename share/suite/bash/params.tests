@@ -83,3 +83,19 @@ printf '%s\n' "${!ref}"
 unset u
 printf '[%s]\n' "${u-'}'}"
 printf '[%s]\n' "${u-'x'}"
+
+# And the same question put to a *subscript*: which quoting holds a `]` back
+# from ending it. bash takes both quotes as well as the backslash, so a key
+# with a bracket in it can be read back the way it was written. zsh takes only
+# the backslash — it stops at the bracket inside the quotes and reports a math
+# error — which is what puts the quoted spellings here rather than in
+# ext/arrays.tests, where the backslash form is asked for all three.
+declare -A b
+b['x]y']=plain
+printf 'single=[%s] double=[%s]\n' "${b['x]y']}" "${b["x]y"]}"
+printf 'count=%s\n' "${#b[@]}"
+
+# The same protection in a length and in a default, so it is the scan that
+# learned to quote rather than one operator's reading of it.
+printf 'length=%s\n' "${#b['x]y']}"
+printf 'absent default=[%s]\n' "${b['no]such']-fallback}"

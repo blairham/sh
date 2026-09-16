@@ -4037,6 +4037,53 @@ type Dialect struct {
 	// no-array dialect on purpose is told it is portable when it is not.
 	ArraySubscript bool
 
+	// SubscriptQuoteProtectsTheClosingBracket says which quoting constructs
+	// written inside a `${name[ … ]}` subscript hold a `]` back from ending
+	// it, so that the subscript runs to the bracket *after* the quoted text.
+	//
+	// The read side only. The write side is already the lexer's and is
+	// already unanimous — see SubscriptSpansSeparators, whose measured table
+	// ends on `m['a]b']=v`, the key `a]b` in every column that has arrays.
+	// Reading `${m['a]b']}` back is the same question put to a different
+	// scanner, and the panel does not answer it the same way, which is why
+	// it is a field rather than a constant.
+	//
+	// Measured 2026-09-15 with an indexed array, so that the answer is a
+	// *diagnostic* rather than a value and the two readings cannot be
+	// confused. `a=(9 8 7); echo "[${a[<q>0]<q>+1]}]"`, where <q> is the
+	// quoting under test: where the quote protects, the subscript is the
+	// whole of `0]+1` and the shell reports an arithmetic error naming it;
+	// where it does not, the subscript ends at the quoted `]`, the `+` that
+	// follows is read as the alternate-value operator and the expansion is
+	// the text `1]` — the answer `[1]]`, with nothing reported.
+	//
+	//	                      \]      '…]…'   "…]…"   $'…]…'
+	//	bash 5.3.20           yes     yes     yes     no
+	//	bash 5.3.20 as sh     yes     yes     yes     no
+	//	bash 3.2.57           no      no      no      no
+	//	ksh93u+ 2012          yes     yes     yes     yes
+	//	zsh 5.9.2             yes     no      no      no
+	//	dash, BusyBox ash     no subscripts at all, so the question is never put
+	//
+	// POSIX mode does not move it: `--posix` and the name `sh` both answer
+	// with the bash row above, measured the same day. That is why there is no
+	// companion field here, where QuoteProtectsTheClosingBrace needed one.
+	//
+	// The `$'…'` column is measured and *not* modeled, and the reason is in
+	// closingBracket: bash decodes the escapes before it looks for the
+	// bracket, so a `]` inside `$'…'` is a bare one by the time the scan
+	// runs. Reading the run whole, as this scan does, keeps the ordinary
+	// `${a[$'k']}` working in every dialect that has the construct and
+	// leaves `${a[$'x]y']}` disagreeing with bash — in a different word, at
+	// the same size, as it did before any of this quoted anything.
+	//
+	// Whether the quote's own bytes then reach the subscript is a *separate*
+	// question and is not this flag's: bash keeps a single quote's, so
+	// `${a['0]'+1]}` is an arithmetic error against `'0]'+1` with the quotes
+	// still in it, and removes a double quote's, reporting `0]+1`. ksh93
+	// removes both. This flag decides only where the subscript ends.
+	SubscriptQuoteProtectsTheClosingBracket SubscriptQuoting
+
 	// SubscriptSpansSeparators lets a subscript written at command-word
 	// position hold a separator: `m[foo bar]=v` assigns the element keyed
 	// `foo bar`, where a grammar without the flag ends the word at the blank
@@ -5104,6 +5151,60 @@ func (p ArithDoubleQuotePolicy) String() string {
 		return "removed"
 	}
 	return "refused"
+}
+
+// SubscriptQuoting is the set of quoting constructs that hold a `]` back from
+// ending a `${name[ … ]}` subscript.
+//
+// A set rather than an ordered policy, because the panel does not nest: bash
+// takes the backslash and both quotes and leaves `$'…'` out, zsh takes the
+// backslash alone, and ksh93 takes all four. See
+// Dialect.SubscriptQuoteProtectsTheClosingBracket for the measurement.
+type SubscriptQuoting uint8
+
+const (
+	// SubscriptBackslashQuotes reads `\]` as the character and not as the end
+	// of the subscript. bash 5.3, ksh93 and zsh.
+	SubscriptBackslashQuotes SubscriptQuoting = 1 << iota
+	// SubscriptSingleQuotes reads `'…'` as a quoted run. bash 5.3 and ksh93;
+	// not zsh, where `${a['0]'+1]}` stops at the quoted bracket and reports a
+	// math error against `'0`.
+	SubscriptSingleQuotes
+	// SubscriptDoubleQuotes reads `"…"` as a quoted run, with a backslash
+	// inside it quoting the next byte. bash 5.3 and ksh93.
+	SubscriptDoubleQuotes
+	// SubscriptDollarSingleQuotes reads `$'…'` as a quoted run. ksh93 alone —
+	// bash 5.3 stops at the bracket inside it, which is the one cell where
+	// bash and ksh93 part.
+	SubscriptDollarSingleQuotes
+)
+
+// Has says q holds the given construct.
+func (q SubscriptQuoting) Has(c SubscriptQuoting) bool { return q&c != 0 }
+
+func (q SubscriptQuoting) String() string {
+	if q == 0 {
+		return "nothing"
+	}
+	out := ""
+	for _, c := range []struct {
+		bit  SubscriptQuoting
+		name string
+	}{
+		{SubscriptBackslashQuotes, `\`},
+		{SubscriptSingleQuotes, `'`},
+		{SubscriptDoubleQuotes, `"`},
+		{SubscriptDollarSingleQuotes, `$'`},
+	} {
+		if !q.Has(c.bit) {
+			continue
+		}
+		if out != "" {
+			out += " "
+		}
+		out += c.name
+	}
+	return out
 }
 
 // BraceQuotePolicy is what a single quote written inside a double-quoted

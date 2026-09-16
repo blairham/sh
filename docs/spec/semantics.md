@@ -16136,6 +16136,36 @@ shift. ksh93 says yes and refuses; zsh says no and truncates. It does
 not arise in a shell without floats, which is why bash and dash leave it
 unanswered.
 
+**`Dialect.ArithHexFloat`** — a grammar flag, ksh93 alone
+
+C's hexadecimal spelling of a float inside `$(( ))`: a hexadecimal
+literal carrying a point or a `p` exponent is a float, and the exponent
+is a power of two. Measured 2026-09-16 against AT&T ksh93u+ 2012-08-01;
+bash 5.3, bash 3.2, bash-as-`sh`, zsh 5.9.2, dash 0.5.12 and BusyBox ash
+1.37.0 refuse every row of it.
+
+    0x1p4      16      0x1.8p1    3       0x1e5    485
+    0x1P4      16      0x1.8      1.5     16#1p4   refused
+    0x1p-1     0.5     0x1.p1     2       0x.8p1   refused
+    0x1p+2     4       0x1.8p     1.5     0xp4     refused
+    0xffp0     255     0x1p       1       0x1p+    1
+
+Three of those are the whole reason it is not a two-line reader. `0x1e5`
+is the integer 485: `e` is a hexadecimal digit and only a point or a `p`
+makes the literal a float. The exponent's digits may be *missing* where
+the letter is present — `0x1p`, `0x1p+` and `0x1p-` are all 1 — which is
+the opposite of the decimal rule, where `1e` ends the numeral at the
+`1`. And the two refusals are about a missing mantissa digit rather than
+a missing exponent.
+
+A grammar flag rather than an axis for the reason `ArithFloat` and
+`ArithBinaryLiteral` are: the question is whether the dialect has the
+literal at all, and the reader and the evaluator must not be able to
+disagree about it. Both halves are needed — the digit run already takes
+`p` as a hexadecimal digit, so the lexer's work is the point and the
+exponent's *sign*, without which `$(( 0x1p-1 ))` parses as `0x1p` minus
+one and answers 0.
+
 **`ArithValuesAreCarriedInADouble`** — bash no · dash no · ksh93 yes · zsh no
 
 Keeps every arithmetic value in a C double rather than in the machine

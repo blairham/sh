@@ -77,3 +77,58 @@ func TestANumeralPastTheWordIsTheDouble(t *testing.T) {
 		}
 	}
 }
+
+// TestAHexadecimalFloatIsRead pins syntax.Dialect.ArithHexFloat end to end,
+// which the suite file cannot do alone: two of its rows are refusals, and a
+// refusal in a suite case ends the script.
+//
+// Measured 2026-09-16 against AT&T ksh93u+ 2012-08-01. Each row fails under a
+// reader written to the decimal float's rules instead.
+func TestAHexadecimalFloatIsRead(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{"0x1p4", "16"},
+		{"0x1P4", "16"},
+		{"0x1p-1", "0.5"},
+		{"0x1P-2", "0.25"},
+		{"0x1p+2", "4"},
+		{"0xffp0", "255"},
+		{"0x1.8p1", "3"},
+		{"0x1.8", "1.5"},
+		{"0x1.p1", "2"},
+		{"0x1.8p", "1.5"},
+		{"0x0p0", "0"},
+		{"-0x1p4", "-16"},
+		// `e` is a hexadecimal digit, so these stay integers.
+		{"0x1e5", "485"},
+		{"0x1E5", "485"},
+		{"0xff", "255"},
+		// The exponent's digits may be missing where the letter is not.
+		{"0x1p", "1"},
+		{"0x1p+", "1"},
+		{"0x1p-", "1"},
+		// And the numeral still ends where an operator begins.
+		{"0x1+1", "2"},
+		{"0x1-1", "0"},
+		{"0xf-1", "14"},
+		{"0xff+1", "256"},
+		// The decimal spelling is untouched by any of it.
+		{"1e5", "100000"},
+		{"1e-1", "0.1"},
+	} {
+		out, st := answersRun(t, `echo "$(( `+tc.src+` ))"`+"\n")
+		if st != 0 || strings.TrimSpace(out) != tc.want {
+			t.Errorf("$(( %s )): status %d, got %q, want %q", tc.src, st, strings.TrimSpace(out), tc.want)
+		}
+	}
+}
+
+// TestAHexadecimalFloatWantsAMantissaDigit is the other half: what ksh93
+// refuses, which is about a missing digit and not a missing exponent.
+func TestAHexadecimalFloatWantsAMantissaDigit(t *testing.T) {
+	for _, src := range []string{"0x.8p1", "0xp4", "16#1p4", "0x1p1p1"} {
+		out, st := answersRun(t, `echo "$(( `+src+` ))"`+"\n")
+		if st == 0 {
+			t.Errorf("$(( %s )): status 0 and output %q, want a refusal", src, out)
+		}
+	}
+}

@@ -156,3 +156,37 @@ printf 'a hexadecimal prefix with no digits: %s\n' "$?"
 notanumber=abc
 ( printf 'value [%s]\n' "$(( notanumber ))" ) 2>/dev/null
 printf 'a name holding letters: %s\n' "$?"
+
+# --- C's hexadecimal spelling of a float --------------------------------------
+#
+# A hexadecimal literal carrying a point or a `p` exponent is a float here, and
+# nowhere else on the panel: bash 5.3, bash 3.2, bash-as-sh, zsh 5.9.2, dash
+# and BusyBox ash refuse every shape of it, each in its own words. The exponent
+# is a power of *two*, which is what the letter changes.
+printf 'a binary exponent:    %s\n' "$(( 0x1p4 ))"
+printf 'either case of it:    %s\n' "$(( 0x1P4 ))"
+printf 'and a signed one:     %s\n' "$(( 0x1p-1 ))"
+printf 'a plus sign as well:  %s\n' "$(( 0x1p+2 ))"
+printf 'an exponent of zero:  %s\n' "$(( 0xffp0 ))"
+printf 'a point as well:      %s\n' "$(( 0x1.8p1 ))"
+printf 'or a point alone:     %s\n' "$(( 0x1.8 ))"
+printf 'with no digits after: %s\n' "$(( 0x1.p1 ))"
+
+# `e` is a hexadecimal *digit*, so the decimal spelling's exponent letter makes
+# no float of a hexadecimal literal. This is the row that says the reader knows
+# which letter it is looking at.
+printf 'an e is a digit here: %s\n' "$(( 0x1e5 ))"
+
+# The exponent's digits may be missing where the letter is there — the letter
+# is consumed and the exponent read as zero — which is the opposite of the
+# decimal rule, where `1e` ends the numeral at the `1`. Both spellings are
+# asked so that a reader written to one rule answers the other wrong.
+printf 'an exponent with no digits: %s\n' "$(( 0x1p ))"
+printf 'and with only a sign:       %s\n' "$(( 0x1p+ ))"
+
+# A mantissa with no digit of its own is refused, and that is about the digit
+# rather than the exponent: `0x.8p1` and `0xp4` both end the script.
+( printf 'value [%s]\n' "$(( 0x.8p1 ))" ) 2>/dev/null
+printf 'a point with no digit before it: %s\n' "$?"
+( printf 'value [%s]\n' "$(( 16#1p4 ))" ) 2>/dev/null
+printf 'and the base# spelling has none of this: %s\n' "$?"

@@ -1211,7 +1211,13 @@ func (a *arithParser) number(start Pos) ArithExpr {
 	for a.off < len(a.src) && isBaseDigit(a.src[a.off]) && !a.refusedOutright() {
 		a.off++
 	}
-	if a.dial.ArithFloat && !isBasedLiteral(a.src[begin:a.off]) {
+	if a.dial.ArithHexFloat && hexPrefixed(a.src[begin:a.off]) {
+		// A hexadecimal literal is not a based one for this dialect: it may
+		// carry a point and a signed `p` exponent, and neither the point nor
+		// the sign is a digit the run above would have taken. See
+		// hexFloatTail.
+		a.hexFloatTail(begin)
+	} else if a.dial.ArithFloat && !isBasedLiteral(a.src[begin:a.off]) {
 		a.floatTail(begin)
 	}
 	if a.off < len(a.src) && a.src[a.off] == '#' && a.dial.ArithExplicitBase {
@@ -1415,6 +1421,45 @@ func (a *arithParser) floatTail(begin int) {
 
 // decimalDigits consumes a run of decimal digits with the dialect's separators
 // among them.
+// hexPrefixed reports whether a literal states base sixteen with the `0x`
+// prefix — the only spelling the hexadecimal float has, since `16#1p4` is a
+// syntax error in the shell that reads `0x1p4`.
+func hexPrefixed(text string) bool {
+	return strings.HasPrefix(text, "0x") || strings.HasPrefix(text, "0X")
+}
+
+// hexFloatTail takes the part of a hexadecimal literal that makes it a float:
+// a point with its digits, and a `p` exponent.
+//
+// The exponent's digits may be missing where the letter is present — `0x1p`,
+// `0x1p+` and `0x1p-` are 1 in ksh93, so the letter and a sign are consumed
+// whether or not a digit follows. That is the opposite of the decimal
+// exponent's rule in floatTail, where `1e` ends the numeral at the `1`, and it
+// is measured rather than assumed: a reader that put the two the same way
+// answers `1-1` for `$(( 0x1p-1 ))` instead of 0.5.
+func (a *arithParser) hexFloatTail(begin int) {
+	if a.off < len(a.src) && a.src[a.off] == '.' {
+		a.off++
+		a.digitsIn(16)
+	}
+	switch {
+	case a.off < len(a.src) && (a.src[a.off] == 'p' || a.src[a.off] == 'P'):
+		a.off++
+	case a.off > begin && (a.src[a.off-1] == 'p' || a.src[a.off-1] == 'P'):
+		// Already swallowed by the digit run, which reads `p` as a hex digit
+		// — the same thing floatTail has to allow for its `e`. So the
+		// exponent's *sign* is what is left to take, and taking it is the
+		// whole reason this branch exists: without it `$(( 0x1p-1 ))` parses
+		// as `0x1p` minus one and answers 0 rather than 0.5.
+	default:
+		return
+	}
+	if a.off < len(a.src) && (a.src[a.off] == '+' || a.src[a.off] == '-') {
+		a.off++
+	}
+	a.decimalDigits()
+}
+
 func (a *arithParser) decimalDigits() {
 	for a.off < len(a.src) {
 		a.skipDigitSeparators()

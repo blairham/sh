@@ -1914,6 +1914,13 @@ func (r *Runner) readArithNum(s string, written bool) (arithNum, error) {
 		// needed, rather than two fields that could disagree.
 		s = strings.ReplaceAll(s, "_", "")
 	}
+	if f, ok := hexFloatNumeral(s); ok && r.dialect().ArithHexFloat {
+		// `0x1p4` is 16 and `0x1.8` is 1.5 in the one column that reads the
+		// spelling C has for a float written in hexadecimal. The other five
+		// refuse it, each in its own words, which is what makes this an axis
+		// and not a reader everyone should have had.
+		return floatNum(f), nil
+	}
 	if !floatShaped(s) {
 		n, err := r.parseNum(s)
 		if err != nil {
@@ -2033,6 +2040,72 @@ func unsignedFloatNumeral(s string) (float64, bool) {
 			return 0, false
 		}
 		f = f*float64(base) + float64(d)
+	}
+	return f, true
+}
+
+// hexFloatNumeral reads the hexadecimal float spelling C has, and reports
+// whether the literal was one at all.
+//
+// Measured 2026-09-16 against AT&T ksh93u+ 2012-08-01, which is the only panel
+// column that reads it — bash 5.3, bash-as-sh, bash 3.2, zsh 5.9.2, dash
+// 0.5.12 and BusyBox ash 1.37.0 all refuse every row below:
+//
+//	0x1p4      16      a binary exponent, which is what makes it a float
+//	0x1P4      16      either case of the exponent letter
+//	0x1p-1     0.5     and a signed one
+//	0x1p+2     4
+//	0xffp0     255     an exponent of zero is still the float spelling
+//	0x1.8p1    3       a point as well
+//	0x1.8      1.5     or a point alone, with no exponent at all
+//	0x1.p1     2       the digits after the point may be missing
+//	0x1e5      485     but `e` is a hex *digit* here, so this is an integer
+//
+// Two shapes are refused and both are about a missing digit rather than a
+// missing exponent: `0x.8p1` and `0xp4`, which have no digit between the `0x`
+// and the point or the `p`. An exponent whose digits are missing is not
+// refused — `0x1p`, `0x1p+` and `0x1.8p` are 1, 1 and 1.5 — so the letter is
+// consumed and the absent exponent read as zero.
+//
+// Go's reader wants the exponent this spelling may leave off, so it is put
+// back before the literal is handed over. That is the whole of the difference.
+func hexFloatNumeral(s string) (float64, bool) {
+	body := s
+	neg := false
+	if body != "" && (body[0] == '-' || body[0] == '+') {
+		neg = body[0] == '-'
+		body = body[1:]
+	}
+	if len(body) < 3 || body[0] != '0' || (body[1] != 'x' && body[1] != 'X') {
+		return 0, false
+	}
+	digits := body[2:]
+	if !isHexDigit(digits[0]) {
+		// `0x.8p1` and `0xp4` are refused, so the mantissa wants a digit of
+		// its own before anything else may follow.
+		return 0, false
+	}
+	e := strings.IndexAny(digits, "pP")
+	if e < 0 && !strings.Contains(digits, ".") {
+		// An ordinary hexadecimal integer, `e` and all.
+		return 0, false
+	}
+	switch {
+	case e < 0:
+		body += "p0"
+	case e == len(digits)-1:
+		body += "0"
+	case digits[e+1] == '+' || digits[e+1] == '-':
+		if e+2 == len(digits) {
+			body += "0"
+		}
+	}
+	f, err := strconv.ParseFloat(body, 64)
+	if err != nil {
+		return 0, false
+	}
+	if neg {
+		return -f, true
 	}
 	return f, true
 }

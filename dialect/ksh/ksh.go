@@ -363,6 +363,10 @@ func Dialect() syntax.Dialect {
 	d.TimesIsReserved = true
 	// Floating point, which POSIX has not and these two do.
 	d.ArithFloat = true
+	// And C's hexadecimal spelling of one, which this shell alone reads:
+	// `$(( 0x1p4 ))` is 16 and `$(( 0x1.8 ))` is 1.5, while `$(( 0x1e5 ))`
+	// stays the integer 485 because `e` is a hexadecimal digit.
+	d.ArithHexFloat = true
 	// `name(args)` inside an expression is a call to a math function, and
 	// this shell needs nothing registered for it: it ships sixty-one of them
 	// built in, which is what mathfunc.go holds. Measured 2026-09-13 on

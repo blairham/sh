@@ -62,6 +62,132 @@ func TestTheShippedArgumentsProtocolOffersTheOptions(t *testing.T) {
 	}
 }
 
+// TestTheShippedArgumentsProtocolOffersTheRestOfAStack is the one of #3039's
+// four recorded gaps that turned out not to be one, asked end to end.
+//
+// **The offering is built by `_arguments` and not by the builtin.** When
+// `comparguments -s` answers 0 the shipped function takes the option names out
+// of `-O`'s own four arrays, strips the leading `-` from each single-letter
+// one and writes `$PREFIX` back in front of it — so everything a stacked
+// offering needs is `-s`'s status and `-O`'s arrays, and both were already
+// here. What is written below is that, with the name-building spelled as a
+// loop rather than as the nested expansion the shipped function writes.
+//
+// Measured on zsh 5.9.2, 2026-09-16 through a pseudo-terminal with `compinit`
+// over this machine's own functions, Tab left where `compinit` put it:
+// `uname -a<TAB>` completes to `uname -ap ` on `/bin/zsh` and on this shell
+// alike — `-p` is all that `-a`'s exclusion list leaves — and `gzip -c<TAB>`
+// twice lists the same twenty-three stacked words from both. The array the
+// shipped `_arguments` builds was read out of a shadowing function on the
+// same line and is identical in both shells:
+//
+//	_a_12=(-cd -cf -ch -ck -cl -cL -cn -cN -cq -cr -ct -cv -cV -c1 … -cS)
+//
+// Three specs with no exclusions between them, so that the answer is a list
+// and not the single name `uname` happens to leave.
+func TestTheShippedArgumentsProtocolOffersTheRestOfAStack(t *testing.T) {
+	got := completionFor(t, widgetOf(`
+		comparguments -i '' -s : '-a[all]' '-m[machine]' '-p[processor]' || return
+		local -a next direct odirect equal
+		comparguments -O next direct odirect equal || return
+		local single
+		comparguments -s single || return
+		local -a stacked; local o
+		for o in ${next%%:*}; do stacked+=( "$PREFIX${o#-}" ); done
+		compadd -a stacked
+	`), "uname -a")
+	want := []string{"-am", "-ap"}
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("uname -a offered %q, want %q", got, want)
+	}
+}
+
+// TestAStackIsOnlyOfferedWhereOneIsBeingWritten is the other side of it: the
+// status `_arguments` reads before it builds any of that. Measured on zsh
+// 5.9.2 from both directions — `uname -` is 1, because a lone `-` is not yet a
+// stack, and `uname -a` is 0.
+func TestAStackIsOnlyOfferedWhereOneIsBeingWritten(t *testing.T) {
+	for _, c := range []struct{ name, line, want string }{
+		{"a lone dash is not a stack", "uname -", "1"},
+		{"a letter after it is", "uname -a", "0"},
+		{"and a long option is not", "uname --a", "1"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			got := reported(t, `comparguments -i '' -s : '-a[all]' '-m[machine]'
+				local one; comparguments -s one; say $?`, c.line)
+			if got != c.want {
+				t.Errorf("%s answered %q, want %q", c.line, got, c.want)
+			}
+		})
+	}
+}
+
+// TestTheOptionUnderTheCursorIsOfferedBack is the one spent option that is
+// offered all the same, and it is the whole twelve-cell table rather than the
+// rows that happen to differ — a shell that withheld every spent option passes
+// six of them and a shell that offered every one passes the other six.
+//
+// Measured on zsh 5.9.2, 2026-09-16 through a pseudo-terminal from inside a
+// `zle -C` widget, the word under the cursor being exactly the option named.
+// Visible as well as recorded: `git checkout --force<TAB>` closes the word and
+// adds a space on `/bin/zsh` against this machine's own functions, and offered
+// nothing here.
+func TestTheOptionUnderTheCursorIsOfferedBack(t *testing.T) {
+	// One spec set holding all six argument forms, so that every row is asked
+	// of the same parse and a difference can only be the form.
+	const forms = `'-a[plain]' '-n[next]:nx:' '-o=[out]:out:' ` +
+		`'-e=-[eqd]:ed:' '-d-[dir]:dir:' '-f+[file]:file:' ` +
+		`'--long[long]' '1:first:(x y)'`
+	for _, c := range []struct {
+		name, line, switches string
+		want                 bool
+	}{
+		{"plain, no -s", "cmd -a", "", true},
+		{"a separate argument, no -s", "cmd -n", "", true},
+		{"an = argument, no -s", "cmd -o", "", true},
+		{"an =-only argument, no -s", "cmd -e", "", true},
+		{"an attached argument, no -s", "cmd -d", "", false},
+		{"an optionally attached one, no -s", "cmd -f", "", false},
+		{"plain, with -s", "cmd -a", "-s", false},
+		{"a separate argument, with -s", "cmd -n", "-s", true},
+		{"an = argument, with -s", "cmd -o", "-s", false},
+		{"an =-only argument, with -s", "cmd -e", "-s", false},
+		{"an attached argument, with -s", "cmd -d", "-s", false},
+		{"an optionally attached one, with -s", "cmd -f", "-s", false},
+		// And it is the stack and not the switch: a long option under `-s` is
+		// not one, so it is offered back like any other. Measured beside the
+		// short `-a` in one spec set, because the two rows together are what
+		// say the predicate is `comparguments -s`' own.
+		{"a long option under -s is not a stack", "cmd --long", "-s", true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			got := reported(t, `comparguments -i '' `+c.switches+` : `+forms+`
+				local -a n d od e; comparguments -O n d od e
+				local -a all=( ${n%%:*} ${d%%:*} ${od%%:*} ${e%%:*} )
+				say "${all[*]}"`, c.line)
+			name := c.line[strings.LastIndex(c.line, " ")+1:]
+			if back := strings.Contains(" "+got+" ", " "+name+" "); back != c.want {
+				t.Errorf("%s %s offered %q, want %s back: %v",
+					c.line, c.switches, got, name, c.want)
+			}
+		})
+	}
+}
+
+// TestTheOptionUnderTheCursorIsTheOnlyOneOfferedBack is the other half of it,
+// because "offered back" would pass just as well if every spent option were.
+// Measured with `--all` and `--almost` declared: `cmd --all --almost<TAB>`
+// offers `--almost` and not `--all`.
+func TestTheOptionUnderTheCursorIsTheOnlyOneOfferedBack(t *testing.T) {
+	got := reported(t, `comparguments -i '' : '--all[all]' '--almost[almost]' '-p[proc]'
+		local -a n d od e; comparguments -O n d od e
+		local -a names=( ${n%%:*} ); say "${names[*]}"`,
+		"cmd --all --almost")
+	if want := "--almost -p"; got != want {
+		t.Errorf("cmd --all --almost offered %q, want %q", got, want)
+	}
+}
+
 // TestComparguments is the six read-back verbs, each asked in the position
 // its measurement was taken in.
 func TestComparguments(t *testing.T) {
@@ -185,6 +311,39 @@ func TestComparguments(t *testing.T) {
 			 local -a l; local -A oa; comparguments -W l oa 0; say "${l[*]}"`,
 			"-",
 		},
+		// **An option is in `$opt_args` whether or not its argument is there
+		// yet.** Measured on zsh 5.9.2, 2026-09-16 over the five argument
+		// forms: every one of them maps the option to an empty string when
+		// the word under the cursor is the option itself, and to the value
+		// when one is attached. This recorded nothing at all for the four
+		// forms that declare an argument and had not been given one.
+		{
+			"an option with no argument yet", "cmd -n",
+			`comparguments -i '' : '-n[next]:nx:' '-a[plain]'
+			 local -a l; local -A oa; comparguments -W l oa 0
+			 say "${(ko)oa}/[${oa[-n]}]"`,
+			"-n/[]",
+		},
+		{
+			"and one with its argument attached", "cmd -fval",
+			`comparguments -i '' : '-f+[file]:file:' '-a[plain]'
+			 local -a l; local -A oa; comparguments -W l oa 0
+			 say "${(ko)oa}/[${oa[-f]}]"`,
+			"-f/[val]",
+		},
+		// And the option under the cursor is not offered back where the word
+		// is the option *plus* the start of its argument. Measured: `-o=val`
+		// with `-o=[out]:out:` and `-f+[file]:file:` declared answers with
+		// `-f` in `odirect` and an empty `equal` — the option being written
+		// is past the point where its own name would help.
+		{
+			"an attached argument is not the option again", "cmd -o=val",
+			`comparguments -i '' : '-o=[out]:out:' '-f+[file]:file:' '-p[proc]'
+			 local -a n d od e; comparguments -O n d od e
+			 local -a names=( ${n%%:*} ${d%%:*} ${od%%:*} ${e%%:*} )
+			 say "${names[*]}"`,
+			"-p -f",
+		},
 		// `-a` is whether any normal argument is described at all.
 		{"no argument described", "uname -", `comparguments ` + unameSpecs + `
 			 comparguments -a; say $?`, "1"},
@@ -196,6 +355,247 @@ func TestComparguments(t *testing.T) {
 			 local one; comparguments -s one; say $?`, "1"},
 		{"a stack", "uname -a", `comparguments ` + unameSpecs + `
 			 local one; comparguments -s one; say $?`, "0"},
+		// **`-O` is not asked about the word under the cursor, and `-i`
+		// is.** Measured on zsh 5.9.2, 2026-09-16 from inside a `zle -C`
+		// widget with `-v[verbose]` and `-o[opt]:val:` the only specs: `cmd
+		// f` answers 1 from `-i` — nothing can be completed there, the word
+		// has begun as something no option can be — and 0 from `-O` with
+		// both options in `next`, because the *position* still takes them.
+		// `_arguments` does that filtering itself and reads `-O`'s status to
+		// decide whether to ask `_tags` for the `options` tag at all, so a 1
+		// here is a shipped completion told this position takes no options.
+		//
+		// Both halves, because a shell that read the word in neither place
+		// would pass the second row and a shell that read it in both — which
+		// is what this was — passes the first.
+		{
+			"a word no option can be is nothing to complete", "cmd f",
+			`comparguments -i '' : '-v[verbose]' '-o[opt]:val:'; say $?`, "1",
+		},
+		{
+			"but the position still takes them", "cmd f",
+			`comparguments -i '' : '-v[verbose]' '-o[opt]:val:'
+			 local -a n d od e; comparguments -O n d od e
+			 say "$?/${n[*]}"`,
+			"0/-v:verbose -o:opt",
+		},
+		// And what does stop `-O` is the position, from both directions.
+		// Measured on the same day: an argument whose `(-)` spent the
+		// options, and a `*::` rest specification the sub-command's words
+		// have begun under, are each 1 with four empty arrays on zsh.
+		{
+			"an argument that spent the options", "cmd a foo",
+			`comparguments -i '' : '-v[verbose]' '(-)1:first:(a b)' '*:rest:(x y)'
+			 local -a n d od e; comparguments -O n d od e
+			 say "$?/${n[*]}"`,
+			"1/",
+		},
+		{
+			"a rest specification that took over", "cmd sub foo",
+			`comparguments -i '' : '-v[verbose]' '*:: :->rest'
+			 local -a n d od e; comparguments -O n d od e
+			 say "$?/${n[*]}"`,
+			"1/",
+		},
+		// **A `*::` rest specification does not take its arguments out of
+		// `$line`.** #3039 recorded the opposite — that zsh moves them out of
+		// `$line` and into `$words`, leaving `$#line` 0 where this reports 2 —
+		// and it is not so. Measured on zsh 5.9.2, 2026-09-16 through a
+		// pseudo-terminal, both by asking the builtin from inside a widget and
+		// by letting the shipped `_arguments` run and printing its own `$line`,
+		// with `cmd sub arg <TAB>` under `-v[verbose] -o[opt]:val: *:: :->rest`:
+		// `$line` is `(sub arg '')` and `$words` is `(sub arg '')` as well.
+		// `*:`, `*::`, `*:::`, `(-)*::` and a numbered spec in front of one all
+		// answer the same, each asked on the same line so that a shell reading
+		// the colons differently would separate.
+		{
+			"a rest specification leaves the line alone", "cmd sub arg ",
+			`comparguments -i '' : '-v[verbose]' '-o[opt]:val:' '*:: :->rest'
+			 local -a ds as ss; comparguments -D ds as ss
+			 local -a l; local -A oa; comparguments -W l oa 0
+			 say "${#l}/${l[1]}/${l[2]}/[${l[3]}]"`,
+			"3/sub/arg/[]",
+		},
+		// **`-s` answers 1 where `_arguments` was never given `-s`**, whatever
+		// the word looks like. Measured: the same `uname -a` that is 0 with
+		// the switch is 1 without it, because there is no stack to continue.
+		{
+			"no stacking, no stack", "uname -a",
+			`comparguments -i '' : '-a[all]' '-m[machine]'
+			 local one; comparguments -s one; say $?`, "1",
+		},
+		// And the parameter it names is `next` for one shape only: a stack of
+		// exactly one letter whose option takes a separate word. Measured on
+		// zsh 5.9.2, 2026-09-16 over five lines of one spec set, because a
+		// shell that filled it from the last letter of any stack passes the
+		// first row and fails the third.
+		{
+			"a single option with an argument of its own", "cmd -n",
+			`comparguments -i '' -s : '-n[next]:nx:' '-a[plain]' '-p[proc]'
+			 local one; comparguments -s one; say "$?/$one"`, "0/next",
+		},
+		{
+			"a single option with no argument", "cmd -a",
+			`comparguments -i '' -s : '-n[next]:nx:' '-a[plain]' '-p[proc]'
+			 local one; comparguments -s one; say "$?/$one"`, "0/",
+		},
+		{
+			"a stack of two", "cmd -an",
+			`comparguments -i '' -s : '-n[next]:nx:' '-a[plain]' '-p[proc]'
+			 local one; comparguments -s one; say "$?/$one"`, "0/",
+		},
+		// And without `-s` the same word fills nothing, because there is no
+		// stack for `_arguments` to be told to stop building. Measured: the
+		// `cmd -n` that answers `0/next` with the switch answers `1/`
+		// without it.
+		{
+			"no stacking, nothing to say about one", "cmd -n",
+			`comparguments -i '' : '-n[next]:nx:' '-a[plain]' '-p[proc]'
+			 local one; comparguments -s one; say "$?/$one"`, "1/",
+		},
+		// **A word is a stack only where every letter after the dash is a
+		// single-letter option**, and a word that reaches one the specs do
+		// not know is not a stack at all — the letters before it are not
+		// spent either. Measured on zsh 5.9.2, 2026-09-16 with `-s` and
+		// `-n[next]:nx:`, `-a[plain]`, `-p[proc]` and `1:first:(x y)`:
+		//
+		//	typed     -s   $opt_args     $line   -O next
+		//	cmd -z    1    (empty)       -z      -n -a -p
+		//	cmd -az   1    (empty)       -az     -n -a -p
+		//	cmd -na   0    -a '' -n ''   (empty) -p
+		//
+		// so `-az` spends nothing and is the first argument being written,
+		// and `-na` spends both. All three rows, because a shell that spent
+		// as it walked and gave up part-way — which is what this did —
+		// passes the first and the third.
+		{
+			"an undeclared letter is not a stack", "cmd -az",
+			`comparguments -i '' -s : '-n[next]:nx:' '-a[plain]' '-p[proc]' '1:first:(x y)'
+			 local -a l; local -A oa; comparguments -W l oa 0
+			 local one; comparguments -s one
+			 say "$?/${l[*]}/${(ko)oa}"`,
+			"1/-az/",
+		},
+		{
+			"nor is a longer option spelled out", "cmd -ab",
+			`comparguments -i '' -s : '-ab[two]:x:' '-a[plain]' '-p[proc]'
+			 local -a l; local -A oa; comparguments -W l oa 0
+			 local one; comparguments -s one
+			 say "$?/${l[*]}/${(ko)oa}"`,
+			"1//-ab",
+		},
+		// And the two halves of that rule pulled apart: with `-b` declared as
+		// well, the letter walk accepts `-ab` and only "the word is itself a
+		// longer option" refuses it. Measured: zsh answers 1 and records
+		// `-ab` in `$opt_args`, with `-a` and `-b` untouched.
+		{
+			"a longer option beats the letters that spell it", "cmd -ab",
+			`comparguments -i '' -s : '-ab[two]:x:' '-a[plain]' '-b[bee]' '-p[proc]'
+			 local -a l; local -A oa; comparguments -W l oa 0
+			 local one; comparguments -s one
+			 say "$?/${(ko)oa}"`,
+			"1/-ab",
+		},
+		{
+			"and every letter known is", "cmd -na",
+			`comparguments -i '' -s : '-n[next]:nx:' '-a[plain]' '-p[proc]' '1:first:(x y)'
+			 local -a l; local -A oa; comparguments -W l oa 0
+			 local one; comparguments -s one
+			 say "$?/${l[*]}/${(ko)oa}"`,
+			"0//-a -n",
+		},
+		// **A `+` leads a stack as a `-` does**, and a `-+x` spec is two
+		// names with the `+` spelling first. Measured on zsh 5.9.2,
+		// 2026-09-16 with `-s` and `-+a[plus]`, `-+b[bee]`, `-o[opt]:val:`
+		// and `-p[proc]` declared:
+		//
+		//	cmd +ab<TAB>          $opt_args +a '' +b '', $line empty
+		//	cmd -o val foo<TAB>   next=(+a:plus -a:plus +b:bee -b:bee -p:proc)
+		//	cmd +a<TAB>           next=(-a:plus +b:bee -b:bee -o:opt -p:proc)
+		//
+		// The `+` stack used to land on `$line` as an ordinary argument, and
+		// the pair used to come back `-` first. The third row is what says
+		// the pair really is two names: `+a` is spent and `-a` is not.
+		{
+			"a plus leads a stack too", "cmd +ab",
+			`comparguments -i '' -s : '-+a[plus]' '-+b[bee]' '-p[proc]' '1:first:(x y)'
+			 local -a l; local -A oa; comparguments -W l oa 0
+			 local one; comparguments -s one
+			 say "$?/${l[*]}/${(ko)oa}"`,
+			"0//+a +b",
+		},
+		{
+			"and the plus spelling is offered first", "cmd -o val foo",
+			`comparguments -i '' -s : '-+a[plus]' '-+b[bee]' '-o[opt]:val:' '-p[proc]' '1:first:(x y)'
+			 local -a n d od e; comparguments -O n d od e
+			 local -a names=( ${n%%:*} ); say "${names[*]}"`,
+			"+a -a +b -b -p",
+		},
+		{
+			"and each spelling is spent on its own", "cmd +a",
+			`comparguments -i '' -s : '-+a[plus]' '-+b[bee]' '-o[opt]:val:' '-p[proc]' '1:first:(x y)'
+			 local -a n d od e; comparguments -O n d od e
+			 local -a names=( ${n%%:*} ); say "${names[*]}"`,
+			"-a +b -b -o -p",
+		},
+		// An option's argument taken from the **following word** is the value
+		// `$opt_args` carries. Measured: `cmd -o val foo` reports `-o val`
+		// and `$line` as `foo` alone.
+		{
+			"an argument from the next word", "cmd -o val foo",
+			`comparguments -i '' : '-o[opt]:val:' '-p[proc]' '*:rest:'
+			 local -a l; local -A oa; comparguments -W l oa 0
+			 say "${l[*]}/${(ko)oa}/[${oa[-o]}]"`,
+			"foo/-o/[val]",
+		},
+		// **An option that takes more than one word joins them with a
+		// colon.** Measured on zsh 5.9.2, 2026-09-16 with
+		// `-C+[copy]:from:(f1 f2):to:(t1 t2)` declared and `cmd -C a b foo`:
+		// `-C` is mapped to `a:b` and `$line` is `foo` alone. This kept only
+		// the last word, so a two-argument option lost its first.
+		{
+			"two words joined by a colon", "cmd -C a b foo",
+			`comparguments -i '' : '-C+[copy]:from:(f1 f2):to:(t1 t2)' '-p[proc]' '*:rest:'
+			 local -a l; local -A oa; comparguments -W l oa 0
+			 say "${l[*]}/${(ko)oa}/[${oa[-C]}]"`,
+			"foo/-C/[a:b]",
+		},
+		// And `-W` takes **three** arguments: the shipped `_arguments` always
+		// writes its own `$opt_args_use_NUL_separators` as the third.
+		// Measured: two is `comparguments:9: not enough arguments` at 1.
+		{
+			"the line wants three names", "uname -a",
+			`comparguments ` + unameSpecs + `
+			 local -a l; local -A oa
+			 comparguments -W l oa 2>/dev/null; say $?`,
+			"1",
+		},
+		// **A stack spends every letter in it.** Measured with `-s` and
+		// `-a -m -p`: `cmd -am <TAB>` leaves `-p` and nothing else, and
+		// `$line` has neither `-am` nor its letters on it.
+		{
+			"a stack spends its letters", "cmd -am ",
+			`comparguments -i '' -s : '-a[all]' '-m[machine]' '-p[proc]' '*:rest:'
+			 local -a n d od e; comparguments -O n d od e
+			 local -a names=( ${n%%:*} ); say "${names[*]}"`,
+			"-p",
+		},
+		{
+			"a stack is not an argument", "cmd -am foo",
+			`comparguments -i '' -s : '-a[all]' '-m[machine]' '-p[proc]' '*:rest:'
+			 local -a l; local -A oa; comparguments -W l oa 0
+			 say "${l[*]}/${(ko)oa}"`,
+			"foo/-a -m",
+		},
+		// And with no `-s` the same word is not a stack at all: it is an
+		// option nobody declared, so it lands on `$line` whole. Measured.
+		{
+			"without -s a stack is an argument", "cmd -am foo",
+			`comparguments -i '' : '-a[all]' '-m[machine]' '-p[proc]' '*:rest:'
+			 local -a l; local -A oa; comparguments -W l oa 0
+			 say "${l[*]}/${(ko)oa}"`,
+			"-am foo/",
+		},
 		// An option whose exclusion list names another takes it off the
 		// offering once it is on the line.
 		{

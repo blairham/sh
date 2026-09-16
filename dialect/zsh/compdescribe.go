@@ -53,14 +53,32 @@ import (
 //
 // # One group out for one group in
 //
-// zsh splits its answer further than this: `gzip -` comes back as
-// forty-three groups, one per distinct description, so that its listing can
-// pack names whose descriptions are shared onto one row. This hands back one
-// group per definition instead, which is the same set of matches in the same
-// order and a different listing arrangement — and this editor has one listing
-// arrangement, so there is nothing for the finer grouping to say. Descriptions
-// are built and handed over all the same, so the day repl's completion seam
-// can carry one (#3041) they are already here.
+// zsh splits its answer further than this: one group per distinct listing
+// arrangement, so that its listing can draw the described matches a row each
+// and pack the undescribed ones together. This hands back one group per
+// definition instead.
+//
+// Measured on zsh 5.9.2, 2026-09-16 through a pseudo-terminal, with a function
+// shadowing this builtin and the shipped `_arguments` driving it over
+// `gzip -c<TAB>` — one definition in, and the two shells' answers side by
+// side:
+//
+//	          zsh                                   here
+//	group 1   -l -S '' -J -default-                 -l -S ''
+//	          -cd … -cV -cS  (the described)        -cd … -cV -c1 … -c9 -cS
+//	group 2   -S '' -J -default-                    (none)
+//	          -c1 … -c9      (the undescribed)
+//
+// so it is the **same twenty-three matches**, and the difference is which of
+// them share a `-l`. `-l` is "one match per line", which is what a row
+// carrying a description needs and what a bare name does not; splitting on it
+// is a listing arrangement, and this editor draws one listing of replacement
+// words and has no second one to ask for. A person sees the same twenty-three
+// words from both shells, in one block here and in two there.
+//
+// Descriptions are built and handed over all the same, so the day repl's
+// completion seam can carry one (#3041) they are already here — and the day it
+// can draw a second arrangement, the split is one comparison in group().
 
 // describeState is one `-i`/`-I` call: the groups it defined and how far `-g`
 // has read them.

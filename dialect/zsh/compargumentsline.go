@@ -56,7 +56,12 @@ func (a *argumentsState) analyze(r *interp.Runner, cs *completionState) {
 				// specification is what moves `$words` — so without it
 				// `cmd -v<TAB>` would hand the completer a word list holding
 				// only the option the person is still typing.
-				a.cursorIsOption = a.cursorIsOption || cursor
+				if cursor {
+					a.cursorIsOption = true
+					if name, _, _ := a.lookupOption(word); name == word {
+						a.cursorOption = name
+					}
+				}
 				i += skip
 				continue
 			}
@@ -96,6 +101,8 @@ func (a *argumentsState) analyze(r *interp.Runner, cs *completionState) {
 		}
 		position++
 	}
+	a.stackInProgress = a.continuingAStack(cs)
+	a.optionsPossible = options
 	a.optionsHere = options && a.optionsCompletable(cs)
 	if !a.cursorIsOption {
 		a.here = a.applicable(position)
@@ -106,6 +113,30 @@ func (a *argumentsState) analyze(r *interp.Runner, cs *completionState) {
 // optionsCompletable is whether the word under the cursor could be an option
 // at all: an empty word could become one, and a word already opening with `-`
 // or `+` is one being written. A word that has begun as anything else cannot.
+//
+// **It gates `-i` and not `-O`**, which is the pair of answers that separates
+// them and the divergence #3039 recorded. `-i` is asked whether there is
+// anything to complete at the cursor and reads the word; `-O` is asked what
+// options this *position* could still take and does not. Measured on zsh
+// 5.9.2, 2026-09-16 through a pseudo-terminal from inside a `zle -C` widget,
+// with `-v[verbose]` and `-o[opt]:val:` the only specs:
+//
+//	line        zsh -i  zsh -O
+//	cmd <TAB>   0       0, next=(-v:verbose -o:opt)
+//	cmd -<TAB>  0       0, next=(-v:verbose -o:opt)
+//	cmd f<TAB>  1       0, next=(-v:verbose -o:opt)
+//
+// so the third row is the one that tells them apart, and `-O` answering 1
+// with four empty arrays there was this builtin's own reading rather than
+// zsh's. `_arguments` does the filtering itself — `[[ "$PREFIX" = [-+]* ]] &&
+// tmp1=( "${(@M)tmp1:#${PREFIX[1]}*}" )` — and reads `-O`'s status to decide
+// whether to ask `_tags` for the `options` tag at all, so a 1 here is a
+// shipped completion told this position takes no options.
+//
+// What does still stop `-O` is the position: measured on the same day, `cmd a
+// foo<TAB>` under `(-)1:first:(a b)` and `cmd sub foo<TAB>` under `*:: :->rest`
+// are both 1 with four empty arrays on zsh, because the argument and the
+// sub-command's takeover really did shut the options off.
 func (a *argumentsState) optionsCompletable(cs *completionState) bool {
 	word := cs.prefix
 	return word == "" || word[0] == '-' || word[0] == '+'
@@ -117,7 +148,7 @@ func (a *argumentsState) optionsCompletable(cs *completionState) bool {
 func (a *argumentsState) takeOption(word string, after []string) int {
 	name, value, attached := a.lookupOption(word)
 	if name == "" {
-		if !a.stacking || !strings.HasPrefix(word, "-") || strings.HasPrefix(word, "--") {
+		if !a.stackable(word) {
 			return -1
 		}
 		return a.takeStack(word)
@@ -131,29 +162,75 @@ func (a *argumentsState) takeOption(word string, after []string) int {
 		a.optArgs[name] = value
 		return 0
 	}
+	// **An option is in `$opt_args` whether or not its argument is there
+	// yet.** Measured on zsh 5.9.2, 2026-09-16 from inside a `zle -C` widget
+	// with `-n[next]:nx:`, `-e=-[eqd]:ed:`, `-d-[dir]:dir:`, `-f+[file]:file:`
+	// and `-a[plain]` declared, asking `comparguments -W` about the word under
+	// the cursor: every one of `cmd -n`, `cmd -e`, `cmd -d`, `cmd -f` and
+	// `cmd -a` answers with that option mapped to an empty string, and
+	// `cmd -fval` and `cmd -o=val` map theirs to `val`. This recorded nothing
+	// at all for the four that declare an argument and had not been given one.
+	//
+	// **An option that takes more than one word joins them with a colon.**
+	// Measured with `-C+[copy]:from:(f1 f2):to:(t1 t2)` declared and
+	// `cmd -C a b foo<TAB>`: zsh reports `-C` mapped to `a:b` and `$line` as
+	// `foo` alone. This kept only the last word, so the two-argument options
+	// the shipped completions declare lost their first. The colon is the
+	// default separator — the third argument `-W` takes is
+	// `_arguments`' own `$opt_args_use_NUL_separators`, and it is empty on
+	// every call measured.
+	a.optArgs[name] = ""
 	eaten := 0
 	for _, arg := range spec.optargs {
 		if arg.optional || eaten >= len(after) {
 			break
 		}
-		a.optArgs[name] = after[eaten]
+		if eaten > 0 {
+			a.optArgs[name] += ":"
+		}
+		a.optArgs[name] += after[eaten]
 		eaten++
-	}
-	if len(spec.optargs) == 0 {
-		a.optArgs[name] = ""
 	}
 	return eaten
 }
 
+// stackable is whether a word on the line could be a stack of single-letter
+// options at all: `-s` given, a `-` or a `+` in front, and something after it.
+//
+// **A `+` leads a stack as a `-` does.** Measured on zsh 5.9.2, 2026-09-16
+// with `-s` and `-+a[plus]`, `-+b[bee]` declared: `cmd +ab<TAB>` reports
+// `$opt_args` as `+a ” +b ”` and an empty `$line`, exactly as `cmd -ab`
+// reports `-a ” -b ”`. This read the `-` spelling only, so a `+` stack
+// landed on `$line` as an ordinary argument.
+func (a *argumentsState) stackable(word string) bool {
+	return a.stacking && len(word) > 1 &&
+		(word[0] == '-' || word[0] == '+') && word[1] != word[0]
+}
+
 // takeStack is `-s`: a word of single letters, each of which is an option.
-// The letters are read so that `-xy` spends both `-x` and `-y`; what is not
-// done is offering the rest of such a word — see comparguments.go.
+// The letters are read so that `-xy` spends both `-x` and `-y`.
+//
+// **All of them or none of them.** A word that reaches a letter the specs do
+// not know is not a stack at all, and the letters before it are not spent
+// either — this used to spend as it walked and then give up part-way, which
+// left `-a` on the line for a word zsh reads as an ordinary argument.
+// Measured on zsh 5.9.2, 2026-09-16 with `-s` and `-n[next]:nx: -a[plain]
+// -p[proc] 1:first:(x y)` in force:
+//
+//	typed       zsh $opt_args   zsh $line   zsh -O next
+//	cmd -az     (empty)         -az         -n -a -p
+//	cmd -na     -a '' -n ''     (empty)     -p
+//
+// so `-az` spends nothing and is described as the first argument, while
+// `-na` — every letter an option — spends both.
 func (a *argumentsState) takeStack(word string) int {
 	for i := 1; i < len(word); i++ {
-		letter := word[:1] + word[i:i+1]
-		if a.optionNamed(letter) == nil {
+		if a.optionNamed(word[:1]+word[i:i+1]) == nil {
 			return -1
 		}
+	}
+	for i := 1; i < len(word); i++ {
+		letter := word[:1] + word[i:i+1]
 		a.spend(letter)
 		a.optArgs[letter] = ""
 	}
@@ -263,6 +340,25 @@ func (a *argumentsState) applicable(position int) []int {
 // normalArguments is `$line`: the words that are not options and not an
 // option's argument.
 //
+// **A `*::` rest specification does not take its arguments out of it.** #3039
+// recorded the opposite — that zsh moves the rest-covered words out of `$line`
+// and into `$words`, leaving `$#line` 0 where this reports 2 — and it is not
+// so. Measured on zsh 5.9.2, 2026-09-16 through a pseudo-terminal two ways:
+// asking the builtin from inside a `zle -C` widget, and letting the shipped
+// `_arguments` run a completion of its own and printing the `$line` it was
+// left holding. With `cmd sub arg <TAB>` under `-v[verbose] -o[opt]:val:
+// *:: :->rest`, `$line` is `(sub arg ”)` and `$words` is `(sub arg ”)` as
+// well — the rest specification *copies* into `$words`, it does not move.
+//
+//	specification              $line             $words
+//	*:: :->rest                sub arg ''        sub arg ''
+//	*::: :->rest               sub arg ''        sub arg ''
+//	(-)*:: :->rest             sub arg ''        sub arg ''
+//	1:first:(a b) *:: :->rest  a sub ''          a sub ''
+//
+// each asked on the same line, so that a shell reading the colon count
+// differently would come apart on one of the rows.
+//
 // **The word under the cursor is one of them**, unless it is itself an
 // option. Measured on zsh 5.9.2, 2026-09-15: `uname -a -` reports
 // `line=(-)`, `uname -` reports `line=(-)` and `uname -a` reports an empty
@@ -297,7 +393,7 @@ func (a *argumentsState) normalArguments(r *interp.Runner, cs *completionState) 
 func (a *argumentsState) takeOptionQuietly(word string, after []string) int {
 	name, _, attached := a.lookupOption(word)
 	if name == "" {
-		if a.stacking && strings.HasPrefix(word, "-") && !strings.HasPrefix(word, "--") {
+		if a.stackable(word) {
 			return a.takeStack(word)
 		}
 		return -1
@@ -433,13 +529,13 @@ func (a *argumentsState) offerOptions(r *interp.Runner, names []string) int {
 		return 1
 	}
 	lists := make([][]string, 4)
-	if a.optionsHere {
+	if a.optionsPossible {
 		for _, opt := range a.opts {
 			if opt.hidden || a.excluded(opt) {
 				continue
 			}
 			for _, name := range opt.names {
-				if a.spent[name] && !opt.repeat {
+				if a.spent[name] && !opt.repeat && !a.offeredBack(opt, name) {
 					continue
 				}
 				at := optionListIndex(opt.style)
@@ -467,6 +563,62 @@ func (a *argumentsState) offerOptions(r *interp.Runner, names []string) int {
 	// same reason from the other direction — the argument shut the options
 	// off.
 	return boolStatus(offered)
+}
+
+// offeredBack is the one spent option that is offered all the same: the one
+// the word under the cursor spells out, where writing it again is what the
+// person is doing.
+//
+// **A spent option is withheld and this one is not**, which is the shape a
+// guess gets wrong in both directions. Measured on zsh 5.9.2, 2026-09-16
+// through a pseudo-terminal from inside a `zle -C` widget, asking
+// `comparguments -O` with the word under the cursor being exactly the option
+// named — all twelve cells, because the rule turns on the argument form *and*
+// on whether `_arguments` was given `-s`:
+//
+//	spec form         cursor word   without -s   with -s
+//	-a[plain]         -a            offered      withheld
+//	-n[next]:nx:      -n            offered      offered
+//	-o=[out]:out:     -o            offered      withheld
+//	-e=-[eqd]:ed:     -e            offered      withheld
+//	-d-[dir]:dir:     -d            withheld     withheld
+//	-f+[file]:file:   -f            withheld     withheld
+//
+// and it is the word under the cursor and no other: with `--all` and
+// `--almost` declared, `cmd --all --almost<TAB>` offers `--almost` back and
+// not `--all`.
+//
+// The two rules that table is:
+//
+//   - **an argument that attaches with nothing between it and the option is
+//     already being written**, so `-d-` and `-f+` are never offered back —
+//     the word under the cursor is the option plus the start of its argument,
+//     and `comparguments -D` is what describes that argument.
+//   - **where a stack is being continued, everything else is its next
+//     letter**, which `_arguments` builds by writing `$PREFIX` in front of
+//     each name `-O` hands it; offering `-a` back there would produce `-aa`.
+//     The one exception is an argument written as its own word, because a
+//     stack cannot continue past one.
+//
+// It is the stack and not the switch: `-s` given and `--all` under the cursor
+// offers `--all` back, because a long option is not a stack — measured beside
+// the short `-a` in the same spec set, where it is withheld. That is the same
+// predicate `-s` answers with, so the two are asked of one field.
+//
+// Visible, and not only in the status: `git checkout --force<TAB>` closes the
+// word and adds a space on `/bin/zsh` against this machine's own functions,
+// and offered nothing here.
+func (a *argumentsState) offeredBack(opt optionSpec, name string) bool {
+	if name == "" || name != a.cursorOption {
+		return false
+	}
+	switch opt.style {
+	case optArgDirect, optArgOptDirect:
+		return false
+	case optArgSeparate:
+		return true
+	}
+	return !a.stackInProgress
 }
 
 // excluded is whether something already on the line shut this option off. The
@@ -523,10 +675,16 @@ func (a *argumentsState) reportMatcher(r *interp.Runner, names []string) int {
 	return 0
 }
 
-// reportLine is `-W`: the normal arguments as `$line`, and the options
-// already written as `$opt_args`.
+// reportLine is `-W`: the normal arguments as `$line`, the options already
+// written as `$opt_args`, and a third argument the shipped `_arguments`
+// always passes — its own `$opt_args_use_NUL_separators`, which is empty.
+//
+// **Three arguments, not two.** Measured on zsh 5.9.2, 2026-09-16 from inside
+// a `zle -C` widget: `comparguments -W line opt_args` is
+// `comparguments:9: not enough arguments` at status 1, and the same call with
+// a third argument is 0. This took two and answered.
 func (a *argumentsState) reportLine(r *interp.Runner, names []string) int {
-	if len(names) < 2 {
+	if len(names) < 3 {
 		r.Diagnosef("not enough arguments\n")
 		return 1
 	}
@@ -536,19 +694,93 @@ func (a *argumentsState) reportLine(r *interp.Runner, names []string) int {
 }
 
 // reportStack is `-s`: whether a stack of single-letter options is being
-// continued at the cursor.
+// continued at the cursor, and — in the parameter it names — the one shape
+// where `_arguments` should close the word rather than go on stacking.
 //
-// Measured: `uname -` with `-s` in force answers 1, and `uname -a` answers 0
-// with the named parameter left empty. Nothing is offered on the strength of
-// it here — see comparguments.go, where the gap is written down.
+// Measured on zsh 5.9.2: `uname -` with `-s` in force answers 1, `uname -a`
+// answers 0, and `uname --a` answers 1 — a long option is not a stack. The
+// parameter is empty in all three, and in every one of the eighteen shipped
+// traces; the one line that fills it is a stack of **exactly one letter**
+// whose option takes its argument as a separate word:
+//
+//	specs `-n[next]:nx:` `-a[plain]` `-p[proc]`, with -s
+//
+//	cmd -<TAB>    1, single=          not a stack yet
+//	cmd -n<TAB>   0, single=next      one letter, and its argument is a word
+//	cmd -a<TAB>   0, single=          one letter, and no argument
+//	cmd -an<TAB>  0, single=          two letters, so the stack goes on
+//	cmd -na<TAB>  0, single=
+//
+// `_arguments` reads `next` there and writes `compadd -Q - "$PREFIX$SUFFIX"`,
+// which is why the same row is the one where `-O` offers the option back; see
+// offeredBack. The `direct` and `equal` values `_arguments` also tests for
+// were not produced by any spec form asked here — `-d-`, `-f+`, `-o=` and
+// `-e=-` each answer with an empty parameter — so they are left unwritten
+// rather than guessed at.
 func (a *argumentsState) reportStack(r *interp.Runner, cs *completionState, names []string) int {
 	if len(names) < 1 {
 		r.Diagnosef("not enough arguments\n")
 		return 1
 	}
-	r.SetVar(names[0], "")
+	r.SetVar(names[0], a.singleOption())
+	return boolStatus(a.stackInProgress)
+}
+
+// continuingAStack is that question asked of the word under the cursor: is
+// this a `-xy…` under `-s` with another letter still to come.
+//
+// **Every letter after the dash has to be a single-letter option, and the
+// word must not be a longer option of its own.** Measured on zsh 5.9.2,
+// 2026-09-16 from inside a `zle -C` widget with `-s` in force, asking
+// `comparguments -s`:
+//
+//	specs                           typed        -s
+//	-n:nx: -a -p                    cmd -a       0  — a letter they know
+//	-n:nx: -a -p                    cmd -na      0  — and so is the next
+//	-n:nx: -a -p                    cmd -z       1  — `-z` is not one
+//	-n:nx: -a -p                    cmd -az      1  — nor is `-z` here
+//	-ab:x: -a -p                    cmd -ab      1  — `-b` is not one
+//	-ab:x: -a -b -p                 cmd -ab      1  — and `-ab` is an option
+//	-o=[out]: -f+[file]: -p         cmd -o=val   1  — nor `=`, `v`, `a`, `l`
+//	-o=[out]: -f+[file]: -p         cmd -fval    1
+//	-a -m                           uname --a    1  — `--` is not one
+//
+// The last two rows of the first group are what separate the two halves of
+// the rule: with `-b` undeclared the letter walk already refuses `-ab`, and
+// with it declared only "the word is itself a longer option" does. A lone `-`
+// and a `--` fall out of the letter walk, which is why neither is spelled
+// out here: the mutation that removed a `word[1] == '-'` guard killed no
+// test, so the guard was not carrying the answer.
+//
+// The point of the rule is that a word reaching a letter the specs do not
+// know stops being a stack rather than becoming one with a typo in it — and
+// see takeStack, where the same words are read off the line.
+func (a *argumentsState) continuingAStack(cs *completionState) bool {
 	word := cs.prefix
-	stacked := a.stacking && len(word) > 1 &&
-		(word[0] == '-' || word[0] == '+') && word[1] != '-'
-	return boolStatus(stacked)
+	if !a.stacking || len(word) < 2 || (word[0] != '-' && word[0] != '+') {
+		return false
+	}
+	if len(word) > 2 && a.optionNamed(word) != nil {
+		return false
+	}
+	for i := 1; i < len(word); i++ {
+		if a.optionNamed(word[:1]+word[i:i+1]) == nil {
+			return false
+		}
+	}
+	return true
+}
+
+// singleOption is the value `-s` writes into the parameter it names: `next`
+// where the stack is one letter whose argument is its own word, and nothing
+// otherwise.
+func (a *argumentsState) singleOption() string {
+	if !a.stackInProgress {
+		return ""
+	}
+	if spec := a.optionNamed(a.cursorOption); spec != nil &&
+		spec.style == optArgSeparate {
+		return "next"
+	}
+	return ""
 }

@@ -73,14 +73,31 @@ import (
 //     `subcs=(argument-1)`, because both an option and the first argument can
 //     be completed at that position, and `_arguments` offers both.
 //
-// # What is not done here
+// # Option stacking, and who does the offering
 //
-// **Option stacking is read but not offered.** `-s` is parsed and a stacked
-// word is taken apart when the line is analyzed, so `-xy` marks both `-x` and
-// `-y` as seen; what `comparguments -s` will not do is offer the *rest* of a
-// stack, so `uname -a<TAB>` does not go on to `-am`. That is the one place
-// this knowingly answers smaller than zsh, and it is measured rather than
-// assumed — see the test of the same name.
+// This file used to say that `-s` was read but the rest of a stack was never
+// offered. **It is offered, and it always was** — because `_arguments` builds
+// the offering rather than this builtin. When `comparguments -s` answers 0 the
+// shipped function takes the names out of `-O`'s own four arrays, keeps the
+// single-letter ones, strips the leading `-` and writes `$PREFIX` back in
+// front; so a stacked word needs nothing from here but `-s`'s status and
+// `-O`'s arrays.
+//
+// Measured on zsh 5.9.2, 2026-09-16 through a pseudo-terminal with `compinit`
+// over this machine's own functions: `uname -a<TAB>` completes to `uname -ap `
+// on `/bin/zsh` and here alike, and `gzip -c<TAB>` twice lists the same
+// twenty-three stacked words from both. A function shadowing `compdescribe` on
+// the same line read the array the shipped `_arguments` had built out of
+// `_arguments`' own frame, and it is identical in the two shells:
+//
+//	_a_12=(-cd -cf -ch -ck -cl -cL -cn -cN -cq -cr -ct -cv -cV -c1 … -cS)
+//
+// `$single`, the parameter `-s` names, was empty in every one of those traces
+// and in every synthetic spec set asked beside them — `-af`, `-ad`, `-an`,
+// `-ao` against options whose arguments attach, follow, or come after an `=`
+// — so the documented `direct`/`next`/`equal` values belong to a shape neither
+// shell has been made to produce here, and the empty string is what zsh
+// answers with.
 
 // optionArgStyle is where an option's first argument may be written, which is
 // the whole of what separates `-O`'s four arrays.
@@ -139,15 +156,29 @@ type argumentsState struct {
 	args []argumentSpec
 
 	// What the line analysis found.
-	optionsHere bool // an option could be written at the cursor
+	//
+	// optionsPossible is whether this *position* still takes options at all
+	// — what `-O` answers about. optionsHere is that and the word under the
+	// cursor being one an option could be written into, which is what `-i`
+	// answers about. See optionsCompletable, where the two are separated and
+	// the measurement that separates them is.
+	optionsPossible bool
+	optionsHere     bool
 	// cursorIsOption records that the word being typed is already a whole
 	// option the specs know — see analyze, where the measurement is.
 	cursorIsOption bool
-	here           []int    // indices into args of the specs applying at the cursor
-	line           []string // the normal arguments, `$line`
-	optArgs        map[string]string
-	spent          map[string]bool // option names already on the line
-	shutOff        map[string]bool // what an option on the line excluded
+	// cursorOption is that option's name, where the word is exactly it. It
+	// is the one spent option that may still be offered — see offeredBack.
+	cursorOption string
+	// stackInProgress is whether the word under the cursor is a stack of
+	// single-letter options being continued: what `-s` answers, and half of
+	// what decides offeredBack.
+	stackInProgress bool
+	here            []int    // indices into args of the specs applying at the cursor
+	line            []string // the normal arguments, `$line`
+	optArgs         map[string]string
+	spent           map[string]bool // option names already on the line
+	shutOff         map[string]bool // what an option on the line excluded
 }
 
 // defaultArgumentsMatcher is what `-M` answers when `_arguments` was given no
@@ -376,10 +407,22 @@ func splitOptionModifier(name string) (string, optionArgStyle) {
 }
 
 // optionNames is the one or two names a spec describes: `-+foo` and `+-foo`
-// are both `-foo` and `+foo`, and everything else is itself.
+// are both `+foo` and `-foo`, and everything else is itself.
+//
+// **The `+` spelling comes first**, which is measured rather than chosen —
+// it is the order the two arrive in `-O`'s arrays. On zsh 5.9.2, 2026-09-16
+// from inside a `zle -C` widget with `-+a[plus]`, `-+b[bee]`, `-o[opt]:val:`
+// and `-p[proc]` declared:
+//
+//	cmd -o val foo<TAB>   next=(+a:plus -a:plus +b:bee -b:bee -p:proc)
+//	cmd +a<TAB>           next=(-a:plus +b:bee -b:bee -o:opt -p:proc)
+//
+// so the specs are in declaration order and each pair is `+` then `-`. The
+// second row is what says the pair is two names and not one: `+a` is spent
+// and `-a` is still offered.
 func optionNames(name string) []string {
 	if len(name) > 2 && (strings.HasPrefix(name, "-+") || strings.HasPrefix(name, "+-")) {
-		return []string{"-" + name[2:], "+" + name[2:]}
+		return []string{"+" + name[2:], "-" + name[2:]}
 	}
 	return []string{name}
 }

@@ -248,35 +248,45 @@ completes to `git checkout `, and a second Tab on `git che<TAB>` lists
 all three — the same three, in the same order, that zsh lists for the
 same widget.
 
-**The shipped completion system runs too, as far as the rest of the
-shell lets it.** `_main_complete` reaches `_complete` → `_normal` →
-`_dispatch` → `_arguments`, and `_arguments` is `comparguments` — one of
-the eight builtins of `zsh/computil`, all eight of which are now in the
-table. Measured 2026-09-15 through a pseudo-terminal against `compinit`
-on this machine's own zsh functions, with Tab left where `compinit` put
-it:
+**The shipped completion system runs too.** `_main_complete` reaches
+`_complete` → `_normal` → `_dispatch` → `_arguments`, and `_arguments`
+is `comparguments` — one of the eight builtins of `zsh/computil`, all
+eight of which are in the table and answering. Measured 2026-09-16
+through a pseudo-terminal against `compinit` on this machine's own zsh
+functions, with Tab left where `compinit` put it, `cmd/zsh` beside
+`/bin/zsh` on the same line and the same rc:
 
-    uname -<TAB>   here: -a  -m  -n  -p  -r  -s  -v
-                   zsh:  the same seven, each with its description
+    uname -<TAB>      here: -a  -m  -n  -p  -r  -s  -v
+                      zsh:  the same seven, each with its description
+    uname -a<TAB>     here: uname -ap        zsh: uname -ap
+    git che<TAB>      here: check-attr check-ignore check-mailmap
+                            check-ref-format checkout checkout-index
+                            cherry cherry-pick
+                      zsh:  the same eight, sorted, each described
+    git checkout -    here: -q --quiet -f --force -b -B -d --detach …
+                      zsh:  the same set, with descriptions
+    git log --for     here: --format=        zsh: --format=
+    gzip -c<TAB>      here: the twenty-three stacked words
+                      zsh:  the same twenty-three, in two blocks
 
-So the names and their order are zsh's. What zsh draws beside them is
-not: see the paragraph below.
+So the names and their order are zsh's, and the rest of an option stack
+is offered. What zsh draws *beside* a name is not: see below.
 
-**Three of the eight are smaller than zsh's.** `compfiles` builds no
-glob pattern and prunes nothing, which is an optimisation `_path_files`
-can do without; `compgroups` creates groups this editor has nowhere to
-draw; and `compdescribe` hands back one group per definition rather than
-one per distinct description, which is the same matches in the same
-order and a different listing arrangement. `#3039` records which.
+**Two of the eight are smaller than zsh's, and it is the same seam
+twice.** `compgroups` creates groups, and `compdescribe` splits its
+answer into one group per listing arrangement, and this editor has one
+listing arrangement — a block of replacement words with nowhere to put a
+description. The matches and their order are zsh's either way. A third,
+`compfiles`, builds no glob pattern and prunes nothing: that one is an
+optimisation `_path_files` can do without, and the conservative answers
+it gives are correct rather than approximate.
 
 **And what a shipped completion reaches is not decided here alone.**
-`_git` does not parse in this shell at all (#3040), and several
-completions that do parse stop short somewhere else — `_files` on a
-pattern this shell's globbing refuses (#3075), `_nl` and `_od` on the
-`(R)` expansion flag, `_file_modes` on the `zsh/complete` conditions. So
-`git che<TAB>` on a real `~/.zshrc` still offers what this document
-specifies rather than zsh's eight subcommands, and the reason is no
-longer `zsh/computil`.
+Several completions stop short somewhere outside `zsh/computil` — `_nl`
+and `_od` on the `(R)` expansion flag, `_file_modes` on the
+`zsh/complete` conditions, and `git checkout <branch>` on a `:q`
+modifier written after a bare parameter expansion (#3127), which leaves
+a literal `:q` for `compadd` to stop reading options at.
 
 **Descriptions are not carried either.** `compadd -d`, `-X` and `-x`
 are read and their argument consumed, and the listing this editor draws

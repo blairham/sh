@@ -1,0 +1,47 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# The token a `$( … )` body's refusal names — #3296.
+#
+# The body is not a program on its own: in the script it is followed by the
+# parenthesis that closed it. A shell that reads the body separately runs out
+# of *input* where the script's own reader meets a `)`, and each of them has
+# its own rule for what running out of input means — so the token named was
+# the right rule answering the wrong question. ksh93 named the construct left
+# open, `` `if' unmatched ``, where the shell itself names the closer.
+#
+# The sentence is ksh93's alone. bash writes `syntax error near unexpected
+# token' and a second line quoting the script; zsh writes `parse error near';
+# dash and BusyBox put the token in double quotes with no backquote anywhere.
+#
+# One failing case, and it is last, for the reason
+# ksh/substitution-fatality.tests gives: this failure ends the script. It can
+# be contained in a subshell *here* — which is that file's subject — but
+# ksh93 then mis-counts the lines of everything after it, reporting the next
+# failure a line or more early, so a file with two of them disagrees about
+# the line rather than about the token. The controls above it all parse.
+
+printf 'the controls first\n'
+
+# A body that parses, which is what says the body is read at all.
+v=$(echo hi); printf 'an ordinary body -> [%s]\n' "$v"
+
+# A body whose grammar fails *before* the closer is reached. The refusal is
+# the body's own and this change must not move it — but it is a control here
+# rather than a case, because it is fatal too: it is written so that it never
+# fails, and `share/suite/core` grades the shape that does.
+w=$(echo hi; echo x); printf 'two commands -> [%s]\n' "$w"
+
+# The older spelling, which ends at its own backquote rather than where its
+# contents end, and which the columns read with the script. It is the control
+# on the other side: this change is the parenthesised form's alone, and a
+# backquoted body that parses proves the form still works at all.
+x=`echo hi`; printf 'the older spelling -> [%s]\n' "$x"
+
+# And the case. `if` rather than `for`, because a bare `for` is the one
+# construct the whole panel answers specially — dash and BusyBox call the
+# closer a bad loop variable rather than an unexpected token, so it is the
+# one shape that cannot show this.
+printf 'the case\n'
+v=$(echo hi; if)
+printf 'never reached\n'

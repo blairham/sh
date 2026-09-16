@@ -146,3 +146,53 @@ emulate sh
 printf 'after a move: '
 report
 emulate zsh
+
+# `vi` and `emacs` are options *and* keymap selections, and the pair has to be
+# read together. `[[ -o vi ]]` alone says nothing about which keymap the line
+# editor is reading: `bindkey -v` leaves the option off and still edits the vi
+# way, and `setopt vi; bindkey -e` leaves the option on with the editor plainly
+# in emacs. So every row below prints both — the option, and the keymap `main`
+# is an alias for, which is what the editor actually consults.
+#
+# This exists because the option once moved nothing but itself: `setopt vi`
+# reported `vi on` and left the editor in emacs, so an Escape a person pressed
+# went into the line (#3140). A row that read only the option would have passed
+# every day of that.
+editing() {
+  printf '%-24s ' "$1"
+  [[ -o vi ]] && printf 'vi=on  ' || printf 'vi=off '
+  [[ -o emacs ]] && printf 'emacs=on  ' || printf 'emacs=off '
+  bindkey -lL main
+}
+
+( editing 'fresh shell' )
+( setopt vi; editing 'setopt vi' )
+( set -o vi; editing 'set -o vi' )
+( bindkey -v; editing 'bindkey -v' )
+( setopt emacs; editing 'setopt emacs' )
+( bindkey -e; editing 'bindkey -e' )
+
+# Turning one on is a selection; turning one off is not a request to go back.
+# Both directions, because a rule that only ever selected would pass the first
+# of these on its own.
+( setopt vi; unsetopt vi; editing 'setopt vi; unsetopt vi' )
+( bindkey -v; set +o vi; editing 'bindkey -v; set +o vi' )
+( setopt vi; bindkey -e; editing 'setopt vi; bindkey -e' )
+( setopt emacs; unsetopt emacs; editing 'setopt emacs; unsetopt emacs' )
+
+# And `-lL` is the listing that says it. `.safe` is named by `-l` and skipped
+# by `-lL`, because no `bindkey` command would make it; a name no keymap has is
+# refused with a colon that the same complaint from `-M` does not have.
+( setopt vi; bindkey -lL )
+( bindkey -l .safe; bindkey -lL .safe; printf '.safe under -lL -> nothing above\n' )
+( bindkey -lL emacs main )
+( bindkey -lL nosuchkeymap_zz ) 2> /dev/null
+printf 'bindkey -lL on a name nobody has -> %s\n' "$?"
+
+# And turning off the name that is *not* selected, which is the row that tells
+# "only turning one on selects" from "either direction selects": turning `vi`
+# off in a shell that turned `vi` on reselects the same keymap and reads alike
+# whichever rule is in force.
+( setopt vi; unsetopt emacs; editing 'setopt vi; unsetopt emacs' )
+( bindkey -v; unsetopt emacs; editing 'bindkey -v; unsetopt emacs' )
+( setopt emacs; unsetopt vi; editing 'setopt emacs; unsetopt vi' )

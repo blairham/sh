@@ -330,28 +330,96 @@ func TestACommandKeyBoundToItsEmacsDefaultIsStillReported(t *testing.T) {
 	}
 }
 
-// TestViEditingIsAskedOfTwoCommands is the measurement that decided the seam's
-// shape.
+// TestViEditingAndTheOptionAreReadTogether is the measurement that decided the
+// seam's shape, and it reads *both* halves of every row on purpose.
 //
 // Under a pty against zsh 5.9.2: `bindkey -v` gives a working command mode and
-// leaves `set -o` reporting `emacs off` and `vi off`, while `set -o vi` gives
-// the same command mode and reports `vi on`. So the option cannot be read for
-// the answer and neither can the keymap alone — which is why repl asks the
-// dialect rather than reading interp's editing mode itself.
-func TestViEditingIsAskedOfTwoCommands(t *testing.T) {
+// leaves `set -o` reporting `emacs off` and `vi off`, while `setopt vi` gives
+// the same command mode and reports `vi on`. So the two are one piece of state
+// written from two directions, and the option is a *report* of one of those
+// writes rather than the state itself.
+//
+// **An earlier version of this test read only ViEditing, and it passed every
+// day of #3140** — the bug where `setopt vi` was taken, reported itself on,
+// and left the editor reading the emacs keymap. ViEditing answered from
+// interp's editing mode, which the option really did move; nothing here asked
+// what the *editor* would consult. The last three rows are the ones that tell
+// the two apart, and each of them has the option and the keymap disagreeing.
+func TestViEditingAndTheOptionAreReadTogether(t *testing.T) {
 	for _, c := range []struct {
-		src  string
-		want bool
+		src    string
+		vi     bool // what the line editor does
+		option bool // what `[[ -o vi ]]` says about it
 	}{
-		{src: "bindkey -v\n", want: true},
-		{src: "set -o vi\n", want: true},
-		{src: "bindkey -v\nbindkey -e\n", want: false},
-		{src: "bindkey -e\n", want: false},
-		{src: ":\n", want: false},
+		{src: ":\n"},
+		{src: "bindkey -v\n", vi: true},
+		{src: "bindkey -e\n"},
+		{src: "bindkey -v\nbindkey -e\n"},
+		{src: "setopt vi\n", vi: true, option: true},
+		{src: "set -o vi\n", vi: true, option: true},
+		{src: "setopt emacs\n"},
+
+		// The rows that discriminate. Each is measured in zsh 5.9.2 by
+		// reading `bindkey -lL main` and `[[ -o vi ]]` back together.
+		//
+		//   `setopt vi; bindkey -e` — the option stays on and the editor
+		//   goes to emacs, so an answer read off the option is wrong here.
+		//
+		//   `setopt vi; unsetopt vi` — the option goes off and the keymap
+		//   stays viins, so turning the option off is not a request to go
+		//   back and an answer read off the option is wrong here too, in the
+		//   other direction.
+		{src: "setopt vi\nbindkey -e\n", option: true},
+		{src: "setopt vi\nunsetopt vi\n", vi: true},
+		{src: "bindkey -v\nset +o vi\n", vi: true},
+
+		// And turning off the name that is *not* selected, which is the row
+		// that tells "only on selects" from "either direction selects". The
+		// two rows above cannot: turning `vi` off in a shell that turned `vi`
+		// on would select `viins` again either way and read the same. This
+		// one moves the other name, so a selection on the way off would put
+		// the editor in emacs. Measured: `setopt vi; unsetopt emacs` leaves
+		// `main` on `viins` with `vi` still on.
+		{src: "setopt vi\nunsetopt emacs\n", vi: true, option: true},
+		{src: "bindkey -v\nunsetopt emacs\n", vi: true},
+		{src: "setopt emacs\nunsetopt vi\n"},
 	} {
-		if got := zsh.ViEditing(bindkeyRunner(t, c.src)); got != c.want {
-			t.Errorf("after %q, ViEditing = %v, want %v", c.src, got, c.want)
+		r := bindkeyRunner(t, c.src)
+		if got := zsh.ViEditing(r); got != c.vi {
+			t.Errorf("after %q, ViEditing = %v, want %v", c.src, got, c.vi)
 		}
+		if got, known := r.DialectOption("vi"); !known || got != c.option {
+			t.Errorf("after %q, [[ -o vi ]] = %v (known %v), want %v", c.src, got, known, c.option)
+		}
+	}
+}
+
+// TestTheKeymapListingSaysWhichOneIsCurrent is `bindkey -l` and `-lL`.
+//
+// `-lL` is the only way a script can read which keymap is current: `main` is
+// an alias, and the command that would recreate it writes the target out.
+// Measured on zsh 5.9.2 — `.safe` is named by `-l` and skipped by `-lL`
+// because no `bindkey` command would make it, and a name no keymap has is
+// refused with a colon that the same complaint from `-M` does not have.
+func TestTheKeymapListingSaysWhichOneIsCurrent(t *testing.T) {
+	for _, c := range []struct{ src, want string }{
+		{src: "bindkey -lL main\n", want: "bindkey -A emacs main\n"},
+		{src: "setopt vi\nbindkey -lL main\n", want: "bindkey -A viins main\n"},
+		{src: "set -o vi\nbindkey -lL main\n", want: "bindkey -A viins main\n"},
+		{src: "bindkey -v\nbindkey -lL main\n", want: "bindkey -A viins main\n"},
+		{src: "setopt vi\nbindkey -e\nbindkey -lL main\n", want: "bindkey -A emacs main\n"},
+		{src: "bindkey -l main\n", want: "main\n"},
+		{src: "bindkey -l .safe\n", want: ".safe\n"},
+		{src: "bindkey -lL .safe\n", want: ""},
+		{src: "bindkey -lL emacs main\n", want: "bindkey -N emacs\nbindkey -A emacs main\n"},
+		{src: "bindkey -lL nosuch_zz\n", want: "zsh:bindkey:1: no such keymap: `nosuch_zz'\n"},
+	} {
+		if out, _ := runZsh(t, t.TempDir(), c.src); out != c.want {
+			t.Errorf("%q printed %q, want %q", c.src, out, c.want)
+		}
+	}
+	if _, st := runZsh(t, t.TempDir(), "bindkey -lL nosuch_zz\n"); st != 1 {
+		t.Errorf("a name no keymap has is status %d, want 1", st)
 	}
 }
 

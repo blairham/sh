@@ -433,18 +433,24 @@ func keymapBindings(r *interp.Runner, km repl.Keymap) map[string]string {
 
 // ViEditing reports whether this session has a command mode.
 //
-// **Two commands ask for it and only one of them is the option**, which is
-// measured and is the reason repl asks a dialect rather than reading the
-// core's editing mode: in zsh 5.9.2 under a pty, `bindkey -v` gives a working
-// command mode and leaves `set -o` reporting both `emacs off` and `vi off`,
-// while `set -o vi` gives the same command mode and reports `vi on`. So either
-// is enough, and neither can be read off the other.
+// **The keymap is the answer and the option is not**, which is measured and
+// is the reason repl asks a dialect rather than reading the core's editing
+// mode. In zsh 5.9.2 the two move together in one direction only:
+//
+//	bindkey -v        -> main is viins, and `[[ -o vi ]]` is false
+//	setopt vi         -> main is viins, and `[[ -o vi ]]` is true
+//	setopt vi; bindkey -e -> main is emacs, and `[[ -o vi ]]` is still true
+//
+// So an option read here would put the third row in vi mode with the editor
+// plainly in emacs. The option reaches the keymap where it should — see
+// editingOption in setopt.go, which is the seam #3140 was the absence of —
+// and this reads the one piece of state both commands write.
 func ViEditing(r *interp.Runner) bool {
 	switch currentKeymap(r) {
 	case "viins", "vicmd":
 		return true
 	}
-	return r.EditingMode() == interp.EditingModeVi
+	return false
 }
 
 // readBindings is one keymap's table: the defaults with whatever was changed
@@ -489,6 +495,11 @@ func currentKeymap(r *interp.Runner) string {
 	return "emacs"
 }
 
+// selectKeymap makes one keymap the current one — what `main` is an alias for
+// — which is what `bindkey -v`, `bindkey -e` and the `vi` and `emacs` options
+// all do and the only thing they have in common. See editingOption.
+func selectKeymap(r *interp.Runner, name string) { r.SetVar(bindkeyMap, name) }
+
 // bindkeyLetters are the option letters this builtin answers to.
 const bindkeyLetters = "lLeavrsM"
 
@@ -503,13 +514,10 @@ func bindkeyBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 		return code
 	}
 	if opts.list {
-		for _, name := range keymapsNow(r) {
-			_, _ = fmt.Fprintf(r.Out(), "%s\n", name)
-		}
-		return 0
+		return listKeymaps(r, rest, opts.commands)
 	}
 	if opts.selected != "" {
-		r.SetVar(bindkeyMap, opts.selected)
+		selectKeymap(r, opts.selected)
 		if len(rest) == 0 && !opts.commands && !opts.remove && !opts.strings && opts.keymap == "" {
 			// Measured: `bindkey -v` and `bindkey -e` alone print nothing.
 			// Selecting a keymap is not a request to see it, where `-M` and
@@ -548,6 +556,54 @@ func bindkeyBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 	default:
 		return bindPairs(r, rest, false)
 	}
+}
+
+// listKeymaps answers `bindkey -l`: the keymaps this shell has, or the ones
+// named, and with `-L` the commands that would make each.
+//
+// **`-lL` is the one place a script can read which keymap is current.** `main`
+// is an alias rather than a keymap, so the command that would recreate it is
+// `bindkey -A <target> main` with the target written out — which is exactly
+// the question `setopt vi` moves and the only scriptable answer to it. There
+// is no `$KEYMAP` outside a widget and no other listing that says it, so
+// without this the option's effect was observable only through a terminal,
+// which is how it stayed broken (#3140).
+//
+// Measured on zsh 5.9.2: `.safe` is listed by `-l` and skipped by `-lL`,
+// because it is built into the shell and no `bindkey` command would make it.
+// A name no keymap has is `no such keymap` and status 1 under both, and the
+// order is keymapsNow's — names given as operands are printed in the order
+// they were written, which is also measured (`bindkey -lL emacs main`).
+func listKeymaps(r *interp.Runner, names []string, commands bool) int {
+	if len(names) == 0 {
+		names = keymapsNow(r)
+	} else {
+		have := keymapsNow(r)
+		for _, name := range names {
+			if !containsWord(have, name) {
+				// **With a colon, where `-M` says the same thing without
+				// one.** Measured on zsh 5.9.2, both status 1: `bindkey -l
+				// nosuch` is "no such keymap: `nosuch'" and `bindkey -M
+				// nosuch ...` is "no such keymap `nosuch'". One shell, one
+				// condition, two sentences — so the two routes cannot share
+				// a wording however much they want to.
+				r.Diagnosef("no such keymap: `%s'\n", name)
+				return 1
+			}
+		}
+	}
+	for _, name := range names {
+		switch {
+		case !commands:
+			_, _ = fmt.Fprintf(r.Out(), "%s\n", name)
+		case name == "main":
+			_, _ = fmt.Fprintf(r.Out(), "bindkey -A %s main\n", currentKeymap(r))
+		case name == ".safe":
+		default:
+			_, _ = fmt.Fprintf(r.Out(), "bindkey -N %s\n", name)
+		}
+	}
+	return 0
 }
 
 // bindkeyOpts is what the letters asked for.

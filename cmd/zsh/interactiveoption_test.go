@@ -22,11 +22,11 @@ import (
 //
 // The prompt is two rows on purpose. A one-line `PS1` is drawn by parts of
 // this front end that a two-row one is not, and a probe that cannot tell them
-// apart has measured the easy half. Only its **last** row is asserted here:
-// this shell draws that row and drops the ones above it, where zsh 5.9.2 draws
-// all of them — measured with a three-row `PS1` and true of `-i` as well, so it
-// is a defect of the prompt drawer rather than of this route, and it is filed
-// rather than pinned here.
+// apart has measured the easy half. **Both** rows are asserted, which they
+// were not when this was written: the plain prompt loop drew the last row and
+// dropped the ones above it, so this test asserted `ROW2> ` alone and said so.
+// That was #3222, and with it fixed the upper row is the half that says the
+// prompt reaching a program on the other end of a pipe is the whole prompt.
 //
 // Measured 2026-09-16 against zsh 5.9.2 with the program on a pipe, so that
 // nothing but the invocation could make the shell interactive. Each row below
@@ -65,7 +65,7 @@ func TestTheInteractiveOptionNameDrawsAPrompt(t *testing.T) {
 			if !strings.Contains(both, "TYPED") {
 				t.Fatalf("said %q, want the typed line to have run under either answer", both)
 			}
-			for _, mark := range []string{"RCWASREAD", "ROW2> "} {
+			for _, mark := range []string{"RCWASREAD", "ROW1\nROW2> "} {
 				if got := strings.Contains(both, mark); got != tc.prompts {
 					t.Errorf("%q present = %v, want %v — said %q", mark, got, tc.prompts, both)
 				}

@@ -185,6 +185,13 @@ printf -- '--- what a .set returns is the assignment status ---\n'
   printf 'read: %s\n' "$?"
   for s in one; do :; done
   printf 'for: %s\n' "$?"
+
+  # And the status belongs to the assignment that ran the hook. A plain
+  # assignment to a name with no discipline of its own, straight after one
+  # that failed, is 0 — which is what says the answer is read from this
+  # command rather than left lying about from the last one.
+  plain=ok
+  printf 'a name with no hook: %s\n' "$?"
 )
 
 printf -- '--- an exported name reaches a child through its .get ---\n'

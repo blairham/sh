@@ -1109,11 +1109,35 @@ func TestThePrivilegedLetter(t *testing.T) {
 	if !strings.Contains(out, "st=0") {
 		t.Errorf("out = %q, want the name granted too", out)
 	}
-	// The move this shell cannot make is refused, and refused by the *name*
-	// — the letter is not a second complaint about the same request.
+	// And the move, which is granted and lands wherever the name lands.
+	//
+	// It used to be refused here, by the *name* rather than by the letter —
+	// and that was the name's answer rather than the letter's then too. The
+	// name is recorded since #3128 and the letter followed it without being
+	// told, which is the point of routing the letter through the table: two
+	// spellings of one question cannot answer differently. Measured
+	// 2026-09-16, `set -p` is status 0 in bash 5.3.20, bash 3.2.57 and
+	// ksh93u+ alike, and the two shells differ only in where the row lands
+	// afterwards — on in bash, off in ksh93, which is
+	// Runner.AddInertSetOptions and not the letter's business.
 	out, _ = run(t, `set -p; echo "st=$?"`, has(Yes))
-	if !strings.Contains(out, "privileged") || !strings.Contains(out, "st=2") {
-		t.Errorf("out = %q, want the name refused at 2", out)
+	if !strings.Contains(out, "st=0") || strings.Contains(out, "not implemented") {
+		t.Errorf("out = %q, want the letter granted through the name", out)
+	}
+	// And the row it leaves behind, which is the half a status cannot see:
+	// recorded here, so the letter really did move the state the name holds.
+	out, _ = run(t, "set -p\nset -o\n", has(Yes))
+	if got := listedState(out, "privileged"); got != "on" {
+		t.Errorf("set -p left the row %q, want on (listing %q)", got, out)
+	}
+	// Where the dialect declares the name inert the same letter is still
+	// granted and the row does not move, which is ksh93's answer.
+	out, _ = run(t, "set -p\nset -o\n", func(r *Runner) {
+		has(Yes)(r)
+		r.AddInertSetOptions("privileged")
+	})
+	if got := listedState(out, "privileged"); got != "off" {
+		t.Errorf("set -p under an inert name left the row %q, want off (listing %q)", got, out)
 	}
 	// Where the dialect has not got the letter at all, both directions are a
 	// bad option rather than a granted no-op.

@@ -209,7 +209,16 @@ func (r *Runner) typePath(name string, m typeMode) int {
 	}
 	if !past {
 		// This engine's `-p` speaks only where the plain answer would have
-		// been a file: a function, builtin or keyword is silence and 0.
+		// been a file: an alias, function, builtin or keyword is silence
+		// and 0. The alias is first because the plain answer puts it first —
+		// `type -p ls` is silent in bash 5.3.20 with `alias ls=...` set, and
+		// names the file without it.
+		if _, _, _, ok := r.AliasForName(name); ok {
+			return 0
+		}
+		if r.unspecified {
+			return 2
+		}
 		if _, ok := r.reportedFunc(name); ok && !m.noFuncs {
 			return 0
 		}
@@ -328,8 +337,30 @@ func (r *Runner) functionOrigin(name string) (string, bool) {
 // typeAll is `-a`: every resolution the name has — the shell's own answer
 // and then every PATH hit, in PATH order, duplicates and all.
 func (r *Runner) typeAll(name string, m typeMode) int {
+	// `-p` and `-P` narrow the listing to its file rows. A letter that asks
+	// for the *kind* wins over them, which is measured rather than chosen:
+	// `type -apt cd` is `builtin` then `file` in bash 5.3.20 and bash 3.2.57,
+	// where `-ap` is the path alone.
+	if (m.path || m.pathSearch) && !m.kind && !m.word {
+		return r.typeAllPaths(name, m)
+	}
 	dg := r.diag()
 	found := false
+	// The tables come first, as they do in the plain answer and in every
+	// column that has the letter: bash 5.3.20, zsh 5.9.2 and ksh93u+ all
+	// write the alias row ahead of the function, the builtin and the files,
+	// and all three then carry on rather than stopping there. Measured
+	// 2026-09-16. This listing had no alias row at all, so a name that was
+	// only an alias was `not found` under `-a` while plain `type` named it.
+	if display, value, akind, ok := r.AliasForName(name); ok {
+		found = true
+		if !r.sayKind(m.asked(), name, "alias", "alias") {
+			r.printf("%s\n", r.AliasSentence(display, value, akind))
+		}
+	}
+	if r.unspecified {
+		return 2
+	}
 	if fn, ok := r.reportedFunc(name); ok && !m.noFuncs {
 		found = true
 		if !r.sayKind(m.asked(), name, "function", NamedKindWord(NameFunction)) {
@@ -377,6 +408,79 @@ func (r *Runner) typeAll(name string, m typeMode) int {
 		return 0
 	}
 	return r.typeNotFound(m.kind, r.typeNotFoundWording(name))
+}
+
+// typeAllPaths is `-a` with `-p` or `-P`: the same walk, printed as paths.
+//
+// The letters compose rather than one cancelling the other — `-a` decides how
+// many rows there are and `-p` decides what a row says — which is why this
+// shares the found/not-found tail with [Runner.typePath] instead of restating
+// it. Measured 2026-09-16 over a function, a builtin-and-file, a name twice on
+// PATH and a name that is nothing:
+//
+//	              bash 5.3.20        ksh93u+            zsh 5.9.2
+//	-ap f         silence, 0         silence, 1         `f not found`, 1
+//	-ap echo      /bin/echo, 0       /bin/echo, 0       `echo is /bin/echo`, 0
+//	-ap dup       both paths, 0      both paths, 0      both sentences, 0
+//	-ap nosuch    silence, 1         silence, 1         `nosuch not found`, 1
+//
+// The first row is TypePSearchesPathPastTheShell and nothing new: where the
+// shell's own answer counts, a name it can answer for is *found* even though
+// this letter prints none of it. What `-a` changes is that the shell's answer
+// no longer stops the PATH walk — bash prints nothing for `type -p echo` and
+// the file for `type -ap echo` — so the two are asked separately here.
+func (r *Runner) typeAllPaths(name string, m typeMode) int {
+	past := r.ask(r.sem().TypePSearchesPathPastTheShell, "`type -p` searching PATH past the shell's own answer")
+	if r.unspecified {
+		return 2
+	}
+	found := false
+	if !past && !m.pathSearch {
+		// Counted, never printed: `-P` is the letter that ignores the
+		// shell's own answer in every column, so it asks nothing here.
+		if _, _, _, ok := r.AliasForName(name); ok {
+			found = true
+		}
+		if r.unspecified {
+			return 2
+		}
+		if _, ok := r.reportedFunc(name); ok && !m.noFuncs {
+			found = true
+		}
+		if _, ok := r.lookupBuiltin(name); ok {
+			found = true
+		}
+		if r.reservedWord(name) {
+			found = true
+		}
+	}
+	sentence := r.ask(r.sem().TypePathAnswerIsASentence, "`type -p` answering with a sentence")
+	if r.unspecified {
+		return 2
+	}
+	if !r.reservedBuiltin(name) {
+		for _, path := range r.lookPathAll(name) {
+			found = true
+			path = r.reportedPath(name, path)
+			if r.unspecified {
+				return r.status
+			}
+			if sentence {
+				r.printf("%s\n", Wording(r.diag().TypeExternal, "%[1]s is %[2]s", name, path))
+			} else {
+				r.printf("%s\n", path)
+			}
+		}
+	}
+	if found {
+		return 0
+	}
+	if sentence {
+		return r.typeNotFound(m.kind, r.typeNotFoundWording(name))
+	}
+	// A miss is silence and the failing status in the bare-path shells, the
+	// same tail the plain letter has.
+	return orDefault(r.diag().TypeNotFoundStatus, 1)
 }
 
 // typeNotFound is the tail every mode shares: the complaint — or `-t`'s

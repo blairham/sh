@@ -1587,17 +1587,35 @@ func (sh *Runner) applyFloat(op string, l, r arithNum) (arithNum, error) {
 		return floatNum(math.Pow(a, b)), nil
 	case "%":
 		// A remainder is a float operation in one of the two shells with
-		// floats — `7 % 2.5` is 2 there — and refused outright in the other,
-		// which is the same axis the bitwise operators answer.
+		// floats — `7 % 2.5` is 2 there — and the other refuses a float here
+		// the way it refuses one to a bitwise operator.
 		//
-		// Both operands are offered, because either may be the float: `7%2.5`
-		// has a whole number on the left, and asking only about that one let
-		// the refusal through.
-		if _, err := sh.integerOperand(l, op); err != nil {
-			return intNum(0), err
-		}
+		// But it refuses only the **divisor**, and that is measured rather
+		// than assumed. 2026-09-16, AT&T ksh93u+ 2012-08-01:
+		//
+		//	7 % 2.5    invalid floating point operation
+		//	7 % 2.0    invalid floating point operation
+		//	2.0 % 2.0  invalid floating point operation
+		//	1.5 % 1    0
+		//	7.0 % 2    1
+		//	-1.5 % 2   -1
+		//
+		// So a float dividend is truncated and the remainder is an integer
+		// one — `1.5 % 1` is 0 and not the 0.5 the float operation gives.
+		// Every other integer-only operator refuses a float on either side
+		// there, `1 << 1.5` and `1 & 1.5` included, so this is the one
+		// operand in the shell that is taken rather than questioned.
+		//
+		// The extent belongs to the refusal rather than to an axis of its
+		// own: zsh does not refuse at all, and bash and dash have no float to
+		// offer, so there is no second column that could answer it
+		// differently.
 		if _, err := sh.integerOperand(r, op); err != nil {
 			return intNum(0), err
+		}
+		if l.floatKind() &&
+			sh.ask(sh.sem().ArithIntegerOperatorRefusesFloat, "an integer-only operator refusing a float") {
+			return sh.apply(op, intNum(l.asInt()), r)
 		}
 		return floatNum(math.Mod(a, b)), nil
 	}

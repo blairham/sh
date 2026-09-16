@@ -122,13 +122,20 @@ func TestArithIntegerOperatorRefusesFloatIsAnAxis(t *testing.T) {
 		src  string
 		want string
 	}{
-		// A remainder is a float operation on the tolerant side and refused
-		// on the other, and either operand may be the float — `7%2.5` has a
-		// whole number on the left, and asking only about that let the
-		// refusal through.
+		// A remainder is a float operation on the tolerant side and refuses
+		// only its *divisor* on the other. The row below used to say
+		// `7.5 % 2` was refused too, which was never measured: ksh93u+
+		// 2012-08-01 answers 1 for it, and 0 for `1.5 % 1`, so the dividend
+		// is truncated and the remainder taken on integers. Every other
+		// integer-only operator does refuse either side — see the bitwise
+		// rows — which is what made the wrong reading look like the obvious
+		// one.
 		{"remainder truncates nothing", No, `echo $((7%2.5))`, "2"},
-		{"remainder refused", Yes, `echo $((7%2.5))`, "invalid floating point operation"},
-		{"remainder refused from the left", Yes, `echo $((7.5%2))`, "invalid floating point operation"},
+		{"remainder refused by its divisor", Yes, `echo $((7%2.5))`, "invalid floating point operation"},
+		{"and by a whole one written as a float", Yes, `echo $((7%2.0))`, "invalid floating point operation"},
+		{"but a float dividend is truncated", Yes, `echo $((7.5%2))`, "1"},
+		{"and truncated toward zero", Yes, `echo $((-1.5%2))`, "-1"},
+		{"a dividend under one still counts", Yes, `echo $((1.5%1))`, "0"},
 		{"remainder of two floats", No, `echo $((7.5%2))`, "1.5"},
 		// A bitwise operator is not the same question: the tolerant side
 		// truncates rather than working in floating point.

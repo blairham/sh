@@ -16136,6 +16136,24 @@ shift. ksh93 says yes and refuses; zsh says no and truncates. It does
 not arise in a shell without floats, which is why bash and dash leave it
 unanswered.
 
+The *extent* of the refusal is part of the answer rather than a second
+axis, because no other column can be asked it: zsh refuses nothing and
+bash and dash have no float to offer. Measured 2026-09-16 against ksh93u+
+2012-08-01, `%` refuses only its **divisor**:
+
+    7 % 2.5    invalid floating point operation
+    7 % 2.0    invalid floating point operation   even a whole one
+    2.0 % 2.0  invalid floating point operation
+    1.5 % 1    0                                  the dividend is truncated
+    7.0 % 2    1
+    -1.5 % 2   -1
+
+So a float dividend is taken and the remainder is an *integer* one —
+`1.5 % 1` is 0, not the 0.5 the float operation gives. Every other
+integer-only operator refuses a float on either side there, `1 << 1.5`,
+`1 & 1.5` and `~1.5` included, which makes `%`'s dividend the one operand
+in the shell that is taken rather than questioned.
+
 **`Dialect.ArithHexFloat`** — a grammar flag, ksh93 alone
 
 C's hexadecimal spelling of a float inside `$(( ))`: a hexadecimal

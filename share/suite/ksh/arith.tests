@@ -190,3 +190,20 @@ printf 'and with only a sign:       %s\n' "$(( 0x1p+ ))"
 printf 'a point with no digit before it: %s\n' "$?"
 ( printf 'value [%s]\n' "$(( 16#1p4 ))" ) 2>/dev/null
 printf 'and the base# spelling has none of this: %s\n' "$?"
+
+# --- the one operand an integer-only operator takes rather than refuses --------
+#
+# A float where only an integer will do is refused here and truncated in zsh,
+# which is an axis. What is this column's alone is the *extent* of the refusal:
+# `%` refuses a float divisor and takes a float dividend, truncating it — so
+# `1.5 % 1` is 0 and not the 0.5 the float operation gives. Every other
+# integer-only operator refuses a float on either side.
+printf 'a float dividend is truncated: %s\n' "$(( 1.5 % 1 ))"
+printf 'a whole one written as a float: %s\n' "$(( 7.0 % 2 ))"
+printf 'and a negative one:             %s\n' "$(( -1.5 % 2 ))"
+( printf 'value [%s]\n' "$(( 7 % 2.5 ))" ) 2>/dev/null
+printf 'a float divisor is refused: %s\n' "$?"
+( printf 'value [%s]\n' "$(( 7 % 2.0 ))" ) 2>/dev/null
+printf 'even a whole one: %s\n' "$?"
+( printf 'value [%s]\n' "$(( 1.5 & 1 ))" ) 2>/dev/null
+printf 'and a bitwise operator refuses either side: %s\n' "$?"

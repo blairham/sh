@@ -1229,6 +1229,10 @@ func Semantics() interp.Semantics {
 // 458 rows of the corpus on its own.
 func Diagnostics() interp.Diagnostics {
 	return interp.Diagnostics{
+		// An assignment written in front of a command is traced on the
+		// command's own line, exactly as the script spells it: `+ A=3 f zz`,
+		// where bash writes two lines and ksh93 writes the command first.
+		TracePrefixAssignment: interp.TracePrefixOnTheCommandLine,
 		// Measured on `-c`, on a script file and on standard input: only the
 		// script route names a line. `ash -c 'echo a; nosuchcmd'` is `ash:
 		// nosuchcmd: not found` however deep the failure is, and the same two

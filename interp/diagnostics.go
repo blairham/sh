@@ -5152,6 +5152,14 @@ type Diagnostics struct {
 	// rendered. Zero is TraceArrayTight, which is bash's answer and the
 	// substrate's own; ksh93 and zsh write a space inside each parenthesis.
 	TraceArrayLiteral TraceArrayLiteral
+	// TracePrefixAssignment is where an assignment written in front of a
+	// command is traced. Zero is TracePrefixOwnLineBefore — a line of its
+	// own, ahead of the command's — which is all three bash columns' answer
+	// and the substrate's own; ksh93 writes it after the command, and dash,
+	// BusyBox ash and zsh write it on the command's own line. See
+	// interp/xtraceprefix.go, and #3133 for the position that was written
+	// nowhere at all.
+	TracePrefixAssignment TracePrefixAssignment
 	// TracePrefixRepeatsAtIndirection repeats the trace prefix's first
 	// character once per level of indirection — an `eval`, a sourced file, a
 	// command substitution or a trap body the traced command is inside.

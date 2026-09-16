@@ -292,6 +292,13 @@ func (r *Runner) traceCommand(words []string) {
 		return
 	}
 	d := r.diag()
+	r.errf("%s%s\n", r.tracePrefix(), strings.Join(r.traceCommandWords(words, d), " "))
+}
+
+// traceCommandWords is one command's words, quoted for a trace. Split out of
+// traceCommand because a prefixed command's line is built elsewhere and has
+// to quote its words the same way — see Runner.tracePrefixAndCommand.
+func (r *Runner) traceCommandWords(words []string, d Diagnostics) []string {
 	quoted := make([]string, len(words))
 	for i, w := range words {
 		if traceBracketIsBare(d.TraceBareBracket, words, i) {
@@ -300,7 +307,7 @@ func (r *Runner) traceCommand(words []string) {
 		}
 		quoted[i] = traceQuote(w, d.TraceQuoting, d.TraceMetacharacters)
 	}
-	r.errf("%s%s\n", r.tracePrefix(), strings.Join(quoted, " "))
+	return quoted
 }
 
 // traceAssignments writes one trace line for a run of assignments.

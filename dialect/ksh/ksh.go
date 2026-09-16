@@ -2514,6 +2514,11 @@ func Diagnostics() interp.Diagnostics {
 		// `[ -n "]" ]` is `[ -n ']' ]`.
 		TraceBareBracket:  interp.TraceBracketPairBare,
 		TraceArrayLiteral: interp.TraceArraySpaced,
+		// The assignment written in front of a command is traced *after* the
+		// command's own line — `+ /bin/echo c` then `+ C=3` — except in front
+		// of a special builtin or a function, where it comes first. See
+		// interp/xtraceprefix.go for the nine rows that says.
+		TracePrefixAssignment: interp.TracePrefixOwnLineAfter,
 		// The same quoting inside a condition as outside it, which is where
 		// this shell parts from bash: `[[ "a b" == "a b" ]]` traces
 		// `[[ 'a b' == 'a b' ]]` here and `[[ a b == a b ]]` there.

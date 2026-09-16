@@ -447,12 +447,19 @@ func quantifiesAGroup(s string, i int) bool {
 	return false
 }
 
+// closesGroup reports whether the group opening at i is closed.
+//
+// A bracket expression is stepped over whole, for the reason closingParen
+// does it: a parenthesis inside a bracket is a member and not nesting, so
+// `([(])` is a closed group however unbalanced its parentheses look.
 func closesGroup(s string, i int) bool {
 	depth := 0
 	for ; i < len(s); i++ {
 		switch s[i] {
 		case '\\':
 			i++
+		case '[':
+			i = skipBracket(s, i)
 		case '(':
 			depth++
 		case ')':

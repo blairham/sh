@@ -974,10 +974,8 @@ func topAlternatives(pattern string) (arms []string, offsets []int) {
 			// measured, `L='[a|b]'` matches `a` and matches `|`, so a bar
 			// between two members is not a split. An unterminated `[` is not
 			// a bracket expression and its text is ordinary, which is what
-			// the second answer says.
-			if end, ok := bracketEnd(pattern, i); ok {
-				i = end
-			}
+			// skipBracket answers by standing still.
+			i = skipBracket(pattern, i)
 		case '|':
 			if depth == 0 {
 				arms, offsets = append(arms, pattern[start:i]), append(offsets, start)
@@ -1507,12 +1505,20 @@ func splitGroup(p string, pp int, o *patternOpts) (body string, quant byte, rest
 }
 
 // closingParen is the offset of the `)` that closes the `(` at the start of p.
+//
+// A bracket expression is stepped over whole, because a parenthesis inside
+// one is a member rather than nesting: `([(])` matches `(` on zsh 5.9.2 and
+// had no closing parenthesis at all here, so the group was not a group and
+// the text was read as ordinary characters (#3075). The prepared table in
+// matchWhere.prepare is built from this, so the two cannot disagree.
 func closingParen(p string) (int, bool) {
 	depth := 0
 	for i := 0; i < len(p); i++ {
 		switch p[i] {
 		case '\\':
 			i++
+		case '[':
+			i = skipBracket(p, i)
 		case '(':
 			depth++
 		case ')':
@@ -1534,6 +1540,22 @@ func alternatives(body string) []string {
 
 // alternativesAt is alternatives with each arm's offset in the pattern, which
 // is what a nested group inside an arm needs to know its own number.
+//
+// The bracket expression is stepped over whole, exactly as [topAlternatives]
+// does it and by the same scan — a `|` between two members of a bracket is a
+// member and not a split, and so is every `(` and `)` in there. The comment
+// above has said so since it was written and the code did not, which cost
+// this (#3075): `([a|b])` was split into `([a` and `b])`, the first arm
+// carried an unterminated `[`, and the whole pattern was refused. The
+// parentheses inside are the half that makes it invisible — in
+// `([][()|*?^#~<>])` the `(` and `)` inside the bracket balance, so the depth
+// counter is back at nought when the `|` arrives and the split looks correct.
+//
+// Measured 2026-09-15 with `[[ $s == ${~p} ]]`, each probe in a script file
+// of its own. bash 5.3.20 and bash 3.2.57 with `extglob`, ksh93u+ and zsh
+// 5.9.2 all match `a` against `@([a|b])` and `|` against `@([]|])`; dash and
+// BusyBox ash have neither `[[ ]]` nor the group, so six of seven columns
+// agree and the seventh cannot be asked. A plain bug, not an axis.
 func alternativesAt(body string, at int) (arms []string, offsets []int) {
 	depth, start := 0, 0
 	for i := 0; i < len(body); i++ {
@@ -1544,6 +1566,11 @@ func alternativesAt(body string, at int) (arms []string, offsets []int) {
 			depth++
 		case ')':
 			depth--
+		case '[':
+			// An unterminated `[` is not a bracket expression and its text
+			// is ordinary, so a `|` behind one still splits — which is what
+			// skipBracket answers by standing still.
+			i = skipBracket(body, i)
 		case '|':
 			if depth == 0 {
 				arms, offsets = append(arms, body[start:i]), append(offsets, at+start)

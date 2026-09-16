@@ -139,9 +139,13 @@ func Semantics() interp.Semantics {
 	// keyword` is refused the same way. The refusal is dash's answer rather
 	// than a gap, which is what this states.
 	s.KeywordAssignments = interp.No
+	// unanswered KeywordPromotesADeclarationsOperand: there is no keyword
+	// option here to reach a declaration with — `set -k` is `Illegal option
+	// -k` and ends the file — so the question cannot be put to this shell.
 	// Job control wants the tty: with none, `set -m` earns the remark
 	// `can't access tty; job control turned off` — a remark, measured, not
 	// a failure: the option stays off and `set` still reports 0.
+
 	s.MonitorNeedsATerminal = interp.Yes
 	// The monitor alone is what `fg` and `bg` need, which here means with a
 	// terminal: the monitor is denied without one, so the gate answers no

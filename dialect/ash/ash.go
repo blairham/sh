@@ -246,8 +246,12 @@ func Semantics() interp.Semantics {
 	// at 2 and the file ends there. The refusal is this shell's answer
 	// rather than a gap.
 	s.KeywordAssignments = interp.No
+	// unanswered KeywordPromotesADeclarationsOperand: there is no keyword
+	// option here to reach a declaration with — `set -k` is `illegal option
+	// -k` and ends the file — so the question cannot be put to this shell.
 	// `$-` under `-c` is `c`, and `set -e -u` makes it `uce` — so the letter
 	// is shown, where dash shows nothing at all on that route.
+
 	s.CommandStringShowsCInDollarDash = interp.Yes
 	s.LoginShowsLInDollarDash = interp.No
 	s.CommandStringShowsSInDollarDash = interp.No

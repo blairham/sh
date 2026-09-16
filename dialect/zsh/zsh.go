@@ -793,6 +793,11 @@ func Semantics() interp.Semantics {
 	// the command name stays a positional and that is zsh's answer rather
 	// than a gap. See Semantics.KeywordAssignments.
 	s.KeywordAssignments = interp.No
+	// unanswered KeywordPromotesADeclarationsOperand: there is no keyword
+	// option here to reach a declaration with. `-k` is this shell's
+	// `interactivecomments` and `set -o keyword` is `no such option`, both
+	// measured 2026-09-16, so the question cannot be put to it.
+
 	s.HistoryExpansionAtAPrompt = interp.Yes
 	// The startup files, and zsh has more of them than the rest of the panel
 	// put together. Measured 2026-09-05 through a pseudo-terminal with a

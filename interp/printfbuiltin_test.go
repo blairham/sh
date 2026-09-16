@@ -1838,7 +1838,7 @@ func TestPrintfAsksTheNonFiniteAxisOnlyWhereTheReadingsDiffer(t *testing.T) {
 
 // A field wider than Go's `fmt` renders is laid out by this shell instead.
 //
-// Past `printfFmtWidthCeiling` the package writes its own error text into the
+// Past `printfFmtFieldCeiling` the package writes its own error text into the
 // output — `%!(NOVERB)%!(EXTRA int64=1)` — which is a message for a Go
 // programmer arriving in a shell script's stdout. Measured by bisection
 // 2026-09-14: 10000009 renders and 10000010 does not (#2663).
@@ -1877,6 +1877,93 @@ func TestAFieldWiderThanFmtRendersIsLaidOutHere(t *testing.T) {
 			}
 			if strings.Contains(out, "NOVERB") {
 				t.Error("fmt's own complaint reached the output")
+			}
+		})
+	}
+}
+
+// A precision wider than Go's `fmt` renders is honored by this shell instead.
+//
+// The same ceiling the width has, reached the other way and never covered:
+// printfWideField takes a wide width out of the spec and lays it out, and
+// there was no equivalent for the precision — so everything between the
+// ceiling and the C int printfFieldBeyondAnInt settles fell straight through
+// to `fmt` and put `%!(NOVERB)%!(EXTRA string=xyz)` on the shell's stdout at
+// status 0 (#3017).
+//
+// Two halves, because a precision means two different things. A string
+// conversion's only truncates, so one past the operand is a no-op and the
+// field is the operand. A numeric conversion's is digits that have to be
+// produced, and bash really does produce them — every length below is bash
+// 5.3.20's, measured byte for byte 2026-09-15.
+//
+// One past the ceiling rather than the issue's two billion: the shape is the
+// same and the test writes ten megabytes instead of two gigabytes.
+func TestAPrecisionWiderThanFmtRendersIsHonoredHere(t *testing.T) {
+	const over = 10000010
+	for _, tc := range []struct {
+		name        string
+		src         string
+		want        string
+		wantLen     int
+		first, last byte
+	}{
+		// The truncating conversions, where the answer is the whole operand.
+		{name: "a string precision", src: `printf '[%.10000010s]' xyz`, want: "[xyz]"},
+		{name: "reached through a star", src: `printf '[%.*s]' 10000010 xyz`, want: "[xyz]"},
+		{name: "an escaped one", src: `printf '[%.10000010b]' 'a\tb'`, want: "[a\tb]"},
+		{name: "a quoted one", src: `printf '[%.10000010q]' xyz`, want: "[xyz]"},
+		// A format with no conversions in it, so the row is the precision
+		// and not the machine's timezone.
+		{name: "and a date", src: `printf '[%.10000010(epoch)T]' 0`, want: "[epoch]"},
+		// The digits really are produced, and these are bash's lengths.
+		{
+			name: "a decimal precision is minimum digits", src: `printf '%.10000010d' 1`,
+			wantLen: over, first: '0', last: '1',
+		},
+		{
+			name: "so is a hexadecimal one", src: `printf '%.10000010x' 1`,
+			wantLen: over, first: '0', last: '1',
+		},
+		{
+			name: "a float precision is places after the point", src: `printf '%.10000010f' 1`,
+			wantLen: over + 2, first: '1', last: '0',
+		},
+		{
+			name: "and the sign leads them", src: `printf '%.10000010f' -1`,
+			wantLen: over + 3, first: '-', last: '0',
+		},
+		{
+			name: "a scientific one keeps its exponent", src: `printf '%.10000010e' 1`,
+			wantLen: over + 6, first: '1', last: '0',
+		},
+		// `%g` counts *significant* digits and strips the trailing zeros,
+		// so ten million of them come to one character.
+		{name: "a significant-digit precision strips them again", src: `printf '[%.10000010g]' 1`, want: "[1]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := printfSem()
+			sem.PrintfTimeConversion = Yes
+			sem.PrintfTimeOperandIsADateString = No
+			out, st := run(t, tc.src+"\n", func(r *Runner) { r.Semantics = &sem })
+			if strings.Contains(out, "NOVERB") || strings.Contains(out, "EXTRA") {
+				t.Fatalf("fmt's own complaint reached the output: %q", out[:min(len(out), 80)])
+			}
+			if st != 0 {
+				t.Errorf("status = %d, want 0", st)
+			}
+			if tc.want != "" {
+				if out != tc.want {
+					t.Errorf("got %q, want %q", out, tc.want)
+				}
+				return
+			}
+			if len(out) != tc.wantLen {
+				t.Fatalf("len = %d, want %d", len(out), tc.wantLen)
+			}
+			if out[0] != tc.first || out[len(out)-1] != tc.last {
+				t.Errorf("ends are %q…%q, want %q…%q",
+					out[0], out[len(out)-1], tc.first, tc.last)
 			}
 		})
 	}

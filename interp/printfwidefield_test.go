@@ -34,7 +34,7 @@ func TestAZeroInTheWidthIsNotTheZeroFlag(t *testing.T) {
 				t.Errorf("narrow=%q flags=%q, want %q and %q",
 					narrow, flags, tc.wantNarrow, tc.wantFlags)
 			}
-			if want := printfFmtWidthCeiling + 1; width != want {
+			if want := printfFmtFieldCeiling + 1; width != want {
 				t.Errorf("width = %d, want %d", width, want)
 			}
 		})

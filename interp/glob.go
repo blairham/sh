@@ -1164,13 +1164,15 @@ func (r *Runner) excludedBy(word string, rights []string) bool {
 // all, so no zero-level match arises there without a trailing slash — and
 // with one, the slash comes from the pattern and this never runs.
 //
-// ksh93 *is* a second reading and is deliberately not modeled here, because
-// nothing in this tree can reach it yet: it drops the zero-level match
-// entirely where the prefix is spelled out, so `a/b/**` is the three names
-// beneath `a/b` and `a/*/**` is `a/b a/f1 …` — the mirror image, and it
-// counts a plain file as a zero-level match where bash keeps only
-// directories. `set -o globstar` is not wired into that dialect, so writing
-// the axis today would be writing a branch no run can take.
+// ksh93 *is* a second reading, and since #3152 it is modeled — under an
+// option of its own rather than as this function's other answer, because the
+// two ask different questions about the same prefix. This one asks whether
+// the path was **spelled**, and writes a separator where it was. That one
+// asks where the starting directory's name **came from**, and reports it only
+// where a listing produced it. See globZeroLevelSource and
+// StarStarZeroLevelIsTheDirectoryItStartsFrom, and note that the two are read
+// on either side of the `**` run's collapse: `a/**/**` is `a` here and
+// nothing there.
 func (r *Runner) spelledOut(ahead []string) bool {
 	for _, p := range ahead {
 		if r.describesRatherThanSpells(p) {
@@ -1419,10 +1421,19 @@ func (r *Runner) matchIn(dir, pattern string, o patternOpts, seeHidden bool) []s
 //
 // The component match only. A `..` the walk *descended into* would climb out
 // of the tree and never stop, and no column does that — ksh93's `**` lists
-// the tree below and nothing above it. Whether the descent also *lists* the
-// two names beside the entries it finds is a question no dialect here can
-// reach: ksh93 does (`**` under `set -o globstar` writes `sub/.` and
-// `sub/..`), and this preset has no `globstar` to turn its `**` on with.
+// the tree below and nothing above it.
+//
+// Whether the descent also *lists* the two names beside the entries it finds
+// is now reachable and is **not** done: that dialect's `set -o globstar` was
+// wired to the walk in #3152, so the question stopped being hypothetical, and
+// the sentence standing here until then said it could not be reached at all.
+// Measured 2026-09-16, with `FIGNORE` set so that the leading-period rule is
+// off and the names are visible at all: ksh93's `set -o globstar; FIGNORE=zz;
+// printf '[%s]' **` writes `[.][..][p][p/.][p/..][p/pf]…` and this walk
+// writes `[p][p/pf]…`. A gap rather than a decision — the two names come from
+// globListingNames, which the component match consults and appendDescendants
+// does not — and filed as its own row rather than folded in here, because a
+// descent that lists `..` has to say what it then does with it.
 func (r *Runner) globListingNames(entries []os.DirEntry) []string {
 	names := make([]string, 0, len(entries)+2)
 	if r.sem().GlobListsDotAndDotDot == Yes {

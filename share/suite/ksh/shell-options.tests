@@ -233,3 +233,98 @@ set +x
 exec 2>&3
 cat xt.err
 printf 'and the append did not outlive the command [%s]\n' "$v"
+
+# ---- `set -o globstar`, and the walk behind it ----
+#
+# The row moved from #3128 and `**` went on reading as `*`, which is the same
+# promise the refusal was, one level quieter: `set -o globstar` at 0 with the
+# listing saying `globstar on` and a script still getting `d/e` for `d/**`
+# (#3152).
+#
+# Four questions hang on the one name here, and three of them are bash's
+# answers too — `**` crosses levels, `**/` names a symlinked directory
+# without entering it, and a run of `**` is one component rather than a cross
+# product. The other two are this shell's alone, and neither is the symmetric
+# guess:
+#
+#   - A zero-level `**` is **not** the directory the walk stood in. What it
+#     reports is what the component ahead of it *listed*, so `p/**` names no
+#     `p/` at all, `*/**` names the plain file `topf` that no walk could have
+#     stood in, and `*/q/**` and `**/q/**` differ while spelling the same `q`.
+#   - A pattern holding a `**` reads no directory through a symbolic link —
+#     the one the walk starts in included — while the same shell with the
+#     option still on reads straight through that link for a pattern with no
+#     `**` in it.
+#
+# Every pattern is printed one word per `[…]`. A table built with `echo` looks
+# identical across every column in the panel, because `echo` joins with
+# spaces and the whole question here is where the words divide.
+
+mkdir -p gs/p/q/w gs/r
+: > gs/topf; : > gs/p/pf; : > gs/p/q/qf; : > gs/p/q/w/leaf; : > gs/r/x
+ln -s r gs/s
+
+# Off first, so the rows below are a difference and not a claim.
+( cd gs; printf 'off p/**  [%s]' p/**; printf '\n' )
+
+( cd gs
+  set -o globstar
+  printf 'set -o globstar -> %s\n' "$?"
+  [[ -o globstar ]] && printf 'and the condition agrees\n'
+
+  # Crossing, with a component behind it and with none.
+  printf 'p/**       [%s]' p/**; printf '\n'
+  printf '**/qf      [%s]' **/qf; printf '\n'
+  printf 'p/q/**     [%s]' p/q/**; printf '\n'
+
+  # The zero-level question, four ways. The prefix decides it, and `*/**`
+  # naming a plain file is what says the match is a listing and not a place
+  # the walk stood.
+  printf '*/**       [%s]' */**; printf '\n'
+  printf 'p/*/**     [%s]' p/*/**; printf '\n'
+  printf '*/q/**     [%s]' */q/**; printf '\n'
+  printf '**/q/**    [%s]' **/q/**; printf '\n'
+  printf '**/q/w/**  [%s]' **/q/w/**; printf '\n'
+
+  # A trailing slash asks for directories and writes one slash, not two.
+  printf 'p/**/      [%s]' p/**/; printf '\n'
+  printf '*/**/      [%s]' */**/; printf '\n'
+
+  # A run of `**` is one component. Without that the run is a cross product
+  # and every name comes back once per way of splitting it.
+  printf '**/**/     [%s]' **/**/; printf '\n'
+  printf 'p/**/**    [%s]' p/**/**; printf '\n'
+
+  # Links: named by `**/`, never entered, and not read from at all by a
+  # pattern that holds a `**`.
+  printf '**/        [%s]' **/; printf '\n'
+  printf '**/x       [%s]' **/x; printf '\n'
+  printf 's/**       [%s]' s/**; printf '\n'
+  printf 's/**/x     [%s]' s/**/x; printf '\n'
+  # A literal component is joined and stat'd rather than listed, so it
+  # reaches through the same link in the same pattern.
+  printf '*/x        [%s]' */x; printf '\n'
+  # And with no `**` in the word the link is read like any other directory,
+  # with the option still on.
+  printf 's/*        [%s]' s/*; printf '\n'
+  printf '*/*        [%s]' */*; printf '\n'
+)
+
+# The letter is the same option: `set -G` moves the row and shows in `$-`.
+( cd gs
+  set -G
+  printf 'set -G -> %s\n' "$?"
+  set -o | grep '^globstar'
+  case "$-" in *G*) printf 'the letter is in $-\n' ;; *) printf 'the letter is not in $-\n' ;; esac
+  printf 'set -G p/** [%s]' p/**; printf '\n'
+  set +G
+  set -o | grep '^globstar'
+  case "$-" in *G*) printf 'and set +G left it\n' ;; *) printf 'and set +G took it out\n' ;; esac
+)
+
+# A subshell that turns it off does not reach the shell that started it.
+( cd gs
+  set -o globstar
+  ( set +o globstar; printf 'inner [%s]' p/**; printf '\n' )
+  printf 'outer [%s]' p/**; printf '\n'
+)

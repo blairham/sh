@@ -5349,8 +5349,13 @@ The bill is real and it is deferred rather than waived: `globstar` on with no
 `**` crossing is a weaker answer than `globstar` implemented, which is why
 each name that is recorded rather than built carries an issue of its own. A
 name that becomes real must leave the recorded set in the same change, and
-`braceexpand`, `keyword`, `history`, `histexpand` and `onecmd` are the five
-that already have.
+`braceexpand`, `keyword`, `history`, `histexpand`, `onecmd` and `globstar`
+are the six that already have. `globstar` is the worked example of the bill
+coming due: it was recorded for one day, and building it took two options
+nobody had measured — ksh93 takes a zero-level `**` from what the component
+ahead of it listed rather than from the directory the walk stood in, and
+answers a `**` pattern with a walk that reads no directory through a symbolic
+link (#3152).
 
 What it needed was a run-time switch beside the dialect's answer, and the
 two are different questions: `Semantics.BraceExpansion` is whether this

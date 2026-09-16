@@ -189,3 +189,55 @@ func TestStarStarSeeingALinkStillDoesNotEnterIt(t *testing.T) {
 		t.Errorf("**/x = %s, want [r/x]", out)
 	}
 }
+
+// TestAStarStarPatternReadsNoLinkedDirectoryWhereTheDialectSaysSo is the
+// third column, and it is a fact about the whole **pattern** rather than
+// about the `**` component: one shell answers a field holding a
+// level-crossing `**` with a physical walk and reads no directory through a
+// link anywhere in it — while the same shell, with the same option still set,
+// reads straight through that link for a field with no `**` in it.
+//
+// Measured 2026-09-16 on ksh93u+ 2012-08-01 under `set -o globstar` in this
+// fixture, against bash 5.3.20 under `shopt -s globstar` and zsh 5.9.2.
+func TestAStarStarPatternReadsNoLinkedDirectoryWhereTheDialectSaysSo(t *testing.T) {
+	dir := starStarLinkDir(t)
+	// The crossing on and the link reading off, which is the ksh93 pair. The
+	// zero-level option is off with it, so `s/**` has no self match to fall
+	// back on either — and that is why the row below is a miss and not `[s/]`.
+	physical := withOption(StarStarCrossesDirectories, true, inDir(dir))
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			// The walk will not begin behind the link, so the pattern is
+			// the word. bash answers `[s/x]` for this.
+			"a walk does not begin behind a link", `printf "[%s]" s/**/x`, `[s/**/x]`,
+		},
+		{
+			// Nor where a pattern put it there rather than a spelling: the
+			// `s` and `up` the `*` matched are both links, so only `r` is
+			// walked. Measured — ksh93 answers `[r/x]` where bash answers
+			// `[r/x][s/x][up/r/x][up/s/x]` and zsh `[r/x][s/x][up/r/x]`.
+			"however the link was reached", `printf "[%s]" */**/x`, `[r/x]`,
+		},
+		{
+			// A **literal** component is joined onto the path and stat'd
+			// rather than listed, so it reaches through the same link in the
+			// same pattern — the row that keeps this from being read as
+			// "drop every link from the set".
+			"a literal still reaches through one", `printf "[%s]" */x`, `[r/x][s/x]`,
+		},
+		{
+			// And with no `**` in the word at all the link is read like any
+			// other directory, with the option still on. This is the row
+			// that makes it the pattern's property rather than the option's.
+			"a pattern with no crossing in it reads the link",
+			`printf "[%s]" s/*`, `[s/x]`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, _ := run(t, tc.src, physical)
+			if out != tc.want {
+				t.Errorf("%s = %s, want %s", tc.src, out, tc.want)
+			}
+		})
+	}
+}

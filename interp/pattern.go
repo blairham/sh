@@ -83,8 +83,15 @@ const bracketMeta = "-]!"
 // an oversight: an escaped ordinary character is that character, so the two
 // spellings match the same text and no test could tell a guard here from its
 // absence.
-func escapePatternMeta(text string) string {
-	const meta = patternMeta + extendedPatternMeta + bracketMeta
+func escapePatternMeta(text string) string { return escapePatternMetaIn(text, everyDialectsMeta) }
+
+// everyDialectsMeta is the mark set above: every character that means
+// something in a pattern in *some* dialect, plus the three that mean
+// something only inside a bracket expression.
+const everyDialectsMeta = patternMeta + extendedPatternMeta + bracketMeta
+
+// escapePatternMetaIn is escapePatternMeta over a named set.
+func escapePatternMetaIn(text, meta string) string {
 	if !strings.ContainsAny(text, meta) {
 		return text
 	}
@@ -96,6 +103,47 @@ func escapePatternMeta(text string) string {
 		b.WriteByte(text[i])
 	}
 	return b.String()
+}
+
+// markedMeta is the set escapePatternMeta marks for *this* dialect, and it is
+// the wide one in four columns out of five.
+//
+// The paragraph above escapePatternMeta says a surplus mark costs nothing,
+// because an escaped ordinary character is that character and no test could
+// tell the guard from its absence. That is true under two of the three
+// readings of [Semantics.BracketEscape] and **false under the third**: where
+// the backslash is a member of the set rather than protection for what
+// follows, every surplus mark is a surplus member, and a quoted `(` inside a
+// bracket would admit a backslash BusyBox never puts there.
+//
+// So the set narrows exactly where it becomes visible, to what this dialect
+// itself reads: the three that are metacharacters everywhere, the backslash,
+// the three that mean something inside a bracket, and the negating caret;
+// groups, numeric ranges, a top-level bar and the extended operators join it
+// only in the dialects that have them. Measured 2026-09-16 against BusyBox
+// ash 1.37.0 a character at a time — `case 'a\c' in a[\X]c)` for 37 values of
+// X — and the characters it keeps a mark before are `* ? [ ] \ ! ^ -` and no
+// others: `( ) | < ~ #` are ordinary there, and this shell has none of the
+// four constructs that would make them anything else (#3271).
+func (r *Runner) markedMeta() string {
+	if r.sem().BracketEscape != BracketEscapeIsOnlyAMember {
+		return everyDialectsMeta
+	}
+	d := r.dialect()
+	meta := `*?[\` + bracketMeta + "^"
+	if d.PatternAlternation || d.ExtendedPattern || d.ExtendedPatternInCondition {
+		meta += "()"
+	}
+	if d.NumericRangePattern {
+		meta += "<"
+	}
+	if d.PatternTopLevelAlternation.ReadsATopLevelBar(false) {
+		meta += "|"
+	}
+	if d.ExtendedPattern || d.ExtendedPatternInCondition {
+		meta += "#~"
+	}
+	return meta
 }
 
 // patternOf renders a word as a pattern, expanding it and escaping the parts
@@ -155,7 +203,7 @@ func (r *Runner) patternOf(w *syntax.Word) string {
 		}
 		// Quoted text, and the result of an expansion the dialect does not
 		// re-read as a pattern, are literal: every metacharacter is escaped.
-		b.WriteString(escapePatternMeta(text))
+		b.WriteString(escapePatternMetaIn(text, r.markedMeta()))
 	}
 	return r.markWrittenBars(b.String(), fromValue)
 }
@@ -320,7 +368,7 @@ func (r *Runner) patternSpan(s syntax.Span) (text string, live bool) {
 		// with: whatever the value was worth is settled here, and what comes
 		// back is the finished pattern.
 		if !live {
-			text = escapePatternMeta(text)
+			text = escapePatternMetaIn(text, r.markedMeta())
 		}
 		return text + r.bareSubscriptPattern(tail), true
 	case syntax.CommandSubst:
@@ -443,7 +491,8 @@ func (r *Runner) expansionPattern(v string, q syntax.Quoting, glob Answer) (stri
 // bracketEscapeAsMember rewrites a value about to be matched as a pattern so
 // that the backslashes inside its bracket expressions are members of their
 // sets as well as protection for the characters behind them — which is what
-// [Semantics.BracketEscapeIsAlsoAMember] records, and what one column does.
+// [Semantics.BracketEscape] records at BracketEscapeProtectsAndIsAMember,
+// and what one column does.
 //
 // It is spelled as a rewrite rather than as a flag the matcher reads because
 // the matcher cannot tell the two provenances apart. A backslash reaching it
@@ -458,7 +507,7 @@ func (r *Runner) expansionPattern(v string, q syntax.Quoting, glob Answer) (stri
 // Off — every column but one — nothing is rewritten and the value reaches the
 // matcher as it stands.
 func (r *Runner) bracketEscapeAsMember(v string) string {
-	if !r.sem().BracketEscapeIsAlsoAMember || !strings.Contains(v, `\`) {
+	if !hasBracketEscape(v) || r.bracketEscape() != BracketEscapeProtectsAndIsAMember {
 		return v
 	}
 	var b strings.Builder
@@ -689,6 +738,15 @@ type patternOpts struct {
 	// character after it stands on its own. See
 	// Semantics.PatternEscapeReaches, which is where it is measured.
 	escapes string
+	// bracketMember says a backslash *inside* a bracket expression escapes
+	// nothing and is an ordinary member of the set — the third reading of
+	// [Semantics.BracketEscape], which BusyBox ash holds. The escape rule
+	// outside a bracket is `escapes` above and is untouched by it, which is
+	// the control that says this is about the bracket.
+	//
+	// Set only where the pattern really holds one, so the axis is asked
+	// where it decides and nowhere else.
+	bracketMember bool
 }
 
 // escapeReaches reports whether a backslash escapes c rather than standing
@@ -1896,12 +1954,35 @@ func unterminatedBracket(p, c string, o *patternOpts) (rest string, ok bool) {
 // being read as the operator. A bound that needed no protection keeps its
 // range, so `[\a-z]` is still a through z.
 func bracketMember(p string, i int, o *patternOpts) (unit string, next int) {
-	if p[i] == '\\' && i+1 < len(p) && o.escapeReaches(p[i+1]) {
+	if p[i] == '\\' && i+1 < len(p) && !o.bracketMember && o.escapeReaches(p[i+1]) {
 		w := o.unitWidth(p[i+1:])
 		return p[i+1 : i+1+w], i + 1 + w
 	}
 	w := o.unitWidth(p[i:])
 	return p[i : i+w], i + w
+}
+
+// hasBracketEscape reports whether a pattern holds a backslash inside a
+// bracket expression, which is the only place [Semantics.BracketEscape]
+// decides anything — so an ordinary `[a-z]`, and a backslash standing
+// anywhere else in the pattern, put no question to the dialect.
+func hasBracketEscape(p string) bool {
+	for i := 0; i < len(p); i++ {
+		switch p[i] {
+		case '\\':
+			i++
+		case '[':
+			end, ok := bracketEnd(p, i)
+			if !ok {
+				return false
+			}
+			if strings.Contains(p[i:end], `\`) {
+				return true
+			}
+			i = end
+		}
+	}
+	return false
 }
 
 // hasUnterminatedBracket reports whether a pattern contains a `[` with no
@@ -2253,8 +2334,19 @@ func (r *Runner) patternOpts(pattern string, subjects ...string) patternOpts {
 		quantified:        r.readsQuantifiedGroups(false),
 		numericRange:      r.dialect().NumericRangePattern,
 		escapes:           r.sem().PatternEscapeReaches,
+		bracketMember:     r.bracketEscapeIsOnlyAMember(pattern),
 		classes:           r.patternClasses(pattern),
 	}, pattern, 1), pattern)
+}
+
+// bracketEscapeIsOnlyAMember resolves [Semantics.BracketEscape] for the
+// matcher, and only for a pattern that really holds a backslash inside a
+// bracket expression.
+func (r *Runner) bracketEscapeIsOnlyAMember(pattern string) bool {
+	if !hasBracketEscape(pattern) {
+		return false
+	}
+	return r.bracketEscape() == BracketEscapeIsOnlyAMember
 }
 
 // readsQuantifiedGroups reports whether `@(a|b)` is a group where this pattern

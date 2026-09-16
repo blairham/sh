@@ -52,8 +52,10 @@ ordinary already.
 
 **Asking it takes care, because quote removal answers first.** An escape
 written in the source is spent before the matcher ever sees it, so a
-`case` pattern spelled `bet\a` is the pattern `beta` in all six shells
-and says nothing about this. What does ask it is a pattern the matcher
+`case` pattern spelled `bet\a` is the pattern `beta` in all seven shells
+and says nothing about this. That unanimity is **outside** a bracket
+expression, and it is the control for the axis in the next section —
+inside one, BusyBox ash spends nothing. What does ask it is a pattern the matcher
 receives with a *raw* backslash in it — a substituted one, in the five
 shells that match the result of an expansion, and the same two lines
 under `setopt globsubst` in the one that does not:
@@ -107,6 +109,37 @@ Semantics axis: `BracketCaretNegates` — dash no, bash, ksh93 and zsh
 yes. Unanswered in the core, and the `posix` preset says no, because in
 a shell pattern the standard has `!` *replace* `^` in the role it plays
 in regular expression notation (XCU §2.13.1), which leaves `^` ordinary.
+
+### A backslash inside a bracket expression
+
+Three readings, and `Semantics.BracketEscape` is the axis. Measured
+2026-09-07 through zsh's `${~p}` and again 2026-09-16 against BusyBox
+ash 1.37.0 in the digest-pinned Alpine image, under `--init`:
+
+| shell | `[\)]` holds | `[a\-z]` holds |
+| --- | --- | --- |
+| bash 5.3, as `sh`, bash 3.2, dash, ksh93 | `)` | `a`, `-`, `z` |
+| zsh 5.9.2 | `)` and `\` | `a`, `-`, `z`, `\` — no `y` |
+| BusyBox ash 1.37.0 | `\` alone | `a`, and the **range** `\`–`z` |
+
+The last row's second cell is what makes it a reading rather than a
+refusal: the `-` behind the backslash is still the range operator there,
+with the backslash as its left bound, so `a[a\-z]c` matches `abc` and
+`a\c` and does **not** match `a-c`. A shell that rejected the pattern
+would answer no to all three.
+
+**Both routes reach it in that shell**, which is what the section above
+used to deny. Quote removal there keeps the escape before a character
+that is a metacharacter *to BusyBox* — measured, `* ? [ ] \ ! ^ -` and
+no others, so `( ) | < ~ #` are ordinary — and the matcher's bracket
+scan has no escape rule, so the surviving backslash is a member. A
+pattern written in the source therefore reaches the matcher with the
+backslash still in it, where the other six columns spend it.
+
+This implementation marks quoted text with a backslash, that being the
+only channel quoting has, so the set it marks narrows to what the
+dialect itself reads wherever a surplus mark would become a surplus
+member.
 
 ### The character classes
 

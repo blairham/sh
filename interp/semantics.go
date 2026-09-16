@@ -10450,10 +10450,19 @@ type Semantics struct {
 	// characters `bet\a` and matches `beta` not at all.
 	//
 	// Measured 2026-09-07 by handing the matcher a raw backslash, which is
-	// the only way to ask: quote removal takes an escape off a pattern
-	// written in the source before the matcher ever sees it, so a `case`
-	// pattern spelled `bet\a` is `beta` in all six and says nothing about
-	// this. What does ask it is a *substituted* pattern — `p='bet\a'; case
+	// the only way to ask *this* axis: quote removal takes an escape off a
+	// pattern written in the source before the matcher ever sees it, so a
+	// `case` pattern spelled `bet\a` is `beta` in all seven and says nothing
+	// about this. That row is also the control for BracketEscape — outside a
+	// bracket expression BusyBox ash spends the escape like every other
+	// column, which is what keeps #3271 about the bracket.
+	//
+	// The sentence "only `${~p}` hands this matcher a raw backslash" used to
+	// stand here and in BracketEscape's doc, and it is false: BusyBox's quote
+	// removal keeps the escape before a character that is a metacharacter to
+	// *that* shell, so a bracket expression written in the source reaches its
+	// matcher with the backslash still in it. What is unanimous is this axis
+	// rather than the route. What does ask it is a *substituted* pattern — `p='bet\a'; case
 	// beta in $p)` in the five shells that match the result of an expansion,
 	// and `setopt globsubst` with the same two lines in zsh, which does not.
 	//
@@ -10511,36 +10520,37 @@ type Semantics struct {
 	// are resolved where a Runner can be asked and not in a table.
 	PatternClasses string
 
-	// BracketEscapeIsAlsoAMember says a backslash that protects a member of
-	// a bracket expression is a member of the set itself.
+	// BracketEscape is what a backslash *inside* a bracket expression does,
+	// and the panel gives it three answers rather than two.
 	//
-	// False is five columns' answer: `[\)]` handed to the matcher with the
-	// backslash still in it is the one-character set `)` in bash, bash 3.2,
-	// bash as `sh`, dash and ksh93. True is zsh's, where the same set holds
-	// the backslash as well.
+	// Measured 2026-09-07 through zsh's `${~p}` and again 2026-09-16 against
+	// BusyBox ash 1.37.0 in the digest-pinned Alpine image internal/oracle
+	// reaches, under `--init`. Two routes can ask: a bracket written in the
+	// *source*, whose escapes quote removal spends before the matcher sees
+	// them in six columns, and the *result of an expansion*, where the
+	// backslash arrives as data.
 	//
-	// Measured 2026-09-07 through `${~p}`, which is the only construct that
-	// hands this matcher a bracket expression holding a raw backslash — a
-	// pattern *written* in the source has had its escapes spent by quote
-	// removal long before, which is why the two routes can disagree at all
-	// and why the source route is unanimous. Four values, four exact hits:
+	//	p='[\)]'   p='[\-z]'                   route
+	//	bash 5.3, as `sh`, bash 3.2, dash, ksh93   `)`   `-`, `z`, no `y`
+	//	zsh 5.9.2                       `)` and `\`   `-`, `z`, `\`, no `y`
+	//	BusyBox ash 1.37.0              `\` alone     the **range** `\` to `z`
 	//
-	//	p='[\)]'   matches `)` and `\`, not `a`
-	//	p='[\-z]'  matches `-`, `z` and `\`, not `y` — no range is formed
-	//	p='[\a]'   matches `a` and `\`
-	//	p='[\]]'   matches `]` and `\`
+	// The second column of the last row is what says BusyBox holds a third
+	// reading rather than one of the first two: the `-` behind the backslash
+	// is still the range operator there, and the backslash is its left bound,
+	// so `a[a\-z]c` matches `abc` and `a\c` and does **not** match `a-c`.
+	// zsh protects the dash and adds the backslash; BusyBox protects nothing
+	// and adds the backslash; the other five protect and add nothing.
 	//
-	// The second row is what says the answer is *also a member* rather than
-	// *not an escape*: the `-` behind the backslash stays a member instead of
-	// becoming the range operator, so the protection happens there too. Both
-	// halves are true at once, which is exactly what this field turns on.
+	// It was a bool until #3271 and the third column had no value it could
+	// hold without being wrong about half its rows — the same shape
+	// DollarSingleNul had at #2276. "Does the backslash join the set" and
+	// "what does the backslash do" are different questions, and a two-valued
+	// field has quietly answered the first.
 	//
-	// It reaches only the results of expansions, in expansionPattern, because
-	// that is the only place a backslash arrives inside a bracket expression
-	// without having been put there to say "the source quoted this". Reading
-	// it in the matcher instead would have taken the source route with it and
-	// broken the unanimous half (#1407).
-	BracketEscapeIsAlsoAMember bool
+	// Asked only where a pattern really holds a backslash inside a bracket
+	// expression, so an ordinary `[a-z]` puts no question to the dialect.
+	BracketEscape BracketEscapePolicy
 
 	// LongestMatchTakesTheWrittenArm decides which match `${x##pat}` removes,
 	// and which one `${x//pat/rep}` replaces, when `pat` holds an alternation
@@ -17637,6 +17647,61 @@ func (r *Runner) quoteStyle() PrintfQuoteStyle {
 	return p
 }
 
+// BracketEscapePolicy is what a backslash inside a bracket expression does —
+// see [Semantics.BracketEscape] for the three measured columns.
+type BracketEscapePolicy int
+
+const (
+	// BracketEscapeUnspecified is no answer, and is refused like any other.
+	BracketEscapeUnspecified BracketEscapePolicy = iota
+	// BracketEscapeProtectsTheMember spends the backslash on the character
+	// behind it and puts nothing of its own in the set: `[\)]` is the
+	// one-character set `)`, and `[a\-z]` is the three members a, `-` and
+	// z, the escape being what stops the dash reading as the range operator.
+	// bash 5.3, that binary as `sh`, bash 3.2, dash and ksh93.
+	BracketEscapeProtectsTheMember
+	// BracketEscapeProtectsAndIsAMember does both: `[\)]` holds `)` **and**
+	// a backslash, and `[\-z]` holds a dash, a z and a backslash while
+	// holding no y. zsh, reachable only through `${~p}` — a pattern written
+	// in the source has had its escapes spent long before.
+	BracketEscapeProtectsAndIsAMember
+	// BracketEscapeIsOnlyAMember protects nothing: the backslash is an
+	// ordinary member of the set and the character behind it keeps whatever
+	// meaning it has there, so `[\)]` is the one-character set `\` and
+	// `[a\-z]` is `a` together with the **range** from `\` to `z`.
+	// BusyBox ash, and the reading that had nowhere to go while this was a
+	// bool (#3271).
+	//
+	// It is the bracket alone. Outside one this shell spends the escape like
+	// every other column — `bet\a` matches `beta` — which is the control
+	// that says this is about the bracket and not about patterns in general.
+	BracketEscapeIsOnlyAMember
+)
+
+func (p BracketEscapePolicy) String() string {
+	switch p {
+	case BracketEscapeProtectsTheMember:
+		return "protects the member"
+	case BracketEscapeProtectsAndIsAMember:
+		return "protects and is a member"
+	case BracketEscapeIsOnlyAMember:
+		return "is only a member"
+	}
+	return "unspecified"
+}
+
+// bracketEscape resolves the axis, and only for a pattern that really holds a
+// backslash inside a bracket expression.
+func (r *Runner) bracketEscape() BracketEscapePolicy {
+	p := r.sem().BracketEscape
+	if p == BracketEscapeUnspecified {
+		r.diagf("%s\n", r.unanswered("a backslash inside a bracket expression"))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
+}
+
 // DollarSingleControlPolicy is what `\c` means inside `$'…'`.
 //
 // The three answers were measured character by character rather than assumed
@@ -19153,6 +19218,7 @@ func (r *Runner) matchPatternR(pattern, s string, condition bool) bool {
 		fold:              r.MatchOption(MatchFoldsCase),
 		chars:             r.patternCountsCharacters(pattern, s),
 		escapes:           r.sem().PatternEscapeReaches,
+		bracketMember:     r.bracketEscapeIsOnlyAMember(pattern),
 		classes:           r.patternClasses(pattern),
 		unknownClass:      r.unknownClassPolicy(pattern),
 		unterminatedClass: r.unterminatedClassPolicy(pattern),

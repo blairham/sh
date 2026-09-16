@@ -79,6 +79,11 @@ func testSemantics() Semantics {
 	// emptyreplacementpattern_test.go, which sets both sides.
 	s.ReplacementAnchors = Yes
 	s.AnchoredEmptyReplacementPattern = Yes
+	// And whether the anchor counts after the *global* `//`, which zsh alone
+	// reads. bash's answer is the floor here as everywhere else in this
+	// function; the suite that is *about* it is
+	// globalreplacementanchor_test.go, which sets both sides (#3307).
+	s.GlobalReplacementAnchors = No
 
 	s.ArraysAreSparse = Yes
 	s.ArrayScalarIsTheWholeArray = No

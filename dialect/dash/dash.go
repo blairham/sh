@@ -326,11 +326,21 @@ func Semantics() interp.Semantics {
 	// bytes, where every other column writes one. The five other axes of that
 	// construct are unanswered here for the same reason and have been since
 	// the dialect was written (#3270).
-	// unanswered ReplacementAnchors and AnchoredEmptyReplacementPattern:
-	// dash has no span replacement at all, so neither the anchor nor the
-	// empty pattern behind one can be written. Measured 2026-09-16 from a
-	// script file, `v=abcabc; printf '%s' "${v/b/X}"` is `Bad substitution`
-	// at 2 with nothing written and the script over (#3272).
+	// unanswered ReplacementAnchors: dash has no span replacement at all, so
+	// there is no `/` for an anchor to stand after. Measured 2026-09-16 from
+	// a script file, `v=abcabc; printf '%s' "${v/b/X}"` is `Bad
+	// substitution` at 2 with nothing written and the script over (#3272).
+	//
+	// unanswered AnchoredEmptyReplacementPattern: the same absence one step
+	// in — an empty pattern behind an anchor needs the anchor first (#3272).
+	//
+	// unanswered GlobalReplacementAnchors: and so does the global spelling
+	// that would carry a second one (#3307).
+	//
+	// Three paragraphs rather than one sentence naming three axes, which is
+	// what this was: `make axis-coverage` reads `unanswered NAME:` and a
+	// line naming more than one matches nothing, so a reason was written and
+	// no instrument could see it.
 	// unanswered TraceArrayLiteralShowsTheExpandedElements: there is no
 	// array literal to trace. Measured 2026-09-14, `a=(1 2)` is `Syntax
 	// error: "(" unexpected` at 2 — the parenthesis, not the assignment — so

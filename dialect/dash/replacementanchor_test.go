@@ -22,6 +22,11 @@ func TestTheReplacementAnchorIsUnanswerable(t *testing.T) {
 	if got := s.AnchoredEmptyReplacementPattern; got != interp.Unspecified {
 		t.Errorf("AnchoredEmptyReplacementPattern = %v, want unspecified", got)
 	}
+	// And neither is the global spelling that would carry a second anchor
+	// (#3307).
+	if got := s.GlobalReplacementAnchors; got != interp.Unspecified {
+		t.Errorf("GlobalReplacementAnchors = %v, want unspecified", got)
+	}
 	if dash.Dialect().ParamSubstitution {
 		t.Error("ParamSubstitution is set, but dash calls ${v/b/X} a bad substitution")
 	}

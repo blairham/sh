@@ -1878,6 +1878,13 @@ func Semantics() interp.Semantics {
 	// end: `v=abcabc` gives `Xabcabc` for `${v/#/X}` and `abcabcX` for
 	// `${v/%/X}`, which is bash's answer and not ksh93's (#3272).
 	s.ReplacementAnchors = interp.Yes
+	// And after the global `//` as well, which is this shell alone: the two
+	// spellings are one construct here and two everywhere else. Measured
+	// 2026-09-16 on 5.9.2 — `${v//#a/X}` on `abcabc` is `Xbcabc` where every
+	// other column is `abcabc`, and the discriminating row, `${w//#a/Q}` on
+	// `x#ay%bz`, is `x#ay%bz` here and `xQy%bz` there: this shell left the
+	// value alone *because* it anchored (#3307).
+	s.GlobalReplacementAnchors = interp.Yes
 	s.AnchoredEmptyReplacementPattern = interp.Yes
 	// The same empty match bash refuses, measured the same way:
 	// `${v//(b|)/<>}` under extendedglob is `<>a<><>c`.

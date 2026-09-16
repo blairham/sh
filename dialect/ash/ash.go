@@ -1215,6 +1215,13 @@ func Semantics() interp.Semantics {
 	// unanswered AnchoredEmptyReplacementPattern: that axis is what an
 	// *anchored* empty pattern matches, and no anchor is ever read here, so
 	// nothing in this shell can reach it.
+	//
+	// unanswered GlobalReplacementAnchors: that axis is whether the anchor
+	// is read after the global `//` as well, and it is asked only of a
+	// column that reads one after a single `/` — which the line below says
+	// this shell does not. Measured 2026-09-16 in the pinned alpine image
+	// under `--init`: `${w//#a/Q}` on `x#ay%bz` is `xQy%bz`, the same
+	// reading the single spelling gives here (#3307).
 	s.ReplacementAnchors = interp.No
 
 	// `$'\q\8'` keeps both characters, which is bash's answer and not the

@@ -2162,6 +2162,14 @@ type Dialect struct {
 	// answers and it is unanimous among the shells that have the construct;
 	// what the `#` *means* is interp.Semantics.ReplacementAnchors, which is
 	// where the divergence lives (#3272).
+	//
+	// The same division one slash further along: a `#` or a `%` after the
+	// **global** `//` is accepted by every column too and is an anchor in
+	// zsh alone — `${v//#a/X}` on `abcabc` is `Xbcabc` there and `abcabc`
+	// in bash, bash 3.2, bash-as-`sh` and ksh93. The grammar reads the
+	// anchor in both spellings and
+	// interp.Semantics.GlobalReplacementAnchors decides whether it counts
+	// (#3307).
 	ParamSubstitution bool
 
 	// BadSubstitutionAtParseTime refuses a `${...}` with an unrecognized

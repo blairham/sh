@@ -363,7 +363,12 @@ type ParamExpr struct {
 
 	// All is `//`, replacing every match rather than the first.
 	All bool
-	// Anchor is '#' for `/#` or '%' for `/%`, and 0 otherwise.
+	// Anchor is '#' for `/#` or '%' for `/%`, and 0 otherwise. It is
+	// independent of All: `${v//#a/X}` carries both, because one shell reads
+	// an anchor after the global spelling too and the rest read the
+	// character as the pattern's first byte — see
+	// interp.Semantics.GlobalReplacementAnchors, which is where the two
+	// readings are told apart.
 	Anchor byte
 	// Transform is ParamTransform's letter — one of Q E P A a K k L U u.
 	// It is a byte rather than a word because it is part of the operator:
@@ -1654,11 +1659,27 @@ func (p *Parser) scanParamOp(s string, e *ParamExpr) (ParamOp, string, bool) {
 			return 0, "", false
 		}
 		rest := s[1:]
-		switch {
-		case strings.HasPrefix(rest, "/"):
+		// The two spellings are read one after the other rather than as
+		// alternatives, which is what lets `${v//#a/X}` carry both. They
+		// used to be the arms of one switch, and an anchor after the global
+		// `//` was therefore never seen at all: zsh reads one there, and
+		// measured on 5.9.2 with `v=abcabc`, `${v//#a/X}` is `Xbcabc`
+		// (#3307).
+		//
+		// What the character then *means* is not settled here. Every column
+		// accepts both spellings — bash and ksh93 read the `#` after a `//`
+		// as the pattern's own first byte, BusyBox ash reads it that way
+		// after a single `/` too — so acceptance is not what differs, and a
+		// grammar flag would have had to claim one shell's reading for the
+		// core. interp.Semantics.ReplacementAnchors and
+		// GlobalReplacementAnchors are where the two readings live, and
+		// interp's readAnchor puts the character back on the front of the
+		// pattern for a column that does not take it.
+		if strings.HasPrefix(rest, "/") {
 			e.All = true
 			rest = rest[1:]
-		case strings.HasPrefix(rest, "#"), strings.HasPrefix(rest, "%"):
+		}
+		if strings.HasPrefix(rest, "#") || strings.HasPrefix(rest, "%") {
 			e.Anchor = rest[0]
 			rest = rest[1:]
 		}

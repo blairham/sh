@@ -88,6 +88,21 @@ func TestParamForms(t *testing.T) {
 		{`echo ${x//a/b}`, `x all/ a / b`},
 		{`echo ${x/#a/b}`, `x #/ a / b`},
 		{`echo ${x/%a/b}`, `x %/ a / b`},
+		// The global spelling carries an anchor too, and the two used to be
+		// the arms of one switch here: an anchor after `//` was never read,
+		// so zsh's `${v//#a/X}` lost the anchor at parse time and nothing
+		// downstream could put it back (#3307). What the character then
+		// *means* is interp.Semantics.GlobalReplacementAnchors — every
+		// column accepts both spellings, so the grammar reads the anchor
+		// and the dialect decides whether it counts.
+		{`echo ${x//#a/b}`, `x all#/ a / b`},
+		{`echo ${x//%a/b}`, `x all%/ a / b`},
+		// Exactly one character, so a doubled one is the anchor and then a
+		// pattern byte — which is what zsh's `${v//##a/X}` answers.
+		{`echo ${x//##a/b}`, `x all#/ #a / b`},
+		// And an anchor with nothing behind it is still an anchor, which is
+		// the empty pattern at that end rather than a one-character one.
+		{`echo ${x//#/b}`, `x all#/  / b`},
 		// Omitting the replacement deletes the match.
 		{`echo ${x/a}`, `x / a`},
 		{`echo ${x:1:2}`, `x : 1 / 2`},

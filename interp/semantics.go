@@ -10800,6 +10800,58 @@ type Semantics struct {
 	//
 	// Asked only where an anchor was actually written.
 	ReplacementAnchors Answer
+	// GlobalReplacementAnchors reads that same `#` or `%` as an anchor when
+	// it stands after the **global** `//` rather than after a single `/` —
+	// `${v//#pat/rep}`.
+	//
+	// zsh alone. The other columns that have anchors at all read the
+	// character there as the pattern's own first byte, so the two spellings
+	// are one construct in that shell and two in the rest.
+	//
+	// Measured 2026-09-16 from a script file under `env -i
+	// PATH=/usr/bin:/bin LC_ALL=C`, stdin from /dev/null, `v=abcabc`:
+	//
+	//	                     ${v//#a/X}  ${v/#a/X}   ${v//%c/Y}  ${v/%c/Y}
+	//	bash 5.3, as `sh`    abcabc      Xbcabc      abcabc      abcabY
+	//	bash 3.2.57          abcabc      Xbcabc      abcabc      abcabY
+	//	ksh93u+              abcabc      Xbcabc      abcabc      abcabY
+	//	zsh 5.9.2            **Xbcabc**  Xbcabc      **abcabY**  abcabY
+	//
+	// The single spelling beside each is the control: every column that has
+	// anchors reads that one, so the divergence is the *global* spelling and
+	// not the anchor.
+	//
+	// `abcabc` cannot settle it on its own — it is the answer both when the
+	// anchor is honored and `a` does not start the value, and when the
+	// pattern is `#a` and is not in the value. So the discriminating probe
+	// is a value holding the anchor character, measured in the same run with
+	// `w='x#ay%bz'`:
+	//
+	//	                     ${w//#a/Q}   ${w//%b/Q}
+	//	bash 5.3, 3.2, ksh93 xQy%bz       x#ayQz
+	//	zsh 5.9.2            **x#ay%bz**  **x#ay%bz**
+	//
+	// zsh leaves the value alone *because* it anchored; the others replace
+	// *because* they did not. One value, two readings, told apart.
+	//
+	// One answer for both ends and for the empty pattern too, measured
+	// rather than assumed: `${v//#/X}` is `Xabcabc` in zsh and `${v//%/Y}`
+	// is `abcabcY`, the same rows `${v/#/X}` and `${v/%/Y}` give there, so
+	// nothing here splits `#` from `%` or the empty pattern from a full one.
+	//
+	// A Semantics answer rather than a syntax.Dialect flag, on the same
+	// grounds as ReplacementAnchors above and measured the same way: every
+	// column **parses** `${v//#a/X}` without complaint, so acceptance is not
+	// what differs. The parser reads the anchor in both spellings and this
+	// decides whether it counts; where the answer is No the character goes
+	// back on the front of the pattern, which is exactly what the shell does
+	// with it. See readAnchor.
+	//
+	// Asked only where an anchor was written **after `//`** and the dialect
+	// reads anchors at all, so a single-`/` anchor never reaches it — and
+	// neither does a column with no anchors, which has already answered No
+	// above (#3307).
+	GlobalReplacementAnchors Answer
 	// AnchoredEmptyReplacementPattern is whether an **anchored** span
 	// replacement whose pattern is empty matches the empty string at that
 	// end — `${v/#/X}` and `${v/%/X}`.

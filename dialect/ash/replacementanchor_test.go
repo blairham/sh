@@ -75,8 +75,9 @@ func TestTheReplacementHasNoAnchors(t *testing.T) {
 			"xQay%bz",
 		},
 		{
-			// And with `//`, where the parser reads the second slash first
-			// and the `#` is a pattern character in bash and ksh93 too.
+			// And with `//`, where the parser reads an anchor too since
+			// #3307 and every column but zsh declines it — so the `#` is a
+			// pattern character in bash and ksh93 here as well.
 			"the global spelling reads it the same way",
 			`w='x#ay%bz'; printf '%s' "${w//#a/Q}"`,
 			"xQy%bz",
@@ -101,5 +102,11 @@ func TestTheReplacementAnchorAnswers(t *testing.T) {
 	// be a guess recorded as a measurement.
 	if got := s.AnchoredEmptyReplacementPattern; got != interp.Unspecified {
 		t.Errorf("AnchoredEmptyReplacementPattern = %v, want unspecified", got)
+	}
+	// Nor whether the anchor is read after the global `//` as well: that
+	// question is only put to a column that reads one after a single `/`,
+	// and the row above says this shell does not (#3307).
+	if got := s.GlobalReplacementAnchors; got != interp.Unspecified {
+		t.Errorf("GlobalReplacementAnchors = %v, want unspecified", got)
 	}
 }

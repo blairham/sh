@@ -1100,6 +1100,47 @@ The `#a` was found *inside* the value and replaced, which no reading but "an
 ordinary pattern" produces. `${w/x/Q}` is `Q#ay%bz` everywhere, which is the
 control saying the replacement itself works there.
 
+### And whether it anchors after the *global* `//`
+
+A second disagreement, over the same two characters one slash further along.
+`${x//#pat/rep}` parses everywhere too, and **zsh alone** reads the `#` there
+as an anchor; bash 5.3, that binary as `sh`, bash 3.2 and ksh93 read it as
+the pattern's first byte, so their pattern is `#pat`.
+`Semantics.GlobalReplacementAnchors` is that answer, and it is asked only of
+a column that reads an anchor after a single `/` at all — BusyBox ash has
+already said no one axis earlier, and dash has no replacement to ask about.
+
+Measured 2026-09-16 with `v=abcabc`, and with the single spelling beside it
+as the control, since every column that has anchors reads that one:
+
+| | `${v//#a/X}` | `${v/#a/X}` | `${v//%c/Y}` | `${v/%c/Y}` |
+| --- | --- | --- | --- | --- |
+| bash 5.3, as `sh`, bash 3.2, ksh93 | `abcabc` | `Xbcabc` | `abcabc` | `abcabY` |
+| **zsh 5.9.2** | **`Xbcabc`** | `Xbcabc` | **`abcabY`** | `abcabY` |
+
+And over the value that holds the character, which is what parts the two
+readings rather than merely showing one of them:
+
+| | `${w//#a/Q}` | `${w//%b/Q}` |
+| --- | --- | --- |
+| bash 5.3, as `sh`, bash 3.2, ksh93 | `xQy%bz` | `x#ayQz` |
+| **zsh 5.9.2** | **`x#ay%bz`** | **`x#ay%bz`** |
+
+zsh leaves the value alone *because* it anchored; the others replace
+*because* they did not.
+
+Exactly one character is taken: `${v//##a/X}` is `abcabc` in zsh, the anchor
+and then the pattern `#a`. An anchor with nothing behind it is the empty
+pattern at that end rather than a one-character one — `${v//#/X}` is
+`Xabcabc` there and `${v//%/Y}` is `abcabcY`, the same rows the single
+spelling gives — so `AnchoredEmptyReplacementPattern` answers that half and
+this axis does not split it.
+
+The grammar reads the anchor in both spellings and the dialect decides
+whether it counts, for the reason the section above gives: acceptance is
+unanimous, so a grammar flag would have had to claim one shell's reading for
+the core.
+
 ## The `!` that lists names instead of following one
 
 Two more spellings open with `!` and are not indirection:
@@ -6087,8 +6128,9 @@ reason: `${$((6*7))[1]}`.
 ## Dialect flags
 
     ParamSubstitution      ${x/pat/rep}, and the spellings with a # or %
-                           after the / (whether those anchor is the axis
-                           interp.Semantics.ReplacementAnchors, not this flag)
+                           after either / (whether those anchor is the pair
+                           of axes interp.Semantics.ReplacementAnchors and
+                           GlobalReplacementAnchors, not this flag)
     ParamSubstring         ${x:off:len}
     ParamCaseChange        ${x^^} ${x,,} ${x~~} and their single forms — bash only
     ParamIndirection       ${!x}, ${!prefix*}, ${!a[@]} — parses in bash and ksh;

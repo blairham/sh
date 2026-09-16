@@ -499,7 +499,7 @@ func (r *Runner) conditionOperand(text string) (value int, failure string) {
 	text = r.conditionLeadingNumeral(text)
 	p := syntax.NewParser("", r.dialect())
 	tree := p.ParseArithFor(text, syntax.Pos{})
-	// The text a complaint quotes back is the one a script would recognise,
+	// The text a complaint quotes back is the one a script would recognize,
 	// which is this one without the marks: they are this implementation's
 	// bookkeeping, and a refusal carrying one prints a stray NUL into the
 	// log. The *reading* is done from the marked text, which is the whole

@@ -3353,7 +3353,7 @@ type Dialect struct {
 	// expression: illegal character: '` — the quote reaching its reader as
 	// a byte and not as a quotation. Which is the same shell that reads a
 	// subscript's expanded text back as syntax, and for a reader that never
-	// sees quoting the two are one behaviour (#3302).
+	// sees quoting the two are one behavior (#3302).
 	//
 	// Additive rather than a semantics axis, for the reason
 	// ArithDoubleQuote is: it is what the *reader* does with a byte, and a

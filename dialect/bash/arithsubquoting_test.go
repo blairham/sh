@@ -8,7 +8,6 @@ import (
 
 	"github.com/blairham/sh/dialect/bash"
 	"github.com/blairham/sh/interp"
-	"github.com/blairham/sh/syntax"
 )
 
 // A quotation inside an arithmetic subscript holds its brackets: what ends
@@ -67,5 +66,4 @@ func TestThisDialectReadsAQuotedArithmeticSubscript(t *testing.T) {
 	if got := bash.Semantics().ConditionArithmeticReadsTheWrittenSubscript; got != interp.Yes {
 		t.Errorf("ConditionArithmeticReadsTheWrittenSubscript = %v, want %v", got, interp.Yes)
 	}
-	var _ syntax.Dialect = bash.Dialect()
 }

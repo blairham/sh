@@ -1,0 +1,90 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Diagnostic wording in BusyBox ash — #2324, from the column the other
+# diagnostics files cannot speak for.
+#
+# core/diagnostics.tests asks what a script can depend on: every diagnostic
+# is on stderr and each arrives in order. The wording is each shell's own,
+# and BusyBox's is a fourth shape, not a dialect of dash's. A builtin's
+# complaint is `<file>: <builtin>: line N: ` — the builtin's name *before*
+# the location, where bash writes `<file>: line N: <builtin>: ` and dash
+# writes `<file>: N: <builtin>: `. A complaint that belongs to no builtin
+# keeps the word `line` and drops the name.
+#
+# The reasons are BusyBox's too: `no such file` and `nonexistent directory`
+# for a redirection, lower case and not the C library's sentence, where a
+# `.` of a file that is not there does quote the C library, in its capital.
+#
+# Held out, each with an issue, because ours does not give BusyBox's answer
+# yet. The applets BusyBox shares with its other programs — `kill` (#3165),
+# `test` (#3278), `printf` — complain as `ash: ...` with no file and no line,
+# and so does `read` naming a bad variable. `printf`'s prefix is the name the
+# shell was started under, which in this harness is not `ash` for our binary,
+# so that row cannot be asked here at all.
+
+say() { printf -- '--- %s\n' "$1"; }
+
+say 'a command that is not there'
+( nosuchcommand_zz ) 2>&1 > /dev/null
+
+say 'a file that cannot be executed'
+: > ne; chmod 644 ne
+( ./ne ) 2>&1 > /dev/null
+
+say 'a directory where a command was expected'
+mkdir -p adir
+( ./adir ) 2>&1 > /dev/null
+
+say 'cd to a directory that is not there'
+( cd /nosuchdir_zz ) 2>&1 > /dev/null
+
+say 'an unset name under -u'
+( set -u; printf '%s' "$UNSET_ZZ" ) 2>&1 > /dev/null
+
+say 'a redirection from a file that is not there'
+( read x < /nosuchfile_zz ) 2>&1 > /dev/null
+
+say 'a redirection into a directory that is not there'
+( printf x > /nosuchdir_zz/f ) 2>&1 > /dev/null
+
+say 'a signal name given to trap'
+( trap : NOSUCHSIG_ZZ ) 2>&1 > /dev/null
+
+say 'an option the builtin does not have'
+( unset -Z x ) 2>&1 > /dev/null
+
+say 'an option name set does not have'
+( set -o nosuchoption_zz ) 2>&1 > /dev/null
+
+# Nothing at all: `shift` past the end is a failure here and not a complaint.
+say 'shift past the end'
+( set -- a; shift 5 ) 2>&1 > /dev/null
+
+say 'arithmetic that will not parse'
+( : $((1 +)) ) 2>&1 > /dev/null
+
+say 'division by zero'
+( : $((1 / 0)) ) 2>&1 > /dev/null
+
+say 'assigning to a readonly'
+( readonly rv=1; rv=2 ) 2>&1 > /dev/null
+
+say 'unsetting a readonly'
+( readonly rr=1; unset rr ) 2>&1 > /dev/null
+
+say 'a dot file that is not there'
+( . ./nosuchfile_zz ) 2>&1 > /dev/null
+
+say 'exec of a program that is not there'
+( exec ./nosuchprog_zz ) 2>&1 > /dev/null
+
+say 'a name that is not an identifier, to export'
+( export 1bad=1 ) 2>&1 > /dev/null
+
+# Nothing again: BusyBox does not diagnose a pid that is not its child.
+say 'waiting for a pid that is not a child'
+( wait 999999 ) 2>&1 > /dev/null
+
+say 'text that will not parse, through eval'
+( eval 'for' ) 2>&1 > /dev/null

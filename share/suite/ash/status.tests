@@ -1,0 +1,60 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Exit status in BusyBox ash — #2323, and the one place this shell's numbers
+# come apart where every other column's stay together.
+#
+# A special builtin whose redirection cannot be made ends a non-interactive
+# shell (XCU 2.8.1), and the question here is the status it ends with. Every
+# other column answers it with a number it already uses for everything
+# fatal: dash exits 2, bash in POSIX mode, ksh93 and zsh emulating sh exit 1,
+# and in each of them the redirection's own status is that same number. So a
+# model that said "the fatal status" and a model that said "the
+# redirection's status" could not be told apart on four shells.
+#
+# BusyBox can tell them apart. Its fatal errors exit 2 — `${v?}`, an
+# arithmetic error, a `<&` word that names no descriptor, the last of which
+# is fatal whatever the command was — and a redirection failure is 1, and
+# the special builtin that stops over one exits **1**. The redirection's
+# number, not the fatal one. Ours exited 2 on every row below until
+# 2026-09-16, which is dash's answer arrived at by the wrong route.
+#
+# Every row is a subshell with the diagnostic discarded, because the claim is
+# the number and the stop, not the wording.
+
+printf -- '--- a special builtin stops, at the redirection status ---\n'
+
+( exec 3< /nosuchfile_zz; echo not reached ) 2>/dev/null; printf 'exec, a read  -> %s\n' "$?"
+( exec > /nosuchdir_zz/f; echo not reached ) 2>/dev/null; printf 'exec, a write -> %s\n' "$?"
+( : > /nosuchdir_zz/f; echo not reached ) 2>/dev/null; printf 'colon         -> %s\n' "$?"
+( export > /nosuchdir_zz/f; echo not reached ) 2>/dev/null; printf 'export        -> %s\n' "$?"
+( eval ': > /nosuchdir_zz/f'; echo not reached ) 2>/dev/null; printf 'through eval  -> %s\n' "$?"
+( . /dev/null > /nosuchdir_zz/f; echo not reached ) 2>/dev/null; printf 'dot           -> %s\n' "$?"
+( : <&9; echo not reached ) 2>/dev/null; printf 'a descriptor that is not open -> %s\n' "$?"
+
+# noclobber is a refusal rather than an open that failed, and it goes the
+# same way.
+( set -C; : > clobbered; : > clobbered; echo not reached ) 2>/dev/null; printf 'set -C        -> %s\n' "$?"
+
+# Inside a function the shell it ends is the caller's, and the number does
+# not change on the way out.
+( f() { : > /nosuchdir_zz/f; echo not reached; }; f; echo not reached ) 2>/dev/null
+printf 'in a function -> %s\n' "$?"
+
+printf -- '--- the controls: the fatal status is 2 ---\n'
+
+# These are what make the rows above a finding. If this shell's fatal status
+# were 1 the section above would say nothing.
+( : "${unset_zz?gone}"; echo not reached ) 2>/dev/null; printf '${v?}         -> %s\n' "$?"
+( : "$(( 1 + ))"; echo not reached ) 2>/dev/null; printf 'arithmetic    -> %s\n' "$?"
+
+# And a `<&` word that names no descriptor, which is fatal on any command
+# here, is at the fatal status even on a special builtin — the redirection
+# stopped the shell before the builtin's rule was asked.
+( exec 9<&qq; echo not reached ) 2>/dev/null; printf 'exec 9<&word  -> %s\n' "$?"
+( : 9<&qq; echo not reached ) 2>/dev/null; printf ': 9<&word     -> %s\n' "$?"
+
+printf -- '--- and a regular builtin does not stop ---\n'
+
+( true > /nosuchdir_zz/f; printf 'true carried on at %s\n' "$?" ) 2>/dev/null
+printf 'true          -> %s\n' "$?"

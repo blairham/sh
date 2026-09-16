@@ -541,6 +541,14 @@ func Dialect() syntax.Dialect {
 	// *pattern* operand's quote as an ordinary character too. See
 	// Dialect.QuoteProtectsTheClosingBrace (#2399).
 	d.QuoteProtectsTheClosingBrace = syntax.BraceQuoteProtectsNothing
+	// A backslash holds a `]` back from ending a `${a[ … ]}` subscript here
+	// and a quote does not — the narrowest row of the panel. Measured
+	// 2026-09-15 on zsh 5.9.2: `typeset -A a; a[x\]y]=1; print -r --
+	// "${a[x\]y]}"` is `1`, while `${a['0]'+1]}` stops at the quoted bracket
+	// and reports a math error against `'0`, where bash and ksh93 read the
+	// whole of `'0]'+1`. See
+	// Dialect.SubscriptQuoteProtectsTheClosingBracket (#2299).
+	d.SubscriptQuoteProtectsTheClosingBracket = syntax.SubscriptBackslashQuotes
 	// A parameter written without braces carries a subscript here, and `$#a`
 	// is a count rather than `$#` with a letter after it. Measured 2026-09-05
 	// on zsh 5.9.2: `a=(x y z); echo $a[1]` prints `x` and `echo $#a` prints

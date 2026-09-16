@@ -154,6 +154,16 @@ m["double quoted key"]=dq
 printf 'single=[%s] double=[%s]\n' "${m['single quoted key']}" "${m["double quoted key"]}"
 printf 'count now=%s\n' "${#m[@]}"
 
+# A `]` inside the key. A backslash holds it back from ending the subscript on
+# the way in *and* on the way back out, in all three shells that have a map —
+# and the way back out is the half that is easy to get wrong, because writing
+# the key is the lexer's word boundary and reading it is a different scanner.
+# The quoted spellings of the same key are not here: bash and ksh93 take
+# `m['a]b']` and zsh stops at the bracket inside the quotes, so that row is
+# each dialect's own and is asked in bash/params.tests.
+m[bracket\]key]=bracketed
+printf 'bracketed=[%s]\n' "${m[bracket\]key]}"
+
 # Assignment replaces rather than adds, and the count says so.
 m[one]=replaced
 printf 'replaced=[%s] count=%s\n' "${m[one]}" "${#m[@]}"

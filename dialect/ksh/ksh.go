@@ -39,6 +39,16 @@ func Dialect() syntax.Dialect {
 	// bash, against zsh 5.9.2, which refuses the text. See
 	// [syntax.Dialect.SubscriptSpansSeparators].
 	d.SubscriptSpansSeparators = true
+	// And every quoting construct holds a `]` back from ending a `${a[ … ]}`
+	// subscript on the way back out, `$'…'` included — the widest row of the
+	// panel, and the one cell where this shell and bash part. Measured
+	// 2026-09-15 on 93u+ 2012 with `a=(9 8 7); echo "[${a[$'0]'+1]}]"`: an
+	// arithmetic error naming `0]+1` here, and the text `[1]]` in bash, whose
+	// subscript ended at the bracket inside the quotes. See
+	// [syntax.Dialect.SubscriptQuoteProtectsTheClosingBracket] (#2299).
+	d.SubscriptQuoteProtectsTheClosingBracket = syntax.SubscriptBackslashQuotes |
+		syntax.SubscriptSingleQuotes | syntax.SubscriptDoubleQuotes |
+		syntax.SubscriptDollarSingleQuotes
 	// And a compound literal is one shape or the other rather than a
 	// mixture, which is what says where a subscript may be read at all here:
 	// `a=([1]=A [2]=B)` is subscripted throughout, `a=(p [1]=A)` is a word

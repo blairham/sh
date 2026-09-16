@@ -2191,6 +2191,14 @@ func (sh Shell) executeLines(
 		// shell it turns on — and the line after it can only be found once
 		// every line before it has been walked past.
 		say(int(line.Last.Line))
+		// The command joins the history list **before** it runs, which is
+		// measured and is not a detail: `history` written in a script lists
+		// itself, and `history -s planted` followed by `!!` recalls what it
+		// planted rather than the `history -s` that planted it — the line was
+		// already in the list when the builtin appended to it. Nothing at all
+		// where the program has no gate, which is every script that never
+		// wrote `set -o history`.
+		pr.recordHistory()
 		if err := r.RunPart(ctx, line); err != nil {
 			// Refused rather than silently doing nothing: a shell that
 			// quietly skips what it cannot do is worse than one that says so.

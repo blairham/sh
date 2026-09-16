@@ -163,7 +163,7 @@ func (g *histGate) next() (string, bool) {
 		// it, and goes on to the next line — so the line is dropped and not
 		// the program. A blank line goes in its place, which keeps every
 		// later line's number where the file has it.
-		g.errf("%s", g.report(g.at, g.r.HistoryExpansionRefusal(err)))
+		g.errf("%s", g.report(g.at, g.r.HistoryExpansionRefusal(err)+"\n"))
 		return "\n", true
 	}
 	if res.Changed {

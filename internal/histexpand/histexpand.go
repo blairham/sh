@@ -296,12 +296,20 @@ func one(src []rune, i int, sofar string, hist List, c Chars, st *state) (string
 	ref := func(end int) string { return string(src[i:end]) }
 
 	var words []string
+	// raw is the event's own text, which is what a reference with no word
+	// designator on it becomes. Kept beside the words rather than rebuilt
+	// from them: measured, `echo   spaced    words` recalled by `!!` comes
+	// back with its spacing intact, where `!!:*` joins the words with one
+	// space each. A prompt never showed the difference because a line typed
+	// at one is a line; a **script** puts whole multi-line commands in the
+	// list, and joining those with spaces turns a here-document into gibberish.
+	var raw string
 	var haveWords bool
 	switch {
 	case j < len(src) && src[j] == '#':
 		// The line up to here, which is the one event that is not in the
 		// list at all.
-		words = fields(sofar)
+		words, raw = fields(sofar), sofar
 		haveWords = true
 		j++
 	case j < len(src) && (src[j] == c.Event):
@@ -309,7 +317,7 @@ func one(src []rune, i int, sofar string, hist List, c Chars, st *state) (string
 		if !ok {
 			return "", 0, false, &NotFound{Ref: ref(j + 1)}
 		}
-		words = fields(entry)
+		words, raw = fields(entry), entry
 		haveWords = true
 		j++
 	case j < len(src) && isWordDesignator(src[j], c):
@@ -319,7 +327,7 @@ func one(src []rune, i int, sofar string, hist List, c Chars, st *state) (string
 		if !ok {
 			return "", 0, false, &NotFound{Ref: ref(j + 1)}
 		}
-		words = fields(entry)
+		words, raw = fields(entry), entry
 		haveWords = true
 	case j < len(src) && src[j] == '?':
 		k := j + 1
@@ -335,7 +343,7 @@ func one(src []rune, i int, sofar string, hist List, c Chars, st *state) (string
 			return "", 0, false, &NotFound{Ref: ref(k)}
 		}
 		st.matched = want
-		words = fields(entry)
+		words, raw = fields(entry), entry
 		haveWords = true
 		j = k
 	default:
@@ -359,7 +367,7 @@ func one(src []rune, i int, sofar string, hist List, c Chars, st *state) (string
 			if !ok {
 				return "", 0, false, &NotFound{Ref: ref(digits)}
 			}
-			words = fields(entry)
+			words, raw = fields(entry), entry
 			haveWords = true
 			j = digits
 			break
@@ -377,7 +385,7 @@ func one(src []rune, i int, sofar string, hist List, c Chars, st *state) (string
 		if !ok {
 			return "", 0, false, &NotFound{Ref: ref(k)}
 		}
-		words = fields(entry)
+		words, raw = fields(entry), entry
 		haveWords = true
 		j = k
 	}
@@ -389,10 +397,10 @@ func one(src []rune, i int, sofar string, hist List, c Chars, st *state) (string
 	if err != nil {
 		return "", 0, false, err
 	}
-	if !ok {
-		chosen = words
+	text := raw
+	if ok {
+		text = strings.Join(chosen, " ")
 	}
-	text := strings.Join(chosen, " ")
 	text, j, print, err := modifiers(src, j, text, ref(j), st)
 	if err != nil {
 		return "", 0, false, err

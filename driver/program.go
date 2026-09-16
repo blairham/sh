@@ -105,6 +105,18 @@ func (pr *program) handOver(g *histGate, at int) {
 	pr.src.WriteString(head)
 }
 
+// recordHistory puts the command the parser has just handed back into the
+// list, where a program has a gate collecting one.
+//
+// Called by the front end between the parse and the run, because that is
+// where bash has it: a command is in the list before it executes, so
+// `history` lists itself and a `history -s` appends *after* its own line.
+func (pr *program) recordHistory() {
+	if pr.gate != nil {
+		pr.gate.record()
+	}
+}
+
 // openQuote is what the parser is still inside, which is what the next
 // physical line begins inside. Empty where there is no parser yet or where it
 // finished what it was given.

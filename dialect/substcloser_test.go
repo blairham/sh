@@ -6,6 +6,8 @@ package dialect_test
 import (
 	"strings"
 	"testing"
+
+	"github.com/blairham/sh/interp"
 )
 
 // The token a `$( … )` body's refusal names, across every preset a shipped
@@ -194,6 +196,57 @@ func TestABackquotedRefusalIsLeftAtItsOwnToken(t *testing.T) {
 	} {
 		t.Run(preset, func(t *testing.T) {
 			_, errs, _ := splitRun(t, presets[preset], src)
+			if errs != want {
+				t.Errorf("wrote %q, want %q", errs, want)
+			}
+		})
+	}
+}
+
+// A body that will not parse on its own but *does* once the closer is on the
+// end keeps its own refusal, and this is the row that says the guard for it is
+// load-bearing rather than defensive.
+//
+// The re-read shares the alias table, which is what makes the case reachable:
+// `alias q='(:'` leaves a body of `echo hi; q` — an unclosed subshell once the
+// alias is expanded, and a closed one as `echo hi; q)`. The lexer sees neither
+// parenthesis, because it found the substitution's own closer before any alias
+// was expanded.
+//
+// Without the guard the re-read reports no error, `nil` reaches the wording,
+// and the shell dies — measured on a build of the mutant rather than reasoned:
+// `internal error: runtime error: invalid memory address or nil pointer
+// dereference` in place of a diagnostic, in four of the six presets. So this
+// row turns a silent contract into an assertion.
+//
+// Alias expansion is switched on for the run because these presets leave it
+// where a non-interactive bash does and the case needs the table consulted at
+// all. That is also why bash is a row here rather than the exception it is at
+// a real invocation, where it expands no alias in a script and never reaches
+// this at all.
+//
+// The POSIX preset is absent, and it is absent for a reason rather than
+// trimmed: `alias` there refuses to read options at all until a dialect is
+// chosen, so the name is never defined, the body holds a command instead of a
+// parenthesis, and the case cannot be built. A row of it would have asserted
+// an unanswered axis rather than this guard.
+func TestABodyTheCloserWouldHealKeepsItsOwnRefusal(t *testing.T) {
+	const src = "printf 'start\\n'\nalias q='(:'\nv=$(echo hi; q)\nprintf 'after st=%s\\n' \"$?\"\n"
+	for preset, want := range map[string]string{
+		"zsh":  "zsh:3: parse error near `:'\n",
+		"ksh":  "ksh: line 3: syntax error at line 3: `(' unmatched\n",
+		"dash": "dash: 3: Syntax error: end of file unexpected (expecting \")\")\n",
+		"ash":  "ash: syntax error: unexpected end of file (expecting \")\")\n",
+		"bash": "bash: line 3: syntax error: unexpected end of file from `(' command on line 3\n",
+	} {
+		t.Run(preset, func(t *testing.T) {
+			p := presets[preset]
+			inner := p.Apply
+			p.Apply = func(r *interp.Runner) {
+				inner(r)
+				r.SetAliasExpansion(true)
+			}
+			_, errs, _ := splitRun(t, p, src)
 			if errs != want {
 				t.Errorf("wrote %q, want %q", errs, want)
 			}

@@ -1448,10 +1448,17 @@ type Runner struct {
 	// spells it `banghist`.
 	//
 	// Kept here and read by the front end for the reason histIgnoreDups is:
-	// a script has no history to index. It is *not* the same switch as
-	// histRecord below — bash `set +o history` stops recording and leaves the
-	// expander on over what is already in the list, and the two names are
-	// listed separately in `set -o` because they are separate states.
+	// this package holds no list. It is *not* the same switch as histRecord
+	// below — the two names are listed separately in `set -o` because they
+	// are separate states, and `set -H` alone expands nothing.
+	//
+	// Separate states, and an **AND** wherever a front end reads them: this
+	// comment used to say `set +o history` left the expander on over what
+	// was already in the list, and that was reasoning rather than a
+	// measurement. Measured 2026-09-16 in a script, `set +o history` stops
+	// the expansion too, and a later `set -o history` starts it again over
+	// the entries the list still holds. Which of the two switches a given
+	// route reads is the front end's, and driver's history gate reads both.
 	//
 	// The default is the dialect's, applied by the front end: measured
 	// 2026-09-15 through a pty with a two-row prompt, bash 5.3, bash 3.2,

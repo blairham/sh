@@ -88,3 +88,15 @@ set -x
 W1=1 unalias -a
 W2=1 cd .
 set +x
+
+# And a prefix this shell refuses costs the script in front of one of them,
+# where in front of `cd` it costs nothing. The `readonly` is what makes the
+# assignment a refusal; `export` is the POSIX-name control on the fatal side.
+#
+# No `2>/dev/null` on these: this shell writes the refusal before it opens the
+# command's redirections, so a `2>&1` here would be swallowing the diagnostic
+# in one column and not the other, over an ordering that is not this file's
+# question.
+( readonly V=0; V=1 alias; printf 'after alias\n' )
+( readonly V=0; V=1 export; printf 'after export\n' )
+( readonly W=0; W=1 cd .; printf 'after cd\n' )

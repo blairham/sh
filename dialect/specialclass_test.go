@@ -221,9 +221,15 @@ func TestSpecialBuiltinFatalityByMembership(t *testing.T) {
 		})
 	}
 	// `local` outside a function, which ends a dash and a BusyBox script and
-	// leaves the other three running. The status is part of the answer: 2
-	// where it is fatal, and the builtin's own refusal status where it is
-	// not.
+	// leaves the other three running.
+	//
+	// A regression guard rather than a discriminator, and the difference is
+	// worth naming: emptying dash's roster does not move these rows. That
+	// refusal has an axis of its own — LocalOutsideAFunctionIsFatal — and it
+	// was already right while the sentence beside it was wrong, which is the
+	// drift #3290 was filed about. See
+	// TestLocalFatalityAndMembershipStillAgree for what holds the two
+	// together now.
 	for _, c := range []struct {
 		preset string
 		alive  bool
@@ -267,5 +273,93 @@ func TestSpecialBuiltinTraceOrderFollowsMembership(t *testing.T) {
 	const want = "+ V=1\n+ unalias -a\n+ cd .\n+ W=1\n"
 	if out != want {
 		t.Errorf("trace was %q, want %q", out, want)
+	}
+}
+
+// TestLocalFatalityAndMembershipStillAgree is the guard on the drift #3290
+// named: two fields hold one fact about `local` in every column measured, and
+// nothing until now would have noticed them parting.
+//
+// They are two rather than one on purpose. `local` outside a function is a
+// *usage* error with its own wording, not a bad option, and bash reaches that
+// refusal — it says `local: can only be used in a function` at 1 — while
+// marking no builtin special at all. So the columns cannot tell "the refusal
+// is fatal because `local` is special here" from "the refusal is fatal here",
+// and collapsing the axis into the roster would be asserting a rule the panel
+// cannot distinguish from a coincidence.
+//
+// What the panel *can* say is that the two agree, column for column, and that
+// is what this pins: a preset whose roster holds `local` ends the script over
+// it, and one whose roster does not, does not. Measured 2026-09-16: dash
+// 0.5.12 and BusyBox ash 1.37.0 mark `local` special and end the script at 2;
+// the three bash builds mark nothing special and carry on at 1; zsh sets a
+// global at 0; ksh93 has no `local`.
+func TestLocalFatalityAndMembershipStillAgree(t *testing.T) {
+	for _, preset := range []string{"bash", "zsh", "dash", "ash", "posix"} {
+		t.Run(preset, func(t *testing.T) {
+			p := presets[preset]
+			// The membership, read through the sentence rather than through
+			// the field, so that this asks the same question the shell does.
+			out, _, err := p.Combined(t, dialecttest.Base{}, "type local")
+			if err != nil {
+				t.Fatal(err)
+			}
+			special := strings.Contains(out, "special shell builtin")
+			// And the fatality, read the same way.
+			out, _, err = p.Combined(t, dialecttest.Base{},
+				"local qq 2>/dev/null\nprintf 'AFTER\\n'\n")
+			if err != nil {
+				t.Fatal(err)
+			}
+			fatal := out != "AFTER\n"
+			if special != fatal {
+				t.Errorf("%s calls local special=%v but ends the script over it=%v; the two must move together",
+					preset, special, fatal)
+			}
+		})
+	}
+}
+
+// TestRefusedPrefixOnASpecialBuiltinFollowsMembership is the fifth
+// consequence, and the one a first pass at #3290 changed without a row that
+// could see it: reverting the membership read there left every test green.
+//
+// ksh93 is the column with PrefixRefusalFatalOnASpecialBuiltinOrFunction —
+// a prefix the shell refuses ends the script in front of a special builtin
+// and costs nothing at all in front of an ordinary one. So the same roster
+// that moves the sentence moves this, and `cd` is the control.
+//
+// Measured 2026-09-16 on ksh93u+ 2012-08-01, `readonly V=0` first:
+//
+//	V=1 alias    `V: is read only`, and the script ends at 1
+//	V=1 export   the same, which is the POSIX-name control
+//	W=1 cd .     `after cd st=0`, and the script runs on
+//
+// Before this change ours answered `after alias st=0` and carried on, which
+// is the ordinary-builtin answer given to a name ksh93 marks special.
+func TestRefusedPrefixOnASpecialBuiltinFollowsMembership(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		// alive is whether the script reached the line after the refusal.
+		alive bool
+	}{
+		{"alias", false},
+		{"unalias -a", false},
+		// The POSIX name, which says the preset answers the fatality at all.
+		{"export", false},
+		// And the ordinary builtin, which says it is not answering it for
+		// everything.
+		{"cd .", true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, _, err := presets["ksh"].Combined(t, dialecttest.Base{},
+				"readonly V=0\nV=1 "+c.name+" >/dev/null\nprintf 'AFTER\\n'\n")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := strings.Contains(out, "AFTER"); got != c.alive {
+				t.Errorf("a refused prefix on %s: alive=%v (output %q), want alive=%v", c.name, got, out, c.alive)
+			}
+		})
 	}
 }

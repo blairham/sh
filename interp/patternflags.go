@@ -322,14 +322,18 @@ func splitExclusion(p string, o *patternOpts) (left string, rights []string, ok 
 // closes it, since an unterminated `[` is not a bracket expression and its
 // text is ordinary.
 //
-// It exists so that the four scans that walk a pattern counting parentheses —
-// [topAlternatives], [alternativesAt], [groupEndsAt] and [groupAlternatives]
-// — cannot disagree about where a bracket ends, and so that a fifth added
-// tomorrow has one line to write rather than a rule to remember. Three of the
-// four were missing it and the fourth had it inline, which is exactly the
-// shape of #3075: a `|`, a `(` or a `)` between two members of a bracket is a
-// member, and a walker that does not know it splits the alternation in the
-// wrong place or never finds the group's end.
+// It exists so that the scans that walk a pattern counting parentheses —
+// [topAlternatives], [splitExclusion], [alternativesAt], [closingParen],
+// [groupEndsAt] and [groupAlternatives] — cannot disagree about where a
+// bracket ends, and so that a seventh added tomorrow has one line to write
+// rather than a rule to remember. Two of the six had it inline and four were
+// missing it, which is exactly the shape of #3075: a `|`, a `(` or a `)`
+// between two members of a bracket is a member, and a walker that does not
+// know it splits the alternation in the wrong place or never finds the
+// group's end.
+//
+// [closesGroup] is the one scan of that family deliberately left alone, and
+// its own comment says why.
 //
 // The scan itself is [bracketEnd], which is the matcher's own, so a walker
 // and the matcher cannot read the same text two ways.

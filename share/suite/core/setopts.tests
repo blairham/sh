@@ -44,6 +44,14 @@ sub 'set -e; false || true; printf "e or ok\n"' 'errexit or'
 sub 'set -e; if false; then :; fi; printf "e if ok\n"' 'errexit if'
 sub 'set -e; ! false; printf "e bang ok\n"' 'errexit bang'
 sub 'set -e; set +e; false; printf "turned off\n"' 'errexit toggled off'
+# A compound answers with the status its last command left, and where that
+# command was exempt the compound is too: a loop whose final pass ends in a
+# test that short-circuited is not a failure, and neither is a group or an
+# `if` body ending in `!` or in a chain (#3344).
+sub 'set -e; for i in 1 2; do [ "$i" = 3 ] && printf "three\n"; done; printf "e loop chain ok\n"' 'errexit loop ending in a chain'
+sub 'set -e; { ! true; }; printf "e group bang ok\n"' 'errexit group ending in a bang'
+sub 'set -e; if true; then false && true; fi; printf "e if chain ok\n"' 'errexit if body ending in a chain'
+sub 'set -e; case x in x) ! true;; esac; printf "e case bang ok\n"' 'errexit case arm ending in a bang'
 sub 'set -eu; false' 'combined'
 
 # noglob by its long name, which is the spelling all four share.

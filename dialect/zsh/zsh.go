@@ -790,6 +790,15 @@ func Semantics() interp.Semantics {
 	// plus the line-editor letter. Measured 2026-09-05 under `-i script.sh`
 	// and at a pseudo-terminal alike; `i` comes from the runner.
 	s.InteractiveOptionLetters = "569XZ"
+	// The option namespace's own way of saying `-i`, and the shell prompts for
+	// it: measured 2026-09-16 with a program on a pipe so nothing else could
+	// make it interactive, `zsh -f -o interactive` draws a prompt, runs the
+	// line and draws another, and reads `~/.zshrc` exactly as `-i` does.
+	// `+o interactive` and `-o nointeractive` are the other direction and draw
+	// none, on a pipe and — measured through a pseudo-terminal — on a terminal
+	// too, where the shell would otherwise have prompted (#3195).
+	s.InteractiveOptionName = "interactive"
+	s.NonInteractiveOptionName = "nointeractive"
 	// zsh has a history expander and starts a prompt with it on — measured
 	// 2026-09-15 through a pseudo-terminal with a two-row prompt, where
 	// `echo one two three` then `echo !!` echoes the expanded line and runs

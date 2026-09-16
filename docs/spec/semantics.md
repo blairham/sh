@@ -16993,6 +16993,44 @@ run in the same shell, so a `PRESET` assigned on the line before survives
 there if anything scanned before it. The first call in a shell empties it
 as the table says.
 
+**`GetoptsUnsetsOptargAtEndOfOptions`** — bash yes · dash no · ksh93 yes · zsh no
+
+Takes OPTARG away on the call that reports "no more options", rather than
+leaving the last option's argument standing. The run that says the scan is
+over is also the one that clears OPTARG in five of the seven columns, and a
+script reading `$OPTARG` after its `while getopts` loop gets the previous
+option's value in the other two. Measured 2026-09-16 over a script file
+under `env -i PATH=/usr/bin:/bin`, `OPTARG=PRESET; OPTIND=1; set -- x;
+getopts a: o` — and identically over `-- x`, over no words at all, and over
+the call after an option that was read: bash 5.3.20, bash called as `sh`,
+bash 3.2.57, ksh93u+ and BusyBox ash 1.37.0 all unset it; dash 0.5.12 and
+zsh 5.9.2 leave `PRESET`. **dash and BusyBox ash part company here**, for
+the third time in one builtin, which is what keeps this apart from the two
+axes above. It is not an empty-or-unset question either: every column that
+clears here *unsets*.
+
+**`GetoptsClearingOptargIsARealUnset`** — bash yes · dash no · ksh93 no · zsh no
+
+Clears OPTARG by **taking the name away** rather than by writing over it, so
+a `readonly` on OPTARG neither stops the clearing nor survives it. Both
+halves are one answer: removing a name removes what was recorded about it.
+Measured the same day with `OPTARG=P; readonly OPTARG` in front, reading
+OPTARG and then whether an assignment on the line after is taken —
+
+| | bash 5.3.20 | ksh93u+ | dash 0.5.12 | BusyBox ash | zsh 5.9.2 |
+| --- | --- | --- | --- | --- | --- |
+| a bad option | gone, free | gone, frozen | P, frozen | P, frozen | `""`, frozen |
+| a missing argument | gone, free | gone, frozen | P, frozen | P, frozen | `""`, frozen |
+| the end of the options | gone, free | gone, frozen | P, frozen | P, frozen | P, frozen |
+
+— where "free" is `OPTARG=written` succeeding afterwards. So a `readonly
+OPTARG` early in a file left this shell believing in a freeze bash had
+dropped, and a later assignment got a refusal out of nowhere. The one
+clearing this is **not** asked of is an option the string has that takes no
+argument: bash writes `OPTARG: readonly variable` there, leaves `P` standing
+and leaves the freeze on — two clearings spelled the same way in the manual
+and answered differently by the same shell.
+
 **`GetoptsOwnParametersIgnoreAFreeze`** — bash no · dash no · ksh93 yes · zsh yes
 
 Lets `getopts` write OPTARG and OPTIND over a `readonly` on them, without

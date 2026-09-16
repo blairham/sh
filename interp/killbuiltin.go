@@ -165,10 +165,10 @@ func (r *Runner) killSignal(args []string) (string, syscall.Signal, []string, er
 		if len(args) < 2 {
 			return "", 0, nil, &killError{kind: killMissingSignalArgument, operand: a}
 		}
-		spec, form, args = args[1], killSpecOption, args[2:]
+		spec, form, args = args[1], killSpecOptionFor(a), args[2:]
 	case isJoined && r.ask(r.sem().KillReadsASignalJoinedToItsOption,
 		"a signal written onto `kill -n` or `kill -s` with no space"):
-		spec, form, args = joined, killSpecOption, args[1:]
+		spec, form, args = joined, killSpecOptionFor(args[0][:2]), args[1:]
 	case strings.HasPrefix(a, "-") && len(a) > 1:
 		if r.unspecified {
 			// The axis above went unanswered, and this word is exactly the
@@ -224,9 +224,24 @@ type killSpecForm int
 
 const (
 	killSpecBare killSpecForm = iota
+	// killSpecOption is `-s`, which takes a signal *name*.
 	killSpecOption
+	// killSpecNumberOption is `-n`, which takes a signal *number*. Its own
+	// form because two dialects treat a number differently from a name:
+	// `kill -n 99` reaches `kill(2)` in ksh93 and zsh where `kill -s 99` is
+	// refused by both. See Semantics.KillSendsASignalNumberItCannotName.
+	killSpecNumberOption
 	killSpecFlag
 )
+
+// killSpecOptionFor is which of the two option forms a word is, given the
+// option itself — `-n` or `-s`, joined spelling included.
+func killSpecOptionFor(option string) killSpecForm {
+	if option == "-n" {
+		return killSpecNumberOption
+	}
+	return killSpecOption
+}
 
 // signalSpec resolves a name or a number to the signal it names.
 //
@@ -248,6 +263,24 @@ func (r *Runner) signalSpec(spec string, form killSpecForm) (string, syscall.Sig
 			if int(k.Sig) == n {
 				return k.Name, k.Sig, nil
 			}
+		}
+		// A number this shell has no name for. Two dialects hand it to the
+		// kernel anyway and let `kill(2)` be the one to refuse it, which is
+		// the difference between a word the shell would not take and a send
+		// that failed — see the axis for the measurement, and note it is
+		// asked only where the signal was written as a number in a position
+		// that takes one, since `-s 99` is a name-shaped operand that
+		// happens to be digits.
+		//
+		// Read rather than `ask`ed, for the reason Runner.EditingMode is:
+		// an unanswered axis here would replace one refusal with another
+		// rather than stop a shell from guessing. Not sending is a real
+		// answer — four of the five columns give it — and it is the one the
+		// standard implies, so a vector that says nothing gets a `kill` that
+		// keeps its own counsel rather than one that puts a number it has
+		// never heard of into a system call.
+		if form != killSpecOption && n > 0 && r.sem().KillSendsASignalNumberItCannotName == Yes {
+			return "", syscall.Signal(n), nil
 		}
 		return bad()
 	}
@@ -342,7 +375,7 @@ func (r *Runner) killTargets(name string, sig syscall.Signal, targets []string) 
 		}
 		if hit == 0 {
 			failed++
-			r.killReport(killFailureKind(miss), t)
+			r.killFailed(&killError{kind: killFailureKind(miss), operand: t, errno: miss})
 			continue
 		}
 		sent++
@@ -360,11 +393,24 @@ func (r *Runner) killTargets(name string, sig syscall.Signal, targets []string) 
 // way, and because a gate's refusal arrives here as EPERM and has to land in
 // the second — a refused target reads exactly as a target the kernel would
 // not let us have. See signalgate.go for why that is the bargain.
+// killFailureKind is which complaint a failed send draws, which is three
+// cases and not two once a shell can send a signal number it cannot name.
+//
+// EINVAL is what `kill(2)` answers for a signal the platform does not have,
+// and the two shells that get that far word it differently: zsh prints the
+// errno — `kill <pid> failed: invalid argument` — and ksh93 gives every
+// failed send its one sentence, `kill: <pid>: no such process`, errno
+// regardless. Measured 2026-09-16 with `kill -99 $$` on macOS arm64, where
+// the same two shells answer `no such process` for a pid that is really
+// absent, so the wordings are separable rather than coincidental.
 func killFailureKind(err error) killErrorKind {
-	if errors.Is(err, syscall.EPERM) {
+	switch {
+	case errors.Is(err, syscall.EPERM):
 		return killNotPermitted
+	case errors.Is(err, syscall.ESRCH):
+		return killNoSuchProcess
 	}
-	return killNoSuchProcess
+	return killSendFailed
 }
 
 // killTargetNotAPid is killTarget's own failure code, past the job lookup's:
@@ -868,6 +914,9 @@ func killSignalName(n int) (string, bool) {
 type killError struct {
 	kind    killErrorKind
 	operand string
+	// errno is what `kill(2)` said, for the one wording that prints it. Nil
+	// for every failure the shell decided on its own.
+	errno error
 }
 
 type killErrorKind int
@@ -891,6 +940,13 @@ const (
 	killNotAPid
 	// killNoSuchProcess is a target that is not there.
 	killNoSuchProcess
+	// killSendFailed is a send the kernel refused for any other reason,
+	// which is reachable only where the shell sends a signal number it has
+	// no name for — see Semantics.KillSendsASignalNumberItCannotName. One
+	// dialect prints the errno here and the rest fall back on the sentence
+	// they use for a target that is not there, which is measured: ksh93
+	// really does call an EINVAL `no such process`.
+	killSendFailed
 	// killNotPermitted is a target that is there and is not ours.
 	killNotPermitted
 	// killNoSuchJob is a `%` spec that names no job.
@@ -911,7 +967,14 @@ func (e *killError) verbs() []any {
 	// unknown signal `SIGQ` for `Q` and `SIGNOPE` for `SIGNOPE`, so passing
 	// the operand as written to a format that adds one gave SIGSIGNOPE.
 	prefixed := "SIG" + strings.TrimPrefix(strings.ToUpper(e.operand), "SIG")
-	return []any{e.operand, first, prefixed}
+	// And the kernel's own words, for the dialect that prints them. Go
+	// spells an errno the way strerror does and in lower case already —
+	// `invalid argument` — which is how zsh prints it.
+	reason := ""
+	if e.errno != nil {
+		reason = e.errno.Error()
+	}
+	return []any{e.operand, first, prefixed, reason}
 }
 
 func (e *killError) fallback() string {
@@ -924,7 +987,7 @@ func (e *killError) fallback() string {
 		return "kill: %[1]s: not a pid"
 	case killNoSuchJob:
 		return "kill: %[1]s: no such job"
-	case killNoSuchProcess:
+	case killNoSuchProcess, killSendFailed:
 		return "kill: (%[1]s) - No such process"
 	case killNotPermitted:
 		return "kill: (%[1]s) - Operation not permitted"
@@ -948,6 +1011,8 @@ func (e *killError) format(d Diagnostics) string {
 		return d.KillNoSuchJob
 	case killNoSuchProcess:
 		return d.KillNoSuchProcess
+	case killSendFailed:
+		return orElse(d.KillSendFailed, d.KillNoSuchProcess)
 	case killNotPermitted:
 		return d.KillNotPermitted
 	}
@@ -986,7 +1051,7 @@ func (r *Runner) killFailed(err error) int {
 		return 1
 	}
 	d := r.diag()
-	target := ke.kind == killNoSuchProcess || ke.kind == killNotPermitted
+	target := ke.kind == killNoSuchProcess || ke.kind == killNotPermitted || ke.kind == killSendFailed
 	if (ke.kind == killUsage && d.KillUsageUnprefixed) || (target && d.KillTargetUnprefixed) {
 		// One dialect prints these with no location and no shell name in
 		// front, which is not how it prints a complaint about an argument.

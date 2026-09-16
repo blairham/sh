@@ -109,3 +109,26 @@ printf -- '--- and the ordering, with the sentences replaced\n'
 mark() { sed -e 's/.*nosuchcommand_zz.*/<a diagnostic>/' -e 's/.*nosuchdir_zz.*/<a diagnostic>/'; }
 ( printf 'before\n'; nosuchcommand_zz; printf 'after\n' ) 2>&1 | mark
 ( printf 'one\n'; nosuchcommand_zz; printf 'two\n'; cd /nosuchdir_zz; printf 'three\n' ) 2>&1 | mark
+
+# A signal *number* out of range never reaches the signal table here: this
+# shell hands it to `kill(2)` and reports what the kernel said — and it says
+# `no such process` for it, which is the same sentence a pid that is really
+# absent gets. The pair is the point rather than either line alone. A name
+# out of range is a different route and is refused before anything is sent,
+# with a different wording and a different status, which is what #3139 was:
+# the number was read as the option letter `-9` and refused at 2.
+say 'a signal number out of range'
+( kill -99 $$ ) 2>&1 > /dev/null | sed "s/$$/<pid>/g"
+( kill -99 $$ ) > /dev/null 2>&1; printf 'status %s\n' "$?"
+
+say 'the same number written to the option that takes one'
+( kill -n 99 $$ ) 2>&1 > /dev/null | sed "s/$$/<pid>/g"
+( kill -n 99 $$ ) > /dev/null 2>&1; printf 'status %s\n' "$?"
+
+say 'and to the option that takes a name, which does not send'
+( kill -s 99 $$ ) 2>&1 > /dev/null
+( kill -s 99 $$ ) > /dev/null 2>&1; printf 'status %s\n' "$?"
+
+say 'a pid that is really absent, for the sentence to be compared against'
+( kill -0 4194303 ) 2>&1 > /dev/null
+( kill -0 4194303 ) > /dev/null 2>&1; printf 'status %s\n' "$?"

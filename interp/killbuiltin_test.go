@@ -692,3 +692,103 @@ func TestKillListReadsAnExitStatus(t *testing.T) {
 		t.Errorf("stderr = %q, want the signal wording for a -s argument", errs)
 	}
 }
+
+// TestASignalNumberThisShellCannotName is the axis #3139 was the absence of.
+//
+// A number out of range splits the panel in two and the split is about where
+// the refusal comes from, not about how it is worded: ksh93 and zsh hand the
+// number to `kill(2)` and report what the kernel said, while bash and the
+// two ash-family shells check their own table first and the number never
+// reaches a system call. Measured 2026-09-16 on macOS arm64, where 31 is the
+// highest signal there is.
+//
+// Both halves are asked, and both are asked with the *errno* rather than with
+// a status alone: an EINVAL and an ESRCH are the same status and different
+// sentences, so a row reading only the status would pass in a shell that
+// reported the wrong one — which is how the `-9`-as-an-option reading survived
+// as long as it did.
+func TestASignalNumberThisShellCannotName(t *testing.T) {
+	sends, checks := killSem(), killSem()
+	sends.KillSendsASignalNumberItCannotName = Yes
+	checks.KillSendsASignalNumberItCannotName = No
+	// Wordings that name which route was taken, so the assertion is about the
+	// route and not about a status the two share.
+	d := Diagnostics{
+		KillInvalidSignal: "refused: %[1]s",
+		KillIllegalOption: "refused: %[1]s",
+		KillSendFailed:    "sent and failed: %[4]s",
+		KillNoSuchProcess: "sent and failed: no such process",
+	}
+	for _, c := range []struct {
+		name string
+		sem  Semantics
+		src  string
+		errs string
+	}{
+		// 99 is out of range on every platform this runs on: macOS stops at
+		// 31 and Linux at 64.
+		{"the bare form sends", sends, `kill -99 $$`, "testsh: sent and failed: invalid argument\n"},
+		{"and so does -n", sends, `kill -n 99 $$`, "testsh: sent and failed: invalid argument\n"},
+		// `-s` takes a *name*, so digits there are already the wrong kind of
+		// word and the shell refuses them however it answers the axis.
+		// Measured: `kill -s 99` is `unknown signal name` in ksh93 and
+		// `unknown signal: SIG99` in zsh, both of which send the other two.
+		{"but -s does not", sends, `kill -s 99 $$`, "testsh: refused: 99\n"},
+		{"the bare form refused", checks, `kill -99 $$`, "testsh: refused: 99\n"},
+		{"-n refused", checks, `kill -n 99 $$`, "testsh: refused: 99\n"},
+		{"-s refused", checks, `kill -s 99 $$`, "testsh: refused: 99\n"},
+		// And the control: a number the shell *can* name goes nowhere near
+		// either route. Signal 0 is the existence probe, so this says nothing
+		// and is status 0 under both answers.
+		{"a number it can name", sends, `kill -0 $$`, ""},
+		{"the same under the other answer", checks, `kill -0 $$`, ""},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			_, errs, _ := killRun(t, c.src, c.sem, d)
+			if errs != c.errs {
+				t.Errorf("stderr: got %q, want %q", errs, c.errs)
+			}
+		})
+	}
+}
+
+// TestAnUnansweredSignalNumberAxisStillRefuses.
+//
+// This axis is read rather than `ask`ed, which is a deliberate exception and
+// therefore worth a row of its own: an unanswered vector gets the refusal
+// four of the five columns give rather than a complaint about the vector.
+// Handing a number the shell has never heard of to a system call is not a
+// thing to do because nobody said not to.
+func TestAnUnansweredSignalNumberAxisStillRefuses(t *testing.T) {
+	sem := killSem()
+	sem.KillSendsASignalNumberItCannotName = Unspecified
+	_, errs, _ := killRun(t, `kill -99 $$`, sem, Diagnostics{KillIllegalOption: "refused: %[1]s"})
+	if errs != "testsh: refused: 99\n" {
+		t.Errorf("stderr: got %q, want the ordinary refusal", errs)
+	}
+}
+
+// TestAFailedSendIsThreeCasesAndNotTwo keeps the errno split honest.
+//
+// Before a shell could send a number it cannot name, every failed send was
+// ESRCH or EPERM and two wordings covered it. EINVAL is the third, and the
+// two shells that reach it word it differently: zsh prints the errno and
+// ksh93 gives every failed send its one sentence. So the fallback is the
+// no-such-process wording, which is a measurement rather than a convenience.
+func TestAFailedSendIsThreeCasesAndNotTwo(t *testing.T) {
+	sem := killSem()
+	sem.KillSendsASignalNumberItCannotName = Yes
+	// A dialect that says nothing about the new case falls back, which is
+	// what ksh93 does: `kill -99 $$` there is `no such process` for an EINVAL.
+	fellBack := Diagnostics{KillNoSuchProcess: "kill: %[1]s: no such process"}
+	_, errs, _ := killRun(t, `kill -99 $$`, sem, fellBack)
+	if !strings.HasSuffix(errs, ": no such process\n") {
+		t.Errorf("stderr: got %q, want the no-such-process sentence", errs)
+	}
+	// And one that does word it prints the errno instead.
+	spelled := Diagnostics{KillSendFailed: "kill %[1]s failed: %[4]s", KillNoSuchProcess: "unused"}
+	_, errs, _ = killRun(t, `kill -99 $$`, sem, spelled)
+	if !strings.HasSuffix(errs, " failed: invalid argument\n") {
+		t.Errorf("stderr: got %q, want the errno spelled out", errs)
+	}
+}

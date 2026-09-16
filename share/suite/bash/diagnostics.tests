@@ -105,6 +105,17 @@ say 'signaling a pid nobody has'
 say 'text that will not parse, through eval'
 ( eval 'for' ) 2>&1 > /dev/null
 
+# A signal number out of range is checked against this shell's own table and
+# refused there, however it was written — the same sentence for the bare form,
+# for `-n` and for `-s`, at 1. This is the column ksh93 and zsh do *not* agree
+# with (they hand the number to `kill(2)`), so it is a row here rather than in
+# core/, and it is what a fix for #3139 had to leave alone.
+say 'a signal number out of range, three ways'
+( kill -99 $$ ) 2>&1 > /dev/null
+( kill -n 99 $$ ) 2>&1 > /dev/null
+( kill -s 99 $$ ) 2>&1 > /dev/null
+( kill -99 $$ ) > /dev/null 2>&1; printf 'status %s\n' "$?"
+
 printf -- '--- and the ordering, with the sentences replaced\n'
 mark() { sed -e 's/.*nosuchcommand_zz.*/<a diagnostic>/' -e 's/.*nosuchdir_zz.*/<a diagnostic>/'; }
 ( printf 'before\n'; nosuchcommand_zz; printf 'after\n' ) 2>&1 | mark

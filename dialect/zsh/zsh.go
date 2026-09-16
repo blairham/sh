@@ -675,6 +675,11 @@ func Semantics() interp.Semantics {
 	// in this shell and none in bash and ksh93 (#2197).
 	s.WritingSubstitutionIsWaitedForAtTheCommand = interp.Yes
 	s.SetFTurnsOffGlobbing = interp.No
+	// A numeric signal goes to `kill(2)` unchecked here, so `kill -99 $$` is
+	// `kill <pid> failed: invalid argument` at 1 — the errno, printed —
+	// rather than a word refused. Measured 2026-09-16; `kill -s 99` is still
+	// `unknown signal: SIG99`, since `-s` takes a name.
+	s.KillSendsASignalNumberItCannotName = interp.Yes
 	// Neither editing mode is selected on its own. Measured 2026-09-11 in a
 	// session at a real terminal: `[[ -o emacs ]]` and `[[ -o vi ]]` both
 	// answer 1 there, which is why this shell's own default for `emacs` is
@@ -3622,11 +3627,17 @@ func Diagnostics() interp.Diagnostics {
 			"local":   "not an identifier: %[2]s",
 			"integer": "not an identifier: %[2]s",
 		},
-		BuiltinBadOptionStatus:    1,
-		PrintfUsage:               "not enough arguments",
-		PrintfUsageStatus:         1,
-		TrapBadSignal:             "undefined signal: %[1]s",
-		KillNoSuchProcess:         "kill %[1]s failed: no such process",
+		BuiltinBadOptionStatus: 1,
+		PrintfUsage:            "not enough arguments",
+		PrintfUsageStatus:      1,
+		TrapBadSignal:          "undefined signal: %[1]s",
+		KillNoSuchProcess:      "kill %[1]s failed: no such process",
+		// The same sentence with the errno in it, for the sends this shell
+		// makes that the two above do not cover: `kill -99 $$` is `kill
+		// <pid> failed: invalid argument`, measured. The other two are this
+		// wording with ESRCH and EPERM written out, which is why all three
+		// read alike.
+		KillSendFailed:            "kill %[1]s failed: %[4]s",
 		KillNotPermitted:          "kill %[1]s failed: operation not permitted",
 		KillInvalidSignal:         "unknown signal: %[3]s",
 		KillIllegalOption:         "unknown signal: %[3]s",

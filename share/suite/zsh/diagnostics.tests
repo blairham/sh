@@ -102,6 +102,29 @@ say 'signaling a pid nobody has'
 say 'text that will not parse, through eval'
 ( eval 'for' ) 2>&1 > /dev/null
 
+# A signal *number* out of range never reaches the signal table here: this
+# shell hands it to `kill(2)` and prints the errno the kernel answered with,
+# which is a different sentence from the one a pid that is really absent gets
+# and is why both are below. A *name* out of range is a different route
+# altogether — refused before anything is sent, in this shell's own words and
+# with the hint after it. #3139 was the number taking the name's route and,
+# worse, being read as an unknown option first.
+say 'a signal number out of range'
+( kill -99 $$ ) 2>&1 > /dev/null | sed "s/$$/<pid>/g"
+( kill -99 $$ ) > /dev/null 2>&1; printf 'status %s\n' "$?"
+
+say 'the same number written to the option that takes one'
+( kill -n 99 $$ ) 2>&1 > /dev/null | sed "s/$$/<pid>/g"
+( kill -n 99 $$ ) > /dev/null 2>&1; printf 'status %s\n' "$?"
+
+say 'and to the option that takes a name, which does not send'
+( kill -s 99 $$ ) 2>&1 > /dev/null
+( kill -s 99 $$ ) > /dev/null 2>&1; printf 'status %s\n' "$?"
+
+say 'a pid that is really absent, for the errno to be compared against'
+( kill -0 4194303 ) 2>&1 > /dev/null
+( kill -0 4194303 ) > /dev/null 2>&1; printf 'status %s\n' "$?"
+
 printf -- '--- and the ordering, with the sentences replaced\n'
 mark() { sed -e 's/.*nosuchcommand_zz.*/<a diagnostic>/' -e 's/.*nosuchdir_zz.*/<a diagnostic>/'; }
 ( printf 'before\n'; nosuchcommand_zz; printf 'after\n' ) 2>&1 | mark

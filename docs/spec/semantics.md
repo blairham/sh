@@ -1272,6 +1272,52 @@ almost every time. Making `kill` a builtin removed that accidental
 padding, and the same case with the recording mutated out fails three
 hundred times in three hundred rather than three.
 
+## A signal number the shell cannot name
+
+Measured 2026-09-16 against bash 5.3.20, bash 3.2.57, ksh93u+ (AJM 93u+
+2012-08-01), zsh 5.9.2, dash 0.5.12 and BusyBox ash 1.37.0, each under a
+matching `argv[0]`, with `kill -99 $$` — 99 being out of range on macOS,
+where 31 is the highest signal there is, and on Linux, where 64 is.
+
+| column | what it says | status |
+| --- | --- | --- |
+| bash 5.3, bash-as-`sh`, bash 3.2 | `kill: 99: invalid signal specification` | 1 |
+| ksh93 | `kill: <pid>: no such process` | 1 |
+| zsh | `kill <pid> failed: invalid argument` | 1 |
+| BusyBox ash | `bad signal name '99'` | 1 |
+| dash | `kill: Illegal option -9` | 2 |
+
+Four sentences and two statuses, and the split underneath them is not a
+wording. **ksh93 and zsh never check the number at all**: they hand it to
+`kill(2)` and report what came back — zsh prints the errno and ksh93 gives
+every failed send the one sentence it gives a pid that is really absent.
+The other three refuse the word before anything is sent.
+`Semantics.KillSendsASignalNumberItCannotName` is that difference, and it is
+about reaching the system call rather than about what is printed afterwards.
+
+dash is the column that cannot be asked, because there is no number there to
+send: a dash-word is option letters in that shell, so `-99` is the letter `9`
+with junk behind it and `-32` is `-3`. That is a *reading* and not an answer
+to this axis, which is why the base reads No — a shell with no opinion should
+not be putting numbers it has never heard of into a system call.
+
+Two details are measured rather than assumed, and each is a row the obvious
+rule gets wrong:
+
+- **`-s` is not the same as `-n`.** ksh93 and zsh send `kill -99` and `kill
+  -n 99` and refuse `kill -s 99` — `kill: 99: unknown signal name` and
+  `unknown signal: SIG99`. `-s` takes a *name*, so digits there are already
+  the wrong kind of word.
+- **BusyBox has no option complaint for `kill` at all.** Everything after the
+  dash is a signal, so `-Q`, `-NOPE`, `-9x` and `-99` are one sentence with
+  the *whole* word in it, at 1. The whole-word rows are what tell it from
+  dash's reading, which names only the first character.
+
+#3139 was the other three columns having dash's answer: `kill -99` was an
+unknown *option* in ksh93, zsh and ash alike, and two of the three returned
+2 for it. `kill -99 $$` was the only miss in the ksh93 and zsh columns of
+`internal/cmd/diagsample`, and one of four in ash.
+
 ## Handing the death to the driver is not the same as dying
 
 Measured 2026-09-05 against bash 5.3, bash 3.2, dash, ksh93 and zsh, and

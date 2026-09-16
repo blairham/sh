@@ -10858,6 +10858,46 @@ type Semantics struct {
 	// long as the job would have.
 	KillReadsASignalJoinedToItsOption Answer
 
+	// KillSendsASignalNumberItCannotName hands a numeric signal to the
+	// kernel without checking it against the shell's own table first, so
+	// `kill -99 $$` is a `kill(2)` that failed rather than a word the shell
+	// refused.
+	//
+	// ksh93 and zsh; bash and the two ash-family shells check first.
+	// Measured 2026-09-16 on macOS arm64, where 31 is the highest signal
+	// there is, each under a matching `argv[0]`:
+	//
+	//	ksh93   kill: <pid>: no such process              status 1
+	//	zsh     kill <pid> failed: invalid argument       status 1
+	//	bash    kill: 99: invalid signal specification    status 1
+	//	ash     bad signal name '99'                      status 1
+	//	dash    kill: Illegal option -9                   status 2
+	//
+	// The two that send it are telling the truth about where the refusal
+	// came from: `kill(2)` answered EINVAL, and zsh prints that errno
+	// verbatim while ksh93 gives every failed send its one sentence. The
+	// discriminating detail is that the number never reaches the kernel in
+	// the other three — which is why this is an axis about *reaching the
+	// system call* and not about a wording.
+	//
+	// It applies to a number however it was written except after `-s`,
+	// which is measured and not a simplification: `kill -99` and `kill -n 99`
+	// both send in ksh93 and zsh, and `kill -s 99` is `kill: 99: unknown
+	// signal name` in ksh93 and `unknown signal: SIG99` in zsh. `-s` takes a
+	// *name*, so a number there is already the wrong kind of word.
+	//
+	// dash is the column that cannot be asked, because the question never
+	// arises there: `-99` in dash is the option letter `9` followed by
+	// junk — `Illegal option -9`, at 2 — so there is no number for anything
+	// to send. That is a reading rather than an answer here, and it is why
+	// this reads No in the base: a shell with no opinion should not be
+	// putting numbers it has never heard of into a system call.
+	//
+	// #3139 was the other three getting dash's answer: a number out of range
+	// was an unknown *option* in ksh93, zsh and ash alike, and two of the
+	// three returned 2 for it where the real shell returns 1.
+	KillSendsASignalNumberItCannotName Answer
+
 	// HeldExitListsTheJobs follows that warning with the job table — the
 	// same rows `jobs` writes. bash does and zsh does not: measured through a
 	// pseudo-terminal, `shopt -s checkjobs` then `exit` writes
@@ -15169,8 +15209,12 @@ func PosixSemantics() Semantics {
 		// operand, so the base reads nothing joined to the option; bash 5.x
 		// and ksh93 override.
 		KillReadsASignalJoinedToItsOption: No,
-		CdpathAnnouncesTheDirectory:       Yes,
-		FdVariableOutlivesTheCommand:      Yes,
+		// The standard has `kill` refuse a signal the shell does not know,
+		// and says nothing about handing an unknown number to the kernel, so
+		// the base checks its own table first; ksh93 and zsh override.
+		KillSendsASignalNumberItCannotName: No,
+		CdpathAnnouncesTheDirectory:        Yes,
+		FdVariableOutlivesTheCommand:       Yes,
 		// The standard has the here-document end at the delimiter and says
 		// nothing about a body the input cut short, so this follows the
 		// panel: three of the five leave the last line as it was written and

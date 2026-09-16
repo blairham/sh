@@ -1412,6 +1412,12 @@ func Semantics() interp.Semantics {
 	// still — it takes `kill -s9` too, which the axis records and does not
 	// follow (#2227).
 	s.KillReadsASignalJoinedToItsOption = interp.Yes
+	// A numeric signal goes to `kill(2)` unchecked here, so `kill -99 $$` is
+	// `kill: <pid>: no such process` at 1 — the sentence this shell gives
+	// every failed send — rather than a word refused. Measured 2026-09-16;
+	// `kill -s 99` is still `kill: 99: unknown signal name`, since `-s`
+	// takes a name.
+	s.KillSendsASignalNumberItCannotName = interp.Yes
 	s.SIGPrefixAccepted = interp.Yes
 	s.RedirectsUseEveryTarget = interp.No
 	s.KillStatus = interp.KillStatusAnyFailure

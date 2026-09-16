@@ -50,3 +50,39 @@ both() {
 both -n 5 -s hello rest
 both -s hello -n 5
 both -n5 -shello
+
+# --- a freeze on the names getopts fills in ---
+#
+# OPTARG and OPTIND are the builtin's own here rather than a script's: a
+# `readonly` on either is not consulted at all, and `getopts` writes through
+# it without a word. bash reports the refusal and dash stops the builtin over
+# it, so this is the third of three answers and ksh93 shares it only with zsh
+# (#3147).
+#
+# Counted rather than quoted, because the interesting number is zero. Each
+# case resets OPTIND, so that none of them reads where the one before it
+# stopped.
+
+printf 'sentences for a frozen OPTARG -> '
+( OPTIND=1; set -- -a val; readonly OPTARG
+  getopts 'a:' o 2>&1 >/dev/null | wc -l | tr -d ' ' )
+
+( OPTIND=1; set -- -a val; readonly OPTARG
+  getopts 'a:' o 2>/dev/null
+  printf 'frozen OPTARG: st=%s o=[%s] OPTIND=%s OPTARG=[%s]\n' "$?" "$o" "$OPTIND" "${OPTARG-unset}" )
+
+# The same for OPTIND, which the scan writes on every call.
+printf 'sentences for a frozen OPTIND -> '
+( OPTIND=1; set -- -a val; readonly OPTIND
+  getopts 'a:' o 2>&1 >/dev/null | wc -l | tr -d ' ' )
+
+( OPTIND=1; set -- -a val; readonly OPTIND
+  getopts 'a:' o 2>/dev/null
+  printf 'frozen OPTIND: st=%s o=[%s] OPTARG=[%s]\n' "$?" "$o" "${OPTARG-unset}" )
+
+# The **name** is not one of the two the builtin owns, and it is refused: the
+# letter cannot be reported, so the builtin reports 2 instead and the name
+# keeps what it had.
+( OPTIND=1; set -- -a val; N=kept; readonly N
+  getopts 'a:' N 2>/dev/null
+  printf 'frozen name: st=%s N=[%s]\n' "$?" "$N" )

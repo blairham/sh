@@ -79,3 +79,49 @@ trace() {
 trace -abc rest
 trace -ac rest
 trace -a -c rest
+
+# --- a freeze on the names getopts fills in ---
+#
+# The third answer on the panel and dash's own. bash consults a `readonly` on
+# OPTARG, reports it and writes everything else anyway; ksh93 and zsh do not
+# consult it at all. dash consults it and **stops**: the builtin reports,
+# returns 2, and neither the name nor OPTIND is written (#3147).
+#
+# OPTIND is what says it stopped rather than merely reported. It is still 1
+# afterwards, so the word count had not moved by the time the refusal
+# happened — and it is the only place the order the two are written in is
+# visible from a script.
+#
+# Each case resets OPTIND, for the reason the probes above are functions.
+
+printf 'frozen OPTARG reports -> '
+( OPTIND=1; set -- -a val; readonly OPTARG
+  getopts 'a:' o 2>&1 >/dev/null | wc -l | tr -d ' ' )
+
+( OPTIND=1; set -- -a val -b; o=none; readonly OPTARG
+  getopts 'a:b' o 2>/dev/null
+  printf 'frozen OPTARG: st=%s o=[%s] OPTIND=%s\n' "$?" "$o" "$OPTIND"
+  getopts 'a:b' o 2>/dev/null
+  printf 'and again:     st=%s o=[%s] OPTIND=%s\n' "$?" "$o" "$OPTIND" )
+
+# A frozen OPTIND stops it one write later: OPTARG is written before the
+# refusal happens and keeps the value it was given.
+( OPTIND=1; set -- -a val; o=none; readonly OPTIND
+  getopts 'a:' o 2>/dev/null
+  printf 'frozen OPTIND: st=%s o=[%s] OPTARG=[%s]\n' "$?" "$o" "${OPTARG-unset}" )
+
+# And a frozen name, which is the same 2 — here the two answers meet, because
+# a name nothing may write is a letter nothing can report.
+( OPTIND=1; set -- -a val; N=kept; readonly N
+  getopts 'a:' N 2>/dev/null
+  printf 'frozen name: st=%s N=[%s] OPTARG=[%s]\n' "$?" "$N" "${OPTARG-unset}" )
+
+# Including at the end of the options, where bash keeps its own 1.
+( OPTIND=1; set -- operand; N=kept; readonly N
+  getopts 'a:' N 2>/dev/null
+  printf 'frozen name at the end: st=%s N=[%s]\n' "$?" "$N" )
+
+# None of it ends the script, which is what separates a builtin's refused
+# write from the plain `x=2` this shell gives a whole file up for.
+( OPTIND=1; set -- -a val; readonly OPTARG
+  getopts 'a:' o 2>/dev/null; printf 'the rest of the line ran\n' ) 2>/dev/null

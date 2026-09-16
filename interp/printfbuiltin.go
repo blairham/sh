@@ -585,14 +585,255 @@ func (r *Runner) printfUnfinishedStars(unfinished string, next func() (string, b
 	return status, false
 }
 
-// printfFmtWidthCeiling is the widest field Go's `fmt` will render. Past it
+// printfFmtFieldCeiling is the widest field Go's `fmt` will render. Past it
 // the package writes its own error text — `%!(NOVERB)%!(EXTRA …)` — into the
 // output instead of the field, which is a diagnostic aimed at a Go programmer
 // arriving in a shell script's stdout.
 //
 // Measured by bisection 2026-09-14: `fmt.Sprintf("%10000009d", 1)` is ten
 // million characters and `%10000010d` is 25 characters of complaint.
-const printfFmtWidthCeiling = 10000009
+//
+// It bounds a width and a precision alike, because `fmt` reads both with one
+// scanner — `parsenum` gives up once the number it has accumulated is past
+// 1e6, which is why the ceiling is a seven-digit prefix and a spare digit
+// rather than a round number. So the name says field and not width: the
+// precision side is #3017 and the width side was #2663, and one constant is
+// how a measurement of the boundary reaches both.
+const printfFmtFieldCeiling = 10000009
+
+// printfSpecParts reads a settled spec into the flags, the width and the
+// precision it carries. A precision of -1 is one the spec does not write,
+// which is C's "omitted" and not a zero — `%.f` writes a zero and is 0 here.
+//
+// Every `*` has been replaced by the operand it took before this is reached,
+// so the runs are digits, and anything past a C int has already been settled
+// by printfFieldBeyondAnInt — so the numbers fit.
+func printfSpecParts(spec string) (flags string, width, prec int) {
+	i := 1 // past the %
+	i += runOfBytes(spec, i, "-+ #0'")
+	flags = spec[1:i]
+	j := i + printfFieldRun(spec, i)
+	width, _ = strconv.Atoi(spec[i:j])
+	prec = -1
+	if j < len(spec) && spec[j] == '.' {
+		j++
+		// Atoi of the empty run answers zero, which is exactly what a `.`
+		// with no digits after it means.
+		prec, _ = strconv.Atoi(spec[j : j+printfFieldRun(spec, j)])
+	}
+	return flags, width, prec
+}
+
+// printfWidePrecision reports a precision this shell has to honor itself
+// because `fmt` will not — the band between printfFmtFieldCeiling and the C
+// int printfFieldBeyondAnInt settles, which used to fall straight through and
+// put Go's `%!(NOVERB)` on the shell's stdout at status 0 (#3017).
+//
+// printfWideField is the width's half of this and takes the spec apart
+// itself, because what it does about a wide width is rewrite the spec. This
+// one cannot: a precision means something different for every family of verb
+// — truncation for a string, minimum digits for an integer, digits after the
+// point for a float — so the callers are where the value is, and each one
+// lays its own field out.
+func printfWidePrecision(spec string) bool {
+	_, _, prec := printfSpecParts(spec)
+	return prec > printfFmtFieldCeiling
+}
+
+// printfStringField lays a conversion whose field is a string out through
+// `fmt`, honoring a precision past what `fmt` renders here instead.
+//
+// A string conversion's precision only truncates, so one past the operand's
+// length is a no-op — which is why this half is exact and costs nothing:
+// the text is cut at the precision and the precision then leaves the spec,
+// so `fmt` is left with a width it can render. `printf '[%.10000010s]' xyz`
+// is `[xyz]` in bash 5.3 and is `[xyz]` here.
+//
+// The width stays with `fmt`, because printfWideField has already taken out
+// any width `fmt` would refuse.
+func printfStringField(spec, text string) string {
+	if _, _, prec := printfSpecParts(spec); prec > printfFmtFieldCeiling {
+		if prec < len(text) {
+			text = text[:prec]
+		}
+		spec = printfWithoutPrecision(spec)
+	}
+	return fmt.Sprintf(spec+"s", text)
+}
+
+// printfWideInteger lays an integer conversion out here because its precision
+// — C's *minimum number of digits* — is past what `fmt` renders.
+//
+// The digits are really produced, because the references produce them:
+// `printf '%.10000010d' 1` is ten million zeros and then a 1 in bash 5.3,
+// measured 2026-09-15, and the same for `%x`, `%o` and `%u`. Clamping would
+// be a different answer and not a cheaper one.
+//
+// signed says whether the value is read as a signed number. The unsigned
+// conversions take the operand's 64-bit pattern rather than its magnitude —
+// see the `%x` note in printfConvert — so the same int64 is a bare pattern
+// there and a sign and a magnitude at `%d`.
+//
+// The `0` flag is deliberately not honored: C says it is ignored where a
+// precision is written for an integer conversion, and one is written here by
+// definition.
+func printfWideInteger(spec string, verb byte, n int64, signed bool) string {
+	flags, width, prec := printfSpecParts(spec)
+	base := 10
+	switch verb {
+	case 'o':
+		base = 8
+	case 'x', 'X':
+		base = 16
+	}
+	v, neg := uint64(n), false
+	if signed && n < 0 {
+		// Unary minus on an unsigned is 0 minus it, so the magnitude of
+		// INT64_MIN comes out right rather than overflowing a negation.
+		v, neg = -v, true
+	}
+	digits := strconv.FormatUint(v, base)
+	if verb == 'X' {
+		digits = strings.ToUpper(digits)
+	}
+	if prec == 0 && v == 0 {
+		// C's one erasure: a precision of nought and a value of nought
+		// write no characters at all. Unreachable from the wide band, where
+		// the precision is ten million, and here because this is a renderer
+		// and TestTheWidePrecisionRenderersAgreeWithFmt grades it as one.
+		digits = ""
+	}
+	if prec > len(digits) {
+		digits = strings.Repeat("0", prec-len(digits)) + digits
+	}
+	prefix := ""
+	if strings.ContainsRune(flags, '#') {
+		switch verb {
+		case 'o':
+			// C's `#` on an octal raises the precision until there is a
+			// leading zero, which a precision this wide has already done.
+			if !strings.HasPrefix(digits, "0") {
+				prefix = "0"
+			}
+		case 'x':
+			if v != 0 {
+				prefix = "0x"
+			}
+		case 'X':
+			if v != 0 {
+				prefix = "0X"
+			}
+		}
+	}
+	sign := ""
+	switch {
+	case neg:
+		sign = "-"
+	case strings.ContainsRune(flags, '+'):
+		sign = "+"
+	case strings.ContainsRune(flags, ' '):
+		sign = " "
+	}
+	return printfPadToWidth(sign+prefix+digits, width, strings.Contains(flags, "-"), false)
+}
+
+// printfWideFloat lays a floating conversion out here because its precision —
+// digits that have to be *produced* — is past what `fmt` renders.
+//
+// strconv is what produces them, and it is the reason this half is tractable
+// at all: `strconv.FormatFloat(1, 'f', 10000010, 64)` is ten million decimal
+// places in six milliseconds, where `fmt` writes 25 characters of complaint.
+// A float64's exact decimal expansion is finite, so everything past it is
+// zeros and strconv writes those too — which is what bash writes.
+//
+// An infinity and a not-a-number never reach here: printfNonFinite answers
+// them first, and its field has no precision in it.
+func printfWideFloat(spec string, verb byte, f float64) string {
+	flags, width, prec := printfSpecParts(spec)
+	if verb == 'F' {
+		// Go has no `%F`, and strconv has no `'F'`. The capital only ever
+		// changed the spelling of a non-finite value, which is written
+		// elsewhere.
+		verb = 'f'
+	}
+	alternate := strings.ContainsRune(flags, '#')
+	body := ""
+	if alternate && (verb == 'g' || verb == 'G') {
+		// strconv's `'g'` strips the trailing zeros, which is `%g` and is
+		// not `%#g`. The alternate form is the one place the two differ
+		// enough to need a renderer of its own, and it is chosen before the
+		// digits are produced rather than after: at ten million places the
+		// rendering nobody keeps is ten megabytes nobody keeps.
+		body = printfAlternateG(math.Abs(f), verb, prec)
+	} else {
+		body = strconv.FormatFloat(math.Abs(f), verb, prec, 64)
+	}
+	if alternate {
+		body = printfForcePoint(body)
+	}
+	sign := ""
+	switch {
+	case math.Signbit(f):
+		// The value's own sign, so a negative zero keeps its minus.
+		sign = "-"
+	case strings.ContainsRune(flags, '+'):
+		sign = "+"
+	case strings.ContainsRune(flags, ' '):
+		sign = " "
+	}
+	return printfPadToWidth(sign+body, width,
+		strings.Contains(flags, "-"), strings.Contains(flags, "0"))
+}
+
+// printfAlternateG is C's `%#g`: the significant digits `%g` chooses, with
+// the trailing zeros `%g` strips kept and the point always written.
+//
+// `%g` picks its style from the exponent — the scientific one below -4 or at
+// the precision, the plain one between — and strconv's `'g'` picks it the
+// same way, so the only thing rebuilt here is the digits. Go's `fmt` is
+// right about every row of this and strconv is not, which is why the narrow
+// path needs none of it: measured against bash 5.3 2026-09-15, `%#.1g` of 1
+// is `1.`, of 0.00001 is `1.e-05`, `%#.3g` of 0.0001 is `0.000100` and
+// `%#.2g` of 9.99 is `10.` — and `fmt` writes those four.
+//
+// The exponent is read back out of the scientific rendering rather than
+// computed, so a carry out of the rounding is already in it: 9.99 at one
+// digit is `1.e+01` and not `9.e+00`.
+func printfAlternateG(f float64, verb byte, prec int) string {
+	if prec == 0 {
+		// C reads a precision of nought at `%g` as one, and so does strconv.
+		prec = 1
+	}
+	e := byte('e')
+	if verb == 'G' {
+		e = 'E'
+	}
+	sci := strconv.FormatFloat(f, e, prec-1, 64)
+	exp := 0
+	if i := strings.IndexAny(sci, "eE"); i >= 0 {
+		exp, _ = strconv.Atoi(sci[i+1:])
+	}
+	body := sci
+	if exp >= -4 && exp < prec {
+		body = strconv.FormatFloat(f, 'f', prec-1-exp, 64)
+	}
+	return body
+}
+
+// printfForcePoint is the decimal point C's `#` flag forces onto a floating
+// conversion, which is visible only where the digits left none to separate:
+// `%#.0f` of 1 is `1.` and `%#.0e` of it is `1.e+00`, in bash 5.3 and in Go's
+// `fmt` alike. In the scientific style the point belongs in front of the
+// exponent and not at the end of the field.
+func printfForcePoint(body string) string {
+	if strings.ContainsRune(body, '.') {
+		return body
+	}
+	if i := strings.IndexAny(body, "eE"); i >= 0 {
+		return body[:i] + "." + body[i:]
+	}
+	return body + "."
+}
 
 // printfWideField reports a width this shell has to lay out itself because
 // `fmt` will not, answering the spec with that width taken out.
@@ -613,7 +854,7 @@ func printfWideField(spec string) (narrow, flags string, width int, wide bool) {
 		return spec, "", 0, false
 	}
 	n, err := strconv.Atoi(spec[i:j])
-	if err != nil || n <= printfFmtWidthCeiling {
+	if err != nil || n <= printfFmtFieldCeiling {
 		return spec, "", 0, false
 	}
 	// The flags are returned rather than looked for in the whole spec,
@@ -912,7 +1153,7 @@ func (r *Runner) printfConvert(spec string, verb byte, timeFmt string, next func
 	case 'T':
 		return r.printfTime(spec, timeFmt, arg, present)
 	case 's':
-		return fmt.Sprintf(spec+"s", arg), 0, false
+		return printfStringField(spec, arg), 0, false
 	case 'b':
 		// The one verb whose *argument* is escaped, where `%s` leaves it
 		// alone. Unanimous, and the difference people reach for `%b` to get.
@@ -921,7 +1162,7 @@ func (r *Runner) printfConvert(spec string, verb byte, timeFmt string, next func
 		// conversion — `printf '[%b][%s]' 'a\cb' x` is `[a` in all six — so
 		// the flag is returned rather than dropped.
 		text, stop := r.expandBEscapes(arg)
-		field := fmt.Sprintf(spec+"s", text)
+		field := printfStringField(spec, text)
 		if stop && field != text &&
 			!r.ask(r.sem().PrintfBStopIsPadded, "a `%b` a `\\c` cut short still going through its field") {
 			// ksh93 alone: what the stop left is written as it stands, width
@@ -966,6 +1207,9 @@ func (r *Runner) printfConvert(spec string, verb byte, timeFmt string, next func
 		if stop {
 			return "", code, true
 		}
+		if printfWidePrecision(spec) {
+			return printfWideInteger(spec, 'd', n, true), code, false
+		}
 		return fmt.Sprintf(spec+"d", n), code, false
 	case 'o', 'u', 'x', 'X':
 		n, code, stop := r.printfNumber(arg, present)
@@ -988,6 +1232,9 @@ func (r *Runner) printfConvert(spec string, verb byte, timeFmt string, next func
 		// A signed reading is what wrote `-ff` for `printf '%x' -255`, which
 		// is not a numeral any of those shells would read back, and `%u` with
 		// a minus sign in front of it.
+		if unsigned := printfWithoutSignFlags(spec); printfWidePrecision(unsigned) {
+			return printfWideInteger(unsigned, verb, n, false), code, false
+		}
 		return fmt.Sprintf(printfWithoutSignFlags(spec)+string(verb), uint64(n)), code, false
 	case 'f', 'e', 'E', 'g', 'G', 'F', 'a', 'A':
 		f, code, stopped := r.printfFloat(arg, present)
@@ -1009,6 +1256,9 @@ func (r *Runner) printfConvert(spec string, verb byte, timeFmt string, next func
 			// spelling of a non-finite value, and printfNonFinite above has
 			// already written that one.
 			verb = 'f'
+		}
+		if printfWidePrecision(spec) {
+			return printfWideFloat(spec, verb, f), code, false
 		}
 		return fmt.Sprintf(spec+string(verb), f), code, false
 	}
@@ -1427,15 +1677,15 @@ func cNotANumber(s string) (float64, bool) {
 func (r *Runner) printfQuote(spec, arg string) (string, int, bool) {
 	switch r.quoteStyle() {
 	case PrintfQuoteAnsiCWord:
-		return fmt.Sprintf(spec+"s", ansiCWordQuote(arg)), 0, false
+		return printfStringField(spec, ansiCWordQuote(arg)), 0, false
 	case PrintfQuoteAnsiCCharacter:
 		// The same function `${(q)…}` uses, which is the same job: this
 		// shell's `%q` and its `q` flag were measured against each other over
 		// every printable byte at three positions and every control byte, and
 		// they agree everywhere.
-		return fmt.Sprintf(spec+"s", quoteWithBackslashes(arg, false)), 0, false
+		return printfStringField(spec, quoteWithBackslashes(arg, false)), 0, false
 	case PrintfQuoteSingle:
-		return fmt.Sprintf(spec+"s", kshSingleQuote(arg)), 0, false
+		return printfStringField(spec, kshSingleQuote(arg)), 0, false
 	case PrintfQuoteAbsent:
 		// A conversion the shell does not have stops the output where it is,
 		// as any other unknown one does.
@@ -2020,7 +2270,7 @@ func (r *Runner) printfTime(spec, format, arg string, present bool) (string, int
 	}
 	// The width and the flags belong to the *result*, not to the date: a
 	// `%10(%Y)T` pads the four digits out to ten.
-	return fmt.Sprintf(spec+"s", strftime(format, t)), code, false
+	return printfStringField(spec, strftime(format, t)), code, false
 }
 
 // printfDate is the other reading of `%T`: the operand is a date string, and
@@ -2042,7 +2292,7 @@ func (r *Runner) printfDate(spec, format, arg string) (string, int, bool) {
 	if format == "" {
 		format = "%a %b %e %H:%M:%S %Z %Y"
 	}
-	return fmt.Sprintf(spec+"s", strftime(format, t)), code, false
+	return printfStringField(spec, strftime(format, t)), code, false
 }
 
 // badVerbName is the conversion character a diagnostic names, given where the

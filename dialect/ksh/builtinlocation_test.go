@@ -70,3 +70,39 @@ func TestOnlyKshNamesThePlaceTwoWays(t *testing.T) {
 		t.Error("ksh93 should name it its own way in a script too")
 	}
 }
+
+// TestTestKeepsTheBuiltinLocation is the same two styles asked of the one
+// builtin that used to write both.
+//
+// `test` has three complaints in this dialect and they were not located
+// alike: a word standing where an operator belonged took the *parser's*
+// `<file>: line N: ` and every other one took `<file>[N]: `. Measured
+// 2026-09-15 on AT&T ksh93u+ 2012-08-01, in a script called `t.sh`:
+//
+//	t.sh[1]: test: b: unknown operator      test a b c
+//	t.sh[1]: [: b: unknown operator         [ a b c ]
+//	t.sh[1]: [: -Q: unknown operator        [ -Q x ]
+//
+// All three bracketed, so the disagreement was ours alone (#3035). The cause
+// was a rule measured on the dialect that writes a builtin's name *into* the
+// location — there `test a b c` is `zsh:1: condition expected: b`, the same
+// as `[[ a b c ]]`, which is not a builtin — applied to a dialect that has a
+// second location style instead.
+func TestTestKeepsTheBuiltinLocation(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct{ name, src string }{
+		{"a word where a binary operator belongs", "test a b c"},
+		{"the same through the bracket", "[ a b c ]"},
+		{"a word after a file test", "test -n x y"},
+		{"a word where a unary operator belongs", "[ -Q x ]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// On line 2, because line 1 of a command string names no line
+			// at all and the two styles are indistinguishable there.
+			out, _ := runKsh(t, dir, "true\n"+tc.src)
+			if !strings.HasPrefix(out, "ksh[2]: ") {
+				t.Errorf("output = %q, want it to open with %q", out, "ksh[2]: ")
+			}
+		})
+	}
+}

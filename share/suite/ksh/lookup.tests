@@ -46,6 +46,35 @@ alias hash
 ( hash -t tool2 ) > /dev/null 2>&1; printf 'hash -t -> %s\n' "$?"
 ( hash -p /bin/ls lsalias ) > /dev/null 2>&1; printf 'hash -p -> %s\n' "$?"
 
+# The same two with the diagnostic kept, because the status alone cannot see
+# which command was refused. `hash` is not a command in this dialect, so a
+# refusal naming it sends the reader to options that do not exist here — and
+# the sentence is `bad option(s)` with no usage block under it, which is not
+# what `alias` writes for a letter it has not got.
+( hash -t tool2 ) 2>&1 > /dev/null
+( hash -p /bin/ls lsalias ) 2>&1 > /dev/null
+
+# That other sentence, for the contrast: a letter written *beside* the
+# tracked one is `alias`'s ordinary refusal, usage block and all, at 2 rather
+# than 1. Two spellings of `alias` in one dialect, which is why the rows above
+# cannot be graded on the word `alias` alone.
+( alias -tq ) 2>&1 > /dev/null; printf 'a letter beside it -> %s\n' "$?"
+
+# And it is fatal, which no status can show. The line after it inside the
+# subshell never runs; the file does.
+( hash -t tool2 2>/dev/null; printf 'reached after the refusal\n' )
+printf 'the file runs on -> %s\n' "$?"
+
+# `-p` and `-x` are `alias`'s letters, not the cache's, and beside the tracked
+# one with no operand they are two shapes of the same listing: `-pt` writes
+# the word that would define the entry back in front of it, and `-xt` writes
+# nothing, because a tracked alias is never an exported one. The bare `-t` is
+# the control — a row that lost the prefix and a row that lost the listing
+# cannot both pass. PATH is set inside the subshell so the rows below still
+# see the one this file built.
+( PATH=/bin; ls > /dev/null 2>&1; alias -t; alias -pt; alias -xt ) 2>&1
+printf 'the three listings -> %s\n' "$?"
+
 # A word with a slash, reported by `command -v`.
 printf '#!/bin/sh\nprintf "tool\\n"\n' > bin1/tool; chmod 755 bin1/tool
 command -v ./bin1/tool; printf 'dot slash -> %s\n' "$?"

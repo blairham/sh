@@ -76,3 +76,18 @@ show 'a blank between two lists' "$@"
 set -- a b
 set -- ${v:+p }
 show 'a blank ending the word' "$@"
+
+# --- the closing separator's field, asked at the edge of a word -------------
+#
+# The rows above ask it of a value standing alone. Asked with text in front of
+# the expansion the answer is the same and the count is one higher than the
+# other four give: bash, ksh93, dash and BusyBox ash absorb the delimiter and
+# leave the word they opened closed by whatever follows, and here it is a
+# field of its own.
+
+IFS=:
+set -- a$(printf ':')
+show 'a separator closing a word text opened' "$@"
+set -- $(printf 'b:')
+show 'and one closing a word the output opened' "$@"
+IFS=' '

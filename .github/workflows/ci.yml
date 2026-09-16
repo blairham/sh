@@ -378,3 +378,92 @@ jobs:
       # required Build and test job. What cannot rot unnoticed here is the
       # machinery; what is reported here is the number.
       run: make perfgate || true
+
+  suite:
+    name: Our own suite (report only)
+    needs: changes
+    runs-on: ubuntu-latest
+    # Bounded for the same reason as the gate above: `|| true` turns a red
+    # report into a green job, and it would turn a wedged one into a job that
+    # sits at the default six-hour limit holding a runner. suitecheck carries
+    # its own 30s per-case timeout; this is the outer bound on the whole run.
+    timeout-minutes: 30
+    steps:
+    - uses: actions/checkout@v6
+      if: needs.changes.outputs.code == 'true'
+    - uses: actions/setup-go@v6
+      if: needs.changes.outputs.code == 'true'
+      with:
+        go-version-file: go.mod
+        check-latest: true
+        cache: true
+    - name: Install as much of the panel as this runner can host
+      if: needs.changes.outputs.code == 'true'
+      run: sudo apt-get update -qq && sudo apt-get install -y -qq dash ksh zsh
+    - name: What does our own suite say, per dialect?
+      if: needs.changes.outputs.code == 'true'
+      # #2291's bar is `make suite` reporting strict 100% for every built
+      # column, and until this job existed **there was nowhere that number
+      # came from except somebody's laptop**. `suiteguard` runs in the test
+      # job and answers a different question -- whether a file was lost or
+      # shortened -- so a suite that still had every file and had stopped
+      # agreeing with the reference shells would have said nothing at all.
+      #
+      # That gap had a cost. The burndown issues under #2291 (#2298, #2299,
+      # #2345) are measured in per-file counts, so every pass over them meant
+      # a full local sweep, and several agents running one concurrently is
+      # what drove the maintainer's machine to load 8.8 while he was working
+      # on it. The instrument belongs on a runner; that is what this is.
+      #
+      # Report-only, and the reason is the one the oracle job above documents
+      # rather than a hope that it will go green. **This runner is not the
+      # machine the baselines were taken on.** Its bash, zsh, ksh and dash are
+      # Ubuntu's builds, and the suite is graded against whatever shell is
+      # actually present -- so these numbers are this runner's, and they are
+      # not comparable to a figure quoted from macOS. What they are good for
+      # is a **delta across one pull request on one runner**, which is exactly
+      # what a burndown needs and exactly what nobody could get before.
+      #
+      # It blocks nothing today. It earns the right to block when a column is
+      # at strict 100% here and a regression would be a real one rather than
+      # a platform difference; #2291 names that bar.
+      run: make suite || true
+
+  bash-suite:
+    name: bash's own suite (report only)
+    needs: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+    - uses: actions/checkout@v6
+      if: needs.changes.outputs.code == 'true'
+    - uses: actions/setup-go@v6
+      if: needs.changes.outputs.code == 'true'
+      with:
+        go-version-file: go.mod
+        check-latest: true
+        cache: true
+    - name: Run bash's own tests/ through real bash and through cmd/bash
+      if: needs.changes.outputs.code == 'true'
+      # #2298 (49 files that exit 0 under both shells and print different
+      # things) and #2299 (14 files that end at a different status) are
+      # counted from this run, and like the job above they had no home but a
+      # laptop. A silent wrong answer is the thing this repository should find
+      # most uncomfortable -- status 0 is what a script checks -- so the count
+      # deserves to be produced on every change rather than when somebody
+      # remembers.
+      #
+      # The suite is bash's own work and GPLv3. It is **fetched at test time
+      # into the gitignored build directory and never committed**, and
+      # `internal/suite` is built so that what comes back out is a score and
+      # not a quotation: `suite.Result` has no path field and no text field.
+      # Nothing here can print a line of it. That is the same rule the local
+      # target follows, and putting the run on a runner does not relax it.
+      #
+      # Report-only. The runner's bash is Ubuntu's build and the maintainer's
+      # is Homebrew's 5.3, so the absolute counts here will not match a figure
+      # quoted from that machine -- the useful reading is the delta across one
+      # pull request on one runner. It needs the network to fetch, so a fetch
+      # failure must not fail the build either; suitecheck already reports
+      # that as a skip rather than a crash, and `|| true` covers the rest.
+      run: make bash-suite || true

@@ -181,6 +181,37 @@ fn
 alias ev='printf "from eval\n"'
 eval 'ev'
 
+# --- a here-document whose body is text of the value ---
+
+# Substitution is textual: the value stands where the alias word stood, and a
+# body is read from the lines after the operator's — here the value's own.
+# Reading it from the input after the alias word instead ran `in alias` and
+# `EOF` as commands. Every value here ends in a newline: without one, the seam
+# between the value and the input is where the four shells part.
+alias hd1='cat <<EOF
+in alias
+EOF
+'
+hd1
+printf 'whole body -> %s\n' "$?"
+
+# The body and a command after it, both in the value.
+alias hd2='cat <<EOF
+body
+EOF
+printf "after the body\n"
+'
+hd2
+
+# The operator in one value and the body in the value it was spliced into.
+alias hdop='cat <<\END'
+alias hdouter='hdop
+from the outer value
+END
+'
+hdouter
+printf 'nested -> %s\n' "$?"
+
 # --- removing them all ---
 
 alias u1='printf "u1\n"' u2='printf "u2\n"'

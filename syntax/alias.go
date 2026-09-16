@@ -320,14 +320,50 @@ func (p *Parser) spliceAlias(name, value string) {
 	// text a construct this body leaves open has to reach before it reaches
 	// the input.
 	outer := p.tokTail
+	// The here-document bodies this value opens, where the value — or the
+	// text of the bodies it was spliced into — holds them whole. See
+	// aliasHeredocBodies.
+	bodies, from, took, skip := p.aliasHeredocBodies(value)
+	if took > from {
+		p.spendPending(from, took)
+		outer = outer[:from] + outer[took:]
+	}
+	if skip > 0 {
+		// And a body that went on into the input takes those lines from
+		// the input's own lexer.
+		p.lex.skipOver(skip)
+	}
 	lastEnd := -1
 	// Where the body's last token began, in the body's own offsets, for the
 	// one that may still be running when the body ends. See carryOpenWord.
 	lastStart := 0
+	var heredocOp Kind
 	for {
+		sub.inHeredocDelimiter = heredocOp != 0 && bodies != nil
 		t := sub.Next()
+		sub.inHeredocDelimiter = false
 		if t.Kind == TokEOF {
 			break
+		}
+		switch {
+		case bodies == nil:
+		case t.Kind.IsHeredoc():
+			heredocOp = t.Kind
+		case heredocOp != 0 && t.Kind == TokWord:
+			// Queued on the value's own lexer as well, so the body lines the
+			// value holds are skipped rather than read as words; the body
+			// handed to the parser is the one read from the joined text.
+			queueAliasHeredoc(sub, heredocOp, t)
+			heredocOp = 0
+			if len(bodies) > 0 {
+				t.aliasBody, bodies = bodies[0], bodies[1:]
+				for j := range t.aliasBody.Heredoc.Spans {
+					t.aliasBody.Heredoc.Spans[j].Pos = at
+				}
+				t.aliasBody.Heredoc.Start, t.aliasBody.Heredoc.Stop = at, at
+			}
+		default:
+			heredocOp = 0
 		}
 		touches = append(touches, int(t.Pos.Offset) == lastEnd)
 		lastEnd = int(t.End.Offset)
@@ -393,6 +429,150 @@ func (p *Parser) spliceAlias(name, value string) {
 	// The first token of a body replaces the alias word, which stood where
 	// it stood: nothing about the body says it touches what came before.
 	p.tokTouches = false
+}
+
+// aliasHeredocBodies reads the here-document bodies an alias value opens,
+// where they are text of the value or of the bodies it was spliced into.
+//
+// Substitution is textual in every column: the value stands in the input
+// where the alias word stood, and a body is read from the lines after the
+// operator's. For a value holding newlines those are the value's own, so
+// `alias hd='cat <<EOF` ⏎ `hello` ⏎ `EOF'` used as `hd` prints `hello` in
+// bash 5.3, ksh93 and dash — where reading the body from the input after the
+// alias word ran `hello` and `EOF` as commands. And for a value spliced into
+// another, they may be the *outer* value's: `alias Y='cat <<\E'` with
+// `alias X='Y` ⏎ `text` ⏎ `E'` used as `X` prints `text`.
+//
+// So the value and what follows it inside enclosing values are read as one
+// text, and a body that ends inside it is taken. from and took bound the
+// part of the enclosing values' text the bodies used, which the caller
+// spends: from is where the bodies began — after the newline that ends the
+// operator's line, which stays, since it ends the command — and took where
+// they ended.
+//
+// And past them, the input: a body the value leaves unfinished goes on into
+// the lines after the alias word, and skip is how much of the input it took.
+// That is also what decides a delimiter written on the value's last line
+// with no newline after it — `hd` alone on its line ends the body there, and
+// `hd; echo x` makes the line `EOF; echo x`, which is body, in bash 5.3,
+// ksh93 and dash alike.
+//
+// Nil where a body runs out at the end of the input, or where the bodies
+// begin in the input rather than in the alias text: a value holding such a
+// body is tokenized as it was before bodies were read from values at all.
+// All or nothing, because the bodies of one line are read in order.
+func (p *Parser) aliasHeredocBodies(value string) (bodies []*Redirect, from, took, skip int) {
+	if !strings.Contains(value, "<<") {
+		return nil, 0, 0, 0
+	}
+	// The seam between the value and what follows it. zsh 5.9.2 reads a
+	// blank there unless one is already there — `alias hd='cat <<EOF` ⏎ `x`
+	// ⏎ `EOF'` used as `hd` on a line of its own gives the body `x` ⏎ `EOF `
+	// and runs on, a body line the value ends in the middle of gains one,
+	// and `hd x` after a value ending mid-line gives `… x` with one blank
+	// rather than two. It is the same blank that keeps a backslash ending a
+	// value from joining the next line there, so the one field answers both.
+	// See Dialect.AliasBodyBackslashJoinsTheNextLine.
+	outer := p.tokTail
+	after := outer + p.lex.src[p.lex.off:]
+	seam := ""
+	if !p.dialect.AliasBodyBackslashJoinsTheNextLine && (after == "" || !isBlank(after[0])) {
+		seam = " "
+	}
+	head := len(value) + len(seam)
+	text := value + seam + after
+	begin := -1
+	probe := NewLexer(text, p.dialect)
+	var op Kind
+	for {
+		probe.inHeredocDelimiter = op != 0
+		waiting := len(probe.pending) > 0
+		t := probe.Next()
+		probe.inHeredocDelimiter = false
+		if t.Kind == TokEOF || probe.err != nil {
+			break
+		}
+		if waiting && len(probe.pending) == 0 && begin < 0 {
+			// The newline the first bodies were read at. Its own End is
+			// past them.
+			begin = int(t.Pos.Offset) + 1
+		}
+		switch {
+		case int(t.Pos.Offset) >= len(value) && op == 0:
+			// Past the value: only a body the value opened is its business,
+			// and the tokens after it stay whoever's they were.
+		case t.Kind.IsHeredoc():
+			op = t.Kind
+		case op != 0 && t.Kind == TokWord:
+			bodies = append(bodies, queueAliasHeredoc(probe, op, t))
+			op = 0
+		default:
+			op = 0
+		}
+		if int(t.End.Offset) >= len(value) && len(probe.pending) == 0 {
+			break
+		}
+	}
+	// Bodies that begin in the input are the ordinary route's: the operator's
+	// line ends there, and the input's lexer reads them at its own newline.
+	if len(bodies) == 0 || probe.err != nil || len(probe.pending) > 0 || begin > head+len(outer) {
+		return nil, 0, 0, 0
+	}
+	end := 0
+	for _, r := range bodies {
+		if r.Heredoc == nil || r.HeredocAtEOF {
+			// A body the input runs out inside is not modeled here: it
+			// carries a remark about where the input ended, and the text
+			// this was read from is not the input.
+			return nil, 0, 0, 0
+		}
+		end = max(end, int(r.Heredoc.Stop.Offset))
+	}
+	from = min(max(0, begin-head), len(outer))
+	took = min(max(0, end-head), len(outer))
+	skip = max(0, end-head-len(outer))
+	return bodies, from, took, skip
+}
+
+// queueAliasHeredoc registers a here-document on a lexer reading alias text,
+// from the delimiter token, the way the parser registers one on the input's.
+func queueAliasHeredoc(l *Lexer, op Kind, delim Token) *Redirect {
+	r := &Redirect{Op: op, Word: &Word{Spans: delim.Spans, Start: delim.Pos, Stop: delim.End}}
+	l.queueHeredoc(r, delim.Text != delim.Literal())
+	return r
+}
+
+// spendPending drops the pending tokens that stand for the text between from
+// and took after the current token, which here-document bodies have used:
+// they are inside a body now and are no longer words of their own. The tokens
+// in front of that text stay, and what follows each of them no longer holds
+// it. See carryOpenWord, which spends a body's text the same way.
+func (p *Parser) spendPending(from, took int) {
+	outer := p.tokTail
+	n := 0
+	for i := range p.pending {
+		end := len(outer) - len(p.pendingTails[i])
+		if end > from && end <= took {
+			// Only ever called while a splice is being made, whose own count
+			// replaces aliasSpliced once it is done, so nothing is counted
+			// down here.
+			continue
+		}
+		if end <= from {
+			p.pendingTails[i] = outer[end:from] + outer[took:]
+		}
+		p.pending[n] = p.pending[i]
+		p.pendingTouches[n] = p.pendingTouches[i]
+		p.pendingChains[n] = p.pendingChains[i]
+		p.pendingTails[n] = p.pendingTails[i]
+		p.pendingCarries[n] = p.pendingCarries[i]
+		n++
+	}
+	p.pending = p.pending[:n]
+	p.pendingTouches = p.pendingTouches[:n]
+	p.pendingChains = p.pendingChains[:n]
+	p.pendingTails = p.pendingTails[:n]
+	p.pendingCarries = p.pendingCarries[:n]
 }
 
 // carryOpenWord continues a construct the alias body opened and did not close

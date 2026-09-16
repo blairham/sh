@@ -160,3 +160,21 @@ if [ "$rc" -ne 0 ]; then printf 'yes\n'; else printf 'no\n'; fi
 rc=$?
 printf 'two numbers with no operator failed: '
 if [ "$rc" -ne 0 ]; then printf 'yes\n'; else printf 'no\n'; fi
+
+# --- a shift count past the width of the word -------------------------------
+#
+# Every shell here hands the count to a C shift on a 64-bit word, and the
+# machine takes the count modulo the width rather than answering zero for a
+# count too large to mean anything. So `1 << 64` is the word shifted by
+# nothing, `1 << 65` by one, and a *negative* count arrives as 63 — the low six
+# bits of -1. Unanimous across bash, zsh, ksh93, dash and BusyBox ash, which is
+# what puts it here and not in a dialect file.
+#
+# It is the one place a shell's C heritage shows through a language whose own
+# shift is the defined one, and a reimplementation that simply uses that gets
+# zero for all four of these.
+
+printf 'shifted by the whole width: %s\n' "$(( 1 << 64 ))"
+printf 'and by one more:            %s\n' "$(( 1 << 65 ))"
+printf 'right by the whole width:   %s\n' "$(( 8 >> 64 ))"
+printf 'by a negative count:        %s\n' "$(( 1 << -1 ))"

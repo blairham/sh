@@ -3190,6 +3190,25 @@ type Dialect struct {
 	// it means where both have it.
 	ArithBinaryLiteral bool
 
+	// ArithHexFloat enables C's hexadecimal float spelling inside `$(( ))`:
+	// a hexadecimal literal carrying a point or a `p` exponent is a float.
+	// ksh93 alone among the panel — measured 2026-09-16, `$(( 0x1p4 ))` is
+	// 16 and `$(( 0x1.8 ))` is 1.5 there, while bash 5.3, bash 3.2,
+	// bash-as-sh, zsh 5.9.2, dash 0.5.12 and BusyBox ash 1.37.0 all refuse
+	// every shape of it.
+	//
+	// The `e` of the decimal spelling is not this: `0x1e5` is the integer
+	// 485 in every column, `e` being a hexadecimal digit. Only a point or a
+	// `p` makes the literal a float.
+	//
+	// A grammar flag rather than an axis for the reason ArithFloat and
+	// ArithBinaryLiteral are: the question is whether the dialect has the
+	// literal at all, and the reader and the evaluator must not be able to
+	// disagree about it. See interp's hexFloatNumeral for the measured
+	// table, the two shapes ksh93 refuses and what an exponent with no
+	// digits comes to.
+	ArithHexFloat bool
+
 	// DollarBracketArith enables `$[expr]`, the older spelling of `$((expr))`.
 	//
 	// Measured 2026-09-06: bash 5.3.15, bash 3.2.57, bash invoked as `sh` and

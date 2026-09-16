@@ -12404,10 +12404,42 @@ type Semantics struct {
 	// separate row the panel answers differently again (bash 5.3 refuses it
 	// where bash 3.2 answers zero), and is not this axis.
 	ArithEmptyRadixDigitsAreZero Answer
-	// ArithOverflowSaturates clamps integer overflow at the edge: ksh93
-	// holds max+1 at the maximum where the other shells wrap. Asked only
-	// when an overflow actually happened.
-	ArithOverflowSaturates Answer
+	// ArithValuesAreCarriedInADouble keeps every arithmetic value in a C
+	// double rather than in the machine word, which ksh93 does and no other
+	// column on the panel does.
+	//
+	// This replaced ArithOverflowSaturates, which recorded the wrong model
+	// from a probe that could not tell the two apart. That axis was measured
+	// with `$(( big + 1 ))` on the largest value, which is the maximum again
+	// under *either* reading: a shell that clamps says so, and a shell that
+	// adds in a double gets 2^63, casts it back saturating, and lands on the
+	// same number. The row that separates them is `$(( big * 2 ))` — clamping
+	// predicts the maximum a second time, and ksh93 answers
+	// 1.84467440737096e+19.
+	//
+	// Measured 2026-09-16 against AT&T ksh93u+ 2012-08-01, where the double is
+	// 64 bits wide. Nothing about it is confined to the edge of the word:
+	//
+	//	$(( 9007199254740993 ))            9007199254740992
+	//	$(( 9007199254740992 + 1 ))        9007199254740992
+	//	$(( 3037000499*3037000499 ))       9223372030926248960
+	//	$(( 1152921504606846976/3 ))       384307168202282304
+	//	$(( (1<<62) | 1 ))                 4611686018427387904
+	//	$(( 2**63 ))                       9223372036854775807
+	//	$(( 2**64 ))                       1.84467440737096e+19
+	//	$(( big * 2 ))                     1.84467440737096e+19
+	//
+	// A written numeral rounds as an evaluated one does, and `/`, `%` and the
+	// bitwise operators still do their work on the word — the value goes back
+	// through the double afterwards, which is what loses the `| 1` above. The
+	// same carriage is already recorded for this shell's printf from the other
+	// side, in the corpus row `printf/integer-operand-rounds-through-a-double`
+	// (#2907), whose note says the arithmetic does it too.
+	//
+	// Asked only where the two readings disagree — it is on the path of every
+	// integer operation, and an axis asked unconditionally would report itself
+	// unanswered on `$(( 1 + 1 ))` in a run with no dialect.
+	ArithValuesAreCarriedInADouble Answer
 	// EmptyArithExpressionIsAnError refuses `$(( ))`: dash wants a primary
 	// and stops the script; the other three answer zero.
 	EmptyArithExpressionIsAnError Answer
@@ -15743,7 +15775,7 @@ func PosixSemantics() Semantics {
 		ArithBaseIsAtMostTwoDigits:           No,
 		ArithBaseZeroReadsTheDigitsAsWritten: No,
 		ArithEmptyRadixDigitsAreZero:         No,
-		ArithOverflowSaturates:               No,
+		ArithValuesAreCarriedInADouble:       No,
 		EmptyArithExpressionIsAnError:        No,
 		// The standard says `times` takes no operands and does not say what to
 		// do with one; the two shells that follow it most closely ignore it.

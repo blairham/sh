@@ -60,6 +60,13 @@ type arithError struct {
 	// was zero, which one column goes on evaluating past. See
 	// Semantics.ArithDivisionByZeroYieldsAValue.
 	dividedByZero bool
+	// pastTheWord says the numeral is well formed and larger than the machine
+	// word holds. Every reference shell answers *something* for one and the
+	// six answers are six different readings; the only one this shell has is
+	// ksh93's, where the numeral simply becomes the double its arithmetic is
+	// carried in. See Semantics.ArithValuesAreCarriedInADouble, and #3202
+	// for the other columns.
+	pastTheWord bool
 	// complete says the message is the whole diagnostic and must not be
 	// wrapped. Measured: dash wraps a division by zero — `arithmetic
 	// expression: division by zero: "1/0"` — but reports a non-numeric
@@ -168,10 +175,26 @@ type arithNum struct {
 	i     int
 	f     float64
 	float bool
+	// wide says the value is an *integer* one the machine word cannot hold,
+	// so it is carried in f with the floats. Only the shell whose arithmetic
+	// is a C double throughout can produce one — see
+	// Semantics.ArithValuesAreCarriedInADouble — and the distinction is not
+	// cosmetic: `$(( 2**64 / 3 ))` there is an integer division of the
+	// saturated value, 3074457345618258432, and not 6.14891469123652e+18.
+	// So the *kind* is integer while the *representation* is the double,
+	// which is exactly the pair ksh93 keeps.
+	wide bool
 }
 
 func intNum(i int) arithNum       { return arithNum{i: i} }
 func floatNum(f float64) arithNum { return arithNum{f: f, float: true} }
+
+// wideNum is an integer value past the word, carried in the double.
+func wideNum(f float64) arithNum { return arithNum{f: f, float: true, wide: true} }
+
+// floatKind reports whether the value is a float as far as an *operator* is
+// concerned, which a wide integer is not.
+func (n arithNum) floatKind() bool { return n.float && !n.wide }
 
 // asFloat is the value as a float, whichever it is.
 func (n arithNum) asFloat() float64 {
@@ -185,7 +208,8 @@ func (n arithNum) asFloat() float64 {
 // array subscript, the truth of `(( ))`, or a shell that has no floats at all.
 func (n arithNum) asInt() int {
 	if n.float {
-		return int(n.f)
+		i, _ := intFromDouble(n.f)
+		return i
 	}
 	return n.i
 }
@@ -202,6 +226,27 @@ func (n arithNum) isZero() bool {
 func (r *Runner) evalArith(e syntax.ArithExpr) (int, error) {
 	v, err := r.evalNum(e)
 	return v.asInt(), err
+}
+
+// evalArithTruth is the truth of an expression, for the two commands whose
+// exit status is that truth: `(( ))` and `let`.
+//
+// It is not evalArith != 0. An integer context *truncates*, and a value
+// between zero and one truncates to zero — so `(( 0.5 ))` came out false here
+// where the two panel columns that have floats at all both call it true.
+// Measured 2026-09-16: `(( 0.5 ))`, `(( -0.5 ))` and `let 0.5` are status 0 in
+// ksh93u+ 2012-08-01 and in zsh 5.9.2, `(( 0.0 ))` is 1 in both, and bash
+// 5.3.20, bash-as-sh, bash 3.2, dash 0.5.12 and BusyBox ash 1.37.0 have no
+// float to ask. `(( 1.5 ))` was already true here, which is why nothing had
+// noticed: truncation and the truth agree for every value of one or more, and
+// part company only under it.
+//
+// The operators inside an expression were already right — `$(( !0.5 ))` is 0
+// and `$(( 0.5 ? 7 : 9 ))` is 7 — because those ask isZero. Only the two
+// commands' status went through the integer.
+func (r *Runner) evalArithTruth(e syntax.ArithExpr) (bool, error) {
+	v, err := r.evalNum(e)
+	return !v.isZero(), err
 }
 
 // evalNum is the value of an expression, and the point where the shell's
@@ -1115,10 +1160,10 @@ func (r *Runner) evalUnary(x *syntax.ArithUnary) (arithNum, error) {
 	}
 	switch x.Op {
 	case "-":
-		if v.float {
+		if v.floatKind() {
 			return floatNum(-v.f), nil
 		}
-		return intNum(-v.i), nil
+		return r.carriedInADouble(-v.asFloat(), -v.asInt()), nil
 	case "+":
 		return v, nil
 	case "~":
@@ -1126,7 +1171,7 @@ func (r *Runner) evalUnary(x *syntax.ArithUnary) (arithNum, error) {
 		if err != nil {
 			return intNum(0), err
 		}
-		return intNum(^i), nil
+		return r.carried(^i), nil
 	case "!":
 		return intNum(boolInt(v.isZero())), nil
 	}
@@ -1135,10 +1180,10 @@ func (r *Runner) evalUnary(x *syntax.ArithUnary) (arithNum, error) {
 
 // addNum steps a value by one, keeping it whichever kind it was.
 func (r *Runner) addNum(n arithNum, step float64) arithNum {
-	if n.float {
+	if n.floatKind() {
 		return floatNum(n.f + step)
 	}
-	return intNum(n.i + int(step))
+	return r.carriedInADouble(n.asFloat()+step, n.asInt()+int(step))
 }
 
 func (r *Runner) evalAssign(x *syntax.ArithAssign) (arithNum, error) {
@@ -1326,19 +1371,19 @@ func (sh *Runner) apply(op string, l, r arithNum) (arithNum, error) {
 	if v, ok, err := sh.compare(op, l, r); ok {
 		return v, err
 	}
-	if l.float || r.float {
+	if l.floatKind() || r.floatKind() {
 		return sh.applyFloat(op, l, r)
 	}
+	li, ri := l.asInt(), r.asInt()
 	switch op {
 	case "+":
-		return sh.saturating(l.i+r.i, overflowedAdd(l.i, r.i)), nil
+		return sh.carriedInADouble(l.asFloat()+r.asFloat(), li+ri), nil
 	case "-":
-		return sh.saturating(l.i-r.i, overflowedAdd(l.i, -r.i) && r.i != minInt),
-			nil
+		return sh.carriedInADouble(l.asFloat()-r.asFloat(), li-ri), nil
 	case "*":
-		return sh.saturating(l.i*r.i, overflowedMul(l.i, r.i)), nil
+		return sh.carriedInADouble(l.asFloat()*r.asFloat(), li*ri), nil
 	case "/", "%":
-		if r.i == 0 {
+		if ri == 0 {
 			// The value beside the failure is what the one column that goes
 			// on evaluating goes on with: zero for a division and the
 			// dividend for a remainder. It is discarded wherever the error
@@ -1354,21 +1399,21 @@ func (sh *Runner) apply(op string, l, r arithNum) (arithNum, error) {
 			}
 		}
 		if op == "/" {
-			return intNum(l.i / r.i), nil
+			return sh.carried(li / ri), nil
 		}
-		return intNum(l.i % r.i), nil
+		return sh.carried(li % ri), nil
 	case "<<":
-		return intNum(l.i << uint(r.i)), nil
+		return sh.carried(li << shiftCount(ri)), nil
 	case ">>":
-		return intNum(l.i >> uint(r.i)), nil
+		return sh.carried(li >> shiftCount(ri)), nil
 	case "&":
-		return intNum(l.i & r.i), nil
+		return sh.carried(li & ri), nil
 	case "^":
-		return intNum(l.i ^ r.i), nil
+		return sh.carried(li ^ ri), nil
 	case "|":
-		return intNum(l.i | r.i), nil
+		return sh.carried(li | ri), nil
 	case "**":
-		return sh.intPow(l.i, r.i)
+		return sh.intPow(li, ri)
 	}
 	return intNum(0), arithError{msg: "unknown operator " + op}
 }
@@ -1378,32 +1423,78 @@ const (
 	minInt = -maxInt - 1
 )
 
-// saturating answers an integer operation, clamping at the edge where the
-// dialect does: ksh93 holds 9223372036854775807 + 1 at the maximum where the
-// other shells wrap around, and the axis is asked only when an overflow
-// actually happened.
-func (sh *Runner) saturating(wrapped int, overflowed bool) arithNum {
-	if !overflowed ||
-		!sh.ask(sh.sem().ArithOverflowSaturates, "integer overflow clamping at the edge") {
-		return intNum(wrapped)
+// shiftCount is the count a shift actually uses, which is the low six bits of
+// the one written.
+//
+// Every reference shell on the panel hands the count to a C shift operator on
+// a 64-bit word, and the machine those all run on takes the count modulo the
+// width rather than answering zero for a count that is too large. Measured
+// 2026-09-16 across bash 5.3.20, bash-as-sh, bash 3.2, zsh 5.9.2, ksh93u+
+// 2012-08-01, dash 0.5.12 and BusyBox ash 1.37.0: `1<<64` is 1 in all seven,
+// `1<<65` is 2, `8>>64` is 8, and `1<<-1` is the most negative value — the
+// count -1 arriving as 63. Go's shift is the defined one instead and answers
+// zero past the width, which is why this is written down: unanimous, so no
+// axis, and the one place a shell's C heritage shows through the language
+// this is written in.
+func shiftCount(n int) uint { return uint(n) & 63 }
+
+// carried is carriedInADouble for an operation that cannot overflow the word:
+// the two readings are the same arithmetic and differ only where the value is
+// past what a double holds exactly.
+func (sh *Runner) carried(v int) arithNum { return sh.carriedInADouble(float64(v), v) }
+
+// carriedInADouble is the value an integer result leaves the shell holding.
+//
+// Two readings are handed in and the axis chooses between them. `exact` is
+// integer arithmetic on the machine word, wrapping at the edge, which is what
+// bash, zsh, dash and BusyBox ash do. `dbl` is the same operation carried out
+// in the C double ksh93 keeps every arithmetic value in — so a result past
+// 2^53 loses its low bits, and one past the word does not wrap at all.
+//
+// They agree for every value small enough, and the axis is asked only where
+// they do not. That matters: this is on the path of every integer operation in
+// the shell, and an axis asked unconditionally would report itself unanswered
+// on `$(( 1 + 1 ))` in a run with no dialect.
+//
+// The int/float split of the answer is ksh93's own and not a magnitude: the
+// value is written as an integer when a saturating `(intmax_t)` cast of it
+// converts back to the same double, and in floating notation when it does not.
+// That is why `$(( 3037000499*3037000499 ))` is 9223372030926248960 — an
+// integer, the product rounded — while `$(( 2**64 ))` is 1.84467440737096e+19,
+// and why `$(( big + 1 ))` on the largest value is that value again: 2^63 casts
+// to the maximum and the maximum converts back to 2^63.
+func (sh *Runner) carriedInADouble(dbl float64, exact int) arithNum {
+	i, fits := intFromDouble(dbl)
+	if fits && i == exact {
+		return intNum(exact)
 	}
-	if wrapped < 0 {
-		return intNum(maxInt)
+	if !sh.ask(sh.sem().ArithValuesAreCarriedInADouble, "arithmetic carried in a C double") {
+		return intNum(exact)
 	}
-	return intNum(minInt)
+	if fits {
+		return intNum(i)
+	}
+	return wideNum(dbl)
 }
 
-func overflowedAdd(a, b int) bool {
-	sum := a + b
-	return (a > 0 && b > 0 && sum < 0) || (a < 0 && b < 0 && sum >= 0)
-}
-
-func overflowedMul(a, b int) bool {
-	if a == 0 || b == 0 {
-		return false
+// intFromDouble is the value a C `(intmax_t)` cast of a double leaves, and
+// whether that cast converts back to the double it was given.
+//
+// The cast saturates rather than wrapping, which is what the hardware this was
+// measured on does and what makes the maximum its own round trip. Go leaves an
+// out-of-range float-to-int conversion undefined, so the ends are handled
+// before the conversion rather than after it.
+func intFromDouble(f float64) (int, bool) {
+	switch {
+	case math.IsNaN(f):
+		return 0, false
+	case f >= float64(maxInt):
+		return maxInt, f == float64(maxInt)
+	case f <= float64(minInt):
+		return minInt, f == float64(minInt)
 	}
-	p := a * b
-	return p/b != a
+	i := int(f)
+	return i, float64(i) == f
 }
 
 // intPow is `**` on integers.
@@ -1423,13 +1514,13 @@ func (sh *Runner) intPow(base, exp int) (arithNum, error) {
 		return floatNum(math.Pow(float64(base), float64(exp))), nil
 	}
 	v := 1
-	for b := base; exp > 0; exp >>= 1 {
-		if exp&1 == 1 {
+	for b, e := base, exp; e > 0; e >>= 1 {
+		if e&1 == 1 {
 			v *= b
 		}
 		b *= b
 	}
-	return intNum(v), nil
+	return sh.carriedInADouble(math.Pow(float64(base), float64(exp)), v), nil
 }
 
 // compare answers the operators that yield a truth rather than a number. They
@@ -1496,17 +1587,35 @@ func (sh *Runner) applyFloat(op string, l, r arithNum) (arithNum, error) {
 		return floatNum(math.Pow(a, b)), nil
 	case "%":
 		// A remainder is a float operation in one of the two shells with
-		// floats — `7 % 2.5` is 2 there — and refused outright in the other,
-		// which is the same axis the bitwise operators answer.
+		// floats — `7 % 2.5` is 2 there — and the other refuses a float here
+		// the way it refuses one to a bitwise operator.
 		//
-		// Both operands are offered, because either may be the float: `7%2.5`
-		// has a whole number on the left, and asking only about that one let
-		// the refusal through.
-		if _, err := sh.integerOperand(l, op); err != nil {
-			return intNum(0), err
-		}
+		// But it refuses only the **divisor**, and that is measured rather
+		// than assumed. 2026-09-16, AT&T ksh93u+ 2012-08-01:
+		//
+		//	7 % 2.5    invalid floating point operation
+		//	7 % 2.0    invalid floating point operation
+		//	2.0 % 2.0  invalid floating point operation
+		//	1.5 % 1    0
+		//	7.0 % 2    1
+		//	-1.5 % 2   -1
+		//
+		// So a float dividend is truncated and the remainder is an integer
+		// one — `1.5 % 1` is 0 and not the 0.5 the float operation gives.
+		// Every other integer-only operator refuses a float on either side
+		// there, `1 << 1.5` and `1 & 1.5` included, so this is the one
+		// operand in the shell that is taken rather than questioned.
+		//
+		// The extent belongs to the refusal rather than to an axis of its
+		// own: zsh does not refuse at all, and bash and dash have no float to
+		// offer, so there is no second column that could answer it
+		// differently.
 		if _, err := sh.integerOperand(r, op); err != nil {
 			return intNum(0), err
+		}
+		if l.floatKind() &&
+			sh.ask(sh.sem().ArithIntegerOperatorRefusesFloat, "an integer-only operator refusing a float") {
+			return sh.apply(op, intNum(l.asInt()), r)
 		}
 		return floatNum(math.Mod(a, b)), nil
 	}
@@ -1529,13 +1638,15 @@ func (sh *Runner) applyFloat(op string, l, r arithNum) (arithNum, error) {
 // so the axis is asked — and only when the value really is a float, because a
 // shell whose numbers are all integers never reaches the question.
 func (sh *Runner) integerOperand(n arithNum, op string) (int, error) {
-	if !n.float {
-		return n.i, nil
+	if !n.floatKind() {
+		// A wide value is an integer past the word, not a float, so it is
+		// the saturating cast and no question.
+		return n.asInt(), nil
 	}
 	if sh.ask(sh.sem().ArithIntegerOperatorRefusesFloat, "an integer-only operator refusing a float") {
 		return 0, arithError{msg: Wording(sh.diag().ArithInvalidFloatOperation, "invalid floating point operation"), token: op}
 	}
-	return int(n.f), nil
+	return n.asInt(), nil
 }
 
 func boolInt(b bool) int {
@@ -1821,9 +1932,31 @@ func (r *Runner) readArithNum(s string, written bool) (arithNum, error) {
 		// needed, rather than two fields that could disagree.
 		s = strings.ReplaceAll(s, "_", "")
 	}
+	if f, ok := hexFloatNumeral(s); ok && r.dialect().ArithHexFloat {
+		// `0x1p4` is 16 and `0x1.8` is 1.5 in the one column that reads the
+		// spelling C has for a float written in hexadecimal. The other five
+		// refuse it, each in its own words, which is what makes this an axis
+		// and not a reader everyone should have had.
+		return floatNum(f), nil
+	}
 	if !floatShaped(s) {
 		n, err := r.parseNum(s)
-		return intNum(n), err
+		if err != nil {
+			var ae arithError
+			if errors.As(err, &ae) && ae.pastTheWord && r.dialect().ArithFloat &&
+				r.ask(r.sem().ArithValuesAreCarriedInADouble, "arithmetic carried in a C double") {
+				// The numeral is past the word and this shell keeps its
+				// arithmetic in a double, so it is simply that double:
+				// `$(( 10000000000000000000 ))` is 1e+19 and
+				// `$(( 0xffffffffffffffffff ))` is 4.72236648286965e+21.
+				return floatNum(floatNumeral(s)), nil
+			}
+			return intNum(n), err
+		}
+		// The numeral goes through the same carriage every result does, so a
+		// written-down 9007199254740993 is the same value as one arrived at
+		// by arithmetic. See carriedInADouble.
+		return r.carriedInADouble(float64(n), n), nil
 	}
 	if !r.dialect().ArithFloat {
 		// The dialect has no floats, so this is not a number at all. It is
@@ -1870,6 +2003,129 @@ func overflowZero(written bool) float64 {
 		return math.Copysign(0, -1)
 	}
 	return 0
+}
+
+// floatNumeral is an integer numeral too large for the machine word, read as
+// the double it comes to.
+//
+// The decimal and hexadecimal spellings go through the reader that rounds
+// correctly — Go will read a hexadecimal one once it is given the binary
+// exponent C already lets it leave off. A numeral in any other base is
+// accumulated a digit at a time, which is a rounding of its own past 2^53 and
+// the reason the two exact readers are preferred where they apply.
+func floatNumeral(s string) float64 {
+	neg := false
+	if s != "" && (s[0] == '-' || s[0] == '+') {
+		neg = s[0] == '-'
+		s = s[1:]
+	}
+	f, ok := unsignedFloatNumeral(s)
+	if !ok {
+		return 0
+	}
+	if neg {
+		return -f
+	}
+	return f
+}
+
+func unsignedFloatNumeral(s string) (float64, bool) {
+	digits, base := s, 10
+	switch {
+	case strings.Contains(s, "#"):
+		text, rest, _ := strings.Cut(s, "#")
+		b, err := strconv.Atoi(text)
+		if err != nil || b < 2 || b > 64 {
+			return 0, false
+		}
+		digits, base = rest, b
+	case strings.HasPrefix(s, "0x"), strings.HasPrefix(s, "0X"):
+		f, err := strconv.ParseFloat(s+"p0", 64)
+		return f, err == nil
+	case strings.HasPrefix(s, "0b"), strings.HasPrefix(s, "0B"):
+		digits, base = s[2:], 2
+	case len(s) > 1 && s[0] == '0':
+		digits, base = s[1:], 8
+	}
+	if base == 10 {
+		f, err := strconv.ParseFloat(digits, 64)
+		return f, err == nil
+	}
+	f := 0.0
+	for i := 0; i < len(digits); i++ {
+		d, ok := baseDigitValue(digits[i], base)
+		if !ok {
+			return 0, false
+		}
+		f = f*float64(base) + float64(d)
+	}
+	return f, true
+}
+
+// hexFloatNumeral reads the hexadecimal float spelling C has, and reports
+// whether the literal was one at all.
+//
+// Measured 2026-09-16 against AT&T ksh93u+ 2012-08-01, which is the only panel
+// column that reads it — bash 5.3, bash-as-sh, bash 3.2, zsh 5.9.2, dash
+// 0.5.12 and BusyBox ash 1.37.0 all refuse every row below:
+//
+//	0x1p4      16      a binary exponent, which is what makes it a float
+//	0x1P4      16      either case of the exponent letter
+//	0x1p-1     0.5     and a signed one
+//	0x1p+2     4
+//	0xffp0     255     an exponent of zero is still the float spelling
+//	0x1.8p1    3       a point as well
+//	0x1.8      1.5     or a point alone, with no exponent at all
+//	0x1.p1     2       the digits after the point may be missing
+//	0x1e5      485     but `e` is a hex *digit* here, so this is an integer
+//
+// Two shapes are refused and both are about a missing digit rather than a
+// missing exponent: `0x.8p1` and `0xp4`, which have no digit between the `0x`
+// and the point or the `p`. An exponent whose digits are missing is not
+// refused — `0x1p`, `0x1p+` and `0x1.8p` are 1, 1 and 1.5 — so the letter is
+// consumed and the absent exponent read as zero.
+//
+// Go's reader wants the exponent this spelling may leave off, so it is put
+// back before the literal is handed over. That is the whole of the difference.
+func hexFloatNumeral(s string) (float64, bool) {
+	body := s
+	neg := false
+	if body != "" && (body[0] == '-' || body[0] == '+') {
+		neg = body[0] == '-'
+		body = body[1:]
+	}
+	if len(body) < 3 || body[0] != '0' || (body[1] != 'x' && body[1] != 'X') {
+		return 0, false
+	}
+	digits := body[2:]
+	if !isHexDigit(digits[0]) {
+		// `0x.8p1` and `0xp4` are refused, so the mantissa wants a digit of
+		// its own before anything else may follow.
+		return 0, false
+	}
+	e := strings.IndexAny(digits, "pP")
+	if e < 0 && !strings.Contains(digits, ".") {
+		// An ordinary hexadecimal integer, `e` and all.
+		return 0, false
+	}
+	switch {
+	case e < 0:
+		body += "p0"
+	case e == len(digits)-1:
+		body += "0"
+	case digits[e+1] == '+' || digits[e+1] == '-':
+		if e+2 == len(digits) {
+			body += "0"
+		}
+	}
+	f, err := strconv.ParseFloat(body, 64)
+	if err != nil {
+		return 0, false
+	}
+	if neg {
+		return -f, true
+	}
+	return f, true
 }
 
 // floatShaped reports whether a literal can only be a float.
@@ -2026,6 +2282,15 @@ func (r *Runner) parseNum(s string) (int, error) {
 		n, err = strconv.ParseInt(digits, base, 64)
 	}
 	if err != nil {
+		if errors.Is(err, strconv.ErrRange) {
+			// Well formed and too large. The reader that refuses it is
+			// alone on the panel, so the numeral is handed back as a
+			// failure the caller may still answer — see evalNumeral.
+			return 0, arithError{
+				msg: r.wordInvalidNumber(s), token: s,
+				badNumeral: true, complete: true, pastTheWord: true,
+			}
+		}
 		if w := r.diag().DigitTooGreatForBase; w != "" {
 			// Three dialects word every unreadable literal through the same
 			// wrapper, and one of them parts two diagnoses inside it: a
@@ -2178,7 +2443,7 @@ func (r *Runner) arithCmd(ctx context.Context, c *syntax.ArithCmdClause) error {
 			r.status = r.arithCmdFailed(r.diag().StatusForParseError(perr))
 			return nil
 		}
-		v, err := r.evalArith(tree)
+		v, err := r.evalArithTruth(tree)
 		if r.unspecified {
 			r.status = 2
 			return nil
@@ -2193,7 +2458,7 @@ func (r *Runner) arithCmd(ctx context.Context, c *syntax.ArithCmdClause) error {
 			r.status = r.arithCmdFailed(1)
 			return nil
 		}
-		r.status = boolInt(v == 0)
+		r.status = boolInt(!v)
 		return nil
 	})
 }

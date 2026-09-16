@@ -363,6 +363,10 @@ func Dialect() syntax.Dialect {
 	d.TimesIsReserved = true
 	// Floating point, which POSIX has not and these two do.
 	d.ArithFloat = true
+	// And C's hexadecimal spelling of one, which this shell alone reads:
+	// `$(( 0x1p4 ))` is 16 and `$(( 0x1.8 ))` is 1.5, while `$(( 0x1e5 ))`
+	// stays the integer 485 because `e` is a hexadecimal digit.
+	d.ArithHexFloat = true
 	// `name(args)` inside an expression is a call to a math function, and
 	// this shell needs nothing registered for it: it ships sixty-one of them
 	// built in, which is what mathfunc.go holds. Measured 2026-09-13 on
@@ -829,9 +833,14 @@ func Semantics() interp.Semantics {
 	// names they fired on was four suffixes too wide (#3033). See
 	// interp/discipline.go for what each event carries.
 	s.DisciplineFunctionIsAVariableHook = interp.Yes
-	// max+1 stays at the maximum, and a value that names another variable
-	// is chased until it is a number.
-	s.ArithOverflowSaturates = interp.Yes
+	// Every arithmetic value is a C double here — `$(( 9007199254740993 ))`
+	// is 9007199254740992 and `$(( big * 2 ))` is 1.84467440737096e+19 — and a
+	// value that names another variable is chased until it is a number.
+	//
+	// This was `ArithOverflowSaturates`, recorded from `$(( big + 1 ))` alone.
+	// That row is the maximum under either reading, so it could not tell a
+	// clamp from a double; `$(( big * 2 ))` can, and it is not a clamp.
+	s.ArithValuesAreCarriedInADouble = interp.Yes
 	// A negative substring length is nothing at all here.
 	//
 	// A quoted `"${a[@]}"` is not next to it any more. This shell was the

@@ -16114,7 +16114,8 @@ arithmetic. ksh93 answers `inf` for the value once it has been computed
 and zero only for the same value written down, so a reading that made
 every overflow zero would contradict the column it was measured from —
 and the integer side of the same question is a separate axis,
-`ArithOverflowSaturates`, whose columns do not line up with these.
+`ArithValuesAreCarriedInADouble`, whose columns do not line up with
+these.
 
 Two details of the zero reading, both measured on the only column that
 has it, and both following from a zero that carries a sign. The numeral
@@ -16148,11 +16149,105 @@ shift. ksh93 says yes and refuses; zsh says no and truncates. It does
 not arise in a shell without floats, which is why bash and dash leave it
 unanswered.
 
-**`ArithOverflowSaturates`** — bash no · dash no · ksh93 yes · zsh no
+The *extent* of the refusal is part of the answer rather than a second
+axis, because no other column can be asked it: zsh refuses nothing and
+bash and dash have no float to offer. Measured 2026-09-16 against ksh93u+
+2012-08-01, `%` refuses only its **divisor**:
 
-Clamps integer overflow at the edge: ksh93 holds max+1 at the maximum
-where the other shells wrap. Asked only when an overflow actually
-happened.
+    7 % 2.5    invalid floating point operation
+    7 % 2.0    invalid floating point operation   even a whole one
+    2.0 % 2.0  invalid floating point operation
+    1.5 % 1    0                                  the dividend is truncated
+    7.0 % 2    1
+    -1.5 % 2   -1
+
+So a float dividend is taken and the remainder is an *integer* one —
+`1.5 % 1` is 0, not the 0.5 the float operation gives. Every other
+integer-only operator refuses a float on either side there, `1 << 1.5`,
+`1 & 1.5` and `~1.5` included, which makes `%`'s dividend the one operand
+in the shell that is taken rather than questioned.
+
+**`Dialect.ArithHexFloat`** — a grammar flag, ksh93 alone
+
+C's hexadecimal spelling of a float inside `$(( ))`: a hexadecimal
+literal carrying a point or a `p` exponent is a float, and the exponent
+is a power of two. Measured 2026-09-16 against AT&T ksh93u+ 2012-08-01;
+bash 5.3, bash 3.2, bash-as-`sh`, zsh 5.9.2, dash 0.5.12 and BusyBox ash
+1.37.0 refuse every row of it.
+
+    0x1p4      16      0x1.8p1    3       0x1e5    485
+    0x1P4      16      0x1.8      1.5     16#1p4   refused
+    0x1p-1     0.5     0x1.p1     2       0x.8p1   refused
+    0x1p+2     4       0x1.8p     1.5     0xp4     refused
+    0xffp0     255     0x1p       1       0x1p+    1
+
+Three of those are the whole reason it is not a two-line reader. `0x1e5`
+is the integer 485: `e` is a hexadecimal digit and only a point or a `p`
+makes the literal a float. The exponent's digits may be *missing* where
+the letter is present — `0x1p`, `0x1p+` and `0x1p-` are all 1 — which is
+the opposite of the decimal rule, where `1e` ends the numeral at the
+`1`. And the two refusals are about a missing mantissa digit rather than
+a missing exponent.
+
+A grammar flag rather than an axis for the reason `ArithFloat` and
+`ArithBinaryLiteral` are: the question is whether the dialect has the
+literal at all, and the reader and the evaluator must not be able to
+disagree about it. Both halves are needed — the digit run already takes
+`p` as a hexadecimal digit, so the lexer's work is the point and the
+exponent's *sign*, without which `$(( 0x1p-1 ))` parses as `0x1p` minus
+one and answers 0.
+
+**`ArithValuesAreCarriedInADouble`** — bash no · dash no · ksh93 yes · zsh no
+
+Keeps every arithmetic value in a C double rather than in the machine
+word. ksh93 does; no other column does.
+
+This replaced **`ArithOverflowSaturates`**, which recorded the wrong
+model — and recorded it from a probe that could not have told the two
+apart. That axis was measured with `$(( big + 1 ))` on the largest
+value, which is the maximum again under *either* reading: a shell that
+clamps says so, and a shell that adds in a double gets 2^63, casts it
+back saturating, and lands on the same number. The corpus row that
+carried it, `arith/overflow-saturates-in-one-shell`, is that same
+snippet and says "ksh93 clamps at the maximum"; the row that separates
+the readings is `$(( big * 2 ))`, and ksh93 answers
+`1.84467440737096e+19` rather than the maximum a second time.
+
+Measured 2026-09-16 against AT&T ksh93u+ 2012-08-01, where a long double
+is 64 bits wide. Nothing about it is confined to the edge of the word:
+
+    $(( 9007199254740993 ))            9007199254740992
+    $(( 9007199254740992 + 1 ))        9007199254740992
+    $(( 3037000499*3037000499 ))       9223372030926248960
+    $(( 1152921504606846976/3 ))       384307168202282304
+    $(( (1<<62) | 1 ))                 4611686018427387904
+    $(( 2**63 ))                       9223372036854775807
+    $(( 2**64 ))                       1.84467440737096e+19
+    $(( big * 2 ))                     1.84467440737096e+19
+
+A written numeral rounds as an evaluated one does; `/`, `%` and the
+bitwise operators still do their work on the word, and the result goes
+back through the double afterwards, which is what loses the `| 1`.
+
+Whether the answer is written as an integer or in floating notation is
+ksh93's own test and not a magnitude: the value is an integer when a
+saturating `(intmax_t)` cast of it converts back to the same double.
+That is why the rounded product above is an integer while 2^64 is not,
+and why `$(( big + 1 ))` is the largest value — 2^63 casts to it and it
+converts back to 2^63.
+
+The *kind* stays integer even where the representation cannot: a value
+past the word is still an integer as far as an operator is concerned, so
+`$(( 2**64 / 3 ))` is `3074457345618258432` — an integer division of the
+saturated cast — and not `6.14891469123652e+18`.
+
+The same carriage is recorded for this shell's `printf` from the other
+side, in the corpus row `printf/integer-operand-rounds-through-a-double`
+(#2907), whose note already said the arithmetic does it too.
+
+Asked only where the two readings disagree. It is on the path of every
+integer operation, and an axis asked unconditionally would report itself
+unanswered on `$(( 1 + 1 ))` in a run with no dialect.
 
 **`EmptyArithExpressionIsAnError`** — bash no · dash yes · ksh93 no · zsh no
 

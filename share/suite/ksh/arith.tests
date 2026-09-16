@@ -90,17 +90,63 @@ let "a == 7" && printf '%s\n' 'let reports the truth of its last expression'
 # a dialect's answer. core/arith.tests says the same thing from the other
 # side: `-7 / 2` is core and `7 / -2` is nowhere.
 
-# --- the top of the range ----------------------------------------------------
+# --- every value is a C double ------------------------------------------------
 #
-# bash and zsh wrap a 64-bit overflow the way C does. ksh93 saturates at the
-# largest value instead — and where saturating would lose too much, converts
-# to floating point and prints the result in that notation, which no other
-# column on the panel can do inside `$(( ))` at all.
+# The other three columns do their arithmetic in the machine word. This one
+# does not do it in a word at all: every value is a C `long double`, 64 bits
+# wide on this machine, and both halves of that show.
+#
+# The half at the top of the range was here before, read as a saturation —
+# `big + 1` holds at the maximum where bash and zsh wrap to the minimum. That
+# row is the maximum under either reading, which is what made it the wrong
+# probe to have recorded the rule from: a shell that clamps says so, and a
+# shell that adds in a double reaches 2^63, casts it back saturating, and
+# lands on the same number. `big * 2` is the row that parts them.
 big=9223372036854775807
 printf 'the largest value: %s\n' "$(( big ))"
 printf 'one past it:       %s\n' "$(( big + 1 ))"
 printf 'twice it:          %s\n' "$(( big * 2 ))"
 printf 'below the smallest: %s\n' "$(( -9223372036854775807 - 2 ))"
+printf 'two to the sixty-third: %s\n' "$(( 2**63 ))"
+printf 'two to the sixty-fourth: %s\n' "$(( 2**64 ))"
+
+# The other half is nowhere near the edge of the word: a value past what a
+# double holds exactly loses its low bits, whether it was written down or
+# arrived at. A saturation reading has nothing to say about any of these.
+printf 'one past what a double holds: %s\n' "$(( 9007199254740993 ))"
+printf 'and reached by adding:        %s\n' "$(( 9007199254740992 + 1 ))"
+printf 'a product that fits and rounds: %s\n' "$(( 3037000499*3037000499 ))"
+printf 'a quotient that rounds:         %s\n' "$(( 1152921504606846976/3 ))"
+printf 'a bit the double cannot keep:   %s\n' "$(( (1<<62) | 1 ))"
+
+# Whether the answer is written as an integer or in floating notation is not a
+# magnitude but a round trip: the value is an integer when a saturating cast of
+# it converts back to the same double. The product two lines above is nineteen
+# digits and an integer; two to the sixty-fourth is not.
+#
+# And the *kind* stays integer even where the representation cannot, so an
+# integer operator still does integer work on the saturated cast rather than
+# refusing a value it thinks is a float.
+printf 'a wide value divided:     %s\n' "$(( 2**64 / 3 ))"
+printf 'a wide value remaindered: %s\n' "$(( 2**64 % 3 ))"
+
+# A numeral the word cannot hold is the same rule, and here the four columns
+# give four answers: bash wraps it modulo 2^64, zsh stops after the digits it
+# can hold and says so, dash saturates. See #3202 — this is ksh93's answer and
+# the others are not yet read at all.
+printf 'a numeral past the word:      %s\n' "$(( 10000000000000000000 ))"
+printf 'a hexadecimal one:            %s\n' "$(( 0xffffffffffffffffff ))"
+
+# --- two rows that are not asked, and that is the measurement -----------------
+#
+# `integer n=9223372036854775807; n=n+1` is **0** in ksh93 93u+ on this
+# machine, where the same addition inside `$(( ))` is the largest value. A
+# double of 2^63 stored into an integer variable comes back as zero, which is
+# neither the arithmetic above nor a clamp, and is a defect in a shell from
+# 2012 rather than a rule this dialect has: the same variable holding
+# 9007199254740993 reads back as -1 there, and 2^64 as -4, which is no reading
+# at all. It is written here rather than run, for the reason the negative
+# divisor above is. The whole panel is on #3211.
 
 # --- a value that is not a number --------------------------------------------
 #
@@ -112,3 +158,54 @@ printf 'a hexadecimal prefix with no digits: %s\n' "$?"
 notanumber=abc
 ( printf 'value [%s]\n' "$(( notanumber ))" ) 2>/dev/null
 printf 'a name holding letters: %s\n' "$?"
+
+# --- C's hexadecimal spelling of a float --------------------------------------
+#
+# A hexadecimal literal carrying a point or a `p` exponent is a float here, and
+# nowhere else on the panel: bash 5.3, bash 3.2, bash-as-sh, zsh 5.9.2, dash
+# and BusyBox ash refuse every shape of it, each in its own words. The exponent
+# is a power of *two*, which is what the letter changes.
+printf 'a binary exponent:    %s\n' "$(( 0x1p4 ))"
+printf 'either case of it:    %s\n' "$(( 0x1P4 ))"
+printf 'and a signed one:     %s\n' "$(( 0x1p-1 ))"
+printf 'a plus sign as well:  %s\n' "$(( 0x1p+2 ))"
+printf 'an exponent of zero:  %s\n' "$(( 0xffp0 ))"
+printf 'a point as well:      %s\n' "$(( 0x1.8p1 ))"
+printf 'or a point alone:     %s\n' "$(( 0x1.8 ))"
+printf 'with no digits after: %s\n' "$(( 0x1.p1 ))"
+
+# `e` is a hexadecimal *digit*, so the decimal spelling's exponent letter makes
+# no float of a hexadecimal literal. This is the row that says the reader knows
+# which letter it is looking at.
+printf 'an e is a digit here: %s\n' "$(( 0x1e5 ))"
+
+# The exponent's digits may be missing where the letter is there — the letter
+# is consumed and the exponent read as zero — which is the opposite of the
+# decimal rule, where `1e` ends the numeral at the `1`. Both spellings are
+# asked so that a reader written to one rule answers the other wrong.
+printf 'an exponent with no digits: %s\n' "$(( 0x1p ))"
+printf 'and with only a sign:       %s\n' "$(( 0x1p+ ))"
+
+# A mantissa with no digit of its own is refused, and that is about the digit
+# rather than the exponent: `0x.8p1` and `0xp4` both end the script.
+( printf 'value [%s]\n' "$(( 0x.8p1 ))" ) 2>/dev/null
+printf 'a point with no digit before it: %s\n' "$?"
+( printf 'value [%s]\n' "$(( 16#1p4 ))" ) 2>/dev/null
+printf 'and the base# spelling has none of this: %s\n' "$?"
+
+# --- the one operand an integer-only operator takes rather than refuses --------
+#
+# A float where only an integer will do is refused here and truncated in zsh,
+# which is an axis. What is this column's alone is the *extent* of the refusal:
+# `%` refuses a float divisor and takes a float dividend, truncating it — so
+# `1.5 % 1` is 0 and not the 0.5 the float operation gives. Every other
+# integer-only operator refuses a float on either side.
+printf 'a float dividend is truncated: %s\n' "$(( 1.5 % 1 ))"
+printf 'a whole one written as a float: %s\n' "$(( 7.0 % 2 ))"
+printf 'and a negative one:             %s\n' "$(( -1.5 % 2 ))"
+( printf 'value [%s]\n' "$(( 7 % 2.5 ))" ) 2>/dev/null
+printf 'a float divisor is refused: %s\n' "$?"
+( printf 'value [%s]\n' "$(( 7 % 2.0 ))" ) 2>/dev/null
+printf 'even a whole one: %s\n' "$?"
+( printf 'value [%s]\n' "$(( 1.5 & 1 ))" ) 2>/dev/null
+printf 'and a bitwise operator refuses either side: %s\n' "$?"

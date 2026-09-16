@@ -12844,13 +12844,23 @@ type Semantics struct {
 	// one shell rather than a disagreement between two, which is why it is
 	// asked where the route is known instead of where the option is.
 	//
-	// One of the panel has it. Measured on zsh 5.9.2, 2026-09-10: `zsh -t
-	// plain.sh` runs the first line of a three-line script and stops, and
-	// `-o singlecommand` and the borrowed `-o onecmd` do the same, while
-	// `set -t`, `setopt singlecommand` and `unsetopt singlecommand` inside
-	// that script are all `can't change option` at 1 and fatal. So the five
-	// names that shell calls fixed are not five states it cannot reach; they
-	// are five a script may not change.
+	// Two of the panel have it, and they were found a week apart. Measured
+	// on zsh 5.9.2, 2026-09-10: `zsh -t plain.sh` runs the first line of a
+	// three-line script and stops, and `-o singlecommand` and the borrowed
+	// `-o onecmd` do the same, while `set -t`, `setopt singlecommand` and
+	// `unsetopt singlecommand` inside that script are all `can't change
+	// option` at 1 and fatal. So the five names that shell calls fixed are
+	// not five states it cannot reach; they are five a script may not
+	// change.
+	//
+	// Measured on ksh93u+ 2012-08-01, 2026-09-16: `ksh -o interactive` with
+	// the program on a pipe prompts, runs the line and prompts again at
+	// status 0, and `ksh -o rc` and `ksh -o login_shell` are 0 and silent,
+	// while `set -o interactive`, `set -o rc` and `set -o login_shell` are
+	// each `bad option(s)` at 2 in both directions inside that same shell.
+	// Those are the three Runner.AddImmovableSetOptions declares, so the
+	// split there is the whole of that list rather than one name in it
+	// (#3221).
 	//
 	// It governs the refusal and not the applying: a dialect that answers
 	// `Yes` still has to say what each such name *would* move, which for the
@@ -12859,10 +12869,13 @@ type Semantics struct {
 	// to apply is refused at the invocation exactly as it is refused in a
 	// script.
 	//
-	// unexhibited No: nobody, and nothing in the panel can reach it.
-	// Measured 2026-09-12: zsh 5.9.2 is the only column with an option a
-	// running script may not change, so it is the only one the axis is
-	// consulted in, and it answers Yes. bash's `-r` is not this shape —
+	// unexhibited No: nobody, and nothing in the panel can reach it. zsh
+	// 5.9.2 and ksh93u+ 2012-08-01 are the columns with an option a running
+	// script may not change, so they are the only ones the axis is consulted
+	// in, and both answer Yes. That the second was read as a refusal of ours
+	// for four days is the reason this note says which columns were asked:
+	// the sentence it replaces said zsh was the only one, and ksh93 had
+	// three such names the whole time. bash's `-r` is not this shape —
 	// `set -r` is taken inside a script in all three bash columns and in
 	// ksh93u+, and only `set +r` is refused, which is a latch and not a
 	// fixed option. `No` is the other side of a binary Answer, read (`==

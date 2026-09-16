@@ -5562,7 +5562,7 @@ is the refusal. dash refuses both signs alike, because it has not got the
 letter at all, which is what says the grant hangs on the shell *having* the
 letter and not on the state alone.
 
-**The invocation is a route split inside one shell**
+**The invocation is a route split inside a shell**
 (`Semantics.ImmovableOptionsSetAtInvocation`). Real zsh takes `-t`,
 `-o onecmd` and `-o singlecommand` on the command line and runs one line of a
 script, refusing only what a *running script* asks for. Measured on zsh 5.9.2,
@@ -5572,6 +5572,31 @@ the first line and stops, `zsh -t -c 'echo "$-"'` is `569Xt`, and `set -t`,
 all `can't change option` at 1 and fatal. So the five names that shell calls
 fixed are not five states it cannot reach; they are five a script may not
 change (#1730).
+
+ksh93 is the second column with the split, and it reaches it by a *name*
+rather than by a letter. `interactive`, `login_shell` and `rc` are the three
+names that shell lists and `set` will not take — `bad option(s)` at 2 in both
+directions, word for word with a name it has never heard of — and its own
+command line takes all three. Measured 2026-09-16 on ksh93u+ 2012-08-01 with
+the program on a pipe, so that nothing but the invocation could make the shell
+interactive: `ksh -o interactive` writes `$ `, runs the line and writes `$ `
+again at status 0, and `ksh -o rc` and `ksh -o login_shell` are 0 and silent.
+
+The axis governs the refusal and not the applying, which decides what our own
+shell does with the other two. `interactive` has a state to write — the same
+one `$-`'s `i` and the prompt decision read — so it is granted. `rc` and
+`login_shell` are rows the option table records and acts on nothing with, so
+they keep the refusal they had: granting them would replace ksh93's own
+`bad option(s)` with a `not implemented` no column in the panel ever writes,
+which is a worse answer at the same status (#3221).
+
+The negative spelling is the same state read upside down, and it is resolved
+from `Semantics.NonInteractiveOptionName` rather than declared as a row —
+ksh93's listing names only `interactive`, and `nointeractive` is the shell's
+own `no` prefix over it. Measured on the same run: `-o nointeractive` draws no
+prompt and `+o nointeractive` draws one, both at 0, and `set -o nointeractive`
+inside a script is `bad option(s)` exactly as the positive spelling is. Both
+spellings are refused together, because they are one fact.
 
 The axis governs the *refusal* and not the applying, which is what keeps it
 one question rather than five. A dialect that answers `Yes` still has to say
@@ -20716,8 +20741,12 @@ both lists — separated four kinds (2026-09-12, panel as above):
    holds.** `SplitCommandSubstitution`,
    `TransformLetterCheckedOnlyWhenValued` and
    `ImmovableOptionsSetAtInvocation` — the first because all six columns
-   answer alike, the other two because one column has the construct at
-   all and the rest never reach the question. The value stays because it
+   answer alike, the other two because the columns that have the
+   construct at all answer `Yes` and the rest never reach the question.
+   `ImmovableOptionsSetAtInvocation` is two columns rather than one as of
+   #3221: ksh93 has the same split, reached by a name instead of by a
+   letter, and it sat here as a refusal of ours for four days because the
+   note said zsh was the only shell with such an option. The value stays because it
    is the other side of a question a dialect has to be able to answer:
    `No` is the null hypothesis these axes exist to make the odd shell
    argue against, and deleting it would leave the odd answer looking

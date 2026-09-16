@@ -829,9 +829,14 @@ func Semantics() interp.Semantics {
 	// names they fired on was four suffixes too wide (#3033). See
 	// interp/discipline.go for what each event carries.
 	s.DisciplineFunctionIsAVariableHook = interp.Yes
-	// max+1 stays at the maximum, and a value that names another variable
-	// is chased until it is a number.
-	s.ArithOverflowSaturates = interp.Yes
+	// Every arithmetic value is a C double here — `$(( 9007199254740993 ))`
+	// is 9007199254740992 and `$(( big * 2 ))` is 1.84467440737096e+19 — and a
+	// value that names another variable is chased until it is a number.
+	//
+	// This was `ArithOverflowSaturates`, recorded from `$(( big + 1 ))` alone.
+	// That row is the maximum under either reading, so it could not tell a
+	// clamp from a double; `$(( big * 2 ))` can, and it is not a clamp.
+	s.ArithValuesAreCarriedInADouble = interp.Yes
 	// A negative substring length is nothing at all here.
 	//
 	// A quoted `"${a[@]}"` is not next to it any more. This shell was the

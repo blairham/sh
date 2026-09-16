@@ -60,6 +60,13 @@ type arithError struct {
 	// was zero, which one column goes on evaluating past. See
 	// Semantics.ArithDivisionByZeroYieldsAValue.
 	dividedByZero bool
+	// pastTheWord says the numeral is well formed and larger than the machine
+	// word holds. Every reference shell answers *something* for one and the
+	// six answers are six different readings; the only one this shell has is
+	// ksh93's, where the numeral simply becomes the double its arithmetic is
+	// carried in. See Semantics.ArithValuesAreCarriedInADouble, and #3202
+	// for the other columns.
+	pastTheWord bool
 	// complete says the message is the whole diagnostic and must not be
 	// wrapped. Measured: dash wraps a division by zero — `arithmetic
 	// expression: division by zero: "1/0"` — but reports a non-numeric
@@ -168,10 +175,26 @@ type arithNum struct {
 	i     int
 	f     float64
 	float bool
+	// wide says the value is an *integer* one the machine word cannot hold,
+	// so it is carried in f with the floats. Only the shell whose arithmetic
+	// is a C double throughout can produce one — see
+	// Semantics.ArithValuesAreCarriedInADouble — and the distinction is not
+	// cosmetic: `$(( 2**64 / 3 ))` there is an integer division of the
+	// saturated value, 3074457345618258432, and not 6.14891469123652e+18.
+	// So the *kind* is integer while the *representation* is the double,
+	// which is exactly the pair ksh93 keeps.
+	wide bool
 }
 
 func intNum(i int) arithNum       { return arithNum{i: i} }
 func floatNum(f float64) arithNum { return arithNum{f: f, float: true} }
+
+// wideNum is an integer value past the word, carried in the double.
+func wideNum(f float64) arithNum { return arithNum{f: f, float: true, wide: true} }
+
+// floatKind reports whether the value is a float as far as an *operator* is
+// concerned, which a wide integer is not.
+func (n arithNum) floatKind() bool { return n.float && !n.wide }
 
 // asFloat is the value as a float, whichever it is.
 func (n arithNum) asFloat() float64 {
@@ -185,7 +208,8 @@ func (n arithNum) asFloat() float64 {
 // array subscript, the truth of `(( ))`, or a shell that has no floats at all.
 func (n arithNum) asInt() int {
 	if n.float {
-		return int(n.f)
+		i, _ := intFromDouble(n.f)
+		return i
 	}
 	return n.i
 }
@@ -1136,10 +1160,10 @@ func (r *Runner) evalUnary(x *syntax.ArithUnary) (arithNum, error) {
 	}
 	switch x.Op {
 	case "-":
-		if v.float {
+		if v.floatKind() {
 			return floatNum(-v.f), nil
 		}
-		return intNum(-v.i), nil
+		return r.carriedInADouble(-v.asFloat(), -v.asInt()), nil
 	case "+":
 		return v, nil
 	case "~":
@@ -1147,7 +1171,7 @@ func (r *Runner) evalUnary(x *syntax.ArithUnary) (arithNum, error) {
 		if err != nil {
 			return intNum(0), err
 		}
-		return intNum(^i), nil
+		return r.carried(^i), nil
 	case "!":
 		return intNum(boolInt(v.isZero())), nil
 	}
@@ -1156,10 +1180,10 @@ func (r *Runner) evalUnary(x *syntax.ArithUnary) (arithNum, error) {
 
 // addNum steps a value by one, keeping it whichever kind it was.
 func (r *Runner) addNum(n arithNum, step float64) arithNum {
-	if n.float {
+	if n.floatKind() {
 		return floatNum(n.f + step)
 	}
-	return intNum(n.i + int(step))
+	return r.carriedInADouble(n.asFloat()+step, n.asInt()+int(step))
 }
 
 func (r *Runner) evalAssign(x *syntax.ArithAssign) (arithNum, error) {
@@ -1347,19 +1371,19 @@ func (sh *Runner) apply(op string, l, r arithNum) (arithNum, error) {
 	if v, ok, err := sh.compare(op, l, r); ok {
 		return v, err
 	}
-	if l.float || r.float {
+	if l.floatKind() || r.floatKind() {
 		return sh.applyFloat(op, l, r)
 	}
+	li, ri := l.asInt(), r.asInt()
 	switch op {
 	case "+":
-		return sh.saturating(l.i+r.i, overflowedAdd(l.i, r.i)), nil
+		return sh.carriedInADouble(l.asFloat()+r.asFloat(), li+ri), nil
 	case "-":
-		return sh.saturating(l.i-r.i, overflowedAdd(l.i, -r.i) && r.i != minInt),
-			nil
+		return sh.carriedInADouble(l.asFloat()-r.asFloat(), li-ri), nil
 	case "*":
-		return sh.saturating(l.i*r.i, overflowedMul(l.i, r.i)), nil
+		return sh.carriedInADouble(l.asFloat()*r.asFloat(), li*ri), nil
 	case "/", "%":
-		if r.i == 0 {
+		if ri == 0 {
 			// The value beside the failure is what the one column that goes
 			// on evaluating goes on with: zero for a division and the
 			// dividend for a remainder. It is discarded wherever the error
@@ -1375,21 +1399,21 @@ func (sh *Runner) apply(op string, l, r arithNum) (arithNum, error) {
 			}
 		}
 		if op == "/" {
-			return intNum(l.i / r.i), nil
+			return sh.carried(li / ri), nil
 		}
-		return intNum(l.i % r.i), nil
+		return sh.carried(li % ri), nil
 	case "<<":
-		return intNum(l.i << shiftCount(r.i)), nil
+		return sh.carried(li << shiftCount(ri)), nil
 	case ">>":
-		return intNum(l.i >> shiftCount(r.i)), nil
+		return sh.carried(li >> shiftCount(ri)), nil
 	case "&":
-		return intNum(l.i & r.i), nil
+		return sh.carried(li & ri), nil
 	case "^":
-		return intNum(l.i ^ r.i), nil
+		return sh.carried(li ^ ri), nil
 	case "|":
-		return intNum(l.i | r.i), nil
+		return sh.carried(li | ri), nil
 	case "**":
-		return sh.intPow(l.i, r.i)
+		return sh.intPow(li, ri)
 	}
 	return intNum(0), arithError{msg: "unknown operator " + op}
 }
@@ -1414,32 +1438,63 @@ const (
 // this is written in.
 func shiftCount(n int) uint { return uint(n) & 63 }
 
-// saturating answers an integer operation, clamping at the edge where the
-// dialect does: ksh93 holds 9223372036854775807 + 1 at the maximum where the
-// other shells wrap around, and the axis is asked only when an overflow
-// actually happened.
-func (sh *Runner) saturating(wrapped int, overflowed bool) arithNum {
-	if !overflowed ||
-		!sh.ask(sh.sem().ArithOverflowSaturates, "integer overflow clamping at the edge") {
-		return intNum(wrapped)
+// carried is carriedInADouble for an operation that cannot overflow the word:
+// the two readings are the same arithmetic and differ only where the value is
+// past what a double holds exactly.
+func (sh *Runner) carried(v int) arithNum { return sh.carriedInADouble(float64(v), v) }
+
+// carriedInADouble is the value an integer result leaves the shell holding.
+//
+// Two readings are handed in and the axis chooses between them. `exact` is
+// integer arithmetic on the machine word, wrapping at the edge, which is what
+// bash, zsh, dash and BusyBox ash do. `dbl` is the same operation carried out
+// in the C double ksh93 keeps every arithmetic value in — so a result past
+// 2^53 loses its low bits, and one past the word does not wrap at all.
+//
+// They agree for every value small enough, and the axis is asked only where
+// they do not. That matters: this is on the path of every integer operation in
+// the shell, and an axis asked unconditionally would report itself unanswered
+// on `$(( 1 + 1 ))` in a run with no dialect.
+//
+// The int/float split of the answer is ksh93's own and not a magnitude: the
+// value is written as an integer when a saturating `(intmax_t)` cast of it
+// converts back to the same double, and in floating notation when it does not.
+// That is why `$(( 3037000499*3037000499 ))` is 9223372030926248960 — an
+// integer, the product rounded — while `$(( 2**64 ))` is 1.84467440737096e+19,
+// and why `$(( big + 1 ))` on the largest value is that value again: 2^63 casts
+// to the maximum and the maximum converts back to 2^63.
+func (sh *Runner) carriedInADouble(dbl float64, exact int) arithNum {
+	i, fits := intFromDouble(dbl)
+	if fits && i == exact {
+		return intNum(exact)
 	}
-	if wrapped < 0 {
-		return intNum(maxInt)
+	if !sh.ask(sh.sem().ArithValuesAreCarriedInADouble, "arithmetic carried in a C double") {
+		return intNum(exact)
 	}
-	return intNum(minInt)
+	if fits {
+		return intNum(i)
+	}
+	return wideNum(dbl)
 }
 
-func overflowedAdd(a, b int) bool {
-	sum := a + b
-	return (a > 0 && b > 0 && sum < 0) || (a < 0 && b < 0 && sum >= 0)
-}
-
-func overflowedMul(a, b int) bool {
-	if a == 0 || b == 0 {
-		return false
+// intFromDouble is the value a C `(intmax_t)` cast of a double leaves, and
+// whether that cast converts back to the double it was given.
+//
+// The cast saturates rather than wrapping, which is what the hardware this was
+// measured on does and what makes the maximum its own round trip. Go leaves an
+// out-of-range float-to-int conversion undefined, so the ends are handled
+// before the conversion rather than after it.
+func intFromDouble(f float64) (int, bool) {
+	switch {
+	case math.IsNaN(f):
+		return 0, false
+	case f >= float64(maxInt):
+		return maxInt, f == float64(maxInt)
+	case f <= float64(minInt):
+		return minInt, f == float64(minInt)
 	}
-	p := a * b
-	return p/b != a
+	i := int(f)
+	return i, float64(i) == f
 }
 
 // intPow is `**` on integers.
@@ -1459,13 +1514,13 @@ func (sh *Runner) intPow(base, exp int) (arithNum, error) {
 		return floatNum(math.Pow(float64(base), float64(exp))), nil
 	}
 	v := 1
-	for b := base; exp > 0; exp >>= 1 {
-		if exp&1 == 1 {
+	for b, e := base, exp; e > 0; e >>= 1 {
+		if e&1 == 1 {
 			v *= b
 		}
 		b *= b
 	}
-	return intNum(v), nil
+	return sh.carriedInADouble(math.Pow(float64(base), float64(exp)), v), nil
 }
 
 // compare answers the operators that yield a truth rather than a number. They
@@ -1565,13 +1620,15 @@ func (sh *Runner) applyFloat(op string, l, r arithNum) (arithNum, error) {
 // so the axis is asked — and only when the value really is a float, because a
 // shell whose numbers are all integers never reaches the question.
 func (sh *Runner) integerOperand(n arithNum, op string) (int, error) {
-	if !n.float {
-		return n.i, nil
+	if !n.floatKind() {
+		// A wide value is an integer past the word, not a float, so it is
+		// the saturating cast and no question.
+		return n.asInt(), nil
 	}
 	if sh.ask(sh.sem().ArithIntegerOperatorRefusesFloat, "an integer-only operator refusing a float") {
 		return 0, arithError{msg: Wording(sh.diag().ArithInvalidFloatOperation, "invalid floating point operation"), token: op}
 	}
-	return int(n.f), nil
+	return n.asInt(), nil
 }
 
 func boolInt(b bool) int {
@@ -1859,7 +1916,22 @@ func (r *Runner) readArithNum(s string, written bool) (arithNum, error) {
 	}
 	if !floatShaped(s) {
 		n, err := r.parseNum(s)
-		return intNum(n), err
+		if err != nil {
+			var ae arithError
+			if errors.As(err, &ae) && ae.pastTheWord && r.dialect().ArithFloat &&
+				r.ask(r.sem().ArithValuesAreCarriedInADouble, "arithmetic carried in a C double") {
+				// The numeral is past the word and this shell keeps its
+				// arithmetic in a double, so it is simply that double:
+				// `$(( 10000000000000000000 ))` is 1e+19 and
+				// `$(( 0xffffffffffffffffff ))` is 4.72236648286965e+21.
+				return floatNum(floatNumeral(s)), nil
+			}
+			return intNum(n), err
+		}
+		// The numeral goes through the same carriage every result does, so a
+		// written-down 9007199254740993 is the same value as one arrived at
+		// by arithmetic. See carriedInADouble.
+		return r.carriedInADouble(float64(n), n), nil
 	}
 	if !r.dialect().ArithFloat {
 		// The dialect has no floats, so this is not a number at all. It is
@@ -1906,6 +1978,63 @@ func overflowZero(written bool) float64 {
 		return math.Copysign(0, -1)
 	}
 	return 0
+}
+
+// floatNumeral is an integer numeral too large for the machine word, read as
+// the double it comes to.
+//
+// The decimal and hexadecimal spellings go through the reader that rounds
+// correctly — Go will read a hexadecimal one once it is given the binary
+// exponent C already lets it leave off. A numeral in any other base is
+// accumulated a digit at a time, which is a rounding of its own past 2^53 and
+// the reason the two exact readers are preferred where they apply.
+func floatNumeral(s string) float64 {
+	neg := false
+	if s != "" && (s[0] == '-' || s[0] == '+') {
+		neg = s[0] == '-'
+		s = s[1:]
+	}
+	f, ok := unsignedFloatNumeral(s)
+	if !ok {
+		return 0
+	}
+	if neg {
+		return -f
+	}
+	return f
+}
+
+func unsignedFloatNumeral(s string) (float64, bool) {
+	digits, base := s, 10
+	switch {
+	case strings.Contains(s, "#"):
+		text, rest, _ := strings.Cut(s, "#")
+		b, err := strconv.Atoi(text)
+		if err != nil || b < 2 || b > 64 {
+			return 0, false
+		}
+		digits, base = rest, b
+	case strings.HasPrefix(s, "0x"), strings.HasPrefix(s, "0X"):
+		f, err := strconv.ParseFloat(s+"p0", 64)
+		return f, err == nil
+	case strings.HasPrefix(s, "0b"), strings.HasPrefix(s, "0B"):
+		digits, base = s[2:], 2
+	case len(s) > 1 && s[0] == '0':
+		digits, base = s[1:], 8
+	}
+	if base == 10 {
+		f, err := strconv.ParseFloat(digits, 64)
+		return f, err == nil
+	}
+	f := 0.0
+	for i := 0; i < len(digits); i++ {
+		d, ok := baseDigitValue(digits[i], base)
+		if !ok {
+			return 0, false
+		}
+		f = f*float64(base) + float64(d)
+	}
+	return f, true
 }
 
 // floatShaped reports whether a literal can only be a float.
@@ -2062,6 +2191,15 @@ func (r *Runner) parseNum(s string) (int, error) {
 		n, err = strconv.ParseInt(digits, base, 64)
 	}
 	if err != nil {
+		if errors.Is(err, strconv.ErrRange) {
+			// Well formed and too large. The reader that refuses it is
+			// alone on the panel, so the numeral is handed back as a
+			// failure the caller may still answer — see evalNumeral.
+			return 0, arithError{
+				msg: r.wordInvalidNumber(s), token: s,
+				badNumeral: true, complete: true, pastTheWord: true,
+			}
+		}
 		if w := r.diag().DigitTooGreatForBase; w != "" {
 			// Three dialects word every unreadable literal through the same
 			// wrapper, and one of them parts two diagnoses inside it: a

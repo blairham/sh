@@ -324,10 +324,17 @@ func mathAbs(_ *interp.Runner, call interp.MathCall) (interp.MathValue, error) {
 	}
 	n := x.Int()
 	if n < 0 {
-		// The smallest integer has no positive counterpart and stays where
-		// it is.
+		// The smallest integer has no positive counterpart in the word, and
+		// this shell does not work in the word: the value is a double, so
+		// |-2^63| is 2^63, and 2^63 comes back through the saturating cast
+		// as the largest integer. Measured 2026-09-16 against AT&T ksh93u+
+		// 2012-08-01 — `$(( abs(-9223372036854775807) ))` and
+		// `$(( abs(-9223372036854775808) ))` are both 9223372036854775807
+		// there, and the first of those is already the most negative value
+		// by the time abs sees it. See
+		// Semantics.ArithValuesAreCarriedInADouble.
 		if n == math.MinInt {
-			return interp.MathInt(n), nil
+			return interp.MathInt(math.MaxInt), nil
 		}
 		n = -n
 	}

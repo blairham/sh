@@ -62,7 +62,7 @@ func MathInt(i int) MathValue { return MathValue{n: intNum(i)} }
 func MathFloat(f float64) MathValue { return MathValue{n: floatNum(f)} }
 
 // IsFloat reports whether the value is a float rather than an integer.
-func (v MathValue) IsFloat() bool { return v.n.float }
+func (v MathValue) IsFloat() bool { return v.n.floatKind() }
 
 // Float is the value as a float, whichever it is.
 func (v MathValue) Float() float64 { return v.n.asFloat() }

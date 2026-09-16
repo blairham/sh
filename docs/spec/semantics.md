@@ -16101,7 +16101,8 @@ arithmetic. ksh93 answers `inf` for the value once it has been computed
 and zero only for the same value written down, so a reading that made
 every overflow zero would contradict the column it was measured from —
 and the integer side of the same question is a separate axis,
-`ArithOverflowSaturates`, whose columns do not line up with these.
+`ArithValuesAreCarriedInADouble`, whose columns do not line up with
+these.
 
 Two details of the zero reading, both measured on the only column that
 has it, and both following from a zero that carries a sign. The numeral
@@ -16135,11 +16136,57 @@ shift. ksh93 says yes and refuses; zsh says no and truncates. It does
 not arise in a shell without floats, which is why bash and dash leave it
 unanswered.
 
-**`ArithOverflowSaturates`** — bash no · dash no · ksh93 yes · zsh no
+**`ArithValuesAreCarriedInADouble`** — bash no · dash no · ksh93 yes · zsh no
 
-Clamps integer overflow at the edge: ksh93 holds max+1 at the maximum
-where the other shells wrap. Asked only when an overflow actually
-happened.
+Keeps every arithmetic value in a C double rather than in the machine
+word. ksh93 does; no other column does.
+
+This replaced **`ArithOverflowSaturates`**, which recorded the wrong
+model — and recorded it from a probe that could not have told the two
+apart. That axis was measured with `$(( big + 1 ))` on the largest
+value, which is the maximum again under *either* reading: a shell that
+clamps says so, and a shell that adds in a double gets 2^63, casts it
+back saturating, and lands on the same number. The corpus row that
+carried it, `arith/overflow-saturates-in-one-shell`, is that same
+snippet and says "ksh93 clamps at the maximum"; the row that separates
+the readings is `$(( big * 2 ))`, and ksh93 answers
+`1.84467440737096e+19` rather than the maximum a second time.
+
+Measured 2026-09-16 against AT&T ksh93u+ 2012-08-01, where a long double
+is 64 bits wide. Nothing about it is confined to the edge of the word:
+
+    $(( 9007199254740993 ))            9007199254740992
+    $(( 9007199254740992 + 1 ))        9007199254740992
+    $(( 3037000499*3037000499 ))       9223372030926248960
+    $(( 1152921504606846976/3 ))       384307168202282304
+    $(( (1<<62) | 1 ))                 4611686018427387904
+    $(( 2**63 ))                       9223372036854775807
+    $(( 2**64 ))                       1.84467440737096e+19
+    $(( big * 2 ))                     1.84467440737096e+19
+
+A written numeral rounds as an evaluated one does; `/`, `%` and the
+bitwise operators still do their work on the word, and the result goes
+back through the double afterwards, which is what loses the `| 1`.
+
+Whether the answer is written as an integer or in floating notation is
+ksh93's own test and not a magnitude: the value is an integer when a
+saturating `(intmax_t)` cast of it converts back to the same double.
+That is why the rounded product above is an integer while 2^64 is not,
+and why `$(( big + 1 ))` is the largest value — 2^63 casts to it and it
+converts back to 2^63.
+
+The *kind* stays integer even where the representation cannot: a value
+past the word is still an integer as far as an operator is concerned, so
+`$(( 2**64 / 3 ))` is `3074457345618258432` — an integer division of the
+saturated cast — and not `6.14891469123652e+18`.
+
+The same carriage is recorded for this shell's `printf` from the other
+side, in the corpus row `printf/integer-operand-rounds-through-a-double`
+(#2907), whose note already said the arithmetic does it too.
+
+Asked only where the two readings disagree. It is on the path of every
+integer operation, and an axis asked unconditionally would report itself
+unanswered on `$(( 1 + 1 ))` in a run with no dialect.
 
 **`EmptyArithExpressionIsAnError`** — bash no · dash yes · ksh93 no · zsh no
 

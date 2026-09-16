@@ -320,7 +320,7 @@ tidy-up.
 GoReleaser on a `v*` tag, per the parent tree: green CI on `main` → tag →
 `.github/workflows/release.yml` → `blairham/homebrew-tap` updated. One
 archive per platform carrying all six binaries, Linux and macOS only —
-every route into this program is a POSIX one. The first tag is `v0.0.0`.
+every route into this program is a POSIX one. The first tag was `v0.0.0`.
 
 Every binary's `version` is a var rather than a const so the tag can be
 stamped over it with `-X main.version=`; it is what `--acp` reports to a
@@ -329,12 +329,21 @@ client, and a checkout says `0.0.0-dev`. It was `cmd/sh`'s alone until
 true while only that binary served the protocol, and false the moment they
 all did. One left unstamped announces `0.0.0-dev` out of a tagged release.
 
-### What v0.0.0 waits for, and how to count it
+### What a tag waits for, and how to count it
 
-The bar is **countable, not a judgement**: open `P1` = 0 **and** open
-`daily-driver` = 0. Nothing else gates the first tag.
+The bar is **countable, not a judgement**: open `P1` = 0. Nothing else gates
+a release.
 
-That makes the labels load-bearing, so the *counting method* is part of the
+It used to be two legs — open `P1` = 0 **and** open `daily-driver` = 0 — and
+the second one has been retired. It did its job: it was the label that said
+"this shell cannot be used to get work done", and it went to zero and stayed
+there, so what remains on the board is prioritized work rather than a
+separate class of blocker. The label itself stays — it is the record of the
+campaign that made this shell usable, on 267 issues — but it is descriptive
+now and gates nothing. `P1` is what "fix first" means, and an issue that
+would once have earned both earns `P1`.
+
+That makes the label load-bearing, so the *counting method* is part of the
 definition. Three ways the obvious query has lied here, each of which has
 been believed at least once:
 
@@ -359,7 +368,7 @@ been believed at least once:
   filed by an agent as it finished, and twice it made the bar read lower than
   it was.
 
-So **re-run this before quoting either leg**, every time:
+So **re-run this before quoting the bar**, every time:
 
     gh issue list --state open --limit 400 --json number,labels \
       --jq '[.[]|select([.labels[].name]|any(.=="P1" or .=="P2" or .=="P3")|not)]|length'

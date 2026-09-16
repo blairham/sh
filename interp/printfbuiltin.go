@@ -2515,6 +2515,23 @@ func (r *Runner) expandPrintfEscape(s string) (string, int, printfPassEnd) {
 		return string([]byte{e}), 2, printfPassRan
 	}
 	switch c := s[1]; c {
+	case 'e', 'E':
+		// The colour idiom's own escape, and one shape asked twice.
+		//
+		// Not the `%b` site's pair under another name: ksh93 takes both
+		// letters here and only `\E` there, so a format that borrowed
+		// PrintfBEscEscape would write `a\eZ` for the one column whose
+		// two sites disagree. zsh and BusyBox ash take `\e` at both sites
+		// and `\E` at neither, which is what keeps the two letters two
+		// questions here as they are there (#3225).
+		axis := r.sem().PrintfEscEscape
+		if c == 'E' {
+			axis = r.sem().PrintfCapitalEscEscape
+		}
+		if r.ask(axis, `printf: \`+string(c)+` in a format`) {
+			return "\x1b", 2, printfPassRan
+		}
+		return `\` + string(c), 2, printfPassRan
 	case 'x':
 		text, n := r.hexEscapeText(r.hexEscape(), s)
 		return text, n, printfPassRan

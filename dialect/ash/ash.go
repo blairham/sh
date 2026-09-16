@@ -558,6 +558,12 @@ func Semantics() interp.Semantics {
 	s.PrintfBHexEscape = interp.PrintfHexEscapeByte
 	s.PrintfUnicodeEscape = interp.PrintfUnicodeEscapeAbsent
 	s.PrintfBUnicodeEscape = interp.PrintfUnicodeEscapeAbsent
+	// `\e` in a *format* too, and `\E` at neither site: this column's split
+	// is zsh's rather than dash's silence. Measured 2026-09-16 in BusyBox
+	// 1.37.0 inside the pinned Alpine image, `od -An -c`: `printf 'a\eZ'` is
+	// `a 033 Z` and `printf 'a\EZ'` is `a \ E Z` (#3225).
+	s.PrintfEscEscape = interp.Yes
+	s.PrintfCapitalEscEscape = interp.No
 	// And `%b` splits the two spellings of the escape character exactly as
 	// `echo -e` does: `printf '%b' 'a\eZ:a\EZ'` is ` 61 1b 5a 3a 61 5c 45
 	// 5a`. Measured at this site rather than borrowed from the one above,

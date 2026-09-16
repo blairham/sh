@@ -599,6 +599,12 @@ func Semantics() interp.Semantics {
 	// characters as written, as it is for this shell's `\x`.
 	s.PrintfUnicodeEscape = interp.PrintfUnicodeEscapeAbsent
 	s.PrintfBUnicodeEscape = interp.PrintfUnicodeEscapeAbsent
+	// Neither spelling in a format either, which makes this the panel's one
+	// column with no `\e` anywhere: `printf 'a\eZ'` is `61 5c 65 5a` in
+	// 0.5.12 (#3225). XCU gives the format the XSI set and nothing else, so
+	// this is the text read as written rather than an omission.
+	s.PrintfEscEscape = interp.No
+	s.PrintfCapitalEscEscape = interp.No
 	s.PrintfBEscEscape = interp.No
 	s.PrintfBCapitalEscEscape = interp.No
 	// The octal needs no `\0` here, which is the one thing this shell and

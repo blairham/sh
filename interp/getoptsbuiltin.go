@@ -738,8 +738,17 @@ func (r *Runner) localizeGetoptsCursor(sc *scope) {
 		if !askedIn {
 			// Nothing was reset on the way in, so the call is only
 			// distinguishable if its body moved the cursor.
+			//
+			// Against optCursorWord and not optIndex, because that is the
+			// unit `cursor` was saved in. The two coincide here — the clause
+			// beside this one pins optChar at the caller's, which the entry
+			// required to be at the start of a word, and it is exactly a
+			// place *inside* a word that the units differ by — so this is
+			// the same comparison written the same way rather than a second
+			// reading of the same number, which is how the units came to be
+			// mixed in the first place.
 			if still && now == held && r.optChar == char &&
-				r.optindAssigned == assigned && r.optIndex() == cursor {
+				r.optindAssigned == assigned && r.optCursorWord() == cursor {
 				return
 			}
 			position = r.getoptsFunctionPosition()

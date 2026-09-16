@@ -2047,15 +2047,22 @@ func (r *Runner) unsetFunction(name string) int {
 // The letters come from captureAttributes rather than from a list written
 // again here, so a letter added to that struct is counted by this without a
 // second edit — the failure this tree keeps having is a second helper that
-// omits what the first one learned. readonly and exported are not in it and
-// are read beside it; `readonly` is reached ahead of this anyway, since a
-// frozen parameter refuses the `unset` before any of it.
+// omits what the first one learned. The export attribute is not in that
+// struct and is read beside it: `export e` with no value is a parameter, and
+// dropping this clause removes the function on the first `unset` for both
+// `export f` and `declare -x f`.
+//
+// The readonly attribute is deliberately *not* read here, and it was until a
+// mutation said so. A frozen parameter refuses the `unset` in biUnset before
+// this is ever called, so a clause for it killed nothing — the one shape that
+// could reach it is a dialect's absent parameter, which unsetReadonly exempts
+// on purpose, and no preset that answers this axis `Yes` has any.
 func (r *Runner) parameterNamespaceHolds(name string) bool {
 	if r.nameIsSet(name) {
 		return true
 	}
 	name = r.throughNameref(name)
-	if r.readonly[name] || r.isExported(name) {
+	if r.isExported(name) {
 		return true
 	}
 	a := r.captureAttributes(name)

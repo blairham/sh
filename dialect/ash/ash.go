@@ -544,6 +544,9 @@ func Semantics() interp.Semantics {
 	// image 2026-09-15: `printf '%#x' 0` is `0` and `printf '%#.0o' 0`
 	// is `0`, which is musl reading the same C the BSD columns do.
 	s.PrintfAlternateFormAsksTheValue = interp.Yes
+	// And counts it against the width: `printf '%#05x' 7` is `0x007`,
+	// five characters, on BusyBox 1.37.0 in the pinned Alpine image.
+	s.PrintfZeroFillCountsTheAlternatePrefix = interp.Yes
 	s.PrintfTimeConversion = interp.No
 	// An empty operand to a numeric conversion is reported, where dash reads
 	// it as a zero and says nothing.

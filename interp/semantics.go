@@ -3117,6 +3117,55 @@ type Semantics struct {
 	// about `printf '%#x' 255`, which is `0xff` in all seven.
 	PrintfAlternateFormAsksTheValue Answer
 
+	// PrintfZeroFillCountsTheAlternatePrefix counts the `0x` C's `#` wrote
+	// as part of the field, so the `0` flag's fill is the width less the
+	// prefix and the digits. The other reading pads the *digits* to the
+	// width and writes the prefix past it, which makes the field two
+	// characters wider than the width asked for.
+	//
+	// `printf '%#05x' 7` is the whole of it: five characters and `0x007`
+	// where the prefix counts, seven characters and `0x00007` where it does
+	// not. Both readings put the fill between the `0x` and the digits — what
+	// parts them is the arithmetic, not the placement — so a table of this
+	// has to show the width it produced rather than only the bytes around
+	// the fill.
+	//
+	// Measured 2026-09-15 under `LC_ALL=C` with `printf '[%s]' N`, and this
+	// is the axis's own evidence rather than a restatement of the code:
+	//
+	//	              bash 5.3.20  bash 3.2.57  zsh 5.9.2  dash  ash  ksh93u+
+	//	%#05x 7       0x007        0x007        0x007      …     …    0x00007
+	//	%#05X 255     0X0FF        0X0FF        0X0FF      …     …    0X000FF
+	//	%#010x 255    0x000000ff   0x000000ff   0x000000ff …     …    0x00000000ff
+	//	%#04x 255     0xff         0xff         0xff       …     …    0x00ff
+	//	%#06o 255     000377       000377       000377     …     …    000377
+	//	%#8x 7        `     0x7`   `     0x7`   `     0x7` …     …    `     0x7`
+	//	%#-08x 7      `0x7     `   `0x7     `   `0x7     ` …     …    `0x7     `
+	//	%05d -42      -0042        -0042        -0042      …     …    -0042
+	//
+	// The last four rows are the controls, and a table without them would
+	// have been read far too widely. An octal's alternate form is a leading
+	// `0` that is itself a fill character, so `%#06o` cannot tell the two
+	// readings apart and all seven write the same six bytes — which is why
+	// this is asked only of `%x` and `%X`. A *space* fill is unanimous too:
+	// `%#8x` puts the blanks in front of the whole field in every column,
+	// so it is the `0` flag and not the width that the reading is about.
+	// `-` voids a zero fill outright, which C says and all seven do. And
+	// `%05d` of a negative is the row that proves the question is the
+	// prefix's and not the fill's: a sign is counted in the width by
+	// everyone, ksh93 included.
+	//
+	// The two readings coincide wherever the fill would be empty, so nothing
+	// is asked of `printf '%#3x' 7`. They are also never both reachable at a
+	// value of nought: under PrintfAlternateFormAsksTheValue's C reading
+	// there is no prefix at a nought to count, and the column that keeps one
+	// there is the column that does not count it.
+	//
+	// Go's `fmt` is the second reading — `fmt.Sprintf("%#05x", 7)` is
+	// `0x00007` — so this shell answered as ksh93 does before it was asked,
+	// and the fix is one column staying where it was while six move (#3066).
+	PrintfZeroFillCountsTheAlternatePrefix Answer
+
 	// PrintfNumberOperand is how a numeric conversion reads an operand that
 	// is not already the whole number C asked for — see PrintfNumberReading.
 	PrintfNumberOperand PrintfNumberReading
@@ -14358,6 +14407,12 @@ func PosixSemantics() Semantics {
 		// there is a leading zero however few digits the precision left. So
 		// the text answers this one and ksh93 is the departure.
 		PrintfAlternateFormAsksTheValue: Yes,
+		// And C counts the `0x` it wrote as part of the field, so the `0`
+		// flag's fill is the width less the prefix and the digits: `%#05x`
+		// of 7 is five characters. The text defers the conversion
+		// specifications to C's `printf()`, so it answers this one too, and
+		// ksh93 is the departure here as it is above.
+		PrintfZeroFillCountsTheAlternatePrefix: Yes,
 		// POSIX has `kill -l` turn the status of a signal-killed process
 		// back into a name, which one subtraction does; it says nothing
 		// about a second, gives no output for a number that names nothing,

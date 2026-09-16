@@ -1285,6 +1285,10 @@ func Semantics() interp.Semantics {
 	// C's `#` at a value of nought: `printf '%#x' 0` is `0` and
 	// `printf '%#.0o' 0` is `0`, bash 5.3.20 and bash 3.2.57 alike.
 	s.PrintfAlternateFormAsksTheValue = interp.Yes
+	// And it counts that prefix against the width a `0` flag fills:
+	// `printf '%#05x' 7` is `0x007` and is five characters, bash 5.3.20
+	// and bash 3.2.57 alike.
+	s.PrintfZeroFillCountsTheAlternatePrefix = interp.Yes
 	// `$'\cA'` is 0x01 and `$'\c1'` is 0x11: the character uppercased and
 	// masked to five bits, with `\c?` reading as DEL since 5.x.
 	s.DollarSingleBackslashC = interp.DollarSingleControlMasked

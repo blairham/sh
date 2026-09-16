@@ -32,6 +32,7 @@ var lastElementRows = []struct {
 	{"a program on PATH", `true | sh -c 'exit 1'`, 1, 1, 2},
 	{"a subshell", `true | ( exit 1 )`, 1, 1, 2},
 	{"a group of one", `true | { false; }`, 1, 2, 2},
+	{"a group of one on PATH", `true | { sh -c 'exit 1'; }`, 1, 1, 2},
 	{"a group of two", `true | { :; false; }`, 1, 1, 2},
 	{"a loop", `true | for i in 1; do false; done`, 1, 1, 2},
 	{"a test", `true | [[ a == b ]]`, 1, 1, 2},

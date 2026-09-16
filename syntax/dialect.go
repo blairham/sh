@@ -3333,11 +3333,19 @@ type Dialect struct {
 	// outside the quotes, so a key spelled with a bracket in it is
 	// reachable.
 	//
-	// Measured 2026-09-16 from a script file with `declare -A a; a[']']=5`:
+	// Measured 2026-09-16 from a script file with `typeset -A a; a[']']=5`:
 	// `$(( a[']'] ))` is 5 in bash 5.3.20, under that build as `sh` and in
-	// ksh93u+ 2012-08-01, and so is `(( a[']'] ))` and the same subscript
-	// inside `[[ ]]`. bash 3.2.57 has no associative arrays to ask, and
-	// dash and BusyBox ash have no arrays at all.
+	// ksh93u+ 2012-08-01, and so is `(( a[']'] ))`. bash 3.2.57 has no
+	// associative arrays to ask, and dash and BusyBox ash have no arrays at
+	// all.
+	//
+	// The same subscript inside `[[ ]]` is deliberately *not* this flag, and
+	// that is measured rather than assumed: ksh93u+ answers `[[ a[']'] -eq 5
+	// ]]` with `a[]]: arithmetic syntax error` in the same run that answers
+	// the `(( ))` line with 5. A condition's operand reaches its arithmetic
+	// already expanded, so what a shell does there is a question about which
+	// reading it takes rather than about what its reader sees — see
+	// interp.Semantics.ConditionArithmeticReadsTheWrittenSubscript.
 	//
 	// zsh 5.9.2 is measured *off* rather than left out: it will not store
 	// such a key from an assignment at all, and with the element put there

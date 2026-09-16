@@ -406,9 +406,14 @@ func (r *Runner) condOperand(w *syntax.Word) string {
 		}
 		// A bracket behind a quote, and one out of an expansion, are
 		// content: measured 2026-09-16 from a script file with `declare -A
-		// a; a[']']=5`, `[[ a[']'] -eq 5 ]]` holds in bash 5.3.20 and in
-		// ksh93u+ 2012-08-01 (#3302). The same rule `[[ -v a[k] ]]` already
-		// reads its brackets by, one operator over.
+		// a; a[']']=5`, `[[ a[']'] -eq 5 ]]` holds in bash 5.3.20 and under
+		// that build as `sh`. It is bash's alone — ksh93u+ 2012-08-01 says
+		// `a[]]: arithmetic syntax error` to the same line, and reads the
+		// same subscript inside `(( ))` perfectly well — so which of the two
+		// readings is taken is the dialect's, and the marking is only what
+		// makes both available. See
+		// Semantics.ConditionArithmeticReadsTheWrittenSubscript and
+		// conditionSubscriptText, which asks it (#3302).
 		return markArithValue(text)
 	})
 }

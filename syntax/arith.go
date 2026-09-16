@@ -237,7 +237,7 @@ type ArithIndex struct {
 	// array's key is the one reading that does: quote removal is performed
 	// over a subscript there, and it has to leave a value's own quote
 	// characters alone. Measured 2026-09-16 from a script file with
-	// `declare -A a; a["'q'"]=21; a[q]=22; k="'q'"`, `$(( a[$k] ))` is 21 in
+	// `typeset -A a; a["'q'"]=21; a[q]=22; k="'q'"`, `$(( a[$k] ))` is 21 in
 	// bash 5.3.20 and in ksh93u+ 2012-08-01 — the value's quotes are two
 	// characters of the key and not a quotation — where the same two
 	// characters written in the source name the element under `q`.
@@ -1716,7 +1716,7 @@ func (a *arithParser) subscript(emptyOK bool) arithSubscript {
 //
 // The scan reads quotations, which is the whole of what a subscript's
 // brackets are: a `]` inside one is a character of the key and ends nothing.
-// Measured 2026-09-16 from a script file with `declare -A a; a[']']=5`,
+// Measured 2026-09-16 from a script file with `typeset -A a; a[']']=5`,
 // `$(( a[']'] ))` is 5 in bash 5.3.20, under bash as `sh` and in ksh93u+
 // 2012-08-01, and this shell alone stopped at the first bracket and was left
 // holding a `'] ` it could not read as an operator (#3302). A quote a *value*

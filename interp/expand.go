@@ -5674,12 +5674,21 @@ func ifsFirst(ifs string, set bool) string {
 func (r *Runner) namesWithPrefix(prefix string) []string {
 	seen := map[string]bool{}
 	var out []string
-	add := func(name string) {
-		if seen[name] || r.removed[name] || !strings.HasPrefix(name, prefix) {
+	// listed is add without the removal skip: a name the shell knows even
+	// though nothing is stored under it. Split out rather than repeated so
+	// the prefix test and the de-duplication stay in one place.
+	listed := func(name string) {
+		if seen[name] || !strings.HasPrefix(name, prefix) {
 			return
 		}
 		seen[name] = true
 		out = append(out, name)
+	}
+	add := func(name string) {
+		if r.removed[name] {
+			return
+		}
+		listed(name)
 	}
 	for name := range r.Vars {
 		add(name)
@@ -5698,8 +5707,16 @@ func (r *Runner) namesWithPrefix(prefix string) []string {
 	// 2026-09-15 on bash 5.3.15, `v=1; declare -n r=v; echo "${!r@}"` writes
 	// `r` — the reference's own name and not the target's — so the listing
 	// is over the names this shell knows rather than over what they reach.
+	//
+	// listed rather than add, so the reference survives the removal its own
+	// declaration records: a `-n` over a name that held a value empties the
+	// cell under it (#3084), and a skip on that record took the reference's
+	// name out of the listing with the value. Measured on bash 5.3.20 —
+	// `r=OUTER; declare -n r=v; ${!r@}` answers `r`, and the same listing
+	// behind an `unset -n r` answers nothing, which is this loop no longer
+	// having the name to offer.
 	for name := range r.nameref {
-		add(name)
+		listed(name)
 	}
 	sort.Strings(out)
 	return out

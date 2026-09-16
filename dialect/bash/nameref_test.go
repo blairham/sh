@@ -300,3 +300,127 @@ func TestAReferenceToItsOwnNameRefersOutward(t *testing.T) {
 		})
 	}
 }
+
+// The cell a reference lands on holds **nothing**, which is only visible once
+// the reference is taken off it: `$r` goes through the reference, so a value
+// left standing underneath is unreachable until `unset -n` opens the cell.
+//
+// Measured 2026-09-15 against bash 5.3.20, `env -i` with a scratch HOME and no
+// startup files, every row run against the real shell and this one side by
+// side. This shell kept the outer value in the cell instead, so `unset -n r`
+// read the caller's value where bash reads an unset name (#3084).
+//
+// The discard is **not** a fact about scope. It happens with no function in
+// sight and through `-g`, which is what says it belongs to the `n` letter
+// rather than to what makes a local — the reading the first attribution of
+// this bug took, and the reason the top-level and `-g` rows are here.
+func TestANameReferenceEmptiesTheCellItLandsOn(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			// The report's own line. `${r-GONE}` rather than `$r` because
+			// the question is whether the name is *set*, and an empty string
+			// and an unset name both print nothing.
+			"unset -n opens an empty cell",
+			`r=OUTER; v=VEE; f(){ local -n r=v; unset -n r; echo "in=[${r-GONE}]"; }; f; echo "after=[${r-GONE}]"`,
+			"in=[GONE]\nafter=[OUTER]\n",
+		},
+		{
+			// No scope at all, so nothing was shadowed and there is nothing
+			// for a scope to put back: the value is simply gone. The row
+			// that decides where the rule lives.
+			"the top level discards it too",
+			`r=OUTER; v=VEE; declare -n r=v; unset -n r; echo "[${r-GONE}]"`,
+			"[GONE]\n",
+		},
+		{
+			// And `-g`, which is the same cell as the row above reached from
+			// inside a function: no shadow is taken, and the global value
+			// goes anyway — for good, since no return puts it back.
+			"and a global declaration from inside a function",
+			`r=OUTER; v=VEE; f(){ declare -gn r=v; unset -n r; echo "in=[${r-GONE}]"; }; f; echo "after=[${r-GONE}]"`,
+			"in=[GONE]\nafter=[GONE]\n",
+		},
+		{
+			// A reference with nothing to point at yet empties the cell just
+			// the same: it is the letter and not the operand that does it.
+			"a valueless declaration empties it as well",
+			`r=OUTER; f(){ local -n r; unset -n r; echo "in=[${r-GONE}]"; }; f; echo "after=[${r-GONE}]"`,
+			"in=[GONE]\nafter=[OUTER]\n",
+		},
+		{
+			// The listing says the same thing from the other side — no
+			// value against the name, where this shell listed one before.
+			"and lists as holding nothing",
+			`r=OUTER; f(){ local -n r; declare -p r; }; f`,
+			"declare -n r\n",
+		},
+		{
+			// Three deep, which is the only shape that can tell "the cell
+			// this binding shadowed" from "some outer cell": with one caller
+			// they are the same thing. What `unset -n` opens is *this*
+			// binding's cell, so no caller's local is disturbed — `g` and
+			// `h` still hold theirs and the global still holds L0.
+			"and it is this binding's cell, not a caller's",
+			`r=L0; v=VEE; h(){ local r=L1; g; echo "h=[$r]"; }; ` +
+				`g(){ local r=L2; f; echo "g=[$r]"; }; ` +
+				`f(){ local -n r=v; unset -n r; echo "f=[${r-GONE}]"; }; h; echo "top=[$r]"`,
+			"f=[GONE]\ng=[L2]\nh=[L1]\ntop=[L0]\n",
+		},
+		{
+			// What the opened cell *is*: an ordinary empty local. A write to
+			// it stays in the call and does not reach the target the
+			// reference used to point at, and the caller gets its own value
+			// back on return.
+			"the opened cell is an ordinary local",
+			`r=OUTER; v=VEE; f(){ local -n r=v; unset -n r; r=NEW; echo "in=[$r] v=[$v]"; }; f; echo "after=[$r] v=[$v]"`,
+			"in=[NEW] v=[VEE]\nafter=[OUTER] v=[VEE]\n",
+		},
+		{
+			// An inherited name goes too, which a bare delete would have
+			// missed: it is not in the parameter table to begin with, so the
+			// environment would have gone on answering the read.
+			"an inherited value goes with it",
+			`export E=ENV; v=VEE; declare -n E=v; unset -n E; echo "[${E-GONE}]"`,
+			"[GONE]\n",
+		},
+		{
+			// Nothing to discard and nothing said about it, which is the
+			// ordinary case the rows above are the exception to.
+			"a name that held nothing is unremarkable",
+			`v=VEE; declare -n r=v; unset -n r; echo "[${r-GONE}] v=[$v]"`,
+			"[GONE] v=[VEE]\n",
+		},
+		{
+			// And a **refused** declaration leaves the name exactly as it
+			// found it. The discard belongs to a reference that gets made,
+			// so it cannot be done before the refusals are past.
+			"a refused declaration keeps the value",
+			`r=OUTER; declare -n r=1bad; echo "st=$?"; unset -n r; echo "[${r-GONE}]"`,
+			"bash: line 1: declare: `1bad': invalid variable name for name reference\n" +
+				"st=1\n[OUTER]\n",
+		},
+		{
+			// The self reference refused at the top level, for the same
+			// reason and by the other door (#3048).
+			"and so does a refused self reference",
+			`r=OUTER; declare -n r=r; echo "st=$?"; unset -n r; echo "[${r-GONE}]"`,
+			"bash: line 1: declare: r: nameref variable self references not allowed\n" +
+				"st=1\n[OUTER]\n",
+		},
+		{
+			// The reference is why none of this is visible in ordinary use:
+			// the same name reads the target right up until `unset -n`.
+			"the reference hides all of it until then",
+			`r=OUTER; v=VEE; declare -n r=v; echo "[${r-GONE}]"; unset -n r; echo "[${r-GONE}]"`,
+			"[VEE]\n[GONE]\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runBash(t, dir, tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("%s = %q at %d, want %q at 0", tc.src, out, st, tc.want)
+			}
+		})
+	}
+}

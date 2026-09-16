@@ -66,3 +66,58 @@ say 'a reference that is itself the global cell is a closed loop'
 say 'and a write through that one lands nowhere and gives up the list'
 ( f() { declare -gn r=r; r=SET; printf 'NOPE\n'; }; f; printf 'st=%s\n' "$?" ) 2>&1
 printf 'and the file carries on\n'
+
+# The cell a reference lands on — #3084, and the second half of what `-n`
+# means. The letter says the name is a reference, and a reference has no value
+# under it, so whatever the name was holding is discarded when the reference is
+# made. Nothing can see that while the reference stands, because a read of the
+# name goes through it; `unset -n` is the door onto the cell, and what it finds
+# is an unset name.
+#
+# Not a fact about scope, which is why the top-level and `-g` cases are here
+# beside the local one: the discard happens with no function in sight and
+# through the letter that takes no scope at all.
+
+say 'unset -n opens an empty cell'
+( r=OUTER; v=VEE; f() { local -n r=v; unset -n r; printf 'in=[%s]\n' "${r-GONE}"; }
+  f; printf 'after=[%s]\n' "${r-GONE}" ) 2>&1
+
+say 'the top level discards it too'
+( r=OUTER; v=VEE; declare -n r=v; unset -n r; printf '[%s]\n' "${r-GONE}" ) 2>&1
+
+say 'and so does a global declaration made inside a function'
+( r=OUTER; v=VEE; f() { declare -gn r=v; unset -n r; printf 'in=[%s]\n' "${r-GONE}"; }
+  f; printf 'after=[%s]\n' "${r-GONE}" ) 2>&1
+
+say 'a reference with nothing to point at empties it as well'
+( r=OUTER; f() { local -n r; unset -n r; printf 'in=[%s]\n' "${r-GONE}"; }
+  f; printf 'after=[%s]\n' "${r-GONE}" ) 2>&1
+
+say 'and the listing says the same from the other side'
+( r=OUTER; f() { local -n r; declare -p r; }; f ) 2>&1
+( v=1; declare -n r=v; declare -p r ) 2>&1
+
+say 'the cell opened is this binding, not a caller of it'
+( r=L0; v=VEE
+  h() { local r=L1; g; printf 'h=[%s]\n' "$r"; }
+  g() { local r=L2; f; printf 'g=[%s]\n' "$r"; }
+  f() { local -n r=v; unset -n r; printf 'f=[%s]\n' "${r-GONE}"; }
+  h; printf 'top=[%s]\n' "$r" ) 2>&1
+
+say 'and what it opens onto is an ordinary empty local'
+( r=OUTER; v=VEE
+  f() { local -n r=v; unset -n r; r=NEW; printf 'in=[%s] v=[%s]\n' "$r" "$v"; }
+  f; printf 'after=[%s] v=[%s]\n' "$r" "$v" ) 2>&1
+
+say 'an inherited value goes with it'
+( export E=ENV; v=VEE; declare -n E=v; unset -n E; printf '[%s]\n' "${E-GONE}" ) 2>&1
+
+say 'a refused declaration keeps the value it found'
+( r=OUTER; declare -n r=1bad; printf 'st=%s\n' "$?"; unset -n r
+  printf '[%s]\n' "${r-GONE}" ) 2>&1
+( r=OUTER; declare -n r=r; printf 'st=%s\n' "$?"; unset -n r
+  printf '[%s]\n' "${r-GONE}" ) 2>&1
+
+say 'and the reference is what hides all of it until then'
+( r=OUTER; v=VEE; declare -n r=v; printf '[%s]\n' "${r-GONE}"; unset -n r
+  printf '[%s]\n' "${r-GONE}" ) 2>&1

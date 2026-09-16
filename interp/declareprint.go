@@ -471,6 +471,18 @@ func (r *Runner) declarableNames() []string {
 			seen[name] = true
 		}
 	}
+	for name := range r.nameref {
+		// A reference is a name the shell has rather than a value it stored,
+		// so it is in none of the value tables and in none of the attribute
+		// ones either — the `n` letter is recorded here and nowhere else.
+		// Without this the full listing reached a nameref only when the cell
+		// under the name happened to be holding something, which is the state
+		// a `-n` declaration is now measured *not* to leave (#3084): bash
+		// 5.3.20 writes `declare -n r="v"` for `v=1; declare -n r=v` whether
+		// or not `r` held a value before the line, and this shell wrote it
+		// only in the second case.
+		seen[name] = true
+	}
 	for name, on := range r.compoundVariable {
 		if on {
 			seen[name] = true

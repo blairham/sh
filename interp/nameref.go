@@ -302,6 +302,7 @@ func (r *Runner) namerefTargetIsAName(target string) bool {
 func (r *Runner) declareNameref(builtin, name, target string, hasValue bool) int {
 	if !hasValue {
 		if !r.isNameref(name) {
+			r.namerefEmptiesTheCell(name)
 			r.setNameref(name, "")
 		}
 		// A second `typeset -n r` over a reference that is already aimed
@@ -342,6 +343,12 @@ func (r *Runner) declareNameref(builtin, name, target string, hasValue bool) int
 			return r.status
 		}
 		r.warnAboutASelfReference(builtin, name)
+		// The cell is emptied here too, and it is not the one the reference
+		// reads: `local -n r=r` refers *out*, to the copy the oldest scope
+		// that shadowed the name is holding, which is untouched by this
+		// (#3048). What goes is the value standing in the live table under
+		// the name this binding just took over.
+		r.namerefEmptiesTheCell(name)
 		r.setNameref(name, target)
 		return 0
 	}
@@ -360,8 +367,49 @@ func (r *Runner) declareNameref(builtin, name, target string, hasValue bool) int
 		// by an empty line — so nothing is said here. See warnAboutACycle,
 		// which is the read's half.
 	}
+	r.namerefEmptiesTheCell(name)
 	r.setNameref(name, target)
 	return 0
+}
+
+// namerefEmptiesTheCell is what a `-n` declaration does to whatever the name
+// was holding: the name becomes a **reference**, and a reference has no value
+// under it. Both shells discard it, and the discard is not a fact about scope
+// — `r=OUTER; typeset -n r=v; unset -n r` reads the name as unset at the top
+// level, inside a function, and through `-g` alike, in bash 5.3.20 and in
+// ksh93u+ 2012 (#3084). The reference hides the discard everywhere else,
+// because a read of the name goes through it; `unset -n` is what takes the
+// reference away and asks the cell underneath what it holds.
+//
+// The value is the only thing that goes. Attributes stay, because the same
+// declaration applied them a few lines earlier and `unset`'s clearing would
+// take them straight back off; and the reference itself is recorded after
+// this, in the nameref table rather than in a parameter one.
+//
+// A name holding an array is left alone entirely, which is a measurement
+// rather than an omission: neither shell lets a reference land on one. `r=(a
+// b c); typeset -n r=v` is `r: reference variable cannot be an array` at 1 in
+// bash 5.3.20 and in ksh93u+ 2012, for the indexed and the associative kind
+// alike and with or without a target. This shell accepts that line today,
+// which is #3103 and not this — so the guard below stands on a case that
+// should never have reached here, and hiding the cell on it would leave the
+// name reading as unset while still counting its elements. Wrong in one way
+// rather than two is where that case stays until #3103 decides it.
+//
+// Nothing here runs on a refusal. A `-n` declaration the shell will not make
+// leaves the name exactly as it found it — measured, `r=OUTER` followed by
+// `typeset -n r=NOT_A_NAME` or by a refused self reference reports 1 and
+// leaves `r` holding OUTER in both shells — so every caller is on a path that
+// has already decided the reference is going to be made.
+func (r *Runner) namerefEmptiesTheCell(name string) {
+	if r.Arrays[name] != nil || r.AssocArrays[name] != nil {
+		return
+	}
+	// hideVar rather than a bare delete: a name that came from the
+	// environment is not in Vars to begin with, so deleting nothing would
+	// leave the inherited value answering every read of the cell the
+	// reference has just taken over.
+	r.hideVar(name)
 }
 
 // unsetNameref takes the reference attribute off a name, which is what

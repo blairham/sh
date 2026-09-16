@@ -597,3 +597,46 @@ func TestGetoptsClearingComesBeforeTheWordCount(t *testing.T) {
 		t.Errorf("got %q, want %q", out, want)
 	}
 }
+
+// TestGetoptsWritesOptargBeforeTheWordCount. One order on every path, and it
+// is invisible until a freeze refuses the OPTARG half: dash and BusyBox ash
+// then report and stop with OPTIND still where it was, which is what says the
+// builtin never counted past the word. Each of the four paths writes OPTARG
+// its own way, so each is its own row.
+func TestGetoptsWritesOptargBeforeTheWordCount(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"an option that takes one",
+			`set -- -a val`,
+			"sh: OPTARG: frozen\nst=2 ind=1\n",
+		},
+		{
+			"an option that takes none",
+			`set -- -b`,
+			"sh: OPTARG: frozen\nst=2 ind=1\n",
+		},
+		{
+			"a bad option in silent mode",
+			`set -- -z; spec=':a:b'`,
+			"sh: OPTARG: frozen\nst=2 ind=1\n",
+		},
+		{
+			"the end of the options, past a --",
+			`set -- -- operand`,
+			"sh: OPTARG: frozen\nst=2 ind=1\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := getoptsFrozenSem()
+			sem.GetoptsRefusedWriteEndsTheBuiltin = Yes
+			sem.GetoptsUnsetsOptargAtEndOfOptions = Yes
+			dg := Diagnostics{ReadonlyVariable: "%s: frozen", GetoptsBadOption: "bad -%[1]s"}
+			src := "spec='a:b'\nOPTIND=1\nOPTARG=PRESET\n" + tc.src + "\nreadonly OPTARG\n" +
+				`getopts "$spec" o; echo "st=$? ind=$OPTIND"`
+			out, _ := run(t, src, func(r *Runner) { r.Semantics, r.Diagnostics = &sem, &dg })
+			if out != tc.want {
+				t.Errorf("got %q, want %q", out, tc.want)
+			}
+		})
+	}
+}

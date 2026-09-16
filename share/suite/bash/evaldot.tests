@@ -122,3 +122,47 @@ printf 'a refusal on the second line -> %s\n' "$?"
 # contradict the first.
 eval 'printf "A\n"
 { fi; }' 2>&1 > /dev/null
+
+# `eval`'s own options — #3216, and this shell alone on the panel in the bytes
+# it writes. `eval` is a POSIX special builtin and every column has it, but
+# what it makes of a leading dash-word splits three ways: bash and ksh93 read
+# options, zsh reads the `--` marker and refuses no letter behind it, and dash
+# and BusyBox ash read nothing at all and run the marker as a command.
+#
+# Each refusal is taken a stream at a time and inside a subshell, for the
+# reason the freeze rows in functions.tests give: a usage error in a special
+# builtin is fatal in some columns, and a file that let it out would end here.
+printf -- '--- an option letter this builtin has not got\n'
+( eval -q echo hi ) 2>&1 > /dev/null
+( eval -q echo hi ) > /dev/null 2>&1; printf 'status -> %s\n' "$?"
+
+# And the text after it does not run, which is the half that makes this a
+# wrong action rather than a wrong message.
+( eval -q echo hi ) 2>/dev/null
+
+# Not fatal here: the command after the refusal runs.
+( eval -q echo hi; printf 'carried on\n' ) 2>/dev/null
+
+# With no text behind it the answer is the same.
+printf -- '--- the letter alone\n'
+( eval -q ) 2>&1 > /dev/null
+( eval -q ) > /dev/null 2>&1; printf 'status -> %s\n' "$?"
+
+# The marker ends the options and the rest is the text — the spelling written
+# precisely to keep a leading dash out of the way.
+printf -- '--- the end-of-options marker\n'
+eval -- echo hi; printf 'status -> %s\n' "$?"
+eval --; printf 'the marker alone -> %s\n' "$?"
+
+# And behind the marker a dash-word is a command again, which is what says the
+# marker ended the options rather than being dropped.
+( eval -- -q ) 2>&1 > /dev/null
+( eval -- -q ) > /dev/null 2>&1; printf 'behind the marker -> %s\n' "$?"
+
+# A lone `-` is not the marker and is not an option: it is the first word of
+# the text, and the text runs it as a command.
+( eval - echo hi ) 2>&1 > /dev/null
+( eval - echo hi ) > /dev/null 2>&1; printf 'a lone dash -> %s\n' "$?"
+
+# And a word with no dash reaches none of this.
+eval echo plain; printf 'plain -> %s\n' "$?"

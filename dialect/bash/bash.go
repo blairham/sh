@@ -1134,6 +1134,11 @@ func Semantics() interp.Semantics {
 	// an invalid option and prints a usage line without it.
 	s.DotReadsOptions = interp.Yes
 	s.DotTakesTheSearchPathOption = interp.Yes
+	// `eval` reads a leading dash-word the way every other builtin here
+	// does: `eval -- cmd` runs `cmd`, and `eval -q cmd` is `eval: -q:
+	// invalid option` with the usage line, at 2. There are no letters to
+	// know, so the refusal is the whole of what the reading does.
+	s.EvalOptions = interp.EvalReadsOptions
 	s.ExecFailureRunsExitTrap = interp.Yes
 	s.ExecTakesOptions = interp.Yes
 	// Both letters, and `-l` reaches the name `-a` chose: `exec -l -a NAME`

@@ -597,11 +597,68 @@ func biEval(r *Runner, ctx context.Context, args []string) int {
 		// after a failure, which is measured and unanimous.
 		return 0
 	}
+	args, code := r.evalOptions(args)
+	if code != 0 {
+		return code
+	}
 	return r.runSourced(ctx, strings.Join(args, " "), sourced{
 		eval:         true,
 		label:        "eval",
 		syntaxStatus: r.diag().SyntaxStatus(),
 	})
+}
+
+// evalOptions reads whatever of a leading dash-word this shell reads as
+// options for `eval`, and hands back the words the text is joined from.
+//
+// The whole of the dialect's question is Semantics.EvalOptions — three
+// answers, because zsh takes the `--` marker and refuses no letter behind it
+// and neither of the other two readings covers that. See EvalOptionReading.
+//
+// Asked narrowly. A first word that does not begin with a dash reaches no
+// question — `eval echo hi` is the same command in all seven columns — and
+// neither does a lone `-`, which is a command word everywhere here. That
+// second exclusion is measured rather than tidy: `eval - echo hi` prints `hi`
+// in zsh, which reads as an option being eaten, and is not. `eval "- echo
+// hi"` as one argument prints `hi` there too, so it is the text running with
+// a bare `-` in command position discarded — a separate fact about that
+// shell, filed as issue 3236. A reading that ate the dash here would have
+// made `eval - -- echo hi` run `echo hi`, and it runs `--`.
+//
+// It may hand back nothing — `eval --` is every word being a marker — and the
+// caller runs the empty text rather than short-circuiting to 0. A branch that
+// returned early was here and was taken out: no probe could tell the two
+// apart. `eval --` after a `false` is 0 either way, and the pair is identical
+// under `set -x`, under `set -v` and in what `$_` holds afterwards, in this
+// shell and in bash 5.3.20. A branch nothing can distinguish reads as a case
+// somebody covered.
+func (r *Runner) evalOptions(args []string) ([]string, int) {
+	if len(args) == 0 || len(args[0]) < 2 || args[0][0] != '-' {
+		return args, 0
+	}
+	switch r.sem().EvalOptions {
+	case EvalReadsNoOptions:
+		return args, 0
+	case EvalTakesTheEndMarkerOnly:
+		if args[0] == "--" {
+			return args[1:], 0
+		}
+		return args, 0
+	case EvalReadsOptions:
+		// The shell's own builtin option reader, with no letters to know.
+		// That is not a degenerate call: it is what carries the `--`, the
+		// `--help` answer, the wording of the refusal, its usage line and
+		// the fatality a special builtin's usage error has in the columns
+		// that end the script over it. Writing a refusal here instead would
+		// have been a second helper with none of those — which is how this
+		// tree keeps growing two spellings of one rule.
+		rest, _, code := r.builtinOptions("eval", args, "")
+		return rest, code
+	}
+	r.diagf("%s\n", r.unanswered("how much of a leading dash-word `eval` reads as options"))
+	r.status = 2
+	r.unspecified = true
+	return nil, 2
 }
 
 // biDot implements `.`, and `source` where a dialect registers that name too.

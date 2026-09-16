@@ -61,3 +61,42 @@ printf 'reached the end\n'
 # special builtin. The subshell is what the file survives it in.
 ( . -p /tmp f.sh; printf 'reached\n' ) 2> /dev/null
 printf 'a dash-word -> %s\n' "$?"
+
+# `eval`'s own options — #3216, which expected this shell to take none and
+# measured it wrong. It reads them, in its own words and with its own
+# fatality: `eval: -q: unknown option` and `Usage: eval [ options ] [arg...]`,
+# status 2, and the **script ends there** because a usage error in a POSIX
+# special builtin is fatal here.
+#
+# Every refusal is inside a subshell for exactly that reason — the fatality is
+# the fact being pinned, so it has to be contained rather than avoided — and
+# each stream is taken on its own because the diagnostic is unbuffered and
+# the pipe is not.
+printf -- '--- an option letter this builtin has not got\n'
+( eval -q echo hi ) 2>&1 > /dev/null
+( eval -q echo hi ) > /dev/null 2>&1; printf 'status -> %s\n' "$?"
+
+# The text after it does not run, and neither does the command after the
+# refusal: the subshell is over.
+( eval -q echo hi; printf 'carried on\n' ) 2>/dev/null; printf 'and the subshell ended -> %s\n' "$?"
+
+printf -- '--- the letter alone\n'
+( eval -q ) 2>&1 > /dev/null
+( eval -q ) > /dev/null 2>&1; printf 'status -> %s\n' "$?"
+
+# The marker ends the options and the rest is the text.
+printf -- '--- the end-of-options marker\n'
+eval -- echo hi; printf 'status -> %s\n' "$?"
+eval --; printf 'the marker alone -> %s\n' "$?"
+
+# Behind the marker a dash-word is a command again, and a command that is not
+# there is not fatal — which is the pair that separates "the marker ended the
+# options" from "the marker was dropped".
+( eval -- -q ) 2>&1 > /dev/null
+( eval -- -q; printf 'carried on\n' ) 2>/dev/null
+
+# A lone `-` is the first word of the text rather than a marker or an option.
+( eval - echo hi ) 2>&1 > /dev/null
+( eval - echo hi ) > /dev/null 2>&1; printf 'a lone dash -> %s\n' "$?"
+
+eval echo plain; printf 'plain -> %s\n' "$?"

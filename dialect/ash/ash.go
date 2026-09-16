@@ -972,6 +972,9 @@ func Semantics() interp.Semantics {
 	// reports success. A directory operand is no error in either.
 	s.DotWithNoOperandIsAnError = interp.Yes
 	s.DotReadsOptions = interp.Yes
+	// `eval` reads none, unlike `.` above — measured against BusyBox
+	// 1.37.0, where `eval -- echo hi` is `eval: --: not found` at 127.
+	s.EvalOptions = interp.EvalReadsNoOptions
 	s.DotTakesTheSearchPathOption = interp.No
 	s.DotDirectoryOperandIsAnError = interp.No
 	// Only the last of several targets is used: `echo hi >a >b` leaves a

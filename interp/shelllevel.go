@@ -120,16 +120,16 @@ const ShellLevelCeiling = 1000
 // settleShellLevel reads the inherited depth, adds this shell to it, and
 // exports the result.
 //
-// Once per session, like settleInheritedOldpwd and for the same reason: a
-// front end reading a person's input hands over a chunk a line, and a count
-// that were re-decided per chunk would climb a level for every command typed.
-// The flag is separate from the presence of the name because one policy
-// writes no name at all, and "nothing there" would ask again forever.
+// The count is the process's, and it must not climb as a session runs: a
+// front end reading a person's input hands over a chunk a line and this runs
+// at the head of each one. Two things keep it still, and neither is a flag of
+// its own — a flag was written here first and no mutation could kill it. The
+// depth is computed from the *environment* rather than from the last value,
+// so recomputing it answers the same number; and the name already being in
+// Vars ends it before that, which is the guard that matters, because it is
+// what keeps a value the script assigned from being overwritten on its next
+// line.
 func (r *Runner) settleShellLevel() {
-	if r.shellLevelSettled {
-		return
-	}
-	r.shellLevelSettled = true
 	policy := r.sem().ShellLevel
 	if policy == ShellLevelUnspecified || policy == ShellLevelNotCounted {
 		return

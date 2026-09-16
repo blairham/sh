@@ -1432,7 +1432,9 @@ type Semantics struct {
 	// evaluating the subscript at all. Yes in zsh alone: measured 2026-09-10,
 	// `$(( nodecl[1/0] ))` is a quiet 0 there and a division by zero in bash
 	// 5.3, bash 3.2 and ksh93, and `i=0; $(( nodecl[i++] ))` leaves i at 0 in
-	// zsh and at 1 in the other three.
+	// zsh and at 1 in those three. dash and BusyBox ash are not a fourth and
+	// fifth answer: neither has a subscript in arithmetic, so `$(( nodecl[1/0]
+	// ))` is a syntax error in both and the question never arises.
 	//
 	// Not a rule about *empty* subscripts, though it is what answers one:
 	// `$(( m[$w] ))` with `$w` empty reaches the expression as the literal
@@ -3904,9 +3906,9 @@ type Semantics struct {
 	// LoginShowsLInDollarDash puts `l` in `$-` when the shell was started as
 	// a login shell.
 	//
-	// Four against two, so there is no majority to follow and this is a
-	// switch: ksh93 and zsh say yes, and dash and all three bash columns say
-	// no. bash's no is a deliberate one rather than an omission — it keeps
+	// Five against two, so there is no majority to follow and this is a
+	// switch: ksh93 and zsh say yes, and dash, BusyBox ash and all three bash
+	// columns say no — measured 2026-09-16, `ash -lc 'echo $-'` is `c`. bash's no is a deliberate one rather than an omission — it keeps
 	// the fact in `shopt login_shell`, which reads `on` for exactly the
 	// invocations this letter would mark, so the shell answers the question
 	// and answers it somewhere else.
@@ -3920,7 +3922,7 @@ type Semantics struct {
 	// order the string alike.
 	//
 	// The fact itself is Runner.LoginShell, carried in from the front end:
-	// no `set` letter turns login-ness on in three of the four dialects, so
+	// no `set` letter turns login-ness on in four of the five dialects, so
 	// there is no option field for the table to write. zsh is the exception
 	// and is recorded rather than implemented — see docs/spec/semantics.md,
 	// "the login letter": there `l` is a genuine `set` option, `set +l`
@@ -5010,7 +5012,7 @@ type Semantics struct {
 	// spelled by: the hook's own name plus this. zsh's is `_functions`, so
 	// `precmd` reads `precmd_functions` as well and `chpwd` reads
 	// `chpwd_functions`. Empty is a shell whose hooks are the named function
-	// and nothing else, which is three of the four — and, since those three
+	// and nothing else, which is four of the five — and, since those four
 	// have no hooks at all, is really "no hooks" said once.
 	//
 	// Not decoration: `add-zsh-hook precmd f` defines no function called
@@ -5064,10 +5066,11 @@ type Semantics struct {
 	DirectoryChangeHook string
 
 	// ExitHook names the function this shell runs on the way out — zsh's
-	// `zshexit`. Empty is a shell without one, which is three of the four:
+	// `zshexit`. Empty is a shell without one, which is four of the five:
 	// measured 2026-09-12, a `zshexit` function defined in bash 5.3.15,
 	// bash-as-sh, bash 3.2.57, dash and ksh93 ran on none of their exits and
-	// none of them said anything about it.
+	// none of them said anything about it, and BusyBox ash has no hook of
+	// any name either.
 	//
 	// **After the EXIT trap, not before it.** Measured against zsh 5.9.2, a
 	// script with both wrote the trap's line and then the hook's — and an
@@ -7229,8 +7232,9 @@ type Semantics struct {
 	ListedHashIsBareUnlessItOpensTheValue Answer
 
 	// ExportListing is the shape `export -p` writes: bash spells each name
-	// as a clustered declaration (`declare -x V="1"`), and the other three
-	// repeat the command word (`export V='1'`).
+	// as a clustered declaration (`declare -x V="1"`), and the other four —
+	// ksh93, dash, zsh and BusyBox ash — repeat the command word (`export
+	// V='1'`).
 	//
 	// unexhibited DeclareListingExportSpelled: ReadonlyListing holds it,
 	// for zsh — measured 2026-09-12, `readonly -p` writes `typeset -r R=2`
@@ -8509,7 +8513,16 @@ type Semantics struct {
 	WaitRemembersAReapedJob Answer
 	// WaitNWaitsForTheNextJob gives `wait` a `-n`: block until whichever
 	// job finishes first and report its status, 127 with no jobs at all.
-	// bash's letter alone; the other three refuse or misread it.
+	// bash's letter alone; the other four refuse or misread it.
+	//
+	// BusyBox ash is in the misreading half and needs the second half of the
+	// question to show it, which is why the letter alone is not the probe.
+	// Measured 2026-09-16: it refuses nothing and blocks, but with `sh -c
+	// 'sleep 1; exit 7' &` and `sh -c 'sleep 5; exit 9' &` behind it, `wait
+	// -n` there returns after five seconds at 129 where bash returns after
+	// one at 7 — a plain `wait` with the letter swallowed, not this. Ours
+	// refuses the letter outright, which is a third answer and neither
+	// shell's (#3245).
 	//
 	// **The operands narrow it.** `wait -n` with job specs or process ids
 	// after it waits for the first of *those* to finish and not for the
@@ -8726,15 +8739,17 @@ type Semantics struct {
 	// dialect answering Yes and expanding nothing would list an alias it
 	// never uses, which is the shape #2081 was filed against in reverse.
 	//
-	// `make axis-sweep` pins this in three of the four dialects and cannot
-	// in dash, which is a fact about dash rather than a gap: `alias` there
-	// reads no options at all — AliasParsesOptions is No — so the accepted
-	// set is never consulted, and no shell in the panel has an `unalias -g`
-	// for it to be consulted from either. The answer has no reachable
-	// consequence in that dialect, which is the third of the four triages
-	// docs/spec/semantics.md lists. SuffixAliases is pinned in all four,
-	// because `unalias -s` reads the axis whatever `alias` does with its
-	// operands.
+	// `make axis-sweep` pins this in three of the five dialects and cannot
+	// in dash or in BusyBox ash, which is a fact about those two rather than
+	// a gap: `alias` there reads no options at all — AliasParsesOptions is No
+	// in both — so the accepted set is never consulted, and no shell in the
+	// panel has an `unalias -g` for it to be consulted from either. Measured
+	// 2026-09-16: `alias -g UP='| tr a-z A-Z'` is `alias: -g not found` at 1
+	// in ash, which is dash's answer word for word. The answer has no
+	// reachable consequence in either dialect, which is the third of the four
+	// triages docs/spec/semantics.md lists. SuffixAliases is pinned in all
+	// five, because `unalias -s` reads the axis whatever `alias` does with
+	// its operands.
 	GlobalAliases Answer
 
 	// SuffixAliases gives this dialect the third kind, which is a second
@@ -9638,7 +9653,7 @@ type Semantics struct {
 
 	// PromptCommentsNeedTheOption names the option a `#` typed at this
 	// shell's prompt has to have on before it opens a comment. Empty is
-	// "nothing has to be on", which is what three of the four say.
+	// "nothing has to be on", which is what four of the five say.
 	//
 	// Read by the front end rather than by the interpreter, for the reason
 	// the field above it is: it is about what a prompt does with a line. A
@@ -10715,12 +10730,12 @@ type Semantics struct {
 	//	ksh93        V2                                           0
 	//	dash         V2                                           0
 	//
-	// So three of the four fall back to a fresh PATH walk and find the
-	// second copy, while bash uses what it remembered and reports the
-	// *remembered path* rather than the name — which is why the diagnostic
-	// differs too, and why a probe that only deleted the single copy could
-	// not tell the readings apart: all four fail there, and only the wording
-	// moves.
+	// So four of the five fall back to a fresh PATH walk and find the
+	// second copy — BusyBox ash with them, measured 2026-09-16 — while bash
+	// uses what it remembered and reports the *remembered path* rather than
+	// the name, which is why the diagnostic differs too, and why a probe that
+	// only deleted the single copy could not tell the readings apart: every
+	// column fails there, and only the wording moves.
 	//
 	// This is what `hash -r` is for in the one shell that needs it.
 	CommandHashIsTrusted Answer
@@ -10846,8 +10861,8 @@ type Semantics struct {
 	// was only asked *where* it is — `type`, `command -v`, `command -V`,
 	// `type -p`.
 	//
-	// zsh, ksh93 and dash do; bash does not. Measured 2026-09-13 with an
-	// empty table, `type ls >/dev/null; hash`:
+	// zsh, ksh93, dash and BusyBox ash do; bash does not. Measured 2026-09-13
+	// with an empty table, `type ls >/dev/null; hash`:
 	//
 	//	bash 5.3.15   the table is still empty
 	//	zsh 5.9.2     ls is in it
@@ -10857,17 +10872,17 @@ type Semantics struct {
 	// This was written down here as unanimous on the strength of a bash-only
 	// probe, and it is not — which is the failure this burndown keeps making
 	// and is worth the sentence. What *is* unanimous is the other half:
-	// running a command hashes it in all four, so hashCommandRun stays on
+	// running a command hashes it in all five, so hashCommandRun stays on
 	// the execution path and is asked about by nobody.
 	//
 	// bash's `type -P` is not this question and no dialect here answers it
-	// differently: measured, it hashes in none of the four — in bash because
-	// no lookup does, and in the other three because they have no such
+	// differently: measured, it hashes in none of the five — in bash because
+	// no lookup does, and in the other four because they have no such
 	// letter for the question to be put through.
 	//
 	// **Read rather than asked** — see Runner.lookPathReporting. The
 	// disagreement is invisible to the builtin that would have to refuse:
-	// `type ls` prints the same sentence in all four, and only a later
+	// `type ls` prints the same sentence in all five, and only a later
 	// `hash` can tell them apart.
 	ALookupRemembersThePath Answer
 
@@ -11478,8 +11493,8 @@ type Semantics struct {
 	HeldExitListsTheJobs Answer
 
 	// CdpathAnnouncesTheDirectory prints where CDPATH sent a `cd`, when
-	// the winning entry was not a plain dot — three of the four; zsh moves
-	// in silence.
+	// the winning entry was not a plain dot — four of the five, BusyBox ash
+	// included; zsh alone moves in silence.
 	CdpathAnnouncesTheDirectory Answer
 
 	// AutoCdAnnouncesTheSubstitution writes the `cd` that a bare directory
@@ -11859,12 +11874,12 @@ type Semantics struct {
 
 	// NonInteractiveStartupVariable names a variable whose value is expanded
 	// and sourced by a shell that is *not* going to prompt. Empty means the
-	// shell has no such file, which is three of the four.
+	// shell has no such file, which is four of the five.
 	//
 	// A name rather than a bool, for the reason the profile's own filename is
 	// not modeled as an axis: what a shell calls the thing is a per-dialect
 	// fact and not a disagreement about behavior. One shell in the panel has
-	// it, under a name of its own, and the other three do nothing at all with
+	// it, under a name of its own, and the other four do nothing at all with
 	// that name — measured 2026-09-05 on a script operand, `-c` and a program
 	// on standard input alike.
 	//
@@ -11900,7 +11915,7 @@ type Semantics struct {
 
 	// StartupDirectoryVariable names a variable whose value replaces the home
 	// directory as the place the startup files below are looked for. Empty
-	// means the home directory, which is three of the four.
+	// means the home directory, which is four of the five.
 	//
 	// zsh alone has one, `ZDOTDIR`, and it redirects *all* of its files
 	// rather than one of them — measured 2026-09-05, with every file under
@@ -11936,7 +11951,7 @@ type Semantics struct {
 
 	// UnconditionalStartupFile names a file read on *every* invocation —
 	// login or not, prompting or not, `-c` and a script alike. Empty means
-	// the shell has no such file, which is three of the four.
+	// the shell has no such file, which is four of the five.
 	//
 	// zsh alone has one, `.zshenv`, and it is the only startup file any shell
 	// in the panel reads for a plain `sh -c cmd`. Measured 2026-09-05 with a
@@ -11983,7 +11998,7 @@ type Semantics struct {
 	LoginStartupFiles string
 
 	// LateLoginStartupFile names a login file read *after* the interactive
-	// file rather than before it. Empty for three of the four.
+	// file rather than before it. Empty for four of the five.
 	//
 	// zsh alone has one, `.zlogin`, and the position is the whole of why it
 	// is a second field: measured, an interactive login zsh reads `.zprofile`,
@@ -13022,10 +13037,10 @@ type Semantics struct {
 	// here. What the yes changes is the set of names the refusal fires on,
 	// which is four suffixes wide (#3033).
 	//
-	// bash 5.3.20 and zsh 5.9.2 define an ordinary function whose name has a
-	// dot in it and never fire it for a variable; dash will not parse the
-	// definition at all. So no is both the preset and three of the four
-	// columns, and the hooks cost nothing at all where nobody has defined
+	// bash 5.3.20, zsh 5.9.2 and BusyBox ash 1.37.0 define an ordinary
+	// function whose name has a dot in it and never fire it for a variable;
+	// dash will not parse the definition at all. So no is both the preset and
+	// four of the five columns, and the hooks cost nothing at all where nobody has defined
 	// one — see interp/discipline.go, where the read path's first question
 	// is a nil map.
 	DisciplineFunctionIsAVariableHook Answer

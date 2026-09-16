@@ -1079,6 +1079,11 @@ func Semantics() interp.Semantics {
 	s.DotFallsBackToCurrentDirectory = interp.Yes
 	s.ExecFailureRunsExitTrap = interp.Yes
 	s.ExecTakesOptions = interp.Yes
+	// Both letters, and `-l` reaches the name `-a` chose: `exec -l -a NAME`
+	// hands the replacement `-NAME`, where zsh hands it `NAME`.
+	s.ExecTakesTheLoginLetter = interp.Yes
+	s.ExecTakesTheEmptyEnvironmentLetter = interp.Yes
+	s.ExecLoginPrefixesTheGivenName = interp.Yes
 	s.TestAcceptsDoubleEqual = interp.Yes
 	// The operators past the three-word rules. `test -a f` is `-e`'s question
 	// where two words say the letter is an operator rather than the

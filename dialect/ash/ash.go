@@ -779,6 +779,15 @@ func Semantics() interp.Semantics {
 	s.KillListReducesRepeatedly = interp.Yes
 	s.KillListPrintsANumberItCannotName = interp.Yes
 	s.KillListNamesZeroAsExit = interp.Yes
+	// `exec -a name` is BusyBox's too, which the ash preset had inherited a
+	// No for: `exec -a NAME /bin/echo` was `-a: not found` here and runs the
+	// applet named NAME there. The other two letters are not — `-l` and `-c`
+	// are `illegal option` at the same door `-x` is, and this shell's `exec`
+	// is special, so the script ends there (#3056).
+	s.ExecTakesOptions = interp.Yes
+	s.ExecTakesTheLoginLetter = interp.No
+	s.ExecTakesTheEmptyEnvironmentLetter = interp.No
+	s.ExecLoginPrefixesTheGivenName = interp.No
 	s.KillStatus = interp.KillStatusAnyFailure
 	s.SubshellJobTable = interp.SubshellJobsCleared
 	// A job started with `&` reads an empty standard input: `ash -c

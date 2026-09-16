@@ -226,3 +226,20 @@ kill -l 160 2> /dev/null; printf '160 -> %s\n' "$?"
 kill -l 257 2> /dev/null; printf '257 -> %s\n' "$?"
 kill -l 128 2> /dev/null; printf '128 -> %s\n' "$?"
 kill -l 32 2> /dev/null; printf '32 -> %s\n' "$?"
+# `exec`'s own option letters. `-l` puts the leading `-` on argv[0] that says
+# "login shell" to whatever is being started, and `-c` hands the replacement
+# no environment at all — the `env -i` a launcher would otherwise write on
+# the front of the line. bash and zsh have both; ksh93 has `-c` and not `-l`,
+# and dash has neither. Each `exec` is in a subshell so the file survives it.
+#
+# The `-` goes on the word as written, path and all.
+( exec -l /bin/sh -c 'printf "[%s]\n" "$0"' )
+( exec -a NAME /bin/sh -c 'printf "[%s]\n" "$0"' )
+# And with both letters bash puts the dash on the name `-a` chose, which is
+# the one place the two shells that have `-l` disagree: zsh answers `NAME`.
+( exec -l -a NAME /bin/sh -c 'printf "[%s]\n" "$0"' )
+( exec -a NAME -l /bin/sh -c 'printf "[%s]\n" "$0"' )
+
+# `-c` clears everything, an export on the way in included.
+( export KEEP=1; exec -c /bin/sh -c 'printf "with -c: [%s]\n" "${KEEP-unset}"' )
+( export KEEP=1; exec /bin/sh -c 'printf "without: [%s]\n" "${KEEP-unset}"' )

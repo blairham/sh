@@ -410,3 +410,100 @@ func TestExecIsASpecialBuiltin(t *testing.T) {
 		t.Error("exec is called special and does not exist")
 	}
 }
+
+// `exec -l` and `exec -c`, which are argv and environment work at the spawn
+// seam rather than interpretation: `-l` is the leading `-` that says "login
+// shell" to whatever is being started, and `-c` is the `env -i` a launcher
+// would otherwise have to put on the front of the line. Both were `exec: -l
+// is not implemented` in three dialects until #3056.
+//
+// Asserted through ReplaceProcess, which is where a real shell's argument
+// vector and environment actually go.
+func TestExecLoginAndClearedEnvironment(t *testing.T) {
+	dir := t.TempDir()
+	run := func(src string, tweak func(*Semantics)) (argv, env []string, out string, st int) {
+		t.Helper()
+		out, st, _ = execRun(t, dir, src, func(r *Runner) {
+			if tweak != nil {
+				tweak(r.Semantics)
+			}
+			r.ReplaceProcess = func(_ string, a, e []string, _ []*os.File) error {
+				argv, env = a, e
+				// A real replacement does not return; an error is how a test
+				// says the image could not be replaced.
+				return os.ErrPermission
+			}
+		})
+		return argv, env, out, st
+	}
+	both := func(s *Semantics) {
+		s.ExecTakesTheLoginLetter = Yes
+		s.ExecTakesTheEmptyEnvironmentLetter = Yes
+		s.ExecLoginPrefixesTheGivenName = Yes
+	}
+
+	// The `-` goes on the word as written, path and all.
+	argv, _, _, _ := run(`exec -l /bin/echo hi`, both)
+	if len(argv) == 0 || argv[0] != "-/bin/echo" {
+		t.Errorf("argv = %q, want a leading dash on the word as written", argv)
+	}
+	// And `-c` hands over no environment at all — not a nil slice, which
+	// os/exec reads as the caller's own.
+	_, env, _, _ := run(`exec -c /bin/echo hi`, both)
+	if env == nil || len(env) != 0 {
+		t.Errorf("env = %#v, want an empty slice and not nil", env)
+	}
+	// Including a variable this shell exported, which is the case a script
+	// reaches for `-c` over.
+	_, env, _, _ = run("export KEEP=1\nexec -c /bin/echo hi", both)
+	if len(env) != 0 {
+		t.Errorf("env = %q, want nothing to survive -c", env)
+	}
+	// Without it, the environment is this shell's.
+	_, env, _, _ = run("export KEEP=1\nexec /bin/echo hi", both)
+	if !slicesContain(env, "KEEP=1") {
+		t.Errorf("env = %q, want the shell's own without -c", env)
+	}
+
+	// The two letters together, which is the one place the two shells that
+	// have `-l` disagree about it.
+	argv, _, _, _ = run(`exec -l -a NAME /bin/echo hi`, both)
+	if len(argv) == 0 || argv[0] != "-NAME" {
+		t.Errorf("argv = %q, want the dash on the chosen name", argv)
+	}
+	argv, _, _, _ = run(`exec -a NAME -l /bin/echo hi`, func(s *Semantics) {
+		both(s)
+		s.ExecLoginPrefixesTheGivenName = No
+	})
+	if len(argv) == 0 || argv[0] != "NAME" {
+		t.Errorf("argv = %q, want the chosen name alone, in either order", argv)
+	}
+
+	// Where the dialect has not got the letter it is an option it does not
+	// know, reported the way every other builtin reports one rather than
+	// with a sentence of this package's own.
+	for _, opt := range []string{"-l", "-c"} {
+		gotArgv, _, out, st := run(`exec `+opt+` /bin/echo hi`, func(s *Semantics) {
+			s.ExecTakesTheLoginLetter = No
+			s.ExecTakesTheEmptyEnvironmentLetter = No
+		})
+		if gotArgv != nil {
+			t.Errorf("%s without the letter: replaced the process with %q", opt, gotArgv)
+		}
+		if st == 0 || !strings.Contains(out, "invalid option") {
+			t.Errorf("%s without the letter: %q status %d, want an unknown-option refusal", opt, out, st)
+		}
+		if !strings.Contains(out, opt) {
+			t.Errorf("%s without the letter: %q does not name the letter", opt, out)
+		}
+	}
+}
+
+func slicesContain(all []string, want string) bool {
+	for _, s := range all {
+		if s == want {
+			return true
+		}
+	}
+	return false
+}

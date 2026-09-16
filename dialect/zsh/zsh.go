@@ -1712,6 +1712,10 @@ func Semantics() interp.Semantics {
 	// still run it.
 	s.ExecFailureRunsExitTrap = interp.No
 	s.ExecTakesOptions = interp.Yes
+	// Both letters, and `-a` wins over `-l` in either order.
+	s.ExecTakesTheLoginLetter = interp.Yes
+	s.ExecTakesTheEmptyEnvironmentLetter = interp.Yes
+	s.ExecLoginPrefixesTheGivenName = interp.No
 	s.TestAcceptsDoubleEqual = interp.Yes
 	// Of the operators past the three-word rules this shell has only `-N`:
 	// `test -a f` and `test -o errexit` are `too many arguments` here, and

@@ -483,12 +483,16 @@ func (r *Runner) killTarget(t string) (targets []jobProcess, fromJob bool, bad i
 // a job that shares its own group. Where the monitor did put the job in a
 // group of its own, the ordinary group send below is already the right call.
 func (r *Runner) aimsAJobSpecAtItsGroup(aims []jobProcess) bool {
-	if !r.ask(r.sem().KillJobSpecAimsAtTheGroup, "`kill` aiming a job spec at the job's process group") {
+	// dash names the first process of the job, so that is the one whose
+	// group is in question. Where the monitor did put it in a group of its
+	// own the two readings agree — the group is there, and the ordinary
+	// group send below reaches it whichever the dialect aims at — so the
+	// axis is put only where it decides something, which is the discipline
+	// every other conditional axis in this package follows.
+	if len(aims) > 0 && aims[0].ownGroup {
 		return false
 	}
-	// dash names the first process of the job, so that is the one whose
-	// group is asked for.
-	return len(aims) == 0 || !aims[0].ownGroup
+	return r.ask(r.sem().KillJobSpecAimsAtTheGroup, "`kill` aiming a job spec at the job's process group")
 }
 
 // jobProcesses is what signaling a job aims at, whether the script named the

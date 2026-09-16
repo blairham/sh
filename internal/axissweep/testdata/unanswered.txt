@@ -142,7 +142,6 @@ ash   NumericTypeLettersAreExclusive
 ash   NumericTypeWithNoValueReachesAChildAsZero
 ash   OneCommandStopsACommandString
 ash   OperatorAfterTheSubscriptListingIsBad
-ash   OperatorDistributesOverStarSubscript
 ash   PrefixRefusalCostsTheCommand
 ash   PrintfFloatOperandIsEvaluatedTwice
 ash   PrintfHexFloatDefaultIsTwelveDigits
@@ -361,7 +360,6 @@ dash  NumericTypeLettersAreExclusive
 dash  NumericTypeWithNoValueReachesAChildAsZero
 dash  OneCommandStopsACommandString
 dash  OperatorAfterTheSubscriptListingIsBad
-dash  OperatorDistributesOverStarSubscript
 dash  PipefailSubstitutesTheBareSignal
 dash  PrefixRefusalCostsTheCommand
 dash  PrintfFloatOperandIsEvaluatedTwice

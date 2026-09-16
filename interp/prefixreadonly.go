@@ -66,7 +66,7 @@ func (r *Runner) prefixCommandOf(argv []string) prefixCommand {
 				argv = commandOperandOf(argv[1:])
 				continue
 			}
-			if specialBuiltins[argv[0]] {
+			if r.IsSpecialBuiltinHere(argv[0]) {
 				p.kind = prefixBeforeSpecialBuiltin
 				return p
 			}

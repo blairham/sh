@@ -43,3 +43,23 @@ type echo
 # its own road to it.
 command -V .
 command -V echo
+
+# And *which* names are special is not POSIX's list here: `local` is on the
+# special side in this shell and in BusyBox ash, and nowhere else (#3290).
+#
+# `alias` is the control and is a plain builtin in this column — it is ksh93
+# that marks that one — so a shell that had put every name it knows on the
+# special side fails the line below rather than passing this file.
+type local
+type alias
+type echo
+
+# The behaviour that comes with the sentence, which is the half a script runs
+# into. Inside a function, because `local` outside one ends this shell.
+# `command` is the control: an ordinary builtin, whose prefix no column keeps.
+f() { LV=1 local x; }
+f
+printf 'local LV=[%s]\n' "${LV-UNSET}"
+g() { CV=1 command true; }
+g
+printf 'command CV=[%s]\n' "${CV-UNSET}"

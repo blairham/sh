@@ -60,3 +60,43 @@ command -V echo
 whence -v .
 whence -a .
 whence -a echo
+
+# And *which* names are special is not POSIX's list here: this shell puts
+# `alias`, `unalias` and `typeset` on the special side, which no other column
+# of the panel does (#3290).
+#
+# `cd` is the control on every line below — an ordinary builtin in every
+# column — so a shell that had put every name it knows on the special side
+# fails here rather than passing this file.
+type alias
+type unalias
+type typeset
+type cd
+
+# The behaviour that comes with the sentence: an assignment prefixed to a
+# special builtin persists here, and one prefixed to `cd` does not.
+V1=1 alias > /dev/null
+V2=1 unalias -a > /dev/null
+V3=1 typeset > /dev/null
+V4=1 cd . > /dev/null
+printf 'alias=[%s] unalias=[%s] typeset=[%s] cd=[%s]\n' \
+	"${V1-UNSET}" "${V2-UNSET}" "${V3-UNSET}" "${V4-UNSET}"
+
+# And `set -x` traces the prefix before the command rather than after it,
+# which is this shell's special-builtin order. `cd` keeps the other one.
+set -x
+W1=1 unalias -a
+W2=1 cd .
+set +x
+
+# And a prefix this shell refuses costs the script in front of one of them,
+# where in front of `cd` it costs nothing. The `readonly` is what makes the
+# assignment a refusal; `export` is the POSIX-name control on the fatal side.
+#
+# No `2>/dev/null` on these: this shell writes the refusal before it opens the
+# command's redirections, so a `2>&1` here would be swallowing the diagnostic
+# in one column and not the other, over an ordering that is not this file's
+# question.
+( readonly V=0; V=1 alias; printf 'after alias\n' )
+( readonly V=0; V=1 export; printf 'after export\n' )
+( readonly W=0; W=1 cd .; printf 'after cd\n' )

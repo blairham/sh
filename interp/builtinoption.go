@@ -322,16 +322,17 @@ func (r *Runner) badBuiltinOption(name string, opts ...string) int {
 
 // badOptionEndsTheScript is whether this builtin's bad option is fatal here.
 //
-// Two axes rather than one, because two lists are involved: POSIX's special
-// builtins, which the substrate keeps, and the longer list one dialect has of
-// its own. See Semantics.AliasBadOptionFatal for why `alias` is not simply
-// added to the table.
+// One list and one axis. It was two until #3290: the substrate kept POSIX's
+// fourteen and `alias` and `unalias` were named here in Go, beside the table,
+// because ksh93 ends a script over their bad options and POSIX does not mark
+// them special. That is the same fact the sentence and the assignment
+// persistence were getting wrong from two other places, so the longer list
+// now lives in Semantics.SpecialBuiltinsBeyondPosix and all of them read it.
+// ksh93 answers BadOptionToSpecialBuiltinFatal yes, so the two names come out
+// where they were.
 func (r *Runner) badOptionEndsTheScript(name string) bool {
-	if specialBuiltins[name] {
+	if r.IsSpecialBuiltinHere(name) {
 		return r.ask(r.sem().BadOptionToSpecialBuiltinFatal, "a special builtin's bad option ending the script")
-	}
-	if name == "alias" || name == "unalias" {
-		return r.ask(r.sem().AliasBadOptionFatal, "a bad `alias` option ending the script")
 	}
 	return false
 }

@@ -1547,14 +1547,29 @@ func Diagnostics() interp.Diagnostics {
 
 		// `kill`. The applet-level messages carry neither a line nor a
 		// builtin, which the unprefixed flags say.
-		KillNoSuchProcess:   "can't kill pid %[1]s: No such process\n",
-		KillInvalidSignal:   "bad signal name '%[1]s'",
-		KillIllegalOption:   "illegal option -%[2]s",
-		KillNotAPid:         "Illegal number: %[1]s",
-		KillUsageStatus:     2,
-		KillBadOptionStatus: 2,
-		KillArgumentStatus:  2,
-		KillListing:         interp.KillListingZeroFirst,
+		KillNoSuchProcess: "can't kill pid %[1]s: No such process\n",
+		KillInvalidSignal: "bad signal name '%[1]s'",
+		// **There is no option complaint here.** Everything after the dash
+		// is a signal to this shell, so `kill -Q`, `kill -NOPE`, `kill -9x`
+		// and `kill -99` are all `bad signal name '<the whole word>'` at 1 —
+		// measured 2026-09-16 against BusyBox 1.37.0, all four. The wording
+		// is KillInvalidSignal's because the reading is the same one, and
+		// the status follows: this shell has no route to 2 for a signal it
+		// did not recognize (#3139).
+		KillIllegalOption: "bad signal name '%[1]s'",
+		KillNotAPid:       "Illegal number: %[1]s",
+		KillUsageStatus:   2,
+		// 1, not 2: a spec this shell will not take is an argument
+		// complaint however it was written. `kill -99`, `kill -Q` and
+		// `kill -s` with nothing after it are all 1, measured.
+		KillBadOptionStatus: 1,
+		// And 1 here for the same reason, which is what `kill -s 99` needed:
+		// a number out of range reaches this route rather than the one
+		// above, and the real shell answers both the same way. Measured
+		// 2026-09-16: `kill -s 99 $$`, `kill -l nope` and `kill notapid`
+		// are all 1 in BusyBox 1.37.0.
+		KillArgumentStatus: 1,
+		KillListing:        interp.KillListingZeroFirst,
 
 		// `getopts` names nothing in front of its two complaints, as dash
 		// does.

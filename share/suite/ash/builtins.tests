@@ -84,3 +84,40 @@ printf 'a\\tb\n' | { read line; printf '%s\n' "$line"; }
 # being special, the subshell ends there. Only bash 5.3 has the `-p`.
 ( . -p /tmp f.sh; printf 'reached\n' ) 2> /dev/null
 printf 'a dash-word -> %s\n' "$?"
+
+# `kill` has no option complaint at all here: everything after the dash is a
+# signal, whatever it looks like. So a number out of range, a letter, a word
+# and a number with junk behind it are one sentence with the *whole* word in
+# it, at 1 — where dash reads the same words as option letters and names only
+# the first, at 2. #3139 was this column answering dash's way: `kill -99` was
+# `illegal option -9` at 2, which named a letter nobody typed and a status
+# this shell has no route to.
+#
+# The prefix is cut off every line, and that is not tidying: BusyBox prints
+# these applet-style — `ash: bad signal name '99'`, no file and no line —
+# where its own `not found` carries `<file>: line N:`. Nothing here can say
+# the word `ash`, because the same sentence from this shell names the binary
+# it was started as. What is left after the cut is the whole of the sentence.
+said() { sed "s/^.*: //"; }
+( kill -99 $$ ) 2>&1 | said
+( kill -99 $$ ) 2>/dev/null; printf 'a number out of range -> %s\n' "$?"
+( kill -Q $$ ) 2>&1 | said
+( kill -Q $$ ) 2>/dev/null; printf 'a letter -> %s\n' "$?"
+( kill -NOPE $$ ) 2>&1 | said
+( kill -NOPE $$ ) 2>/dev/null; printf 'a word -> %s\n' "$?"
+( kill -9x $$ ) 2>&1 | said
+( kill -9x $$ ) 2>/dev/null; printf 'a number with junk behind it -> %s\n' "$?"
+# And the option that takes a signal reaches the same sentence and the same
+# status, which the bare form alone cannot show: the two routes were 1 and 2
+# here before, so a row on one of them would have passed.
+( kill -s 99 $$ ) 2>&1 | said
+( kill -s 99 $$ ) 2>/dev/null; printf 'the same number after -s -> %s\n' "$?"
+# The control, so the probe is known to discriminate: `-9` is a signal here
+# and the same route says nothing at all about it. A row of refusals with no
+# acceptance beside it would read the same in a shell that refused every
+# signal there is.
+sleep 30 &
+p=$!
+( kill -9 $p ) 2>&1 | said
+wait $p 2> /dev/null
+printf 'a signal this shell has -> nothing said above\n'

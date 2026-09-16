@@ -2802,6 +2802,21 @@ type Diagnostics struct {
 	//	ksh93  kill: 999999: no such process
 	//	zsh    kill 999999 failed: no such process
 	KillNoSuchProcess string
+	// KillSendFailed is a send the kernel refused for any reason other than
+	// a missing process or a permission, which is reachable only where the
+	// shell hands over a signal number it has no name for — see
+	// Semantics.KillSendsASignalNumberItCannotName. Four verbs: the pid, its
+	// first character, its SIG-prefixed spelling, and the errno as the C
+	// library spells it.
+	//
+	// zsh only, because zsh is the only dialect that prints the errno rather
+	// than a sentence of its own. Measured 2026-09-16, `kill -99 $$` on
+	// macOS arm64 where 99 is out of range: `zsh:kill:1: kill <pid> failed:
+	// invalid argument` against ksh93's `kill: <pid>: no such process` for
+	// the identical EINVAL. So the fallback is KillNoSuchProcess and it is a
+	// measurement rather than a convenience — ksh93 really does give a
+	// failed send one sentence whatever the kernel said.
+	KillSendFailed string
 	// KillNotPermitted is a target that exists and is not ours. One verb.
 	KillNotPermitted string
 	// KillInvalidSignal is a name or number naming no signal, as `-s Q` or

@@ -231,13 +231,14 @@ func whenceAll(r *interp.Runner, ctx context.Context, name string, m whenceMode)
 		found = true
 		writeLine(r, aliasAnswer(r, display, value, akind, m))
 	}
-	switch kind, _ := r.ResolveName(name); kind {
-	case interp.NameFunction, interp.NameBuiltin, interp.NameReserved:
+	// Every resolution inside the shell rather than the first of them. One
+	// name is a reserved word *and* a builtin here for all seven declaration
+	// commands, and `whence -a export` in zsh 5.9.2 writes a line for each —
+	// three of them with a function of that name defined. A file is listed by
+	// the loop below, which shows every hit rather than the first (#3291).
+	for _, kind := range r.NameKinds(name) {
 		found = true
 		writeLine(r, resolvedAnswer(r, name, kind, "", m))
-	case interp.NameNotFound, interp.NameFile:
-		// A file is listed by the loop below, which shows every hit rather
-		// than the first; nothing found so far leaves it to say so.
 	}
 	for _, path := range r.LookPathAll(name) {
 		found = true

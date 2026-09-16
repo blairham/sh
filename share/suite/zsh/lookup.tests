@@ -46,3 +46,47 @@ unset -f true
 
 # And the utility form of the same question.
 ( eval 'whence -p true' ) 2>/dev/null; printf 'whence -p -> %s\n' "$?"
+
+# The class this shell gives a name is its own reserved-word table, not the
+# POSIX grammar's (#3291).
+#
+# All seven declaration commands are reserved words here, and `cd` is the
+# control on every line below: a shell that had started calling every name
+# reserved would move it too.
+type export
+type readonly
+type local
+type typeset
+type declare
+type integer
+type float
+type cd
+
+# The same question through the other three spellings, each of which had its
+# own road to the answer.
+whence -v export
+whence -w export
+command -v export
+command -v float
+
+# The listing has both resolutions, the word before the builtin, and `whence
+# -a` is that listing in the bare form.
+type -a export
+whence -a export
+type -a cd
+
+# And the words this shell does *not* reserve, which the POSIX grammar does —
+# the half a table read as a union would get wrong. `[[` is the control: this
+# shell's table holds that one.
+whence -w in
+echo "in st=$?"
+whence -w '[['
+echo "[[ st=$?"
+command -v in
+echo "command -v in st=$?"
+
+# `float` is `typeset -E` under a second name, and a written letter wins over
+# the name's own.
+float c=1.5; typeset -p c
+float -F 2 d=1.5; typeset -p d
+float -x g=2.5; typeset -p g

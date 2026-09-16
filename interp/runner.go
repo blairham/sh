@@ -504,6 +504,11 @@ type Runner struct {
 	// carried them and no operands. Nil in a shell with no such thing — see
 	// SetMarkedFunctions.
 	markedFunctions func(r *Runner, letters string) []string
+	// reservedWords is the dialect's own answer to which words this shell
+	// classes as reserved, for a shell whose table is not its parser's. Nil
+	// in the four where the two are the same thing, and the grammar answers
+	// then — see [Runner.SetReservedWords].
+	reservedWords func(name string) bool
 
 	// SetUp is what a front end does to a Runner beyond filling in its
 	// exported fields — a dialect's own adjustment to the builtins, the ties

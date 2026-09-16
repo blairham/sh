@@ -2900,6 +2900,13 @@ func Semantics() interp.Semantics {
 	// that reused them would accept `integer -A m`, which is an associative
 	// array in no shell that has the word.
 	s.IntegerOptions = "gHhilprux"
+	// And `float` is the same word one letter along, with the same set
+	// narrowed the same way: measured 2026-09-16 under `-f`, a letter at a
+	// time against `float -X zz=1.5`, this shell's `float` refuses `-a`,
+	// `-A`, `-G`, `-i`, `-m`, `-T`, `-U` and `-z` and takes the rest. So it
+	// is `integer`'s letters with the integer one traded for the two float
+	// ones, which is what the two words are.
+	s.FloatOptions = "EFgHhlprux"
 	// `-i16` and `-i 16` are an output base here — `integer -i 16 b=255` is
 	// `16#FF` — and this engine has no base to keep, so it refuses by name.
 	s.IntegerAttributeTakesABase = interp.Yes
@@ -4355,6 +4362,23 @@ func Apply(r *interp.Runner) {
 	// And the assignment rule follows the name the way it follows `declare`:
 	// `integer n=5+2` is a declaration's operand and not a word to split.
 	r.SetDeclaring("integer")
+	// `float` is the same thing one letter along, and it is this shell's
+	// alone: ksh93 has the word as the preset alias `typeset -lE` and the
+	// other three answer `float: not found`. It was missing outright until
+	// #3291 — `float c=1.5` was `command not found` here, in a shell whose
+	// own `$reswords` names the word — so `add-zsh-hook`'s neighbours in a
+	// startup file had one declaration keyword of the seven that did not
+	// exist.
+	r.Register("float", interp.FloatBuiltin())
+	r.SetDeclaring("float")
+	// And the classification this shell's grammar gives all seven of them.
+	// zsh's reserved-word table is not its parser's in the sense the other
+	// four dialects' are: the seven declaration commands and four words the
+	// rest of the panel has no construct for are in it, and `in` and `]]` —
+	// which the POSIX grammar's table holds — are not. zshReservedWords is
+	// that table, measured twice and already relied on by `$reswords`, so
+	// the classification reads the one list rather than a second copy of it.
+	r.SetReservedWords(zshReserves)
 	// `functions` is `typeset -f` under this shell's own name and
 	// `unfunction` is `unset -f` under its own — the same registration
 	// `integer` gets and for the same reason, so that the listing and the

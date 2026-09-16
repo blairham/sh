@@ -102,6 +102,14 @@ func TestSpecialBuiltinMembershipIsPerDialect(t *testing.T) {
 					t.Fatal(err)
 				}
 				want := c.name + " is a shell builtin\necho is a shell builtin\n"
+				if preset == "zsh" && (c.name == "local" || c.name == "typeset") {
+					// zsh's grammar reserves the declaration commands, so
+					// the sentence never reaches a builtin there and the
+					// membership is not what it reports (#3291). Not an
+					// exemption: the row still says the word is not called
+					// special, which is the claim this table makes.
+					want = c.name + " is a reserved word\necho is a shell builtin\n"
+				}
 				if c.special[preset] {
 					want = c.name + " is a special shell builtin\necho is a shell builtin\n"
 				}
@@ -121,6 +129,11 @@ func TestSpecialBuiltinMembershipIsPerDialect(t *testing.T) {
 				t.Fatal(err)
 			}
 			want := "typeset is a shell builtin\necho is a shell builtin\n"
+			if preset == "zsh" {
+				// A reserved word there, not a builtin — see the note on
+				// the loop above.
+				want = "typeset is a reserved word\necho is a shell builtin\n"
+			}
 			if preset == "ksh" {
 				want = "typeset is a special shell builtin\necho is a shell builtin\n"
 			}

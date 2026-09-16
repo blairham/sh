@@ -388,6 +388,20 @@ func (r *Runner) typeAll(name string, m typeMode) int {
 	if r.unspecified {
 		return 2
 	}
+	// The reserved word first, and *every* resolution the name has after it.
+	// `type -a export` in zsh 5.9.2 writes `export is a reserved word`, then
+	// the function if one is defined, then `export is a shell builtin` — the
+	// whole list, in that order, after the alias. A `switch` on the builtin
+	// wrote one line or the other, which is right in the four dialects where
+	// no name is ever both and short by a line in the one where seven are
+	// (#3291). Measured with a function of that name defined, which is what
+	// puts the three in an order rather than a pair.
+	if r.reservedWord(name) {
+		found = true
+		if !r.sayKind(m.asked(), name, "keyword", NamedKindWord(NameReserved)) {
+			r.printf("%s\n", Wording(dg.TypeKeyword, "%[1]s is a shell keyword", name))
+		}
+	}
 	if fn, ok := r.reportedFunc(name); ok && !m.noFuncs {
 		found = true
 		if !r.sayKind(m.asked(), name, "function", NamedKindWord(NameFunction)) {
@@ -401,8 +415,7 @@ func (r *Runner) typeAll(name string, m typeMode) int {
 			}
 		}
 	}
-	switch _, ok := r.lookupBuiltin(name); {
-	case ok:
+	if _, ok := r.lookupBuiltin(name); ok {
 		found = true
 		if !r.sayKind(m.asked(), name, "builtin", NamedKindWord(NameBuiltin)) {
 			line := r.BuiltinSentence(name)
@@ -410,11 +423,6 @@ func (r *Runner) typeAll(name string, m typeMode) int {
 				return 2
 			}
 			r.printf("%s\n", line)
-		}
-	case r.reservedWord(name):
-		found = true
-		if !r.sayKind(m.asked(), name, "keyword", NamedKindWord(NameReserved)) {
-			r.printf("%s\n", Wording(dg.TypeKeyword, "%[1]s is a shell keyword", name))
 		}
 	}
 	// The reserved-name guard the plain answer has, for the same reason;
@@ -585,6 +593,19 @@ func (r *Runner) describeName(name string, kind typeKind, skipFuncs bool, notFou
 		}
 		return 0
 	}
+	// The reserved word first, which is the resolution order and not a
+	// preference: a plain answer names what the shell would reach, and a
+	// word this grammar owns is reached before any table is consulted. It
+	// only ever *shows* in the one dialect where a name is both — zsh's
+	// seven declaration commands — because nowhere else does a builtin share
+	// a name with a word of the grammar (#3291).
+	if r.reservedWord(name) {
+		if r.sayKind(kind, name, "keyword", NamedKindWord(NameReserved)) {
+			return 0
+		}
+		r.printf("%s\n", Wording(dg.TypeKeyword, "%[1]s is a shell keyword", name))
+		return 0
+	}
 	if _, ok := r.lookupBuiltin(name); ok {
 		if r.sayKind(kind, name, "builtin", NamedKindWord(NameBuiltin)) {
 			return 0
@@ -594,13 +615,6 @@ func (r *Runner) describeName(name string, kind typeKind, skipFuncs bool, notFou
 			return 2
 		}
 		r.printf("%s\n", line)
-		return 0
-	}
-	if r.reservedWord(name) {
-		if r.sayKind(kind, name, "keyword", NamedKindWord(NameReserved)) {
-			return 0
-		}
-		r.printf("%s\n", Wording(dg.TypeKeyword, "%[1]s is a shell keyword", name))
 		return 0
 	}
 	// The same guard `command -v` has, and for the same reason: there is an

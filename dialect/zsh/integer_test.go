@@ -199,9 +199,16 @@ func TestIntegerIsADeclaringBuiltinHere(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "7"), nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	out, st := runZsh(t, dir, `whence -w integer`)
-	if !strings.Contains(out, "integer: builtin") || st != 0 {
-		t.Errorf("whence -w integer = %q (status %d), want it named a builtin", out, st)
+	// `type -a` and not `whence -w`, which was here until #3291 and stopped
+	// meaning this: the classification this shell gives the word is
+	// `reserved`, because its grammar reserves all seven declaration
+	// commands, and the builtin is the *second* line of the listing. A
+	// `whence -w` assertion cannot see the builtin at all now, so it would
+	// have gone on passing with the registration taken back out.
+	out, st := runZsh(t, dir, `type -a integer`)
+	if !strings.Contains(out, "integer is a reserved word") ||
+		!strings.Contains(out, "integer is a shell builtin") || st != 0 {
+		t.Errorf("type -a integer = %q (status %d), want the reserved word and the builtin", out, st)
 	}
 	out, st = runZsh(t, dir, `integer n=*; echo "n=[$n]"`)
 	if !strings.Contains(out, "bad math expression: operand expected at `*'") || st != 1 {

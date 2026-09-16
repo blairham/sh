@@ -547,21 +547,51 @@ func NamedKindWord(k NameKind) string {
 	return "none"
 }
 
+// SetReservedWords replaces the grammar's answer about which words this shell
+// classes as *reserved*, for a dialect whose reserved-word table is not the
+// table its parser consults.
+//
+// One shell needs it and the reason is not a gap here. zsh's grammar reserves
+// the seven declaration commands — `declare`, `export`, `float`, `integer`,
+// `local`, `readonly` and `typeset` — and four words the rest of the panel has
+// no construct for, and it does *not* reserve `in` or `]]`, which the POSIX
+// grammar's table holds. Measured 2026-09-16 against zsh 5.9.2 under `-f`, by
+// two instruments that share no code: `zmodload zsh/parameter; print -rl --
+// $reswords` lists thirty-one words, and `whence -w` answers `reserved` for
+// exactly those thirty-one and `none` or `builtin` for every other candidate
+// tried, `in`, `]]` and `((` included.
+//
+// The classification is all this moves. A reserved word is still dispatched as
+// whatever it resolves to, which is what keeps `export x=1` running in a shell
+// that calls `export` a reserved word — the name is in that shell's *grammar*
+// and in its builtin table both, and only the report has to choose.
+//
+// Nil in the four dialects where the two tables are the same thing, and the
+// grammar answers then. See [syntax.Dialect.Reserves], which is what a
+// dialect that has not set one is asked.
+func (r *Runner) SetReservedWords(reserves func(name string) bool) {
+	r.reservedWords = reserves
+}
+
 // ResolveName reports what this shell would run for name, and for a file the
 // path it would run. Everything else has no path, and the empty string says so.
 //
-// The order is the resolution's own — a function, then a builtin, then a
-// reserved word, then PATH — which is the order `type` and `command -v`
-// already answer in, from the same lookup rather than from a copy of it.
+// The order is the resolution's own — a function, then a reserved word, then
+// a builtin, then PATH — which is the order `type` and `command -v` already
+// answer in, from the same lookup rather than from a copy of it.
 func (r *Runner) ResolveName(name string) (NameKind, string) {
 	if _, ok := r.reportedFunc(name); ok {
 		return NameFunction, ""
 	}
-	if _, ok := r.lookupBuiltin(name); ok {
-		return NameBuiltin, ""
-	}
+	// The reserved word before the builtin, because that is the order the
+	// grammar is consulted in and the order `type -a` writes the two in
+	// where a name is both. See SetReservedWords: zsh's seven declaration
+	// commands are the only names in the panel that are.
 	if r.reservedWord(name) {
 		return NameReserved, ""
+	}
+	if _, ok := r.lookupBuiltin(name); ok {
+		return NameBuiltin, ""
 	}
 	if r.reservedBuiltin(name) {
 		// A name this shell must answer itself is never resolved from PATH,
@@ -574,6 +604,31 @@ func (r *Runner) ResolveName(name string) (NameKind, string) {
 		return NameFile, path
 	}
 	return NameNotFound, ""
+}
+
+// NameKinds is every resolution a name has *inside* the shell, in the order a
+// listing writes them: a reserved word, then a function, then a builtin.
+//
+// [Runner.ResolveName] answers with the first of them, which is what the shell
+// would run and what a plain report names. A listing needs the rest: one name
+// can be all three in zsh, whose seven declaration commands are reserved words
+// and builtins at once, and `whence -a export` there writes a line for each.
+//
+// PATH is not in it. A listing shows every hit rather than the first, so the
+// caller walks [Runner.LookPathAll] itself, and a reserved name is one this
+// shell answers for rather than searching PATH at all.
+func (r *Runner) NameKinds(name string) []NameKind {
+	var kinds []NameKind
+	if r.reservedWord(name) {
+		kinds = append(kinds, NameReserved)
+	}
+	if _, ok := r.reportedFunc(name); ok {
+		kinds = append(kinds, NameFunction)
+	}
+	if _, ok := r.lookupBuiltin(name); ok {
+		kinds = append(kinds, NameBuiltin)
+	}
+	return kinds
 }
 
 // DefineFunction gives a name a body written as text, parsed with this

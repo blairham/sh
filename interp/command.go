@@ -233,6 +233,9 @@ func (r *Runner) reportWhatRuns(name string) int {
 // for the path of `/usr/bin/time`. See [syntax.Dialect.Reserves] for the
 // measurement and for the two spellings the lexer does not class as words.
 func (r *Runner) reservedWord(name string) bool {
+	if r.reservedWords != nil {
+		return r.reservedWords(name)
+	}
 	return r.dialect().Reserves(name)
 }
 

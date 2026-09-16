@@ -1069,7 +1069,7 @@ func (r *Runner) writePlace(p arithPlace, v arithNum, from syntax.ArithExpr) err
 		r.setArrayElem(p.name, idx, p.sub, text)
 		return nil
 	}
-	target := &syntax.ArithIndex{Name: p.name, Index: p.index, Sub: p.sub, Empty: p.empty}
+	target := &syntax.ArithIndex{Name: p.name, Index: p.index, Sub: p.sub, SubMarked: p.subMarked, Empty: p.empty}
 	if r.reportArithWholeArraySubscript(target) {
 		// Named and nothing written, and *not* an error: measured, `(( a[*] =
 		// 5 ))` reports, leaves every element as it was and ends at 0 in the

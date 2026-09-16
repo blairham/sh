@@ -178,6 +178,30 @@ func TestAReferenceTheListDoesNotHoldDropsTheLine(t *testing.T) {
 	}
 }
 
+// And the dropped line is dropped **before the parser sees it**, which is
+// visible in every line number after it: measured, a second bad reference on
+// the file's line 5 is reported at `line 4`, a `$LINENO` on the file's line 4
+// reads 3, and a syntax error on the file's line 5 is reported at line 4.
+//
+// Not a rounding error to be tidied away — it is what bash does, and a shell
+// numbering from the file would answer a different line for every diagnostic
+// after the first dropped reference.
+func TestEverythingAfterADroppedLineIsNumberedWithoutIt(t *testing.T) {
+	out, errs, _ := historyRun(t, "set -o history; set -H\necho before\necho !nosuch\necho $LINENO\necho !nosuch2\necho end\n")
+	if out != "before\n3\nend\n" {
+		t.Errorf("ran %q, want $LINENO reading 3 on the file's line 4", out)
+	}
+	want := "S: line 3: !nosuch: event not found\nS: line 4: !nosuch2: event not found\n"
+	if errs != want {
+		t.Errorf("said %q, want %q", errs, want)
+	}
+	// The same shift reaches a parse failure after it.
+	_, errs, code := historyRun(t, "set -o history; set -H\necho before\necho !nosuch\necho after\nfor\n")
+	if !strings.Contains(errs, "line 4: syntax error") || code == 0 {
+		t.Errorf("said %q at %d, want the failure on the file's line 5 reported at line 4", errs, code)
+	}
+}
+
 // The list a script builds, read back by `history`. Every column of this is
 // measured, and three of them could not have been seen at a prompt.
 func TestTheListAScriptBuilds(t *testing.T) {

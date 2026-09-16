@@ -136,43 +136,58 @@ func (g *histGate) next() (string, bool) {
 		g.flush = false
 		g.record()
 	}
-	line, ok := g.take()
-	if !ok {
-		// The end of the program. What was collected is still a command —
-		// the last one — and nothing else is going to ask for it.
-		g.record()
-		return "", false
+	for {
+		line, ok := g.take()
+		if !ok {
+			// The end of the program. What was collected is still a command
+			// — the last one — and nothing else is going to ask for it.
+			g.record()
+			return "", false
+		}
+		body := strings.TrimSuffix(line, "\n")
+		if g.open == "<<" {
+			// A here-document's body, which is not shell text and is not
+			// expanded: measured with a quoted delimiter and an unquoted one.
+			// It still belongs to the command, and the list holds it.
+			g.at++
+			g.keep(body)
+			return line, true
+		}
+		if strings.TrimSpace(body) == "" && len(g.cur) == 0 {
+			// A blank line between commands is not one. Measured: bash's
+			// list holds the comment lines of a script and not its blank
+			// ones.
+			g.at++
+			return line, true
+		}
+		res, err := g.r.ExpandHistoryIn(body, quoteOf(g.open), g.r.HistoryEntries(), 1)
+		if err != nil {
+			// A reference the list does not hold. bash complains, does not
+			// run the line, leaves the status where the command before it put
+			// it, and goes on — so the line is **dropped**, and dropped
+			// before the parser ever sees it.
+			//
+			// Which is visible, and is why this hands back nothing rather
+			// than a blank line in its place: measured, everything after a
+			// dropped line is numbered as though the file had never held it.
+			// `echo !nosuch` on line 3 followed by a second one on line 5 is
+			// `line 3` and then `line 4`, a `$LINENO` on line 4 reads 3, and
+			// a syntax error on line 5 is reported at line 4. The complaint
+			// itself names the line the counter is *about* to reach, which is
+			// the one line the file and the counter still agree on.
+			g.errf("%s", g.report(g.at+1, g.r.HistoryExpansionRefusal(err)+"\n"))
+			continue
+		}
+		if res.Changed {
+			// The whole bargain of `!!` is that whoever wrote it sees what it
+			// became. bash writes it before running the line, to standard
+			// error.
+			g.errf("%s\n", res.Line)
+		}
+		g.at++
+		g.keep(res.Line)
+		return res.Line + "\n", true
 	}
-	body := strings.TrimSuffix(line, "\n")
-	if g.open == "<<" {
-		// A here-document's body, which is not shell text and is not
-		// expanded: measured with a quoted delimiter and an unquoted one.
-		// It still belongs to the command, and the list holds it.
-		g.keep(body)
-		return line, true
-	}
-	if strings.TrimSpace(body) == "" && len(g.cur) == 0 {
-		// A blank line between commands is not one. Measured: bash's list
-		// holds the comment lines of a script and not its blank ones.
-		return line, true
-	}
-	res, err := g.r.ExpandHistoryIn(body, quoteOf(g.open), g.r.HistoryEntries(), 1)
-	if err != nil {
-		// A reference the list does not hold. Measured: bash complains, does
-		// not run the line, leaves the status where the command before it put
-		// it, and goes on to the next line — so the line is dropped and not
-		// the program. A blank line goes in its place, which keeps every
-		// later line's number where the file has it.
-		g.errf("%s", g.report(g.at, g.r.HistoryExpansionRefusal(err)+"\n"))
-		return "\n", true
-	}
-	if res.Changed {
-		// The whole bargain of `!!` is that whoever wrote it sees what it
-		// became. bash writes it before running the line, to standard error.
-		g.errf("%s\n", res.Line)
-	}
-	g.keep(res.Line)
-	return res.Line + "\n", true
 }
 
 // take is the next physical line of the program, or false at the end of it.
@@ -188,7 +203,6 @@ func (g *histGate) take() (string, bool) {
 		}
 		g.rest = text
 	}
-	g.at++
 	if i := strings.IndexByte(g.rest, '\n'); i >= 0 {
 		line := g.rest[:i+1]
 		g.rest = g.rest[i+1:]

@@ -2649,6 +2649,14 @@ type Runner struct {
 	// `b=1 a=2` reports a's. A scalar, so a subshell gets its own copy.
 	disciplineStatus    int
 	disciplineStatusSet bool
+	// The frame a script has pointed the shell's location parameters at, the
+	// depth it did so from, and a name written over the top of it. See
+	// interp/callstack.go, where all four are documented together.
+	selectedFrame     int
+	selectedFrameName string
+	frameSelected     bool
+	frameNamed        bool
+	frameSelectedAt   int
 	// mathFuncs holds the `functions -M` registrations: names arithmetic may
 	// call, each naming a shell function to run. mathOrder is the order they
 	// arrived in, because the listing walks it backwards. See mathfunc.go.

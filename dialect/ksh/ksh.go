@@ -3516,31 +3516,40 @@ func Apply(r *interp.Runner) {
 	// `.sh.version` is: real ksh93 lists nothing from this namespace, and no
 	// stored value could follow a call stack anyway.
 	r.SetDynamic(".sh.version", func(*interp.Runner) string { return kshVersion })
+	//
+	// And the pair is **writable**, which is the half #3090 measured: an
+	// assignment to `.sh.level` selects a frame and `${.sh.fun}` then answers
+	// for that one, which is how a debug trap looks at its caller. Produced
+	// parameters with no writer hear an assignment and drop it in silence —
+	// the exact failure SetDynamicWriter's own documentation warns about — so
+	// before this, `.sh.level=1` inside a function two deep went nowhere and
+	// `${.sh.fun}` went on naming the function that wrote it. What the
+	// selection does, what an out-of-range level does, and how long it lasts
+	// are all measured; see interp/callstack.go, which holds the rules.
 	r.SetDynamic(".sh.fun", func(rr *interp.Runner) string {
-		for _, f := range rr.CallStack() {
-			if f.IsFunction() {
-				return f.Name
-			}
-		}
 		// Empty at the top level, and empty rather than absent: measured,
 		// `${.sh.fun}` there writes nothing at status 0. A sourced file is
 		// transparent — `function f { . ./inc; }` reads `f` from inside the
-		// file — which is what walking past a frame that is not a function
-		// gives.
-		return ""
+		// file — which is what counting only function frames gives.
+		_, name := rr.SelectedCallFrame()
+		return name
+	})
+	r.SetDynamicWriter(".sh.fun", func(rr *interp.Runner, value string) {
+		// A plain string for as long as the frame lasts: measured,
+		// `function f { .sh.fun=zzz; }` reads `zzz` inside `f` and the top
+		// level is empty again afterwards.
+		rr.NameSelectedCallFrame(value)
 	})
 	r.SetDynamic(".sh.level", func(rr *interp.Runner) string {
-		depth := 0
-		for _, f := range rr.CallStack() {
-			if f.IsFunction() {
-				depth++
-			}
-		}
 		// `0` at the top level rather than nothing, which is the half that
 		// makes the name distinguishable from a shell that does not have it
 		// — both were empty here before (#3033). A `name()` function counts
 		// the same as a `function` one, measured.
-		return strconv.Itoa(depth)
+		level, _ := rr.SelectedCallFrame()
+		return strconv.Itoa(level)
+	})
+	r.SetDynamicWriter(".sh.level", func(rr *interp.Runner, value string) {
+		rr.SelectCallFrame(value)
 	})
 	r.SetDynamic("RANDOM", func(rr *interp.Runner) string { return rr.Randoms() })
 	// And an assignment seeds it, which is what makes a script that uses

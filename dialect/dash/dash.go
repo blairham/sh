@@ -497,6 +497,8 @@ func Semantics() interp.Semantics {
 	// `.` and `eval` is the POSIX answer, which dash keeps and the others have
 	// each moved away from.
 	s.DotWithNoOperandIsAnError = interp.No
+	s.DotReadsOptions = interp.Yes
+	s.DotTakesTheSearchPathOption = interp.No
 	// And a directory operand is no error either: measured, `. ./` is
 	// silent at status 0, which zsh agrees with and bash and ksh93 do not.
 	s.DotDirectoryOperandIsAnError = interp.No

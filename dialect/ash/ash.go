@@ -890,6 +890,8 @@ func Semantics() interp.Semantics {
 	// `. ` with no operand is refused at 2, where dash does nothing and
 	// reports success. A directory operand is no error in either.
 	s.DotWithNoOperandIsAnError = interp.Yes
+	s.DotReadsOptions = interp.Yes
+	s.DotTakesTheSearchPathOption = interp.No
 	s.DotDirectoryOperandIsAnError = interp.No
 	// Only the last of several targets is used: `echo hi >a >b` leaves a
 	// empty.

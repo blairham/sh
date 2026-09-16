@@ -1081,6 +1081,14 @@ func Semantics() interp.Semantics {
 	// PATH has missed. Measured: `PATH=/usr/bin:/bin; . f.sh` finds an f.sh in
 	// the current directory here, and is "not found" in the other three.
 	s.DotFallsBackToCurrentDirectory = interp.Yes
+	// `. -p list file`, which is a 5.x addition: bash 3.2 calls the letter
+	// an invalid option and prints a usage line without it.
+	s.DotReadsOptions = interp.Yes
+	s.DotTakesTheSearchPathOption = interp.Yes
+	// `. -p list file`, which is a 5.x addition: bash 3.2 calls the letter
+	// an invalid option and prints a usage line without it.
+	s.DotReadsOptions = interp.Yes
+	s.DotTakesTheSearchPathOption = interp.Yes
 	s.ExecFailureRunsExitTrap = interp.Yes
 	s.ExecTakesOptions = interp.Yes
 	// Both letters, and `-l` reaches the name `-a` chose: `exec -l -a NAME`
@@ -2353,7 +2361,10 @@ func Diagnostics() interp.Diagnostics {
 		// Measured: `.` of a file it cannot open reports 1 and carries on,
 		// where a missing operand is 2 — two numbers for what reads like one
 		// failure, which is why they are two fields.
-		DotCannotOpen:       "%[1]s: %[2]s",
+		DotCannotOpen: "%[1]s: %[2]s",
+		// `. -p list f` whose list missed, which is not the sentence a file
+		// that would not open gets: lower case, and naming the builtin.
+		DotSearchPathMiss:   ".: %[1]s: file not found",
 		DotCannotOpenStatus: 1,
 		// The one `.` failure bash gives a sentence of its own, and the one
 		// it names the builtin in — `source ./` says `source:` where `. ./`

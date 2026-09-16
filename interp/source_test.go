@@ -25,6 +25,13 @@ import (
 // a `.` looking at the current directory cannot see the developer's.
 func sourceRun(t *testing.T, dir, src string, sem Semantics, dg Diagnostics) (string, int) {
 	t.Helper()
+	return sourceRunWith(t, dir, src, sem, dg, nil)
+}
+
+// sourceRunWith is the same with a hand on the Runner before it starts, for
+// the switches a session holds rather than the vectors a dialect does.
+func sourceRunWith(t *testing.T, dir, src string, sem Semantics, dg Diagnostics, setup func(*Runner)) (string, int) {
+	t.Helper()
 	f, err := syntax.Parse(src, syntax.Core())
 	if err != nil {
 		t.Fatalf("parse %q: %v", src, err)
@@ -38,6 +45,9 @@ func sourceRun(t *testing.T, dir, src string, sem Semantics, dg Diagnostics) (st
 	// PATH is set explicitly rather than inherited: a `.` that found something
 	// on the developer's PATH would pass here and fail on a runner.
 	r.Vars = map[string]string{"PATH": dir}
+	if setup != nil {
+		setup(r)
+	}
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {
 		return buf.String() + "unsupported: " + rerr.Error(), -1
@@ -725,5 +735,106 @@ func TestEvalAndDotAreSpecialBuiltins(t *testing.T) {
 		if _, ok := newTestRunner(t, &Runner{}).Builtin(name); !ok {
 			t.Errorf("%s is called special and does not exist", name)
 		}
+	}
+}
+
+// `. -p list file` — bash 5.3's way of saying "look along this list instead
+// of $PATH, for this call only" — and the switch that turns the ordinary
+// search off. Neither half existed until #3058: `-p` was taken as the name
+// of the file, so the complaint named `-p`.
+func TestDotSearchPathOptionAndSwitch(t *testing.T) {
+	home := t.TempDir()
+	elsewhere := t.TempDir()
+	if err := os.WriteFile(filepath.Join(elsewhere, "f.sh"), []byte("echo sourced\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	sem := func(tweak func(*Semantics)) Semantics {
+		s := permissive()
+		s.DotReadsOptions = Yes
+		s.DotTakesTheSearchPathOption = Yes
+		s.DotFallsBackToCurrentDirectory = Yes
+		if tweak != nil {
+			tweak(&s)
+		}
+		return s
+	}
+
+	// The whole point: a directory the shell is not in and PATH does not
+	// hold. `sourceRun` puts only `dir` on PATH, so nothing else could find
+	// this file.
+	out, st := sourceRun(t, home, `. -p `+elsewhere+` f.sh`, sem(nil), Diagnostics{})
+	if st != 0 || !strings.Contains(out, "sourced") {
+		t.Errorf(". -p dir f.sh = %q status %d, want it read", out, st)
+	}
+	// Several directories, like a PATH.
+	out, st = sourceRun(t, home, `. -p /nonexistent-zz:`+elsewhere+` f.sh`, sem(nil), Diagnostics{})
+	if st != 0 || !strings.Contains(out, "sourced") {
+		t.Errorf("a list = %q status %d, want it read", out, st)
+	}
+	// An empty argument is a list of one empty element, which is the current
+	// directory — the same rule an empty element inside a longer list
+	// follows. Measured in bash.
+	if err := os.WriteFile(filepath.Join(home, "viapath.sh"), []byte("echo reached\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, st = sourceRun(t, home, `. -p "" viapath.sh`, sem(nil), Diagnostics{})
+	if st != 0 || !strings.Contains(out, "reached") {
+		t.Errorf(`. -p "" = %q status %d, want the current directory`, out, st)
+	}
+	// The list *replaces* the search: a miss is a miss even when the file is
+	// right there, where a `.` without the option would have found it.
+	out, st = sourceRun(t, home, `. -p /nonexistent-zz viapath.sh`, sem(nil), Diagnostics{})
+	if st == 0 || !strings.Contains(out, "file not found") {
+		t.Errorf("a missed list = %q status %d, want the search's own complaint", out, st)
+	}
+	// An operand with a slash in it is a path and is not searched for.
+	out, st = sourceRun(t, home, `. -p `+elsewhere+` ./f.sh`, sem(nil), Diagnostics{})
+	if st == 0 || strings.Contains(out, "sourced") {
+		t.Errorf("a slashed operand = %q status %d, want the path taken as written", out, st)
+	}
+	// `-p` with nothing after it, and every option with no operand at all.
+	out, st = sourceRun(t, home, `. -p`, sem(nil), Diagnostics{})
+	if st == 0 || !strings.Contains(out, "requires an argument") {
+		t.Errorf(". -p alone = %q status %d", out, st)
+	}
+	out, st = sourceRun(t, home, `. -p `+elsewhere, sem(nil), Diagnostics{})
+	if st == 0 || !strings.Contains(out, "filename") {
+		t.Errorf(". -p dir with no file = %q status %d", out, st)
+	}
+
+	// The switch. With it off the operand is a path relative to the shell's
+	// own directory and nothing else — so a file only PATH holds is gone,
+	// and one in the directory is still read.
+	// The shell runs in `elsewhere` and only `home` is on PATH, so a bare
+	// `here.sh` is reachable by the search and by nothing else.
+	onPath := func(r *Runner) { r.Vars["PATH"] = home }
+	off := func(r *Runner) { r.Vars["PATH"] = home; r.SetSearchesPathForSource(false) }
+	out, st = sourceRunWith(t, elsewhere, `. viapath.sh`, sem(nil), Diagnostics{}, onPath)
+	if st != 0 || !strings.Contains(out, "reached") {
+		t.Errorf("with the search on, PATH holds it: %q status %d", out, st)
+	}
+	out, st = sourceRunWith(t, elsewhere, `. viapath.sh`, sem(nil), Diagnostics{}, off)
+	if st == 0 || strings.Contains(out, "reached") {
+		t.Errorf("with the search off, PATH must not be consulted: %q status %d", out, st)
+	}
+	// And `-p` wins over the switch, which is measured rather than assumed.
+	out, st = sourceRunWith(t, home, `. -p `+elsewhere+` f.sh`, sem(nil), Diagnostics{}, off)
+	if st != 0 || !strings.Contains(out, "sourced") {
+		t.Errorf("-p with the switch off = %q status %d, want the list still searched", out, st)
+	}
+
+	// Where the dialect reads no options at all, the dash-word is the file.
+	out, st = sourceRun(t, home, `. -p `+elsewhere+` f.sh`,
+		sem(func(s *Semantics) { s.DotReadsOptions = No }), Diagnostics{})
+	if st == 0 || !strings.Contains(out, "-p") {
+		t.Errorf("without option reading = %q status %d, want a complaint naming the file -p", out, st)
+	}
+	// And where it reads options and has not got this one, it is an option
+	// it does not know rather than a file.
+	out, st = sourceRun(t, home, `. -p `+elsewhere+` f.sh`,
+		sem(func(s *Semantics) { s.DotTakesTheSearchPathOption = No }),
+		Diagnostics{BuiltinBadOption: "%[1]s: %[2]s: unknown option"})
+	if st == 0 || !strings.Contains(out, "unknown option") {
+		t.Errorf("without the option = %q status %d, want the shared bad-option wording", out, st)
 	}
 }

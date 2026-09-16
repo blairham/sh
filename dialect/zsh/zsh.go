@@ -1704,6 +1704,10 @@ func Semantics() interp.Semantics {
 	s.ParamErrorIsAnExitRequest = interp.Yes
 	s.DotMissingFileFatal = interp.No
 	s.DotPassesArguments = interp.Yes
+	// A leading dash-word is the file here, so `. -p dir f` is a complaint
+	// about a file called `-p` and not about an option.
+	s.DotReadsOptions = interp.No
+	s.DotTakesTheSearchPathOption = interp.No
 	// zsh opens a directory operand, reads no commands out of it and calls
 	// that a script that did nothing: measured, `. ./` is silent at status
 	// 0 and `. ./ && echo ok` prints `ok`. dash agrees; bash and ksh93 do

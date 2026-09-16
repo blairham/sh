@@ -614,31 +614,21 @@ func biDot(r *Runner, ctx context.Context, args []string) int {
 	here := r.dotCurrentDirectoryFirst
 	r.dotCurrentDirectoryFirst = false
 	if len(args) == 0 {
-		// Four answers in the panel, so this asks two questions rather than
-		// guessing. dash calls a missing operand success and does nothing at
-		// all; the rest call it an error, and ksh93 alone makes it fatal.
-		if !r.ask(r.sem().DotWithNoOperandIsAnError, "`.` with no operand being an error") {
-			return 0
-		}
-		usage := Wording(r.diag().DotNoOperand, ".: filename argument required")
-		if r.diag().DotNoOperandUnprefixed {
-			r.errf("%s\n", usage)
-		} else {
-			r.diagf("%s\n", usage)
-		}
-		// The status is the measured one either way, rather than the generic
-		// fatal status: ksh93 ends the script here *and* reports 2, where the
-		// fatal status it uses everywhere else is 1. Getting that from
-		// fatalQuiet gave 1 and was wrong by one.
-		status := r.diag().dotNoOperandStatus()
-		if r.ask(r.sem().DotMissingFileFatal, "`.` with no operand being fatal") {
-			r.status = status
-			r.stopTheShell()
-		}
-		return status
+		return r.dotNoOperand()
 	}
 
-	display, path, err := r.resolveDotPath(args[0], here)
+	args, search, code := r.dotOptions(args)
+	if code != 0 {
+		return code
+	}
+	if len(args) == 0 {
+		// Every option and no operand, which is the same complaint a bare
+		// `.` gets — measured, bash prints `filename argument required` and
+		// its usage line for `. -p /tmp` exactly as it does for `.` alone.
+		return r.dotNoOperand()
+	}
+
+	display, path, err := r.resolveDotPath(args[0], here, search)
 	if err != nil {
 		return r.dotFailed(args[0], err)
 	}
@@ -802,6 +792,11 @@ func (r *Runner) dotFailed(name string, err error) int {
 		format = r.diag().DotIsADirectory
 	case errors.Is(err, errNotOnPath) && r.diag().DotNotFound != "":
 		format = r.diag().DotNotFound
+	case errors.Is(err, errNotOnSearchPath):
+		// A list the call named itself, which the one shell that has `-p`
+		// words differently from a file it simply could not open — see
+		// Diagnostics.DotSearchPathMiss.
+		format = orElse(r.diag().DotSearchPathMiss, ".: %[1]s: file not found")
 	}
 	r.diagf("%s\n", Wording(format, ".: %[1]s: %[2]s", name, reason(err), r.inBuiltin))
 	// dash and ksh93 end the script here; bash and zsh report it and go on.
@@ -834,6 +829,12 @@ func reason(err error) string {
 // errNotOnPath is what resolveDotPath returns when no candidate existed. It
 // carries no path because there is no one file to name.
 var errNotOnPath = errors.New("no such file or directory")
+
+// errNotOnSearchPath is the same miss with `-p` in front of it, and it is a
+// different error because bash words the two differently: a bare operand
+// nothing could find is `f: No such file or directory`, and an operand a
+// given list could not find is `.: f: file not found`.
+var errNotOnSearchPath = errors.New("file not found")
 
 // errIsADirectory is a directory operand, in the dialects that call one an
 // error. Written here rather than taken from the read because a read of a
@@ -901,8 +902,30 @@ func (r *Runner) DotLooksInCurrentDirectoryFirst() (restore func()) {
 // current-directory fallback as the bare operand — the resolved absolute path
 // appears in none of them, and the shell asking its own source stack gets the
 // same spelling the diagnostics use.
-func (r *Runner) resolveDotPath(name string, currentDirectoryFirst bool) (display, path string, err error) {
+func (r *Runner) resolveDotPath(name string, currentDirectoryFirst bool, search dotSearch) (display, path string, err error) {
 	if strings.ContainsRune(name, filepath.Separator) {
+		return name, r.atDir(name), nil
+	}
+	if search.given {
+		// `-p` replaces the search rather than adding to it, and the
+		// fallbacks go with it: measured, `. -p /nowhere f` in a directory
+		// holding f is `f: file not found` in bash, where the same call
+		// without the option reads it. It wins over the switch below too.
+		for _, dir := range search.list {
+			if dir == "" {
+				dir = "."
+			}
+			joined := filepath.Join(dir, name)
+			if candidate := r.atDir(joined); r.readableFile(candidate) {
+				return joined, candidate, nil
+			}
+		}
+		return "", "", fmt.Errorf("%w", errNotOnSearchPath)
+	}
+	if !r.SearchesPathForSource() {
+		// The switch off: the operand is a path relative to this shell's
+		// directory and nothing else, which is what a shell with neither
+		// half of this mechanism does. See Runner.SearchesPathForSource.
 		return name, r.atDir(name), nil
 	}
 	if currentDirectoryFirst {
@@ -932,6 +955,105 @@ func (r *Runner) resolveDotPath(name string, currentDirectoryFirst bool) (displa
 		}
 	}
 	return "", "", fmt.Errorf("%w", errNotOnPath)
+}
+
+// dotNoOperand is `.` with nothing to read, which the options reader reaches
+// as well as the builtin's own first line: `. -p /tmp` gets the same
+// complaint `.` alone gets, measured in bash.
+//
+// Four answers in the panel, so this asks two questions rather than guessing.
+// dash calls a missing operand success and does nothing at all; the rest call
+// it an error, and ksh93 alone makes it fatal.
+func (r *Runner) dotNoOperand() int {
+	if !r.ask(r.sem().DotWithNoOperandIsAnError, "`.` with no operand being an error") {
+		return 0
+	}
+	usage := Wording(r.diag().DotNoOperand, ".: filename argument required")
+	if r.diag().DotNoOperandUnprefixed {
+		r.errf("%s\n", usage)
+	} else {
+		r.diagf("%s\n", usage)
+	}
+	// The status is the measured one either way, rather than the generic
+	// fatal status: ksh93 ends the script here *and* reports 2, where the
+	// fatal status it uses everywhere else is 1. Getting that from
+	// fatalQuiet gave 1 and was wrong by one.
+	status := r.diag().dotNoOperandStatus()
+	if r.ask(r.sem().DotMissingFileFatal, "`.` with no operand being fatal") {
+		r.status = status
+		r.stopTheShell()
+	}
+	return status
+}
+
+// dotSearch is where `.` looks for an operand with no slash in it, which is
+// two questions and not one: whether a search happens at all, and over what.
+type dotSearch struct {
+	// list is `-p`'s argument, split like a PATH. Non-nil means an explicit
+	// list was given, empty included — `. -p "" f` reads f from the current
+	// directory, because an empty element is the current directory here
+	// exactly as it is in PATH.
+	list []string
+	// given says `-p` was written, which is what separates an explicit empty
+	// list from no option at all.
+	given bool
+}
+
+// dotOptions reads the options `.` and `source` take, which is a dialect
+// question before it is an option question.
+//
+// Four of the five references read a leading dash-word as an option — three
+// of them only so as to say they have not got it — and zsh reads it as the
+// name of the file, so `. -p dir f` there is a complaint about a file called
+// `-p`. Which word the operand is depends on the answer, so it comes first.
+func (r *Runner) dotOptions(args []string) (rest []string, search dotSearch, code int) {
+	if len(args) == 0 || !strings.HasPrefix(args[0], "-") || args[0] == "-" {
+		return args, search, 0
+	}
+	if !r.ask(r.sem().DotReadsOptions, "`.` reading a leading dash-word as an option") {
+		// Not an error: the word is the filename, and resolving it will
+		// produce the dialect's own complaint about a file that is not there.
+		return args, search, 0
+	}
+	for len(args) > 0 && strings.HasPrefix(args[0], "-") && args[0] != "-" {
+		switch args[0] {
+		case "--":
+			return args[1:], search, 0
+		case "-p":
+			if !r.ask(r.sem().DotTakesTheSearchPathOption, "`. -p list file`") {
+				if r.unspecified {
+					return nil, search, r.status
+				}
+				return nil, search, r.badBuiltinOption(r.inBuiltin, args[0])
+			}
+			if len(args) < 2 {
+				r.diagf("%s\n", Wording(r.diag().DotOptionNeedsAnArgument,
+					".: %[1]s: option requires an argument", args[0]))
+				r.builtinUsageLine(r.inBuiltin)
+				return nil, search, 2
+			}
+			search.list, search.given = splitSearchList(args[1]), true
+			args = args[2:]
+		default:
+			if r.unspecified {
+				return nil, search, r.status
+			}
+			return nil, search, r.badBuiltinOption(r.inBuiltin, args[0])
+		}
+	}
+	return args, search, 0
+}
+
+// splitSearchList reads `-p`'s argument the way PATH is read, with one
+// difference that is not a difference: an argument holding nothing at all is
+// a list of one empty element rather than a list of none, so `. -p "" f`
+// reads f from the current directory. Measured in bash, and it is the same
+// rule an empty element inside a longer list already follows.
+func splitSearchList(v string) []string {
+	if v == "" {
+		return []string{""}
+	}
+	return filepath.SplitList(v)
 }
 
 // atDir resolves a relative path against *this runner's* directory rather than

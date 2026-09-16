@@ -54,3 +54,10 @@ printf 'through a dot script -> %s\n' "$?"
 # The outer shell is untouched by any of them, because each was in a
 # subshell of its own.
 printf 'reached the end\n'
+
+# `.` reads a leading dash-word as an option here and has none to read, which
+# is a third answer: not bash 5.3's search path and not zsh's filename, but
+# an unknown option, its usage line, and the end of the script — `.` being a
+# special builtin. The subshell is what the file survives it in.
+( . -p /tmp f.sh; printf 'reached\n' ) 2> /dev/null
+printf 'a dash-word -> %s\n' "$?"

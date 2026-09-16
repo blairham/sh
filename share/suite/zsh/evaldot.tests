@@ -74,3 +74,10 @@ printf 'printf "first line\\n"\nfor\nprintf "third line\\n"\n' > bad3.sh
 ( . ./bad.sh; printf 'carried on after the dot\n' ) 2>/dev/null
 ( eval 'for'; printf 'carried on after the eval\n' ) 2>/dev/null
 printf 'reached the end\n'
+
+# `.` reads no options here, which is not the same as having none: a leading
+# dash-word is the *name of the file*, so `. -p dir f` is a complaint about a
+# file called `-p`. bash 5.3 reads `-p` as a search path, and ksh93, dash and
+# BusyBox ash each call it an option they have not got.
+( . -p /tmp f.sh ) 2>&1 | sed 's/.*: //'
+printf 'a dash-word -> %s\n' "$?"

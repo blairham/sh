@@ -81,6 +81,23 @@ func (r *Runner) CompletesEmptyCommandWord() bool { return !r.emptyCommandWordOf
 // decided.
 func (r *Runner) SetCompletesEmptyCommandWord(on bool) { r.emptyCommandWordOffersNothing = !on }
 
+// SearchesPathForSource reports whether `.` looks along $PATH for an operand
+// with no slash in it — bash's `sourcepath`, which is on by default.
+//
+// One shell in the panel names it and the other four have the search with no
+// way to turn it off, so the *capability* is core and the switch is bash's.
+// Turning it off makes a bare operand a path relative to the shell's own
+// directory and nothing else, which is what a shell with neither half of the
+// mechanism does — and which is right often enough to be invisible until a
+// script relies on either (#3058).
+//
+// `. -p list file` is the other half and is not this: an explicit list wins
+// over the switch, so a `-p` still searches with `sourcepath` off.
+func (r *Runner) SearchesPathForSource() bool { return !r.dotSearchesPathOff }
+
+// SetSearchesPathForSource moves it.
+func (r *Runner) SetSearchesPathForSource(on bool) { r.dotSearchesPathOff = !on }
+
 // CorrectsCdSpelling reports whether `cd` corrects a misspelled operand
 // instead of refusing it.
 //

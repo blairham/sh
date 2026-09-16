@@ -2405,6 +2405,57 @@ type Semantics struct {
 	// call in a shell empties it as the table says.
 	GetoptsEmptiesOptargForAnArgumentlessOption Answer
 
+	// GetoptsOwnParametersIgnoreAFreeze lets `getopts` write OPTARG and
+	// OPTIND over a `readonly` on them, without a word.
+	//
+	// OPTARG and OPTIND are the builtin's own output parameters rather than
+	// names a script assigns, and two shells read them that way: a freeze on
+	// either is simply not consulted. Measured 2026-09-16 over a script file
+	// under `env -i PATH=/usr/bin:/bin`, with `set -- -a val -b` and
+	// `readonly OPTARG` in front:
+	//
+	//	bash 5.3.20   OPTARG: readonly variable    OPTARG unset
+	//	bash 3.2.57   OPTARG: readonly variable    OPTARG unset
+	//	ksh93u+       silent                       OPTARG=val
+	//	dash 0.5.12   getopts: OPTARG: is read only   OPTARG unset
+	//	BusyBox ash   getopts: OPTARG: is read only   OPTARG unset
+	//	zsh 5.9.2     silent                       OPTARG=val
+	//
+	// The same two answer the same way for a frozen OPTIND, and the same two
+	// are the ones that write OPTARG through a freeze in silent mode. The
+	// **name operand** is not this question and is refused in all five: a
+	// frozen `o` is `o: is read only` in ksh93 and `read-only variable: o`
+	// in zsh, which is what keeps this to the two parameters the builtin owns
+	// (#3147).
+	GetoptsOwnParametersIgnoreAFreeze Answer
+
+	// GetoptsRefusedWriteEndsTheBuiltin stops `getopts` where a freeze
+	// refused OPTARG or OPTIND, rather than reporting and carrying on.
+	//
+	// Measured the same day and the same way, `set -- -a val` with `readonly
+	// OPTARG`, reading the status and the name the builtin was given:
+	//
+	//	bash 5.3.20   st=0  o=a  OPTIND=3   — reported, and written anyway
+	//	bash 3.2.57   st=0  o=a  OPTIND=3
+	//	dash 0.5.12   st=2  o=    OPTIND=1  — nothing after the refusal
+	//	BusyBox ash   st=2  o=    OPTIND=1
+	//
+	// dash's OPTIND is what says the builtin *stopped* rather than merely
+	// reporting: it is still 1 afterwards, so OPTARG was being written first
+	// and the refusal ended the run before the word count moved. That is the
+	// order this shell writes them in, and the only place the order is
+	// visible.
+	//
+	// ksh93 and zsh never reach it, because
+	// GetoptsOwnParametersIgnoreAFreeze is Yes for both and there is no
+	// refusal to cost anything; they answer it No so that nothing reports an
+	// unanswered axis over a path they cannot take.
+	//
+	// The **name** operand is not this question either: a freeze on it ends
+	// the builtin in every column that reaches one, which is a rule rather
+	// than an axis — see getoptsRefusedStatus.
+	GetoptsRefusedWriteEndsTheBuiltin Answer
+
 	// InheritedOldpwd is what becomes of an `OLDPWD` the shell was handed in
 	// its environment: taken as it stands, taken only when it names a
 	// directory, or not read at all. See InheritedOldpwdPolicy, which carries
@@ -5406,6 +5457,35 @@ type Semantics struct {
 	// answer, which is the contaminated-probe trap docs/spec/oracle.md
 	// records.
 	ReadonlyReassignmentFatal Answer
+
+	// ReadonlyRefusalInABuiltinIsFatal ends the script where a **builtin**
+	// writing its own output parameter is refused by a freeze, as against a
+	// script's own assignment to a frozen name.
+	//
+	// A different question from ReadonlyReassignmentFatal above, and a
+	// different set of shells: dash and ksh93 answer that one Yes and this
+	// one No. Measured 2026-09-16 over a script file under `env -i
+	// PATH=/usr/bin:/bin`, two builtins that fill in a name:
+	//
+	//	x=; readonly x; echo foo | { read x; echo "st=$?"; }; echo tail
+	//	set -- -a val; readonly OPTARG; getopts a: o; echo "st=$?"; echo tail
+	//
+	//	bash 5.3.20   reports, `tail` runs
+	//	bash 3.2.57   reports, `tail` runs
+	//	ksh93u+       reports for `read`, silent for `getopts`, `tail` runs
+	//	dash 0.5.12   reports, `tail` runs
+	//	BusyBox ash   reports, `tail` runs
+	//	zsh 5.9.2     reports and the script is over — no `tail`
+	//
+	// zsh alone, and it is the same zsh that ends a script for a plain
+	// assignment. What separates the two questions is the other four: every
+	// one of them ends a script for `readonly x=1; x=2` and none of them ends
+	// one for a builtin's refused write (#3147).
+	//
+	// Asked by `getopts` only, so far. `read` has the same defect and is
+	// filed rather than fixed here, because its refusal reaches the shared
+	// assignment path through a different door.
+	ReadonlyRefusalInABuiltinIsFatal Answer
 
 	// DeclarationMayShadowAReadonly lets a declaration inside a function
 	// make a local of a name the shell has frozen.

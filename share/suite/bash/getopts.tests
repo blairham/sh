@@ -60,3 +60,54 @@ printf 'OPTERR=1 again -> '; lines -z
 # Unsetting it is the same as 1: the default is to report.
 unset OPTERR
 printf 'OPTERR unset -> '; lines -z
+
+# --- a freeze on the names getopts fills in ---
+#
+# The last knob, and one the panel does not agree about either. bash consults
+# a `readonly` on all three of the names `getopts` writes — OPTARG, OPTIND and
+# the name it was given — and reports the refusal. Reporting is nearly all it
+# costs: the scan moves on, everything else is written anyway, and only a
+# refused *name* changes the status the builtin reports (#3147).
+#
+# Counted rather than quoted, as everything on stderr in this file is. And
+# OPTIND is reset inside each subshell, so that no case reads where the one
+# before it left off.
+
+printf 'frozen OPTARG reports -> '
+( OPTIND=1; set -- -a val; readonly OPTARG
+  getopts 'a:' o 2>&1 >/dev/null | wc -l | tr -d ' ' )
+
+# What the refusal left behind: the letter is still reported, the word count
+# still moved, and the status is still the ordinary 0.
+( OPTIND=1; set -- -a val -b; readonly OPTARG
+  getopts 'a:b' o 2>/dev/null
+  printf 'frozen OPTARG: st=%s o=[%s] OPTIND=%s OPTARG=[%s]\n' "$?" "${o-unset}" "$OPTIND" "${OPTARG-unset}"
+  getopts 'a:b' o 2>/dev/null
+  printf 'and again:     st=%s o=[%s] OPTIND=%s OPTARG=[%s]\n' "$?" "${o-unset}" "$OPTIND" "${OPTARG-unset}" )
+
+# A frozen OPTIND is the same answer: reported, and everything else written.
+( OPTIND=1; set -- -a val; readonly OPTIND
+  getopts 'a:' o 2>/dev/null
+  printf 'frozen OPTIND: st=%s o=[%s] OPTARG=[%s]\n' "$?" "${o-unset}" "${OPTARG-unset}" )
+
+# The name is the one refusal that costs the builtin its status: there is a
+# letter it cannot report, so it reports 2 instead and leaves the name alone.
+( OPTIND=1; set -- -a val; N=kept; readonly N
+  getopts 'a:' N 2>/dev/null
+  printf 'frozen name: st=%s N=[%s] OPTARG=[%s]\n' "$?" "$N" "${OPTARG-unset}" )
+
+# Except where there was no letter to report. At the end of the options the
+# 1 that says so stands, and the refusal is still written.
+( OPTIND=1; set -- operand; N=kept; readonly N
+  getopts 'a:' N 2>/dev/null
+  printf 'frozen name at the end: st=%s N=[%s]\n' "$?" "$N" )
+
+printf 'frozen name at the end reports -> '
+( OPTIND=1; set -- operand; N=kept; readonly N
+  getopts 'a:' N 2>&1 >/dev/null | wc -l | tr -d ' ' )
+
+# A bad option writes its own sentence first and the refusal after it, so a
+# frozen name costs the complaint nothing: two lines rather than one.
+printf 'frozen name over a bad option -> '
+( OPTIND=1; set -- -z; N=kept; readonly N
+  getopts 'a:' N 2>&1 >/dev/null | wc -l | tr -d ' ' )

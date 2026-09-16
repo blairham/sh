@@ -2006,6 +2006,14 @@ func Semantics() interp.Semantics {
 	// And the same for an option that simply takes none, which is the other
 	// axis and the one this shell shares with dash and BusyBox ash.
 	s.GetoptsEmptiesOptargForAnArgumentlessOption = interp.Yes
+	// OPTARG and OPTIND are written through a freeze without a word, as in
+	// ksh93 — measured 2026-09-16 on 5.9.2.
+	s.GetoptsOwnParametersIgnoreAFreeze = interp.Yes
+	s.GetoptsRefusedWriteEndsTheBuiltin = interp.No
+	// The freeze on the *name* is reached, and this is the one shell where a
+	// builtin's refused write ends the script: `readonly o; getopts a: o;
+	// echo reached` prints neither `reached` nor anything after it.
+	s.ReadonlyRefusalInABuiltinIsFatal = interp.Yes
 	// Measured 2026-09-12: `OLDPWD=/usr zsh -c 'echo $OLDPWD'` answers `$PWD`,
 	// so an inherited value never arrives at all — the name is this shell's own
 	// record of where it has been, and it starts where the shell started. That

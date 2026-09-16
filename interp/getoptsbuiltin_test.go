@@ -256,3 +256,223 @@ func TestDashDashEndsGetoptsOptions(t *testing.T) {
 		t.Errorf("got %q, want -- taken as the end of the options", out)
 	}
 }
+
+// getoptsFrozenSem is getoptsSem plus the three answers a freeze on one of
+// `getopts`'s own names reaches, set to the shape bash measures: the freeze is
+// consulted, the refusal is reported, and neither the builtin nor the script
+// gives anything up.
+func getoptsFrozenSem() Semantics {
+	s := getoptsSem()
+	s.GetoptsOwnParametersIgnoreAFreeze = No
+	s.GetoptsRefusedWriteEndsTheBuiltin = No
+	s.ReadonlyRefusalInABuiltinIsFatal = No
+	s.ReadonlyReassignmentFatal = No
+	s.FatalErrorStatusIsOne = Yes
+	return s
+}
+
+// TestGetoptsRefusedWriteKeepsTheRestOfTheLine. A builtin filling in its own
+// output parameter is neither a bare assignment nor a declaration, and it was
+// taking the bare assignment's answer: the refusal gave up what the shell was
+// running, so the `echo` after the `;` never happened (#3147).
+func TestGetoptsRefusedWriteKeepsTheRestOfTheLine(t *testing.T) {
+	sem := getoptsFrozenSem()
+	dg := Diagnostics{ReadonlyVariable: "%s: frozen"}
+	out, _ := run(t, `set -- -a val; readonly OPTARG; getopts "a:" o; echo "reached [$o]"; echo after`,
+		func(r *Runner) { r.Semantics, r.Diagnostics = &sem, &dg })
+	if want := "sh: OPTARG: frozen\nreached [a]\nafter\n"; out != want {
+		t.Errorf("got %q, want %q", out, want)
+	}
+}
+
+// TestGetoptsOwnParametersIgnoreAFreezeIsAnAxis. OPTARG and OPTIND are the
+// builtin's own in ksh93 and zsh, and a `readonly` on either is not consulted
+// there at all — where bash, dash and BusyBox ash refuse the write and say so.
+func TestGetoptsOwnParametersIgnoreAFreezeIsAnAxis(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		answer Answer
+		want   string
+	}{
+		{"consulted", No, "sh: OPTARG: frozen\n[a][gone]\n"},
+		{"written through", Yes, "[a][val]\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := getoptsFrozenSem()
+			sem.GetoptsOwnParametersIgnoreAFreeze = tc.answer
+			dg := Diagnostics{ReadonlyVariable: "%s: frozen"}
+			out, _ := run(t, `set -- -a val; readonly OPTARG; getopts "a:" o; echo "[$o][${OPTARG-gone}]"`,
+				func(r *Runner) { r.Semantics, r.Diagnostics = &sem, &dg })
+			if out != tc.want {
+				t.Errorf("got %q, want %q", out, tc.want)
+			}
+		})
+	}
+}
+
+// And the freeze is put back afterwards: writing through one is a single
+// store's exemption and not the end of the name being frozen.
+func TestGetoptsWritingThroughAFreezeLeavesItOn(t *testing.T) {
+	sem := getoptsFrozenSem()
+	sem.GetoptsOwnParametersIgnoreAFreeze = Yes
+	dg := Diagnostics{ReadonlyVariable: "%s: frozen"}
+	out, _ := run(t, `set -- -a val; readonly OPTARG; getopts "a:" o
+OPTARG=mine
+echo "[$OPTARG]"`,
+		func(r *Runner) { r.Semantics, r.Diagnostics = &sem, &dg })
+	if want := "sh: OPTARG: frozen\n[val]\n"; out != want {
+		t.Errorf("got %q, want %q", out, want)
+	}
+}
+
+// TestGetoptsRefusedWriteEndsTheBuiltinIsAnAxis. dash and BusyBox ash stop at
+// the refusal, with the name unwritten and OPTIND still where it was; bash
+// reports it and writes the rest anyway. OPTIND is the half that says which
+// of the two happened.
+func TestGetoptsRefusedWriteEndsTheBuiltinIsAnAxis(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		answer Answer
+		want   string
+	}{
+		{"reports only", No, "sh: OPTARG: frozen\nst=0 [a] ind=3\n"},
+		{"ends it", Yes, "sh: OPTARG: frozen\nst=2 [none] ind=1\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := getoptsFrozenSem()
+			sem.GetoptsRefusedWriteEndsTheBuiltin = tc.answer
+			dg := Diagnostics{ReadonlyVariable: "%s: frozen"}
+			out, _ := run(t, `set -- -a val; o=none; readonly OPTARG; getopts "a:" o; echo "st=$? [$o] ind=$OPTIND"`,
+				func(r *Runner) { r.Semantics, r.Diagnostics = &sem, &dg })
+			if out != tc.want {
+				t.Errorf("got %q, want %q", out, tc.want)
+			}
+		})
+	}
+}
+
+// TestReadonlyRefusalInABuiltinIsFatalIsAnAxis. zsh alone ends the script over
+// a builtin's refused write, and it is the same zsh that ends one for a plain
+// assignment — which is what keeps this apart from ReadonlyReassignmentFatal,
+// answered Yes by three shells that carry on here.
+func TestReadonlyRefusalInABuiltinIsFatalIsAnAxis(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		answer Answer
+		want   string
+	}{
+		{"reports and carries on", No, "sh: OPTARG: frozen\nafter\n"},
+		{"ends the script", Yes, "sh: OPTARG: frozen\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := getoptsFrozenSem()
+			sem.ReadonlyRefusalInABuiltinIsFatal = tc.answer
+			dg := Diagnostics{ReadonlyVariable: "%s: frozen"}
+			out, _ := run(t, `set -- -a val; readonly OPTARG; getopts "a:" o; echo after`,
+				func(r *Runner) { r.Semantics, r.Diagnostics = &sem, &dg })
+			if out != tc.want {
+				t.Errorf("got %q, want %q", out, tc.want)
+			}
+		})
+	}
+}
+
+// TestGetoptsRefusedNameCostsTheBuiltinItsStatus. The name is the one write
+// whose refusal ends the builtin wherever it is reached — there is a letter it
+// cannot report — except at the end of the options, where there is no letter
+// and the 1 that says so stands.
+func TestGetoptsRefusedNameCostsTheBuiltinItsStatus(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"a letter it cannot report",
+			`set -- -a val; o=kept; readonly o; getopts "a:" o; echo "st=$? [$o]"`,
+			"sh: o: frozen\nst=2 [kept]\n",
+		},
+		{
+			"no letter to report",
+			`set -- operand; o=kept; readonly o; getopts "a:" o; echo "st=$? [$o]"`,
+			"sh: o: frozen\nst=1 [kept]\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := getoptsFrozenSem()
+			dg := Diagnostics{ReadonlyVariable: "%s: frozen"}
+			out, _ := run(t, tc.src, func(r *Runner) { r.Semantics, r.Diagnostics = &sem, &dg })
+			if out != tc.want {
+				t.Errorf("got %q, want %q", out, tc.want)
+			}
+		})
+	}
+}
+
+// And where the dialect stops the builtin over a refusal it stops it here too,
+// so the end of the options is 2 rather than 1.
+func TestGetoptsRefusedNameAtTheEndFollowsTheAxis(t *testing.T) {
+	sem := getoptsFrozenSem()
+	sem.GetoptsRefusedWriteEndsTheBuiltin = Yes
+	dg := Diagnostics{ReadonlyVariable: "%s: frozen"}
+	out, _ := run(t, `set -- operand; o=kept; readonly o; getopts "a:" o; echo "st=$? [$o]"`,
+		func(r *Runner) { r.Semantics, r.Diagnostics = &sem, &dg })
+	if want := "sh: o: frozen\nst=2 [kept]\n"; out != want {
+		t.Errorf("got %q, want %q", out, want)
+	}
+}
+
+// TestGetoptsClearingOptargMeetsAFreeze. Taking the value away is a write as
+// far as a freeze is concerned: the clearing after an option that takes no
+// argument is refused, reported, and leaves the value standing — where the
+// same line over an unfrozen name leaves OPTARG unset.
+func TestGetoptsClearingOptargMeetsAFreeze(t *testing.T) {
+	sem := getoptsFrozenSem()
+	dg := Diagnostics{ReadonlyVariable: "%s: frozen"}
+	out, _ := run(t, `set -- -b; OPTARG=PRE; readonly OPTARG; getopts "a:b" o; echo "[$o][${OPTARG-gone}]"`,
+		func(r *Runner) { r.Semantics, r.Diagnostics = &sem, &dg })
+	if want := "sh: OPTARG: frozen\n[b][PRE]\n"; out != want {
+		t.Errorf("got %q, want %q", out, want)
+	}
+}
+
+// TestGetoptsBadOptionComplainsBeforeRefusingTheName. Two sentences and an
+// order: every column that writes both writes the option's first. The one that
+// reverses it is the one whose refusal ends the script, and it never writes
+// the second at all.
+func TestGetoptsBadOptionComplainsBeforeRefusingTheName(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		answer Answer
+		want   string
+	}{
+		{"the complaint first", No, "sh: bad -z\nsh: o: frozen\nafter\n"},
+		{"the fatal refusal instead", Yes, "sh: o: frozen\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := getoptsFrozenSem()
+			sem.ReadonlyRefusalInABuiltinIsFatal = tc.answer
+			dg := Diagnostics{ReadonlyVariable: "%s: frozen", GetoptsBadOption: "bad -%[1]s"}
+			out, _ := run(t, `set -- -z; o=kept; readonly o; getopts "a:" o; echo after`,
+				func(r *Runner) { r.Semantics, r.Diagnostics = &sem, &dg })
+			if out != tc.want {
+				t.Errorf("got %q, want %q", out, tc.want)
+			}
+		})
+	}
+}
+
+// TestGetoptsRefusalNamesTheBuiltin. A builtin filling in its own output
+// parameter names itself in the sentence where the dialect names one — `dash`
+// writes `getopts: OPTARG: is read only` through the same wording it writes
+// `export: x: is read only` with — which a bare assignment's form never
+// reaches, because that wording is a declaration's.
+func TestGetoptsRefusalNamesTheBuiltin(t *testing.T) {
+	sem := getoptsFrozenSem()
+	dg := Diagnostics{
+		ReadonlyVariable:              "%s: frozen",
+		ReadonlyVariableInDeclaration: "%[2]s: %[1]s: frozen",
+		ReadonlyRefusalNamesBuiltin:   map[string]bool{"getopts": true},
+	}
+	out, _ := run(t, `set -- -a val; readonly OPTARG; getopts "a:" o; echo "[$o]"`,
+		func(r *Runner) { r.Semantics, r.Diagnostics = &sem, &dg })
+	if want := "sh: getopts: OPTARG: frozen\n[a]\n"; out != want {
+		t.Errorf("got %q, want %q", out, want)
+	}
+}

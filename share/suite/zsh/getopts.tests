@@ -82,3 +82,30 @@ fromzero() {
   printf 'from zero -> %s [%s] ind=%s\n' "$?" "${o-unset}" "$OPTIND"
 }
 fromzero
+
+# --- a freeze on the names getopts fills in ---
+#
+# OPTARG and OPTIND are the builtin's own here rather than a script's, so a
+# `readonly` on either is not consulted and `getopts` writes through it
+# without a word. bash reports the refusal and dash stops the builtin over
+# it; zsh shares this answer with ksh93 alone (#3147).
+#
+# Each case resets OPTIND, so that none of them reads where the one before it
+# stopped.
+
+printf 'sentences for a frozen OPTARG -> '
+( OPTIND=1; set -- -a val; readonly OPTARG
+  getopts 'a:' o 2>&1 >/dev/null | wc -l | tr -d ' ' )
+
+( OPTIND=1; set -- -a val; readonly OPTARG
+  getopts 'a:' o 2>/dev/null
+  printf 'frozen OPTARG: st=%s o=[%s] OPTARG=[%s]\n' "$?" "$o" "${OPTARG-unset}" )
+
+# And for OPTIND, which the scan writes on every call.
+printf 'sentences for a frozen OPTIND -> '
+( OPTIND=1; set -- -a val; readonly OPTIND
+  getopts 'a:' o 2>&1 >/dev/null | wc -l | tr -d ' ' )
+
+( OPTIND=1; set -- -a val; readonly OPTIND
+  getopts 'a:' o 2>/dev/null
+  printf 'frozen OPTIND: st=%s o=[%s] OPTARG=[%s]\n' "$?" "$o" "${OPTARG-unset}" )

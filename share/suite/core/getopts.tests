@@ -159,3 +159,30 @@ m() {
 }
 m -a
 m
+
+# --- a freeze on the names getopts fills in ---
+
+# `getopts` fills OPTARG in itself, and a script may have frozen the name
+# before the loop reached it. What the four do about that splits three ways —
+# one writes through the freeze, one reports it and writes the rest anyway,
+# one reports it and stops the builtin — and each of those is in the dialect's
+# own file. What none of them does is give up the rest of the line, which a
+# refused `x=2` does in every one of them. That is the common answer, so it is
+# here (#3147).
+#
+# OPTIND is reset inside each subshell for the reason the loops above are: a
+# scan that started where the last case left off would be measuring the file.
+( OPTIND=1; set -- -a val
+  readonly OPTARG
+  getopts 'a:' o 2>/dev/null; printf 'the command after a refused OPTARG ran\n'
+  printf 'and so did the next line\n' ) 2>/dev/null
+
+# The name the builtin was given is refused everywhere — it is an ordinary
+# variable rather than one of the two the builtin owns — and the *file* still
+# goes on. Only that much is common: one shell ends the subshell there, so
+# what the case reads is what comes after the subshell rather than inside it.
+( OPTIND=1; set -- -a val
+  N=kept
+  readonly N
+  getopts 'a:' N 2>/dev/null ) 2>/dev/null
+printf 'a refused name did not end the file\n'

@@ -1557,6 +1557,16 @@ func Semantics() interp.Semantics {
 	s.GetoptsAssignmentRestartsWord = interp.Yes
 	s.GetoptsClearsOptarg = interp.No
 	s.GetoptsEmptiesOptargForAnArgumentlessOption = interp.No
+	// OPTARG and OPTIND are the builtin's own here: `readonly OPTARG;
+	// getopts a: o` says nothing at all and leaves `val` in OPTARG.
+	// Measured 2026-09-16 on ksh93u+ 2012-08-01.
+	s.GetoptsOwnParametersIgnoreAFreeze = interp.Yes
+	// Unreachable while the answer above is yes — answered so that nothing
+	// reports an axis this shell cannot be asked.
+	s.GetoptsRefusedWriteEndsTheBuiltin = interp.No
+	// A frozen *name* is refused, and the refusal is not fatal: `read`
+	// writes `warning: x: is read only` and the script runs on.
+	s.ReadonlyRefusalInABuiltinIsFatal = interp.No
 	// The scan position is shared with the caller across a shell function
 	// call, which is why an option-parsing helper here has to reset
 	// OPTIND itself: without it a second call starts where the first

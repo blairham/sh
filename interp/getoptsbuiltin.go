@@ -152,27 +152,138 @@ func (r *Runner) getoptsAt(name, spec string, silent bool, words []string, ind i
 		// any, and the next word otherwise.
 		if rest := word[r.optChar+1:]; rest != "" {
 			r.optChar = 1
-			r.setOptind(ind + 1)
-			r.setVar("OPTARG", rest)
-			r.setVar(name, string(c))
-			return 0
+			// OPTARG ahead of OPTIND, which is the order a refusal makes
+			// visible: measured, a frozen OPTARG leaves dash and BusyBox
+			// ash with OPTIND still at its old value, so neither had
+			// written it by the time the refusal ended the builtin.
+			if !r.getoptsWrite("OPTARG", rest) && r.getoptsRefusalEndsTheBuiltin() {
+				return getoptsRefusedStatus
+			}
+			if !r.setOptind(ind+1) && r.getoptsRefusalEndsTheBuiltin() {
+				return getoptsRefusedStatus
+			}
+			return r.getoptsSetName(name, string(c), 0)
 		}
 		if ind >= len(words) {
 			r.optChar = 1
-			r.setOptind(ind + 1)
+			if !r.setOptind(ind+1) && r.getoptsRefusalEndsTheBuiltin() {
+				return getoptsRefusedStatus
+			}
 			return r.getoptsBad(name, string(c), silent, true)
 		}
 		r.optChar = 1
-		r.setOptind(ind + 2)
-		r.setVar("OPTARG", words[ind])
-		r.setVar(name, string(c))
-		return 0
+		if !r.getoptsWrite("OPTARG", words[ind]) && r.getoptsRefusalEndsTheBuiltin() {
+			return getoptsRefusedStatus
+		}
+		if !r.setOptind(ind+2) && r.getoptsRefusalEndsTheBuiltin() {
+			return getoptsRefusedStatus
+		}
+		return r.getoptsSetName(name, string(c), 0)
 	default:
 		r.advance(word, ind)
-		r.clearOptargForAnArgumentlessOption()
-		r.setVar(name, string(c))
-		return 0
+		if !r.clearOptargForAnArgumentlessOption() && r.getoptsRefusalEndsTheBuiltin() {
+			return getoptsRefusedStatus
+		}
+		return r.getoptsSetName(name, string(c), 0)
 	}
+}
+
+// getoptsRefusedStatus is what `getopts` reports when a freeze refused one of
+// the three names it fills in.
+//
+// Measured 2026-09-16 over a script file, `env -i PATH=/usr/bin:/bin`, with
+// `set -- -a val` and the name frozen: bash 5.3.20, ksh93u+ 2012-08-01, dash
+// 0.5.12 and BusyBox ash 1.37.0 all end the builtin at 2. bash 3.2.57 answers
+// 1 and no dialect here claims that build, so it is recorded rather than
+// modeled. It is not Diagnostics.GetoptsUsageStatus: that is what `getopts`
+// with too few operands reports, which zsh answers 1 to and which this shell
+// never reaches over a freeze because zsh writes through one.
+const getoptsRefusedStatus = 2
+
+// getoptsWrite sets one of the three names `getopts` fills in — OPTARG,
+// OPTIND and the name operand — and reports whether the write happened.
+//
+// # Why this is not r.setVar
+//
+// A builtin filling in its own output parameter is neither of the two shapes
+// interp/runner.go's refusal knows about. A **bare assignment** that a freeze
+// refuses gives up the rest of what the shell was running, and a
+// **declaration** does not; `getopts` reached the first of those through
+// setVar, so `readonly OPTARG; getopts a: o; echo reached` printed the
+// refusal and never the `echo` — where every panel shell runs it (#3147).
+//
+// Every column carries on, so *that* much is not an axis: measured
+// 2026-09-16, bash 5.3.20, bash 3.2.57, bash called as `sh`, ksh93u+
+// 2012-08-01, dash 0.5.12 and BusyBox ash 1.37.0 all reach the next command
+// on the same line, and so does zsh 5.9.2 — which reaches it by never
+// refusing at all. What the refusal *costs* splits three ways, and the two
+// axes below are that split.
+func (r *Runner) getoptsWrite(name, value string) bool {
+	if !r.getoptsMayWrite(name) {
+		return false
+	}
+	if r.readonly[name] {
+		// Written *through* the freeze rather than around it: the freeze is
+		// lifted for the one store, so that everything else a scalar store
+		// does — a reference aimed at another name, a `.set` discipline, a
+		// compound the scalar replaces — still happens.
+		delete(r.readonly, name)
+		defer func() { r.readonly[name] = true }()
+	}
+	r.setVar(name, value)
+	return true
+}
+
+// getoptsMayWrite reports whether a freeze lets `getopts` touch one of the
+// three names it fills in, having written the refusal where it does not.
+//
+// Taking the value away is a write as far as a freeze is concerned, which is
+// why this is a question of its own rather than the top of getoptsWrite:
+// measured 2026-09-16, `set -- -b; OPTARG=PRE; readonly OPTARG; getopts a:b
+// o` writes `OPTARG: readonly variable` in bash 5.3.20 and leaves `PRE`
+// standing, where the same line over an unfrozen name leaves OPTARG unset.
+func (r *Runner) getoptsMayWrite(name string) bool {
+	if !r.readonly[name] {
+		return true
+	}
+	if (name == "OPTARG" || name == "OPTIND") &&
+		r.ask(r.sem().GetoptsOwnParametersIgnoreAFreeze,
+			"`getopts` writing OPTARG and OPTIND through a freeze") {
+		return true
+	}
+	fatal := r.ask(r.sem().ReadonlyRefusalInABuiltinIsFatal,
+		"a builtin's refused write to its own output parameter ending the script")
+	// assignedByBuiltin, which is neither of the two shapes the refusal was
+	// written for: the builtin names itself where the dialect names one —
+	// `getopts: OPTARG: is read only` in dash and BusyBox ash — and the rest
+	// of the line is not given up, which is what #3147 was.
+	r.reportReadonlyRefusal(name, assignedByBuiltin, fatal)
+	return false
+}
+
+// getoptsSetName writes the name operand, returning ok where the write
+// happened and the refused status where a freeze stopped it.
+//
+// The name is the one write whose refusal ends the builtin in every column
+// that reaches it, so it does not go through the axis below: bash 5.3, ksh93,
+// dash and BusyBox ash all answer 2 and leave the name alone. See
+// getoptsRefusedStatus.
+func (r *Runner) getoptsSetName(name, value string, ok int) int {
+	if r.getoptsWrite(name, value) {
+		return ok
+	}
+	return getoptsRefusedStatus
+}
+
+// getoptsRefusalEndsTheBuiltin is the axis a refused **OPTARG or OPTIND**
+// write asks, which the name does not: dash and BusyBox ash stop there and
+// report, and bash writes the rest and reports success anyway.
+//
+// Asked only after a refusal, which is why a `getopts` over unfrozen names —
+// every ordinary use of it — reaches no axis at all.
+func (r *Runner) getoptsRefusalEndsTheBuiltin() bool {
+	return r.ask(r.sem().GetoptsRefusedWriteEndsTheBuiltin,
+		"a freeze on OPTARG or OPTIND ending `getopts` rather than only being reported")
 }
 
 // advance moves past the character just read, staying inside the word while
@@ -190,8 +301,28 @@ func (r *Runner) advance(word string, ind int) {
 // getoptsEnd reports that there are no more options.
 func (r *Runner) getoptsEnd(name string, ind int) int {
 	r.optChar = 1
-	r.setOptind(ind)
-	r.setVar(name, "?")
+	if !r.setOptind(ind) && r.getoptsRefusalEndsTheBuiltin() {
+		return getoptsRefusedStatus
+	}
+	if r.getoptsWrite(name, "?") {
+		return 1
+	}
+	// The one refused name that does not carry the status with it. There is
+	// no letter the builtin failed to report here, so the 1 that says "no
+	// more options" stands: measured 2026-09-16, `set -- x; N=keep; readonly
+	// N; getopts ab N` is `N: readonly variable` at **1** in bash 5.3.20 and
+	// 3.2.57, with `N` still `keep` — where the same freeze over an option
+	// the scan *found* ends the builtin at 2. dash 0.5.12 and BusyBox ash
+	// 1.37.0 answer 2 here as they do everywhere else, which is the same
+	// question they answer for OPTARG, so it is asked through the same axis.
+	//
+	// ksh93u+ is a third answer, recorded rather than modeled: this one
+	// refusal ends the script there, while the same freeze over a letter the
+	// scan found only reports and returns 2. No axis this shell has splits a
+	// fatality by which path inside one builtin reached it.
+	if r.getoptsRefusalEndsTheBuiltin() {
+		return getoptsRefusedStatus
+	}
 	return 1
 }
 
@@ -203,17 +334,41 @@ func (r *Runner) getoptsEnd(name string, ind int) int {
 // script can tell the two apart without reading a message.
 func (r *Runner) getoptsBad(name, letter string, silent, missingArg bool) int {
 	if silent {
-		r.setVar("OPTARG", letter)
-		if missingArg {
-			r.setVar(name, ":")
-		} else {
-			r.setVar(name, "?")
+		if !r.getoptsWrite("OPTARG", letter) && r.getoptsRefusalEndsTheBuiltin() {
+			return getoptsRefusedStatus
 		}
-		return 0
+		if missingArg {
+			return r.getoptsSetName(name, ":", 0)
+		}
+		return r.getoptsSetName(name, "?", 0)
 	}
-	r.clearOptarg()
-	r.setVar(name, "?")
+	if !r.clearOptarg() && r.getoptsRefusalEndsTheBuiltin() {
+		return getoptsRefusedStatus
+	}
+	// The complaint about the option comes first, and a refusal the *name*
+	// earns comes after it: measured 2026-09-16, `set -- -z; readonly o;
+	// getopts a: o` writes the illegal-option line and then the readonly one
+	// in bash 5.3, bash 3.2, ksh93, dash and BusyBox ash alike. So the name
+	// is written below rather than here, and its refusal decides only the
+	// status.
+	//
+	// The one column that reverses it is the one whose refusal is *fatal*:
+	// zsh writes `read-only variable: o` and the script is over, so the
+	// bad-option line it would have written never is. One order and a guard
+	// rather than an axis, because the two are the same rule seen twice — a
+	// refusal that ends the script is written before the complaint it would
+	// otherwise have followed, and there is nothing after it to follow.
+	if r.readonly[name] && r.sem().ReadonlyRefusalInABuiltinIsFatal == Yes {
+		return r.getoptsSetName(name, "?", 0)
+	}
+	r.getoptsBadOptionComplaint(letter, missingArg)
+	return r.getoptsSetName(name, "?", 0)
+}
 
+// getoptsBadOptionComplaint writes the line a bad option or a missing
+// argument earns, in a function of its own so that the name `getopts` fills
+// in can be written after it — see getoptsBad.
+func (r *Runner) getoptsBadOptionComplaint(letter string, missingArg bool) {
 	// Not the builtin's complaint as far as the one dialect that names a
 	// builtin in the location is concerned: `getopts` reports like `test`
 	// rather than like `shift`, with no name between the shell and the line.
@@ -239,7 +394,6 @@ func (r *Runner) getoptsBad(name, letter string, silent, missingArg bool) int {
 	default:
 		r.diagf("%s\n", msg)
 	}
-	return 0
 }
 
 // optIndex is the word the scan is at, and it reads OPTIND unless a call has
@@ -282,8 +436,8 @@ func (r *Runner) optindValue() int {
 	return n
 }
 
-func (r *Runner) setOptind(n int) {
-	r.setVar("OPTIND", strconv.Itoa(n))
+func (r *Runner) setOptind(n int) bool {
+	wrote := r.getoptsWrite("OPTIND", strconv.Itoa(n))
 	if r.optWord > 0 {
 		// The scan's own position moves with the parameter: they part only
 		// at a call boundary, and this is not one.
@@ -291,6 +445,7 @@ func (r *Runner) setOptind(n int) {
 	}
 	// This builtin's own write is not the script's.
 	r.optindAssigned = false
+	return wrote
 }
 
 // clearOptarg takes OPTARG away after a *bad* option, or empties it where the
@@ -298,31 +453,34 @@ func (r *Runner) setOptind(n int) {
 //
 // Four of the five leave it unset and zsh sets it to the empty string, which
 // a script testing `${OPTARG-}` can tell apart.
-func (r *Runner) clearOptarg() {
-	r.emptyOrUnsetOptarg(r.ask(r.sem().GetoptsClearsOptarg,
+func (r *Runner) clearOptarg() bool {
+	return r.emptyOrUnsetOptarg(r.ask(r.sem().GetoptsClearsOptarg,
 		"`getopts` emptying OPTARG rather than unsetting it after a bad option"))
 }
 
 // clearOptargForAnArgumentlessOption is the same for an option the string has
 // and that takes no argument, which is a different axis because the columns
 // line up differently — see the axis for the measurement that separates them.
-func (r *Runner) clearOptargForAnArgumentlessOption() {
-	r.emptyOrUnsetOptarg(r.ask(r.sem().GetoptsEmptiesOptargForAnArgumentlessOption,
+func (r *Runner) clearOptargForAnArgumentlessOption() bool {
+	return r.emptyOrUnsetOptarg(r.ask(r.sem().GetoptsEmptiesOptargForAnArgumentlessOption,
 		"`getopts` emptying OPTARG rather than unsetting it after an option that takes none"))
 }
 
 // emptyOrUnsetOptarg is what both of them do with their answer, in one place
 // so the two cannot come to mean different things by the same word.
-func (r *Runner) emptyOrUnsetOptarg(empty bool) {
+func (r *Runner) emptyOrUnsetOptarg(empty bool) bool {
 	if empty {
-		r.setVar("OPTARG", "")
-		return
+		return r.getoptsWrite("OPTARG", "")
+	}
+	if !r.getoptsMayWrite("OPTARG") {
+		return false
 	}
 	delete(r.Vars, "OPTARG")
 	if r.removed == nil {
 		r.removed = map[string]bool{}
 	}
 	r.removed["OPTARG"] = true
+	return true
 }
 
 // localizeGetoptsCursor arranges for this function call to have a `getopts`

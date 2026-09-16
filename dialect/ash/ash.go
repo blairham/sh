@@ -714,6 +714,12 @@ func Semantics() interp.Semantics {
 	// ask whether the option it just read carried a value. zsh agrees here
 	// and disagrees on the row above, which is why the two are two axes.
 	s.GetoptsEmptiesOptargForAnArgumentlessOption = interp.Yes
+	// The same three answers dash gives, measured the same day in the pinned
+	// alpine image on BusyBox v1.37.0: `getopts: OPTARG: is read only` at
+	// status 2, OPTIND still 1, and the next command on the line still runs.
+	s.GetoptsOwnParametersIgnoreAFreeze = interp.No
+	s.GetoptsRefusedWriteEndsTheBuiltin = interp.Yes
+	s.ReadonlyRefusalInABuiltinIsFatal = interp.No
 	// `alias` reads no options at all, so `-p` is a name it cannot find and
 	// `-g` and `-s` are neither kinds nor letters.
 	s.AliasParsesOptions = interp.No
@@ -1412,8 +1418,13 @@ func Diagnostics() interp.Diagnostics {
 		BuiltinBadNameStatus:          2,
 		ReadonlyVariable:              "%s: is read only",
 		ReadonlyVariableInDeclaration: "%[1]s: is read only",
-		UnsetReadonly:                 "%s: is read only",
-		LocalOutsideAFunction:         "not in a function",
+		// `getopts` names itself for a refused write to one of the three
+		// names it fills in: measured 2026-09-16 in the pinned image,
+		// `readonly OPTARG; getopts a: o` is `ash: getopts: line 4: OPTARG:
+		// is read only`.
+		ReadonlyRefusalNamesBuiltin: map[string]bool{"getopts": true},
+		UnsetReadonly:               "%s: is read only",
+		LocalOutsideAFunction:       "not in a function",
 
 		// The option refusals: lower case, and the letter alone.
 		SetInvalidOptionName:   "illegal option -o %[1]s",

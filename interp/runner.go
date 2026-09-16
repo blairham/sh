@@ -6622,6 +6622,20 @@ const (
 	// missed by `for`, `read`, `select`, `getopts` and `${a::=x}` alike. One
 	// caller is exempt and it says so; everything else is right by default.
 	assignedAsTheCompoundView
+	// assignedByBuiltin is a **builtin filling in its own output
+	// parameter** — `getopts` writing OPTARG, OPTIND and the name it was
+	// given.
+	//
+	// Neither of the two shapes the refusal above was written for. It is not
+	// a declaration: the name was not written in the script at all. And it is
+	// not a bare assignment: measured 2026-09-16, every panel shell that
+	// reports the refusal runs the next command on the same line, where
+	// `readonly x=1; x=2; echo one` never prints `one` in any of them. What
+	// the refusal costs is decided where it happened, which for this form is
+	// interp/getoptsbuiltin.go — see getoptsWrite, and
+	// Semantics.ReadonlyRefusalInABuiltinIsFatal for the one shell that ends
+	// the script over it (#3147).
+	assignedByBuiltin
 )
 
 // declaresRatherThanAssigns reports whether the form is one a *declaration*
@@ -6629,6 +6643,29 @@ const (
 // on: the wording, the fatality, and whether the rest of the line is given up.
 func (f assignForm) declaresRatherThanAssigns() bool {
 	return f == assignedByDeclaration || f == removedAttribute
+}
+
+// namesTheBuiltin reports whether the refusal's *sentence* may carry the name
+// of the builtin that made the write, which is a wider set than the question
+// above: a builtin filling in its own output parameter names itself where a
+// dialect names one, and dash writes `getopts: OPTARG: is read only` through
+// the same wording it writes `export: x: is read only` with.
+//
+// Separate from declaresRatherThanAssigns because the other two things that
+// question decides — the fatality and whether the rest of the line is given
+// up — are not this form's, and reading one answer for all three is what put
+// `getopts` on the bare assignment's path to begin with.
+//
+// Folding assignedByBuiltin into that question instead is an **equivalent
+// mutant today** and was reverted rather than kept: `getopts` reaches this
+// sentence without going through refuseReadonly at all, so the other two
+// answers are never asked of the form and nothing can tell the two spellings
+// apart. What the separation buys is the next caller — a second builtin
+// handed this form would otherwise inherit a declaration's fatality and its
+// hold on the rest of the line, which are the two things measured *not* to be
+// a builtin's (#3147).
+func (f assignForm) namesTheBuiltin() bool {
+	return f.declaresRatherThanAssigns() || f == assignedByBuiltin
 }
 
 // setVarAs sets a variable, knowing how the assignment was written.
@@ -6881,7 +6918,7 @@ func (r *Runner) reportReadonlyRefusal(name string, form assignForm, fatal bool)
 	// explicit indexes and a spare argument becomes "%!(EXTRA …)", which is
 	// what Wording's own note is about.
 	msg := Wording(r.diag().ReadonlyVariable, "%s: readonly variable", name)
-	if form.declaresRatherThanAssigns() && r.diag().ReadonlyVariableInDeclaration != "" &&
+	if form.namesTheBuiltin() && r.diag().ReadonlyVariableInDeclaration != "" &&
 		r.readonlyRefusalNamesBuiltin(form) {
 		msg = Wording(r.diag().ReadonlyVariableInDeclaration, "", name, r.inBuiltin)
 	}

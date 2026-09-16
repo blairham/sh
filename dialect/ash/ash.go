@@ -540,6 +540,10 @@ func Semantics() interp.Semantics {
 	s.PrintfLengthModifiers = interp.PrintfLengthModifiersC89
 	// No `%q` and no `%(fmt)T`: both are `invalid format`.
 	s.PrintfQuote = interp.PrintfQuoteAbsent
+	// C's `#` at a value of nought. Measured inside the pinned Alpine
+	// image 2026-09-15: `printf '%#x' 0` is `0` and `printf '%#.0o' 0`
+	// is `0`, which is musl reading the same C the BSD columns do.
+	s.PrintfAlternateFormAsksTheValue = interp.Yes
 	s.PrintfTimeConversion = interp.No
 	// An empty operand to a numeric conversion is reported, where dash reads
 	// it as a zero and says nothing.

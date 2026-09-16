@@ -42,6 +42,7 @@ ash    LastPipelineElementInCurrentShell                    No
 ash    LocalOutsideAFunctionIsAnError                       Yes
 ash    LocalOutsideAFunctionIsFatal                         Yes
 ash    PrefixToAFunctionIsExported                          Yes
+ash    PrintfAlternateFormAsksTheValue                      Yes
 ash    PrintfC99FloatConversions                            No
 ash    PrintfGroupingFlag                                   No
 ash    PrintfGroupingFlagAfterTheWidth                      -
@@ -83,6 +84,7 @@ bash   LastPipelineElementInCurrentShell                    No
 bash   LocalOutsideAFunctionIsAnError                       Yes
 bash   LocalOutsideAFunctionIsFatal                         No
 bash   PrefixToAFunctionIsExported                          Yes
+bash   PrintfAlternateFormAsksTheValue                      Yes
 bash   PrintfC99FloatConversions                            Yes
 bash   PrintfGroupingFlag                                   Yes
 bash   PrintfGroupingFlagAfterTheWidth                      No
@@ -124,6 +126,7 @@ dash   LastPipelineElementInCurrentShell                    No
 dash   LocalOutsideAFunctionIsAnError                       Yes
 dash   LocalOutsideAFunctionIsFatal                         Yes
 dash   PrefixToAFunctionIsExported                          Yes
+dash   PrintfAlternateFormAsksTheValue                      Yes
 dash   PrintfC99FloatConversions                            Yes
 dash   PrintfGroupingFlag                                   No
 dash   PrintfGroupingFlagAfterTheWidth                      -
@@ -165,6 +168,7 @@ ksh    LastPipelineElementInCurrentShell                    Yes
 ksh    LocalOutsideAFunctionIsAnError                       -
 ksh    LocalOutsideAFunctionIsFatal                         -
 ksh    PrefixToAFunctionIsExported                          No
+ksh    PrintfAlternateFormAsksTheValue                      No
 ksh    PrintfC99FloatConversions                            Yes
 ksh    PrintfGroupingFlag                                   Yes
 ksh    PrintfGroupingFlagAfterTheWidth                      Yes
@@ -206,6 +210,7 @@ zsh    LastPipelineElementInCurrentShell                    Yes
 zsh    LocalOutsideAFunctionIsAnError                       No
 zsh    LocalOutsideAFunctionIsFatal                         No
 zsh    PrefixToAFunctionIsExported                          Yes
+zsh    PrintfAlternateFormAsksTheValue                      Yes
 zsh    PrintfC99FloatConversions                            No
 zsh    PrintfGroupingFlag                                   Yes
 zsh    PrintfGroupingFlagAfterTheWidth                      No

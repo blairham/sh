@@ -71,3 +71,29 @@ printf 'a star the restart replaced [%*-5d]\n' 4 42
 printf '[%d][%d][%d]\n' 1/0 1%0 -7%0 2> /dev/null
 printf '[%d][%d][%d]\n' 1/0+9 1%0+9 '8%0*2' 2> /dev/null
 printf '[%d][%d]\n' 3+1/0 3+1%0 2> /dev/null
+
+# The alternate form at a value of nought, where ksh93 is alone. C reads `#`
+# off the *value* — the `0x` goes on a nonzero one and an octal's precision
+# is raised until there is a leading zero, which is a zero to write where the
+# precision left none — and ksh93 reads the prefix off the digits instead:
+# written wherever there are digits, and absent where there are none. So the
+# first two lines are `0x0` and `0X0` here and a bare `0` in the other four,
+# and the octal is empty here and a `0` there.
+printf 'a hexadecimal nought [%#x] [%#X]\n' 0 0
+printf 'through a precision [%#.2x] and a width [%#5x]\n' 0 0
+printf 'and a zero fill [%#05x]\n' 0
+printf 'an octal with nothing left [%#.0o] [%#5.0o]\n' 0 0
+
+# The controls, which are the same in every shell: the two readings agree
+# where there is neither a nonzero value nor a digit, an octal nought already
+# leads with its own zero, and a nonzero value takes the ordinary prefix.
+printf 'no value and no digits [%#.0x]\n' 0
+printf 'an octal nought [%#o]\n' 0
+printf 'nonzero [%#x] [%#o]\n' 255 255
+
+# Held out with the two at the top of this file, and for the same reason:
+#
+#   #3067  the `0` flag beside a precision. C ignores it where an integer
+#          conversion states one and the other four shells do; ksh93 pads
+#          with zeros whatever the precision said, so `printf '[%+05.0d]' 0`
+#          is `[+0000]` here and `[    +]` in ours.

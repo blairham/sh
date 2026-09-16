@@ -1260,6 +1260,9 @@ func Semantics() interp.Semantics {
 	s.PrintfTimeConversion = interp.Yes
 	s.PrintfTimeOperandIsADateString = interp.No
 	s.PrintfQuote = interp.PrintfQuoteAnsiCWord
+	// C's `#` at a value of nought: `printf '%#x' 0` is `0` and
+	// `printf '%#.0o' 0` is `0`, bash 5.3.20 and bash 3.2.57 alike.
+	s.PrintfAlternateFormAsksTheValue = interp.Yes
 	// `$'\cA'` is 0x01 and `$'\c1'` is 0x11: the character uppercased and
 	// masked to five bits, with `\c?` reading as DEL since 5.x.
 	s.DollarSingleBackslashC = interp.DollarSingleControlMasked

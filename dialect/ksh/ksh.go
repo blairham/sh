@@ -1472,6 +1472,11 @@ func Semantics() interp.Semantics {
 	s.PrintfTimeConversion = interp.Yes
 	s.PrintfTimeOperandIsADateString = interp.Yes
 	s.PrintfQuote = interp.PrintfQuoteSingle
+	// The one column that does not read C's `#` off the value: `printf
+	// '%#x' 0` is `0x0` here and `0` in the other six, and `printf
+	// '%#.0o' 0` is nothing here and `0` in the other six. The prefix
+	// follows the digits instead — written wherever there are digits.
+	s.PrintfAlternateFormAsksTheValue = interp.No
 	// The same `\c` as the printf format, and the arithmetic is bit 6
 	// toggled rather than bash's five-bit mask: `$'\c1'` is `q`, not 0x11.
 	s.DollarSingleBackslashC = interp.DollarSingleControlToggled

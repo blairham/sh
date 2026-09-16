@@ -12436,6 +12436,40 @@ type Semantics struct {
 	// has no such letter. Recorded as `ulimit/a-letter-dash-does-not-have`.
 	UlimitHasProcessCount Answer
 
+	// UlimitTakesHardKeyword reads the word `hard` in a limit's place as the
+	// ceiling this resource has now, so `ulimit -n hard` raises the soft
+	// limit to whatever the process is allowed. True in bash and zsh.
+	//
+	// False in ksh93, dash and BusyBox ash, which have no keyword here: the
+	// operand is a number there and the word is refused as one. ksh93's
+	// refusal is not a keyword check at all — see UlimitOperandIsArithmetic.
+	UlimitTakesHardKeyword Answer
+
+	// UlimitTakesSoftKeyword is the other word, naming the limit in force.
+	// True only in bash: `ulimit -n soft` is the floor, so the line is a way
+	// to write the current value back — which is what makes it useful beside
+	// `-H`, where it lowers the ceiling onto the floor.
+	//
+	// A second axis rather than a value on the first, because the panel does
+	// not split the same way twice: zsh takes `hard` and refuses `soft`.
+	UlimitTakesSoftKeyword Answer
+
+	// UlimitOperandIsArithmetic reads a limit that is not a plain number as
+	// an arithmetic expression. True only in ksh93, where `ulimit -n
+	// 1000+999` is 1999, ` 99` is 99, `0x10` is 16 and a name holds its
+	// value — `hard=333; ulimit -n hard` is 333 there, which is the same
+	// line bash answers with the ceiling.
+	//
+	// It is also why that shell refuses `hard` and `soft` with `parameter
+	// not set` rather than with a bad-number complaint: a bare name in this
+	// position must exist, unlike in `$(( ))`, where an unset one is zero.
+	//
+	// False everywhere else, and the refusal it turns off is load-bearing:
+	// `+1999` is a number to Go's reader and to nobody else's, so four
+	// dialects were setting a limit from a word every reference shell
+	// rejects, at status 0 and in silence (#3060).
+	UlimitOperandIsArithmetic Answer
+
 	// UlimitSetsBothLimits lowers the hard limit along with the soft one when
 	// neither -H nor -S was given — which is what makes `ulimit -t 3600`
 	// irreversible. True in bash, dash and ksh93.
@@ -14156,6 +14190,13 @@ func PosixSemantics() Semantics {
 		UlimitHasProcessCount: No,
 		// POSIX sets both when neither is named.
 		UlimitSetsBothLimits: Yes,
+		// POSIX gives `ulimit` one operand, "a decimal integer" or the word
+		// `unlimited`. So there is no keyword for either limit in the
+		// standard and no expression to evaluate, and the three axes take
+		// the text rather than a vote.
+		UlimitTakesHardKeyword:    No,
+		UlimitTakesSoftKeyword:    No,
+		UlimitOperandIsArithmetic: No,
 		// POSIX defines a pipeline's status as its last command's, and
 		// offers nothing to change it.
 		PipefailOption: No,

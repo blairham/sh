@@ -56,3 +56,15 @@ printf 'let false: %s\n' "$?"
 # so through its status rather than its output.
 typeset -f nosuchfunction
 printf 'typeset -f on nothing: %s\n' "$?"
+
+# `ulimit`'s operand is an *expression* here, which is this shell alone: a
+# sum is summed, hex is read as hex, and a bare name is the parameter's
+# value. That is why `ulimit -c hard` is not a keyword in ksh93 — it is a
+# name, and the complaint is that it is not set — where bash and zsh spend
+# the word before any lookup and raise the floor to the ceiling.
+ulimit -c 1+1; printf 'expression -> %s %s\n' "$?" "$(ulimit -Sc)"
+ulimit -c 0x10; printf 'hex -> %s %s\n' "$?" "$(ulimit -Sc)"
+ulimit -c '+8'; printf 'signed -> %s %s\n' "$?" "$(ulimit -Sc)"
+lim=4; ulimit -c lim; printf 'a name -> %s %s\n' "$?" "$(ulimit -Sc)"
+ulimit -c hard 2> /dev/null; printf 'an unset name -> %s\n' "$?"
+ulimit -c soft 2> /dev/null; printf 'the other unset name -> %s\n' "$?"

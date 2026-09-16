@@ -6,6 +6,8 @@ package interp
 import (
 	"context"
 	"strconv"
+
+	"github.com/blairham/sh/syntax"
 )
 
 // `ulimit` reads and changes the limits this shell and its children run under.
@@ -149,16 +151,19 @@ func biUlimit(r *Runner, _ context.Context, args []string) int {
 	if len(args) == 0 {
 		return r.reportLimit(res, hard, unit)
 	}
-	want, ok := parseLimit(args[0], unit)
-	if !ok {
-		r.diagf("%s\n", Wording(r.diag().UlimitBadNumber,
-			"ulimit: %[1]s: invalid number", args[0]))
-		return orDefault(r.diag().UlimitBadNumberStatus, 1)
-	}
 	cur, curHard, err := r.GetRlimit(res)
 	if err != nil {
 		r.diagf("ulimit: %v\n", err)
 		return 1
+	}
+	want, ok := r.ulimitOperand(args[0], unit, cur, curHard)
+	if r.unspecified {
+		return r.status
+	}
+	if !ok {
+		r.diagf("%s\n", Wording(r.diag().UlimitBadNumber,
+			"ulimit: %[1]s: invalid number", args[0]))
+		return orDefault(r.diag().UlimitBadNumberStatus, 1)
 	}
 	// With neither flag, three of the four lower the ceiling as well as the
 	// floor — which is what makes `ulimit -t 3600` irreversible. zsh moves
@@ -175,9 +180,11 @@ func biUlimit(r *Runner, _ context.Context, args []string) int {
 		}
 	}
 	if err := r.SetRlimit(res, newSoft, newHard); err != nil {
-		r.diagf("%s\n", Wording(r.diag().UlimitCannotChange,
-			"ulimit: cannot change limit: %[1]s", err.Error()))
-		return 1
+		d := r.diag()
+		r.diagf("%s\n", Wording(d.UlimitCannotChange,
+			"ulimit: cannot change limit: %[3]s",
+			d.ulimitResourceName(res), args[0], d.reasonText(reason(err))))
+		return orDefault(d.UlimitCannotChangeStatus, 1)
 	}
 	return 0
 }
@@ -226,13 +233,130 @@ func (r *Runner) hasResource(res Resource) bool {
 	return true
 }
 
-// parseLimit reads a limit, in the units the shell prints it in.
+// ulimitOperand reads the word a limit is being set from, in the three
+// shapes the panel has: a plain number or `unlimited`, which every shell
+// takes; the words `hard` and `soft`, which name the limits this resource
+// already has; and an arithmetic expression, which is ksh93's reading of
+// anything that is not one of the first two.
+//
+// The order is what makes `hard=333; ulimit -n hard` two different answers
+// on one line: bash and zsh spend the keyword before a name can be looked
+// up and raise the soft limit to the ceiling, where ksh93 has no keyword to
+// spend and evaluates the name, giving 333. Both are reproduced here by
+// checking the keyword first and falling through to the expression.
+//
+// cur and curHard are this resource's limits now, which is what the two
+// keywords name. They are raw rather than scaled: `hard` is the ceiling
+// itself and not a count of blocks, so the unit multiply belongs only to
+// the numbers.
+func (r *Runner) ulimitOperand(word string, unit, cur, curHard int64) (int64, bool) {
+	if n, ok := parseLimit(word, unit); ok {
+		return n, true
+	}
+	switch word {
+	case "hard":
+		if r.ask(r.sem().UlimitTakesHardKeyword, "`ulimit -n hard`") {
+			return curHard, true
+		}
+	case "soft":
+		if r.ask(r.sem().UlimitTakesSoftKeyword, "`ulimit -n soft`") {
+			return cur, true
+		}
+	}
+	if r.unspecified {
+		return 0, false
+	}
+	if !r.ask(r.sem().UlimitOperandIsArithmetic, "a `ulimit` operand read as arithmetic") {
+		return 0, false
+	}
+	return r.ulimitArithmetic(word, unit)
+}
+
+// ulimitArithmetic is the ksh93 reading of a limit that is not a plain
+// number: the word is an expression, so `1000+999` is 1999 and `0x10` is 16.
+//
+// A bare name must be *set* here, which is the one place this position is
+// stricter than `$(( ))`: `echo $((hard))` is 0 in that shell and `ulimit -n
+// hard` is `hard: parameter not set`. So the names the expression mentions
+// are checked before it is evaluated, and the first missing one is the
+// complaint — which is why the two keyword words come out of this dialect
+// with the wording the reference gives them without either being named here.
+func (r *Runner) ulimitArithmetic(word string, unit int64) (int64, bool) {
+	tree, err := r.arithTree(nil, word)
+	if err != nil {
+		return 0, false
+	}
+	if _, missing := r.arithUnsetName(tree); missing {
+		return 0, false
+	}
+	n, err := r.evalArith(tree)
+	if err != nil || n < 0 {
+		return 0, false
+	}
+	return int64(n) * unit, true
+}
+
+// arithUnsetName finds the first name an expression reads that is not set,
+// which is the check ulimitArithmetic needs and nothing else does.
+//
+// A walk of its own rather than a general one, because the question is
+// narrow: the nodes that name a parameter are a bare name and a subscripted
+// one, and everything else is reached only to get past it.
+func (r *Runner) arithUnsetName(e syntax.ArithExpr) (string, bool) {
+	switch x := e.(type) {
+	case nil:
+		return "", false
+	case *syntax.ArithVar:
+		if !r.arithNameIsSet(x.Name) {
+			return x.Name, true
+		}
+	case *syntax.ArithIndex:
+		if !r.arithNameIsSet(x.Name) {
+			return x.Name, true
+		}
+		return r.arithUnsetName(x.Index)
+	case *syntax.ArithUnary:
+		return r.arithUnsetName(x.X)
+	case *syntax.ArithBinary:
+		if name, missing := r.arithUnsetName(x.X); missing {
+			return name, true
+		}
+		return r.arithUnsetName(x.Y)
+	case *syntax.ArithCond:
+		if name, missing := r.arithUnsetName(x.Cond); missing {
+			return name, true
+		}
+		if name, missing := r.arithUnsetName(x.Then); missing {
+			return name, true
+		}
+		return r.arithUnsetName(x.Else)
+	}
+	return "", false
+}
+
+// parseLimit reads a limit written as every shell on the panel writes one:
+// the word `unlimited`, or a run of decimal digits in the units the shell
+// prints the resource in.
+//
+// Deliberately not strconv's idea of a number. ParseInt takes a leading sign,
+// so `ulimit -n +1999` set the limit from a word bash, zsh, dash and BusyBox
+// ash all refuse — silently, at status 0, which is the shape #2298 is about.
+// Digits only, so the sign, the leading blank and the `0x` prefix all fall
+// through to the dialect that actually reads them.
 func parseLimit(s string, unit int64) (int64, bool) {
 	if s == "unlimited" {
 		return RlimitInfinity, true
 	}
+	if s == "" {
+		return 0, false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return 0, false
+		}
+	}
 	n, err := strconv.ParseInt(s, 10, 64)
-	if err != nil || n < 0 {
+	if err != nil {
 		return 0, false
 	}
 	return n * unit, true

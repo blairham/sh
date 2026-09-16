@@ -116,3 +116,18 @@ printf '[%E][%G]\n' inf nan
 printf '[%10f][%-10f][%010f]\n' inf inf inf
 printf '[%+f][% f]\n' inf inf
 printf '[%20.3e][%4g]\n' nan inf
+
+# `ulimit`'s keyword operands, which zsh has one of. `hard` is the ceiling
+# this process is allowed; `soft` is bash's alone and is an unreadable number
+# here, which is why the two words are two axes and not one switch.
+#
+# zsh moves only the soft limit when neither -H nor -S is given, so the first
+# line raises the floor to the ceiling and leaves the ceiling where it was.
+ulimit -c hard; printf 'ulimit -c hard -> %s\n' "$?"
+[ "$(ulimit -Sc)" = "$(ulimit -Hc)" ] && printf 'the floor is now the ceiling\n'
+ulimit -c soft 2> /dev/null; printf 'ulimit -c soft -> %s\n' "$?"
+
+# And a limit is a plain number: not a sign, not an expression, not hex.
+ulimit -c +1 2> /dev/null; printf 'signed -> %s\n' "$?"
+ulimit -c 1+1 2> /dev/null; printf 'expression -> %s\n' "$?"
+ulimit -c 0x10 2> /dev/null; printf 'hex -> %s\n' "$?"

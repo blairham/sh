@@ -1324,8 +1324,21 @@ type Diagnostics struct {
 	UlimitListing []UlimitListingRow
 
 	// UlimitCannotChange is the kernel refusing the change — raising a hard
-	// limit, most often. One verb: the reason.
+	// limit, most often.
+	//
+	// Three verbs, because the three shells that quote one do not quote the
+	// same thing: bash names the *resource* — `ulimit: open files: cannot
+	// modify limit: Operation not permitted` — ksh93 names the operand as
+	// written, and dash names neither. So %[1]s is the resource's label,
+	// %[2]s the word the limit was asked for, and %[3]s the strerror text.
+	//
+	// The reason keeps its capital, which is the C string's and what every
+	// shell here prints; it was lower-cased by Go's syscall.Errno until
+	// #3060, and the resource was not named at all.
 	UlimitCannotChange string
+
+	// UlimitCannotChangeStatus is what that reports. Zero means 1.
+	UlimitCannotChangeStatus int
 
 	// BuiltinBadOption is an option a builtin does not have. Two verbs: the
 	// builtin's name and the option as written.
@@ -6561,6 +6574,27 @@ func (d Diagnostics) dotNoOperandStatus() int {
 		return 2
 	}
 	return d.DotNoOperandStatus
+}
+
+// ulimitResourceName is the label this dialect gives a resource, taken from
+// the row `ulimit -a` prints it on rather than from a table beside it — the
+// name bash puts in front of a refusal is the same text, and a second copy
+// would be one more place for the two to drift apart.
+//
+// Everything from the parenthesis on is the unit and the letter, which the
+// refusal does not carry, so the label is what stands before it.
+func (d Diagnostics) ulimitResourceName(res Resource) string {
+	for _, row := range d.UlimitListing {
+		if row.Fixed != "" || row.Res != res {
+			continue
+		}
+		label := row.Prefix
+		if i := strings.IndexByte(label, '('); i >= 0 {
+			label = label[:i]
+		}
+		return strings.TrimSpace(label)
+	}
+	return ""
 }
 
 // reasonText renders a strerror string the way this dialect quotes one.

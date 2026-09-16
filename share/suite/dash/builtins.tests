@@ -107,3 +107,13 @@ set -o debug
 printf 'after -o debug: [%s]\n' "$-"
 set -o
 set +o debug
+
+# `ulimit` takes a plain number and nothing else here: neither of the two
+# keyword operands bash has, and none of the spellings ksh93's arithmetic
+# reading accepts. `+1` was taken in silence at status 0 until #3060, which
+# set a limit from a word no shell on the panel but ksh93 reads.
+ulimit -c hard 2> /dev/null; printf 'ulimit -c hard -> %s\n' "$?"
+ulimit -c soft 2> /dev/null; printf 'ulimit -c soft -> %s\n' "$?"
+ulimit -c +1 2> /dev/null; printf 'signed -> %s\n' "$?"
+ulimit -c 1+1 2> /dev/null; printf 'expression -> %s\n' "$?"
+ulimit -c 0x10 2> /dev/null; printf 'hex -> %s\n' "$?"

@@ -2008,6 +2008,11 @@ func Semantics() interp.Semantics {
 	s.UlimitHasResidentSet = interp.No
 	s.UlimitHasProcessCount = interp.Yes
 	s.UlimitSetsBothLimits = interp.No
+	// zsh takes `hard` and refuses `soft`, which is why the two words are
+	// two axes: `ulimit -n soft` here is `invalid number: soft`.
+	s.UlimitTakesHardKeyword = interp.Yes
+	s.UlimitTakesSoftKeyword = interp.No
+	s.UlimitOperandIsArithmetic = interp.No
 	s.BadOptionToSpecialBuiltinFatal = interp.No
 	// And this shell's POSIX mode does not move it, which is the departure
 	// from the standard's preset and from every other dialect here. The mode

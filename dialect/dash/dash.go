@@ -741,6 +741,9 @@ func Semantics() interp.Semantics {
 	s.UlimitHasResidentSet = interp.Yes
 	s.UlimitHasProcessCount = interp.No
 	s.UlimitSetsBothLimits = interp.Yes
+	s.UlimitTakesHardKeyword = interp.No
+	s.UlimitTakesSoftKeyword = interp.No
+	s.UlimitOperandIsArithmetic = interp.No
 	s.BadOptionToSpecialBuiltinFatal = interp.Yes
 	// `alias` is no more special here than POSIX makes it: the complaint is
 	// said and the next command runs. Measured with `alias -g x`.
@@ -1224,13 +1227,16 @@ func Diagnostics() interp.Diagnostics {
 		UnaliasNotFoundUnprefixed: true,
 		// dash quotes the whole argument back and does not say what in it
 		// was wrong, so there is no operator wording to go with this.
-		UmaskBadSymbolicMode:  "umask: Illegal mode: %[1]s",
-		UmaskBadOption:        "umask: Illegal option %[1]s",
-		UmaskBadMaskStatus:    2,
-		UlimitBadOption:       "ulimit: Illegal option -%[1]s",
-		UlimitBadNumber:       "ulimit: bad number",
-		UlimitBadNumberStatus: 2,
-		BuiltinBadOption:      "%[1]s: Illegal option %[2]s",
+		UmaskBadSymbolicMode: "umask: Illegal mode: %[1]s",
+		UmaskBadOption:       "umask: Illegal option %[1]s",
+		UmaskBadMaskStatus:   2,
+		UlimitBadOption:      "ulimit: Illegal option -%[1]s",
+		UlimitBadNumber:      "ulimit: bad number",
+		// dash names neither the resource nor the operand, and reports 2.
+		UlimitCannotChange:       "ulimit: error setting limit (%[3]s)",
+		UlimitCannotChangeStatus: 2,
+		UlimitBadNumberStatus:    2,
+		BuiltinBadOption:         "%[1]s: Illegal option %[2]s",
 		// The same sentence kill already had for its own missing argument,
 		// measured for the builtins' shared reader with `read -p`.
 		OptionNeedsArgument: "%[1]s: No arg for -%[2]s option",

@@ -774,6 +774,11 @@ func Semantics() interp.Semantics {
 	s.HangupIsAnOrderlyExit = interp.No
 	s.ExitInTrapReportsEarlierStatus = interp.Yes
 	s.KillListAcceptsName = interp.Yes
+	// ksh93's reading of the number, measured in the container: `kill -l
+	// 256` is EXIT, `257` is HUP, `300` is 44 and `160` is 32.
+	s.KillListReducesRepeatedly = interp.Yes
+	s.KillListPrintsANumberItCannotName = interp.Yes
+	s.KillListNamesZeroAsExit = interp.Yes
 	s.KillStatus = interp.KillStatusAnyFailure
 	s.SubshellJobTable = interp.SubshellJobsCleared
 	// A job started with `&` reads an empty standard input: `ash -c

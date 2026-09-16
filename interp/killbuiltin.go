@@ -761,14 +761,12 @@ func (r *Runner) killList(args []string) int {
 	}
 	for _, a := range args {
 		if n, err := strconv.Atoi(a); err == nil {
-			name := ""
-			for _, k := range knownSignals {
-				if int(k.Sig) == n {
-					name = k.Name
-				}
+			name, ok := r.killListName(n)
+			if r.unspecified {
+				return r.status
 			}
-			if name == "" {
-				return r.killReport(killInvalidSignal, a)
+			if !ok {
+				return r.killReport(killListNumberNotASignal, a)
 			}
 			_, _ = fmt.Fprintln(r.stdout(), name)
 			continue
@@ -788,6 +786,84 @@ func (r *Runner) killList(args []string) int {
 	return 0
 }
 
+// killListName turns a number into what `kill -l` writes for it.
+//
+// The number is not a signal number. It is an *exit status*: `$?` is 128 plus
+// the signal for a child the kernel ended, so `kill -l "$?"` is the ordinary
+// way a script turns a death back into a name, and every shell on the panel
+// answers `kill -l 129` with `HUP`. This engine refused all four columns
+// until #3053, because the lookup was against the signal table alone.
+//
+// Three axes, because the agreement stops at the common case:
+//
+//   - how far the 128 comes off. bash, zsh and dash take it off once and keep
+//     the result only when it names something; ksh93 and BusyBox ash subtract
+//     while the number is still 128 or more, which is what makes `kill -l
+//     257` HUP there and a refusal in the other three.
+//   - what is left when nothing matches: printed back in zsh, ksh93 and ash,
+//     refused in bash and dash.
+//   - whether 0 is `EXIT`, which is the trap table's pseudo-signal rather
+//     than the kernel's.
+//
+// The first subtraction is not one of them. It is unanimous, so it is core
+// and asks nobody; the axes begin where the references stop agreeing.
+//
+// The number printed back is the reduced one, which is the same thing as the
+// number as written in every column that reaches here: the two shells that
+// reduce repeatedly print the reduction, and zsh — the one that prints a
+// number it did not reduce — only ever reaches this with the original,
+// because the one subtraction it makes is kept only when it names a signal.
+func (r *Runner) killListName(n int) (string, bool) {
+	if name, ok := killSignalName(n); ok {
+		return name, true
+	}
+	// One 128 off, kept when what is left names a signal. Unanimous across
+	// the seven columns — bash 5.3, bash-as-`sh`, bash 3.2, zsh, ksh93, dash
+	// and BusyBox ash all answer `kill -l 129` with `HUP` and `kill -l 159`
+	// with the last signal on the table — so it is core and asks nobody.
+	if n >= 128 {
+		if name, ok := killSignalName(n - 128); ok {
+			return name, true
+		}
+	}
+	// Past here the panel parts, and each question is asked only where the
+	// numbers reach it.
+	if n == 0 {
+		if r.ask(r.sem().KillListNamesZeroAsExit, "`kill -l 0` naming the EXIT trap") {
+			return "EXIT", true
+		}
+		if r.unspecified {
+			return "", false
+		}
+	}
+	if n >= 128 {
+		if r.ask(r.sem().KillListReducesRepeatedly, "`kill -l 257` reduced by 128 more than once") {
+			for n >= 128 {
+				n -= 128
+			}
+			return r.killListName(n)
+		}
+		if r.unspecified {
+			return "", false
+		}
+	}
+	if r.ask(r.sem().KillListPrintsANumberItCannotName, "`kill -l 160` answered with the number") {
+		return strconv.Itoa(n), true
+	}
+	return "", false
+}
+
+// killSignalName is the signal table read backwards, and the only lookup
+// `kill -l` had before #3053.
+func killSignalName(n int) (string, bool) {
+	for _, k := range knownSignals {
+		if int(k.Sig) == n {
+			return k.Name, true
+		}
+	}
+	return "", false
+}
+
 // killError is a `kill` that did not get as far as signaling anything.
 type killError struct {
 	kind    killErrorKind
@@ -803,6 +879,11 @@ const (
 	killMissingSignalArgument
 	// killInvalidSignal is a name or number that names no signal.
 	killInvalidSignal
+	// killListNumberNotASignal is a number `kill -l` could not turn into a
+	// name. Its own kind because one dialect calls the operand an exit
+	// status there and a signal name everywhere else, which is the whole
+	// point of the listing form: the number it is given is a `$?`.
+	killListNumberNotASignal
 	// killIllegalOption is the same thing spelled as a flag, which two
 	// dialects report as an unknown option instead.
 	killIllegalOption
@@ -837,7 +918,7 @@ func (e *killError) fallback() string {
 	switch e.kind {
 	case killMissingSignalArgument:
 		return "kill: %[1]s: option requires an argument"
-	case killInvalidSignal, killIllegalOption:
+	case killInvalidSignal, killIllegalOption, killListNumberNotASignal:
 		return "kill: %[1]s: invalid signal specification"
 	case killNotAPid:
 		return "kill: %[1]s: not a pid"
@@ -857,6 +938,8 @@ func (e *killError) format(d Diagnostics) string {
 		return d.KillMissingSignalArgument
 	case killInvalidSignal:
 		return d.KillInvalidSignal
+	case killListNumberNotASignal:
+		return orElse(d.KillListBadNumber, d.KillInvalidSignal)
 	case killIllegalOption:
 		return d.KillIllegalOption
 	case killNotAPid:

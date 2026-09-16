@@ -260,3 +260,21 @@ f() { ( exit 3 ); }
 # answering, and is written up in ksh/signals.tests.
 ( exit 256 ); printf 'exit 256 -> %s\n' "$?"
 ( exit 511 ); printf 'exit 511 -> %s\n' "$?"
+
+# `kill -l N` is handed an *exit status* and not a signal number. `$?` is 128
+# plus the signal for a child the kernel ended, so asking `kill -l` what that
+# number was is the ordinary way a script turns a death back into a name.
+#
+# One 128 comes off, and all seven columns agree when what is left names a
+# signal. They part past that — on whether a second 128 comes off, on whether
+# a number that still names nothing is printed back or refused, and on
+# whether 0 is `EXIT` — and each of those is asked in a dialect directory.
+kill -l 129
+kill -l 130
+kill -l 137
+printf 'status: %s\n' "$?"
+
+# The reduction is not the same thing as a signal number: below 128 the
+# number is looked up as itself.
+kill -l 1
+kill -l 9

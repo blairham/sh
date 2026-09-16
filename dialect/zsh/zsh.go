@@ -1798,6 +1798,11 @@ func Semantics() interp.Semantics {
 	// command did, so `trap "false; exit" 0` exits 1.
 	s.ExitInTrapReportsEarlierStatus = interp.No
 	s.KillListAcceptsName = interp.Yes
+	// One subtraction, and what it cannot name it prints back — `kill -l
+	// 160` is `160` here. No EXIT: this shell answers `kill -l 0` with 0.
+	s.KillListReducesRepeatedly = interp.No
+	s.KillListPrintsANumberItCannotName = interp.Yes
+	s.KillListNamesZeroAsExit = interp.No
 	s.SIGPrefixAccepted = interp.Yes
 	s.RedirectsUseEveryTarget = interp.Yes
 	// `exec {fd}< /etc/hosts; echo $fd` says 11 here and 10 in bash 5.3 and

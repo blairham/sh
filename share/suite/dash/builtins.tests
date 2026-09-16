@@ -117,3 +117,15 @@ ulimit -c soft 2> /dev/null; printf 'ulimit -c soft -> %s\n' "$?"
 ulimit -c +1 2> /dev/null; printf 'signed -> %s\n' "$?"
 ulimit -c 1+1 2> /dev/null; printf 'expression -> %s\n' "$?"
 ulimit -c 0x10 2> /dev/null; printf 'hex -> %s\n' "$?"
+
+# `kill -l` takes the 128 off once and refuses everything it cannot name —
+# 0 included, which is the one column with no `EXIT` and no number printed
+# back. The refusal calls the operand an exit status rather than a signal
+# name, which no other shell here does and which is the listing form's whole
+# subject.
+kill -l 0 2> /dev/null; printf '0 -> %s\n' "$?"
+kill -l 32 2> /dev/null; printf '32 -> %s\n' "$?"
+kill -l 128 2> /dev/null; printf '128 -> %s\n' "$?"
+kill -l 160 2> /dev/null; printf '160 -> %s\n' "$?"
+kill -l 257 2> /dev/null; printf '257 -> %s\n' "$?"
+kill -l 32 2>&1 > /dev/null | sed 's/.*kill: //'

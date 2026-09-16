@@ -68,3 +68,15 @@ ulimit -c '+8'; printf 'signed -> %s %s\n' "$?" "$(ulimit -Sc)"
 lim=4; ulimit -c lim; printf 'a name -> %s %s\n' "$?" "$(ulimit -Sc)"
 ulimit -c hard 2> /dev/null; printf 'an unset name -> %s\n' "$?"
 ulimit -c soft 2> /dev/null; printf 'the other unset name -> %s\n' "$?"
+
+# `kill -l` takes the 128 off while the number is still 128 or more, which is
+# this shell's reading and BusyBox ash's. `kill -l 257` is two subtractions
+# and HUP where bash, zsh and dash all stop after one, and `kill -l 300` is
+# 44. What is left and still names nothing is printed back.
+kill -l 0
+kill -l 128
+kill -l 160
+kill -l 256
+kill -l 257
+kill -l 300
+printf 'status: %s\n' "$?"

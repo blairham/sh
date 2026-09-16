@@ -109,6 +109,67 @@ implemented yet`, and `zsh -i +i` gave the letter away to another option
 and reported `569Jg` where real zsh reports `569X` — four dialects
 refusing or mistaking a letter every shell in the panel takes.
 
+### `-O shopt_option`
+
+One column has a **second option namespace** — bash's `shopt` table, whose
+names overlap `set -o`'s in nothing — and one invocation letter that reaches
+it. Both signs carry it: `-O name` turns the named option on and `+O name`
+turns it off.
+
+Measured 2026-09-16 with standard input on `/dev/null`, `SH -O checkhash -c
+'shopt checkhash'`:
+
+| column | status | writes |
+| --- | --- | --- |
+| bash 5.3.20 | 0 | `checkhash           	on` |
+| bash as `sh` | 0 | the same |
+| bash 3.2.57 | 0 | `checkhash      	on` |
+| zsh 5.9.2 | 127 | `can't open input file: checkhash` |
+| ksh93u+ 2012-08-01 | 2 | `ksh: -O: unknown option` |
+| dash 0.5.12 | 2 | `Illegal option -O` |
+| BusyBox ash 1.37.0 | 2 | `illegal option -O` |
+
+zsh's row is the one that says the letter is bash's rather than shared. zsh
+does take `-O` — it is zsh's own abbreviation for `correctall`, one of the
+thirty letters `Runner.SetOptionLetterNames` carries — and then reads
+`checkhash` as the script it was asked to run. That is a letter zsh has
+meaning something else, not the hole below.
+
+The word after the letter is taken **unconditionally**: wherever the letter
+sits in a bundle, whatever the word looks like, and never welded on. `bash -Ox
+name` and `bash -xO name` are one invocation with xtrace and one shopt name;
+`bash -Ocheckhash` takes the *next* word and reads `checkhash` as more
+letters; and `bash -O -c 'echo hi'` refuses `-c` as an option name rather than
+running anything. A name the shell does not have ends the invocation at status
+2 with `bash: line 0: NAME: invalid shell option name` — which names no
+builtin, because none was typed — and the last of two mentions of one name
+wins.
+
+With **no word after it at all** the letter lists the namespace instead and
+the shell goes on to run what it was given: `bash -O` is byte-for-byte `shopt`
+and `bash +O` is byte-for-byte `shopt -p`, both at status 0.
+
+The spelling is `Semantics.ShellOptionInvocationLetter`, read by the front end
+like `VersionOption` and the startup-file options. What a name then *means* is
+the dialect's, through `Runner.SetShellOptionNamespace`.
+
+Ours did not read the letter at all until #3264, and the cost was not a
+missing option — it was a **missing file**. `O` fell through to the runner as
+an ordinary `set` letter, by which time the option's name had already been
+taken as the script operand, so the shell went looking for a file called
+`checkhash`, did not find one, and exited 127. Meanwhile the usage block this
+shell prints under a refused option carried bash's own line, `-ilrsD or -c
+command or -O shopt_option (invocation only)` — advertising an option the
+front end did not have.
+
+One thing is still not this letter's and is not fixed with it: **when** a
+refused invocation option is reported relative to opening the script operand.
+bash reads every option before it looks at an operand, so `bash -O nosuchopt
+/nope/x.sh` complains about the name at status 2; this front end resolves the
+source first and answers `No such file or directory` at 127. `-o nosuchname`
+divides the same way and always has, because a `set` option cannot be applied
+until there is a runner to apply it to.
+
 ## Interactive, and `$-`
 
 **The rule.** A shell is interactive when `-i` was given, or when it

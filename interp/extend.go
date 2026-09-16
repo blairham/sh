@@ -1438,6 +1438,41 @@ func (r *Runner) SetOptionTable(listed func(r *Runner) []ListedOption, move func
 	r.optionListing, r.optionMover = listed, move
 }
 
+// SetShellOptionNamespace installs a dialect's *second* option namespace —
+// the table it keeps beside `set -o` rather than inside it. One shell in the
+// panel has one, and calls it `shopt`.
+//
+// It is not [Runner.SetOptionTable] under another name, and the difference is
+// the namespace rather than the spelling: `shopt -s nullglob` and
+// `set -o nullglob` are not two ways of asking for one option, because the
+// second name does not exist. The tables overlap in nothing, which is why a
+// dialect that has both installs both.
+//
+// This exists because an **invocation** reaches the namespace before any
+// builtin can. `bash -O checkhash -c 'shopt checkhash'` moves one of these
+// names from the command line, and the front end that reads that line has no
+// dialect to ask — it has a Semantics and a Runner, and until this seam it
+// had no way to reach a table registered as a builtin. Without it the letter
+// fell through as a `set` letter and the *name after it* became the script
+// operand, so the shell looked for a file called `checkhash` and exited 127
+// (#3264).
+//
+// move is handed one name and a direction and returns the status the
+// invocation should end with, 0 for a name it moved. It speaks for itself,
+// because the wording is the dialect's and is not the same on both routes:
+// bash's builtin names itself in its complaint and its invocation option does
+// not. [Runner.AtInvocation] is what tells the mover which it is serving.
+//
+// listed writes the whole table, in the form the sign asked for — bash's `-O`
+// with no name after it is byte-for-byte `shopt` and `+O` is byte-for-byte
+// `shopt -p`, measured on 5.3.20.
+//
+// Both halves are handed the runner to act on, for the reason
+// [Runner.SetOptionTable] gives.
+func (r *Runner) SetShellOptionNamespace(move func(r *Runner, name string, on bool) int, listed func(r *Runner, reissuable bool)) {
+	r.shellOptionMover, r.shellOptionListing = move, listed
+}
+
 // SetOptionLetterNames declares the `set` option letters this shell spells
 // its own way, each mapped to the name it abbreviates in this shell's option
 // namespace.

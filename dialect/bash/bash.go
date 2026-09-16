@@ -345,6 +345,18 @@ func Semantics() interp.Semantics {
 	// answers on standard output at status 0, and the first line is the one
 	// scripts read — see version, in prelude.go, for why the tag is there.
 	s.VersionOption = interp.VersionOption{Spellings: "--version", Text: versionLine()}
+	// `-O shopt_option`, which is this shell's alone: the letter whose next
+	// word is a name in the `shopt` table rather than a `set` option. The
+	// usage block above already advertises it — `-ilrsD or -c command or -O
+	// shopt_option (invocation only)` is bash's own line, printed here under
+	// a refused option — and until #3264 it was advertising an option the
+	// front end did not have, so `bash -O checkhash -c 'shopt checkhash'`
+	// took `checkhash` as the script and exited 127 looking for a file
+	// nobody named. The measurement across the panel is on the axis; the
+	// names the letter reaches are in shopt.go.
+	//
+	// bash 3.2.57 has it too, measured, so it is not gated on the version.
+	s.ShellOptionInvocationLetter = "O"
 	// `-c` and `-s` together: the command string names the operands here,
 	// so `sh -sc CMD name a` has `$0` of `name` and one parameter — the
 	// same answer in the 3.2 macOS ships. ksh93 and zsh let `-s` name them.
@@ -2989,6 +3001,12 @@ func Apply(r *interp.Runner) {
 	// The builtin this shell alone answers to; the other three say "command
 	// not found", so it is registered here rather than taken away there.
 	r.Register("shopt", biShopt)
+	// And the same table reached from the command line that started the
+	// shell, where there is no builtin to run: `bash -O checkhash` moves one
+	// of these names before the first line of the script. See shopt.go, and
+	// Semantics.ShellOptionInvocationLetter for the letter the front end
+	// reads (#3264).
+	r.SetShellOptionNamespace(shoptMoveAtInvocation, shoptListAll)
 	// This shell's only self-documenting builtin, and there is no other name
 	// for it — a script reaching for it used to get 127. See help.go, which
 	// carries what is answered and what is deliberately refused.

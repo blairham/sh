@@ -1040,6 +1040,50 @@ func (r *Runner) SetNamedOption(name string, on bool) int {
 	return r.namedOptionAnswer(r.setNamedOption(name, on))
 }
 
+// SetShellOption moves one name in the dialect's *second* option namespace —
+// bash's `shopt` table — from the words the shell was started with, and
+// returns the status the invocation should end with. Exported for the front
+// end, with SetNamedOption, and the namespace is installed by
+// [Runner.SetShellOptionNamespace].
+//
+// The line is zeroed and the invocation flag set exactly as the two above do
+// it, and for the same two reasons: no script line has run, and the mover has
+// to know which route it is serving because bash words the two differently —
+// `bash: line 0: nosuchopt: invalid shell option name` from the command line
+// against `bash: line 1: shopt: nosuchopt: invalid shell option name` from
+// the builtin. Measured on bash 5.3.20.
+//
+// A shell with no such namespace refuses the name, which is what a shell
+// without the table would say about any name at all. It is not reachable from
+// a dialect this repository ships — the front end reads the letter only where
+// Semantics.ShellOptionInvocationLetter names one, and the one dialect that
+// names it installs the table beside it — and refusing is the honest answer
+// for a front end and a dialect that disagree.
+func (r *Runner) SetShellOption(name string, on bool) int {
+	r.line = 0
+	r.atInvocation = true
+	defer func() { r.atInvocation = false }()
+	if r.shellOptionMover == nil {
+		r.Diagnosef("%s: invalid shell option name\n", name)
+		return 2
+	}
+	return r.shellOptionMover(r, name, on)
+}
+
+// ListShellOptions writes the whole of that second namespace, which is what
+// the same invocation letter does with no name after it: `bash -O` is `shopt`
+// and `bash +O` is `shopt -p`, both byte-for-byte and both at status 0 with
+// the shell going on to run whatever it was given. Measured on bash 5.3.20.
+//
+// Silent in a shell with no such namespace, which is the other half of
+// SetShellOption's fallback: there are no rows to write.
+func (r *Runner) ListShellOptions(reissuable bool) {
+	if r.shellOptionListing == nil {
+		return
+	}
+	r.shellOptionListing(r, reissuable)
+}
+
 // ApplyNamedOption is SetNamedOption from inside a running script: a
 // registered builtin presenting the same options under its own names routes
 // through here, where the line a complaint would name is the one being run

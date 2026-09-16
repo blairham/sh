@@ -191,3 +191,42 @@ set +x
 exec 2>&3
 cat xt.err
 printf 'and the append did not outlive the command [%s]\n' "$v"
+
+# ---- `-O`, the same table reached from the command line ----
+#
+# `-O shopt_option` is invocation-only — there is no `set -O` and no
+# `shopt -O` — so these rows start a shell of their own. `$SUITE_SHELL` is the
+# shell of this run, which is what keeps the question one question: the
+# reference re-enters the reference and our binary re-enters ours.
+#
+# It is bash's letter alone. zsh spends `O` on `correctall` and reads the next
+# word as a script, and ksh93, dash and BusyBox ash refuse it outright, so
+# there is no row here for any of them. Until #3264 this shell had no letter
+# either: `O` fell through as a `set` letter, by which time the option's name
+# had been taken as the script operand, and the shell exited 127 looking for a
+# file called `checkhash`.
+
+"$SUITE_SHELL" -O checkhash -c 'shopt checkhash'
+printf 'the minus turned it on -> %s\n' "$?"
+"$SUITE_SHELL" +O checkhash -c 'shopt checkhash'
+printf 'and the plus turned it off -> %s\n' "$?"
+
+# One that is on with nothing said, so the plus is the half that moves and a
+# shell ignoring the sign would still look right on the pair above.
+"$SUITE_SHELL" +O sourcepath -c 'shopt sourcepath'
+printf 'and one that starts on -> %s\n' "$?"
+
+# The word is taken wherever the letter sits in a bundle, and the rest of the
+# bundle is still option letters — so both of these are one invocation with
+# xtrace on. The trace goes where it cannot be part of the comparison.
+"$SUITE_SHELL" -xO checkhash -c 'shopt checkhash' 2> /dev/null
+"$SUITE_SHELL" -Ox checkhash -c 'shopt checkhash' 2> /dev/null
+
+# A name nobody has ends the invocation and runs nothing.
+"$SUITE_SHELL" -O nosuchoption_zz -c 'echo ran' 2> /dev/null
+printf 'a name nobody has -> %s\n' "$?"
+
+# And with nothing after it at all the letter is the listing itself: `-O` is
+# `shopt` and `+O` is `shopt -p`, both of them byte-for-byte.
+"$SUITE_SHELL" -O < /dev/null | head -3
+"$SUITE_SHELL" +O < /dev/null | head -3

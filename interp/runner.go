@@ -2161,6 +2161,20 @@ type Runner struct {
 	// see extend.go.
 	optionListing func(r *Runner) []ListedOption
 	optionMover   func(r *Runner, name string, on bool) (moved, known bool)
+	// shellOptionMover and shellOptionListing are a *second* option
+	// namespace, the one a dialect keeps beside `set -o` rather than inside
+	// it: bash's `shopt` names, which overlap `set -o`'s in nothing. Nil in
+	// the four shells that have no such table, where the invocation letter
+	// that reaches it is not named either. Installed together through
+	// SetShellOptionNamespace; see extend.go.
+	//
+	// Here rather than only in the builtin because an *invocation* reaches
+	// this namespace before any builtin can: `bash -O checkhash -c …` moves
+	// one of these names from the command line, and the front end has no
+	// dialect to ask. Handed the running runner for the reason the three
+	// fields above are (#1855).
+	shellOptionMover   func(r *Runner, name string, on bool) int
+	shellOptionListing func(r *Runner, reissuable bool)
 	// optionLetterNames are the `set` option letters this dialect spells its
 	// own way, mapped to the names in its namespace. Nil where every letter
 	// the shell has is one the panel shares. Installed through

@@ -1982,6 +1982,11 @@ func Semantics() interp.Semantics {
 	// escape standing and complains.
 	s.PrintfUnicodeEscape = interp.PrintfUnicodeEscapeCodePointOrNul
 	s.PrintfBUnicodeEscape = interp.PrintfUnicodeEscapeCodePointOrNul
+	// The format site splits the same way this shell's `%b` does, and in
+	// the other direction from ksh93's format: `printf 'a\eZ'` is
+	// `61 1b 5a` and `printf 'a\EZ'` is `61 5c 45 5a` in 5.9.2 (#3225).
+	s.PrintfEscEscape = interp.Yes
+	s.PrintfCapitalEscEscape = interp.No
 	// `\e` is the escape character and `\E` is two characters — the opposite
 	// of ksh93, which is why one axis could not answer for both letters.
 	s.PrintfBEscEscape = interp.Yes

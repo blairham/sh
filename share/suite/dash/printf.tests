@@ -75,3 +75,15 @@ printf 'the prefix overflows [%#05x] [%#06x] and then does not [%#07x]\n' 65535 
 # column that writes it past the width. Carried here so that a change to the
 # fill cannot move it unnoticed.
 printf 'a nought [%#05x]\n' 0
+
+# Neither spelling of the escape character, at either site: this is the one
+# column in the panel with no `\e` anywhere, and `printf '\e[1m'` writes the
+# nine characters it was given. XCU gives a format the XSI escape set and
+# nothing else, so the text is read as written rather than an escape being
+# left out.
+#
+# Read as bytes, because an ESC written to a terminal is invisible and a case
+# that compared rendered text could not tell an ESC from a backslash.
+printf 'a\eZ:a\EZ' | od -An -c | tr -s ' '
+printf '%b' 'a\eZ:a\EZ' | od -An -c | tr -s ' '
+printf '\e[1mbold\e[0m' | od -An -c | tr -s ' '

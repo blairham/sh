@@ -1308,6 +1308,13 @@ func Semantics() interp.Semantics {
 	// something argv[0] turns off.
 	s.PrintfUnicodeEscape = interp.PrintfUnicodeEscapeCodePoint
 	s.PrintfBUnicodeEscape = interp.PrintfUnicodeEscapeCodePoint
+	// Both spellings of the escape character in a *format*, in every build
+	// of this shell: `printf 'a\eZ'` and `printf 'a\EZ'` are both
+	// `61 1b 5a` in 5.3.20, in 3.2.57 and under argv[0] `sh` (#3225). The
+	// `%b` site answers the same way, which is what makes this the one
+	// column where the two sites cannot tell each other apart.
+	s.PrintfEscEscape = interp.Yes
+	s.PrintfCapitalEscEscape = interp.Yes
 	s.PrintfBEscEscape = interp.Yes
 	s.PrintfBCapitalEscEscape = interp.Yes
 	// `printf '%b' 'a\101Z'` is `aAZ`: the octal needs no `\0` to introduce

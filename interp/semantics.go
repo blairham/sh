@@ -2767,6 +2767,29 @@ type Semantics struct {
 	// the escape as written in dash, bash 3.2.57 and ksh93u+, and `aAZ` in
 	// bash 5.3.15 and zsh 5.9.2. Nothing truncates here (#2060).
 	PrintfBUnicodeEscape PrintfUnicodeEscapePolicy
+	// PrintfEscEscape admits `\e` in a printf *format* for the escape
+	// character, which is the colour idiom's own escape: `printf '\e[1m'`.
+	// Six of the seven panel columns take it and dash alone writes the two
+	// characters.
+	//
+	// It is not the `%b` site's question under another name, and the panel
+	// is what says so: ksh93 takes `\e` in a format and writes the two
+	// characters in a `%b`, so one field could not hold both answers for
+	// that column. See PrintfBEscEscape for the other site.
+	//
+	// It is a separate axis from PrintfCapitalEscEscape below for the same
+	// reason that pair is two axes: zsh and BusyBox ash take `\e` here and
+	// not `\E`, so no single answer describes either of them.
+	//
+	// Asked only where a format actually carries a `\e`.
+	PrintfEscEscape Answer
+	// PrintfCapitalEscEscape admits `\E` in a printf *format*: bash — every
+	// build of it — and ksh93 do, and dash, zsh and BusyBox ash write the
+	// two characters. See PrintfEscEscape for why the two letters are two
+	// questions and why the format's pair is not the `%b` site's.
+	//
+	// Asked only where a format actually carries a `\E`.
+	PrintfCapitalEscEscape Answer
 	// PrintfBEscEscape admits `\e` in a `%b` argument for the escape
 	// character: bash — 5.3, that binary as `sh`, and 3.2 alike — zsh and
 	// BusyBox ash do; dash and ksh93 write the two characters.
@@ -15355,6 +15378,13 @@ func PosixSemantics() Semantics {
 		// specifications to C's `printf()`, so it answers this one too, and
 		// ksh93 is the departure here as it is above.
 		PrintfZeroFillCountsTheAlternatePrefix: Yes,
+		// XCU gives printf's format the XSI escape set and nothing else —
+		// `\\`, `\a`, `\b`, `\f`, `\n`, `\r`, `\t`, `\v` and `\ddd` — so
+		// neither spelling of the escape character is in it and a backslash
+		// in front of an `e` is a backslash in front of an `e`. dash is the
+		// column that reads the text as written, at both letters.
+		PrintfEscEscape:        No,
+		PrintfCapitalEscEscape: No,
 		// POSIX has `kill -l` turn the status of a signal-killed process
 		// back into a name, which one subtraction does; it says nothing
 		// about a second, gives no output for a number that names nothing,

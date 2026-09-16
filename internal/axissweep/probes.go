@@ -719,6 +719,55 @@ func Probes() []Probe {
 			},
 		},
 		{
+			Field: "PrintfEscEscape",
+			Cases: []string{"axis/printf-format-escape-splits-esc-from-capital-esc"},
+			// The row's **first** line and the half of it in front of the
+			// `3a`, which is the `\\e` alone. The half behind it is the other
+			// letter and is read by the probe below; the second and third
+			// lines are the controls and are unanimous, so a reading taken
+			// from them would grade every column alike.
+			Reading: "`printf 'a\\eZ' | od -An -tx1` is `61 1b 5a` where a format's `\\e` is the escape character and `61 5c 65 5a` where it is a backslash and an `e`",
+			Read: func(cells map[string]oracle.Result) (string, string) {
+				return escHalf(cells["axis/printf-format-escape-splits-esc-from-capital-esc"], 0, "65")
+			},
+		},
+		{
+			Field: "PrintfCapitalEscEscape",
+			Cases: []string{"axis/printf-format-escape-splits-esc-from-capital-esc"},
+			// The half of the same line behind the `3a`. Two probes over one
+			// line because the panel divides differently at the two letters:
+			// a reading that answered for both would have to call zsh and
+			// BusyBox ash, which take one and not the other, something no
+			// dialect field can hold.
+			Reading: "`printf 'a\\EZ' | od -An -tx1` is `61 1b 5a` where a format's `\\E` is the escape character and `61 5c 45 5a` where it is a backslash and an `E`",
+			Read: func(cells map[string]oracle.Result) (string, string) {
+				return escHalf(cells["axis/printf-format-escape-splits-esc-from-capital-esc"], 1, "45")
+			},
+		},
+		{
+			Field: "PrintfBEscEscape",
+			Cases: []string{"printf/a-b-escape-splits-esc-from-capital-esc"},
+			// The `%b` site's own row, read the same way and with the same
+			// split. Nothing probed this pair until #3225, and the ash
+			// preset said `No` for years while the recorded cell said
+			// `1b` — a disagreement no instrument was asking about, which
+			// is the blind spot graded.txt exists to make visible. #3233
+			// corrected the preset from its own measurement; this is what
+			// would have caught it.
+			Reading: "`printf '%b' 'a\\eZ' | od -An -tx1` is `61 1b 5a` where a `%b` argument's `\\e` is the escape character and `61 5c 65 5a` where it is a backslash and an `e`",
+			Read: func(cells map[string]oracle.Result) (string, string) {
+				return escHalf(cells["printf/a-b-escape-splits-esc-from-capital-esc"], 0, "65")
+			},
+		},
+		{
+			Field:   "PrintfBCapitalEscEscape",
+			Cases:   []string{"printf/a-b-escape-splits-esc-from-capital-esc"},
+			Reading: "`printf '%b' 'a\\EZ' | od -An -tx1` is `61 1b 5a` where a `%b` argument's `\\E` is the escape character and `61 5c 45 5a` where it is a backslash and an `E`",
+			Read: func(cells map[string]oracle.Result) (string, string) {
+				return escHalf(cells["printf/a-b-escape-splits-esc-from-capital-esc"], 1, "45")
+			},
+		},
+		{
 			Field: "PrintfNumberOperand",
 			Cases: []string{"axis/printf-number-operand"},
 			// The row's **first** line, because one line carries all three
@@ -1057,4 +1106,42 @@ func recordedLines(out, a, b string) (countA, countB int) {
 		}
 	}
 	return countA, countB
+}
+
+// escHalf reads one of the two escape-character letters off a row whose first
+// line is `printf` handing `a\eZ:a\EZ` to `od -An -tx1`, and is shared by the
+// four probes over the two sites rather than written out four times: the
+// format's reader and the `%b` argument's have different answers and the same
+// shape, so one reading with the half named by an argument is the honest way
+// to say that. half 0 is the text in front of the `3a` the colon writes and
+// half 1 is the text behind it; letter is the byte the refusing columns write
+// after the backslash — `65` for an `e` and `45` for an `E`.
+//
+// Silence where the bytes are neither, and never a guess. The trailing space
+// od leaves is one column's and not another's — BusyBox's writes none — so
+// the line is read as fields rather than compared as text.
+func escHalf(cell oracle.Result, half int, letter string) (string, string) {
+	first, _, _ := strings.Cut(cell.Stdout, "~")
+	fields := strings.Fields(first)
+	colon := -1
+	for i, f := range fields {
+		if f == "3a" {
+			colon = i
+			break
+		}
+	}
+	if colon < 0 {
+		return "", "the recorded line does not carry the two spellings either side of a colon, so the row asks this column nothing"
+	}
+	got := fields[:colon]
+	if half == 1 {
+		got = fields[colon+1:]
+	}
+	switch strings.Join(got, " ") {
+	case "61 1b 5a":
+		return "Yes", ""
+	case "61 5c " + letter + " 5a":
+		return "No", ""
+	}
+	return "", "this column wrote neither the escape character nor the backslash and the letter, so the row says nothing about whether it has this escape"
 }

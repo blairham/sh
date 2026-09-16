@@ -1549,6 +1549,13 @@ func Semantics() interp.Semantics {
 	// reachable at those two sites only, since this shell reads no `\u` in
 	// `echo`, in `print` or in a `%b` (#2021).
 	s.UnicodeEscapeOutsideTheLocale = interp.OutsideLocaleEscapeEncoded
+	// In a *format* this shell takes both letters: `printf 'a\eZ'` and
+	// `printf 'a\EZ'` are each `61 1b 5a` in 93u+ 2012-08-01 (#3225). Its
+	// two sites disagree, which is what says the format's pair is not the
+	// `%b` pair under another name — one field could not hold `\e` yes here
+	// and no there.
+	s.PrintfEscEscape = interp.Yes
+	s.PrintfCapitalEscEscape = interp.Yes
 	// `\E` is the escape character and `\e` is two characters — the opposite
 	// of zsh, which is why one axis could not answer for both letters.
 	s.PrintfBEscEscape = interp.No

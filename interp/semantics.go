@@ -4081,11 +4081,20 @@ type Semantics struct {
 	// ProcessSubstitutionInCondition lets `<(cmd)` stand as a condition's
 	// operand — `[[ $v == <(cmd) ]]` — and be performed there.
 	//
-	// bash alone. zsh reads the word and then refuses it, at status 2 and in
-	// a sentence of its own; ksh93 refuses earlier still, while reading, and
-	// dash has no `[[ ]]` to refuse it in. So the answer is no for three of
-	// the four, and what differs between them is only when and in what words
-	// — which is exactly the split between this axis and Diagnostics.
+	// bash and BusyBox ash, and this said "bash alone" until the seventh
+	// column was put to it (#3248's class). zsh reads the word and then
+	// refuses it, in a sentence of its own; ksh93 refuses earlier still,
+	// while reading, and dash has no `[[ ]]` to refuse it in — so the answer
+	// is no for three of the five, and what differs between those three is
+	// only when and in what words, which is exactly the split between this
+	// axis and Diagnostics.
+	//
+	// The discriminating probe is a comparison against the construct's own
+	// text, and not a file test on it: measured 2026-09-16, `[[ "<(echo x)"
+	// == <(echo x) ]]` is 1 in bash and BusyBox ash because the right side
+	// became a `/dev/fd` name, where a shell that left the word as written
+	// would answer 0. `[[ -e <(echo x) ]]` is 0 under both readings and
+	// decides nothing.
 	//
 	// It is asked *before* the substitution is performed. A shell that
 	// refuses the word must not have started the command first, and that is

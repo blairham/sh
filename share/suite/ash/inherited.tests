@@ -25,6 +25,24 @@ printf -- '--- an empty regex operand ---\n'
 [[ abc =~ b ]]; printf 'a regex that matches -> %s\n' "$?"
 [[ abc =~ x ]]; printf 'a regex that does not -> %s\n' "$?"
 
+printf -- '--- a process substitution as a condition operand ---\n'
+
+# The discriminator, and the row that separates "performed" from "read as
+# the word that was written": the left side is the text of the construct and
+# the right side is what it became, so 1 is a shell that performed it and 0 a
+# shell that did not. zsh refuses here with a sentence of its own; ksh93 and
+# dash refuse while reading, before the file runs at all.
+[[ "<(echo x)" == <(echo x) ]]; printf 'compared against its own text -> %s\n' "$?"
+
+# The control that cannot decide it, and is here to say so: `-e` is true on a
+# /dev/fd name and false on the literal word, so it is 0 either way in every
+# column that parses the line.
+[[ -e <(echo x) ]]; printf 'the file test -> %s\n' "$?"
+
+# And the construct works outside a condition, which is what says the two
+# rows above are about `[[ ]]`.
+[[ $(cat <(echo x)) == x ]]; printf 'under an ordinary command -> %s\n' "$?"
+
 printf -- '--- `.` looking in the current directory ---\n'
 
 # PATH is searched first in every column, and where it has the name it wins:

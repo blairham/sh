@@ -167,3 +167,46 @@ func write(t *testing.T, path, body string) {
 		t.Fatal(err)
 	}
 }
+
+// `<(cmd)` as a condition's operand, which this shell performs and zsh,
+// ksh93 and dash refuse — each in its own way and at its own moment.
+func TestProcessSubstitutionStandsInACondition(t *testing.T) {
+	for _, tc := range []struct {
+		name, src string
+		want      int
+	}{
+		{
+			// The discriminator, and the only row that can tell "performed"
+			// from "left as the word that was written": the left side is the
+			// text of the construct and the right side is what it became, so
+			// a shell that performed it answers 1 and a shell that read the
+			// word literally answers 0.
+			"a comparison against the text of the construct",
+			`[[ "<(echo x)" == <(echo x) ]]`,
+			1,
+		},
+		{
+			// The control, and the reason the row above needs saying: this
+			// one is 0 whether the substitution was performed or not, since
+			// `-e` on a literal `<(echo x)` is false and on a `/dev/fd` name
+			// is true — the panel splits and this row does not.
+			"the file test that cannot decide it",
+			`[[ -e <(echo x) ]]`,
+			0,
+		},
+		{
+			// And the substitution works at all outside the condition, which
+			// is what says the rows above are about `[[ ]]`.
+			"the same construct under an ordinary command",
+			`[[ $(cat <(echo x)) == x ]]`,
+			0,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runIn(t, tc.src)
+			if st != tc.want {
+				t.Errorf("status %d, want %d; output %q", st, tc.want, out)
+			}
+		})
+	}
+}

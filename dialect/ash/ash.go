@@ -204,6 +204,15 @@ func Semantics() interp.Semantics {
 	// the preset's `Yes` — the refusal — because nothing asked (#3248's
 	// class).
 	s.EmptyRegexOperandIsAnError = interp.No
+	// A `<(cmd)` may stand as a condition's operand and is performed there,
+	// as it is in bash. Measured 2026-09-16 in the pinned alpine image:
+	// `[[ "<(echo x)" == <(echo x) ]]` is **1**, because the right side
+	// became a `/dev/fd` name and the left is the text — the row that tells
+	// "performed" from "read as a literal word", which the `-e` form cannot.
+	// zsh refuses at 1 with a sentence of its own and ksh93 and dash refuse
+	// while reading, so the preset's `No` was three shells' answer and not
+	// this one's (#3248's class).
+	s.ProcessSubstitutionInCondition = interp.Yes
 	// `echo .*` lists `.` and `..` beside the hidden names, which is the
 	// answer dash and ksh93 give and bash 5.3 does not. Recorded from the
 	// corpus run inside the container rather than guessed at, since there

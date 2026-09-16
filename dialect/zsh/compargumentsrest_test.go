@@ -48,6 +48,10 @@ func TestARestSpecificationMovesTheWords(t *testing.T) {
 		// `cmd sub -o val <TAB>` keeps all four.
 		{"a later option is a word", `'*:: :->rest'`, "cmd sub -o val ", "0/sub,-o,val,/4"},
 		{"and so is the one being typed", `'*:: :->rest'`, "cmd sub -v", "0/sub,-v/2"},
+		// A single-colon rest never stops them, however many words it has
+		// taken — which is what separates the rule from "a rest
+		// specification stops options".
+		{"one colon still reads them", `'*: :->rest'`, "cmd sub -v", "1/cmd,sub,-v/3"},
 		// But not before it has: at the first position nothing has been
 		// written for a sub-command to own, so `-v` is still an option and
 		// no argument specification applies at all.
@@ -169,6 +173,7 @@ func TestATagLoopBelongsToItsFunction(t *testing.T) {
 		inner() { comptags -i :x:inner: p q; comptry p q; comptags -N }
 		here() { comptags -R p 2>/dev/null; local x=$?; comptags -R a 2>/dev/null; say "$x$?" }
 		deeper() { here }
+		prev() { comptags -i- :x:prev: p q; comptry p q }
 	`
 	for _, c := range []struct{ name, body, want string }{
 		// The outer loop is back once the function that replaced it returns.
@@ -183,6 +188,16 @@ func TestATagLoopBelongsToItsFunction(t *testing.T) {
 		// A level nobody installed at has no loop at all, rather than the
 		// nearest one below it.
 		{"a level with no loop", "inner; deeper", "11"},
+		// `comptags -i-` installs at the level *before* the one calling it,
+		// which is what `_tags --` is for — and the `comptry` written beside
+		// it adds its set to that loop rather than looking for one of its
+		// own. Measured: after `prev` returns, `-N` steps into the set it
+		// added and `-R p` is 0 where `-R a` is 1.
+		{
+			"the level before this one", `prev; comptags -N
+			 comptags -R p; local x=$?; comptags -R a; say "$x$?"`,
+			"01",
+		},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			body := helpers + `

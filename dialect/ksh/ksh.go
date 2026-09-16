@@ -339,6 +339,10 @@ func Dialect() syntax.Dialect {
 	// not modeled: it reads as an incremental matcher failing to back out
 	// rather than as a rule, and it costs only the spelling of the body.
 	d.HeredocDelimiterAcrossAContinuation = syntax.NoHeredocDelimiterAcrossAContinuation
+	// A `<<-` delimiter written with leading tabs has them stripped the way
+	// the body lines do, so `EOF` ends a `<tab>EOF` document. zsh agrees;
+	// bash and dash do not. See syntax.HeredocDelimiterTabs.
+	d.StrippedHeredocDelimiter = syntax.HeredocDelimiterTabsAreStrippedToo
 	// The measured ksh93 is 93u+ 2012, which has no `&>`. Later ksh93u+m
 	// does, twelve years apart under the same name — which is the divergence
 	// syntax.Dialect's own comment names as the reason its fields are called

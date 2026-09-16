@@ -1,0 +1,52 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Here-documents, where the panel parts over what ends a body.
+#
+# bash 5.3 ends a body inside parentheses at a delimiter line that carries
+# the closing one, even where a line reading the delimiter alone comes later,
+# and says the document was delimited by end of file. Under `<<-` it meets a
+# delimiter written with a tab by the body line as written, before its tabs
+# are stripped: `<tab>EOF` ends a `<tab>EOF` document and `EOF` does not.
+#
+# Each probe is a script of its own, because a body that never meets its
+# delimiter takes everything under it — and a case that did that here would
+# take the rest of this file with it.
+
+# A body inside $( ) whose delimiter line carries the closing parenthesis,
+# with a line reading the delimiter alone further down and a `)` under that.
+# The shells that read a body from between the parentheses end it at `EOF)`
+# and run what follows as commands, the later `EOF` and `)` included; the
+# shells that read it from the whole input end it at the later `EOF`, and the
+# `)` under that closes the substitution around all of it.
+printf 'x=$(cat <<EOF\nbody\nEOF)\necho "[$x]"\nEOF\n)\necho "{$x}"\n' > later-delimiter
+"$SUITE_SHELL" ./later-delimiter 2>&1
+printf 'later delimiter: status %s\n' "$?"
+
+# The same with the tab-stripping operator, which finds its delimiter by a
+# different rule and reaches the same question.
+printf 'x=$(cat <<-EOF\n\tbody\n\tEOF)\necho "[$x]"\nEOF\n)\necho "{$x}"\n' > later-stripped
+"$SUITE_SHELL" ./later-stripped 2>&1
+printf 'later stripped: status %s\n' "$?"
+
+# `<<-` with a delimiter written with a leading tab, which only a quoted one
+# can be. Four end lines: the delimiter as written, the delimiter's text with
+# no tab, two tabs, and — for a delimiter written with two — two again.
+printf "cat <<- '\tEOF'\n\tbody\n\tEOF\necho after\n" > tab-tab
+"$SUITE_SHELL" ./tab-tab 2>&1
+printf 'tab, tab: status %s\n' "$?"
+printf "cat <<- '\tEOF'\n\tbody\nEOF\necho after\n" > tab-bare
+"$SUITE_SHELL" ./tab-bare 2>&1
+printf 'tab, bare: status %s\n' "$?"
+printf "cat <<- '\tEOF'\n\tbody\n\t\tEOF\necho after\n" > tab-two
+"$SUITE_SHELL" ./tab-two 2>&1
+printf 'tab, two tabs: status %s\n' "$?"
+printf "cat <<- '\t\tEOF'\n\tbody\n\t\tEOF\necho after\n" > two-two
+"$SUITE_SHELL" ./two-two 2>&1
+printf 'two tabs, two tabs: status %s\n' "$?"
+
+# The control: without the dash nothing is stripped anywhere, and the line
+# spelled exactly like the delimiter ends the body in every column.
+printf "cat << '\tEOF'\nbody\nEOF\n\tEOF\necho after\n" > no-dash
+"$SUITE_SHELL" ./no-dash 2>&1
+printf 'no dash: status %s\n' "$?"

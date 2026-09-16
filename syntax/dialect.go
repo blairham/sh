@@ -156,6 +156,50 @@ const (
 	SemicolonSeparatesArrayElementsLikeANewline
 )
 
+// HeredocDelimiterTabs is what `<<-` does with tabs the *delimiter* was
+// written with. See [Dialect.StrippedHeredocDelimiter].
+//
+// The operator strips leading tabs from every body line, and that part is
+// unanimous. A delimiter can only begin with a tab if it was quoted — `<<-
+// '<tab>EOF'` — and then the stripped lines can never be spelled like it, so
+// each shell has had to decide what such a document ends at. Three answers,
+// measured 2026-09-16 from script files under `env -i`, standard input the
+// null device, the body printed by `cat`:
+//
+//	delimiter written  <tab>EOF   <tab>EOF   <tab>EOF        <tab><tab>EOF
+//	end line           <tab>EOF   EOF        <tab><tab>EOF   <tab><tab>EOF
+//	bash 5.3.20        ends       runs out   runs out        ends
+//	zsh 5.9.2          ends       ends       ends            ends
+//	ksh93u+ 2012       ends       ends       ends            ends
+//	dash 0.5.12        runs out   runs out   runs out        runs out
+//
+// So bash compares the line as written as well as the stripped line, zsh and
+// ksh93 strip the delimiter's tabs as they strip the line's, and dash compares
+// the stripped line against the delimiter as written, which nothing can equal.
+// A tab anywhere but the front of the delimiter is unanimous and is not this
+// question, and neither is `<<` without the dash, which strips nothing in any
+// column. BusyBox ash was not reachable when this was measured and keeps the
+// core answer until it is.
+type HeredocDelimiterTabs uint8
+
+const (
+	// HeredocDelimiterTabsAreKept compares the stripped line against the
+	// delimiter as it was written, so a delimiter that opens with a tab is
+	// never met and the body runs to the end of the input. dash, and the
+	// core.
+	HeredocDelimiterTabsAreKept HeredocDelimiterTabs = iota
+
+	// HeredocLineAsWrittenMeetsTheDelimiter also compares the line as it was
+	// written, before its tabs were stripped: `<tab>EOF` ends a `<tab>EOF`
+	// document and `EOF` does not. bash 5.3.
+	HeredocLineAsWrittenMeetsTheDelimiter
+
+	// HeredocDelimiterTabsAreStrippedToo strips the delimiter's leading tabs
+	// as the lines' are stripped, so any line reading `EOF` once its tabs are
+	// gone ends a `<tab>EOF` document. zsh 5.9.2 and ksh93u+.
+	HeredocDelimiterTabsAreStrippedToo
+)
+
 // ContinuedHeredocDelimiter is how far a here-document body line assembled
 // across a backslash-newline may go toward being the delimiter. See
 // [Dialect.HeredocDelimiterAcrossAContinuation].
@@ -2128,6 +2172,11 @@ type Dialect struct {
 	// A quoted delimiter — `<<'EOF'` or `<<\EOF` — makes the body literal
 	// throughout, continuation included, and never reaches this.
 	HeredocDelimiterAcrossAContinuation ContinuedHeredocDelimiter
+
+	// StrippedHeredocDelimiter is what `<<-` does with a delimiter written
+	// with leading tabs, which only a quoted delimiter can be. See
+	// [HeredocDelimiterTabs], which carries the measurement.
+	StrippedHeredocDelimiter HeredocDelimiterTabs
 
 	// ArithCommand enables `(( expr ))` as a command. Consumed by the lexer,
 	// which scans the expression as raw text: what is inside is an arithmetic

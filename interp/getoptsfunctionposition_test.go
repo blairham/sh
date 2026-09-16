@@ -188,3 +188,25 @@ func TestTheTwoOptargRowsAreIndependent(t *testing.T) {
 		t.Errorf("out = %q, want %q", out, want)
 	}
 }
+
+// The answer keyed on the definition form, asked of the substrate with both
+// forms in every row: a row with only the keyword form in it passes under
+// GetoptsFunctionPositionIsLocal too, which scopes both (#3321).
+func TestAKeywordFunctionsCursorIsItsOwnAndAPosixOnesIsShared(t *testing.T) {
+	for _, tc := range []struct{ name, def, want string }{
+		{"the keyword form", `function g { printf "entry=%s " "$OPTIND"; OPTIND=7; }`, "entry=1 after=3\n"},
+		{"the POSIX form", `g() { printf "entry=%s " "$OPTIND"; OPTIND=7; }`, "entry=3 after=7\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := positionSem(GetoptsFunctionPositionIsLocalToAKeywordFunction)
+			src := tc.def + "\n" + `OPTIND=3` + "\n" + `g` + "\n" + `printf "after=%s\n" "$OPTIND"`
+			out, st := run(t, src, func(r *Runner) { r.Semantics = &sem })
+			if st != 0 {
+				t.Errorf("status %d, want 0", st)
+			}
+			if out != tc.want {
+				t.Errorf("out = %q, want %q", out, tc.want)
+			}
+		})
+	}
+}

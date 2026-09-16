@@ -19061,7 +19061,8 @@ const (
 	// a call could be told apart by it.
 	GetoptsFunctionPositionUnspecified GetoptsFunctionPositionPolicy = iota
 	// GetoptsFunctionPositionIsShared gives a call the cursor the caller had
-	// reached and hands back whatever the call left: bash and ksh93, where a
+	// reached and hands back whatever the call left: bash, and ksh93 for a
+	// function written `name() { … }` — see the keyword answer below — where a
 	// helper function that parses its own options parses them once however
 	// often it is called, and the `local OPTIND=1` in every such helper is
 	// what makes the second call work.
@@ -19080,6 +19081,35 @@ const (
 	// had reached, an assignment inside the call is gone on return, and the
 	// place inside a clustered word travels with it.
 	GetoptsFunctionPositionIsLocal
+	// GetoptsFunctionPositionIsLocalToAKeywordFunction is the local answer
+	// above for a call to a function written with the `function` word and
+	// the shared answer for one written `name() { … }`: ksh93, where the
+	// definition form is the scoping construct and the `getopts` cursor is
+	// the fourth thing that word scopes, after the call's typeset locals,
+	// its trap table (TrapsGoBackAtTheReturnOfAKeywordFunction) and its
+	// option table (OptionsGoBackAtTheReturnOfAKeywordFunction).
+	//
+	// Measured 2026-09-16 against AT&T 93u+ 2012-08-01, a script file under
+	// `env -i PATH=/usr/bin:/bin LC_ALL=C` with stdin from /dev/null, the
+	// body both reading and writing the cursor — a body that only writes
+	// cannot tell a fresh cursor from a shared one whose write is undone:
+	//
+	//	set -- -a -b x; getopts ab o
+	//	function k { echo "body=$OPTIND"; OPTIND=9; }; k; echo "after=$OPTIND"
+	//
+	//	ksh93u+, keyword form   body=1 after=2
+	//	ksh93u+, POSIX form     body=2 after=9    as bash, dash, ash
+	//	zsh 5.9.2, either form  body=1 after=1    GetoptsFunctionPositionIsLocal
+	//
+	// It is a reset, where the option table beside it is a restore, and both
+	// halves of the cursor travel with it. With the caller part-way through
+	// `-ab`, a keyword-form body scanning the same words reads `a` again,
+	// and the caller's next `getopts` reads `b`; the POSIX-form body reads
+	// `b` and leaves the caller at the end of the word. And the boundary is
+	// the word, not the call: a POSIX-form function called inside a keyword
+	// one moves the keyword call's cursor, and the keyword call's return
+	// puts the caller's back over it.
+	GetoptsFunctionPositionIsLocalToAKeywordFunction
 )
 
 func (p GetoptsFunctionPositionPolicy) String() string {
@@ -19090,6 +19120,8 @@ func (p GetoptsFunctionPositionPolicy) String() string {
 		return "the call's own, and OPTIND the shell's"
 	case GetoptsFunctionPositionIsLocal:
 		return "local, OPTIND included"
+	case GetoptsFunctionPositionIsLocalToAKeywordFunction:
+		return "local to a `function`-word call, OPTIND included"
 	}
 	return "unspecified"
 }

@@ -13909,6 +13909,54 @@ writes `+` or a space even where a precision of nought erased the digits,
 all seven columns do, and only Go's `fmt` does not — see
 `interp/printfnought.go`.
 
+**`PrintfZeroFillCountsTheAlternatePrefix`** — bash yes · dash yes · ksh93 **no** · zsh yes · ash yes
+
+Counts the `0x` C's `#` wrote as part of the field, so the `0` flag's fill
+is the width less the prefix and less the digits. The other reading pads
+the *digits* to the width and writes the prefix past it, which makes every
+such field two characters wider than the format asked for.
+
+`printf '%#05x' 7` is the whole of it: `0x007` and five characters where
+the prefix counts, `0x00007` and seven where it does not. Both readings
+put the fill between the `0x` and the digits — what parts them is the
+arithmetic and not the placement — so a table of this has to show the
+width it produced rather than only the bytes around the fill.
+
+Measured 2026-09-15 under `LC_ALL=C` with `printf '[%s]' N`:
+
+    %#05x 7      0x007                 ksh93 0x00007
+    %#05X 255    0X0FF                 ksh93 0X000FF
+    %#010x 255   0x000000ff            ksh93 0x00000000ff
+    %#05x 65535  0xffff                ksh93 0x0ffff
+    %#06x 65535  0xffff                ksh93 0x00ffff
+    %#06o 255    000377                all seven, and the axis is not asked
+    %#8x 7       `     0x7`            all seven: a space fill is unanimous
+    %#-08x 7     `0x7     `            all seven: `-` voids a zero fill
+    %05d -42     -0042                 all seven: a sign is counted by everyone
+
+The 65535 rows are where C's fill goes empty two characters before the
+other reading's does, and they are why the arithmetic is stated as a
+subtraction that stops at nothing rather than as a placement.
+
+The last four rows are the controls, and a table without them would have
+been read far too widely. An octal's alternate form is a leading `0` that
+is itself a fill character, so `%#06o` cannot tell the two readings apart
+and the axis is asked only of `%x` and `%X`. A space fill goes in front of
+the whole field everywhere, so the reading is the `0` flag's and not the
+width's. And a *sign* is counted in the width by every column, ksh93
+included, which is what makes the question the prefix's rather than the
+fill's.
+
+It is never asked at a value of nought either: whether there is a prefix
+there at all is `PrintfAlternateFormAsksTheValue`, and the column that
+keeps one is the column that does not count it.
+
+This shell answered as ksh93 does in every dialect until #3066, because
+Go's `fmt` is the second reading — `fmt.Sprintf("%#05x", 7)` is `0x00007`.
+A precision is a different question again: it ignores the `0` flag in C,
+in `fmt` and in six columns, and ksh93 honors it there, which is measured
+and filed rather than modeled (#3067).
+
 **`PrintfQuote`** — bash backslash · dash absent · ksh93 single quoted · zsh backslash
 
 Is how `%q` quotes, which is three answers and an absence rather than a

@@ -258,3 +258,24 @@ printf 'a space padded [% 5.0d]\n' 0
 printf 'a nonzero value [%+.0d]\n' 7
 printf 'digits left [%+.3d]\n' 0
 printf 'a float [%+.0f]\n' 0
+
+# Where a `0` fill meets an alternate form and every shell still agrees. C
+# counts the `0x` against the width and ksh93 does not, which is a dialect's
+# row — but four spellings around it are unanimous, and they are what keeps
+# that reading from being taken more widely than it goes.
+#
+# An octal's alternate form is a leading `0` that is itself a fill character,
+# so nothing can tell the two readings apart there.
+printf 'an octal [%#06o] [%#05o]\n' 255 8
+
+# A *space* fill goes in front of the whole field everywhere, so the reading
+# is the `0` flag's and not the width's; and `-` voids a zero fill outright,
+# which C says and every shell here does.
+printf 'a space fill [%#8x] and left-justified [%#-08x]\n' 7 7
+
+# A sign is counted in the width by every shell, ksh93 included, which is
+# what makes the divergence the prefix's rather than the fill's.
+printf 'a sign [%05d] [%+05d] [% 05d]\n' -42 42 42
+
+# And a width the digits already reach leaves no fill to place at all.
+printf 'nothing to fill [%#03x] and no alternate form [%08x]\n' 4095 255

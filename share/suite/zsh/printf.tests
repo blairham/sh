@@ -44,3 +44,24 @@ printf 'an octal with nothing left [%#.0o] [%#5.0o]\n' 0 0
 printf 'no value and no digits [%#.0x]\n' 0
 printf 'an octal nought [%#o]\n' 0
 printf 'nonzero [%#x] [%#o]\n' 255 255
+
+# The `0` fill against the `0x` C's `#` wrote. C counts the prefix as part of
+# the field, so the fill is the width less the `0x` and less the digits and
+# `%#05x` of 7 is five characters. ksh93 pads the digits to the width and
+# writes the prefix past it, which is seven — so these lines are here rather
+# than in core/, which is the tier that has to agree in all five columns.
+printf 'a hexadecimal [%#05x] [%#05X]\n' 7 255
+printf 'a wider field [%#010x]\n' 255
+printf 'the flags the other way round [%0#5x]\n' 7
+
+# The width the prefix eats into, where C's fill goes empty two characters
+# before the other reading's does. `%#05x` and `%#06x` of 65535 are both
+# `0xffff` here and are `0x0ffff` and `0x00ffff` in ksh93, which is what
+# makes the rule a subtraction that stops at nothing rather than a placement.
+printf 'the prefix overflows [%#05x] [%#06x] and then does not [%#07x]\n' 65535 65535 65535
+
+# A nought is the other reading and not this one: whether there is a prefix
+# there at all is what #3024 settled, and the column that keeps one is the
+# column that writes it past the width. Carried here so that a change to the
+# fill cannot move it unnoticed.
+printf 'a nought [%#05x]\n' 0

@@ -32313,6 +32313,57 @@
         "TimedOut": false
       }
     },
+    "axis/printf-zero-fill-counts-the-alternate-prefix": {
+      "ash": {
+        "Stdout": "[0x007][0X0FF][0x000000ff]~[0xffff][0xffff][0x00ffffffffffffffff]~[000377][     0x7][0x7     ][-0042]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[0x007][0X0FF][0x000000ff]~[0xffff][0xffff][0x00ffffffffffffffff]~[000377][     0x7][0x7     ][-0042]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[0x007][0X0FF][0x000000ff]~[0xffff][0xffff][0x00ffffffffffffffff]~[000377][     0x7][0x7     ][-0042]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[0x007][0X0FF][0x000000ff]~[0xffff][0xffff][0x00ffffffffffffffff]~[000377][     0x7][0x7     ][-0042]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[0x007][0X0FF][0x000000ff]~[0xffff][0xffff][0x00ffffffffffffffff]~[000377][     0x7][0x7     ][-0042]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[0x00007][0X000FF][0x00000000ff]~[0x0ffff][0x00ffff][0x0000ffffffffffffffff]~[000377][     0x7][0x7     ][-0042]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[0x007][0X0FF][0x000000ff]~[0xffff][0xffff][0x00ffffffffffffffff]~[000377][     0x7][0x7     ][-0042]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "axis/readonly-a-subscripted-operand": {
       "ash": {
         "Stdout": "",

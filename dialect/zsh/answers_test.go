@@ -121,6 +121,10 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 	if got, want := s.UnterminatedBracketAfterASubExpression, interp.BracketBadPattern; got != want {
 		t.Errorf("UnterminatedBracketAfterASubExpression = %v, want %v", got, want)
 	}
+	// no parameter for it either: this shell orders an expansion with glob qualifiers, which are part of the pattern.
+	if got, want := s.SortOrderVariable, ""; got != want {
+		t.Errorf("SortOrderVariable = %q, want %q", got, want)
+	}
 	if got, want := s.UnknownCharacterClass, interp.UnknownClassIsInert; got != want {
 		t.Errorf("UnknownCharacterClass = %v, want %v", got, want)
 	}

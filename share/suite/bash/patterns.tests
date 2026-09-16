@@ -161,3 +161,56 @@ printf 'no fold: [%s]\n' g/*
 unset GLOBIGNORE
 
 rm -rf g
+
+# GLOBSORT: the order a pathname expansion comes back in, which is 5.3's and
+# which no other shell in the panel has a parameter for — zsh orders one with
+# glob qualifiers, part of the pattern rather than a parameter, and ksh93 and
+# dash have neither. That is what makes it a claim for this tier: the three
+# references answer every line below in the same default order, and only this
+# one moves.
+#
+# The four rows after the keys are the ones a reader would assume the other
+# way round, and each is measured: a *trailing* blank invalidates the value
+# where a leading one is trimmed, the key is matched whole and case
+# sensitively, and a value this shell does not recognize is the default order
+# at status 0 with nothing said at all.
+#
+# `nosort` is deliberately absent. Its answer is the directory's own order,
+# which is a fact about the filesystem rather than about the shell, so a file
+# that printed it would be reporting the disk. interp/globsort_test.go holds
+# it instead, where the expected order can be read from the directory and
+# compared rather than written down.
+rm -rf s
+mkdir s
+printf '12345' > s/big.o
+printf '1' > s/tiny.o
+: > s/alpha.o
+: > s/9
+: > s/10
+: > s/100
+cd s
+
+gshow() { printf '%-22s' "$1"; shift; printf ' [%s]' "$@"; printf '\n'; }
+
+unset GLOBSORT
+gshow 'unset' *.o
+GLOBSORT=name; gshow 'name' *.o
+GLOBSORT=+name; gshow '+name' *.o
+GLOBSORT=-name; gshow '-name' *.o
+GLOBSORT=size; gshow 'size' *.o
+GLOBSORT=-size; gshow '-size' *.o
+GLOBSORT=numeric; gshow 'numeric' [0-9]*
+GLOBSORT=-numeric; gshow '-numeric' [0-9]*
+GLOBSORT=-; gshow 'a bare sign' *.o
+GLOBSORT=+; gshow 'a bare plus' *.o
+GLOBSORT=' -name'; gshow 'a leading blank' *.o
+GLOBSORT='-name '; gshow 'a trailing blank' *.o
+GLOBSORT=-NAME; gshow 'the wrong case' *.o
+GLOBSORT=-nam; gshow 'a prefix of the key' *.o
+GLOBSORT=bogus; gshow 'a key it has not got' *.o
+GLOBSORT=; gshow 'set to nothing' *.o
+unset GLOBSORT
+gshow 'unset again' *.o
+
+cd ..
+rm -rf s

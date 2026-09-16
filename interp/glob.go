@@ -742,6 +742,26 @@ func (r *Runner) glob(field string) ([]string, bool) {
 	// question about a shape no script writes.
 	trail := field[len(strings.TrimRight(field, "/")):]
 
+	// The order the dialect's sort parameter asks for, read once for the
+	// whole expansion — it cannot change while one runs — and false for the
+	// order this walk would give anyway, which is every column but one and
+	// every script but the one that asked. See interp/globsort.go.
+	//
+	// Read here rather than at the end because one of its values reaches the
+	// walk: `nosort` is the order the *directory* gave, which is destroyed
+	// by the per-component sorts below and cannot be recovered from the
+	// result. Measured, `GLOBSORT=nosort; echo */*` is the top level in the
+	// directory's own order with each level below it in its own.
+	order, ordered := r.globSortOrderOf()
+	unsorted := ordered && order.key == globSortNone
+	if unsorted {
+		// The listing's own order is what is asked for, and the listing is
+		// several calls below here — see Runner.globUnsorted.
+		saved := r.globUnsorted
+		r.globUnsorted = true
+		defer func() { r.globUnsorted = saved }()
+	}
+
 	// An absolute pattern starts at the root; a relative one at the working
 	// directory, which is the shell's rather than the process's.
 	base := r.workDir()
@@ -863,7 +883,9 @@ func (r *Runner) glob(field string) ([]string, bool) {
 				onward[dir] = true
 				next = r.appendDescendants(next, dir, seeHidden, onward)
 			}
-			sortMatches(next)
+			if !unsorted {
+				sortMatches(next)
+			}
 		} else if !r.describesRatherThanSpells(part) {
 			// A component that **spells a name out** rather than describing
 			// one, which is resolved by asking whether the path is there and
@@ -947,7 +969,9 @@ func (r *Runner) glob(field string) ([]string, bool) {
 		if len(next) == 0 {
 			return missed()
 		}
-		sortMatches(next)
+		if !unsorted {
+			sortMatches(next)
+		}
 		dirs = next
 		listed = next
 		if i < len(parts)-1 {
@@ -1089,6 +1113,13 @@ func (r *Runner) glob(field string) ([]string, bool) {
 	// kill it.
 	ignore := r.ignoredNamePatterns()
 	out := make([]string, 0, len(dirs))
+	// The paths the words came from, kept beside them only where an order
+	// was asked for: a size or a time is a question about a file and the
+	// word is not what can be asked it. See Runner.sortMatchesBy.
+	var paths []string
+	if ordered {
+		paths = make([]string, 0, len(dirs))
+	}
 	for _, d := range dirs {
 		w, ok := render(d)
 		if !ok {
@@ -1098,6 +1129,9 @@ func (r *Runner) glob(field string) ([]string, bool) {
 			continue
 		}
 		out = append(out, w)
+		if ordered {
+			paths = append(paths, d)
+		}
 	}
 	if quals.modifiers != "" {
 		// Before the sort, because the shell sorts what the modifiers
@@ -1111,7 +1145,11 @@ func (r *Runner) glob(field string) ([]string, bool) {
 			out[i] = m
 		}
 	}
-	sortMatches(out)
+	if ordered {
+		r.sortMatchesBy(out, paths, order)
+	} else {
+		sortMatches(out)
+	}
 	if len(out) == 0 {
 		// Everything matched was the starting point itself — `**` over an
 		// empty directory — which is no match at all.

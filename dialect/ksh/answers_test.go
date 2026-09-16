@@ -144,6 +144,10 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 	if got, want := s.UnterminatedBracketAfterASubExpression, interp.BracketNoMatch; got != want {
 		t.Errorf("UnterminatedBracketAfterASubExpression = %v, want %v", got, want)
 	}
+	// no parameter for the order an expansion comes back in: this shell has FIGNORE and no GLOBSORT.
+	if got, want := s.SortOrderVariable, ""; got != want {
+		t.Errorf("SortOrderVariable = %q, want %q", got, want)
+	}
 	if got, want := s.UnknownCharacterClass, interp.UnknownClassEmptiesTheBracket; got != want {
 		t.Errorf("UnknownCharacterClass = %v, want %v", got, want)
 	}

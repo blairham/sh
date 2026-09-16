@@ -135,7 +135,7 @@ func (r *Runner) readLink(path string) (string, error) {
 // by whether a link was involved.
 func (r *Runner) readDir(path string) ([]os.DirEntry, error) {
 	if r.Gate == nil && r.Events == nil {
-		return os.ReadDir(path)
+		return r.dirEntries(path)
 	}
 	action := r.act(Action{Kind: ActionReadDir, Path: path})
 	if r.Gate != nil && r.Gate.Allow(r.ctx, action) == Deny {
@@ -146,7 +146,7 @@ func (r *Runner) readDir(path string) ([]os.DirEntry, error) {
 		// Watching without gating: there is nothing a verification could
 		// refuse, so the standard library's one-call form stands.
 		r.emit(r.ctx, Event{Kind: EventAccess, Action: action})
-		return os.ReadDir(path)
+		return r.dirEntries(path)
 	}
 	reached, err := opened.Open(path, os.O_RDONLY, 0)
 	if err != nil {
@@ -175,15 +175,42 @@ func (r *Runner) readDir(path string) ([]os.DirEntry, error) {
 	// listing read through the gate and one read without it cannot come back
 	// differently ordered — see shellOrder.
 	//
-	// **A mutation that changes this order alone survives**, and is recorded
-	// so the next reader does not go hunting for the row that would kill it:
-	// every pathname expansion sorts what it matched before handing it over,
-	// so what this order decides is which entry a *listing* walks first and
-	// nothing a script can see. It is the same order anyway because the two
-	// are the same question about the same names, and a listing whose order
-	// were observable tomorrow would already be right.
-	slices.SortFunc(entries, func(a, b os.DirEntry) int { return shellOrder(a.Name(), b.Name()) })
+	// It used to say here that a mutation changing this order alone survives,
+	// because every pathname expansion sorted what it matched before handing
+	// it over. **That is no longer true**: one dialect's sort parameter has a
+	// value which asks for the order the directory itself gave — see
+	// Semantics.SortOrderVariable — and under it this order is exactly what a
+	// script sees. So the sort is skipped rather than undone, which is the
+	// only way to give that value an honest answer.
+	r.sortEntries(entries)
 	return entries, err
+}
+
+// dirEntries is the standard library's listing, unsorted, so that the sort
+// below is this file's single decision about order rather than one taken here
+// and taken again by os.ReadDir.
+func (r *Runner) dirEntries(path string) ([]os.DirEntry, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = f.Close() }()
+	entries, err := f.ReadDir(-1)
+	r.sortEntries(entries)
+	return entries, err
+}
+
+// sortEntries puts a listing in this shell's order, and leaves it in the
+// directory's where a script has asked for that.
+//
+// In this shell's order rather than in a comparison of its own, so a listing
+// read through the gate and one read without it cannot come back differently
+// ordered — see shellOrder.
+func (r *Runner) sortEntries(entries []os.DirEntry) {
+	if r.globUnsorted {
+		return
+	}
+	slices.SortFunc(entries, func(a, b os.DirEntry) int { return shellOrder(a.Name(), b.Name()) })
 }
 
 // probeDenied consults the gate about a probe and emits the record either

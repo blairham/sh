@@ -428,6 +428,36 @@ type Semantics struct {
 	// than one, and the second is filed rather than guessed at. See
 	// IgnoredNamesRevealHiddenNames for the half they agree on.
 	IgnoredNamesVariable string
+	// SortOrderVariable names the parameter that says which order a pathname
+	// expansion comes back in, and it is empty in every dialect that has no
+	// such parameter.
+	//
+	// A name rather than a value, for the reason IgnoredNamesVariable is
+	// one: the parameter is a script's to reassign at any moment.
+	//
+	// The facility is bash 5.3's `GLOBSORT`. No other column in the panel
+	// has one — zsh orders a pathname expansion with glob qualifiers, which
+	// are part of the pattern rather than a parameter, and ksh93 and dash
+	// have neither. Measured 2026-09-16 under `LC_ALL=C`, five names in one
+	// directory:
+	//
+	//	GLOBSORT=-name    zed tiny.o mid big.o alpha.o
+	//	GLOBSORT=size     alpha.o mid zed tiny.o big.o
+	//	GLOBSORT=-mtime   mid alpha.o zed tiny.o big.o
+	//	GLOBSORT=nosort   tiny.o big.o mid alpha.o zed
+	//
+	// What the value may say, and every rule in it measured, is in
+	// interp/globsort.go beside the code that reads it. Three of them are
+	// worth naming here because they are the ones a reader would assume the
+	// other way: the key is **case sensitive** and matched whole, a
+	// *trailing* blank invalidates the value where a leading one is trimmed,
+	// and a value this shell does not recognize is the default order at
+	// status 0 with nothing said.
+	//
+	// `nosort` is the value that cannot be reached by sorting at all — it is
+	// the order the directory itself gave — so it is the one that reaches
+	// the walk rather than the result.
+	SortOrderVariable string
 
 	// IgnoredNamesRevealHiddenNames says an assignment of a non-null value
 	// to IgnoredNamesVariable also turns hidden names on, so a `*` sees the

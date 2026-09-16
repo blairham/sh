@@ -301,6 +301,10 @@ func Semantics() interp.Semantics {
 	// facility under another name and does not answer alike; it is filed
 	// rather than guessed at.
 	s.IgnoredNamesVariable = "GLOBIGNORE"
+	// And the order the expansion comes back in, which is 5.3's and is this
+	// column's alone: no other shell in the panel has a parameter for it.
+	// See interp.Semantics.SortOrderVariable.
+	s.SortOrderVariable = "GLOBSORT"
 	s.IgnoredNamesRevealHiddenNames = true
 	// A colon-separated list, matched against the *word* the expansion
 	// produced, and a state an assignment latches rather than the

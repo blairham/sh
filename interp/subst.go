@@ -316,6 +316,10 @@ func (r *Runner) currentShellSubst(ctx context.Context, f *syntax.File, span syn
 	// to leave before anything read the status.
 	saved := r.assignBookkeeping()
 	defer func() { saved() }()
+	// The body is a frame a `return` leaves, in both columns that have this
+	// spelling. See Runner.hasSomethingToReturnFrom.
+	r.currentShellSubstDepth++
+	defer func() { r.currentShellSubstDepth-- }()
 	putBackReply := func() {}
 	if span.ReplyValue {
 		putBackReply = r.localizeReply()

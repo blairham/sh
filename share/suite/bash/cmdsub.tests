@@ -1,0 +1,41 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# The value substitutions bash 5.3 runs in the shell that read them.
+#
+# `${ cmd; }` is shared with ksh93 and `${| cmd; }` — whose value is what the
+# body left in `$REPLY` — is bash's alone, which is what keeps this file bash's
+# rather than a core one. ksh/cmdsub.tests asks the questions the two answer
+# differently.
+
+# A `return` in such a body leaves the body: the substitution's value is what
+# it printed up to there, the status is the operand, and the script carries on.
+# It is not a `return` with nothing to return from — the body is a frame, which
+# the forked spelling below is not.
+v=${ echo hi; return 42; }
+printf 'return in a body: [%s] st=%s\n' "$v" "$?"
+printf 'and the script is alive\n'
+
+v=${ echo one; return 3; echo two; }
+printf 'the body stops there: [%s]\n' "$v"
+
+false
+v=${ echo hi; return; }
+printf 'with no operand: [%s] st=%s\n' "$v" "$?"
+
+f() {
+	v=${ echo in; return 5; }
+	printf 'inside a function: [%s] st=%s\n' "$v" "$?"
+	printf 'the function carries on\n'
+}
+f
+printf 'and so does the caller: st=%s\n' "$?"
+
+# The pipe spelling has a frame of the same kind.
+v=${| REPLY=x; return 7; }
+printf 'the pipe spelling: [%s] st=%s\n' "$v" "$?"
+
+# The control, which is the reading the braced form is not given: the forked
+# spelling is a shell of its own, so a `return` in one has nothing to leave.
+v=$(echo hi; return 42) 2>/dev/null
+printf 'forked: [%s] st=%s\n' "$v" "$?"

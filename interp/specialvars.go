@@ -58,7 +58,8 @@ func (r *Runner) ensureSpecials() {
 			// one column moves it only between the commands the shell reads
 			// — so the axis above decides *whether* and underscoreValue
 			// decides *which*.
-			if r.ask(r.sem().UnderscoreTracksTheLastArgument, "`$_` following the last argument") {
+			if (r.lastArgSet || r.inputLastArgSet) &&
+				r.ask(r.sem().UnderscoreTracksTheLastArgument, "`$_` following the last argument") {
 				if value, ok := r.underscoreValue(); ok {
 					return value
 				}

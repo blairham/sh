@@ -1176,6 +1176,13 @@ func TestTheStartupUnderscoreIsTheInvocationAndNotThePrelude(t *testing.T) {
 		sh := shell()
 		sh.Semantics.UnderscoreStartsAtTheInvocation = interp.Yes
 		sh.Semantics.UnderscoreTracksTheLastArgument = interp.Yes
+		// And *how* it moves, which is a third question with a third answer:
+		// one column moves it only between the commands the shell reads, and
+		// this test is about a script's own last argument reaching the
+		// parameter through a `;`-list. Answered here for the same reason
+		// the two above are — so the value under test is the one this test
+		// put there.
+		sh.Semantics.UnderscoreMovesOnlyBetweenInputCommands = interp.No
 		sh.Semantics.UnderscoreInheritsFromTheEnvironment = inherits
 		return sh
 	}

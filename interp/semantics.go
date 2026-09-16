@@ -15414,6 +15414,15 @@ func PosixSemantics() Semantics {
 		FinishedJobNoticeNeedsAPrompt:   Yes,
 		TildePlusMinusExpands:           No,
 		UnderscoreTracksTheLastArgument: No,
+		// The substrate keeps no `$_`, so neither of the two questions about
+		// how it moves has anything to move — but both are written rather
+		// than left unanswered, because a caller that turns tracking on
+		// should get the reading two of the three shells that have the
+		// parameter share: every simple command moves it, and a function
+		// body opens with what the caller had. ksh93's narrowing and zsh's
+		// entry value are each one column's, and each says so itself.
+		UnderscoreMovesOnlyBetweenInputCommands: No,
+		UnderscoreMovesBeforeAFunctionBody:      No,
 		// POSIX has no `$_`, so nothing is written at startup and a name
 		// the environment carried is an ordinary variable that shows
 		// through — which is also the majority, five of the six.
@@ -15589,6 +15598,16 @@ func CoreSemantics() Semantics {
 	return Semantics{
 		SplitCommandSubstitution: Yes,
 		LengthOfSpecialIsCount:   Yes,
+		// Whether `$_` exists at all is left unanswered here, which is the
+		// substrate refusing it. *How* it moves is answered anyway, at the
+		// reading two of the three shells that have the parameter share:
+		// every simple command moves it, and a function body opens with what
+		// the caller had. So a caller that turns tracking on gets a working
+		// parameter rather than a second refusal, and the two columns that
+		// differ — ksh93's narrowing to the commands the shell reads, zsh's
+		// entry value — each say so themselves.
+		UnderscoreMovesOnlyBetweenInputCommands: No,
+		UnderscoreMovesBeforeAFunctionBody:      No,
 		// Every shell in the panel reads a profile for a login shell, so the
 		// core reads one too; the disagreement is only over what it is
 		// called. `.profile` is the standard's name and nobody's brand,

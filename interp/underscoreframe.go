@@ -156,11 +156,29 @@ func (r *Runner) aLoneSimpleCommandOnItsLine(stmts []*syntax.Stmt, at int) bool 
 	}
 	line := r.lineOf(st.Pos())
 	for i, other := range stmts {
-		if i != at && r.lineOf(other.Pos()) == line {
+		if i == at {
+			continue
+		}
+		at, ok := statementLine(r, other)
+		if ok && at == line {
 			return false
 		}
 	}
 	return true
+}
+
+// statementLine is the line a statement starts on, and whether it has one.
+//
+// A [syntax.Pipeline] with no commands and no `!` cannot answer Pos — it
+// reads `Cmds[0]` — and one exists: a dialect that takes a bare negation at
+// either place parses text that leaves an empty pipeline behind. Nothing else
+// on this path asks a neighbouring statement where it is, which is why the
+// guard lives here rather than on the node.
+func statementLine(r *Runner, st *syntax.Stmt) (int, bool) {
+	if p, ok := st.Expr.(*syntax.Pipeline); ok && !p.Negated && len(p.Cmds) == 0 {
+		return 0, false
+	}
+	return r.lineOf(st.Pos()), true
 }
 
 // underscoreValue is what a read of `$_` answers with, for the dialects that

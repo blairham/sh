@@ -1,0 +1,154 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# The two function definition forms in ksh93 — #2302, #2345.
+#
+# `function g { … }` and `g() { … }` are the same body written two ways in
+# every other shell on the panel. Here they are two different constructs, and
+# the difference is what a call is a *scope* for:
+#
+#	function g { typeset x=in; }; x=out; g; echo "$x"   out
+#	g() { typeset x=in; }; x=out; g; echo "$x"          in
+#
+# bash and zsh scope a `typeset` in both forms; dash has neither the keyword
+# nor `typeset`. So every section below runs the same body twice, once each
+# way, because the *pairing* is the answer. A row with only the keyword form
+# would pass in bash and zsh too.
+#
+# The trap table is the second thing a `function` call takes, and it takes it
+# whole rather than one condition at a time: the body is handed an **empty**
+# table and the caller's comes back at the return. That is why the listing
+# sections below are not decoration — they are what separates "the caller's
+# handler was put back" from "the caller's handler was never there".
+#
+# Each section is its own subshell. A trap left installed by one section would
+# otherwise be inherited by the next, and a section that ends the shell — the
+# EXIT rows all run one — would take the rest of the file with it.
+#
+# No signal is sent anywhere here. `kill -USR1 $$` names the *outer* shell
+# from inside a section, and a file that killed the harness's shell to measure
+# a disposition would be measuring the harness. EXIT and ERR fire on their
+# own and answer the same question.
+
+show() {
+	printf -- '--- %s -> [%s]\n' "$1" "$2"
+}
+
+printf -- '=== typeset is local to one form and not the other ===\n'
+(
+	function g { typeset x=in; }
+	x=out
+	g
+	show 'the keyword form' "$x"
+)
+(
+	g() { typeset x=in; }
+	x=out
+	g
+	show 'the POSIX form' "$x"
+)
+(
+	function g { typeset x=in; h; }
+	h() { printf -- '--- a callee under the keyword form -> [%s]\n' "${x-unset}"; }
+	x=out
+	g
+)
+(
+	g() { typeset x=in; h; }
+	h() { printf -- '--- a callee under the POSIX form -> [%s]\n' "${x-unset}"; }
+	x=out
+	g
+)
+
+printf -- '=== the trap table a body is handed ===\n'
+(
+	trap 'echo unreachable' USR1
+	function g { printf -- '--- the keyword form sees:\n'; trap; printf -- '--- .\n'; }
+	g
+	printf -- '--- and afterwards:\n'
+	trap
+	trap - USR1
+)
+(
+	trap 'echo unreachable' USR1
+	g() { printf -- '--- the POSIX form sees:\n'; trap; printf -- '--- .\n'; }
+	g
+	trap - USR1
+)
+(
+	trap 'echo unreachable' USR1
+	function o {
+		function i { trap 'echo inner' USR1; }
+		i
+		printf -- '--- inside the outer call, after the inner one returned:\n'
+		trap
+		printf -- '--- .\n'
+	}
+	o
+	printf -- '--- and at the top:\n'
+	trap
+	trap - USR1
+)
+(
+	trap 'echo outer' USR1
+	function g { ( trap 'echo subshell' USR1 ); }
+	g
+	printf -- '--- a subshell inside the body changes nothing:\n'
+	trap
+	trap - USR1
+)
+(
+	trap 'echo outer' USR1
+	function g { trap - USR1; }
+	g
+	printf -- '--- a reset inside the body is undone too:\n'
+	trap
+	trap - USR1
+)
+
+printf -- '=== ERR, which the table takes with it ===\n'
+(
+	function g { trap 'echo ERR from the body' ERR; false; }
+	g
+	printf -- '--- the keyword call has returned; now a failure at the top:\n'
+	false
+	printf -- '--- .\n'
+)
+(
+	g() { trap 'echo ERR from the body' ERR; false; }
+	g
+	printf -- '--- the POSIX call has returned; now a failure at the top:\n'
+	false
+	printf -- '--- .\n'
+	trap - ERR
+)
+
+printf -- '=== EXIT, which goes with the table as well ===\n'
+(
+	trap 'echo the outer EXIT trap' EXIT
+	function g { trap 'echo EXIT set by the keyword call' EXIT; }
+	g
+	printf -- '--- the keyword call has returned\n'
+)
+(
+	trap 'echo the outer EXIT trap' EXIT
+	g() { trap 'echo EXIT set by the POSIX call' EXIT; }
+	g
+	printf -- '--- the POSIX call has returned\n'
+)
+(
+	function g { trap 'echo fired' EXIT; printf -- '--- in the body\n'; }
+	g
+	g
+	printf -- '--- two calls, each firing its own\n'
+)
+(
+	trap 'echo the outer EXIT trap' EXIT
+	function o {
+		p() { trap 'echo the trap p set' EXIT; }
+		p
+		printf -- '--- p has returned and o has not\n'
+	}
+	o
+	printf -- '--- o has returned\n'
+)

@@ -17231,6 +17231,45 @@ bash 3.2 has one oddity of its own, recorded and not modeled: `break -- -1`
 there quotes the **marker** in the out-of-range complaint rather than the
 count it read.
 
+**`ExtraNumericOperand`** — bash gives up the statement · dash ignored ·
+ksh93 ignored · zsh refused · ash ignored
+
+What a word written **behind** the count of `break`, `continue`, `return`,
+`exit` or `shift` comes to. The five take one operand between them and the
+panel does three different things with a second. Measured 2026-09-16 in a
+script file, each refusal followed by `echo "A=$?"` on a line of its own:
+
+    exit 1 2                         bash 5.3, bash as sh
+    f(){ return 1 2; echo BODY; }; f   `break: too many arguments`, 2, the
+    set -- a b c; shift 1 2            builtin does nothing, and the rest of
+    for i in 1 2; do break 1 2;        the *statement* is given up: the loop
+      echo IN; done                    stops, a `; echo` behind it never runs,
+                                       and the next line does
+                                     bash 3.2
+                                       the same sentence and give-up at 1
+                                     zsh 5.9.2
+                                       `too many arguments`, 1, the builtin
+                                       does nothing and nothing is given up —
+                                       a loop complains once per pass and runs
+                                       to its end
+                                     ksh93, dash, ash
+                                       silence, and the count is taken
+
+Three readings and not two, which is why it is a policy rather than a yes
+and a no: what a script sees of zsh's refusal and of bash's differs in both
+halves at once, the status and how much stopped running. bash's half is
+`controlAbandon`, the same unwinding a refused readonly assignment raises.
+
+Where it is asked is measured too. The count is read first — `shift abc def`
+is `abc: numeric argument required` and `exit abc def` names the number — and
+the refusal then wins over everything after that read, so `shift 5 2` on
+three positional parameters is `too many arguments` and not the out-of-range
+complaint. `break` and `continue` ask it after their **place**, which is
+`LoopControlPlaceIsJudgedBeforeTheCount` read at a second site: `break 1 2`
+outside a loop is the place's sentence in bash and `too many arguments` in
+zsh. zsh's `shift` never arrives at all — see `ShiftNamesAreArrays` below,
+whose second row is this axis seen from the other side.
+
 **`ShiftNamesAreArrays`** — bash no · dash no · ksh93 no · zsh yes
 
 Reads `shift`'s operands as the names of arrays to shift, instead of the

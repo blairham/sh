@@ -675,6 +675,14 @@ func (r *Runner) setOptionWordsAndOperands(_ context.Context, args []string) int
 			// Semantics.SetLongOptionWord.
 			switch r.sem().SetLongOptionWord {
 			case LongOptionWordIsAnOptionName:
+				// Two of these words are not option names at all, and they
+				// are asked first because one of them — `--s` — is a prefix
+				// no option name would match and the other is a word the
+				// namespace has never heard of. See
+				// Semantics.SetHasTheStateAndDefaultWords.
+				if r.applySetControlWord(a[2:]) {
+					continue
+				}
 				// The same second spelling for the option namespace the
 				// invocation has, read by the same function, so the `no`
 				// fallback and the `=value` cannot drift between the two
@@ -1068,6 +1076,15 @@ func (r *Runner) unknownSetOption(args []string, names, report bool) (preceded, 
 			//
 			// A dialect that discards the word has nothing to refuse, so the
 			// reading pass has nothing to say about it either.
+			if _, control := setControlWord(a[2:]); control &&
+				w == LongOptionWordIsAnOptionName &&
+				r.sem().SetHasTheStateAndDefaultWords == Yes {
+				// Not an option name and not a bad one: a word this shell's
+				// `set` takes on its own account. The applying loop answers
+				// it, and a validating pass that refused it first would
+				// refuse what that loop grants.
+				continue
+			}
 			if nm, _ := r.longSetOptionName(a[2:]); w == LongOptionWordIsAnOptionName &&
 				names && !r.hasSetOptionName(nm) {
 				// The spelling travels with the refusal, because this pass

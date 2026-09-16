@@ -5324,6 +5324,22 @@ are left out of the `set +o` line, which is a command and must name only
 what `set` would take. `monitor`, on for the same reason in an interactive
 shell and movable, is on the line.
 
+And the line **opens** with `--default`, which is the word that makes it a
+save rather than a description: `set +o` writes what is on, and restoring
+from it means putting everything back first. That word and `--state` were in
+the usage line `set` prints when it refuses something else — `Usage: set
+[--default] [--state] [arg ...]` — and the builtin declined both until
+#3153, so `eval "$(set +o)"` did not round-trip even with every roster name
+moving. Neither is an option name: `--state` writes what `set +o` writes,
+`--default` puts every option back to its **compiled-in** state, and that is
+not the state the shell starts in — a stock ksh93 lists `braceexpand`,
+`multiline` and `trackall` on and the reset leaves only `viraw`, so the
+dialect declares the compiled rows
+(`interp.Runner.AddDefaultOnSetOptions`) rather than the reset re-reading
+the table it is resetting. The reset reaches behavior and not only the
+listing: `set --default; echo {a,b}` prints `{a,b}`. See
+`interp.Semantics.SetHasTheStateAndDefaultWords`.
+
 ### `braceexpand`, and the letter `set -B`
 
 `braceexpand` was in the recorded set until #1856, and it is the case that

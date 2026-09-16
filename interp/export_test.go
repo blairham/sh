@@ -59,3 +59,9 @@ func (r *Runner) PipesMadeForTest() uint64 {
 	}
 	return r.procSubHome.seq.Load()
 }
+
+// SetControlWord reads a `--name` word the `set` builtin takes on its own
+// account, by unique prefix. Exported so the prefix rule can be asked
+// directly: the behavior it gates is a dialect's, and a test that could only
+// reach it through one would be measuring two things at once.
+var SetControlWord = setControlWord

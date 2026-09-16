@@ -144,6 +144,7 @@ func (c *Runner) ownTables(r *Runner) {
 	c.negatedOptions = maps.Clone(r.negatedOptions)
 	c.immovableOptions = maps.Clone(r.immovableOptions)
 	c.inertOptions = maps.Clone(r.inertOptions)
+	c.defaultOnOptions = maps.Clone(r.defaultOnOptions)
 
 	// The descriptor tables are copied and the streams in them are shared: a
 	// subshell's `exec 7>&1` must not appear in the parent, and its writes

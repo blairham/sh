@@ -278,6 +278,7 @@ func seedTables(r *Runner) {
 	r.negatedOptions = map[string]string{"seed": "noseed"}
 	r.immovableOptions = map[string]bool{"seed": true}
 	r.inertOptions = map[string]bool{"seed": true}
+	r.defaultOnOptions = map[string]bool{"seed": true}
 	r.recordedOptions = map[string]bool{"seed": true}
 	r.fds = map[int]any{7: nil}
 	r.freezing = map[string]bool{"seed": true}

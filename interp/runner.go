@@ -2010,6 +2010,12 @@ type Runner struct {
 	// AddInertSetOptions; `privileged` in ksh93 is the one. Not the same as
 	// immovableOptions, which refuse the request out loud.
 	inertOptions map[string]bool
+	// defaultOnOptions are the `set -o` rows this shell's compiled default
+	// has on, which is what `set --default` puts back and is not the same
+	// thing as the state the shell starts in. Declared through
+	// AddDefaultOnSetOptions; ksh93's four movers are the panel's only ones.
+	defaultOnOptions map[string]bool
+
 	// recordedOptions are the `set -o` names a script has moved that this
 	// shell remembers and does not act on — see recordedOption in
 	// setoptions.go. Absent means the name is still at the state the table

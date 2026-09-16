@@ -379,6 +379,15 @@ func Semantics() interp.Semantics {
 	// -c`, so it disagrees with itself by route as well as with its later
 	// build. 5.3 is the panel member that counts, as it is everywhere else.
 	s.InteractiveOptionLetters = "hBH"
+	// And the feature that letter names. bash has a history expander and
+	// starts an interactive session with it on — measured 2026-09-15 through
+	// a pseudo-terminal with a two-row prompt, where `echo one two three`
+	// followed by `echo !!` echoes `echo echo one two three` to standard
+	// error and prints `echo one two three`, with nothing configured and no
+	// `set -H` typed. bash 3.2 answers identically, and so does the same
+	// binary invoked as `sh`.
+	s.HistoryExpansion = interp.Yes
+	s.HistoryExpansionAtAPrompt = interp.Yes
 	// `bash -c 'echo $-'` reports `hBc`; ksh93 agrees and dash and zsh do
 	// not. The `s` of the standard-input route is not added under `-c`
 	// here — ksh93 alone does that.
@@ -2474,12 +2483,17 @@ func Diagnostics() interp.Diagnostics {
 			// in both cases and both signs; the ones missing from here it
 			// refuses itself, and those get SetInvalidOptionLetter.
 			//
+			// `-H` left it when the expander was built (#3093): the letter
+			// and `set -o histexpand` are one request, so leaving it here
+			// while the name was wired would refuse what the name grants —
+			// the same pairing `-t` describes below.
+			//
 			// `-t` left this list when the option behind it was built. The
 			// two tables are one table: the letter and `set -o onecmd` are
 			// the same request, so a letter listed here while the name is
 			// wired would refuse what the name grants — see
 			// Semantics.SetHasTheTLetter.
-			"set": "bkrHP",
+			"set": "bkrP",
 			// Options these builtins have here and this shell does not.
 			"wait": "f",
 			// disown's sweepers: -a for every job, -h for HUP shielding

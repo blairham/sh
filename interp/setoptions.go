@@ -297,9 +297,26 @@ var extraSetOptions = map[string]setOption{
 		apply: func(r *Runner, on bool) { r.functrace = on },
 		get:   func(r *Runner) bool { return r.functrace },
 	},
-	"history":    {},
-	"histexpand": {},
-	"keyword":    {},
+	// The two history states, which are two states and not one: bash lists
+	// `history` and `histexpand` separately in `set -o`, and measured on
+	// bash 5.3.20 a script with `set -o history; set -H` expands where a
+	// script with only the first does not. Both were listed here and refused
+	// until #3093, so `set -H` — the line a person's rc file opens with —
+	// was `set: -H is not implemented yet` and the shell had no expander at
+	// all.
+	//
+	// Whether the shell *has* the names stays the dialect's; what the state
+	// then does is read by the front end, which is the only part of this
+	// tree holding a history list to index. See Semantics.HistoryExpansion.
+	"history": {
+		apply: func(r *Runner, on bool) { r.histRecord = on },
+		get:   func(r *Runner) bool { return r.histRecord },
+	},
+	"histexpand": {
+		apply: func(r *Runner, on bool) { r.SetHistoryExpansion(on) },
+		get:   func(r *Runner) bool { return r.histExpand },
+	},
+	"keyword": {},
 	// onecmd is `set -t`: the line it is set on finishes and the shell reads
 	// no more. Implemented rather than recorded because the front end can
 	// honestly stop — see Runner.OneCommand — and because bash takes the

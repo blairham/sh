@@ -1255,6 +1255,29 @@ func (r *Runner) setLetters(letters string, on bool) bool {
 			} else {
 				r.histIgnoreDups = on
 			}
+		case 'H':
+			// History expansion, which bash and ksh93 both abbreviate with
+			// this letter and mean the same thing by. zsh has the letter too
+			// and means `rmstarsilent` — a different option entirely — so it
+			// never reaches here: its own table above answers first, which is
+			// exactly what that table is for.
+			//
+			// Asked rather than assumed because dash has neither the letter
+			// nor the feature, and a dash that quietly took `-H` would be
+			// promising an expander it has not got.
+			if !r.ask(r.sem().HistoryExpansion, "`set -H` rewriting `!!` into the previous command") {
+				if r.unspecified {
+					return false
+				}
+				if !r.badSetOptionLetter(opt, on) {
+					return false
+				}
+				continue
+			}
+			// The same state `set -o histexpand` writes, so the letter and
+			// the name cannot answer differently — the rule `-h` and hashall
+			// already follow.
+			r.SetHistoryExpansion(on)
 		case 'E', 'T':
 			// bash's trap-carriage letters. zsh spells different options
 			// with the same letters and dash and ksh93 have neither, so a

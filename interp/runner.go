@@ -1397,6 +1397,31 @@ type Runner struct {
 	// file. So the state was kept truthfully here before anything read it,
 	// and is now read.
 	histIgnoreDups bool
+	// histExpand is whether `!!` and its family are rewritten before a line
+	// is parsed — bash and ksh93 spell it `histexpand` and `set -H`, and zsh
+	// spells it `banghist`.
+	//
+	// Kept here and read by the front end for the reason histIgnoreDups is:
+	// a script has no history to index. It is *not* the same switch as
+	// histRecord below — bash `set +o history` stops recording and leaves the
+	// expander on over what is already in the list, and the two names are
+	// listed separately in `set -o` because they are separate states.
+	//
+	// The default is the dialect's, applied by the front end: measured
+	// 2026-09-15 through a pty with a two-row prompt, bash 5.3, bash 3.2,
+	// bash-as-sh and zsh 5.9.2 all start an interactive session with it on
+	// and a script with it off, and ksh93u+ starts with it off everywhere.
+	// See Semantics.HistoryExpansion and HistoryExpansionAtAPrompt.
+	histExpand bool
+	// histExpandMoved says a script has written histExpand itself, so the
+	// front end's default must not overwrite it. `set +H` in an rc file is
+	// the whole reason: the file runs before the session's first prompt, and
+	// a default applied afterwards would put back the thing it turned off.
+	histExpandMoved bool
+	// histRecord is bash's `set -o history`: whether accepted lines are added
+	// to the list at all. On for an interactive session and off for a script,
+	// measured the same way.
+	histRecord bool
 	// tracksWindowSize is permission to keep $LINES and $COLUMNS abreast of
 	// the terminal. bash spells it `checkwinsize` and zsh has no name for it
 	// at all because it never stops doing it; the *capability* is neither

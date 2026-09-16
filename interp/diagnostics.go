@@ -3139,6 +3139,32 @@ type Diagnostics struct {
 	// lines of one refusal finally name the shell the same way.
 	InvocationOptionRefusalNamesTheBase bool
 
+	// InvocationOptionRefusalNamesTheInvocation writes the **whole word the
+	// shell was invoked by** in an option refusal at an invocation, where the
+	// same shell writes a short name of its own everywhere else.
+	//
+	// zsh alone, and it is the mirror image of the field above rather than a
+	// second spelling of it: one shell shortens the name for this one
+	// diagnostic and the other lengthens it. Measured 2026-09-16 invoking
+	// zsh 5.9.2 as `/opt/homebrew/bin/zsh`:
+	//
+	//	-o zzznosuch      /opt/homebrew/bin/zsh: no such option: zzznosuch
+	//	--zzznosuch       /opt/homebrew/bin/zsh: no such option: zzznosuch
+	//	/nosuch/zz.sh     /opt/homebrew/bin/zsh: can't open input file: …
+	//	-u -c '$NOPE'     zsh:1: NOPE: parameter not set
+	//
+	// So the split is the *route* and not the refusal: everything the shell
+	// says before a line is read names the word it was started by, and
+	// everything it says about a line it is running names `zsh`. That second
+	// name is Diagnostics.SelfName, which this is the exception to — without
+	// it the shell answered `zsh: no such option` from a command line that
+	// spelled its whole path, which is a shorter name than any route there
+	// produces.
+	//
+	// bash and dash need no bit: neither has a SelfName, so both already
+	// write the whole word here and everywhere else.
+	InvocationOptionRefusalNamesTheInvocation bool
+
 	// InvocationNameRefusalNamesTheShell reports a refused `set -o` name at
 	// an invocation exactly as the builtin would, with the shell's own name
 	// standing where the builtin's would:

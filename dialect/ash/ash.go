@@ -495,6 +495,9 @@ func Semantics() interp.Semantics {
 	// *this* axis is no. What it does with the word instead is a separate
 	// question and is not claimed here.
 	s.LongOptionNamesASetOption = interp.No
+	// unanswered LongOptionNameIgnoresHyphens: the fold is a rule of the
+	// `--name` spelling, and the axis above says this shell has no such
+	// spelling. There is no site here to put the question to.
 	// unanswered LongOptionValueIsANumber: the `=value` it reads rides on a
 	// `--name` option word, and the axis above says this shell has no such
 	// word. There is no site here to put the question to.

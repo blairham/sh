@@ -1328,7 +1328,11 @@ func (r *Runner) SetLongOption(word string) int {
 		r.longSetOptionSpelling = false
 	}()
 	name, on := r.longSetOptionName(word)
-	return r.namedOptionAnswer(r.setNamedOption(name, on))
+	// The word as it was written is what a refusal echoes, not the name the
+	// reading arrived at: measured, `ksh --no_profile` is `no_profile: bad
+	// option(s)` and `zsh --Zzz_No` is `no such option: Zzz_No`. The reader
+	// is shown what they typed rather than what the shell was left holding.
+	return r.namedOptionAnswer(r.setNamedOptionSpelled(name, word, on))
 }
 
 // longSetOptionName reads a `--name` word — already stripped of its dashes —
@@ -1362,12 +1366,26 @@ func (r *Runner) longSetOptionName(word string) (name string, on bool) {
 		n, err := strconv.Atoi(value)
 		on = err == nil && n != 0
 	}
-	if r.hasSetOptionName(name) {
-		return name, on
+	// The word with its hyphens taken out, where the dialect reads one that
+	// way — a rule of this spelling and of no other route to the same
+	// namespace. See Semantics.LongOptionNameIgnoresHyphens.
+	//
+	// Tried before the word as written, so that a name holding a hyphen
+	// still wins where the folded form is not a name at all. No dialect that
+	// answers the axis has such a name today, and the order is what keeps
+	// that from being a rule nobody wrote down.
+	candidates := [...]string{name, name}
+	if r.sem().LongOptionNameIgnoresHyphens == Yes {
+		candidates[0] = strings.ReplaceAll(name, "-", "")
 	}
-	if rest, ok := strings.CutPrefix(name, "no"); ok && rest != "" &&
-		r.hasSetOptionName(rest) {
-		return rest, !on
+	for _, candidate := range candidates {
+		if r.hasSetOptionName(candidate) {
+			return candidate, on
+		}
+		if rest, ok := strings.CutPrefix(candidate, "no"); ok && rest != "" &&
+			r.hasSetOptionName(rest) {
+			return rest, !on
+		}
 	}
 	return name, on
 }

@@ -667,16 +667,31 @@ func (r *Runner) setOptionWordsAndOperands(_ context.Context, args []string) int
 			i++
 			break
 		}
-		if r.sem().LongOptionNamesASetOption == Yes && strings.HasPrefix(a, "--") {
-			// `set --name`, the same second spelling for the option
-			// namespace the invocation has — and read by the same function,
-			// so the `no` fallback and the `=value` cannot drift between the
-			// two routes. After the `--` above, which is the terminator and
-			// is a whole word rather than a name of nothing.
-			if !r.applyLongSetOption(a[2:]) {
-				return r.setOptionFailure()
+		if strings.HasPrefix(a, "--") {
+			// A word beginning with `--`, after the bare `--` above, which is
+			// the terminator and is a whole word rather than a name of
+			// nothing. What the builtin makes of one is the dialect's, and
+			// the three readings are measured — see
+			// Semantics.SetLongOptionWord.
+			switch r.sem().SetLongOptionWord {
+			case LongOptionWordIsAnOptionName:
+				// The same second spelling for the option namespace the
+				// invocation has, read by the same function, so the `no`
+				// fallback and the `=value` cannot drift between the two
+				// routes.
+				if !r.applyLongSetOption(a[2:]) {
+					return r.setOptionFailure()
+				}
+				continue
+			case LongOptionWordIsDiscarded:
+				// Swallowed whole: no option moves, nothing is said, and the
+				// word does not fall through to become a positional
+				// parameter either. Measured on zsh 5.9.2, `set --zzz q` is
+				// status 0 with an empty standard error and `q` as `$1`.
+				continue
 			}
-			continue
+			// And otherwise it is letters, which is what the loop below
+			// reads — the reading four of the six columns have.
 		}
 		if !setOptionWord(a) {
 			break
@@ -1044,12 +1059,17 @@ func (r *Runner) unknownSetOption(args []string, names, report bool) (preceded, 
 		if a == "--" || len(a) < 2 || (a[0] != '-' && a[0] != '+') {
 			return
 		}
-		if r.sem().LongOptionNamesASetOption == Yes && strings.HasPrefix(a, "--") {
+		if w := r.sem().SetLongOptionWord; w != LongOptionWordIsOptionLetters &&
+			strings.HasPrefix(a, "--") {
 			// Cut the way the applying loop cuts it, which is this pass's
 			// whole rule. Read as letters instead, `--noglob` would be an
 			// `-n` this dialect has and a `-`, `-o`, `-g` and `-b` it reads
 			// as something else entirely.
-			if nm, _ := r.longSetOptionName(a[2:]); names && !r.hasSetOptionName(nm) {
+			//
+			// A dialect that discards the word has nothing to refuse, so the
+			// reading pass has nothing to say about it either.
+			if nm, _ := r.longSetOptionName(a[2:]); w == LongOptionWordIsAnOptionName &&
+				names && !r.hasSetOptionName(nm) {
 				// The spelling travels with the refusal, because this pass
 				// is where the report is made: the applying loop never
 				// reaches a word this one has already refused.
@@ -1603,8 +1623,14 @@ func (r *Runner) saySetRefusal(msg string, usage, isName bool) {
 		return
 	}
 	name := r.name()
-	if d.InvocationOptionRefusalNamesTheBase {
+	switch {
+	case d.InvocationOptionRefusalNamesTheBase:
 		name = filepath.Base(name)
+	case d.InvocationOptionRefusalNamesTheInvocation:
+		// The whole word the shell was started by, where this shell's own
+		// short name would otherwise stand. See the field: it is the one
+		// diagnostic that route writes with a longer name than the rest.
+		name = r.invokedAs()
 	}
 	r.errf("%s%s\n", d.invocationPrefix(name), strings.TrimPrefix(msg, "set: "))
 	u := d.InvocationUsage
@@ -1796,7 +1822,10 @@ func (r *Runner) applyLongSetOption(word string) bool {
 	name, on := r.longSetOptionName(word)
 	r.longSetOptionSpelling = true
 	defer func() { r.longSetOptionSpelling = false }()
-	return r.setNamedOption(name, on)
+	// The spelling a refusal echoes is the word as it was written, for the
+	// reason Runner.SetLongOption gives on the other route to the same
+	// reading.
+	return r.setNamedOptionSpelled(name, word, on)
 }
 
 func (r *Runner) setOption(name string, on bool) bool {

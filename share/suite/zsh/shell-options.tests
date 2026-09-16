@@ -25,3 +25,19 @@ printf 'an unknown letter -> %s\n' "$?"
 ( set -Q; printf 'and the shell carried on\n' ) 2> /dev/null
 ( set -o nosuchoption_zz ) 2> /dev/null
 printf 'an unknown long name -> %s\n' "$?"
+
+# ---- and a `--word` at the builtin is swallowed whole ----
+#
+# The command line takes every option name as a `--name` word here (see
+# zsh/invocation.tests), and the builtin does not take it at all — it is
+# neither applied, nor refused, nor left to become a positional parameter.
+# ksh93, the other shell with the spelling, reads it as the name and applies
+# it, and the other four read it as option letters and refuse the dash.
+#
+# The positional parameters are what tell "swallowed" from "ignored": a word
+# an option loop merely declined would end the options and stand as `$1`.
+
+( set --xtrace q; has x 'x after set --xtrace'; printf 'and [%s]\n' "$*" )
+( set --zzznosuch q; printf 'an unknown one -> %s [%s]\n' "$?" "$*" ) 2>&1
+( set --noglob q; printf '[%s]' /dev/nul*; printf ' and [%s]\n' "$*" )
+( set -- --xtrace q; printf 'behind the terminator [%s]\n' "$*" )

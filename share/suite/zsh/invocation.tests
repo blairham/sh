@@ -40,3 +40,59 @@
 "$SUITE_SHELL" -c 'f() { printf "in a function [%s]\n" "$0"; }
 f' givenname
 "$SUITE_SHELL" -c 'printf "outside a function [%s]\n" "$0"' givenname
+
+# ---- every `setopt` name is a command-line word of its own ----
+#
+# The second of the two shells that have this facility, and it is not ksh93's.
+# The namespace is zsh's own: it holds the `no` forms as names in their own
+# right, it folds case and underscores wherever an option name is written, and
+# the `--name` spelling folds hyphens on top of that — `--e-x-t-endedglob` is
+# `extendedglob` here. A refused word is `no such option: …` at **1** with no
+# usage block, where ksh93 writes a usage line and exits 2.
+#
+# The `-o` rows are what say the hyphen fold belongs to the `--name` spelling
+# rather than to the option table: `--no-glob` is `noglob` and `-o no-glob` is
+# a refusal, in the same shell in the same run.
+#
+# `--nonomatch` and `--nonoglob` are the pair that pins what "the `no` forms
+# are names" means. `nomatch` is a canonical name, so `nonomatch` is its
+# negation and is taken; the canonical name behind `noglob` is `glob`, so
+# `noglob` is *already* the negation and `nonoglob` is a second one the
+# namespace does not have.
+
+# A refusal here names the shell by the **whole word** it was invoked by,
+# where everything zsh says about a line it is running names `zsh` — so the
+# harness's own `<shell>` rewrite is what appears in the rows below, and a
+# shell that shortened its name to `zsh` would fail them. That is the
+# difference from ksh93, which shortens its name for exactly this diagnostic
+# and spells it in full everywhere else.
+
+zrow() {
+	label=$1
+	shift
+	printf -- '--- %s\n' "$label"
+	out=$( "$SUITE_SHELL" "$@" 2>&1 )
+	st=$?
+	printf '%s\n' "$out"
+	printf 'status %s\n' "$st"
+}
+
+zrow 'xtrace'              --xtrace -c 'echo traced'
+zrow 'the no form of it'   --noxtrace -c 'echo untraced'
+zrow 'errexit'             --errexit -c 'false; echo unreachable'
+zrow 'noexec'              --noexec -c 'echo unreachable'
+zrow 'shwordsplit'         --shwordsplit -c 'v="a b"; set -- $v; echo $#'
+zrow 'and without it'      -c 'v="a b"; set -- $v; echo $#'
+zrow 'extendedglob'        --extendedglob -c 'setopt'
+zrow 'underscores'         --no_glob -c 'setopt'
+zrow 'case as well'        --NO_GLOB -c 'setopt'
+zrow 'hyphens too'         --no-glob -c 'setopt'
+zrow 'and all of it'       --e-x-t-endedglob -c 'setopt'
+zrow 'the same name to -o' -o no-glob -c 'echo unreachable'
+zrow 'a no form as a name' --nonomatch -c 'setopt'
+zrow 'a second negation'   --nonoglob -c 'echo unreachable'
+zrow 'and with a gap in it' --no_no_glob -c 'echo unreachable'
+zrow 'a word that is none' --zzznosuch -c 'echo unreachable'
+zrow 'a bare no'           --no -c 'echo unreachable'
+zrow 'no value is read'    --xtrace=1 -c 'echo unreachable'
+zrow 'the refusal stops it' --zzz --xtrace -c 'echo unreachable'

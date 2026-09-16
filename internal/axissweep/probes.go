@@ -697,6 +697,28 @@ func Probes() []Probe {
 			},
 		},
 		{
+			Field: "PrintfZeroFillCountsTheAlternatePrefix",
+			Cases: []string{"axis/printf-zero-fill-counts-the-alternate-prefix"},
+			// The row's **first** line, which is the reading at three
+			// widths and nothing else. The second line is read by nobody:
+			// it is the width the prefix eats into, where C's fill goes
+			// empty two characters before the other reading's does, and a
+			// column that wrote a short field there would still be one of
+			// the two readings rather than a third. The third line is the
+			// controls, which are unanimous and so say nothing.
+			Reading: "`printf '[%#05x][%#05X][%#010x]' 7 255 255` is `[0x007][0X0FF][0x000000ff]` where the `0x` is counted against the width and `[0x00007][0X000FF][0x00000000ff]` where it is written past it",
+			Read: func(cells map[string]oracle.Result) (string, string) {
+				first, _, _ := strings.Cut(cells["axis/printf-zero-fill-counts-the-alternate-prefix"].Stdout, "~")
+				switch first {
+				case "[0x007][0X0FF][0x000000ff]":
+					return "Yes", ""
+				case "[0x00007][0X000FF][0x00000000ff]":
+					return "No", ""
+				}
+				return "", "this column laid the fill out as neither reading does, so the row says nothing about which of the two it has"
+			},
+		},
+		{
 			Field: "PrintfNumberOperand",
 			Cases: []string{"axis/printf-number-operand"},
 			// The row's **first** line, because one line carries all three

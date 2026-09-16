@@ -1495,6 +1495,11 @@ func Semantics() interp.Semantics {
 	// '%#.0o' 0` is nothing here and `0` in the other six. The prefix
 	// follows the digits instead — written wherever there are digits.
 	s.PrintfAlternateFormAsksTheValue = interp.No
+	// And the one column that does not count that prefix against the
+	// width either: `printf '%#05x' 7` is `0x00007` here, seven
+	// characters, where the other six write `0x007` (#3066). The width
+	// is the digits' alone and the `0x` is written past it.
+	s.PrintfZeroFillCountsTheAlternatePrefix = interp.No
 	// The same `\c` as the printf format, and the arithmetic is bit 6
 	// toggled rather than bash's five-bit mask: `$'\c1'` is `q`, not 0x11.
 	s.DollarSingleBackslashC = interp.DollarSingleControlToggled

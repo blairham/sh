@@ -50,6 +50,7 @@ ash    PrintfHexFloatDefaultIsTwelveDigits                  -
 ash    PrintfNonFiniteIsConverted                           Yes
 ash    PrintfNumberOperand                                  PrintfNumberWholeOperand
 ash    PrintfRefusedOperandKeepsItsLeadingNumber            -
+ash    PrintfZeroFillCountsTheAlternatePrefix               Yes
 ash    QuitIgnoredWhenNotInteractive                        Yes
 ash    QuitResetRestoresTheDefault                          No
 ash    ReadonlyDeclaresALocal                               No
@@ -92,6 +93,7 @@ bash   PrintfHexFloatDefaultIsTwelveDigits                  No
 bash   PrintfNonFiniteIsConverted                           Yes
 bash   PrintfNumberOperand                                  PrintfNumberLeadingNumber
 bash   PrintfRefusedOperandKeepsItsLeadingNumber            -
+bash   PrintfZeroFillCountsTheAlternatePrefix               Yes
 bash   QuitIgnoredWhenNotInteractive                        Yes
 bash   QuitResetRestoresTheDefault                          No
 bash   ReadonlyDeclaresALocal                               No
@@ -134,6 +136,7 @@ dash   PrintfHexFloatDefaultIsTwelveDigits                  No
 dash   PrintfNonFiniteIsConverted                           Yes
 dash   PrintfNumberOperand                                  PrintfNumberLeadingNumber
 dash   PrintfRefusedOperandKeepsItsLeadingNumber            -
+dash   PrintfZeroFillCountsTheAlternatePrefix               Yes
 dash   QuitIgnoredWhenNotInteractive                        No
 dash   QuitResetRestoresTheDefault                          -
 dash   ReadonlyDeclaresALocal                               No
@@ -176,6 +179,7 @@ ksh    PrintfHexFloatDefaultIsTwelveDigits                  Yes
 ksh    PrintfNonFiniteIsConverted                           -
 ksh    PrintfNumberOperand                                  PrintfNumberArithmetic
 ksh    PrintfRefusedOperandKeepsItsLeadingNumber            Yes
+ksh    PrintfZeroFillCountsTheAlternatePrefix               No
 ksh    QuitIgnoredWhenNotInteractive                        No
 ksh    QuitResetRestoresTheDefault                          -
 ksh    ReadonlyDeclaresALocal                               No
@@ -218,6 +222,7 @@ zsh    PrintfHexFloatDefaultIsTwelveDigits                  -
 zsh    PrintfNonFiniteIsConverted                           No
 zsh    PrintfNumberOperand                                  PrintfNumberArithmetic
 zsh    PrintfRefusedOperandKeepsItsLeadingNumber            No
+zsh    PrintfZeroFillCountsTheAlternatePrefix               Yes
 zsh    QuitIgnoredWhenNotInteractive                        Yes
 zsh    QuitResetRestoresTheDefault                          Yes
 zsh    ReadonlyDeclaresALocal                               Yes

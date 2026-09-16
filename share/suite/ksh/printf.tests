@@ -97,3 +97,21 @@ printf 'nonzero [%#x] [%#o]\n' 255 255
 #          conversion states one and the other four shells do; ksh93 pads
 #          with zeros whatever the precision said, so `printf '[%+05.0d]' 0`
 #          is `[+0000]` here and `[    +]` in ours.
+
+# The `0` fill against the `0x` its own `#` wrote, where ksh93 is alone
+# again and is alone the same way: the width is the digits' and the prefix is
+# written past it, so `%#05x` of 7 is `0x00007` and is seven characters where
+# the other four write `0x007` and five. Go's `fmt` reads it this way too,
+# which is why this column needed no change when the other four were fixed.
+printf 'a hexadecimal [%#05x] [%#05X]\n' 7 255
+printf 'a wider field [%#010x]\n' 255
+printf 'the flags the other way round [%0#5x]\n' 7
+
+# The width the prefix eats into. Here the fill is the width less the digits
+# alone, so it is still two characters where C's has already gone empty.
+printf 'the prefix overflows [%#05x] [%#06x] and then does not [%#07x]\n' 65535 65535 65535
+
+# And the nought, which this shell keeps a prefix on and then does not count:
+# the two readings move together in every column, which is what makes them
+# two axes that never both bite rather than one.
+printf 'a nought [%#05x]\n' 0

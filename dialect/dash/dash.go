@@ -595,6 +595,9 @@ func Semantics() interp.Semantics {
 	// C's `#` at a value of nought, which this shell hands straight to the
 	// C library: `printf '%#x' 0` is `0`.
 	s.PrintfAlternateFormAsksTheValue = interp.Yes
+	// And counts it against the width: `printf '%#05x' 7` is `0x007`,
+	// five characters, on dash 0.5.12.
+	s.PrintfZeroFillCountsTheAlternatePrefix = interp.Yes
 	// unanswered BraceRescanEntersFailedGroup: dash has no brace expansion,
 	// so there is no scan to resume. `@{x}{a,b}@` is the one word it was
 	// written as, and the question of how far past a group that did not

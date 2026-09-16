@@ -38,9 +38,11 @@ import (
 // coincidence: the C reading takes the prefix *off* at nought, and the ksh93
 // reading — which keeps it — never reaches this function, so the field laid
 // out below is a sign and digits and printfPadToWidth can place a `0` fill
-// without knowing about a prefix it will never see. Where the padding would
-// have to land inside a `0x` the answer is still `fmt`'s, which is a separate
-// question with a separate divergence of its own (#3066).
+// without knowing about a prefix it will never see. Where a `0` fill does
+// have a `0x` to be counted against, the layout is printfAlternatePrefixField
+// — a separate reading with an axis of its own, and one this function can
+// never reach: the columns that keep a prefix at a nought are exactly the
+// columns that do not count it (#3066).
 //
 // spec is the conversion as the caller will hand it to `fmt`: the unsigned
 // conversions have already had their sign flags taken out by

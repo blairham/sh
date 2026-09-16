@@ -1242,6 +1242,9 @@ func (r *Runner) printfConvert(spec string, verb byte, timeFmt string, next func
 		if field, ok := r.printfNoughtField(unsigned, verb, n); ok {
 			return field, code, false
 		}
+		if field, ok := r.printfAlternatePrefixField(unsigned, verb, n); ok {
+			return field, code, false
+		}
 		return fmt.Sprintf(unsigned+string(verb), uint64(n)), code, false
 	case 'f', 'e', 'E', 'g', 'G', 'F', 'a', 'A':
 		f, code, stopped := r.printfFloat(arg, present)

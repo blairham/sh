@@ -965,6 +965,12 @@ func Semantics() interp.Semantics {
 	// shell writes what the construct itself reported: `false | true;
 	// ! [[ a = a ]]` leaves 0 here and 1 there. Measured 2026-09-11.
 	s.NegatedTestRecordsThePostNegationStatus = interp.No
+	// And where the other six columns let a `!` alone once `set -n` has
+	// stopped anything running, this shell inverts the status it exits with
+	// anyway: `zsh -n` over a file holding `! true` writes nothing on either
+	// stream and exits 1, on 5.9 and 5.9.2 alike, where bash, ksh93, dash and
+	// BusyBox ash all exit 0. Measured 2026-09-16 (#3179).
+	s.UnrunNegationInvertsTheStatus = interp.Yes
 	// And whether a *compound* writes the record at all is decided by what
 	// its body holds rather than by what ran: `if [[ a = b ]]; then :; fi`
 	// replaces the record and `if [[ a = b ]]; then [[ b = b ]]; fi` leaves

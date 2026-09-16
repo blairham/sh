@@ -9297,6 +9297,43 @@ type Semantics struct {
 	// and a script branching on `${PIPESTATUS[0]}` after a negated test reads
 	// the opposite of what the shell it was written for reports (#1513).
 	NegatedTestRecordsThePostNegationStatus Answer
+	// UnrunNegationInvertsTheStatus applies a `!` to the status the shell
+	// exits with even though `set -n` meant the pipeline under it never ran.
+	//
+	// `sh -n file` is the one route whose whole contract is "tell me whether
+	// this parses, and run nothing", and its answer is read as a boolean by
+	// CI steps and editors that have no other way to ask. A file whose
+	// top-level command is negated leaves the shell holding an inverted
+	// status for a command that never happened.
+	//
+	// Measured 2026-09-16, `env -i PATH=/usr/bin:/bin LC_ALL=C <shell> -n
+	// x.sh` with both streams captured separately; every cell wrote nothing
+	// on either stream, so the status is the whole of the answer:
+	//
+	//	                   ! true   true; ! true   ! true | cat   ! ! true   if ! true; then :; fi
+	//	bash 5.3.20        0        0              0              0          0
+	//	bash-as-`sh`       0        0              0              0          0
+	//	bash 3.2.57        0        0              0              refused    0
+	//	ksh93u+ 2012-08-01 0        0              0              0          0
+	//	dash 0.5.12        0        0              0              refused    0
+	//	BusyBox ash 1.37.0 0        0              0              refused    0
+	//	zsh 5.9.2          1        1              1              refused    0
+	//
+	// Six columns against one, and the same six against the same one on
+	// `-c`, on stdin and on `-s` — the route does not move it.
+	//
+	// The last two columns are what says this is the negation and not the
+	// reading: `! ! true` inverts twice and lands back on 0 in the shells
+	// that admit it, and a negation *inside* an `if` is the clause's
+	// business, so zsh answers 0 there too. Nothing else reachable under
+	// `set -n` moves the status — `false`, `exit 3` and `false; set -n` are
+	// 0 everywhere, because no command runs to set one.
+	//
+	// Silent when it is wrong, which is the worst shape this failure has: a
+	// pre-commit hook or a CI step fails a file that is perfectly well
+	// formed, writes nothing to either stream, and leaves the author with no
+	// line number to look at because there is no error to point at (#3179).
+	UnrunNegationInvertsTheStatus Answer
 	// PromptAsksAgainAfterARefusedToken draws the continuation prompt for a
 	// construct the parser has **refused**, rather than refusing it where it
 	// stands.
@@ -14693,6 +14730,14 @@ func PosixSemantics() Semantics {
 		// the shell in the panel that targets this text. bash's join is the
 		// departure from it.
 		UnquotedListJoinsOnIFS: No,
+		// 2.9.2 gives a pipeline's `!` the logical NOT of the status of the
+		// pipeline it ran, and 2.8.2 makes the shell's own exit status the
+		// one the last command executed reported — or zero where none was.
+		// `set -n` executes none, so there is no status for the `!` to
+		// negate and the shell exits 0. bash, ksh93, dash and BusyBox ash
+		// all comply; zsh is the departure, and sets this the other way
+		// (#3179).
+		UnrunNegationInvertsTheStatus: No,
 		// POSIX makes an unquoted `$@` in a context that does not split
 		// behave as `$*` does, which is the join on IFS; dash, the shell in
 		// the panel that targets this text, complies. bash and ksh93 are the

@@ -4304,6 +4304,55 @@ enables `a=(x y)`: the two halves are separately reachable, since a subscript
 can be written for a variable that was never an array — which is exactly the
 case that was wrong.
 
+## The status a `!` leaves when nothing ran
+
+`set -n` reads and runs nothing, and `sh -n file` is that option's whole
+reason to exist: it is what every CI syntax check and every editor's on-save
+check calls, and its answer is read as a boolean by machinery with no other
+way to ask. A `!` in front of a top-level pipeline is ordinary in a script —
+`! grep -q pat file && ...` — and it turns out to decide what that route
+answers.
+
+Measured 2026-09-16, `env -i PATH=/usr/bin:/bin LC_ALL=C <shell> -n x.sh`,
+with stdout and stderr captured separately. **Every cell wrote nothing on
+either stream**, so the status is the whole of the answer and a probe that
+compared output alone could not see this at all:
+
+| file | bash 5.3.20 | bash as `sh` | bash 3.2.57 | ksh93u+ | dash 0.5.12 | ash 1.37.0 | zsh 5.9.2 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `! true` | 0 | 0 | 0 | 0 | 0 | 0 | **1** |
+| `true; ! true` | 0 | 0 | 0 | 0 | 0 | 0 | **1** |
+| `! true \| cat` | 0 | 0 | 0 | 0 | 0 | 0 | **1** |
+| `!` alone | 0 | 0 | refused | 0 | refused | refused | **1** |
+| `! ! true` | 0 | 0 | refused | 0 | refused | refused | refused |
+| `if ! true; then :; fi` | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| `echo hi` | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+
+Six columns against one, and the same six against the same one on `-c`, on
+stdin and on `-s` — the route does not move it. So this is
+`UnrunNegationInvertsTheStatus`, one `Answer` on the semantics vector, `Yes`
+in zsh and `No` in the other four presets and in `PosixSemantics`: 2.9.2 gives
+the `!` the logical NOT of the status of the pipeline it *ran*, and 2.8.2
+makes the shell's own status the one the last command executed reported, or
+zero where none was.
+
+The last two rows are what say this is the negation rather than the reading.
+`! ! true` inverts twice and lands back on 0 wherever it parses at all, and a
+negation inside an `if` is the clause's business — `set -n` never walks into
+the compound, so no `!` is reached. Nothing else reachable under the option
+moves the status either: `false`, `exit 3` and `false; set -n` are 0 in every
+column, because no command runs to report one.
+
+It is asked only under `set -n`. A negated pipeline in a running shell has
+one answer everywhere, so asking the vector on that route would make
+`! grep -q pat file` unanswerable in the core over a question the panel never
+posed.
+
+Silent when it is wrong, which is the worst shape this failure has: the shell
+answered 1 with **nothing on either stream**, so a pre-commit hook or a CI
+step failed a well-formed file and left its author no line number to look at,
+because there was no error to point at (#3179).
+
 ## One rule, and the half of it that gives it away
 
 `{ echo hi }` runs in zsh and is a syntax error in the other three. The

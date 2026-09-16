@@ -196,3 +196,25 @@ printf 'bindkey -lL on a name nobody has -> %s\n' "$?"
 ( setopt vi; unsetopt emacs; editing 'setopt vi; unsetopt emacs' )
 ( bindkey -v; unsetopt emacs; editing 'bindkey -v; unsetopt emacs' )
 ( setopt emacs; unsetopt vi; editing 'setopt emacs; unsetopt vi' )
+
+# ---- `set -n` and a `!` nothing ran ----
+#
+# `set -n` reads and runs nothing, which is what `sh -n file` is: every CI
+# syntax check and every editor's on-save check. A `!` in front of a top-level
+# pipeline still inverts the status this shell exits with, so a file whose
+# first command is negated comes back 1 — with nothing on either stream, since
+# there is nothing wrong with the file to report. bash 5.3, bash as `sh`,
+# bash 3.2, ksh93u+, dash and BusyBox ash all leave the status alone and
+# answer 0 (#3179).
+( set -n; ! true ); printf 'noexec bang -> %s\n' "$?"
+( set -n; true; ! true ); printf 'noexec bang after a command -> %s\n' "$?"
+( set -n; ! true | cat ); printf 'noexec bang on a pipeline -> %s\n' "$?"
+
+# The three controls are what say this is the `!` and not the reading, and
+# they agree in every column: two negations invert back onto 0, a negation
+# inside an `if` is the clause's business and `set -n` never walks into the
+# compound to reach it, and a command that is not negated at all leaves the
+# status alone because none of them ran to report one.
+( set -n; ! true; ! true ); printf 'noexec bang twice -> %s\n' "$?"
+( set -n; if ! true; then :; fi ); printf 'noexec bang inside if -> %s\n' "$?"
+( set -n; false ); printf 'noexec plain command -> %s\n' "$?"

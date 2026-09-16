@@ -767,7 +767,7 @@ func (p *Parser) Open() []Open {
 // per call and its last entry is a construct keyword whenever the lexer had
 // nothing open — `then` is not a quote, and a caller reading it as one would
 // silence expansion inside every `if`.
-func (p *Parser) OpenQuote() string { return p.lex.Open() }
+func (p *Parser) OpenQuote() string { return p.lex.OpenInnermost() }
 
 // Open is one thing the parser is inside.
 type Open struct {

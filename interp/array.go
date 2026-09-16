@@ -2660,7 +2660,11 @@ func (r *Runner) expressionValue(text string) (int, error) {
 	// zero` and the trimmed text could not say the spaces had been there
 	// (#2010). It also kept the offsets the parser records from lining up
 	// with the text a diagnostic slices.
-	tree, err := r.arithTree(nil, text)
+	// Read, not expanded again. Both callers hand over text their own word
+	// expansion already produced, so a `$` still standing in it is a
+	// character of the *result* rather than an expansion waiting to happen —
+	// see arithTreeRead, where the panel rows are (#3047).
+	tree, err := r.arithTreeRead(text)
 	if err != nil {
 		return 0, err
 	}

@@ -5732,3 +5732,26 @@ func (p *Parser) ParseReference(src string, at Pos) *ParamExpr {
 func (p *Parser) ParseArithFor(src string, at Pos) ArithExpr {
 	return p.parseArith(src, at)
 }
+
+// ParseArithExpanded is ParseArithFor for text that has **already** been
+// expanded: a subscript and a substring's range, which are words their caller
+// expands before anything arithmetic happens.
+//
+// The difference is what a `$` means. ParseArithFor is handed a program's
+// text and leaves an expression with an expansion in it alone — nil, for the
+// interpreter to expand and read when it runs — because `$(( $x$y ))` is the
+// *result* of substituting. Text that arrives here has been through that
+// already, so a `$` still standing in it is an ordinary character, and it
+// begins no operand: reading it a second time ran what the first round had
+// only produced, and `k='$(cmd)'; a[$k]=V` executed cmd (#3047).
+//
+// Measured 2026-09-15 from a script file, and unanimous in bash 5.3.20, bash
+// 3.2.57, zsh 5.9.2 and ksh93u+ 2012-08-01: `$(cmd)`, a backquoted run,
+// `$((1))` and a bare `$i` left in an expanded subscript are each refused for
+// wanting an operand, and none of the four runs anything. A bare name is not
+// one of them — `k='i'` and `k='1+1'` both name an element in all four —
+// because resolving a name is the evaluator's job rather than a second round
+// of expansion.
+func (p *Parser) ParseArithExpanded(src string, at Pos) ArithExpr {
+	return p.parseArithIn(src, at, true)
+}

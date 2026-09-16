@@ -1121,10 +1121,56 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		return r.declareTie(name, args, f)
 	}
 	if f.print {
-		// The other letters are accepted alongside `-p` and decide nothing:
-		// the shells that have them use an attribute letter to *filter* the
-		// full listing, which is not built. Refusing the combination would
-		// break the plain use to be honest about the rare one.
+		if len(args) == 0 && f.attributeLetterWritten() {
+			// `-p` beside an attribute letter and no operand is the
+			// *filtered* listing, and the filter is built: it is the one
+			// `export -p` already walks this very renderer with. The comment
+			// that used to stand here said it was not built, and so this fell
+			// through to the whole table — `declare -pi` wrote every variable
+			// the shell had, at status 0, where the letter asked for the
+			// integer ones.
+			//
+			// Unanimous across the panel, measured 2026-09-15 over a table
+			// holding one integer, one readonly, one export and one plain
+			// scalar, each shell counting the rows of its own `typeset -p -i`
+			// against its own bare `typeset -i`:
+			//
+			//	bash 5.3.20   9 filtered   (bare -i: 9)
+			//	bash 3.2      8 filtered   (bare -i: 8)
+			//	zsh 5.9.2    19 filtered   (bare -i: 30)
+			//	ksh93        10 filtered   (bare -i: 10)
+			//
+			// So it is the core's and not an axis, and all three of our
+			// dialects had it: bash wrote 23 rows where the letter asked for
+			// 1, zsh 62 and ksh 13.
+			//
+			// Through declarePrintForm rather than through the bare listing,
+			// because `-p` picks the *shape* as well as the set: zsh and
+			// ksh93 both write `n1=1` for a bare `typeset -i` and `typeset -i
+			// n1=1` for `typeset -p -i`, so routing this to the bare walk
+			// would have filtered the rows and then written them in the wrong
+			// form in two columns of three.
+			//
+			// Only with no operand. `declare -pi name` is not a filter in any
+			// of them — bash writes `declare -- p1="plain"` at 0 for a name
+			// carrying no integer attribute — so the operand form is left to
+			// declarePrint below, which already answers it.
+			keep, answered := r.attributeFilter(f)
+			if !answered {
+				return r.status
+			}
+			if keep == nil {
+				// A letter this dialect spells and this engine records
+				// nothing for. It is still an attribute to select on and no
+				// name carries it, so the listing is empty rather than whole
+				// — the same answer declarationListing gives.
+				return 0
+			}
+			return r.declarePrintForm(nil, r.sem().DeclareListing, true, keep)
+		}
+		// A letter alongside `-p` that no listing filters on decides nothing,
+		// and refusing the combination would break the plain use to be honest
+		// about the rare one.
 		return r.declarePrint(args)
 	}
 
@@ -4050,6 +4096,38 @@ func (r *Runner) shadow(name string) (fresh bool) {
 		}
 		sc.savedAttrs[name] = r.captureAttributes(name)
 		r.dropNameAttributes(name)
+		// And the export attribute, which is an attribute like every other
+		// one above and was the one this list did not have. Not taken off
+		// here — whether a local inherits it is a dialect's answer and
+		// localExportAttribute asks it — but *recorded*, so that whatever
+		// the declaration then does to the record goes away with the call.
+		//
+		// Without the record, `-x` written on a declaration inside a
+		// function wrote a global fact. Measured 2026-09-15 against bash
+		// 5.3.20, bash 3.2 and ksh93, all three of which answer that the
+		// attribute is the local's and lasts as long as the call:
+		//
+		//	f(){ declare -x A=1; }; f; declare -p A     A: not found, 1
+		//	A=outer; f(){ declare -x A=1; }; f          A reaches a child
+		//	export B=o; f(){ declare +x B; }; f         B reaches none
+		//
+		// The first left `declare -p` answering 0 for a name that does not
+		// exist. The other two are the worse half: a function's own
+		// declaration decided what the *caller's* variable put in a child's
+		// environment, in both directions, long after the call returned.
+		//
+		// The dialect that reads `-x` as `-g` never arrives here — the
+		// letter takes no shadow there, which is what the letter means — so
+		// this is inert for it and its own answer is unchanged.
+		if sc.exportedSpoken == nil {
+			sc.exportedSpoken = map[string]bool{}
+			sc.savedExported = map[string]bool{}
+		}
+		if _, seen := sc.exportedSpoken[name]; !seen {
+			on, spoken := r.exported[name]
+			sc.exportedSpoken[name] = spoken
+			sc.savedExported[name] = on
+		}
 		// And what a produced parameter was last assigned, which is a store
 		// of its own: a declaration that shadowed Vars alone left the message
 		// to the producer standing, so the local's value went on being read

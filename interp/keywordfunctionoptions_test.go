@@ -216,3 +216,42 @@ func TestOptionsSurviveTheFunctionScopesNeitherForm(t *testing.T) {
 		}
 	}
 }
+
+// `pipefail` is the one name whose *existence* is an axis rather than a table
+// entry, so its row carries a read and no write and the restore reaches the
+// state directly. Without that, the option is saved and never put back — and
+// nothing else here notices, because every other name this walk touches has
+// a writer in the table.
+func TestKeywordFunctionRestoresPipefail(t *testing.T) {
+	const src = `set -o pipefail; function g { set +o pipefail; }; g; false | true; echo "st=$?"`
+	s := keywordOptionsSem()
+	s.PipefailOption = Yes
+	out, _ := run(t, src, func(r *Runner) {
+		r.Semantics = &s
+		r.AddSetOptions("pipefail")
+	})
+	if out != "st=1\n" {
+		t.Errorf("got %q, want the caller's pipefail back", out)
+	}
+}
+
+// The two editing modes are two names over one state, which is the pair a
+// restore is most likely to get wrong. It does not: turning a mode off moves
+// nothing unless that mode is the selected one, so the walk's order does not
+// decide the answer. Both directions, because a pair that works one way round
+// and not the other is the failure this row is for.
+func TestKeywordFunctionRestoresTheEditingMode(t *testing.T) {
+	for _, tc := range []struct{ name, outer, inner, want string }{
+		{"emacs displaced by vi", "emacs", "vi", "emacs          on\nvi             off\n"},
+		{"vi displaced by emacs", "vi", "emacs", "emacs          off\nvi             on\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			src := `set -o ` + tc.outer + `; function g { set -o ` + tc.inner + `; }; g
+set -o | grep -E '^(emacs|vi) '`
+			out, _ := keywordOptionsRun(t, src)
+			if out != tc.want {
+				t.Errorf("got %q, want %q", out, tc.want)
+			}
+		})
+	}
+}

@@ -88,11 +88,17 @@ func (r *Runner) saveTheOptionTable(sc *scope) {
 
 // restoreTheOptionTable puts it back as the call unwinds.
 //
-// In the listing's order rather than the map's, and that is load-bearing for
-// exactly one pair: `vi` and `emacs` are two names over one state, so a
-// restore that wrote them in whichever order a map walk produced could leave
-// the mode the body chose standing. Sorted, the name being turned *off* is
-// written before the one being turned on in both directions.
+// In the listing's order rather than the map's, so that a return which does
+// move several names moves them the same way twice — the same reason
+// sortedTrapNames orders its own restore.
+//
+// It is **not** load-bearing, and that is worth writing down because one pair
+// looks as though it should be: `vi` and `emacs` are two names over one
+// state, so a walk could plausibly leave the mode the body chose standing.
+// Measured by reversing this walk — it does not, in either direction,
+// because turning a mode off only moves anything when that mode is the
+// selected one. A mutant that walks the map instead survives every row here,
+// which is the claim this comment is making and not an oversight.
 //
 // Only where the state actually differs. A call that moved nothing is the
 // overwhelmingly common one, and several of these names do real work when

@@ -96,6 +96,15 @@ func biBreak(r *Runner, _ context.Context, args []string) int {
 	if done {
 		return st
 	}
+	// After the place, which is where bash asks it: `break 1 2` outside a
+	// loop is `only meaningful in a for, while, or until loop` there and is
+	// `too many arguments` in zsh, and that ordering is
+	// Semantics.LoopControlPlaceIsJudgedBeforeTheCount read at a second site
+	// rather than a reading of its own. Inside a loop both columns say too
+	// many, and neither leaves the loop.
+	if st, done := r.extraNumericOperands("break", args); done {
+		return st
+	}
 	r.ctl, r.ctlDepth = controlBreak, reach
 	return 0
 }
@@ -109,8 +118,57 @@ func biContinue(r *Runner, _ context.Context, args []string) int {
 	if done {
 		return st
 	}
+	if st, done := r.extraNumericOperands("continue", args); done {
+		return st
+	}
 	r.ctl, r.ctlDepth = controlContinue, reach
 	return 0
+}
+
+// extraNumericOperands is what a word written **behind** the count of
+// `break`, `continue`, `return`, `exit` or `shift` comes to: the status the
+// builtin ends at, and whether it ends there.
+//
+// One helper for the five because it is one rule in every shell that has it —
+// bash reaches it through `no_args`, once, from the reader all five share —
+// and a second copy beside the first is how this repository's recurring
+// defect is spelled: a fix applied to one spelling and not its twin.
+//
+// The count is already read when this is asked, which is measured rather than
+// convenient: `shift abc def` is `abc: numeric argument required` and
+// `exit abc def` is `exit: abc: numeric argument required`, so a count that
+// will not read is what a script hears about first and this never speaks. It
+// does win over everything *after* the read — `shift 5 2` on three positional
+// parameters is `too many arguments` and not the out-of-range complaint, and
+// `shift -2 3` is the same.
+//
+// See Semantics.ExtraNumericOperand for the three readings and the panel.
+func (r *Runner) extraNumericOperands(name string, args []string) (int, bool) {
+	if len(args) < 2 {
+		return 0, false
+	}
+	p := r.extraNumericOperand()
+	if r.unspecified {
+		return r.status, true
+	}
+	if p == ExtraNumericOperandIgnored {
+		return 0, false
+	}
+	r.diagf("%s\n", Wording(r.diag().NumericOperandTooMany, "%[1]s: too many arguments", name))
+	if p == ExtraNumericOperandGivesUpTheStatement {
+		// The rest of the *statement* goes with it and the input does not:
+		// measured, `shift 1 2; echo SAME` prints no `SAME` and the next
+		// line runs, and a loop around the refusal stops where it stands.
+		// That is controlAbandon, which the refused readonly assignment
+		// beside it already raises — see interp/compound.go.
+		r.status = 2
+		r.ctl, r.abandonLine = controlAbandon, r.line
+		return 2, true
+	}
+	// Refused and nothing given up: the loop around it runs on and complains
+	// again on the next pass.
+	r.status = 1
+	return 1, true
 }
 
 // numericOperandMarker takes a leading `--` off the operands of a builtin
@@ -358,6 +416,9 @@ func biReturn(r *Runner, _ context.Context, args []string) int {
 	if len(args) > 0 {
 		switch n, ok := r.statusOperand("return", args[0]); {
 		case ok:
+			if st, done := r.extraNumericOperands("return", args); done {
+				return st
+			}
 			operand, haveOperand = n, true
 		case r.unspecified:
 			// statusArgument has reported the unanswered axis already. It is
@@ -3099,6 +3160,14 @@ func biShift(r *Runner, _ context.Context, args []string) int {
 					return r.status
 				}
 			}
+			if len(names) == 0 {
+				// Not names, so it is one operand too many — and the
+				// column that refuses does so ahead of both ends of the
+				// range below.
+				if st, done := r.extraNumericOperands("shift", args); done {
+					return st
+				}
+			}
 		}
 	}
 	if n < 0 {
@@ -5631,6 +5700,9 @@ func biExit(r *Runner, _ context.Context, args []string) int {
 	if len(args) > 0 {
 		switch n, ok := r.statusOperand("exit", args[0]); {
 		case ok:
+			if st, done := r.extraNumericOperands("exit", args); done {
+				return st
+			}
 			// Masked here and not in the reading, because the eight bits are
 			// the *process's* limit rather than a decision any shell made:
 			// `exit 300` is 44 in all six, including the two that leave a

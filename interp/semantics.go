@@ -4553,6 +4553,50 @@ type Semantics struct {
 	// `exit 3` need no dialect.
 	NumericOperandDoubleDashEndsOptions Answer
 
+	// ExtraNumericOperand says what a word written **behind** the count of
+	// `break`, `continue`, `return`, `exit` or `shift` comes to. The five
+	// take one operand between them and the panel does three different
+	// things with a second.
+	//
+	// Measured 2026-09-16 in a script file, each line followed by
+	// `echo "A=$?"` and by a command on a line of its own:
+	//
+	//	exit 1 2 · f(){ return 1 2; echo BODY; }; f
+	//	set -- a b c; shift 1 2 · for i in 1 2; do break 1 2; echo IN; done
+	//
+	//	bash 5.3, bash as sh	`break: too many arguments`, status 2, the
+	//	                    	builtin does nothing, and the rest of the
+	//	                    	*statement* is given up — the loop stops, the
+	//	                    	`; echo` behind it never runs, and the next
+	//	                    	line does
+	//	bash 3.2            	the same sentence and the same give-up at
+	//	                    	status 1
+	//	zsh 5.9.2           	`too many arguments`, status 1, the builtin
+	//	                    	does nothing and nothing is given up: the loop
+	//	                    	runs on and complains once per iteration
+	//	ksh93u+, dash, ash  	silence: the count is taken and the rest of
+	//	                    	the line ignored
+	//
+	// Three readings and not two, which is why it is a policy: what a script
+	// sees of zsh's refusal and of bash's are different in *both* halves —
+	// the status, and how much stopped running. bash's half is exactly
+	// controlAbandon, which the readonly reassignment beside it already
+	// raises.
+	//
+	// Asked only where there **is** a second operand, and after the count
+	// has been read: measured, `shift abc def` is `abc: numeric argument
+	// required` and `exit abc def` is `exit: abc: numeric argument
+	// required`, so a count that will not read is what a script hears about
+	// first. `break` and `continue` ask it later still — their *place* is
+	// judged before their count in bash, so `break 1 2` outside a loop is
+	// `only meaningful in a for, while, or until loop` there and is `too
+	// many arguments` in zsh, which is LoopControlPlaceIsJudgedBeforeTheCount
+	// read at a second site rather than a fourth reading here.
+	//
+	// zsh's `shift` never arrives: its operands are the names of arrays to
+	// shift and a second word is one of those — see ShiftNamesAreArrays.
+	ExtraNumericOperand ExtraNumericOperandPolicy
+
 	// FunctionCallIsALoopControlBoundary stops a `break` or `continue` in a
 	// function body from reaching the loops the *caller* is inside.
 	//
@@ -18400,6 +18444,52 @@ func (r *Runner) shiftOptionWords() ShiftOptionWordPolicy {
 	p := r.sem().ShiftOptionWords
 	if p == ShiftOptionWordsUnspecified {
 		r.diagf("%s\n", r.unanswered("`shift -x` read as an option rather than as a count"))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
+}
+
+// ExtraNumericOperandPolicy is what a word behind the count of `break`,
+// `continue`, `return`, `exit` or `shift` comes to. See
+// Semantics.ExtraNumericOperand for the panel this was measured from.
+type ExtraNumericOperandPolicy int
+
+const (
+	// ExtraNumericOperandUnspecified is no answer, and is refused like any
+	// other.
+	ExtraNumericOperandUnspecified ExtraNumericOperandPolicy = iota
+	// ExtraNumericOperandIgnored takes the count and reads no further:
+	// ksh93, dash, BusyBox ash.
+	ExtraNumericOperandIgnored
+	// ExtraNumericOperandRefused complains, leaves status 1 and does not do
+	// what the builtin was called for — and gives up nothing else, so a loop
+	// around it runs to its end: zsh.
+	ExtraNumericOperandRefused
+	// ExtraNumericOperandGivesUpTheStatement complains, leaves status 2,
+	// does not do what the builtin was called for, and gives up the rest of
+	// the statement the way a refused readonly assignment does: bash.
+	ExtraNumericOperandGivesUpTheStatement
+)
+
+func (p ExtraNumericOperandPolicy) String() string {
+	switch p {
+	case ExtraNumericOperandIgnored:
+		return "ignored: the count is taken and the rest of the line is not read"
+	case ExtraNumericOperandRefused:
+		return "refused: too many arguments, and the shell carries on"
+	case ExtraNumericOperandGivesUpTheStatement:
+		return "refused: too many arguments, and the statement is given up"
+	}
+	return "unspecified"
+}
+
+// extraNumericOperand resolves the axis, and only where a second operand was
+// actually written.
+func (r *Runner) extraNumericOperand() ExtraNumericOperandPolicy {
+	p := r.sem().ExtraNumericOperand
+	if p == ExtraNumericOperandUnspecified {
+		r.diagf("%s\n", r.unanswered("a word written behind a `break`, `exit`, `return` or `shift` count"))
 		r.status = 2
 		r.unspecified = true
 	}

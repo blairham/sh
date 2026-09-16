@@ -714,6 +714,8 @@ func Semantics() interp.Semantics {
 	// The marker is taken in front of a numeric operand too, so
 	// `break -- 1` ends the loop and `return -- 3` returns 3.
 	s.NumericOperandDoubleDashEndsOptions = interp.Yes
+	// The count is taken and the rest of the line is not read.
+	s.ExtraNumericOperand = interp.ExtraNumericOperandIgnored
 	s.ShiftNamesAreArrays = interp.No
 	s.ShiftNegativeIsOutOfRange = interp.Yes
 	s.WaitReadsOptions = interp.Yes

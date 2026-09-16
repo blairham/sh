@@ -1111,6 +1111,9 @@ func Semantics() interp.Semantics {
 	// The marker is taken in front of a numeric operand too, so
 	// `break -- 1` ends the loop and `exit -- 3` exits 3.
 	s.NumericOperandDoubleDashEndsOptions = interp.Yes
+	// Refused, and nothing is given up: `for i in 1 2; do break 1 2; done`
+	// complains once per pass and runs to the end of the list.
+	s.ExtraNumericOperand = interp.ExtraNumericOperandRefused
 	s.ShiftNamesAreArrays = interp.Yes
 	s.ShiftNegativeIsOutOfRange = interp.Yes
 	s.WaitReadsOptions = interp.No
@@ -2926,6 +2929,9 @@ func Diagnostics() interp.Diagnostics {
 		LoopControlCount:               "%[1]s: argument is not positive: %[2]s",
 		LoopControlCountNamesTheNumber: true,
 		LoopControlCountStatus:         1,
+		// No name in the sentence: zsh's location already carries it —
+		// `./s.sh:break:1: too many arguments`.
+		NumericOperandTooMany: "too many arguments",
 		// zsh names itself, not the path it was invoked by. `/bin/zsh` and a
 		// symlink called `myzsh` both say `zsh:`, and so does the shell run
 		// as `exec -a weirdname /bin/zsh` — measured all three ways, because

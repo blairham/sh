@@ -1,0 +1,52 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# The here-string, which BusyBox ash does not have — the ext/ area this
+# column does not run.
+#
+# ext/herestring.tests is asked of bash, zsh and ksh93 only, on the reading
+# that the ext/ constructs are the ones dash is the holdout on. BusyBox is not
+# dash, and it takes most of that list — `$'…'`, `[[`, substrings, the
+# replacement, `function`, `<(…)` — which makes "does it take `<<<`" a real
+# question rather than a foregone one. It does not: ext/herestring.tests
+# stops at its first line in the image with `syntax error: unexpected
+# redirection`, and cmd/ash says the same thing at the same place.
+#
+# So this file asks the refusal, and asks it through `eval` in a subshell, so
+# that a script which reaches it goes on to the next row and the parse of the
+# file as a whole is not what is being graded.
+
+try() {
+  ( eval "$1" ) 2>&1
+  printf '  -> %s\n' "$?"
+}
+
+printf -- '--- refused wherever it is written ---\n'
+
+try 'cat <<< word'
+try 'cat <<<word'
+try 'cat <<< "a quoted word"'
+try 'read -r x <<< one; printf "%s\n" "$x"'
+try 'f() { cat; }; f <<< word'
+try '{ cat; } <<< word'
+
+# The refusal is at parse time, so nothing on the line before it runs either.
+try 'printf "ran\n"; cat <<< word'
+
+printf -- '--- and the spellings a script falls back to ---\n'
+
+# A here-document is the portable form, and it keeps its trailing newline.
+cat <<EOF
+word
+EOF
+printf 'word\n' | cat
+read -r x <<EOF
+one two
+EOF
+printf '[%s]\n' "$x"
+
+# And the one reading of `<<<` that is not a here-string — `<<` with a
+# delimiter of `<` — is refused with the same sentence: the `<` is a
+# redirection operator before it can be a word, so there is no spacing of
+# three `<` this shell reads as anything.
+try 'cat << <'

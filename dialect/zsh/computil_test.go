@@ -117,6 +117,27 @@ func TestComparguments(t *testing.T) {
 			 say "$ds/$as/$ss"`,
 			"cmd/(alpha beta)/argument-1",
 		},
+		// **A numbered spec wins over the rest specification at its own
+		// position**, and the rest specification takes over after it. Both
+		// sides, because one alone does not separate the rule from a shell
+		// that always answers with the first spec it has, or always with the
+		// last. Measured on zsh 5.9.2, 2026-09-15, with `1:first:(a b)` and
+		// `*:rest:(c d)` in force: `cmd foo` reports `first` and
+		// `argument-1`, and `cmd x foo` reports `rest` and `argument-rest`.
+		{
+			"a numbered spec wins at its own position", "cmd foo",
+			`comparguments -i '' : '1:first:(a b)' '*:rest:(c d)'
+			 local -a ds as ss; comparguments -D ds as ss
+			 say "$ds/$as/$ss"`,
+			"first/(a b)/argument-1",
+		},
+		{
+			"and the rest takes over after it", "cmd x foo",
+			`comparguments -i '' : '1:first:(a b)' '*:rest:(c d)'
+			 local -a ds as ss; comparguments -D ds as ss
+			 say "$ds/$as/$ss"`,
+			"rest/(c d)/argument-rest",
+		},
 		// A `*:…` spec covers whatever number the argument turns out to be.
 		{
 			"the rest", "make foo ",

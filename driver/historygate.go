@@ -158,6 +158,21 @@ func (g *histGate) next() (string, bool) {
 			g.keep(body)
 			return line, true
 		}
+		if !g.r.HistoryRecording() {
+			// `set +o history` part way through stops the expander as well
+			// as the list, and that is measured rather than assumed: after
+			// it, `echo !!` prints the two characters again, and a later
+			// `set -o history` starts both again over the entries the list
+			// still holds.
+			//
+			// So the two options are an AND held continuously and not a
+			// sequence — which is the same reading the gate itself is built
+			// on, where the list is what decides whether this route exists
+			// at all.
+			g.at++
+			g.keep(body)
+			return line, true
+		}
 		res, err := g.r.ExpandHistoryIn(body, quoteOf(g.open), g.r.HistoryEntries(), 1)
 		if err != nil {
 			// A reference the list does not hold. bash complains, does not

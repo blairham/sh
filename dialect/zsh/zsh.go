@@ -1874,6 +1874,11 @@ func Semantics() interp.Semantics {
 	// The end of the value is not one of the positions, which is the general
 	// rule below rather than anything about this pattern.
 	s.EmptyReplacementPattern = interp.EmptyReplacementPatternMatchesEveryPosition
+	// The anchors, and an empty pattern behind one still matches at that
+	// end: `v=abcabc` gives `Xabcabc` for `${v/#/X}` and `abcabcX` for
+	// `${v/%/X}`, which is bash's answer and not ksh93's (#3272).
+	s.ReplacementAnchors = interp.Yes
+	s.AnchoredEmptyReplacementPattern = interp.Yes
 	// The same empty match bash refuses, measured the same way:
 	// `${v//(b|)/<>}` under extendedglob is `<>a<><>c`.
 	s.ReplacementEmptyMatchDeclined = interp.EmptyMatchDeclinedAtTheEnd

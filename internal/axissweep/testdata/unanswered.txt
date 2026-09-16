@@ -28,6 +28,7 @@
 
 ash   AliasInvalidNameFatal
 ash   AliasNameCheckReachesALookup
+ash   AnchoredEmptyReplacementPattern
 ash   AppendedArrayLiteralOverANameNotDeclaredAnArrayStartsItOver
 ash   ArithDivisionByZeroYieldsAValue
 ash   ArithFloatOverflowIsZero
@@ -234,6 +235,7 @@ bash  SetArrayWithNoValuesUnsetsTheName
 
 dash  AliasInvalidNameFatal
 dash  AliasNameCheckReachesALookup
+dash  AnchoredEmptyReplacementPattern
 dash  AppendedArrayLiteralOverANameNotDeclaredAnArrayStartsItOver
 dash  ArithDivisionByZeroYieldsAValue
 dash  ArithFloatOverflowIsZero
@@ -379,6 +381,7 @@ dash  ReadZeroTimeout
 dash  ReadonlyAttributeCanBeRemoved
 dash  ReadonlyElement
 dash  ReadonlyRecordsTheCompoundAttribute
+dash  ReplacementAnchors
 dash  ReplacementEmptyMatchDeclined
 dash  ReplacementOperandTakesTheEnclosingQuoting
 dash  ScalarAppendedToAnArrayBecomesANewElement

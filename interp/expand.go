@@ -3670,7 +3670,11 @@ func (r *Runner) armOrder() armOrder {
 // count, and cost four times the run time of a substitution over a long
 // value for the trouble.
 func (r *Runner) replaceWith(value, pattern string, e *syntax.ParamExpr) string {
+	pattern, e = r.readAnchor(pattern, e)
 	if pattern == "" && e.Anchor == 0 && !r.emptyPatternFires(value) {
+		return value
+	}
+	if pattern == "" && e.Anchor != 0 && !r.anchoredEmptyPatternFires() {
 		return value
 	}
 	o := r.replacementPatternOpts(pattern, value)
@@ -3691,6 +3695,50 @@ func (r *Runner) replaceWith(value, pattern string, e *syntax.ParamExpr) string 
 		r.publishMatch(m)
 		return r.replacementFor(repl)(matched)
 	})
+}
+
+// readAnchor decides whether the `#` or `%` the parser took off the front of
+// a span replacement's pattern is an anchor at all.
+//
+// The parser reads one wherever the dialect has `${x/pat/rep}`, because the
+// two are spelled as one construct — and BusyBox ash has the replacement and
+// no anchors, so there the character is the pattern's own first byte and the
+// pattern is `#a` rather than `a` anchored at the start. Measured: with
+// `w='x#ay%bz'`, `${w/#a/Q}` is `xQy%bz` there, the `#a` found *inside* the
+// value, which no other reading produces. See Semantics.ReplacementAnchors.
+//
+// Putting the character back here rather than refusing the anchor in the
+// parser is what keeps `syntax.Core()` out of it: every column **accepts**
+// `${v/#a/X}`, so acceptance is not what differs and a grammar flag would
+// have had to claim one shell's reading for the whole core.
+//
+// The character goes back on through the dialect's own mark set, so it
+// arrives as an ordinary character in a dialect that would otherwise read it
+// as a pattern operator. e is copied rather than written through: the
+// expression belongs to the parsed script and is expanded again on the next
+// pass over the same line.
+//
+// Asked only where an anchor was written, so an ordinary `${v/a/X}` puts no
+// question to the dialect.
+func (r *Runner) readAnchor(pattern string, e *syntax.ParamExpr) (string, *syntax.ParamExpr) {
+	if e.Anchor == 0 || r.ask(r.sem().ReplacementAnchors, "`${v/#pat/rep}`: the anchored span replacement") {
+		return pattern, e
+	}
+	unanchored := *e
+	unanchored.Anchor = 0
+	return escapePatternMetaIn(string(e.Anchor), r.markedMeta()) + pattern, &unanchored
+}
+
+// anchoredEmptyPatternFires is whether an *anchored* span replacement whose
+// pattern is empty gets as far as matching.
+//
+// EmptyReplacementPattern is the same question at the unanchored spelling and
+// has a different answer, which is why the two are separate axes: ksh93
+// declines this anchor and takes every other one. See
+// Semantics.AnchoredEmptyReplacementPattern.
+func (r *Runner) anchoredEmptyPatternFires() bool {
+	return r.ask(r.sem().AnchoredEmptyReplacementPattern,
+		"`${v/#/X}`: an anchored replacement whose pattern is empty")
 }
 
 // emptyPatternFires is whether an unanchored span replacement whose pattern

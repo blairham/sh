@@ -1241,6 +1241,14 @@ func Semantics() interp.Semantics {
 	// where the control `${e//*/X}` is `X`. Not a rule about empty matches —
 	// with extglob on, `${v//@(|)/<>}` is `<>a<>b<>c` in the same build.
 	s.EmptyReplacementPattern = interp.EmptyReplacementPatternMatchesNothing
+	// `#` and `%` after the `/` are anchors here, and an anchored pattern
+	// that is empty still matches at that end: `v=abcabc` gives `Xbcabc`,
+	// `abcabX`, `Xabcabc` and `abcabcX` for `${v/#a/X}`, `${v/%c/X}`,
+	// `${v/#/X}` and `${v/%/X}`. ksh93 takes the anchor and declines the
+	// empty pattern behind it, and BusyBox ash has no anchors at all
+	// (#3272).
+	s.ReplacementAnchors = interp.Yes
+	s.AnchoredEmptyReplacementPattern = interp.Yes
 	// And the empty match a global replacement refuses is the one at the end
 	// of the value: `${v//@(b|)/<>}` is `<>a<><>c`, which takes the empty
 	// match sitting where `b` ended and leaves the end alone.

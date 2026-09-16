@@ -1202,6 +1202,20 @@ func Semantics() interp.Semantics {
 	// and `${e//x/X}` come to `abc`, `abc`, empty and empty. ksh93 replaces
 	// in the third and zsh in every position (#2272).
 	s.EmptyReplacementPattern = interp.EmptyReplacementPatternMatchesNothing
+	// And no anchors at all behind the `/`, which is the half
+	// syntax.Dialect.ParamSubstitution's comment calls one feature with the
+	// replacement: `#` and `%` written there are the pattern's own first
+	// character. Measured 2026-09-16 in the pinned alpine image under
+	// `--init`, with `w='x#ay%bz'`: `${w/#a/Q}` is `xQy%bz` — the `#a` found
+	// *inside* the value — and `${w/%b/Q}` is `x#ayQz`, where the other six
+	// columns leave both alone. `${v/b/X}` and `${v//b/X}` are the controls
+	// and are right here, so this is "no anchor" and not "no replacement"
+	// (#3272).
+	//
+	// unanswered AnchoredEmptyReplacementPattern: that axis is what an
+	// *anchored* empty pattern matches, and no anchor is ever read here, so
+	// nothing in this shell can reach it.
+	s.ReplacementAnchors = interp.No
 
 	// `$'\q\8'` keeps both characters, which is bash's answer and not the
 	// dropping one ksh93 and zsh share (#2272).

@@ -207,6 +207,20 @@ type Shell struct {
 	// dialect publishes it under the parameters its own shell names.
 	RunWidget func(*interp.Runner, context.Context, string, repl.Line) (repl.Line, bool)
 
+	// RunCompletion asks this dialect's own completion system what the word
+	// under the cursor could become — what a startup file's `compdef` rules
+	// and completion widgets have to say about it. Nil is a dialect with no
+	// completion system of its own, which is three of the four.
+	//
+	// From the Runner for the reason RunWidget is: the widget the name refers
+	// to is a builtin's state, and so are the parameters the word is
+	// published under while the function looks at it.
+	//
+	// Its answer is asked before the editor's own completion and never
+	// instead of it — see repl.Binding.Candidates, which is where the name
+	// comes from and why the ordering is the only safe one.
+	RunCompletion func(*interp.Runner, context.Context, string, repl.Completion) []string
+
 	// RunScheduled runs whatever this dialect had set aside for a time that
 	// has now passed. It is called at every prompt, before the prompt is
 	// drawn. Nil is a dialect with nothing that can be scheduled, which is

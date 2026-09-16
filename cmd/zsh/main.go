@@ -46,6 +46,7 @@ func shell() driver.Shell {
 		KeyBindings:            zsh.KeyBindings,
 		ViEditing:              zsh.ViEditing,
 		RunWidget:              zsh.RunWidget,
+		RunCompletion:          zsh.RunCompletion,
 		RunScheduled:           zsh.RunScheduled,
 		HighlightLine:          zsh.RegionHighlights,
 		StartLine:              zsh.ResetRegionHighlight,

@@ -173,6 +173,18 @@ func (sh Shell) runWidget(r *interp.Runner) func(context.Context, string, repl.L
 	}
 }
 
+// runCompletion is the same for the dialect's completion system, and is nil
+// for the same reason: repl asks whether it has one before a key's binding can
+// name anything for it to run.
+func (sh Shell) runCompletion(r *interp.Runner) func(context.Context, string, repl.Completion) []string {
+	if sh.RunCompletion == nil {
+		return nil
+	}
+	return func(ctx context.Context, name string, c repl.Completion) []string {
+		return sh.RunCompletion(r, ctx, name, c)
+	}
+}
+
 // highlighter is what colors the line, preferring the binary's own answer to
 // the dialect's.
 //
@@ -399,9 +411,13 @@ func (sh Shell) frontEnd(r *interp.Runner, name string, dg interp.Diagnostics) r
 		// And how a key bound to one of the dialect's own actions runs, and
 		// what it had set aside for a time that has passed. Both bound to
 		// this runner, for the reason the bindings are.
-		StartLine:    sh.startLine(r),
-		RunWidget:    sh.runWidget(r),
-		RunScheduled: sh.runScheduled(r),
+		StartLine: sh.startLine(r),
+		RunWidget: sh.runWidget(r),
+		// And how a key whose binding named a completion of the shell's own
+		// asks for the candidates. Bound to this runner for the reason the
+		// bindings are: the widget table is this session's.
+		RunCompletion: sh.runCompletion(r),
+		RunScheduled:  sh.runScheduled(r),
 		// And what it wants waited on beside the terminal while it waits for
 		// a key, and what it does when one of those wakes. Bound to this
 		// runner too, because the table a handler arms is this session's.

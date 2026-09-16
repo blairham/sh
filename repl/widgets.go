@@ -170,10 +170,20 @@ const (
 
 // Binding is what a key sequence was rebound to.
 //
-// One of two things, and never both: an action this editor performs, or the
-// name of an action the *shell* performs — see shellwidget.go, and Function
-// there for why a name and not a callable. The zero value is a key bound to
-// nothing, which is how a removed binding is spelled.
+// The *action* is one of two things, and never both: an action this editor
+// performs, or the name of an action the *shell* performs — see
+// shellwidget.go, and Function there for why a name and not a callable. The
+// zero value is a key bound to nothing, which is how a removed binding is
+// spelled.
+//
+// Candidates is a third field rather than a third alternative, because the
+// shell it describes really does say both things at once. zsh's `zle -C name
+// completer function` makes two claims about one key — that it behaves like
+// the builtin completion widget `completer`, and that `function` is what
+// produces the candidates — and a binding that could carry only one of them
+// had to drop one. #2770 dropped the second, which kept Tab working on a
+// real startup file and left the startup file's own completions unrun; this
+// field is how both survive.
 //
 // A struct rather than the Widget alone because the two cannot be one value: a
 // shell action has no constant, since it is code the shell was handed at run
@@ -196,6 +206,23 @@ type Binding struct {
 	// the dialect is asked. A callable here would have made this package the
 	// one holding a shell's idea of a call.
 	Function string
+
+	// Candidates is the name of a shell action that supplies what this
+	// editor's completion offers, where the key names a completion the shell
+	// has configured. Empty is the ordinary case, and every key whose Widget
+	// is not WidgetComplete.
+	//
+	// Asked **before** this editor's own completion and never instead of it:
+	// an action that offers nothing leaves the editor completing exactly what
+	// it completes with no such action at all. That ordering is the whole of
+	// why this is safe to wire to a startup file's completion system — the
+	// failure mode a startup file had before it, a Tab that diagnosed and
+	// completed nothing, cannot be reached from here.
+	//
+	// A name, for Function's reason: producing the candidates means calling
+	// a function of the shell's, and Shell.RunCompletion is where the dialect
+	// is asked.
+	Candidates string
 }
 
 // runWidget performs one action and redraws where the action changed the line.
@@ -204,8 +231,8 @@ type Binding struct {
 // in the actions: an action that moved the cursor and one that changed the
 // text both leave the screen wrong, and the two kinds are told apart by which
 // call is made and not by anything the action reports.
-func (e *editor) runWidget(w Widget, prompt drawnPrompt) {
-	switch w {
+func (e *editor) runWidget(b Binding, prompt drawnPrompt) {
+	switch b.Widget {
 	case WidgetNone:
 		// A key bound to nothing. Doing nothing is the whole of it, and it is
 		// how a removed binding stops the editor's own default from running.
@@ -269,7 +296,7 @@ func (e *editor) runWidget(w Widget, prompt drawnPrompt) {
 		e.deleteBackward()
 		e.redraw(prompt)
 	case WidgetComplete:
-		e.complete(e.comp)
+		e.complete(e.completerFor(b.Candidates))
 		e.redraw(prompt)
 	case WidgetUndo:
 		e.undoLine()

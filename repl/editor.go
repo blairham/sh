@@ -59,6 +59,12 @@ type editor struct {
 	comp    Completer
 	lastTab bool
 
+	// shellComplete asks the shell's own completion system what a word could
+	// become, by the name of the action a key's binding named — see
+	// Binding.Candidates. Nil is a session whose front end gave it no such
+	// way, which is every dialect but one and every key but a completion one.
+	shellComplete func(name string, c Completion) []string
+
 	// workingDir is the shell's own directory, asked when a completion is
 	// built rather than held, because `cd` moves it under the editor. Nil is
 	// a session with nothing to ask — the editor is usable without a Runner.
@@ -339,8 +345,18 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 				return string(e.line), nil
 			}
 			continue
+		case claimed && b.Widget == WidgetComplete:
+			// Completion is the one action this editor performs over *two*
+			// keystrokes — the second Tab is what lists — so a key rebound to
+			// it cannot go through runWidget, which knows only about the key
+			// in hand. It listed nothing before this case existed, and every
+			// real startup file rebinds Tab: `compinit` ends by putting a
+			// completion widget on it, so the rebound key is the ordinary
+			// case and not the exotic one (#2776).
+			e.completeKey(e.completerFor(b.Candidates), wasTab, prompt)
+			continue
 		case claimed:
-			e.runWidget(b.Widget, prompt)
+			e.runWidget(b, prompt)
 			continue
 		}
 		if e.viCommand {
@@ -416,16 +432,7 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 			e.change(false, e.deleteBackward)
 			e.redraw(prompt)
 		case tab:
-			var matches []string
-			e.change(false, func() { matches = e.complete(e.comp) })
-			if len(matches) > 0 && wasTab && e.confirmList(matches, prompt) {
-				e.list(matches, prompt)
-			}
-			e.redraw(prompt)
-			// Set after the redraw, and the only key that leaves it set: two
-			// Tabs in a row are a request to see the matches, and anything
-			// between them is not.
-			e.lastTab = true
+			e.completeKey(e.comp, wasTab, prompt)
 			continue
 		case esc:
 			if e.viEditing() && e.escapeIsTheModeSwitch() {

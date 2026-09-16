@@ -86,3 +86,19 @@ printf 'sentences for a frozen OPTIND -> '
 ( OPTIND=1; set -- -a val; N=kept; readonly N
   getopts 'a:' N 2>/dev/null
   printf 'frozen name: st=%s N=[%s]\n' "$?" "$N" )
+
+# --- OPTARG when the scan runs out of options ---
+#
+# The call that says "no more options" unsets OPTARG here, so the last
+# option's argument is not left standing — the answer bash and BusyBox ash
+# give, and not dash's or zsh's. The freeze is a second question and this
+# shell keeps it: OPTARG is the builtin's, so the clearing is not refused,
+# and nothing removes the attribute (#3146).
+
+( OPTIND=1; set -- -a val x
+  getopts 'a:' o; getopts 'a:' o
+  printf 'after the scan: st=%s o=[%s] OPTARG=[%s]\n' "$?" "$o" "${OPTARG-unset}" )
+
+( OPTIND=1; OPTARG=PRESET; set -- operand; readonly OPTARG
+  getopts 'a:' o 2>/dev/null
+  printf 'frozen, at the end: OPTARG=[%s]\n' "${OPTARG-unset}" ) 2>/dev/null

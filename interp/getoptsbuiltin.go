@@ -145,8 +145,7 @@ func (r *Runner) getoptsAt(name, spec string, silent bool, words []string, ind i
 	at := strings.IndexByte(spec, c)
 	switch {
 	case at < 0 || c == ':':
-		r.advance(word, ind)
-		return r.getoptsBad(name, string(c), silent, false)
+		return r.getoptsBad(name, string(c), silent, false, func() bool { return r.advance(word, ind) })
 	case at+1 < len(spec) && spec[at+1] == ':':
 		// The option takes an argument: the rest of this word if there is
 		// any, and the next word otherwise.
@@ -166,10 +165,7 @@ func (r *Runner) getoptsAt(name, spec string, silent bool, words []string, ind i
 		}
 		if ind >= len(words) {
 			r.optChar = 1
-			if !r.setOptind(ind+1) && r.getoptsRefusalEndsTheBuiltin() {
-				return getoptsRefusedStatus
-			}
-			return r.getoptsBad(name, string(c), silent, true)
+			return r.getoptsBad(name, string(c), silent, true, func() bool { return r.setOptind(ind + 1) })
 		}
 		r.optChar = 1
 		if !r.getoptsWrite("OPTARG", words[ind]) && r.getoptsRefusalEndsTheBuiltin() {
@@ -180,8 +176,13 @@ func (r *Runner) getoptsAt(name, spec string, silent bool, words []string, ind i
 		}
 		return r.getoptsSetName(name, string(c), 0)
 	default:
-		r.advance(word, ind)
+		// OPTARG first here too, for the reason the argument-taking branch
+		// writes it first: a refusal leaves dash and BusyBox ash with OPTIND
+		// where it was.
 		if !r.clearOptargForAnArgumentlessOption() && r.getoptsRefusalEndsTheBuiltin() {
+			return getoptsRefusedStatus
+		}
+		if !r.advance(word, ind) && r.getoptsRefusalEndsTheBuiltin() {
 			return getoptsRefusedStatus
 		}
 		return r.getoptsSetName(name, string(c), 0)
@@ -288,19 +289,25 @@ func (r *Runner) getoptsRefusalEndsTheBuiltin() bool {
 
 // advance moves past the character just read, staying inside the word while
 // there is more of the cluster to come.
-func (r *Runner) advance(word string, ind int) {
+func (r *Runner) advance(word string, ind int) bool {
 	if r.optChar+1 >= len(word) {
 		r.optChar = 1
-		r.setOptind(ind + 1)
-		return
+		return r.setOptind(ind + 1)
 	}
 	r.optChar++
-	r.setOptind(ind)
+	return r.setOptind(ind)
 }
 
 // getoptsEnd reports that there are no more options.
 func (r *Runner) getoptsEnd(name string, ind int) int {
 	r.optChar = 1
+	// Ahead of OPTIND, which is the order a refusal makes visible: measured
+	// 2026-09-16, a frozen OPTARG leaves BusyBox ash with OPTIND still 1 over
+	// `set -- -- x`, where every other column has already counted past the
+	// `--`. So the clearing happens before the word count moves.
+	if !r.clearOptargAtEndOfOptions() && r.getoptsRefusalEndsTheBuiltin() {
+		return getoptsRefusedStatus
+	}
 	if !r.setOptind(ind) && r.getoptsRefusalEndsTheBuiltin() {
 		return getoptsRefusedStatus
 	}
@@ -332,18 +339,23 @@ func (r *Runner) getoptsEnd(name string, ind int) int {
 // Silent mode is the interesting half: the letter goes into OPTARG and the
 // name becomes `?` for an unknown option and `:` for a missing argument, so a
 // script can tell the two apart without reading a message.
-func (r *Runner) getoptsBad(name, letter string, silent, missingArg bool) int {
+// advanceOptind moves the word count on, and is the caller's rather than
+// this function's so that it can happen **after** whatever is done to OPTARG:
+// measured 2026-09-16, a frozen OPTARG over `set -- -z` leaves dash 0.5.12 and
+// BusyBox ash 1.37.0 refusing at 2 with OPTIND still 1, so neither had counted
+// past the word when the refusal ended the run.
+func (r *Runner) getoptsBad(name, letter string, silent, missingArg bool, advanceOptind func() bool) int {
 	if silent {
 		if !r.getoptsWrite("OPTARG", letter) && r.getoptsRefusalEndsTheBuiltin() {
+			return getoptsRefusedStatus
+		}
+		if !advanceOptind() && r.getoptsRefusalEndsTheBuiltin() {
 			return getoptsRefusedStatus
 		}
 		if missingArg {
 			return r.getoptsSetName(name, ":", 0)
 		}
 		return r.getoptsSetName(name, "?", 0)
-	}
-	if !r.clearOptarg() && r.getoptsRefusalEndsTheBuiltin() {
-		return getoptsRefusedStatus
 	}
 	// The complaint about the option comes first, and a refusal the *name*
 	// earns comes after it: measured 2026-09-16, `set -- -z; readonly o;
@@ -362,6 +374,15 @@ func (r *Runner) getoptsBad(name, letter string, silent, missingArg bool) int {
 		return r.getoptsSetName(name, "?", 0)
 	}
 	r.getoptsBadOptionComplaint(letter, missingArg)
+	// And what becomes of OPTARG after it: measured 2026-09-16, dash 0.5.12
+	// and BusyBox ash 1.37.0 write `Illegal option -z` and *then* `getopts:
+	// OPTARG: is read only` over a frozen OPTARG, in that order.
+	if !r.clearOptarg() && r.getoptsRefusalEndsTheBuiltin() {
+		return getoptsRefusedStatus
+	}
+	if !advanceOptind() && r.getoptsRefusalEndsTheBuiltin() {
+		return getoptsRefusedStatus
+	}
 	return r.getoptsSetName(name, "?", 0)
 }
 
@@ -454,8 +475,75 @@ func (r *Runner) setOptind(n int) bool {
 // Four of the five leave it unset and zsh sets it to the empty string, which
 // a script testing `${OPTARG-}` can tell apart.
 func (r *Runner) clearOptarg() bool {
-	return r.emptyOrUnsetOptarg(r.ask(r.sem().GetoptsClearsOptarg,
+	return r.clearOptargPossiblyForReal(r.ask(r.sem().GetoptsClearsOptarg,
 		"`getopts` emptying OPTARG rather than unsetting it after a bad option"))
+}
+
+// clearOptargPossiblyForReal is the clearing the error paths and the end of
+// the options share, and the one place the difference between *taking the
+// name away* and *writing over it* is decided.
+//
+// A `delete` from the value map is not an unset: it leaves the name's
+// attributes where they were, so a `readonly OPTARG` neither stopped the
+// clearing nor was taken away by it. Both halves are measured, and they are
+// one answer rather than two — bash's clearing removes the name, and removing
+// a name removes what was recorded about it.
+//
+// See Semantics.GetoptsClearingOptargIsARealUnset for the panel, and for the
+// one clearing this is *not* asked of: an option that takes no argument goes
+// through the ordinary refusal even in bash, which reports it and leaves the
+// value standing.
+func (r *Runner) clearOptargPossiblyForReal(empty bool) bool {
+	if !empty && r.readonly["OPTARG"] && r.ask(r.sem().GetoptsClearingOptargIsARealUnset,
+		"`getopts` clearing OPTARG by removing the name rather than by writing over it") {
+		delete(r.readonly, "OPTARG")
+	}
+	return r.emptyOrUnsetOptarg(empty)
+}
+
+// clearOptargAtEndOfOptions takes OPTARG away when the scan runs out of
+// options, in the dialects that do.
+//
+// The run that reports "no more options" is also the one that clears OPTARG
+// in five of the seven, and this shell did nothing there — so the **last
+// option's argument was still standing** when the loop exited, and a script
+// reading `$OPTARG` after its `while getopts` got the previous option's value
+// instead of nothing, at status 0 (#3146).
+//
+// Not the empty-or-unset question the two clearings above ask. Every column
+// that clears here *unsets*, so `${OPTARG-…}` finds nothing rather than an
+// empty string in all three, and there is no second answer for an axis to
+// hold. Measured 2026-09-16 over a script file under `env -i
+// PATH=/usr/bin:/bin`, `OPTARG=PRESET; OPTIND=1; set -- x; getopts a: o`,
+// and the same over `-- x`, over no words at all, and over the call after an
+// option that was read:
+//
+//	bash 5.3.20   OPTARG unset
+//	bash as `sh`  OPTARG unset
+//	bash 3.2.57   OPTARG unset
+//	ksh93u+       OPTARG unset
+//	BusyBox ash   OPTARG unset
+//	dash 0.5.12   PRESET stands
+//	zsh 5.9.2     PRESET stands
+//
+// What the clearing *is* then splits three ways over a frozen OPTARG, and
+// two of the three fall out of answers this builtin already has:
+//
+//   - ksh93 writes past the freeze without a word, which is
+//     GetoptsOwnParametersIgnoreAFreeze.
+//   - BusyBox ash is refused by it, reports, and ends the builtin at 2 with
+//     OPTARG still `PRESET` — the same two answers it gives for every other
+//     write here.
+//   - bash is the third: silent, OPTARG gone, **and the freeze gone with
+//     it**, so `OPTARG=written` on the line after succeeds where it was
+//     refused before. That is GetoptsClearingOptargIsARealUnset, which bash
+//     alone answers yes and which the error paths ask too.
+func (r *Runner) clearOptargAtEndOfOptions() bool {
+	if !r.ask(r.sem().GetoptsUnsetsOptargAtEndOfOptions,
+		"`getopts` unsetting OPTARG when it runs out of options") {
+		return true
+	}
+	return r.clearOptargPossiblyForReal(false)
 }
 
 // clearOptargForAnArgumentlessOption is the same for an option the string has

@@ -642,6 +642,13 @@ func Semantics() interp.Semantics {
 	// is `getopts: OPTARG: is read only` at status 2 with the name unset and
 	// OPTIND still at 1 — so the word count had not moved and nothing after
 	// the refusal ran. Measured 2026-09-16 on 0.5.12.
+	// The last option's argument is still there when the scan runs out, which
+	// dash shares with zsh alone — and not with BusyBox ash, which unsets it.
+	s.GetoptsUnsetsOptargAtEndOfOptions = interp.No
+	// And every clearing this shell does make is an ordinary write a freeze
+	// refuses: `OPTARG=P; readonly OPTARG; set -- -z; getopts a:b o` leaves
+	// `P` standing and the freeze on.
+	s.GetoptsClearingOptargIsARealUnset = interp.No
 	s.GetoptsOwnParametersIgnoreAFreeze = interp.No
 	s.GetoptsRefusedWriteEndsTheBuiltin = interp.Yes
 	// The builtin stops; the script does not. `echo reached` on the same

@@ -109,3 +109,19 @@ printf 'sentences for a frozen OPTIND -> '
 ( OPTIND=1; set -- -a val; readonly OPTIND
   getopts 'a:' o 2>/dev/null
   printf 'frozen OPTIND: st=%s o=[%s] OPTARG=[%s]\n' "$?" "$o" "${OPTARG-unset}" )
+
+# --- OPTARG when the scan runs out of options ---
+#
+# The last option's argument is still standing when the loop ends here, as in
+# dash — bash, ksh93 and BusyBox ash all unset it, so a script reading
+# `$OPTARG` after its `while getopts` gets the previous option's value in this
+# shell and nothing in those three (#3146).
+
+( OPTIND=1; set -- -a val x
+  getopts 'a:' o; getopts 'a:' o
+  printf 'after the scan: st=%s OPTARG=[%s]\n' "$?" "${OPTARG-unset}" )
+
+# Nothing is written there, so a frozen OPTARG is not refused either.
+printf 'sentences at a frozen end -> '
+( OPTIND=1; OPTARG=PRESET; set -- operand; readonly OPTARG
+  getopts 'a:' o 2>&1 >/dev/null | wc -l | tr -d ' ' )

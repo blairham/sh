@@ -186,3 +186,21 @@ m
   readonly N
   getopts 'a:' N 2>/dev/null ) 2>/dev/null
 printf 'a refused name did not end the file\n'
+
+# --- OPTARG when the scan runs out of options ---
+
+# The call that reports "no more options" is also the one that clears OPTARG
+# in five of the seven columns, and two of them leave the last option's
+# argument standing — so a script reading `$OPTARG` after its loop gets the
+# previous option's value there and nothing here. Two against two among the
+# four this file is graded in, so the rows are in the dialect files and what
+# is common is only that the *status* does not depend on it: 1 on the call
+# that runs out, and 1 every time after, whatever became of OPTARG. The name
+# is not asked here either, for the reason the header gives — zsh leaves
+# whatever was in it (#3146).
+( OPTIND=1; set -- -a val x
+  getopts 'a:' o
+  getopts 'a:' o
+  printf 'after the scan: st=%s\n' "$?"
+  getopts 'a:' o
+  printf 'and again:      st=%s\n' "$?" ) 2>/dev/null

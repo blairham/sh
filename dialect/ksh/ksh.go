@@ -1566,6 +1566,14 @@ func Semantics() interp.Semantics {
 	// OPTARG and OPTIND are the builtin's own here: `readonly OPTARG;
 	// getopts a: o` says nothing at all and leaves `val` in OPTARG.
 	// Measured 2026-09-16 on ksh93u+ 2012-08-01.
+	// The end of the options unsets OPTARG here too, and the freeze stays on:
+	// `OPTARG=written` after the loop is still refused. It reaches that
+	// through the answer below rather than through an unset of its own —
+	// OPTARG is the builtin's, so the clearing is not refused, and the
+	// attribute is nobody's to remove. Measured 2026-09-16 on ksh93u+
+	// 2012-08-01.
+	s.GetoptsUnsetsOptargAtEndOfOptions = interp.Yes
+	s.GetoptsClearingOptargIsARealUnset = interp.No
 	s.GetoptsOwnParametersIgnoreAFreeze = interp.Yes
 	// Unreachable while the answer above is yes — answered so that nothing
 	// reports an axis this shell cannot be asked.

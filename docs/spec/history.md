@@ -413,7 +413,7 @@ agreement.
 
 ### The panel
 
-| shell | at a prompt | in a script | the switch | `set -H` |
+| shell | at a prompt | a script starts | the switch | `set -H` |
 | --- | --- | --- | --- | --- |
 | bash 5.3.20 | **on** | off | `set -o histexpand`, `set -o history` | history expansion |
 | bash 3.2.57 (`/bin/bash`) | **on** | off | same | same |
@@ -422,6 +422,10 @@ agreement.
 | ksh93u+ 2012-08-01 | **off** | off | `set -o histexpand` | history expansion |
 | dash | none | none | none | `Illegal option -H` |
 | BusyBox ash | none | none | none | the same shell's answer |
+
+The third column is where a *session* starts, not what a script can reach: a
+script that writes the options gets the expander in bash and gets nothing in
+zsh or ksh93, which is the separate axis **The script route** below is about.
 
 Three rows in that table are traps for an implementation that assumed one
 behavior:
@@ -512,20 +516,111 @@ double quotes opens nothing — `echo "it's !!"` expands where `echo '!!'` does
 not. Nothing that had already tokenized the line could tell those apart from a
 parameter expansion's rules.
 
+## The script route
+
+bash expands in a script too, once `set -o history` and `set -H` have both
+been written — and it does it by expanding each **physical line as it reads
+it**. That one fact is the whole of the route, and everything below is a
+consequence of it. Measured 2026-09-16 on bash 5.3.20 and again on bash 3.2.57
+and the same binary invoked as `sh`, which answer identically on every row.
+
+It is **bash's row alone**, which is the third history axis,
+`Semantics.HistoryExpansionInAScript`. zsh refuses `set -o history` outright
+(`no such option`) and with its own `setopt banghist` written instead still
+prints the two characters; ksh93 refuses the name (`bad option(s)`), takes the
+`set -H` it does have, and still prints the two characters. So two shells with
+an expander apiece confine it to a prompt, and one uses it wherever it reads:
+`-c`, a script file and a program on standard input all expand.
+
+### What follows from reading a line at a time
+
+| written | what happens | why |
+| --- | --- | --- |
+| `set -H` on line 2 | line 3 expands, line 2 does not | the line is read before any of it runs |
+| `set -H; echo !!` on one line | nothing expands | same, on one line |
+| `f() {` / `echo !!` / `}` | the **definition** holds the expansion | the body was expanded when it was read, not when `f` is called |
+| `echo a \` / `!! b` | expands, and the echo shows that physical line alone | a continuation line is a physical line |
+| `echo "a` / `!!` / `b"` | expands | the quote carries and references expand inside `"` |
+| `echo 'a` / `!!` / `b'` | left alone | the quote carries |
+| `echo 'a` / `b' !!` | expands after the quote closes | the state seeds the scan; the scan still closes the quote |
+| `cat <<EOD` / `x !! y` / `EOD` | left alone | a here-document's body is not shell text — quoted delimiter or not |
+| `x=$(echo` / `!!)` | expands | a substitution is ordinary text to this |
+| `eval 'echo !!'`, `. file`, an alias body | left alone | only the program the shell is **reading** |
+
+What a line begins inside comes from the parser (`syntax.Parser.OpenQuote`)
+rather than being worked out again from the line before it: `$'`, a backquote,
+a `'` inside a double-quoted string and a here-document body are four separate
+answers, and the lexer already has all four.
+
+### The list a script builds
+
+`set -o history` starts it, and it is the same list the `history` builtin
+keeps — so a `history -s` entry is reachable from a later `!!`, and `history`
+in a script reads back what the script has run.
+
+A command joins the list **before** it runs, which is measured twice over:
+`history` written in a script lists itself, and `history -s planted` followed
+by `!!` recalls what was planted rather than the line that planted it.
+
+One entry per command, however many physical lines it took, with the
+newlines written as the separators the text can take — measured by reading
+bash's own list back:
+
+| written | the entry |
+| --- | --- |
+| `if true` / `then` / `  echo hi` / `fi` | `if true; then   echo hi; fi` |
+| `for i in 1 2` / `do` / `echo $i` / `done` | `for i in 1 2; do echo $i; done` |
+| `f() {` / `echo c` / `}` | `f() { echo c; }` |
+| `echo a \|` / `cat` | `echo a \| cat` |
+| `cat <<EOD` / `body` / `EOD` | the three lines and a newline after them |
+| `echo a &` / `wait` | **two** entries — the `&` ended the command |
+
+So a `;` is written unless the text so far ends in something that cannot take
+one — `&&`, `\|\|`, `\|`, `;;`, `{`, `(`, `then`, `else`, `do`, `in`, or a blank
+line — and a boundary the parser was inside a quote or a here-document at
+takes a newline instead, because a `;` there would be text.
+
+A comment line is an entry of its own. A line of **blanks** is an entry too;
+only a truly empty line is not.
+
+### The echo, and a reference nothing answers
+
+The expanded line goes to the script's own standard error before it runs:
+`exec 2>file` earlier in the script captures it, and a redirection on the
+command carrying the reference does not — the expansion happens while the line
+is being read, before anything that line says has taken effect. The complaint
+about a reference the list cannot answer goes to the same place, in the shape
+a script's diagnostics have: `s.sh: line 3: !nosuch: event not found`.
+
+That line is then **dropped**, and dropped before the parser ever sees it,
+which is visible in every line number after it. Measured: a second bad
+reference on the file's line 5 is reported at `line 4`, a `$LINENO` on the
+file's line 4 reads 3, and a syntax error on the file's line 5 is reported at
+line 4. The status is left where the command before it put it, and the script
+carries on.
+
 ### What is implemented, and what is not
 
 Implemented: every event designator (`!!`, `!n`, `!-n`, `!string`,
 `!?string?`, `!#`, `!{…}`), every word designator (`^`, `$`, `*`, `%`, `n`,
 `x-y`, `x-`, `x*`), the modifiers `h t r e p q x s/// & g a`, quick
-substitution, the quoting rules above, and `histchars`.
+substitution, the quoting rules above, `histchars`, the prompt route and the
+script route, and the `history` builtin's tie to the list the designators
+index — including the line `history -s` and `history -p` each drop from it,
+which is their own.
 
-**Not implemented: the script route.** bash expands in a script too, once
-`set -o history; set -H` has been written, because it expands each physical
-line as it reads it. This shell parses a script's text as a whole, so there is
-no per-line read to hook — the expander runs at the prompt only. The option is
-still honest there: `set -H` in a script is taken and moves the state, and the
-state is what `set -o` reports.
+**Not implemented: `shopt histverify`**, which puts the expansion back on the
+editing line instead of running it. It is the one remaining piece and it is a
+*line editor's* feature rather than a reader's: nothing about the expansion
+changes, only what is done with the result, and the seam it needs is the one
+that puts text into the editing buffer.
 
-Also not implemented: `shopt histverify`, which puts the expansion back on the
-editing line instead of running it, and the `history` builtin's interaction
-with the list the designators index.
+**One divergence, deliberately not modeled.** A reference recalling a command
+that holds a here-document — `cat <<EOD` / `body` / `EOD` and then `echo !!` —
+runs here and confuses bash: bash pushes the recalled text back into its
+reader a line at a time, so the here-document re-opens, is never terminated,
+and the body's lines are then run as commands (`x: command not found`). The
+expansion is the same in both; what differs is that this shell hands the
+expanded text to the parser whole. Modeling bash's answer would mean
+modeling its push-back buffer, which is a property of its reader rather than
+of the language.

@@ -7,8 +7,22 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/blairham/sh/dialect/ksh"
 	"github.com/blairham/sh/driver"
+	"github.com/blairham/sh/interp"
 )
+
+// The axis, asserted beside the behaviour for the reason dialect/zsh's twin
+// gives: ksh93 refuses `set -o history`, so no ksh script can turn the list
+// on and no transcript can reach the answer.
+func TestKshAnswersNoToHistoryExpansionInAScript(t *testing.T) {
+	if got := ksh.Semantics().HistoryExpansionInAScript; got != interp.No {
+		t.Errorf("HistoryExpansionInAScript is %v, want No", got)
+	}
+	if got := ksh.Semantics().HistoryExpansion; got != interp.Yes {
+		t.Errorf("HistoryExpansion is %v, want Yes — the expander exists, it is the route that does not", got)
+	}
+}
 
 // ksh93 takes `set -H` in a script and expands nothing, which is the other
 // half of the third history axis.

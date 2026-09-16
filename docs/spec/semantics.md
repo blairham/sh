@@ -5700,7 +5700,10 @@ the switch zsh's history expander reads, so `unsetopt banghist` at a prompt
 stops `!!` being rewritten rather than only being remembered. Its *reading*
 did not move — `[[ -o banghist ]]` is on in `zsh -c` where nothing expands,
 because zsh gates the expander on being interactive and leaves the option
-alone, and that was measured before the entry changed.
+alone, and that was measured before the entry changed. That gate is now an
+axis of its own, `Semantics.HistoryExpansionInAScript`: bash expands a script
+it reads and zsh and ksh93 do not, whatever their options say (#3111). See
+docs/spec/history.md.
 
 So 140 of 185 are recorded, the count above is the one produced by counting
 the constructors in `dialect/zsh/setopt.go`, and **the fixed set is now

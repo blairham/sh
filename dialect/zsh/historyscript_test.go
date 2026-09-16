@@ -7,8 +7,27 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/blairham/sh/dialect/zsh"
 	"github.com/blairham/sh/driver"
+	"github.com/blairham/sh/interp"
 )
+
+// The axis itself, asserted beside the behaviour: zsh has an expander and
+// does not use it where nobody is typing.
+//
+// Worth asserting rather than leaving to the transcript below, because the
+// transcript cannot reach it — zsh has no `set -o history`, so a zsh script
+// can never turn the list on and the axis is never read there at all. A
+// preset flipped to Yes would change nothing this shell can be made to do,
+// and would change bash's neighbours the moment one of them grew the option.
+func TestZshAnswersNoToHistoryExpansionInAScript(t *testing.T) {
+	if got := zsh.Semantics().HistoryExpansionInAScript; got != interp.No {
+		t.Errorf("HistoryExpansionInAScript is %v, want No", got)
+	}
+	if got := zsh.Semantics().HistoryExpansion; got != interp.Yes {
+		t.Errorf("HistoryExpansion is %v, want Yes — the expander exists, it is the route that does not", got)
+	}
+}
 
 // zsh has an expander and does not use it in a script, which is the third
 // history axis and the reason it is an axis rather than a constant.

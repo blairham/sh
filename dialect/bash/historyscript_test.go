@@ -358,6 +358,22 @@ func TestTheOtherScriptRoutesExpandToo(t *testing.T) {
 	}
 }
 
+// `set -v` writes back the **expanded** line, which is measured and is what
+// says the gate replaces the source text rather than adding to it: under
+// `set -o history; set -H; set -v`, the file's `echo !!` is echoed as `echo
+// echo one two three`, and the history expander then echoes the same text
+// again on its own account.
+func TestVerboseEchoesTheExpandedLine(t *testing.T) {
+	out, errs, _ := historyRun(t, "set -o history; set -H\nset -v\necho one two three\necho !!\n")
+	wantErr := "echo one two three\necho echo one two three\necho echo one two three\n"
+	if errs != wantErr {
+		t.Errorf("echoed %q, want %q", errs, wantErr)
+	}
+	if out != "one two three\necho one two three\n" {
+		t.Errorf("ran %q", out)
+	}
+}
+
 // A script that never asks for the feature is untouched — the `!` characters
 // reach the parser as they always did, and the three places a `!` is
 // something else stay what they are.

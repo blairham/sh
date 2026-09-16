@@ -4855,7 +4855,11 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 				continue
 			}
 			undo = append(undo, r.saveVar(a.Name))
-			r.setVar(a.Name, r.prefixValue(a))
+			// A prefix to a function persists here, so it is a store and
+			// fires the discipline a store fires — with `.append` for `+=`,
+			// which is the event the operator names. See
+			// interp/prefixdiscipline.go.
+			r.prefixStore(a, true)
 			// The export attribute for the duration, which the two readings
 			// move in opposite directions rather than one of them leaving it
 			// alone: where the prefix is the command's *environment* the name
@@ -4941,11 +4945,17 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 				// x=2 env`.
 				continue
 			}
-			v := r.prefixValue(a)
 			if !specialBuiltins[argv[0]] || !r.ask(r.sem().AssignmentPrefixPersistsOnSpecialBuiltin, "an assignment before a special builtin persisting") {
 				undo = append(undo, r.saveVar(a.Name))
 			}
-			r.setVar(a.Name, v)
+			// Whether a discipline hears about it is whether there is a
+			// store for it to hear about. A *regular* builtin's prefix is the
+			// environment it is handed and nothing else, so the assignment
+			// below is this shell showing it the value rather than a write
+			// the name's owner is told of; a special builtin's persists, and
+			// a prefix that reached here through `command` before an
+			// external is the child's store. See interp/prefixdiscipline.go.
+			r.prefixStore(a, kind.kind != prefixBeforeRegularBuiltin)
 			if kind.throughCommand {
 				// `command` is a precommand word rather than a command, so
 				// the prefix in front of it belongs to whatever it goes on
@@ -5172,7 +5182,20 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 // holds, whether or not the name is exported, which is what the panel shows
 // for a name that was never exported at all.
 func (r *Runner) prefixValue(a *syntax.Assign) string {
-	value := strings.Join(r.expandWord(a.Value), " ")
+	return r.prefixJoined(a, r.prefixExpansion(a))
+}
+
+// prefixExpansion is the prefix's own value, before an append has anything to
+// join it to. Split out of prefixValue because a store fires the event the
+// operator names, and `.append` is entered with the appended part alone —
+// see interp/prefixdiscipline.go.
+func (r *Runner) prefixExpansion(a *syntax.Assign) string {
+	return strings.Join(r.expandWord(a.Value), " ")
+}
+
+// prefixJoined puts the name's current value in front of an append's, and is
+// the identity for a plain assignment.
+func (r *Runner) prefixJoined(a *syntax.Assign, value string) string {
 	if !a.Append {
 		return value
 	}
@@ -5579,17 +5602,23 @@ func (r *Runner) environ() []string {
 			out = append(out, k+"="+live)
 			continue
 		}
-		if r.disciplined != nil {
-			// A name inherited and never assigned since can still have a
-			// `.get` discipline, and a child is handed what a read of it
-			// answers — see the Vars loop below, where the same rule is
-			// measured. Behind the nil check because this loop runs for
-			// every command in every shell.
-			if v, _, cut := strings.Cut(kv, "="); cut {
-				out = append(out, k+"="+r.exportedThroughDiscipline(k, v))
-				continue
-			}
-		}
+		// A name **inherited** and never assigned since reaches a child as
+		// the text that came in, `.get` discipline or no `.get` discipline —
+		// which is not what a read of it in the shell answers. Measured on
+		// ksh93u+ 2012-08-01, 2026-09-16, with `G=raw` in the environment:
+		//
+		//	function G.get { .sh.value=HOOKED; }; print "$G"     HOOKED
+		//	the same, then `env`                                 G=raw
+		//	the same, then `export G; env`                       G=raw
+		//	the same, then `G=new; env`                          G=HOOKED
+		//
+		// So the hook is asked for a name the shell holds and not for one it
+		// is merely passing along, and the row that assigns first says why:
+		// the assignment moves the name into this shell's own table, which is
+		// the loop below and where the hook is asked. This loop used to ask
+		// it too, and passed it the *name* rather than the value — the first
+		// half of a cut it had already made — so a script with any hook
+		// anywhere in it handed every command it ran a `PATH=PATH`.
 		out = append(out, kv)
 	}
 	// The functions this shell was told to carry, written as source because

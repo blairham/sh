@@ -1155,9 +1155,12 @@ type Semantics struct {
 	BrokenPipeWriteErrorFailsTheCommand Answer
 
 	// LengthOfSpecialIsCount makes `${#@}` the number of positional
-	// parameters. False in dash, which gives the length of the joined
-	// string. The first axis measured where dash stands alone, and a silent
-	// one: both answers are plausible numbers.
+	// parameters. False in dash and in BusyBox ash, which give the length of
+	// the joined string: with nine one-character parameters set, `${#@}` is
+	// 9 in bash — all three builds — ksh93 and zsh, and 17 in those two.
+	//
+	// A silent axis, because both answers are plausible numbers, and it was
+	// written down as the first one where dash stood alone. It never did.
 	LengthOfSpecialIsCount Answer
 
 	// TransformLetterCheckedOnlyWhenValued delays the check of a `@`
@@ -2307,9 +2310,17 @@ type Semantics struct {
 	// an answer from columns that cannot reach the question.
 	StatusArgument StatusArgumentPolicy
 	// BracketCaretNegates reads `[^abc]` as a negated class. dash alone
-	// treats `^` as an ordinary character, so `[^abc]` matches a caret there
-	// and everything-but there elsewhere: the two answers are both matches,
-	// on different inputs, with nothing to warn on.
+	// treats `^` as an ordinary character; bash — all three builds — ksh93,
+	// zsh and BusyBox ash negate.
+	//
+	// The subject has to be a letter the class does not name, and this
+	// comment used to say the opposite. A caret matches `[^abc]` under
+	// *both* readings — literally, where the class holds a caret, and by
+	// negation everywhere else, since a caret is none of `a`, `b`, `c` — so
+	// it cannot tell them apart. Measured: `case '^' in [^abc])` matches in
+	// all seven columns, and `z` matches in every column but dash. The two
+	// answers are still both matches, on different inputs, with nothing to
+	// warn on, which is how a probe that decides nothing sat here unnoticed.
 	BracketCaretNegates Answer
 	// GetoptsAssignmentRestartsWord makes assigning OPTIND begin the word
 	// again, dropping any position inside a cluster.
@@ -2542,9 +2553,10 @@ type Semantics struct {
 	// See StartupPwdNamePolicy.
 	StartupPwdName StartupPwdNamePolicy
 	// CdWithoutHomeIsAnError makes `cd` with no operand and no HOME a
-	// failure. True in bash and ksh93; dash and zsh stay where they are and
-	// report success, which is the quieter answer and the surprising one.
-	// The same axis answers `cd -` with no OLDPWD.
+	// failure. True in bash — all three builds — and ksh93; dash, zsh and
+	// BusyBox ash stay where they are and report success, which is the
+	// quieter answer and the surprising one. The same axis answers `cd -`
+	// with no OLDPWD.
 	CdWithoutHomeIsAnError Answer
 	// CdEmptyOperandIsAnError refuses `cd ""` instead of taking it as the
 	// directory the shell is already in. True in bash and ksh93.
@@ -2602,9 +2614,10 @@ type Semantics struct {
 	CdDashPrintsTheDirectory Answer
 
 	// PrintfReportsBadNumber complains when a numeric conversion is given
-	// something that is not a number. True in bash and dash, false in ksh93
-	// and zsh — and all four print the zero either way, so the complaint sits
-	// beside the output rather than instead of it.
+	// something that is not a number. True in bash — all three builds —
+	// dash and BusyBox ash, false in ksh93 and zsh — and all five print the
+	// zero either way, so the complaint sits beside the output rather than
+	// instead of it.
 	PrintfReportsBadNumber Answer
 	// PrintfBackslashC is what `\c` means in a printf format, and it is three
 	// different things rather than a switch:
@@ -3607,8 +3620,9 @@ type Semantics struct {
 	// than a verdict, and the reason this is a policy rather than a bool.
 	KillStatus KillStatusPolicy
 	// CommandNotFoundStatusIsNotFound makes `command -v` answer 127 for a
-	// name that is nothing, rather than a plain 1. dash alone says yes; the
-	// other three report a failure and leave 127 to mean a command that was
+	// name that is nothing, rather than a plain 1. dash and BusyBox ash say
+	// yes; bash — 5.3, that binary as `sh`, and 3.2 alike — ksh93 and zsh
+	// report a plain failure and leave 127 to mean a command that was
 	// looked for and run.
 	CommandNotFoundStatusIsNotFound Answer
 
@@ -3652,9 +3666,10 @@ type Semantics struct {
 	InteractiveSelectsEmacs Answer
 
 	// SetFTurnsOffGlobbing makes `set -f` the short spelling of `set -o
-	// noglob`. True in bash, dash and ksh93. zsh spells that option the long
-	// way only: there `-f` is about startup files and leaves globbing alone,
-	// so `set -f; echo *.txt` lists the files.
+	// noglob`. True in bash — all three builds — dash, ksh93 and BusyBox
+	// ash. zsh alone spells that option the long way only: there `-f` is
+	// about startup files and leaves globbing alone, so `set -f; echo *.txt`
+	// lists the files.
 	SetFTurnsOffGlobbing Answer
 
 	// SetBTurnsOffBraceExpansion makes `-B` the short spelling of the
@@ -4290,8 +4305,10 @@ type Semantics struct {
 	RedirectTargetIsAnOrdinaryWord Answer
 
 	// TypePrintsFunctionBody makes `type name` follow "name is a function"
-	// with the function itself, reformatted. True in bash alone; the other
-	// three stop at the sentence.
+	// with the function itself, reformatted. True in bash alone — all three
+	// builds — where the other four stop at the sentence. What that sentence
+	// says is a wording rather than this axis: zsh's names the file the
+	// function was read from.
 	TypePrintsFunctionBody Answer
 
 	// TypeEndsOptionsWithDashDash makes `type -- name` skip the `--`. True
@@ -4357,9 +4374,11 @@ type Semantics struct {
 	OperatorDistributesOverStarSubscript Answer
 
 	// ExportCarriesFunctions gives `export` its `-f`, which writes a
-	// function into a child's environment. True in bash alone: the other
-	// three have no way to carry a function at all, and each rejects the
-	// option as an option — two of them fatally.
+	// function into a child's environment. True in bash alone — all three
+	// builds: the other four have no way to carry a function at all, and
+	// each rejects the option as an option. Three of them fatally — dash,
+	// ksh93 and BusyBox ash all end the script at status 2 — where zsh
+	// reports `invalid option(s)` at 1 and runs the next command.
 	ExportCarriesFunctions Answer
 
 	// ExportTakesTheAttributeOff gives `export` its `-n`, which takes the
@@ -4484,7 +4503,8 @@ type Semantics struct {
 	// that is not defined. True in zsh alone, which reports it about any
 	// name it does not hold, well formed or not.
 	//
-	// Unsetting a function that *is* there is quiet in all four.
+	// Unsetting a function that *is* there is quiet in all five dialects,
+	// and measured quiet in all seven panel columns.
 	UnsetFunctionReportsMissing Answer
 
 	// LoneDashIsAnOption eats a `-` given to a builtin on its own instead of
@@ -5262,7 +5282,12 @@ type Semantics struct {
 	SetReportsEveryBadOption Answer
 
 	// ShiftPastEndFatal ends a non-interactive shell when `shift` runs off
-	// the end. True in dash and ksh93.
+	// the end. True in dash and ksh93, and false in bash — under either
+	// name — zsh and BusyBox ash, which report the count and run the next
+	// command.
+	//
+	// Not the split DotMissingFileFatal has, though the two were written
+	// down as one: ash ends the script there and carries on here.
 	ShiftPastEndFatal Answer
 	// ReadonlyReassignmentByDeclarationFatal ends the script when a
 	// declaration utility assigns to a readonly name — `export x=2`,
@@ -10588,8 +10613,16 @@ type Semantics struct {
 	DotDirectoryOperandIsAnError Answer
 
 	// DotMissingFileFatal ends the script when `.` cannot read its file.
-	// True in dash and ksh93, false in bash and zsh — the same split as
-	// ShiftPastEndFatal, and for the same POSIX reason.
+	// True in dash, ksh93 and BusyBox ash, false in bash and zsh.
+	//
+	// The panel splits it one further than the dialect set can: the same
+	// bash 5.3 ends the script when it is called `sh` and complains and
+	// carries on when it is called `bash`, which is POSIX mode rather than a
+	// second shell, and is what the argv[0] column is in the panel to catch.
+	//
+	// Filed for a long time as the same split as ShiftPastEndFatal, for the
+	// same POSIX reason. It is not the same split: ash is fatal here and not
+	// there.
 	DotMissingFileFatal Answer
 
 	// DotPassesArguments gives a sourced file its own positional parameters
@@ -12172,7 +12205,13 @@ type Semantics struct {
 	UnsetNameAtIsOneEmptyField Answer
 
 	// SubstringNegativeLengthIsEmpty answers `${x:1:-2}` with nothing at
-	// all: ksh93; bash and zsh count the negative length from the end.
+	// all: ksh93 alone. bash 5.3 — under either name — zsh and BusyBox ash
+	// count the negative length from the end, so `x=abcdef` gives `bcd`.
+	//
+	// Two panel columns answer neither way, and neither is a third reading:
+	// bash 3.2 calls it `substring expression < 0` and ends the script,
+	// which is the version line, and dash has no `${x:offset:length}` at
+	// all.
 	SubstringNegativeLengthIsEmpty Answer
 
 	// ArithSubscriptRereadsItsExpandedText hands what a subscript's
@@ -12424,8 +12463,12 @@ type Semantics struct {
 	EvalTextContinuesTheCallersLines Answer
 
 	// ArithBaseAbove36 admits `37#…` through `64#…`, whose letters split
-	// into cases and whose last two digits are `@` and `_`. bash and ksh93
-	// take the full 64; zsh stops at 36 and says so.
+	// into cases and whose last two digits are `@` and `_`. bash — all three
+	// builds — ksh93 and BusyBox ash take the full 64, where `$((64#@))` is
+	// 62 and `$((64#_))` is 63; zsh stops at 36 and says so.
+	//
+	// dash never reaches the question: it has no `base#` notation at all, so
+	// `$((16#ff))` is already a syntax error there.
 	ArithBaseAbove36 Answer
 	// ArithBaseMayHaveALeadingZero lets `010#5` name base ten. The base is
 	// read in decimal either way; what this decides is whether a zero in
@@ -13408,8 +13451,13 @@ type Semantics struct {
 	LocalOutsideAFunctionIsAnError Answer
 
 	// LocalOutsideAFunctionIsFatal ends the script rather than carrying on
-	// after that refusal. dash does; bash says the same thing and runs the
-	// next command.
+	// after that refusal. dash and BusyBox ash do, both at status 2; bash
+	// says the same thing and runs the next command.
+	//
+	// The other two never reach the refusal at all, which is why they are
+	// not a third answer: zsh takes `local` outside a function and reports
+	// success, and ksh93 has no `local`, so the word is an ordinary command
+	// that is not found.
 	LocalOutsideAFunctionIsFatal Answer
 
 	// UmaskPrintsFourDigits writes the mask as four digits, always — `0022`
@@ -13433,13 +13481,20 @@ type Semantics struct {
 	UmaskSetWithSPrints Answer
 
 	// UlimitBlockIsKilobyte counts `ulimit -c` and `-f` in 1024-byte blocks
-	// rather than POSIX's 512. True only in bash.
+	// rather than POSIX's 512. True only in bash, and only under that name:
+	// the same bash 5.3 called `sh` uses POSIX's 512, which is the argv[0]
+	// column doing the job it is in the panel for. bash 3.2 keeps bash's
+	// 1024.
 	//
-	// Measured rather than read: `ulimit -f 1` then writing until the kernel
-	// objected. bash allowed 1000 bytes and refused 1200; dash, ksh93 and zsh
-	// refused 600. The probe lives in docs/spec/semantics.md rather than in
-	// the corpus — bash and ksh93 announce the killed writer by process id,
-	// which no golden record can hold.
+	// Measured rather than read, and in the corpus rather than here. The
+	// probe was prose for a while because the shell that reaps the killed
+	// writer announces it with a process id, which is different on every run
+	// — but the announcement is written by the *parent*, so a redirection on
+	// the group around the subshell catches it and the row is stable. It is
+	// `ulimit/the-file-size-block`, re-run by every `make oracle`, and it
+	// records 600 bytes landing under bash and bash 3.2 and 512 under
+	// bash-as-`sh`, dash, ksh93, zsh and BusyBox ash. See
+	// docs/spec/semantics.md, "A probe the corpus could hold after all".
 	UlimitBlockIsKilobyte Answer
 
 	// UlimitHasResidentSet is `ulimit -m`. True in bash, dash and ksh93; zsh

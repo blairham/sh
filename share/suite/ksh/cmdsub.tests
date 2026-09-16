@@ -1,0 +1,183 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Command substitution in ksh93 — the shared-state spelling, #2302.
+#
+# `${ list ;}` runs its body in *this* shell and hands back what the body
+# printed. That one sentence is the whole of the construct, and everything
+# below follows from it or contradicts it:
+#
+#	x=$( y=1 ); echo "${y-unset}"     unset   — a subshell, nothing escapes
+#	x=${ y=1 ; }; echo "${y-unset}"   1       — this shell, everything does
+#
+# zsh 5.9.2 and dash have no such spelling — `${ ` is `bad substitution` in
+# one and a syntax error in the other — so the only other column that can be
+# asked anything here is bash, which grew the form in 5.3. The two agree
+# about state and part company over three things, which is what most of this
+# file is about: what a stop inside the body costs the shell, what a body
+# that is nothing but `<file` hands back, and what a bare `exit` reports.
+#
+# **The body is a boundary for an unwinding, even though it is not a
+# subshell.** That is the surprise. `x=${ exit 7; }` ends the substitution
+# here and leaves 7 in `$?`, with the next line of the script still run;
+# bash ends the shell. An error this shell calls fatal is caught the same
+# way, however deep in the body it was raised. Only `break` and `continue`
+# still leave, and they leave in bash too — so the exception is the pair of
+# loop controls rather than the rule.
+#
+# Each section is its own subshell. A body that stops leaves state behind by
+# definition here, so a section that ran one has to be unable to reach the
+# next; and the fatal rows genuinely are fatal in the shells that do not
+# catch them, which would otherwise cost the file rather than the section.
+#
+# Nothing here uses a bare `exit` or a bare `return` inside a body. Their
+# operand-less reading is a divergence of its own — measured, `false; x=${
+# exit; }` is 0 in ksh93 and not the 1 the same body can read out of `$?` —
+# and a file asking two questions in one row can answer neither.
+
+show() {
+	printf -- '--- %s -> [%s] status %s\n' "$1" "$2" "$3"
+}
+
+printf -- '=== the body runs in this shell ===\n'
+(
+	v=${ shared=set; echo printed; }
+	show 'an assignment in the body' "$v/${shared-unset}" "$?"
+)
+(
+	unset kept
+	v=$( kept=set; echo printed )
+	show 'the same in the forking spelling' "$v/${kept-unset}" "$?"
+)
+(
+	mkdir -p cmdsub-dir
+	base=${ cd cmdsub-dir; printf '%s' "${PWD##*/}"; }
+	show 'a cd in the body' "$base/${PWD##*/}" "$?"
+)
+(
+	set -- a b
+	n=${ set -- x y z; echo $#; }
+	show 'positional parameters' "$n/$#" "$?"
+)
+(
+	f() { echo fromfunc; }
+	show 'a function call' "${ f; }" "$?"
+)
+(
+	show 'trailing newlines are stripped' "${ printf 'a\n\n\n'; }" "$?"
+)
+(
+	v=${ echo one
+echo two
+}
+	show 'a closing brace on its own line' "${v}" "$?"
+)
+
+printf -- '=== a body that is nothing but a redirection ===\n'
+(
+	printf 'l1\nl2\n\n' > cmdsub-file
+	show 'the whole body is <file' "${ <cmdsub-file ; }" "$?"
+)
+(
+	show 'the parenthesised spelling' "$(<cmdsub-file)" "$?"
+)
+(
+	show 'a command after the redirection' "${ <cmdsub-file ; echo tail; }" "$?"
+)
+(
+	show 'a redirection after a command' "${ echo head; <cmdsub-file ; }" "$?"
+)
+(
+	v=${ <cmdsub-nosuch ; } 2>&1
+	show 'a name that will not open' "$v" "$?"
+)
+
+printf -- '=== a stop inside the body ===\n'
+(
+	v=${ echo before; exit 7; echo after; }
+	show 'exit ends the substitution' "$v" "$?"
+	echo 'and the script goes on'
+)
+(
+	g() { exit 4; }
+	v=${ echo before; g; echo after; }
+	show 'exit from a function the body called' "$v" "$?"
+)
+(
+	readonly frozen=1
+	v=${ frozen=2; echo after; } 2>&1
+	show 'a readonly reassignment in the body' "$v" "$?"
+)
+(
+	v=${ shift 99; echo after; } 2>&1
+	show 'a special builtin refusing its operand' "$v" "$?"
+)
+(
+	v=${ set -u; echo "${cmdsub_nope}"; echo after; } 2>&1
+	show 'an unset parameter under set -u' "$v" "$?"
+)
+(
+	f() { v=${ exit 6; }; show 'inside a function' "$v" "$?"; return 0; }
+	f
+	show 'and the function returned' '' "$?"
+)
+(
+	f() { v=${ return 3; }; show 'a return in the body' "$v" "$?"; echo 'the function goes on'; }
+	f
+	show 'and the function returned' '' "$?"
+)
+
+printf -- '=== the two that are not contained ===\n'
+(
+	for i in 1 2 3; do
+		echo "top $i"
+		v=${ break; }
+		echo "bottom $i"
+	done
+	show 'break leaves the loop' '' "$?"
+)
+(
+	for i in 1 2 3; do
+		echo "top $i"
+		v=${ continue; }
+		echo "bottom $i"
+	done
+	show 'continue leaves the iteration' '' "$?"
+)
+
+printf -- '=== the status an assignment reports ===\n'
+(
+	v=${ false; }
+	show 'the last command in the body' "$v" "$?"
+)
+(
+	v=${ echo out; false; }
+	show 'the last command, not the one that printed' "$v" "$?"
+)
+(
+	v=${ exit 7; } w=${ echo second; }
+	show 'the last substitution in the assignment' "$w" "$?"
+)
+(
+	v=${ exit 300; }
+	show 'a status past a byte' '' "$?"
+)
+
+printf -- '=== the two spellings nested ===\n'
+(
+	v=${ inner=${ echo deep; }; printf '%s' "$inner"; }
+	show 'a shared body inside a shared body' "$v" "$?"
+)
+(
+	v=$( n=${ echo fromshared; }; printf '%s' "$n" )
+	show 'a shared body inside a forked one' "$v" "$?"
+)
+(
+	v=${ printf '%s' "$( echo fromforked )"; }
+	show 'a forked body inside a shared one' "$v" "$?"
+)
+(
+	outer=start
+	v=$( outer=changed; echo "$outer" )
+	show 'and the forked one still changes nothing' "$v/$outer" "$?"
+)

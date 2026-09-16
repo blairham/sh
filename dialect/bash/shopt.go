@@ -179,12 +179,12 @@ var shoptModes = map[string][]interp.MatchOption{
 //     (interp.Runner.CompletesEmptyCommandWord) and the inversion happens
 //     here, in the one place the name's sense is decided.
 //
-// `lastpipe` and `extdebug` are the last two entries and belong to neither
-// group above. Neither is interactive-only — they are the names here a
-// *script* sets and immediately depends on — and what they move is a
-// semantics axis and a pair of trap-carriage options rather than a
-// capability. Their own comments on the entries carry the measurements;
-// #2361 and #2426 are the issues.
+// `lastpipe`, `inherit_errexit` and `extdebug` are the last three entries and
+// belong to neither group above. None of them is interactive-only — they are
+// the names here a *script* sets and immediately depends on — and what they
+// move is a semantics axis apiece and a pair of trap-carriage options rather
+// than a capability. Their own comments on the entries carry the
+// measurements; #2361, #3001 and #2426 are the issues.
 var shoptSwitches = map[string]struct {
 	get func(*interp.Runner) bool
 	set func(*interp.Runner, bool)
@@ -308,6 +308,32 @@ var shoptSwitches = map[string]struct {
 	"lastpipe": {
 		get: (*interp.Runner).KeepsLastPipelineElement,
 		set: (*interp.Runner).SetKeepsLastPipelineElement,
+	},
+	// The second name here that moves a semantics axis, and the one that
+	// moves the same axis `set -o posix` does. Whether a `$(…)` body's own
+	// shell holds `set -e` is
+	// interp.Semantics.ErrExitEntersACommandSubstitution, answered `No` by
+	// this preset and by BusyBox ash and `Yes` by dash, ksh93 and zsh — and
+	// bash is the only column with a name for moving it.
+	//
+	// The option and the mode are one piece of state rather than two,
+	// because that is what was measured: `set -o posix` leaves `shopt
+	// inherit_errexit` reporting `on`, `set +o posix` leaves it reporting
+	// `on` with the behavior still there, and `shopt -u inherit_errexit` is
+	// the way back from either door. A bit of its own beside the axis would
+	// have had to agree with the mode in both directions and would have
+	// disagreed in the second.
+	//
+	// It sat in shoptStates below, refusing the write, and that refusal was
+	// the actively misleading kind #2361 names: a script sets this option
+	// precisely so that a failure inside `$(…)` stops the substitution, and
+	// the table said `off` while the shell behaved as though it were on. So
+	// the name reported the opposite of what the shell did, in the one
+	// direction that hides work — the value comes back short and nothing is
+	// printed to say so (#3001).
+	"inherit_errexit": {
+		get: (*interp.Runner).ErrExitEntersACommandSubstitution,
+		set: (*interp.Runner).SetErrExitEntersACommandSubstitution,
 	},
 }
 
@@ -503,7 +529,6 @@ var shoptStates = map[string]bool{
 	"histreedit":           false,
 	"histverify":           false,
 	"huponexit":            false,
-	"inherit_errexit":      false,
 	"interactive_comments": true,
 	"lithist":              true,
 	"localvar_inherit":     false,

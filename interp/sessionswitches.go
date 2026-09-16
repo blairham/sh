@@ -201,3 +201,34 @@ func (r *Runner) KeepsLastPipelineElement() bool { return r.keepsLastPipelineEle
 // SetKeepsLastPipelineElement moves it, for a dialect naming the capability —
 // `shopt -s lastpipe` is the only name the panel has for it.
 func (r *Runner) SetKeepsLastPipelineElement(on bool) { r.keepsLastPipelineElement = on }
+
+// ErrExitEntersACommandSubstitution reports whether the shell a `$(…)` body
+// runs in holds `set -e` — `shopt inherit_errexit` under its bash name.
+//
+// A read of Semantics.ErrExitEntersACommandSubstitution rather than a second
+// piece of state, and that is the measurement rather than a convenience. The
+// option and the mode are one thing in bash: `set -o posix` leaves `shopt
+// inherit_errexit` reporting `on`, and `set +o posix` leaves it on, so a
+// separate bit would have had to be kept in step with the mode in both
+// directions and would have drifted in the second.
+//
+// Unanswered reads as off, which is the reading the getter's own name asks
+// for — a shell that has never been told is not a shell that inherits — and
+// it is unreachable from the one dialect that has the name anyway.
+func (r *Runner) ErrExitEntersACommandSubstitution() bool {
+	return r.sem().ErrExitEntersACommandSubstitution == Yes
+}
+
+// SetErrExitEntersACommandSubstitution moves it, for a dialect naming the
+// switch — `shopt -s inherit_errexit` is the only name the panel has for it,
+// and it travels both ways: `shopt -u inherit_errexit` in a bash invoked as
+// `sh` puts the shell back where plain bash starts.
+func (r *Runner) SetErrExitEntersACommandSubstitution(on bool) {
+	a := No
+	if on {
+		a = Yes
+	}
+	r.swapSemantics(func(s *Semantics) {
+		s.ErrExitEntersACommandSubstitution = a
+	})
+}

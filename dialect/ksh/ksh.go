@@ -721,6 +721,11 @@ func Semantics() interp.Semantics {
 	s.ShiftCountIsArithmetic = interp.Yes
 	s.TrapBodyRunsWhatParsed = interp.No
 	s.ReportsAKilledCommandInACommandSubstitution = interp.Yes
+	// A substitution's body is a subshell environment and holds the
+	// shell's options with it, `-e` included: measured 2026-09-15,
+	// `set -e; echo "end[$(false; echo no)]"` is `end[]` here, and `$-`
+	// inside the body still carries `e`.
+	s.ErrExitEntersACommandSubstitution = interp.Yes
 	// The listing runs the other way here: descending by signal number,
 	// which puts EXIT last where the other six put it first.
 	s.TrapListingOrder = interp.TrapListingHighestFirst

@@ -33,3 +33,33 @@ printf 'BASH_REMATCH [%s][%s][%s]\n' "${BASH_REMATCH[0]}" "${BASH_REMATCH[1]}" "
 printf 'and how many of them: %s\n' "${#BASH_REMATCH[@]}"
 [[ abcd =~ z ]]
 printf 'after a miss [%s] %s\n' "${BASH_REMATCH[0]}" "${#BASH_REMATCH[@]}"
+
+# And `[[ -v a[k] ]]` reads the subscript the script *wrote*, not the one
+# left standing once the operand has been expanded and unquoted. A bracket
+# inside quotes, one behind a backslash, and one that arrives out of an
+# expansion are all content, so each of the four spellings below finds the
+# element whose key really is the two characters `x]`. zsh 5.9.2 and ksh93u+
+# answer unset to every one of them.
+#
+# The last two are the controls, and they are what makes this a rule about
+# written brackets rather than "the subscript ends at the last bracket":
+# written out, `a[x]]` closes its subscript and then has a bracket nobody
+# opened, and `a[q[r]` opens one nobody closes. bash refuses both.
+#
+# `test -v` is the row where bash's own two spellings of the operator part,
+# and it is not an oversight on either side: the builtin is handed one word
+# that has already been expanded, so there is no written bracket left in it.
+declare -A brk
+brk['x]']=closer
+brk['q[r']=opener
+bk=']'
+bo='q[r'
+[[ -v brk["x]"] ]] && printf 'a double-quoted bracket is part of the key\n'
+[[ -v brk['x]'] ]] && printf 'and so is a single-quoted one\n'
+[[ -v brk[x\]] ]] && printf 'and one behind a backslash\n'
+[[ -v brk[x$bk] ]] && printf 'and one out of an expansion\n'
+[[ -v brk[$bo] ]] && printf 'at the opening end too\n'
+[[ -v brk[x]] ]] || printf 'a written bracket closes the subscript\n'
+[[ -v brk[q[r] ]] || printf 'and a written one left open is no subscript\n'
+[[ -v brk[nope] ]] || printf 'an ordinary absent key is still absent\n'
+test -v "brk[x$bk]" || printf 'the test builtin has no written bracket to read\n'

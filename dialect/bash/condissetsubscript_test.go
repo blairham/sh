@@ -100,3 +100,45 @@ func TestThisDialectReadsTheWrittenSubscript(t *testing.T) {
 		t.Errorf("ConditionIsSetReadsTheWrittenSubscript = %v, want %v", got, interp.Yes)
 	}
 }
+
+// An associative subscript written inside an arithmetic expression is a
+// quoting context here, exactly as `${m['k']}` is.
+//
+// The two spellings reach this shell in different shapes — a parameter
+// expansion's subscript is a word with its quoting recorded per span, an
+// arithmetic one is text, because the expression is expanded before it is
+// parsed — so the question has to be asked twice, and it was only being asked
+// once. Measured 2026-09-16 on `declare -A a; a[q]=7`: bash 5.3.20 and
+// ksh93u+ answer 7 for every row below and zsh 5.9.2 answers 0, which is
+// interp.Semantics.SubscriptIsAQuotingContext.
+func TestAnArithmeticSubscriptIsAQuotingContext(t *testing.T) {
+	const setup = `declare -A a; a[q]=7; a['a b']=9; `
+	for _, c := range []struct{ name, src, want string }{
+		{"bare", setup + `(( r = a[q] )); echo $r`, "7"},
+		{"single quoted", setup + `(( r = a['q'] )); echo $r`, "7"},
+		{"double quoted", setup + `(( r = a["q"] )); echo $r`, "7"},
+		{"backslash", setup + `(( r = a[\q] )); echo $r`, "7"},
+		{"a quoted blank", setup + `(( r = a['a b'] )); echo $r`, "9"},
+		// A quoted *bracket* is deliberately not here. It is a defect one
+		// stage earlier — the arithmetic parser ends the subscript at the
+		// first `]` whether or not it is quoted, so `a[']']` never reaches
+		// this reading at all — and it is #3302, not this.
+		{"through a dollar-arithmetic", setup + `echo $(( a['q'] ))`, "7"},
+		// The store takes the same key as the read, which is what keeps
+		// `(( a['k'] = 5 ))` from putting an element where nothing can
+		// reach it.
+		{"assigned", `declare -A a; (( a['k'] = 5 )); echo "${a[k]-U}"`, "5"},
+		{"assigned then read", `declare -A a; (( a['k'] = 5 )); (( r = a['k'] )); echo $r`, "5"},
+		// A key that was never quoted is untouched, and so is an indexed
+		// subscript, which is an expression and not a key at all.
+		{"an absent key", setup + `(( r = a[zz] )); echo $r`, "0"},
+		{"indexed stays arithmetic", `b=(9 8 7); (( r = b[1+1] )); echo $r`, "7"},
+		{"indexed through a name", `b=(9 8 7); i=1; (( r = b[i] )); echo $r`, "8"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			if out, st := answersRun(t, c.src); out != c.want+"\n" || st != 0 {
+				t.Errorf("%s = %q status %d, want %q at 0", c.src, out, st, c.want)
+			}
+		})
+	}
+}

@@ -376,7 +376,7 @@ func (r *Runner) arithElement(x *syntax.ArithIndex) (arithNum, error) {
 	// answer `$(( m[k] ))` with 7. Evaluating it instead read the wrong
 	// element and said nothing, which is the silent half of a wrong answer.
 	if a, ok := r.assocFor(x.Name); ok {
-		return r.arithElemValue(a[x.Sub].scalar())
+		return r.arithElemValue(a[r.arithAssocKey(x.Sub)].scalar())
 	}
 	if r.reportArithWholeArraySubscript(x) {
 		// Named and answered: the operand is zero and the expression keeps
@@ -1027,7 +1027,7 @@ func (r *Runner) writePlace(p arithPlace, v arithNum, from syntax.ArithExpr) err
 		p.sub, p.flags = r.joinWord(p.flags.Arg), nil
 	}
 	if r.assocDeclared(p.name) {
-		r.setAssocElem(p.name, p.sub, text)
+		r.setAssocElem(p.name, r.arithAssocKey(p.sub), text)
 		return nil
 	}
 	// Through the same reader the element is read by, so a text that is no
@@ -2738,4 +2738,97 @@ func stripArithValueMarks(text string) string {
 		return text
 	}
 	return syntax.UnmarkArithValue(text)
+}
+
+// arithAssocKey is the key an associative array's subscript names when the
+// subscript was written inside an arithmetic expression.
+//
+// The same question Runner.assocKey answers for `${m[k]}`, asked through the
+// same axis, and it has to be asked twice because the two subscripts reach
+// this shell in different shapes. A parameter expansion's is a syntax.Word
+// with its quoting recorded per span; an arithmetic expression's is *text*,
+// because the expression has already been expanded once by the time it is
+// parsed — so what arrives here is a subscript with its remaining quote
+// characters still in it, and nothing downstream would take them out.
+//
+// Measured 2026-09-16 with `declare -A a; a[q]=7`, each probe from a script
+// file with standard input on /dev/null:
+//
+//	                      bash 5.3.20  ksh93u+  zsh 5.9.2
+//	(( r = a[q] ))                  7        7          7
+//	(( r = a['q'] ))                7        7          0
+//	(( r = a[\q] ))                 7        7          0
+//	(( a['k'] = 5 ))             [k]=5    [k]=5    ['k']=5
+//
+// Which is Semantics.SubscriptIsAQuotingContext exactly — yes in bash and
+// ksh93, no in zsh — and this shell already answers it correctly one
+// spelling over, where `${a['q']}` is 7 here and unset in zsh. So the bug was
+// not a missing answer but an unasked question: the arithmetic route looked
+// the key up as written and found nothing, which is the silent half of a
+// wrong answer. `(( r = a['q'] ))` came to 0.
+//
+// A double-quoted subscript was already right in both columns before this,
+// and by a different mechanism: the expansion that runs over an arithmetic
+// expression before it is parsed takes the quotes out under the bash dialect
+// and leaves them in under zsh's, so `a["q"]` arrives here as `q` in the one
+// that should find the element and as `"q"` in the one that should not. That
+// is why this asks the axis on *whether quoting was removed* rather than on
+// whether the text changed — the two columns reach the right answer from
+// opposite sides, and a comparison against the original text would have
+// stopped asking in the column where the question is already settled.
+//
+// Asked only where removal changes the text, so a key with no quote and no
+// backslash in it — nearly every key a script writes — never demands a
+// dialect for the question.
+func (r *Runner) arithAssocKey(sub string) string {
+	bare, quoted := subscriptQuoteRemoval(sub)
+	if !quoted {
+		return sub
+	}
+	if r.ask(r.sem().SubscriptIsAQuotingContext,
+		"an array subscript written inside arithmetic being a quoting context") {
+		return bare
+	}
+	return sub
+}
+
+// subscriptQuoteRemoval performs quote removal on an arithmetic subscript and
+// reports whether it took anything out.
+//
+// The boolean rather than a comparison at the caller, because "took something
+// out" and "the text changed" are not the same claim: `a[\q]` and `a['q']`
+// both come to `q`, and a subscript whose quoting happens to remove to itself
+// would still be a quoted one. Nothing in the panel distinguishes them today,
+// and a caller that asked `bare != sub` would silently stop asking the axis
+// the day one did.
+//
+// An unterminated quotation removes nothing. The expression will not parse
+// past it in any case, and text that ran off the end is not a key anybody
+// wrote on purpose.
+func subscriptQuoteRemoval(sub string) (string, bool) {
+	if !strings.ContainsAny(sub, `'"\`) {
+		return sub, false
+	}
+	var b strings.Builder
+	b.Grow(len(sub))
+	for i := 0; i < len(sub); i++ {
+		switch c := sub[i]; c {
+		case '\\':
+			if i+1 == len(sub) {
+				return sub, false
+			}
+			i++
+			b.WriteByte(sub[i])
+		case '\'', '"':
+			end := strings.IndexByte(sub[i+1:], c)
+			if end < 0 {
+				return sub, false
+			}
+			b.WriteString(sub[i+1 : i+1+end])
+			i += end + 1
+		default:
+			b.WriteByte(c)
+		}
+	}
+	return b.String(), true
 }

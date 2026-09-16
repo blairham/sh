@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -699,6 +700,9 @@ func biDot(r *Runner, ctx context.Context, args []string) int {
 	if err != nil {
 		return r.dotFailed(args[0], err)
 	}
+	if b, ok := r.dotReadsItsOwnInput(path); ok {
+		return r.runDotText(ctx, args, display, b)
+	}
 	// The read is an open to the gate, exactly as the same syscall behind a
 	// `<` redirect is: `.` pulls a file into the interpreter and then runs
 	// it, which is the re-entry the seams exist for. A denial is routed
@@ -728,62 +732,7 @@ func biDot(r *Runner, ctx context.Context, args []string) int {
 	}
 	r.emit(ctx, Event{Kind: EventAccess, Action: action})
 
-	// Arguments after the file become its positional parameters, and are put
-	// back afterwards. dash is the exception: it ignores them, so a script
-	// there still sees the caller's `$1`. With no arguments at all, every
-	// shell leaves the parameters alone — which is why this is guarded on
-	// having some rather than on the axis.
-	if len(args) > 1 {
-		pass := r.ask(r.sem().DotPassesArguments, "`.` giving a sourced file its own positional parameters")
-		if r.unspecified {
-			// Refused before the file runs rather than after. A sourced file
-			// that sees its own `$1` and one that sees the caller's are two
-			// different programs, so there is no version of running it that
-			// is not a guess — and the refusal would be lost anyway: the flag
-			// is cleared per command, so the first line of the file would
-			// erase it.
-			return 2
-		}
-		if pass {
-			saved := r.Params
-			r.Params = append([]string(nil), args[1:]...)
-			defer func() { r.Params = saved }()
-		}
-	}
-
-	// A frame of its own, because a sourced file is a place a script can be
-	// *in*: the functions it declares remember it, and a script asking where
-	// it is while being sourced means the file rather than whatever sourced
-	// it. Named for the builtin, which is what the shells put in the stack —
-	// and carrying the operand as the shell constructed it rather than the
-	// resolved path, which is the spelling diagnostics and the source stack
-	// were measured to use.
-	// The operand as well as the file, because `$0` takes the first and a
-	// diagnostic takes the second, and a PATH search is where they part
-	// company. See Frame.Operand.
-	r.pushFrame(Frame{File: display, Name: sourceFrameName, Operand: args[0]})
-	defer r.popFrame()
-
-	// Where the `.` itself stands, because that is where a RETURN trap
-	// fired from here counts as having fired and the file's own lines are
-	// about to walk over the record. Measured 2026-09-13 on bash 5.3.15 and
-	// bash 3.2: a two-line RETURN body at the end of a one-line sourced file
-	// reports the line of the `.` and one past it, where this engine
-	// reported the sourced file's own 1 and 2.
-	dotLine := r.line
-	st := r.runSourced(ctx, string(b), sourced{
-		label:        display,
-		syntaxStatus: r.diag().sourcedSyntaxStatus(),
-		fatalStatus:  r.diag().SourcedFatalStatus,
-		catchReturn:  true,
-	})
-	// The RETURN trap fires as a sourced file finishes — wherever the trap
-	// was set, which is the half of the rule functions do not share. The
-	// action sees the file's status, and an `exit` of its own wins.
-	r.status = st
-	r.line = dotLine
-	r.runReturnTrap(ctx, sourcedFrame)
-	return r.status
+	return r.runDotText(ctx, args, display, b)
 }
 
 // dotDirectoryOperand answers a read that failed because the operand names a
@@ -1155,4 +1104,89 @@ func (r *Runner) atDir(path string) string {
 func (r *Runner) readableFile(path string) bool {
 	st, err := r.stat(path)
 	return err == nil && !st.IsDir()
+}
+
+// runDotText runs what a `.` read, however it read it: the operands after the
+// file become its positional parameters, it runs in a frame of its own, and
+// the RETURN trap fires as it finishes.
+func (r *Runner) runDotText(ctx context.Context, args []string, display string, b []byte) int {
+	// Arguments after the file become its positional parameters, and are put
+	// back afterwards. dash is the exception: it ignores them, so a script
+	// there still sees the caller's `$1`. With no arguments at all, every
+	// shell leaves the parameters alone — which is why this is guarded on
+	// having some rather than on the axis.
+	if len(args) > 1 {
+		pass := r.ask(r.sem().DotPassesArguments, "`.` giving a sourced file its own positional parameters")
+		if r.unspecified {
+			// Refused before the file runs rather than after. A sourced file
+			// that sees its own `$1` and one that sees the caller's are two
+			// different programs, so there is no version of running it that
+			// is not a guess — and the refusal would be lost anyway: the flag
+			// is cleared per command, so the first line of the file would
+			// erase it.
+			return 2
+		}
+		if pass {
+			saved := r.Params
+			r.Params = append([]string(nil), args[1:]...)
+			defer func() { r.Params = saved }()
+		}
+	}
+
+	// A frame of its own, because a sourced file is a place a script can be
+	// *in*: the functions it declares remember it, and a script asking where
+	// it is while being sourced means the file rather than whatever sourced
+	// it. Named for the builtin, which is what the shells put in the stack —
+	// and carrying the operand as the shell constructed it rather than the
+	// resolved path, which is the spelling diagnostics and the source stack
+	// were measured to use.
+	// The operand as well as the file, because `$0` takes the first and a
+	// diagnostic takes the second, and a PATH search is where they part
+	// company. See Frame.Operand.
+	r.pushFrame(Frame{File: display, Name: sourceFrameName, Operand: args[0]})
+	defer r.popFrame()
+
+	// Where the `.` itself stands, because that is where a RETURN trap
+	// fired from here counts as having fired and the file's own lines are
+	// about to walk over the record. Measured 2026-09-13 on bash 5.3.15 and
+	// bash 3.2: a two-line RETURN body at the end of a one-line sourced file
+	// reports the line of the `.` and one past it, where this engine
+	// reported the sourced file's own 1 and 2.
+	dotLine := r.line
+	st := r.runSourced(ctx, string(b), sourced{
+		label:        display,
+		syntaxStatus: r.diag().sourcedSyntaxStatus(),
+		fatalStatus:  r.diag().SourcedFatalStatus,
+		catchReturn:  true,
+	})
+	// The RETURN trap fires as a sourced file finishes — wherever the trap
+	// was set, which is the half of the rule functions do not share. The
+	// action sees the file's status, and an `exit` of its own wins.
+	r.status = st
+	r.line = dotLine
+	r.runReturnTrap(ctx, sourcedFrame)
+	return r.status
+}
+
+// dotReadsItsOwnInput is the text a `.` of the command's own standard input
+// reads, and whether the operand named it.
+//
+// `/dev/stdin` and `/dev/fd/0` are the command's standard input, which is not
+// the process's here: a here-document, a here-string or a pipe into a builtin
+// is a stream this shell holds and never put on descriptor 0. Opening the
+// path read whatever the *process* was started with instead, so
+// `. /dev/stdin <<<'echo hi'` ran nothing at status 0 where bash 5.3.20, zsh
+// 5.9.2, ksh93u+ and dash all run the text (#3402).
+//
+// No gate: nothing is opened. The stream was already this command's.
+func (r *Runner) dotReadsItsOwnInput(path string) ([]byte, bool) {
+	if path != "/dev/stdin" && path != "/dev/fd/0" {
+		return nil, false
+	}
+	if r.Stdin == nil {
+		return nil, true
+	}
+	b, err := io.ReadAll(r.Stdin)
+	r.NoteErrno(err)
+	return b, true
 }

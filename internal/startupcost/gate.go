@@ -30,6 +30,11 @@ import (
 //
 // #1403 is the requirement. The maintainer's words: "performance is a must
 // requirement before 0.0.0, no dialect can be slower than the original."
+//
+// #2813 settled which rows that counts. The workload gates; the bare case is
+// measured and reported and does not. See Cases — the short version is that
+// the bar was read off macOS numbers, and on Linux what is underneath the
+// bare case is the Go runtime's process start rather than anything here.
 
 // Pair is one dialect measured against the shell it claims to be.
 //
@@ -158,13 +163,44 @@ type Case struct {
 	// means the program prints nothing and only its exit status is checked
 	// — see bareProgram for why that is enough there and not enough alone.
 	Answer string
+	// Gating is whether losing this case fails the release bar, as against
+	// being measured and reported. See Cases for why the two programs
+	// answer differently, which is #2813's finding.
+	Gating bool
 }
 
 // Cases are the two programs, in the order a report should read them.
+//
+// **Only the workload gates**, and that is #2813's answer rather than a
+// softening of #1403. The bar was written from macOS numbers where bash
+// starts in 6.76 ms; the same bash on an idle ubuntu runner starts in 0.73 ms,
+// an order of magnitude apart, while ours barely moves between the two. So
+// the margin the bar was read from was macOS being slow at starting bash, and
+// not anything this repository did.
+//
+// What is left underneath the bare case on a platform where spawning a
+// process is cheap is the Go runtime's own start, which is already measured:
+// an empty Go binary costs more CPU to start than /bin/dash costs to do its
+// whole job. That is a fact about the language this shell is written in, and
+// no amount of work in this tree moves it — a gate nobody can pass teaches
+// nobody anything, and would have held v0.0.0 indefinitely for a reason with
+// no fix.
+//
+// The workload is a different matter and is why the bar survives with teeth.
+// It is interpreter throughput, it is ours to win, and the same ubuntu run had
+// bash at 1.53x and zsh at 2.20x — losing, but losing by an amount that is
+// work rather than physics. Every dialect still has to beat the shell it
+// claims to be there, strictly, with no epsilon.
+//
+// The bare case keeps being measured and keeps being printed. It is what a
+// script's every subshell pays, a regression in it is worth seeing, and
+// deleting the row would lose the only number that shows the floor. Report
+// marks its verdict so that a red bare row cannot be misread as a gate
+// failure; see Report.
 func Cases() []Case {
 	return []Case{
-		{Name: "bare", Program: bareProgram},
-		{Name: "workload", Program: workloadProgram, Answer: workloadAnswer},
+		{Name: "bare", Program: bareProgram, Gating: false},
+		{Name: "workload", Program: workloadProgram, Answer: workloadAnswer, Gating: true},
 	}
 }
 
@@ -346,7 +382,50 @@ func ratio(ours, real time.Duration) float64 {
 // requirement as written, and a gate that allowed 5% would be answering a
 // question nobody asked. A comparison that could not be measured has not
 // passed — see Err.
+//
+// This is the comparison and not the bar. A bare row that loses is a real
+// loss and says so here; whether that loss stops a release is Gating's
+// question, and the two are kept apart so that #2813's decision changed which
+// rows are counted rather than what a row means.
 func (c Comparison) Passed() bool { return c.Err == nil && c.Ours.Best.Wall < c.Real.Best.Wall }
+
+// Gating reports whether losing this comparison fails the release bar.
+//
+// See Cases: the workload gates and the bare case does not, because what is
+// underneath the bare case on Linux is the Go runtime's process start rather
+// than any code here.
+func (c Comparison) Gating() bool { return c.Case.Gating }
+
+// Failures sorts a run into the three things a caller has to say about it.
+//
+// In the package rather than in the test that fails, deliberately. The bar is
+// now a *selection* — which rows count — and a selection made inside a test
+// body is a rule with no test of its own. Here it is ordinary code, so the
+// one-line unit tests beside it can pin "a slower bare row does not fail the
+// gate" and "a slower workload row does" without measuring anything, which is
+// the property this package already relies on to keep the gate from rotting
+// between releases.
+//
+// unmeasured comes first and is never folded into the other two: a comparison
+// that could not honestly be taken is a failure whatever case it was on, so a
+// machine missing half the panel cannot read as green. That includes the
+// bare case — not gating means "being slower here does not fail the bar", not
+// "this row may quietly go missing".
+func Failures(cs []Comparison) (gating, reported, unmeasured []string) {
+	for _, c := range cs {
+		name := c.Pair.Name + "/" + c.Case.Name
+		switch {
+		case c.Err != nil:
+			unmeasured = append(unmeasured, name+": "+c.Err.Error())
+		case c.Passed():
+		case c.Gating():
+			gating = append(gating, name)
+		default:
+			reported = append(reported, name)
+		}
+	}
+	return gating, reported, unmeasured
+}
 
 // Measure times every pair on every case, interleaved, and returns what it
 // found.
@@ -496,10 +575,19 @@ func Report(cs []Comparison) string {
 	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].Pair.Name < sorted[j].Pair.Name })
 	for _, c := range sorted {
 		verdict := "FASTER"
-		if c.Err != nil {
+		switch {
+		case c.Err != nil:
 			verdict = "NOT MEASURED"
-		} else if !c.Passed() {
+		case c.Passed():
+		case c.Gating():
 			verdict = "SLOWER"
+		default:
+			// Still slower, and still worth seeing — but not the bar.
+			// Spelled out in the row itself rather than left to a
+			// footnote, because the one thing #2813 cost this project
+			// was a week of "perfgate is failing" passed on second-hand
+			// by people who could not tell which rows meant it.
+			verdict = "SLOWER (not gating)"
 		}
 		fmt.Fprintf(&b, "%-10s %-9s %8.2fms %8.2fms %7.2fx %8.2fms %8.2fms %7.2fx %7d  %s\n",
 			c.Pair.Name, c.Case.Name,

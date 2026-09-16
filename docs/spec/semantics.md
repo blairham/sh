@@ -16863,6 +16863,42 @@ run in the same shell, so a `PRESET` assigned on the line before survives
 there if anything scanned before it. The first call in a shell empties it
 as the table says.
 
+**`GetoptsOwnParametersIgnoreAFreeze`** — bash no · dash no · ksh93 yes · zsh yes
+
+Lets `getopts` write OPTARG and OPTIND over a `readonly` on them, without
+a word. They are the builtin's own output parameters rather than names a
+script assigns, and two shells read them that way: a freeze on either is
+simply not consulted. Measured 2026-09-16 over a script file under
+`env -i PATH=/usr/bin:/bin`, `set -- -a val` with `readonly OPTARG` in
+front — bash 5.3.20, bash 3.2.57, dash 0.5.12 and BusyBox ash 1.37.0 all
+report the refusal and leave OPTARG unset, ksh93u+ and zsh 5.9.2 say
+nothing and leave `val` in it. The **name operand** is not this question
+and is refused in all five.
+
+**`GetoptsRefusedWriteEndsTheBuiltin`** — bash no · dash yes · ksh93 n/a · zsh n/a
+
+Stops `getopts` where a freeze refused OPTARG or OPTIND, rather than
+reporting and carrying on. Measured the same day and the same way: bash
+reports it and writes the rest anyway, ending at 0 with the letter in the
+name and OPTIND moved; dash and BusyBox ash end at 2 with the name unset
+and OPTIND **still 1**, which is what says the builtin stopped rather
+than merely reported — OPTARG is written first, so the word count had not
+moved yet. ksh93 and zsh never reach it, the axis above being yes for
+both. The name operand is not this question either: a freeze on it ends
+the builtin in every column that reaches one, except at the end of the
+options, where bash keeps its own 1.
+
+**`ReadonlyRefusalInABuiltinIsFatal`** — bash no · dash no · ksh93 no · zsh yes
+
+Ends the script where a **builtin** writing its own output parameter is
+refused by a freeze, as against a script's own assignment to a frozen
+name. A different set of shells from `ReadonlyReassignmentFatal`, which
+dash and ksh93 answer yes: measured 2026-09-16, both `read` over a frozen
+name and `getopts` over a frozen OPTARG report and run the next command
+on the same line in bash 5.3.20, bash 3.2.57, ksh93u+, dash 0.5.12 and
+BusyBox ash 1.37.0, where `readonly x=1; x=2; echo one` never prints
+`one` in any of them. zsh alone ends the script for both.
+
 **`ShiftPastEndFatal`** — bash no · dash yes · ksh93 yes · zsh no
 
 Ends a non-interactive shell when `shift` runs off the end. True in dash

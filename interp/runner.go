@@ -6615,6 +6615,15 @@ func (f assignForm) declaresRatherThanAssigns() bool {
 // question decides — the fatality and whether the rest of the line is given
 // up — are not this form's, and reading one answer for all three is what put
 // `getopts` on the bare assignment's path to begin with.
+//
+// Folding assignedByBuiltin into that question instead is an **equivalent
+// mutant today** and was reverted rather than kept: `getopts` reaches this
+// sentence without going through refuseReadonly at all, so the other two
+// answers are never asked of the form and nothing can tell the two spellings
+// apart. What the separation buys is the next caller — a second builtin
+// handed this form would otherwise inherit a declaration's fatality and its
+// hold on the rest of the line, which are the two things measured *not* to be
+// a builtin's (#3147).
 func (f assignForm) namesTheBuiltin() bool {
 	return f.declaresRatherThanAssigns() || f == assignedByBuiltin
 }

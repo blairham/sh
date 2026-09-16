@@ -457,3 +457,22 @@ func TestGetoptsBadOptionComplainsBeforeRefusingTheName(t *testing.T) {
 		})
 	}
 }
+
+// TestGetoptsRefusalNamesTheBuiltin. A builtin filling in its own output
+// parameter names itself in the sentence where the dialect names one — `dash`
+// writes `getopts: OPTARG: is read only` through the same wording it writes
+// `export: x: is read only` with — which a bare assignment's form never
+// reaches, because that wording is a declaration's.
+func TestGetoptsRefusalNamesTheBuiltin(t *testing.T) {
+	sem := getoptsFrozenSem()
+	dg := Diagnostics{
+		ReadonlyVariable:              "%s: frozen",
+		ReadonlyVariableInDeclaration: "%[2]s: %[1]s: frozen",
+		ReadonlyRefusalNamesBuiltin:   map[string]bool{"getopts": true},
+	}
+	out, _ := run(t, `set -- -a val; readonly OPTARG; getopts "a:" o; echo "[$o]"`,
+		func(r *Runner) { r.Semantics, r.Diagnostics = &sem, &dg })
+	if want := "sh: getopts: OPTARG: frozen\n[a]\n"; out != want {
+		t.Errorf("got %q, want %q", out, want)
+	}
+}

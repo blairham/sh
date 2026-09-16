@@ -83,11 +83,16 @@ type Semantics struct {
 	// the elements joined on the first character of IFS — before the split
 	// above runs on it, rather than splitting each element on its own.
 	//
-	// True in bash, bash 3.2 and bash as `sh`; false in zsh, ksh93 and dash.
+	// True in bash, bash 3.2 and bash as `sh`; false in zsh, ksh93, dash and
+	// BusyBox ash. Measured 2026-09-16 across all seven columns with
+	// `IFS=:; set -- x "" y; printf '[%s]' $*`: `[x][][y]` in the three bash
+	// builds and `[x][y]` in the other four, the empty element dropped
+	// because nothing was joined for it to sit between.
+	//
 	// It is one question wearing two faces, and both were being answered
-	// without asking: `$@` and `${a[@]}` never joined, which is right for
-	// three of the six, and `$*` and `${a[*]}` always did, which is right for
-	// the other three.
+	// without asking: `$@` and `${a[@]}` never joined, which is right for the
+	// four that do not join, and `$*` and `${a[*]}` always did, which is
+	// right for the three that do.
 	//
 	// The join is what decides the fate of an *empty* element, which is where
 	// it shows. Under a non-whitespace IFS, `set -- x "" y` is `x::y` joined
@@ -709,7 +714,8 @@ type Semantics struct {
 	// every shell measured, `e` everywhere but dash, `E` in bash and zsh
 	// alone. A word carrying any other letter is not an option at all — the
 	// whole word becomes an operand, which is unanimous and is why `echo
-	// -nq hi` prints `-nq hi` in all four. Empty means `n`.
+	// -nq hi` prints `-nq hi` in all seven columns, measured 2026-09-16.
+	// Empty means `n`.
 	EchoOptions string
 	// EchoLastEscapeFlagWins decides `echo -e -E`: bash lets the last flag
 	// win and prints the backslashes, zsh lets -e win whatever the order.
@@ -1209,17 +1215,21 @@ type Semantics struct {
 	// expansion writes to the command the body feeds, where that command is
 	// one the shell runs as a process of its own.
 	//
-	// True in bash, ksh93 and zsh; dash alone lets the write escape.
+	// True in bash, ksh93 and zsh; dash and BusyBox ash let the write escape.
 	// Measured with `unset u` and a body of `${u:=zz}` fed to `cat`: `u` is
-	// unset afterwards in the three, and holds `zz` in dash. With `$(( n++ ))`
-	// instead — which dash has not got — the three are unanimous again.
+	// unset afterwards in the three bash builds, in ksh93 and in zsh, and
+	// holds `zz` in dash and in ash — re-measured 2026-09-16 across all seven
+	// columns, and the ash half is the column the two-shell sentence used to
+	// leave out. With `$(( n++ ))` instead — which neither of those two has —
+	// the rest are unanimous again.
 	//
 	// It is one axis rather than one per construct because the split is a
 	// property of *where the shell expands a body*, and every construct
 	// downstream of that follows: a builtin, a function, a compound command,
-	// `exec`, `eval` and `.` all leave the write behind in all four shells,
-	// because the shell runs them itself and there is no other process for
-	// it to land in. Nothing is asked for those.
+	// `exec`, `eval` and `.` all leave the write behind everywhere, because
+	// the shell runs them itself and there is no other process for it to land
+	// in. Measured the same day with `read line <<XX` over the same body: `u`
+	// holds `zz` in all seven. Nothing is asked for those.
 	//
 	// Silent either way, which is the reason it is here: a counter advanced
 	// inside a template's here-document reads one too high on the next line
@@ -2062,9 +2072,9 @@ type Semantics struct {
 	//
 	//	trap "false; exit" 0; true
 	//
-	// is 0 in bash, dash and ksh93 and 1 in zsh. Only the bare form: `exit 7`
-	// is 7 everywhere, and a trap that does not exit at all leaves the
-	// script's status alone in all four.
+	// is 0 in bash, dash, ksh93 and BusyBox ash, and 1 in zsh. Only the bare
+	// form: `exit 7` is 7 everywhere, and a trap that does not exit at all
+	// leaves the script's status alone in all seven columns.
 	//
 	// Found on an installed script — /usr/bin/bzless traps `stty …; exit` on
 	// EXIT, and the `stty` failing made the script exit 1 where every shell
@@ -2180,9 +2190,19 @@ type Semantics struct {
 	//
 	//	trap 'echo bye' EXIT; kill -INT $$
 	//
-	// prints bye in bash and ksh93 and prints nothing in dash and zsh, and
-	// all four report 130. A two-two split on whether dying counts as
-	// exiting.
+	// prints bye in bash and ksh93 and prints nothing in dash, zsh or BusyBox
+	// ash, and all seven columns report 130. A split on whether dying counts
+	// as exiting, three dialects to two.
+	//
+	// **The ash column cannot be measured with the shell at PID 1.** A signal
+	// whose disposition is still the default is not delivered to PID 1 at
+	// all, so `docker run <image> /bin/ash case.sh` — where the shell *is*
+	// PID 1 — does not die: measured 2026-09-16, the script runs on to its
+	// end, prints `bye` from an ordinary exit and reports 0, which reads
+	// exactly like bash's answer to this axis. Run under `--init`, with the
+	// shell a child, the same case is 130 with nothing printed. internal/
+	// oracle is not exposed to this because its runner is the container's
+	// PID 1 and every shell it starts is a child of that; a hand probe is.
 	ExitTrapRunsOnSignalDeath Answer
 
 	// QuitIgnoredWhenNotInteractive makes an untrapped SIGQUIT do nothing at
@@ -3933,7 +3953,7 @@ type Semantics struct {
 	// itself is unanimous for the standard-input route — with `-s` written
 	// or not, and at a prompt — so what splits the panel is only whether a
 	// command string counts. Read down ksh93's rows and its rule is "no
-	// script file was named" where the other three's is "the program came
+	// script file was named" where every other column's is "the program came
 	// from standard input"; the two agree everywhere except here.
 	//
 	// Four other columns rather than three: measured 2026-09-16, `echo $-`
@@ -4286,16 +4306,22 @@ type Semantics struct {
 	// `let` reports *false* for an expression that came out zero, which is
 	// unanimous and not a question — `let "x=5"` is 0 and `let "x=0"` is 1
 	// everywhere. What this decides is the value that rule is then applied to.
-	// Measured 2026-09-11, zsh 5.9.2 against bash 5.3, bash 3.2 and ksh93:
+	// Measured 2026-09-11, zsh 5.9.2 against bash 5.3, bash 3.2 and ksh93,
+	// and re-measured 2026-09-16 with BusyBox ash beside them:
 	//
-	//	let '1 @'  	zsh 0, the others 1
-	//	let '0 @'  	1 everywhere
-	//	let '1+2 @'	zsh 0, the others 1
-	//	let '@'    	1 everywhere
+	//	let '1 @'  	zsh 0, bash x2 and ksh93 1, ash 2
+	//	let '0 @'  	zsh, bash x2 and ksh93 1, ash 2
+	//	let '1+2 @'	zsh 0, bash x2 and ksh93 1, ash 2
+	//	let '@'    	zsh, bash x2 and ksh93 1, ash 2
 	//
 	// So it is not "a failure is success there": the value before the byte is
 	// what decides, and where nothing stood before it the answer is the same
 	// as everybody's.
+	//
+	// ash is a No with a status of its own rather than a fifth reading of
+	// this field. It keeps nothing — `x=9; let 'x = 5 @'` leaves `x` at 9 —
+	// and reports 2 where the others report 1, which is the builtin's
+	// failure status and not this question. dash has no `let` at all.
 	//
 	// Only the byte the reader refuses outright, which is the discriminating
 	// half and the reason this is not a statement about arithmetic failure at
@@ -4788,8 +4814,10 @@ type Semantics struct {
 	// status it was given. True in bash alone.
 	//
 	// Asked only where there is nothing to return from. Inside a function
-	// and inside a sourced file all four obey it, so the question is about
-	// the one case they split on.
+	// and inside a sourced file all seven columns obey it — measured
+	// 2026-09-16, `return 3` in a function is 3 and the line after it does
+	// not run, and `return 4` in a sourced file is 4 — so the question is
+	// about the one case they split on.
 	ReturnOutsideAFunctionIsRefused Answer
 
 	// StartupFileReturnCarriesItsArgument makes `return 3` at the top of a
@@ -5008,8 +5036,9 @@ type Semantics struct {
 	// operands — `cd old new` — and a leading dash word is the first of
 	// them there.
 	//
-	// Only about an *unknown* letter. `-L` and `-P` are options in all four
-	// and are not asked about.
+	// Only about an *unknown* letter. `-L` and `-P` are options in all seven
+	// columns — measured 2026-09-16, `cd -L /` and `cd -P /` are both 0
+	// everywhere — and are not asked about.
 	CdRefusesUnknownOption Answer
 
 	// CdHasQuietOption gives `cd` the `-q` of zsh, which is the one letter
@@ -5204,13 +5233,16 @@ type Semantics struct {
 
 	// ReportsACommandKilledBySignal says out loud that a signal ended a
 	// command, rather than leaving the status to carry it alone. True in
-	// bash, dash and ksh93; zsh says nothing — measured with a terminal as
-	// well as without one, so it is not the prompt-only rule that governs a
-	// background job's announcement.
+	// bash, dash, ksh93 and BusyBox ash; zsh alone says nothing — measured
+	// with a terminal as well as without one, so it is not the prompt-only
+	// rule that governs a background job's announcement. Re-measured
+	// 2026-09-16 on a child killed by TERM: `Terminated: 15` in the three
+	// bash builds and in dash, `Terminated` in ksh93 and in ash, nothing in
+	// zsh.
 	//
 	// Not asked for the two signals nothing reports. ^C and a broken pipe
-	// are how a command is meant to end, and all four stay quiet about
-	// those, so there is no disagreement there to put to a dialect.
+	// are how a command is meant to end, and all seven columns stay quiet
+	// about those, so there is no disagreement there to put to a dialect.
 	ReportsACommandKilledBySignal Answer
 
 	// StoppedJobTakesTheCurrentJobMarker keeps the `+` on a job that stopped
@@ -5634,8 +5666,11 @@ type Semantics struct {
 	// and the next gate becomes visible.
 	//
 	// Not the two parameter failures that look like it. `set -u` on an unset
-	// name and `${x?word}` end the *shell* in all four, by both routes and
-	// with either separator, so they are fatalExpansion's and stay there.
+	// name and `${x?word}` end the *shell* in all seven columns — measured
+	// 2026-09-16, `echo pre` runs and `echo after` does not, at 1 in the
+	// three bash builds, ksh93 and zsh and at 2 in dash and BusyBox ash — by
+	// both routes and with either separator, so they are fatalExpansion's and
+	// stay there.
 	//
 	// The core leaves it unanswered: one shell against three is a
 	// disagreement, and this path already asks an unanswered axis there —
@@ -9018,6 +9053,18 @@ type Semantics struct {
 	// bash and dash name the parse position in both places. zsh is not
 	// asked, because it reads the action when the trap is set and never
 	// reaches a parse failure at fire time.
+	//
+	// **The split is not the same for a one-line body, and the panel is not
+	// the four that sentence names.** Measured 2026-09-16 with `trap "fi"
+	// EXIT` set on line 2 of a five-line script and fired by `exit 0` on
+	// line 5: bash 5.3 and that build as `sh` say `line 1`, dash says `1`
+	// and ksh93 says `at line 1` — all three the position inside the body —
+	// where **bash 3.2.57 says `line 5` and BusyBox ash says `line 5`**, the
+	// line the trap fired from. So two columns the sentence puts in the
+	// parse-position group name the fire position here, and the column it
+	// names alone does not. The value is left as it stands because the
+	// multi-line measurement above is the one the axis was written from;
+	// what is recorded here is that a one-line body cannot confirm it.
 	TrapParseFailureNamesWhereItFired Answer
 
 	// SymbolicMaskTakesMoreThanOneOperator lets one `umask` clause turn on
@@ -10732,7 +10779,9 @@ type Semantics struct {
 	// from the words after the filename, restoring the caller's afterwards.
 	//
 	// False in dash, which ignores them, so `. f.sh ARG` leaves `$1` as the
-	// caller's; true in bash, ksh93 and zsh. With no words after the filename
+	// caller's; true in bash, ksh93, zsh and BusyBox ash — measured
+	// 2026-09-16, `. "$d/sub.sh" arg` with a body of `echo "[$1]"` writes
+	// `[arg]` in six columns and `[]` in dash alone. With no words after the filename
 	// every shell leaves the parameters alone, so the axis only speaks when
 	// there are some.
 	DotPassesArguments Answer
@@ -10857,12 +10906,20 @@ type Semantics struct {
 
 	// HashListingIsSorted lists the command hash in name order.
 	//
-	// zsh alone, and it is asked rather than assumed because the other three
-	// have no reproducible order at all: bash, ksh93 and dash each walk their
-	// own hash table's buckets, so `awk`, `ls`, `sed` hashed in that order
-	// come out `ls awk sed` in bash and `awk sed ls` in dash. See
+	// zsh alone, and it is asked rather than assumed because the other
+	// dialects have no reproducible order at all: bash, ksh93, dash and
+	// BusyBox ash each walk their own hash table's buckets, so `sed`, `awk`,
+	// `ls` hashed in that order come out `ls awk sed` in bash 5.3, `sed awk
+	// ls` in bash 3.2 and `awk sed ls` in dash and in ash. See
 	// hashedCommandNames — insertion order is this shell's answer where the
 	// dialect's own is a property of its hash function.
+	//
+	// **A short listing cannot settle this one, and that is why the value is
+	// not read off one.** Measured 2026-09-16 with those same three names,
+	// ksh93 writes `awk ls sed` — name order exactly, and indistinguishable
+	// from zsh's answer. Three entries is too few to tell a sort from a hash
+	// that happens to agree with one, so the claim rests on what the shells
+	// document about their tables and not on the observation.
 	HashListingIsSorted Answer
 
 	// HashListsAsCommands is `hash -l`: the table written as the `hash -p`
@@ -11522,8 +11579,10 @@ type Semantics struct {
 	// came from: `kill(2)` answered EINVAL, and zsh prints that errno
 	// verbatim while ksh93 gives every failed send its one sentence. The
 	// discriminating detail is that the number never reaches the kernel in
-	// the other three — which is why this is an axis about *reaching the
-	// system call* and not about a wording.
+	// the three bash builds or in BusyBox ash, each of which checks the
+	// number against its own table first — which is why this is an axis about
+	// *reaching the system call* and not about a wording. dash is a fifth
+	// answer again, and is the paragraph below.
 	//
 	// It applies to a number however it was written except after `-s`,
 	// which is measured and not a simplification: `kill -99` and `kill -n 99`
@@ -13116,10 +13175,20 @@ type Semantics struct {
 	//
 	// Every shell measured continues the search past the directory — that is
 	// unanimous, and is what makes a shim directory early on PATH work at
-	// all. They part ways only when nothing later matches: bash reports the
-	// name as not found at all (status 127), where dash, ksh93 and zsh
-	// report the directory they could not run. dash alone keeps 127 for the
-	// status even then, which is DirectoryOnPathStatus's question.
+	// all. They part ways only when nothing later matches: the three bash
+	// builds report the name as not found at all (status 127), where dash,
+	// zsh and BusyBox ash report the directory they could not run. dash and
+	// ash keep 127 for the status even then, which is
+	// DirectoryOnPathStatus's question.
+	//
+	// **ksh93 is a sixth answer, and a probe with one PATH entry cannot see
+	// it.** Measured 2026-09-16: with the directory as the last entry
+	// searched, `zzcmd: cannot execute [Is a directory]` at 126 — zsh's
+	// answer to the letter. Put any entry after it, even an empty directory,
+	// and the same run is `zzcmd: not found` at 127 — bash's. So it keeps
+	// the *last* candidate's failure rather than the directory, and a probe
+	// that puts the directory alone on PATH files ksh93 under zsh's group
+	// because the two observations are identical there.
 	DirectoryOnPathIsACandidate Answer
 
 	// BinaryContentIsNotRunAsAScript stops a file the kernel refused with
@@ -13148,9 +13217,15 @@ type Semantics struct {
 	ScriptImageSeesTheResolvedPath Answer
 
 	// ExecTakesOptions lets `exec` read options of its own, such as
-	// `-a name` to choose the argv[0] the command sees. True in bash, ksh93
-	// and zsh; false in dash, where a leading `-a` is the name of a command
-	// and is reported as not found.
+	// `-a name` to choose the argv[0] the command sees. True in bash, ksh93,
+	// zsh and BusyBox ash; false in dash alone, where a leading `-a` is the
+	// name of a command and is reported as not found.
+	//
+	// ash was read off dash for a while and is not dash here (#3056).
+	// Measured 2026-09-16 inside the pinned image: `exec -a echo /bin/echo
+	// control` writes `control`, and `exec -a zzname /bin/echo tagged` is
+	// `zzname: applet not found` — which is the letter *working*, since
+	// BusyBox dispatches on argv[0] and `-a` is what changed it.
 	//
 	// The answer has to come before the command is looked up, because it
 	// decides which word the command is.
@@ -13162,9 +13237,11 @@ type Semantics struct {
 	// can start one.
 	//
 	// True in bash and zsh; false in ksh93, which has `-a` and `-c` and not
-	// this, and reports the letter as an option it does not know. dash and
-	// BusyBox ash never reach the question: ExecTakesOptions is false there,
-	// so `-l` is the name of a command.
+	// this, and reports the letter as an option it does not know. dash never
+	// reaches the question: ExecTakesOptions is false there, so `-l` is the
+	// name of a command. BusyBox ash does reach it and refuses — `-l` and
+	// `-c` are `illegal option` at the same door `-x` is, and `exec` is
+	// special there, so the script ends (#3056).
 	//
 	// The prefix goes on the word as it was written, path and all, rather
 	// than on its basename: `exec -l /bin/sh` is `-/bin/sh`.
@@ -13193,7 +13270,8 @@ type Semantics struct {
 	// `.` operand with no slash in it, after PATH has missed.
 	//
 	// True only in bash. PATH is searched first everywhere, and wins over an
-	// identically named file in the current directory in all four — this is
+	// identically named file in the current directory in all seven columns,
+	// measured 2026-09-16 with the same basename in both places — this is
 	// only about what happens when PATH does not have it.
 	//
 	// About `.`, and only about `.`. One shell's second name for the builtin
@@ -13342,7 +13420,10 @@ type Semantics struct {
 	//
 	// False in zsh and in BusyBox ash, which recognize the options they have
 	// and take anything else as the format — so `printf -q x` prints `-q` in
-	// those two, at status 0, and is an error in the other three.
+	// those two, at status 0, and is an error in the other five columns.
+	// Measured 2026-09-16: `-q: invalid option` at 2 in the three bash
+	// builds, `-q: unknown option` at 2 in ksh93, `Illegal option -q` at 2 in
+	// dash, and the two characters written at 0 in zsh and ash.
 	PrintfRejectsUnknownOption Answer
 
 	// TrapParsesOptions reads a leading `-` word as an option rather than as
@@ -13356,7 +13437,9 @@ type Semantics struct {
 	// Asked of the letters a dialect knows as much as of the ones it does
 	// not, because zsh takes `-p` as the action just as it takes `-Q`. A
 	// lone `-` is trap's own word for "put it back" and is never an option,
-	// and `--` ends them in all four.
+	// and `--` ends them in all seven columns — measured 2026-09-16,
+	// `trap -- 'echo fired' EXIT` sets the trap at 0 and fires it in every
+	// one of them, zsh included.
 	TrapParsesOptions Answer
 
 	// TrapPrintsWithP makes `trap -p` write the traps currently set, and
@@ -13572,8 +13655,11 @@ type Semantics struct {
 	// LocalOutsideAFunctionIsAnError refuses `local x=2` written where there
 	// is no function to be local to.
 	//
-	// bash and dash refuse it, zsh takes it and sets a global instead. ksh93
-	// has no `local` at all, so it never reaches the question.
+	// bash, dash and BusyBox ash refuse it — measured 2026-09-16, `local: can
+	// only be used in a function` at 1 in the three bash builds and `not in a
+	// function` at 2 in the other two. zsh takes it and sets a global
+	// instead, at 0. ksh93 has no `local` at all, so it never reaches the
+	// question and the word is reported as a command that was not found.
 	LocalOutsideAFunctionIsAnError Answer
 
 	// LocalOutsideAFunctionIsFatal ends the script rather than carrying on
@@ -13587,15 +13673,16 @@ type Semantics struct {
 	LocalOutsideAFunctionIsFatal Answer
 
 	// UmaskPrintsFourDigits writes the mask as four digits, always — `0022`
-	// against zsh's `022`. True in bash, dash and ksh93.
+	// against zsh's `022`. True in bash, dash, ksh93 and BusyBox ash: zsh is
+	// alone, measured 2026-09-16 across all seven columns.
 	//
 	// False is not "three digits". zsh writes a C octal literal with a
 	// minimum of three, so the leading zero comes back as soon as the owner
 	// group denies anything: `022` and `077`, but `0333` and `0777`. Reading
 	// this as a flat three printed `333` where zsh prints `0333`.
 	//
-	// Only about printing: all four read `022` and `0022` alike, and the
-	// symbolic form `umask -S` is identical in every one of them.
+	// Only about printing: all seven read `022` and `0022` alike, both at 0,
+	// and the symbolic form `umask -S` is identical in every one of them.
 	UmaskPrintsFourDigits Answer
 
 	// UmaskSetWithSPrints echoes the new mask when `umask -S mask` both sets
@@ -14081,8 +14168,9 @@ type Semantics struct {
 	TypesetTakesASubscript Answer
 
 	// UnsetTakesASubscript is the same question asked of `unset`, where the
-	// answers are not the same: bash, ksh93 and zsh take it and dash refuses
-	// it.
+	// answers are not the same: bash, ksh93 and zsh take it; dash and
+	// BusyBox ash refuse it, both with `a[0]: bad variable name` and both
+	// fatally, at 2.
 	UnsetTakesASubscript Answer
 
 	// BadNameDeclaresTheOperandsAfterIt keeps declaring past an operand the
@@ -15438,7 +15526,11 @@ func PosixSemantics() Semantics {
 		SignalHandlerSeesEarlierStatus:      No,
 		// POSIX says a bare `exit` reports the status of the last command,
 		// and in an EXIT trap it names the value `$?` had when the trap was
-		// entered — which is what three of the four do.
+		// entered — which is what six of the seven columns do. Measured
+		// 2026-09-16 with `trap 'true; exit' EXIT` over `(exit 7)`: 7
+		// everywhere but zsh, which reports the `true` at 0. The `true` is
+		// the discriminating half — with a bare `exit` in the trap body all
+		// seven report 7, and the probe decides nothing.
 		ExitInTrapReportsEarlierStatus: Yes,
 		UnsetPositionalIsAllowed:       No,
 		TraceShowsItsOwnDisabling:      Yes,
@@ -15449,7 +15541,9 @@ func PosixSemantics() Semantics {
 		// an operator; the three shells that accept it added it.
 		TestAcceptsDoubleEqual: No,
 		// POSIX requires only "greater than 128" for a command killed by a
-		// signal, which decides nothing; three of the four use 128.
+		// signal, which decides nothing; six of the seven columns use 128.
+		// Measured 2026-09-16 on a child killed by TERM: 143 everywhere but
+		// ksh93, which is 271.
 		SignalDeathStatusIsTwoFiftySix: No,
 		// POSIX gives printf no options at all, so there is nothing to
 		// assign with and a leading `-` word is not one.
@@ -15554,9 +15648,11 @@ func PosixSemantics() Semantics {
 		// say; 1 is what the shells that do have it say, bar one.
 		ArithCommandErrorStatusIsTwo: No,
 		// POSIX has no `(( ))` at all — it is an extension every shell but
-		// dash carries — so there is no text to read here and the base takes
-		// the answer three of the four give: the status is left for the next
-		// line, which runs.
+		// dash and BusyBox ash carries, where `(( 1 / 0 ))` is a command
+		// named `1` and 127 — so there is no text to read here and the base
+		// takes the answer four of the five columns that have it give: the
+		// status is left for the next line, which runs. ksh93 is the one
+		// that ends the script.
 		ArithCommandErrorIsFatal: No,
 		// POSIX has no C-style `for` either — it is the same extension, one
 		// construct over — so there is no text to read here and the base
@@ -15566,8 +15662,11 @@ func PosixSemantics() Semantics {
 		// neither parses the header at all: `for ((i=0;;))` is
 		// `Bad for loop variable` at 2 before any expression is evaluated.
 		ForHeaderArithmeticErrorIsFatal: No,
-		// POSIX has no `let` either, and the answer three of the four give is
-		// that a failed expression leaves nothing behind: the status is 1.
+		// POSIX has no `let` either, and the answer five of the six columns
+		// with the builtin give is that a failed expression leaves nothing
+		// behind. The status that goes with it is not unanimous — 1 in the
+		// three bash builds and in ksh93, 2 in BusyBox ash — and the base
+		// takes the 1.
 		LetKeepsTheValueBeforeAnIllegalByte: No,
 		LastPipelineElementInCurrentShell:   No,
 		ShiftPastEndFatal:                   Yes,
@@ -15726,8 +15825,10 @@ func PosixSemantics() Semantics {
 		// it where it was. Both other shells with the builtin agree.
 		DeclarationAssignmentClearsTheExportAttribute: No,
 		// POSIX has `trap` save the action and execute it when the
-		// condition arises, so the text is not read until then. Three of
-		// the four agree; zsh reads it as the trap is set.
+		// condition arises, so the text is not read until then. Six of the
+		// seven columns agree; zsh alone reads it as the trap is set, and
+		// says so — `trap 'if' EXIT` is `couldn't parse trap command` at 1
+		// there and 0 everywhere else.
 		TrapActionIsParsedWhenSet: No,
 		// A shell runs what it has read rather than reading everything
 		// first, which is unanimous for a script and is the same reading
@@ -15735,7 +15836,10 @@ func PosixSemantics() Semantics {
 		// body whole.
 		TrapBodyRunsWhatParsed: Yes,
 		// And it names where the failure was, not where the trap fired,
-		// which is what three of the four do.
+		// which is the answer the standard's silence points at: the text
+		// that failed is what a reader has to go and look at. It is the
+		// majority too, but only for a multi-line body — see the axis, where
+		// a one-line body moves two columns across.
 		TrapParseFailureNamesWhereItFired: No,
 		// POSIX gives `trap` the signals and EXIT, and nothing else — ERR,
 		// DEBUG and RETURN are conditions the shells added. dash still
@@ -15822,8 +15926,9 @@ func PosixSemantics() Semantics {
 		// a sentence that does not exist.
 		// The core has arrays — they are in the common denominator even
 		// though POSIX has none — so `unset a[0]` names an element and
-		// removes it, which is what three of the four do and the only part
-		// of this anybody writes. A *declaration* still names a variable
+		// removes it, which is what the three dialects with arrays do and
+		// the only part of this anybody writes. dash and BusyBox ash have no
+		// arrays and refuse the word as a bad name, fatally. A *declaration* still names a variable
 		// rather than an element, which is bash's and dash's answer.
 		DeclarationTakesASubscript: No,
 		UnsetTakesASubscript:       Yes,
@@ -15894,16 +15999,18 @@ func PosixSemantics() Semantics {
 		// exit-trap answer below does.
 		DotDirectoryOperandIsAnError: No,
 		// The standard gives `.` a filename and nothing else; passing
-		// positional parameters to a sourced file is an extension three of
-		// the four grew. And it reads the file from PATH, with no mention of
-		// the current directory as a fallback.
+		// positional parameters to a sourced file is an extension four of
+		// the five dialects grew — dash alone ignores the words. And it
+		// reads the file from PATH, with no mention of the current directory
+		// as a fallback.
 		DotPassesArguments:             No,
 		DotFallsBackToCurrentDirectory: No,
 		// The standard says a special builtin's failure is fatal and says
 		// nothing about a trap on the way out; dash, the panel's
 		// POSIX-faithful member, runs it, so the preset follows the shell
 		// rather than the silence. `exec` takes no options in the standard —
-		// -a is an extension three of the four grew.
+		// -a is an extension four of the five dialects grew, dash alone
+		// reading the letter as a command name.
 		ExecFailureRunsExitTrap: Yes,
 		ExecTakesOptions:        No,
 		// The standard says an empty element is the current directory and
@@ -15911,7 +16018,10 @@ func PosixSemantics() Semantics {
 		// preset follows the text and the majority together.
 		EmptyPathIsTheCurrentDirectory: Yes,
 		// The standard's 126 is for a command that was found and cannot be
-		// executed; a directory qualifies, and three of the four report it.
+		// executed; a directory qualifies, and three of the five dialects
+		// report it — zsh, dash and BusyBox ash, where the three bash builds
+		// say the name was never found at all and ksh93 says either
+		// depending on what follows the directory on PATH.
 		DirectoryOnPathIsACandidate: Yes,
 		// The standard says the shell executes a file it cannot exec "in a
 		// subshell environment" as if it were a script, and says nothing

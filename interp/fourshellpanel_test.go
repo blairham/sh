@@ -35,7 +35,7 @@ import (
 // miscount would be satisfied by rewording rather than by measuring. A ceiling
 // that only falls needs no such judgement, and the budget below is the whole
 // audit trail.
-const fourShellPhraseBudget = 81
+const fourShellPhraseBudget = 52
 
 // fourShellPanel is the phrase set from the audit that filed #3228. Each one
 // names a panel of four where the panel is seven.

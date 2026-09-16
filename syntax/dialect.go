@@ -2350,13 +2350,19 @@ type Dialect struct {
 	// there.
 	//
 	// It is the one place the two substitution models are visible from
-	// outside. dash, ksh93 and zsh splice the body's *text*, so its newlines
-	// are input lines; bash splices tokens and the whole body sits on the
-	// line the alias word was written on. Measured 2026-09-05 with `$LINENO`
-	// after a two-line body physically on line 5 — bash 5, the other three 6
-	// — and again with a three-line body, which shifts by two; and with a
-	// command that fails inside the body, reported on the body's own line by
-	// the three and on the alias word's line by bash. The shift is per
+	// outside. dash, ksh93, zsh and BusyBox ash splice the body's *text*, so
+	// its newlines are input lines; bash splices tokens and the whole body
+	// sits on the line the alias word was written on. Measured 2026-09-05
+	// with `$LINENO` after a two-line body physically on line 5 — bash 5,
+	// the other four 6 — and again with a three-line body, which shifts by
+	// two; and with a command that fails inside the body, reported on the
+	// body's own line by the four and on the alias word's line by bash.
+	//
+	// The bash column is only reachable with the aliases on. Re-measured
+	// 2026-09-16, a script that never asks for them expands nothing in bash
+	// 5.3 or bash 3.2 and the word is `command not found`; the same file
+	// under that binary called `sh` expands it and answers 5. So this is one
+	// of the rows where argv[0] decides whether there is an answer at all. The shift is per
 	// *expansion*: using the alias twice shifts twice, and defining it and
 	// never using it shifts nothing.
 	//
@@ -2869,10 +2875,11 @@ type Dialect struct {
 	// answer here.
 	//
 	// Off in the core, which is what the common denominator means: the wider
-	// reading takes text the other three read as belonging to the word, and
-	// a core that swallowed it would be reading a word nobody wrote.
+	// reading takes text the other five columns read as belonging to the
+	// word, and a core that swallowed it would be reading a word nobody
+	// wrote.
 	//
-	// Only unquoted. In double quotes all six stop at the first `}` and the
+	// Only unquoted. In double quotes all seven stop at the first `}` and the
 	// flag is not consulted — see the note in scanBraces, and #1586, which
 	// settled that half. The `${ cmd;}` command form keeps its own rule for
 	// a third reason again: its body is a program, so a `{ … }` block
@@ -3279,8 +3286,11 @@ type Dialect struct {
 	// shell in the panel that has the sentence.
 	//
 	// A table of bytes and not a code path, which is the whole reason it is
-	// here: three of the four have no such sentence, and for them this is
-	// empty and every failure keeps the wording it already had. The bytes are
+	// here: the other four dialects have no such sentence, and for them this
+	// is empty and every failure keeps the wording it already had. Measured
+	// 2026-09-16, `x=$((@))` is `operand expected` in the three bash builds,
+	// `arithmetic syntax error` in ksh93 and in BusyBox ash, `expecting
+	// primary` in dash, and `illegal character: @` in zsh alone. The bytes are
 	// measured, not derived — every other punctuation byte tried is either a
 	// math token in that shell or can begin a value.
 	//
@@ -3299,12 +3309,14 @@ type Dialect struct {
 	// Measured 2026-09-07 and re-measured 2026-09-10, from a script file with
 	// `n=5`: `$(( "1" + 1 ))` is 2, `$(( "n" + 1 ))` is 6 and `$(( 1 + "2" ))`
 	// is 3 in bash 5.3.15, that build as `sh`, ksh93u+ and zsh 5.9.2; bash
-	// 3.2.57 and dash refuse all three. So four shells read what the quote
-	// held and two refuse it — additive, which is why it is here and not on
-	// the semantics vector, exactly as [ArithCharacterCode] is.
+	// 3.2.57, dash and BusyBox ash refuse all three, ash with the bare
+	// `arithmetic syntax error` it gives every reader failure. So four
+	// columns read what the quote held and three refuse it — additive, which
+	// is why it is here and not on the semantics vector, exactly as
+	// [ArithCharacterCode] is.
 	//
 	// It matters more than the spelling suggests: `$(( "$n" + 1 ))` looks
-	// defensive and is common, and refusing it fails under three of the four
+	// defensive and is common, and refusing it fails under three of the five
 	// dialects graded here (#1223).
 	ArithDoubleQuote ArithDoubleQuotePolicy
 
@@ -3891,8 +3903,8 @@ type Dialect struct {
 	// It is what lets zsh write `{ echo hi }` with no terminator before the
 	// brace: the `}` cannot be an argument, so it can only be closing the
 	// group. The same rule is why `echo }` is a syntax error there and prints
-	// a brace in the other three, which is the half that shows it is one rule
-	// rather than a special case inside brace groups.
+	// a brace in the other six columns, which is the half that shows it is
+	// one rule rather than a special case inside brace groups.
 	//
 	// **Reserved reaches into the word, which is the half that was missing.**
 	// A `}` that ends a word is the reserved word and not the word's last

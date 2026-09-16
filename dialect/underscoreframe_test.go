@@ -43,20 +43,20 @@ import (
 // that has none both answer empty.
 func underscorePresets() []struct {
 	dialecttest.Preset
-	tracks, narrowed, beforeBody interp.Answer
-	want                         string
+	tracks, narrowed, beforeBody, parameter interp.Answer
+	want                                    string
 } {
 	return []struct {
 		dialecttest.Preset
-		tracks, narrowed, beforeBody interp.Answer
-		want                         string
+		tracks, narrowed, beforeBody, parameter interp.Answer
+		want                                    string
 	}{
 		{
 			dialecttest.Preset{
 				Name: "bash", Dialect: bash.Dialect, Semantics: bash.Semantics,
 				Diagnostics: bash.Diagnostics, Apply: bash.Apply,
 			},
-			interp.Yes, interp.No, interp.No,
+			interp.Yes, interp.No, interp.No, interp.Yes,
 			"body [outer] after [zz] call [two]\n",
 		},
 		{
@@ -64,7 +64,7 @@ func underscorePresets() []struct {
 				Name: "ksh", Dialect: ksh.Dialect, Semantics: ksh.Semantics,
 				Diagnostics: ksh.Diagnostics, Apply: ksh.Apply,
 			},
-			interp.Yes, interp.Yes, interp.No,
+			interp.Yes, interp.Yes, interp.No, interp.Yes,
 			"body [outer] after [outer] call [two]\n",
 		},
 		{
@@ -72,7 +72,7 @@ func underscorePresets() []struct {
 				Name: "zsh", Dialect: zsh.Dialect, Semantics: zsh.Semantics,
 				Diagnostics: zsh.Diagnostics, Apply: zsh.Apply,
 			},
-			interp.Yes, interp.No, interp.Yes,
+			interp.Yes, interp.No, interp.Yes, interp.Yes,
 			"body [two] after [zz] call [two]\n",
 		},
 		{
@@ -80,7 +80,7 @@ func underscorePresets() []struct {
 				Name: "dash", Dialect: dash.Dialect, Semantics: dash.Semantics,
 				Diagnostics: dash.Diagnostics, Apply: dash.Apply,
 			},
-			interp.No, interp.No, interp.No,
+			interp.No, interp.No, interp.No, interp.No,
 			"body [] after [] call []\n",
 		},
 		{
@@ -88,7 +88,7 @@ func underscorePresets() []struct {
 				Name: "ash", Dialect: ash.Dialect, Semantics: ash.Semantics,
 				Diagnostics: ash.Diagnostics, Apply: ash.Apply,
 			},
-			interp.No, interp.No, interp.No,
+			interp.No, interp.No, interp.No, interp.No,
 			"body [] after [] call []\n",
 		},
 	}
@@ -106,6 +106,15 @@ func TestEachDialectAnswersTheUnderscoreAxes(t *testing.T) {
 			}
 			if got := s.UnderscoreMovesBeforeAFunctionBody; got != p.beforeBody {
 				t.Errorf("UnderscoreMovesBeforeAFunctionBody = %v, want %v", got, p.beforeBody)
+			}
+			// The fourth, and the one the probe above cannot separate: a
+			// shell that keeps the parameter empty and one that keeps no
+			// such name both write `[]` here. dash and BusyBox ash are the
+			// second, which `${_+x}` and `set -u` say and this does not —
+			// see dialect/dash/underscore_test.go and the ash one beside it
+			// for the bytes (#3380).
+			if got := s.UnderscoreIsAParameterAtAll; got != p.parameter {
+				t.Errorf("UnderscoreIsAParameterAtAll = %v, want %v", got, p.parameter)
 			}
 		})
 	}

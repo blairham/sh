@@ -42,13 +42,12 @@
 # two shells and so belongs in neither tier: see #2291 on the splits a tier
 # cannot express.
 #
-# `$_` is the third absence and it is held out because it is **ours**, not
-# this shell's. dash has no `$_` at all — `${_+x}` is empty and, under
-# `set -u`, reading it is `_: parameter not set` at status 2 — and cmd/dash
-# answers `[]` at 0 because the producer is registered for every dialect.
-# #3380, filed rather than fixed here, because the repair is a question about
-# which shells have the parameter at all and BusyBox cannot be asked on this
-# machine. A case will come back to this file when that is decided.
+# `$_` was the third absence and was held out of this file when it was
+# written, because it was **ours** rather than this shell's: cmd/dash answered
+# `[]` at 0 where dash stops the script. It is asked below now that #3380 is
+# fixed — BusyBox was measured in the pinned image and answers as dash does,
+# so both POSIX-family dialects take the preset's No and the question is no
+# longer a guess about the column that could not be asked.
 
 # A plain value, quoted. This is the row the whole file turns on: nothing
 # about `plain` needs quoting and dash quotes it anyway.
@@ -97,11 +96,23 @@ set | sed -n '/^[qrsv]=/p'
 # panel and in no POSIX text, and each reads as the empty string here rather
 # than failing.
 #
-# Presence only, never the value: both carry a clock or a generator in the
-# other shells, and a case that printed one would not repeat even under the
-# shell that answered it.
+# Presence only, never the value: the first two carry a clock or a generator
+# in the other shells, and a case that printed one would not repeat even under
+# the shell that answered it.
+#
+# `$_` is the third and it is the one with a status behind it. bash, zsh and
+# ksh93 all keep the parameter with nothing in it, so `set -u` reads it there
+# and stops here — which is the row that says the absence is the *name* and
+# not merely an empty value.
 case "${RANDOM+x}" in x) printf 'RANDOM     [present]\n' ;; *) printf 'RANDOM     [absent]\n' ;; esac
 case "${SECONDS+x}" in x) printf 'SECONDS    [present]\n' ;; *) printf 'SECONDS    [absent]\n' ;; esac
+case "${_+x}" in x) printf 'underscore [present]\n' ;; *) printf 'underscore [absent]\n' ;; esac
+( set -u; printf 'under set -u [%s]\n' "$_" ) 2>&1 | sed 's/.*: //'
+printf 'set -u on it -> %s\n' "$( ( set -u; : "$_" ) 2>/dev/null; printf '%s' "$?" )"
+# And the control: a command does not put a value there either, so the name is
+# absent rather than emptied.
+true one two
+case "${_+x}" in x) printf 'after a command [present]\n' ;; *) printf 'after a command [absent]\n' ;; esac
 
 # And one it has, so that the three above are a measurement rather than a
 # probe that cannot tell an absent variable from an absent shell.

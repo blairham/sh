@@ -591,3 +591,72 @@ echo "[$FROZEN]"`, func(r *Runner) {
 		t.Errorf("re-registered got %q, want %q", out, want)
 	}
 }
+
+// TestUnderscoreIsAParameterAtAllIsAnAxis — two of the panel keep `$_` with
+// nothing in it and two keep no such name, and until this axis existed every
+// dialect got the first answer.
+//
+// The three axes above it decide what the *value* is; this one decides
+// whether there is a parameter to hold one. A registered producer is the name
+// being set — the lookup answers from it ahead of every table, and `${_+x}`
+// never calls it — so there is no value a producer could return that reads as
+// unset. That is why this is registration rather than a fourth thing the
+// producer returns.
+//
+// Measured 2026-09-16 with `_` scrubbed from the environment: `${_+x}` is
+// non-empty in bash 5.3.20, zsh 5.9.2 and ksh93 93u+, and empty in dash and
+// in BusyBox 1.37.0 — where `set -u` stops the script at status 2.
+func TestUnderscoreIsAParameterAtAllIsAnAxis(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		is    Answer
+		src   string
+		want  string
+		wantS int
+	}{
+		{"kept, and empty", Yes, `printf '[%s]\n' "${_+set}"`, "[set]\n", 0},
+		{"no such name", No, `printf '[%s]\n' "${_+set}"`, "[]\n", 0},
+		{"kept, so set -u reads it", Yes, `set -u; printf '[%s]\n' "$_"`, "[]\n", 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, status := run(t, tc.src, func(r *Runner) {
+				sem := CoreSemantics()
+				sem.UnderscoreIsAParameterAtAll = tc.is
+				sem.UnderscoreTracksTheLastArgument = No
+				sem.UnderscoreStartsAtTheInvocation = No
+				sem.UnderscoreInheritsFromTheEnvironment = Yes
+				r.Semantics = &sem
+			})
+			if out != tc.want || status != tc.wantS {
+				t.Errorf("got %q at %d, want %q at %d", out, status, tc.want, tc.wantS)
+			}
+		})
+	}
+}
+
+// The half that keeps the axis from being "this shell has no `$_`": a shell
+// with no parameter of its own still reads one the environment brought, and
+// the name is an ordinary one there — assignable, and the value stays.
+//
+// Measured on both shells that answer No. `env -i _=inherited dash -c 'echo
+// $_'` writes `inherited`, and so does BusyBox ash in the pinned image;
+// `_=mine; echo "$_"` writes `mine` in both.
+func TestAShellWithNoUnderscoreStillReadsOneItWasHanded(t *testing.T) {
+	setup := func(r *Runner) {
+		sem := CoreSemantics()
+		sem.UnderscoreIsAParameterAtAll = No
+		sem.UnderscoreInheritsFromTheEnvironment = Yes
+		r.Semantics = &sem
+		r.Env = append(r.Env, "_=brought")
+	}
+	if out, _ := run(t, `printf '[%s][%s]\n' "${_+set}" "$_"`, setup); out != "[set][brought]\n" {
+		t.Errorf("got %q, want the environment's `_` to show through", out)
+	}
+	if out, _ := run(t, `_=mine; printf '[%s]\n' "$_"`, func(r *Runner) {
+		sem := CoreSemantics()
+		sem.UnderscoreIsAParameterAtAll = No
+		r.Semantics = &sem
+	}); out != "[mine]\n" {
+		t.Errorf("got %q, want `_` to be an ordinary name where the shell keeps none", out)
+	}
+}

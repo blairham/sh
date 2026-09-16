@@ -862,6 +862,11 @@ func Semantics() interp.Semantics {
 	// and a shell without it give the same empty answer. `echo one two`
 	// and `echo "[$_]"` on their own lines read `two` here (#3134).
 	s.UnderscoreTracksTheLastArgument = interp.Yes
+	// The same reading one step earlier: the parameter is there before any
+	// command has written it, so `${_+x}` is non-empty and `set -u` reads an
+	// empty string rather than stopping. That is what separates this column
+	// from dash and BusyBox ash, which the `;`-list probe could not.
+	s.UnderscoreIsAParameterAtAll = interp.Yes
 	// And it moves under a rule nothing else in the panel has: only a simple
 	// command standing alone on a line at the top level of the input writes
 	// it. A `;`-list, an `&&` chain, a pipeline, a backgrounded command and

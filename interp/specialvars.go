@@ -48,10 +48,26 @@ func (r *Runner) ensureSpecials() {
 	if _, ok := r.Vars["IFS"]; !ok && !r.removed["IFS"] {
 		r.setVarQuietly("IFS", " \t\n")
 	}
-	if _, ok := r.Dynamic["_"]; !ok && !r.endedProducers["_"] {
+	if _, ok := r.Dynamic["_"]; !ok && !r.endedProducers["_"] &&
+		r.sem().UnderscoreIsAParameterAtAll != No {
 		// Registered once, not every time: RunPart comes back through here
 		// while a process substitution's goroutine may be reading the shared
 		// table, and rewriting the same producer was a write all the same.
+		//
+		// And not registered at all where the shell has no such parameter,
+		// which is the whole of Semantics.UnderscoreIsAParameterAtAll. A
+		// registered producer *is* the name being set — the lookup answers
+		// from it ahead of every table and `${_+x}` never calls it — so
+		// there is no value a producer could return that reads as unset.
+		// dash and BusyBox ash both stop a `set -u` script on `$_` and this
+		// shell answered `[]` at 0 in their columns until the question was
+		// asked (#3380).
+		//
+		// An `_` the environment brought still shows through, in those two
+		// as in the others: with nothing registered the name is found the
+		// way every inherited variable is, which is what their references do
+		// with it — `_` is an ordinary name there, assignable, and the value
+		// stays.
 		r.Dynamic["_"] = func(r *Runner) string {
 			// The tracked argument in the dialects that move `$_`. Which
 			// record is read is a second question with a second answer —

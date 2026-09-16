@@ -1,0 +1,128 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# The command line — #2345's argv half, and the one area where this shell has
+# a whole *facility* the rest of the panel has not.
+#
+# **Every `set -o` name is also a `--name` word.** ksh93's own manual page on
+# this machine states it under `-o[option]`: "Options -o name can also be
+# specified with --name and +o name can be specifed with --noname except that
+# options names beginning with no are turned on by omitting no." So there is
+# no table of long options to enumerate — the roster is the `-o` roster, and
+# a name absent from one is absent from both. `ksh --xtrace script` traces,
+# `ksh --nounset -c 'echo $u'` is a refusal at 1, and `ksh --noglob` is the
+# POSIX spelling of the same switch `--glob` moves the other way.
+#
+# Only here, and the panel is not close: bash calls `--xtrace` an invalid
+# option and prints its own list of the seventeen GNU long options it *does*
+# have; dash says `Illegal option --`. zsh takes the word — its own roster and
+# its `NO_` prefix are a separate measurement and zsh/options.tests's ground —
+# but it agrees with nothing below once a name is refused.
+#
+# `--noprofile` is the row that shows this is a namespace and not a list. It
+# looks like bash's option of the same spelling and is nothing of the sort:
+# `no` comes off, `profile` is no option name here, and the answer is the
+# same `bad option(s)` any other unknown word gets. So a script written for
+# bash and run here is refused rather than quietly obeyed.
+#
+# Three readings, in the order that keeps them from eating each other, and
+# each has a row below that fails under the other two:
+#
+#	1. an `=value` suffix, read as a **number** — `--noglob=on` is globbing
+#	   left alone, because there is no number there to read;
+#	2. the whole word as a name — `notify` is an option in its own right, so
+#	   `--notify` turns notify *on*;
+#	3. the word with a leading `no` taken off — `--nonotify` turns it off.
+#
+# A refused word is named back as it was written: `noprofile:` and not
+# `profile:`, so the reader is shown what they typed rather than what the
+# shell was left holding after a strip that did not help.
+#
+# The block under that sentence is this spelling's own — `Usage: ksh [
+# options ] [arg ...]`, naming no letters because the spelling refused has
+# none, where a bad letter and a bad `-o` name both get the block that lists
+# them. And the *sentence* names the shell by the last element of the word it
+# was invoked by, which nothing else about an invocation does: a script it
+# cannot open is `<path>: not found` from the same command line with no line
+# read either. That is the AST option reader speaking rather than the shell.
+#
+# `$SUITE_SHELL` is the shell of this run; see suite.OurShellVar. The harness
+# rewrites the shell's whole *path* wherever it appears, so the `sed` below
+# has only the base-name spellings to deal with — and it rewrites them to a
+# different word on purpose. `<base>:` and `<shell>:` staying apart in the
+# output is how the last paragraph's distinction survives into a graded file:
+# the refusals below are base-named and the unreadable script under them is
+# path-named, in the same run, from the same command line.
+
+row() {
+	label=$1
+	shift
+	printf -- '--- %s\n' "$label"
+	out=$( "$SUITE_SHELL" "$@" 2>&1 )
+	st=$?
+	printf '%s\n' "$out" | sed \
+		-e 's#^\([^/ ]*\)ksh: #<base>: #' \
+		-e 's#^\(Usage: \)[^/ ]*ksh#\1<base>#'
+	printf 'status %s\n' "$st"
+}
+
+printf -- '=== every option name is a command-line word of its own ===\n'
+
+row 'xtrace'                 --xtrace -c 'echo traced'
+row 'errexit'                --errexit -c 'false; echo unreachable'
+row 'nounset'                --nounset -c 'echo "[${NOSUCH_ZZ}]"'
+row 'noexec'                 --noexec -c 'echo unreachable'
+row 'monitor'                --monitor -c 'echo ran'
+row 'allexport'              --allexport -c 'v=1; export | grep -c "^v="'
+
+printf -- '=== the direction is inside the word, not in the sign ===\n'
+
+row 'noglob is glob off'     --noglob -c 'set -o | grep -w glob'
+row 'glob is glob on'        --glob -c 'set -o | grep -w glob'
+row 'noclobber'              --noclobber -c 'set -o | grep -w clobber'
+row 'noallexport'            --noallexport -c 'set -o | grep -w allexport'
+row 'a later word wins'      -x --noxtrace -c 'echo untraced'
+
+printf -- '=== the whole word is a name before the `no` comes off ===\n'
+
+row 'notify, a name in no'   --notify -c 'set -o | grep -w notify'
+row 'nonotify, the strip'    --nonotify -c 'set -o | grep -w notify'
+
+printf -- '=== an `=value` is a number, not a word ===\n'
+
+row 'one'                    --noglob=1 -c 'set -o | grep -w glob'
+row 'two'                    --noglob=2 -c 'set -o | grep -w glob'
+row 'nought'                 --noglob=0 -c 'set -o | grep -w glob'
+row 'the word on'            --noglob=on -c 'set -o | grep -w glob'
+row 'a word that is no word' --noglob=xyz -c 'set -o | grep -w glob'
+row 'nothing at all'         --noglob= -c 'set -o | grep -w glob'
+
+printf -- '=== a word that is no name, and the block under it ===\n'
+
+row 'an unknown name'        --zzznosuch -c 'echo unreachable'
+row 'no plus a non-name'     --noprofile -c 'echo unreachable'
+row 'a bare no'              --no -c 'echo unreachable'
+row 'an unknown letter'      -Z -c 'echo unreachable'
+row 'an unknown -o name'     -o zzznosuch -c 'echo unreachable'
+
+# And the same command line with no line read either, which is where the base
+# name above stops: a script that will not open is named by the whole word the
+# shell was invoked by. Two spellings of the shell's own name in one file, and
+# the difference is the refusal rather than the route.
+row 'a script it cannot open' /nosuch/script_zz.sh
+
+printf -- '=== and two dashes alone are still the terminator ===\n'
+
+row 'the word behind it'     -- -c 'echo unreachable'
+
+printf -- '=== the same spelling at the builtin ===\n'
+
+# Each in a subshell of its own: a refused `set` option is fatal here, and at
+# the top level one refusal would take every row under it with it.
+( set --noglob; set -o | grep -w glob )
+( set --glob; set -o | grep -w glob )
+( set --nonotify; set -o | grep -w notify )
+( set --noglob=1; set -o | grep -w glob )
+( set --zzznosuch ) 2>&1 | sed -e 's#^\([^/ ]*\)ksh: #<base>: #'
+printf 'set --zzznosuch -> %s\n' "$?"
+( set -- --xtrace; printf 'behind the terminator [%s]\n' "$1" )

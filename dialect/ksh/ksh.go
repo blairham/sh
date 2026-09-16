@@ -2406,8 +2406,11 @@ func Diagnostics() interp.Diagnostics {
 		// letters because the spelling that was refused has none.
 		InvocationLongOptionUsage: "Usage: %[2]s [ options ] [arg ...]",
 		SetLongOptionUsage:        "Usage: set [--default] [--state] [arg ...]",
-		SignalDescriptions:        signalDescriptions(),
-		JobRunning:                " Running",
+		// And the sentence above it names the shell the same way, which
+		// nothing but an option refusal does here.
+		InvocationOptionRefusalNamesTheBase: true,
+		SignalDescriptions:                  signalDescriptions(),
+		JobRunning:                          " Running",
 		// The spec is not named. Measured on `jobs %9`, which says exactly
 		// `jobs: no such job` — the one wording in this area that uses
 		// neither verb, and it is the shell rather than a truncation: `%nope`

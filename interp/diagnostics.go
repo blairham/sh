@@ -3114,6 +3114,31 @@ type Diagnostics struct {
 	// Empty leaves BuiltinUsage["set"] standing for both spellings.
 	SetLongOptionUsage string
 
+	// InvocationOptionRefusalNamesTheBase writes the last element of the
+	// word the shell was invoked by, where every other diagnostic about the
+	// invocation writes the whole word.
+	//
+	// ksh93 alone, and it is not a style: the option refusals come from the
+	// AST option reader, which carries its own idea of the program's name,
+	// while everything else is the shell speaking. Measured 2026-09-16
+	// invoking it as `/bin/ksh`:
+	//
+	//	-o zzznosuch   ksh: zzznosuch: bad option(s)
+	//	-Z             ksh: -Z: unknown option
+	//	--zzznosuch    ksh: zzznosuch: bad option(s)
+	//	/nosuch.sh     /bin/ksh: /nosuch.sh: not found
+	//	a directory    /bin/ksh: …: cannot open [Is a directory]
+	//	`;;`           /bin/ksh: syntax error at line 1: …
+	//
+	// So the split is the refusal and not the route: all three option
+	// spellings take the base and every other invocation diagnostic takes
+	// the path. bash, zsh and dash write the whole word for both.
+	//
+	// The usage block under the refusal already writes the base in this
+	// dialect — InvocationUsage's second verb — so with this set the two
+	// lines of one refusal finally name the shell the same way.
+	InvocationOptionRefusalNamesTheBase bool
+
 	// InvocationNameRefusalNamesTheShell reports a refused `set -o` name at
 	// an invocation exactly as the builtin would, with the shell's own name
 	// standing where the builtin's would:

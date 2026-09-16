@@ -1580,7 +1580,11 @@ func (r *Runner) saySetRefusal(msg string, usage, isName bool) {
 		r.diagf("%s: %s\n", r.name(), rest)
 		return
 	}
-	r.errf("%s%s\n", d.invocationPrefix(r.name()), strings.TrimPrefix(msg, "set: "))
+	name := r.name()
+	if d.InvocationOptionRefusalNamesTheBase {
+		name = filepath.Base(name)
+	}
+	r.errf("%s%s\n", d.invocationPrefix(name), strings.TrimPrefix(msg, "set: "))
 	u := d.InvocationUsage
 	if r.longSetOptionSpelling && d.InvocationLongOptionUsage != "" {
 		// A `--name` gets the block that names long options, where the

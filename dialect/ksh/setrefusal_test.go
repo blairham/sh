@@ -59,15 +59,30 @@ func TestKshRefusesASetOptionInItsOwnWords(t *testing.T) {
 // line instead of the builtin's — naming itself there by the last element of
 // the word it was invoked by, where bash spells the whole path. Measured
 // through a link named `myksh`, which is what it called itself.
+//
+// The *sentence* above that block names itself the same way, which this test
+// asserted the other way round until it was measured. Invoked as `/bin/ksh`,
+// 93u+ 2012-08-01 writes `ksh: -Z: unknown option` and `ksh: zzznosuch: bad
+// option(s)` — and `/bin/ksh: /nosuch.sh: not found` for a script it cannot
+// open, from the same invocation with no line read either. So the base name
+// is the *option refusal's* and not the route's: it is the AST option reader
+// speaking rather than the shell. See
+// Diagnostics.InvocationOptionRefusalNamesTheBase.
 func TestKshRefusesAnInvocationOptionWithItsOwnUsageLine(t *testing.T) {
 	const usage = "Usage: ksh [-cilrsDEabefhkmnprtuvxBCGH] [-R file] [-o[option]] [arg ...]\n"
 	got := refuseAtInvocation(t, func(r *interp.Runner) { r.SetOptionLetters("q", true) })
-	if want := "/bin/ksh: -q: unknown option\n" + usage; got != want {
+	if want := "ksh: -q: unknown option\n" + usage; got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
 	named := refuseAtInvocation(t, func(r *interp.Runner) { r.SetNamedOption("zzznosuch", true) })
-	if want := "/bin/ksh: zzznosuch: bad option(s)\n" + usage; named != want {
+	if want := "ksh: zzznosuch: bad option(s)\n" + usage; named != want {
 		t.Errorf("got %q, want %q", named, want)
+	}
+	// The long spelling: the same sentence under a different block, the one
+	// that names no letters because the spelling refused has none.
+	long := refuseAtInvocation(t, func(r *interp.Runner) { r.SetLongOption("zzznosuch") })
+	if want := "ksh: zzznosuch: bad option(s)\nUsage: ksh [ options ] [arg ...]\n"; long != want {
+		t.Errorf("got %q, want %q", long, want)
 	}
 }
 

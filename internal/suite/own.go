@@ -144,6 +144,12 @@ var Ours = []Suite{
 		Ext:      OurExt,
 		ShellVar: OurShellVar,
 		Lookup:   []string{"/opt/homebrew/bin/bash", "/usr/local/bin/bash", "/bin/bash", "/usr/bin/bash"},
+		// Homebrew's 5.3, which is what these cases were written against.
+		// Ubuntu 24.04 ships 5.2.21, and #3113 measured seven `0 / 2` rows
+		// on the runner that do not exist here — a 5.2-against-5.3
+		// difference wearing our column's clothes.
+		Against:       "GNU bash 5.3",
+		AgainstReport: "version 5.3",
 	},
 	{
 		Name:     "zsh",
@@ -153,6 +159,12 @@ var Ours = []Suite{
 		Ext:      OurExt,
 		ShellVar: OurShellVar,
 		Lookup:   []string{"/opt/homebrew/bin/zsh", "/usr/local/bin/zsh", "/bin/zsh", "/usr/bin/zsh"},
+		// Homebrew's 5.9.2 against Ubuntu's 5.9: the smallest skew of the
+		// three, and named for the same reason as the largest. A column is
+		// discounted or it is not; which of them it is is not for a reader
+		// to guess from the runner's package list.
+		Against:       "zsh 5.9.2",
+		AgainstReport: "zsh 5.9.2",
 	},
 	{
 		Name:     "ksh93",
@@ -162,6 +174,15 @@ var Ours = []Suite{
 		Ext:      OurExt,
 		ShellVar: OurShellVar,
 		Lookup:   []string{"/bin/ksh", "/usr/bin/ksh", "/opt/homebrew/bin/ksh93"},
+		// Not a version skew like the other two. macOS ships AT&T's 2012
+		// build and Ubuntu ships ksh93u+m, a fork twelve years on, and the
+		// gap between them on the one file measured so far is entirely
+		// rewritten refusals: `unknown option` for `bad option(s)`, a
+		// different usage block, an extra ` Help:` line, `-R` gone. Every
+		// accepting row agreed. The fragment is the whole date because
+		// `93u+` is a prefix of `93u+m` and would clear the fork (#3135).
+		Against:       "AT&T ksh93 93u+ 2012-08-01",
+		AgainstReport: "93u+ 2012-08-01",
 	},
 	{
 		// The column the fetched panel can never have: dash ships no suite,
@@ -171,6 +192,11 @@ var Ours = []Suite{
 		// gap: dash is the holdout on arrays, [[ ]], $'…', += and the rest,
 		// and running those files here would grade dash on constructs it
 		// has never claimed to have.
+		// No Against, and that is a measurement rather than an omission:
+		// dash answers no version probe in any spelling, so the build behind
+		// this column cannot be named from the outside. The reference line
+		// says `could not determine` on every run, which is the truth and
+		// was `/bin/dash: 0: Illegal option --` until #3135.
 		Name:     "dash",
 		Dialect:  "dash",
 		Ours:     true,
@@ -197,12 +223,16 @@ var Ours = []Suite{
 		// same job through a different route, and MustReport is what keeps
 		// /bin/ash from being some other shell's symlink in some other
 		// image.
-		Name:       "ash",
-		Dialect:    "ash",
-		Ours:       true,
-		Dirs:       []string{"core", "ash"},
-		Ext:        OurExt,
-		ShellVar:   OurShellVar,
+		Name:     "ash",
+		Dialect:  "ash",
+		Ours:     true,
+		Dirs:     []string{"core", "ash"},
+		Ext:      OurExt,
+		ShellVar: OurShellVar,
+		//
+		// No Against: the image is pinned by digest, so the build is pinned
+		// with it and a second expectation written out by hand beside the
+		// digest would be the one to go stale.
 		Lookup:     []string{"/bin/ash", "/bin/busybox"},
 		Container:  "ash",
 		MustReport: "busybox",

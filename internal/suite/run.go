@@ -6,7 +6,6 @@ package suite
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -169,34 +168,6 @@ func environ(s Suite, dir, shell string) []string {
 	return env
 }
 
-// runVersion asks a shell for its build string, bounded like everything else
-// here: a shell that will not answer this is not one to run a suite under.
-//
-// Two spellings, in order, because one shell on the panel answers neither of
-// the usual ones. `--version` covers bash and zsh; BusyBox refuses it and
-// prints its build on the first line of `--help`, which is the only place the
-// string "BusyBox" appears at all. ksh and dash answer nothing here and stay
-// unknown, which is what their rows have always said.
-//
-// The output is combined for the second probe: BusyBox writes its usage to
-// standard error, and a version taken from an empty stream would make
-// [Suite.Believable] refuse a shell that had in fact identified itself.
-func runVersion(ctx context.Context, shell string) (string, error) {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	if out, err := exec.CommandContext(ctx, shell, "--version").Output(); err == nil {
-		return string(out), nil
-	}
-	out, err := exec.CommandContext(ctx, shell, "--help").CombinedOutput()
-	if len(bytes.TrimSpace(out)) == 0 {
-		if err == nil {
-			err = errors.New("the shell answered neither --version nor --help")
-		}
-		return "", err
-	}
-	return string(out), nil
-}
-
 // Believable applies [Suite.MustReport]: the path exists and answered, but is
 // it this shell?
 //
@@ -205,12 +176,24 @@ func runVersion(ctx context.Context, shell string) (string, error) {
 // column that trusted a path recorded the wrong shell and nothing looked
 // wrong. A column reached inside an image is where this matters most, since
 // nobody is going to notice by eye what that path resolved to.
-func (s Suite) Believable(version string) error {
-	if s.MustReport == "" || strings.Contains(strings.ToLower(version), s.MustReport) {
+func (s Suite) Believable(b Build) error {
+	if s.MustReport == "" {
+		return nil
+	}
+	if !b.Known {
+		// A shell that would not identify itself is not a shell this check
+		// can clear, and before #3135 it could be: the probe handed back
+		// whatever the refusal printed, and a refusal that happened to carry
+		// the name — `Usage: ksh [ options ]` does — passed as an
+		// identification.
+		return fmt.Errorf("found, but it answers no version probe, so it cannot be confirmed "+
+			"as the %q this column names", s.MustReport)
+	}
+	if strings.Contains(strings.ToLower(b.Version), s.MustReport) {
 		return nil
 	}
 	return fmt.Errorf("found, but it reports %q rather than %q, so it is not the shell this column names",
-		firstLine(version), s.MustReport)
+		b.Version, s.MustReport)
 }
 
 func firstLine(s string) string {

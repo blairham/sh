@@ -139,9 +139,13 @@ type StatusPair struct {
 
 // Report is one column's run.
 type Report struct {
-	Suite            Suite
-	Reference        string
-	ReferenceVersion string
+	Suite     Suite
+	Reference string
+	// ReferenceVersion is the build the reference shell reported, and
+	// whether it reported one at all. A struct rather than a string because
+	// a probe that failed used to be indistinguishable from one that
+	// answered — see [Build] and #3135.
+	ReferenceVersion Build
 	Ours             string
 	Helpers          []string
 	// Route is how the column was reached, and it is empty for a binary on
@@ -744,16 +748,4 @@ func Locate(lookup []string) (string, bool) {
 		}
 	}
 	return "", false
-}
-
-// Version is the build string a reference shell reports, for the report's
-// header. The suite is pinned and the shell on the machine is not, so a
-// reader needs both to know what was compared.
-func Version(ctx context.Context, shell string) string {
-	out, err := runVersion(ctx, shell)
-	if err != nil {
-		return "unknown"
-	}
-	line, _, _ := strings.Cut(out, "\n")
-	return strings.TrimSpace(line)
 }

@@ -226,6 +226,9 @@ func printReport(w io.Writer, rep suite.Report) {
 	s := rep.Suite
 	o.printf("%s's own suite, %s — %d files (%s)\n", s.Name, s.Version, rep.Files, s.Ext)
 	o.printf("  oracle   %s — %s\n", rep.Reference, rep.ReferenceVersion)
+	if label, why := s.Lineage(rep.ReferenceVersion); why != "" {
+		o.printf("  %s\n", wrap(label+" — "+why, "    "))
+	}
 	o.printf("  ours     %s\n", rep.Ours)
 	if len(rep.Helpers) > 0 {
 		o.printf("  helpers  %s, built from the suite's own C\n", strings.Join(rep.Helpers, ", "))

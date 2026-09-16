@@ -65,19 +65,25 @@ func TestAContainedColumnSaysWhatItMustReport(t *testing.T) {
 
 func TestBelievableRefusesTheWrongShell(t *testing.T) {
 	s := Suite{Name: "ash", MustReport: "busybox"}
-	if err := s.Believable("BusyBox v1.37.0 (2026-01-10 15:38:28 UTC) multi-call binary."); err != nil {
+	if err := s.Believable(Build{Version: "BusyBox v1.37.0 (2026-01-10 15:38:28 UTC) multi-call binary.", Known: true}); err != nil {
 		t.Fatalf("BusyBox's own version line was refused: %v", err)
 	}
-	err := s.Believable("Debian Almquist Shell")
+	err := s.Believable(Build{Version: "Debian Almquist Shell", Known: true})
 	if err == nil {
 		t.Fatal("a shell reporting something else was believed")
 	}
 	if !strings.Contains(err.Error(), "busybox") {
 		t.Fatalf("the refusal does not say what was wanted: %v", err)
 	}
+	// A shell that would not identify itself cannot be cleared either, and
+	// before #3135 it could be: the probe handed back whatever the refusal
+	// printed, and `Usage: ksh [ options ]` carries the name.
+	if err := s.Believable(Build{}); err == nil {
+		t.Fatal("a shell that answered no version probe was believed")
+	}
 	// No MustReport is the four columns on this machine, where the path was
 	// typed by a person and the shell answers nothing useful to --version.
-	if err := (Suite{}).Believable("anything at all"); err != nil {
+	if err := (Suite{}).Believable(Build{Version: "anything at all", Known: true}); err != nil {
 		t.Fatalf("a column naming no requirement refused a version: %v", err)
 	}
 }

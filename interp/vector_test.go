@@ -64,6 +64,14 @@ func testSemantics() Semantics {
 	s.DollarSingleHexReadsEveryDigit = No
 	s.DollarSingleDigitlessEscapeIsAZeroByte = No
 
+	// And the three that used to be a shared table. `\e` is how a snippet
+	// writes a control sequence and `\u` how it writes a code point, both
+	// on the way to something else; the suite that is *about* them is
+	// dialect/ash's, where BusyBox answers No to all three (#3270).
+	s.DollarSingleEscEscape = Yes
+	s.DollarSingleQuestionEscape = Yes
+	s.DollarSingleUnicodeEscapes = Yes
+
 	s.ArraysAreSparse = Yes
 	s.ArrayScalarIsTheWholeArray = No
 	// And which element the one-element answer means on a keyed table: the

@@ -148,7 +148,7 @@ func (a *argumentsState) optionsCompletable(cs *completionState) bool {
 func (a *argumentsState) takeOption(word string, after []string) int {
 	name, value, attached := a.lookupOption(word)
 	if name == "" {
-		if !a.stacking || !strings.HasPrefix(word, "-") || strings.HasPrefix(word, "--") {
+		if !a.stackable(word) {
 			return -1
 		}
 		return a.takeStack(word)
@@ -180,6 +180,19 @@ func (a *argumentsState) takeOption(word string, after []string) int {
 		eaten++
 	}
 	return eaten
+}
+
+// stackable is whether a word on the line could be a stack of single-letter
+// options at all: `-s` given, a `-` or a `+` in front, and something after it.
+//
+// **A `+` leads a stack as a `-` does.** Measured on zsh 5.9.2, 2026-09-16
+// with `-s` and `-+a[plus]`, `-+b[bee]` declared: `cmd +ab<TAB>` reports
+// `$opt_args` as `+a ” +b ”` and an empty `$line`, exactly as `cmd -ab`
+// reports `-a ” -b ”`. This read the `-` spelling only, so a `+` stack
+// landed on `$line` as an ordinary argument.
+func (a *argumentsState) stackable(word string) bool {
+	return a.stacking && len(word) > 1 &&
+		(word[0] == '-' || word[0] == '+') && word[1] != word[0]
 }
 
 // takeStack is `-s`: a word of single letters, each of which is an option.
@@ -368,7 +381,7 @@ func (a *argumentsState) normalArguments(r *interp.Runner, cs *completionState) 
 func (a *argumentsState) takeOptionQuietly(word string, after []string) int {
 	name, _, attached := a.lookupOption(word)
 	if name == "" {
-		if a.stacking && strings.HasPrefix(word, "-") && !strings.HasPrefix(word, "--") {
+		if a.stackable(word) {
 			return a.takeStack(word)
 		}
 		return -1
@@ -510,7 +523,7 @@ func (a *argumentsState) offerOptions(r *interp.Runner, names []string) int {
 				continue
 			}
 			for _, name := range opt.names {
-				if a.spent[name] && !opt.repeat && !a.offeredBack(name) {
+				if a.spent[name] && !opt.repeat && !a.offeredBack(opt, name) {
 					continue
 				}
 				at := optionListIndex(opt.style)
@@ -583,15 +596,11 @@ func (a *argumentsState) offerOptions(r *interp.Runner, names []string) int {
 // Visible, and not only in the status: `git checkout --force<TAB>` closes the
 // word and adds a space on `/bin/zsh` against this machine's own functions,
 // and offered nothing here.
-func (a *argumentsState) offeredBack(name string) bool {
+func (a *argumentsState) offeredBack(opt optionSpec, name string) bool {
 	if name == "" || name != a.cursorOption {
 		return false
 	}
-	spec := a.optionNamed(name)
-	if spec == nil {
-		return false
-	}
-	switch spec.style {
+	switch opt.style {
 	case optArgDirect, optArgOptDirect:
 		return false
 	case optArgSeparate:

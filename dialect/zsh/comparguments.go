@@ -407,10 +407,22 @@ func splitOptionModifier(name string) (string, optionArgStyle) {
 }
 
 // optionNames is the one or two names a spec describes: `-+foo` and `+-foo`
-// are both `-foo` and `+foo`, and everything else is itself.
+// are both `+foo` and `-foo`, and everything else is itself.
+//
+// **The `+` spelling comes first**, which is measured rather than chosen —
+// it is the order the two arrive in `-O`'s arrays. On zsh 5.9.2, 2026-09-16
+// from inside a `zle -C` widget with `-+a[plus]`, `-+b[bee]`, `-o[opt]:val:`
+// and `-p[proc]` declared:
+//
+//	cmd -o val foo<TAB>   next=(+a:plus -a:plus +b:bee -b:bee -p:proc)
+//	cmd +a<TAB>           next=(-a:plus +b:bee -b:bee -o:opt -p:proc)
+//
+// so the specs are in declaration order and each pair is `+` then `-`. The
+// second row is what says the pair is two names and not one: `+a` is spent
+// and `-a` is still offered.
 func optionNames(name string) []string {
 	if len(name) > 2 && (strings.HasPrefix(name, "-+") || strings.HasPrefix(name, "+-")) {
-		return []string{"-" + name[2:], "+" + name[2:]}
+		return []string{"+" + name[2:], "-" + name[2:]}
 	}
 	return []string{name}
 }

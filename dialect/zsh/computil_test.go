@@ -504,6 +504,50 @@ func TestComparguments(t *testing.T) {
 			 say "$?/${l[*]}/${(ko)oa}"`,
 			"0//-a -n",
 		},
+		// **A `+` leads a stack as a `-` does**, and a `-+x` spec is two
+		// names with the `+` spelling first. Measured on zsh 5.9.2,
+		// 2026-09-16 with `-s` and `-+a[plus]`, `-+b[bee]`, `-o[opt]:val:`
+		// and `-p[proc]` declared:
+		//
+		//	cmd +ab<TAB>          $opt_args +a '' +b '', $line empty
+		//	cmd -o val foo<TAB>   next=(+a:plus -a:plus +b:bee -b:bee -p:proc)
+		//	cmd +a<TAB>           next=(-a:plus +b:bee -b:bee -o:opt -p:proc)
+		//
+		// The `+` stack used to land on `$line` as an ordinary argument, and
+		// the pair used to come back `-` first. The third row is what says
+		// the pair really is two names: `+a` is spent and `-a` is not.
+		{
+			"a plus leads a stack too", "cmd +ab",
+			`comparguments -i '' -s : '-+a[plus]' '-+b[bee]' '-p[proc]' '1:first:(x y)'
+			 local -a l; local -A oa; comparguments -W l oa 0
+			 local one; comparguments -s one
+			 say "$?/${l[*]}/${(ko)oa}"`,
+			"0//+a +b",
+		},
+		{
+			"and the plus spelling is offered first", "cmd -o val foo",
+			`comparguments -i '' -s : '-+a[plus]' '-+b[bee]' '-o[opt]:val:' '-p[proc]' '1:first:(x y)'
+			 local -a n d od e; comparguments -O n d od e
+			 local -a names=( ${n%%:*} ); say "${names[*]}"`,
+			"+a -a +b -b -p",
+		},
+		{
+			"and each spelling is spent on its own", "cmd +a",
+			`comparguments -i '' -s : '-+a[plus]' '-+b[bee]' '-o[opt]:val:' '-p[proc]' '1:first:(x y)'
+			 local -a n d od e; comparguments -O n d od e
+			 local -a names=( ${n%%:*} ); say "${names[*]}"`,
+			"-a +b -b -o -p",
+		},
+		// An option's argument taken from the **following word** is the value
+		// `$opt_args` carries. Measured: `cmd -o val foo` reports `-o val`
+		// and `$line` as `foo` alone.
+		{
+			"an argument from the next word", "cmd -o val foo",
+			`comparguments -i '' : '-o[opt]:val:' '-p[proc]' '*:rest:'
+			 local -a l; local -A oa; comparguments -W l oa 0
+			 say "${l[*]}/${(ko)oa}/[${oa[-o]}]"`,
+			"foo/-o/[val]",
+		},
 		// **A stack spends every letter in it.** Measured with `-s` and
 		// `-a -m -p`: `cmd -am <TAB>` leaves `-p` and nothing else, and
 		// `$line` has neither `-am` nor its letters on it.

@@ -1231,4 +1231,29 @@ func TestTheStartupUnderscoreIsTheInvocationAndNotThePrelude(t *testing.T) {
 	if out != "[b]\n" {
 		t.Errorf("got %q, want the script's own last argument", out)
 	}
+
+	// And forgotten in the *narrowed* reading too, which is its own record
+	// and the one a real prelude reaches: a dialect that moves `$_` only
+	// between the commands the shell reads is reading its own prelude
+	// exactly that way, so a prelude ending in a command left that command's
+	// last word where the script's first `$_` looks. Measured against
+	// ksh93's own prelude, which ends on `type=whence -v` — that string was
+	// what the parameter answered with.
+	sh = base(interp.No)
+	sh.Semantics.UnderscoreMovesOnlyBetweenInputCommands = interp.Yes
+	sh.Prelude = "true prelude word\n"
+	out, _, _ = runArgs(t, sh, "/some/where/testsh", "-c", `echo "[$_]"`)
+	if out != "[/some/where/testsh]\n" {
+		t.Errorf("got %q, want the invocation and not the prelude's last word", out)
+	}
+
+	// The other half, so the row above cannot pass for a parameter that
+	// simply stopped moving: a lone command in the script still reaches it.
+	sh = base(interp.No)
+	sh.Semantics.UnderscoreMovesOnlyBetweenInputCommands = interp.Yes
+	sh.Prelude = "true prelude word\n"
+	out, _, _ = runArgs(t, sh, "/some/where/testsh", "-c", "true a b\necho \"[$_]\"")
+	if out != "[b]\n" {
+		t.Errorf("got %q, want the script's own last argument", out)
+	}
 }

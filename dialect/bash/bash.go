@@ -1392,6 +1392,15 @@ func Semantics() interp.Semantics {
 	s.GetoptsClearingOptargIsARealUnset = interp.Yes
 	s.GetoptsOwnParametersIgnoreAFreeze = interp.No
 	s.GetoptsRefusedWriteEndsTheBuiltin = interp.No
+	// `read` stops at the first name a freeze refuses and leaves the names
+	// after it alone, which is the other answer from `getopts` above and is
+	// why the two are separate axes: `readonly a; printf 'x y\n' | { read a
+	// b; }` leaves b untouched here and fills it in ksh93.
+	s.ReadRefusedWriteEndsTheBuiltin = interp.Yes
+	// And the status parts "I stopped early" from "a write failed": 2 where a
+	// name was left to fill and 1 where the frozen name was the last one.
+	// Measured over three names in 5.3.20, 2026-09-16 (#3208).
+	s.ReadRefusedWriteIsOneOnTheLastName = interp.Yes
 	// And the refusal is not the end of the script: `getopts a: o; echo
 	// reached` prints `reached`, where a plain `x=2` over a frozen `x` gives
 	// up the rest of the line in every shell here.

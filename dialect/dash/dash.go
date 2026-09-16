@@ -683,6 +683,11 @@ func Semantics() interp.Semantics {
 	s.GetoptsClearingOptargIsARealUnset = interp.No
 	s.GetoptsOwnParametersIgnoreAFreeze = interp.No
 	s.GetoptsRefusedWriteEndsTheBuiltin = interp.Yes
+	// And so does `read`, on the same reading and with the same status: 2
+	// wherever the frozen name stood, where bash answers 1 for the last one
+	// (#3208).
+	s.ReadRefusedWriteEndsTheBuiltin = interp.Yes
+	s.ReadRefusedWriteIsOneOnTheLastName = interp.No
 	// The builtin stops; the script does not. `echo reached` on the same
 	// line runs, where `readonly x=1; x=2` ends this shell outright.
 	s.ReadonlyRefusalInABuiltinIsFatal = interp.No
@@ -1247,8 +1252,12 @@ func Diagnostics() interp.Diagnostics {
 		// only`. It is the one entry here that is not a declaration utility,
 		// which is the point — a builtin filling in its own output parameter
 		// reports like one.
+		// And `read`, which names itself the same way: measured 2026-09-16,
+		// `a=A; readonly a; printf 'x\n' | read a` is `read: a: is read
+		// only`.
 		ReadonlyRefusalNamesBuiltin: map[string]bool{
 			"export": true, "readonly": true, "local": true, "getopts": true,
+			"read": true,
 		},
 		ReadonlyVariable: "%s: is read only",
 		UnsetReadonly:    "unset: %s: is read only",

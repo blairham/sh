@@ -7066,7 +7066,14 @@ func (r *Runner) reportReadonlyRefusal(name string, form assignForm, fatal bool)
 	msg := Wording(r.diag().ReadonlyVariable, "%s: readonly variable", name)
 	if form.namesTheBuiltin() && r.diag().ReadonlyVariableInDeclaration != "" &&
 		r.readonlyRefusalNamesBuiltin(form) {
-		msg = Wording(r.diag().ReadonlyVariableInDeclaration, "", name, r.inBuiltin)
+		wording := r.diag().ReadonlyVariableInDeclaration
+		if r.inBuiltin == "read" && r.diag().ReadonlyVariableInRead != "" {
+			// One dialect words `read`'s refusal apart from every other
+			// builtin's, calling it a warning. See
+			// Diagnostics.ReadonlyVariableInRead.
+			wording = r.diag().ReadonlyVariableInRead
+		}
+		msg = Wording(wording, "", name, r.inBuiltin)
 	}
 	// The builtin has been taken for the wording above where a dialect wants
 	// it, and this message does not carry it in the *location* in the dialect

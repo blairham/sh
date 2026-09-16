@@ -146,3 +146,16 @@ kill -l 32 2>&1 > /dev/null | sed 's/.*kill: //'
 ( umask 122; umask -S u+X; umask -S )
 ( umask 133; umask -S a+X; umask -S )
 ( umask 133; umask -S u+x,g+X; umask -S )
+
+# `read` into a readonly name is 2 here wherever the frozen name stood, and
+# the builtin stops there. bash answers 1 when the frozen name was the last
+# one, ksh93 answers 1 always and fills the rest, and zsh ends the shell
+# (#3208).
+( a=A; b=B; readonly a
+  printf 'x y\n' | { read a b; printf 'first st=%s [%s][%s]\n' "$?" "$a" "$b"; }
+) 2> /dev/null
+( a=A; b=B; readonly b
+  printf 'x y\n' | { read a b; printf 'last  st=%s [%s][%s]\n' "$?" "$a" "$b"; }
+) 2> /dev/null
+# The control: an unfrozen name reports the read's own status.
+( a=A; printf 'x\n' | { read a; printf 'plain st=%s [%s]\n' "$?" "$a"; } ) 2> /dev/null

@@ -3952,6 +3952,18 @@ type Diagnostics struct {
 	// where its plain form says only the name. Empty leaves the wording
 	// below standing for both, which is what the other three want here.
 	ReadonlyVariableInDeclaration string
+	// ReadonlyVariableInRead replaces that again for `read`, in the one
+	// dialect that words its own refusal differently from every other
+	// builtin's: ksh93 writes `read: warning: q: is read only`, and the word
+	// `warning` is the tell that this is not the fatal refusal an assignment
+	// to a readonly name is in the same shell. It is the only builtin
+	// diagnostic in the panel that calls itself one.
+	//
+	// Two verbs, the same pair ReadonlyVariableInDeclaration takes: the name,
+	// then the builtin. Empty falls back to that field, which is what the
+	// other three columns want — dash and BusyBox ash word `read` exactly as
+	// they word `export`, and bash names no builtin here at all (#3208).
+	ReadonlyVariableInRead string
 	// ReadonlyRefusalNamesBuiltin is which declaration builtins use that
 	// wording. Empty means none, and the wording is then never reached.
 	//

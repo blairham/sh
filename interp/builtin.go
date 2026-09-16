@@ -5106,12 +5106,22 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 			// reference belongs to this call and the caller's own name of
 			// the same spelling gets itself back on return. See
 			// interp/nameref.go.
-			if code := r.declareNameref("local", name, value, hasValue); code != 0 {
+			if code := r.declareNameref("local", name, value, hasValue,
+				r.readonly[name] && !f.readonlyOff); code != 0 {
 				status = code
 				if r.ctl == controlExit {
 					return r.status
 				}
 				r.assignFailed = true
+				continue
+			}
+			// The readonly letter, which is marked at the bottom of this
+			// loop and which this branch's `continue` walked past — the same
+			// line biDeclare's reference branch was missing. `local -rn`
+			// freezes the call's own reference and the caller gets its own
+			// back on return, which is what the shadow is for.
+			if f.readonly && !f.readonlyOff {
+				r.markReadonly(name)
 			}
 			continue
 		}

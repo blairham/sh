@@ -1414,32 +1414,24 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 			// for `local -n`: the reference belongs to this binding, so the
 			// caller's own name of the same spelling is untouched and gets
 			// itself back on return. See interp/nameref.go.
-			if r.readonly[name] && !df.readonlyOff {
-				// A **frozen reference** is not re-aimed, and the refusal is
-				// the ordinary one a declaration over a frozen name makes:
-				// measured 2026-09-16 on bash 5.3.20, `v=1; w=2; declare -rn
-				// r=v` then `declare -n r=w` and a bare `declare -n r` both
-				// answer `declare: r: readonly variable` at 1 and leave the
-				// reference aimed where it was.
-				//
-				// Core rather than an axis, because bash is the only column
-				// that can make one: ksh93u+ answers `typeset -rn` with its
-				// usage block at 2, and no other shell on the panel spells a
-				// reference at all. Asking a dialect here would be asking a
-				// question only one of them can be measured on — see "ask
-				// only where it matters".
-				//
-				// Ahead of declareNameref so that nothing about the operand
-				// happens, which is the shape every other refusal in this
-				// loop takes.
-				r.refuseReadonly(name, assignedByDeclaration)
-				if r.unspecified || r.ctl == controlExit {
-					return r.status
-				}
-				status, r.assignFailed = 1, true
-				continue
-			}
-			if code := r.declareNameref(complaintName, name, value, hasValue); code != 0 {
+			// A **frozen name** takes no reference, and a frozen reference
+			// is not re-aimed: measured 2026-09-16 on bash 5.3.20, `v=1;
+			// w=2; declare -rn r=v` then `declare -n r=w` and a bare
+			// `declare -n r` both answer `declare: r: readonly variable` at
+			// 1 and leave the reference aimed where it was.
+			//
+			// Core rather than an axis, because bash is the only column that
+			// can make a frozen reference: ksh93u+ answers `typeset -rn`
+			// with its usage block at 2, and no other shell on the panel
+			// spells a reference at all. Asking a dialect here would be
+			// asking a question only one of them can be measured on — see
+			// "ask only where it matters".
+			//
+			// Carried *into* declareNameref rather than tested here, because
+			// its order against the other two refusals is measured and the
+			// bad target goes first. See there.
+			frozen := r.readonly[name] && !df.readonlyOff
+			if code := r.declareNameref(complaintName, name, value, hasValue, frozen); code != 0 {
 				status = code
 				if r.ctl == controlExit {
 					return r.status

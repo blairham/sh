@@ -259,7 +259,7 @@ var zshOptions = []zshOption{
 		// `unsetopt banghist` at a prompt stops the expansion rather than
 		// only being remembered.
 		base: "banghist", def: true,
-		get: func(r *interp.Runner) bool { return true != recordedDeviates(r, "banghist") },
+		get: func(r *interp.Runner) bool { return !recordedDeviates(r, "banghist") },
 		set: func(r *interp.Runner, on bool) int {
 			setRecordedDeviation(r, "banghist", !on)
 			r.SetHistoryExpansion(on)

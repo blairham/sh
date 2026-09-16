@@ -118,16 +118,18 @@ func (r *Runner) ExpandHistory(line string, lines []string, first int) (histexpa
 // one it says.
 func (r *Runner) HistoryExpansionRefusal(err error) string {
 	d := r.diag()
-	ref := err.Error()
-	bare := ref
 	switch e := err.(type) {
 	case *histexpand.NotFound:
-		ref, bare = e.Ref, strings.TrimLeft(e.Ref, string(r.HistoryChars().Event))
-		return Wording(d.HistoryEventNotFound, "%[1]s: event not found", ref, bare)
+		bare := strings.TrimLeft(e.Ref, string(r.HistoryChars().Event))
+		return Wording(d.HistoryEventNotFound, "%[1]s: event not found", e.Ref, bare)
 	case *histexpand.SubstFailed:
 		return Wording(d.HistorySubstitutionFailed, "%[1]s: substitution failed", e.Ref, e.Bare)
 	case *histexpand.BadModifier:
 		return Wording(d.HistoryBadModifier, "%[1]s: unrecognized history modifier", e.Mod, e.Mod)
 	}
-	return ref
+	// Nothing else reaches here — the engine raises those three and no
+	// others, and the compile-time reminder in repl/historyexpand.go says so
+	// — but a fourth added later must not print its Go error text at
+	// somebody's prompt without at least being legible.
+	return err.Error()
 }

@@ -12315,6 +12315,47 @@ type Semantics struct {
 	// about it would have to hold every dialect's at once.
 	VersionOption VersionOption
 
+	// ShellOptionInvocationLetter is the option letter whose next word names
+	// an option in this shell's *second* option namespace — the table it
+	// keeps beside `set -o` rather than inside it. Written without its sign,
+	// because both signs carry it: the minus turns the named option on and
+	// the plus turns it off. Empty means the shell has no such letter, which
+	// is six of the seven columns.
+	//
+	// bash spells it `O`, and bash alone. Measured 2026-09-16 with standard
+	// input on /dev/null, `<shell> -O checkhash -c 'shopt checkhash'`:
+	//
+	//	bash 5.3.20      `checkhash           	on`         status 0
+	//	bash as `sh`     the same                          status 0
+	//	bash 3.2.57      `checkhash      	on`              status 0
+	//	zsh 5.9.2        can't open input file: checkhash  status 127
+	//	ksh93u+          `ksh: -O: unknown option`         status 2
+	//	dash 0.5.12      `Illegal option -O`               status 2
+	//	BusyBox ash      `illegal option -O`               status 2
+	//
+	// zsh is the row that says the letter is bash's rather than shared. It
+	// does take `-O`, and reads the *next* word as a script, because `O` is
+	// its own abbreviation for `correctall` — one of the thirty letters
+	// Runner.SetOptionLetterNames carries — so its 127 is a letter it has
+	// meaning something else, not the hole this field fills.
+	//
+	// The word after the letter is taken unconditionally, wherever the letter
+	// sits in a bundle and whatever the word looks like: `bash -Ox checkhash`
+	// is xtrace plus `checkhash`, and `bash -O -c 'echo hi'` refuses `-c` as
+	// an option name rather than running anything. A name the shell does not
+	// have ends the invocation at status 2 before the script is even looked
+	// for, and the last of two mentions of one name wins.
+	//
+	// With no word after it at all the letter *lists* the namespace instead,
+	// at status 0, and the shell goes on to run what it was given —
+	// [Runner.ListShellOptions].
+	//
+	// Read by the front end rather than by the interpreter, like
+	// StartupFileOptions and VersionOption above, and for the same reason:
+	// the spelling is the dialect's. What the name then means is the
+	// dialect's too, through [Runner.SetShellOptionNamespace] (#3264).
+	ShellOptionInvocationLetter string
+
 	// FunctionSearchVariable names the scalar this shell searches for
 	// *function definition files* — the parameter an `autoload`d name is
 	// looked up on. Empty means the shell has no such search, which is three

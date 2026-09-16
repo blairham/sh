@@ -748,10 +748,7 @@ func biShopt(r *interp.Runner, ctx context.Context, args []string) int {
 	// with names the status says whether every one of them is on.
 	if len(names) == 0 {
 		if !quiet {
-			for _, n := range shoptNames() {
-				on, _ := shoptState(r, n)
-				printShopt(r, n, on, reissue)
-			}
+			shoptListAll(r, reissue)
 		}
 		return 0
 	}
@@ -804,14 +801,73 @@ func shoptApply(r *interp.Runner, names []string, on bool) int {
 				// Already in the state being asked for: granted.
 				continue
 			}
-			r.Diagnosef("shopt: %s: not implemented\n", name)
+			shoptComplaint(r, "%s: not implemented\n", name)
 			status = 1
 			continue
 		}
-		r.Diagnosef("shopt: %s: invalid shell option name\n", name)
+		shoptComplaint(r, "%s: invalid shell option name\n", name)
 		status = 1
 	}
 	return status
+}
+
+// shoptComplaint writes one of shoptApply's sentences, naming the builtin
+// only where a builtin was written.
+//
+// The same table is reached from two routes and bash words them differently.
+// Measured 2026-09-16 on bash 5.3.20 with standard input on /dev/null:
+//
+//	bash -O nosuchopt -c :
+//	  bash: line 0: nosuchopt: invalid shell option name
+//	bash -c 'shopt -s nosuchopt'
+//	  bash: line 1: shopt: nosuchopt: invalid shell option name
+//
+// One sentence, two routes, and the difference is a word — the name of a
+// builtin that was never typed. interp.Runner.AtInvocation is what tells the
+// two apart, and it is true only for the length of one
+// interp.Runner.SetShellOption call.
+func shoptComplaint(r *interp.Runner, format string, args ...any) {
+	if r.AtInvocation() {
+		r.Diagnosef(format, args...)
+		return
+	}
+	r.Diagnosef("shopt: "+format, args...)
+}
+
+// shoptMoveAtInvocation moves one name from the words the shell was started
+// with — `bash -O checkhash`, `bash +O extglob` — and answers the status the
+// invocation ends with.
+//
+// Through shoptApply, which is the same door `shopt -s` and an inherited
+// `$BASHOPTS` already use, so a name this shell knows and cannot honor draws
+// the one sentence written for it rather than a second copy.
+//
+// The status is **not** this builtin's. Measured on bash 5.3.20: `shopt -s
+// nosuchopt` inside a script is status 1 and the script carries on, while
+// `bash -O nosuchopt -c 'echo hi'` is status 2, prints nothing on standard
+// output and never runs the command — and never opens the script operand
+// either, since `bash -O nosuchopt /nope/x.sh` complains about the name and
+// not about the file. So the two numbers are mapped here rather than shared.
+func shoptMoveAtInvocation(r *interp.Runner, name string, on bool) int {
+	if shoptApply(r, []string{name}, on) != 0 {
+		return 2
+	}
+	return 0
+}
+
+// shoptListAll writes every name in the table, which is both what `shopt`
+// with no operands does and what the invocation letter does with no name
+// after it.
+//
+// One function for the two because they are one listing: measured on bash
+// 5.3.20, `bash -O` is byte-for-byte `shopt` and `bash +O` is byte-for-byte
+// `shopt -p`, and both leave the shell to go on and run whatever it was
+// given at status 0.
+func shoptListAll(r *interp.Runner, reissuable bool) {
+	for _, n := range shoptNames() {
+		on, _ := shoptState(r, n)
+		printShopt(r, n, on, reissuable)
+	}
 }
 
 // shoptSetO is the `-o` face, which acts on the `set -o` names rather than

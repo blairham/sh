@@ -889,6 +889,19 @@ type optionSpec struct {
 	// direction is inside it rather than in a sign — `--noglob` is glob off.
 	// Implies isName. See Semantics.LongOptionNamesASetOption.
 	long bool
+	// shell says spec is a name in the dialect's *second* option namespace —
+	// the one bash's `shopt` keeps beside `set -o` — rather than a `set`
+	// letter or a `set -o` name. The two tables share no name, so which one
+	// a word belongs to is decided by the letter that introduced it and
+	// cannot be worked out from the name.
+	shell bool
+	// shellListing is that same letter written with **no word after it at
+	// all**, which lists the namespace instead of moving anything: `bash -O`
+	// is `shopt` and `bash +O` is `shopt -p`. A flag of its own rather than
+	// an empty spec, because an empty *word* is a different request — `bash
+	// -O ''` is `: invalid shell option name` at status 2, measured — and a
+	// spec string cannot tell "no word" from "an empty one".
+	shellListing bool
 	// on is `-` rather than `+`. Both signs work on every option, which is
 	// measured and unanimous: `sh +x script` is how xtrace is kept *off*
 	// regardless of what the parent had.
@@ -1274,6 +1287,32 @@ func (sh Shell) optionWord(a string, args []string, inv *invocation) (rest []str
 			if args, _, err = sh.startupOption("-"+string(ch), args, inv); err != nil {
 				return nil, err
 			}
+		case sh.Semantics.ShellOptionInvocationLetter != "" &&
+			string(ch) == sh.Semantics.ShellOptionInvocationLetter:
+			// The letter that reaches the dialect's *second* option
+			// namespace, whose name is the next word — bash's `-O`, and
+			// bash's alone. See Semantics.ShellOptionInvocationLetter.
+			//
+			// The word is taken wherever the letter sits in the bundle and
+			// the rest of the bundle goes on being read, which is measured
+			// and is not how `-o` behaves in two of the columns: `bash -Ox
+			// checkhash -c cmd` is xtrace plus `checkhash`, and so is `bash
+			// -xO checkhash -c cmd`. Nothing attaches — `bash -Ocheckhash`
+			// takes the *next* word too, and reads `checkhash` as more
+			// letters.
+			//
+			// Whatever the word looks like, including a word that is itself
+			// an option: `bash -O -c 'echo hi'` refuses `-c` as an option
+			// name and runs nothing.
+			flush()
+			if len(args) == 0 {
+				// The letter with nothing behind it lists the namespace, at
+				// status 0, and the shell goes on to run what it was given.
+				inv.opts = append(inv.opts, optionSpec{shellListing: true, on: on})
+				continue
+			}
+			inv.opts = append(inv.opts, optionSpec{spec: args[0], shell: true, on: on})
+			args = args[1:]
 		case ch == 'o':
 			// The long spelling, whose name is the next word — read at the
 			// end of a bundle exactly as `set` reads it, so `sh -euo
@@ -2068,6 +2107,14 @@ func (sh Shell) applyOptions(r *interp.Runner, opts []optionSpec) (int, bool) {
 	for _, o := range opts {
 		apply := r.SetOptionLetters
 		switch {
+		case o.shellListing:
+			// The listing is not a request that can fail, so it answers 0
+			// and the direction picks the form rather than a direction:
+			// minus is the two-column listing and plus the re-inputtable
+			// one.
+			apply = func(_ string, on bool) int { r.ListShellOptions(!on); return 0 }
+		case o.shell:
+			apply = r.SetShellOption
 		case o.long:
 			// The direction is inside the word, so the sign the loop
 			// recorded says nothing here and is not passed on.

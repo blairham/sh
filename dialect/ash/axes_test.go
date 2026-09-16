@@ -187,6 +187,16 @@ func TestNoAnsweredAxisRefusesAtRunTime(t *testing.T) {
 				"and exits 0 where zsh exits 1",
 		},
 		{
+			"a leading dash-word given to `eval`",
+			"eval -- echo hi\n",
+			"EvalOptions — asked only where the first word begins with a " +
+				"dash and is more than one character, so a plain `eval echo " +
+				"hi` reaches no question and cannot stand in for this. " +
+				"Measured against BusyBox 1.37.0, which reads no options " +
+				"here and answers `eval: --: not found` at 127 where bash " +
+				"runs the text",
+		},
+		{
 			"a plain `unset` over a name that is a function and not a variable",
 			"f() { echo ran; }\nunset f\nf\n",
 			"UnsetReachesTheFunctionTable — asked only where the name has a " +

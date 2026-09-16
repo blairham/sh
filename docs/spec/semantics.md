@@ -19082,6 +19082,43 @@ than followed: bash 3.2.57 consults the freeze from `unset -f` but not
 from the plain spelling, so `readonly -f b; unset b` removes a frozen
 function there at status 0. 5.3.20 is what the bash preset is.
 
+
+**`EvalOptions`** — bash EvalReadsOptions · dash EvalReadsNoOptions · ksh93 EvalReadsOptions · zsh EvalTakesTheEndMarkerOnly
+
+How much of a leading dash-word `eval` reads as options before the rest
+becomes the text it runs. Three answers over seven columns, measured
+2026-09-16 from a script file with both streams separately, the status
+after each line and a marker after that:
+
+| column | `eval -q echo hi` | `eval -- echo hi` | continued |
+| --- | --- | --- | --- |
+| bash 5.3.20 | `eval: -q: invalid option` + usage, 2 | `hi`, 0 | yes |
+| bash as `sh` | the same two lines, 2 | `hi`, 0 | **no** |
+| bash 3.2.57 | the same two lines, 2 | `hi`, 0 | yes |
+| ksh93u+ 2012-08-01 | `eval: -q: unknown option` + usage, 2 | `hi`, 0 | **no** |
+| zsh 5.9.2 | `command not found: -q`, 127 | `hi`, 0 | yes |
+| dash 0.5.12 | `eval: -q: not found`, 127 | `--: not found`, 127 | yes |
+| BusyBox ash 1.37.0 | the same, 127 | the same, 127 | yes |
+
+The two columns that end the script do so because a usage error in a POSIX
+special builtin is fatal where the shell is in that mode; that is the
+refusal machinery's fatality and not a second question here.
+
+Three values rather than the two `DotReadsOptions` has, because zsh needs a
+middle: it reads the marker and refuses no letter behind it. A boolean
+would have had to call that "reads options" — making `eval -q cmd` a usage
+error there, which it is not — or "reads none", making `eval -- cmd` run
+the marker, which it does not. `unset -q` in zsh *is* refused, so the
+reading is this builtin's and not the shell's.
+
+Asked only where the first word begins with a dash and is more than one
+character. A lone `-` is outside it in every column: it is the first word
+of the text. `eval - echo hi` prints `hi` in zsh, which reads as the dash
+being eaten and is not — `eval "- echo hi"` as one argument prints `hi`
+there too, while the same single argument is an option *bundle* in bash
+(`eval: - : invalid option`) and in ksh93. The zsh row is a bare `-` in
+command position being discarded, which is its own defect.
+
 **`UnsetNameOperands`** — bash AnythingIsAName · dash PlainNamesOnly · ksh93 PlainNamesOnly · zsh NamesAndPositionals
 
 Is that question for `unset`, and is a separate field because two

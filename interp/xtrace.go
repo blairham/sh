@@ -27,7 +27,7 @@ import (
 // really are real, so a spurious one has cover.
 //
 // Everything else about it is decoration, and all four shells decorate
-// differently — fifteen divergences at the last count, which
+// differently — seventeen divergences at the last count, which
 // docs/spec/semantics.md enumerates.
 
 // TraceStyle is how a shell introduces a traced command.

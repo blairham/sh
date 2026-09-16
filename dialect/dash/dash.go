@@ -134,6 +134,11 @@ func Semantics() interp.Semantics {
 	s.MultibyteEncodingIsHonored = interp.No
 	// The one shell that refuses the -h letter POSIX names.
 	s.SetHasTheHLetter = interp.No
+	// And no keyword option either. Measured 2026-09-16: `set -k` is
+	// `set: Illegal option -k` at 2 and the file ends there, and `set -o
+	// keyword` is refused the same way. The refusal is dash's answer rather
+	// than a gap, which is what this states.
+	s.KeywordAssignments = interp.No
 	// Job control wants the tty: with none, `set -m` earns the remark
 	// `can't access tty; job control turned off` — a remark, measured, not
 	// a failure: the option stays off and `set` still reports 0.

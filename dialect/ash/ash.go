@@ -241,6 +241,11 @@ func Semantics() interp.Semantics {
 	s.SetBTurnsOffBraceExpansion = interp.No
 	// Nor the `-h` POSIX names: `set -h` is refused the same way.
 	s.SetHasTheHLetter = interp.No
+	// And no keyword option either. Measured 2026-09-16 in the pinned
+	// alpine image, BusyBox v1.37.0: `set -k` is `set: illegal option -k`
+	// at 2 and the file ends there. The refusal is this shell's answer
+	// rather than a gap.
+	s.KeywordAssignments = interp.No
 	// `$-` under `-c` is `c`, and `set -e -u` makes it `uce` — so the letter
 	// is shown, where dash shows nothing at all on that route.
 	s.CommandStringShowsCInDollarDash = interp.Yes

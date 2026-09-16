@@ -387,6 +387,12 @@ func Semantics() interp.Semantics {
 	// `set -H` typed. bash 3.2 answers identically, and so does the same
 	// binary invoked as `sh`.
 	s.HistoryExpansion = interp.Yes
+	// `set -k` and `set -o keyword`, and this is the column that reaches
+	// *past* a declaration utility with them: measured 2026-09-16, `set -k;
+	// export E1=e1` leaves `export` listing the environment and `E1` unset.
+	// See Semantics.KeywordAssignments and keywordassign.go.
+	s.KeywordAssignments = interp.Yes
+	s.KeywordPromotesADeclarationsOperand = interp.Yes
 	s.HistoryExpansionAtAPrompt = interp.Yes
 	// `bash -c 'echo $-'` reports `hBc`; ksh93 agrees and dash and zsh do
 	// not. The `s` of the standard-input route is not added under `-c`
@@ -412,7 +418,7 @@ func Semantics() interp.Semantics {
 	// shell never shows both, being the one that answers `No` to
 	// CommandStringShowsSInDollarDash — so the pair is written in the order
 	// the substrate produces them.
-	s.DollarDashLetterOrder = "aefhilmntuvxBCEHTcs"
+	s.DollarDashLetterOrder = "aefhkilmntuvxBCEHTcs"
 	s.ArrayScalarIsTheWholeArray = interp.No
 	// And the one element a plain `$m` on a keyed table gives is the one
 	// keyed `0`, which is nothing at all where no such key was written.
@@ -2512,7 +2518,7 @@ func Diagnostics() interp.Diagnostics {
 			// the same request, so a letter listed here while the name is
 			// wired would refuse what the name grants — see
 			// Semantics.SetHasTheTLetter.
-			"set": "bkrP",
+			"set": "brP",
 			// Options these builtins have here and this shell does not.
 			"wait": "f",
 			// disown's sweepers: -a for every job, -h for HUP shielding

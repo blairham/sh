@@ -316,7 +316,23 @@ var extraSetOptions = map[string]setOption{
 		apply: func(r *Runner, on bool) { r.SetHistoryExpansion(on) },
 		get:   func(r *Runner) bool { return r.histExpand },
 	},
-	"keyword": {},
+	// `set -o keyword`, the long spelling of `set -k`: every `name=value`
+	// word of a simple command is a prefix assignment and not only the ones
+	// in front of the command name. Listed here and refused until now, so a
+	// script reaching the state either way was told `not implemented` and
+	// then ran with the option off — the argument count wrong, `$1` the
+	// assignment's own text, and the variable the command expected unset, all
+	// at status 0 (#3095).
+	//
+	// One state behind the letter and the name, which is the rule `hashall`
+	// and `set -h` already follow. Whether the shell *has* the name stays the
+	// dialect's: bash and ksh93 list it, zsh answers `no such option`, and
+	// dash and BusyBox ash refuse the letter and the name alike. See
+	// Semantics.KeywordAssignments.
+	"keyword": {
+		apply: func(r *Runner, on bool) { r.keywordAssignments = on },
+		get:   func(r *Runner) bool { return r.keywordAssignments },
+	},
 	// onecmd is `set -t`: the line it is set on finishes and the shell reads
 	// no more. Implemented rather than recorded because the front end can
 	// honestly stop — see Runner.OneCommand — and because bash takes the

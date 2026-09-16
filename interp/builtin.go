@@ -1149,6 +1149,8 @@ func (r *Runner) hasSetLetter(opt rune) bool {
 		return r.sem().SetBTurnsOffBraceExpansion != No
 	case 'H':
 		return r.sem().HistoryExpansion != No
+	case 'k':
+		return r.sem().KeywordAssignments != No
 	}
 	return false
 }
@@ -1280,6 +1282,26 @@ func (r *Runner) setLetters(letters string, on bool) bool {
 			// the name cannot answer differently — the rule `-h` and hashall
 			// already follow.
 			r.SetHistoryExpansion(on)
+		case 'k':
+			// POSIX's keyword option: every `name=value` word of a simple
+			// command becomes a prefix assignment. bash and ksh93 have the
+			// letter and mean this by it; zsh has the letter and means
+			// `interactivecomments`, so it never reaches here — its own
+			// table above answers first, which is exactly what that table is
+			// for — and dash and BusyBox ash have neither the letter nor the
+			// option, so it is asked rather than assumed.
+			if !r.ask(r.sem().KeywordAssignments, "`set -k` making every `name=value` word an assignment") {
+				if r.unspecified {
+					return false
+				}
+				if !r.badSetOptionLetter(opt, on) {
+					return false
+				}
+				continue
+			}
+			// The same state `set -o keyword` writes, so the letter and the
+			// name cannot answer differently.
+			r.keywordAssignments = on
 		case 'E', 'T':
 			// bash's trap-carriage letters. zsh spells different options
 			// with the same letters and dash and ksh93 have neither, so a

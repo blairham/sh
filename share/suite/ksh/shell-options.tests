@@ -44,3 +44,95 @@ set +o
 # each is asked in a subshell of its own.
 ( set -o interactive ) 2> /dev/null; printf 'set -o interactive -> %s\n' "$?"
 ( set +o rc ) 2> /dev/null; printf 'set +o rc -> %s\n' "$?"
+
+# ---- `set -k`, the keyword option ----
+#
+# POSIX's keyword option: with it on, **every** `name=value` word of a simple
+# command is a prefix assignment and not only the ones in front of the command
+# name. ksh93 and bash have it, zsh spells `interactivecomments` with the same
+# letter, and dash and BusyBox ash end the file over it — so it cannot be a
+# core or an ext case, and this half of it is graded against ksh93.
+#
+# Two things are this shell's own. A promoted assignment **outlives the call**,
+# exactly as one written in front of a function does here and does not in bash;
+# and the option leaves a declaration utility's own operand where it stands,
+# where bash takes that too and leaves the utility with nothing to act on.
+# bash/shell-options.tests holds the same rows with the other answer.
+#
+# `set -k` stands on a line of its own throughout, because this shell decides
+# the option while **parsing**: `set -k; f A=1 x` on one line reaches nothing
+# here even though it works in bash, and a case written that way would be
+# asking the two columns different questions.
+#
+# The argument words are `zz` and `yy` rather than anything shorter: `r` is a
+# preset alias for `hist -s` in this shell, and an argument standing behind an
+# assignment is alias-expanded — so a probe using it reports two arguments and
+# an argument nobody wrote.
+
+f() { printf 'f: 1=[%s] KV=[%s] n=%s\n' "${1-.}" "${KV-unset}" "$#"; }
+set -k
+f KV=2 zz
+printf 'and the promoted name outlives the call [%s]\n' "${KV-unset}"
+unset KV
+
+# Several on one command, and the last of a repeated name wins.
+g() { printf 'g: 1=[%s] A=[%s] B=[%s] n=%s\n' "${1-.}" "${A-unset}" "${B-unset}" "$#"; }
+g A=1 xx B=2
+unset A B
+g A=4 A=5 yy
+unset A
+
+# A `--` does not stop it: it is not an end-of-options marker for this.
+g -- C=3
+printf 'C after the double dash [%s]\n' "${C-unset}"
+unset C
+
+# The **written** word decides and not the expanded one.
+w='A=9'
+g $w yy
+g 'A=10' yy
+g 1A=11 yy
+
+# The value may hold what a written assignment's may, and is neither split nor
+# matched against the filesystem.
+h() { printf 'h: 1=[%s] Q=[%s] n=%s\n' "${1-.}" "${Q-unset}" "$#"; }
+V=vv
+h Q=$V yy
+h Q="$V" yy
+h Q=x$V yy
+h Q=$(printf cs) yy
+h Q=$((1+1)) yy
+h Q= yy
+h Q=a=b yy
+unset Q
+
+# It reaches a builtin and an external alike, and an external is handed the
+# name in its environment — which is what the option is for.
+printf 'echo drops it -> [%s]\n' "$(echo A=12 kept)"
+unset A
+env A=13 > k.env
+printf 'an external is told -> %s\n' "$(grep -c '^A=13$' k.env)"
+unset A
+
+# The letter shows in `$-`, and the long name is the same state.
+case "$-" in *k*) printf 'the letter is in $-\n' ;; *) printf 'the letter is not in $-\n' ;; esac
+set +k
+case "$-" in *k*) printf 'and set +k left it\n' ;; *) printf 'and set +k took it out\n' ;; esac
+g A=14 yy
+set -o keyword
+printf 'set -o keyword -> %s\n' "$?"
+g A=15 yy
+unset A
+set +o keyword
+printf 'set +o keyword -> %s\n' "$?"
+g A=16 yy
+
+# The row bash does not share: a declaration utility keeps its own operand.
+set -k
+export E1=e1 > /dev/null
+printf 'export under -k [%s]\n' "${E1-unset}"
+readonly R1=r1 > /dev/null
+printf 'readonly under -k [%s]\n' "${R1-unset}"
+typeset -i N1=3*3 > /dev/null
+printf 'typeset under -k [%s]\n' "${N1-unset}"
+set +k

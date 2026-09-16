@@ -296,14 +296,50 @@ script` at status 2 in bash, because there the body really is a shell of
 its own with no frame in it. Inside a function the body's `return` leaves
 the *body*: the function runs on.
 
-**A frame is not yet a scope here, and in bash it is both.** `local`,
-`declare` and `typeset` inside such a body declare a variable local to it
-in bash 5.3.20 — `x=outer; v=${ local x=in; printf %s "$x"; }` leaves `x`
-as `outer` there — where ksh93 lets the same `typeset` through to the
-shell's own name. This shell has the frame and not the scope, so a
-declaration in a body still writes the outer name; see the issue filed
-from this measurement, and `Runner.localizeReply`, whose `${| … ;}`
-corner is the same gap seen from the other side.
+### And in one column the frame carries a variable scope
+
+The two columns that have the spelling disagree about whether a
+declaration written in a body is local to it, which makes this an axis —
+`Semantics.CurrentShellSubstitutionBodyIsAScope` — rather than a
+correction. Measured 2026-09-16, printing the substitution's value and
+then the shell's own name:
+
+| probe | bash 5.3.20 | ksh93u+ 2012 |
+| --- | --- | --- |
+| `x=outer; v=${ typeset x=in; printf %s "$x"; }` | `[in][outer]` | `[in][in]` |
+| `x=outer; v=${ declare x=in; …` | `[in][outer]` | no `declare` |
+| `x=outer; v=${ local x=in; …` | `[in][outer]` | no `local` |
+| `f() { local x=fn; v=${ local x=in; … }; f` | `[in][fn]` | — |
+
+`typeset` is the row that decides it, being the one spelling both columns
+have. So in bash the body behaves like a call for declarations and in
+ksh93 it does not, and POSIX has nothing to follow here — the standard
+has neither the spelling nor `local`. The preset takes ksh93's reading
+for the same reason it takes it nowhere else: the spelling's own
+definition is that the body runs in *this* shell, whose variables are the
+ones it has, and a scope is what bash adds on top of that.
+
+Three things bound the axis, and each is a row a wrong reading gets
+wrong. A **plain assignment** is not a declaration and still writes the
+shell's own name in both columns — `x=outer; v=${ x=in; }` leaves `x` as
+`in` — which is the whole difference between this spelling and the forked
+one, unchanged. `local` **being legal** inside a body follows from the
+scope rather than being a second decision: the word is refused for having
+no function to be local to, and a body with a scope has one; in `$( … )`
+it is refused in bash exactly as it is at the top level, which is the
+control that says this is about the shared-state form. And the scopes
+**nest**: a body inside a call unwinds into the call's declaration and not
+past it.
+
+The scope is opened inside the `${| … ;}` form's hiding of `REPLY` and
+closed before it, so a body that declares `REPLY` shadows the hidden name
+and the outer one is put back over that. The two are separate mechanisms
+and not one seen twice — measured on bash 5.3.20, `REPLY=outer; v=${|
+unset REPLY; }` is the empty string with `REPLY` still `outer`, which the
+hiding answers on its own. #2656 recorded that row as the visible corner
+of the missing scope, on the reading that unsetting a local reveals what
+it shadows; re-measured with the rest of this section, bash does not do
+that, so the note is corrected rather than carried.
 
 ## `${(list)}` — the parenthesized body
 

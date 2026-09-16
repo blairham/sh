@@ -810,6 +810,14 @@ func Semantics() interp.Semantics {
 	// `${ echo h; <f ; }` answering alike in both — so what this shell reads
 	// is the whole body being the one redirection.
 	s.CurrentShellSubstitutionReadsAFile = interp.Yes
+	// And the body is *not* a variable scope here, which is the half of the
+	// spelling the two columns that have it split on. Measured 2026-09-16:
+	// `x=outer; v=${ typeset x=in; printf %s "$x"; }` leaves `x` as `in`
+	// here and as `outer` in bash 5.3.20 — the declaration writes the
+	// shell's own name, which is what "the body runs in this shell" means
+	// taken all the way. Said out loud rather than inherited, because this
+	// is one of only two shells that can be asked.
+	s.CurrentShellSubstitutionBodyIsAScope = interp.No
 	// The listing runs the other way here: descending by signal number,
 	// which puts EXIT last where the other six put it first.
 	s.TrapListingOrder = interp.TrapListingHighestFirst

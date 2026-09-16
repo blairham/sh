@@ -10050,6 +10050,49 @@ type Semantics struct {
 	// dash. See Runner.currentShellSubst, and `ksh/cmdsub.tests`.
 	CurrentShellSubstitutionBoundsAnUnwind Answer
 
+	// CurrentShellSubstitutionBodyIsAScope makes a `${ … ;}` body a variable
+	// scope as well as a frame: a declaration written inside one is local to
+	// the body, and the shell's own name comes back when the substitution
+	// ends.
+	//
+	// The two columns that have the spelling disagree, which is what makes
+	// this an axis rather than a correction. Measured 2026-09-16, script
+	// files under `env -i PATH=/usr/bin:/bin LC_ALL=C` with standard input
+	// the null device, printing the substitution's value and then the name:
+	//
+	//	x=outer; v=${ typeset x=in; printf %s "$x"; }
+	//	                 bash 5.3.20 [in][outer]   ksh93u+ [in][in]
+	//	x=outer; v=${ declare x=in; printf %s "$x"; }
+	//	                 bash        [in][outer]   ksh93 has no `declare`
+	//	x=outer; v=${ local x=in; printf %s "$x"; }
+	//	                 bash        [in][outer]   ksh93 has no `local`
+	//	f() { local x=fn; v=${ local x=in; printf %s "$x"; }; … }
+	//	                 bash        [in][fn]      the scope nests in a call
+	//
+	// So in bash the body behaves like a call for declarations and in ksh93
+	// it does not, and `typeset` is the row that says it: it is the one
+	// spelling both columns have, and they answer it opposite ways.
+	//
+	// It is *only* about declarations, which is what keeps it from being the
+	// forked spelling in disguise. A plain assignment in a body still writes
+	// the shell's own name in both columns — `x=outer; v=${ x=in; }` leaves
+	// `x` as `in` — and that is the whole difference between `${ … ;}` and
+	// `$( … )`, unchanged. What the scope adds is a name a *declaration* may
+	// shadow, so the reading is "a frame with a variable scope on it" rather
+	// than "a subshell".
+	//
+	// bash's answer also makes `local` legal there, which is a consequence
+	// rather than a second decision: the word is refused for having no
+	// function to be local to (see Runner.localOutsideAFunction), and a body
+	// with a scope has one. In the forked `$( … )` spelling it is refused in
+	// bash exactly as it is at the top level, which is the control that says
+	// this is about the shared-state form.
+	//
+	// zsh 5.9.2 and dash have no such spelling to ask, for the reason
+	// CurrentShellSubstitutionBoundsAnUnwind gives. See
+	// Runner.currentShellSubst and Runner.pushScope.
+	CurrentShellSubstitutionBodyIsAScope Answer
+
 	// CurrentShellSubstitutionReadsAFile makes a `${ <file ;}` whose body is
 	// nothing but that one redirection the file's contents, the way `$(<file)`
 	// already is.
@@ -16840,6 +16883,12 @@ func PosixSemantics() Semantics {
 		// only other column that has the construct; ksh93 says otherwise
 		// and says so itself.
 		CurrentShellSubstitutionBoundsAnUnwind: No,
+		// And no scope on the body either, from the same reading and for the
+		// same reason: the standard has no `${ … ;}`, and the spelling's own
+		// definition is that the body runs in *this* shell — whose variables
+		// are the ones it has. A scope is what bash adds on top of that, and
+		// ksh93 is the column that agrees with the definition.
+		CurrentShellSubstitutionBodyIsAScope: No,
 		// And no reading of a file either, for the same reason: the standard
 		// has no `${ … ;}`, so the preset follows the column that has one and
 		// leaves the body to the redirection.

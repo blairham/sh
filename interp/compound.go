@@ -984,202 +984,33 @@ func (r *Runner) funcDecl(c *syntax.FuncDecl) error {
 	return nil
 }
 
-// callFunc runs a function body with the arguments as its positional
-// parameters.
+// pushScope opens a variable scope, and popScope closes it: the declarations
+// made inside one are put back as it closes, in the order they displaced
+// things.
 //
-// The parameters are saved and restored rather than copied into a new runner,
-// because a function shares the shell's variables — the scoping is dynamic,
-// and `local` is what carves out an exception. `local` is not here yet.
-func (r *Runner) callFunc(ctx context.Context, fn *syntax.FuncDecl, args []string) error {
-	return r.callFuncAs(ctx, fn, fn.Name, args)
+// The pair is factored out of the call below because a function call is not
+// its only user. In one of the two columns that have the spelling a `${ …; }`
+// body is a variable scope too — see
+// Semantics.CurrentShellSubstitutionBodyIsAScope and
+// Runner.currentShellSubst — and the shape this repository keeps finding bugs
+// in is a second copy of a long unwind written beside the first, so the scope
+// half is one function and the call keeps the rest.
+//
+// What is *not* in here is everything a call does around its scope: the
+// frame, the positional parameters, the trap table, the option table, the
+// `getopts` cursor, the enclosing calls' sealed declarations. Their restores
+// are still run from popScope, because they are keyed on the scope and each
+// is a no-op for a scope that never took them — a body that is not a call
+// takes none of them, so the one unwind serves both without asking which it
+// is unwinding.
+func (r *Runner) pushScope(keyword bool) *scope {
+	sc := &scope{saved: map[string]string{}, existed: map[string]bool{}, keyword: keyword, owner: r}
+	r.scopes = append(r.scopes, sc)
+	return sc
 }
 
-// callFuncAs is callFunc with the name the call is *known by* given
-// separately, for the one caller where it is not the function's own: a math
-// function runs an implementation registered under another name.
-//
-// The two names go to different places, and that split is measured rather
-// than chosen. `$0` inside the implementation is the *registered* name —
-// `functions -M mf 0 3 g; : $(( mf(1,2,3) ))` leaves `$0` as `mf` — so the
-// frame carries that one, which is what innermostCall reads. A diagnostic
-// from inside the body names the *implementation*: the same call with a
-// missing command in `g` reports `g: command not found: …`, not `mf:`, so
-// r.inFunc keeps the function's own name and so does the prelude-speaker
-// check and the recursion bound. The file the body is remembered as coming
-// from is the implementation's too, because that is where its lines are.
-func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name string, args []string) error {
-	if r.depth >= maxDepth {
-		r.diagf("%s: too deeply nested\n", fn.Name)
-		r.status = 1
-		return nil
-	}
-	saved, savedIn, savedLine := r.Params, r.inFunc, r.funcLine
-	// Entered before the location moves into the body, because the frame
-	// records where the call was made *and what it was made inside* — see
-	// pushFrame, and Runner.LocatedAtTheCall for what reads it back. A push
-	// after the two assignments below would record the callee as its own
-	// caller.
-	r.pushFrame(Frame{File: r.functionFile(fn.Name), Name: name, Keyword: fn.Keyword})
-	defer r.popFrame()
-	// And the arguments, where a debugger has asked for them. After the
-	// frame, because the entry records the depth it was taken at. Only a
-	// call that pushed pops: a call entered while the record was off is not
-	// in it, and one the record was turned on *inside* left an entry that
-	// outlives the call. See Runner.pushCallArguments.
-	if r.pushCallArguments(args) {
-		defer r.popCallArguments()
-	}
-	r.Params, r.inFunc = args, fn.Name
-	// Where the loops were when the call was made, for the dialects that do
-	// not let a `break` in the body reach them — see Runner.loopControlFloor.
-	savedFloor := r.callLoopFloor
-	r.callLoopFloor = r.loopDepth
-	defer func() { r.callLoopFloor = savedFloor }()
-	// A function the dialect's prelude defined is the shell speaking rather
-	// than the script, so what it reports is named after it and located where
-	// it was called. The outermost such call owns both: a prelude helper it
-	// calls in turn adds nothing, because the script named the outer one.
-	savedSpeaker, savedSpeakerLine := r.speaker, r.speakerLine
-	if r.speaker == "" && r.speaksForTheShell(fn) {
-		r.speaker, r.speakerLine = fn.Name, r.line
-	}
-	defer func() { r.speaker, r.speakerLine = savedSpeaker, savedSpeakerLine }()
-	// Where the function was written, so a dialect that numbers a message
-	// from the function rather than from the file can subtract it.
-	r.funcLine = int(fn.Pos().Line)
-	// And the body's lines are the body's, whatever offset the *caller* was
-	// running under. A command substitution and — in two dialects — `eval`
-	// run their text at an offset into the script (Runner.lineBase), and it
-	// used to stay in force through a call made from inside one: measured
-	// 2026-09-12, `f() { echo $LINENO; }` called as `x=$(f)` on line 4 read
-	// 4 here where bash and zsh both say 1. The frame already carries the
-	// same idea for the file a body came out of; this is its line half.
-	//
-	// The body's own offset is not nothing, though, and reading it off the
-	// origin rather than writing a zero here is the other half of the same
-	// rule. A body read out of `eval`'s text in a dialect that numbers that
-	// text on from the caller's lines was numbered at that offset when it
-	// was read, and is called after the text has been left — so measured
-	// 2026-09-12 over a script file whose line 2 is
-	// `eval 'f() { nosuchcmd-xyz; }; f'`, bash 5.3 reports `line 2` where
-	// this engine reported `line 1` (#2565). Where the dialect numbers
-	// `eval`'s text from one there was no offset in force to record, so the
-	// origin holds nothing and this is the zero it always was.
-	savedBase, savedText := r.lineBase, r.runText
-	r.lineBase = r.funcOrigins[fn.Name].lineBase
-	// And the text the body was read from, on the same terms: a function
-	// defined in a sourced file quotes that file however it is called. See
-	// runningText.
-	r.runText = r.funcOrigins[fn.Name].text
-	defer func() { r.lineBase, r.runText = savedBase, savedText }()
-	// This call's own serial, because the RETURN trap fires for the one
-	// function whose body set it and for nobody else — not a caller, and
-	// not a sibling entered after it returned.
-	frameSerial := r.currentFrameSerial()
-	r.depth++
-	// A scope the function's locals unwind into.
-	sc := &scope{saved: map[string]string{}, existed: map[string]bool{}, keyword: fn.Keyword, owner: r}
-	r.scopes = append(r.scopes, sc)
-	// And a `getopts` cursor of its own, where the dialect gives a function
-	// one. A function that parses options is only callable twice if the
-	// second call starts over, which is why one shell's own function library
-	// is written without the `local OPTIND=1` the others need.
-	r.localizeGetoptsCursor(sc)
-	// And, in the dialect whose bodies read past them, the declarations the
-	// calls below this one made — put aside for the duration. Here rather
-	// than at the first read, because the seal is over the shell's one table
-	// of names and a body that never reads `v` may still write it. See
-	// staticscope.go.
-	r.sealCallerLocals(sc)
-	// And whatever a dialect saves around every call, taken now rather than
-	// when the body asks for it: the option table, in the shell whose
-	// options are function-scoped. See AtEveryFunctionCall for why the
-	// moment has to be this one and why the runner is handed in.
-	for _, save := range r.aroundFunctionCalls {
-		if restore := save(r); restore != nil {
-			sc.onReturn = append(sc.onReturn, restore)
-		}
-	}
-	// What the EXIT trap was on the way in, so zsh can tell whether this
-	// function set one of its own.
-	outerTrap, outerDepth := r.exitTrap, r.trapDepth
-	// And, in the shell where a `function name { … }` call gets a trap table
-	// of its own, the rest of that table — taken and emptied here, put back
-	// as the call unwinds. EXIT goes with it, which is why this is beside
-	// the two records above rather than inside the walk: the value to put
-	// back is already on the stack. See localtraps.go.
-	r.takeTheTrapTable(sc)
-	if sc.trapTableWasTaken {
-		r.exitTrap, r.trapDepth = nil, 0
-	}
-	// And, in that same shell, the option table — which the same word
-	// scopes and the same word does *not* empty. The body is handed the
-	// caller's options live and gives them back at the return, where the
-	// trap table above is taken away from it. Beside that one rather than
-	// inside the walk over the dialects' hooks for the reason localtraps.go
-	// gives about its own store: `set -o` writes the substrate's state, so
-	// what puts it back is the substrate's too. See localsetoptions.go.
-	r.saveTheOptionTable(sc)
-
-	// One dialect fires the DEBUG trap again here: once for the call where
-	// it was written, and once more with the frame entered — see
-	// Semantics.DebugTrapRefiresOnEnteringAFunction. It goes through the
-	// same gating as every other firing, so with the trap kept out of calls
-	// there is nothing here to double.
-	//
-	// The location is the *body's* first line for the duration, which is
-	// measured and not an artifact of where this sits: with the definition
-	// spread over two lines bash reports the `{` and not the `f()` above it.
-	// Put back afterwards, because a body whose commands never run would
-	// otherwise leave the line moved.
-	enteredAt := r.line
-	r.line = int(fn.Body.Pos().Line)
-	r.runDebugTrapOnFunctionEntry(ctx)
-	r.line = enteredAt
-
-	// A function this shell has been asked to **trace** runs its body with
-	// the trace on and gives it back at the return, whatever the caller had.
-	// See Runner.SetTracedFunctions, and note that this is a property of the
-	// call rather than of the option: a function the mark is on traces
-	// wherever it is called from, and the function it calls in turn does
-	// not.
-	// Set for **every** call and not only for a marked one, which is what
-	// makes the mark stop at the body it is on: entering an unmarked
-	// function clears it, so the function a traced one calls is traced only
-	// in the caller's line that calls it.
-	wasMarked := r.xtraceByMark
-	r.xtraceByMark = r.tracesFunction(name, fn.Keyword)
-	defer func() { r.xtraceByMark = wasMarked }()
-	// And the body itself is never a head, in any column, however it is
-	// written — measured, though the column that writes a head for a `{ }`
-	// standing on its own writes none here. See Runner.suppressedHead.
-	r.suppressedHead = true
-	err := r.command(ctx, fn.Body)
-	// Whatever arrived while the body's *last* command ran, handled before
-	// the call unwinds. stmt drains between commands, which leaves the last
-	// one of a body with nobody to drain after it: the arrival waited for
-	// the caller's next command and the handler then ran outside the
-	// function. Measured, and unanimous across the panel — `g() { local
-	// v=inner; trap 'echo $v' USR1; kill -USR1 $$; }; v=outer; g` prints
-	// inner in bash 3.2, bash 5.3, dash, ksh93 and zsh alike, so it is the
-	// core's answer and not an axis.
-	//
-	// It was invisible until a trap could be *put back* at a return: with
-	// the handler unchanged either side of the boundary, running it late
-	// only moved the output. With a function-local trap it runs the wrong
-	// handler — see localtraps.go.
-	r.runPendingTraps(ctx)
-
-	// And the ERR trap, where the dialect judges the body's status in the
-	// frame that produced it rather than at the call — see
-	// judgeTheBodyForErr. Here, while the frame is still standing, because
-	// that is where it was measured: with the action printing `$v` and the
-	// body declaring `local v=in`, zsh 5.9.2 writes `in`, so the locals,
-	// the positional parameters and the call stack are all still the
-	// call's when the handler runs.
-	r.judgeTheBodyForErr(ctx)
-
-	r.depth--
+// popScope closes the scope pushScope opened. See pushScope.
+func (r *Runner) popScope(sc *scope) {
 	// Put back what `local` displaced, in whatever order it was declared:
 	// the values are keyed by name, so order does not matter.
 	for name, old := range sc.saved {
@@ -1339,6 +1170,206 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	// caller's again before the caller's is put back over it.
 	r.unsealCallerLocals(sc)
 	r.scopes = r.scopes[:len(r.scopes)-1]
+}
+
+// callFunc runs a function body with the arguments as its positional
+// parameters.
+//
+// The parameters are saved and restored rather than copied into a new runner,
+// because a function shares the shell's variables — the scoping is dynamic,
+// and `local` is what carves out an exception. `local` is not here yet.
+func (r *Runner) callFunc(ctx context.Context, fn *syntax.FuncDecl, args []string) error {
+	return r.callFuncAs(ctx, fn, fn.Name, args)
+}
+
+// callFuncAs is callFunc with the name the call is *known by* given
+// separately, for the one caller where it is not the function's own: a math
+// function runs an implementation registered under another name.
+//
+// The two names go to different places, and that split is measured rather
+// than chosen. `$0` inside the implementation is the *registered* name —
+// `functions -M mf 0 3 g; : $(( mf(1,2,3) ))` leaves `$0` as `mf` — so the
+// frame carries that one, which is what innermostCall reads. A diagnostic
+// from inside the body names the *implementation*: the same call with a
+// missing command in `g` reports `g: command not found: …`, not `mf:`, so
+// r.inFunc keeps the function's own name and so does the prelude-speaker
+// check and the recursion bound. The file the body is remembered as coming
+// from is the implementation's too, because that is where its lines are.
+func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name string, args []string) error {
+	if r.depth >= maxDepth {
+		r.diagf("%s: too deeply nested\n", fn.Name)
+		r.status = 1
+		return nil
+	}
+	saved, savedIn, savedLine := r.Params, r.inFunc, r.funcLine
+	// Entered before the location moves into the body, because the frame
+	// records where the call was made *and what it was made inside* — see
+	// pushFrame, and Runner.LocatedAtTheCall for what reads it back. A push
+	// after the two assignments below would record the callee as its own
+	// caller.
+	r.pushFrame(Frame{File: r.functionFile(fn.Name), Name: name, Keyword: fn.Keyword})
+	defer r.popFrame()
+	// And the arguments, where a debugger has asked for them. After the
+	// frame, because the entry records the depth it was taken at. Only a
+	// call that pushed pops: a call entered while the record was off is not
+	// in it, and one the record was turned on *inside* left an entry that
+	// outlives the call. See Runner.pushCallArguments.
+	if r.pushCallArguments(args) {
+		defer r.popCallArguments()
+	}
+	r.Params, r.inFunc = args, fn.Name
+	// Where the loops were when the call was made, for the dialects that do
+	// not let a `break` in the body reach them — see Runner.loopControlFloor.
+	savedFloor := r.callLoopFloor
+	r.callLoopFloor = r.loopDepth
+	defer func() { r.callLoopFloor = savedFloor }()
+	// A function the dialect's prelude defined is the shell speaking rather
+	// than the script, so what it reports is named after it and located where
+	// it was called. The outermost such call owns both: a prelude helper it
+	// calls in turn adds nothing, because the script named the outer one.
+	savedSpeaker, savedSpeakerLine := r.speaker, r.speakerLine
+	if r.speaker == "" && r.speaksForTheShell(fn) {
+		r.speaker, r.speakerLine = fn.Name, r.line
+	}
+	defer func() { r.speaker, r.speakerLine = savedSpeaker, savedSpeakerLine }()
+	// Where the function was written, so a dialect that numbers a message
+	// from the function rather than from the file can subtract it.
+	r.funcLine = int(fn.Pos().Line)
+	// And the body's lines are the body's, whatever offset the *caller* was
+	// running under. A command substitution and — in two dialects — `eval`
+	// run their text at an offset into the script (Runner.lineBase), and it
+	// used to stay in force through a call made from inside one: measured
+	// 2026-09-12, `f() { echo $LINENO; }` called as `x=$(f)` on line 4 read
+	// 4 here where bash and zsh both say 1. The frame already carries the
+	// same idea for the file a body came out of; this is its line half.
+	//
+	// The body's own offset is not nothing, though, and reading it off the
+	// origin rather than writing a zero here is the other half of the same
+	// rule. A body read out of `eval`'s text in a dialect that numbers that
+	// text on from the caller's lines was numbered at that offset when it
+	// was read, and is called after the text has been left — so measured
+	// 2026-09-12 over a script file whose line 2 is
+	// `eval 'f() { nosuchcmd-xyz; }; f'`, bash 5.3 reports `line 2` where
+	// this engine reported `line 1` (#2565). Where the dialect numbers
+	// `eval`'s text from one there was no offset in force to record, so the
+	// origin holds nothing and this is the zero it always was.
+	savedBase, savedText := r.lineBase, r.runText
+	r.lineBase = r.funcOrigins[fn.Name].lineBase
+	// And the text the body was read from, on the same terms: a function
+	// defined in a sourced file quotes that file however it is called. See
+	// runningText.
+	r.runText = r.funcOrigins[fn.Name].text
+	defer func() { r.lineBase, r.runText = savedBase, savedText }()
+	// This call's own serial, because the RETURN trap fires for the one
+	// function whose body set it and for nobody else — not a caller, and
+	// not a sibling entered after it returned.
+	frameSerial := r.currentFrameSerial()
+	r.depth++
+	// A scope the function's locals unwind into. Opened and closed by the
+	// pair above this function, because a call is not the only thing that
+	// opens one.
+	sc := r.pushScope(fn.Keyword)
+	// And a `getopts` cursor of its own, where the dialect gives a function
+	// one. A function that parses options is only callable twice if the
+	// second call starts over, which is why one shell's own function library
+	// is written without the `local OPTIND=1` the others need.
+	r.localizeGetoptsCursor(sc)
+	// And, in the dialect whose bodies read past them, the declarations the
+	// calls below this one made — put aside for the duration. Here rather
+	// than at the first read, because the seal is over the shell's one table
+	// of names and a body that never reads `v` may still write it. See
+	// staticscope.go.
+	r.sealCallerLocals(sc)
+	// And whatever a dialect saves around every call, taken now rather than
+	// when the body asks for it: the option table, in the shell whose
+	// options are function-scoped. See AtEveryFunctionCall for why the
+	// moment has to be this one and why the runner is handed in.
+	for _, save := range r.aroundFunctionCalls {
+		if restore := save(r); restore != nil {
+			sc.onReturn = append(sc.onReturn, restore)
+		}
+	}
+	// What the EXIT trap was on the way in, so zsh can tell whether this
+	// function set one of its own.
+	outerTrap, outerDepth := r.exitTrap, r.trapDepth
+	// And, in the shell where a `function name { … }` call gets a trap table
+	// of its own, the rest of that table — taken and emptied here, put back
+	// as the call unwinds. EXIT goes with it, which is why this is beside
+	// the two records above rather than inside the walk: the value to put
+	// back is already on the stack. See localtraps.go.
+	r.takeTheTrapTable(sc)
+	if sc.trapTableWasTaken {
+		r.exitTrap, r.trapDepth = nil, 0
+	}
+	// And, in that same shell, the option table — which the same word
+	// scopes and the same word does *not* empty. The body is handed the
+	// caller's options live and gives them back at the return, where the
+	// trap table above is taken away from it. Beside that one rather than
+	// inside the walk over the dialects' hooks for the reason localtraps.go
+	// gives about its own store: `set -o` writes the substrate's state, so
+	// what puts it back is the substrate's too. See localsetoptions.go.
+	r.saveTheOptionTable(sc)
+
+	// One dialect fires the DEBUG trap again here: once for the call where
+	// it was written, and once more with the frame entered — see
+	// Semantics.DebugTrapRefiresOnEnteringAFunction. It goes through the
+	// same gating as every other firing, so with the trap kept out of calls
+	// there is nothing here to double.
+	//
+	// The location is the *body's* first line for the duration, which is
+	// measured and not an artifact of where this sits: with the definition
+	// spread over two lines bash reports the `{` and not the `f()` above it.
+	// Put back afterwards, because a body whose commands never run would
+	// otherwise leave the line moved.
+	enteredAt := r.line
+	r.line = int(fn.Body.Pos().Line)
+	r.runDebugTrapOnFunctionEntry(ctx)
+	r.line = enteredAt
+
+	// A function this shell has been asked to **trace** runs its body with
+	// the trace on and gives it back at the return, whatever the caller had.
+	// See Runner.SetTracedFunctions, and note that this is a property of the
+	// call rather than of the option: a function the mark is on traces
+	// wherever it is called from, and the function it calls in turn does
+	// not.
+	// Set for **every** call and not only for a marked one, which is what
+	// makes the mark stop at the body it is on: entering an unmarked
+	// function clears it, so the function a traced one calls is traced only
+	// in the caller's line that calls it.
+	wasMarked := r.xtraceByMark
+	r.xtraceByMark = r.tracesFunction(name, fn.Keyword)
+	defer func() { r.xtraceByMark = wasMarked }()
+	// And the body itself is never a head, in any column, however it is
+	// written — measured, though the column that writes a head for a `{ }`
+	// standing on its own writes none here. See Runner.suppressedHead.
+	r.suppressedHead = true
+	err := r.command(ctx, fn.Body)
+	// Whatever arrived while the body's *last* command ran, handled before
+	// the call unwinds. stmt drains between commands, which leaves the last
+	// one of a body with nobody to drain after it: the arrival waited for
+	// the caller's next command and the handler then ran outside the
+	// function. Measured, and unanimous across the panel — `g() { local
+	// v=inner; trap 'echo $v' USR1; kill -USR1 $$; }; v=outer; g` prints
+	// inner in bash 3.2, bash 5.3, dash, ksh93 and zsh alike, so it is the
+	// core's answer and not an axis.
+	//
+	// It was invisible until a trap could be *put back* at a return: with
+	// the handler unchanged either side of the boundary, running it late
+	// only moved the output. With a function-local trap it runs the wrong
+	// handler — see localtraps.go.
+	r.runPendingTraps(ctx)
+
+	// And the ERR trap, where the dialect judges the body's status in the
+	// frame that produced it rather than at the call — see
+	// judgeTheBodyForErr. Here, while the frame is still standing, because
+	// that is where it was measured: with the action printing `$v` and the
+	// body declaring `local v=in`, zsh 5.9.2 writes `in`, so the locals,
+	// the positional parameters and the call stack are all still the
+	// call's when the handler runs.
+	r.judgeTheBodyForErr(ctx)
+
+	r.depth--
+	r.popScope(sc)
 	// zsh runs an EXIT trap set *inside* a function when the function
 	// returns, and then forgets it; the other three keep it for the end of
 	// the script. Only a trap this call installed counts, which is what the

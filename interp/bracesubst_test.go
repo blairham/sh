@@ -105,8 +105,20 @@ func TestABracedSubstitutionIsPlacedInTheScript(t *testing.T) {
 // fix to land, and only one of them would get it.
 func braceRun(t *testing.T, src string, env ...string) string {
 	t.Helper()
+	return braceRunWith(t, src, nil, env...)
+}
+
+// braceRunWith is braceRun with an answer of its own put on the vector, for
+// the tests that are about an axis rather than about the construct. One
+// function under both, because a second copy of the runner setup is a second
+// place for a flag the construct needs to be turned on.
+func braceRunWith(t *testing.T, src string, set func(*Semantics), env ...string) string {
+	t.Helper()
 	var buf strings.Builder
 	sem := PosixSemantics()
+	if set != nil {
+		set(&sem)
+	}
 	d := syntax.Core()
 	d.CurrentShellSubstitution = true
 	// And the pipe spelling, so replysubst_test.go has the same door rather
@@ -233,5 +245,104 @@ func TestAForkedSubstitutionIsNotSomethingToReturnFrom(t *testing.T) {
 	// than the operand. Both halves say the frame was not there.
 	if !strings.Contains(got, "st=2") || !strings.Contains(got, "return") {
 		t.Errorf("got %q, want the place judged and status 2", got)
+	}
+}
+
+// The body is a variable scope as well as a frame in one of the two columns
+// that have the spelling, so a declaration written inside one is local to the
+// body there and writes the shell's own name in the other.
+//
+// The axis is answered both ways on every row, because the correction is a
+// disagreement rather than a fix: see
+// Semantics.CurrentShellSubstitutionBodyIsAScope for the measurements. Rows
+// name the axis and never a shell.
+func TestABracedSubstitutionBodyIsAScopeOrIsNot(t *testing.T) {
+	for _, c := range []struct{ name, src, scoped, shared string }{
+		{
+			name:   "a declaration in the body",
+			src:    "x=outer\nv=${ typeset x=in; printf %s \"$x\";}\nprintf '[%s][%s]\\n' \"$v\" \"$x\"\n",
+			scoped: "[in][outer]\n",
+			shared: "[in][in]\n",
+		},
+		{
+			name:   "a plain assignment, which is not a declaration",
+			src:    "x=outer\nv=${ x=in; printf %s \"$x\";}\nprintf '[%s][%s]\\n' \"$v\" \"$x\"\n",
+			scoped: "[in][in]\n",
+			shared: "[in][in]\n",
+		},
+		{
+			name:   "a declaration of a name the shell does not hold",
+			src:    "v=${ typeset fresh=in; printf %s \"$fresh\";}\nprintf '[%s][%s]\\n' \"$v\" \"${fresh-none}\"\n",
+			scoped: "[in][none]\n",
+			shared: "[in][in]\n",
+		},
+		{
+			name:   "a scope inside a call, which nests",
+			src:    "x=outer\nf() { typeset x=fn; v=${ typeset x=in; printf %s \"$x\";}; printf '[%s][%s]\\n' \"$v\" \"$x\"; }\nf\nprintf '[%s]\\n' \"$x\"\n",
+			scoped: "[in][fn]\n[outer]\n",
+			shared: "[in][in]\n[outer]\n",
+		},
+		{
+			name:   "a declaration in the pipe spelling's body",
+			src:    "x=outer\nv=${| typeset x=in; REPLY=$x;}\nprintf '[%s][%s]\\n' \"$v\" \"$x\"\n",
+			scoped: "[in][outer]\n",
+			shared: "[in][in]\n",
+		},
+		{
+			name:   "the body's own value, which the scope does not touch",
+			src:    "v=${ printf out;}\nprintf '[%s]\\n' \"$v\"\n",
+			scoped: "[out]\n",
+			shared: "[out]\n",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			for _, a := range []struct {
+				answer Answer
+				want   string
+			}{{Yes, c.scoped}, {No, c.shared}} {
+				got := braceRunWith(t, c.src, func(s *Semantics) {
+					s.CurrentShellSubstitutionBodyIsAScope = a.answer
+					// The declaration word declares a local in any function
+					// here, which is a question of its own and is answered
+					// so these rows reach the one they are about.
+					s.TypesetLocalNeedsKeywordFunction = No
+				})
+				if got != a.want {
+					t.Errorf("scope=%v: got %q, want %q", a.answer, got, a.want)
+				}
+			}
+		})
+	}
+}
+
+// And `local` is legal in a body that is a scope, which is a consequence of
+// the axis rather than a second decision: the word is refused for having no
+// function to be local to, and a body with a scope has one. The forked
+// spelling is the control and keeps the refusal under both answers.
+func TestLocalInABracedSubstitutionFollowsTheScope(t *testing.T) {
+	const src = "x=outer\nv=${ local x=in; printf %s \"$x\";}\nprintf '[%s][%s]\\n' \"$v\" \"$x\"\n"
+	const forked = "x=outer\nv=$(local x=in; printf %s \"$x\")\nprintf '[%s][%s]\\n' \"$v\" \"$x\"\n"
+	scoped := braceRunWith(t, src, func(s *Semantics) {
+		s.CurrentShellSubstitutionBodyIsAScope = Yes
+		s.LocalOutsideAFunctionIsAnError = Yes
+	})
+	if scoped != "[in][outer]\n" {
+		t.Errorf("scoped: got %q, want the declaration local to the body", scoped)
+	}
+	shared := braceRunWith(t, src, func(s *Semantics) {
+		s.CurrentShellSubstitutionBodyIsAScope = No
+		s.LocalOutsideAFunctionIsAnError = Yes
+	})
+	if !strings.Contains(shared, "local") {
+		t.Errorf("shared: got %q, want the word refused for having no scope", shared)
+	}
+	for _, a := range []Answer{Yes, No} {
+		got := braceRunWith(t, forked, func(s *Semantics) {
+			s.CurrentShellSubstitutionBodyIsAScope = a
+			s.LocalOutsideAFunctionIsAnError = Yes
+		})
+		if !strings.Contains(got, "local") {
+			t.Errorf("forked, scope=%v: got %q, want the word refused there whatever the axis says", a, got)
+		}
 	}
 }

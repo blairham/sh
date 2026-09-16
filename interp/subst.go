@@ -326,6 +326,23 @@ func (r *Runner) currentShellSubst(ctx context.Context, f *syntax.File, span syn
 	} else {
 		r.Stdout = &out
 	}
+	// And in one of the two columns that have the spelling the body is a
+	// variable scope as well: a declaration inside it is local to the body
+	// and the shell's own name comes back afterwards. See
+	// Semantics.CurrentShellSubstitutionBodyIsAScope, and Runner.pushScope
+	// for why this is the call's own unwind rather than a lighter copy of it.
+	//
+	// Opened *inside* the hiding above and closed before it, which is the
+	// order rather than a preference: a body that declares REPLY unwinds
+	// into the hidden name, and the outer one is put back over that. The
+	// hiding stays a thing of its own, because the column that has the
+	// spelling and no scope has the pipe form too.
+	closeScope := func() {}
+	if r.ask(r.sem().CurrentShellSubstitutionBodyIsAScope,
+		"a `${ … ;}` body being a variable scope of its own") {
+		sc := r.pushScope(false)
+		closeScope = func() { r.popScope(sc) }
+	}
 	// The body was parsed on its own, so its lines count from one; the
 	// script it was written in did not. Same offset the subshell form
 	// carries, and put back afterwards because this runner goes on being
@@ -334,6 +351,7 @@ func (r *Runner) currentShellSubst(ctx context.Context, f *syntax.File, span syn
 	for _, st := range f.Stmts {
 		if err := r.stmt(ctx, st); err != nil {
 			r.Stdout, r.lineBase = savedOut, savedBase
+			closeScope()
 			putBackReply()
 			r.diagf("%v\n", err)
 			return ""
@@ -354,9 +372,11 @@ func (r *Runner) currentShellSubst(ctx context.Context, f *syntax.File, span syn
 		// newlines the other form strips are text here. Measured,
 		// `v=$'a\n\n'; echo "[${| REPLY=$v; }]"` keeps both.
 		v, _ := r.getVar("REPLY")
+		closeScope()
 		putBackReply()
 		return v
 	}
+	closeScope()
 	return strings.TrimRight(out.String(), "\n")
 }
 
@@ -447,15 +467,27 @@ func (r *Runner) boundCurrentShellBody() {
 // deleted name still reads through to the environment: `REPLY=outer sh -c
 // 'echo "[${| true; }]"'` would answer `[outer]` off the inherited value.
 //
-// **What this is not is a scope.** bash gives the body a variable frame —
-// `local` is legal inside one there and an error at the top level — and this
-// engine gives neither form of the construct a frame at all, so `${ local z=1;
-// echo $z; }` says `local: can only be used in a function` here. That is one
-// gap and not two: the visible corner of it is that `${| unset REPLY; }` reads
-// bash's *outer* REPLY, because unsetting a local there reveals what it shadows
-// and there is nothing here for it to reveal. Recorded rather than worked
-// around, so a frame — when the blank form gets one — fixes both spellings at
-// once instead of finding a second answer already written here (#2656).
+// **What this is not is the body's scope**, and it is deliberately not it.
+// The body *is* a variable scope in bash — see
+// Semantics.CurrentShellSubstitutionBodyIsAScope, which is what makes `local`
+// legal inside one — and the scope is opened inside this hiding and closed
+// before it, so a body that declares REPLY shadows the hidden name rather
+// than the one being put back. Four rows say the two are separate and not one
+// mechanism looked at twice: with the scope in force and `REPLY=outer`,
+// `${| REPLY=in; }` is `in` with `outer` back afterwards, `${| typeset
+// REPLY=in; }` is the same, `${| :; }` is empty rather than `outer`, and an
+// unset REPLY is unset again after `${| REPLY=in; }` — all measured on bash
+// 5.3.20 and all answered the same way before the scope existed, because the
+// body starts with no REPLY at all and a scope cannot say that.
+//
+// #2656 recorded a fifth row as the visible corner of the missing scope:
+// `${| unset REPLY; }` reading bash's *outer* REPLY, on the reasoning that
+// unsetting a local there reveals what it shadows. **Re-measured 2026-09-16
+// on bash 5.3.20, that is not what it does** — `REPLY=outer; v=${| unset
+// REPLY; }` is the empty string there, with `REPLY` still `outer` after, which
+// is what this hiding answers on its own and answered before the scope
+// landed. So the note is corrected rather than carried: there was one gap
+// here and not two.
 func (r *Runner) localizeReply() func() {
 	held, inVars := r.Vars["REPLY"]
 	wasRemoved := r.removed["REPLY"]

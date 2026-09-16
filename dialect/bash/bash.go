@@ -712,6 +712,21 @@ func Semantics() interp.Semantics {
 	// only: this is the `inherit_errexit` switch below, and `set -o posix`
 	// turns it on by the other door.
 	s.ErrExitEntersACommandSubstitution = interp.No
+	// A `${ … ;}` body is a variable scope here as well as a frame: a
+	// declaration inside one is local to the body and the shell's own name
+	// comes back after it. Measured 2026-09-16 from a script file —
+	// `x=outer; v=${ local x=in; printf %s "$x"; }` is `[in]` with `x` still
+	// `outer`, and `declare` and `typeset` answer the same — where ksh93u+,
+	// the only other column with the construct, leaves `x` as `in`. Nested
+	// in a call the scopes nest: with `local x=fn` around it the name comes
+	// back as `fn`.
+	//
+	// A plain assignment is not this and still writes the shell's own name,
+	// which is what keeps the spelling different from the forked one. And
+	// `local` being legal inside a body follows from the scope rather than
+	// being a second decision — in `$( … )` it is refused here exactly as it
+	// is at the top level.
+	s.CurrentShellSubstitutionBodyIsAScope = interp.Yes
 	s.SelectAssumesUnboundedWidth = interp.No
 	s.SelectEofEndsPromptLine = interp.No
 	s.SelectEofIsSuccess = interp.No

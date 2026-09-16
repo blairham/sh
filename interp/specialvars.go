@@ -53,10 +53,15 @@ func (r *Runner) ensureSpecials() {
 		// while a process substitution's goroutine may be reading the shared
 		// table, and rewriting the same producer was a write all the same.
 		r.Dynamic["_"] = func(r *Runner) string {
-			// The tracked argument in the dialects that move `$_`.
-			if r.lastArgSet &&
-				r.ask(r.sem().UnderscoreTracksTheLastArgument, "`$_` following the last argument") {
-				return r.lastArg
+			// The tracked argument in the dialects that move `$_`. Which
+			// record is read is a second question with a second answer —
+			// one column moves it only between the commands the shell reads
+			// — so the axis above decides *whether* and underscoreValue
+			// decides *which*.
+			if r.ask(r.sem().UnderscoreTracksTheLastArgument, "`$_` following the last argument") {
+				if value, ok := r.underscoreValue(); ok {
+					return value
+				}
 			}
 			return r.underscoreAtStartup()
 		}
@@ -448,7 +453,14 @@ func (r *Runner) showsS() bool {
 // Exported rather than done inside Run because only the caller knows which
 // text was the script's: the interpreter is handed a parsed file either way
 // and the two are indistinguishable to it.
-func (r *Runner) ForgetLastArgument() { r.lastArg, r.lastArgSet = "", false }
+// Both records, because a dialect whose `$_` moves only between the commands
+// the shell reads has a prelude that is read exactly that way: ksh93's ends
+// on `type=whence -v`, and without this that string is what the script's
+// first `$_` answered with.
+func (r *Runner) ForgetLastArgument() {
+	r.lastArg, r.lastArgSet = "", false
+	r.inputLastArg, r.inputLastArgSet = "", false
+}
 
 // underscoreAtStartup is `$_` before anything has moved it, and it is still
 // the answer afterwards in the shells that never move it at all.

@@ -10691,6 +10691,53 @@ type Semantics struct {
 	// on both the `-c` and the script route.
 	UnderscoreTracksTheLastArgument Answer
 
+	// UnderscoreMovesBeforeAFunctionBody lets the *body* of a function see
+	// the call's own last argument in `$_`, rather than what the caller had
+	// before the call.
+	//
+	// zsh alone. Measured 2026-09-16 over a script file with `: outer` on
+	// the line above and a body whose first statement prints `$_`: `peek one
+	// two` reads `two` at the top of the body in zsh 5.9.2, and `outer` in
+	// bash 5.3.20 and ksh93u+ 2012-08-01.
+	//
+	// Not the same question as what the *caller* reads afterwards, which is
+	// `two` in all three and is not an axis at all — see
+	// Runner.underscoreAcrossAFunctionCall. A shell that answered this one
+	// Yes and left the body's own record in place would agree with zsh on
+	// the first line of a body and with nobody on the line after the call.
+	//
+	// Asked only where UnderscoreTracksTheLastArgument is Yes: a shell that
+	// keeps no `$_` has nothing to decide, and asking would report an
+	// unanswered axis for every function call in a script that never reads
+	// the name.
+	UnderscoreMovesBeforeAFunctionBody Answer
+
+	// UnderscoreMovesOnlyBetweenInputCommands narrows `$_` to the commands
+	// the shell *reads*: a simple command standing alone on a line at the
+	// top level of the input, and nothing else.
+	//
+	// ksh93 alone, and it is why that column was recorded as having no `$_`
+	// at all. The probe it was measured with — `echo one two >/dev/null;
+	// echo "[$_]"` — is a `;`-list on one line, which moves nothing here, so
+	// a shell with the parameter and a shell without it give the same empty
+	// answer to it. It has one: the same two commands on their own lines
+	// read `two`.
+	//
+	// Measured 2026-09-16, ksh93u+ 2012-08-01, over a script file. What
+	// moves it: a lone simple command, including one written over two lines
+	// with a backslash, one with a trailing `;`, a builtin, an external, a
+	// `.` of a file, and a function call. What does not: a `;`-list, an
+	// `&&` chain, a pipeline, a `!`, a backgrounded command, a bare
+	// assignment — which also does not *clear* it, where bash and zsh do —
+	// and anything at all inside a `for`, an `if`, a `{ }`, a `( )`, a
+	// function body or an `eval`'s text.
+	//
+	// The interesting consequence is the one an idiom runs into: `mkdir -p
+	// "$d" && cd "$_"` reaches an **empty** `$_` in ksh93, because the `&&`
+	// is what stops it moving. The same two lines, written as two lines,
+	// work.
+	UnderscoreMovesOnlyBetweenInputCommands Answer
+
 	// UnderscoreStartsAtTheInvocation writes argv[0] into `$_` before the
 	// first command runs, so a script reading it at the top finds how the
 	// shell was started. bash alone, in both builds and under either

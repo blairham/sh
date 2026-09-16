@@ -1,0 +1,180 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
+package interp
+
+import "github.com/blairham/sh/syntax"
+
+// `$_` across a function call, and the one column whose `$_` is not a
+// last-argument parameter at all.
+//
+// `$_` is the previous command's last argument, and `mkdir -p "$d" && cd "$_"`
+// is the idiom it exists for. It is written after *any* command, a function
+// call included, and a wrapper function is exactly the shape that broke it
+// here: `make_dir /tmp/x` then `cd "$_"` reached the body's last command —
+// `:` — where all three references reach `/tmp/x`, so the `cd` went somewhere
+// else at status 0 (#3134).
+//
+// Measured 2026-09-16, `env -i PATH=/usr/bin:/bin LC_ALL=C <shell> x.sh` over
+// a script file, with `inner() { :; }` and a `peek` whose body prints `$_`,
+// calls `inner zz`, and prints it again:
+//
+//	                	bash 5.3.20	ksh93u+ 2012-08-01	zsh 5.9.2
+//	body, at entry  	`outer`    	`outer`           	`two`
+//	body, after `inner zz`	`zz` 	`outer`           	`zz`
+//	after `peek one two`	`two`  	`two`             	`two`
+//
+// Three columns, three readings, and they agree about exactly one row — the
+// last. That is the unanimous half and it is core: whatever a body did, the
+// caller reads the **call's** own last argument once it returns. The two rows
+// above it are the axes below.
+//
+// dash and BusyBox ash have no `$_` at all — they hold whatever the
+// environment brought and nothing when it brought nothing, because `_` is an
+// ordinary name there — and this shell agrees with them, which is right and
+// stays.
+
+// underscoreAcrossAFunctionCall holds `$_` to the call rather than to the body.
+//
+// It is given what `$_` held *before* the call's own last argument was
+// recorded, and gives back the closure that puts the call's value in place
+// once the body has returned.
+//
+// The restore is unconditional because the panel is unanimous about it. What
+// is asked is only the body's *entry* value, and only in a dialect that has
+// the parameter at all: a shell that keeps no `$_` has nothing to decide, and
+// asking there would report an unanswered axis on every function call in a
+// script that never reads the name.
+func (r *Runner) underscoreAcrossAFunctionCall(before underscoreRecord) func() {
+	call := r.underscoreRecord()
+	if r.sem().UnderscoreTracksTheLastArgument == Yes &&
+		!r.ask(r.sem().UnderscoreMovesBeforeAFunctionBody,
+			"`$_` holding the call's own last argument inside the body") {
+		// The body sees what the caller had. bash and ksh93 — measured on
+		// the table above, where the first line of the body reads `outer`
+		// and not `two`.
+		r.setUnderscoreRecord(before)
+	}
+	return func() {
+		// And the caller reads the call's, whatever the body left behind.
+		// Unanimous, and the whole of #3134's first defect: without this the
+		// body's last command leaked out through `$_`.
+		r.setUnderscoreRecord(call)
+	}
+}
+
+// underscoreRecord is both of the trackers at once, because a function call
+// has to put both back: the narrowed one is written before the body runs for
+// the same reason the general one is, and a restore that moved only one would
+// leave the dialect that reads the other looking into the body.
+type underscoreRecord struct {
+	arg, inputArg string
+	set, inputSet bool
+}
+
+func (r *Runner) underscoreRecord() underscoreRecord {
+	return underscoreRecord{
+		arg: r.lastArg, set: r.lastArgSet,
+		inputArg: r.inputLastArg, inputSet: r.inputLastArgSet,
+	}
+}
+
+func (r *Runner) setUnderscoreRecord(u underscoreRecord) {
+	r.lastArg, r.lastArgSet = u.arg, u.set
+	r.inputLastArg, r.inputLastArgSet = u.inputArg, u.inputSet
+}
+
+// noteInputLevelArgument records a command's last argument for the one dialect
+// whose `$_` moves only between the commands the shell *reads*.
+//
+// ksh93 has `$_` — the row that said it kept none was measured through a
+// `;`-list, where this shell writes nothing and looks like a shell without the
+// parameter. It has one, and it moves under a rule none of the others have:
+// only a **simple command standing alone on a line at the top level of the
+// input** puts anything in it. Measured 2026-09-16, ksh93u+ 2012-08-01, over a
+// script file, reading `$_` on the line after each:
+//
+//	echo a b                            	`b`
+//	echo a \ <newline> b c              	`c`   	one command over two lines
+//	echo a b;                           	`b`   	a trailing `;` is still one
+//	true a b / /bin/echo a b / . /file  	its own last argument
+//	f one two                           	`two` 	a function call is a command
+//	echo a b; echo c d                  	nothing moves
+//	echo a b && echo c d                	nothing moves
+//	echo c d | cat                      	nothing moves
+//	! echo c d                          	nothing moves
+//	x=5 on a line of its own            	nothing moves — and it does not clear
+//	inside a `for`, `if`, `{ }`, `( )`  	nothing moves
+//	inside a function body              	nothing moves
+//	inside `eval`'s text                	nothing moves; the `eval` line itself does
+//
+// Two consequences worth naming, because both are what a simpler reading gets
+// wrong. `echo one two >/dev/null; echo "$_"` — the corpus's own probe for
+// this parameter — answers **empty** in ksh93, and would answer `two` in a
+// shell given bash's rule; the record has held that empty cell since the
+// column was first measured. And a bare assignment does not empty `$_` here,
+// where bash and zsh do, which falls out of the same rule rather than needing
+// one of its own.
+//
+// The gate is cleared the moment it is used, which is what makes a *body*
+// inherit nothing: a call is a lone top-level command, so it records its own
+// last argument and then everything it runs is below the input level.
+func (r *Runner) noteInputLevelArgument(argv []string) {
+	if !r.atInputLevel {
+		return
+	}
+	r.atInputLevel = false
+	if len(argv) > 0 {
+		r.inputLastArg, r.inputLastArgSet = argv[len(argv)-1], true
+	}
+}
+
+// aLoneSimpleCommandOnItsLine reports whether this top-level statement is the
+// kind ksh93 moves `$_` for: a simple command, with no other statement sharing
+// its line.
+//
+// The line test is what stands in for "the shell read one command": `a; b` is
+// two statements on one line and ksh93 moves nothing for either, where the
+// same two on their own lines move it twice. A `&&` chain, a pipeline and a
+// negation are one statement whose command is not a call, so the kind test
+// covers those without a second rule.
+func (r *Runner) aLoneSimpleCommandOnItsLine(stmts []*syntax.Stmt, at int) bool {
+	st := stmts[at]
+	if st.Background || st.Disown || st.Coprocess {
+		// Started rather than run, so what it was handed is a fact about a
+		// child. Measured: `echo a b &` moves nothing here.
+		return false
+	}
+	p, ok := st.Expr.(*syntax.Pipeline)
+	if !ok || p.Negated || len(p.Cmds) != 1 {
+		// An `&&` chain is a BinaryExpr, a pipe has more than one command,
+		// and a `!` is the pipeline's own — all three move nothing.
+		return false
+	}
+	if _, ok := p.Cmds[0].(*syntax.SimpleCmd); !ok {
+		return false
+	}
+	line := r.lineOf(st.Pos())
+	for i, other := range stmts {
+		if i != at && r.lineOf(other.Pos()) == line {
+			return false
+		}
+	}
+	return true
+}
+
+// underscoreValue is what a read of `$_` answers with, for the dialects that
+// move it.
+//
+// Two trackers rather than one flag, because the two readings are not the same
+// parameter narrowed: bash and zsh record every simple command and ksh93
+// records only the ones it read at the input level, so a single record with a
+// filter over it would have to know which shell it was at write time. Each is
+// written where it is true and the read picks.
+func (r *Runner) underscoreValue() (string, bool) {
+	if r.ask(r.sem().UnderscoreMovesOnlyBetweenInputCommands,
+		"`$_` moving only between the commands the shell reads") {
+		return r.inputLastArg, r.inputLastArgSet
+	}
+	return r.lastArg, r.lastArgSet
+}

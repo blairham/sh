@@ -785,6 +785,22 @@ func Semantics() interp.Semantics {
 	// [interp.Semantics.HashedPathShadowsAnEarlierDirectory] (#2936).
 	s.HashedPathShadowsAnEarlierDirectory = interp.No
 	s.TildePlusMinusExpands = interp.Yes
+	// This shell has `$_`, and the row that said it did not was measured
+	// through a `;`-list — the one shape where a shell with the parameter
+	// and a shell without it give the same empty answer. `echo one two`
+	// and `echo "[$_]"` on their own lines read `two` here (#3134).
+	s.UnderscoreTracksTheLastArgument = interp.Yes
+	// And it moves under a rule nothing else in the panel has: only a simple
+	// command standing alone on a line at the top level of the input writes
+	// it. A `;`-list, an `&&` chain, a pipeline, a backgrounded command and
+	// everything inside a loop, a branch, a group, a subshell, a function
+	// body or an `eval` all leave it where it stood — and so does a bare
+	// assignment, which in the other two empties it.
+	s.UnderscoreMovesOnlyBetweenInputCommands = interp.Yes
+	// A function body opens with what the caller had, as bash's does. It
+	// then stays there for the whole body, which the rule above is what
+	// says: nothing inside a body is at the input level.
+	s.UnderscoreMovesBeforeAFunctionBody = interp.No
 	// A defined f-g stops the script; a.b is an invalid discipline function.
 	s.PunctuatedFunctionNameIsRefused = interp.Yes
 	// And `a.get` is not: a dotted name whose suffix is one of this shell's

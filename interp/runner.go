@@ -1367,6 +1367,14 @@ type Runner struct {
 	// for the `$_` the dialects that move it answer with.
 	lastArg    string
 	lastArgSet bool
+	// inputLastArg is the same record kept under ksh93's rule: only a simple
+	// command standing alone on a line at the top level of the input writes
+	// it. atInputLevel is the gate, set for each such statement and cleared
+	// the moment a command uses it, so everything a call or an `eval` goes on
+	// to run is below the level. See interp/underscoreframe.go.
+	inputLastArg    string
+	inputLastArgSet bool
+	atInputLevel    bool
 	// noexec is `set -n`: read, never run, never unset — even the `set +n`
 	// that would clear it is a command.
 	noexec bool
@@ -3604,7 +3612,7 @@ func (r *Runner) RunPart(ctx context.Context, f *syntax.File) error {
 	}
 	r.programEnd = int(f.End().Line + 1)
 	abandoned := 0
-	for _, st := range f.Stmts {
+	for i, st := range f.Stmts {
 		if abandoned != 0 && r.lineOf(st.Pos()) == abandoned {
 			// The rest of the line the last statement gave up on goes with
 			// it. Everything inside a construct has already unwound; this is
@@ -3617,9 +3625,17 @@ func (r *Runner) RunPart(ctx context.Context, f *syntax.File) error {
 			// how that was established rather than assumed.
 			continue
 		}
+		// The one place a statement is read at the level a shell reads its
+		// input, which is the level one dialect's `$_` moves at. Inside an
+		// `eval` or a sourced file this runs again with indirection above
+		// zero, where nothing is at the input level — see
+		// Runner.aLoneSimpleCommandOnItsLine.
+		r.atInputLevel = r.indirection == 0 && !r.inSubshell &&
+			r.aLoneSimpleCommandOnItsLine(f.Stmts, i)
 		if err := r.stmt(ctx, st); err != nil {
 			return err
 		}
+		r.atInputLevel = false
 		if r.ctl == controlAbandon {
 			// The statement gave up; the shell has not. This is the one
 			// place that consumes it, which is what keeps the give-up from
@@ -4613,6 +4629,8 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// assignment moves it to empty. Tracked unconditionally and cheaply;
 	// whether a read of `$_` answers with it is the dialect's question,
 	// asked where the read happens rather than on every command here.
+	beforeUnderscore := r.underscoreRecord()
+	r.noteInputLevelArgument(argv)
 	if len(argv) > 0 {
 		r.lastArg, r.lastArgSet = argv[len(argv)-1], true
 	} else if len(c.Assigns) > 0 {
@@ -4943,6 +4961,10 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			r.takeBackFunctionPrefix(undo)
 			r.line = bodyLine
 		}()
+		// `$_` belongs to the *call* and not to the body: whatever the last
+		// command inside it was handed, the caller reads what the call was.
+		// Unanimous across bash, ksh93 and zsh, and #3134's first defect.
+		defer r.underscoreAcrossAFunctionCall(beforeUnderscore)()
 		return r.callFunc(ctx, fn, argv[1:])
 	}
 

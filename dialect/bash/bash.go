@@ -796,6 +796,16 @@ func Semantics() interp.Semantics {
 	s.AutoCdAnnouncesTheSubstitution = interp.Yes
 	s.TildePlusMinusExpands = interp.Yes
 	s.UnderscoreTracksTheLastArgument = interp.Yes
+	// And every simple command moves it, wherever that command stands —
+	// inside a loop, inside a function body, behind a `;` on one line. The
+	// narrowed reading is ksh93's alone.
+	s.UnderscoreMovesOnlyBetweenInputCommands = interp.No
+	// A function body opens with what the *caller* had rather than with the
+	// call's own last argument: `: outer` then `f one two` reads `outer` on
+	// the first line of the body here and `two` in zsh. What the caller
+	// reads once the call returns is `two` in both, and in ksh93, and is not
+	// an axis.
+	s.UnderscoreMovesBeforeAFunctionBody = interp.No
 	// Alone in the panel, bash writes `$_` before the first command runs,
 	// and what it writes is argv[0]: the same binary reached through a
 	// symlink named `sh` writes `sh`. An `_` the environment carried wins

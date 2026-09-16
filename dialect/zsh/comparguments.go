@@ -76,7 +76,7 @@ import (
 // # What is not done here
 //
 // **Option stacking is read but not offered.** `-s` is parsed and a stacked
-// word is taken apart when the line is analysed, so `-xy` marks both `-x` and
+// word is taken apart when the line is analyzed, so `-xy` marks both `-x` and
 // `-y` as seen; what `comparguments -s` will not do is offer the *rest* of a
 // stack, so `uname -a<TAB>` does not go on to `-am`. That is the one place
 // this knowingly answers smaller than zsh, and it is measured rather than
@@ -192,7 +192,7 @@ func compargumentsQuery(r *interp.Runner, cs *completionState, a *argumentsState
 	return 1
 }
 
-// compargumentsInit parses the specs and analyses the line, and answers
+// compargumentsInit parses the specs and analyzes the line, and answers
 // whether anything at all can be completed at the cursor.
 func compargumentsInit(r *interp.Runner, cs *completionState, st *computilState, args []string) int {
 	if len(args) == 0 {
@@ -207,7 +207,7 @@ func compargumentsInit(r *interp.Runner, cs *completionState, st *computilState,
 	if !a.readSpecs(r, rest) {
 		return 1
 	}
-	a.analyse(r, cs)
+	a.analyze(r, cs)
 	st.arguments = a
 	return boolStatus(a.optionsHere || len(a.here) > 0)
 }

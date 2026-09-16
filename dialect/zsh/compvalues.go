@@ -201,14 +201,12 @@ func (v *valuesState) offer(r *interp.Runner, names []string) int {
 // other separator splits on itself.
 func (v *valuesState) valuesWritten(word string) map[string]bool {
 	given := map[string]bool{}
-	var pieces []string
-	switch {
-	case v.separator == "":
+	pieces := strings.Split(word, v.separator)
+	if v.separator == "" {
+		pieces = nil
 		for _, ch := range word {
 			pieces = append(pieces, string(ch))
 		}
-	default:
-		pieces = strings.Split(word, v.separator)
 	}
 	for _, piece := range pieces {
 		if v.argSep != "" {

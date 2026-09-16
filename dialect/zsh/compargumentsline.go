@@ -13,13 +13,13 @@ import (
 // report it. See comparguments.go for the spec language and for how the
 // protocol was measured.
 
-// analyse walks the words up to and including the one under the cursor,
+// analyze walks the words up to and including the one under the cursor,
 // deciding which options are spent, which are shut off, how many normal
 // arguments have been written, and therefore what can be completed here.
 //
 // **Including the one under the cursor**, which is the measured rule and the
 // one a guess gets wrong — see comparguments.go's third reading.
-func (a *argumentsState) analyse(r *interp.Runner, cs *completionState) {
+func (a *argumentsState) analyze(r *interp.Runner, cs *completionState) {
 	a.spent, a.shutOff = map[string]bool{}, map[string]bool{}
 	a.optArgs = map[string]string{}
 	position := 1

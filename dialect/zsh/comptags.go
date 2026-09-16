@@ -62,7 +62,7 @@ import (
 //
 // **The `tag-order` style is not read.** The two `comptry -m` calls the
 // shipped `_tags` always makes carry the patterns it wants tried first, and
-// those are honoured; a `zstyle ':completion:*' tag-order …` a person sets is
+// those are honored; a `zstyle ':completion:*' tag-order …` a person sets is
 // applied by `_tags` itself before it gets here, so nothing in this file has
 // to know the style exists.
 
@@ -74,9 +74,9 @@ type tagsState struct {
 	sets    [][]string
 	used    map[string]bool
 	at      int
-	// labelled is which (set, tag) pairs `-A` has already answered for, so
+	// labeled is which (set, tag) pairs `-A` has already answered for, so
 	// that `_next_label`'s loop runs once per tag and then stops.
-	labelled map[string]bool
+	labeled map[string]bool
 }
 
 func comptagsBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
@@ -95,7 +95,7 @@ func comptagsBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 		}
 		st.tags = &tagsState{
 			context: args[1], offered: args[2:],
-			used: map[string]bool{}, at: -1, labelled: map[string]bool{},
+			used: map[string]bool{}, at: -1, labeled: map[string]bool{},
 		}
 		return 0
 	}
@@ -146,11 +146,11 @@ func (t *tagsState) nextLabel(r *interp.Runner, names []string) int {
 	}
 	tag := names[0]
 	key := itoa(t.at) + ":" + tag
-	if !t.requested(tag) || t.labelled[key] {
+	if !t.requested(tag) {
 		r.SetVar(names[2], "")
 		return 1
 	}
-	t.labelled[key] = true
+	t.labeled[key] = true
 	r.SetVar(names[1], tag)
 	r.SetVar(names[2], tag)
 	return 0

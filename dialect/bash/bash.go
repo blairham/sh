@@ -1942,6 +1942,12 @@ func Semantics() interp.Semantics {
 	s.LoneDashIsAnOption = interp.No
 	s.UnsetFunctionChecksTheName = interp.No
 	s.UnsetFunctionReportsMissing = interp.No
+	// A plain `unset NAME` falls through to the function table when the
+	// name holds no variable, which is bash's alone: measured 2026-09-16,
+	// 5.3.20, the same binary as `sh` and 3.2.57 all answer 127 to a call
+	// after `unset b`, where zsh, ksh93u+, dash and BusyBox ash all still
+	// run the function.
+	s.UnsetReachesTheFunctionTable = interp.Yes
 
 	// Whether a redirection target is expanded as an ordinary word.
 	s.RedirectTargetIsAnOrdinaryWord = interp.Yes

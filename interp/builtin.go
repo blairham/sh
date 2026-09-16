@@ -2026,6 +2026,92 @@ func (r *Runner) unsetFunction(name string) int {
 	return 0
 }
 
+// parameterNamespaceHolds reports whether a plain `unset` has a *parameter*
+// of this name to remove, which is what decides whether the function table is
+// reached behind it at all.
+//
+// It is deliberately not nameIsSet. That asks whether the name has a value,
+// and a declaration with none is still a parameter: measured 2026-09-16 on
+// bash 5.3.20, every one of `declare a`, `declare -i b`, `declare -a c`,
+// `declare -A d`, `declare -l`, `declare -x`, `export e` and a bare `local`
+// inside a call leaves a function of the same name standing after one `unset`
+// and takes a second to reach it. Reading only the value made all eight of
+// them remove the function on the first.
+//
+// A **reference is resolved and does not itself count**, which is the same
+// rule nameIsSet already keeps and is measured too: `v=1; declare -n n=v;
+// unset n` takes `v` away and leaves the function `n` callable, while
+// `declare -n n=nowhere; unset n` finds nothing at the far end and removes
+// the function.
+//
+// The letters come from captureAttributes rather than from a list written
+// again here, so a letter added to that struct is counted by this without a
+// second edit — the failure this tree keeps having is a second helper that
+// omits what the first one learned. readonly and exported are not in it and
+// are read beside it; `readonly` is reached ahead of this anyway, since a
+// frozen parameter refuses the `unset` before any of it.
+func (r *Runner) parameterNamespaceHolds(name string) bool {
+	if r.nameIsSet(name) {
+		return true
+	}
+	name = r.throughNameref(name)
+	if r.readonly[name] || r.isExported(name) {
+		return true
+	}
+	a := r.captureAttributes(name)
+	a.nameref, a.isNameref = "", false
+	return a != nameAttributes{}
+}
+
+// unsetTheFunctionInstead is the plain `unset NAME` that reaches the
+// *function* table, and reports whether it was this shell's answer and what
+// status it carries.
+//
+// The whole of the dialect's question is Semantics.UnsetReachesTheFunctionTable
+// — bash alone — and this is where it is asked. Deliberately narrow: it says
+// no before consulting the vector unless the name has a function and holds no
+// variable, because that is the only shape the panel disagrees about. A plain
+// `unset x` over an ordinary parameter is a parameter's removal in all seven
+// columns, and asking there would refuse it in a preset that has no answer.
+//
+// "Holds no variable" is nameIsSet and so is the declaration rather than the
+// value: measured 2026-09-16 on bash 5.3.20, `f() { :; }; declare f; unset f`
+// takes the valueless declaration and leaves `f` callable, and it takes a
+// second `unset f` to reach the body. `f=` and `f=(a b)` behave the same, and
+// so does a `local f` inside a call — one table per call, the variable's
+// first.
+//
+// A name this shell provides is not the script's to remove, which is the same
+// rule unsetFunction already keeps: `unset pushd` reaches a prelude function
+// standing in for a builtin, and a builtin is not what a plain `unset`
+// removes anywhere.
+//
+// `unset -v` is not the plain spelling and takes none of this, which is the
+// letterV argument and is measured: `f() { :; }; unset -v f` leaves `f`
+// callable in bash 5.3.20, where `unset f` does not. The letter names the
+// parameter namespace, so a name with nothing in it is a quiet 0 there
+// rather than a function's removal — and reading `-v` as "the plain form
+// with a name check" is what let it through here first time.
+func (r *Runner) unsetTheFunctionInstead(name string, letterV bool) (bool, int) {
+	fn := r.funcs[name]
+	if letterV || fn == nil || r.speaksForTheShell(fn) || r.parameterNamespaceHolds(name) {
+		return false, 0
+	}
+	if !r.ask(r.sem().UnsetReachesTheFunctionTable,
+		"a plain `unset` over a name that is a function and not a variable") {
+		return false, 0
+	}
+	// Through the freeze rather than around it. `readonly -f b` refuses a
+	// plain `unset b` in the same sentence it refuses `unset -f b` — status
+	// 1, the body still there, and the script carries on — and that refusal
+	// had no reachable caller until this route existed (#3192, #3206).
+	if code, refused := r.readonlyFunctionUnset(name); refused {
+		return true, code
+	}
+	r.removeFunction(name)
+	return true, 0
+}
+
 // removeFunction takes a function out, and gives the name back to the
 // prelude's where there was one.
 //
@@ -2429,7 +2515,8 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 	}
 	// After `-f`, so that a function name keeps its own laxer rule: bash
 	// takes `unset -f 1x` without a word where it refuses `unset 1x`.
-	args, status, ended := r.builtinNames("unset", args, strings.ContainsRune(opts, 'v'))
+	letterV := strings.ContainsRune(opts, 'v')
+	args, status, ended := r.builtinNames("unset", args, letterV)
 	if r.unspecified {
 		return status
 	}
@@ -2538,6 +2625,23 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 			}
 			status = r.carryUnsetStatus(status, r.unsetArrayElem(base, idx, sub))
 			continue
+		}
+		if handled, code := r.unsetTheFunctionInstead(name, letterV); handled {
+			// The name holds no variable and does hold a function, and this
+			// shell reads that as a function's removal rather than as
+			// nothing at all. Behind the readonly *variable* check above,
+			// which is measured: a frozen `f3=rv` beside a function `f3`
+			// refuses at 1 and leaves the function standing, so the freeze
+			// on the parameter is answered before the function table is
+			// reached.
+			status = r.carryUnsetStatus(status, code)
+			if r.ctl == controlExit {
+				return status
+			}
+			continue
+		}
+		if r.unspecified {
+			return r.status
 		}
 		r.unsetName(name)
 	}

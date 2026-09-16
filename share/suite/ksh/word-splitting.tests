@@ -1,0 +1,30 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Field splitting where ksh93 answers differently from every other shell on
+# the panel. core/word-splitting.tests carries the rules the four share.
+
+show() {
+	printf '%s:' "$1"
+	shift
+	printf ' n=%s' "$#"
+	for w in "$@"; do printf ' [%s]' "$w"; done
+	printf '\n'
+}
+
+# --- a quoted empty word behind a separator ---------------------------------
+#
+# In the word a `-` or `+` substitutes, a quoted nothing written behind a
+# separator is a field of its own in bash, dash and BusyBox ash — the
+# separator closed the field in front of it and the quotes opened the one
+# behind. Here it is no field at all, so the word comes to exactly what stood
+# in front of the separator. (zsh reaches neither answer: it does not split
+# the word at all, so the whole thing is one field including the blank.)
+
+v=x
+set -- a b
+set -- ${v:+p ""}
+show 'a word, a blank, and quoted nothing' "$@"
+set -- a b
+set -- ${v:+"$@" ""}
+show 'a list, a blank, and quoted nothing' "$@"

@@ -56,3 +56,23 @@ show 'a trailing colon after two fields' "$@"
 set -- $(printf ':a')
 show 'a leading colon' "$@"
 IFS=' '
+
+# --- the word a `-` or `+` substitutes is not split either -------------------
+#
+# It is part of an unquoted expansion's result, so the blanks a script writes
+# in it separate fields in bash, ksh93 and dash. Here nothing about an
+# unquoted expansion splits, so the word stays whole — separators, boundaries
+# between two lists, and all.
+
+v=x
+set -- a b
+set -- ${v:+p q}
+show 'blanks written in the word' "$@"
+set -- ${nope:-p q}
+show 'the same word an alternative did not reach' "$@"
+set -- a b
+set -- ${v:+"$@" "$@"}
+show 'a blank between two lists' "$@"
+set -- a b
+set -- ${v:+p }
+show 'a blank ending the word' "$@"

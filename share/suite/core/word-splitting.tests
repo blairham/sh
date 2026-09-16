@@ -196,3 +196,32 @@ printf 'a::c\n' | { IFS=: read -r x y z; printf 'read empty middle: [%s][%s][%s]
 printf '  a  b  \n' | { IFS=' ' read -r x y; printf 'read trims whitespace: [%s][%s]\n' "$x" "$y"; }
 printf 'a b\n' | { IFS=' ' read -r x y z; printf 'read with too few fields: [%s][%s][%s]\n' "$x" "$y" "$z"; }
 printf '  one  \n' | { IFS= read -r line; printf 'read with an empty IFS keeps the blanks: [%s]\n' "$line"; }
+
+# --- a separator closes the field beside it, with nothing to show for it -----
+#
+# A command substitution whose output is nothing but blanks produces no field,
+# and the text on either side of it does not go on sharing one: the separator
+# is a boundary of its own. Every shell on the panel agrees, zsh included,
+# which is why this is asked through a substitution rather than through a
+# parameter — zsh does not split one of those at all.
+
+show() {
+	printf '%s:' "$1"
+	shift
+	printf ' n=%s' "$#"
+	for w in "$@"; do printf ' [%s]' "$w"; done
+	printf '\n'
+}
+
+set -- a$(printf ' ')b
+show 'blanks between two words' "$@"
+set -- a$(printf '  ')b
+show 'a run of blanks between two words' "$@"
+set -- a$(printf ' b')
+show 'a leading blank in what came back' "$@"
+set -- $(printf 'b ')c
+show 'a trailing blank in what came back' "$@"
+set -- a$(printf '')b
+show 'nothing at all, which closes no field' "$@"
+set -- $(printf ' ')
+show 'blanks alone, which open no field' "$@"

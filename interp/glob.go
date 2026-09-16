@@ -707,6 +707,11 @@ func (r *Runner) glob(field string) ([]string, bool) {
 	// the separator and no longer counts for this. See
 	// StarStarZeroLevelIsTheDirectoryItStartsFrom and globZeroLevelSource.
 	zeroLevelFromAListing := globZeroLevelSource(r, parts)
+	// And whether this field holds a level-crossing `**` at all, which is
+	// what makes its listings physical in the dialect that walks such a
+	// field. Hoisted out of the loop because it is a property of the field
+	// and the loop would rescan it once per component.
+	holdsAStarStar := starstar && slices.Contains(parts, "**")
 	// And the listing it reads: the matches the component ahead of the `**`
 	// produced, before the gate below takes the ones that are no directory
 	// out of them. Held one component at a time, because the `**` that reads
@@ -896,8 +901,7 @@ func (r *Runner) glob(field string) ([]string, bool) {
 			// rather than listed, so it reaches through the link in every
 			// column — `*/a/**` is `t/a/b …` there too, which is why this
 			// asks the same question globZeroLevelSource asks.
-			physical := starstar && r.describesRatherThanSpells(part) &&
-				slices.Contains(parts, "**")
+			physical := holdsAStarStar && r.describesRatherThanSpells(part)
 			o := r.patternOpts(part)
 			o.fold = r.MatchOption(GlobFoldsCase)
 			// The subjects are the names in each directory, which are not

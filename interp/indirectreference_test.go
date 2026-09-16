@@ -264,3 +264,71 @@ func TestAnIndirectionsErrorOperatorNamesTheSameSubject(t *testing.T) {
 		})
 	}
 }
+
+// A positional parameter standing as the *outer* name, which is the one shape
+// where the refusal's name tests could have been asked of the wrong parameter:
+// the subject is the whole `!1` and not the `$1` a bare positional wears, and
+// the sigil branch reads the written name rather than the one the text
+// resolved to. Measured 2026-09-16, `set -- nope; set -u; echo "${!1}"` is
+// `!1: unbound variable` in bash 5.3.20 and bash 3.2.57, and so is the same
+// line with no parameters passed at all.
+func TestAnIndirectionThroughAPositionalNameIsStillTheIndirectionsRefusal(t *testing.T) {
+	for _, tc := range []struct{ name, src string }{
+		{"the positional holds an unset name", `set -- nope; set -u; echo "[${!1}]"; echo after`},
+		{"the positional itself is unset", `set --; set -u; echo "[${!1}]"; echo after`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runIndirectRef(t, tc.src)
+			if !strings.Contains(out, "!1: parameter not set") {
+				t.Errorf("got %q, want %q in it", out, "!1: parameter not set")
+			}
+			if strings.Contains(out, "$1") {
+				t.Errorf("got %q, which wears the sigil a bare positional gets", out)
+			}
+			if strings.Contains(out, "after") {
+				t.Errorf("got %q, want the script abandoned", out)
+			}
+			if st == 0 {
+				t.Error("status = 0, want a refusal")
+			}
+		})
+	}
+}
+
+// The refusal is written **once**. It is one parameter however many reads it
+// took to fail, and the outer check running beside the target's wrote the
+// sentence twice for `set -u; ${!v}` with nothing set — which no shell does
+// and which a Contains assertion cannot see. The count is the assertion for
+// that reason.
+func TestAnIndirectionIsRefusedOnlyOnce(t *testing.T) {
+	for _, src := range []string{
+		`set -u; echo "[${!v}]"`,
+		`set -u; v=nope; echo "[${!v}]"`,
+		`set --; set -u; echo "[${!1}]"`,
+	} {
+		out, _ := runIndirectRef(t, src)
+		if n := strings.Count(out, "parameter not set"); n != 1 {
+			t.Errorf("%s: refused %d times, want 1 — %q", src, n, out)
+		}
+	}
+}
+
+// A command substitution written into a resolved subscript costs this road no
+// more than it costs the written one. The two are printed side by side rather
+// than counted against a number, because the number is not this change's:
+// measured 2026-09-16, bash 5.3.20 runs it **once** for both spellings and
+// this shell runs it once per reader for both, which is a defect of its own
+// (#3231). What belongs here is that the indirection adds nothing — asking
+// wholeArrayIndex about the parsed node instead of about the text added one
+// more run, and the arithmetic rows above cannot see it.
+func TestAnIndirectionAddsNoReadOfItsSubscript(t *testing.T) {
+	const sub = `$(printf . >&2; echo 1)`
+	written, _ := runIndirectRef(t, `a=(x y z); echo "[${a[`+sub+`]}]"`)
+	indirect, _ := runIndirectRef(t, `a=(x y z); d='a[`+sub+`]'; echo "[${!d}]"`)
+	if !strings.Contains(written, "[y]") || !strings.Contains(indirect, "[y]") {
+		t.Fatalf("written %q and indirect %q, want both to reach the second element", written, indirect)
+	}
+	if w, i := strings.Count(written, "."), strings.Count(indirect, "."); w != i {
+		t.Errorf("the written subscript ran %d times and the indirect one %d, want the same", w, i)
+	}
+}

@@ -195,3 +195,8 @@ unbound_at='@'
 # the parameter and not to the `set -u` sentence.
 (printf 'q1=[%s]\n' "${!unbound_v?missing}"); printf 'q1rc=%s\n' "$?"
 (printf 'q2=[%s]\n' "${!arr[9]?missing}"); printf 'q2rc=%s\n' "$?"
+
+# A positional parameter standing as the *outer* name, where the subject is
+# the whole `!1` and not the `$1` a bare positional wears.
+(set -- nope; set -u; printf 'u9=[%s]\n' "${!1}"); printf 'u9rc=%s\n' "$?"
+(set --; set -u; printf 'u10=[%s]\n' "${!1}"); printf 'u10rc=%s\n' "$?"

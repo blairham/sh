@@ -96,7 +96,7 @@ func (r *Runner) judgePipeline(ctx context.Context) {
 			return
 		}
 	case PipelineJudgedAsItsLastElement:
-		if last.bodyRan && !(ranItself(last.cmd) && !last.onPath) {
+		if last.bodyRan && (!ranItself(last.cmd) || last.onPath) {
 			return
 		}
 		if last.status == 0 {

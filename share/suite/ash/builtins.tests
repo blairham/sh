@@ -162,3 +162,19 @@ printf 'a signal this shell has -> nothing said above\n'
 ( OPTIND=1; OPTARG=PRESET; set -- -- operand; o=kept; readonly OPTARG
   getopts 'a:' o 2>/dev/null
   printf 'frozen, at the end: st=%s o=[%s] OPTIND=%s OPTARG=[%s]\n' "$?" "$o" "$OPTIND" "${OPTARG-unset}" ) 2>/dev/null
+
+# `read` into a readonly name is 2 here wherever the frozen name stood, and
+# the builtin stops there, leaving the names after it alone. bash answers 1
+# when the frozen name was the last one, ksh93 answers 1 always and fills the
+# rest, and zsh ends the shell (#3208).
+( a=A; b=B; readonly a
+  printf 'x y\n' | { read a b; printf 'first st=%s [%s][%s]\n' "$?" "$a" "$b"; }
+) 2> /dev/null
+( a=A; b=B; readonly b
+  printf 'x y\n' | { read a b; printf 'last  st=%s [%s][%s]\n' "$?" "$a" "$b"; }
+) 2> /dev/null
+# The diagnostic, which this column words with the builtin in its location.
+# The script's own path is in it, so only the tail is kept.
+( a=A; readonly a; printf 'x\n' | read a ) 2>&1 | sed 's/.*read: //'
+# The control: an unfrozen name reports the read's own status and says nothing.
+( a=A; printf 'x\n' | { read a; printf 'plain st=%s [%s]\n' "$?" "$a"; } ) 2>&1

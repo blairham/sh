@@ -94,3 +94,23 @@ printf 'status: %s\n' "$?"
 ( umask 122; umask -S u+X; umask -S )
 ( umask 133; umask -S a+X; umask -S )
 ( umask 022; umask -S g=u ) 2> /dev/null; printf 'a copy -> %s\n' "$?"
+
+# `read` into a readonly name is a **warning** here, and the shell carries on
+# reading. No other column on the panel does either half: bash, dash and
+# BusyBox ash stop the builtin at the frozen name and leave the names after it
+# alone, and zsh ends the shell (#3208).
+#
+# The diagnostics carry this shell's own location, which is this file's tier
+# anyway; what the lines below measure is the status, the values, and that the
+# word `warning` is in it.
+( a=A; b=B; readonly a
+  printf 'x y\n' | { read a b; printf 'st=%s [%s][%s]\n' "$?" "$a" "$b"; }
+) 2>&1
+( a=A; b=B; readonly a b
+  printf 'x y\n' | { read a b; printf 'st=%s [%s][%s]\n' "$?" "$a" "$b"; }
+) 2>&1
+( REPLY=R; readonly REPLY
+  printf 'x\n' | { read; printf 'st=%s [%s]\n' "$?" "$REPLY"; }
+) 2>&1
+# The control: an unfrozen name says nothing and reports the read's own status.
+( a=A; printf 'x\n' | { read a; printf 'st=%s [%s]\n' "$?" "$a"; } ) 2>&1

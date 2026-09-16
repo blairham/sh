@@ -17436,6 +17436,49 @@ on the same line in bash 5.3.20, bash 3.2.57, ksh93u+, dash 0.5.12 and
 BusyBox ash 1.37.0, where `readonly x=1; x=2; echo one` never prints
 `one` in any of them. zsh alone ends the script for both.
 
+**`ReadRefusedWriteEndsTheBuiltin`** — bash yes · dash yes · ksh93 no ·
+zsh n/a
+
+Stops `read` at the first name a freeze refuses, leaving the names after
+it alone. The same question `getopts` above asks and a different set of
+shells answering it, which is why the two are two axes.
+
+Measured 2026-09-16, `a=A; b=B; readonly a; printf 'x y\n' | { read a b;
+printf '[%s][%s]' "$a" "$b"; }`:
+
+    bash 5.3.20          [A][B]   one sentence
+    bash as `sh`         [A][B]   one sentence
+    bash 3.2.57          [A][y]   one per frozen name
+    ksh93u+ 2012-08-01   [A][y]   one per frozen name
+    dash 0.5.12          [A][B]   one sentence
+    BusyBox ash 1.37.0   [A][B]   one sentence
+    zsh 5.9.2            —        the shell ended
+
+`b` holding `y` is the row that says the builtin carried on rather than
+merely complaining, and the count of sentences says it a second time from
+the other side. zsh never reaches the axis:
+`ReadonlyRefusalInABuiltinIsFatal` is asked first.
+
+**`ReadRefusedWriteIsOneOnTheLastName`** — bash yes · dash no · ksh93 n/a
+· zsh n/a
+
+Reports 1 rather than 2 when the freeze stopped `read` with no name left
+to fill. Over three names bash answers 2, 2, 1 — "I stopped early" and "a
+write failed" are different things to it — where dash and BusyBox ash
+answer 2 for all three. ksh93 does not stop at all and reports 1
+throughout, which is its own rule rather than this axis.
+
+A `read` with no operands has no last name for the question to be about:
+the name it fills is the shell's own `REPLY`, and bash answers 2 there,
+in 5.3.20 and 3.2.57 alike. So the axis is asked only where an operand
+was the last one.
+
+Both are reached through `assignedByBuiltin`, the form #3147 added for
+`getopts`: before it, `read`'s write went through the bare-assignment
+path and a refused bare assignment gives up the rest of the line, so
+`readonly q; printf 'z\n' | read q; echo "st=$?"` printed the refusal and
+nothing else in all five dialects (#3208).
+
 **`ShiftPastEndFatal`** — bash no · dash yes · ksh93 yes · zsh no
 
 Ends a non-interactive shell when `shift` runs off the end. True in dash

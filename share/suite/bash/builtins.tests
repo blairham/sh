@@ -275,3 +275,27 @@ kill -l 32 2> /dev/null; printf '32 -> %s\n' "$?"
 # And the test is against the mask the operand started from, not the one an
 # earlier clause left: the owner gaining `x` does not give the group `X`.
 ( umask 133; umask -S u+x,g+X )
+
+# `read` into a readonly name stops the builtin at that name and parts "I
+# stopped early" from "a write failed" in the status: 2 where a name was left
+# to fill and 1 where the frozen name was the last one. ksh93 fills the rest
+# and reports 1 throughout, dash and BusyBox ash report 2 wherever the frozen
+# name stood, and zsh ends the shell — so all four numbers below are this
+# column's alone (#3208).
+#
+# Stderr is discarded: the sentence is this shell's and the file is already
+# its tier, where the numbers are the claim.
+( a=A; b=B; c=C; readonly a
+  printf 'x y z\n' | { read a b c; printf 'first  st=%s [%s][%s][%s]\n' "$?" "$a" "$b" "$c"; }
+) 2> /dev/null
+( a=A; b=B; c=C; readonly b
+  printf 'x y z\n' | { read a b c; printf 'middle st=%s [%s][%s][%s]\n' "$?" "$a" "$b" "$c"; }
+) 2> /dev/null
+( a=A; b=B; c=C; readonly c
+  printf 'x y z\n' | { read a b c; printf 'last   st=%s [%s][%s][%s]\n' "$?" "$a" "$b" "$c"; }
+) 2> /dev/null
+# A `read` with no operands has no last name for that to be about: the name it
+# fills is the shell's own, and this column answers 2 for it.
+( REPLY=R; readonly REPLY
+  printf 'x\n' | { read; printf 'bare   st=%s [%s]\n' "$?" "$REPLY"; }
+) 2> /dev/null

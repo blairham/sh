@@ -1645,8 +1645,10 @@ func Semantics() interp.Semantics {
 	// alone. The builtin reports 1 for it, whatever the read itself did, and
 	// reports it once however many names were frozen (#3208).
 	s.ReadRefusedWriteEndsTheBuiltin = interp.No
-	// Not reached: the builtin does not stop, so there is no early stop to
-	// part from a failed write. Left unanswered on purpose.
+	// Unreachable while the answer above is no: the builtin never stops, so
+	// there is no early stop to part from a failed write. Answered so that
+	// nothing reports an axis this shell cannot be asked.
+	s.ReadRefusedWriteIsOneOnTheLastName = interp.No
 	// A frozen *name* is refused, and the refusal is not fatal: `read`
 	// writes `warning: x: is read only` and the script runs on.
 	s.ReadonlyRefusalInABuiltinIsFatal = interp.No

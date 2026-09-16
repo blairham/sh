@@ -656,6 +656,23 @@ func Semantics() interp.Semantics {
 	// dollar included — so the grammar refuses the form before any of them
 	// can be asked. An answer here would be an invention.
 	s.GetoptsAssignmentRestartsWord = interp.Yes
+	// `kill %1` aims at the job's process group, which a script never has:
+	// the monitor is off, the job leads no group, and the send is ESRCH.
+	s.KillJobSpecAimsAtTheGroup = interp.Yes
+	// A trim on `$@` runs over the whole list once, not over each field:
+	// `set -- aa ab ba` makes `"${@#a}"` into `a ab ba` here and
+	// `a b ba` in bash, zsh and ksh93.
+	s.OperatorDistributesOverTheFieldList = interp.No
+	// And nor does it over `"$*"`: `set -- aa ab ba` makes `"${*#a}"`
+	// into `a ab ba` here and in zsh and BusyBox ash, against `a b ba` in
+	// bash and ksh93. Measured 2026-09-16. Unanswered until now, so the
+	// construct was a refusal in a shell that has it.
+	s.OperatorDistributesOverStarSubscript = interp.No
+	// OPTIND names the word *after* a cluster from its first letter on, so
+	// `-abc` reads `a` with OPTIND already 2. The place inside the word is
+	// kept somewhere a script cannot see. bash, ksh93 and zsh all leave
+	// OPTIND naming the word until its last letter has been read.
+	s.GetoptsCountsTheWordAtItsFirstLetter = interp.Yes
 	// A shell function call gets a `getopts` scan of its own here, while
 	// OPTIND itself stays the shell's: a helper called twice reads its
 	// arguments twice, and `$OPTIND` inside the call is still the caller's
@@ -1454,9 +1471,15 @@ func Diagnostics() interp.Diagnostics {
 		TestUnaryExpected:       "%[2]s: %[1]s: unexpected operator",
 		TestBinaryExpected:      "%[2]s: %[1]s: unexpected operator",
 		TestIntegerExpected:     "%[2]s: Illegal number: %[1]s",
-		TestTooManyArguments:    "%[2]s: too many arguments",
-		TestOperandExpected:     "%[2]s: argument expected",
-		TestMissingBracket:      "[: missing ]",
+		// No "too many arguments" sentence at all: a well-formed expression
+		// with words left over is the *last word the parse took* called an
+		// unexpected operator. `test a = b = c` is `test: b: unexpected
+		// operator` and `test a b c d` is `test: a:` — one past the end of
+		// what parsed, never the leftover itself. Measured 2026-09-16 on
+		// Apple's dash-16 and Debian's dash 0.5.12, which agree.
+		TestTooManyArguments: "%[2]s: %[1]s: unexpected operator",
+		TestOperandExpected:  "%[2]s: argument expected",
+		TestMissingBracket:   "[: missing ]",
 		// Six decimal places, the most of any shell in the panel.
 		TimesDecimals: 6,
 		// dash hands the path to execve rather than checking first, so a

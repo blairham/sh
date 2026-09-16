@@ -7,6 +7,33 @@
 # features — they are the places where the same builtin behaves differently
 # here than in the other three. `echo` processing escapes with no option is
 # the one a portable script trips over most.
+#
+# ---- two rows here are not this shell's to answer ----
+#
+# Measured 2026-09-16, and both are named so that nobody closes them by
+# making cmd/dash wrong somewhere else.
+#
+# The `set -o` listing is **patched by Debian and Ubuntu**. Upstream dash
+# 0.5.12 lists seventeen names and Apple's dash-16 lists the same seventeen;
+# Debian's dash 0.5.12-12 lists nineteen, adding `privileged` after `nounset`
+# and `pipefail` after `nolog`. Two builds of one upstream version disagree,
+# so it is the distribution's patch and not a version this file is behind on.
+# Matching it would put two names in cmd/dash's listing that upstream dash
+# does not have.
+#
+# The `kill -l` rows are **the operating system's signal table**, not the
+# shell's. `kill -l 32` is `32` at 0 under every dash on Linux — Debian's and
+# Alpine's alike — and `invalid signal number or exit status` at 2 under
+# Apple's dash-16, because macOS has 31 signals and Linux has 64. The
+# reference on the machine is the expectation, so each platform's answer is
+# the right one there; what is missing is that cmd/dash knows only the
+# signals both platforms name, so on Linux it refuses a number the reference
+# accepts. That is ours and is filed, platform-scoped.
+#
+# Neither can be read off the column header, and that is the sharper half:
+# dash answers no version probe in any spelling, so the report prints
+# `could not determine` and has nothing to raise the WRONG BUILD banner from
+# that the bash, zsh and ksh93 columns carry for exactly this. See #2291.
 
 # echo interprets the escape sequences with no -e and no option set. bash
 # does not, which is the whole reason `printf` is the portable spelling.

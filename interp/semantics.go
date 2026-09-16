@@ -2369,6 +2369,101 @@ type Semantics struct {
 	// a second time where zsh carries on to `b`.
 	GetoptsAssignmentRestartsWord Answer
 
+	// KillJobSpecAimsAtTheGroup points a `%` job specification at the job's
+	// *process group* rather than at its process.
+	//
+	// dash alone does, and in a script it is the difference between `kill
+	// %1` working and not working at all. A group id is its leader's pid, so
+	// a job the monitor never put in a group of its own has no group of its
+	// number — and `set -m` is refused without a controlling terminal, which
+	// is every script. So the send is ESRCH:
+	//
+	//	mkfifo gate; cat < gate & kill -0 %1
+	//
+	//	bash 5.3.20, zsh 5.9.2, ksh93u+, BusyBox ash 1.37.0   0
+	//	dash                            `kill: No such process`, 1
+	//
+	// The job is held open on a fifo so that it cannot have finished, which
+	// is what makes the two answers a rule rather than a race. Measured
+	// 2026-09-16 on Apple's dash-16 and on Debian's and Alpine's 0.5.12
+	// builds, all three the same; `kill -0 "$!"` on that same job is 0 in
+	// dash and `kill -0 -"$!"` draws the identical refusal, which is what
+	// says the group and not the word is what it could not reach.
+	//
+	// So it is a missing *reach* rather than a missing spelling: dash reads
+	// the spec, finds the job and aims one process-group number past
+	// anything that exists. A script that stops a background job from a trap
+	// has to keep the pid here.
+	KillJobSpecAimsAtTheGroup Answer
+
+	// OperatorDistributesOverTheFieldList runs a trim or a replacement over
+	// each field of `$@` rather than over the whole list once.
+	//
+	// The counterpart of OperatorDistributesOverStarSubscript on the other
+	// side of the `@`/`*` line, and it is a separate question because the
+	// join is a different one. `[*]` joins with the separator a script chose
+	// and can see the seam of; `$@` keeps its fields, so the dialect that
+	// runs the operator once has to string them together with a boundary
+	// nothing in a pattern can match and split the result back on it.
+	//
+	// The difference is invisible while only the first field matches, which
+	// is why it needs a case where a second one does:
+	//
+	//	set -- aa ab ba; printf '[%s]' "${@#a}"
+	//
+	//	bash 5.3.20, zsh 5.9.2, ksh93u+   [a][b][ba]
+	//	dash 0.5.12, BusyBox ash 1.37.0   [a][ab][ba]
+	//
+	// Measured 2026-09-16 on Apple's dash-16 and Debian's and Alpine's
+	// 0.5.12 builds, and `${@%a}` over `xa ya za` splits the same way. Two
+	// further readings say what the boundary is rather than guessing:
+	// `"${@#ab c}"` over `ab cd` changes nothing there, so the fields are
+	// not joined with a space, and `IFS=:` does not move the answer, so they
+	// are not joined with the field separator either. A `*` does cross it —
+	// `"${@##a*}"` is one empty field — so the boundary is taken with
+	// everything else when the pattern reaches that far.
+	//
+	// It matters to `set -- "${@#--}"`, which strips a prefix from every
+	// argument in three shells and from the first one only here.
+	//
+	// Asked only where the two readings differ, and never over an empty
+	// list: joining nothing and splitting it back would turn no fields into
+	// one empty one.
+	OperatorDistributesOverTheFieldList Answer
+
+	// GetoptsCountsTheWordAtItsFirstLetter moves OPTIND past a clustered
+	// word as soon as its *first* letter has been read, keeping the place
+	// inside the word somewhere a script cannot see.
+	//
+	// `-abc` is three options in one word, and the question is what a script
+	// reading OPTIND between two calls is told. The two answers differ on
+	// every letter but the last:
+	//
+	//	trace() { OPTIND=1
+	//	  while getopts 'ab:c' o "$@" >/dev/null 2>&1; do
+	//	    printf 'saw %s ind=%s\n' "$o" "$OPTIND"
+	//	  done; }
+	//	trace -abc rest
+	//
+	//	bash 5.3.20, bash 3.2.57, ksh93u+, zsh 5.9.2   a ind=1   b ind=2
+	//	dash 0.5.12, BusyBox ash 1.37.0                a ind=2   b ind=2
+	//
+	// Measured 2026-09-16 over a script file, `env -i PATH=/usr/bin:/bin`,
+	// and the same two answers come back for `-ac`, where neither letter
+	// takes an argument. Apple's dash-16 and Alpine's and Debian's 0.5.12
+	// builds all answer 2, so this is the shell rather than the build.
+	//
+	// It matters because OPTIND is the number a script `shift`s by. A
+	// wrapper that reads `-abc`, stops at the first letter it does not know
+	// and shifts by `OPTIND-1` drops the rest of the cluster here and keeps
+	// it in bash.
+	//
+	// The position inside the word is this shell's [Runner.optChar] either
+	// way; what the axis decides is only the number written out. See
+	// [Runner.optIndex], which takes the word back off again so the scan
+	// carries on where it was.
+	GetoptsCountsTheWordAtItsFirstLetter Answer
+
 	// GetoptsFunctionPosition is what a shell function call does to the
 	// `getopts` scan position. See GetoptsFunctionPositionPolicy for the
 	// three answers and the measurements that separate them.
@@ -15707,6 +15802,18 @@ func PosixSemantics() Semantics {
 		// loses it too. The standard has nothing to say — `local` is not
 		// in it — so the measured member decides.
 		GetoptsLocalOptindRestoresTheCursor: No,
+		// OPTIND names the word until its last letter has been read. The
+		// standard's own wording is "the index of the next argument to be
+		// processed", which is the word the scan is still inside, and it is
+		// what four of the six columns do. dash and BusyBox ash count the
+		// word at its first letter and say so themselves.
+		GetoptsCountsTheWordAtItsFirstLetter: No,
+		// `kill %1` reaches the job's process; dash aims at its group and
+		// says so itself.
+		KillJobSpecAimsAtTheGroup: No,
+		// A trim on `$@` runs over each field; dash and BusyBox ash run it
+		// over the whole list once and say so themselves.
+		OperatorDistributesOverTheFieldList: Yes,
 		SignalHandlerSeesEarlierStatus:      No,
 		// POSIX says a bare `exit` reports the status of the last command,
 		// and in an EXIT trap it names the value `$?` had when the trap was
@@ -16514,6 +16621,20 @@ func CoreSemantics() Semantics {
 	return Semantics{
 		SplitCommandSubstitution: Yes,
 		LengthOfSpecialIsCount:   Yes,
+		// A clustered `-abc` leaves OPTIND naming the word until its last
+		// letter has been read, which is what four of the six columns do and
+		// what a script shifting by `OPTIND-1` between calls needs. dash and
+		// BusyBox ash count the word at its first letter and say so
+		// themselves. Answered here rather than left to refuse because the
+		// substrate is a shell somebody runs: an unanswered axis would make
+		// every clustered `getopts` read a refusal.
+		GetoptsCountsTheWordAtItsFirstLetter: No,
+		// `kill %1` reaches the job's process; dash aims at its group and
+		// says so itself.
+		KillJobSpecAimsAtTheGroup: No,
+		// A trim on `$@` runs over each field; dash and BusyBox ash run it
+		// over the whole list once and say so themselves.
+		OperatorDistributesOverTheFieldList: Yes,
 		// Whether `$_` exists at all is left unanswered here, which is the
 		// substrate refusing it. *How* it moves is answered anyway, at the
 		// reading two of the three shells that have the parameter share:

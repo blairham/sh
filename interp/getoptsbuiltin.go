@@ -295,6 +295,13 @@ func (r *Runner) advance(word string, ind int) bool {
 		return r.setOptind(ind + 1)
 	}
 	r.optChar++
+	if r.ask(r.sem().GetoptsCountsTheWordAtItsFirstLetter,
+		"OPTIND counting a clustered word at its first letter") {
+		// dash and BusyBox ash have already counted past the word; the
+		// place inside it is optChar and a script cannot see it. optIndex
+		// takes the word back off so the scan carries on where it was.
+		return r.setOptind(ind + 1)
+	}
 	return r.setOptind(ind)
 }
 
@@ -434,13 +441,30 @@ func (r *Runner) getoptsBadOptionComplaint(letter string, missingArg bool) {
 // has a cursor of its own afterwards.
 func (r *Runner) optIndex() int {
 	if r.optWord > 0 && !r.optindAssigned {
-		return r.optWord
+		return r.optWord - r.optWordAlreadyCounted()
 	}
 	n := r.optindValue()
 	if r.optWord > 0 {
 		r.optWord = n
 	}
-	return n
+	return n - r.optWordAlreadyCounted()
+}
+
+// optWordAlreadyCounted is the one word OPTIND is ahead by, in the dialect
+// that counts a clustered word at its first letter.
+//
+// Read rather than asked, and the difference matters: an unanswered axis has
+// left every write to OPTIND at the other rule, so there is nothing ahead to
+// take back. The question is put once, in advance, where the number is
+// chosen. A script's own assignment outranks it for the reason it outranks
+// the override above — writing OPTIND is how a scan is restarted, so the
+// number written is the position and nothing is ahead of it.
+func (r *Runner) optWordAlreadyCounted() int {
+	if r.optChar > 1 && !r.optindAssigned &&
+		r.sem().GetoptsCountsTheWordAtItsFirstLetter == Yes {
+		return 1
+	}
+	return 0
 }
 
 // optindValue is the number OPTIND holds, which is the shell's and which a

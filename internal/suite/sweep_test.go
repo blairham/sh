@@ -20,8 +20,9 @@ import (
 func gradeFile(t *testing.T, tests, name, ours, reference string) Result {
 	t.Helper()
 	s := Suite{ShellVar: "THIS_SH", TestDir: "tests", Ext: ".tests"}
-	return grade(context.Background(), s, tests, name, ours, reference,
+	res, _ := grade(context.Background(), s, tests, name, ours, reference,
 		bash.Dialect(), true, Doc{}, Options{Timeout: 2 * time.Second})
+	return res
 }
 
 // TestAKilledOracleAndAKilledDialectAreDifferentFindings is the distinction

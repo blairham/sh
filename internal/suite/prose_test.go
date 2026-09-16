@@ -23,8 +23,9 @@ import (
 func gradeWithDoc(t *testing.T, tests, name, ours, reference string, doc Doc) Result {
 	t.Helper()
 	s := Suite{ShellVar: "THIS_SH", TestDir: "tests", Ext: ".tests"}
-	return grade(context.Background(), s, tests, name, ours, reference,
+	res, _ := grade(context.Background(), s, tests, name, ours, reference,
 		bash.Dialect(), true, doc, Options{Timeout: 5 * time.Second})
+	return res
 }
 
 // TestTheReferenceQuotingItsOwnManualIsNotCountedAsWork is the finding this

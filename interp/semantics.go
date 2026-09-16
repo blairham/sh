@@ -8006,6 +8006,48 @@ type Semantics struct {
 	// the same and has no dialect of its own here (#2411).
 	ReapedCoprocessEnds CoprocEndDisposal
 
+	// CoprocessNamedByARedirection makes `p` a duplication target that names
+	// the running coprocess's near end — `exec 3>&p` the end this shell
+	// writes, `exec 4<&p` the end it reads — and says what becomes of the
+	// end once a number of the script's own aims at it. It is the
+	// redirection half of the facility `print -p` and `read -p` are the
+	// builtin half of.
+	//
+	// Measured 2026-09-16 from a script file under `env -i`, with a
+	// coprocess running and `print -p` asked again afterwards:
+	//
+	//	ksh93u+ 2012   `exec 3>&p` works, and `print -p` is then
+	//	               `print: no query process [Bad file descriptor]`
+	//	               at 1 — the end was **moved**. `exec 4<&p` takes
+	//	               the read end the same way and leaves the write
+	//	               end alone, so the two move one at a time.
+	//	zsh 5.9.2      `exec 3>&p` works and `print -p` still writes to
+	//	               the coprocess — the end was **duplicated**.
+	//	bash 5.3.20    no such target. The bare `>&p` is the csh
+	//	               spelling and *makes a file called p*; `2>&p` is
+	//	               `p: ambiguous redirect`.
+	//	dash, ash      `Syntax error: Bad fd number`, at parse.
+	//
+	// Three shells have no such word at all, and for them the zero value is
+	// the answer rather than a refusal: a dialect without the facility
+	// already has a reading for `p`, and it is the one every other word
+	// gets. So there is no unanswered state and nothing is put to a script.
+	//
+	// **It is read before the csh reading of `>&word`.** Measured in a
+	// directory holding a file named `p`: ksh93 still answers `p: cannot
+	// open [Bad file descriptor]` with no coprocess running and leaves the
+	// file untouched, where bash writes into it. The word is the facility's
+	// wherever the facility exists, whatever is on disk.
+	//
+	// **With no coprocess running it is the duplication's own refusal**, not
+	// an open that failed: `p: cannot open [Bad file descriptor]` in ksh93 —
+	// DuplicationSourceNotOpen's sentence with the word `p` where a number
+	// usually stands — at status 1, ending the shell where `exec` wrote it
+	// and carrying on where a simple command did. zsh words the same event
+	// `coprocess: bad file descriptor`, naming the facility rather than the
+	// word, which is CoprocessDuplicationTargetName's job.
+	CoprocessNamedByARedirection CoprocRedirectionTarget
+
 	// BareDeclarationListing is the shape `export` and `readonly` write with
 	// no operands and no `-p` — which is not always the shape `-p` writes.
 	// dash and both bash builds answer the bare form exactly as they answer
@@ -19523,6 +19565,42 @@ func (p CoprocEndPlacement) String() string {
 		return "at the top of the table"
 	}
 	return "where any descriptor goes"
+}
+
+// CoprocRedirectionTarget is whether `>&p` and `<&p` name the running
+// coprocess's ends, and what becomes of an end a script has aimed a number of
+// its own at. See Semantics.CoprocessNamedByARedirection, which holds the
+// measurements.
+type CoprocRedirectionTarget uint8
+
+const (
+	// CoprocessIsNotARedirectionTarget leaves `p` to the ordinary readings of
+	// a word after `>&` or `<&`: a file in the dialect whose bare `>&word` is
+	// the csh spelling, a refused target in the rest. The three shells with
+	// no coprocess letters.
+	CoprocessIsNotARedirectionTarget CoprocRedirectionTarget = iota
+
+	// CoprocessRedirectionDuplicatesTheEnd leaves the coprocess reachable by
+	// its letter afterwards, so `exec 3>&p; print -p x` still writes to the
+	// coprocess. zsh.
+	CoprocessRedirectionDuplicatesTheEnd
+
+	// CoprocessRedirectionMovesTheEnd hands the end over: the letter that
+	// reached it finds none, and `print -p` after an `exec 3>&p` is the same
+	// `no query process` it gives before any coprocess was started. ksh93,
+	// and one end at a time — moving the write end leaves the read end where
+	// it was.
+	CoprocessRedirectionMovesTheEnd
+)
+
+func (t CoprocRedirectionTarget) String() string {
+	switch t {
+	case CoprocessRedirectionDuplicatesTheEnd:
+		return "the redirection duplicates the coprocess's end"
+	case CoprocessRedirectionMovesTheEnd:
+		return "the redirection takes the coprocess's end"
+	}
+	return "`p` does not name a coprocess"
 }
 
 // CoprocEndDisposal is what a shell does with a coprocess's near ends once

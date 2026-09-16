@@ -2527,6 +2527,16 @@ func Semantics() interp.Semantics {
 	// nothing left is not this axis — both shells with the letters forget the
 	// whole coprocess there, reaped or not. Measured 2026-09-12 (#2411).
 	s.ReapedCoprocessEnds = interp.CoprocWriteEndGoesWithTheCoprocess
+	// And `p` is a duplication target that names the ends the letters reach,
+	// so a script may park them on numbers of its own: `cat |&; exec 3>&p`
+	// then writes to the coprocess through a 3. It **takes** the end rather
+	// than lending it — `print -p` after that `exec` is the same `no query
+	// process` it gives before any coprocess was started, while a `read -p`
+	// still answers, so the two ends move one at a time. Measured
+	// 2026-09-16; with no coprocess running the word is refused as the
+	// duplication's own failure, `p: cannot open [Bad file descriptor]`, and
+	// a *file* called `p` in the directory does not make it an open (#2345).
+	s.CoprocessNamedByARedirection = interp.CoprocessRedirectionMovesTheEnd
 	// The ends are numbered where any other allocation goes rather than at
 	// the top of the table. Measured 2026-09-13 through the numbers left over
 	// for the shell to hand out: `exec {a}>/dev/null; exec {b}>/dev/null;

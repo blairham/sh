@@ -3016,6 +3016,15 @@ func Semantics() interp.Semantics {
 	// status rather than the signal, so this column reports 1 where zsh
 	// reports 141 until that lands (#2411).
 	s.ReapedCoprocessEnds = interp.CoprocEndsSurviveTheCoprocess
+	// `p` after `>&` or `<&` is the coprocess here too, which is the same
+	// facility the `-p` letters are: `coproc cat; exec 3>&p; print -u3 x`
+	// reaches the coprocess through a 3. It **lends** the end rather than
+	// handing it over — measured 2026-09-16, `print -p` after that `exec`
+	// still writes to the coprocess, where ksh93's letter finds none. The
+	// refusal with none running names the facility rather than the word,
+	// `coprocess: bad file descriptor`, which is what the diagnostic below
+	// carries (#2345).
+	s.CoprocessNamedByARedirection = interp.CoprocessRedirectionDuplicatesTheEnd
 	s.SetListingQuoting = interp.ListingQuoteWhenNeededRuns
 
 	// A descriptor number the process cannot hold is not checked here: with
@@ -3255,7 +3264,11 @@ func Diagnostics() interp.Diagnostics {
 		// nothing of its own to say. The writing side never reaches this —
 		// GreatAmpTarget sends it to the file.
 		DuplicationTargetIsNotADescriptor: "file number expected",
-		CannotCreate:                      "%[2]s: %[1]s",
+		// A refused `>&p` names the facility rather than the word:
+		// `coprocess: bad file descriptor`, measured 2026-09-16 with no
+		// coprocess running. ksh93 quotes the `p` the script wrote.
+		CoprocessDuplicationTargetName: "coprocess",
+		CannotCreate:                   "%[2]s: %[1]s",
 		// Under `noclobber`, a name holding something that is not a regular
 		// file is opened — `>/dev/null` writes — and where that open fails
 		// for a reason of its own zsh says `file exists` about it anyway.

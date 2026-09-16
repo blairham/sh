@@ -1973,6 +1973,19 @@ type Diagnostics struct {
 	// wants, which has nothing else to say.
 	EmptyDuplicationTarget string
 
+	// CoprocessDuplicationTargetName is what a refused `>&p` calls the word
+	// when no coprocess is running — see
+	// Semantics.CoprocessNamedByARedirection, which is what makes `p` a
+	// target at all. It stands where a number usually stands in
+	// DuplicationSourceNotOpen, and the two shells with the facility fill it
+	// differently: ksh93 quotes the word the script wrote and says `p:
+	// cannot open [Bad file descriptor]`, where zsh names the *facility* and
+	// says `coprocess: bad file descriptor`.
+	//
+	// Empty means the word as written, which is ksh93's answer and the one a
+	// dialect that grows the facility gets for nothing.
+	CoprocessDuplicationTargetName string
+
 	// ExportNotAFunction is `export -f` given a name that is not one. One
 	// verb: the name.
 	ExportNotAFunction string

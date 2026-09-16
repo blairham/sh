@@ -275,3 +275,8 @@ say 'a fresh binding is a declaration of that binding'
 ( u=1; declare -n s=u; f() { local -i s; declare -p s u; }; f; declare -p s u ) 2>&1
 ( f() { local u=1; local -n s=u; local -i s; declare -p s u; }; f ) 2>&1
 ( u=1; declare -n s=u; f() { declare -g -r s; }; f; declare -p s u ) 2>&1
+
+say 'and a re-aim is about the reference rather than about its target'
+( u=1; w=2; declare -n s=u; declare -n s=w; declare -p s u w ) 2>&1
+( u=1; w=2; declare -n s=u; declare -rn s=w; declare -p s u w ) 2>&1
+( u=1; declare -n s=u; declare -n s; declare -p s u ) 2>&1

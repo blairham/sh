@@ -2755,7 +2755,7 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 		// The export attribute goes to what a reference points at, and this
 		// loop takes no scope, so there is never a fresh binding for it to be
 		// about instead. See interp/namerefattribute.go.
-		if target, follows := r.attributeFollowsTheReference(name, declareFlags{}, false); follows {
+		if target, follows := r.attributeFollowsTheReference(name, declareFlags{}); follows {
 			name = target
 		}
 		if hasValue {
@@ -5189,10 +5189,10 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 		// back, and it becomes a plain assignment.
 		fresh := r.shadow(name)
 		// And a name already holding a **reference** puts everything below on
-		// what it points at — unless this call has just made a fresh binding,
-		// which is a declaration of that binding and not of the reference.
-		// See interp/namerefattribute.go.
-		if target, follows := r.attributeFollowsTheReference(name, f, fresh); follows {
+		// what it points at. After the shadow, which is what leaves a fresh
+		// binding out of it: the copy drops the reference along with every
+		// other attribute. See interp/namerefattribute.go.
+		if target, follows := r.attributeFollowsTheReference(name, f); follows {
 			name = target
 			wasExported = r.isExported(name)
 		}
@@ -5454,7 +5454,7 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 		// a caller's variable and told to freeze it froze the reference, and
 		// the caller's variable stayed writable at status 0. See
 		// interp/namerefattribute.go.
-		if target, follows := r.attributeFollowsTheReference(name, f, fresh); follows {
+		if target, follows := r.attributeFollowsTheReference(name, f); follows {
 			name = target
 		}
 		if (f.array || f.assoc) && r.readonlyRecordsTheCompound() {

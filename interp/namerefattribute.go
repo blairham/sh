@@ -40,9 +40,14 @@ package interp
 //     the function its own `s` in bash and leaves `u` plain, exactly as
 //     `local` over any other outer name does. Where the binding already
 //     exists the letter follows again: `f() { local u=1; local -n s=u; local
-//     -i s; }` puts `-i` on the local `u`. That question is what
-//     `shadowTypeset` answers, which is why this is asked with its result in
-//     hand rather than in front of it.
+//     -i s; }` puts `-i` on the local `u`.
+//
+//     That exception is the **call site's order** and not a test here. The
+//     shadow runs `dropNameAttributes`, which takes the reference off with
+//     every other attribute, so a fresh binding is already not a reference by
+//     the time this is asked. Asking after the shadow is therefore the whole
+//     of it — a `fresh` argument beside it was a second spelling of the same
+//     fact, and a mutation that removed it changed no measured answer.
 //
 // A frozen *reference* does not stop the letter: `v=1; declare -rn r=v;
 // declare -i r` is 0 in bash and leaves `declare -i v="1"`. That falls out of
@@ -52,11 +57,12 @@ package interp
 // value are really about, and whether that is somewhere other than the name
 // written.
 //
-// `fresh` is shadowTypeset's answer: true when this declaration has just taken
-// the innermost scope's copy of the name, which is the one shape where the
-// reference is not what is being declared.
-func (r *Runner) attributeFollowsTheReference(name string, df declareFlags, fresh bool) (string, bool) {
-	if df.nameref || fresh || !r.isNameref(name) {
+// **Call it after the shadow.** That is where the fresh-binding exception
+// above lives: a shadow this declaration has just taken has already dropped
+// the reference, so the name asked about here is a reference exactly when the
+// declaration is about one.
+func (r *Runner) attributeFollowsTheReference(name string, df declareFlags) (string, bool) {
+	if df.nameref || !r.isNameref(name) {
 		return name, false
 	}
 	target, cycle, aimed := r.namerefWalk(name)

@@ -111,6 +111,24 @@ func TestAnAttributeLetterLandsOnWhatTheReferencePointsAt(t *testing.T) {
 			src:  `u=1; declare -rn s=u; declare -p s u`,
 			want: "declare -nr s=\"u\"\ndeclare -- u=\"1\"\n",
 		},
+		// A declaration that writes `-n` again is a **re-aim**, which is the
+		// exception seen from the other side: it is about the reference and
+		// not about what the reference is pointing at when it runs.
+		{
+			name: "a re-aim is about the reference",
+			src:  `u=1; w=2; declare -n s=u; declare -n s=w; declare -p s u w`,
+			want: "declare -n s=\"w\"\ndeclare -- u=\"1\"\ndeclare -- w=\"2\"\n",
+		},
+		{
+			name: "and a re-aim carrying a letter",
+			src:  `u=1; w=2; declare -n s=u; declare -rn s=w; declare -p s u w`,
+			want: "declare -nr s=\"w\"\ndeclare -- u=\"1\"\ndeclare -- w=\"2\"\n",
+		},
+		{
+			name: "and the bare letter re-reads it",
+			src:  `u=1; declare -n s=u; declare -n s; declare -p s u`,
+			want: "declare -n s=\"u\"\ndeclare -- u=\"1\"\n",
+		},
 		// And a frozen *reference* does not stop a later letter reaching the
 		// target: the freeze is the reference's and the letter is the
 		// target's.

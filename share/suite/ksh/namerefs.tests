@@ -51,3 +51,7 @@ say 'the nameref word makes the same reference'
 
 say 'a POSIX-form function has no scope, so the letter reaches the reference'
 ( u=1; typeset -n s=u; f() { typeset -i s; }; f; typeset -p u ) 2>&1
+
+say 'and a re-aim is about the reference rather than about its target'
+( u=1; w=2; typeset -n s=u; typeset -n s=w; typeset -p s u w ) 2>&1
+( u=1; w=2; typeset -n s=u; nameref s=w; typeset -p s u w ) 2>&1

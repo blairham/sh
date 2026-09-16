@@ -256,6 +256,37 @@ popd +1; echo "pwd=$PWD"`)
 	}
 }
 
+// `-n` does the stack work and leaves the shell where it is.
+//
+// Each line here is bash 5.3.20's, measured 2026-09-15, and the two that look
+// like mistakes are not. `pushd -n dir` stores the word as written — nothing
+// goes there, so nothing resolves it — and a suppressed rotation prints
+// nothing while every other form of `pushd` lists the stack it just changed.
+func TestDirectoryStackNoMove(t *testing.T) {
+	home := t.TempDir()
+	out, _ := runBashPrelude(t, home, `HOME=`+home+`
+cd /
+pushd -n /tmp; echo "pwd=$PWD"
+pushd -n; echo "quiet=$?"
+pushd /usr >/dev/null
+popd -n; echo "pwd=$PWD"
+dirs`)
+	for _, want := range []string{
+		// The directory lands below the current one and the shell stays.
+		"/ /tmp\npwd=/\n",
+		// Nothing to do and nothing said.
+		"quiet=0\n",
+		// The entry below the current one is the one that goes: after the
+		// plain push the stack is /usr, / and /tmp, and popd -n takes out
+		// the / rather than the directory the shell is standing in.
+		"/usr /tmp\npwd=/usr\n",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("got %q, want %q in it", out, want)
+		}
+	}
+}
+
 // The refusals, whole: the sentence, the name in front of it, and the location
 // in front of that. Every one is a line bash writes verbatim, and the location
 // is the half no shell function could reach before #603 — which is why the
@@ -270,7 +301,7 @@ popd -9; echo "o=$?"
 dirs +9; echo "d=$?"
 popd >/dev/null; pushd +1; echo "e=$?"
 dirs -q; echo "q=$?"
-pushd -n /etc; echo "n=$?"
+pushd -L /etc; echo "n=$?"
 popd foo; echo "a=$?"
 pushd /no/such/dir-xyz; echo "c=$?"`)
 	wantWholeLines(t, out,
@@ -285,8 +316,12 @@ pushd /no/such/dir-xyz; echo "c=$?"`)
 		// The usage line that follows carries no location, which is bash's
 		// own shape: only the first line of a refusal is placed.
 		"dirs: usage: dirs [-clpv] [+N] [-N]",
-		// Refused by name rather than read as a directory called `-n`.
-		"bash: line 9: pushd: -n is not implemented yet",
+		// A letter that is not `-n` is an index that will not parse, and
+		// the name on it is `pushd`'s. It used to break the option loop
+		// and reach `cd`, which answered with `cd`'s name and `cd`'s
+		// usage line at status 1.
+		"bash: line 9: pushd: -L: invalid number",
+		"pushd: usage: pushd [-n] [+N | -N | dir]",
 		// And a third wording for a word that is neither an index nor an
 		// option, which `popd` alone has.
 		"bash: line 10: popd: foo: invalid argument",

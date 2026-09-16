@@ -3,6 +3,13 @@
 # plain `install` writes only .git/hooks/pre-commit and the push-stage hook
 # is configured but never fires -- silent in the green direction, which is
 # the failure mode #1495 and #2150 were both about.
+# Every other hook here is a *commit* hook and nothing more. Without this key
+# pre-commit's default is "run at every stage", so each one would run a second
+# time on every push -- gofumpt, gitleaks and the rest re-doing at push exactly
+# what they already passed at commit. The golangci-lint hook below opts back
+# out with an explicit `stages:`.
+default_stages: [pre-commit]
+
 default_install_hook_types: [pre-commit, pre-push]
 
 repos:

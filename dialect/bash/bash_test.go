@@ -817,6 +817,13 @@ func TestDollarSingleAnswers(t *testing.T) {
 		// C-string semantics: `$'a\0b'` is `a`, and the length of what was
 		// assigned is 1.
 		{"DollarSingleNul", s.DollarSingleNul, interp.DollarSingleNulEndsTheSpan},
+		// The five entries that left simpleEscape's shared table when
+		// BusyBox turned out to have none of them (#3270). All Yes here, and
+		// in 5.3 — the Unicode pair is a bash 4 feature that the 3.2 macOS
+		// ships writes out as characters, which this preset does not model.
+		{"DollarSingleEscEscape", s.DollarSingleEscEscape, interp.Yes},
+		{"DollarSingleQuestionEscape", s.DollarSingleQuestionEscape, interp.Yes},
+		{"DollarSingleUnicodeEscapes", s.DollarSingleUnicodeEscapes, interp.Yes},
 	} {
 		if tc.got != tc.want {
 			t.Errorf("%s = %v, want %v", tc.axis, tc.got, tc.want)

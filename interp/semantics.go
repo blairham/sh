@@ -941,6 +941,69 @@ type Semantics struct {
 	// the same table seen from its two ends: a `q+` whose spelling the shell
 	// cannot read back is not a quoting flag at all.
 	DollarSingleCaretMeta DollarSingleCaretMetaPolicy
+	// DollarSingleEscEscape admits `\e` and `\E` for the escape character
+	// inside a `$'…'`, the two spellings together: bash 5.3 — as `bash` and as
+	// `sh` — bash 3.2, zsh and ksh93 all read both, and BusyBox ash reads
+	// neither, so the backslash there falls to DollarSingleUnknownEscape and
+	// `$'\e'` is the two characters it was written as. dash has no `$'…'` to
+	// reach the question with.
+	//
+	// One axis for both letters where the `echo -e` site needs two, and that
+	// is measured rather than reasoned: no column splits them here, while at
+	// the other site ksh93 has `\E` and not `\e` and zsh and ash have `\e` and
+	// not `\E`.
+	//
+	// **The two sites disagree inside one shell**, which is the whole of
+	// #3270: `echo -e 'a\eZ'` writes an escape character in BusyBox ash and
+	// `$'a\eZ'` writes a backslash and an `e`, so EchoExpandsEscEscape being
+	// Yes there says nothing about this axis. Measured 2026-09-16 by `od`
+	// under `env -i PATH=/usr/bin:/bin LC_ALL=C`, an escape character being
+	// invisible rendered, BusyBox v1.37.0 in the digest-pinned Alpine image
+	// internal/oracle reaches, under `--init`:
+	//
+	//	                       $'\e'   $'\E'   $'\x41'  $'\t'
+	//	bash 5.3, as `sh`      1b      1b      41       09
+	//	bash 3.2.57            1b      1b      41       09
+	//	zsh 5.9.2, ksh93u+     1b      1b      41       09
+	//	BusyBox ash 1.37.0     5c 65   5c 45   41       09
+	//
+	// The last two columns are the controls that say the construct works in
+	// BusyBox at all rather than `$'…'` being inert there.
+	//
+	// Asked only where a `$'…'` actually carries a `\e` or an `\E`.
+	DollarSingleEscEscape Answer
+	// DollarSingleQuestionEscape admits `\?` inside a `$'…'`, where it stands
+	// for the question mark alone: bash 5.3, bash 3.2, that binary as `sh`,
+	// zsh and ksh93 all write `3f`, and BusyBox ash writes `5c 3f` — the
+	// escape is not in its set and DollarSingleUnknownEscape decides the
+	// backslash. Measured in the same run as DollarSingleEscEscape above.
+	//
+	// It is the C escape, and it is the one entry of that set BusyBox leaves
+	// out: `\n`, `\r`, `\a`, `\b`, `\f`, `\v`, `\\`, `\'`, `\"` and the octal
+	// forms were measured beside it and are unanimous.
+	//
+	// Asked only where a `$'…'` actually carries a `\?`.
+	DollarSingleQuestionEscape Answer
+	// DollarSingleUnicodeEscapes admits `\uHHHH` and `\UHHHHHHHH` inside a `$'…'`,
+	// each read as a code point and written in UTF-8: bash 5.3, that binary
+	// as `sh`, zsh and ksh93 do; **bash 3.2 and BusyBox ash do not**, and
+	// there the backslash falls to DollarSingleUnknownEscape.
+	//
+	// One axis for both letters, as EchoExpandsUnicodeEscapes is at its site
+	// and for the same measured reason: every column that reads one reads the
+	// other. Measured 2026-09-16 by `od` under `LC_ALL=C`, with the literal
+	// four- and eight-digit spellings of U+0041:
+	//
+	//	                       $'\u0041'  $'\U00000041'
+	//	bash 5.3, as `sh`      41             41
+	//	zsh 5.9.2, ksh93u+     41             41
+	//	bash 3.2.57            5c 75 …        5c 55 …
+	//	BusyBox ash 1.37.0     5c 75 …        5c 55 …
+	//
+	// Asked only where a `$'…'` actually carries one. The digitless form is
+	// DollarSingleDigitlessEscapeIsAZeroByte's question and is reached only
+	// once this one is Yes.
+	DollarSingleUnicodeEscapes Answer
 
 	// ReadOptions is the set of letters `read` takes, a `:` after a letter
 	// marking one whose argument follows it — the getopts convention, the

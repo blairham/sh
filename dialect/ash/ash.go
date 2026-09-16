@@ -1175,6 +1175,21 @@ func Semantics() interp.Semantics {
 	// and `$'\M-\C-?'` are all kept as written, so the escape vocabulary
 	// this shell's `$'…'` has is neither zsh's nor ksh93's (#2272).
 	s.DollarSingleCaretMeta = interp.DollarSingleCaretMetaAbsent
+	// And three more escapes this shell's `$'…'` does not have, where the
+	// other six columns do. Measured 2026-09-16 by `od` in the pinned alpine
+	// image, under `--init`: `$'\e'` is `5c 65`, `$'\E'` is `5c 45`, `$'\?'`
+	// is `5c 3f`, and both $'\u0041' and $'\U00000041' keep the backslash and every
+	// digit — where `$'\41'` is `41` and `$'\t'` is `09`, the controls that
+	// say the construct works here at all.
+	//
+	// The `\e` row is the one to be careful with, because **this shell
+	// answers the two sites differently**: `echo -e 'a\eZ'` writes an escape
+	// character here (#3226, EchoExpandsEscEscape = Yes) and `$'a\eZ'` does
+	// not. A probe at one site decides nothing at the other, which is the
+	// same warning the `printf %b` comment above carries about ksh93 (#3270).
+	s.DollarSingleEscEscape = interp.No
+	s.DollarSingleQuestionEscape = interp.No
+	s.DollarSingleUnicodeEscapes = interp.No
 
 	// `$((2**-1))` is `exponent less than 0` — no float answer, which is
 	// bash's side of the split (#2272).

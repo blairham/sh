@@ -45,6 +45,21 @@ printf '%b\n' 'via %%b: a\tb'
 # borrowed from echo's: ksh93 is the shell whose two sites disagree, so an
 # answer carried across from one to the other is a guess.
 printf '%b' 'a\eZ:a\EZ' | od -An -tx1 | tr -s " "
+
+# And the third site, which is the one the other two say nothing about.
+# `$'…'` has its own escape set here and it is **not** `echo -e`'s: this shell
+# writes an escape character for `\e` after the letter and a backslash and an
+# `e` for the same two characters inside the quotes, so the answers measured
+# above cannot be carried in here. Five escapes were decoded that BusyBox
+# leaves standing — `\e`, `\E`, `\?` and both code-point spellings (#3270).
+# Bytes again, because an escape character is invisible rendered.
+printf '%s' $'a\eZ:a\EZ:a\?Z' | od -An -tx1 | tr -s " "
+printf '%s' $'a\u0041Z:a\U00000041Z' | od -An -tx1 | tr -s " "
+
+# The controls, and they are what make the three rows above a reading of the
+# escape set rather than `$'…'` being inert here: `\x41` and `\t` are decoded,
+# and a shell without the construct at all would write a `$` and the text.
+printf '%s' $'a\x41Z:a\tZ' | od -An -tx1 | tr -s " "
 printf '%b\n' 'via %%b, hex: A\x41B'
 printf '%s|%d|%c\n' str 42 xyz
 printf '%5.2f\n' 3.14159

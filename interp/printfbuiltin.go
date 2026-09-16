@@ -2555,7 +2555,7 @@ func (r *Runner) expandPrintfEscape(s string) (string, int, printfPassEnd) {
 			// argument before controlling it. Writing that arithmetic a
 			// second time here is what let the two drift — `\c1` was
 			// `0x11` in a format and `q` inside the quotes (#556).
-			x, next, ok := controlArgument(DollarSingleControlToggled, s, 2)
+			x, next, ok := r.controlArgument(DollarSingleControlToggled, s, 2)
 			if !ok {
 				// `\c` with nothing after it is a NUL. printf writes it
 				// rather than ending there, because a format is a counted

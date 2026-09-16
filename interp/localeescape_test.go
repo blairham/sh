@@ -202,6 +202,7 @@ func TestADollarSingleEscapeOutsideTheLocaleIsRefusedAtTheWord(t *testing.T) {
 		return func(r *Runner) {
 			sem := PosixSemantics()
 			sem.UnicodeEscapeOutsideTheLocale = p
+			sem.DollarSingleUnicodeEscapes = Yes
 			r.Semantics = &sem
 			r.Vars = map[string]string{"LC_ALL": "C"}
 		}
@@ -230,6 +231,7 @@ func TestADollarSingleEscapeOutsideTheLocaleIsRefusedAtTheWord(t *testing.T) {
 		out, st := run(t, `printf '%s' $'a\u00e9Z'`, func(r *Runner) {
 			sem := PosixSemantics()
 			sem.UnicodeEscapeOutsideTheLocale = OutsideLocaleEscapeUnspecified
+			sem.DollarSingleUnicodeEscapes = Yes
 			r.Semantics = &sem
 			r.Vars = map[string]string{"LC_ALL": "en_US.UTF-8"}
 		})
@@ -241,6 +243,14 @@ func TestADollarSingleEscapeOutsideTheLocaleIsRefusedAtTheWord(t *testing.T) {
 		out, st := run(t, `printf '%s' $'a\u0041Z'`,
 			func(r *Runner) {
 				sem := PosixSemantics()
+				// UnicodeEscapeOutsideTheLocale stays unspecified on
+				// purpose — that is the axis this row is about, and an
+				// ASCII code point must not reach it. Whether the escape
+				// exists at all is a different question and is answered,
+				// since #3270 made it one: BusyBox ash has no `\u` inside
+				// a `$'…'`, so leaving this unset would refuse here for
+				// the wrong reason and the row would pass for none.
+				sem.DollarSingleUnicodeEscapes = Yes
 				r.Semantics = &sem
 				r.Vars = map[string]string{"LC_ALL": "C"}
 			})
@@ -303,6 +313,10 @@ func TestAnEscapeInALocalesCharsetIsTheCharsetsBytes(t *testing.T) {
 		return func(r *Runner) {
 			sem := PosixSemantics()
 			sem.UnicodeEscapeOutsideTheLocale = p
+			// The escape has to exist before the locale can be asked what
+			// to do with it, and in a `$'…'` that is its own axis since
+			// #3270 — BusyBox ash has no `\u` there.
+			sem.DollarSingleUnicodeEscapes = Yes
 			r.Semantics = &sem
 			r.Vars = map[string]string{"LC_ALL": locale}
 		}

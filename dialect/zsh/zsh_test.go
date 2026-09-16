@@ -894,6 +894,22 @@ func TestDollarSingleAnswers(t *testing.T) {
 	if got, want := s.DollarSingleNul, interp.DollarSingleNulIsAByte; got != want {
 		t.Errorf("DollarSingleNul = %v, want %v", got, want)
 	}
+	// Both spellings of the escape character are read inside the quotes —
+	// which is **not** this shell's `echo -e` answer, where `\e` is in the
+	// set and `\E` is not. One site is not evidence about the other, and
+	// #3270 is the bug that carrying an answer across produces.
+	for _, tc := range []struct {
+		axis string
+		got  interp.Answer
+	}{
+		{"DollarSingleEscEscape", s.DollarSingleEscEscape},
+		{"DollarSingleQuestionEscape", s.DollarSingleQuestionEscape},
+		{"DollarSingleUnicodeEscapes", s.DollarSingleUnicodeEscapes},
+	} {
+		if tc.got != interp.Yes {
+			t.Errorf("%s = %v, want %v", tc.axis, tc.got, interp.Yes)
+		}
+	}
 }
 
 // A login shell reads ~/.profile whether or not it is going to prompt.

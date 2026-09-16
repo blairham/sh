@@ -1613,6 +1613,13 @@ func Semantics() interp.Semantics {
 	// it: `$'\M-x'` is 1b then `x`. Measured 2026-09-13 through `od -c`
 	// (#2345).
 	s.DollarSingleCaretMeta = interp.DollarSingleCaretMetaFoldedWithNoDash
+	// The plain C escapes `\e`, `\E` and `\?` are all here — `1b`, `1b` and
+	// `3f` — and so are both Unicode spellings: $'\u0041' and $'\U00000041'
+	// are `41`. Measured 2026-09-16 by `od` (#3270). BusyBox ash is the one
+	// column that has none of the five, which is what made them axes.
+	s.DollarSingleEscEscape = interp.Yes
+	s.DollarSingleQuestionEscape = interp.Yes
+	s.DollarSingleUnicodeEscapes = interp.Yes
 	s.DollarSingleUnknownEscape = interp.DollarSingleUnknownDropsBackslash
 	s.DollarSingleNul = interp.DollarSingleNulEndsTheSpan
 	// `\x` here takes every hexadecimal digit that follows and a run past

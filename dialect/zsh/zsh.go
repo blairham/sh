@@ -2043,6 +2043,14 @@ func Semantics() interp.Semantics {
 	// its argument. ksh93 writes `\C-A` too and means `m` then `A` by it, so
 	// the value names the reading rather than saying yes (#2345).
 	s.DollarSingleCaretMeta = interp.DollarSingleCaretMetaMaskedWithAnOptionalDash
+	// `\e` and `\E` are both the escape character here, which is **not** the
+	// split this shell's `echo -e` has — there it takes `\e` and leaves `\E`
+	// standing. One site's answer is not the other's, and measuring both is
+	// what #3270 was about. `\?` and the two Unicode spellings are read too:
+	// `3f`, and `41` from $'\u0041' and from $'\U00000041'.
+	s.DollarSingleEscEscape = interp.Yes
+	s.DollarSingleQuestionEscape = interp.Yes
+	s.DollarSingleUnicodeEscapes = interp.Yes
 	s.GetoptsAssignmentRestartsWord = interp.No
 	// `kill %1` reaches the job's process. dash aims at the group.
 	s.KillJobSpecAimsAtTheGroup = interp.No

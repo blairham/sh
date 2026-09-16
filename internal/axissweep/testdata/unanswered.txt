@@ -296,8 +296,11 @@ dash  DisownRemovesTheJob
 dash  DollarSingleBackslashC
 dash  DollarSingleCaretMeta
 dash  DollarSingleDigitlessEscapeIsAZeroByte
+dash  DollarSingleEscEscape
 dash  DollarSingleHexReadsEveryDigit
 dash  DollarSingleNul
+dash  DollarSingleQuestionEscape
+dash  DollarSingleUnicodeEscapes
 dash  DollarSingleUnknownEscape
 dash  EarlierDeclarationLetterBlocksALaterPlus
 dash  EchoLastEscapeFlagWins

@@ -16,6 +16,13 @@ import (
 // recoverable; decoding is this side's job, and for a long time nothing did
 // it — `$'a\tb'` reached the output as a backslash and a t, which looks
 // almost right in a terminal.
+//
+// Every row is an escape the whole panel reads the same way, which is what
+// the core can answer at all. `$'\e'` was one of them until #3270 measured
+// BusyBox ash and found the escape absent there — it is an axis now, so the
+// core refuses it, and the row that says so is in
+// TestDollarSingleAxesAreAskedOnlyWhereTheyDecide with the rest of the
+// refusals.
 func TestDollarSingleDecodesItsEscapes(t *testing.T) {
 	for _, tc := range []struct{ src, want string }{
 		{`printf '%s' $'a\tb'`, "a\tb"},
@@ -23,7 +30,6 @@ func TestDollarSingleDecodesItsEscapes(t *testing.T) {
 		{`printf '%s' $'\x41'`, "A"},
 		{`printf '%s' $'\101'`, "A"},
 		{`printf '%s' $'é'`, "é"},
-		{`printf '%s' $'\e'`, "\x1b"},
 		{`printf '%s' $'it\'s'`, "it's"},
 	} {
 		t.Run(tc.src, func(t *testing.T) {

@@ -26,6 +26,11 @@ func dollarSingleSem(c DollarSingleControlPolicy, u DollarSingleUnknownPolicy, n
 	// that are *about* those two set them themselves and assert both sides.
 	s.DollarSingleHexReadsEveryDigit = No
 	s.DollarSingleDigitlessEscapeIsAZeroByte = No
+	// And the three the escape table gave up in #3270, for the same
+	// reason: a row about the NUL reaches `\u0000` on the way to it.
+	s.DollarSingleEscEscape = Yes
+	s.DollarSingleQuestionEscape = Yes
+	s.DollarSingleUnicodeEscapes = Yes
 	return s
 }
 
@@ -282,7 +287,7 @@ func TestDollarSingleAxesAreAskedOnlyWhereTheyDecide(t *testing.T) {
 	for _, src := range []string{
 		`printf '%s' $'a\tb'`,
 		`printf '%s' $'\x41\101'`,
-		`printf '%s' $'\e\a\v'`,
+		`printf '%s' $'\a\v\b\f'`,
 		`printf '%s' $'it\'s'`,
 	} {
 		t.Run(src, func(t *testing.T) {
@@ -298,6 +303,16 @@ func TestDollarSingleAxesAreAskedOnlyWhereTheyDecide(t *testing.T) {
 		{"a meta escape", `printf '%s' $'\M-x'`},
 		{"an escape with no meaning", `printf '%s' $'\q'`},
 		{"a zero byte", `printf '%s' $'a\0b'`},
+		// The three #3270 took out of the shared table. They used to be in
+		// the list above — `$'\e\a\v'` was one row of it — because a
+		// comment over `simpleEscape` called the table unanimous across
+		// bash, ksh93 and zsh, a panel written before BusyBox ash had a
+		// column. It reads none of the three, so the core refuses them.
+		{"the escape character", `printf '%s' $'\e'`},
+		{"its capital spelling", `printf '%s' $'\E'`},
+		{"the question-mark escape", `printf '%s' $'\?'`},
+		{"a code point escape", `printf '%s' $'\u0041'`},
+		{"its eight-digit spelling", `printf '%s' $'\U00000041'`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, st := run(t, tc.src, withSem(CoreSemantics()))

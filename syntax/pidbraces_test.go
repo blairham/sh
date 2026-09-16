@@ -258,3 +258,32 @@ func TestAPidBraceRunPrintsBackAsItCame(t *testing.T) {
 		}
 	}
 }
+
+// TestThePrinterLeavesTheRunsRawModeAtTheMatch is the half the rows above
+// cannot reach: every one of them prints back identically whether the raw
+// mode is put back at the closing `}` or left on for the rest of the word,
+// because nothing after their run needs protecting. A `$` that begins no
+// expansion does — it is written `\$` under the ordinary rules — so this is
+// where leaving the mode on becomes visible.
+func TestThePrinterLeavesTheRunsRawModeAtTheMatch(t *testing.T) {
+	d := pidBraceDialect()
+	const src = "echo $${a b}$%"
+	f, err := Parse(src, d)
+	if err != nil {
+		t.Fatalf("%s: %v", src, err)
+	}
+	got := strings.TrimRight(Print(f), "\n")
+	if want := `echo $${a b}\$%`; got != want {
+		t.Errorf("%q printed back as %q, want %q", src, got, want)
+	}
+	// The control: the same tail with no run in front of it is written the
+	// same way, which is what says the escape is the ordinary rule and not
+	// something this construct added.
+	f, err = Parse("echo $%", d)
+	if err != nil {
+		t.Fatalf("echo $%%: %v", err)
+	}
+	if got, want := strings.TrimRight(Print(f), "\n"), `echo \$%`; got != want {
+		t.Errorf("the control printed back as %q, want %q", got, want)
+	}
+}

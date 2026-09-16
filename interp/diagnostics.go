@@ -3077,6 +3077,43 @@ type Diagnostics struct {
 	// the block is a fact about the shell rather than about `set`.
 	InvocationUsage string
 
+	// InvocationLongOptionUsage is the usage block written under a refusal of
+	// an option spelled `--name` at an invocation, where that is a different
+	// block from the one a letter or an `-o` name gets.
+	//
+	// ksh93 alone, because it is the only shell on the panel with the
+	// spelling at all (Semantics.LongOptionNamesASetOption). Measured
+	// 2026-09-16 on 93u+ 2012-08-01:
+	//
+	//	ksh -o badname -c :   badname: bad option(s)
+	//	                      Usage: ksh [-cilrsDER:abefhkmno:prtuvxBCGH] …
+	//	ksh --badname -c :    badname: bad option(s)
+	//	                      Usage: ksh [ options ] [arg ...]
+	//
+	// The sentence is the same in both and only the block moves, which is
+	// why this is a second string beside InvocationUsage rather than a
+	// second refusal. Empty leaves InvocationUsage standing for both
+	// spellings, which is right for every dialect that has no long one.
+	//
+	// One verb, read the same way InvocationUsage reads its two: the name
+	// the shell was invoked by, then that name's last path element.
+	InvocationLongOptionUsage string
+
+	// SetLongOptionUsage is the same block for the `set` *builtin*: the
+	// usage written under a refused `set --name`, where the dialect answers
+	// that spelling at all.
+	//
+	// ksh93 alone, and it names the two long options `set` has that are not
+	// option names — measured 2026-09-16:
+	//
+	//	set -o zzznosuch   zzznosuch: bad option(s)
+	//	                   Usage: set [-sabefhkmnprtuvxBCGH] [-A name] …
+	//	set --zzznosuch    zzznosuch: bad option(s)
+	//	                   Usage: set [--default] [--state] [arg ...]
+	//
+	// Empty leaves BuiltinUsage["set"] standing for both spellings.
+	SetLongOptionUsage string
+
 	// InvocationNameRefusalNamesTheShell reports a refused `set -o` name at
 	// an invocation exactly as the builtin would, with the shell's own name
 	// standing where the builtin's would:

@@ -1908,6 +1908,10 @@ type Runner struct {
 	// it.
 	pendingOptionListing pendingListingForm
 	setUsageOwed         bool
+	// setUsageOwedBlock is which block that debt is for, recorded at the
+	// refusal because the spelling that chooses it — a letter, an `-o` name,
+	// a `--name` — is known there and nowhere later.
+	setUsageOwedBlock string
 
 	// setLettersWelded records that the letters being read are the ones that
 	// were welded behind an `-o` in the same word, which the pass that
@@ -1928,6 +1932,14 @@ type Runner struct {
 	// SetOptionLetters and SetNamedOption, which are the front end's only
 	// way in.
 	atInvocation bool
+	// longSetOptionSpelling marks an option word written as `--name` rather
+	// than as a letter or as an `-o` name. It changes nothing about which
+	// option is moved and everything about the usage block under a refusal:
+	// the one shell with this spelling prints a *different* usage for it,
+	// the one naming its long options, so the block cannot be chosen from
+	// the route alone. Set for the length of one call in SetLongOption and
+	// around the builtin's own reading of the word.
+	longSetOptionSpelling bool
 	// fromEnvironment is the third of those: an option name that arrived in
 	// the environment rather than in an argument vector or a script. It is
 	// the plainest refusal of the three — the location and the sentence, with

@@ -7731,6 +7731,62 @@ type Semantics struct {
 	// than guessed at here.
 	SetOLetterAttachesItsName Answer
 
+	// LongOptionNamesASetOption reads a `--name` word — at the invocation
+	// and at the `set` builtin alike — as the `set -o` name inside it, with
+	// `--noname` for the option off. It is a whole second spelling for the
+	// option namespace rather than a handful of long options bolted on
+	// beside it: every name the shell has, in both directions, without an
+	// `-o` in sight.
+	//
+	// Yes in ksh93, whose own manual page states the rule on the machine
+	// here — "Options -o name can also be specified with --name and +o name
+	// can be specifed with --noname". Measured 2026-09-16 on 93u+
+	// 2012-08-01 across the whole roster:
+	//
+	//	ksh --xtrace -c 'echo hi'     + echo hi, then hi
+	//	ksh --noglob -c 'set -o'      glob off
+	//	ksh --nounset -c 'echo $u'    u: parameter not set, status 1
+	//	ksh -c 'set --noallexport'    allexport off
+	//	ksh --noprofile -c :          noprofile: bad option(s), status 2
+	//
+	// No in the three bash columns and in dash, which is not a wording
+	// difference: bash refuses `--xtrace` as an invalid option and prints
+	// its own GNU-long-option table, and dash calls it an illegal option.
+	// zsh takes them too — `zsh --xtrace -c 'echo hi'` traces — but its
+	// roster and its own `NO_` prefix are a separate measurement, so this
+	// stays unanswered there and its front end refuses the word as it did.
+	//
+	// The `no` reading is a *fallback* and not a prefix rule, which the
+	// roster forces: `notify` is an option in its own right, so `--notify`
+	// turns notify on and only `--nonotify` turns it off, while `noglob` is
+	// equally an option in its own right and `--noglob` is glob off either
+	// way. Trying the whole word first and the `no`-stripped remainder only
+	// when the whole word is not a name is what lets those two coexist.
+	//
+	// A refused word is named as it was written, minus the dashes:
+	// `--noprofile` is `noprofile: bad option(s)` and not `profile:`, so the
+	// reader is shown the word they typed rather than the one the shell
+	// was left holding after a strip that did not help.
+	//
+	// Unanswered is a refusal, which is the front end's behaviour before
+	// this axis existed and is still what every dialect but ksh93 gets.
+	LongOptionNamesASetOption Answer
+
+	// LongOptionValueIsANumber reads the `=value` an AST long option may
+	// carry — `--noglob=1` — as a number, with the option on when it is
+	// nonzero and off for everything else.
+	//
+	// ksh93 alone, and it is a number rather than a word: measured
+	// 2026-09-16, `=1` and `=2` turn the option on while `=0`, `=off`,
+	// `=on`, `=true`, `=false`, `=yes`, `=no`, `=xyz` and an empty value all
+	// turn it off. `=on` turning the option **off** is the row that makes
+	// this a `strtol` and not a boolean spelling, and is why the reading is
+	// written down rather than guessed at from the names of the values.
+	//
+	// Separate from LongOptionNamesASetOption because it is separately
+	// falsifiable: a dialect could take `--name` without taking `=value`.
+	LongOptionValueIsANumber Answer
+
 	// SetODeclinesADashWord makes a bare `-o` refuse a next word that begins
 	// with `-` or `+` as its long option name. The `-o` is then a bare one —
 	// it lists the options — and the word is read as option letters of its

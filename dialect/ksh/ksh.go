@@ -1984,6 +1984,8 @@ func Semantics() interp.Semantics {
 	// an option *name* rather than reading it as a letter. Its own usage
 	// line spells the form, `[-o[option]]`.
 	s.SetOLetterAttachesItsName = interp.Yes
+	s.LongOptionNamesASetOption = interp.Yes
+	s.LongOptionValueIsANumber = interp.Yes
 	// Where the `-o` does stand alone, the word behind it is taken only if
 	// it does not look like options: `set -o -e` lists and turns errexit
 	// on, which is bash's reading and not zsh's. What this column still
@@ -2399,9 +2401,13 @@ func Diagnostics() interp.Diagnostics {
 		// itself by the last element of the word it was invoked by — where
 		// bash spells the whole path. Measured through a link named
 		// `myksh`, which is what it called itself.
-		InvocationUsage:    "Usage: %[2]s [-cilrsDEabefhkmnprtuvxBCGH] [-R file] [-o[option]] [arg ...]",
-		SignalDescriptions: signalDescriptions(),
-		JobRunning:         " Running",
+		InvocationUsage: "Usage: %[2]s [-cilrsDEabefhkmnprtuvxBCGH] [-R file] [-o[option]] [arg ...]",
+		// The block a `--name` refusal gets instead, which names no
+		// letters because the spelling that was refused has none.
+		InvocationLongOptionUsage: "Usage: %[2]s [ options ] [arg ...]",
+		SetLongOptionUsage:        "Usage: set [--default] [--state] [arg ...]",
+		SignalDescriptions:        signalDescriptions(),
+		JobRunning:                " Running",
 		// The spec is not named. Measured on `jobs %9`, which says exactly
 		// `jobs: no such job` — the one wording in this area that uses
 		// neither verb, and it is the shell rather than a truncation: `%nope`

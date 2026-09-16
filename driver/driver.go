@@ -868,6 +868,10 @@ type optionSpec struct {
 	// empty spec cannot: `sh -o ''` names an option called nothing, and
 	// three of the panel refuse it rather than ignoring it.
 	isName bool
+	// long says spec is a whole `--name` word, dashes already off, whose
+	// direction is inside it rather than in a sign — `--noglob` is glob off.
+	// Implies isName. See Semantics.LongOptionNamesASetOption.
+	long bool
 	// on is `-` rather than `+`. Both signs work on every option, which is
 	// measured and unanimous: `sh +x script` is how xtrace is kept *off*
 	// regardless of what the parent had.
@@ -1153,6 +1157,22 @@ func (sh Shell) optionWord(a string, args []string, inv *invocation) (rest []str
 		}
 		if rest, matched, err = connectOption(a, args, inv); matched {
 			return rest, err
+		}
+		// A dialect where every `set -o` name is also a `--name` invocation
+		// word, which is a whole second spelling for the option namespace
+		// rather than a table of long options to match against. Last of the
+		// long spellings, so that the ones above — `--version`, the startup
+		// files, ours — keep the words they already own: ksh93's own roster
+		// has no name any of them spell, so nothing is shadowed.
+		//
+		// Which option a word asks for is the runner's to read and not this
+		// front end's: the roster, the `no` fallback and the `=value` are
+		// all the dialect's, and this front end has no option table at all.
+		// So the word travels whole, the way a `-o` name does.
+		if sh.Semantics.LongOptionNamesASetOption == interp.Yes {
+			inv.opts = append(inv.opts,
+				optionSpec{spec: a[2:], isName: true, long: true, on: on})
+			return args, nil
 		}
 		return nil, fmt.Errorf("unknown option %q", a)
 	}
@@ -1928,7 +1948,12 @@ func (sh Shell) runInput(in source) int {
 func (sh Shell) applyOptions(r *interp.Runner, opts []optionSpec) (int, bool) {
 	for _, o := range opts {
 		apply := r.SetOptionLetters
-		if o.isName {
+		switch {
+		case o.long:
+			// The direction is inside the word, so the sign the loop
+			// recorded says nothing here and is not passed on.
+			apply = func(spec string, _ bool) int { return r.SetLongOption(spec) }
+		case o.isName:
 			apply = r.SetNamedOption
 		}
 		if code := apply(o.spec, o.on); code != 0 {

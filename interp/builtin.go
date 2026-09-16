@@ -667,6 +667,17 @@ func (r *Runner) setOptionWordsAndOperands(_ context.Context, args []string) int
 			i++
 			break
 		}
+		if r.sem().LongOptionNamesASetOption == Yes && strings.HasPrefix(a, "--") {
+			// `set --name`, the same second spelling for the option
+			// namespace the invocation has — and read by the same function,
+			// so the `no` fallback and the `=value` cannot drift between the
+			// two routes. After the `--` above, which is the terminator and
+			// is a whole word rather than a name of nothing.
+			if !r.applyLongSetOption(a[2:]) {
+				return r.setOptionFailure()
+			}
+			continue
+		}
 		if !setOptionWord(a) {
 			break
 		}
@@ -1032,6 +1043,25 @@ func (r *Runner) unknownSetOption(args []string, names, report bool) (preceded, 
 		a := args[i]
 		if a == "--" || len(a) < 2 || (a[0] != '-' && a[0] != '+') {
 			return
+		}
+		if r.sem().LongOptionNamesASetOption == Yes && strings.HasPrefix(a, "--") {
+			// Cut the way the applying loop cuts it, which is this pass's
+			// whole rule. Read as letters instead, `--noglob` would be an
+			// `-n` this dialect has and a `-`, `-o`, `-g` and `-b` it reads
+			// as something else entirely.
+			if nm, _ := r.longSetOptionName(a[2:]); names && !r.hasSetOptionName(nm) {
+				// The spelling travels with the refusal, because this pass
+				// is where the report is made: the applying loop never
+				// reaches a word this one has already refused.
+				r.longSetOptionSpelling = true
+				keep := refuseName(nm)
+				r.longSetOptionSpelling = false
+				if !keep {
+					return
+				}
+			}
+			seen = true
+			continue
 		}
 		sign := a[0] == '-'
 		letters, read, stop := a[1:], false, false
@@ -1535,9 +1565,14 @@ func (r *Runner) saySetRefusal(msg string, usage, isName bool) {
 				// here — where it is known that *this* refusal wanted one —
 				// and paid in finishSetRefusals.
 				r.setUsageOwed = true
+				// Which block, decided here where the spelling of *this*
+				// word is still known. The payment happens after the whole
+				// option loop, by which time nothing remembers whether the
+				// word that owed it was a letter or a `--name`.
+				r.setUsageOwedBlock = r.setUsageBlock()
 				return
 			}
-			r.sayBuiltinUsage(d.BuiltinUsage["set"])
+			r.sayBuiltinUsage(r.setUsageBlock())
 		}
 		return
 	}
@@ -1546,9 +1581,28 @@ func (r *Runner) saySetRefusal(msg string, usage, isName bool) {
 		return
 	}
 	r.errf("%s%s\n", d.invocationPrefix(r.name()), strings.TrimPrefix(msg, "set: "))
-	if u := d.InvocationUsage; u != "" {
+	u := d.InvocationUsage
+	if r.longSetOptionSpelling && d.InvocationLongOptionUsage != "" {
+		// A `--name` gets the block that names long options, where the
+		// dialect writes a second one. See
+		// Diagnostics.InvocationLongOptionUsage for the two measured rows.
+		u = d.InvocationLongOptionUsage
+	}
+	if u != "" {
 		r.errf("%s\n", Wording(u, u, r.name(), filepath.Base(r.name())))
 	}
+}
+
+// setUsageBlock is the usage the `set` builtin writes under a refusal, which
+// is the dialect's own except where the word was spelled `--name` and the
+// dialect writes a second block for that spelling.
+func (r *Runner) setUsageBlock() string {
+	if r.longSetOptionSpelling {
+		if u := r.diag().SetLongOptionUsage; u != "" {
+			return u
+		}
+	}
+	return r.diag().BuiltinUsage["set"]
 }
 
 // sayBuiltinUsage writes a usage line the way the dialect writes one: after
@@ -1692,10 +1746,10 @@ func (r *Runner) reportsEveryBadSetOption() bool {
 // carried on past a bad word — everywhere else setRefusalStatus has already
 // done both and nothing is owed.
 func (r *Runner) finishSetRefusals() int {
-	usage := r.setUsageOwed
-	r.setRefusalOwed, r.setUsageOwed = false, false
+	usage, block := r.setUsageOwed, r.setUsageOwedBlock
+	r.setRefusalOwed, r.setUsageOwed, r.setUsageOwedBlock = false, false, ""
 	if usage {
-		r.sayBuiltinUsage(r.diag().BuiltinUsage["set"])
+		r.sayBuiltinUsage(block)
 	}
 	sp := r.setRefusalSpelling
 	status := sp.status(r.diag())
@@ -1706,6 +1760,17 @@ func (r *Runner) finishSetRefusals() int {
 	}
 	r.setOptionStatus = 0
 	return status
+}
+
+// applyLongSetOption applies one `set --name` word, dashes already off, with
+// the spelling recorded for the length of the call so that a refusal picks the
+// usage block this dialect writes for a long option rather than the one it
+// writes for a letter.
+func (r *Runner) applyLongSetOption(word string) bool {
+	name, on := r.longSetOptionName(word)
+	r.longSetOptionSpelling = true
+	defer func() { r.longSetOptionSpelling = false }()
+	return r.setNamedOption(name, on)
 }
 
 func (r *Runner) setOption(name string, on bool) bool {

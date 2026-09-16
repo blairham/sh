@@ -195,3 +195,38 @@ done
 ( set --globstar; set -o ) | grep '^globstar'
 ( set --noglobstar; set -o ) | grep '^globstar'
 ( set --markdirs; set --nomarkdirs; set -o ) | grep '^markdirs'
+
+# ---- `set -x` and the assignment written in front of a command ----
+#
+# ksh93's shape, and the one the panel has no majority for: **a line of its
+# own for each assignment, behind the command's** — `+ /bin/echo ext` and
+# then `+ D=6`. bash writes the same lines ahead of the command and dash,
+# BusyBox ash and zsh write them on the command's line, so each column's file
+# carries its own rows. See interp/xtraceprefix.go and #3133, where this shell
+# wrote nothing for the position at all.
+#
+# The half that is not "behind", and the reason the rows below are four
+# commands and not one: a **special builtin** and a **function** keep the
+# assignment in front, where a regular builtin and an external put it behind.
+# Those are exactly the two positions where a prefix in this shell is an
+# ordinary assignment that stays assigned, so the shell is writing it where a
+# bare assignment would be written. `xf` is the function, `:` the special
+# builtin, `true` the regular one and `/bin/echo` the external, and a reading
+# that used only one of them would record a quarter of the answer.
+#
+# `PS4='+ '` is this shell's own default and is written so that the same rows
+# in bash/ and zsh/ are the same rows.
+
+xf() { :; }
+PS4='+ '
+exec 3>&2 2> xt.err
+set -x
+A=3 xf zz
+B=4 true
+C=5 :
+D=6 E=7 /bin/echo ext
+V=$(printf vv) :
+Q='a b' :
+set +x
+exec 2>&3
+cat xt.err

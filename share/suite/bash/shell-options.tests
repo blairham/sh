@@ -149,3 +149,36 @@ printf 'readonly under -k [%s]\n' "${R1-unset}"
 declare -i N1=3*3 > /dev/null
 printf 'declare under -k [%s]\n' "${N1-unset}"
 set +k
+
+# ---- `set -x` and the assignment written in front of a command ----
+#
+# An assignment standing in front of a command is part of that command, and
+# every shell on the panel traces it. This one is bash's shape: **a line of
+# its own for each assignment, ahead of the command's own line**, where ksh93
+# writes them behind the command and dash, BusyBox ash and zsh write them on
+# the command's line. Three shapes and no majority, so each column's file
+# carries its own — see interp/xtraceprefix.go and #3133, where this shell
+# wrote nothing for the position at all.
+#
+# `PS4='+ '` is what makes the block comparable at all: zsh's default prefix
+# names the script and the line, so the same rows in zsh/shell-options.tests
+# would otherwise be a fact about where the harness put the file. It is this
+# shell's own default here, so it changes nothing in this column.
+#
+# The trace is collected in a file and printed afterwards rather than left on
+# stderr, so that the order of the two streams is the file's and not the
+# harness's.
+
+xf() { :; }
+PS4='+ '
+exec 3>&2 2> xt.err
+set -x
+A=3 xf zz
+B=4 true
+C=5 :
+D=6 E=7 /bin/echo ext
+V=$(printf vv) :
+Q='a b' :
+set +x
+exec 2>&3
+cat xt.err

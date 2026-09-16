@@ -46,13 +46,23 @@ func TestZleIsOnAtAnInteractivePromptAndOffInAScript(t *testing.T) {
 // At an interactive prompt it is the shape `monitor` has and not the shape
 // `shinstdin` has: freely movable in both directions, granted at 0, and it
 // really moves. Measured in an interactive zsh, both builds alike.
+//
+// **With a terminal**, which the base now says out loud rather than leaving
+// implied. Turning the editor *on* needs one and turning it off does not, and
+// the pair is reachable since #3154 made `zsh -o interactive` a shell that is
+// interactive with nothing to edit: `zsh -f -o interactive -c 'setopt zle'`
+// on a pipe is `can't change option: zle` at 1 in real zsh, while `unsetopt
+// zle` in that same shell is a silent 0. The interactive zsh this row was
+// measured in had a terminal, so it is that shell this now builds — and
+// TestZleIsOnAtAnInteractivePromptAndOffInAScript above keeps the *read*
+// following interactive alone, which is a separate measurement and unmoved.
 func TestZleMovesBothWaysAtAnInteractivePrompt(t *testing.T) {
 	const src = `unsetopt zle; s1=$?
 [[ -o zle ]] && a=on || a=off
 setopt zle; s2=$?
 [[ -o zle ]] && b=on || b=off
 print -r -- "$s1 $a $s2 $b"`
-	base := dialecttest.Base{Dir: t.TempDir(), Interactive: true}
+	base := dialecttest.Base{Dir: t.TempDir(), Interactive: true, Terminal: true}
 	out, st, err := preset.Combined(t, base, src)
 	if err != nil {
 		t.Fatal(err)
@@ -102,5 +112,32 @@ func TestZleMovedInASubshellStaysThere(t *testing.T) {
 	}
 	if want := "in=off out=on\n"; out != want || st != 0 {
 		t.Errorf("out %q status %d, want %q at 0", out, st, want)
+	}
+}
+
+// And the pair that separates the two facts: interactive with **no** terminal.
+//
+// Unreachable before #3154 — nothing could make a `-c` shell interactive — and
+// it is the shell `zsh -o interactive` on a pipe is. Measured 2026-09-16 on
+// zsh 5.9.2: `setopt zle` there is `can't change option: zle` at 1 and
+// `unsetopt zle` is a silent 0 that really takes the `Z` out of `$-`. So the
+// direction decides it, which is why the split is written on the entry's own
+// set rather than through `immovable` — that answers one way for both.
+func TestZleNeedsATerminalToBeTurnedOnAndNotToBeTurnedOff(t *testing.T) {
+	base := dialecttest.Base{Dir: t.TempDir(), Interactive: true}
+	const src = `unsetopt zle; s1=$?
+[[ -o zle ]] && a=on || a=off
+setopt zle; s2=$?
+[[ -o zle ]] && b=on || b=off
+print -r -- "$s1 $a $s2 $b"`
+	out, _, err := preset.Combined(t, base, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Combined, so the refusal is in the same string as the report — which
+	// is the half that says the sentence is zsh's own and is written where
+	// the builtin writes every other one.
+	if want := "zsh:setopt:3: can't change option: zle\n0 off 1 off\n"; out != want {
+		t.Errorf("out %q, want %q — off is granted and on is refused with no terminal", out, want)
 	}
 }

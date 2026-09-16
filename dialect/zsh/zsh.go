@@ -4047,6 +4047,13 @@ func Apply(r *interp.Runner) {
 		"physical",
 		"pipefail",
 		"privileged",
+		// The state behind the `s` in `$-`, which this dialect's `shinstdin`
+		// is read and written through. It is not in this shell's own `set -o`
+		// roster and does not appear in one — zsh installs an option table of
+		// its own, so this list reaches nothing but Runner.NamedOption and
+		// Runner.ApplyNamedOption, which is exactly what setopt.go's
+		// shinStdinOption calls (#3154).
+		"stdin",
 		"trackall",
 	)
 	// The statuses of the last pipeline's elements. The core keeps the

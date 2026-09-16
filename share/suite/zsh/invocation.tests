@@ -96,3 +96,58 @@ zrow 'a word that is none' --zzznosuch -c 'echo unreachable'
 zrow 'a bare no'           --no -c 'echo unreachable'
 zrow 'no value is read'    --xtrace=1 -c 'echo unreachable'
 zrow 'the refusal stops it' --zzz --xtrace -c 'echo unreachable'
+
+# ---- the four names a running script cannot move, granted here ----
+#
+# zsh refuses exactly five names to a script — `interactive`, `monitor`,
+# `shinstdin`, `singlecommand` and `zle`, with `can't change option: NAME` at
+# 1 — and **takes four of the five on the command line that started it**.
+# `singlecommand` was the one that already worked here and is the worked
+# example the other four follow (#3154).
+#
+# The route is the whole of it, which is why these rows are in this file and
+# not in options.tests: the refusals a script gets are right and were never in
+# question, and the grant lives where the front end hands a `-o name` or a
+# `--name` word to the option table. A Go test that called the resolver would
+# pass with the routing gone, which is what #3129 recorded when
+# `LongOptionNamesASetOption` was dropped and every one of them stayed green.
+#
+# Two of the four move observable state and two do not, and that is measured
+# rather than symmetric:
+#
+#   - `interactive` turns the shell interactive, so `$-` gains `i` — and `Z`
+#     with it, because `zle` is read over the same state and an interactive
+#     shell has an editor.
+#   - `shinstdin` gains `s`, which is the state behind the `s` this shell
+#     already wrote on the route where the program really does arrive on
+#     standard input.
+#   - `monitor` and `zle` are **granted and inert**: status 0, nothing on
+#     standard error, and `[[ -o NAME ]]` still false afterwards. Neither the
+#     refusal a script gets nor a move.
+#
+# `+o zle` is the row that says the last of those is about the route and not
+# about the name: with `interactive` on ahead of it the option really is on,
+# and turning it off there takes the `Z` back out.
+
+zrow 'interactive'          -o interactive -c 'echo "[$-]"'
+zrow 'the long spelling'    --interactive -c 'echo "[$-]"'
+zrow 'and it reads back'    -o interactive -c '[[ -o interactive ]] && echo yes; [[ -o zle ]] && echo and the editor'
+zrow 'shinstdin'            -o shinstdin -c 'echo "[$-]"'
+zrow 'reading back too'     --shinstdin -c '[[ -o shinstdin ]] && echo yes'
+zrow 'monitor'              -o monitor -c 'echo "[$-]"'
+zrow 'granted and inert'    --monitor -c '[[ -o monitor ]] && echo on; echo asked'
+zrow 'zle'                  -o zle -c 'echo "[$-]"'
+zrow 'and inert as well'    --zle -c '[[ -o zle ]] && echo on; echo asked'
+zrow 'singlecommand'        -o singlecommand -c 'echo "[$-]"'
+zrow 'two of them at once'  -o singlecommand -o interactive -c 'echo "[$-]"'
+zrow 'the editor turned off' -o interactive +o zle -c 'echo "[$-]"'
+zrow 'and asked for again'  -o interactive -c 'unsetopt zle; setopt zle; echo "[$-]"'
+zrow 'the plus direction'   +o interactive -c 'echo "[$-]"'
+zrow 'and the no spelling'  --nomonitor -c 'echo "[$-]"'
+
+# And a script still may not move any of them, which is the half that was
+# already right and is what the four rows above are a difference against.
+zrow 'a script may not'     -c 'setopt interactive'
+zrow 'nor this one'         -c 'setopt shinstdin'
+zrow 'nor the editor'       -c 'setopt zle'
+zrow 'nor one command'      -c 'setopt singlecommand'

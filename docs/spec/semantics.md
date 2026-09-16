@@ -5555,7 +5555,7 @@ first is unanimous across the table.** Every name is one of five kinds:
 | --- | --- | --- |
 | substrate-backed | 15 | moves a real `set -o` switch: `setopt err_exit` **is** `set -e`, and `setopt vi` **is** `set -o vi`. `ignorebraces` is the inverted one: it is `set +o braceexpand`, zsh naming the state that *stops* the expansion where the substrate names the expansion |
 | axis- or matcher-backed | 14 | moves a semantics axis (`shwordsplit`, `nomatch`, `ksharrays`, `localtraps`, `multios`, `globsubst`, `typesetsilent`, `posixbuiltins`) or a pattern-matcher option (`nullglob`, `globdots`, `caseglob`, `casematch`, `extendedglob`, `bareglobqual`). `ksharrays` is one name over **five** axes — see below; `casematch` is the one whose *spelling* bash shares and whose meaning it does not — see below |
-| fixed | 4 | refuses to move, in zsh's own words: `can't change option: NAME`, status 1. Asking for the state it already holds is granted, and one of the four is taken at the *invocation* — see `singlecommand` below |
+| fixed | 4 | refuses to move **to a running script**, in zsh's own words: `can't change option: NAME`, status 1. Asking for the state it already holds is granted, and **all four are taken on the command line that started the shell** — `singlecommand` since #1730 and the other three since #3154, where the route rather than the name is what decides. Two of them move state there (`interactive` adds `i` and `Z` to `$-`, `shinstdin` adds `s`) and `zle` is granted with nothing following unless the shell is already interactive |
 | store-backed, read by the front end | 7 | `histignorespace`, read by the line editor before it records a line; `interactivecomments`, read by the same editor before it *parses* one; `promptsp` and `promptcr`, read by it before it draws a prompt; `checkrunningjobs`, read by `checkjobs` when it recomputes what the exit is held for; and `cshnullcmd` and `shnullcmd`, read together when either moves so that the first can win while it is on. All seven are kept where a recorded name is kept, because the substrate has no `set -o` name for any of them |
 | switch-backed | 5 | `aliases`, `autocd`, `banghist`, `checkjobs` and `cprecedences`: each moves a capability the substrate holds under no `set -o` name of its own — alias expansion really does stop, a bare directory name really is read as a `cd`, `!!` really is rewritten into the previous command, a job still running really does hold the exit, and the arithmetic operators really do change the order they bind in |
 | **recorded** | 140 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
@@ -5707,6 +5707,19 @@ the constructors in `dialect/zsh/setopt.go`, and **the fixed set is now
 exactly the set real zsh refuses**: `interactive`, `shinstdin`,
 `singlecommand` and `zle`. `monitor` left it in #1720 because zsh grants it
 where the shell has a terminal.
+
+**Fixed is about the script and not about the shell.** All four are taken on
+the command line that started it, measured 2026-09-16 on zsh 5.9.2 — and so
+is `monitor`, which is refused to a script on a pipe and granted there.
+`zsh -o interactive` gains `i` **and** `Z`, because `zle` is read over the
+same state; `zsh -o shinstdin` gains `s`; and `zsh -o monitor` and
+`zsh -o zle` are status 0 with nothing on standard error and the option
+still off afterwards — granted and inert, which is neither the refusal a
+script gets nor a move. `+o zle` after `-o interactive` really does take the
+`Z` back out, which is what says the inertness belongs to the route rather
+than to the name (#3154). Turning the editor **on** needs a terminal as well
+as a prompt and turning it off does not, which is only reachable in the
+shell `-o interactive` on a pipe makes.
 
 ### What an emulation resets, and what it leaves standing
 

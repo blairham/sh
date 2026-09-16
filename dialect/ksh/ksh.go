@@ -382,6 +382,11 @@ func Dialect() syntax.Dialect {
 	// error — the quote ends the number rather than vanishing from the
 	// text, which is the line between this reading and bash's (#1223).
 	d.ArithDoubleQuote = syntax.ArithDoubleQuoteSkipped
+	// A quotation inside a subscript holds its brackets here too: measured
+	// on ksh93u+ 2012-08-01, `typeset -A a; a[']']=5; (( r = a[']'] ))` is
+	// 5, which is bash's answer and not zsh's. See
+	// syntax.Dialect.ArithSubscriptQuoting (#3302).
+	d.ArithSubscriptQuoting = true
 	// `'c'` is the code of the character between the quotes, the way C
 	// reads one, and this is the only shell in the panel with it: measured
 	// 2026-09-10, `$(( '1' + 1 ))` is 50 and `$(( 'a' ))` is 97 where the

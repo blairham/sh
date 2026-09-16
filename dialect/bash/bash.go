@@ -34,6 +34,10 @@ func Dialect() syntax.Dialect {
 	// this is a version line inside one lineage; the preset is the current
 	// build (#1223).
 	d.ArithDoubleQuote = syntax.ArithDoubleQuoteRemoved
+	// A quotation inside a subscript holds its brackets here: `declare -A a;
+	// a[']']=5; (( a[']'] ))` is 5 in 5.3.20 and under the `sh` name alike.
+	// See syntax.Dialect.ArithSubscriptQuoting (#3302).
+	d.ArithSubscriptQuoting = true
 	// bash is the panel's holdout: it expands interactively and needs `shopt
 	// -s expand_aliases` anywhere else. Measured 2026-09-12 on all three
 	// routes, and in `eval`, `$( )`, a sourced file and a trap body — nothing
@@ -2206,6 +2210,12 @@ func Semantics() interp.Semantics {
 	// interp.Semantics.ConditionIsSetReadsTheWrittenSubscript, including the
 	// row where bash's own `test -v` answers the other way.
 	s.ConditionIsSetReadsTheWrittenSubscript = interp.Yes
+
+	// And `[[ a[k] -eq 5 ]]` reads it the same way, which is this shell's
+	// alone: ksh93 reads a quotation inside a subscript in `(( ))` and still
+	// refuses it here. See
+	// interp.Semantics.ConditionArithmeticReadsTheWrittenSubscript (#3302).
+	s.ConditionArithmeticReadsTheWrittenSubscript = interp.Yes
 	return s
 }
 

@@ -3336,6 +3336,38 @@ type Dialect struct {
 	// dialects graded here (#1223).
 	ArithDoubleQuote ArithDoubleQuotePolicy
 
+	// ArithSubscriptQuoting says a quotation inside an arithmetic subscript
+	// holds its brackets: the `]` that ends the subscript is one written
+	// outside the quotes, so a key spelled with a bracket in it is
+	// reachable.
+	//
+	// Measured 2026-09-16 from a script file with `typeset -A a; a[']']=5`:
+	// `$(( a[']'] ))` is 5 in bash 5.3.20, under that build as `sh` and in
+	// ksh93u+ 2012-08-01, and so is `(( a[']'] ))`. bash 3.2.57 has no
+	// associative arrays to ask, and dash and BusyBox ash have no arrays at
+	// all.
+	//
+	// The same subscript inside `[[ ]]` is deliberately *not* this flag, and
+	// that is measured rather than assumed: ksh93u+ answers `[[ a[']'] -eq 5
+	// ]]` with `a[]]: arithmetic syntax error` in the same run that answers
+	// the `(( ))` line with 5. A condition's operand reaches its arithmetic
+	// already expanded, so what a shell does there is a question about which
+	// reading it takes rather than about what its reader sees — see
+	// interp.Semantics.ConditionArithmeticReadsTheWrittenSubscript.
+	//
+	// zsh 5.9.2 is measured *off* rather than left out: it will not store
+	// such a key from an assignment at all, and with the element put there
+	// by `a=( "]" 5 )` instead, `e="a[']']"; $(( $e ))` is `bad math
+	// expression: illegal character: '` — the quote reaching its reader as
+	// a byte and not as a quotation. Which is the same shell that reads a
+	// subscript's expanded text back as syntax, and for a reader that never
+	// sees quoting the two are one behavior (#3302).
+	//
+	// Additive rather than a semantics axis, for the reason
+	// ArithDoubleQuote is: it is what the *reader* does with a byte, and a
+	// dialect without subscripts never reaches it.
+	ArithSubscriptQuoting bool
+
 	// ArithPrecedence is the order the binary operators bind in. See
 	// [ArithPrecedencePolicy]: one shell in the panel does not use C's, and
 	// says so in its own manual.

@@ -119,10 +119,10 @@ func TestAnArithmeticSubscriptIsAQuotingContext(t *testing.T) {
 		{"double quoted", setup + `(( r = a["q"] )); echo $r`, "7"},
 		{"backslash", setup + `(( r = a[\q] )); echo $r`, "7"},
 		{"a quoted blank", setup + `(( r = a['a b'] )); echo $r`, "9"},
-		// A quoted *bracket* is deliberately not here. It is a defect one
-		// stage earlier — the arithmetic parser ends the subscript at the
-		// first `]` whether or not it is quoted, so `a[']']` never reaches
-		// this reading at all — and it is #3302, not this.
+		// A quoted *bracket* has its own file beside this one: the
+		// boundary it turns on is the parser's bracket scan rather than
+		// this reading of the key, and the two are measured apart. See
+		// TestAQuotationInAnArithmeticSubscriptHoldsItsBrackets (#3302).
 		{"through a dollar-arithmetic", setup + `echo $(( a['q'] ))`, "7"},
 		// The store takes the same key as the read, which is what keeps
 		// `(( a['k'] = 5 ))` from putting an element where nothing can

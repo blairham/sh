@@ -63,3 +63,20 @@ bo='q[r'
 [[ -v brk[q[r] ]] || printf 'and a written one left open is no subscript\n'
 [[ -v brk[nope] ]] || printf 'an ordinary absent key is still absent\n'
 test -v "brk[x$bk]" || printf 'the test builtin has no written bracket to read\n'
+
+# The word-spelled comparisons read the subscript the script wrote too, which
+# is this shell alone in the panel and not the same measurement as the `-v`
+# rows above: ksh93u+ reads a quotation inside a subscript in `(( ))` and
+# still refuses it here, because a condition's operand reaches its arithmetic
+# already expanded. zsh 5.9.2 refuses it as well (#3302).
+declare -A cmp
+cmp[']']=5
+cmp['x]']=9
+cmp[q]=8
+ck='x]'
+[[ cmp[']'] -eq 5 ]] && printf 'a single-quoted bracket is part of the key\n'
+[[ cmp["]"] -eq 5 ]] && printf 'and so is a double-quoted one\n'
+[[ cmp[x$ck] -eq 0 ]] && printf 'a bracket out of an expansion is content\n'
+[[ cmp[$ck] -eq 9 ]] && printf 'and the whole key can come out of one\n'
+[[ cmp['q'] -eq 8 ]] && printf 'a quotation with no bracket in it still reaches the key\n'
+[[ cmp[nope] -eq 0 ]] && printf 'an absent key is zero to a comparison\n'

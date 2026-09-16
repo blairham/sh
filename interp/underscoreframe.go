@@ -178,7 +178,7 @@ func (r *Runner) aLoneSimpleCommandOnItsLine(stmts []*syntax.Stmt, at int) bool 
 // A [syntax.Pipeline] with no commands and no `!` cannot answer Pos — it
 // reads `Cmds[0]` — and one exists: a dialect that takes a bare negation at
 // either place parses text that leaves an empty pipeline behind. Nothing else
-// on this path asks a neighbouring statement where it is, which is why the
+// on this path asks a neighboring statement where it is, which is why the
 // guard lives here rather than on the node.
 func statementLine(r *Runner, st *syntax.Stmt) (int, bool) {
 	if p, ok := st.Expr.(*syntax.Pipeline); ok && !p.Negated && len(p.Cmds) == 0 {

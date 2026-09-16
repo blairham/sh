@@ -5022,7 +5022,28 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// ask about `true 3>/nope/x`.
 		if r.IsSpecialBuiltinHere(argv[0]) &&
 			r.ask(r.sem().RedirectErrorOnSpecialBuiltinFatal, "a failed redirection on a special builtin ending the script") {
+			stopped := r.ctl == controlExit
 			r.fatalUsageQuiet()
+			// The shell that stops exits with the *redirection's* status,
+			// not the generic fatal one. The two are the same number in
+			// every column but one, which is why this read as
+			// FatalErrorStatusIsOne's for so long: dash is 2 and 2, bash,
+			// ksh93 and zsh are 1 and 1. BusyBox ash is the column that
+			// tells them apart — its fatal errors exit 2 (`shift` past the
+			// end, `${v?}`, arithmetic, a `<&word` naming no descriptor) and
+			// this one exits 1, for `exec`, `:`, `eval`, `.`, `export`,
+			// under `set -C` and inside a function alike. Measured
+			// 2026-09-16, BusyBox v1.37.0 in the pinned alpine image.
+			//
+			// Only where the dialect recorded a status of its own; the
+			// substrate's zero keeps the fatal answer, so a preset that
+			// never measured this does not move. And not where the failed
+			// redirection had already stopped the shell on its own — a word
+			// after `<&` that named no descriptor is the fatal status in ash
+			// too (DuplicationTargetErrorForm).
+			if st := r.diag().RedirectFailureStatus; st != 0 && !stopped {
+				r.status = st
+			}
 			return nil
 		}
 		// One dialect ends the shell over a `<&word` that named something

@@ -33,7 +33,6 @@ ash   AppendedArrayLiteralOverANameNotDeclaredAnArrayStartsItOver
 ash   ArithDivisionByZeroYieldsAValue
 ash   ArithFloatOverflowIsZero
 ash   ArithIntegerOperatorRefusesFloat
-ash   ArithRecursedNameMustBeSet
 ash   ArithSubscriptNameMustBeSet
 ash   ArithSubscriptSkippedWhenNameUnset
 ash   ArithWholeArraySubscriptIsReportedAsBad

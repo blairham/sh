@@ -2791,11 +2791,10 @@ func Diagnostics() interp.Diagnostics {
 		// ksh93 has `--version` here, which this shell does not.
 		UnimplementedOptionLetters: map[string]string{
 			// `set` letters ksh93 has and this shell does not: -b job
-			// notices, -k assignment-anywhere, -r restricted, -s sorting
-			// the positional parameters, and -G -H, its globstar and
-			// history-expansion switches. Measured 2026-09-05 by asking
-			// ksh93 for every letter of the alphabet in both cases and both
-			// signs.
+			// notices, -k assignment-anywhere, -r restricted, and -s
+			// sorting the positional parameters. Measured 2026-09-05 by
+			// asking ksh93 for every letter of the alphabet in both cases
+			// and both signs.
 			//
 			// `-B` and `-p` have left this sentence without leaving the
 			// string, the drift #3088 swept for: brace expansion is built
@@ -2812,7 +2811,12 @@ func Diagnostics() interp.Diagnostics {
 			// there lists `histexpand off` and the letter moves that row —
 			// and a letter refused while the name is wired would refuse what
 			// the name grants.
-			"set": "brsG",
+			// `G` left it in #3152 for the same reason and by the other
+			// road: it is `set -o globstar`, and the name is now wired to the
+			// walk, so the letter goes through the dialect's own letter table
+			// above. A letter left here while its name moves is the paired
+			// tables drifting apart, which is the drift #3088 swept for.
+			"set": "brs",
 			// ksh93 answers --version on most builtins, and has its own
 			// letters for these two.
 			"wait": "-",
@@ -3388,6 +3392,42 @@ func Apply(r *interp.Runner) {
 	// they are simply there, which is what `$(( sqrt(4) ))` needing no
 	// preamble means. See mathfunc.go.
 	registerMathFuncs(r)
+	// The three other questions `set -o globstar` has to answer here, set
+	// beside the walk for the same reason dialect/bash does it: the walk
+	// asks them only where that option has already said `**` crosses levels
+	// at all, and `globstar` is the only name this shell has for any of
+	// them. Measured 2026-09-16 on ksh93u+ 2012-08-01, each rendered one
+	// word per `[…]` because `echo` joins with spaces and hid exactly this
+	// kind of difference all night:
+	//
+	//	set -o globstar; printf '[%s]' d/**     every level, not `d/e` alone
+	//	                 printf '[%s]' '**/'    names a symlinked directory
+	//	                 printf '[%s]' '**/**/' one component, not a cross
+	//	                                        product — 6 words in a tree
+	//	                                        where zsh answers 48
+	//
+	// So all three are bash's answers too, and `**/a*`, `**`, `**/` and
+	// `**/x` agree byte for byte between the two shells (#3152).
+	r.SetMatchOption(interp.StarStarAloneCrossesDirectories, true)
+	r.SetMatchOption(interp.StarStarSeesLinkedDirectories, true)
+	r.SetMatchOption(interp.RepeatedStarStarIsOneComponent, true)
+	// And the two this shell answers **differently** from bash and zsh, both
+	// of which are left off. A `**` that matched zero levels is not the
+	// directory the walk stood in — `printf '[%s]' d/**` is `[d/e][d/e/f]`
+	// here against bash's `[d/][d/e][d/e/f]` — and a walk will not begin
+	// inside a directory reached through a symbolic link, so `s/**` with `s`
+	// a link to `r` is no match at all where bash lists `[s/][s/x]`. See
+	// interp.StarStarZeroLevelIsTheDirectoryItStartsFrom and
+	// interp.StarStarDescendsFromALinkedStart for the tables (#3152).
+
+	// `set -G` is this shell's letter for `globstar`, and the letter and the
+	// name are one request with one answer: `set -G; set -o` reports
+	// `globstar on` and `$-` gains a `G`, measured. Declared through the
+	// dialect's letter table rather than the shared one because `G` is a
+	// letter two shells spell different options with — zsh's `-G` is
+	// `nullglob` — which is exactly what that table is for. See
+	// interp.Runner.SetOptionLetterNames.
+	r.SetOptionLetterNames(map[rune]string{'G': "globstar"})
 	// The `set -o` names beyond the ones every shell has. Measured 2026-09-15
 	// against ksh93u+ 2012-08-01 by diffing the whole listing: 32 rows there
 	// against 20 here, and five of the twenty spelled the other way round

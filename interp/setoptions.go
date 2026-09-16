@@ -452,17 +452,39 @@ var extraSetOptions = map[string]setOption{
 	// of the listing in *both* directions finds.
 	"multiline": recordedOption("multiline", true),
 	"viraw":     recordedOption("viraw", true),
-	// The rest are off here and off there. None of them is acted on: `**`
-	// has no switch in the dialect that spells it this way (see glob.go),
-	// there is no third editing mode, `let` reads no octal, a glob marks no
+	// `**` crossing directory levels, under the name one shell in the panel
+	// spells it with. bash has the same behavior behind a `shopt` and reaches
+	// it through dialect/bash/shopt.go; this is the other door onto the same
+	// option, and both move the state the walk reads so the two spellings
+	// cannot disagree.
+	//
+	// The state rather than a record of the request, which is what took this
+	// name out of the group below. It was recorded from #3128 until #3152
+	// built it, and the rule that move follows is written at recordedOption:
+	// **a name leaves the recorded set in the change that makes it real**,
+	// because a listing saying `globstar on` over a `**` still reading as
+	// `*` is the same lie the refusal was, one level quieter.
+	//
+	// The *other* three questions `**` raises — bare `**` crossing levels, a
+	// link counting as one of them, and a run of `**` being one component —
+	// are the dialect's and are set beside the walk rather than here: this
+	// option is the only name either shell has for any of them, so a dialect
+	// that has this name has already answered all four. See
+	// interp.StarStarCrossesDirectories and the three that follow it.
+	"globstar": {
+		apply: func(r *Runner, on bool) { r.SetMatchOption(StarStarCrossesDirectories, on) },
+		get:   func(r *Runner) bool { return r.MatchOption(StarStarCrossesDirectories) },
+	},
+
+	// The rest are off here and off there. None of them is acted on: there
+	// is no third editing mode, `let` reads no octal, a glob marks no
 	// directory, nothing is withheld for `showme`, and this shell has no
-	// restricted mode. All six are recorded: ksh93u+ takes every one of them
-	// in both directions at 0 and reports the state back afterwards —
-	// measured 2026-09-16, `set -o globstar; set -o` is `globstar on` there
+	// restricted mode. All five are recorded: ksh93u+ takes every one of
+	// them in both directions at 0 and reports the state back afterwards —
+	// measured 2026-09-16, `set -o markdirs; set -o` is `markdirs on` there
 	// — so refusing them made the listing advertise names the shell then
 	// declined (#3128). What each is recorded *for* is the follow-up work;
 	// remembering it is not a claim to do it. See recordedOption.
-	"globstar":   recordedOption("globstar", false),
 	"gmacs":      recordedOption("gmacs", false),
 	"letoctal":   recordedOption("letoctal", false),
 	"markdirs":   recordedOption("markdirs", false),
@@ -1209,8 +1231,9 @@ func negatedOption(o setOption) setOption {
 //
 // A name moves *out* of here the moment something reads it, which is the
 // distinction being written down rather than assumed: `keyword` was in this
-// class until #3126 built `set -k`, and `history` and `histexpand` until
-// #3093. The entries below are the ones nothing reads yet.
+// class until #3126 built `set -k`, `history` and `histexpand` until #3093,
+// and `globstar` until #3152 wired it to the walk. The entries below are the
+// ones nothing reads yet.
 func recordedOption(name string, def bool) setOption {
 	return recordedOverOption(name, def, nil)
 }

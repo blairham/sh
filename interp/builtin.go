@@ -1178,6 +1178,16 @@ func (r *Runner) hasSetOptionName(name string) bool {
 // answers as it did before. A letter it called foreign that the switch would
 // have taken would be a refusal no shell makes.
 func (r *Runner) hasSetLetter(opt rune) bool {
+	if _, ok := r.optionLetterNames[opt]; ok {
+		// A letter the dialect spells its own way, asked first for the same
+		// reason setLetters asks it first: the letters that need a table are
+		// exactly the letters two shells disagree about, and the switch
+		// below would refuse one of them on a shared axis rather than answer
+		// it. A validating pass that missed such a letter refused `set -G`
+		// in the one shell whose `-G` is `globstar` — with `G` in that
+		// shell's own usage line, one line down (#3152).
+		return true
+	}
 	if _, ok := setLetterNames[opt]; ok {
 		return true
 	}

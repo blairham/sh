@@ -42,8 +42,18 @@ func starStarLinkDir(t *testing.T) string {
 // crossing turns the level-crossing reading on, which is the state every
 // assertion below is about: with it off `**` is an ordinary `*` and the
 // question does not arise.
+//
+// And with them, the two readings bash and zsh share and ksh93 does not: a
+// link the *pattern* reached is listed like any other directory, and a `**`
+// that matched no level at all names the directory it started from — `s/**/`
+// is `[s/]` in those two and no match in ksh93, which will not begin a walk
+// behind a link. This file is those two shells throughout —
+// see TestAStarStarPatternReadsNoLinkedDirectoryWhereTheDialectSaysSo for the
+// third column.
 func crossing(dir string) func(*Runner) {
-	return withOption(StarStarCrossesDirectories, true, inDir(dir))
+	return withOption(StarStarCrossesDirectories, true,
+		withOption(StarStarPatternsReadLinkedDirectories, true,
+			withOption(StarStarZeroLevelIsTheDirectoryItStartsFrom, true, inDir(dir))))
 }
 
 // TestStarStarDoesNotEnterASymbolicLink is #2360.

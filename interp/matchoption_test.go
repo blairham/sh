@@ -221,7 +221,8 @@ func TestStarStarCrossesDirectories(t *testing.T) {
 		{false, true, `echo **/f`, "d/f"},
 	} {
 		opt := withOption(StarStarCrossesDirectories, tc.on,
-			withOption(StarStarAloneCrossesDirectories, tc.alone, inDir(dir)))
+			withOption(StarStarAloneCrossesDirectories, tc.alone,
+				withOption(StarStarZeroLevelIsTheDirectoryItStartsFrom, true, inDir(dir))))
 		out, _ := run(t, tc.src, opt)
 		if got := strings.TrimSpace(out); got != tc.want {
 			t.Errorf("on=%v alone=%v %s = %q, want %q", tc.on, tc.alone, tc.src, got, tc.want)
@@ -259,7 +260,8 @@ func TestStarStarAloneIsItsOwnQuestion(t *testing.T) {
 		{true, `echo **/f`, "d/e/f d/f f"},
 	} {
 		opt := withOption(StarStarCrossesDirectories, true,
-			withOption(StarStarAloneCrossesDirectories, tc.alone, inDir(dir)))
+			withOption(StarStarAloneCrossesDirectories, tc.alone,
+				withOption(StarStarZeroLevelIsTheDirectoryItStartsFrom, true, inDir(dir))))
 		out, _ := run(t, tc.src, opt)
 		if got := strings.TrimSpace(out); got != tc.want {
 			t.Errorf("alone=%v %s = %q, want %q", tc.alone, tc.src, got, tc.want)

@@ -117,7 +117,8 @@ func TestATrailingSlashOnAnAbsolutePatternToo(t *testing.T) {
 func TestATrailingSlashSurvivesTheStarStarSelfDirectory(t *testing.T) {
 	dir := slashDir(t)
 	opt := withOption(StarStarCrossesDirectories, true,
-		withOption(StarStarAloneCrossesDirectories, true, inDir(dir)))
+		withOption(StarStarAloneCrossesDirectories, true,
+			withOption(StarStarZeroLevelIsTheDirectoryItStartsFrom, true, inDir(dir))))
 	for _, tc := range []struct{ name, src, want string }{
 		{"with a trailing slash", `printf "[%s]" cx/**/`, `[cx/][cx/dx/]`},
 		// Without one, the self directory still carries the separator it

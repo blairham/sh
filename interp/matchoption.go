@@ -26,9 +26,15 @@ type MatchOption int
 // shifted off the end and the option read as off in every state — a dialect
 // turning it on, `shopt -p` reporting it off, and the behavior behind it
 // never running (#1862).
-type matchOptionSet = uint16
+//
+// Widened from uint16 when the two `**` options below took the fifteenth and
+// sixteenth bits. The guard under lastMatchOption would have caught the
+// seventeenth at compile time, which is what it is for, but a width with no
+// room left in it is a trap set for whoever adds the next option rather than
+// a bound anybody chose (#3152).
+type matchOptionSet = uint32
 
-const matchOptionBits = 16
+const matchOptionBits = 32
 
 const (
 	// UnmatchedPatternIsEmpty expands a pattern that matches no file to
@@ -274,6 +280,90 @@ const (
 	// the two dialects that can reach this path get their own measured scope
 	// without either naming the other.
 	UnmatchedPatternIsError
+
+	// StarStarZeroLevelIsTheDirectoryItStartsFrom reports a `**` that
+	// matched **zero** levels as the directory the walk stood in when it
+	// reached the component, so `d/**` names `d/` ahead of what is inside
+	// it. Off, the zero-level match is whatever the component ahead of the
+	// `**` **listed** instead — which is nothing at all where the path was
+	// spelled out, and includes plain files where it was not.
+	//
+	// The one question about `**` the panel splits three ways rather than
+	// two, and the split is ksh93 against the other two. Measured 2026-09-16
+	// in a tree holding `p/pf`, `p/q/qf` and `p/q/w/leaf`, rendered one word
+	// per `[…]` because `echo` joins with spaces and hides exactly this:
+	//
+	//	p/**      ksh93  [p/pf][p/q][p/q/qf][p/q/w][p/q/w/leaf]
+	//	          bash   [p/][p/pf][p/q][p/q/qf][p/q/w][p/q/w/leaf]
+	//	*/**      ksh93  [p][p/pf][p/q][p/q/qf][p/q/w][p/q/w/leaf][topf]
+	//	          bash   [p][p/pf][p/q][p/q/qf][p/q/w][p/q/w/leaf]
+	//	p/*/**    both   [p/pf][p/q][p/q/qf][p/q/w][p/q/w/leaf]
+	//	*/q/**    ksh93  [p/q/qf][p/q/w][p/q/w/leaf]
+	//	          bash   [p/q][p/q/qf][p/q/w][p/q/w/leaf]
+	//	**/q/**   both   [p/q][p/q/qf][p/q/w][p/q/w/leaf]
+	//
+	// Two things fall out of that table and neither is the symmetric guess.
+	// `topf` is a **file** and ksh93 names it for `*/**`, so the zero-level
+	// match there is not a directory the walk stood in — it is the `*`
+	// component's own listing, before anything filtered it down to what
+	// could be descended into. And `*/q/**` and `**/q/**` differ while
+	// spelling the same `q`, so it is not the whole prefix that decides it
+	// either.
+	//
+	// What fits every row is where the starting directory's **name** came
+	// from. A literal component is joined onto the path and stat'd; a
+	// pattern is resolved by reading the directory it sits in, and so is a
+	// literal that follows a `**`, because that walk is already listing
+	// every level it crosses. So the zero-level match exists exactly where
+	// the start came out of a listing, and the listing is what it reports.
+	// See globZeroLevelSource, which is that rule and nothing else.
+	//
+	// Consulted only where StarStarCrossesDirectories is already on, and
+	// reachable only where a `**` is the last real component: with something
+	// behind it the set is a set of directories to descend and a zero-level
+	// match is a place to carry on from rather than an answer.
+	StarStarZeroLevelIsTheDirectoryItStartsFrom
+
+	// StarStarPatternsReadLinkedDirectories lets a pattern holding a
+	// level-crossing `**` list a directory it reached through a symbolic
+	// link, so `s/**` with `s` a link to `r` lists what is under `r`.
+	//
+	// The whole pattern and not the `**` component alone, which is measured
+	// and is the reason this is one option rather than two. One shell in the
+	// panel answers a `**` pattern with a **physical** walk and reads no
+	// directory through a link anywhere in it — not the one the walk starts
+	// in, and not one an earlier pattern component would have listed — while
+	// the same shell reads straight through the same link for a pattern with
+	// no `**` in it.
+	//
+	// It is not about following a link the walk *meets* on the way down: no
+	// dialect does that, which is what keeps `**` bounded on a tree holding
+	// a link to its own ancestor, and StarStarSeesLinkedDirectories decides
+	// only whether such a link is *named*.
+	//
+	// Measured 2026-09-16 in a tree holding `r/x`, a symlink `s` to `r`, a
+	// three-deep `tree/` holding `tree/a/b/c` and `tree/afile`, and a
+	// symlink `t` to `tree`:
+	//
+	//	s/**       bash [s/][s/x]   zsh [s/x]   ksh93 [s/**] — no match
+	//	s/**/x     bash [s/x]       zsh [s/x]   ksh93 [s/**/x] — no match
+	//	t/**       bash [t/][t/a]…  zsh [t/a]…  ksh93 [t/**] — no match
+	//	t/*/**     bash [t/a/b]…                ksh93 [t/*/**] — no match
+	//	*/*/**     bash …[t/a]…                 ksh93 no `t/` name at all
+	//	**/s/**    bash [s][s/x]    zsh [s/x]   ksh93 [s]
+	//
+	// Three rows pull the rule away from the guesses next to it. `s/./**`
+	// is `[s/./x]` in **every** column, so it is the directory a listing is
+	// read from that matters and not the text of the path. `*/a/**` is
+	// `…[t/a/b]…` in ksh93 too, because a *literal* component is joined onto
+	// the path and stat'd rather than listed — the same split
+	// globZeroLevelSource turns on. And `*/*` without a `**` anywhere lists
+	// `[t/a][t/afile][t/b]` in that shell with the option on, so the
+	// physical reading belongs to the pattern that holds a `**` rather than
+	// to the option being set.
+	//
+	// Consulted only where StarStarCrossesDirectories is already on.
+	StarStarPatternsReadLinkedDirectories
 
 	// lastMatchOption is the guard's subject and never a behavior. It has to
 	// stay last.

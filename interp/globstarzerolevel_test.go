@@ -34,7 +34,24 @@ func starStarTree(t *testing.T, dirs, files []string) string {
 // levels and still crosses them with nothing behind it, which is bash's
 // `globstar` and ksh93's. With the second option off a bare `**` is an
 // ordinary `*` and no zero-level match arises at all.
+//
+// The last two are bash's answers to the questions ksh93 answers the other
+// way, and they are written here rather than left to the zero value because
+// this file is bash's reading throughout — see
+// TestZeroLevelStarStarIsNamedByWhatStandsAheadOfItInKsh93 for the other one.
 func bareCrossing(dir string) func(*Runner) {
+	return withOption(StarStarCrossesDirectories, true,
+		withOption(StarStarAloneCrossesDirectories, true,
+			withOption(RepeatedStarStarIsOneComponent, true,
+				withOption(StarStarZeroLevelIsTheDirectoryItStartsFrom, true,
+					withOption(StarStarPatternsReadLinkedDirectories, true, inDir(dir))))))
+}
+
+// bareCrossingKsh93 is bareCrossing with the two options that shell answers
+// differently turned back off: a zero-level `**` takes its match from what
+// the component ahead of it listed, and a pattern holding a `**` reads no
+// directory through a symbolic link.
+func bareCrossingKsh93(dir string) func(*Runner) {
 	return withOption(StarStarCrossesDirectories, true,
 		withOption(StarStarAloneCrossesDirectories, true,
 			withOption(RepeatedStarStarIsOneComponent, true, inDir(dir))))

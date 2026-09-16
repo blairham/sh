@@ -3830,6 +3830,16 @@ func Apply(r *interp.Runner) {
 	// levels of symbolic links` once per link per level. That is the
 	// distinction being deliberate, written down where somebody would
 	// otherwise read the refusal above as an oversight.
+	//
+	// The fourth and fifth questions about the same component, and this
+	// shell answers both the way bash does. A `**` that matched zero levels
+	// is the directory the walk stood in — `d/**/` is `[d/][d/e/]` here and
+	// in bash, against `[d/e/]` in ksh93 — and a walk may begin inside a
+	// directory the pattern reached through a link: `s/**` is `[s/x]` here,
+	// `[s/][s/x]` in bash, and no match at all in ksh93. Measured 2026-09-16
+	// (#3152).
+	r.SetMatchOption(interp.StarStarZeroLevelIsTheDirectoryItStartsFrom, true)
+	r.SetMatchOption(interp.StarStarPatternsReadLinkedDirectories, true)
 	// What `=~` matched is readable here, and under the *same* parameters a
 	// reporting pattern fills rather than under a record of its own: `$MATCH`
 	// is the whole match, `$match` the groups alone, and `$MBEGIN`/`$MEND`

@@ -1313,6 +1313,10 @@ func Semantics() interp.Semantics {
 	// is the half of this zsh answers the other way.
 	s.ParamErrorIsAnExitRequest = interp.No
 	s.DotPassesArguments = interp.Yes
+	// Reads options and has none to read, which is a different answer from
+	// reading the word as a filename: `unknown option` and a usage line.
+	s.DotReadsOptions = interp.Yes
+	s.DotTakesTheSearchPathOption = interp.No
 	// A directory operand is an error, and a fatal one through
 	// DotMissingFileFatal: measured, `. ./` is `.: ./: cannot open [Is a
 	// directory]` and the script ends there. No wording of its own — that

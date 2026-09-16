@@ -1459,6 +1459,14 @@ type Runner struct {
 	// and a table that stored the option's own bit would have granted it by
 	// storing a `true` that meant "on".
 	emptyCommandWordOffersNothing bool
+	// dotSearchesPathOff withholds the PATH search `.` makes for an operand
+	// with no slash in it — bash's `sourcepath`, which is on by default and
+	// is the only name any shell in the panel has for the question.
+	//
+	// Stored as the *negative* so the zero value is the default the option
+	// has, which is on. A Runner that was never told about the switch
+	// searches PATH, which is what every shell here does.
+	dotSearchesPathOff bool
 	// cdCorrectsSpelling is permission for `cd` to correct a misspelled
 	// operand rather than refuse it — bash's `cdspell`, and the only shell in
 	// the panel with a name for it. The correction itself is in

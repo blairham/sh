@@ -48,3 +48,41 @@ shopt -u sourcepath 2>/dev/null; printf 'shopt -u -> %s\n' "$?"
 
 shopt -s sourcepath 2>/dev/null
 . cwdlib.sh 2>/dev/null; printf 'back on -> %s\n' "$?"
+
+# The other half of the same mechanism: `. -p list file` is "look along this
+# list instead, for this call only", and it is bash's alone — zsh reads the
+# `-p` as the name of a file, and ksh93, dash and BusyBox ash each call it an
+# option they have not got. **bash 3.2 has not got it either**, answering
+# `.: -p: invalid option`, so this is a 5.x row rather than a bash one.
+mkdir -p aside
+printf 'printf "found by -p\\n"\n' > aside/asidelib.sh
+
+# A directory that is neither the working one nor on PATH.
+. -p "$PWD/aside" asidelib.sh
+printf 'p option -> %s\n' "$?"
+
+# Several directories, like a PATH, and the first hit wins.
+. -p "/nonexistent-zz:$PWD/aside" asidelib.sh; printf 'a list -> %s\n' "$?"
+
+# The list *replaces* the search rather than adding to it: a miss is a miss
+# even when the file is in the working directory, where a plain `.` finds it.
+. -p /nonexistent-zz cwdlib.sh 2>/dev/null; printf 'a missed list -> %s\n' "$?"
+
+# An empty argument is a list of one empty element, which is the working
+# directory — the same rule an empty element inside a longer list follows.
+. -p "" cwdlib.sh; printf 'an empty list -> %s\n' "$?"
+
+# It wins over the switch, so the two halves do not cancel.
+shopt -u sourcepath
+. -p "$PWD/aside" asidelib.sh; printf 'p option with the switch off -> %s\n' "$?"
+shopt -s sourcepath
+
+# A name with a slash was never a search, so `-p` does not reach it.
+. -p "$PWD/aside" ./asidelib.sh 2>/dev/null; printf 'a slash with -p -> %s\n' "$?"
+
+# `source` is the same builtin and takes it too.
+source -p "$PWD/aside" asidelib.sh; printf 'source -p -> %s\n' "$?"
+
+# And the two ways to write it wrong.
+( . -p ) 2>/dev/null; printf 'no argument -> %s\n' "$?"
+( . -p "$PWD/aside" ) 2>/dev/null; printf 'no file -> %s\n' "$?"

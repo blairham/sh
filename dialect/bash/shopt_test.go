@@ -87,8 +87,10 @@ func TestShoptRefusals(t *testing.T) {
 		{`shopt -su nullglob`, "cannot set and unset shell options simultaneously", 1},
 		{`shopt -z`, "shopt: usage: shopt [-pqsu] [-o] [optname ...]", 2},
 		// A name this shell recognizes and cannot move: refused out loud,
-		// never accepted quietly.
-		{`shopt -u sourcepath`, "shopt: sourcepath: not implemented", 1},
+		// never accepted quietly. `sourcepath` was the example here until
+		// #3058 gave it the switch it names, so the example is now one that
+		// is still only a name.
+		{`shopt -u histappend`, "shopt: histappend: not implemented", 1},
 	} {
 		out, st := runBash(t, t.TempDir(), tc.src)
 		if st != tc.status || !strings.Contains(out, tc.said) {
@@ -97,7 +99,7 @@ func TestShoptRefusals(t *testing.T) {
 		}
 	}
 	// The states already held are granted: off may be turned off, on on.
-	for _, src := range []string{`shopt -u execfail`, `shopt -s sourcepath`} {
+	for _, src := range []string{`shopt -u execfail`, `shopt -s histappend`} {
 		if out, st := runBash(t, t.TempDir(), src); st != 0 || out != "" {
 			t.Errorf("%s = %q status %d, want a quiet success", src, out, st)
 		}

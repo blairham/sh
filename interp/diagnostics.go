@@ -155,6 +155,21 @@ type Diagnostics struct {
 	// ksh93 need no answer here.
 	SourcedFatalStatus int
 
+	// DotSearchPathMiss is a `. -p list file` whose list did not hold the
+	// file. One verb: the operand as written.
+	//
+	// Its own sentence because bash words it differently from every other
+	// way `.` can fail to read something: `.: f.sh: file not found`, in
+	// lower case and naming the builtin, where a bare operand nothing could
+	// find is `f.sh: No such file or directory`. Only bash has `-p`, so only
+	// bash reaches it (#3058).
+	DotSearchPathMiss string
+
+	// DotOptionNeedsAnArgument is `. -p` with nothing after it. One verb:
+	// the option as written. Only bash has an option that takes an argument;
+	// the other four never reach this.
+	DotOptionNeedsAnArgument string
+
 	// DotNoOperand is what `.` says when given no filename at all. No verbs.
 	DotNoOperand string
 	// DotNoOperandStatus is the status that carries. bash and ksh93 say 2,

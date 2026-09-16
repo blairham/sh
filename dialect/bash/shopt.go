@@ -216,6 +216,15 @@ var shoptSwitches = map[string]struct {
 		get: (*interp.Runner).CorrectsCdSpelling,
 		set: (*interp.Runner).SetCorrectsCdSpelling,
 	},
+	// The other switch here that turns a *capability* down rather than up,
+	// and the only name any shell on the panel has for the question: with
+	// `sourcepath` off, a `.` operand with no slash in it is a path relative
+	// to the shell's directory and is not looked for along $PATH. On by
+	// default, which is the zero value the Runner stores (#3058).
+	"sourcepath": {
+		get: (*interp.Runner).SearchesPathForSource,
+		set: (*interp.Runner).SetSearchesPathForSource,
+	},
 	"checkjobs": {
 		get: (*interp.Runner).ChecksRunningJobsAtExit,
 		set: (*interp.Runner).SetChecksRunningJobsAtExit,
@@ -538,7 +547,6 @@ var shoptStates = map[string]bool{
 	"progcomp_alias":       false,
 	"promptvars":           true,
 	"shift_verbose":        false,
-	"sourcepath":           true,
 	"varredir_close":       false,
 	"xpg_echo":             false,
 }

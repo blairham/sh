@@ -79,3 +79,8 @@ printf 'a\\tb\n' | { read line; printf '%s\n' "$line"; }
 ( exec -a NAME /bin/sh -c 'printf "[%s]\n" "$0"' )
 ( exec -l /bin/sh -c 'printf "reached\n"' ) 2> /dev/null; printf 'option -l -> %s\n' "$?"
 ( exec -c /bin/sh -c 'printf "reached\n"' ) 2> /dev/null; printf 'option -c -> %s\n' "$?"
+# `.` reads a leading dash-word as an option here and has none to read, so
+# `. -p dir f` is an illegal option rather than a file called `-p`, and `.`
+# being special, the subshell ends there. Only bash 5.3 has the `-p`.
+( . -p /tmp f.sh; printf 'reached\n' ) 2> /dev/null
+printf 'a dash-word -> %s\n' "$?"

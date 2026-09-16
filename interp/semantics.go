@@ -12213,6 +12213,34 @@ type Semantics struct {
 	// Runner.DotLooksInCurrentDirectoryFirst.
 	DotFallsBackToCurrentDirectory Answer
 
+	// DotReadsOptions lets `.` and `source` read a leading dash-word as an
+	// option rather than as the name of the file to read.
+	//
+	// True in bash, ksh93, dash and BusyBox ash — three of which have no
+	// option to read and say so, which is the point: `. -p dir f` is
+	// `.: -p: unknown option` in ksh93 and `.: Illegal option -p` in dash,
+	// each followed by that shell's own rule about a special builtin's
+	// failure. False in zsh, where `-p` is a filename and the complaint is
+	// that there is no such file.
+	//
+	// The answer has to come before the operand is resolved, because it
+	// decides which word the operand is.
+	DotReadsOptions Answer
+
+	// DotTakesTheSearchPathOption is `. -p list file`, bash 5.3's way of
+	// saying "look along this list instead of $PATH, for this call only".
+	//
+	// True in bash alone, and a 5.x addition: **bash 3.2** answers `.: -p:
+	// invalid option` and its usage line, which is the same line without the
+	// `[-p path]` in it.
+	//
+	// The list replaces the search rather than adding to it — a miss is a
+	// miss even when the file is in the current directory, where an ordinary
+	// `.` would have found it — and it wins over the switch below, so
+	// `shopt -u sourcepath` does not turn it off. An operand with a slash in
+	// it is a path in every reading and is not searched for at all.
+	DotTakesTheSearchPathOption Answer
+
 	// TestAcceptsDoubleEqual makes `==` a synonym for `=` in `test` and `[`,
 	// so `test a == a` is a string comparison. True in bash, ksh93 and zsh.
 	//
@@ -14342,6 +14370,10 @@ func PosixSemantics() Semantics {
 		ExecTakesTheLoginLetter:            No,
 		ExecTakesTheEmptyEnvironmentLetter: No,
 		ExecLoginPrefixesTheGivenName:      No,
+		// POSIX gives `.` one operand and no options, so a leading dash-word
+		// is not one — and there is no `-p` to read.
+		DotReadsOptions:             No,
+		DotTakesTheSearchPathOption: No,
 		// POSIX shows the mask in a form that can be read back; three of the
 		// four write four octal digits.
 		UmaskPrintsFourDigits: Yes,

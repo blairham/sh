@@ -56,3 +56,9 @@ printf 'an eval that will not parse -> %s\n' "$?"
 printf 'a dot file that is not there -> %s\n' "$?"
 
 printf 'reached the end\n'
+
+# `.` reads a leading dash-word as an option here and has none, so `. -p dir
+# f` is an illegal option rather than bash 5.3's search path or zsh's
+# filename — and `.` being special, the subshell ends there.
+( . -p /tmp f.sh; printf 'reached\n' ) 2> /dev/null
+printf 'a dash-word -> %s\n' "$?"

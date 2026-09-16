@@ -26,7 +26,7 @@ func (r *Runner) assignElemLiteral(a *syntax.Assign) {
 		// shell quotes `a[$i]` back, and it refuses before evaluating it at
 		// all — `a[1/0]=(p q)` is the same sentence there and not a division
 		// by zero, so nothing is asked of the subscript on this route.
-		r.fatal("%s\n", Wording(r.diag().ArrayLiteralThroughASubscript,
+		r.failedSubscript("%s\n", Wording(r.diag().ArrayLiteralThroughASubscript,
 			"%[1]s[%[2]s]: cannot assign list to array member",
 			a.Name, subscriptSubject(a.IndexText, r.subscriptAsWritten(a.Index))))
 	case SubscriptedArrayLiteralSplices:

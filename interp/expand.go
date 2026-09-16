@@ -661,6 +661,13 @@ func (r *Runner) readParamSource(e *syntax.ParamExpr) (value string, set, subscr
 		words, iset, _ := r.nestedWords(e)
 		return strings.Join(words, ifsFirst(r.ifs())), iset, false
 	}
+	// A name reference aimed at the *whole* of an array is the expansion it
+	// names, so the node becomes that expansion and everything below answers
+	// it. Ahead of the subscript branch because the rewrite is what puts the
+	// subscript there. See Runner.namerefAimedAtTheWholeArray.
+	if aimed, ok := r.namerefAimedAtTheWholeArray(e); ok {
+		e = aimed
+	}
 	if e.Index != nil {
 		if elems, ok := r.arraySubscript(e); ok {
 			// nil rather than empty is what says the element was not there:
@@ -994,6 +1001,13 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 		// expansion. It already reads a name reference first, asks
 		// IndirectionYieldsName, and looks the resolved text up.
 		return nil, false
+	}
+	// A name reference aimed at the whole of an array is that array's
+	// expansion, fields and all — the same rewrite the scalar path makes, and
+	// here for the half that decides the field count. See
+	// Runner.namerefAimedAtTheWholeArray.
+	if aimed, ok := r.namerefAimedAtTheWholeArray(e); ok {
+		e = aimed
 	}
 	// A bare array name is the *array* in one dialect, so the node is given
 	// the subscript that says so and the array path below answers it. See
@@ -2123,6 +2137,12 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 		set       bool
 		subscript bool
 	)
+	// The same rewrite paramSource makes, made before the length block:
+	// `${#r}` on a reference aimed at `a[@]` is the element *count*, and the
+	// subscript is what says so. See Runner.namerefAimedAtTheWholeArray.
+	if aimed, ok := r.namerefAimedAtTheWholeArray(e); ok {
+		e = aimed
+	}
 	if e.Index != nil && e.Inner == nil {
 		// A subscript on a *name*. The same brackets after a nested
 		// expansion index what the inner came to and are answered through

@@ -635,3 +635,111 @@ func TestTheCountHoldsThreeDeep(t *testing.T) {
 		}
 	}
 }
+
+// A reference aimed at **all** of an array — `declare -n r=a[@]` — is that
+// whole-array expansion wherever the name is read, fields and all.
+//
+// It read as one element with the subscript `@`, which is no arithmetic, so
+// every such reference came back **empty at status 0**: a silent wrong
+// answer, and under `set -u` a fatal one. `nameref.tests` of bash's own suite
+// ended at 127 for it where bash ends at 0 (#2299).
+//
+// Measured 2026-09-16 against bash 5.3.20. Only one column can express this
+// at all — bash 3.2 has no `-n` letter, zsh has no `-n` letter, and ksh93u+
+// refuses the target at the declaration because it evaluates the subscript
+// there — so it is written as a bash row rather than as an axis.
+func TestANameReferenceAimedAtTheWholeArray(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct{ name, src, want string }{
+		// `[@]` keeps one field per element even inside quotes, exactly as
+		// `"${a[@]}"` does — the field count is the whole assertion, which
+		// is why these print delimiters rather than the joined text.
+		{
+			"[@] is one field per element, quoted",
+			`a=(x y z); declare -n r=a[@]; printf "<%s>" "$r"; echo`,
+			"<x><y><z>\n",
+		},
+		{
+			"and unquoted",
+			`a=(x y z); declare -n r=a[@]; printf "<%s>" $r; echo`,
+			"<x><y><z>\n",
+		},
+		// `[*]` is the other spelling and keeps the other answer, which is
+		// what says the target's own subscript decides rather than the
+		// quoting at the use.
+		{
+			"[*] is one joined field, quoted",
+			`a=(x y z); declare -n r=a[*]; printf "<%s>" "$r"; echo`,
+			"<x y z>\n",
+		},
+		{
+			"and splits when it is not",
+			`a=(x y z); declare -n r=a[*]; printf "<%s>" $r; echo`,
+			"<x><y><z>\n",
+		},
+		// `${#r}` is the element *count*, not the length of the join: 3 and
+		// not 5, which is the number a script tests to ask whether the array
+		// it was handed has anything in it.
+		{"${#r} counts the elements", `a=(x y z); declare -n r=a[@]; echo "${#r}"`, "3\n"},
+		{"and so does the [*] spelling", `a=(x y z); declare -n r=a[*]; echo "${#r}"`, "3\n"},
+		// A table reads the same way.
+		{
+			"a table's values read through",
+			`declare -A m=([k]=v); declare -n r=m[@]; echo "[$r]"`,
+			"[v]\n",
+		},
+		// An operator runs over what the expansion came to, as it does for
+		// the written spelling.
+		{"an operator reads through", `a=(x y z); declare -n r=a[@]; echo "${r#x}"`, " y z\n"},
+		// And the three readings that are about the *reference* rather than
+		// about what it names, each of which bash answers without the
+		// rewrite. A subscript on the reference subscripts the reference,
+		// which is not an array.
+		{"${!r} is still the target text", `a=(x y z); declare -n r=a[@]; echo "${!r}"`, "a[@]\n"},
+		{"a subscript on the reference finds nothing", `a=(x y z); declare -n r=a[@]; echo "[${r[1]}]"`, "[]\n"},
+		{"and counts nothing", `a=(x y z); declare -n r=a[@]; echo "${#r[@]}"`, "0\n"},
+		{"the listing still shows the target", `a=(x y z); declare -n r=a[@]; declare -p r`, "declare -n r=\"a[@]\"\n"},
+		// The controls: a reference to *one* element is unchanged, and so is
+		// a reference to a plain name. Both would break if the rewrite fired
+		// on more than the two whole-array spellings.
+		{"one element is still one element", `a=(x y z); declare -n r=a[1]; echo "[$r]"`, "[y]\n"},
+		{"and its length is that element's", `a=(hello); declare -n r=a[0]; echo "${#r}"`, "5\n"},
+		{"a plain name is still a plain name", `s=hello; declare -n r=s; echo "[$r] ${#r}"`, "[hello] 5\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runBash(t, dir, tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("%s = %q at %d, want %q at 0", tc.src, out, st, tc.want)
+			}
+		})
+	}
+}
+
+// And `set -u` does not fire for it, which is the half that decided an exit
+// status. `${a[@]}` on an array that was never set is not an unbound
+// parameter in bash, so neither is a reference aimed at it — where the same
+// reference aimed at an *element* is, in both shells.
+func TestANameReferenceToTheWholeArrayIsNotUnbound(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct {
+		name, src string
+		want      int
+	}{
+		{"the whole array is not unbound", `set -u; declare -n r=a[@]; : "$r"; echo ok`, 0},
+		{"nor is the joined spelling", `set -u; declare -n r=a[*]; : "$r"; echo ok`, 0},
+		{"nor is an empty array", `set -u; a=(); declare -n r=a[@]; : "$r"; echo ok`, 0},
+		// The controls, which bash does refuse — so a fix that simply stopped
+		// asking would fail these. The number is the route's: this harness
+		// runs a script *file*, where bash leaves 1 for an unbound parameter;
+		// the same three lines given to `-uc` leave 127 in bash and here
+		// alike, which is the pair that decided `nameref.tests`.
+		{"an element still is", `set -u; declare -n r=a[0]; : "$r"`, 1},
+		{"and a plain name still is", `set -u; declare -n r=v; : "$r"`, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, st := runBash(t, dir, tc.src); st != tc.want {
+				t.Errorf("%s exited %d, want %d", tc.src, st, tc.want)
+			}
+		})
+	}
+}

@@ -131,3 +131,56 @@ esac
 # generate from it and ksh93 and dash open the pattern as a filename and
 # fail. Two against two is neither tier's claim, so it is written here rather
 # than run.
+
+# --- a component that spells a name out -------------------------------------
+#
+# A component holding no metacharacter is resolved by asking whether the path
+# is there, never by listing the directory above it, and the two are not the
+# same question: listing needs read permission on that directory and resolving
+# needs only the right to pass through it.
+#
+# So the block below needs a directory whose mode is not the default, which is
+# the one thing in this file that is not simply a name on the disk. `search` is
+# `--x`: it may be entered and not read. `none` is `---`: neither.
+#
+# Both directions are here, because getting this wrong loses a name in one and
+# invents one in the other. The listing cannot see through `search`, so a
+# spelled name under it goes missing; and no listing anywhere reports `.` or
+# `..`, so a walk that joins them without asking offers `none/.`, which no
+# shell in the panel does.
+#
+# `gone` is the control for *which* question is asked: it is a symbolic link
+# to nothing, so it has no target to stat and is still a name — every column
+# matches it. A resolution that followed the link would drop it.
+#
+# The trailing separator is the other control and it is deliberately the one
+# row that has always been right: `p/*/` lists `none/` too, in every column
+# and here, because the empty component a trailing slash leaves is a question
+# about the directory the walk already matched rather than a component of its
+# own.
+rm -rf p
+mkdir -p p/search/deep p/none p/open
+: > p/search/f
+: > p/search/deep/g
+: > p/open/f
+ln -s nowhere p/open/gone
+chmod 100 p/search
+chmod 000 p/none
+
+set -- p/*/f
+show 'spelled under a directory that may be entered and not listed' "$@"
+set -- p/*/deep/g
+show 'two spelled components of it' "$@"
+set -- p/*/deep
+show 'a spelled directory under it' "$@"
+set -- p/*/.
+show 'a dot component' "$@"
+set -- p/*/..
+show 'a dot-dot component' "$@"
+set -- p/*/gone
+show 'a spelled name that is a dangling link' "$@"
+set -- p/*/
+show 'the empty component a trailing slash leaves' "$@"
+
+chmod 700 p/search p/none
+rm -rf p

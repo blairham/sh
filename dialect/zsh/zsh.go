@@ -1871,6 +1871,9 @@ func Semantics() interp.Semantics {
 	// Alone in refusing an argument to `times`; dash and bash ignore it.
 	s.TimesRejectsArguments = interp.Yes
 	s.UnterminatedBracket = interp.BracketBadPattern
+	// And the same question where a `[:name:]`, a `[.x.]` or a `[=x=]`
+	// inside it is what left it open: not a pattern, the same as a bare `[`.
+	s.UnterminatedBracketAfterASubExpression = interp.BracketBadPattern
 	s.UnknownCharacterClass = interp.UnknownClassIsInert
 	// The one column with neither construct: `[[.a.]]` is the three-member
 	// set `[`, `.`, `a` followed by a literal `]`, so it matches `a]` where

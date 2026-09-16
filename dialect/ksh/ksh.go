@@ -1354,6 +1354,9 @@ func Semantics() interp.Semantics {
 	// `(( ))` — see [interp.Semantics.ForHeaderArithmeticErrorIsFatal].
 	s.ForHeaderArithmeticErrorIsFatal = interp.Yes
 	s.UnterminatedBracket = interp.BracketLiteral
+	// And the same question where a `[:name:]`, a `[.x.]` or a `[=x=]`
+	// inside it is what left it open: the column that moves: a bare `[` is a literal `[` here and `[[:alpha:]` matches nothing at all.
+	s.UnterminatedBracketAfterASubExpression = interp.BracketNoMatch
 	// And inside a bracket expression the backslash protects the character
 	// behind it and puts nothing of its own in the set: `[\)]` is the
 	// one-character set `)`, and `[a\-z]` is the three members a, `-` and z,

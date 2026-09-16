@@ -173,7 +173,7 @@ var exempt = map[string]string{
 		"matches (#1492).",
 	"interp.lstat":    "fsgate.go's own os.Lstat, behind the same ActionStat consultation as stat.",
 	"interp.readLink": "fsgate.go's own os.Readlink, behind the same ActionStat consultation as stat.",
-	"interp.readDir": "fsgate.go's own listing, behind ActionReadDir. The gated path opens the " +
+	"interp.dirEntries": "fsgate.go's own listing, behind ActionReadDir. The gated path opens the " +
 		"directory through internal/opened and takes the entries from that descriptor; the " +
 		"os.ReadDir calls are the no-gate and watch-only forms.",
 	"interp.openGatedFile": "verifyopen.go: the open the gate has just agreed to, verified against " +

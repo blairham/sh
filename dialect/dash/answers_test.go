@@ -120,6 +120,14 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 	if got, want := s.UnterminatedBracket, interp.BracketNoMatch; got != want {
 		t.Errorf("UnterminatedBracket = %v, want %v", got, want)
 	}
+	// a bracket a sub-expression left open matches nothing, as a bare one does.
+	if got, want := s.UnterminatedBracketAfterASubExpression, interp.BracketNoMatch; got != want {
+		t.Errorf("UnterminatedBracketAfterASubExpression = %v, want %v", got, want)
+	}
+	// no parameter for the order an expansion comes back in.
+	if got, want := s.SortOrderVariable, ""; got != want {
+		t.Errorf("SortOrderVariable = %q, want %q", got, want)
+	}
 	if got, want := s.UnknownCharacterClass, interp.UnknownClassEndsTheScan; got != want {
 		t.Errorf("UnknownCharacterClass = %v, want %v", got, want)
 	}

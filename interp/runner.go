@@ -2569,6 +2569,18 @@ type Runner struct {
 	// observable: `$-` reports the option, and a runner that flipped it for
 	// the length of an expansion answered for it while it was flipped.
 	globSuspended bool
+	// globUnsorted says the expansion running right now asked for the order
+	// the directory itself gave, which is one value of the dialect's sort
+	// parameter — see Semantics.SortOrderVariable. It reaches the listing
+	// rather than the result because a sort destroys that order and nothing
+	// can recover it: a walk that sorted each level and then "unsorted" the
+	// answer would be inventing one.
+	//
+	// Held on the Runner for the length of one glob, the way globSuspended
+	// is, because the listing is several calls below the walk and threading
+	// a flag through every one of them would put the question to callers
+	// that have nothing to do with it.
+	globUnsorted bool
 
 	// matchOptions is the run-time pattern behaviors a dialect's builtin has
 	// switched on, one bit per MatchOption. A plain value so a subshell's

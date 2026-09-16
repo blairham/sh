@@ -428,6 +428,36 @@ type Semantics struct {
 	// than one, and the second is filed rather than guessed at. See
 	// IgnoredNamesRevealHiddenNames for the half they agree on.
 	IgnoredNamesVariable string
+	// SortOrderVariable names the parameter that says which order a pathname
+	// expansion comes back in, and it is empty in every dialect that has no
+	// such parameter.
+	//
+	// A name rather than a value, for the reason IgnoredNamesVariable is
+	// one: the parameter is a script's to reassign at any moment.
+	//
+	// The facility is bash 5.3's `GLOBSORT`. No other column in the panel
+	// has one — zsh orders a pathname expansion with glob qualifiers, which
+	// are part of the pattern rather than a parameter, and ksh93 and dash
+	// have neither. Measured 2026-09-16 under `LC_ALL=C`, five names in one
+	// directory:
+	//
+	//	GLOBSORT=-name    zed tiny.o mid big.o alpha.o
+	//	GLOBSORT=size     alpha.o mid zed tiny.o big.o
+	//	GLOBSORT=-mtime   mid alpha.o zed tiny.o big.o
+	//	GLOBSORT=nosort   tiny.o big.o mid alpha.o zed
+	//
+	// What the value may say, and every rule in it measured, is in
+	// interp/globsort.go beside the code that reads it. Three of them are
+	// worth naming here because they are the ones a reader would assume the
+	// other way: the key is **case sensitive** and matched whole, a
+	// *trailing* blank invalidates the value where a leading one is trimmed,
+	// and a value this shell does not recognize is the default order at
+	// status 0 with nothing said.
+	//
+	// `nosort` is the value that cannot be reached by sorting at all — it is
+	// the order the directory itself gave — so it is the one that reaches
+	// the walk rather than the result.
+	SortOrderVariable string
 
 	// IgnoredNamesRevealHiddenNames says an assignment of a non-null value
 	// to IgnoredNamesVariable also turns hidden names on, so a `*` sees the
@@ -1970,6 +2000,38 @@ type Semantics struct {
 	// any of them and still compile. An axis with three answers gets a type
 	// with three values; the binary ones keep the type that says so.
 	UnterminatedBracket BracketPolicy
+	// UnterminatedBracketAfterASubExpression is the same question about a
+	// bracket that was left open by a **sub-expression** inside it — a
+	// `[:name:]`, a `[.x.]` or a `[=x=]`, whose own `]` is not the
+	// bracket's. `[[:alpha:]` looks closed and is not.
+	//
+	// A second axis rather than a corner of [UnterminatedBracket], because
+	// one column moves between the two. Measured 2026-09-16 under `LC_ALL=C`
+	// with a prefix trim, so that what matched is visible as text —
+	// `w=$subject; echo "${w#$pattern}"`:
+	//
+	//	pattern       subject  bash 5.3   zsh    ksh93   dash
+	//	[             [a       a          error  a       [a
+	//	[[:alpha:]    [a       (empty)    error  [a      [a
+	//	[[.a.]        [a       (empty)    a      [a      [a
+	//
+	// The first row is [UnterminatedBracket]: a literal `[` in bash and in
+	// ksh93, a class that can never match in dash, a bad pattern in zsh. The
+	// second row is this one, and **ksh93 has left**: it matches nothing
+	// where the same shell reads a bare `[` as a character.
+	//
+	// bash's reading is the literal one throughout, and the trim shows what
+	// it is literal *about*: `[[:alpha:]` is a `[` and then the ordinary set
+	// `[:alpha:]` holding `:`, `a`, `l`, `p` and `h`, so it takes exactly
+	// `[` plus one of those five and nothing else. The third row is the same
+	// shape reached through a collating element, and zsh answers it
+	// differently only because it has no such construct — there the bracket
+	// really is closed.
+	//
+	// BusyBox ash is unmeasured: no BusyBox was reachable when this was
+	// taken, so its preset keeps the answer it already gave, which is the
+	// one dash gives. #3379 holds the same gap on the neighboring axis.
+	UnterminatedBracketAfterASubExpression BracketPolicy
 	// UnknownCharacterClass is what a bracket does with a `[:name:]` whose
 	// name this shell has never heard of — including the empty one, `[::]`,
 	// which every column answers the same way it answers a name.
@@ -19006,6 +19068,24 @@ func (r *Runner) bracketPolicy() BracketPolicy {
 	return p
 }
 
+// bracketAfterSubPolicy resolves
+// [Semantics.UnterminatedBracketAfterASubExpression], the same question about
+// a bracket a `[:name:]`, a `[.x.]` or a `[=x=]` left open.
+//
+// Asked from inside the matcher, through patternOpts.askBracketAfterSub, and
+// only where a bracket really ran off the end behind one — which is the
+// shape [Runner.caretNegates] uses, moved to the one place that can tell.
+func (r *Runner) bracketAfterSubPolicy() BracketPolicy {
+	p := r.sem().UnterminatedBracketAfterASubExpression
+	if p == BracketUnspecified {
+		r.errf("%s\n", r.diag().Report(r.name(), r.line,
+			r.unanswered("a bracket expression a `[:name:]` or a `[.x.]` left unterminated")))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
+}
+
 // UnsetArraySpanPolicy is what `unset` does to the span of elements a
 // subscript names — `a[@]` and `a[*]`, which every shell measured treats
 // identically, and `a[3]`, which names a span of one.
@@ -20221,6 +20301,11 @@ func (r *Runner) matchPatternR(pattern, s string, condition bool) bool {
 		collating:         r.readsCollatingSymbols(pattern),
 		unknownClass:      r.unknownClassPolicy(pattern),
 		unterminatedClass: r.unterminatedClassPolicy(pattern),
+		// Handed as a question rather than an answer: a bracket a
+		// sub-expression left open is something only the matcher's own scan
+		// can spot, and asking up front would either put the axis to a
+		// pattern that never poses it or need a second scan to decide.
+		askBracketAfterSub: r.bracketAfterSubPolicy,
 	}
 	// The locale narrows the fold, and only a fold there is asks: the helper
 	// is shared with the sites that convert a value rather than match one,
@@ -20235,8 +20320,16 @@ func (r *Runner) matchPatternR(pattern, s string, condition bool) bool {
 	}
 	o = r.tildeModifierOpts(r.extendedPatternOpts(o, pattern, badStatus), pattern)
 	var bad bool
+	// The place to record a pattern the dialect rejects, handed over
+	// whatever the scan below says. A bracket a `[:name:]` left open is one
+	// the scan does not see — it stops at the class's own `]` — and where
+	// that dialect's answer is "not a pattern at all", a nil here loses the
+	// refusal and reports a miss instead: measured, real zsh gives up the
+	// script on `case '[a' in [[:alpha:]])` and this shell answered the
+	// next arm. Writing to it costs nothing where no pattern is refused.
+	o.bad = &bad
 	if hasUnterminatedBracket(pattern) {
-		o.bracket, o.bad = r.bracketPolicy(), &bad
+		o.bracket = r.bracketPolicy()
 	}
 	// The whole-subject question, like matchPattern's: a condition, a `case`
 	// arm and an element filter each ask whether the pattern describes the

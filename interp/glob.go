@@ -742,6 +742,26 @@ func (r *Runner) glob(field string) ([]string, bool) {
 	// question about a shape no script writes.
 	trail := field[len(strings.TrimRight(field, "/")):]
 
+	// The order the dialect's sort parameter asks for, read once for the
+	// whole expansion — it cannot change while one runs — and false for the
+	// order this walk would give anyway, which is every column but one and
+	// every script but the one that asked. See interp/globsort.go.
+	//
+	// Read here rather than at the end because one of its values reaches the
+	// walk: `nosort` is the order the *directory* gave, which is destroyed
+	// by the per-component sorts below and cannot be recovered from the
+	// result. Measured, `GLOBSORT=nosort; echo */*` is the top level in the
+	// directory's own order with each level below it in its own.
+	order, ordered := r.globSortOrderOf()
+	unsorted := ordered && order.key == globSortNone
+	if unsorted {
+		// The listing's own order is what is asked for, and the listing is
+		// several calls below here — see Runner.globUnsorted.
+		saved := r.globUnsorted
+		r.globUnsorted = true
+		defer func() { r.globUnsorted = saved }()
+	}
+
 	// An absolute pattern starts at the root; a relative one at the working
 	// directory, which is the shell's rather than the process's.
 	base := r.workDir()
@@ -878,33 +898,62 @@ func (r *Runner) glob(field string) ([]string, bool) {
 				onward[dir] = true
 				next = r.appendDescendants(next, dir, seeHidden, onward)
 			}
-			sortMatches(next)
-		} else if lit := globUnescape(part); lit == "." || lit == ".." {
-			// `.` and `..` **name** a directory rather than describe one, so
-			// this component is joined and never matched. No listing reports
-			// either name — Go's ReadDir does not, and neither does any
-			// shell's — so matching it against one answers nothing, which is
-			// why the whole pattern used to be a miss. Measured unanimous
-			// across the six: `./cx/*` is `./cx/ax`, `cx/./*` is `cx/./ax`,
-			// `cx/../*` is `cx/../ax`, and `*/..` is `cx/..`.
+			if !unsorted {
+				sortMatches(next)
+			}
+		} else if !r.describesRatherThanSpells(part) {
+			// A component that **spells a name out** rather than describing
+			// one, which is resolved by asking whether the path is there and
+			// never by listing the directory above it.
 			//
-			// The literal behind the quoting marks is what is tested,
-			// because quoting a component does not change what it names:
-			// `"."/cx/*` and `\./cx/*` both list `./cx/ax` in all six. Today
-			// the two spellings coincide — globEscape marks only the
-			// metacharacters, and a period is not one — so this normalizing
-			// is defensive rather than load-bearing, and a mutation that
-			// drops it survives. It is written against the literal so that
-			// it stays right if that set ever grows.
+			// Unanimous across the panel, and visible without any permission
+			// fixture: with a directory `Dir` holding `File`, `*/file`
+			// answers `Dir/file` in bash 5.3.20, zsh 5.9.2, ksh93u+ and dash
+			// 0.5.12 alike — the spelling the *pattern* wrote, where a match
+			// found in a listing would have carried the spelling on disk.
+			// (It resolves at all because the filesystem it was measured on
+			// folds case; what the row shows is which of the two routes the
+			// answer came down, and that is the same on either kind.) The
+			// same probe says a fold — `nocaseglob` — does not reach such a
+			// component, since a stat has no case rule of its own.
 			//
-			// Nothing here checks that the join exists, and nothing needs to.
-			// Every directory standing at this point came out of a listing or
-			// through the descent gate below, so `dir/.` and `dir/..` both
-			// do. That gate is also the reason `ax/./*` is a miss in all six
-			// and stays one here: `ax` is a file, and it is dropped before
-			// this component is reached.
+			// Listing the directory instead is wrong in both directions, and
+			// #3387 has the measurement for each:
+			//
+			//	*/f   under a directory that is `--x`   every column finds it,
+			//	                                        a listing cannot
+			//	*/.   under a directory that is `---`   no column finds it,
+			//	                                        a listing of the
+			//	                                        *parent* offers it
+			//
+			// `.` and `..` are this case rather than a case of their own,
+			// which is what folded the branch that used to stand here: no
+			// listing reports either name, so they were joined unchecked, and
+			// that is exactly the second row above. Every other literal fell
+			// through to the listing and is the first.
+			//
+			// The literal behind the quoting marks is what is joined, because
+			// quoting a component does not change what it names: `"."/cx/*`
+			// and `\./cx/*` both list `./cx/ax` in all six.
+			//
+			// lstat rather than stat, measured: a literal component naming a
+			// **dangling** symbolic link matches in every column — `*/d` is
+			// `x/d` with `x/d` pointing nowhere — while `*/d/` matches in
+			// none, because the trailing separator asks a question about the
+			// target that this component does not.
+			//
+			// This is also the branch the comment below has always described:
+			// a literal component is joined and stat'd, so it reaches through
+			// a symbolic link even in the dialect that walks a `**` field
+			// physically. Until now it went through the listing with every
+			// other component and the physical rule applied to it.
+			lit := globUnescape(part)
 			for _, dir := range dirs {
-				next = append(next, globJoin(dir, lit))
+				joined := globJoin(dir, lit)
+				if _, err := r.lstat(joined); err != nil {
+					continue
+				}
+				next = append(next, joined)
 			}
 		} else {
 			// A pattern component in a field that holds a level-crossing
@@ -947,7 +996,9 @@ func (r *Runner) glob(field string) ([]string, bool) {
 		if len(next) == 0 {
 			return missed()
 		}
-		sortMatches(next)
+		if !unsorted {
+			sortMatches(next)
+		}
 		dirs = next
 		listed = next
 		if i < len(parts)-1 {
@@ -1090,6 +1141,13 @@ func (r *Runner) glob(field string) ([]string, bool) {
 	// here so the next reader does not go hunting for the row that would
 	// kill it.
 	out := make([]string, 0, len(dirs))
+	// The paths the words came from, kept beside them only where an order
+	// was asked for: a size or a time is a question about a file and the
+	// word is not what can be asked it. See Runner.sortMatchesBy.
+	var paths []string
+	if ordered {
+		paths = make([]string, 0, len(dirs))
+	}
 	for _, d := range dirs {
 		w, ok := render(d)
 		if !ok {
@@ -1099,6 +1157,9 @@ func (r *Runner) glob(field string) ([]string, bool) {
 			continue
 		}
 		out = append(out, w)
+		if ordered {
+			paths = append(paths, d)
+		}
 	}
 	if quals.modifiers != "" {
 		// Before the sort, because the shell sorts what the modifiers
@@ -1112,7 +1173,11 @@ func (r *Runner) glob(field string) ([]string, bool) {
 			out[i] = m
 		}
 	}
-	sortMatches(out)
+	if ordered {
+		r.sortMatchesBy(out, paths, order)
+	} else {
+		sortMatches(out)
+	}
 	if len(out) == 0 {
 		// Everything matched was the starting point itself — `**` over an
 		// empty directory — which is no match at all.

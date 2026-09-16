@@ -148,6 +148,15 @@ func TestTheAnswersThatSideWithBashRatherThanDash(t *testing.T) {
 	if got, want := s.CollatingSymbols, interp.No; got != want {
 		t.Errorf("CollatingSymbols = %v, want %v", got, want)
 	}
+	// Unmeasured for the same reason, and the same treatment: the answer the
+	// shell already gave, which is dash's (#3379).
+	if got, want := s.UnterminatedBracketAfterASubExpression, interp.BracketNoMatch; got != want {
+		t.Errorf("UnterminatedBracketAfterASubExpression = %v, want %v", got, want)
+	}
+	// And no parameter for the order an expansion comes back in.
+	if got, want := s.SortOrderVariable, ""; got != want {
+		t.Errorf("SortOrderVariable = %q, want %q", got, want)
+	}
 	// And the `[:` that nothing closes, which is the axis beside it
 	// rather than a corner of it — see #1431.
 	if got, want := s.UnterminatedCharacterClass, interp.UnterminatedClassSwallowsTheClosingBracket; got != want {

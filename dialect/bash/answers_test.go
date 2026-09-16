@@ -140,6 +140,14 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 	if got, want := s.UnterminatedBracket, interp.BracketLiteral; got != want {
 		t.Errorf("UnterminatedBracket = %v, want %v", got, want)
 	}
+	// a bracket a `[:name:]` or a `[.x.]` left open is the same literal `[` a bare one is here.
+	if got, want := s.UnterminatedBracketAfterASubExpression, interp.BracketLiteral; got != want {
+		t.Errorf("UnterminatedBracketAfterASubExpression = %v, want %v", got, want)
+	}
+	// the parameter that says which order a pathname expansion comes back in — 5.3's, and this column's alone.
+	if got, want := s.SortOrderVariable, "GLOBSORT"; got != want {
+		t.Errorf("SortOrderVariable = %q, want %q", got, want)
+	}
 	if got, want := s.UnknownCharacterClass, interp.UnknownClassIsInert; got != want {
 		t.Errorf("UnknownCharacterClass = %v, want %v", got, want)
 	}

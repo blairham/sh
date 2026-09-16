@@ -738,6 +738,13 @@ type patternOpts struct {
 	// character after it stands on its own. See
 	// Semantics.PatternEscapeReaches, which is where it is measured.
 	escapes string
+	// askBracketAfterSub resolves
+	// Semantics.UnterminatedBracketAfterASubExpression, and is a function
+	// rather than a value so that the axis is asked only where a bracket
+	// really ran off the end behind a `[:name:]`, a `[.x.]` or a `[=x=]`.
+	// Nil leaves the question to bracket above, which is every caller that
+	// has not been given the dialect to ask.
+	askBracketAfterSub func() BracketPolicy
 	// collating reads `[.x.]` and `[=x=]` inside a bracket expression as one
 	// collating element and one equivalence class — see
 	// Semantics.CollatingSymbols. Off, the delimiters are ordinary members,
@@ -755,6 +762,25 @@ type patternOpts struct {
 	// Set only where the pattern really holds one, so the axis is asked
 	// where it decides and nowhere else.
 	bracketMember bool
+}
+
+// bracketPolicy is what the text an unterminated bracket left behind means,
+// and it is asked here rather than resolved up front because only a bracket
+// that really ran off the end poses the question — which is something only
+// the matcher's own scan knows. A pattern with a bracket in it is not a
+// pattern that asks: `[[:alpha:]]` closes and `[[:alpha:]` does not, and the
+// two differ by a character no separate scan of ours reads the same way as
+// this one does. Asking through a function is what keeps the one reading.
+//
+// sub says a bracket sub-expression is what left it open. It is a second axis
+// and not a corner of the first, because ksh93 moves between them: a bare `[`
+// is a literal `[` there and `[[:alpha:]` matches nothing. See
+// Semantics.UnterminatedBracketAfterASubExpression.
+func (o *patternOpts) bracketPolicy(sub bool) BracketPolicy {
+	if sub && o.askBracketAfterSub != nil {
+		return o.askBracketAfterSub()
+	}
+	return o.bracket
 }
 
 // escapeReaches reports whether a backslash escapes c rather than standing
@@ -1788,6 +1814,13 @@ func matchBracket(p string, c string, o *patternOpts) (rest string, ok bool) {
 	// after it counts, and the *negation* does not survive it either: see the
 	// `]` below and Semantics.UnknownCharacterClass.
 	frozen := false
+	// sub says the scan consumed a bracket sub-expression — a `[:name:]`, a
+	// `[.x.]` or a `[=x=]`. It matters only where the bracket then never
+	// closes, and it is the whole question there: the `]` a sub-expression
+	// ends with is its own, so a bracket that looks closed to the eye is
+	// open, and what the text is instead is a different answer from what a
+	// bare `[` is. See Semantics.UnterminatedBracketAfterASubExpression.
+	sub := false
 	first := true
 	for i < len(p) {
 		if p[i] == ']' && !first {
@@ -1819,6 +1852,7 @@ func matchBracket(p string, c string, o *patternOpts) (rest string, ok bool) {
 		// `[[ x == [[:] ]]` does not, in bash 5.3.15 and zsh 5.9.2 alike,
 		// so the four characters are a bracket holding `[` and `:`.
 		if strings.HasPrefix(p[i:], "[:") {
+			sub = true
 			if end := strings.Index(p[i+2:], ":]"); end < 0 {
 				// Nothing closes the name, so there is no name: `[[:]` holds
 				// four characters and no class. What that leaves is the
@@ -1833,7 +1867,7 @@ func matchBracket(p string, c string, o *patternOpts) (rest string, ok bool) {
 					// The `]` is taken as part of the name still being
 					// looked for, so this bracket expression never ends and
 					// the text is whatever an unterminated one is here.
-					return unterminatedBracket(p, c, o)
+					return unterminatedBracket(p, c, o, sub)
 				}
 				// UnterminatedClassIsOrdinaryCharacters falls through: the
 				// `[` and the `:` are members like any other, which is what
@@ -1885,6 +1919,9 @@ func matchBracket(p string, c string, o *patternOpts) (rest string, ok bool) {
 		// ASCII, so none of them can be mistaken for the `-` of a range or
 		// the `]` that ends the expression, and the scan above stays a byte
 		// scan.
+		if o.collating && i+1 < len(p) && p[i] == '[' && (p[i+1] == '.' || p[i+1] == '=') {
+			sub = true
+		}
 		lo, next, read := bracketMember(p, i, o)
 		if !read {
 			// A `[.x.]` or `[=x=]` this shell cannot read as one collating
@@ -1935,7 +1972,7 @@ func matchBracket(p string, c string, o *patternOpts) (rest string, ok bool) {
 	}
 	// An unterminated bracket is not a bracket expression, and what it is
 	// instead is the dialect's answer rather than this file's.
-	return unterminatedBracket(p, c, o)
+	return unterminatedBracket(p, c, o, sub)
 }
 
 // unterminatedBracket is what text that opened a bracket and never closed one
@@ -1946,8 +1983,8 @@ func matchBracket(p string, c string, o *patternOpts) (rest string, ok bool) {
 // a `[:` that nothing closes, which takes the `]` as part of the name it is
 // still looking for. See Semantics.UnterminatedCharacterClass. Folded rather
 // than written twice, because a second copy is how the two answers drift.
-func unterminatedBracket(p, c string, o *patternOpts) (rest string, ok bool) {
-	switch o.bracket {
+func unterminatedBracket(p, c string, o *patternOpts, sub bool) (rest string, ok bool) {
+	switch o.bracketPolicy(sub) {
 	case BracketLiteral:
 		// bash and ksh93: an ordinary `[`, and the rest of the pattern
 		// carries on from just after it.
@@ -2412,6 +2449,14 @@ func (r *Runner) patternOpts(pattern string, subjects ...string) patternOpts {
 		bracketMember:     r.bracketEscapeIsOnlyAMember(pattern),
 		classes:           r.patternClasses(pattern),
 		collating:         r.readsCollatingSymbols(pattern),
+		// The bracket axis above is deliberately not resolved on this path
+		// and this one is, because the two are not the same question here.
+		// A bare `[` reaching pathname expansion or a trim is literal in
+		// every column this path serves; a bracket a sub-expression left
+		// open is not — measured with a prefix trim, `${w#[[:alpha:]}` on
+		// `[a` is empty in bash and `[a` in ksh93 and dash, where
+		// `${w#[}` takes the `[` in bash and in ksh93 alike.
+		askBracketAfterSub: r.bracketAfterSubPolicy,
 	}, pattern, 1), pattern)
 }
 

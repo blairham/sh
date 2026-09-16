@@ -301,6 +301,10 @@ func Semantics() interp.Semantics {
 	// facility under another name and does not answer alike; it is filed
 	// rather than guessed at.
 	s.IgnoredNamesVariable = "GLOBIGNORE"
+	// And the order the expansion comes back in, which is 5.3's and is this
+	// column's alone: no other shell in the panel has a parameter for it.
+	// See interp.Semantics.SortOrderVariable.
+	s.SortOrderVariable = "GLOBSORT"
 	s.IgnoredNamesRevealHiddenNames = true
 	// A colon-separated list, matched against the *word* the expansion
 	// produced, and a state an assignment latches rather than the
@@ -1241,6 +1245,9 @@ func Semantics() interp.Semantics {
 	s.PipefailSubstitutesTheBareSignal = interp.No
 	s.ErrexitSeesPipefailFailure = interp.Yes
 	s.UnterminatedBracket = interp.BracketLiteral
+	// And the same question where a `[:name:]`, a `[.x.]` or a `[=x=]`
+	// inside it is what left it open: a literal `[`, and the rest of the pattern behind it — `[[:alpha:]` takes `[` plus one of `:alpha`'s five characters, which is the same reading the axis above gives a bare `[`.
+	s.UnterminatedBracketAfterASubExpression = interp.BracketLiteral
 	// And inside a bracket expression the backslash protects the character
 	// behind it and puts nothing of its own in the set: `[\)]` is the
 	// one-character set `)`, and `[a\-z]` is the three members a, `-` and z,

@@ -540,6 +540,9 @@ func Semantics() interp.Semantics {
 	s.EchoExpandsCapitalEscEscape = interp.No
 	s.LengthOfSpecialIsCount = interp.No
 	s.UnterminatedBracket = interp.BracketNoMatch
+	// And the same question where a `[:name:]`, a `[.x.]` or a `[=x=]`
+	// inside it is what left it open: a class that can never match, the same as a bare `[`.
+	s.UnterminatedBracketAfterASubExpression = interp.BracketNoMatch
 	// And inside a bracket expression the backslash protects the character
 	// behind it and puts nothing of its own in the set: `[\)]` is the
 	// one-character set `)`, and `[a\-z]` is the three members a, `-` and z,

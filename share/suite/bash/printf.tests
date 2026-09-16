@@ -44,3 +44,23 @@ printf '[%d]\n' '7	'
 printf 'a trailing tab -> %s\n' "$?"
 printf '[%d]\n' '  7  '
 printf 'blanks at both ends -> %s\n' "$?"
+
+# C's `#` at a value of nought, which is where ksh93 parts from every other
+# shell and so cannot be asked in core/. C reads the alternate form off the
+# *value*: the `0x` goes on a nonzero one, so a nought carries none, and an
+# octal's precision is raised until there is a leading zero — which is a zero
+# to write even where the precision had erased every digit. ksh93 reads the
+# prefix off the digits instead, writing `0x0` for the first line here and
+# nothing at all for the octal.
+printf 'a hexadecimal nought [%#x] [%#X]\n' 0 0
+printf 'through a precision [%#.2x] and a width [%#5x]\n' 0 0
+printf 'and a zero fill [%#05x]\n' 0
+printf 'an octal with nothing left [%#.0o] [%#5.0o]\n' 0 0
+
+# The controls. `%#.0x` is where the two readings agree — no nonzero value
+# and no digit for a prefix to stand in front of — `%#o` of nought is the
+# octal already leading with its own zero, and the nonzero forms are the
+# ordinary alternate form every shell writes the same way.
+printf 'no value and no digits [%#.0x]\n' 0
+printf 'an octal nought [%#o]\n' 0
+printf 'nonzero [%#x] [%#o]\n' 255 255

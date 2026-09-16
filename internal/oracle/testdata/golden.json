@@ -31446,6 +31446,57 @@
         "TimedOut": false
       }
     },
+    "axis/printf-alternate-form-at-nought": {
+      "ash": {
+        "Stdout": "[0][0][0]~[0][00][    0]~[][0xff][0377]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[0][0][0]~[0][00][    0]~[][0xff][0377]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[0][0][0]~[0][00][    0]~[][0xff][0377]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[0][0][0]~[0][00][    0]~[][0xff][0377]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[0][0][0]~[0][00][    0]~[][0xff][0377]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[0x0][0X0][0]~[][0x00][  0x0]~[][0xff][0377]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[0][0][0]~[0][00][    0]~[][0xff][0377]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "axis/printf-an-evaluated-infinity-overflows": {
       "ash": {
         "Stdout": "[0]|1~[0]|1~[0]|1~[0]|1~[0]|1~[0]|1~[0]|1",
@@ -162984,6 +163035,57 @@
       "zsh": {
         "Stdout": "[ st=1",
         "Stderr": "\u003cshell\u003e:printf:1: %..: invalid directive",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "printf/a-sign-survives-a-precision-of-nought": {
+      "ash": {
+        "Stdout": "[+][ ][]~[    +][+    ][     ]~[+7][+000][+0]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[+][ ][]~[    +][+    ][     ]~[+7][+000][+0]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[+][ ][]~[    +][+    ][     ]~[+7][+000][+0]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[+][ ][]~[    +][+    ][     ]~[+7][+000][+0]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[+][ ][]~[    +][+    ][     ]~[+7][+000][+0]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[+][ ][]~[    +][+    ][     ]~[+7][+000][+0]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[+][ ][]~[    +][+    ][     ]~[+7][+000][+0]~st=0",
+        "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

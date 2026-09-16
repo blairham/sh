@@ -13875,6 +13875,40 @@ down. 680 of the 682 rows swept 2026-09-14 across both references agree
 with what this shell writes; those two and their like do not, and no rule
 that fits the rest of the panel produces them.
 
+**`PrintfAlternateFormAsksTheValue`** — bash yes · dash yes · ksh93 **no** · zsh yes · ash yes
+
+Reads C's `#` off the **value** rather than off the digits it produced,
+which is the whole of what a value of nought does to the alternate form.
+
+C gives `#` two readings that only a nought can tell apart. A `%#x` writes
+its `0x` for a *nonzero* value, so a nought carries none; and a `%#o`
+raises the precision until there is a leading zero, which is a zero to
+write even where the precision had erased every digit. Six columns read
+both off the value and ksh93u+ reads the prefix off the digits instead —
+written wherever there are digits, absent where there are none.
+
+Measured 2026-09-15 under `LC_ALL=C` with `printf '[%s]' 0`:
+
+    %#x      0    everywhere but ksh93, which writes 0x0
+    %#X      0    ksh93 0X0
+    %#.2x    00   ksh93 0x00
+    %#5x     `    0`  ksh93 `  0x0`
+    %#.0o    0    ksh93 writes nothing at all
+    %#.0x    ``   the two readings agree: no value and no digits
+    %#o      0    and here, since the nought is its own leading zero
+
+The last two rows are the controls, and a table without them would have
+been read too widely — as one shell having no alternate form rather than
+one reading of it. `printf '%#x' 255` is `0xff` in all seven columns, so
+the axis is asked only where a `#` meets a value of nought.
+
+This shell answered as ksh93 does in every dialect until #3024, which is
+why the report read as a bug against six columns and a passing grade
+against the seventh. The *sign* half of that report is not an axis: C
+writes `+` or a space even where a precision of nought erased the digits,
+all seven columns do, and only Go's `fmt` does not — see
+`interp/printfnought.go`.
+
 **`PrintfQuote`** — bash backslash · dash absent · ksh93 single quoted · zsh backslash
 
 Is how `%q` quotes, which is three answers and an absence rather than a

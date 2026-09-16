@@ -585,6 +585,9 @@ func Semantics() interp.Semantics {
 	s.PrintfTimeConversion = interp.No
 	s.PrintfTimeOperandIsADateString = interp.No
 	s.PrintfQuote = interp.PrintfQuoteAbsent
+	// C's `#` at a value of nought, which this shell hands straight to the
+	// C library: `printf '%#x' 0` is `0`.
+	s.PrintfAlternateFormAsksTheValue = interp.Yes
 	// unanswered BraceRescanEntersFailedGroup: dash has no brace expansion,
 	// so there is no scan to resume. `@{x}{a,b}@` is the one word it was
 	// written as, and the question of how far past a group that did not

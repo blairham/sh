@@ -229,3 +229,32 @@ printf '[%d]\n' ' 7' 2> /dev/null
 # ksh93. `\0101` is the one spelling all four agree on, which is why it is
 # the one asked above.
 printf -- '%s\n' 'after the dashdash'
+
+# A sign flag survives a precision of nought. C says a precision of 0 with a
+# value of 0 produces no digits, and says separately that `+` and the space
+# flag write a sign for a signed conversion; both hold at once, so what comes
+# out is one character rather than none. Every shell here agrees, which is
+# what puts it in this file rather than in one of the dialects'.
+printf 'a plus [%+.0d]\n' 0
+printf 'a space [% .0d]\n' 0
+printf 'a bare point [%+.d]\n' 0
+
+# No flag, so there is nothing left to write. This is the control that makes
+# the three lines above about the *sign* rather than about the erasure.
+printf 'no flag [%.0d]\n' 0
+
+# The sign goes through the field like any other one-character text, and the
+# `-` flag moves it to the left. `%+05.0d` is deliberately not here: the `0`
+# flag is ignored where an integer conversion states a precision in every
+# shell but ksh93, which pads with zeros whatever the precision said, so the
+# spelling belongs in a dialect's file and not in this one.
+printf 'padded [%+5.0d]\n' 0
+printf 'to the left [%-+5.0d]\n' 0
+printf 'a space padded [% 5.0d]\n' 0
+
+# The controls that the erasure does not reach: a nonzero value, a precision
+# that leaves digits, and a float conversion, whose precision is places after
+# the point rather than a minimum count of digits.
+printf 'a nonzero value [%+.0d]\n' 7
+printf 'digits left [%+.3d]\n' 0
+printf 'a float [%+.0f]\n' 0

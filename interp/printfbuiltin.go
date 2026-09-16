@@ -1210,6 +1210,9 @@ func (r *Runner) printfConvert(spec string, verb byte, timeFmt string, next func
 		if printfWidePrecision(spec) {
 			return printfWideInteger(spec, 'd', n, true), code, false
 		}
+		if field, ok := r.printfNoughtField(spec, 'd', n); ok {
+			return field, code, false
+		}
 		return fmt.Sprintf(spec+"d", n), code, false
 	case 'o', 'u', 'x', 'X':
 		n, code, stop := r.printfNumber(arg, present)
@@ -1232,10 +1235,14 @@ func (r *Runner) printfConvert(spec string, verb byte, timeFmt string, next func
 		// A signed reading is what wrote `-ff` for `printf '%x' -255`, which
 		// is not a numeral any of those shells would read back, and `%u` with
 		// a minus sign in front of it.
-		if unsigned := printfWithoutSignFlags(spec); printfWidePrecision(unsigned) {
+		unsigned := printfWithoutSignFlags(spec)
+		if printfWidePrecision(unsigned) {
 			return printfWideInteger(unsigned, verb, n, false), code, false
 		}
-		return fmt.Sprintf(printfWithoutSignFlags(spec)+string(verb), uint64(n)), code, false
+		if field, ok := r.printfNoughtField(unsigned, verb, n); ok {
+			return field, code, false
+		}
+		return fmt.Sprintf(unsigned+string(verb), uint64(n)), code, false
 	case 'f', 'e', 'E', 'g', 'G', 'F', 'a', 'A':
 		f, code, stopped := r.printfFloat(arg, present)
 		if stopped {

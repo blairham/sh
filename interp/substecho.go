@@ -36,12 +36,14 @@ import (
 //
 // # Why "borrowed" is a flag and not an empty string
 //
-// Four places run text that is not the script's: a sourced file, `eval`, a
-// function defined in either and called after it was left, and a trap body.
-// Each of those states the text it runs — including a trap, which states that
-// it has none — so that a failure inside one can never be quoted against the
-// script's lines. Unset, the script's text is the answer, which is what a
-// function written in the script itself needs and costs it no record.
+// Five places run text that is not the script's: a sourced file, `eval`, a
+// function defined in either and called after it was left, a trap body, and
+// the body of the older substitution spelling. Each of those states the text
+// it runs, so that a failure inside one is never quoted against the script's
+// lines. Unset, the script's text is the answer, which is what a function
+// written in the script itself needs and costs it no record. A function
+// defined through Runner.DefineFunction is left unset too, rather than given
+// a record per autoloaded name, and is caught by the check in substTextLines.
 type runningText struct {
 	text string
 	// base is the line offset the text was entered at, so that a line of the
@@ -92,8 +94,7 @@ func (r *Runner) textInForce() (string, int) {
 //
 // The parenthesised spellings only. The backquoted one is placed by a rule of
 // its own in the dialect that tags it — at the line its command *ends* on,
-// plus the body's — and that is not modelled here; see the issue filed with
-// #3331.
+// plus the body's — and that is not modelled here; see #3354.
 func (r *Runner) substFailureAtItsLine(span syntax.Span, failure error) func() {
 	d := r.diag()
 	line := d.ParseFailureLine(failure)
@@ -201,7 +202,7 @@ func substTextLines(span syntax.Span, body, text string, start int) []string {
 // column the word places it. Inside double quotes the second message is
 // `unmatched "`, inside an expansion's operand `closing brace expected`, and
 // the word of a redirection or an arithmetic expansion is not reached here —
-// none of those is written, rather than a quote from the wrong place.
+// none of those is written, rather than a quote from the wrong place (#3355).
 //
 // Nor inside a function body, where this dialect locates a message by the
 // function and the line within it. It reads a body where the definition is,

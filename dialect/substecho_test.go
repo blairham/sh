@@ -140,7 +140,7 @@ func TestASubstitutionRefusalQuotesTheScript(t *testing.T) {
 //
 // The first messages are not asserted: bash 5.3.20 tags the first two
 // `exit trap:` and `command substitution:`, and places the third at line 3,
-// and this engine does neither yet (filed with #3331). What is pinned is the
+// and this engine does neither yet (#3354). What is pinned is the
 // quote alone. Measured 2026-09-16, the same way as the table above.
 func TestASubstitutionRefusalQuotesOnlyItsOwnText(t *testing.T) {
 	for _, c := range []struct {
